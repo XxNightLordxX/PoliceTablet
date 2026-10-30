@@ -16,6 +16,9 @@ local COUNT_RECHECK_S = 60           -- an hourly or daily count at its cap is r
 local AREA_SPREAD = 0.25             -- base weight of an area when a call is posted (plus the idle units near it)
 local HOUR_S = 3600
 local DAY_S = 86400
+local LANE_KEY = 'callLane'          -- the Mission control of a department's own call lane (step P12)
+local WAIT_KEY = 'staffCallWait'     -- the Mission control of a department's wait between staff calls (step P12)
+local LANE_WEIGHT_MAX = 10           -- the highest weight a lane gives one mission type
 
 -- End reasons of a claimed run that reopen the call when nobody had reached the start (SPEC Dispatch).
 local REDISPATCH = {
@@ -42,6 +45,7 @@ local staffLast = {}   -- staffLast[issuer] = os.time() of the last call that is
 local coverage = nil   -- { at, index } (areaIndex cache)
 local codeDay, codeSeq = nil, 0
 local nextPostAt = 0
+local laneNext = {}    -- laneNext[department] = os.time() its lane may post its next call (step P12)
 local tempId = 0
 local claimSeq = 0
 local dirty = false
@@ -489,6 +493,16 @@ end
 -- The call's own rules for a unit (after every accept check): nil, or the error key and whether it is only
 -- the priority window ('priority').
 local function CallRule(call, unit, dist, now)
+    -- a department lane's call (step P12): only a unit of that department, never the unit of the one who set the lane
+    if call.department then
+        for _, o in ipairs(unit.officers or {}) do
+            if o.department ~= call.department then return 'err.mc_other_department' end
+        end
+        local dc = CP.DeptControls
+        if call.laneSetBy and dc and dc.heldBy and dc.heldBy(unit.officers or {}, { setBy = call.laneSetBy }) then
+            return 'err.mc_own_call'
+        end
+    end
     for _, cid in ipairs(unit.cids) do
         if call.excluded[cid] then return 'err.mc_excluded' end
     end
@@ -574,7 +588,8 @@ local function NoteFinished(call, outcome, now)
 end
 
 -- A new call: the row, the record and the toasts. opts: staff, issuer (citizenid or 'console'), issuerCid,
--- pagedSrc, pagedCid, pageTime, priorityUntil, units (idle units for the toasts).
+-- pagedSrc, pagedCid, pageTime, priorityUntil, units (idle units for the toasts), department and laneSetBy (a
+-- department lane's call, step P12).
 local function NewCall(missionType, area, opts)
     opts = opts or {}
     local cfg = Cfg()
@@ -582,9 +597,9 @@ local function NewCall(missionType, area, opts)
     local code = NextCode(now)
     local priority = Priority(missionType)
     -- NULL for the missing values (a nil would leave a hole in the parameter list)
-    local cols = { code, missionType, area, priority, opts.issuer, opts.pagedCid }
+    local cols = { code, missionType, area, priority, opts.issuer, opts.pagedCid, opts.department }
     local values, params = {}, {}
-    for i = 1, 6 do
+    for i = 1, 7 do
         if cols[i] == nil then
             values[i] = 'NULL'
         else
@@ -596,7 +611,7 @@ local function NewCall(missionType, area, opts)
     local okI, id = pcall(
         MySQL.insert.await,
         ([[
-        INSERT INTO cp_mission_calls (code, mission_type, area, priority, created_by, paged_to, status)
+        INSERT INTO cp_mission_calls (code, mission_type, area, priority, created_by, paged_to, department, status)
         VALUES (%s, 'open')
     ]]):format(table.concat(values, ', ')),
         params
@@ -625,6 +640,8 @@ local function NewCall(missionType, area, opts)
         pagedCid = opts.pagedCid,
         pagedUntil = opts.pagedCid and (now + math.floor(Num(cfg.pageTime, 30))) or nil,
         priorityUntil = opts.priorityUntil,
+        department = opts.department,
+        laneSetBy = opts.laneSetBy,
         redispatched = false,
         reopened = false,
         excluded = {},
@@ -633,7 +650,8 @@ local function NewCall(missionType, area, opts)
     }
     calls[id] = call
     MarkDirty()
-    CP.log(TAG, 'posted %s (%s, %s, %s)', code, missionType, tostring(area), call.staff and 'staff' or 'server')
+    CP.log(TAG, 'posted %s (%s, %s, %s)', code, missionType, tostring(area),
+        call.staff and 'staff' or (call.department and ('lane ' .. call.department)) or 'server')
     return call
 end
 
@@ -715,10 +733,13 @@ local function ToastPageEnded(units, now)
     end
 end
 
-local function OpenCalls()
+-- The open calls (open or claiming). lane: nil = every call, false = the server's own and staff calls only, a
+-- department key = that department's lane calls only (step P12).
+local function OpenCalls(lane)
     local out = {}
     for _, call in pairs(calls) do
-        if call.status == 'open' or call.status == 'claiming' then out[#out + 1] = call end
+        local mine = lane == nil or (lane == false and call.department == nil) or (lane and call.department == lane)
+        if mine and (call.status == 'open' or call.status == 'claiming') then out[#out + 1] = call end
     end
     return out
 end
@@ -778,18 +799,37 @@ local function WeightedPick(items, weightOf)
     return items[#items]
 end
 
--- The server's own call: a weighted type that an idle unit could claim (not at its run cap), and an area
--- weighted towards the idle units that no open call of that type already names.
-local function PostServerCall(units, now)
+-- The areas a call may name: Config.MissionCalls.areas, or only those a department lane picked (step P12).
+local function LaneAreas(lane)
+    local all = Cfg().areas or {}
+    local picked = lane and type(lane.areas) == 'table' and #lane.areas > 0 and lane.areas or nil
+    if not picked then return all end
+    local out = {}
+    for _, a in ipairs(all) do
+        if type(a) == 'table' and Contains(picked, a.key) then out[#out + 1] = a end
+    end
+    return out
+end
+
+-- A posted call: a weighted type that an idle unit could claim (not at its run cap), and an area weighted towards
+-- the idle units that no open call of that type already names. lane: nil = the server's own call; a department
+-- lane (step P12) = { department, types = { [type] = weight }, areas, setBy }: its types, weights and areas, and
+-- only the units given (that department's).
+local function PostCall(units, now, lane)
     local cfg = Cfg()
     local keys = {}
-    for key in pairs(cfg.types or {}) do if Callable(key) then keys[#keys + 1] = key end end
+    local weights = lane and lane.types or nil
+    for key in pairs(weights or cfg.types or {}) do if Callable(key) then keys[#keys + 1] = key end end
     table.sort(keys)
+    local function Weight(key)
+        if weights then return Num(weights[key], 0) end
+        return Num(cfg.types[key].weight, 1)
+    end
     local open = OpenCalls()
     local viable = {}
     for _, key in ipairs(keys) do
         local _, capOk = Call('Runs', 'capsOk', key)
-        if capOk ~= false then
+        if capOk ~= false and Weight(key) > 0 then
             local claimers = {}
             for _, u in ipairs(units) do
                 local st = TypeState(UnitState(u.leader, false, u), key)
@@ -798,21 +838,28 @@ local function PostServerCall(units, now)
             if #claimers > 0 then viable[#viable + 1] = { key = key, units = claimers } end
         end
     end
+    local allAreas = LaneAreas(lane)
     local tries = #viable
     while tries > 0 do
         tries = tries - 1
-        local pick = WeightedPick(viable, function(v) return Num(cfg.types[v.key].weight, 1) end)
+        local pick = WeightedPick(viable, function(v) return Weight(v.key) end)
         if not pick then return false end
         local areas = {}
-        for _, a in ipairs(cfg.areas or {}) do
+        for _, a in ipairs(allAreas) do
             local taken = false
             for _, c in ipairs(open) do
                 if c.type == pick.key and c.area == a.key then taken = true end
             end
             if not taken and type(a.key) == 'string' then areas[#areas + 1] = a end
         end
+        -- a lane with every one of its areas taken by this type may name one again (its few areas are its choice)
+        if lane and #areas == 0 then
+            for _, a in ipairs(allAreas) do
+                if type(a.key) == 'string' then areas[#areas + 1] = a end
+            end
+        end
         local area = nil
-        if #(cfg.areas or {}) > 0 then
+        if #allAreas > 0 then
             local index = MC.areaIndex()[pick.key] or {}
             local km = Num(cfg.countyWeightKm, 2.0)
             area = WeightedPick(areas, function(a)
@@ -825,7 +872,7 @@ local function PostServerCall(units, now)
                 return w
             end)
         end
-        if #(cfg.areas or {}) == 0 or area then
+        if #allAreas == 0 or area then
             local areaKey = area and area.key or nil
             local priorityUntil = nil
             if areaKey then
@@ -836,7 +883,11 @@ local function PostServerCall(units, now)
                     end
                 end
             end
-            local call = NewCall(pick.key, areaKey, { priorityUntil = priorityUntil })
+            local call = NewCall(pick.key, areaKey, {
+                priorityUntil = priorityUntil,
+                department = lane and lane.department or nil,
+                laneSetBy = lane and lane.setBy or nil,
+            })
             Toast(call, units)
             return true
         end
@@ -846,6 +897,181 @@ local function PostServerCall(units, now)
     end
     return false
 end
+
+-- ============================================================================
+--                    DEPARTMENT LANES AND STAFF WAIT (P12)
+-- ============================================================================
+-- A department's supervisor may give it its own lane of mission calls next to the server's (the callLane Mission
+-- control): { spawnEvery = { lo, hi }, maxOpen, areas = { key, ... }, types = { [type] = weight } }. The lane posts on
+-- its own gap, only callable types, only to idle units whose every member is of that department; its calls count
+-- against Config.MissionCalls.maxOpen; other departments never see or claim them. The server's own flow is unchanged.
+
+local function DeptControl(dept, key, officer)
+    local dc = CP.DeptControls
+    if not (dc and dc.get) or type(dept) ~= 'string' then return nil end
+    local ok, v, row = pcall(dc.get, dept, key, officer)
+    if not ok then
+        CP.err(TAG, 'reading the %s control of %s failed: %s', key, dept, tostring(v))
+        return nil
+    end
+    return v, row
+end
+
+-- The lane of a department while one is set and switched on: lane, its row | nil.
+local function LaneOf(dept)
+    local v, row = DeptControl(dept, LANE_KEY)
+    if type(v) ~= 'table' or type(v.types) ~= 'table' or type(v.spawnEvery) ~= 'table' then return nil end
+    return v, row
+end
+MC.laneOf = LaneOf
+
+-- Config.MissionControls.callLaneMaxOpen: the most open calls one lane may have (at least 1).
+local function LaneMaxOpen()
+    local mc = Config.MissionControls
+    return math.max(1, math.floor(Num(type(mc) == 'table' and mc.callLaneMaxOpen, 2)))
+end
+
+local function DeptKeys()
+    local out = {}
+    for key, d in pairs(type(Config.Departments) == 'table' and Config.Departments or {}) do
+        if type(key) == 'string' and type(d) == 'table' and d.enabled ~= false then out[#out + 1] = key end
+    end
+    table.sort(out)
+    return out
+end
+
+local function OfDept(unit, dept)
+    if #unit.officers == 0 then return false end
+    for _, o in ipairs(unit.officers) do
+        if o.department ~= dept then return false end
+    end
+    return true
+end
+
+-- Each lane that is due posts one call while it and the whole board are under their open caps.
+local function PostLaneCalls(units, now)
+    local cap = math.floor(Num(Cfg().maxOpen, 4))
+    for _, dept in ipairs(DeptKeys()) do
+        local lane, row = LaneOf(dept)
+        if lane and now >= (laneNext[dept] or 0) and #OpenCalls() < cap
+            and #OpenCalls(dept) < math.min(math.floor(Num(lane.maxOpen, 1)), LaneMaxOpen()) then
+            local own = {}
+            for _, u in ipairs(units) do
+                if OfDept(u, dept) then own[#own + 1] = u end
+            end
+            local posted = #own > 0
+                and PostCall(own, now, {
+                    department = dept,
+                    types = lane.types,
+                    areas = lane.areas,
+                    setBy = row and row.setBy or nil,
+                })
+            if posted then
+                local lo = math.floor(Num(lane.spawnEvery[1], 120))
+                local hi = math.floor(Num(lane.spawnEvery[2], lo))
+                laneNext[dept] = now + Rng():int(lo, math.max(lo, hi))
+            end
+        end
+    end
+end
+
+-- The lane control's own value check: { spawnEvery = { lo, hi } inside the admin's min and max, maxOpen 1 to
+-- callLaneMaxOpen, areas = known area keys (none = every area), types = callable types with a weight 0-10, one
+-- above 0 }. strict: anything outside is refused (a supervisor's change); else moved inside (a saved value).
+local function CleanLane(v, bounds, strict)
+    if type(v) ~= 'table' or type(v.spawnEvery) ~= 'table' or type(v.types) ~= 'table' then return nil end
+    local lo, hi = tonumber(v.spawnEvery[1]), tonumber(v.spawnEvery[2])
+    if not lo or not hi or math.tointeger(lo) == nil or math.tointeger(hi) == nil or lo > hi then return nil end
+    local bMin, bMax = tonumber(bounds.min), tonumber(bounds.max)
+    if strict and ((bMin and lo < bMin) or (bMax and hi > bMax)) then return nil end
+    if bMin then lo, hi = math.max(lo, bMin), math.max(hi, bMin) end
+    if bMax then lo, hi = math.min(lo, bMax), math.min(hi, bMax) end
+    local open = math.tointeger(tonumber(v.maxOpen))
+    if not open or open < 1 or (strict and open > LaneMaxOpen()) then return nil end
+    open = math.min(open, LaneMaxOpen())
+    local areas, seen = {}, {}
+    if v.areas ~= nil and type(v.areas) ~= 'table' then return nil end
+    for k, a in pairs(v.areas or {}) do
+        if math.tointeger(k) == nil or type(a) ~= 'string' or not AreaDef(a) or seen[a] then
+            if strict then return nil end
+        else
+            seen[a] = true
+            areas[#areas + 1] = a
+        end
+    end
+    table.sort(areas)
+    local types, any = {}, false
+    for k, w in pairs(v.types) do
+        local n = math.tointeger(tonumber(w))
+        if not Callable(k) or not n or n < 0 or n > LANE_WEIGHT_MAX then
+            if strict then return nil end
+        else
+            types[k] = n
+            if n > 0 then any = true end
+        end
+    end
+    if not any then return nil end
+    return { spawnEvery = { math.floor(lo), math.floor(hi) }, maxOpen = open, areas = areas, types = types }
+end
+MC._cleanLane = CleanLane
+
+-- The callable types and the areas a lane may pick from (the Supervisor UI's lane editor).
+local function LaneChoices()
+    local types = {}
+    for key, t in pairs(Cfg().types or {}) do
+        if Callable(key) then
+            types[#types + 1] = { key = key, label = TypeLabel(key), weight = math.floor(Num(t.weight, 1)) }
+        end
+    end
+    table.sort(types, function(a, b) return a.key < b.key end)
+    local areas = {}
+    for _, a in ipairs(Cfg().areas or {}) do
+        if type(a) == 'table' and type(a.key) == 'string' then
+            areas[#areas + 1] = { key = a.key, label = a.label or a.key }
+        end
+    end
+    return { laneTypes = types, laneAreas = areas, maxOpenCap = LaneMaxOpen(), weightMax = LANE_WEIGHT_MAX }
+end
+
+-- The seconds a staff member waits between two calls he creates: Config.MissionCalls.staffCooldown, or his
+-- department's staffCallWait Mission control (the self rule: the one who shortened it keeps the config wait).
+local function StaffWait(officer)
+    local wait = Num(Cfg().staffCooldown, 120)
+    if type(officer) ~= 'table' then return wait end
+    local v = DeptControl(officer.department, WAIT_KEY, officer)
+    if type(v) == 'number' and v >= 0 then return v end
+    return wait
+end
+MC.staffWait = StaffWait
+
+function MC.registerControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(LANE_KEY, {
+        kind = 'map',
+        range = { 30, 3600 },
+        configValue = function() return nil end,
+        check = function(v, b)
+            local clean = CleanLane(v, b, true)
+            if not clean then return nil, 'err.control_value' end
+            return clean
+        end,
+        clamp = function(v, b) return CleanLane(v, b, false) end,
+        -- more calls for his department: his own unit never claims a lane call (CallRule), so the read is plain
+        relaxes = function() return false end,
+        viewExtra = function() return LaneChoices() end,
+    })
+    dc.register(WAIT_KEY, {
+        kind = 'number',
+        integer = true,
+        range = { 0, 3600 },
+        configValue = function() return math.floor(Num(Cfg().staffCooldown, 120)) end,
+        -- a shorter wait relaxes the rule (the self rule keeps the config wait for the one who set it)
+        relaxes = function(v, configValue) return tonumber(v) ~= nil and v < (tonumber(configValue) or 0) end,
+    })
+    return true
+end
+MC.registerControls()
 
 -- ============================================================================
 --                                 CALL ENDINGS
@@ -1216,7 +1442,9 @@ function MC.create(src, typeKey, area, opts)
     local issuer, issuerCid = StaffIssuer(src)
     local now = os.time()
     local last = staffLast[issuer]
-    local waiting = last and now - last < Num(Cfg().staffCooldown, 120)
+    -- the wait between two staff calls: config, or the issuer's department's staffCallWait (step P12)
+    local wait = StaffWait(ToSrc(src) and GetOfficer(src) or nil)
+    local waiting = last and now - last < wait
     if waiting and not opts.skipWait then return false, 'err.mc_staff_cooldown' end
     staffLast[issuer] = now
     local call = NewCall(typeKey, areaKey, { staff = true, issuer = issuer, issuerCid = issuerCid })
@@ -1225,7 +1453,7 @@ function MC.create(src, typeKey, area, opts)
     if waiting then
         local role = ToSrc(src) and 'admin' or 'console'
         Call('Admin', 'audit', ToSrc(src) or 'console', role, 'operations', 'mcCreateSkipWait', call.code,
-            ('%ds left'):format(math.max(0, math.floor(Num(Cfg().staffCooldown, 120) - (now - last)))),
+            ('%ds left'):format(math.max(0, math.floor(wait - (now - last)))),
             ('%s %s'):format(typeKey, areaKey or 'county'), opts.reason)
     end
     return true, { id = call.id, code = call.code }
@@ -1306,6 +1534,19 @@ local function Distance(v, st, area)
     return best and math.floor(best + 0.5) or nil
 end
 
+-- The short name of a department ('SAST'), nil for none.
+local function DeptShort(dept)
+    local d = type(dept) == 'string' and type(Config.Departments) == 'table' and Config.Departments[dept] or nil
+    if type(d) ~= 'table' then return nil end
+    return d.short or dept
+end
+
+-- A department lane's call (step P12) is shown only to that department's officers (staff: admins see every one).
+local function Shown(call, officer)
+    if not call.department then return true end
+    return type(officer) == 'table' and officer.department == call.department
+end
+
 local function Card(call, v, tod)
     local cfg = Cfg()
     local now = v.now
@@ -1335,6 +1576,8 @@ local function Card(call, v, tod)
         typeOfTheDay = tod == call.type,
         redispatched = call.redispatched,
         paged = call.pagedCid ~= nil,
+        department = call.department,
+        departmentShort = DeptShort(call.department),
         status = 'ready',
         priorityEndsIn = nil,
         locked = nil,
@@ -1423,7 +1666,7 @@ function MC.list(src)
     local _, tod = Call('Events', 'typeOfTheDay')
     local cards = {}
     for _, call in pairs(calls) do
-        if Visible(call, v.now) then cards[#cards + 1] = Card(call, v, tod) end
+        if Visible(call, v.now) and Shown(call, v.officer) then cards[#cards + 1] = Card(call, v, tod) end
     end
     local _, run = Call('Runs', 'getBySrc', src)
     local onCall = false
@@ -1458,7 +1701,7 @@ function MC.claimableCount(src)
     if not v or not v.isLeader then return 0 end
     local n = 0
     for _, call in pairs(calls) do
-        if call.status == 'open' and not call.window then
+        if call.status == 'open' and not call.window and Shown(call, v.officer) then
             local card = Card(call, v, nil)
             if card.status == 'ready' then n = n + 1 end
         end
@@ -1534,13 +1777,44 @@ local function SupToday(src)
     return out
 end
 
+-- The lanes staff see on the mission calls panel: their own department's (admins and the console: every one).
+local function LaneViews(dept, now)
+    local out = {}
+    for _, key in ipairs(DeptKeys()) do
+        local lane = (dept == nil or key == dept) and LaneOf(key) or nil
+        if lane then
+            local areas = {}
+            for _, a in ipairs(lane.areas or {}) do areas[#areas + 1] = AreaLabel(a) or a end
+            local types = {}
+            for k, w in pairs(lane.types) do
+                if Num(w, 0) > 0 then types[#types + 1] = { key = k, label = TypeLabel(k), weight = w } end
+            end
+            table.sort(types, function(a, b) return a.key < b.key end)
+            out[#out + 1] = {
+                department = key,
+                departmentShort = DeptShort(key),
+                spawnEvery = { lane.spawnEvery[1], lane.spawnEvery[2] },
+                maxOpen = lane.maxOpen,
+                open = #OpenCalls(key),
+                nextIn = math.max(0, (laneNext[key] or 0) - now),
+                areas = areas,
+                types = types,
+            }
+        end
+    end
+    return out
+end
+
 function MC.supView(src)
     local v = Viewer(src)
     local open = {}
     local now = os.time()
     local _, tod = Call('Events', 'typeOfTheDay')
+    local _, admin = Call('Access', 'isAdmin', src)
+    local ownDept = not admin and v and v.officer.department or nil
     for _, call in pairs(calls) do
-        if call.status == 'open' or call.status == 'claiming' then
+        local shown = not ownDept or not call.department or call.department == ownDept
+        if shown and (call.status == 'open' or call.status == 'claiming') then
             if v then
                 -- staff see the call's own area, not the one it names to them as an officer
                 local card = Card(call, v, tod)
@@ -1567,6 +1841,8 @@ function MC.supView(src)
                     typeOfTheDay = tod == call.type,
                     redispatched = call.redispatched,
                     paged = call.pagedCid ~= nil,
+                    department = call.department,
+                    departmentShort = DeptShort(call.department),
                     status = call.status == 'claiming' and 'claiming' or 'ready',
                     lostBy = nil,
                 }
@@ -1592,7 +1868,7 @@ function MC.supView(src)
             }
         end
     end
-    return { open = SortCards(open), today = SupToday(src), units = units }
+    return { open = SortCards(open), today = SupToday(src), units = units, lanes = LaneViews(ownDept, now) }
 end
 
 -- ============================================================================
@@ -1643,13 +1919,16 @@ function MC._tick()
         local per = math.max(1, Num(cfg.unitsPerCall, 2))
         target = math.min(math.floor(Num(cfg.maxOpen, 4)), math.max(1, math.ceil(#units / per)))
     end
-    if #OpenCalls() < target and now >= nextPostAt then
-        if PostServerCall(units, now) then
+    -- the server's own flow counts its own calls; every call, lane calls too, counts against maxOpen (step P12)
+    local cap = math.floor(Num(cfg.maxOpen, 4))
+    if #OpenCalls(false) < target and #OpenCalls() < cap and now >= nextPostAt then
+        if PostCall(units, now) then
             local every = cfg.spawnEvery or { 60, 150 }
             local lo, hi = math.floor(Num(every[1], 60)), math.floor(Num(every[2], every[1] or 150))
             nextPostAt = now + Rng():int(lo, math.max(lo, hi))
         end
     end
+    PostLaneCalls(units, now)
     PushAll()
 end
 
@@ -1657,6 +1936,7 @@ function MC._reset()
     calls, runToCall, finished, states, history, watchers, muted, wins, staffLast = {}, {}, {}, {}, {}, {}, {}, {}, {}
     counts = {}
     coverage, codeDay, codeSeq, nextPostAt, tempId, claimSeq, dirty = nil, nil, 0, 0, 0, 0, false
+    laneNext = {}
 end
 MC._calls = function() return calls end
 MC._setNextPost = function(ts) nextPostAt = ts end
@@ -1894,8 +2174,13 @@ if CP.Hooks and CP.Hooks.on then
         Invalidate(type(p) == 'table' and p.citizenid or nil)
     end)
     CP.Hooks.on('participant:left', function() Invalidate(nil) end)
-    -- a supervisor changed a Mission control (a cooldown): every unit's eligibility is worked out again
-    CP.Hooks.on('deptControls:changed', function() Invalidate(nil) end)
+    -- a supervisor changed a Mission control (a cooldown, a lane): every unit's eligibility and no-repeat history
+    -- is worked out again; a changed lane posts on its new gap from the next check
+    CP.Hooks.on('deptControls:changed', function(p)
+        history = {}
+        Invalidate(nil)
+        if type(p) == 'table' and p.key == LANE_KEY and type(p.dept) == 'string' then laneNext[p.dept] = nil end
+    end)
     CP.Hooks.on('home:extras', function(_, src, extras)
         if type(extras) == 'table' and ToSrc(src) then extras.callsOpen = MC.claimableCount(src) end
     end)

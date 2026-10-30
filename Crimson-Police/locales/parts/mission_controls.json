@@ -168,5 +168,18 @@
   "sup.ban.set": "Mission ban set.",
   "sup.ban.lifted": "Mission ban lifted.",
   "board.locked_mission_ban": "Mission ban (by {by})",
-  "board.locked_mission_ban_member": "{name} has a mission ban (by {by})"
+  "board.locked_mission_ban_member": "{name} has a mission ban (by {by})",
+  "mc.control.callLane": "Department call lane",
+  "mc.control_desc.callLane": "Your department's own mission calls next to the server's: how often, how many open at once, the areas and the mission types. Only your department's officers see and claim them; you never claim one yourself.",
+  "mc.value.callLane": "every {lo}-{hi} s, up to {max} open",
+  "mc.value.callLane_none": "No lane",
+  "mc.control.staffCallWait": "Wait between staff calls",
+  "mc.control_desc.staffCallWait": "Seconds a supervisor of your department waits between two mission calls he creates. If you shorten it, your own wait stays the config value.",
+  "mc.unit.staffCallWait": "{n} s",
+  "sup.lane.gap_from": "Shortest gap between lane calls",
+  "sup.lane.gap_to": "Longest gap between lane calls",
+  "sup.lane.max_open": "Lane calls open at once",
+  "sup.lane.areas": "Areas (none picked = every area)",
+  "sup.lane.types": "Mission types and how often (0 = never)",
+  "mc.unit.callLaneGap": "{n} s"
 }

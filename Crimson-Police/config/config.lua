@@ -243,6 +243,13 @@ Config.MissionControls = {
         -- Cross-Department join; the tablet stays usable and a mission already running goes on. The one who set it
         -- and admins (Officers -> Today & cooldowns) may lift it early
         missionBan = { on = false, min = 1, max = 24 },
+        -- Dispatch: his department's own lane of mission calls next to the server's: min to max seconds between two
+        -- lane calls (he picks a range inside it), how many may be open at once (up to callLaneMaxOpen), the areas
+        -- and the mission types (MissionCalls.types) with a weight each; only his department sees and claims them
+        callLane = { on = false, min = 120, max = 600 },
+        -- seconds a supervisor of his department waits between two mission calls he creates
+        -- (MissionCalls.staffCooldown); the one who shortens it keeps the config wait for himself
+        staffCallWait = { on = false, min = 60, max = 120 },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 
@@ -255,6 +262,8 @@ Config.MissionControls = {
     addRunTimeMax = 300,
     -- mission bans one supervisor may set a day (admins any)
     missionBanPerDay = 3,
+    -- calls one department's lane may have open at once (every open call still counts against MissionCalls.maxOpen)
+    callLaneMaxOpen = 2,
 }
 
 -- ============================================================================

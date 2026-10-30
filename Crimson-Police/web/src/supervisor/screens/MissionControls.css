@@ -110,3 +110,31 @@
     color: var(--cp-warning);
     font-size: var(--cp-fs-sm);
 }
+
+/* the call lane (step P12): the areas a lane may name, as chips */
+.sup-mc-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sup-mc-chip {
+    padding: 3px 10px;
+    border-radius: var(--cp-radius-pill);
+    border: 1px solid var(--cp-border);
+    background: var(--cp-surface-2);
+    color: var(--cp-text);
+    font-size: var(--cp-fs-sm);
+    cursor: pointer;
+}
+
+.sup-mc-chip[aria-pressed='true'] {
+    border-color: var(--cp-accent);
+    background: var(--cp-accent);
+    color: var(--cp-accent-contrast);
+}
+
+.sup-mc-chip:disabled {
+    opacity: 0.5;
+    cursor: default;
+}

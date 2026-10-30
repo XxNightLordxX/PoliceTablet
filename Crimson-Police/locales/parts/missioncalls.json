@@ -177,5 +177,11 @@
   "admin.action.mcWithdraw": "Mission call withdrawn",
   "mc.card.twists_hint": "Pick twists, then claim",
   "mc.oneclick.note": "Claim takes a call at once. The mission is drawn at random after the claim, and abandoning it puts the type on cooldown. To add twists, use the Twists button on the call.",
-  "mc.toast.dispatch_key": "{key} opens Dispatch."
+  "mc.toast.dispatch_key": "{key} opens Dispatch.",
+  "err.mc_other_department": "This call is for another department's officers only.",
+  "mc.card.lane": "{dept} call",
+  "mc.lane.title": "Department lanes",
+  "mc.lane.line": "{dept} lane: a call every {gap}, up to {max} open ({open} now). {types}",
+  "mc.lane.areas": "Areas: {list}",
+  "mc.lane.all_areas": "Every area"
 }

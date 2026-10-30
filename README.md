@@ -585,6 +585,20 @@ Supervisor UI → **Mission controls** (below).
   lift are in the audit log under flags (posted to `cp_webhook_flags`), and a restart keeps the ban.
   `Config.MissionControls.missionBanPerDay` (`3`): bans one supervisor may set a day.
 
+- **Calls** (step P12, per department, off when you install, under the master switch). A supervisor sets them for
+  his own department in Supervisor UI → Mission controls → Calls:
+  - `callLane = { on = false, min = 120, max = 600 }` (**Department call lane**): his department's own mission calls
+    next to the server's. He picks the gap between two lane calls (a range inside `min` to `max` seconds), how many
+    may be open at once (up to `Config.MissionControls.callLaneMaxOpen`, `2`), the areas (none picked = every area)
+    and a weight 0-10 per mission type of `Config.MissionCalls.types`. Only his department's officers get the pop-up,
+    see the call on Dispatch (tagged "SAST call") and may claim it; a unit with an officer of another department
+    cannot, and neither can the unit of the supervisor who set the lane. Lane calls count against
+    `Config.MissionCalls.maxOpen`; the server's own calls go on exactly as before. The staff mission calls panel lists
+    the lane.
+  - `staffCallWait = { on = false, min = 60, max = 120 }` (**Wait between staff calls**): seconds his department's
+    supervisors wait between two mission calls they create, instead of `Config.MissionCalls.staffCooldown`. The one
+    who shortens it keeps the config wait for himself.
+
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
   supervisor may pick: `<control> = { on = true, min = ..., max = ... }`. Switching either off again brings back
@@ -1526,7 +1540,9 @@ a radio-style title, the type, a priority (Tactical P1, Investigation P2, Patrol
 never names the mission. The first unit leader (or solo officer) to claim it gets a random mission of that type in
 that area. Nearby units get the first 15 seconds. Reaching the start fast earns +10% points (rapid response).
 Mission calls never go to sc-dispatch. Supervisors and admins can withdraw a call, page a unit or create a call.
-Staff-posted calls wait 2 minutes between them; an admin may **Post anyway** with a reason.
+Staff-posted calls wait 2 minutes between them (a department's **Wait between staff calls** Mission control may
+change that); an admin may **Post anyway** with a reason. A department may also get its own **call lane** (Mission
+controls → Calls, [4.4](#44-what-supervisors-may-do)): extra calls only its officers see and claim.
 
 ### 9.6 Police actions and custody
 

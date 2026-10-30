@@ -153,7 +153,7 @@ PoliceTablet/                      (git repo)
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
                    009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql,
-                   012_mission_ban.sql
+                   012_mission_ban.sql, 013_call_department.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -3493,6 +3493,22 @@ pattern, so a missing module reads as config).
   `until`. CP.Operations: `Ops.join`, the card's `joinBlocked` and the waitlist refill refuse `err.mission_banned`.
   `sup:getDeptReport` rows carry `missionBan` (the view), `sup:getOfficerActivity` gains `missionBan` (supView) and
   `missionBanState`, `admin:getOfficerRunState` gains `missionBan`. A live run is never ended.
+- Call lanes and the staff call wait (step P12, modules/missioncalls, `MC.registerControls`): `callLane`, kind `map`
+  with its own check and clamp (`MC._cleanLane`), per department, under the master switch, range 30-3600 s, shipped
+  off with 120-600; value `{ spawnEvery = { lo, hi }, maxOpen (1 to Config.MissionControls.callLaneMaxOpen), areas,
+  types = { [callable type] = weight 0-10 } }`, read with no officer (the self rule is the claim rule below);
+  `viewExtra` gives `laneTypes`, `laneAreas`, `maxOpenCap`, `weightMax`. `MC._tick` posts, after the server's own
+  flow, one call per due lane (`laneNext[dept]`, its own gap) through the same `PostCall` (its types and weights, its
+  areas, only idle units whose every member is of that department) with `call.department` and `laneSetBy`; the row
+  keeps `cp_mission_calls.department` (migration 013). Every open call counts against `Config.MissionCalls.maxOpen`;
+  the server's own flow counts only calls with no department against its target. `CallRule` refuses
+  `err.mc_other_department` (a member of another department) and `err.mc_own_call` (`DC.heldBy`: the lane's setter);
+  `MC.list` / `MC.claimableCount` leave other departments' lane calls out; cards carry `department` and
+  `departmentShort`; `MC.supView` shows staff their own department's lane calls (admins all) and `lanes`. On
+  `deptControls:changed` the eligibility and no-repeat history caches are emptied and a changed lane posts at the next
+  check. `staffCallWait`, kind `number`, range 0-3600, shipped off with 60-120: `MC.create` reads it for the issuer's
+  department and the issuer (`MC.staffWait`; a shorter wait relaxes, so the self rule keeps the setter on
+  `Config.MissionCalls.staffCooldown`).
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through

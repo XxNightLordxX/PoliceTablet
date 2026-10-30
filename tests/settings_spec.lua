@@ -904,6 +904,15 @@ do
                     ~= nil,
             'step P11: the mission ban ships off (1-24 hours), 3 a supervisor a day, with its comment'
         )
+        H.ok(
+            d.callLane.on == false and d.callLane.min == 120 and d.callLane.max == 600 and d.staffCallWait.on == false
+                and d.staffCallWait.min == 60 and d.staffCallWait.max == 120
+                and E('MissionControls.callLaneMaxOpen').default == 2 and E('MissionControls.callLaneMaxOpen').min == 1
+                and E('MissionControls.callLaneMaxOpen').max == 10
+                and E('MissionControls.callLaneMaxOpen').desc:find('one department\'s lane may have open', 1, true)
+                    ~= nil,
+            'step P12: the call lane (120-600 s, 2 open) and the staff call wait (60-120 s) ship off, with comments'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

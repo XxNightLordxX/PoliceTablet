@@ -345,7 +345,15 @@ export interface TypeSwitchMission {
     type: string;
 }
 // a string: a choice control's pick (step P9: difficulty; step P10: featuredType, a mission type key)
-export type MissionControlValue = number | boolean | string | Record<string, number> | TypeSwitches;
+// callLane (step P12): a department's own lane of mission calls; areas empty = every area.
+export interface CallLaneValue {
+    spawnEvery: [number, number];
+    maxOpen: number;
+    areas: string[];
+    types: Record<string, number>;
+}
+export type MissionControlValue =
+    number | boolean | string | Record<string, number> | TypeSwitches | CallLaneValue | null;
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
 export interface MissionControlState {
     key: string;
@@ -394,6 +402,12 @@ export interface MissionControlState {
     choices?: string[];
     // the types control (step P10): every mission it may switch off on its own
     missions?: TypeSwitchMission[];
+    // callLane (step P12): the callable mission types (their server weight), the areas, the most open calls a lane
+    // may have (Config.MissionControls.callLaneMaxOpen) and the highest weight
+    laneTypes?: { key: string; label: string; weight: number }[];
+    laneAreas?: { key: string; label: string }[];
+    maxOpenCap?: number;
+    weightMax?: number;
 }
 export interface MissionControlsDepartment {
     key: string;

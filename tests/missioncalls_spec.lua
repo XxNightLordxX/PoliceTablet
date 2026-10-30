@@ -1599,6 +1599,128 @@ do
     CP.MissionBan = nil
 end
 
+-- Step P12: a department's own call lane (the callLane Mission control) and its staff call wait (staffCallWait). A
+-- stand-in CP.DeptControls gives SAST a lane (Patrol only, South LS, every 120-240 s, two open at most).
+do
+    Reset()
+    local S = CENTRE.south_ls
+    AddPlayer(1, vec3(S.x, S.y, 30.0))
+    AddPlayer(2, vec3(S.x + 30, S.y, 30.0))
+    AddPlayer(4, vec3(S.x + 50, S.y, 30.0), { dept = 'fib', short = 'FIB' })
+    local keepDC = CP.DeptControls
+    local lane = { spawnEvery = { 120, 240 }, maxOpen = 2, areas = { 'south_ls' }, types = { patrol = 5 } }
+    local wait = nil
+    local setter = 'NOBODY'
+    CP.DeptControls = {
+        get = function(dept, key)
+            if key == 'callLane' and dept == 'sast' then return lane, { setBy = 'SUP1' } end
+            if key == 'staffCallWait' and dept == 'sast' then return wait end
+            return nil
+        end,
+        heldBy = function(officers)
+            for _, o in ipairs(officers) do if o.citizenid == setter then return true end end
+            return false
+        end,
+    }
+    local function LaneCalls(dept)
+        local out = {}
+        for _, c in pairs(MC._calls()) do
+            if c.department == dept and c.status == 'open' then out[#out + 1] = c end
+        end
+        return out
+    end
+    local t0 = H.time
+    local keepOffer = Config.MissionCalls.offerTime
+    Config.MissionCalls.offerTime = 3600   -- the calls stay open through the whole check
+    MC._tick()
+    local list = LaneCalls('sast')
+    H.eq(#list, 1, 'lane: the first check posts one SAST lane call')
+    local lc = list[1]
+    H.ok(lc and lc.type == 'patrol' and lc.area == 'south_ls', 'lane: Patrol in South LS, as the lane picked')
+    H.eq(#LaneCalls(nil), 0, 'lane: the server flow (not due) posted nothing')
+    H.eq(CallRow(lc.id).department, 'sast', 'lane: the row keeps the department (migration 013)')
+    H.eq(Toasts(1), 1, 'lane: the SAST officer gets the pop-up')
+    H.eq(Toasts(4), 0, 'lane: the FIB officer never does')
+    H.eq(CardOf(4, lc.id), nil, 'lane: the call is not on the FIB officer\'s Dispatch')
+    local card = CardOf(1, lc.id)
+    H.ok(card and card.department == 'sast' and card.departmentShort == 'SAST', 'lane: the SAST card is tagged SAST')
+    H.eq(MC.claimableCount(4), 0, 'lane: nothing claimable for FIB')
+    local ok, err = Claim(4, lc.id)
+    H.ok(ok == false and err == 'err.mc_other_department', 'lane: the FIB officer cannot claim it')
+    setter = Cid(2)
+    ok, err = Claim(2, lc.id)
+    H.ok(ok == false and err == 'err.mc_own_call', 'lane: the one who set the lane cannot claim its calls')
+    setter = 'NOBODY'
+    H.time = t0 + 60
+    MC._tick()
+    H.eq(#LaneCalls('sast'), 1, 'lane: no second call inside the lane gap')
+    H.time = t0 + 241
+    MC._tick()
+    H.eq(#LaneCalls('sast'), 2, 'lane: a second call once the gap passed')
+    H.time = t0 + 600
+    MC._tick()
+    H.eq(#LaneCalls('sast'), 2, 'lane: never more than its maxOpen open')
+    local sup = MC.supView(4)
+    H.eq(#sup.lanes, 0, 'lane: an FIB viewer sees no SAST lane on the staff panel')
+    sup = MC.supView(1)
+    H.ok(#sup.lanes == 1 and sup.lanes[1].departmentShort == 'SAST' and sup.lanes[1].open == 2,
+        'lane: a SAST viewer sees his lane with its two open calls')
+    Config.MissionCalls.offerTime = keepOffer
+
+    -- every call counts against Config.MissionCalls.maxOpen; the server flow counts only its own calls
+    Reset()
+    H.time = t0
+    AddPlayer(1, vec3(S.x, S.y, 30.0))
+    AddPlayer(2, vec3(S.x + 30, S.y, 30.0))
+    MC._setNextPost(0)
+    MC._tick()
+    H.ok(#LaneCalls(nil) == 1 and #LaneCalls('sast') == 1,
+        'two idle units (server target 1): one server call and one lane call')
+    local keepMax = Config.MissionCalls.maxOpen
+    Config.MissionCalls.maxOpen = 2
+    H.time = t0 + 300
+    MC._tick()
+    H.eq(#LaneCalls(nil) + #LaneCalls('sast'), 2, 'the board never goes past maxOpen with lane calls in it')
+    Config.MissionCalls.maxOpen = keepMax
+
+    -- the lane value check: callable types only, the admin's gap bounds, a known area
+    local b = { min = 120, max = 600 }
+    H.ok(MC._cleanLane(lane, b, true) ~= nil, 'check: the lane above is good')
+    H.eq(MC._cleanLane({ spawnEvery = { 60, 240 }, maxOpen = 1, types = { patrol = 1 } }, b, true), nil,
+        'check: a gap under the admin\'s min is refused')
+    H.eq(MC._cleanLane({ spawnEvery = { 120, 240 }, maxOpen = 1, types = { training = 1 } }, b, true), nil,
+        'check: Training is never callable')
+    H.eq(MC._cleanLane({ spawnEvery = { 120, 240 }, maxOpen = 1, areas = { 'mars' }, types = { patrol = 1 } }, b, true),
+        nil, 'check: an unknown area is refused')
+    H.eq(MC._cleanLane({ spawnEvery = { 120, 240 }, maxOpen = 3, types = { patrol = 1 } }, b, true), nil,
+        'check: more open calls than callLaneMaxOpen is refused')
+    local moved = MC._cleanLane({ spawnEvery = { 60, 900 }, maxOpen = 1, types = { patrol = 1 } }, b, false)
+    H.ok(moved and moved.spawnEvery[1] == 120 and moved.spawnEvery[2] == 600, 'clamp: a saved gap moves inside')
+
+    -- staffCallWait: SAST's 60 s instead of the config 120 s
+    Reset()
+    H.time = t0
+    AddPlayer(3, vec3(S.x, S.y, 30.0), { sup = true })
+    wait = 60
+    H.ok((MC.create(3, 'patrol', 'south_ls')), 'staff wait: the first call')
+    H.time = t0 + 59
+    local okW, errW = MC.create(3, 'patrol', 'south_ls')
+    H.ok(okW == false and errW == 'err.mc_staff_cooldown', 'staff wait: refused inside 60 s')
+    H.time = t0 + 61
+    H.ok((MC.create(3, 'patrol', 'south_ls')), 'staff wait: SAST\'s 60 s passed')
+    wait = nil
+    H.time = t0 + 122
+    okW, errW = MC.create(3, 'patrol', 'south_ls')
+    H.ok(okW == false and errW == 'err.mc_staff_cooldown', 'staff wait: the control off, config 120 s again')
+    H.time = t0 + 182
+    H.ok((MC.create(3, 'patrol', 'south_ls')), 'staff wait: 120 s after the last call')
+    H.time = t0 + 250
+    okW, errW = MC.create(3, 'patrol', 'south_ls')
+    H.ok(okW == false and errW == 'err.mc_staff_cooldown', 'staff wait: config 120 s applies')
+    H.time = t0
+    CP.DeptControls = keepDC
+end
+
 -- Step O9: callAlerts 'favourites' (My options -> Dispatch): a call of another type shows on Dispatch with no pop-up;
 -- calls_muted still silences every call (the mute section above); with no favourite picked every call pops up.
 do

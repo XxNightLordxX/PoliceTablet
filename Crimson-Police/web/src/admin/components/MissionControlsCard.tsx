@@ -20,6 +20,7 @@ import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useOptionalSession } from '../../shared/session';
 import type {
+    CallLaneValue,
     MissionControlBounds,
     MissionControlState,
     MissionControlValue,
@@ -43,6 +44,12 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
     const session = useOptionalSession();
     const typeLabel = (k: string) => asArray(session?.config?.missionTypes).find(m => m.key === k)?.label ?? k;
     return (key, v) => {
+        // callLane (step P12): the gap and how many may be open; none = no lane
+        if (key === 'callLane') {
+            const lane = v && typeof v === 'object' && !Array.isArray(v) ? (v as CallLaneValue) : null;
+            if (!lane || !Array.isArray(lane.spawnEvery)) return t('mc.value.callLane_none');
+            return t('mc.value.callLane', { lo: lane.spawnEvery[0], hi: lane.spawnEvery[1], max: lane.maxOpen });
+        }
         if (v === undefined || v === null) return '-';
         if (typeof v === 'boolean') return v ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off');
         // featuredType (step P10): the type's label

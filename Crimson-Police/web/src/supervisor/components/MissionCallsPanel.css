@@ -46,3 +46,12 @@
 .mc-coverage td.is-empty {
     color: var(--cp-subtle);
 }
+
+/* the department call lanes (step P12) above the open calls */
+.mc-panel__lanes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--cp-border);
+}

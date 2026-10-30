@@ -24,7 +24,14 @@ import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
-import type { AreaCoverage, LocationPlay, MissionCall, PageableUnit, SupCallsView } from '../../types/missioncalls';
+import type {
+    AreaCoverage,
+    CallLaneView,
+    LocationPlay,
+    MissionCall,
+    PageableUnit,
+    SupCallsView,
+} from '../../types/missioncalls';
 import './MissionCallsPanel.css';
 
 const POLL_MS = 15000;
@@ -153,6 +160,7 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
     const open = asArray(data?.open as MissionCall[] | undefined);
     const today = asArray(data?.today as TodayRow[] | undefined);
     const units = asArray(data?.units as PageableUnit[] | undefined);
+    const lanes = asArray(data?.lanes as CallLaneView[] | undefined);
 
     const reload = async () => {
         await refetch();
@@ -201,7 +209,23 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
 
     const openColumns: TableColumn<MissionCall>[] = [
         { key: 'code', header: t('mc.col.code'), width: 90, render: c => <span className="cp-num">{c.code}</span> },
-        { key: 'type', header: t('mc.col.type'), render: c => c.typeLabel },
+        {
+            key: 'type',
+            header: t('mc.col.type'),
+            render: c => (
+                <>
+                    {c.typeLabel}
+                    {c.departmentShort ? (
+                        <>
+                            {' '}
+                            <Badge size="sm" tone="accent" variant="outline">
+                                {t('mc.card.lane', { dept: c.departmentShort })}
+                            </Badge>
+                        </>
+                    ) : null}
+                </>
+            ),
+        },
         { key: 'area', header: t('mc.col.area'), render: c => c.area?.label ?? t('mc.county_wide') },
         {
             key: 'status',
@@ -277,6 +301,25 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
         >
             {loading && !data ? <LoadingBlock /> : null}
             {error && !data ? <ErrorState error={error} onRetry={() => void reload()} /> : null}
+            {data && lanes.length > 0 ? (
+                <div className="mc-panel__lanes">
+                    <strong>{t('mc.lane.title')}</strong>
+                    {lanes.map(l => (
+                        <p key={l.department} className="mc-panel__muted">
+                            {t('mc.lane.line', {
+                                dept: l.departmentShort,
+                                gap: `${formatDuration(l.spawnEvery[0])}-${formatDuration(l.spawnEvery[1])}`,
+                                max: l.maxOpen,
+                                open: l.open,
+                                types: l.types.map(tp => `${tp.label} ${tp.weight}`).join(', '),
+                            })}{' '}
+                            {t('mc.lane.areas', {
+                                list: l.areas.length > 0 ? l.areas.join(', ') : t('mc.lane.all_areas'),
+                            })}
+                        </p>
+                    ))}
+                </div>
+            ) : null}
             {data ? (
                 <>
                     <Table

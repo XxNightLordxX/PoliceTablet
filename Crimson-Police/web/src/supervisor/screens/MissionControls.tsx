@@ -23,6 +23,7 @@ import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import type {
+    CallLaneValue,
     MissionControlState,
     MissionControlValue,
     MissionControlsView,
@@ -48,6 +49,8 @@ const CONTROL_GROUP: Record<string, GroupKey> = {
     happyHour: 'delays',
     types: 'board',
     featuredType: 'board',
+    callLane: 'calls',
+    staffCallWait: 'calls',
 };
 
 export function groupOf(c: MissionControlState): GroupKey {
@@ -140,6 +143,94 @@ function TypeSwitchesEditor({
     );
 }
 
+// The callLane control (step P12): the gap range, how many open at once, area chips and a weight per type. A
+// department with no lane starts from the admin's whole gap range, one open call and the server's own weights.
+function laneOf(c: MissionControlState, draft: MissionControlValue): CallLaneValue {
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<CallLaneValue>) : {};
+    const lo = c.min ?? 120;
+    const hi = c.max ?? Math.max(lo, 600);
+    const types: Record<string, number> = {};
+    for (const tp of asArray(c.laneTypes)) types[tp.key] = tp.weight;
+    return {
+        spawnEvery: Array.isArray(v.spawnEvery) ? [v.spawnEvery[0], v.spawnEvery[1]] : [lo, hi],
+        maxOpen: typeof v.maxOpen === 'number' ? v.maxOpen : 1,
+        areas: asArray<string>(v.areas),
+        types: v.types && typeof v.types === 'object' && !Array.isArray(v.types) ? { ...v.types } : types,
+    };
+}
+
+function CallLaneEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const lane = laneOf(c, draft);
+    const [lo, hi] = lane.spawnEvery;
+    const set = (patch: Partial<CallLaneValue>) => onChange({ ...lane, ...patch });
+    const gap = { ...c, integer: true, key: 'callLaneGap' };
+    const openCap = { ...c, min: 1, max: c.maxOpenCap ?? 1, integer: true, key: 'callLaneOpen' };
+    const weight = { ...c, min: 0, max: c.weightMax ?? 10, integer: true, key: 'callLaneWeight' };
+    const toggleArea = (key: string) =>
+        set({ areas: lane.areas.includes(key) ? lane.areas.filter(a => a !== key) : [...lane.areas, key] });
+    return (
+        <div className="sup-mc-sliders">
+            <Slider
+                c={gap}
+                label={t('sup.lane.gap_from')}
+                value={fit(gap, lo)}
+                disabled={disabled}
+                onChange={n => set({ spawnEvery: [n, Math.max(n, hi)] })}
+            />
+            <Slider
+                c={gap}
+                label={t('sup.lane.gap_to')}
+                value={fit(gap, hi)}
+                disabled={disabled}
+                onChange={n => set({ spawnEvery: [Math.min(lo, n), n] })}
+            />
+            <Slider
+                c={openCap}
+                label={t('sup.lane.max_open')}
+                value={fit(openCap, lane.maxOpen)}
+                disabled={disabled}
+                onChange={n => set({ maxOpen: n })}
+            />
+            <span className="sup-mc-slider__label">{t('sup.lane.areas')}</span>
+            <div className="sup-mc-chips" role="group" aria-label={t('sup.lane.areas')}>
+                {asArray(c.laneAreas).map(a => (
+                    <button
+                        key={a.key}
+                        type="button"
+                        className="sup-mc-chip"
+                        aria-pressed={lane.areas.includes(a.key)}
+                        disabled={disabled}
+                        onClick={() => toggleArea(a.key)}
+                    >
+                        {a.label}
+                    </button>
+                ))}
+            </div>
+            <span className="sup-mc-slider__label">{t('sup.lane.types')}</span>
+            {asArray(c.laneTypes).map(tp => (
+                <Slider
+                    key={tp.key}
+                    c={weight}
+                    label={tp.label}
+                    value={fit(weight, lane.types[tp.key] ?? 0)}
+                    disabled={disabled}
+                    onChange={n => set({ types: { ...lane.types, [tp.key]: n } })}
+                />
+            ))}
+        </div>
+    );
+}
+
 function Slider({
     c,
     label,
@@ -188,6 +279,7 @@ function Editor({
     const session = useSession();
     const text = useValueText();
     if (c.key === 'types') return <TypeSwitchesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'callLane') return <CallLaneEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     // a choice control (step P9: difficulty; step P10: featuredType): the names the admin offers
     if (c.kind === 'choice') {
         const offered = asArray<string>(c.offered);

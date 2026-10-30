@@ -27,6 +27,9 @@ export interface MissionCall {
     typeOfTheDay: boolean;
     redispatched: boolean;
     paged: boolean;
+    // a department lane's call (step P12): only that department's officers see it ("SAST call")
+    department?: string | null;
+    departmentShort?: string | null;
     status: 'ready' | 'priority' | 'locked' | 'claiming' | 'claimed' | 'lapsed' | 'withdrawn';
     priorityEndsIn: number | null;
     locked: null | { reason: string; until?: number };
@@ -67,9 +70,23 @@ export interface PageableUnit {
     size: number;
 }
 
+// A department's own call lane (step P12, the callLane Mission control) as the staff panel lists it.
+export interface CallLaneView {
+    department: string;
+    departmentShort: string;
+    spawnEvery: [number, number];
+    maxOpen: number;
+    open: number;
+    nextIn: number;
+    areas: string[];
+    types: { key: string; label: string; weight: number }[];
+}
+
 export interface SupCallsView {
     open: MissionCall[];
     units?: PageableUnit[];
+    // the lanes the viewer may see: his department's (admins: every one)
+    lanes?: CallLaneView[];
     today: {
         code: string;
         type: string;

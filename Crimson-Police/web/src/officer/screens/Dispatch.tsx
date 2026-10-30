@@ -208,6 +208,11 @@ function CallCard({
                                 {t('mc.card.paged')}
                             </Badge>
                         ) : null}
+                        {call.departmentShort ? (
+                            <Badge size="sm" tone="accent" variant="outline" icon="building">
+                                {t('mc.card.lane', { dept: call.departmentShort })}
+                            </Badge>
+                        ) : null}
                     </div>
                     <div className="mc-card__title">{t(call.titleKey)}</div>
                     <div className="mc-card__meta">
