@@ -1015,6 +1015,7 @@ local KNOWN = {
     ['Leaderboard.weekStartsOn'] = { tpl = Enum(WEEKDAYS), kind = 'enum' },
     ['Profile.bannedWords'] = { tpl = ListOf(Text(nil, 64)), kind = 'list', item = 'string' },
     ['OfficerOptions.defaults.hudSide'] = { tpl = Enum({ 'right', 'left' }), kind = 'enum' },
+    ['OfficerOptions.defaults.textSize'] = { tpl = Enum({ 'normal', 'large' }), kind = 'enum' },
     ['Profile.appearances'] = {
         tpl = ListOf(Enum(APPEARANCES), { min = 1, unique = true }),
         kind = 'list',

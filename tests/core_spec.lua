@@ -1608,6 +1608,19 @@ do
     for _, c in ipairs(callbackCalls) do if c.args and c.args.silent then silentCall = c end end
     H.ok(silentCall ~= nil and silentCall.args.ui == 'officer', 'theme fetch is a silent officer session')
     H.eq(CP.Access.current().departmentShort, 'SAST', 'access client keeps the officer')
+    -- step O5: the officer's look and the options hudLook / textSize go with the theme, before the tablet opens
+    H.ok(themeMsg ~= nil and type(themeMsg.prefs) == 'table', 'the login theme carries the officer\'s look')
+    local realOptions = CP.Options
+    CP.Options = {
+        get = function(key) return ({ hudLook = true, textSize = 'large' })[key] end,
+    }
+    CP.Hooks.fire('options:changed', 'textSize')
+    H.ok(LastNui('theme').options.hudLook == true and LastNui('theme').options.textSize == 'large',
+        'a changed hudLook or textSize sends the theme again')
+    local themes = #nui
+    CP.Hooks.fire('options:changed', 'hudSide')
+    H.eq(#nui, themes, 'another option does not')
+    CP.Options = realOptions
 
     -- open with the command, prop and animation, close via NUI
     H.clockMs = H.clockMs + 1000
@@ -1921,6 +1934,7 @@ do
     H.eq(LastNui('hud').hud, nil, 'unload clears the HUD')
     H.eq(LastNui('theme').theme.primary, '#a4161a', 'default theme after unload')
     H.eq(LastNui('theme').locale, nil, 'the unload theme carries no locale')
+    H.eq(LastNui('theme').prefs, nil, 'and no officer look')
     H.eq(CP.Access.current(), nil, 'access cleared on unload')
     Tick(2000)
     -- a character unload with no Crimson-Police UI open leaves the NUI focus alone (another resource's

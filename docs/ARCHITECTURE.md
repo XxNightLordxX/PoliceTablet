@@ -119,6 +119,7 @@ PoliceTablet/                      (git repo)
     shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
     shared/options.lua             CP.OptionDefs: the officer options registry and its rules (§5.48)
     shared/options_hud.lua         The mission HUD's officer options: side, size, compact, fewer animations (§5.48)
+    shared/options_look.lua        Easier to read: the tablet look on the HUD, larger text (§5.48)
     shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
     config/banned_words.txt        the default banned-word list for profile bios (one word or phrase a line)
@@ -3255,6 +3256,16 @@ no option is registered by this module: each feature registers its own keys.
   in App.tsx sets the body class `cp-reduce-motion`, which drops the HUD and result card slide-in, the off-route
   flash and the toast slide-in). Shipped allowed, defaults right / 1.0 / false / false (the HUD as before). Mock:
   `?hud=progress&hudSide=left&hudCompact=1` (also `hudScale=1.2`, `reduceMotion=1`).
+- Easier to read (step O5, shared/options_look.lua, group `look`, both `server`): `hudLook` (bool; App.tsx
+  `AmbientLook` writes `applyAppearance(document.documentElement, mergeAppearance(theme, appearance, accent))` with
+  the officer's prefs while it is on, else the plain theme; the open Admin UI keeps its theme) and `textSize`
+  ('normal' | 'large'; `textScaleOf` = 1 or 1.15 is `--cp-fs-scale` on `.cp-tablet` (TabletFrame, officer and
+  supervisor only) and `.cp-hud-column`; styles/base.css declares the `--cp-fs-*` sizes again on both, and the fixed
+  sizes of hud.css and the tablet are `calc(Npx * var(--cp-fs-scale, 1))`). The client's `theme` message carries
+  `prefs` { appearance, accent } and `options` { hudLook, textSize } (modules/tablet/client.lua `AmbientLook`) and is
+  sent again on the hook `options:changed` for those two keys, so the HUD has them before the first open; the NUI
+  uses the theme message's values until a newer officer or supervisor session arrives (`OptionsProvider ambient`).
+  Shipped allowed, defaults false / 'normal'. Mock: `?hud=progress&look=colourblind&hudLook=1&textSize=large`.
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 
@@ -3980,7 +3991,7 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.l
 | `result` | `result = RunResult` | result screen |
 | `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `options` (own officer options changed, `{ values }`), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `missionControls` (a department's supervisors and the admins: a Mission control changed, `{ department, key }`, §5.49), `spawnCheck` (the admin's spawn point check, §5.27); `unit` gains `readyCheck`, `run` gains `contact` |
 | `overlay` | `overlay = null \| { kind: 'placement'\|'recording'\|'testdrive'\|'fade', ... }` | full-screen/HUD overlays |
-| `theme` | `theme`, `locale?` | the department theme for the HUD (login, duty, job, unload); only the reply to `ready` carries `locale` (`CP.Locale.all()`), the NUI's one copy of the text |
+| `theme` | `theme`, `locale?`, `prefs?`, `options?` | the department theme for the HUD (login, duty, job, unload, and a change of the options `hudLook` / `textSize`), with the officer's look (`prefs` { appearance, accent }, `options` { hudLook, textSize }; absent without an officer session, step O5); only the reply to `ready` carries `locale` (`CP.Locale.all()`), the NUI's one copy of the text |
 | `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names at once) |
 | `localOptions` | `options` | this PC's 'local' officer options (§8.5): on `ready` and after every change |
 

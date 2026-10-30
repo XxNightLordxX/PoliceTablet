@@ -29,5 +29,12 @@
   "options.key.hudCompact": "Compact HUD",
   "options.key.hudCompact_hint": "Show only the current objective, how many are done and the timer.",
   "options.key.reduceMotion": "Fewer animations",
-  "options.key.reduceMotion_hint": "The HUD and notifications appear without sliding in or flashing."
+  "options.key.reduceMotion_hint": "The HUD and notifications appear without sliding in or flashing.",
+  "options.group.look": "Easier to read",
+  "options.key.hudLook": "Use my tablet look on the HUD",
+  "options.key.hudLook_hint": "The mission HUD, the result card and notifications use your tablet look and accent instead of the department colours.",
+  "options.key.textSize": "Text size",
+  "options.key.textSize_hint": "Large text makes the words on the tablet and the mission HUD bigger.",
+  "options.value.textSize.normal": "Normal",
+  "options.value.textSize.large": "Large"
 }

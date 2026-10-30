@@ -19,18 +19,60 @@ import { closeTopLayer, useHudScale, useKeyRelease, usePush, useViewport } from 
 import { LocaleProvider, t } from './shared/i18n';
 import { NavigationContext, type NavigationValue, type ScreenKey, type ScreenParams } from './shared/navigation';
 import { clientAction, fetchNui, isEnvBrowser, request, setTabletShown, useNuiEvent } from './shared/nui';
-import { OptionsProvider } from './shared/options';
+import { OptionsProvider, useOption } from './shared/options';
 import { SessionContext, type SessionContextValue } from './shared/session';
-import { applyTheme, DEFAULT_THEME } from './shared/theme';
+import { applyAppearance, DEFAULT_THEME, mergeAppearance } from './shared/theme';
 import { normalizeHud, normalizeResult, normalizeSession } from './shared/data';
 import { pushNotification, subscribeToasts, toast, TOAST_DEFAULT_MS } from './shared/toast';
-import type { HudState, Notification, Overlay, RunResult, Session, Theme, UiKind } from './shared/types';
+import type {
+    HudState,
+    Notification,
+    OfficerOptionValue,
+    Overlay,
+    Prefs,
+    RunResult,
+    Session,
+    Theme,
+    UiKind,
+} from './shared/types';
 
 // Browser dev mode only (never loaded inside FiveM).
 const DevPanel = isEnvBrowser() ? lazy(() => import('./mocks/DevPanel')) : null;
 
 const MAX_TOASTS = 5;
 let readySent = false;
+
+// The officer's look from the theme message (step O5): his prefs and the options hudLook and textSize.
+interface ThemeLook {
+    prefs: Partial<Prefs> | null;
+    options: Record<string, OfficerOptionValue> | null;
+}
+
+// The theme of everything outside the tablet (HUD, result card, toasts, overlays) on the page root. With the officer
+// option hudLook on, his tablet look (appearance and accent) goes on top of it; the open Admin UI keeps its own theme.
+function AmbientLook({
+    theme,
+    prefs,
+    accents,
+    adminOpen,
+}: {
+    theme: Theme;
+    prefs: Partial<Prefs> | null;
+    accents: { colour: string }[] | null;
+    adminOpen: boolean;
+}): null {
+    const on = useOption('hudLook') === true && !adminOpen && !!prefs;
+    const appearance = on ? (prefs?.appearance ?? 'department') : 'department';
+    const accent = on ? (prefs?.accent ?? null) : null;
+    const look = useMemo(
+        () => (on ? mergeAppearance(theme, appearance, accent, accents) : theme),
+        [on, theme, appearance, accent, accents],
+    );
+    useLayoutEffect(() => {
+        applyAppearance(document.documentElement, look, appearance);
+    }, [look, appearance]);
+    return null;
+}
 
 type ScreenState = Record<UiKind, { key: ScreenKey; params: ScreenParams }>;
 
@@ -49,6 +91,9 @@ export default function App() {
     const [toasts, setToasts] = useState<Notification[]>([]);
     const [overlay, setOverlay] = useState<Overlay | null>(null);
     const [hudTheme, setHudTheme] = useState<Theme | null>(null);
+    // the officer's look as the latest theme message gave it, and whether a session came after it (then it wins)
+    const [themeLook, setThemeLook] = useState<ThemeLook | null>(null);
+    const [lookFromSession, setLookFromSession] = useState(false);
     const [bootLocale, setBootLocale] = useState<Record<string, string> | null>(null);
     const [debug, setDebug] = useState<unknown>(null);
     const [screens, setScreens] = useState<ScreenState>(initialScreens);
@@ -122,6 +167,8 @@ export default function App() {
     });
     useNuiEvent('theme', m => {
         setHudTheme(m.theme ?? null);
+        setThemeLook({ prefs: m.prefs ?? null, options: m.options ?? null });
+        setLookFromSession(false);
         if (m.locale && typeof m.locale === 'object') setBootLocale(m.locale);
     });
     useNuiEvent('locale', m => {
@@ -213,9 +260,14 @@ export default function App() {
         hudTheme ??
         (session && session.ui !== 'admin' ? session.theme : null) ??
         DEFAULT_THEME;
-    useLayoutEffect(() => {
-        applyTheme(document.documentElement, ambientTheme);
-    }, [ambientTheme]);
+    // a new officer or supervisor session is newer than the last theme message (an Admin UI session has no look)
+    useEffect(() => {
+        if (session && session.ui !== 'admin') setLookFromSession(true);
+    }, [session]);
+    const sessionLook = lookFromSession && !!session && session.ui !== 'admin';
+    const ambientPrefs: Partial<Prefs> | null = sessionLook ? (session?.prefs ?? null) : (themeLook?.prefs ?? null);
+    const ambientAccents = sessionLook ? (session?.config?.profile?.accents ?? null) : null;
+    const ambientOptions = sessionLook ? null : (themeLook?.options ?? null);
 
     const locale = session?.locale ?? bootLocale ?? null;
     const uiOpen = !!(ui && session);
@@ -268,8 +320,14 @@ export default function App() {
     return (
         <LocaleProvider locale={locale}>
             <SessionContext.Provider value={sessionValue}>
-                <OptionsProvider session={session}>
+                <OptionsProvider session={session} ambient={ambientOptions}>
                     <MotionPref />
+                    <AmbientLook
+                        theme={ambientTheme}
+                        prefs={ambientPrefs}
+                        accents={ambientAccents}
+                        adminOpen={uiOpen && ui === 'admin'}
+                    />
                     <NavigationContext.Provider value={nav}>
                         {showColumn ? (
                             <QuietBoundary

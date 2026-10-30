@@ -497,7 +497,15 @@ export interface NuiMessageMap {
     overlay: { type: 'overlay'; overlay: Overlay | null };
     // The officer's department theme for the HUD (login, duty, job, unload); only the reply to 'ready' carries the
     // whole locale (CP.Locale.all()), the NUI's one copy of the text.
-    theme: { type: 'theme'; theme: Theme | null; locale?: Record<string, string> };
+    // Step O5: the officer's look (prefs: appearance, accent) and his options hudLook and textSize go with it; both
+    // are absent without an officer session.
+    theme: {
+        type: 'theme';
+        theme: Theme | null;
+        locale?: Record<string, string>;
+        prefs?: Partial<Prefs> | null;
+        options?: Record<string, OfficerOptionValue> | null;
+    };
     // the whole locale again after an admin renamed something in Settings → Names (Config.Labels)
     locale: { type: 'locale'; locale: Record<string, string> };
     // this PC's 'local' officer options (modules/options/client.lua): on 'ready' and after every change

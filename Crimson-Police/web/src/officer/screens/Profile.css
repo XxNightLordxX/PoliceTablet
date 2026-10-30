@@ -14,7 +14,7 @@
 }
 
 .boards-profile-avatar {
-    font-size: 22px;
+    font-size: calc(22px * var(--cp-fs-scale, 1));
     font-weight: 800;
     box-shadow: 0 0 0 3px rgba(var(--cp-primary-rgb), 0.35);
 }

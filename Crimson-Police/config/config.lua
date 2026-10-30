@@ -1414,6 +1414,8 @@ Config.OfficerOptions = {
         hudScale = true,             -- the mission HUD bigger or smaller (kept on this PC)
         hudCompact = true,           -- the mission HUD shows only the current objective (kept on this PC)
         reduceMotion = true,         -- no slide-in or flashing on the HUD and the toasts (kept on this PC)
+        hudLook = true,              -- the officer's tablet look on the HUD, result card and toasts (this character)
+        textSize = true,             -- larger text on the tablet and the mission HUD (this character)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -1421,6 +1423,9 @@ Config.OfficerOptions = {
         hudCompact = false,          -- true = the HUD shows the current objective, the done count and the timer
                                      -- only; false = every objective (as before)
         reduceMotion = false,        -- true = the HUD and the toasts appear without sliding in or flashing
+        hudLook = false,             -- true = the HUD, result card and toasts use the officer's tablet look
+                                     -- (appearance and accent); false = the department theme (as before)
+        textSize = 'normal',         -- 'normal' (as before) or 'large': text size on the tablet and the mission HUD
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick

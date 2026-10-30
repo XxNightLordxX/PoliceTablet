@@ -1,9 +1,10 @@
 // Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions,
+// setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
 
 import { emitDebug, registerMock } from '../shared/nui';
 import type { OfficerOptionValue } from '../shared/types';
 import type { KeyLabel, OptionDef, OptionsView } from '../types/options';
-import { buildSession } from './samples';
+import { buildSession, MOCK_DEPARTMENTS } from './samples';
 
 const PARAMS = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
 const MODE = PARAMS.get('options');
@@ -48,6 +49,16 @@ const SCHEMA: OptionDef[] = [
     },
     { key: 'hudCompact', kind: 'bool', default: false, store: 'local', group: 'hud', order: 30 },
     { key: 'reduceMotion', kind: 'bool', default: false, store: 'local', group: 'hud', order: 40 },
+    { key: 'hudLook', kind: 'bool', default: false, store: 'server', group: 'look', order: 10 },
+    {
+        key: 'textSize',
+        kind: 'enum',
+        values: ['normal', 'large'],
+        default: 'normal',
+        store: 'server',
+        group: 'look',
+        order: 20,
+    },
 ];
 
 const defaults = Object.fromEntries(SCHEMA.map(d => [d.key, d.default])) as Record<string, OfficerOptionValue>;
@@ -59,6 +70,20 @@ if (PARAMS.get('reduceMotion') === '1') local.reduceMotion = true;
 if (Number(PARAMS.get('hudScale')) > 0) local.hudScale = Math.min(1.3, Math.max(0.8, Number(PARAMS.get('hudScale'))));
 // the client sends the options of this PC on the NUI ready
 if (Object.keys(local).length) emitDebug('localOptions', { options: { ...local } }, 300);
+if (PARAMS.get('hudLook') === '1') server.hudLook = true;
+if (PARAMS.get('textSize') === 'large') server.textSize = 'large';
+// like the client's login theme: the officer's look and his hudLook / textSize, before the tablet opens
+if (server.hudLook !== undefined || server.textSize !== undefined) {
+    emitDebug(
+        'theme',
+        {
+            theme: MOCK_DEPARTMENTS.sast.theme,
+            prefs: { appearance: PARAMS.get('look') ?? 'department', accent: PARAMS.get('accent') },
+            options: { hudLook: server.hudLook ?? false, textSize: server.textSize ?? 'normal' },
+        },
+        700,
+    );
+}
 
 // The mock session's config carries Config.OfficerOptions resolved, as the real getSession sends it.
 {

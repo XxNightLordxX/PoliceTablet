@@ -505,9 +505,34 @@ end
 
 -- withLocale (only the NUI's 'ready'): the whole locale goes with it, the NUI's one copy of the text until a
 -- Config.Labels change sends it again ('locale'). Login, duty, job and unload send the theme alone.
-local function SendTheme(withLocale)
-    T.send({ type = 'theme', theme = state.theme or DEFAULT_THEME, locale = withLocale and CP.Locale.all() or nil })
+-- The officer's look goes with it (step O5): prefs (appearance, accent) and the options hudLook and textSize, so the
+-- HUD, the result card and the toasts follow them before the tablet first opens. nil without an officer session.
+local function AmbientLook()
+    local cur = CP.Access and CP.Access.current and CP.Access.current() or nil
+    if type(cur) ~= 'table' then return nil, nil end
+    local p = type(cur.prefs) == 'table' and cur.prefs or {}
+    local options
+    if CP.Options and CP.Options.get then
+        options = { hudLook = CP.Options.get('hudLook'), textSize = CP.Options.get('textSize') }
+    end
+    return { appearance = p.appearance, accent = p.accent }, options
 end
+
+local function SendTheme(withLocale)
+    local prefs, options = AmbientLook()
+    T.send({
+        type = 'theme',
+        theme = state.theme or DEFAULT_THEME,
+        locale = withLocale and CP.Locale.all() or nil,
+        prefs = prefs,
+        options = options,
+    })
+end
+
+-- The officer turned his tablet look on the HUD or larger text on or off (My options, any of his tablets).
+CP.Hooks.on('options:changed', function(key)
+    if key == 'hudLook' or key == 'textSize' then SendTheme() end
+end)
 
 local function RefreshTheme()
     local pd = CP.Qbx and CP.Qbx.getPlayerData() or {}

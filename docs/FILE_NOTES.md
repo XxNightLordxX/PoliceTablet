@@ -3774,6 +3774,15 @@ Settings applies to the next NPC. The run-scoped damage settings of each officer
 modules/npccombat/client.lua; the combat caps are applied by modules/npc/client.lua.
 ```
 
+## Crimson-Police/shared/options_look.lua
+
+```text
+The officer options that make the tablet easier to read (My options -> Easier to read, saved with the character):
+the officer's tablet look (appearance and accent) on the mission HUD, the result card and the notifications too,
+and larger text on the tablet and the HUD. The tablet applies them (web/src/App.tsx AmbientLook,
+layouts/TabletFrame.tsx, hud/HudColumn.tsx); Config.OfficerOptions holds the allow and defaults.
+```
+
 ## Crimson-Police/web/build-stamp.mjs
 
 ```text
@@ -4254,6 +4263,15 @@ Buttons call client actions of the Lua testing client:
 Text keys: locales/parts/testing.json (test.*).
 ```
 
+## Crimson-Police/web/src/layouts/TabletFrame.tsx
+
+```text
+The tablet device: a 1280×800 screen in a rounded bezel, centred and scaled to fit the viewport (never larger than
+the space, grows on screens above 1080p), times the officer's tablet size. Themed with the department theme and
+the officer's look; dialogs render inside it (LayerRootContext) so they scale and theme with the tablet. The
+officer option textSize (step O5) sets --cp-fs-scale on it: large text in the whole tablet.
+```
+
 ## Crimson-Police/web/src/mocks/DevPanel.tsx
 
 ```text
@@ -4341,10 +4359,9 @@ Eagerly loads every src/mocks/*.mock.ts, so a feature adds mocks by dropping in 
 
 ```text
 Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions,
-setLocalOption, the localOptions message) and My keys (getKeyLabels). The mission board samples stand in for the
-options later features register; the hud group is the real one (shared/options_hud.lua). ?options=locked shows the
-screen with officer options turned off by an admin; ?hudSide=left&hudCompact=1&hudScale=1.2&reduceMotion=1 start
-the HUD options of this PC (with ?hud=progress).
+setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
+?hudSide=left&hudCompact=1&hudScale=1.2&reduceMotion=1 start the HUD options of this PC (with ?hud=progress);
+?hudLook=1&textSize=large (with ?look=colourblind and ?hud=progress) the Easier to read options of the character.
 ```
 
 ## Crimson-Police/web/src/mocks/run_ui.mock.ts

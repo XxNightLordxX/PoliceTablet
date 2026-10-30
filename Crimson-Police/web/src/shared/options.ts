@@ -41,7 +41,23 @@ function asValues(v: unknown): OptionValues {
     return v && typeof v === 'object' && !Array.isArray(v) ? (v as OptionValues) : {};
 }
 
-export function OptionsProvider({ session, children }: { session: Session | null; children?: ReactNode }) {
+// The text size factor of the officer option textSize (step O5): 'large' = 1.15, anything else 1. It is the CSS
+// variable --cp-fs-scale on the tablet and the HUD column (styles/base.css).
+export function textScaleOf(v: unknown): number {
+    return v === 'large' ? 1.15 : 1;
+}
+
+// session: the open UI's (kept after it closes). ambient: the server options the theme message carried (hudLook,
+// textSize), used over the session's while that message is newer than the session (App.tsx).
+export function OptionsProvider({
+    session,
+    ambient,
+    children,
+}: {
+    session: Session | null;
+    ambient?: OptionValues | null;
+    children?: ReactNode;
+}) {
     const [local, setLocalValues] = useState<OptionValues>({});
     const [pushed, setPushed] = useState<OptionValues | null>(null);
     useNuiEvent('localOptions', m => setLocalValues(asValues(m.options)));
@@ -61,11 +77,11 @@ export function OptionsProvider({ session, children }: { session: Session | null
     const value = useMemo<OptionsContextValue>(
         () => ({
             local,
-            server: pushed ?? asValues(session?.options),
+            server: pushed ?? (ambient ? { ...asValues(session?.options), ...ambient } : asValues(session?.options)),
             defaults: asValues(session?.config?.officerOptions?.defaults),
             setLocal,
         }),
-        [local, pushed, session, setLocal],
+        [local, pushed, session, ambient, setLocal],
     );
     return createElement(OptionsContext.Provider, { value }, children);
 }

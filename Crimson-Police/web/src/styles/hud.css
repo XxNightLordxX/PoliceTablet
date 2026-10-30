@@ -56,7 +56,7 @@
     border-radius: 9px;
     background: repeating-linear-gradient(135deg, #f5a524 0 12px, #e8961a 12px 24px);
     color: #1c1204;
-    font-size: 12px;
+    font-size: calc(12px * var(--cp-fs-scale, 1));
     font-weight: 800;
     letter-spacing: 0.14em;
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
@@ -64,7 +64,7 @@
 
 .cp-hud__test-note {
     margin-left: auto;
-    font-size: 11px;
+    font-size: calc(11px * var(--cp-fs-scale, 1));
     font-weight: 650;
     letter-spacing: 0.01em;
     opacity: 0.85;
@@ -112,7 +112,7 @@
 }
 
 .cp-hud__eyebrow {
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--cp-fs-scale, 1));
     font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -120,7 +120,7 @@
 }
 
 .cp-hud__mission {
-    font-size: 18px;
+    font-size: calc(18px * var(--cp-fs-scale, 1));
     font-weight: 750;
     line-height: 1.2;
     letter-spacing: -0.005em;
@@ -143,7 +143,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 10px;
+    font-size: calc(10px * var(--cp-fs-scale, 1));
     font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -151,7 +151,7 @@
 }
 
 .cp-hud__timer-value {
-    font-size: 25px;
+    font-size: calc(25px * var(--cp-fs-scale, 1));
     font-weight: 750;
     line-height: 1.1;
     letter-spacing: 0.01em;
@@ -197,7 +197,7 @@
     margin: 0 12px 12px;
     padding: 9px 11px;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: calc(13px * var(--cp-fs-scale, 1));
     font-weight: 600;
     line-height: 1.4;
     background: rgba(var(--cp-info-rgb), 0.13);
@@ -260,12 +260,12 @@
 }
 
 .cp-hud__route-text strong {
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--cp-fs-scale, 1));
     font-weight: 700;
 }
 
 .cp-hud__route-text span {
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--cp-fs-scale, 1));
     color: var(--cp-muted);
 }
 
@@ -296,7 +296,7 @@
 }
 
 .cp-hud__route.is-off b {
-    font-size: 14px;
+    font-size: calc(14px * var(--cp-fs-scale, 1));
     color: var(--cp-warning);
 }
 
@@ -319,7 +319,7 @@
     display: flex;
     justify-content: space-between;
     margin-bottom: 9px;
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--cp-fs-scale, 1));
     font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -367,14 +367,14 @@
 }
 
 .cp-hud__obj-label {
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--cp-fs-scale, 1));
     line-height: 1.35;
     color: var(--cp-muted);
 }
 
 .cp-hud__obj-count {
     flex: none;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--cp-fs-scale, 1));
     font-weight: 750;
     color: var(--cp-muted);
 }
@@ -396,7 +396,7 @@
 
 .cp-hud__obj-detail {
     margin-top: 4px;
-    font-size: 12px;
+    font-size: calc(12px * var(--cp-fs-scale, 1));
     color: var(--cp-muted);
 }
 
@@ -436,7 +436,7 @@
 .cp-hud__pending {
     padding: 11px 16px 13px;
     border-top: 1px solid rgba(var(--cp-text-rgb), 0.08);
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--cp-fs-scale, 1));
     color: var(--cp-muted);
 }
 
@@ -447,7 +447,7 @@
     padding: 10px 16px 11px;
     border-top: 1px solid rgba(var(--cp-text-rgb), 0.08);
     background: rgba(var(--cp-accent-rgb), 0.07);
-    font-size: 13px;
+    font-size: calc(13px * var(--cp-fs-scale, 1));
     font-weight: 650;
 }
 
@@ -528,13 +528,13 @@
 }
 
 .cp-result__title {
-    font-size: 18px;
+    font-size: calc(18px * var(--cp-fs-scale, 1));
     font-weight: 750;
     line-height: 1.2;
 }
 
 .cp-result__reason {
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--cp-fs-scale, 1));
     color: var(--cp-muted);
 }
 
@@ -546,7 +546,7 @@
 }
 
 .cp-result__mission-label {
-    font-size: 14.5px;
+    font-size: calc(14.5px * var(--cp-fs-scale, 1));
     font-weight: 650;
     min-width: 0;
     overflow: hidden;
@@ -558,7 +558,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    font-size: 12px;
+    font-size: calc(12px * var(--cp-fs-scale, 1));
     color: var(--cp-muted);
 }
 
@@ -575,7 +575,7 @@
     margin: 0 12px 10px;
     padding: 9px 11px;
     border-radius: 8px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--cp-fs-scale, 1));
     line-height: 1.45;
 }
 
@@ -611,7 +611,7 @@
 
 .cp-result__tier-label {
     margin-right: 2px;
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--cp-fs-scale, 1));
     font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -628,7 +628,7 @@
     align-items: center;
     gap: 6px;
     margin-bottom: 7px;
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--cp-fs-scale, 1));
     font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -644,7 +644,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 2.5px 0;
-    font-size: 13px;
+    font-size: calc(13px * var(--cp-fs-scale, 1));
 }
 
 .cp-result__line-label {
@@ -681,13 +681,13 @@
 }
 
 .cp-result__line.is-note .cp-result__line-label {
-    font-size: 12px;
+    font-size: calc(12px * var(--cp-fs-scale, 1));
     font-style: italic;
     color: var(--cp-subtle);
 }
 
 .cp-result__line.is-note .cp-result__line-value {
-    font-size: 12px;
+    font-size: calc(12px * var(--cp-fs-scale, 1));
     color: var(--cp-subtle);
 }
 
@@ -707,13 +707,13 @@
 }
 
 .cp-result__final .cp-num {
-    font-size: 24px;
+    font-size: calc(24px * var(--cp-fs-scale, 1));
     font-weight: 800;
     color: var(--cp-accent-text);
 }
 
 .cp-result__final small {
-    font-size: 12px;
+    font-size: calc(12px * var(--cp-fs-scale, 1));
     font-weight: 600;
     color: var(--cp-muted);
 }
@@ -726,12 +726,12 @@
 }
 
 .cp-result__formula {
-    font-size: 13px;
+    font-size: calc(13px * var(--cp-fs-scale, 1));
     color: var(--cp-muted);
 }
 
 .cp-result__amount {
-    font-size: 24px;
+    font-size: calc(24px * var(--cp-fs-scale, 1));
     font-weight: 800;
 }
 
@@ -745,7 +745,7 @@
     border-radius: var(--cp-radius-pill);
     background: rgba(var(--cp-text-rgb), 0.08);
     color: var(--cp-muted);
-    font-size: 11px;
+    font-size: calc(11px * var(--cp-fs-scale, 1));
     font-weight: 700;
     text-transform: none;
     letter-spacing: 0.01em;
@@ -803,7 +803,7 @@
 
 .cp-fade__text {
     color: #f2f2f2;
-    font-size: 22px;
+    font-size: calc(22px * var(--cp-fs-scale, 1));
     font-weight: 600;
     letter-spacing: 0.04em;
     text-align: center;

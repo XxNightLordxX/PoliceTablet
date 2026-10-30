@@ -231,6 +231,18 @@ do
     H.eq(Options.effective('OPT00003', 'sast', false).t_enum, 'medium', 'raw false: no row, the defaults')
 end
 
+-- Easier to read (shared/options_look.lua, step O5): saved with the character, normal or large text only.
+do
+    local v = Cb('getOptions', 1).data.values
+    H.ok(v.hudLook == false and v.textSize == 'normal', 'the look options ship as today: department theme, normal text')
+    local ok, data = Act(1, { hudLook = true, textSize = 'large' })
+    H.ok(ok == true and data.values.hudLook == true and data.values.textSize == 'large', 'large text and the HUD look')
+    H.ok(Saved('OPT00001').textSize == 'large' and Saved('OPT00001').hudLook == true, '...saved with the character')
+    H.eq(select(2, Act(1, { textSize = 'huge' })), 'err.option_value', 'the text size is normal or large only')
+    H.eq(select(2, Act(1, { textSize = 1.15 })), 'err.option_value', 'a number is not a text size')
+    Act(1, { hudLook = false, textSize = 'normal' })
+end
+
 -- the column the step adds, in every storage mode (files mode: the saves folder engine)
 H.ok(pcall(H.sql, 'SELECT options FROM cp_officers LIMIT 1'), 'migration 010: cp_officers.options exists')
 

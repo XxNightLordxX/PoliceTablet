@@ -1781,6 +1781,8 @@ My options holds the choices each officer makes for their own tablet, saved per 
 
 - Mission HUD (kept on this PC, for every character played on it; they apply at once, even before the tablet opens): HUD side (right, as before, or left; notifications stay top right), HUD size (on top of the screen size; officers pick inside Config.OfficerOptions.bounds.hudScale, shipped 0.8 to 1.3, default 1.0), Compact HUD (only the current objective, how many are done of how many and the timer; off by default) and Fewer animations (the HUD, the result card and notifications appear without sliding in, and the off-route warning does not flash; off by default). Each is allowed by default (Config.OfficerOptions.allow).
 
+- Easier to read (saved with the character, on any PC; they apply at once, even before the tablet opens): Use my tablet look on the HUD (off by default: the mission HUD, the result card and notifications keep the department theme; on: they take the officer's tablet look, the appearance such as colour-blind, midnight or high contrast and the accent; the open Admin UI keeps its own theme) and Text size (Normal, as before, or Large: the text on the tablet and the mission HUD is 15% bigger). Each is allowed by default (Config.OfficerOptions.allow).
+
 - Config.OfficerOptions: enabled (true; false = no My options screen and every option keeps its default for everyone), allow (per option: false = officers cannot change it and everyone gets the default), defaults (per option: what every officer starts with) and bounds (per number option: { min, max } officers may pick). A department may set its own allow, defaults and bounds in Config.Departments.<key>.officerOptions; they win over the global ones for its officers.
 - An option is a switch, one choice from a list, several choices from a list, or a number. A choice that is no longer offered (a mission type or twist that was removed) is dropped from the saved value, and a number outside the bounds now is clamped to them. Only the options that differ from the default are saved: picking the default again removes it.
 - An option that is not allowed now is ignored, never deleted: allowing it again brings the officer's own choice back.
@@ -3961,6 +3963,8 @@ Config.OfficerOptions = {
         hudScale = true,             -- the mission HUD bigger or smaller (kept on this PC)
         hudCompact = true,           -- the mission HUD shows only the current objective (kept on this PC)
         reduceMotion = true,         -- no slide-in or flashing on the HUD and the toasts (kept on this PC)
+        hudLook = true,              -- the officer's tablet look on the HUD, result card and toasts (this character)
+        textSize = true,             -- larger text on the tablet and the mission HUD (this character)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -3968,6 +3972,9 @@ Config.OfficerOptions = {
         hudCompact = false,          -- true = the HUD shows the current objective, the done count and the timer
                                      -- only; false = every objective (as before)
         reduceMotion = false,        -- true = the HUD and the toasts appear without sliding in or flashing
+        hudLook = false,             -- true = the HUD, result card and toasts use the officer's tablet look
+                                     -- (appearance and accent); false = the department theme (as before)
+        textSize = 'normal',         -- 'normal' (as before) or 'large': text size on the tablet and the mission HUD
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick

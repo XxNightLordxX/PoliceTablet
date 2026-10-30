@@ -1,10 +1,9 @@
 // The tablet device: a 1280×800 screen in a rounded bezel, centred and scaled to fit the viewport (never larger than
-// the space, grows on screens above 1080p), times the officer's tablet size. Themed with the department theme and
-// the officer's look; dialogs render inside it (LayerRootContext) so they scale and theme with the tablet.
 
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { LayerRootContext } from '../shared/components';
 import { useViewport } from '../shared/hooks';
+import { textScaleOf, useOption } from '../shared/options';
 import { applyAppearance, mergeAppearance } from '../shared/theme';
 import type { Prefs, Session, Theme } from '../shared/types';
 
@@ -45,6 +44,9 @@ export function TabletFrame({
     const uiScale = prefs ? clampUiScale(prefs.uiScale, profile?.uiScale) : 1;
     currentUiScale = uiScale;
     const scale = tabletScale(width, height, uiScale);
+    // the Admin UI and the gallery (no prefs) keep the normal text
+    const textScale = textScaleOf(useOption('textSize'));
+    const fsScale = prefs ? textScale : 1;
     const frame = useRef<HTMLDivElement>(null);
     const [layer, setLayer] = useState<HTMLDivElement | null>(null);
     const appearance = prefs?.appearance ?? 'department';
@@ -64,7 +66,14 @@ export function TabletFrame({
                 ref={frame}
                 className="cp-tablet"
                 data-appearance={appearance}
-                style={{ width: TABLET_W, height: TABLET_H, transform: `translate(-50%, -50%) scale(${scale})` }}
+                style={
+                    {
+                        width: TABLET_W,
+                        height: TABLET_H,
+                        transform: `translate(-50%, -50%) scale(${scale})`,
+                        '--cp-fs-scale': fsScale,
+                    } as CSSProperties
+                }
             >
                 <div className="cp-tablet__bezel" aria-hidden>
                     <span className="cp-tablet__camera" />

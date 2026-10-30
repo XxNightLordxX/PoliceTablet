@@ -1,10 +1,10 @@
 // The screen-edge column that holds the mission HUD and the result card (no NUI focus). The officer options of this PC
 // (shared/options_hud.lua) set its side (hudSide), its size on top of the screen size (hudScale) and fewer animations
-// (reduceMotion, MotionPref).
+// (reduceMotion, MotionPref); the officer's textSize (shared/options_look.lua) sets --cp-fs-scale on it.
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useViewport } from '../shared/hooks';
-import { useOption } from '../shared/options';
+import { textScaleOf, useOption } from '../shared/options';
 
 const MARGIN = 16;
 
@@ -29,6 +29,7 @@ export function HudColumn({ scale, overUi, children }: { scale: number; overUi?:
     const [natural, setNatural] = useState(0);
     const left = useOption<string>('hudSide') === 'left';
     const size = scale * hudSizeOf(useOption<number>('hudScale'));
+    const textScale = textScaleOf(useOption('textSize'));
 
     useLayoutEffect(() => {
         const el = ref.current;
@@ -47,7 +48,12 @@ export function HudColumn({ scale, overUi, children }: { scale: number; overUi?:
         <div
             ref={ref}
             className={`cp-hud-column${left ? ' is-left' : ''}${overUi ? ' is-over-ui' : ''}`}
-            style={{ transform: `translateY(-50%) scale(${Math.max(0.4, fit)})` }}
+            style={
+                {
+                    transform: `translateY(-50%) scale(${Math.max(0.4, fit)})`,
+                    '--cp-fs-scale': textScale,
+                } as CSSProperties
+            }
         >
             {children}
         </div>

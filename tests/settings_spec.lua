@@ -937,6 +937,20 @@ do
         'the HUD size bounds edit as a smallest and a biggest size')
 end
 
+-- Easier to read (step O5): the tablet look on the HUD and larger text, allowed, shipped as today, each with its comment.
+do
+    local function E(p) return S.entry(p) or {} end
+    for _, key in ipairs({ 'hudLook', 'textSize' }) do
+        H.eq(E('OfficerOptions.allow.' .. key).default, true, key .. ': officers may change it')
+        H.ok((E('OfficerOptions.defaults.' .. key).desc or '') ~= '', key .. ': its default has a comment')
+    end
+    H.eq(E('OfficerOptions.defaults.hudLook').default, false, 'the HUD keeps the department theme, as before')
+    H.eq(E('OfficerOptions.defaults.textSize').default, 'normal', 'text ships at its size of today')
+    H.eq(E('OfficerOptions.defaults.textSize').kind, 'enum', 'the text size is a choice')
+    Err('OfficerOptions.defaults.textSize', 'huge', 'err.setting_option', 'the text size is normal or large only')
+    H.ok((Check('OfficerOptions.defaults.textSize', 'large')), 'large text may be the default')
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

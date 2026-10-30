@@ -9,7 +9,7 @@
     border: 1px solid var(--cp-warning);
     background: rgba(var(--cp-warning-rgb), 0.14);
     color: var(--cp-text);
-    font-size: 13px;
+    font-size: calc(13px * var(--cp-fs-scale, 1));
 }
 
 .cp-maintenance__text {

@@ -60,14 +60,6 @@
         sans-serif;
     --cp-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', Menlo, monospace;
 
-    --cp-fs-xs: 11px;
-    --cp-fs-sm: 12.5px;
-    --cp-fs: 14px;
-    --cp-fs-md: 15px;
-    --cp-fs-lg: 17px;
-    --cp-fs-xl: 21px;
-    --cp-fs-2xl: 28px;
-
     --cp-radius-xs: 4px;
     --cp-radius-sm: 7px;
     --cp-radius: 10px;
@@ -79,6 +71,26 @@
     --cp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
     --cp-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     --cp-shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55), 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* Text sizes. The officer option textSize sets --cp-fs-scale (1, or 1.15 for large text) on the tablet
+   (layouts/TabletFrame.tsx) and the HUD column (hud/HudColumn.tsx); each element that sets it declares the sizes
+   again so they follow it. A fixed size elsewhere in the tablet or the HUD is calc(Npx * var(--cp-fs-scale, 1)). */
+:root,
+.cp-tablet,
+.cp-hud-column {
+    --cp-fs-xs: calc(11px * var(--cp-fs-scale, 1));
+    --cp-fs-sm: calc(12.5px * var(--cp-fs-scale, 1));
+    --cp-fs: calc(14px * var(--cp-fs-scale, 1));
+    --cp-fs-md: calc(15px * var(--cp-fs-scale, 1));
+    --cp-fs-lg: calc(17px * var(--cp-fs-scale, 1));
+    --cp-fs-xl: calc(21px * var(--cp-fs-scale, 1));
+    --cp-fs-2xl: calc(28px * var(--cp-fs-scale, 1));
+}
+
+.cp-tablet,
+.cp-hud-column {
+    font-size: var(--cp-fs);
 }
 
 /* The game renders behind the page: html, body and #root stay fully transparent. */

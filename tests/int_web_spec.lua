@@ -983,7 +983,8 @@ do
     Has(oclient, 'CP.Tablet.registerClientAction(\'setLocalOption\',', 'which the Lua client registers')
     Has(oclient, 'CP.Tablet.registerClientAction(\'getLocalOptions\',', 'and getLocalOptions')
     Has(opts, 'usePush<{ values?: unknown }>(\'options\'', 'the push options refreshes the server values')
-    Has(appSrc, '<OptionsProvider session={session}>', 'App mounts OptionsProvider next to the session context')
+    Has(appSrc, '<OptionsProvider session={session} ambient={ambientOptions}>',
+        'App mounts OptionsProvider next to the session context')
 end
 
 -- ============================================================================
