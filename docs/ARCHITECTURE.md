@@ -3605,6 +3605,17 @@ pattern, so a missing module reads as config).
   the server type (admin override, then the roll). Callers pass the department: the board (viewer, unit), the boss
   card, `Scoring.compute` (participant, run participants), Home, Dispatch (`MC.list`) and the run view's expected
   points. `viewExtra`: `todFor` (tomorrow), `todToday`, `todServer` for the supervisor's line.
+- Department goals (step P21), `goals`, kind `map` `{ daily = { id, ... }, weekly = { id, ... } }`, per department,
+  under the master switch, shipped off with `min = 1, max = 5` (how many goals of a list a pick holds; an empty list
+  = every goal), range 1-20; a pick relaxes (self rule: the setter keeps the admin's whole lists). modules/goals
+  `Goals.registerControl`: `check` / `clamp` (`Goals._cleanPick`) keep only the admin's enabled goals of that kind;
+  the new DC def field `carry(ctx)` (DC.set calls it after `allow`) saves `from` (the next week's key) and `prev`
+  (the lists that count this week, read from the live row), so a pick counts from the next weekly reset and a second
+  change in a week never moves that week's goals. `Pick(kind, citizenid, ts, dept)` narrows the list to the
+  department's ids for the week of ts (same seed, same points); the officer's department is read (online job, else
+  `cp_officers.department`) only while some department has the control on; `Goals.forOfficer(citizenid,
+  department)` takes it from Home. `viewExtra`: `goalsAll`, `goalsFrom`, `goalsNow`. A reset or the control off
+  goes back to every goal at once.
 - Push a chosen mission (step P19), `pushMission`, kind `action`, per department, under the master switch, shipped
   off (the Mission choice Hard rule's fifth exception). modules/missioncalls registers it; `MC.page(src, type, area,
   leaderSrc, { missionId })` checks `DC.canChange(src, 'pushMission', leader's department)` (a supervisor's own

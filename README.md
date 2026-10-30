@@ -664,6 +664,14 @@ Supervisor UI → **Mission controls** (below).
   setter's own runs or a unit he is in (they keep the server's type). Switching the control off drops the pick at once;
   a restart keeps it (it is read back from the audit log). The Mission Board, Home, Dispatch, the run screen and the
   scoring all use the officer's department's type.
+- **Department goals** (step P21, per department, off when you install, under the master switch):
+  `goals = { on = false, min = 1, max = 5 }`. A supervisor picks which of your daily and weekly goals
+  (`Config.Goals.daily`, `Config.Goals.weekly`) his department's officers draw theirs from: `min` to `max` of each
+  list, or none (every goal). The pick counts **from the next weekly reset**, so no goal an officer is working on
+  changes; a second change in the same week waits for the week after. The points stay yours
+  (`Config.Goals.dailyPoints`, `weeklyPoints`); other departments and the supervisor himself keep your whole lists.
+  A goal you remove or switch off later is left out of the pick (none left = every goal). Switching the control off
+  or **Back to config** goes back to every goal at once; a goal already rewarded this period never pays twice.
 - **Push a chosen mission** (step P19, per department, off when you install, under the master switch):
   `pushMission = { on = false }`. In **Page a unit** (Live Missions) the supervisor may pick one mission of the call's
   type instead of **Any (drawn at random)**, for a unit of his own department (never his own unit). Only that unit gets
@@ -2543,6 +2551,10 @@ however it ends.
   happy hour, never for its starter) and `twistPoints` (each twist's points share, still under
   `Config.Events.twistMaxPoints`), per department, shipped off with bounds that move nothing; completed runs only,
   never on test runs, Cross-Department runs or the Weekly Boss.
+- Department goals from the admin's list (step P21, owner decision of 2026-10-19: "supervisors may give points"): the
+  Points Hard rule now names the `goals` Mission control (shipped off): a supervisor picks which of the admin's
+  `Config.Goals` goals his department's officers draw from, from the next weekly reset, with the admin's points,
+  never for the setter.
 
 - NPC combat, at the owner's request of 2026-10-19 ("make them also not do head shots at all also reduce the damage
   they shoot as they kill really quickly", no automatic weapons, lower accuracy): `Config.NpcCombat` ([5.9](#59-how-hard-npcs-fight-back)). Mission NPCs never carry an

@@ -1959,6 +1959,10 @@ Public API (docs/ARCHITECTURE.md §5.19)
       Goal = { id, label, count, progress, done, points }   (progress is capped at count)
   CP.Goals.onRunCompleted(citizenid)   (hook: a completed row was counted) -> inserts the goal rows earned
 Both query the database: call them from a thread.
+
+Step P21: the goals Mission control (Goals.registerControl). A supervisor picks which of the admin's daily and
+weekly goals his department's officers draw from, counting from the next weekly reset (the saved value carries
+from and prev); forOfficer(citizenid, department) and Pick take the department; the setter keeps the whole lists.
 ```
 
 ## Crimson-Police/modules/happyhour/server.lua
@@ -5072,6 +5076,15 @@ A department's Type of the Day (step P18): a supervisor picks one mission type f
 department's officers earn the Type of the Day points on it instead of the server's type, other departments keep
 the server's, and the setter (or a unit he is in) keeps the server's too. Plain stubs: CP.DeptControls answers the
 switch and the self rule, MySQL.single.await answers the cp_audit row of yesterday's pick. No database.
+```
+
+## tests/dept_goals_spec.lua
+
+```text
+A department's goals (step P21): a supervisor picks which of the admin's daily and weekly goals his department's
+officers draw from, counting from the next weekly reset; a second change in a week waits for the week after; the
+points stay the admin's; FIB officers and the setter keep the whole lists. Plain Lua: stubbed controls, schedule
+and SQL, no database.
 ```
 
 ## tests/dept_twists_spec.lua

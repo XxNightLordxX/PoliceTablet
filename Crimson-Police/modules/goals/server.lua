@@ -49,10 +49,165 @@ local function ValidGoals(list)
     return out
 end
 
--- The goal of 'kind' for citizenid in the period that contains ts.
-local function Pick(kind, citizenid, ts)
+-- ============================================================================
+--                 DEPARTMENT GOALS (MISSION CONTROL, STEP P21)
+-- ============================================================================
+-- goals (Config.MissionControls.controls): per department, under the master switch, shipped off. A supervisor picks
+-- min to max of the admin's daily goals and of the admin's weekly goals (Config.Goals); his department's officers draw
+-- their goals from those FROM THE NEXT WEEKLY RESET, so no goal an officer is working on changes under him. An empty
+-- list = every goal of that kind. The points stay Config.Goals.dailyPoints / weeklyPoints. The setter (and any
+-- character of his) keeps the admin's whole list (Config.MissionControls.selfExempt).
+-- Saved value: { daily = { id, ... }, weekly = { id, ... }, from = '<week key>', prev = { daily, weekly } | nil }: the
+-- lists count from the week that starts on 'from'; before it, prev (what counted when the change was made).
+
+local CONTROL_KEY = 'goals'
+local KINDS = { 'daily', 'weekly' }
+local LIST_MAX = 20           -- goal ids one list may hold
+local WEEK_KEY = '^%d%d%d%d%-%d%d%-%d%d$'
+
+local function WeekKeyOf(ts)
+    local key = Period('weekly', ts)
+    return key
+end
+
+-- The key of the week after the one that contains ts (the week a change made now counts from).
+local function NextWeekKey(ts)
+    local _, start = Period('weekly', ts or Now())
+    return WeekKeyOf(start + 7 * 86400 + 12 * 3600)
+end
+
+-- A list of goal ids of one kind: the admin's goals (switched-off ones left out), each once, in the admin's order.
+-- strict (a supervisor's or admin's change): an unknown id, a repeat or a count outside min to max is refused (nil);
+-- otherwise (a saved value read today) what no longer exists is left out and a list longer than max is cut.
+local function CleanIds(kind, raw, bounds, strict)
+    if raw == nil then return {} end
+    if type(raw) ~= 'table' then return nil end
+    local goals = ValidGoals(Config.Goals and Config.Goals[kind])
+    local known = {}
+    for _, g in ipairs(goals) do known[g.id] = true end
+    local keep, n = {}, 0
+    for k, id in pairs(raw) do
+        n = n + 1
+        local good = n <= LIST_MAX and math.type(k) == 'integer' and type(id) == 'string' and known[id] == true
+        if good and not keep[id] then
+            keep[id] = true
+        elseif strict then
+            return nil
+        end
+    end
+    local out = {}
+    for _, g in ipairs(goals) do
+        if keep[g.id] then
+            out[#out + 1] = g.id
+            keep[g.id] = nil
+        end
+    end
+    if #out == 0 then return out end
+    local lo = math.max(1, math.floor(Num(bounds and bounds.min, 1)))
+    local hi = math.max(1, math.floor(Num(bounds and bounds.max, LIST_MAX)))
+    if strict and (#out < lo or #out > hi) then return nil end
+    while #out > hi do out[#out] = nil end
+    return out
+end
+
+-- The control's value cleaned. strict: only { daily, weekly } (the server adds from and prev when it saves).
+local function CleanPick(v, bounds, strict)
+    if type(v) ~= 'table' then return nil end
+    if strict then
+        for k in pairs(v) do
+            if k ~= 'daily' and k ~= 'weekly' then return nil end
+        end
+    end
+    local out = {}
+    for _, kind in ipairs(KINDS) do
+        out[kind] = CleanIds(kind, v[kind], bounds, strict)
+        if not out[kind] then return nil end
+    end
+    if strict then return out end
+    if type(v.from) == 'string' and v.from:match(WEEK_KEY) then out.from = v.from end
+    if type(v.prev) == 'table' then
+        out.prev = {
+            daily = CleanIds('daily', v.prev.daily, bounds, false) or {},
+            weekly = CleanIds('weekly', v.prev.weekly, bounds, false) or {},
+        }
+    end
+    return out
+end
+Goals._cleanPick = CleanPick
+
+-- The lists that count in the week weekKey: the newest pick from its week on, before it the one it replaced.
+local function ListsAt(v, weekKey)
+    if type(v) ~= 'table' then return nil end
+    if type(v.from) == 'string' and weekKey < v.from then return v.prev end
+    return v
+end
+
+-- True while some department has the control on (the master switch too): only then is an officer's department read.
+local function AnyOn()
+    local dc = CP.DeptControls
+    if not (dc and dc.active and dc.def and dc.def(CONTROL_KEY)) then return false end
+    for key in pairs(type(Config.Departments) == 'table' and Config.Departments or {}) do
+        local ok, on = pcall(dc.active, key, CONTROL_KEY)
+        if ok and on == true then return true end
+    end
+    return false
+end
+
+-- The officer's department: his job while he is online (on duty or not), else his officer row.
+local function DeptOf(citizenid)
+    local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid)
+    local info = src and CP.Qbx.getInfo and CP.Qbx.getInfo(src)
+    if type(info) == 'table' and type(info.job) == 'table' and CP.Access and CP.Access.departmentForJob then
+        local dept = CP.Access.departmentForJob(info.job.name)
+        if dept then return dept end
+    end
+    local ok, d = pcall(MySQL.scalar.await, 'SELECT department FROM cp_officers WHERE citizenid = ? LIMIT 1',
+        { citizenid })
+    if ok and type(d) == 'string' and d ~= '' then return d end
+    return nil
+end
+
+-- The officer's department once for several reads: false while no department has the control on.
+local function ResolveDept(citizenid)
+    if not AnyOn() then return false end
+    return DeptOf(citizenid) or false
+end
+
+-- The department's lists for citizenid in the week that contains ts ({ daily, weekly }), or nil (the whole lists).
+-- dept: the officer's department when the caller knows it.
+local function DeptLists(citizenid, ts, dept)
+    local dc = CP.DeptControls
+    if not (dc and dc.get and dc.def and dc.def(CONTROL_KEY)) then return nil end
+    if dept == nil then
+        if not AnyOn() then return nil end
+        dept = DeptOf(citizenid)
+    end
+    if type(dept) ~= 'string' then
+        return nil
+    end -- false: ResolveDept found no department control on
+    local ok, v = pcall(dc.get, dept, CONTROL_KEY, { citizenid = citizenid })
+    if not ok then
+        CP.err(TAG, 'reading the goals control of %s failed: %s', dept, tostring(v))
+        return nil
+    end
+    return ListsAt(v, WeekKeyOf(ts))
+end
+
+-- The goal of 'kind' for citizenid in the period that contains ts: from his department's pick (step P21) when it
+-- names goals that still exist, else from the admin's whole list. dept (optional): the officer's department.
+local function Pick(kind, citizenid, ts, dept)
     local list = ValidGoals(Config.Goals and Config.Goals[kind])
     if #list == 0 then return nil end
+    local lists = DeptLists(citizenid, ts, dept)
+    local ids = type(lists) == 'table' and lists[kind] or nil
+    if type(ids) == 'table' and #ids > 0 then
+        local want, narrowed = {}, {}
+        for _, id in ipairs(ids) do want[id] = true end
+        for _, g in ipairs(list) do
+            if want[g.id] then narrowed[#narrowed + 1] = g end
+        end
+        if #narrowed > 0 then list = narrowed end
+    end
     local key, start = Period(kind, ts)
     local rng = CP.U.rng(CP.U.hash(('%s:%s:%s'):format(kind, key, citizenid)))
     local goal = rng:pick(list)
@@ -129,8 +284,8 @@ local function Rewarded(kind, goal, citizenid, start)
     return id ~= nil
 end
 
-local function GoalView(kind, citizenid)
-    local goal, _, start = Pick(kind, citizenid)
+local function GoalView(kind, citizenid, dept)
+    local goal, _, start = Pick(kind, citizenid, nil, dept)
     if not goal then return nil end
     local count = math.floor(Num(goal.count, 1))
     local progress = ProgressOf(goal, citizenid, start) or 0
@@ -149,15 +304,18 @@ end
 --                                     API
 -- ============================================================================
 
-function Goals.forOfficer(citizenid)
+-- department (optional): the officer's department when the caller knows it (step P21: his department's goals).
+function Goals.forOfficer(citizenid, department)
     if type(citizenid) ~= 'string' or citizenid == '' then return { daily = nil, weekly = nil } end
     Db()
-    return { daily = GoalView('daily', citizenid), weekly = GoalView('weekly', citizenid) }
+    local dept = department
+    if type(dept) ~= 'string' then dept = ResolveDept(citizenid) end
+    return { daily = GoalView('daily', citizenid, dept), weekly = GoalView('weekly', citizenid, dept) }
 end
 
 -- force (an admin's Mark complete, a goal a bug blocked): rewarded without the progress check.
-local function Award(kind, citizenid, force, extra)
-    local goal, key, start = Pick(kind, citizenid)
+local function Award(kind, citizenid, force, extra, dept)
+    local goal, key, start = Pick(kind, citizenid, nil, dept)
     if not goal then return false end
     local count = math.floor(Num(goal.count, 1))
     if not force then
@@ -205,8 +363,9 @@ function Goals.onRunCompleted(citizenid)
     end
     busy[citizenid] = true
     local ok, err = pcall(function()
-        Award('daily', citizenid)
-        Award('weekly', citizenid)
+        local dept = ResolveDept(citizenid)
+        Award('daily', citizenid, false, nil, dept)
+        Award('weekly', citizenid, false, nil, dept)
     end)
     busy[citizenid] = nil
     if not ok then CP.err(TAG, 'goal check for %s failed: %s', citizenid, tostring(err)) end
@@ -218,14 +377,15 @@ function Goals.complete(kind, citizenid, goalId, extra)
     if kind ~= 'daily' and kind ~= 'weekly' then return false, 'err.goal_unknown' end
     if type(citizenid) ~= 'string' or citizenid == '' then return false, 'err.invalid_citizenid' end
     Db()
-    local goal, _, start = Pick(kind, citizenid)
+    local dept = ResolveDept(citizenid)
+    local goal, _, start = Pick(kind, citizenid, nil, dept)
     if not goal or goal.id ~= goalId then return false, 'err.goal_unknown' end
     local already = Rewarded(kind, goal, citizenid, start)
     if already == nil then return false, 'err.internal' end
     if already then return false, 'err.goal_rewarded' end
     if busy[citizenid] then return false, 'err.busy' end
     busy[citizenid] = true
-    local ok, res = pcall(Award, kind, citizenid, true, extra)
+    local ok, res = pcall(Award, kind, citizenid, true, extra, dept)
     busy[citizenid] = nil
     if not ok or not res then return false, ok and 'err.goal_rewarded' or 'err.internal' end
     return true
@@ -243,6 +403,58 @@ if CP.Hooks and CP.Hooks.on then
         end
     end)
 end
+
+-- ============================================================================
+--                     THE GOALS MISSION CONTROL (STEP P21)
+-- ============================================================================
+
+local function GoalChoices(kind)
+    local out = {}
+    for _, g in ipairs(ValidGoals(Config.Goals and Config.Goals[kind])) do
+        out[#out + 1] = { id = g.id, label = LabelOf(g) }
+    end
+    return out
+end
+
+function Goals.registerControl()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    return dc.register(CONTROL_KEY, {
+        kind = 'map',
+        integer = true,
+        range = { 1, LIST_MAX },
+        -- no pick: every goal of the admin's lists
+        configValue = function() return { daily = {}, weekly = {} } end,
+        check = function(v, bounds)
+            local clean = CleanPick(v, bounds, true)
+            if not clean then return nil, 'err.control_value' end
+            return clean
+        end,
+        clamp = function(v, bounds) return CleanPick(v, bounds, false) end,
+        -- a narrower goal list is a choice of goals that pay points: the setter keeps the admin's whole list
+        relaxes = function() return true end,
+        -- the pick counts from the next weekly reset; until then the one that counts now stays
+        carry = function(ctx)
+            local out = { daily = ctx.value.daily, weekly = ctx.value.weekly, from = NextWeekKey() }
+            local row = type(ctx.row) == 'table' and ctx.row or nil
+            local saved = row and CleanPick(row.value, dc.bounds and dc.bounds(ctx.dept, CONTROL_KEY) or {}, false)
+            local now = ListsAt(saved, WeekKeyOf())
+            if type(now) == 'table' then out.prev = { daily = now.daily or {}, weekly = now.weekly or {} } end
+            return out
+        end,
+        -- what the supervisor's screen shows: the admin's goals, the week a pick counts from and what counts now
+        viewExtra = function(dept)
+            local ok, v = pcall(dc.get, dept, CONTROL_KEY)
+            local now = ok and ListsAt(v, WeekKeyOf()) or nil
+            return {
+                goalsAll = { daily = GoalChoices('daily'), weekly = GoalChoices('weekly') },
+                goalsFrom = NextWeekKey(),
+                goalsNow = type(now) == 'table' and { daily = now.daily or {}, weekly = now.weekly or {} } or nil,
+            }
+        end,
+    })
+end
+Goals.registerControl()
 
 -- Test hooks (not part of the contract).
 Goals._pick = Pick

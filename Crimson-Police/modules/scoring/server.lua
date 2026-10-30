@@ -1500,7 +1500,7 @@ local function HomeData(officer)
     local st = Scoring.streak(cid)
     local goals = { daily = nil, weekly = nil }
     if CP.Goals and CP.Goals.forOfficer then
-        local ok, g = pcall(CP.Goals.forOfficer, cid)
+        local ok, g = pcall(CP.Goals.forOfficer, cid, officer.department)
         if ok and type(g) == 'table' then goals = { daily = g.daily, weekly = g.weekly } end
     end
     local maxDay = math.floor(Num(Config.Limits and Config.Limits.maxCompletionsDay, 0))

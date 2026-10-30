@@ -107,6 +107,8 @@ end
 --   range       optional { lo, hi }: the admin's min and max (config and Settings) must lie inside it
 --   duration    optional fn(value) -> seconds: a timed control; DC.set makes the change end that long after it starts
 --   allow       optional fn({ role, src, dept, value, row }) -> errKey | nil, extra: one more rule before a change
+--   carry       optional fn({ role, dept, value, row }) -> the value saved: built from the change and the live row
+--               (step P21: a pick that counts from the next weekly reset keeps the one that counts until then)
 --   overlays    optional { [other key] = fn(value, thisValue) -> value }: while this control has a live change, DC.get
 --               of the other key returns fn's value (the self rule of this change still applies)
 --   viewExtra   optional fn(dept) -> table: more fields for this control's row in DC.view
@@ -152,6 +154,7 @@ function DC.register(key, def)
         range = type(def.range) == 'table' and IsNum(def.range[1]) and IsNum(def.range[2]) and def.range or nil,
         duration = type(def.duration) == 'function' and def.duration or nil,
         allow = type(def.allow) == 'function' and def.allow or nil,
+        carry = type(def.carry) == 'function' and def.carry or nil,
         overlays = type(def.overlays) == 'table' and def.overlays or nil,
         viewExtra = type(def.viewExtra) == 'function' and def.viewExtra or nil,
         bounded = def.bounded ~= false and def.kind ~= 'bool' and def.kind ~= 'choice',
@@ -626,6 +629,14 @@ function DC.set(src, key, value, reason, opts)
             return false, 'err.internal'
         end
         if errA then return false, errA, extra end
+    end
+    if def.carry then
+        local okC, carried = pcall(def.carry, { role = role, dept = dept, value = clean, row = row })
+        if not okC or carried == nil then
+            CP.err(TAG, 'the carry of %s failed: %s', key, tostring(carried))
+            return false, 'err.internal'
+        end
+        clean = carried
     end
     local text = Encode(clean)
     if not text then return false, 'err.control_value' end

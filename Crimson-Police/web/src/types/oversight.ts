@@ -375,6 +375,14 @@ export interface TwistsValue {
     offered: string[];
     ticked: string[];
 }
+// goals (step P21): the goal ids of each kind a department's officers draw from (none = every goal); the server adds
+// the week key the lists count from and the lists that count until then
+export interface GoalsValue {
+    daily: string[];
+    weekly: string[];
+    from?: string;
+    prev?: { daily: string[]; weekly: string[] };
+}
 export type MissionControlValue =
     | number
     | boolean
@@ -386,6 +394,7 @@ export type MissionControlValue =
     | BoardsValue
     | ReviewRulesValue
     | TwistsValue
+    | GoalsValue
     | null;
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
 export interface MissionControlState {
@@ -453,6 +462,10 @@ export interface MissionControlState {
     todFor?: string;
     todToday?: string;
     todServer?: string;
+    // goals (step P21): the admin's goals of each kind, the week a pick made now counts from, the lists that count now
+    goalsAll?: { daily: { id: string; label: string }[]; weekly: { id: string; label: string }[] };
+    goalsFrom?: string;
+    goalsNow?: { daily: string[]; weekly: string[] };
     // notices (step P13): characters a department notice may hold (Config.MissionControls.noticeMaxLength)
     maxLength?: number;
 }

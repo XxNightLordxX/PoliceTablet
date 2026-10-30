@@ -26,6 +26,7 @@ import type {
     BoardsValue,
     CallLaneValue,
     CrossDeptValue,
+    GoalsValue,
     MissionControlState,
     MissionControlValue,
     MissionControlsView,
@@ -55,6 +56,7 @@ const CONTROL_GROUP: Record<string, GroupKey> = {
     types: 'board',
     featuredType: 'board',
     typeOfTheDay: 'board',
+    goals: 'officers',
     callLane: 'calls',
     staffCallWait: 'calls',
 };
@@ -424,6 +426,45 @@ function TwistsEditor({
     );
 }
 
+// The goals control (step P21): which of the admin's daily and weekly goals the department's officers draw from.
+function GoalsEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const all = c.goalsAll ?? { daily: [], weekly: [] };
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<GoalsValue>) : {};
+    // only the picks are sent; the server adds the week they count from
+    const w: GoalsValue = { daily: asStrings(v.daily), weekly: asStrings(v.weekly) };
+    const kinds = ['daily', 'weekly'] as const;
+    return (
+        <div className="sup-mc-sliders">
+            <span className="sup-mc-picks__label">{t('sup.goals.hint', { min: c.min ?? 1, max: c.max ?? 1 })}</span>
+            {kinds.map(kind => {
+                const list = asArray<{ id: string; label: string }>(all[kind]);
+                return (
+                    <div key={kind}>
+                        <span className="sup-mc-picks__label">{t(`sup.goals.${kind}`)}</span>
+                        <PickList
+                            names={list.map(g => g.id)}
+                            picked={w[kind]}
+                            label={id => list.find(g => g.id === id)?.label ?? id}
+                            disabled={disabled}
+                            onChange={next => onChange({ ...w, [kind]: next })}
+                        />
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 function Slider({
     c,
     label,
@@ -475,6 +516,7 @@ function Editor({
     if (c.key === 'callLane') return <CallLaneEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'crossDept') return <CrossDeptEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'boards') return <BoardsEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'goals') return <GoalsEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'twists') return <TwistsEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'reviewRules') {
         return <ReviewRulesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
@@ -722,6 +764,12 @@ function PlainRow({
                                 type: text('typeOfTheDay', c.todToday ?? c.todServer ?? null),
                                 day: c.todFor,
                             })}
+                        </p>
+                    ) : null}
+                    {c.key === 'goals' && c.goalsFrom ? (
+                        // step P21: what counts this week and the week a pick made now counts from
+                        <p className="sup-mc-row__desc">
+                            {t('sup.goals.from', { now: text('goals', c.goalsNow ?? null), day: c.goalsFrom })}
                         </p>
                     ) : null}
                 </div>

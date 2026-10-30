@@ -292,6 +292,10 @@ Config.MissionControls = {
         -- of a random one; only that unit sees the mission's name and may accept or decline it, every accept rule
         -- stays (cooldowns, caps, unit size), the call never earns rapid response and the audit names the mission
         pushMission = { on = false },
+        -- Goals: a supervisor picks min to max of your daily goals and of your weekly goals (Goals.daily, Goals.weekly)
+        -- his department's officers draw theirs from, starting at the next weekly reset (none picked = every goal);
+        -- the goals' points never change and the supervisor himself keeps your whole lists
+        goals = { on = false, min = 1, max = 5 },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 

@@ -960,6 +960,11 @@ do
                 and cfgText:find('with one mission he chooses instead', 1, true) ~= nil,
             'step P19: pushing a chosen mission to a unit ships off, 5 a supervisor a day, with comments'
         )
+        H.ok(
+            d.goals.on == false and d.goals.min == 1 and d.goals.max == 5
+                and cfgText:find('Goals: a supervisor picks min to max of your daily goals', 1, true) ~= nil,
+            'step P21: a department\'s goals ship off, with a comment'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

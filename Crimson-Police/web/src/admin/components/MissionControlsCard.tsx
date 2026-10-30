@@ -23,6 +23,7 @@ import type {
     BoardsValue,
     CallLaneValue,
     CrossDeptValue,
+    GoalsValue,
     MissionControlBounds,
     MissionControlState,
     MissionControlValue,
@@ -85,6 +86,15 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
                 n: Array.isArray(w.offered) ? w.offered.length : 0,
                 ticked: Array.isArray(w.ticked) ? w.ticked.length : 0,
             });
+        }
+        // goals (step P21): how many goals of each kind the department picked (none = every goal)
+        if (key === 'goals') {
+            const g = v && typeof v === 'object' && !Array.isArray(v) ? (v as Partial<GoalsValue>) : {};
+            const part = (ids: unknown) =>
+                Array.isArray(ids) && ids.length > 0
+                    ? t('mc.value.goals_n', { n: ids.length })
+                    : t('mc.value.goals_all');
+            return t('mc.value.goals', { daily: part(g.daily), weekly: part(g.weekly) });
         }
         if (v === undefined || v === null) return '-';
         if (typeof v === 'boolean') return v ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off');

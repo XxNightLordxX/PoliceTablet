@@ -266,5 +266,14 @@
   "mc.unit.happyHourPoints": "×{n}",
   "mc.control.twistPoints": "Twist points",
   "mc.control_desc.twistPoints": "Multiplies each twist's points share on runs your department leads. All chosen twists together still stop at the server's twist points cap.",
-  "mc.unit.twistPoints": "×{n}"
+  "mc.unit.twistPoints": "×{n}",
+  "mc.control.goals": "Department goals",
+  "mc.control_desc.goals": "Pick which of the server's daily and weekly goals your department's officers draw theirs from. A pick counts from the next weekly reset, so no goal an officer is working on changes. None picked = every goal. The goals' points never change, and your own goals stay drawn from every goal.",
+  "mc.value.goals": "Daily: {daily} · Weekly: {weekly}",
+  "mc.value.goals_all": "every goal",
+  "mc.value.goals_n": "{n} picked",
+  "sup.goals.daily": "Daily goals your officers draw from",
+  "sup.goals.weekly": "Weekly goals your officers draw from",
+  "sup.goals.hint": "Pick {min} to {max}, or none for every goal.",
+  "sup.goals.from": "Counts now: {now}. A pick saved now counts from the week of {day}."
 }
