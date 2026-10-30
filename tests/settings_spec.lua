@@ -1112,6 +1112,16 @@ do
     end
 end
 
+-- My usual twists (step O15): allowed, none by default (as before), commented, edited as a list of twist keys.
+do
+    local function E(p) return S.entry(p) or {} end
+    H.eq(E('OfficerOptions.allow.usualTwists').default, true, 'usualTwists: officers may change it')
+    local e = E('OfficerOptions.defaults.usualTwists')
+    H.ok(type(e.default) == 'table' and #e.default == 0, 'usualTwists: none, as before')
+    H.eq(e.kind, 'list', 'usualTwists: edits as a list')
+    H.ok((e.desc or '') ~= '', 'usualTwists: its default has a comment')
+end
+
 -- Dispatch and opening (step O9): one-click claim, call pop-ups, the key after a call, open on, remember filters;
 -- allowed, shipped as today, each with its comment.
 do

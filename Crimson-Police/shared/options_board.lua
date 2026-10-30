@@ -33,3 +33,18 @@ end
 Defs.add('favouriteTypes', { kind = 'list', values = TypeKeys, default = {}, group = 'board', order = 10 })
 Defs.add('hiddenTypes', { kind = 'list', values = TypeKeys, default = {}, guard = NotAll, group = 'board', order = 20 })
 Defs.add('skipAcceptConfirm', { kind = 'bool', default = false, group = 'board', order = 30 })
+
+-- My usual twists (step O15): the twists enabled in Config.Events.twists, in the tablet's order, asked at every call
+-- (a twist switched off is dropped from a saved list). The accept step (Mission Board, mission call claim) starts with
+-- the ones offered for that card ticked; the server still checks the chosen list at the accept.
+local function TwistKeys()
+    local out = {}
+    if not (CP.Twists and CP.Twists.ORDER) then return out end
+    for _, key in ipairs(CP.Twists.ORDER) do
+        local c = CP.Twists.cfg(key)
+        if c and c.enabled then out[#out + 1] = key end
+    end
+    return out
+end
+
+Defs.add('usualTwists', { kind = 'list', values = TwistKeys, default = {}, group = 'board', order = 40 })

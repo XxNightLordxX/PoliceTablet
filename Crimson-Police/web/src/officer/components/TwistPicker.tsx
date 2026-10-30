@@ -8,6 +8,8 @@ import { t } from '../../shared/i18n';
 import type { TwistCaps, TwistOffer } from '../../shared/types';
 import './TwistPicker.css';
 
+export { tickedTwists } from './twistTicks';
+
 // The shipped caps (Config.Events.twistMaxPoints, twistMaxCash) when the server sends none.
 const DEFAULT_CAPS: TwistCaps = { points: 0.7, cash: 1.95 };
 
@@ -17,13 +19,6 @@ function pct(share: number): number {
 
 function times(m: number): string {
     return (Math.round(m * 100) / 100).toFixed(2);
-}
-
-// The keys the leader's department pre-ticks (step P15), in the offered order: what the accept step starts with.
-export function tickedTwists(offered?: TwistOffer[] | null): string[] {
-    return asArray(offered as TwistOffer[] | undefined)
-        .filter(o => o.ticked === true)
-        .map(o => o.key);
 }
 
 // The bonus of the picked twists: the points shares add up, the cash multipliers multiply, both stop at the caps

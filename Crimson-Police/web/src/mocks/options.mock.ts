@@ -30,6 +30,15 @@ const SCHEMA: OptionDef[] = [
         order: 20,
     },
     { key: 'skipAcceptConfirm', kind: 'bool', default: false, store: 'server', group: 'board', order: 30 },
+    {
+        key: 'usualTwists',
+        kind: 'list',
+        values: ['armored_hostiles', 'time_crunch', 'radio_silence'],
+        default: [],
+        store: 'server',
+        group: 'board',
+        order: 40,
+    },
     { key: 'skipClaimConfirm', kind: 'bool', default: false, store: 'server', group: 'dispatch', order: 10 },
     {
         key: 'callAlerts',
@@ -124,6 +133,8 @@ const listParam = (name: string) => (PARAMS.get(name) ?? '').split(',').filter(B
 if (listParam('fav').length) server.favouriteTypes = listParam('fav');
 if (listParam('hide').length) server.hiddenTypes = listParam('hide');
 if (PARAMS.get('oneClick') === '1') server.skipAcceptConfirm = true;
+// My usual twists (step O15): ?usual=time_crunch,armored_hostiles
+if (listParam('usual').length) server.usualTwists = listParam('usual');
 if (PARAMS.get('oneClickClaim') === '1') server.skipClaimConfirm = true;
 // During a mission (step O10): ?abandonConfirm=0 (Abandon pressed twice) ?oneClickRecalc=1 ?units=imperial (with
 // ?hud=progress: miles on the HUD)

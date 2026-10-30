@@ -87,7 +87,10 @@ async function steps(): Promise<void> {
     // My options lists the three board options; hiding every type is refused, one type is fine
     const view = await request<OptionsView>('getOptions', {});
     const board = (view.data?.schema ?? []).filter(d => d.group === 'board').map(d => d.key);
-    ok(board.join(',') === 'favouriteTypes,hiddenTypes,skipAcceptConfirm', 'My options: the Mission Board group');
+    ok(
+        board.join(',') === 'favouriteTypes,hiddenTypes,skipAcceptConfirm,usualTwists',
+        'My options: the Mission Board group',
+    );
     const allTypes = ['patrol', 'training', 'investigation', 'tactical'];
     const refused = await action('server:options:set', { hiddenTypes: allTypes });
     ok(!refused.ok && refused.error === 'err.option_hide_all', 'hiding every type is refused');

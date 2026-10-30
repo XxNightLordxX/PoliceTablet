@@ -387,6 +387,33 @@ do
     Act(1, { objectiveGps = 'route' })
 end
 
+-- My usual twists (shared/options_board.lua, step O15): the twists enabled in Config.Events.twists, saved with the
+-- character; shipped as today (none); an unknown twist is refused, one switched off since is dropped.
+do
+    local rows = {}
+    for _, d in ipairs(Cb('getOptions', 1).data.schema) do rows[d.key] = d end
+    local u = rows.usualTwists
+    H.ok(u and u.group == 'board' and u.store == 'server' and u.kind == 'list',
+        'My usual twists: a Mission Board row, saved with the character')
+    H.eq(table.concat(Defs.values('usualTwists'), ','), 'armored_hostiles,time_crunch,radio_silence',
+        'the values are the enabled twists, in the tablet\'s order')
+    H.eq(#Cb('getOptions', 1).data.values.usualTwists, 0, 'shipped: no usual twists, as before')
+    local ok, data = Act(1, { usualTwists = { 'time_crunch', 'time_crunch' } })
+    H.ok(ok == true and table.concat(data.values.usualTwists, ',') == 'time_crunch', 'Time Crunch as usual (once)')
+    H.eq(Saved('OPT00001').usualTwists[1], 'time_crunch', '...saved with the character')
+    H.eq(select(2, Act(1, { usualTwists = { 'double_trouble' } })), 'err.option_value', 'an unknown twist is refused')
+    H.eq(select(2, Act(1, { usualTwists = 'time_crunch' })), 'err.option_value', 'a list, not one key')
+    Act(1, { usualTwists = { 'time_crunch', 'radio_silence' } })
+    local keep = Config.Events.twists.time_crunch.enabled
+    Config.Events.twists.time_crunch.enabled = false
+    H.eq(table.concat(Defs.values('usualTwists'), ','), 'armored_hostiles,radio_silence', 'a switched-off twist goes')
+    H.eq(table.concat(Cb('getOptions', 1).data.values.usualTwists, ','), 'radio_silence',
+        '...and is dropped from the saved list')
+    Config.Events.twists.time_crunch.enabled = keep
+    Act(1, { usualTwists = {} })
+    H.eq(Saved('OPT00001') and Saved('OPT00001').usualTwists, nil, 'back to the defaults: nothing saved')
+end
+
 -- the column the step adds, in every storage mode (files mode: the saves folder engine)
 H.ok(pcall(H.sql, 'SELECT options FROM cp_officers LIMIT 1'), 'migration 010: cp_officers.options exists')
 

@@ -3331,6 +3331,14 @@ no option is registered by this module: each feature registers its own keys.
   (random draw, cooldown, route, the unit note) show as a footnote under the cards; the Weekly Boss still asks.
   `server:acceptType` and the draw are unchanged. Shipped allowed, defaults `{}`, `{}`, false. Walk:
   officer/screens/boardOrder.walk.ts. Mock: `?fav=tactical&hide=training&oneClick=1`.
+- My usual twists (step O15, shared/options_board.lua, group `board`, `server`): `usualTwists` (list; values = the
+  `CP.Twists.ORDER` keys enabled in Config.Events.twists, asked at every call, so a twist switched off is dropped from
+  a saved list). The NUI only: officer/components/twistTicks.ts `tickedTwists(offered, usual)` gives the keys the
+  accept dialog (MissionBoard.tsx, Dispatch.tsx claim) starts with: the officer's usual twists that the card offers
+  (the offer already holds only the department's twists, step P15), in the offered order, when he picked any; else
+  the department's `ticked` ones; else none. The usual list is read through a ref, so an options push never resets a
+  dialog already open. `server:acceptType` / `server:claimMissionCall` and `CP.Events.checkTwists` are unchanged.
+  Shipped allowed, default `{}`. Walk: officer/components/usualTwists.walk.ts. Mock: `?usual=time_crunch`.
 - Dispatch and opening (step O9, shared/options_dispatch.lua, groups `dispatch` and `opening`): `skipClaimConfirm`
   (bool, server; Dispatch.tsx `claimNow` sends `server:claimMissionCall` at once with no twists, a Twists button opens
   the dialog, the dialog's lines are the footnote `mc.oneclick.note`; the claim window is unchanged), `callAlerts`

@@ -1515,6 +1515,7 @@ Config.OfficerOptions = {
         favouriteTypes = true,       -- the mission types shown first on the Mission Board (this character)
         hiddenTypes = true,          -- the mission types folded away on the Mission Board (this character)
         skipAcceptConfirm = true,    -- accept a mission type in one click, without the confirm (this character)
+        usualTwists = true,          -- the twists already ticked when the officer takes a mission (this character)
         skipClaimConfirm = true,     -- claim a mission call in one click, without the confirm (this character)
         callAlerts = true,           -- which new mission calls pop up: every call or favourite types (this character)
         dispatchKeyAfterCall = true, -- the tablet key opens Dispatch just after a mission call (this character)
@@ -1554,6 +1555,10 @@ Config.OfficerOptions = {
                                      -- type; {} = none (as before)
         skipAcceptConfirm = false,   -- true = Accept starts a type at once, the warnings sit under the cards; false =
                                      -- Accept asks first (as before)
+        usualTwists = {},            -- twist keys ticked at the start of the accept step (Mission Board, mission call
+                                     -- claim) where that card offers them, e.g. { 'time_crunch' }; the officer can
+                                     -- untick them. Any = they replace the department's pre-ticked twists; {} = the
+                                     -- department's pre-ticked twists, else none (as before)
         skipClaimConfirm = false,    -- true = Claim on a mission call takes it at once (the nearest unit still wins a
                                      -- claim together); false = Claim asks first (as before)
         callAlerts = 'all',          -- 'all' = every new mission call pops up (as before); 'favourites' = only calls

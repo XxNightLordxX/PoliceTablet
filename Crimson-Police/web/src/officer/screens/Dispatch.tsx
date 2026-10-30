@@ -1,7 +1,7 @@
 // Officer UI · Dispatch (screen key 'dispatch'): mission calls. A call names a type, a priority and an area, never
 // a mission; the mission is drawn at random after the claim. Mission calls never reach SC-Dispatch.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Badge,
     Button,
@@ -331,10 +331,13 @@ export default function Dispatch() {
     // My options -> Dispatch (step O9): Claim sends the claim at once; the dialog's lines are the footnote
     const oneClick = useOption('skipClaimConfirm') === true;
     const [pending, setPending] = useState<MissionCall | null>(null);
-    // the twists the leader picked in the claim dialog (PLAN M8b); a new dialog starts with the ones his department
-    // pre-ticks (step P15), else none
+    // the twists the leader picked in the claim dialog (PLAN M8b); a new dialog starts with his
+    // usual twists (My options, step O15) where the call offers them, else the ones his department pre-ticks (step
+    // P15), else none
     const [twists, setTwists] = useState<string[]>([]);
-    useEffect(() => setTwists(pending ? tickedTwists(pending.twists) : []), [pending]);
+    const usualTwists = useRef<unknown>(undefined);
+    usualTwists.current = useOption('usualTwists');
+    useEffect(() => setTwists(pending ? tickedTwists(pending.twists, usualTwists.current) : []), [pending]);
     const [muted, setMuted] = useState<boolean>(!!session.prefs?.callsMuted);
     const [stamp, setStamp] = useState(0);
     useEffect(() => {

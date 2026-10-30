@@ -1035,6 +1035,11 @@ local KNOWN = {
     ['OfficerOptions.defaults.objectiveGps'] = { tpl = Enum({ 'route', 'waypoint', 'off' }), kind = 'enum' },
     ['OfficerOptions.defaults.favouriteTypes'] = { tpl = ListOf(ID, { unique = true }), kind = 'list', item = 'string' },
     ['OfficerOptions.defaults.hiddenTypes'] = { tpl = ListOf(ID, { unique = true }), kind = 'list', item = 'string' },
+    ['OfficerOptions.defaults.usualTwists'] = {
+        tpl = ListOf(Enum({ 'armored_hostiles', 'time_crunch', 'radio_silence' }), { unique = true }),
+        kind = 'list',
+        item = 'string',
+    },
     ['Profile.appearances'] = {
         tpl = ListOf(Enum(APPEARANCES), { min = 1, unique = true }),
         kind = 'list',

@@ -673,10 +673,17 @@ export default function MissionBoard() {
     const { data, loading, error, refetch } = useRequest<MissionBoardData>('getMissionTypes', {}, { pollMs: POLL_MS });
     const { run, busy } = useAction();
     const [pending, setPending] = useState<Pending>(null);
-    // the twists the leader picked in the accept dialog (PLAN M8b); a new dialog starts with the ones his
-    // department pre-ticks (step P15), else none
+    // the twists the leader picked in the accept dialog (PLAN M8b); a new dialog starts with his
+    // usual twists (My options, step O15) where the card offers them, else the ones his department pre-ticks (step
+    // P15), else none
     const [twists, setTwists] = useState<string[]>([]);
-    useEffect(() => setTwists(pending && pending.kind === 'type' ? tickedTwists(pending.card.twists) : []), [pending]);
+    const usualTwists = useRef<unknown>(undefined);
+    usualTwists.current = useOption('usualTwists');
+    useEffect(
+        () =>
+            setTwists(pending && pending.kind === 'type' ? tickedTwists(pending.card.twists, usualTwists.current) : []),
+        [pending],
+    );
     const [joining, setJoining] = useState(false);
     // My options -> Mission Board (step O8): favourite types first, hidden types folded, accept in one click
     const favouriteTypes = typeKeys(useOption('favouriteTypes'));
