@@ -49,6 +49,9 @@ export interface Logo {
     size: number;
     grayscale: boolean;
 }
+// One officer option's value (shared/options.lua kinds: bool, enum, list, number).
+export type OfficerOptionValue = boolean | string | number | (string | number)[];
+
 export interface Session {
     ui: 'officer' | 'supervisor' | 'admin';
     title: string; // 'Crimson-Police'
@@ -104,8 +107,17 @@ export interface Session {
             homeForms?: boolean;
             reasonChips?: string[];
         };
+        // Config.OfficerOptions resolved for the officer's department (CP.OptionDefs.resolve)
+        officerOptions?: {
+            enabled: boolean;
+            allow: Record<string, boolean>;
+            defaults: Record<string, OfficerOptionValue>;
+            bounds: Record<string, { min?: number; max?: number }>;
+        };
     };
     prefs?: Prefs;
+    // the officer's own options saved on the server (CP.Options.effective): every server option, default or chosen
+    options?: Record<string, OfficerOptionValue>;
     // how the tablet was opened: command, keybind, item, export, desk or dispatch (desk = its index)
     access?: { via: string; desk: number | null };
     // CP.Maintenance.view(): a storage copy or switch, a backup restore or a store left behind holds the lock

@@ -828,6 +828,26 @@ do
     H.ok((Check('Profile.bannedWordsFile', false)), 'no banned-words file')
 end
 
+-- Config.OfficerOptions (step O1): with the officer profile, each comment its description, only known options.
+do
+    local function E(p) return S.entry(p) or {} end
+    H.eq(E('OfficerOptions.enabled').section, E('Profile.bioMax').section, 'officer options sit with the profile')
+    H.eq(E('OfficerOptions.enabled').default, true, 'officer options ship on')
+    H.ok(E('OfficerOptions.enabled').desc:find('no My options screen', 1, true) ~= nil, 'enabled: its comment')
+    H.ok(E('OfficerOptions.allow').desc:find('officers cannot change it', 1, true) ~= nil, 'allow: its comment')
+    H.ok(E('OfficerOptions.defaults').desc:find('what every officer starts with', 1, true) ~= nil, 'defaults too')
+    H.ok(E('OfficerOptions.bounds').desc:find('{ min, max } officers may pick', 1, true) ~= nil, 'bounds too')
+    CP.OptionDefs.add('t_set', { kind = 'number', min = 0, max = 10, default = 5 })
+    Err('OfficerOptions.allow', { t_unknown = false }, 'err.option_config', 'allow names a registered option only')
+    Err('OfficerOptions.bounds', { t_set = { 8, 2 } }, 'err.option_config', 'bounds go min to max')
+    H.ok((Check('OfficerOptions.allow', { t_set = false })), 'a known option may be locked')
+    H.eq(S.checkDepartments('Departments.sast.officerOptions', { defaults = { t_set = 'x' } }), 'err.option_config',
+        'a department\'s officerOptions pass the same checks')
+    H.eq(S.checkDepartments('Departments.sast.officerOptions', { defaults = { t_set = 3 } }), nil,
+        'a good department override')
+    CP.OptionDefs.remove('t_set')
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

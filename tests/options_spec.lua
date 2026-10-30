@@ -1,0 +1,240 @@
+-- Officer options (shared/options.lua CP.OptionDefs, modules/options CP.Options): the rules, saving per character
+-- (sparse JSON in cp_officers.options), getOptions and server:options:set, and what the tablet session carries.
+
+local H = dofile('tests/harness.lua')
+H.boot({ side = 'server', realLocale = true })
+local cjson = require('cjson')
+
+-- ============================================================================
+--                         DEPARTMENTS, OFFICERS, STUBS
+-- ============================================================================
+
+local officers = {
+    [1] = { dept = 'sast', cid = 'OPT00001' },
+    [2] = { dept = 'fib', cid = 'OPT00002' },
+    [3] = { dept = 'sast', cid = 'OPT00003' },
+}
+CP.Access = {
+    getOfficer = function(src)
+        local o = officers[src]
+        if not o then return nil, 'err.not_police' end
+        return {
+            src = src,
+            citizenid = o.cid,
+            name = 'Officer ' .. src,
+            department = o.dept,
+            departmentLabel = o.dept:upper(),
+            departmentShort = o.dept:upper(),
+            rank = 'Trooper',
+            callsign = 'C-' .. src,
+            gradeLevel = 1,
+            isSupervisor = false,
+        }
+    end,
+    isAdmin = function() return false end,
+    department = function(key) return { key = key, theme = { primary = '#1f4e8c' } } end,
+    departments = function()
+        return {
+            { key = 'sast', label = 'SAST', short = 'SAST', theme = { primary = '#1f4e8c' } },
+            { key = 'fib', label = 'FIB', short = 'FIB', theme = { primary = '#1c2541' } },
+        }
+    end,
+    refreshOfficerRow = function() end,
+}
+CP.Permissions = {
+    can = function() return false end,
+    actionsFor = function() return {} end,
+}
+CP.Alerts = {
+    inArena = function() return false end,
+}
+Config.Tablet.item = false
+Config.Tablet.access = { command = true, keybind = true, item = true, desk = true, requireItem = false }
+for src in pairs(officers) do H.players[src] = { coords = vec3(0.0, 0.0, 0.0) } end
+
+Config.Departments.sast = Config.Departments.sast or { label = 'SAST', jobs = { 'sast' } }
+Config.Departments.fib = Config.Departments.fib or { label = 'FIB', jobs = { 'fib' } }
+
+H.load('modules/tablet/server.lua')
+H.load('modules/options/server.lua')
+local Defs, Options = CP.OptionDefs, CP.Options
+
+-- Four test options, one of each kind, saved on the server; one kept by the tablet only.
+local types = { 'patrol', 'traffic', 'warrant' }
+Defs.add('t_bool', { kind = 'bool', default = false, group = 'test', order = 1 })
+Defs.add('t_enum', { kind = 'enum', values = { 'small', 'medium', 'large' }, default = 'medium', group = 'test' })
+Defs.add('t_list', {
+    kind = 'list',
+    values = function() return types end,
+    default = {},
+    group = 'test',
+})
+Defs.add('t_num', { kind = 'number', min = 0, max = 100, integer = true, default = 50, group = 'test' })
+Defs.add('t_local', { kind = 'bool', default = true, store = 'local', group = 'test' })
+
+local function Tick() H.clockMs = H.clockMs + 1100 end
+local function Cb(name, src, args)
+    Tick()
+    return H.callback('crimson-police:' .. name, src, args)
+end
+local function Act(src, payload)
+    Tick()
+    H.reset()
+    H.fire('crimson-police:server:options:set', src, payload, 'rq')
+    local ev = H.findEvents('crimson-police:client:actionResult')[1]
+    if not ev then return nil, 'no reply' end
+    return ev.args[2], ev.args[3]
+end
+local function Pushes()
+    local out = {}
+    for _, e in ipairs(H.findEvents('crimson-police:client:push')) do
+        if e.args[1] == 'options' then out[#out + 1] = e end
+    end
+    return out
+end
+local function Saved(cid)
+    local r = H.sql('SELECT options FROM cp_officers WHERE citizenid = ?', { cid })[1]
+    if not r or r.options == nil or r.options == cjson.null then return nil end
+    return cjson.decode(r.options)
+end
+
+H.sql('DELETE FROM cp_officers WHERE citizenid LIKE \'OPT%\'')
+
+-- ============================================================================
+--                         1. THE RULES (CP.OptionDefs)
+-- ============================================================================
+
+do
+    H.eq(Defs.check('t_num', 250), 100, 'a number above the option\'s max is clamped')
+    H.eq(Defs.check('t_num', 10, { 20, 80 }), 20, 'and to the bounds an owner set')
+    H.eq(Defs.check('t_num', 33.4), 33, 'an integer option rounds')
+    H.eq(select(2, Defs.check('t_num', 'x')), 'err.option_value', 'a text is not a number')
+    H.eq(select(2, Defs.check('t_enum', 'huge')), 'err.option_value', 'an enum takes its values only')
+    H.eq(select(2, Defs.check('t_bool', 1)), 'err.option_value', 'a bool takes true or false only')
+    H.eq(cjson.encode(Defs.check('t_list', { 'traffic', 'traffic', 'patrol' })), '["traffic","patrol"]',
+        'a list is de-duplicated')
+    H.eq(select(2, Defs.check('t_list', { 'nope' })), 'err.option_value', 'a list takes offered values only')
+    H.eq(select(2, Defs.check('t_nope', true)), 'err.invalid_payload', 'an unknown key')
+    H.eq(Defs.checkConfig({ allow = { t_nope = false } }), 'err.option_config', 'a config of an unknown key')
+    H.eq(Defs.checkConfig({ defaults = { t_enum = 'huge' } }), 'err.option_config', 'a config with a bad default')
+    H.eq(Defs.checkConfig({ bounds = { t_bool = { 0, 1 } } }), 'err.option_config', 'bounds on a non-number')
+    H.eq(Defs.checkConfig({ allow = { t_bool = false }, bounds = { t_num = { 10, 20 } } }), nil, 'a good config')
+end
+
+-- ============================================================================
+--                  2. A FRESH OFFICER, SAVING, THE SPARSE ROW
+-- ============================================================================
+
+do
+    local res = Cb('getOptions', 1)
+    H.ok(res and res.ok, 'getOptions answers an officer')
+    local v = res.data.values
+    H.ok(v.t_bool == false and v.t_enum == 'medium' and #v.t_list == 0 and v.t_num == 50,
+        'a fresh officer gets the defaults')
+    H.eq(v.t_local, nil, 'a local option is not a server value')
+    H.eq(res.data.enabled, true, 'officer options ship on')
+    local keys = {}
+    for _, s in ipairs(res.data.schema) do keys[s.key] = s end
+    H.ok(keys.t_bool and keys.t_enum and keys.t_list and keys.t_num and keys.t_local, 'the schema lists every option')
+    H.eq(cjson.encode(keys.t_list.values), '["patrol","traffic","warrant"]', 'with the values offered now')
+    H.eq(keys.t_num.bounds.max, 100, 'and a number\'s bounds')
+    H.eq(Cb('getOptions', 9).error, 'err.not_police', 'not police: refused')
+
+    local ok, data = Act(1, { t_bool = true, t_enum = 'large', t_list = { 'warrant' }, t_num = 70 })
+    H.eq(ok, true, 'server:options:set saves')
+    H.eq(data.values.t_enum, 'large', 'and answers the values')
+    local pushes = Pushes()
+    H.ok(#pushes == 1 and pushes[1].target == 1, 'the push \'options\' goes to the officer only')
+    v = Cb('getOptions', 1).data.values
+    H.ok(v.t_bool == true and v.t_enum == 'large' and v.t_list[1] == 'warrant' and v.t_num == 70,
+        'set -> getOptions round trip')
+    H.eq(Cb('getOptions', 3).data.values.t_enum, 'medium', 'another officer keeps the defaults')
+
+    H.eq((Act(1, { t_enum = 'medium', t_num = 50 })), true, 'setting the default values')
+    local saved = Saved('OPT00001')
+    H.ok(saved and saved.t_enum == nil and saved.t_num == nil and saved.t_bool == true,
+        'a value equal to the default removes its key (sparse row)')
+    Act(1, { t_bool = false, t_list = {} })
+    H.eq(Saved('OPT00001'), nil, 'all defaults again: the row keeps NULL')
+
+    H.eq(select(2, Act(1, { t_nope = true })), 'err.invalid_payload', 'an unknown key is refused')
+    H.eq(select(2, Act(1, { t_local = false })), 'err.invalid_payload', 'a local key is refused')
+    H.eq(select(2, Act(1, { t_bool = 'yes' })), 'err.option_value', 'a wrong type is refused')
+    H.eq(select(2, Act(1, 'x')), 'err.invalid_payload', 'a payload that is not a table')
+    H.eq(select(2, Act(9, { t_bool = true })), 'err.not_police', 'not police: refused')
+    Act(1, { t_num = 500 })
+    H.eq(Saved('OPT00001').t_num, 100, 'numbers are clamped to bounds')
+end
+
+-- ============================================================================
+--                 3. LOCKS, DEPARTMENTS, VALUES THAT WENT AWAY
+-- ============================================================================
+
+do
+    Act(3, { t_enum = 'small', t_list = { 'traffic', 'warrant' } })
+    Config.OfficerOptions.allow = { t_enum = false }
+    H.eq(select(2, Act(3, { t_enum = 'large' })), 'err.option_locked', 'allow = false refuses a change')
+    local v = Cb('getOptions', 3).data
+    H.eq(v.values.t_enum, 'medium', 'and ignores the saved value')
+    local listed = false
+    for _, s in ipairs(v.schema) do listed = listed or s.key == 't_enum' end
+    H.eq(listed, false, 'a locked option is left out of the schema')
+    H.eq(Saved('OPT00003').t_enum, 'small', 'the saved value is kept')
+    Config.OfficerOptions.allow = {}
+    H.eq(Cb('getOptions', 3).data.values.t_enum, 'small', 'allowing it again brings it back')
+
+    Config.OfficerOptions.defaults = { t_enum = 'small', t_num = 40 }
+    Config.OfficerOptions.bounds = { t_num = { 30, 60 } }
+    Config.Departments.fib.officerOptions = { defaults = { t_enum = 'large' }, bounds = { t_num = { 0, 20 } } }
+    local fib = Cb('getOptions', 2).data.values
+    H.eq(fib.t_enum, 'large', 'the department override wins over the global one')
+    H.eq(fib.t_num, 20, 'a default is clamped to the department bounds')
+    H.eq(Cb('getOptions', 1).data.values.t_num, 60, 'a saved number outside the bounds now is clamped')
+    local _, got = Act(2, { t_num = 90 })
+    H.eq(got and got.values.t_num, 20, 'the department bounds clamp a new value')
+    H.eq(Saved('OPT00002'), nil, 'clamped to the default: nothing is saved')
+    Config.Departments.fib.officerOptions = { allow = { t_bool = false } }
+    H.eq(select(2, Act(2, { t_bool = true })), 'err.option_locked', 'a department can lock an option')
+    H.eq((Act(1, { t_bool = true })), true, 'for its officers only')
+    Config.Departments.fib.officerOptions = nil
+    Config.OfficerOptions.defaults, Config.OfficerOptions.bounds = {}, {}
+
+    types = { 'patrol', 'traffic' }
+    H.eq(cjson.encode(Cb('getOptions', 3).data.values.t_list), '["traffic"]',
+        'a list value that no longer exists is dropped')
+
+    Config.OfficerOptions.enabled = false
+    H.eq(select(2, Act(3, { t_bool = true })), 'err.option_locked', 'enabled = false refuses every change')
+    H.eq(Cb('getOptions', 3).data.values.t_enum, 'medium', 'and everyone gets the defaults')
+    Config.OfficerOptions.enabled = true
+end
+
+-- ============================================================================
+--                                4. THE SESSION
+-- ============================================================================
+
+do
+    local res = Cb('getSession', 3, { ui = 'officer', via = 'command' })
+    H.ok(res and res.ok, 'the officer session opens')
+    H.eq(res.data.options and res.data.options.t_enum, 'small', 'the session carries the effective options')
+    H.eq(res.data.options.t_local, nil, 'server options only')
+    local oo = res.data.config.officerOptions
+    H.ok(
+        oo and oo.enabled == true and oo.allow.t_num == true and oo.defaults.t_enum == 'medium'
+            and oo.bounds.t_num.max == 100,
+        'and config.officerOptions for the department'
+    )
+    Config.Departments.fib.officerOptions = { allow = { t_num = false } }
+    H.eq(Cb('getSession', 2, { ui = 'officer', via = 'command' }).data.config.officerOptions.allow.t_num, false,
+        'resolved for the officer\'s department')
+    Config.Departments.fib.officerOptions = nil
+    H.eq(Options.effective('OPT00003', 'sast', false).t_enum, 'medium', 'raw false: no row, the defaults')
+end
+
+-- the column the step adds, in every storage mode (files mode: the saves folder engine)
+H.ok(pcall(H.sql, 'SELECT options FROM cp_officers LIMIT 1'), 'migration 010: cp_officers.options exists')
+
+for _, k in ipairs({ 't_bool', 't_enum', 't_list', 't_num', 't_local' }) do Defs.remove(k) end
+H.sql('DELETE FROM cp_officers WHERE citizenid LIKE \'OPT%\'')
+
+return H

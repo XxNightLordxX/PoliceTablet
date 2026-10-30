@@ -1774,6 +1774,15 @@ Commendations
 
 Moderation: Supervisor UI → Review Queue → Profiles (their department) and Admin UI → Officers: approve or reject a pending picture or bio (reason required), clear a bio or a picture (reason required), and handle reports. Every action is audited.
 
+Officer options
+
+My options holds the choices each officer makes for their own tablet, saved per character (cp_officers.options, so they follow the character to any PC). This version builds the storage and the rules only: there is no My options screen and no option yet; later updates add each option with its own rule here.
+
+- Config.OfficerOptions: enabled (true; false = no My options screen and every option keeps its default for everyone), allow (per option: false = officers cannot change it and everyone gets the default), defaults (per option: what every officer starts with) and bounds (per number option: { min, max } officers may pick). A department may set its own allow, defaults and bounds in Config.Departments.<key>.officerOptions; they win over the global ones for its officers.
+- An option is a switch, one choice from a list, several choices from a list, or a number. A choice that is no longer offered (a mission type or twist that was removed) is dropped from the saved value, and a number outside the bounds now is clamped to them. Only the options that differ from the default are saved: picking the default again removes it.
+- An option that is not allowed now is ignored, never deleted: allowing it again brings the officer's own choice back.
+- Only an officer on duty in a department can change their options, only their own, and only to a value the rules take; the server checks every change (the tablet's own checks are only for show). Settings refuses an officerOptions that names an unknown option or a value it cannot take.
+
 Report profile: any officer can press "Report profile" on a public profile, pick a reason (picture, bio, other) and add up to 140 characters. Reports go to Review Queue → Profiles of the reported officer's department and to admins, at most 3 per reporter per day and one per reporter per profile per day (Config.Profile.reports), audited; the reported officer is not told who reported them. Content at an approved image link can change at the host, so a report of an approved picture shows the reviewer the live image.
 
 ## Item rewards (optional)
@@ -2507,7 +2516,11 @@ CREATE TABLE IF NOT EXISTS cp_pvp_pairs (
   INDEX idx_suspect (suspect_citizenid, created_at)
 );
 
-sql/migrations/001_initial.sql creates the first fourteen tables, and 002–009 add the columns and the thirteen tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
+-- sql/migrations/010_officer_options.sql · each character's officer options (My options, CP.Options).
+-- JSON of only the options that differ from the default; NULL = every option at its default.
+ALTER TABLE cp_officers ADD COLUMN options JSON NULL;
+
+sql/migrations/001_initial.sql creates the first fourteen tables, and 002–010 add the columns and the thirteen tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. 010 (officer options) adds cp_officers.options, the JSON of the My options choices of that character that differ from the default (NULL = all defaults). cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
 
 Database upgrades
 
@@ -3891,6 +3904,16 @@ Config.Profile = {
     appearances = { 'department', 'midnight', 'high_contrast', 'colourblind' },
     uiScale = { 0.85, 1.25, 1.0 },   -- min, max and default tablet size
     showMdtCommendations = false,    -- also show SC-Dispatch MDT commendations, read-only
+}
+
+-- Officer options: the choices each officer makes for their own tablet on the My options screen, saved per
+-- character. A department may set its own allow, defaults and bounds (Config.Departments.<key>.officerOptions =
+-- { allow = {}, defaults = {}, bounds = {} }); they win over the ones below for its officers.
+Config.OfficerOptions = {
+    enabled = true,                  -- false = no My options screen; every option keeps its default for everyone
+    allow = {},                      -- per option: false = officers cannot change it, everyone gets the default
+    defaults = {},                   -- per option: what every officer starts with
+    bounds = {},                     -- per number option: { min, max } officers may pick
 }
 
 Config.Commendations = {

@@ -1374,6 +1374,16 @@ Config.Profile = {
     showMdtCommendations = false,    -- also show SC-Dispatch MDT commendations, read-only
 }
 
+-- Officer options: the choices each officer makes for their own tablet on the My options screen, saved per
+-- character. A department may set its own allow, defaults and bounds (Config.Departments.<key>.officerOptions =
+-- { allow = {}, defaults = {}, bounds = {} }); they win over the ones below for its officers.
+Config.OfficerOptions = {
+    enabled = true,                  -- false = no My options screen; every option keeps its default for everyone
+    allow = {},                      -- per option: false = officers cannot change it, everyone gets the default
+    defaults = {},                   -- per option: what every officer starts with
+    bounds = {},                     -- per number option: { min, max } officers may pick
+}
+
 Config.Commendations = {
     enabled = true,
     kinds = { 'valor', 'lifesaving', 'teamwork', 'professionalism', 'leadership', 'investigation' },

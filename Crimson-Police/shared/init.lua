@@ -305,6 +305,7 @@ local CONFIG_SECTIONS = {
     'Events',
     'Challenge',
     'Profile',
+    'OfficerOptions',
     'Commendations',
     'Rewards',
     'Disputes',

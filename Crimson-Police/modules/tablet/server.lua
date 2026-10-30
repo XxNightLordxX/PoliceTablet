@@ -351,12 +351,12 @@ local function Initials(name)
     return #out > 0 and table.concat(out) or '?'
 end
 
--- The officer's cp_officers row: XP, avatar and look (one read; nil when there is none yet).
+-- The officer's cp_officers row: XP, avatar, look and options (one read; nil when there is none yet).
 local function ReadProfile(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
     local ok, row = pcall(MySQL.single.await, [[
-        SELECT xp, avatar_kind, avatar_value, avatar_status, appearance, accent, ui_scale, calls_muted
+        SELECT xp, avatar_kind, avatar_value, avatar_status, appearance, accent, ui_scale, calls_muted, options
         FROM cp_officers WHERE citizenid = ?
     ]], { citizenid })
     if not ok then
@@ -540,6 +540,12 @@ local function BuildSession(src, ui, args)
     local row = officer and ReadProfile(officer.citizenid) or nil
     local config = SessionConfig()
     for k, v in pairs(ExtraConfig(officer and officer.department)) do config[k] = v end
+    -- the officer options (CP.Options): the effective server values, and the rules of the officer's department
+    local options = nil
+    if officer and CP.Options then
+        options = CP.Options.effective(officer.citizenid, officer.department, row and row.options or false)
+        config.officerOptions = CP.Options.config(officer.department)
+    end
     return {
         ui = ui,
         title = type(title) == 'string' and title ~= '' and title or 'Crimson-Police',
@@ -552,6 +558,7 @@ local function BuildSession(src, ui, args)
         -- client:settings), so a session stays a few KB instead of about 340 KB on every open
         config = config,
         prefs = PrefsOf(row),
+        options = options,
         access = { via = via, desk = desk },
         maintenance = CP.Maintenance and CP.Maintenance.view and CP.Maintenance.view() or nil,
         serverTime = os.time(),

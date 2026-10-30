@@ -3332,6 +3332,17 @@ function Settings.checkDepartments(path, clean, ctx, none)
     end
     if enabled == 0 then return 'err.dept_last' end
     if ctx.boot then return nil end
+    -- a department's own officer options (Config.Departments.<key>.officerOptions): known options, good values
+    if CP.OptionDefs then
+        for key, d in pairs(after) do
+            local opts = type(d) == 'table' and d.officerOptions or nil
+            local was = type(before[key]) == 'table' and before[key].officerOptions or nil
+            if opts ~= nil and not Same(opts, was) then
+                local errKey, at = CP.OptionDefs.checkConfig(opts)
+                if errKey then return errKey, at end
+            end
+        end
+    end
     local oldJobs = JobMap(before) or {}
     local moved = false
     for job, key in pairs(byJob) do
@@ -3378,6 +3389,13 @@ end
 
 Settings.registerValidator('Departments', function(path, clean, ctx)
     return (Settings.checkDepartments(path, clean, ctx))
+end)
+
+-- Config.OfficerOptions allow, defaults and bounds: known options and good values only (CP.OptionDefs.checkConfig).
+Settings.registerValidator('OfficerOptions', function(path, clean)
+    local part = path:match('^OfficerOptions%.(%a+)$')
+    if not CP.OptionDefs or (part ~= 'allow' and part ~= 'defaults' and part ~= 'bounds') then return nil end
+    return (CP.OptionDefs.checkConfig({ [part] = clean }))
 end)
 
 -- A desk names known departments only.

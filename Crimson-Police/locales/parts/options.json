@@ -1,0 +1,5 @@
+{
+  "err.option_locked": "Your department has fixed this option, so you can't change it.",
+  "err.option_value": "That choice isn't available for this option.",
+  "err.option_config": "An officer option here is unknown or has a value it can't take."
+}

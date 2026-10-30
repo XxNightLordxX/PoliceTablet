@@ -117,6 +117,7 @@ PoliceTablet/                      (git repo)
     shared/locale.lua              CP.L / CP.Locale
     shared/net.lua                 CP.Net (actions and callbacks)
     shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
+    shared/options.lua             CP.OptionDefs: the officer options registry and its rules (§5.48)
     shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
     config/banned_words.txt        the default banned-word list for profile bios (one word or phrase a line)
@@ -143,11 +144,11 @@ PoliceTablet/                      (git repo)
                                    docs/WEB_UI.md
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
-                   009_real_suspects.sql
+                   009_real_suspects.sql, 010_officer_options.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
-(alphabetical: init, locale, net, npccombat, utils), then `modules/**/server.lua` (server) /
+(alphabetical: init, locale, net, npccombat, options, twists, utils), then `modules/**/server.lua` (server) /
 `modules/**/client.lua` (client), then `blocks/**/server.lua` / `blocks/**/client.lua`.
 Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` and
 `modules/storage/server.lua` before every other server module (so the `MySQL` global is settled before
@@ -210,6 +211,7 @@ The packages of that build add `modules/corrections/` (§5.38), `modules/livectl
 | `CP.Net.rateOk(src, key, max, windowMs)` | shared/net.lua | server: a token bucket per (src, key): `max` calls at once, then one back every `windowMs / max` (a new key starts full; `playerDropped` clears the player's buckets). `CP.Net.action` (`opts.rate`, default 8 a second) and `CP.Net.callback` (default 6) answer `err.rate_limited` past it. `Config.Limits.netRateResponse` (read at each refusal): `'block'` (shipped) refuses quietly; `'log'` also prints one `CP.warn('net', ...)` a minute per player once one name is refused 3 x its limit (at least 20) in a minute, never for an admin (`CP.Access.isAdmin`); `'kick'` prints that warning and calls `DropPlayer(src, CP.L('err.rate_kick'))` once |
 | `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args, opts)` | shared/net.lua | client; both return `{ ok, data, error }` and never raise (`err.timeout` after timeoutMs, default 15000; `err.no_response` when ox_lib raises). `opts` is the timeout in ms or `{ timeoutMs, latent = true }`: latent sends a reply id (from the `actionResult` ids) and, on a `{ latent = id }` answer, waits up to 60 s more for that latent `actionResult`. The tablet's NUI `request` path always passes `latent = true`; the NUI waits 90 s (`EXPORT_TIMEOUT_MS`, `request(name, args, { timeoutMs })`) for the three exports instead of its 20 s |
 | `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `reassertAiDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
+| `CP.OptionDefs.*` | shared/options.lua | Officer options (§5.48), Config.OfficerOptions read at every call: `add(key, { kind = 'bool'\|'enum'\|'list'\|'number', values = list \| function, default, min, max, integer, store = 'server'\|'local', group, order })`, `remove(key)`, `get(key)`, `keys()`, `values(key)`, `check(key, value, bounds, { drop }) -> clean \| nil, errKey` (enum/list membership, lists de-duplicated, numbers clamped; `drop` drops list entries no longer offered), `same(a, b)`, `enabled()`, `resolve(deptKey) -> allow, defaults, bounds` (the option's default <- Config.OfficerOptions <- the department's officerOptions), `checkConfig(t) -> nil \| 'err.option_config', key` |
 | `CP.Twists.*` | shared/twists.lua | Config.Events.twists read at every call (§5.9): `ORDER`, `known(key)`, `cfg(key) -> { enabled, points, cash }`, `sorted(list)`, `of(run|payload) -> keys` (the `modifiers` list, else the one `modifier`), `has(run, key)`, `caps() -> { points, cash }`, `bonus(list) -> { points, cash, lines }` (shares add, multipliers multiply, both capped) |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText` |
 
@@ -3200,6 +3202,25 @@ pop-up instead of the NPC; 'players_only' is offered only while a volunteer who 
 'npc', so nothing changes even with `enabled = true`. Built in steps V4-V26
 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
 
+### 5.48 CP.Options — modules/options (S; officer options, step O1)
+
+Each character's own tablet choices (My options), saved sparse in `cp_officers.options` (JSON of only the keys that
+differ from the default; NULL = all defaults; migration 010). The rules are CP.OptionDefs (§2, shared/options.lua);
+no option is registered by this module: each feature registers its own keys.
+- `effective(citizenid, deptKey, raw) -> { key = value }`: every 'server' option: the default, then the saved value
+  while the option is allowed and the value still passes `check` (a list entry no longer offered is dropped). A saved
+  value of an option that is not allowed now is ignored, not deleted (allowing it again brings it back). `raw` = the
+  row's `options` (nil: read it; false: no row). `Config.OfficerOptions.enabled = false`: the defaults only.
+- `set(src, patch) -> true, { values } | false, errKey`: the officer from `CP.Access.getOfficer` (on duty, department);
+  an unknown or 'local' key `err.invalid_payload`, allow false or `enabled = false` `err.option_locked`, a bad value
+  `err.option_value`; writes the sparse JSON, then `CP.Tablet.push(src, 'options', { values })`.
+- `view(officer) -> { enabled, schema, values }` (schema: allowed options only: key, kind, values, default, bounds,
+  store, group, order), `config(deptKey) -> { enabled, allow, defaults, bounds }`, `decode(raw)`.
+- Net: callback `getOptions` (rate 4); action `server:options:set` (`{ key = value, ... }`, rate 4). The session
+  (`getSession`) carries `options` (the effective values, read in the same cp_officers SELECT as the profile) and
+  `config.officerOptions` for the officer's department. Settings checks `Config.OfficerOptions` allow, defaults and
+  bounds and a department's `officerOptions` with `checkConfig`.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -3516,6 +3537,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:claimMissionCall` | `{ callId, twists? }` → `{ runId }` or `{ pending }` (the twists are checked before the claim joins the window) | missioncalls |
 | `server:contactDecide` | `{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }` | custody |
 | `server:profile:set` / `server:profile:report` | see §5.32 | profile |
+| `server:options:set` | `{ key = value, ... }` → `{ values }` (rate 4; see §5.48) | options |
 | `server:rewards:claim` | `{ id }` | rewards |
 | `server:unitKick` / `server:unitPromote` / `server:unitCancelInvite` | `{ targetSrc }` | units |
 | `server:unitDisband` | — | units |
@@ -3552,7 +3574,7 @@ Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome
 `admin:getTests`, `admin:getFlagged`, `admin:getDisputes`, `builder:list`, `builder:get`,
 `builder:config`, `test:pendingInvites`, `test:state` (testRun or builderEdit), `test:candidates` (testRun),
 `server:test:spawnPoints` (testRun; the spawn point check and its "Teleport here" with `point`, §5.27).
-Parity-plus: `getMissionCalls`, `getNavCounts`, `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
+Parity-plus: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
 `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`);
@@ -3830,7 +3852,7 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.l
 | `notify` | `notification = { id, kind, title?, text, duration }` | Crimson-Police toast |
 | `hud` | `hud = HudState \| null` | mission HUD (full state) |
 | `result` | `result = RunResult` | result screen |
-| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `spawnCheck` (the admin's spawn point check, §5.27); `unit` gains `readyCheck`, `run` gains `contact` |
+| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `options` (own officer options changed, `{ values }`), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `spawnCheck` (the admin's spawn point check, §5.27); `unit` gains `readyCheck`, `run` gains `contact` |
 | `overlay` | `overlay = null \| { kind: 'placement'\|'recording'\|'testdrive'\|'fade', ... }` | full-screen/HUD overlays |
 | `theme` | `theme`, `locale?` | the department theme for the HUD (login, duty, job, unload); only the reply to `ready` carries `locale` (`CP.Locale.all()`), the NUI's one copy of the text |
 | `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names at once) |

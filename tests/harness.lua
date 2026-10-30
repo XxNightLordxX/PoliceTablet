@@ -3080,6 +3080,7 @@ function H.boot(opts)
     H.load('shared/locale.lua')
     H.load('shared/net.lua')
     H.load('shared/npccombat.lua')
+    H.load('shared/options.lua')
     H.load('shared/twists.lua')
     H.load('shared/utils.lua')
     if H.storage == 'files' and server and not H.filesMySQL then
