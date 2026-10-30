@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { formatDistance, type DistanceUnits } from './format';
 import { usePush } from './hooks';
+import { hasKey, t } from './i18n';
 import { clientAction, useNuiEvent } from './nui';
 import type { ApiResult, OfficerOptionValue, Session } from './types';
 
@@ -40,6 +41,21 @@ const OptionsContext = createContext<OptionsContextValue>({
 // A JSON object of values: Lua sends an empty table as [] (no options yet).
 function asValues(v: unknown): OptionValues {
     return v && typeof v === 'object' && !Array.isArray(v) ? (v as OptionValues) : {};
+}
+
+// The plain name of an officer option (options.key.<key>, else the key itself).
+export function optionLabel(key: string): string {
+    return hasKey(`options.key.${key}`) ? t(`options.key.${key}`) : key;
+}
+
+// An officer option's value in plain words: yes / no, an enum's own text (options.value.<key>.<value>), a list
+// joined by commas, a number as it is.
+export function optionValueText(key: string, value: unknown): string {
+    if (typeof value === 'boolean') return value ? t('common.yes') : t('common.no');
+    if (Array.isArray(value)) return value.length ? value.map(v => optionValueText(key, v)).join(', ') : '-';
+    const k = `options.value.${key}.${String(value)}`;
+    if (hasKey(k)) return t(k);
+    return value === null || value === undefined ? '-' : String(value);
 }
 
 // The text size factor of the officer option textSize (step O5): 'large' = 1.15, anything else 1. It is the CSS

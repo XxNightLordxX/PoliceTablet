@@ -373,3 +373,23 @@
     flex-wrap: wrap;
     gap: 6px 16px;
 }
+
+/* Department admin: officer options (Allowed and Default per option) */
+
+.dept-admin-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dept-admin-option {
+    display: grid;
+    grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(140px, 1fr);
+    gap: 8px;
+    align-items: center;
+}
+
+.dept-admin-option__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

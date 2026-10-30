@@ -24,6 +24,19 @@
     margin-bottom: 10px;
 }
 
+.admin-otools__options {
+    margin-bottom: 10px;
+}
+
+.admin-otools__options-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.admin-otools__muted {
+    color: var(--cp-muted);
+}
+
 .admin-otools__form {
     display: flex;
     flex-direction: column;

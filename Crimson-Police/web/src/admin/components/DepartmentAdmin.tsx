@@ -20,9 +20,18 @@ import {
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { hasKey, t } from '../../shared/i18n';
+import { optionLabel, optionValueText } from '../../shared/options';
 import { toast } from '../../shared/toast';
+import type { OfficerOptionValue } from '../../shared/types';
 import type { DeskView, TabletAccessView } from '../../types/access';
-import type { DepartmentFields, DepartmentSetting, DepartmentSetup, DeptTheme } from '../../types/admin_system';
+import type {
+    DepartmentFields,
+    DepartmentSetting,
+    DepartmentSetup,
+    DeptOfficerOptions,
+    DeptTheme,
+    OptionDefAdmin,
+} from '../../types/admin_system';
 import { newRequestId, useAdminAction } from './kit';
 import '../screens/System.css';
 
@@ -137,6 +146,121 @@ export function DepartmentTools({
 }
 
 // ============================================================================
+//                       OFFICER OPTIONS (PER DEPARTMENT)
+// ============================================================================
+
+// The department's own officer options as the form keeps them: allow and defaults per option (a key left out = as
+// global); bounds are passed back as they are.
+type DeptOptionsForm = { allow: Record<string, boolean>; defaults: Record<string, OfficerOptionValue> };
+
+function optionsFormOf(o: DeptOfficerOptions | undefined): DeptOptionsForm {
+    const allow = o?.allow && !Array.isArray(o.allow) ? { ...o.allow } : {};
+    const defaults = o?.defaults && !Array.isArray(o.defaults) ? { ...o.defaults } : {};
+    return { allow, defaults };
+}
+
+function without<T>(map: Record<string, T>, key: string): Record<string, T> {
+    const next = { ...map };
+    delete next[key];
+    return next;
+}
+
+// Per option: Allowed (as global / yes / no) and Default (as global or a value; a list option keeps the global one).
+function DeptOptionsPanel({
+    defs,
+    value,
+    enabled,
+    onChange,
+}: {
+    defs: OptionDefAdmin[];
+    value: DeptOptionsForm;
+    enabled: boolean;
+    onChange: (v: DeptOptionsForm) => void;
+}) {
+    const setAllow = (key: string, v: string) =>
+        onChange({ ...value, allow: v === '' ? without(value.allow, key) : { ...value.allow, [key]: v === 'yes' } });
+    const setDefault = (key: string, v: OfficerOptionValue | null) =>
+        onChange({ ...value, defaults: v === null ? without(value.defaults, key) : { ...value.defaults, [key]: v } });
+    return (
+        <Field label={t('sysadmin.ui.dept_options')} hint={t('sysadmin.ui.dept_options_hint')}>
+            <div className="dept-admin-options">
+                {!enabled ? <div className="system-muted">{t('sysadmin.ui.dept_options_off')}</div> : null}
+                {defs.map(d => {
+                    const allowed = value.allow[d.key];
+                    const own = value.defaults[d.key];
+                    const globalText = (v: string) => t('sysadmin.ui.dept_option_global', { value: v });
+                    let control;
+                    if (d.kind === 'bool') {
+                        control = (
+                            <Select
+                                value={typeof own === 'boolean' ? (own ? 'yes' : 'no') : ''}
+                                onChange={v => setDefault(d.key, v === '' ? null : v === 'yes')}
+                                options={[
+                                    { value: '', label: globalText(optionValueText(d.key, d.default)) },
+                                    { value: 'yes', label: t('common.yes') },
+                                    { value: 'no', label: t('common.no') },
+                                ]}
+                            />
+                        );
+                    } else if (d.kind === 'enum') {
+                        control = (
+                            <Select
+                                value={own === undefined ? '' : String(own)}
+                                onChange={v => {
+                                    const hit = (d.values ?? []).find(x => String(x) === v);
+                                    setDefault(d.key, v === '' || hit === undefined ? null : hit);
+                                }}
+                                options={[
+                                    { value: '', label: globalText(optionValueText(d.key, d.default)) },
+                                    ...(d.values ?? []).map(x => ({
+                                        value: String(x),
+                                        label: optionValueText(d.key, x),
+                                    })),
+                                ]}
+                            />
+                        );
+                    } else if (d.kind === 'number') {
+                        control = (
+                            <NumberInput
+                                value={typeof own === 'number' ? own : null}
+                                onChange={v => setDefault(d.key, v)}
+                                min={d.bounds?.min}
+                                max={d.bounds?.max}
+                                step={d.integer ? 1 : 0.05}
+                                integer={!!d.integer}
+                                showRange={false}
+                            />
+                        );
+                    } else {
+                        control = <span className="system-muted">{globalText(optionValueText(d.key, d.default))}</span>;
+                    }
+                    return (
+                        <div className="dept-admin-option" key={d.key}>
+                            <span className="dept-admin-option__label">{optionLabel(d.key)}</span>
+                            <Select
+                                aria-label={t('sysadmin.ui.dept_option_allowed')}
+                                title={t('sysadmin.ui.dept_option_allowed')}
+                                value={allowed === undefined ? '' : allowed ? 'yes' : 'no'}
+                                onChange={v => setAllow(d.key, v)}
+                                options={[
+                                    {
+                                        value: '',
+                                        label: globalText(t(`sysadmin.ui.dept_option_${d.allow ? 'yes' : 'no'}`)),
+                                    },
+                                    { value: 'yes', label: t('sysadmin.ui.dept_option_yes') },
+                                    { value: 'no', label: t('sysadmin.ui.dept_option_no') },
+                                ]}
+                            />
+                            <div title={t('sysadmin.ui.dept_option_default')}>{control}</div>
+                        </div>
+                    );
+                })}
+            </div>
+        </Field>
+    );
+}
+
+// ============================================================================
 //                            ADD OR EDIT (THE FORM)
 // ============================================================================
 
@@ -177,6 +301,9 @@ export function DepartmentDialog({
     const [logoFile, setLogoFile] = useState(setting?.logo?.file ?? '');
     const [watermark, setWatermark] = useState(setting?.logo?.watermark !== false);
     const [uploading, setUploading] = useState<string | null>(null);
+    const [options, setOptions] = useState<DeptOptionsForm>(optionsFormOf(setting?.officerOptions));
+    const [optionsTouched, setOptionsTouched] = useState(false);
+    const optionDefs = asArray(setup.optionDefs);
 
     const firstJob = asArray(setup.jobs).find(j => j.name === jobs[0]);
     const toggleJob = (name: string, on: boolean) =>
@@ -200,6 +327,14 @@ export function DepartmentDialog({
                 else if (k === 'text' && setting.theme?.text) th.text = '';
             }
             f.theme = th;
+            if (optionsTouched) {
+                const bounds = setting.officerOptions?.bounds;
+                const oo: DeptOfficerOptions = {};
+                if (Object.keys(options.allow).length) oo.allow = options.allow;
+                if (Object.keys(options.defaults).length) oo.defaults = options.defaults;
+                if (bounds && !Array.isArray(bounds) && Object.keys(bounds).length) oo.bounds = bounds;
+                f.officerOptions = oo;
+            }
         }
         return f;
     };
@@ -393,6 +528,17 @@ export function DepartmentDialog({
                     </Field>
                 ) : null}
                 {uploading ? <div className="system-muted">{uploading}</div> : null}
+                {!isNew && optionDefs.length ? (
+                    <DeptOptionsPanel
+                        defs={optionDefs}
+                        value={options}
+                        enabled={setup.optionsEnabled !== false}
+                        onChange={v => {
+                            setOptions(v);
+                            setOptionsTouched(true);
+                        }}
+                    />
+                ) : null}
                 <div className="system-note">
                     <Icon name="info" size={14} />
                     <span>{t(isNew ? 'sysadmin.ui.dept_checklist' : 'sysadmin.ui.dept_edit_note')}</span>

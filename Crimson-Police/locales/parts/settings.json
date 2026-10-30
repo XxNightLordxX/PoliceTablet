@@ -222,5 +222,7 @@
   "settings.help.Builder.requireTestToPublish": "On: a supervisor can publish only a draft that passed a test run. Admins never need one.",
   "settings.help.Testing.debugOverlay": "On: admins can turn on an overlay with the run's details during a test run.",
   "settings.help.Time.resetHour": "The hour (0 to 23, server time) when daily goals, the daily cash cap and Type of the Day reset. Used after the next start.",
-  "settings.help.Leaderboard.weekStartsOn": "The day the weekly goals and the weekly board reset. Used after the next start."
+  "settings.help.Leaderboard.weekStartsOn": "The day the weekly goals and the weekly board reset. Used after the next start.",
+  "settings.label.OfficerOptions.enabled": "Officers set their own options",
+  "settings.help.OfficerOptions.enabled": "Turns the My options screen on or off. Off: every officer keeps the defaults."
 }

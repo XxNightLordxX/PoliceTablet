@@ -159,7 +159,7 @@ end
 
 local ROW_SQL = [[
 SELECT citizenid, display_name, callsign, rank_label, department, xp, hide_name, bio, bio_pending, avatar_kind,
-  avatar_value, avatar_pending, avatar_status, appearance, accent, ui_scale, calls_muted,
+  avatar_value, avatar_pending, avatar_status, appearance, accent, ui_scale, calls_muted, options,
   UNIX_TIMESTAMP(profile_updated_at) AS updated_ts
 FROM cp_officers WHERE citizenid = ?]]
 
@@ -1090,6 +1090,32 @@ function Profile.reviewCount()
     return reviewCount.n
 end
 
+-- The officer's own saved options (My options, cp_officers.options) as a list of { key, value } in the My options
+-- order; a key no longer registered is kept at the end so the admin sees what Reset options clears.
+local function SavedOptions(raw)
+    local saved = raw
+    if type(raw) == 'string' and raw ~= '' then
+        local ok, t = pcall(json.decode, raw)
+        saved = ok and t or nil
+    end
+    if type(saved) ~= 'table' then saved = {} end
+    local out, seen = {}, {}
+    local keys = CP.OptionDefs and CP.OptionDefs.keys() or {}
+    for _, key in ipairs(keys) do
+        if saved[key] ~= nil then
+            out[#out + 1] = { key = key, value = saved[key] }
+            seen[key] = true
+        end
+    end
+    local rest = {}
+    for key in pairs(saved) do
+        if type(key) == 'string' and not seen[key] then rest[#rest + 1] = key end
+    end
+    table.sort(rest)
+    for _, key in ipairs(rest) do out[#out + 1] = { key = key, value = saved[key] } end
+    return out
+end
+
 -- The officer's look and comfort choices as an admin sees them (hide name and calls muted are shown, never changed).
 function Profile.lookView(citizenid)
     local row = ReadRow(citizenid)
@@ -1104,6 +1130,7 @@ function Profile.lookView(citizenid)
         callsMuted = U.truthy(row.calls_muted),
         nextEditIn = NextEditIn(row),
         urlsLeft = UrlsLeft(citizenid),
+        options = SavedOptions(row.options),
     }
 end
 
@@ -1169,6 +1196,28 @@ if CP.AdminKit and CP.AdminKit.action then
         Notify(cid, 'info', 'profile.admin.look_reset')
         PushProfile(cid)
         return true, { citizenid = cid }
+    end, { reason = true })
+
+    -- Clears the officer's own options (My options, cp_officers.options): every option is back to the default of
+    -- their department. An officer online gets the new values at once.
+    Kit.action('server:admin:resetOfficerOptions', 'officerRecords', function(ctx)
+        local cid = ctx.payload.citizenid
+        if not ValidCitizenId(cid) then return false, 'err.invalid_citizenid' end
+        local row = ReadRow(cid)
+        if not row then return false, 'err.unknown_officer' end
+        local before = SavedOptions(row.options)
+        if not WriteFields(cid, { { 'options', nil } }) then return false, 'err.internal' end
+        local keys = {}
+        for _, o in ipairs(before) do keys[#keys + 1] = o.key end
+        ctx.audit('optionsReset', cid, #keys > 0 and U.clip(table.concat(keys, ', '), 200) or '-', 'default')
+        if CP.MissionCalls and CP.MissionCalls._forgetMuted then CP.MissionCalls._forgetMuted(cid) end
+        local src = Notify(cid, 'info', 'profile.admin.options_reset')
+        if src and CP.Options and Has('Tablet', 'push') then
+            local okO, officer = pcall(CP.Access.getOfficer, src)
+            local dept = okO and type(officer) == 'table' and officer.department or row.department
+            Call('Tablet', 'push', src, 'options', { values = CP.Options.effective(cid, dept, {}) })
+        end
+        return true, { citizenid = cid, cleared = #keys }
     end, { reason = true })
 
     Kit.action('server:admin:clearProfileCooldown', 'officerRecords', function(ctx)

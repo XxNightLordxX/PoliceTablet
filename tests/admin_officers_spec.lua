@@ -43,6 +43,7 @@ do
         { 'server:admin:moveRecord', { from = 'OLD00009', to = 'NEW00009', reason = 'x', requestId = Rid() } },
         { 'server:admin:postNotice', { text = 'hi', expiresAt = H.time + 3600, reason = 'x' } },
         { 'server:admin:resetLook', { citizenid = 'OFF00003', reason = 'x' } },
+        { 'server:admin:resetOfficerOptions', { citizenid = 'OFF00003', reason = 'x' } },
     }) do
         local ok, e = Act(a[1], 2, a[2])
         if ok ~= false or e ~= 'err.no_permission' then refused[#refused + 1] = a[1] .. '=' .. tostring(e) end
@@ -565,6 +566,19 @@ do
     H.ok(ok == true, 'reset look: ' .. tostring(e))
     local o = One('SELECT accent, ui_scale FROM cp_officers WHERE citizenid = ?', { 'OFF00003' })
     H.ok(o.accent == nil and o.ui_scale == nil, 'the look is back to the defaults')
+
+    -- O12: the officer's own options, seen and reset by an admin (audited)
+    H.sql([[UPDATE cp_officers SET options = '{"textSize":"large"}' WHERE citizenid = 'OFF00003']])
+    local lk = Data('admin:getOfficerLook', 1, { citizenid = 'OFF00003' })
+    H.ok(lk and #lk.options == 1 and lk.options[1].key == 'textSize' and lk.options[1].value == 'large',
+        'O12: the admin sees the saved options')
+    ok, e = Act('server:admin:resetOfficerOptions', 1, { citizenid = 'OFF00003' })
+    H.ok(not ok and e == 'err.reason_required', 'O12: resetting options needs a reason')
+    ok, e = Act('server:admin:resetOfficerOptions', 1, { citizenid = 'OFF00003', reason = 'Stuck HUD' })
+    H.ok(ok == true and e.cleared == 1, 'O12: options reset: ' .. tostring(e))
+    H.eq(One('SELECT options FROM cp_officers WHERE citizenid = ?', { 'OFF00003' }).options, nil,
+        'O12: the options column is cleared')
+    H.eq(W.auditCount('optionsReset', 'OFF00003'), 1, 'O12: audited as optionsReset')
 
     ok, e = Act('server:admin:clearProfileCooldown', 1, { citizenid = 'OFF00003', reason = 'Typo' })
     H.ok(ok == true, 'profile cooldown cleared: ' .. tostring(e))

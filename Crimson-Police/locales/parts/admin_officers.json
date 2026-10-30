@@ -387,5 +387,11 @@
   "ui.admin_officers.xp.fix": "Fix",
   "ui.admin_officers.xp.stored": "Stored",
   "ui.admin_officers.xp.title": "XP",
-  "ui.admin_officers.bulk.started": "Voiding {n} rows. Corrections → Undo restores the whole batch."
+  "ui.admin_officers.bulk.started": "Voiding {n} rows. Corrections → Undo restores the whole batch.",
+  "admin.action.optionsReset": "Options reset",
+  "profile.admin.options_reset": "An admin set your options back to the defaults.",
+  "ui.admin_officers.look.options": "Own options",
+  "ui.admin_officers.look.options_none": "None: every option is at the default.",
+  "ui.admin_officers.look.reset_options": "Reset options",
+  "ui.admin_officers.confirm.resetOptions": "Set their options back to the defaults"
 }

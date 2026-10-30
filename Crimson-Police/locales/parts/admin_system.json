@@ -397,5 +397,13 @@
   "sysadmin.console.restore_open": "A backup restore did not finish (it stopped part way, or the server stopped during it): payments, new runs and claims stay held. Restore the automatic backup {automatic} in Admin UI → System → Backups, then restart Crimson-Police.",
   "sysadmin.console.restore_open_not_held": "A backup restore did not finish before this start (automatic backup {automatic}), and Config.Backups.holdAfterFailedRestore is false: payments go on with the store as it is.",
   "sysadmin.console.restore_open_missing": "The automatic backup {automatic} of the restore that did not finish is missing or damaged, so no restore can run. To go on with the store as it is, set Config.Backups.holdAfterFailedRestore = false in config.lua and restart Crimson-Police.",
-  "sysadmin.ui.tab.cleanup": "Clean-up"
+  "sysadmin.ui.tab.cleanup": "Clean-up",
+  "sysadmin.ui.dept_options": "Officer options",
+  "sysadmin.ui.dept_options_hint": "What this department's officers may change on My options, and what they start with. As global = the server-wide setting.",
+  "sysadmin.ui.dept_options_off": "Officer options are turned off on this server, so these apply once they are turned on.",
+  "sysadmin.ui.dept_option_allowed": "Allowed",
+  "sysadmin.ui.dept_option_default": "Default",
+  "sysadmin.ui.dept_option_global": "As global ({value})",
+  "sysadmin.ui.dept_option_yes": "Yes",
+  "sysadmin.ui.dept_option_no": "No"
 }

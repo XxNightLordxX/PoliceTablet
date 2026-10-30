@@ -3238,6 +3238,13 @@ no option is registered by this module: each feature registers its own keys.
   (`getSession`) carries `options` (the effective values, read in the same cp_officers SELECT as the profile) and
   `config.officerOptions` for the officer's department. Settings checks `Config.OfficerOptions` allow, defaults and
   bounds and a department's `officerOptions` with `checkConfig`.
+- Admin (step O12): `admin:getOfficerLook` also returns `options` (the saved sparse values as `{ key, value }` in
+  `CP.OptionDefs.keys()` order, unknown keys last); `server:admin:resetOfficerOptions` (modules/profile, perm
+  `officerRecords`, reason, audit `optionsReset`) sets `cp_officers.options` to NULL and, when the officer is online,
+  pushes `options` with the department defaults. `admin:getDepartmentSetup` carries `optionDefs` (each My options row
+  with the global allow, default and bounds), `optionsEnabled` and each department's `officerOptions`;
+  `server:admin:saveDepartment` takes `fields.officerOptions` (`{}` = back to the global options) as the setting
+  `Departments.<key>.officerOptions` (json, nullable, read live; part of an added department's record).
 - Client (modules/options/client.lua, step O2): `get(key)` (allow false or `enabled = false` -> the default; a
   'local' option -> this PC's resource KVP `crimsonpolice:options`, one sparse JSON object; a 'server' option -> the
   session's `options`, refreshed by the push `options`; a value that no longer passes `check` with the session bounds

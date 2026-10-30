@@ -1,6 +1,7 @@
 // Full admin control, System (modules/sysadmin): storage, backups, webhooks, problems, integrations, departments added
 // in game, Support (docs/ARCHITECTURE.md §9.5, "Admin control: system").
 
+import type { OfficerOptionValue } from '../shared/types';
 import type { MaintenanceView } from './admin_control';
 
 // ============================================================================
@@ -165,6 +166,26 @@ export interface DepartmentSetting {
     societyAccount?: string;
     theme?: DeptTheme;
     logo?: DeptLogoSetting;
+    // Config.Departments.<key>.officerOptions: the department's own allow, defaults and bounds (over the global ones)
+    officerOptions?: DeptOfficerOptions;
+}
+
+export interface DeptOfficerOptions {
+    allow?: Record<string, boolean>;
+    defaults?: Record<string, OfficerOptionValue>;
+    bounds?: Record<string, unknown>;
+}
+
+// An officer option the department form offers, with the server-wide allow, default and bounds.
+export interface OptionDefAdmin {
+    key: string;
+    kind: 'bool' | 'enum' | 'list' | 'number';
+    group: string;
+    values?: (string | number)[];
+    integer?: boolean;
+    allow: boolean;
+    default: OfficerOptionValue;
+    bounds?: { min?: number; max?: number };
 }
 
 export interface QboxJobView {
@@ -180,6 +201,9 @@ export interface DepartmentSetup {
     jobs: QboxJobView[];
     cashSource: 'server' | 'society';
     runsGoing: number;
+    optionDefs?: OptionDefAdmin[];
+    // Config.OfficerOptions.enabled
+    optionsEnabled?: boolean;
 }
 
 // The wizard's and the form's fields (the server checks every one again).
@@ -191,6 +215,8 @@ export interface DepartmentFields {
     societyAccount?: string;
     theme?: DeptTheme;
     logo?: DeptLogoSetting;
+    // sent only when the Officer options panel changed ({} = back to the global options)
+    officerOptions?: DeptOfficerOptions;
 }
 
 // ============================================================================

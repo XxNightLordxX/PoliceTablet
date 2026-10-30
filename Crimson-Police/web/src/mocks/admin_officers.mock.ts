@@ -127,6 +127,11 @@ registerMock('request', 'admin:getOfficerLook', (): OfficerLook => ({
     callsMuted: false,
     nextEditIn: 0,
     urlsLeft: 3,
+    options: [
+        { key: 'textSize', value: 'large' },
+        { key: 'favouriteTypes', value: ['traffic_stop', 'pursuit'] },
+        { key: 'skipAcceptConfirm', value: true },
+    ],
 }));
 
 registerMock('request', 'admin:getBadgeCatalog', (): BadgeCatalog => ({
@@ -264,6 +269,7 @@ for (const name of [
     'server:admin:postNotice',
     'server:admin:removeNotice',
     'server:admin:resetLook',
+    'server:admin:resetOfficerOptions',
     'server:admin:clearProfileCooldown',
     'server:admin:setBannedWords',
     'server:admin:recountWeek',

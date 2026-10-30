@@ -1705,7 +1705,9 @@ On an officer's record:
   **Make available again** gives back today's first-run bonus, once per officer per day.
 - **Goals**: today's and this week's goal; **Mark complete** pays a goal a bug blocked (never twice in one period).
 - **Look**: **Reset look** (appearance, accent and size back to the defaults) and **Let them edit now** (clears the
-  profile change cooldown). Their "hide my name" and "mute calls" choices are shown, never changed.
+  profile change cooldown). Their "hide my name" and "mute calls" choices are shown, never changed. **Own options**
+  lists the My options choices they saved with the character (label: value; this-PC choices are not seen);
+  **Reset options** (reason, audited) puts every one back to their department's default, at once if they are online.
 - **Badges**: how each badge came (earned, granted or blocked). **Grant** keeps a badge whatever the runs say,
   **Revoke** takes one away for good, **Back to automatic** lets the runs decide again, **Re-check** recounts them.
 - **Record**: **Refresh from Qbox** (callsign, rank and name come from Qbox and are never edited here), **Keep off
@@ -1972,7 +1974,10 @@ clean-up never archives a run whose money or item rewards are not finished, and 
   and **Upload a logo** (PNG or WebP, at most 1 MB; it takes about 20 s: one 16 KB piece every
   `AdminControl.logoChunkGapMs` ms, so FXServer never drops you for sending too much). The upload replaces a logo link
   and shows after the next restart; until then the tablets keep the old logo. A job moves to another department only
-  while no run is going.
+  while no run is going. **Officer options** (on Edit): per My options choice, **Allowed** (as global, yes or no)
+  and **Default** (as global or a value) for this department's officers only, saved as
+  `Config.Departments.<key>.officerOptions` and used the next time they open the tablet. For example FIB → HUD side →
+  Allowed: no, and FIB officers no longer see that row; they keep the default.
 - **Turn off** (typed short tag): nobody opens the tablet through it any more; its history, boards, disputes and
   unpaid pay stay, and its pay still comes from its account. Not while its officers are on a run, and one department
   always stays on. **Delete** is only for a department added in game that has no history.

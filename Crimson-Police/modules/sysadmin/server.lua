@@ -1258,6 +1258,50 @@ local function Words(list, max)
 end
 
 -- A department record from the wizard's fields (the Settings check and the department validator check it again).
+-- A department's officer options from the form (Departments -> Officer options): { allow, defaults, bounds }, each
+-- part a map of option keys; an empty part is left out and nothing at all is nil (the server-wide options). The
+-- department validator checks the keys and values (CP.OptionDefs.checkConfig).
+local function DeptOptions(v)
+    if type(v) ~= 'table' then return nil end
+    local out = {}
+    for _, part in ipairs({ 'allow', 'defaults', 'bounds' }) do
+        local src = v[part]
+        if type(src) == 'table' then
+            local t = {}
+            for key, x in pairs(src) do
+                if type(key) == 'string' and x ~= nil then t[key] = x end
+            end
+            if next(t) ~= nil then out[part] = t end
+        end
+    end
+    return next(out) ~= nil and out or nil
+end
+
+-- What the department form offers for officer options: each registered option that is a row of My options, with
+-- the server-wide allow, default and bounds (Config.OfficerOptions).
+local function OptionDefsView()
+    local Defs = CP.OptionDefs
+    if not Defs then return {} end
+    local allow, defaults, bounds = Defs.resolve(nil)
+    local out = {}
+    for _, key in ipairs(Defs.keys()) do
+        local d = Defs.get(key)
+        if d and not d.hidden then
+            out[#out + 1] = {
+                key = key,
+                kind = d.kind,
+                group = d.group,
+                values = (d.kind == 'enum' or d.kind == 'list') and Defs.values(key) or nil,
+                integer = d.integer or nil,
+                allow = allow[key] ~= false,
+                default = defaults[key],
+                bounds = bounds[key],
+            }
+        end
+    end
+    return out
+end
+
 local function Record(p, base)
     local r = U.deepcopy(base or {})
     if p.label ~= nil then r.label = type(p.label) == 'string' and U.trim(p.label) or p.label end
@@ -1281,6 +1325,7 @@ local function Record(p, base)
         end
         if next(r.logo) == nil then r.logo = nil end
     end
+    if p.officerOptions ~= nil then r.officerOptions = DeptOptions(p.officerOptions) end
     return r
 end
 
@@ -1312,6 +1357,7 @@ function Sys.departmentSetup()
                 societyAccount = d.societyAccount,
                 theme = Plain(d.theme),
                 logo = Plain(d.logo),
+                officerOptions = Plain(d.officerOptions),
             }
             for _, j in ipairs(type(d.jobs) == 'table' and d.jobs or {}) do taken[j] = k end
         end
@@ -1338,6 +1384,8 @@ function Sys.departmentSetup()
         jobs = jobs,
         cashSource = Config.Cash and Config.Cash.source or 'server',
         runsGoing = RunsGoing(),
+        optionDefs = OptionDefsView(),
+        optionsEnabled = not (CP.OptionDefs and not CP.OptionDefs.enabled()),
     }
 end
 
@@ -1962,6 +2010,7 @@ Kit.action('server:admin:saveDepartment', 'departmentsAdmin', function(ctx)
             if f.logo[k] ~= nil then put('logo.' .. k, rec.logo and rec.logo[k]) end
         end
     end
+    if f.officerOptions ~= nil then put('officerOptions', Plain(rec.officerOptions)) end
     if #changes == 0 then return true, {} end
     return CP.Settings.setMany(ctx.src, changes, { reason = ctx.reason })
 end, { reason = 'optional', rate = 2 })

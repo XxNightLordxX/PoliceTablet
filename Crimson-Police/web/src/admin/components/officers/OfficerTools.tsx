@@ -22,6 +22,7 @@ import { fmtDateTime, formatMoney, formatNumber } from '../../../shared/format';
 import { useRequest } from '../../../shared/hooks';
 import { request } from '../../../shared/nui';
 import { hasKey, t } from '../../../shared/i18n';
+import { optionLabel, optionValueText } from '../../../shared/options';
 import type {
     BadgeCatalog,
     OfficerGoals,
@@ -43,6 +44,7 @@ type Simple =
     | { kind: 'recalcStreak' }
     | { kind: 'firstRun' }
     | { kind: 'resetLook' }
+    | { kind: 'resetOptions' }
     | { kind: 'editNow' }
     | { kind: 'recheck' }
     | { kind: 'refresh' }
@@ -57,6 +59,7 @@ const SIMPLE_ACTION: Record<Simple['kind'], string> = {
     recalcStreak: 'server:admin:recalcStreak',
     firstRun: 'server:admin:resetFirstRun',
     resetLook: 'server:admin:resetLook',
+    resetOptions: 'server:admin:resetOfficerOptions',
     editNow: 'server:admin:clearProfileCooldown',
     recheck: 'server:admin:recheckBadges',
     refresh: 'server:admin:refreshOfficer',
@@ -507,6 +510,21 @@ export function OfficerTools({ o, onChanged }: { o: OfficerDetail; onChanged: ()
                             ]}
                         />
                     ) : null}
+                    {lk ? (
+                        <div className="admin-otools__options">
+                            <div className="admin-otools__options-title">{t('ui.admin_officers.look.options')}</div>
+                            {(lk.options ?? []).length ? (
+                                <KVList
+                                    items={(lk.options ?? []).map(op => ({
+                                        label: optionLabel(op.key),
+                                        value: optionValueText(op.key, op.value),
+                                    }))}
+                                />
+                            ) : (
+                                <div className="admin-otools__muted">{t('ui.admin_officers.look.options_none')}</div>
+                            )}
+                        </div>
+                    ) : null}
                     <Row gap={2}>
                         <Button
                             size="sm"
@@ -515,6 +533,14 @@ export function OfficerTools({ o, onChanged }: { o: OfficerDetail; onChanged: ()
                             onClick={() => setSimple({ kind: 'resetLook' })}
                         >
                             {t('ui.admin_officers.look.reset')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={own || busy || !(lk?.options ?? []).length}
+                            onClick={() => setSimple({ kind: 'resetOptions' })}
+                        >
+                            {t('ui.admin_officers.look.reset_options')}
                         </Button>
                         <Button
                             size="sm"

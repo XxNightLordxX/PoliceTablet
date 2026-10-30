@@ -312,6 +312,32 @@ do
         'an emptied link field removes the link: ' .. tostring(e))
     ok = Act('server:admin:saveDepartment', 1, { key = 'bcso', fields = { short = 'BCS' } })
     H.ok(ok == true and Config.Departments.bcso.short == 'BCS', 'an added department saves its record')
+
+    -- O12: the Officer options panel saves Config.Departments.<key>.officerOptions through the same form
+    local defs = {}
+    for _, d in ipairs(setup.optionDefs or {}) do defs[d.key] = d end
+    H.ok(defs.hudSide and defs.hudSide.kind == 'enum' and defs.hudSide.allow == true,
+        'O12: the setup lists the officer options with the server-wide allow')
+    ok, e = Act('server:admin:saveDepartment', 1, {
+        key = 'fib',
+        fields = { officerOptions = { allow = { hudSide = false }, defaults = { textSize = 'large' } } },
+    })
+    H.ok(
+        ok == true and Config.Departments.fib.officerOptions.allow.hudSide == false
+            and Config.Departments.fib.officerOptions.defaults.textSize == 'large',
+        'O12: a department\'s officer options'
+    )
+    local allow = CP.OptionDefs.resolve('fib')
+    H.eq(allow.hudSide, false, 'O12: an FIB officer may no longer change the HUD side')
+    ok, e = Act('server:admin:saveDepartment', 1,
+        { key = 'fib', fields = { officerOptions = { allow = { nope = 1 } } } })
+    H.ok(ok == false, 'O12: an unknown option is refused: ' .. tostring(e))
+    ok = Act('server:admin:saveDepartment', 1, { key = 'fib', fields = { officerOptions = {} } })
+    H.ok(ok == true and Config.Departments.fib.officerOptions == nil, 'O12: back to the server-wide options')
+    ok, e = Act('server:admin:saveDepartment', 1,
+        { key = 'bcso', fields = { officerOptions = { allow = { hudSide = false } } } })
+    H.ok(ok == true and Config.Departments.bcso.officerOptions.allow.hudSide == false,
+        'O12: an added department keeps them in its record: ' .. tostring(e))
 end
 
 -- ============================================================================

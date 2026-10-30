@@ -2,6 +2,7 @@
 // modules/profile, scoring, goals, and the recognition and season tools in modules/leaderboard and challenge
 // (docs/ARCHITECTURE.md §5.38 and §9.5).
 
+import type { OfficerOptionValue } from '../shared/types';
 import type { DebriefPerson, DecisionEntry } from './run_ui';
 import type { ChallengeDepartment, Contributor, SeasonView } from './boards';
 
@@ -265,6 +266,8 @@ export interface OfficerLook {
     callsMuted: boolean;
     nextEditIn: number;
     urlsLeft: number;
+    // the officer's own saved options (My options): only the ones that differ from the default
+    options?: { key: string; value: OfficerOptionValue }[];
 }
 
 export interface BannedWords {

@@ -121,6 +121,7 @@ local COMMON = {
     'Testing.debugOverlay',
     'Time.resetHour',
     'Leaderboard.weekStartsOn',
+    'OfficerOptions.enabled',
 }
 
 -- The plain groups the Settings screen folds the config.lua sections into (title settings.group.<key>, help text
@@ -1469,6 +1470,15 @@ local LOGO_URL = Text(nil, 512, CheckLogoUrl)
 local LOGO_FILE = Text('^[%w_%-%.]+$', 100, CheckLogoFile)
 local ACCENT = Alts(HEX, Record({ colour = HEX, level = Num(1, 1000, true) }, { colour = true }))
 
+-- A department's own officer options (Admin UI -> Departments -> Officer options): { allow, defaults, bounds }, each
+-- a map of option keys; the department validator checks the keys and values (CP.OptionDefs.checkConfig).
+local OPTION_KEY = '^%a[%w_]*$'
+local DEPT_OPTIONS_TPL = Record({
+    allow = MapOf(true, OPTION_KEY),
+    defaults = MapOf(ANY, OPTION_KEY),
+    bounds = MapOf(ANY, OPTION_KEY),
+})
+
 local DEPT_RECORD = Record({
     label = Text(nil, 64),
     short = Text(nil, 16),
@@ -1492,12 +1502,14 @@ local DEPT_RECORD = Record({
         size = Num(0.05, 1, false),
         grayscale = true,
     }),
+    officerOptions = DEPT_OPTIONS_TPL,
 }, { label = true, short = true, jobs = true, supervisorGrade = true })
 Settings._deptRecord = DEPT_RECORD
 
 KNOWN['Departments.*.logo.url'] = { tpl = Alts(NIL, LOGO_URL), nullable = true, kind = 'text' }
 KNOWN['Departments.*.logo.file'] = { tpl = Alts(NIL, LOGO_FILE), nullable = true, kind = 'text' }
 KNOWN['Departments.*.theme.text'] = { tpl = Alts(NIL, HEX), nullable = true, kind = 'colour' }
+KNOWN['Departments.*.officerOptions'] = { tpl = Alts(NIL, DEPT_OPTIONS_TPL), nullable = true, kind = 'json' }
 
 -- Mission desks: at most 50, inside the map, 0.3 to 5 m a side. Known departments: the department validator.
 local DESKS_MAX = 50
@@ -2094,8 +2106,9 @@ local function Describe(path, default)
     end
     e.locked = Lookup(LOCKED, path)
     e.restart = InList(RESTART, path) or UnderAny(RESTART, path)
-    -- a department's Mission controls bounds are read live (no missions reload)
+    -- a department's Mission controls bounds and officer options are read live (no missions reload)
     e.reload = UnderAny(RELOAD, path) and not Matches(path, 'Departments.*.missionControls')
+        and not Matches(path, 'Departments.*.officerOptions')
     e.points = InList(POINTS, path) or nil
     e.money = Contains(MONEY_SWITCHES, path) or nil
     e.common = InList(COMMON, path) or nil
@@ -2159,10 +2172,11 @@ local function BuildSchema()
             end
         end
     end
-    -- a department's logo link, text colour and Mission controls bounds are optional (config.lua leaves them out)
+    -- a department's logo link, text colour, Mission controls bounds and officer options are optional (config.lua
+    -- leaves them out)
     for key, d in pairs(type(DEFAULTS.Departments) == 'table' and DEFAULTS.Departments or {}) do
         if type(key) == 'string' and type(d) == 'table' then
-            for _, leaf in ipairs({ 'logo.url', 'logo.file', 'theme.text', 'missionControls' }) do
+            for _, leaf in ipairs({ 'logo.url', 'logo.file', 'theme.text', 'missionControls', 'officerOptions' }) do
                 local path = ('Departments.%s.%s'):format(key, leaf)
                 if not byPath[path] and U.getPath(DEFAULTS, path) == nil then add(path, nil) end
             end

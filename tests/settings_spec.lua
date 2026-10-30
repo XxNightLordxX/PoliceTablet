@@ -916,7 +916,31 @@ do
         'a department\'s officerOptions pass the same checks')
     H.eq(S.checkDepartments('Departments.sast.officerOptions', { defaults = { t_set = 3 } }), nil,
         'a good department override')
+    -- O12: the Departments form saves a department's officer options as one setting, read live
+    H.eq(S.checkDepartments('Departments.fib.officerOptions', { allow = { t_unknown = false } }), 'err.option_config',
+        'O12: a department override naming an unknown option is refused')
+    H.eq(S.checkDepartments('Departments.fib.officerOptions', { allow = { t_set = false } }), nil,
+        'O12: a department may lock a known option')
+    local own = S.entry('Departments.fib.officerOptions')
+    H.ok(own and own.nullable and not own.reload,
+        'O12: a config department\'s officerOptions is a setting, optional, read live (no missions reload)')
+    H.ok((Check('Departments.fib.officerOptions', { allow = { hudSide = false }, defaults = { textSize = 'large' } })),
+        'O12: allow and defaults')
+    H.ok((Check('Departments.fib.officerOptions', nil, true)), 'O12: or none (the server-wide options)')
+    Err('Departments.fib.officerOptions', { allow = { hudSide = 'no' } }, 'err.setting_type',
+        'O12: allow is true/false')
     CP.OptionDefs.remove('t_set')
+end
+
+-- O12: every option an owner may allow has a default with a description, and the switch is an everyday setting.
+do
+    local function E(p) return S.entry(p) or {} end
+    for key in pairs(Config.OfficerOptions.allow) do
+        H.ok(S.entry('OfficerOptions.defaults.' .. key) ~= nil, key .. ': allow has a defaults key')
+        H.ok((E('OfficerOptions.allow.' .. key).desc or '') ~= '', key .. ': allow has a description')
+        H.ok((E('OfficerOptions.defaults.' .. key).desc or '') ~= '', key .. ': its default has a description')
+    end
+    H.eq(E('OfficerOptions.enabled').common, true, 'O12: the officer options switch is in the Simple set')
 end
 
 -- The mission HUD's officer options (step O4): allowed, shipped as today, each with its comment, side and size checked.

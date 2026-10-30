@@ -176,6 +176,7 @@ const setup: DepartmentSetup = {
             supervisorGrade: 3,
             societyAccount: 'fib',
             theme: { primary: '#1c2541', accent: '#c9a227', background: '#0b0c10', surface: '#1a1b24' },
+            officerOptions: { allow: { hudSide: false }, defaults: { textSize: 'large' } },
         },
     ],
     jobs: [
@@ -208,6 +209,21 @@ const setup: DepartmentSetup = {
     ],
     cashSource: 'server',
     runsGoing: 0,
+    optionsEnabled: true,
+    optionDefs: [
+        { key: 'hudSide', kind: 'enum', group: 'hud', values: ['right', 'left'], allow: true, default: 'right' },
+        {
+            key: 'hudScale',
+            kind: 'number',
+            group: 'hud',
+            allow: true,
+            default: 1,
+            bounds: { min: 0.5, max: 2 },
+        },
+        { key: 'textSize', kind: 'enum', group: 'look', values: ['normal', 'large'], allow: true, default: 'normal' },
+        { key: 'skipAcceptConfirm', kind: 'bool', group: 'missions', allow: true, default: false },
+        { key: 'favouriteTypes', kind: 'list', group: 'missions', values: ['pursuit'], allow: true, default: [] },
+    ],
 };
 
 registerMock('request', 'admin:getDepartmentSetup', (): DepartmentSetup => setup);
