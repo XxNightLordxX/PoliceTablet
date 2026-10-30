@@ -4337,6 +4337,16 @@ Eagerly loads every src/mocks/*.mock.ts, so a feature adds mocks by dropping in 
   registerMock('action', 'server:acceptType', (type) => { if (type === 'tactical') throw new Error('err.server_busy'); return true; });
 ```
 
+## Crimson-Police/web/src/mocks/options.mock.ts
+
+```text
+Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions,
+setLocalOption, the localOptions message) and My keys (getKeyLabels). The mission board samples stand in for the
+options later features register; the hud group is the real one (shared/options_hud.lua). ?options=locked shows the
+screen with officer options turned off by an admin; ?hudSide=left&hudCompact=1&hudScale=1.2&reduceMotion=1 start
+the HUD options of this PC (with ?hud=progress).
+```
+
 ## Crimson-Police/web/src/mocks/run_ui.mock.ts
 
 ```text

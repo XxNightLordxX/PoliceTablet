@@ -22,6 +22,22 @@
     z-index: 30;
 }
 
+/* hudSide = 'left' (My options, this PC): the column sits at the left edge; the toasts stay top-right */
+.cp-hud-column.is-left {
+    right: auto;
+    left: 28px;
+    align-items: flex-start;
+    transform-origin: left center;
+}
+
+/* reduceMotion (My options, this PC): no slide-in or flash on the HUD, the result card and the toasts */
+.cp-reduce-motion .cp-hud,
+.cp-reduce-motion .cp-hud__route.is-off,
+.cp-reduce-motion .cp-result,
+.cp-reduce-motion .cp-toast {
+    animation: none;
+}
+
 /* HUD */
 .cp-hud {
     display: flex;

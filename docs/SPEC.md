@@ -1779,6 +1779,8 @@ Officer options
 
 My options holds the choices each officer makes for their own tablet, saved per character (cp_officers.options, so they follow the character to any PC). The Officer UI has a My options screen (after Profile & History; hidden while Config.OfficerOptions.enabled is false). Its Tablet look and privacy card changes the look, tablet size, mission call alerts and hide my name with the same rules as Edit profile and the Profile toggle, and Edit profile's Look tab links to it (More options). Each option group has its own card: a row shows only once its feature added it and only while it is allowed, says where it is kept (This character: saved with the character on any PC; This PC: kept on this PC for every character), and saves on its own; Back to default puts the group's options back. My keys lists the four Crimson-Police keys (open the tablet, open Dispatch, ready for the unit's mission, contact action) with the key each is bound to, or not set; players change them in GTA Settings > Key Bindings > FiveM. Later updates add each option with its own rule here.
 
+- Mission HUD (kept on this PC, for every character played on it; they apply at once, even before the tablet opens): HUD side (right, as before, or left; notifications stay top right), HUD size (on top of the screen size; officers pick inside Config.OfficerOptions.bounds.hudScale, shipped 0.8 to 1.3, default 1.0), Compact HUD (only the current objective, how many are done of how many and the timer; off by default) and Fewer animations (the HUD, the result card and notifications appear without sliding in, and the off-route warning does not flash; off by default). Each is allowed by default (Config.OfficerOptions.allow).
+
 - Config.OfficerOptions: enabled (true; false = no My options screen and every option keeps its default for everyone), allow (per option: false = officers cannot change it and everyone gets the default), defaults (per option: what every officer starts with) and bounds (per number option: { min, max } officers may pick). A department may set its own allow, defaults and bounds in Config.Departments.<key>.officerOptions; they win over the global ones for its officers.
 - An option is a switch, one choice from a list, several choices from a list, or a number. A choice that is no longer offered (a mission type or twist that was removed) is dropped from the saved value, and a number outside the bounds now is clamped to them. Only the options that differ from the default are saved: picking the default again removes it.
 - An option that is not allowed now is ignored, never deleted: allowing it again brings the officer's own choice back.
@@ -3954,9 +3956,22 @@ Config.Profile = {
 -- { allow = {}, defaults = {}, bounds = {} }); they win over the ones below for its officers.
 Config.OfficerOptions = {
     enabled = true,                  -- false = no My options screen; every option keeps its default for everyone
-    allow = {},                      -- per option: false = officers cannot change it, everyone gets the default
-    defaults = {},                   -- per option: what every officer starts with
-    bounds = {},                     -- per number option: { min, max } officers may pick
+    allow = {                        -- per option: false = officers cannot change it, everyone gets the default
+        hudSide = true,              -- the mission HUD on the right or the left of the screen (kept on this PC)
+        hudScale = true,             -- the mission HUD bigger or smaller (kept on this PC)
+        hudCompact = true,           -- the mission HUD shows only the current objective (kept on this PC)
+        reduceMotion = true,         -- no slide-in or flashing on the HUD and the toasts (kept on this PC)
+    },
+    defaults = {                     -- per option: what every officer starts with
+        hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
+        hudScale = 1.0,              -- size of the mission HUD on top of the screen size (1.0 = as before)
+        hudCompact = false,          -- true = the HUD shows the current objective, the done count and the timer
+                                     -- only; false = every objective (as before)
+        reduceMotion = false,        -- true = the HUD and the toasts appear without sliding in or flashing
+    },
+    bounds = {                       -- per number option: { min, max } officers may pick
+        hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick
+    },
 }
 
 Config.Commendations = {

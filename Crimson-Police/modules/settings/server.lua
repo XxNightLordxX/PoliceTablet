@@ -299,6 +299,7 @@ local RANGES = {
     ['XPCurve.maxLevel'] = { 1, 500 },
     ['Profile.bioLines'] = { 1, 20 },
     ['Profile.bioMax'] = { 1, 2000 },
+    ['OfficerOptions.defaults.hudScale'] = { 0.5, 2 },
     ['Leaderboard.topN'] = { 1, 100 },
     ['Cash.minPayout'] = { 0, 10000000 },
     ['Cash.maxPayout'] = { 0, 10000000 },
@@ -452,6 +453,7 @@ local RANGE_LISTS = {
     'Custody.*.spawnDistance',
     'Commendations.citation',
     'Profile.uiScale',
+    'OfficerOptions.bounds.hudScale',
     'Spawning.ground.pedAbove',
     'Spawning.ground.vehicleAbove',
     'Spawning.ground.propAbove',
@@ -1012,6 +1014,7 @@ local KNOWN = {
     },
     ['Leaderboard.weekStartsOn'] = { tpl = Enum(WEEKDAYS), kind = 'enum' },
     ['Profile.bannedWords'] = { tpl = ListOf(Text(nil, 64)), kind = 'list', item = 'string' },
+    ['OfficerOptions.defaults.hudSide'] = { tpl = Enum({ 'right', 'left' }), kind = 'enum' },
     ['Profile.appearances'] = {
         tpl = ListOf(Enum(APPEARANCES), { min = 1, unique = true }),
         kind = 'list',
@@ -3428,9 +3431,11 @@ Settings.registerValidator('Departments', function(path, clean, ctx)
     return (Settings.checkDepartments(path, clean, ctx))
 end)
 
--- Config.OfficerOptions allow, defaults and bounds: known options and good values only (CP.OptionDefs.checkConfig).
+-- Config.OfficerOptions allow, defaults and bounds (a whole part, or one option of it): known options and good values
+-- only (CP.OptionDefs.checkConfig).
 Settings.registerValidator('OfficerOptions', function(path, clean)
-    local part = path:match('^OfficerOptions%.(%a+)$')
+    local part, key = path:match('^OfficerOptions%.(%a+)%.([%w_]+)$')
+    if key then clean = { [key] = clean } else part = path:match('^OfficerOptions%.(%a+)$') end
     if not CP.OptionDefs or (part ~= 'allow' and part ~= 'defaults' and part ~= 'bounds') then return nil end
     return (CP.OptionDefs.checkConfig({ [part] = clean }))
 end)

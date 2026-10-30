@@ -126,6 +126,25 @@ local okB, list = actions.getLocalOptions()
 H.ok(okB and list.options.test_size == 'large' and list.options.test_board == nil, 'getLocalOptions: local keys only')
 H.eq(select(2, actions.setLocalOption('x')), 'err.invalid_payload', 'setLocalOption needs { key, value }')
 
+-- the mission HUD's options (shared/options_hud.lua, step O4): kept on this PC, sized inside Config's bounds
+CP.Access.setSession(Session({}, nil))
+kvp['crimsonpolice:options'] = nil
+local hud = O.localValues()
+H.ok(hud.hudSide == 'right' and hud.hudScale == 1.0 and hud.hudCompact == false and hud.reduceMotion == false,
+    'the HUD options ship as today: right, 1.0, every objective, animations on')
+local okS, scale = O.setLocal('hudScale', 2.0)
+H.ok(okS and scale == 1.3, 'a HUD size of 2.0 is clamped to Config.OfficerOptions.bounds.hudScale (1.3)')
+H.eq(O.get('hudScale'), 1.3, '...and reads back clamped')
+H.ok((O.setLocal('hudSide', 'left')), 'the HUD may sit on the left')
+H.eq(select(2, O.setLocal('hudSide', 'top')), 'err.option_value', 'the HUD side is right or left only')
+H.ok((O.setLocal('hudCompact', true)) and O.localValues().hudCompact == true, 'the compact HUD is kept on this PC')
+H.eq(LastLocal() and LastLocal().hudSide, 'left', 'the NUI got the HUD options')
+local keepAllow = Config.OfficerOptions.allow.hudSide
+Config.OfficerOptions.allow.hudSide = false
+H.eq(O.get('hudSide'), 'right', 'allow.hudSide = false: every officer gets the default side')
+Config.OfficerOptions.allow.hudSide = keepAllow
+kvp['crimsonpolice:options'] = nil
+
 -- the client file uses no os or io
 local f = assert(io.open(H.root .. 'modules/options/client.lua', 'r'))
 local src = f:read('a')

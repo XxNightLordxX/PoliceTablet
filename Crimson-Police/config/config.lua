@@ -1409,9 +1409,22 @@ Config.Profile = {
 -- { allow = {}, defaults = {}, bounds = {} }); they win over the ones below for its officers.
 Config.OfficerOptions = {
     enabled = true,                  -- false = no My options screen; every option keeps its default for everyone
-    allow = {},                      -- per option: false = officers cannot change it, everyone gets the default
-    defaults = {},                   -- per option: what every officer starts with
-    bounds = {},                     -- per number option: { min, max } officers may pick
+    allow = {                        -- per option: false = officers cannot change it, everyone gets the default
+        hudSide = true,              -- the mission HUD on the right or the left of the screen (kept on this PC)
+        hudScale = true,             -- the mission HUD bigger or smaller (kept on this PC)
+        hudCompact = true,           -- the mission HUD shows only the current objective (kept on this PC)
+        reduceMotion = true,         -- no slide-in or flashing on the HUD and the toasts (kept on this PC)
+    },
+    defaults = {                     -- per option: what every officer starts with
+        hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
+        hudScale = 1.0,              -- size of the mission HUD on top of the screen size (1.0 = as before)
+        hudCompact = false,          -- true = the HUD shows the current objective, the done count and the timer
+                                     -- only; false = every objective (as before)
+        reduceMotion = false,        -- true = the HUD and the toasts appear without sliding in or flashing
+    },
+    bounds = {                       -- per number option: { min, max } officers may pick
+        hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick
+    },
 }
 
 Config.Commendations = {

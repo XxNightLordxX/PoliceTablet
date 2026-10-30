@@ -1,13 +1,12 @@
 // Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions,
-// setLocalOption, the localOptions message) and My keys (getKeyLabels). The sample options stand in for the ones
-// later features register. ?options=locked shows the screen with officer options turned off by an admin.
 
 import { emitDebug, registerMock } from '../shared/nui';
 import type { OfficerOptionValue } from '../shared/types';
 import type { KeyLabel, OptionDef, OptionsView } from '../types/options';
 import { buildSession } from './samples';
 
-const MODE = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('options') : null;
+const PARAMS = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+const MODE = PARAMS.get('options');
 const LOCKED = MODE === 'locked';
 
 const SCHEMA: OptionDef[] = [
@@ -29,21 +28,37 @@ const SCHEMA: OptionDef[] = [
         group: 'mission_board',
         order: 20,
     },
-    { key: 'hud_sounds', kind: 'bool', default: true, store: 'local', group: 'hud', order: 10 },
     {
-        key: 'hud_volume',
+        key: 'hudSide',
+        kind: 'enum',
+        values: ['right', 'left'],
+        default: 'right',
+        store: 'local',
+        group: 'hud',
+        order: 10,
+    },
+    {
+        key: 'hudScale',
         kind: 'number',
-        default: 60,
-        bounds: { min: 0, max: 100 },
+        default: 1,
+        bounds: { min: 0.8, max: 1.3 },
         store: 'local',
         group: 'hud',
         order: 20,
     },
+    { key: 'hudCompact', kind: 'bool', default: false, store: 'local', group: 'hud', order: 30 },
+    { key: 'reduceMotion', kind: 'bool', default: false, store: 'local', group: 'hud', order: 40 },
 ];
 
 const defaults = Object.fromEntries(SCHEMA.map(d => [d.key, d.default])) as Record<string, OfficerOptionValue>;
 const server: Record<string, OfficerOptionValue> = { board_view: 'cards' };
 const local: Record<string, OfficerOptionValue> = {};
+if (PARAMS.get('hudSide') === 'left') local.hudSide = 'left';
+if (PARAMS.get('hudCompact') === '1') local.hudCompact = true;
+if (PARAMS.get('reduceMotion') === '1') local.reduceMotion = true;
+if (Number(PARAMS.get('hudScale')) > 0) local.hudScale = Math.min(1.3, Math.max(0.8, Number(PARAMS.get('hudScale'))));
+// the client sends the options of this PC on the NUI ready
+if (Object.keys(local).length) emitDebug('localOptions', { options: { ...local } }, 300);
 
 // The mock session's config carries Config.OfficerOptions resolved, as the real getSession sends it.
 {
@@ -52,7 +67,7 @@ const local: Record<string, OfficerOptionValue> = {};
         enabled: true,
         allow: Object.fromEntries(SCHEMA.map(d => [d.key, true])),
         defaults,
-        bounds: { hud_volume: { min: 0, max: 100 } },
+        bounds: { hudScale: { min: 0.8, max: 1.3 } },
     };
 }
 

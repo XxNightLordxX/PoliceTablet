@@ -18,5 +18,16 @@
   "options.keys.hint": "Change them in GTA Settings > Key Bindings > FiveM.",
   "options.keys.unset": "not set",
   "options.keys.other": "a mouse or pad button",
-  "options.more": "More options"
+  "options.more": "More options",
+  "options.group.hud": "Mission HUD",
+  "options.key.hudSide": "HUD side",
+  "options.key.hudSide_hint": "The side of the screen the mission HUD sits on. Notifications stay top right.",
+  "options.value.hudSide.right": "Right",
+  "options.value.hudSide.left": "Left",
+  "options.key.hudScale": "HUD size",
+  "options.key.hudScale_hint": "1 is the normal size; it still grows and shrinks with your screen.",
+  "options.key.hudCompact": "Compact HUD",
+  "options.key.hudCompact_hint": "Show only the current objective, how many are done and the timer.",
+  "options.key.reduceMotion": "Fewer animations",
+  "options.key.reduceMotion_hint": "The HUD and notifications appear without sliding in or flashing."
 }

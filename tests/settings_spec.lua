@@ -900,18 +900,41 @@ do
     H.eq(E('OfficerOptions.enabled').section, E('Profile.bioMax').section, 'officer options sit with the profile')
     H.eq(E('OfficerOptions.enabled').default, true, 'officer options ship on')
     H.ok(E('OfficerOptions.enabled').desc:find('no My options screen', 1, true) ~= nil, 'enabled: its comment')
-    H.ok(E('OfficerOptions.allow').desc:find('officers cannot change it', 1, true) ~= nil, 'allow: its comment')
-    H.ok(E('OfficerOptions.defaults').desc:find('what every officer starts with', 1, true) ~= nil, 'defaults too')
-    H.ok(E('OfficerOptions.bounds').desc:find('{ min, max } officers may pick', 1, true) ~= nil, 'bounds too')
+    local groups = {}
+    for _, sec in ipairs(S._schema().sections) do
+        for _, g in ipairs(sec.groups) do groups[g.path] = g end
+    end
+    local function G(p) return (groups[p] or {}).desc or '' end
+    H.ok(G('OfficerOptions.allow'):find('officers cannot change it', 1, true) ~= nil, 'allow: its comment')
+    H.ok(G('OfficerOptions.defaults'):find('what every officer starts with', 1, true) ~= nil, 'defaults too')
+    H.ok(G('OfficerOptions.bounds'):find('{ min, max } officers may pick', 1, true) ~= nil, 'bounds too')
     CP.OptionDefs.add('t_set', { kind = 'number', min = 0, max = 10, default = 5 })
-    Err('OfficerOptions.allow', { t_unknown = false }, 'err.option_config', 'allow names a registered option only')
-    Err('OfficerOptions.bounds', { t_set = { 8, 2 } }, 'err.option_config', 'bounds go min to max')
-    H.ok((Check('OfficerOptions.allow', { t_set = false })), 'a known option may be locked')
+    Err('OfficerOptions.allow.t_unknown', false, 'err.setting_unknown', 'allow names a registered option only')
+    Err('OfficerOptions.bounds.hudScale', { 1.3, 0.8 }, 'err.setting_min_max', 'bounds go min to max')
+    H.ok((Check('OfficerOptions.allow.hudScale', false)), 'a known option may be locked')
     H.eq(S.checkDepartments('Departments.sast.officerOptions', { defaults = { t_set = 'x' } }), 'err.option_config',
         'a department\'s officerOptions pass the same checks')
     H.eq(S.checkDepartments('Departments.sast.officerOptions', { defaults = { t_set = 3 } }), nil,
         'a good department override')
     CP.OptionDefs.remove('t_set')
+end
+
+-- The mission HUD's officer options (step O4): allowed, shipped as today, each with its comment, side and size checked.
+do
+    local function E(p) return S.entry(p) or {} end
+    for _, key in ipairs({ 'hudSide', 'hudScale', 'hudCompact', 'reduceMotion' }) do
+        H.eq(E('OfficerOptions.allow.' .. key).default, true, key .. ': officers may change it')
+        H.ok((E('OfficerOptions.defaults.' .. key).desc or '') ~= '', key .. ': its default has a comment')
+    end
+    H.eq(E('OfficerOptions.defaults.hudSide').default, 'right', 'the HUD ships on the right, as before')
+    H.eq(E('OfficerOptions.defaults.hudSide').kind, 'enum', 'the side is a choice')
+    Err('OfficerOptions.defaults.hudSide', 'top', 'err.setting_option', 'the side is right or left only')
+    H.eq(E('OfficerOptions.defaults.hudScale').default, 1.0, 'the HUD ships at its size of today')
+    H.eq(E('OfficerOptions.defaults.hudScale').max, 2, 'the HUD size goes up to 2')
+    H.eq(E('OfficerOptions.defaults.hudCompact').default, false, 'every objective shows, as before')
+    H.eq(E('OfficerOptions.defaults.reduceMotion').default, false, 'animations stay, as before')
+    H.ok(E('OfficerOptions.bounds.hudScale').kind == 'range' and E('OfficerOptions.bounds.hudScale').size == 2,
+        'the HUD size bounds edit as a smallest and a biggest size')
 end
 
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.

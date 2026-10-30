@@ -118,6 +118,7 @@ PoliceTablet/                      (git repo)
     shared/net.lua                 CP.Net (actions and callbacks)
     shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
     shared/options.lua             CP.OptionDefs: the officer options registry and its rules (§5.48)
+    shared/options_hud.lua         The mission HUD's officer options: side, size, compact, fewer animations (§5.48)
     shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
     config/banned_words.txt        the default banned-word list for profile bios (one word or phrase a line)
@@ -3246,6 +3247,14 @@ no option is registered by this module: each feature registers its own keys.
   500 ms after the last change, a `local` row the client action `setLocalOption`; an inline Saved; Back to default
   per group) and My keys (client action `getKeyLabels`, §8.5). Edit profile's Look tab: More options ->
   `navigate('options')`. Browser mock: web/src/mocks/options.mock.ts (`?options=locked`: officer options off).
+- Mission HUD options (step O4, shared/options_hud.lua, group `hud`, all `local`): `hudSide` ('right' | 'left';
+  `HudColumn` class `is-left`: left edge, transform origin left; toasts stay top-right), `hudScale` (number 0.5-2,
+  bounded by `Config.OfficerOptions.bounds.hudScale`, shipped 0.8-1.3; the column scale = `useHudScale()` x
+  `hudScale`, still fitted to the screen height), `hudCompact` (bool; `Hud` lists only the current objective, else
+  the first not done, else the last, with the done/total count and the timer) and `reduceMotion` (bool; `MotionPref`
+  in App.tsx sets the body class `cp-reduce-motion`, which drops the HUD and result card slide-in, the off-route
+  flash and the toast slide-in). Shipped allowed, defaults right / 1.0 / false / false (the HUD as before). Mock:
+  `?hud=progress&hudSide=left&hudCompact=1` (also `hudScale=1.2`, `reduceMotion=1`).
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 

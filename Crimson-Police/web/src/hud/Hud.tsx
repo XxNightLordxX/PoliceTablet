@@ -1,4 +1,5 @@
-// The mission HUD (ARCHITECTURE §9.3): shown at the right edge while hud is set, without NUI focus.
+// The mission HUD (ARCHITECTURE §9.3): shown at the screen edge while hud is set, without NUI focus. hudCompact (My
+// options, this PC) shows the current objective only, with the done count and the timer.
 
 import { useMemo } from 'react';
 import { Badge, Icon, TierBadge } from '../shared/components';
@@ -7,6 +8,7 @@ import { ACTION_LEFT_SHOWN, secondsSince } from '../shared/data';
 import { formatDistance, formatDuration } from '../shared/format';
 import { useCountdown } from '../shared/hooks';
 import { t } from '../shared/i18n';
+import { useOption } from '../shared/options';
 import type { HudObjective, HudState } from '../shared/types';
 import type { HudContact } from '../types/custody';
 import { ContactCard } from './ContactCard';
@@ -157,9 +159,21 @@ function Objective({ o }: { o: HudObjective }) {
 
 const MESSAGE_ICON = { info: 'info', success: 'checkCircle', warning: 'alert', error: 'xCircle' } as const;
 
+// The rows the HUD lists: every objective, or in compact the current one (else the first not done, else the last).
+export function shownObjectives(objectives: HudObjective[], compact: boolean): HudObjective[] {
+    if (!compact || objectives.length <= 1) return objectives;
+    const pick =
+        objectives.find(o => o.current && !o.done) ??
+        objectives.find(o => !o.done) ??
+        objectives[objectives.length - 1];
+    return [pick];
+}
+
 export function Hud({ hud }: { hud: HudState }) {
     const objectives = hud.objectives ?? [];
     const done = objectives.filter(o => o.done).length;
+    const compact = useOption<boolean>('hudCompact') === true;
+    const rows = shownObjectives(objectives, compact);
     // Route line: always while heading to the start; afterwards only while still on/off the route or following
     // the action (a late participant), never a stale "arrived"/"disabled" line during the objectives.
     const showRoute =
@@ -174,7 +188,12 @@ export function Hud({ hud }: { hud: HudState }) {
 
     return (
         <section
-            className={cx('cp-hud', hud.test && 'is-test', hud.phase === 'ended' && 'is-ended')}
+            className={cx(
+                'cp-hud',
+                hud.test && 'is-test',
+                hud.phase === 'ended' && 'is-ended',
+                compact && 'is-compact',
+            )}
             aria-label={hud.missionLabel}
         >
             {hud.test ? (
@@ -228,8 +247,8 @@ export function Hud({ hud }: { hud: HudState }) {
                             </span>
                         </div>
                         <ol className="cp-hud__obj-list">
-                            {objectives.map((o, i) => (
-                                <Objective key={i} o={o} />
+                            {rows.map(o => (
+                                <Objective key={objectives.indexOf(o)} o={o} />
                             ))}
                         </ol>
                     </div>

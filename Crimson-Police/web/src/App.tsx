@@ -12,7 +12,7 @@ import BuilderOverlay from './hud/BuilderOverlay';
 import DebugOverlay from './hud/DebugOverlay';
 import { FadeOverlay } from './hud/FadeOverlay';
 import { Hud } from './hud/Hud';
-import { HudColumn } from './hud/HudColumn';
+import { HudColumn, MotionPref } from './hud/HudColumn';
 import { ResultScreen } from './hud/ResultScreen';
 import { QuietBoundary, Toasts } from './shared/components';
 import { closeTopLayer, useHudScale, useKeyRelease, usePush, useViewport } from './shared/hooks';
@@ -269,6 +269,7 @@ export default function App() {
         <LocaleProvider locale={locale}>
             <SessionContext.Provider value={sessionValue}>
                 <OptionsProvider session={session}>
+                    <MotionPref />
                     <NavigationContext.Provider value={nav}>
                         {showColumn ? (
                             <QuietBoundary
