@@ -276,6 +276,7 @@ for _, name in ipairs({
     'builderAutoPoints',
     'builderCheckPoints',
     'builderTeleport',
+    'builderShowMap',
 }) do
     H.ok(type(T.actions[name]) == 'function', 'client action registered: ' .. name)
 end
@@ -2374,6 +2375,83 @@ do
     H.eq(select(2, Act('builderCheckPoints', base)), 'err.builder_here_off', 'Config.Builder.useMyPosition = false')
     Config.Builder.useMyPosition = true
     CP.Spawn, _G.RequestCollisionAtCoord = keep, collision
+end
+
+-- ============================================================================
+--            B17: builderShowMap (temporary blips on the pause map)
+-- ============================================================================
+
+do
+    local frontend = 0
+    local coordBlips = {}
+    _G.AddBlipForCoord = function(x, y, z)
+        local b = 1900 + #coordBlips + 1
+        coordBlips[#coordBlips + 1] = { b = b, x = x, y = y, z = z }
+        W.blips[b] = true
+        return b
+    end
+    _G.SetBlipScale = function() end
+    _G.SetBlipAsShortRange = function() end
+    _G.IsPauseMenuActive = function() return false end
+    _G.ActivateFrontendMenu = function() frontend = frontend + 1 end
+    local function Live()
+        local n = 0
+        for _, c in ipairs(coordBlips) do if W.blips[c.b] then n = n + 1 end end
+        return n
+    end
+    local cabin = { x = 1390.2, y = 3605.8, z = 38.9 }
+    local payload = {
+        points = {
+            { kind = 'start', coords = cabin },
+            { kind = 'spawn', coords = { x = 1395.0, y = 3610.0, z = 38.9 } },
+            { kind = 'checkpoint', coords = { x = 1420.0, y = 3640.0, z = 38.0 } },
+        },
+    }
+    H.eq(select(2, Act('builderShowMap', {})), 'err.invalid_payload', 'show on map needs points')
+    H.eq(select(2, Act('builderShowMap', { points = { { kind = 'boat', coords = cabin } } })), 'err.invalid_payload',
+        'an unknown point kind is refused')
+    H.eq(select(2, Act('builderShowMap', { points = { { kind = 'start', coords = 'cabin' } } })), 'err.invalid_payload',
+        'a point needs coords')
+    local many = {}
+    for i = 1, 301 do many[i] = { kind = 'spawn', coords = cabin } end
+    H.eq(select(2, Act('builderShowMap', { points = many })), 'err.invalid_payload', 'at most 300 points')
+    LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-arena' }
+    H.eq(select(2, Act('builderShowMap', payload)), 'err.in_arena', 'show on map refused in Crimson-Arena')
+    LocalPlayer.state.crimsonArena = nil
+    H.eq(#coordBlips, 0, 'no blip from a refused request')
+
+    T.isOpen = true
+    local closes = T.closes
+    local ok, reply = Act('builderShowMap', payload)
+    H.eq(ok, true, 'show on map accepted')
+    H.eq(reply.shown, 3, 'one blip per point')
+    H.eq(Live(), 3, 'the start, the spawn and the checkpoint are on the map')
+    H.eq(coordBlips[1].x, cabin.x, 'the start blip sits on the start')
+    Frames(10, 50)
+    H.eq(T.closes, closes + 1, 'the tablet closes')
+    H.eq(frontend, 1, 'the pause map opens')
+    Frames(10, 100)
+    H.eq(Live(), 3, 'the blips stay while the tablet is closed')
+
+    -- a second "Show on map" replaces the first one's blips
+    ok = Act('builderShowMap', { points = { { kind = 'start', coords = cabin } } })
+    H.eq(ok, true, 'a second show accepted')
+    H.eq(Live(), 1, 'the earlier blips are cleared')
+    Frames(10, 50)
+    H.eq(B.mapBlips(), 1, 'one blip on the map')
+    CP.Tablet.open('supervisor')
+    Frames(4, 100)
+    H.eq(Live(), 0, 'the blips are cleared when the tablet opens again')
+    H.eq(B.mapBlips(), 0, 'nothing left on the map')
+
+    -- a resource stop clears them too
+    T.isOpen = true
+    Act('builderShowMap', payload)
+    H.eq(Live(), 3, 'shown again')
+    TriggerEvent('onResourceStop', CP.resource)
+    H.eq(Live(), 0, 'a resource stop clears the blips')
+    Frames(10, 100)
+    T.isOpen = true
 end
 
 -- ============================================================================

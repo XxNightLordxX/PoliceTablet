@@ -1528,6 +1528,10 @@ and Home's **Make a new mission** tile. With the wizard off they open the New mi
    **Delete** (removes only that point, saved at once). Pointing at a row rings its dot on the map. Admins (and
    ranks granted in `Config.Permissions.builderTeleport`) also get **Teleport** on each point
    ([4.5](#45-mission-builder-permissions)).
+   **Show on map** (next to the location's name) closes the tablet and opens the pause map with a dot on the
+   location's start, each spawn point and each checkpoint, so you can see it sits where you meant (at the cabin, not
+   in the sea). **All locations** (under the list of locations) does the same for every location's start. The dots
+   are only on your map and go when you open the tablet again.
 4. Test it privately if you like. **Testing is optional**: a draft can be published without a test (the tablet asks
    "Publish without testing?" once). Only when `Config.Builder.requireTestToPublish = true` must a supervisor's draft
    pass a test first; an admin never needs one. The step bar marks **Scaling** and **Test** "(optional)" and ticks

@@ -1441,6 +1441,9 @@ Stop: every value we set is removed.
     builderResult    {} -> the pending result or nil (and clears it)
     builderCancel    {} -> { cancelled = boolean }
     builderWaypoint  { coords } -> { ok = true }   (GPS waypoint; refuses in the arena)
+    builderShowMap   { points = { { kind = start|spawn|checkpoint, coords } } (1-300) } -> { shown = n }
+                     (B17: closes the tablet, temporary blips, opens the pause map; cleared on the next tablet open,
+                     a new show, unload, arena and resource stop; refuses in the arena)
     Immediate replies of the three tools: { started = true } or err.invalid_payload, err.in_arena,
     err.builder_busy, err.builder_dead, err.builder_on_run, err.builder_disabled, err.builder_bad_vehicle.
   Events handled: crimson-police:client:builder { event = 'lockBroken'|'reloaded'|'deleted', id } (stops a tool of

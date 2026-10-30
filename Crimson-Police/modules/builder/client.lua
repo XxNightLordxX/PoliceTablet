@@ -2310,6 +2310,90 @@ do
 end
 
 -- ============================================================================
+--                         SHOW ON THE PAUSE MAP (B17)
+-- ============================================================================
+-- "Show on map" on the Locations step: { points = { { kind, coords }, ... } } with kind start, spawn or checkpoint.
+-- The tablet closes, every point gets a temporary blip and the pause map opens, so the owner sees where the
+-- location sits on the real map (on land, not in the sea). The blips go when the tablet opens again, on a new
+-- "Show on map", on a character unload, on entering Crimson-Arena and on a resource stop.
+do
+    local MAX_MAP_POINTS = 300
+    local MAP_STYLE = {
+        start = { sprite = 309, colour = 47, scale = 1.0, name = 'builder.map.blip_start' },
+        spawn = { sprite = 1, colour = 1, scale = 0.7, name = 'builder.map.blip_spawn' },
+        checkpoint = { sprite = 1, colour = 3, scale = 0.6, name = 'builder.map.blip_checkpoint' },
+    }
+    local shown = {}      -- the blips on the map now
+    local watch = 0       -- bumped per show: an older watcher stops
+
+    function B.clearMap()
+        watch = watch + 1
+        for _, b in ipairs(shown) do
+            if DoesBlipExist(b) then RemoveBlip(b) end
+        end
+        shown = {}
+    end
+
+    function B.mapBlips() return #shown end
+
+    -- The payload as { { kind, coords } }, or nil, errKey.
+    function B.parseShowMap(p)
+        local list = type(p) == 'table' and p.points or nil
+        if type(list) ~= 'table' or #list == 0 or #list > MAX_MAP_POINTS then return nil, 'err.invalid_payload' end
+        local out = {}
+        for i = 1, #list do
+            local item = list[i]
+            local c = type(item) == 'table' and VecOf(item.coords) or nil
+            if not c or not MAP_STYLE[item.kind] then return nil, 'err.invalid_payload' end
+            out[i] = { kind = item.kind, coords = c }
+        end
+        return out
+    end
+
+    local function AddMapBlip(pt)
+        local st = MAP_STYLE[pt.kind]
+        local b = AddBlipForCoord(pt.coords.x, pt.coords.y, pt.coords.z)
+        if not b or b == 0 then return end
+        SetBlipSprite(b, st.sprite)
+        SetBlipColour(b, st.colour)
+        SetBlipScale(b, st.scale)
+        SetBlipAsShortRange(b, false)
+        BeginTextCommandSetBlipName('STRING')
+        AddTextComponentSubstringPlayerName(CP.L(st.name))
+        EndTextCommandSetBlipName(b)
+        shown[#shown + 1] = b
+    end
+
+    -- The client action builderShowMap. Returns ok, data | errKey.
+    function B.showMap(payload)
+        local points, err = B.parseShowMap(payload)
+        if not points then return false, err end
+        local why = Refusal()
+        if why then return false, why end
+        B.clearMap()
+        for _, pt in ipairs(points) do AddMapBlip(pt) end
+        local mine = watch
+        CreateThread(function()
+            Wait(0)
+            if CP.Tablet and CP.Tablet.close then CP.Tablet.close() end
+            Wait(100)
+            if watch ~= mine then return end
+            if not IsPauseMenuActive() then ActivateFrontendMenu(joaat('FE_MENU_VERSION_MP_PAUSE'), false, -1) end
+            -- the blips stay until the tablet is open again
+            while watch == mine do
+                Wait(250)
+                if watch == mine and CP.Tablet and CP.Tablet.isOpen and CP.Tablet.isOpen() then B.clearMap() end
+            end
+        end)
+        return true, { shown = #shown }
+    end
+
+    AddEventHandler('onResourceStop', function(res)
+        if res == CP.resource then B.clearMap() end
+    end)
+end
+
+-- ============================================================================
 --              CLIENT ACTIONS AND EVENTS (registered at runtime)
 -- ============================================================================
 
@@ -2385,6 +2469,7 @@ local function RegisterActions()
         return true, { cancelled = B.cancel('ui') }
     end)
     T.registerClientAction('builderTeleport', B.teleport)
+    T.registerClientAction('builderShowMap', B.showMap)
     T.registerClientAction('builderWaypoint', function(payload)
         local c = type(payload) == 'table' and VecOf(payload.coords) or nil
         if not c then return false, 'err.invalid_payload' end
@@ -2426,12 +2511,18 @@ CreateThread(function()
     local bag = ('player:%d'):format(GetPlayerServerId(PlayerId()))
     AddStateBagChangeHandler('crimsonArena', bag, function(_, _, value)
         -- only queue work: the bag still holds the old value while the handler runs
-        if IsForeignArena(value) then SetTimeout(0, function() B.cancel('arena') end) end
+        if IsForeignArena(value) then
+            SetTimeout(0, function()
+                B.cancel('arena')
+                B.clearMap()
+            end)
+        end
     end)
     if CP.Qbx and CP.Qbx.onUnload then
         CP.Qbx.onUnload(function()
             B.cancel('unload')
             state.result = nil
+            B.clearMap()
         end)
     end
 end)

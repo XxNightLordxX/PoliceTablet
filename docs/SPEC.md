@@ -2026,6 +2026,8 @@ Point list (Locations step, under the map): one row per stored point (the start,
 
 Teleport (B8, owner decision; replaces "the builder never teleports"): the start row and each point-list row have Teleport while Config.Builder.teleport is on and the builder may: admins always, anyone else only with a grant for his department and grade in Config.Permissions.builderTeleport (minGrade or grades; shipped empty = admins only). The screen names the point (mission, location, key, number), never a position: the server checks the grant, refuses in the arena, on a run or while down, reads the saved point (built-in missions too), writes the audit row builderTeleport (mission, #location, key#number) and sends the player its own coordinates; the client fades out, freezes, loads the collision, finds the ground, puts him there and unfreezes. Unsaved changes are saved first. The test drive and the other tools still only set GPS waypoints.
 
+Show on map (B17): next to the location's name, Show on map closes the tablet and opens the pause map with temporary blips on the location's start, spawn points (peds, vehicles) and checkpoints (markers, areas, routes); All locations under the location list does the same for every start of the mission. Client action builderShowMap { points = { kind, coords } } (1-300), refused in the arena; the blips are cleared when the tablet opens again, on a new show, on unload, on entering the arena and on a resource stop. No config option: it only reads the draft and touches only the builder's own map.
+
 Guardrails (checked while placing, and again by the server on publish)
 
 - There is no payout field: a custom mission pays its type's payout (× its star multiplier) until an admin sets a mission payout.

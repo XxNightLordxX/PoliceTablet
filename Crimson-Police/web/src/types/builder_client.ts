@@ -142,6 +142,16 @@ export interface BuilderTeleportRequest {
     key: string;
     index: number;
 }
+// builderShowMap: temporary blips on the pause map (start, spawns, checkpoints); the tablet closes and the blips go
+// when it opens again. At most 300 points.
+export type BuilderMapPointKind = 'start' | 'spawn' | 'checkpoint';
+export interface BuilderMapPoint {
+    kind: BuilderMapPointKind;
+    coords: Vec3;
+}
+export interface BuilderShowMapRequest {
+    points: BuilderMapPoint[];
+}
 // builderAutoPoints (Config.Builder.autoFill): the builderPlace payload of a ped or vehicle key with many points and a
 // start, plus count (points to add) and anchor (the ring's centre, the start when missing). The answer comes once the
 // game has tried its spots (a few seconds); the tablet stays open.

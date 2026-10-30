@@ -23,6 +23,7 @@ import type {
     BuilderRecordRequest,
     BuilderStepKey,
     BuilderTeleportRequest,
+    BuilderShowMapRequest,
     BuilderTestDriveRequest,
     BuilderToolOverlay,
 } from '../types/builder_client';
@@ -401,6 +402,12 @@ registerMock('client', 'builderAutoPoints', (p: BuilderAutoPointsRequest): Build
         proposed,
         result,
     };
+});
+
+registerMock('client', 'builderShowMap', (p: BuilderShowMapRequest) => {
+    if (!p || !Array.isArray(p.points) || !p.points.length || p.points.length > 300)
+        throw new Error('err.invalid_payload');
+    return { shown: p.points.length };
 });
 
 registerMock('client', 'builderWaypoint', (p: { coords?: Vec3 }) => {

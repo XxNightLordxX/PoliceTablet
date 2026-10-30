@@ -310,6 +310,7 @@ Client actions (registered by `modules/builder/client.lua` with `CP.Tablet.regis
 | `builderResult` | `{}` | the pending result below (or `null`), and clears it |
 | `builderCancel` | `{}` | `{ cancelled: boolean }` |
 | `builderWaypoint` | `{ coords: Vec3 }` | `{ ok: true }` (GPS waypoint to a spot) |
+| `builderShowMap` | `{ points: { kind: 'start' \| 'spawn' \| 'checkpoint', coords: Vec3 }[] }` (1-300) | `{ shown: number }`; the tablet closes, temporary blips go on the pause map and it opens; the blips go when the tablet opens again (refuses in the arena) |
 | `builderTeleport` | `{ missionId, location, key, index }` (`key = 'start'`, `index = 1` for the start) | `{ missionId, location, key, index }` once the player is on the ground at the stored point; the server (`server:builder:teleport`) decides who may and where, and audits it |
 
 The tablet closes while the tool runs and reopens on the builder screen when it ends. The result is

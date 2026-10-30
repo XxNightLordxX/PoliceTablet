@@ -19,7 +19,14 @@ import { t } from '../../shared/i18n';
 import { clientAction } from '../../shared/nui';
 import { toast } from '../../shared/toast';
 import type { BuilderKerbSpot, BuilderLocation, BuilderRoute, Vec3 } from '../../types/builder_server';
-import type { BuilderAutoPointsReply, BuilderTeleportRequest, PointSpec, RouteMeta } from '../../types/builder_client';
+import type {
+    BuilderAutoPointsReply,
+    BuilderMapPoint,
+    BuilderShowMapRequest,
+    BuilderTeleportRequest,
+    PointSpec,
+    RouteMeta,
+} from '../../types/builder_client';
 import { CountBadge, ErrorNotes } from '../controls';
 import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength, shiftPoints } from '../defUtils';
 import { KEY_COLOURS, LocationMap, PointList } from '../LocationMap';
@@ -73,6 +80,21 @@ function locationProgress(loc: BuilderLocation, specs: PointSpec[]): { done: num
         } else if (pointsOf(v).length >= Math.max(1, s.min)) done += 1;
     });
     return { done, total: specs.length + 1 };
+}
+
+// "Show on map": the start, the spawns (peds, vehicles) and the checkpoints (markers, areas, routes) of a location
+const MAP_POINTS_MAX = 300;
+function mapPointsOf(loc: BuilderLocation, specs: PointSpec[]): BuilderMapPoint[] {
+    const out: BuilderMapPoint[] = [];
+    const add = (kind: BuilderMapPoint['kind'], c: Vec3) => {
+        if (out.length < MAP_POINTS_MAX) out.push({ kind, coords: { x: c.x, y: c.y, z: c.z } });
+    };
+    if (loc.start) add('start', loc.start.coords);
+    specs.forEach(s => {
+        const kind = s.kind === 'ped' || s.kind === 'vehicle' ? 'spawn' : 'checkpoint';
+        pointsOf(loc[s.key]).forEach(c => add(kind, c));
+    });
+    return out;
 }
 
 // a hint, never an error: this many locations or more make a mission repeat less
@@ -217,6 +239,21 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                 toast('success', t('builder.loc.point_deleted', { label: t(specOf(row).labelKey), n: row.index }));
         });
     };
+    // "Show on map" / "All locations": temporary blips on the pause map, cleared when the tablet opens again
+    const showMap = async (points: BuilderMapPoint[]) => {
+        if (!points.length) {
+            toast('warning', t('builder.loc.map_none'));
+            return;
+        }
+        const req: BuilderShowMapRequest = { points };
+        const res = await clientAction('builderShowMap', req);
+        if (!res.ok) toast('error', t(res.error ?? 'err.internal'));
+    };
+    const allStarts = (): BuilderMapPoint[] =>
+        def.locations
+            .flatMap(l => (l.start ? [l.start.coords] : []))
+            .slice(0, MAP_POINTS_MAX)
+            .map(c => ({ kind: 'start', coords: { x: c.x, y: c.y, z: c.z } }));
     const gps = async (c: Vec3) => {
         const res = await clientAction('builderWaypoint', { coords: c });
         toast(res.ok ? 'success' : 'error', t(res.ok ? 'builder.loc.gps_set' : (res.error ?? 'err.internal')));
@@ -338,6 +375,18 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                             {t('builder.loc.add')}
                         </Button>
                     ) : null}
+                    {def.locations.some(l => !!l.start) ? (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            icon="globe"
+                            block
+                            title={t('builder.loc.show_map_all_hint')}
+                            onClick={() => void showMap(allStarts())}
+                        >
+                            {t('builder.loc.show_map_all')}
+                        </Button>
+                    ) : null}
                 </nav>
                 <div className="builder_client-split__main">
                     {!loc ? (
@@ -375,6 +424,15 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                         }
                                     />
                                 </Field>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="globe"
+                                    title={t('builder.loc.show_map_hint')}
+                                    onClick={() => void showMap(mapPointsOf(loc, specs))}
+                                >
+                                    {t('builder.loc.show_map')}
+                                </Button>
                                 {!ro && loc.start && cfg.useMyPosition !== false ? (
                                     <Button
                                         size="sm"
