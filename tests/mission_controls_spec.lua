@@ -155,8 +155,8 @@ do
     table.sort(shipped)
     H.eq(
         table.concat(shipped, ','),
-        'abandonCooldown,addRunTime,clearCooldown,cooldownScale,dailyCap,difficulty,happyHour,hourlyCap,idleCheck,'
-            .. 'noRepeat,readyCheck,startTimeout,timeLimit,unitSize',
+        'abandonCooldown,addRunTime,clearCooldown,cooldownScale,dailyCap,difficulty,featuredType,happyHour,hourlyCap,'
+            .. 'idleCheck,noRepeat,readyCheck,startTimeout,timeLimit,types,unitSize',
         'the cooldown controls (P2, P3, P6 happy hour, P7 clear), P7 + minutes and the P8 / P9 run controls (off) ship'
     )
     H.eq(Config.MissionControls.controls.addRunTime.on, false, 'only the cooldown controls ship on')
@@ -382,6 +382,23 @@ do
     Config.MissionControls.grants = { sast = { minGrade = 4 } }
     H.ok(DC.available(2) and not DC.available(3), 'a grant leaves out a grade 3 supervisor')
     Config.MissionControls.grants = {}
+end
+
+-- Step P10: a choice control with no list field (featuredType) offers every name its choices function gives.
+do
+    Config.Permissions.supervisor.missionControls = true
+    H.eq(DC.register('t_pick', {
+        kind = 'choice',
+        choices = function() return { 'a', 'b' } end,
+        configValue = function() return nil end,
+    }), true, 'a choice control without a list registers')
+    Config.MissionControls.controls = { t_pick = { on = true } }
+    local row
+    for _, c in ipairs(DC.view(2).departments[1].controls) do if c.key == 't_pick' then row = c end end
+    H.eq(row and table.concat(row.offered, ','), 'a,b', 'no list: every choice is offered')
+    local ok, err = SupSet(2, 't_pick', 'c')
+    H.ok(ok == false and err == 'err.control_value', 'a name its choices do not give is refused')
+    DC.unregister('t_pick')
 end
 
 Config.Permissions.supervisor = keepSup

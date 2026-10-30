@@ -112,7 +112,8 @@ end
 --   viewExtra   optional fn(dept) -> table: more fields for this control's row in DC.view
 --   bounded     false: the control has no min and max (the admin's card shows only its switch)
 --   flags       optional { name, ... }: more true / false fields its bounds may carry (readyCheck's canTurnOff)
---   list        a 'choice' control: the bounds field with the names a supervisor may pick (difficulty: 'presets')
+--   list        a 'choice' control: the bounds field with the names a supervisor may pick (difficulty: 'presets');
+--               left out, every name choices gives is offered (featuredType: every mission type)
 --   choices     a 'choice' control: fn() -> every name that list may hold (the Config.NpcDifficulty presets)
 function DC.register(key, def)
     if type(key) ~= 'string' or #key > KEY_MAX or not key:match(KEY_PATTERN) then
@@ -127,8 +128,9 @@ function DC.register(key, def)
         return false
     end
     local scope = def.scope or 'between'
-    if def.kind == 'choice' and (type(def.list) ~= 'string' or type(def.choices) ~= 'function') then
-        CP.err(TAG, 'register(%s): a choice control needs list (a bounds field) and a choices function', key)
+    local badList = def.list ~= nil and type(def.list) ~= 'string'
+    if def.kind == 'choice' and (badList or type(def.choices) ~= 'function') then
+        CP.err(TAG, 'register(%s): a choice control needs a choices function (and list: a bounds field)', key)
         return false
     end
     if not SCOPES[scope] then
@@ -225,12 +227,19 @@ local function GoodNum(def, v)
     return not def.integer or math.tointeger(v) ~= nil
 end
 
--- A choice control: the names the admin's bounds offer (only names its choices function knows).
+-- A choice control: the names the admin's bounds offer (only names its choices function knows); with no list
+-- field, every name its choices function gives.
 local function Offered(def, bounds)
     local out = {}
-    local list = bounds[def.list]
-    if type(list) ~= 'table' then return out end
+    local list = def.list and bounds[def.list]
     local ok, all = pcall(def.choices)
+    if def.list == nil then
+        for _, n in ipairs(ok and type(all) == 'table' and all or {}) do
+            if type(n) == 'string' then out[#out + 1] = n end
+        end
+        return out
+    end
+    if type(list) ~= 'table' then return out end
     local known = {}
     for _, n in ipairs(ok and type(all) == 'table' and all or {}) do known[n] = true end
     for _, n in ipairs(list) do
@@ -730,7 +739,7 @@ local function ControlFields(def, dept)
         own = OwnBounds(def, dept),
         flags = FlagList(def),
         list = def.list,
-        offered = def.list and Offered(def, bounds) or nil,
+        offered = def.kind == 'choice' and Offered(def, bounds) or nil,
         choices = def.choices and ChoiceList(def) or nil,
     }
 end

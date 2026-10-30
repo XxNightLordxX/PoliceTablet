@@ -22,7 +22,13 @@ import { fmtDateTime, formatDuration } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
-import type { MissionControlState, MissionControlValue, MissionControlsView } from '../../types/oversight';
+import type {
+    MissionControlState,
+    MissionControlValue,
+    MissionControlsView,
+    TypeSwitchMission,
+    TypeSwitches,
+} from '../../types/oversight';
 import { controlName, useValueText } from '../../admin/components/MissionControlsCard';
 import { ReasonChips } from '../../admin/components/ReasonChips';
 import { useAdminAction } from '../../admin/components/kit';
@@ -40,6 +46,8 @@ const CONTROL_GROUP: Record<string, GroupKey> = {
     hourlyCap: 'delays',
     dailyCap: 'delays',
     happyHour: 'delays',
+    types: 'board',
+    featuredType: 'board',
 };
 
 export function groupOf(c: MissionControlState): GroupKey {
@@ -65,6 +73,72 @@ function fit(c: MissionControlState, n: number): number {
 // ============================================================================
 //                                EDITOR BY KIND
 // ============================================================================
+
+// The types control (step P10): a switch per mission type and, folded under it, per mission. Only what is off is
+// sent ({ [type]: false, missions: { [id]: false } }); switching back on removes the entry.
+function TypeSwitchesEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const session = useSession();
+    const v: TypeSwitches = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as TypeSwitches) : {};
+    const off = v.missions && typeof v.missions === 'object' && !Array.isArray(v.missions) ? v.missions : {};
+    const missions = asArray<TypeSwitchMission>(c.missions);
+    const setType = (k: string, on: boolean) => {
+        const next: TypeSwitches = { ...v };
+        if (on) delete next[k];
+        else next[k] = false;
+        onChange(next);
+    };
+    const setMission = (id: string, on: boolean) => {
+        const m: Record<string, boolean> = { ...off };
+        if (on) delete m[id];
+        else m[id] = false;
+        const next: TypeSwitches = { ...v };
+        if (Object.keys(m).length > 0) next.missions = m;
+        else delete next.missions;
+        onChange(next);
+    };
+    return (
+        <div className="sup-mc-types">
+            {asArray(session.config?.missionTypes).map(tp => {
+                const list = missions.filter(m => m.type === tp.key);
+                const typeOn = v[tp.key] !== false;
+                return (
+                    <div key={tp.key} className="sup-mc-types__row">
+                        <Toggle
+                            checked={typeOn}
+                            disabled={disabled}
+                            label={tp.label}
+                            onChange={on => setType(tp.key, on)}
+                        />
+                        {list.length > 0 ? (
+                            <details className="sup-mc-types__missions">
+                                <summary>{t('sup.controls.types.missions', { n: list.length })}</summary>
+                                {list.map(m => (
+                                    <Toggle
+                                        key={m.id}
+                                        checked={off[m.id] !== false}
+                                        disabled={disabled || !typeOn}
+                                        label={m.label}
+                                        onChange={on => setMission(m.id, on)}
+                                    />
+                                ))}
+                            </details>
+                        ) : null}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
 
 function Slider({
     c,
@@ -113,7 +187,8 @@ function Editor({
 }) {
     const session = useSession();
     const text = useValueText();
-    // a choice control (step P9: difficulty): the presets the admin offers
+    if (c.key === 'types') return <TypeSwitchesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    // a choice control (step P9: difficulty; step P10: featuredType): the names the admin offers
     if (c.kind === 'choice') {
         const offered = asArray<string>(c.offered);
         return (

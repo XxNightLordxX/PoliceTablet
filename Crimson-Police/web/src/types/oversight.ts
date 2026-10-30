@@ -333,8 +333,19 @@ export interface MissionControlBounds {
     // a registered flag (step P8: readyCheck's canTurnOff); a choice control's list (step P9: difficulty's presets)
     [flag: string]: boolean | number | string[] | undefined;
 }
-// a string: a choice control's pick (step P9: difficulty)
-export type MissionControlValue = number | boolean | string | Record<string, number>;
+// the types control (step P10): the mission types switched off (false) and, under missions, single missions off
+export interface TypeSwitches {
+    [typeKey: string]: boolean | Record<string, boolean> | undefined;
+    missions?: Record<string, boolean>;
+}
+// one mission the types control may switch off on its own (its viewExtra)
+export interface TypeSwitchMission {
+    id: string;
+    label: string;
+    type: string;
+}
+// a string: a choice control's pick (step P9: difficulty; step P10: featuredType, a mission type key)
+export type MissionControlValue = number | boolean | string | Record<string, number> | TypeSwitches;
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
 export interface MissionControlState {
     key: string;
@@ -381,6 +392,8 @@ export interface MissionControlState {
     list?: string;
     offered?: string[];
     choices?: string[];
+    // the types control (step P10): every mission it may switch off on its own
+    missions?: TypeSwitchMission[];
 }
 export interface MissionControlsDepartment {
     key: string;

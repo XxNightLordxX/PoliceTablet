@@ -5568,6 +5568,14 @@ admin lists (Config.NpcDifficulty) for runs the department leads, read at the ac
 leaders may lead, never above Config.Limits.maxUnitSize.
 ```
 
+## tests/board_types_spec.lua
+
+```text
+Mission Board controls (step P10): types switches mission types or single missions off for a department, featuredType
+recommends one type to its officers. CP.DeptControls is a stub (rows, bounds and the choice kind are covered by
+mission_controls_spec): this spec checks what CP.Draw registers, the accept check, the draw pool and the board cards.
+```
+
 ## tests/run_controls_spec.lua
 
 ```text

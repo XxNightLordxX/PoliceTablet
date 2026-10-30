@@ -564,6 +564,16 @@ Supervisor UI → **Mission controls** (below).
     department may have; invites past it, joining a full unit and accepting a mission with a larger unit are refused.
     Never above `Config.Limits.maxUnitSize`.
 
+- **Mission Board** (step P10, per department, off when you install, under the master switch). A supervisor sets them
+  for his own department in Supervisor UI → Mission controls → Mission Board:
+  - `types = { on = false }` (**Mission types on the board**): a switch per mission type and, folded under it, per
+    mission. A type switched off shows locked on his officers' boards ("Off for SAST by command"); they cannot accept
+    it or claim its mission calls, and neither can a unit with one of them in it. Officers of other departments still
+    take it. A single mission switched off is never drawn for his officers. It stays until switched back on (it is
+    not a timed pause); at least one type always stays on; the Weekly Boss is never affected.
+  - `featuredType = { on = false }` (**Recommended type**): one mission type his officers see as **Recommended by
+    command**, right after their own favourite types. Points and pay never change. Reset to recommend none.
+
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
   supervisor may pick: `<control> = { on = true, min = ..., max = ... }`. Switching either off again brings back
@@ -2403,6 +2413,11 @@ however it ends.
 - Stuck payments, at the owner's request (full admin control): the Cash payouts rule now says a payment left in
   "paying" is resolved in Admin UI → **Payments**: **Mark paid** (no money moves), or **Pay again** with its own
   `-r2` transaction id, behind `Config.Cash.allowPayAgain`, a switch that ships off.
+- Mission types off per department (step P10, owner's list: "which mission types / missions appear on their
+  department's board"): the Mission controls `types` and `featuredType` let a department's supervisors switch mission
+  types or single missions off for their department and recommend one type. This is a catalog switch that stays until
+  changed, like `Config.DisabledMissions`; it is not a mission pause (the **Do not build** list still has no mission
+  pause), and other departments keep the type.
 
 - NPC combat, at the owner's request of 2026-10-19 ("make them also not do head shots at all also reduce the damage
   they shoot as they kill really quickly", no automatic weapons, lower accuracy): `Config.NpcCombat` ([5.9](#59-how-hard-npcs-fight-back)). Mission NPCs never carry an

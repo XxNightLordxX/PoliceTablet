@@ -1553,6 +1553,28 @@ do
     CP.Hooks.fire('deptControls:changed', { key = 'noRepeat' })
 end
 
+-- Step P10: a mission type command switched off for a department (the types Mission control, CP.Draw.offFor): its
+-- officers get no pop-up for a call of that type and cannot claim it; another department's officer still does.
+do
+    Reset()
+    local S = CENTRE.south_ls
+    AddPlayer(1, vec3(S.x, S.y, 30.0))
+    AddPlayer(4, vec3(S.x + 50, S.y, 30.0), { dept = 'fib', short = 'FIB' })
+    local keepDC = CP.DeptControls
+    CP.DeptControls = {
+        def = function(key) return key == 'types' end,
+        get = function(dept, key) return key == 'types' and dept == 'sast' and { patrol = false } or nil end,
+    }
+    CP.Hooks.fire('deptControls:changed', { key = 'types' })
+    local pc = NewCall('patrol', 'south_ls')
+    H.eq(Toasts(1), 0, 'Patrol off for SAST: no pop-up for the SAST officer')
+    H.eq(Toasts(4), 1, '...the FIB officer gets it')
+    local ok, err = Claim(1, pc.id)
+    H.ok(ok == false and err == 'err.type_off_department', 'and the SAST officer cannot claim it')
+    CP.DeptControls = keepDC
+    CP.Hooks.fire('deptControls:changed', { key = 'types' })
+end
+
 -- Step O9: callAlerts 'favourites' (My options -> Dispatch): a call of another type shows on Dispatch with no pop-up;
 -- calls_muted still silences every call (the mute section above); with no favourite picked every call pops up.
 do

@@ -170,5 +170,7 @@
   "board.oneclick.abandon_guide": "Abandoning it or not reaching the start in time puts the whole type on cooldown.",
   "board.card.twists": "Twists",
   "board.card.twists_hint": "Pick twists, then accept",
-  "run.abandon.again": "Click again to abandon"
+  "run.abandon.again": "Click again to abandon",
+  "board.card.featured": "Recommended by command",
+  "board.card.featured_hint": "Your department's command recommends this mission type. Points are the same."
 }

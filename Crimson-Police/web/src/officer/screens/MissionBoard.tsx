@@ -319,6 +319,11 @@ function TypeCardView({
                                 {t('board.card.favourite')}
                             </Badge>
                         ) : null}
+                        {card.featured && !card.offByCommand ? (
+                            <Badge size="sm" tone="success" icon="flag" title={t('board.card.featured_hint')}>
+                                {t('board.card.featured')}
+                            </Badge>
+                        ) : null}
                         {card.typeOfTheDay ? (
                             <Badge
                                 size="sm"

@@ -54,6 +54,29 @@
     gap: 6px;
 }
 
+/* the types control (step P10): a switch per type, its missions folded under it */
+.sup-mc-types {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sup-mc-types__missions {
+    margin: 4px 0 0 18px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-subtle);
+}
+
+.sup-mc-types__missions[open] {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sup-mc-types__missions summary {
+    cursor: pointer;
+}
+
 .sup-mc-slider {
     display: grid;
     grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) 72px;

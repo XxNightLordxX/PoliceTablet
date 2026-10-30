@@ -3461,6 +3461,19 @@ pattern, so a missing module reads as config).
   points and cash never read it. `unitSize` (modules/units `Units.registerControls`, 2 to `Config.Limits.maxUnitSize`,
   never relaxes): `Units.maxSize(dept)` for the leader's department caps invites, joins and the view; CP.Draw's accept
   check refuses `err.unit_too_large` above it.
+- Mission Board controls (step P10), scope `between`, per department, under the master switch, shipped off,
+  registered by CP.Draw (`Draw.registerBoardControls`). `types` (kind `map` with its own check and clamp, no min and
+  max): `{ [type] = false, missions = { [id] = false } }`; the check refuses unknown types or missions and every type
+  off (`err.control_types_all_off`), the clamp drops what no longer exists; never relaxes, so the setter gets it too.
+  `Draw.offFor(dept)` reads it; `Eligibility` treats a mission off for any member's department like `def.departments`
+  leaving it out (never the Weekly Boss), so `Draw.pool`, the draw and a mission call's pool follow; the accept check
+  refuses `err.type_off_department` for any member; the board card is locked "Off for <dept> by command" with
+  `offByCommand`. Mission calls (toast and claim) go through `Draw.check` and `Draw.pool`, so they skip such units.
+  It is a catalog switch (like Config.DisabledMissions), never a timed pause. `featuredType` (kind `choice` with no
+  `list`: every type key is offered; a choice control without `list` offers everything its `choices` gives): the
+  card's `featured` for viewers of that department; the web sorts it right after the officer's favourites and shows
+  "Recommended by command"; points never read it. The web fold rule (`arrangeTypeCards`) never counts a card off by
+  command as the card left to accept.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through

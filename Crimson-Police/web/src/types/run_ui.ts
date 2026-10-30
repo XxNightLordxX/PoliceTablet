@@ -16,7 +16,12 @@ import type { ContactView } from './custody';
 // ============================================================================
 
 // A mission type card (BoardCard §9.4). `locked.until` is a Unix timestamp (os.time) of the cooldown end.
-export type TypeCard = BoardCard;
+export type TypeCard = BoardCard & {
+    // step P10: the type the viewer's department command recommends (featuredType): a badge, right after favourites
+    featured?: boolean;
+    // step P10: switched off for a department of the unit by command (the types Mission control); locked says so
+    offByCommand?: boolean;
+};
 
 // The Weekly Boss event card (BoardCard + available). Accepted with the key 'weekly_boss'.
 export type BossCard = NonNullable<BoardData['boss']>;

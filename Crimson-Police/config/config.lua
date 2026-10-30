@@ -232,6 +232,12 @@ Config.MissionControls = {
         -- the largest unit an officer of his department may lead (invites, joins and accepting a mission); never
         -- above Limits.maxUnitSize
         unitSize = { on = false, min = 2, max = 4 },
+        -- Mission Board: mission types (or single missions) a supervisor switches off for his department; its
+        -- officers see the type locked, other departments still take it; it stays until switched back on
+        types = { on = false },
+        -- Mission Board: one mission type shown to his department's officers as "Recommended by command", right
+        -- after their favourites; points and pay never change
+        featuredType = { on = false },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 

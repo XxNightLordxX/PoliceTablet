@@ -891,6 +891,11 @@ do
                 and d.unitSize.on == false and d.unitSize.min == 2 and d.unitSize.max == 4,
             'step P9: difficulty (easy, normal) and unit size (2-4) ship off'
         )
+        H.ok(
+            d.types.on == false and d.featuredType.on == false
+                and E('MissionControls.controls').desc:find('on = the admin switch', 1, true) ~= nil,
+            'step P10: the Mission Board controls (types off, recommended type) ship off'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

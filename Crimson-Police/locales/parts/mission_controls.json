@@ -128,5 +128,16 @@
   "admin.perms.mc.presets": "Presets supervisors may pick",
   "mc.control.unitSize": "Largest unit",
   "mc.control_desc.unitSize": "The most officers a unit led by your department may have (invites, joins and accepting a mission). Never above the server's largest unit.",
-  "mc.unit.unitSize": "{n} officers"
+  "mc.unit.unitSize": "{n} officers",
+  "board.locked_type_off": "Off for {dept} by command",
+  "err.type_off_department": "Command switched this mission type off for a department in your unit.",
+  "err.control_types_all_off": "At least one mission type must stay on.",
+  "mc.control.types": "Mission types on the board",
+  "mc.control_desc.types": "Switch mission types, or single missions, off for your department. Officers see the type locked; officers of other departments still take it. It stays until you switch it back on.",
+  "mc.control.featuredType": "Recommended type",
+  "mc.control_desc.featuredType": "One mission type your department's officers see as \"Recommended by command\", right after their favourites. Points and pay stay the same.",
+  "mc.value.types_all_on": "Every type on",
+  "mc.value.types_off": "Off: {list}",
+  "mc.value.missions_off": "{n} missions off",
+  "sup.controls.types.missions": "Missions ({n})"
 }

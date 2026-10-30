@@ -254,6 +254,148 @@ local function TypeLabel(key)
     return (t and t.label) or tostring(key)
 end
 
+-- ============================================================================
+--              BOARD CONTROLS (mission types off, featured type)
+-- ============================================================================
+-- Step P10: two per-department Mission controls (under the master switch, off as shipped). types switches mission
+-- types or single missions off for the department: { [type] = false, missions = { [id] = false } }; it is a
+-- catalog switch like Config.DisabledMissions that stays until changed, never a timed pause. featuredType is one
+-- type key command recommends to the department ("Recommended by command" on its card, no points).
+
+local BOARD_KEYS = { types = 'types', featured = 'featuredType' }
+local SWITCH_MAX = 256           -- missions one types value may switch off
+
+local function TypeKnown(k)
+    return type(k) == 'string' and type(Config.MissionTypes) == 'table' and type(Config.MissionTypes[k]) == 'table'
+end
+
+local function MissionKnown(id)
+    if type(id) ~= 'string' or not (CP.Missions and CP.Missions.get) then return false end
+    local ok, def = Safe(CP.Missions.get, id)
+    return ok and type(def) == 'table'
+end
+
+-- A types value cleaned: only the types and missions switched off (false); true (switched back on) is dropped.
+-- strict (a supervisor's or admin's value): an unknown type or mission, or every type off, is refused (nil, errKey);
+-- otherwise (a saved value read today) what no longer exists is left out.
+local function CleanSwitches(v, strict)
+    if type(v) ~= 'table' then return nil, 'err.control_value' end
+    local out, missions, n = {}, {}, 0
+    for k, x in pairs(v) do
+        if k == 'missions' then
+            if type(x) ~= 'table' then return nil, 'err.control_value' end
+            for id, off in pairs(x) do
+                n = n + 1
+                if n > SWITCH_MAX or type(off) ~= 'boolean' then return nil, 'err.control_value' end
+                if MissionKnown(id) then
+                    if off == false then missions[id] = false end
+                elseif strict then
+                    return nil, 'err.control_value'
+                end
+            end
+        elseif type(x) ~= 'boolean' then
+            return nil, 'err.control_value'
+        elseif TypeKnown(k) then
+            if x == false then out[k] = false end
+        elseif strict then
+            return nil, 'err.control_value'
+        end
+    end
+    if strict then
+        local anyOn = false
+        for k in pairs(Config.MissionTypes or {}) do
+            if TypeKnown(k) and out[k] == nil then anyOn = true end
+        end
+        if not anyOn then return nil, 'err.control_types_all_off' end
+    end
+    if next(missions) then out.missions = missions end
+    return out
+end
+
+-- The types and missions command switched off for a department: { types = { [type] = true }, missions = { [id] =
+-- true } }. Nothing while the control is off (the shipped config) or nothing was switched off.
+function Draw.offFor(dept)
+    local out = { types = {}, missions = {} }
+    local dc = CP.DeptControls
+    if type(dept) ~= 'string' or not (dc and dc.get and dc.def and dc.def(BOARD_KEYS.types)) then return out end
+    local ok, v = Safe(dc.get, dept, BOARD_KEYS.types, nil)
+    if not ok or type(v) ~= 'table' then return out end
+    for k, x in pairs(v) do
+        if k == 'missions' and type(x) == 'table' then
+            for id, off in pairs(x) do if off == false then out.missions[id] = true end end
+        elseif x == false then
+            out.types[k] = true
+        end
+    end
+    return out
+end
+
+-- The type command recommends to a department (featuredType), or nil.
+function Draw.featuredFor(dept)
+    local dc = CP.DeptControls
+    if type(dept) ~= 'string' or not (dc and dc.get and dc.def and dc.def(BOARD_KEYS.featured)) then return nil end
+    local ok, v = Safe(dc.get, dept, BOARD_KEYS.featured, nil)
+    return ok and TypeKnown(v) and v or nil
+end
+
+-- The off sets of the officers' departments, each read once: { [dept] = Draw.offFor(dept) }.
+local function OffOf(officers)
+    local out = {}
+    for _, o in ipairs(officers or {}) do
+        local d = type(o) == 'table' and o.department or nil
+        if type(d) == 'string' and out[d] == nil then out[d] = Draw.offFor(d) end
+    end
+    return out
+end
+
+-- The first officer whose department switched the type off (mission: also that single mission), or nil.
+local function OffBy(officers, off, typeKey, missionId)
+    for _, o in ipairs(officers or {}) do
+        local s = off[o.department]
+        if s and (s.types[typeKey] or (missionId and s.missions[missionId])) then return o end
+    end
+    return nil
+end
+
+local function DeptShort(o)
+    if type(o.departmentShort) == 'string' then return o.departmentShort end
+    local d = type(Config.Departments) == 'table' and Config.Departments[o.department] or nil
+    return type(d) == 'table' and d.short or tostring(o.department)
+end
+
+function Draw.registerBoardControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(BOARD_KEYS.types, {
+        kind = 'map',
+        bounded = false,
+        configValue = function() return {} end,
+        check = function(v) return CleanSwitches(v, true) end,
+        clamp = function(v) return (CleanSwitches(v, false)) end,
+        -- switching a type off never makes a rule easier: it applies to the supervisor who set it too
+        relaxes = function() return false end,
+        -- the missions a supervisor may switch off one by one (the types come from the session's config)
+        viewExtra = function()
+            local list = {}
+            local ok, all = Safe(CP.Missions and CP.Missions.list)
+            for _, def in ipairs(ok and type(all) == 'table' and all or {}) do
+                if type(def) == 'table' and not def.isBoss and TypeKnown(def.type) then
+                    list[#list + 1] = { id = def.id, label = def.label or def.id, type = def.type }
+                end
+            end
+            return { missions = list }
+        end,
+    })
+    dc.register(BOARD_KEYS.featured, {
+        kind = 'choice',
+        configValue = function() return nil end,
+        choices = TypeKeysByPoints,
+        relaxes = function() return false end,
+    })
+    return true
+end
+Draw.registerBoardControls()
+
 local function CompletionsToday(citizenid, missionType)
     if not (CP.Runs and CP.Runs.completionsToday) then return 0 end
     local _, n = Safe(CP.Runs.completionsToday, citizenid, missionType)
@@ -306,8 +448,10 @@ Draw._areaKeyOf = AreaKeyOf
 -- ============================================================================
 --                             ELIGIBILITY AND POOL
 -- ============================================================================
--- ok, why ('disabled'|'size'|'department'|'cooldown'), untilTs (cooldown), officer (who blocks it)
-local function Eligibility(def, officers, size, now)
+-- ok, why ('disabled'|'size'|'department'|'cooldown'), untilTs (cooldown), officer (who blocks it). off: the
+-- officers' OffOf when the caller has it (a mission command switched off for a member's department counts like
+-- def.departments leaving that department out, step P10).
+local function Eligibility(def, officers, size, now, off)
     now = now or os.time()
     size = size or #officers
     if not (CP.Missions and CP.Missions.isEnabled and CP.Missions.isEnabled(def.id)) then return false, 'disabled' end
@@ -317,6 +461,9 @@ local function Eligibility(def, officers, size, now)
             if not CP.U.contains(def.departments, o.department) then return false, 'department', nil, o end
         end
     end
+    -- the Weekly Boss is an event card, not a type card: the types switch never touches it
+    local offWho = not def.isBoss and OffBy(officers, off or OffOf(officers), def.type, def.id) or nil
+    if offWho then return false, 'department', nil, offWho end
     local untilTs, who
     for _, o in ipairs(officers) do
         local u = tonumber(CooldownsOf(o.citizenid, officers).missions[def.id])
@@ -359,8 +506,9 @@ function Draw.pool(missionType, members, opts)
     local list, cooldownUntil = {}, nil
     local byType = (CP.Missions and CP.Missions.byType and CP.Missions.byType(missionType)) or {}
     local now = os.time()
+    local off = OffOf(officers)
     for _, def in ipairs(byType) do
-        local ok, why, untilTs = Eligibility(def, officers, size, now)
+        local ok, why, untilTs = Eligibility(def, officers, size, now, off)
         if ok and area and not HasLocationIn(def, area) then
             ok, why = false, 'area'
         end
@@ -1066,6 +1214,8 @@ function Draw.boardCards(src)
     end
     local hourlyWho = HourlyBlocked(officers)
     local caps = Draw.limits(officers)
+    local off = OffOf(officers)
+    local featured = Draw.featuredFor(viewer.department)
 
     for _, key in ipairs(TypeKeysByPoints()) do
         local label = TypeLabel(key)
@@ -1083,10 +1233,17 @@ function Draw.boardCards(src)
             typeOfTheDay = tod == key,
             -- the twists the leader may choose at the accept step (CP.Events.twistOffer)
             twists = Draw.twistOffer(key, list),
+            -- the type command recommends to the viewer's department (featuredType, step P10)
+            featured = featured == key or nil,
         }
         local cdUntil, cdWho = TypeCooldown(officers, key, now)
+        local offWho = OffBy(officers, off, key)
         if missing then
             card.locked = { reason = CP.L('board.member_unavailable') }
+        elseif offWho then
+            -- switched off for a member's department by command (the types Mission control, step P10)
+            card.locked = { reason = CP.L('board.locked_type_off', { type = label, dept = DeptShort(offWho) }) }
+            card.offByCommand = true
         elseif cdUntil then
             if cdWho.src == src then
                 card.locked = { reason = CP.L('board.locked_cooldown', { type = label }), ['until'] = cdUntil }
@@ -1212,6 +1369,7 @@ local function CheckAccept(src, typeKey, counts)
         if InArena(o.src) then return false, 'err.in_arena' end
         if OnMission(o.src) then return false, own and 'err.already_on_run' or 'err.member_on_run' end
         if IsOnCall(o.src) then return false, own and 'err.on_call' or 'err.member_on_call' end
+        if not isBoss and OffBy({ o }, OffOf({ o }), missionType) then return false, 'err.type_off_department' end
         if lastHour(o.citizenid) >= max then
             return false, own and 'err.hourly_cap' or 'err.member_hourly_cap'
         end

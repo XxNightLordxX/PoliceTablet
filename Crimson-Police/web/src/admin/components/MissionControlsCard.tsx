@@ -45,8 +45,20 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
     return (key, v) => {
         if (v === undefined || v === null) return '-';
         if (typeof v === 'boolean') return v ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off');
+        // featuredType (step P10): the type's label
+        if (typeof v === 'string' && key === 'featuredType') return typeLabel(v);
         // a choice control (step P9: difficulty): the preset's name
         if (typeof v === 'string') return hasKey(`mc.value.preset.${v}`) ? t(`mc.value.preset.${v}`) : v;
+        // types (step P10): the types switched off and how many single missions
+        if (key === 'types') {
+            const sw = asMap<unknown>(v);
+            const types = Object.keys(sw).filter(k => k !== 'missions' && sw[k] === false);
+            const n = Object.keys(asMap<unknown>(sw.missions)).length;
+            const parts: string[] = [];
+            if (types.length > 0) parts.push(t('mc.value.types_off', { list: types.map(typeLabel).join(', ') }));
+            if (n > 0) parts.push(t('mc.value.missions_off', { n }));
+            return parts.length > 0 ? parts.join(' · ') : t('mc.value.types_all_on');
+        }
         const one = (n: number) =>
             hasKey(`mc.unit.${key}`) ? t(`mc.unit.${key}`, { n: formatFactor(n) }) : formatFactor(n);
         // readyCheck (step P8): 0 = no ready check
