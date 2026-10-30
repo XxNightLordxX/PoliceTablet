@@ -927,6 +927,43 @@ do
 end
 
 -- ============================================================================
+--               SELECT: A DROPDOWN DRAWN INSIDE THE TABLET (V28)
+-- ============================================================================
+-- CEF draws a native <select> list as its own popup outside the tablet's scale, so Select draws its own list in the
+-- layer root and every screen uses Select.
+
+do
+    local form = Read(WEB .. 'shared/components/Form.tsx')
+    H.ok(form ~= nil, 'shared Form.tsx exists')
+    local body = form and form:match('export function Select%((.-)\n// =+\n//%s+TEXTAREA') or ''
+    H.ok(body ~= '', 'Select is found in Form.tsx')
+    H.ok(not body:find('<select', 1, true), 'Select draws no native <select>')
+    Has(body, 'role="listbox"', 'Select draws a role=listbox list')
+    Has(body, 'useContext(LayerRootContext)', 'Select reads the tablet layer root')
+    Has(body, 'createPortal(popover, root ?? document.body)', 'the list renders into the layer root')
+    Has(body, 'useEscapeLayer(open, close)', 'Escape closes the list before the tablet')
+    Has(body, 'window.addEventListener(\'mousedown\', onDown)', 'an outside click closes the list')
+    for _, key in ipairs({
+        '\'ArrowDown\'',
+        '\'ArrowUp\'',
+        '\'Home\'',
+        '\'End\'',
+        '\'Enter\'',
+        '\' \'',
+        'typeAhead(key)',
+    }) do
+        Has(body, key, 'Select handles the key ' .. key)
+    end
+    local p = io.popen('grep -rln "<select" ' .. WEB .. ' --include=*.tsx')
+    local found = p and p:read('a') or ''
+    if p then p:close() end
+    H.eq(found, '', 'no screen draws a native <select>')
+    local css = Read(WEB .. 'styles/components.css') or ''
+    Has(css, '.cp-select__list {', 'components.css styles the dropdown list')
+    Has(css, '.cp-select__option.is-active {', 'components.css marks the active option')
+end
+
+-- ============================================================================
 --                                SHIPPED FILES
 -- ============================================================================
 -- locales/en.json and web/dist are regenerated from their sources.

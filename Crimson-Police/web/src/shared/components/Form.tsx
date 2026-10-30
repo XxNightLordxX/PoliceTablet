@@ -4,16 +4,20 @@ import {
     useContext,
     useEffect,
     useId,
+    useLayoutEffect,
     useRef,
     useState,
     type InputHTMLAttributes,
+    type KeyboardEvent,
     type ReactNode,
-    type SelectHTMLAttributes,
     type TextareaHTMLAttributes,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { cx } from '../cx';
 import { fmtPlain } from '../format';
 import { t } from '../i18n';
+import { useEscapeLayer } from '../hooks';
+import { LayerRootContext } from './LayerRoot';
 import { Icon } from './Icon';
 
 // ============================================================================
@@ -311,6 +315,9 @@ export function NumberInput({
 // ============================================================================
 //                                    SELECT
 // ============================================================================
+// A button plus a listbox drawn in the tablet's layer root, not a native select element: CEF draws a native list as
+// a separate popup outside the tablet's scale, so it would not match the tablet's size or look. Later screens use
+// this Select for every dropdown.
 
 export interface SelectOption {
     value: string;
@@ -318,45 +325,283 @@ export interface SelectOption {
     disabled?: boolean;
 }
 
-export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value'> {
+export interface SelectProps {
     value: string;
     onChange: (value: string) => void;
     options: SelectOption[];
     // First, empty option.
     placeholder?: string;
     invalid?: boolean;
+    disabled?: boolean;
+    id?: string;
+    className?: string;
+    title?: string;
+    'aria-label'?: string;
+    'aria-labelledby'?: string;
 }
 
-export function Select({ value, onChange, options, placeholder, invalid, className, id, ...rest }: SelectProps) {
+// Gap between the box and the list, and the list's tallest size (unscaled tablet pixels).
+const LIST_GAP = 4;
+const LIST_MAX_H = 280;
+// Type-ahead: letters typed within this many milliseconds build one search.
+const TYPE_AHEAD_MS = 600;
+
+interface ListPos {
+    left: number;
+    top?: number;
+    bottom?: number;
+    width: number;
+    maxHeight: number;
+}
+
+// Where the list goes inside `root` (or the window), below the box, or above it when there is more room there.
+function listPosition(anchor: HTMLElement, root: HTMLElement | null): ListPos {
+    const a = anchor.getBoundingClientRect();
+    const r = root
+        ? root.getBoundingClientRect()
+        : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    const scale = root && root.offsetWidth > 0 ? r.width / root.offsetWidth : 1;
+    const height = r.height / scale;
+    const left = (a.left - r.left) / scale;
+    const top = (a.top - r.top) / scale;
+    const boxH = a.height / scale;
+    const below = height - (top + boxH) - LIST_GAP * 2;
+    const above = top - LIST_GAP * 2;
+    const pos: ListPos = { left, width: a.width / scale, maxHeight: LIST_MAX_H };
+    if (below >= Math.min(LIST_MAX_H, 160) || below >= above) {
+        pos.top = top + boxH + LIST_GAP;
+        pos.maxHeight = Math.max(80, Math.min(LIST_MAX_H, below));
+    } else {
+        pos.bottom = height - top + LIST_GAP;
+        pos.maxHeight = Math.max(80, Math.min(LIST_MAX_H, above));
+    }
+    return pos;
+}
+
+export function Select({
+    value,
+    onChange,
+    options,
+    placeholder,
+    invalid,
+    disabled,
+    className,
+    id,
+    title,
+    ...aria
+}: SelectProps) {
     const f = useFieldIds(id, invalid);
+    const root = useContext(LayerRootContext);
+    const listId = useId();
+    const box = useRef<HTMLDivElement>(null);
+    const button = useRef<HTMLButtonElement>(null);
+    const list = useRef<HTMLUListElement>(null);
+    const typed = useRef({ text: '', at: 0 });
+    const [open, setOpen] = useState(false);
+    const [active, setActive] = useState(-1);
+    const [pos, setPos] = useState<ListPos | null>(null);
+
+    const items: SelectOption[] = placeholder !== undefined ? [{ value: '', label: placeholder }, ...options] : options;
+    const selected = items.findIndex(o => o.value === value);
+    const shown = selected >= 0 ? items[selected] : null;
+    const isPlaceholder = !shown || (placeholder !== undefined && selected === 0);
+
+    const enabled = (i: number) => i >= 0 && i < items.length && !items[i].disabled;
+    const step = (from: number, dir: 1 | -1) => {
+        for (let i = from + dir; i >= 0 && i < items.length; i += dir) if (enabled(i)) return i;
+        return enabled(from) ? from : -1;
+    };
+    const first = () => step(-1, 1);
+    const last = () => step(items.length, -1);
+
+    const close = () => {
+        setOpen(false);
+        setPos(null);
+    };
+    const show = (at?: number) => {
+        if (disabled) return;
+        setActive(at ?? (enabled(selected) ? selected : first()));
+        setOpen(true);
+    };
+    const choose = (i: number) => {
+        if (!enabled(i)) return;
+        close();
+        button.current?.focus();
+        if (items[i].value !== value) onChange(items[i].value);
+    };
+
+    useEscapeLayer(open, close);
+
+    useLayoutEffect(() => {
+        if (!open) return;
+        const place = () => {
+            if (box.current) setPos(listPosition(box.current, root));
+        };
+        place();
+        window.addEventListener('resize', place);
+        window.addEventListener('scroll', place, true);
+        return () => {
+            window.removeEventListener('resize', place);
+            window.removeEventListener('scroll', place, true);
+        };
+    }, [open, root]);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e: MouseEvent) => {
+            const target = e.target as Node;
+            if (box.current?.contains(target) || list.current?.contains(target)) return;
+            close();
+        };
+        window.addEventListener('mousedown', onDown);
+        return () => window.removeEventListener('mousedown', onDown);
+    }, [open]);
+
+    useEffect(() => {
+        if (!open || active < 0 || !list.current) return;
+        const el = list.current.children[active] as HTMLElement | undefined;
+        el?.scrollIntoView?.({ block: 'nearest' });
+    }, [open, active, pos]);
+
+    useEffect(() => {
+        if (disabled && open) close();
+    }, [disabled]);
+
+    // Letters jump to the next option whose label starts with what was typed (closed: picks it straight away).
+    const typeAhead = (ch: string) => {
+        const now = Date.now();
+        const t0 = typed.current;
+        t0.text = now - t0.at < TYPE_AHEAD_MS ? t0.text + ch.toLowerCase() : ch.toLowerCase();
+        t0.at = now;
+        const from = open ? active : selected;
+        const repeat = t0.text.length > 1 && t0.text.split('').every(c => c === t0.text[0]);
+        const needle = repeat ? t0.text[0] : t0.text;
+        const start = repeat || t0.text.length === 1 ? from + 1 : Math.max(from, 0);
+        for (let n = 0; n < items.length; n++) {
+            const i = (start + n) % items.length;
+            if (enabled(i) && items[i].label.toLowerCase().startsWith(needle)) {
+                if (open) setActive(i);
+                else if (items[i].value !== value) onChange(items[i].value);
+                return;
+            }
+        }
+    };
+
+    const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+        if (disabled) return;
+        const key = e.key;
+        if (!open) {
+            if (key === 'ArrowDown' || key === 'ArrowUp' || key === 'Enter' || key === ' ') {
+                e.preventDefault();
+                show();
+            } else if (key === 'Home' || key === 'End') {
+                e.preventDefault();
+                show(key === 'Home' ? first() : last());
+            } else if (key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
+                typeAhead(key);
+            }
+            return;
+        }
+        if (key === 'ArrowDown' || key === 'ArrowUp') {
+            e.preventDefault();
+            setActive(i => step(i, key === 'ArrowDown' ? 1 : -1));
+        } else if (key === 'Home' || key === 'End') {
+            e.preventDefault();
+            setActive(key === 'Home' ? first() : last());
+        } else if (key === 'Enter' || (key === ' ' && Date.now() - typed.current.at >= TYPE_AHEAD_MS)) {
+            e.preventDefault();
+            choose(active);
+        } else if (key === 'Tab') {
+            close();
+        } else if (key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            typeAhead(key);
+        }
+    };
+
+    const optionId = (i: number) => `${listId}-opt-${i}`;
+    const popover =
+        open && pos ? (
+            <ul
+                ref={list}
+                id={listId}
+                role="listbox"
+                aria-label={aria['aria-label']}
+                aria-labelledby={aria['aria-labelledby']}
+                className={cx('cp-select__list', root ? 'cp-select__list--layer' : 'cp-select__list--fixed')}
+                style={{
+                    left: pos.left,
+                    top: pos.top,
+                    bottom: pos.bottom,
+                    minWidth: pos.width,
+                    maxHeight: pos.maxHeight,
+                }}
+                onMouseDown={e => e.preventDefault()}
+            >
+                {items.map((o, i) => (
+                    <li
+                        key={`${i}:${o.value}`}
+                        id={optionId(i)}
+                        role="option"
+                        aria-selected={i === selected}
+                        aria-disabled={o.disabled || undefined}
+                        className={cx(
+                            'cp-select__option',
+                            i === active && 'is-active',
+                            i === selected && 'is-selected',
+                            o.disabled && 'is-disabled',
+                            placeholder !== undefined && i === 0 && 'is-placeholder',
+                        )}
+                        onMouseEnter={() => {
+                            if (!o.disabled) setActive(i);
+                        }}
+                        onClick={() => choose(i)}
+                    >
+                        <span className="cp-select__option-label">{o.label}</span>
+                        {i === selected ? <Icon name="check" size={13} strokeWidth={2.6} /> : null}
+                    </li>
+                ))}
+            </ul>
+        ) : null;
+
     return (
         <div
+            ref={box}
             className={cx(
                 'cp-input',
                 'cp-select',
                 f.invalid && 'is-invalid',
-                rest.disabled && 'is-disabled',
+                disabled && 'is-disabled',
+                open && 'is-open',
                 className,
             )}
         >
-            <select
+            <button
+                ref={button}
                 id={f.id}
-                value={value}
+                type="button"
+                role="combobox"
+                title={title}
+                disabled={disabled}
+                aria-label={aria['aria-label']}
+                aria-labelledby={aria['aria-labelledby']}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-controls={open ? listId : undefined}
+                aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
                 aria-invalid={f.invalid || undefined}
                 aria-describedby={f.describedBy}
-                onChange={e => onChange(e.target.value)}
-                {...rest}
+                className={cx('cp-select__button', isPlaceholder && 'is-placeholder')}
+                onClick={() => (open ? close() : show())}
+                onKeyDown={onKeyDown}
             >
-                {placeholder !== undefined ? <option value="">{placeholder}</option> : null}
-                {options.map(o => (
-                    <option key={o.value} value={o.value} disabled={o.disabled}>
-                        {o.label}
-                    </option>
-                ))}
-            </select>
+                <span className="cp-select__value">{shown ? shown.label : (placeholder ?? '')}</span>
+            </button>
             <span className="cp-select__arrow" aria-hidden>
                 <Icon name="chevronDown" size={14} />
             </span>
+            {popover ? createPortal(popover, root ?? document.body) : null}
         </div>
     );
 }

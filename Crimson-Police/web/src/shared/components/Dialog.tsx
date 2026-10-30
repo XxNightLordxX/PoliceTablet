@@ -1,22 +1,13 @@
-import {
-    createContext,
-    useContext,
-    useEffect,
-    useId,
-    useRef,
-    useState,
-    type KeyboardEvent,
-    type ReactNode,
-} from 'react';
+import { useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../cx';
 import { t } from '../i18n';
 import { useEscapeLayer } from '../hooks';
 import { Button, IconButton } from './Button';
 import { Field, TextInput, Textarea } from './Form';
+import { LayerRootContext } from './LayerRoot';
 
-// The element dialogs render into (the tablet screen or the admin panel), so they scale and theme with it.
-export const LayerRootContext = createContext<HTMLElement | null>(null);
+export { LayerRootContext };
 
 export interface DialogProps {
     open: boolean;

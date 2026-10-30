@@ -1043,8 +1043,7 @@
     opacity: 0.55;
 }
 
-.cp-input input,
-.cp-input select {
+.cp-input input {
     flex: 1;
     min-width: 0;
     height: 100%;
@@ -1121,15 +1120,34 @@
     padding-right: 34px;
 }
 
-.cp-select select {
-    appearance: none;
-    -webkit-appearance: none;
+.cp-select__button {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    outline: none;
     cursor: pointer;
 }
 
-.cp-select select option {
-    background: var(--cp-surface);
-    color: var(--cp-text);
+.cp-select__button:disabled {
+    cursor: default;
+}
+
+.cp-select__value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cp-select__button.is-placeholder {
+    color: var(--cp-subtle);
 }
 
 .cp-select__arrow {
@@ -1140,6 +1158,71 @@
     color: var(--cp-muted);
     pointer-events: none;
     display: flex;
+    transition: transform var(--cp-dur) var(--cp-ease);
+}
+
+.cp-select.is-open .cp-select__arrow {
+    transform: translateY(-50%) rotate(180deg);
+}
+
+/* Dropdown list (drawn in the layer root) */
+.cp-select__list {
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    max-width: 420px;
+    overflow-y: auto;
+    background: var(--cp-surface);
+    color: var(--cp-text);
+    border: 1px solid var(--cp-border-strong);
+    border-radius: var(--cp-radius-sm);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    z-index: 80;
+    animation: cp-fade-in 100ms var(--cp-ease);
+}
+
+.cp-select__list--layer {
+    position: absolute;
+}
+
+.cp-select__list--fixed {
+    position: fixed;
+}
+
+.cp-select__option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.cp-select__option-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cp-select__option.is-active {
+    background: rgba(var(--cp-accent-rgb), 0.16);
+}
+
+.cp-select__option.is-selected {
+    color: var(--cp-accent);
+    font-weight: 600;
+}
+
+.cp-select__option.is-placeholder {
+    color: var(--cp-subtle);
+}
+
+.cp-select__option.is-disabled {
+    opacity: 0.4;
+    cursor: default;
 }
 
 .cp-textarea {

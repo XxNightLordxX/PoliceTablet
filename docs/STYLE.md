@@ -264,6 +264,9 @@ These are the jobs it does around the formatters:
 - **Comments use `//` only**, with no `/** */` doc blocks and no `/* */` (JSX needs `{/* */}`, which
   stays). Banners use the Lua format with `//`.
   > SCD html/police/script.js: `// ============================================================================`
+- **Dropdowns use the shared `Select`** (`shared/components/Form.tsx`), never a native `<select>`. CEF draws a
+  native option list as its own popup outside the tablet's scale; `Select` draws its list in the layer root, so it
+  scales with the tablet, takes the keyboard and closes on Escape before the tablet does.
 - **CSS:** write one declaration per line with 4 spaces, and one blank line between rules. New classes
   are kebab-case; the existing `cp-` names with `--modifier` and `__part` keep their spelling, because
   the components use them. Colours come from `:root` tokens (`--cp-*`). A section label is a plain

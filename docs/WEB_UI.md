@@ -219,7 +219,7 @@ Avoid `color-mix()`, CSS nesting and `:has()` (FiveM's CEF may be older).
 | `Field` | `label`, `hint`, `error`, `required`, `inline` — wires ids/aria for the control inside |
 | `TextInput` / `SearchInput` | `value`, `onChange(string)`, `prefix`, `suffix`, `invalid`, `onEnter`, input attrs |
 | `NumberInput` | `value (number\|null)`, `onChange`, `min`, `max`, `step`, `integer` (default true), `prefix`, `suffix`, `formatRange` (e.g. formatMoney), `showRange`, `stepper`, `onValidityChange` — shows "Between min and max", refuses out-of-range input (onChange is never called with it) |
-| `Select` | `value`, `onChange`, `options [{ value, label, disabled? }]`, `placeholder` |
+| `Select` | `value`, `onChange`, `options [{ value, label, disabled? }]`, `placeholder`, `invalid`, `disabled`, `aria-label`, `className` — a button and a list drawn inside the tablet (not a native `<select>`, whose list CEF draws outside the tablet's scale); arrows, Home/End, Enter/Space and type-ahead; Escape closes the list first. Use it for every dropdown |
 | `Textarea` | `value`, `onChange`, `rows`, `maxLength`, `showCount` |
 | `Toggle` / `Checkbox` | `checked`, `onChange(bool)`, `label`, `description` (Toggle), `disabled`, `indeterminate` (Checkbox) |
 | `ProgressBar` | `value`, `max`, `tone`, `size` sm\|md\|lg, `label`, `showValue` |
