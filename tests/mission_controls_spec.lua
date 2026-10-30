@@ -356,6 +356,29 @@ do
         'a supervisor\'s view carries neither')
 end
 
+-- ============================================================================
+--                  7. THE SUPERVISOR UI SCREEN (SESSION FLAG)
+-- ============================================================================
+-- STEP P5: session.config.missionControls shows the Mission controls screen while the player may change a control.
+
+do
+    local function Flag(src)
+        local r = Cb('getSession', src, { ui = 'supervisor', silent = true })
+        return r.ok and r.data.config.missionControls
+    end
+    Config.Permissions.supervisor.missionControls = false
+    Config.MissionControls.controls = { t_wait = { on = true, min = 300, max = 900 }, t_global = { on = true } }
+    H.ok(DC.available(2) and Flag(2) == true, 'master off, a control outside it on: the screen shows')
+    H.ok(not DC.available(5) and Flag(5) == false, 'never for an officer')
+    Config.MissionControls.controls.t_global.on = false
+    H.ok(not DC.available(2) and Flag(2) == false, 'nothing a supervisor may change: hidden')
+    Config.Permissions.supervisor.missionControls = true
+    H.ok(DC.available(2) and Flag(2) == true, 'the master switch and a control under it: shown')
+    Config.MissionControls.grants = { sast = { minGrade = 4 } }
+    H.ok(DC.available(2) and not DC.available(3), 'a grant leaves out a grade 3 supervisor')
+    Config.MissionControls.grants = {}
+end
+
 Config.Permissions.supervisor = keepSup
 Config.MissionControls = keepMC
 Config.Departments.sast.missionControls = nil

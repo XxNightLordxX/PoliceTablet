@@ -423,6 +423,15 @@ function DC.canChange(src, key, dept)
     return true, nil, 'supervisor', dept
 end
 
+-- DC.available(src): true when that player may change at least one control now (the Supervisor UI shows its
+-- Mission controls screen then; with the shipped config the cooldown controls, outside the master switch).
+function DC.available(src)
+    for _, key in ipairs(order) do
+        if DC.canChange(src, key, nil) then return true end
+    end
+    return false
+end
+
 local function ActorOf(n)
     if n == 0 then return 'console' end
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil

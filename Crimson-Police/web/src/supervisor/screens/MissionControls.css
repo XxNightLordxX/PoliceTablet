@@ -1,0 +1,89 @@
+/* Supervisor UI · Mission controls (step P5). Only --cp-* variables. */
+
+.sup-mc-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 12px;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.sup-mc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sup-mc-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid var(--cp-border);
+}
+
+.sup-mc-row__title {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.sup-mc-row__desc {
+    margin: 4px 0 0;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.sup-mc-row__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    font-size: var(--cp-fs-sm);
+}
+
+.sup-mc-row__who {
+    color: var(--cp-subtle);
+}
+
+.sup-mc-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sup-mc-slider {
+    display: grid;
+    grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) 72px;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--cp-fs-sm);
+}
+
+.sup-mc-slider input {
+    width: 100%;
+    accent-color: var(--cp-accent);
+}
+
+.sup-mc-slider__value {
+    text-align: right;
+}
+
+.sup-mc-row__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+}
+
+.sup-mc-row__wait {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+    color: var(--cp-warning);
+    font-size: var(--cp-fs-sm);
+}

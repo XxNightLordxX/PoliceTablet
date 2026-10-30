@@ -546,6 +546,12 @@ local function BuildSession(src, ui, args)
         options = CP.Options.effective(officer.citizenid, officer.department, row and row.options or false)
         config.officerOptions = CP.Options.config(officer.department)
     end
+    -- the Supervisor UI's Mission controls screen: shown while this player may change at least one control
+    config.missionControls = ui ~= 'admin'
+            and CP.DeptControls
+            and CP.DeptControls.available
+            and CP.DeptControls.available(src) == true
+        or false
     return {
         ui = ui,
         title = type(title) == 'string' and title ~= '' and title or 'Crimson-Police',

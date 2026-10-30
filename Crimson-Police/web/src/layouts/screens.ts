@@ -23,6 +23,7 @@ import SupReviewQueue from '../supervisor/screens/ReviewQueue';
 import SupPayouts from '../supervisor/screens/Payouts';
 import SupBuilder from '../supervisor/screens/Builder';
 import SupDeptReport from '../supervisor/screens/DeptReport';
+import SupMissionControls from '../supervisor/screens/MissionControls';
 
 import AdminHome from '../admin/screens/Home';
 import AdminPayouts from '../admin/screens/Payouts';
@@ -91,6 +92,13 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
         titleKey: 'ui.screen.sup_live',
         icon: 'activity',
         component: SupLiveMissions,
+    },
+    {
+        key: 'sup_controls',
+        titleKey: 'ui.screen.sup_controls',
+        icon: 'clock',
+        component: SupMissionControls,
+        visible: s => has(s, 'missionControls') || s.config?.missionControls === true,
     },
     {
         key: 'sup_review',

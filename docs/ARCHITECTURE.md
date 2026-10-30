@@ -3249,8 +3249,8 @@ no option is registered by this module: each feature registers its own keys.
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 
-Rules a department's supervisors may change for their own department (Supervisor UI → Mission controls, a later
-step), only while an admin switched them on and only inside the admin's bounds. One row of `cp_dept_controls` per
+Rules a department's supervisors may change for their own department (Supervisor UI → Mission controls, step
+P5), only while an admin switched them on and only inside the admin's bounds. One row of `cp_dept_controls` per
 department and control (migration 011; `'*'` = a server-wide control); no row, an expired row (`expires_at` passed;
 a restored backup's expired row stays ignored) or a switched-off control = the config value. This module registers
 no control: each feature registers its own and reads it with `get` (callers use the `Call('DeptControls', ...)`
@@ -3315,6 +3315,12 @@ pattern, so a missing module reads as config).
   `server:admin:setSetting` (`MissionControls.controls` and `MissionControls.grants` as whole maps, a department's
   bounds or none) and resets through `server:admin:resetMissionControl`; `admin:getPermissions` gains
   `missionGrants` (department key -> `{ minGrade }` | `{ grades }`).
+- Supervisor UI → Mission controls (step P5, web/src/supervisor/screens/MissionControls.tsx, screen key
+  `sup_controls`): `sup:getMissionControls` (live on push `missionControls`), the active controls grouped (Delays and
+  repeats, In a run, Board, Calls, Officers, Department), saved through `server:sup:setMissionControl` and
+  `server:sup:resetMissionControl` with a reason. `DC.available(src)` (true while that player may change at least
+  one control) is sent as `session.config.missionControls`, so the screen shows with the master switch off while a
+  control outside it (the cooldown controls, as shipped) is on.
 
 ## 6. Cross-cutting conventions
 

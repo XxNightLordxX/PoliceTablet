@@ -39,7 +39,7 @@ function asMap<T>(v: unknown): Record<string, T> {
 export const controlName = (key: string) => (hasKey(`mc.control.${key}`) ? t(`mc.control.${key}`) : key);
 const controlDesc = (key: string) => (hasKey(`mc.control_desc.${key}`) ? t(`mc.control_desc.${key}`) : '');
 
-function useValueText(): (key: string, v: MissionControlValue | undefined) => string {
+export function useValueText(): (key: string, v: MissionControlValue | undefined) => string {
     const session = useOptionalSession();
     const typeLabel = (k: string) => asArray(session?.config?.missionTypes).find(m => m.key === k)?.label ?? k;
     return (key, v) => {

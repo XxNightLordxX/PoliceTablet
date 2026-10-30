@@ -1039,6 +1039,58 @@ do
 end
 
 -- ============================================================================
+--                    SUPERVISOR UI -> MISSION CONTROLS (P5)
+-- ============================================================================
+-- Shown with the master switch or a control outside it (session.config.missionControls); callbacks mocked.
+
+do
+    local screens = Read(WEB .. 'layouts/screens.ts') or ''
+    local nav = Read(WEB .. 'shared/navigation.tsx') or ''
+    local screen = Read(WEB .. 'supervisor/screens/MissionControls.tsx') or ''
+    local mock = Read(WEB .. 'mocks/oversight.mock.ts') or ''
+    local samples = Read(WEB .. 'mocks/samples.ts') or ''
+    local tabletSrc = Read(ROOT .. 'modules/tablet/server.lua') or ''
+    Has(nav, '| \'sup_live\' | \'sup_controls\' | \'sup_review\'', 'SupervisorScreenKey has sup_controls')
+    Has(screens, 'import SupMissionControls from \'../supervisor/screens/MissionControls\';', 'the registry imports it')
+    Has(screens, [[{
+        key: 'sup_controls',
+        titleKey: 'ui.screen.sup_controls',
+        icon: 'clock',
+        component: SupMissionControls,
+        visible: s => has(s, 'missionControls') || s.config?.missionControls === true,
+    },]], 'sup_controls: visible with the master switch or a control outside it')
+    local atLive = screens:find('key: \'sup_live\'', 1, true) or math.huge
+    H.ok(atLive < (screens:find('key: \'sup_controls\'', 1, true) or 0), 'and comes after Live Missions')
+    Has(tabletSrc, 'CP.DeptControls.available(src) == true', 'the session carries config.missionControls')
+    for _, use in ipairs({
+        {
+            'useRequest<MissionControlsView>(\'sup:getMissionControls\', {}, { pushTopic: \'missionControls\' })',
+            'registerMock(\'request\', \'sup:getMissionControls\',',
+        },
+        { '\'server:sup:setMissionControl\',', 'registerMock(\'action\', \'server:sup:setMissionControl\',' },
+        { '\'server:sup:resetMissionControl\',', 'registerMock(\'action\', \'server:sup:resetMissionControl\',' },
+    }) do
+        Has(screen, use[1], 'Mission controls uses ' .. use[1])
+        Has(mock, use[2], 'with a browser mock')
+    end
+    Has(screen, '.filter(c => c.active)', 'only the controls an admin switched on')
+    Has(screen, '<ReasonChips value={reason} onChange={setReason} disabled={busy} />', 'the reason dialog has chips')
+    Has(screen, '<Countdown seconds={c.waitLeft} onDone={onWaitDone} />', 'the change-wait countdown')
+    Has(screen, 't(\'sup.controls.self_note\')', 'the self rule note')
+    Has(samples, 'SUPERVISOR_ACTIONS.filter(a => a !== \'missionControls\')', 'a mock session without the switch')
+    local missing = {}
+    for k in pairs(LiteralKeys(screen)) do
+        if not keys[k] then missing[#missing + 1] = k end
+    end
+    for _, g in ipairs({ 'delays', 'run', 'board', 'calls', 'officers', 'department' }) do
+        if not keys['sup.controls.group.' .. g] then missing[#missing + 1] = 'sup.controls.group.' .. g end
+    end
+    if not keys['ui.screen.sup_controls'] then missing[#missing + 1] = 'ui.screen.sup_controls' end
+    table.sort(missing)
+    H.eq(#missing, 0, 'every text key of Mission controls exists (' .. table.concat(missing, ', ') .. ')')
+end
+
+-- ============================================================================
 --                                SHIPPED FILES
 -- ============================================================================
 -- locales/en.json and web/dist are regenerated from their sources.

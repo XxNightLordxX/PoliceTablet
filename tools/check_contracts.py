@@ -9,7 +9,7 @@ Checks:
   2. Events: crimson-police:client:* triggered by the server have a client handler, and
      crimson-police:server:* triggered by clients have a server handler (and vice versa).
   3. NUI: every request/action/clientAction name used in web/src exists in Lua (CP.Net.action / callback, or
-     CP.AdminKit.action / callback).
+     CP.AdminKit.action / supAction / callback).
   4. Locale: every CP.L('key') / CP.Lt('key') / t('key') / returned 'err.*' key exists in the merged locale;
      conflicting duplicate keys across parts; locales/en.json (the only file shared/locale.lua loads)
      exists and equals the merge of the parts (regenerate with --merge).
@@ -129,7 +129,7 @@ def collect_kit(kind):
         names = {'CP\\.AdminKit', 'Kit', 'AdminKit'}
         names |= {re.escape(a) for a in re.findall(r"\blocal\s+(\w+)\s*=\s*CP\.AdminKit\b(?!\.)", s)}
         alias = '|'.join(sorted(names))
-        want = r"server:[\w:]+" if kind == 'action' else r"[\w:]+"
+        want = r"server:[\w:]+" if kind in ('action', 'supAction') else r"[\w:]+"
         for m in re.finditer(r"(?<![\w.])(?:%s)\.%s\(\s*['\"](%s)['\"]" % (alias, kind, want), s):
             out[m.group(1)].append(rel(p))
     return out
@@ -155,6 +155,7 @@ for k, v in collect('server', r"RegisterNetEvent\(\s*CP\.e\(\s*['\"](server:[\w:
 srv_actions = collect('server', r"CP\.Net\.action\(\s*['\"](server:[\w:]+)['\"]")
 # admin actions registered through CP.AdminKit (modules/adminkit) are net actions too
 for k, v in collect_kit('action').items(): srv_actions[k] += v
+for k, v in collect_kit('supAction').items(): srv_actions[k] += v  # Kit.supAction: the supervisor variant
 for k, v in collect('server', r"CP\.Net\.action\(\s*\(\s*['\"]server:%s:([\w:]+)['\"]\s*\)\s*:\s*format").items():
     for scope in ('sup', 'admin'): srv_actions['server:%s:%s' % (scope, k)] += v
 for k, v in collect('server', r"CP\.Net\.callback\(\s*\(\s*['\"]%s:([\w:]+)['\"]\s*\)\s*:\s*format").items():

@@ -4665,6 +4665,15 @@ left (counting down locally). Force recall ends one officer's run as Abandoned w
 Data: callback sup:getLiveRuns (modules/admin, polled every 10 s) · action server:sup:forceRecall { runId, src, reason }.
 ```
 
+## Crimson-Police/web/src/supervisor/screens/MissionControls.tsx
+
+```text
+Supervisor UI · Mission controls (screen key 'sup_controls', title key 'ui.screen.sup_controls', step P5): the
+controls an admin switched on (sup:getMissionControls), grouped, each with the config value, the value in use, an
+editor by kind, Back to config, who changed it and when, and the change-wait countdown. Every save asks for a
+reason (server:sup:setMissionControl / server:sup:resetMissionControl). Live: push 'missionControls'.
+```
+
 ## Crimson-Police/web/src/supervisor/screens/MissionList.tsx
 
 ```text

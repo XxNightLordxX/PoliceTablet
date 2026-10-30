@@ -1346,6 +1346,81 @@ registerMock('action', 'server:admin:resetMissionControl', (p: { key?: string; d
 });
 
 // ============================================================================
+//                  MISSION CONTROLS (SUPERVISOR UI, STEP P5)
+// ============================================================================
+// The supervisor's own department (SAST) and the server-wide controls; saving and Back to config are stateful
+// and start the change wait. ?oversight=empty: nothing switched on.
+
+registerMock('request', 'sup:getMissionControls', (): MissionControlsView => {
+    const bounds = {
+        cooldownScale: { on: !EMPTY, min: 0, max: 2 },
+        abandonCooldown: { on: !EMPTY, min: 0, max: 900 },
+        noRepeat: { on: !EMPTY },
+        hourlyCap: { on: !EMPTY, min: 1, max: 16 },
+        dailyCap: { on: !EMPTY, min: 0, max: 40 },
+    };
+    return {
+        master: !EMPTY,
+        changeWait: 300,
+        selfExempt: true,
+        departments: [
+            {
+                key: 'sast',
+                label: 'San Andreas State Troopers',
+                short: 'SAST',
+                controls: EDGE
+                    ? [
+                          mcState(
+                              'sast',
+                              'edgeDepartmentControlWithAVeryLongKey',
+                              'number',
+                              10,
+                              {
+                                  on: true,
+                                  min: 5,
+                                  max: 100,
+                              },
+                              { master: true, integer: true },
+                          ),
+                      ]
+                    : [],
+            },
+        ],
+        serverWide: [
+            mcState('*', 'cooldownScale', 'map', MC_TYPES, bounds.cooldownScale),
+            mcState('*', 'abandonCooldown', 'number', 180, bounds.abandonCooldown, { integer: true }),
+            mcState('*', 'noRepeat', 'bool', true, bounds.noRepeat),
+            mcState('*', 'hourlyCap', 'number', 8, bounds.hourlyCap, { integer: true }),
+            mcState('*', 'dailyCap', 'number', 0, bounds.dailyCap, { integer: true }),
+        ],
+    };
+});
+
+const MC_SERVER_WIDE = ['cooldownScale', 'abandonCooldown', 'noRepeat', 'hourlyCap', 'dailyCap'];
+const mcId = (key: string | undefined) => `${MC_SERVER_WIDE.includes(key ?? '') ? '*' : 'sast'}|${key ?? ''}`;
+
+registerMock(
+    'action',
+    'server:sup:setMissionControl',
+    (p: { key?: string; value?: MissionControlState['value']; reason?: string }) => {
+        if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+        const id = mcId(p.key);
+        const row = mcSaved[id];
+        if (row && now() - row.at < 300) throw new Error('err.control_wait');
+        mcSaved[id] = { value: p.value ?? 0, setBy: 'ABC12345', setRole: 'supervisor', at: now() };
+        return { department: id.split('|')[0], key: p.key, value: p.value };
+    },
+);
+
+registerMock('action', 'server:sup:resetMissionControl', (p: { key?: string; reason?: string }) => {
+    if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+    const id = mcId(p.key);
+    if (!mcSaved[id]) throw new Error('err.control_not_set');
+    delete mcSaved[id];
+    return { department: id.split('|')[0], key: p.key };
+});
+
+// ============================================================================
 //                                  AUDIT LOG
 // ============================================================================
 

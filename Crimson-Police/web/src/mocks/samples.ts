@@ -116,7 +116,13 @@ const ADMIN_ACTIONS = [
     'openAdmin',
 ];
 
+// ?missionControls=off: no Mission controls (the master switch off, no control outside it on); ?missionControls=shipped:
+// the master switch off, the cooldown controls (outside it) on, as config.lua ships. Default: the master switch on.
+const MC_MODE =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('missionControls') : null;
+
 const CONFIG: Session['config'] = {
+    missionControls: MC_MODE !== 'off',
     missionTypes: [
         { key: 'patrol', label: 'Patrol', points: 60 },
         { key: 'training', label: 'Training', points: 100 },
@@ -182,7 +188,7 @@ export function buildSession(ui: UiKind = 'officer'): Session {
         officer: d.officer,
         theme: d.theme,
         logo: d.logo,
-        actions: SUPERVISOR_ACTIONS,
+        actions: MC_MODE ? SUPERVISOR_ACTIONS.filter(a => a !== 'missionControls') : SUPERVISOR_ACTIONS,
     };
 }
 

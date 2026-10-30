@@ -107,6 +107,8 @@ export interface Session {
             homeForms?: boolean;
             reasonChips?: string[];
         };
+        // true while this player may change at least one Mission control (CP.DeptControls.available)
+        missionControls?: boolean;
         // Config.OfficerOptions resolved for the officer's department (CP.OptionDefs.resolve)
         officerOptions?: {
             enabled: boolean;

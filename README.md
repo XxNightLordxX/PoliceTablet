@@ -495,8 +495,8 @@ Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%),
 
 **Mission controls** let a department's supervisors change a few mission rules for their own department, inside
 limits you set. They are **off on install** except the two cooldown controls below: nothing changes until you switch
-them on. You set them in Admin UI → **Permissions** → **Mission controls** (below); supervisors get their own screen
-in a later update.
+them on. You set them in Admin UI → **Permissions** → **Mission controls** (below); supervisors change them in
+Supervisor UI → **Mission controls** (below).
 
 - **Mission cooldowns** (on when you install, owner decision): any department's supervisor may change them, without
   the master switch, and a change counts for **every department** (server-wide):
@@ -1354,6 +1354,7 @@ Supervisors play missions like officers. The **Supervisor** button in the tablet
 | **Mission List** | Every mission by name. Launch a Cross-Department Mission from here |
 | **Cross-Department Mission** | The running operation: start now, relaunch after a fail, cancel, remove a joiner |
 | **Live Missions** | Runs of their department: force recall. Its Mission calls panel withdraws, pages and creates calls. Admins have their own **Live** screen for every department, with more controls ([9.15.3](#9153-live-runs-units-and-anti-farm)) |
+| **Mission controls** | The rules an admin opened to supervisors ([4.4](#44-what-supervisors-may-do)), grouped (Delays and repeats first): the config.lua value, the value in use, a slider (one per mission type for the cooldowns) or a switch, **Save** and **Back to config** (both ask for a reason; the admin's ready-made reasons show as buttons), who changed it and when, and the time until the next change. Shown while the supervisor may change at least one control: out of the box the cooldown controls, for every department |
 | **Review Queue** | Flagged runs and disputes of their department, and a **Profiles** tab for pictures, bios and reports |
 | **Payouts** | Mission type payouts, within the allowed range |
 | **Mission Builder** | Build, test and publish their own missions ([9.12](#912-mission-builder)) |

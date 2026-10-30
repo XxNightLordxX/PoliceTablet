@@ -35,6 +35,7 @@
   "ui.screen.sup_missions": "Mission List",
   "ui.screen.sup_crossdept": "Cross-Department Mission",
   "ui.screen.sup_live": "Live Missions",
+  "ui.screen.sup_controls": "Mission controls",
   "ui.screen.sup_review": "Review Queue",
   "ui.screen.sup_payouts": "Payouts",
   "ui.screen.sup_builder": "Mission Builder",
