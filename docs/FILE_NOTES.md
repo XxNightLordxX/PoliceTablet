@@ -2663,6 +2663,16 @@ nothing here runs while no case is open. A suspect's own acts are staff notes (O
 run.flagged or p.flagged.
 ```
 
+## Crimson-Police/modules/options/client.lua
+
+```text
+CP.Options (client): the officer options as this PC sees them. A 'local' option (CP.OptionDefs store = 'local':
+a look or a sound) is kept on this PC in the resource KVP crimsonpolice:options (one JSON object, only the keys
+that differ from the default) and applies at once, even before the tablet opens; a 'server' option is the value
+the session (and the push 'options') carries. The rules are the session's resolved Config.OfficerOptions.
+Client modules listen to CP.Hooks 'options:changed' (key); the NUI gets { type = 'localOptions', options }.
+```
+
 ## Crimson-Police/modules/payouts/server.lua
 
 ```text
@@ -4525,6 +4535,15 @@ src/shared/nui.ts · the NUI bridge (docs/ARCHITECTURE.md §9.1).
 In a normal browser (isEnvBrowser()) nothing is POSTed: request/action/client calls are answered
 by mocks registered with registerMock() (see src/mocks/*.mock.ts), and emitDebug() fakes Lua
 messages. Every call resolves (never rejects) to { ok, data?, error? } where error is an err.* key.
+```
+
+## Crimson-Police/web/src/shared/options.ts
+
+```text
+The officer options (CP.OptionDefs) as the open UI and the HUD see them. A 'local' option (a look or a sound) comes
+from this PC: the Lua client sends { type: 'localOptions', options } on 'ready' and after every change. A 'server'
+option comes from the session (session.options), refreshed by the push 'options'; else the department default
+(session.config.officerOptions.defaults). OptionsProvider sits next to the session context in App.tsx.
 ```
 
 ## Crimson-Police/web/src/shared/session.tsx

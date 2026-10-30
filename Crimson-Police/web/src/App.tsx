@@ -19,6 +19,7 @@ import { closeTopLayer, useHudScale, useKeyRelease, usePush, useViewport } from 
 import { LocaleProvider, t } from './shared/i18n';
 import { NavigationContext, type NavigationValue, type ScreenKey, type ScreenParams } from './shared/navigation';
 import { clientAction, fetchNui, isEnvBrowser, request, setTabletShown, useNuiEvent } from './shared/nui';
+import { OptionsProvider } from './shared/options';
 import { SessionContext, type SessionContextValue } from './shared/session';
 import { applyTheme, DEFAULT_THEME } from './shared/theme';
 import { normalizeHud, normalizeResult, normalizeSession } from './shared/data';
@@ -267,64 +268,66 @@ export default function App() {
     return (
         <LocaleProvider locale={locale}>
             <SessionContext.Provider value={sessionValue}>
-                <NavigationContext.Provider value={nav}>
-                    {showColumn ? (
-                        <QuietBoundary
-                            name="hud column"
-                            resetKey={`${resultSeq}:${hud?.runId ?? ''}`}
-                            onError={releaseTestFocus}
-                        >
-                            <HudColumn scale={hudScale} overUi={uiOpen}>
-                                {showHud && hud ? (
-                                    <QuietBoundary name="hud" resetKey={hud.runId} onError={releaseTestFocus}>
-                                        <Hud hud={hud} />
-                                    </QuietBoundary>
-                                ) : null}
-                                {result ? (
-                                    <QuietBoundary name="result card" resetKey={resultSeq}>
-                                        <ResultScreen key={resultSeq} result={result} onDismiss={dismissResult} />
-                                    </QuietBoundary>
-                                ) : null}
-                            </HudColumn>
-                        </QuietBoundary>
-                    ) : null}
-
-                    <QuietBoundary name="debug overlay" resetKey={debug} onError={releaseTestFocus}>
-                        <DebugOverlay debug={debug} hud={hud} />
-                    </QuietBoundary>
-
-                    <QuietBoundary name="overlay" resetKey={overlay}>
-                        {overlay?.kind === 'fade' ? <FadeOverlay overlay={overlay} /> : null}
-                        {overlay &&
-                        (overlay.kind === 'placement' ||
-                            overlay.kind === 'recording' ||
-                            overlay.kind === 'testdrive') ? (
-                            <BuilderOverlay overlay={overlay} />
+                <OptionsProvider session={session}>
+                    <NavigationContext.Provider value={nav}>
+                        {showColumn ? (
+                            <QuietBoundary
+                                name="hud column"
+                                resetKey={`${resultSeq}:${hud?.runId ?? ''}`}
+                                onError={releaseTestFocus}
+                            >
+                                <HudColumn scale={hudScale} overUi={uiOpen}>
+                                    {showHud && hud ? (
+                                        <QuietBoundary name="hud" resetKey={hud.runId} onError={releaseTestFocus}>
+                                            <Hud hud={hud} />
+                                        </QuietBoundary>
+                                    ) : null}
+                                    {result ? (
+                                        <QuietBoundary name="result card" resetKey={resultSeq}>
+                                            <ResultScreen key={resultSeq} result={result} onDismiss={dismissResult} />
+                                        </QuietBoundary>
+                                    ) : null}
+                                </HudColumn>
+                            </QuietBoundary>
                         ) : null}
-                    </QuietBoundary>
 
-                    {uiOpen ? (
-                        // A crashed layout shell (outside ScreenHost's per-screen boundary) closes the tablet, so Lua
-                        // releases the NUI focus instead of holding it on an empty page.
-                        <QuietBoundary name={`${ui} layout`} resetKey={`${ui}:${openSeq}`} onError={close}>
-                            {layout}
+                        <QuietBoundary name="debug overlay" resetKey={debug} onError={releaseTestFocus}>
+                            <DebugOverlay debug={debug} hud={hud} />
                         </QuietBoundary>
-                    ) : null}
 
-                    <QuietBoundary name="toasts" resetKey={toasts}>
-                        <Toasts
-                            toasts={toasts}
-                            style={toastStyle}
-                            onDismiss={id => setToasts(list => list.filter(x => x.id !== id))}
-                        />
-                    </QuietBoundary>
+                        <QuietBoundary name="overlay" resetKey={overlay}>
+                            {overlay?.kind === 'fade' ? <FadeOverlay overlay={overlay} /> : null}
+                            {overlay &&
+                            (overlay.kind === 'placement' ||
+                                overlay.kind === 'recording' ||
+                                overlay.kind === 'testdrive') ? (
+                                <BuilderOverlay overlay={overlay} />
+                            ) : null}
+                        </QuietBoundary>
 
-                    {DevPanel ? (
-                        <Suspense fallback={null}>
-                            <DevPanel />
-                        </Suspense>
-                    ) : null}
-                </NavigationContext.Provider>
+                        {uiOpen ? (
+                            // A crashed layout shell (outside ScreenHost's per-screen boundary) closes the tablet, so
+                            // Lua releases the NUI focus instead of holding it on an empty page.
+                            <QuietBoundary name={`${ui} layout`} resetKey={`${ui}:${openSeq}`} onError={close}>
+                                {layout}
+                            </QuietBoundary>
+                        ) : null}
+
+                        <QuietBoundary name="toasts" resetKey={toasts}>
+                            <Toasts
+                                toasts={toasts}
+                                style={toastStyle}
+                                onDismiss={id => setToasts(list => list.filter(x => x.id !== id))}
+                            />
+                        </QuietBoundary>
+
+                        {DevPanel ? (
+                            <Suspense fallback={null}>
+                                <DevPanel />
+                            </Suspense>
+                        ) : null}
+                    </NavigationContext.Provider>
+                </OptionsProvider>
             </SessionContext.Provider>
         </LocaleProvider>
     );

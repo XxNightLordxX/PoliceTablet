@@ -9,6 +9,7 @@ export * from './theme';
 export * from './format';
 export * from './toast';
 export * from './session';
+export * from './options';
 export * from './navigation';
 export * from './cx';
 export * from './data';

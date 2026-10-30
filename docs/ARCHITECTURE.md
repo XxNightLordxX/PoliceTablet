@@ -3220,6 +3220,14 @@ no option is registered by this module: each feature registers its own keys.
   (`getSession`) carries `options` (the effective values, read in the same cp_officers SELECT as the profile) and
   `config.officerOptions` for the officer's department. Settings checks `Config.OfficerOptions` allow, defaults and
   bounds and a department's `officerOptions` with `checkConfig`.
+- Client (modules/options/client.lua, step O2): `get(key)` (allow false or `enabled = false` -> the default; a
+  'local' option -> this PC's resource KVP `crimsonpolice:options`, one sparse JSON object; a 'server' option -> the
+  session's `options`, refreshed by the push `options`; a value that no longer passes `check` with the session bounds
+  -> the default), `setLocal(key, value) -> true, clean | false, errKey` (`err.invalid_payload` for an unknown or
+  'server' key, `err.option_locked`, `err.option_value`; numbers clamped to the session bounds), `localValues()`,
+  `refresh()`. CP.Access (client) keeps the session's `prefs`, `options` and `config.officerOptions`. §8.5 lists the
+  client actions, the NUI message and the hook. Web: `shared/options.ts` (`OptionsProvider` in App.tsx next to the
+  session context; `useOption(key)` = this PC's value, else the session's, else the department default).
 
 ## 6. Cross-cutting conventions
 
@@ -3838,6 +3846,14 @@ Events: `client:diagUnstick`, `client:diagState (token)` (server → one client)
 
 ---
 
+### 8.5 This PC: officer options (modules/options/client.lua)
+
+- Client actions (NUI `client` endpoint): `getLocalOptions` -> `{ options }` (every 'local' option and its value now);
+  `setLocalOption` `{ key, value }` -> `{ key, value, options }` (the clean value; errors `err.invalid_payload`,
+  `err.option_locked`, `err.option_value`).
+- NUI message `{ type = 'localOptions', options }` on the NUI `ready` and after every change of this PC's values.
+- Hook `options:changed (key)` (client): an option's value changed (the session, the push `options`, or this PC).
+
 ## 9. NUI protocol
 
 ### 9.1 Transport
@@ -3856,6 +3872,7 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.l
 | `overlay` | `overlay = null \| { kind: 'placement'\|'recording'\|'testdrive'\|'fade', ... }` | full-screen/HUD overlays |
 | `theme` | `theme`, `locale?` | the department theme for the HUD (login, duty, job, unload); only the reply to `ready` carries `locale` (`CP.Locale.all()`), the NUI's one copy of the text |
 | `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names at once) |
+| `localOptions` | `options` | this PC's 'local' officer options (§8.5): on `ready` and after every change |
 
 Full admin control push topics: `maintenance` (MaintenanceView, `false` when the lock ended; every client) and
 `adminjob` (AdminJobProgress; admin players only).

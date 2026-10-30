@@ -471,7 +471,8 @@ export type PushTopic =
     | 'calls'
     | 'nav'
     | 'profile'
-    | 'rewards';
+    | 'rewards'
+    | 'options';
 
 export type HudObjective = HudState['objectives'][number];
 export type HudRoute = NonNullable<HudState['route']>;
@@ -497,6 +498,8 @@ export interface NuiMessageMap {
     theme: { type: 'theme'; theme: Theme | null; locale?: Record<string, string> };
     // the whole locale again after an admin renamed something in Settings → Names (Config.Labels)
     locale: { type: 'locale'; locale: Record<string, string> };
+    // this PC's 'local' officer options (modules/options/client.lua): on 'ready' and after every change
+    localOptions: { type: 'localOptions'; options: Record<string, OfficerOptionValue> };
 }
 export type NuiMessageType = keyof NuiMessageMap;
 export type NuiMessage = NuiMessageMap[NuiMessageType];

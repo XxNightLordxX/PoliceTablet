@@ -601,6 +601,8 @@ RegisterNUICallback('ready', function(body, cb)
     cb({ ok = true })
     state.nuiAcks = type(body) == 'table' and body.acks == true
     SendTheme(true)
+    -- the options of this PC (CP.Options): a look or a sound applies before the tablet opens
+    if CP.Options and CP.Options.sendLocal then CP.Options.sendLocal() end
     if (state.hud or state.overlay) and InForeignArena() then
         state.arenaHidden = true
     else

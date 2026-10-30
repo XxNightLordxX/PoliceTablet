@@ -964,6 +964,29 @@ do
 end
 
 -- ============================================================================
+--                       OFFICER OPTIONS ON THIS PC (O2)
+-- ============================================================================
+
+do
+    local types = Read(WEB .. 'shared/types.ts')
+    local opts = Read(WEB .. 'shared/options.ts')
+    local appSrc = Read(WEB .. 'App.tsx')
+    local oclient = Read(ROOT .. 'modules/options/client.lua')
+    local tclientSrc = Read(ROOT .. 'modules/tablet/client.lua')
+    Has(types, 'localOptions: { type: \'localOptions\'; options: Record<string, OfficerOptionValue> };',
+        'NuiMessageMap lists the message localOptions')
+    Has(oclient, 'CP.Tablet.send({ type = \'localOptions\', options = O.localValues() })',
+        'which modules/options/client.lua sends')
+    Has(tclientSrc, 'CP.Options.sendLocal()', 'on the NUI \'ready\'')
+    Has(opts, 'useNuiEvent(\'localOptions\'', 'shared/options.ts reads localOptions')
+    Has(opts, '\'setLocalOption\'', 'shared/options.ts calls the client action setLocalOption')
+    Has(oclient, 'CP.Tablet.registerClientAction(\'setLocalOption\',', 'which the Lua client registers')
+    Has(oclient, 'CP.Tablet.registerClientAction(\'getLocalOptions\',', 'and getLocalOptions')
+    Has(opts, 'usePush<{ values?: unknown }>(\'options\'', 'the push options refreshes the server values')
+    Has(appSrc, '<OptionsProvider session={session}>', 'App mounts OptionsProvider next to the session context')
+end
+
+-- ============================================================================
 --                                SHIPPED FILES
 -- ============================================================================
 -- locales/en.json and web/dist are regenerated from their sources.
