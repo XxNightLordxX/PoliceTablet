@@ -88,6 +88,17 @@ local function IsOnCall(src)
     return ok and v == true
 end
 
+-- A supervisor's mission ban in force (step P11, CP.MissionBan): no joins until it ends.
+local function Banned(citizenid)
+    local ok, ban = Call('MissionBan', 'get', citizenid)
+    return ok and type(ban) == 'table'
+end
+
+local function BannedSrc(src)
+    local ok, info = Call('Qbx', 'getInfo', src)
+    return ok and type(info) == 'table' and Banned(info.citizenid)
+end
+
 local function RunGet(runId)
     if not runId then return nil end
     local ok, run = Call('Runs', 'get', runId)
@@ -760,6 +771,7 @@ function Ops.join(src, opId)
     end
     local cur, why = stateCheck()
     if not cur then return false, why end
+    if Banned(officer.citizenid) then return false, 'err.mission_banned' end
     if InArena(src) then return false, 'err.in_arena' end
     if OnRun(src) then return false, 'err.already_on_run' end
     if IsOnCall(src) then
@@ -796,7 +808,7 @@ local function FillFromWaitlist(cur)
         local w = table.remove(cur.waitlist, 1)
         local o = GetOfficer(w.src)
         local fits = o and o.citizenid == w.citizenid and not InArena(w.src) and not OnRun(w.src)
-            and not IsOnCall(w.src)
+            and not IsOnCall(w.src) and not Banned(w.citizenid)
         if fits and op == cur and cur.status == 'joining' and not cur.joinClosed and #cur.participants < max then
             w.joinedAt = os.time()
             cur.participants[#cur.participants + 1] = w
@@ -969,6 +981,8 @@ function Ops.boardCard(src)
         joinBlocked = 'err.op_full'
     elseif src == nil then
         joinBlocked = 'err.invalid_payload'
+    elseif BannedSrc(src) then
+        joinBlocked = 'err.mission_banned'
     elseif InArena(src) then
         joinBlocked = 'err.in_arena'
     elseif OnRun(src) then

@@ -2252,6 +2252,15 @@ CP.Sysadmin.startLocks() (the start-up maintenance locks: a store left behind, a
 that did not finish).
 ```
 
+## Crimson-Police/modules/missionban/server.lua
+
+```text
+CP.MissionBan (server): a supervisor's temporary mission ban of one officer (step P11, the Mission control
+missionBan, kind 'action'). A banned officer keeps the tablet (it is not a suspension) but cannot accept from the
+Mission Board, claim a mission call or join a Cross-Department Mission until it ends; a run already going on is
+never ended. Saved in cp_officers.mission_ban (migration 012) and kept in memory for the accept checks.
+```
+
 ## Crimson-Police/modules/missions/client.lua
 
 ```text
@@ -4729,6 +4738,14 @@ The server refuses the supervisor's own character, an officer on a run, the offi
 the supervisor's own clears a day.
 ```
 
+## Crimson-Police/web/src/supervisor/components/MissionBanDialog.tsx
+
+```text
+Supervisor UI · Department Report · Mission ban (step P11): hours (the admin's min to max) and a reason, or Lift for
+the ban the viewer set. The server checks every rule again (own department, a lower grade, never himself, the
+officer online, the supervisor's bans a day).
+```
+
 ## Crimson-Police/web/src/supervisor/components/OperationPanel.tsx
 
 ```text
@@ -4913,6 +4930,14 @@ Real runtime: the restore lock is a Lua variable (H.restart drops it), the store
 folder), MariaDB's strict mode refuses NULL in a NOT NULL column (the files engine too).
 ```
 
+## tests/board_types_spec.lua
+
+```text
+Mission Board controls (step P10): types switches mission types or single missions off for a department, featuredType
+recommends one type to its officers. CP.DeptControls is a stub (rows, bounds and the choice kind are covered by
+mission_controls_spec): this spec checks what CP.Draw registers, the accept check, the draw pool and the board cards.
+```
+
 ## tests/boards_spec.lua
 
 ```text
@@ -4972,6 +4997,14 @@ put on its parking point only once nobody is on it, and then waits frozen for an
 ground (CP.Spawn.again); a tow truck that never got a road point fades the car out instead of being made inside it.
 Before (a1 4.1 item 13, 5.4) the 60 s fallback put the van on its parking point or the scene with no player check,
 with a raw server SetEntityCoords at the file's height.
+```
+
+## tests/difficulty_unit_spec.lua
+
+```text
+Difficulty and unit size (step P9): two per-department Mission controls. difficulty picks one of the presets the
+admin lists (Config.NpcDifficulty) for runs the department leads, read at the accept; unitSize caps the units its
+leaders may lead, never above Config.Limits.maxUnitSize.
 ```
 
 ## tests/e2e_spec.lua
@@ -5386,6 +5419,15 @@ Needs no database (9.1 compares with the local MariaDB when it runs); every save
 folder removed at the end.
 ```
 
+## tests/mission_ban_spec.lua
+
+```text
+Mission ban (step P11): a supervisor bars one officer of his department (a lower grade, never himself) from taking
+missions for some hours, with a reason; the one who set it and admins lift it. Real missionban, livectl,
+deptcontrols, adminkit, admin, access and permissions (tests/fixtures/admin_live_world.lua). The accept, call
+claim and Cross-Department join checks are in board_types_spec, missioncalls_spec and teams_spec.
+```
+
 ## tests/mission_reader_spec.lua
 
 ```text
@@ -5558,22 +5600,6 @@ For hunting order, clock and time zone effects (docs/TESTING.md):
   CP_TEST_NOW=<unix time>                 the harness' default fake clock H.time (1790000000 otherwise)
   CP_TEST_CLOCK=<unix time>               the wall clock itself: os.time() and MariaDB NOW() start there
   CP_TEST_TZ=<zone>                       the specs' TZ (UTC otherwise; shadow mode always runs UTC)
-```
-
-## tests/difficulty_unit_spec.lua
-
-```text
-Difficulty and unit size (step P9): two per-department Mission controls. difficulty picks one of the presets the
-admin lists (Config.NpcDifficulty) for runs the department leads, read at the accept; unitSize caps the units its
-leaders may lead, never above Config.Limits.maxUnitSize.
-```
-
-## tests/board_types_spec.lua
-
-```text
-Mission Board controls (step P10): types switches mission types or single missions off for a department, featuredType
-recommends one type to its officers. CP.DeptControls is a stub (rows, bounds and the choice kind are covered by
-mission_controls_spec): this spec checks what CP.Draw registers, the accept check, the draw pool and the board cards.
 ```
 
 ## tests/run_controls_spec.lua

@@ -50,6 +50,8 @@ export interface MissionBoardData extends Omit<BoardData, 'operation'> {
     twistMax?: TwistCaps;
     // a happy hour running now (step P6), false when none
     happyHour?: HappyHourState | false | null;
+    // step P11: a mission ban in force for the viewer or (name) a member of his unit; every card is locked until then
+    missionBan?: { until: number; by: string; reason?: string | null; name?: string | null } | null;
 }
 
 // Reply of server:acceptType (payload: the type key, or { missionType, twists }).

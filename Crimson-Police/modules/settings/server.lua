@@ -388,6 +388,7 @@ local RANGES = {
     ['MissionControls.clearCooldownPerDay'] = { 0, 50 },
     ['MissionControls.addRunTimePerDay'] = { 0, 100 },
     ['MissionControls.addRunTimeMax'] = { 0, 3600 },
+    ['MissionControls.missionBanPerDay'] = { 0, 50 },
     ['Cash.addFundsMax'] = { 0, 10000000 },
     ['Cash.manualDailyLimit'] = { 0, 10000000 },
     ['Cash.lowBalanceWarn'] = { 0, 100000000 },

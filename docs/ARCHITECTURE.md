@@ -152,7 +152,8 @@ PoliceTablet/                      (git repo)
                                    docs/WEB_UI.md
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
-                   009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql
+                   009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql,
+                   012_mission_ban.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -3474,6 +3475,24 @@ pattern, so a missing module reads as config).
   card's `featured` for viewers of that department; the web sorts it right after the officer's favourites and shows
   "Recommended by command"; points never read it. The web fold rule (`arrangeTypeCards`) never counts a card off by
   command as the card left to accept.
+- Mission ban (step P11, modules/missionban, CP.MissionBan): `missionBan`, kind `action`, per department, under the
+  master switch, range 1-168 hours, shipped off with 1-24. `cp_officers.mission_ban` (migration 012) holds
+  `{ until, by, name, dept, reason, at }`; every ban is read once after the migrations and kept in memory, so the
+  checks never wait on the store. `MB.get(citizenid, now)` (a ban past `until` = none), `MB.first(officers, now) ->
+  officer, ban`, `MB.view(citizenid) -> { until, by, reason }`, `MB.supView(src, citizenid) -> { min, max, perDay,
+  usedToday, ban, canLift }` (nil = not offered: control off, not a supervisor, his own character), `MB.perDay()`,
+  `MB.clearCache()`. Net: `server:sup:missionBan { citizenid, hours, reason }` (`Kit.supAction`, permission
+  `DC.canChange`; self `err.self_target`; the target online `err.mission_ban_offline` (his grade comes from Qbox), his
+  department `err.other_department`, a lower grade than the supervisor's `err.mission_ban_grade`, hours inside the
+  bounds `err.mission_ban_hours`, `Config.MissionControls.missionBanPerDay` `err.mission_ban_used`; audit `missionBan`
+  category flags; toast `sup.notice.mission_banned`; push `board` to his unit), `server:sup:liftMissionBan
+  { citizenid, reason }` (only the setter `err.mission_ban_not_yours`) and `server:admin:liftMissionBan` (`Kit.action`,
+  antiFarmOverride, also while the control is off); audit `missionBanLift`. CP.Draw's accept check refuses
+  `err.mission_banned` / `err.member_mission_banned` (mission call toasts and claims go through it, the Weekly Boss
+  too); the board gets `missionBan = { until, by, reason (own only), name (a member) }` and every card a lock with
+  `until`. CP.Operations: `Ops.join`, the card's `joinBlocked` and the waitlist refill refuse `err.mission_banned`.
+  `sup:getDeptReport` rows carry `missionBan` (the view), `sup:getOfficerActivity` gains `missionBan` (supView) and
+  `missionBanState`, `admin:getOfficerRunState` gains `missionBan`. A live run is never ended.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through

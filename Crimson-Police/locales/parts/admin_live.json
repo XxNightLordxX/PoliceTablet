@@ -181,5 +181,12 @@
   "admin.live.refused_title": "Refused mission starts",
   "admin.live.refused_count": "{today} today · {total} since the last restart",
   "admin.live.refused_empty_title": "No refused starts",
-  "admin.live.refused_empty_text": "Every mission start since the last restart went through. A refused one shows here with the reason the officer saw."
+  "admin.live.refused_empty_text": "Every mission start since the last restart went through. A refused one shows here with the reason the officer saw.",
+  "admin.runctl.ban_state": "Mission ban until {time} (by {by})",
+  "admin.runctl.ban_lift": "Lift ban",
+  "admin.runctl.ban_lift_title": "Lift the mission ban",
+  "admin.runctl.ban_lift_message": "{name} can take missions again at once. The supervisor's ban stays in the audit log.",
+  "admin.runctl.ban_lifted": "Mission ban lifted.",
+  "admin.action.missionBan": "Mission ban",
+  "admin.action.missionBanLift": "Mission ban lifted"
 }

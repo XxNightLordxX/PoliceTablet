@@ -294,6 +294,8 @@ const state: AdminOfficerRunState = {
         serverTime: nowS(),
         unitSize: 1,
     },
+    // step P11: a supervisor's mission ban in force (Lift ban)
+    missionBan: { until: nowS() + 2 * 3600, by: 'Sergeant Sam Super', reason: 'Ignored a supervisor order on scene' },
     serverTime: nowS(),
 };
 
@@ -325,6 +327,13 @@ registerMock('action', 'server:admin:grantBossAttempt', (p: { reason?: string })
     if (state.boss.grantedThisWeek) throw new Error('err.live_boss_granted');
     state.boss = { ...state.boss, extra: 1, left: state.boss.left + 1, grantedThisWeek: true };
     return { week: '2026-W41' };
+});
+
+registerMock('action', 'server:admin:liftMissionBan', (p: { citizenid: string; reason?: string }) => {
+    needReason(p);
+    if (!state.missionBan) throw new Error('err.mission_ban_none');
+    state.missionBan = null;
+    return { citizenid: p.citizenid };
 });
 
 registerMock('action', 'server:admin:reclassifyAbandon', (p: { runUuid: string; reason?: string }) => {

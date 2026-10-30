@@ -325,6 +325,25 @@ export interface ReportOfficer {
     decisionsBest?: number;
     decisionsBad?: number;
     calls?: number;
+    // step P11: a supervisor's mission ban in force
+    missionBan?: MissionBanState | null;
+}
+
+// A mission ban in force (step P11): until = os.time() of its end, by = who set it ("Sgt Doe")
+export interface MissionBanState {
+    until: number;
+    by: string;
+    reason?: string | null;
+}
+
+// step P11: what the viewer may do about this officer's mission ban (nil = nothing)
+export interface MissionBanControl {
+    min: number;
+    max: number;
+    perDay?: number;
+    usedToday?: number;
+    ban?: MissionBanState | null;
+    canLift?: boolean;
 }
 
 // sup:getDeptReport
@@ -369,6 +388,9 @@ export interface OfficerActivity {
     commendations?: Commendation[];
     // step P7: the viewer may clear this officer's cooldowns (admins: no counts)
     cooldownClear?: { perDay?: number; usedToday?: number } | null;
+    // step P11: Mission ban for this viewer (nil = not offered) and the ban in force
+    missionBan?: MissionBanControl | null;
+    missionBanState?: MissionBanState | null;
 }
 
 // sup:getOfficerCooldowns (step P7): the officer's cooldowns for Clear cooldown

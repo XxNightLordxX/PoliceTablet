@@ -238,6 +238,11 @@ Config.MissionControls = {
         -- Mission Board: one mission type shown to his department's officers as "Recommended by command", right
         -- after their favourites; points and pay never change
         featuredType = { on = false },
+        -- Department Report: a supervisor bars one officer of his department (a lower grade, never himself) from
+        -- taking missions for min to max hours, with a reason: no Mission Board accept, mission call claim or
+        -- Cross-Department join; the tablet stays usable and a mission already running goes on. The one who set it
+        -- and admins (Officers -> Today & cooldowns) may lift it early
+        missionBan = { on = false, min = 1, max = 24 },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 
@@ -248,6 +253,8 @@ Config.MissionControls = {
     -- seconds supervisors may add to one running mission in all, counted together with an admin's additions and
     -- never above AdminControl.runTimeAddMax
     addRunTimeMax = 300,
+    -- mission bans one supervisor may set a day (admins any)
+    missionBanPerDay = 3,
 }
 
 -- ============================================================================

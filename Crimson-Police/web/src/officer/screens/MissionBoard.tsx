@@ -19,7 +19,7 @@ import {
 import type { IconName } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { asArray } from '../../shared/data';
-import { formatNumber } from '../../shared/format';
+import { formatClock, formatNumber } from '../../shared/format';
 import { useAction, usePush, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
@@ -847,6 +847,25 @@ export default function MissionBoard() {
             {data ? (
                 <>
                     <HappyHourBanner state={data.happyHour ?? false} onChange={() => schedule()} />
+                    {data.missionBan ? (
+                        <Notice
+                            icon="lock"
+                            tone="danger"
+                            title={
+                                data.missionBan.name
+                                    ? t('board.notice.ban_member_title', {
+                                          name: data.missionBan.name,
+                                          time: formatClock(data.missionBan.until),
+                                          by: data.missionBan.by,
+                                      })
+                                    : t('board.notice.ban_title', {
+                                          time: formatClock(data.missionBan.until),
+                                          by: data.missionBan.by,
+                                      })
+                            }
+                            text={data.missionBan.reason ?? undefined}
+                        />
+                    ) : null}
                     {data.activeRunId ? (
                         <Notice
                             icon="target"

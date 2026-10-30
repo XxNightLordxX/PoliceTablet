@@ -193,4 +193,44 @@ do
     saved['sast|featuredType'] = nil
 end
 
+-- ============================================================================
+--            3. A MISSION BAN (STEP P11): THE BOARD AND THE ACCEPT
+-- ============================================================================
+
+do
+    local untilTs = os.time() + 3600
+    CP.MissionBan = {
+        first = function(officers, now)
+            for _, o in ipairs(officers) do
+                if o.citizenid == 'BT00003' and untilTs > (now or os.time()) then
+                    return o, { ['until'] = untilTs, name = 'Sergeant Doe', reason = 'Ignored an order' }
+                end
+            end
+            return nil
+        end,
+    }
+    local ok, err = D.check(3, 'patrol')
+    H.ok(ok == false and err == 'err.mission_banned', 'a banned officer cannot accept')
+    H.eq(D.check(1, 'patrol'), true, 'another officer of his department can')
+    local board = D.boardCards(3)
+    H.ok(
+        board.missionBan and board.missionBan['until'] == untilTs and board.missionBan.by == 'Sergeant Doe'
+            and board.missionBan.reason == 'Ignored an order' and board.missionBan.name == nil,
+        'his board says until when and by whom'
+    )
+    local c = Card(3, 'patrol')
+    H.ok(c.locked and c.locked.reason == 'Mission ban (by Sergeant Doe)' and c.locked['until'] == untilTs,
+        'every card is locked with the time left')
+    units[1] = { leader = 1, members = { 1, 3 } }
+    ok, err = D.check(1, 'patrol')
+    H.ok(ok == false and err == 'err.member_mission_banned', 'a unit with a banned member cannot accept')
+    board = D.boardCards(1)
+    H.ok(board.missionBan.name ~= nil and board.missionBan.reason == nil, 'the leader sees who, not the reason')
+    units[1] = nil
+    untilTs = os.time() - 1
+    H.eq(D.check(3, 'patrol'), true, 'it ends at until')
+    H.eq(D.boardCards(3).missionBan, nil, 'and the board is open again')
+    CP.MissionBan = nil
+end
+
 return H

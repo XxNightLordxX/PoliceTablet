@@ -896,6 +896,14 @@ do
                 and E('MissionControls.controls').desc:find('on = the admin switch', 1, true) ~= nil,
             'step P10: the Mission Board controls (types off, recommended type) ship off'
         )
+        H.ok(
+            d.missionBan.on == false and d.missionBan.min == 1 and d.missionBan.max == 24
+                and E('MissionControls.missionBanPerDay').default == 3
+                and E('MissionControls.missionBanPerDay').max == 50
+                and E('MissionControls.missionBanPerDay').desc:find('mission bans one supervisor may set', 1, true)
+                    ~= nil,
+            'step P11: the mission ban ships off (1-24 hours), 3 a supervisor a day, with its comment'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

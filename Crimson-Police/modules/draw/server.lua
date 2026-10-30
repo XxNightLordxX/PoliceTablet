@@ -81,6 +81,14 @@ local function OperationLocked()
     return locked == true
 end
 
+-- A supervisor's mission ban in force for one of these officers (step P11, CP.MissionBan): officer, ban | nil.
+local function BannedOf(officers, now)
+    if not (CP.MissionBan and CP.MissionBan.first) then return nil end
+    local _, o, ban = Safe(CP.MissionBan.first, officers, now)
+    if type(o) ~= 'table' or type(ban) ~= 'table' then return nil end
+    return o, ban
+end
+
 local function IsOnCall(src)
     if not (CP.Calls and CP.Calls.isOnCall) then return false end
     local _, onCall = Safe(CP.Calls.isOnCall, src)
@@ -1216,6 +1224,16 @@ function Draw.boardCards(src)
     local caps = Draw.limits(officers)
     local off = OffOf(officers)
     local featured = Draw.featuredFor(viewer.department)
+    -- a mission ban of a member (step P11): every card locked until it ends; the board's banner says who set it
+    local banWho, ban = BannedOf(officers, now)
+    if ban then
+        data.missionBan = {
+            ['until'] = math.floor(tonumber(ban['until']) or 0),
+            by = ban.name,
+            reason = banWho.src == src and ban.reason or nil,
+            name = banWho.src ~= src and (banWho.name or '?') or nil,
+        }
+    end
 
     for _, key in ipairs(TypeKeysByPoints()) do
         local label = TypeLabel(key)
@@ -1240,6 +1258,13 @@ function Draw.boardCards(src)
         local offWho = OffBy(officers, off, key)
         if missing then
             card.locked = { reason = CP.L('board.member_unavailable') }
+        elseif ban then
+            local by = { by = ban.name or '?', name = banWho.name or '?' }
+            card.locked = {
+                reason = CP.L(banWho.src == src and 'board.locked_mission_ban' or 'board.locked_mission_ban_member',
+                    by),
+                ['until'] = data.missionBan['until'],
+            }
         elseif offWho then
             -- switched off for a member's department by command (the types Mission control, step P10)
             card.locked = { reason = CP.L('board.locked_type_off', { type = label, dept = DeptShort(offWho) }) }
@@ -1369,6 +1394,7 @@ local function CheckAccept(src, typeKey, counts)
         if InArena(o.src) then return false, 'err.in_arena' end
         if OnMission(o.src) then return false, own and 'err.already_on_run' or 'err.member_on_run' end
         if IsOnCall(o.src) then return false, own and 'err.on_call' or 'err.member_on_call' end
+        if BannedOf({ o }, now) then return false, own and 'err.mission_banned' or 'err.member_mission_banned' end
         if not isBoss and OffBy({ o }, OffOf({ o }), missionType) then return false, 'err.type_off_department' end
         if lastHour(o.citizenid) >= max then
             return false, own and 'err.hourly_cap' or 'err.member_hourly_cap'

@@ -40,6 +40,7 @@ import { ResultCell, missionTypeLabel } from '../../officer/screens/Profile';
 import { CommendationsCard } from '../../officer/components/CommendationsCard';
 import type { Commendation } from '../../types/profile';
 import { ClearCooldownDialog } from '../components/ClearCooldownDialog';
+import { MissionBanDialog } from '../components/MissionBanDialog';
 import { CommendDialog } from '../components/CommendDialog';
 import './DeptReport.css';
 
@@ -55,6 +56,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     const can = useCan();
     const [commending, setCommending] = useState(false);
     const [clearing, setClearing] = useState(false);
+    const [banning, setBanning] = useState(false);
     const [revoking, setRevoking] = useState<Commendation | null>(null);
     const [revokeReason, setRevokeReason] = useState('');
     const { run: act, busy } = useAction();
@@ -155,6 +157,11 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
             }
             footer={
                 <>
+                    {officer && current?.missionBan && (!current.missionBanState || current.missionBan.canLift) ? (
+                        <Button variant="secondary" icon="lock" onClick={() => setBanning(true)}>
+                            {t(current.missionBanState ? 'sup.ban.lift' : 'sup.ban.button')}
+                        </Button>
+                    ) : null}
                     {officer && current?.cooldownClear ? (
                         <Button variant="secondary" icon="clock" onClick={() => setClearing(true)}>
                             {t('sup.cd.button')}
@@ -171,6 +178,22 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                 </>
             }
         >
+            {current?.missionBanState ? (
+                <p className="sup-cd-note is-warning">
+                    {t('sup.ban.state', {
+                        time: formatDateTime(current.missionBanState.until),
+                        by: current.missionBanState.by,
+                    })}
+                    {current.missionBanState.reason ? ` · ${current.missionBanState.reason}` : ''}
+                </p>
+            ) : null}
+            <MissionBanDialog
+                officer={banning && officer ? { citizenid: officer.citizenid, name: officer.name } : null}
+                control={current?.missionBan ?? null}
+                state={current?.missionBanState ?? null}
+                onClose={() => setBanning(false)}
+                onDone={() => void refetch()}
+            />
             <ClearCooldownDialog
                 officer={clearing && officer ? { citizenid: officer.citizenid, name: officer.name } : null}
                 onClose={() => setClearing(false)}
@@ -277,6 +300,19 @@ export default function DeptReport() {
                         <span className="boards-strong boards-ellipsis" title={o.name}>
                             {o.name}
                         </span>
+                        {o.missionBan ? (
+                            <Badge
+                                tone="danger"
+                                size="sm"
+                                icon="lock"
+                                title={t('sup.ban.state', {
+                                    time: formatDateTime(o.missionBan.until),
+                                    by: o.missionBan.by,
+                                })}
+                            >
+                                {t('sup.ban.badge')}
+                            </Badge>
+                        ) : null}
                         {o.flagged ? (
                             <Badge tone="warning" size="sm" icon="alert" title={t('sup.report.col.flagged')}>
                                 {formatNumber(o.flagged)}

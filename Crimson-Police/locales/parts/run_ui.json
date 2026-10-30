@@ -172,5 +172,7 @@
   "board.card.twists_hint": "Pick twists, then accept",
   "run.abandon.again": "Click again to abandon",
   "board.card.featured": "Recommended by command",
-  "board.card.featured_hint": "Your department's command recommends this mission type. Points are the same."
+  "board.card.featured_hint": "Your department's command recommends this mission type. Points are the same.",
+  "board.notice.ban_title": "Mission ban until {time} (by {by})",
+  "board.notice.ban_member_title": "{name} has a mission ban until {time} (by {by})"
 }

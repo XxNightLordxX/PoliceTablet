@@ -87,6 +87,12 @@ export function formatDateTime(value: number | string | null | undefined): strin
     return dtf('dt', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(d);
 }
 
+// os.time() seconds -> "18:40" (today's clock time, for an end later today: a mission ban, step P11).
+export function formatClock(value: number | null | undefined): string {
+    if (value === null || value === undefined || !Number.isFinite(value)) return '';
+    return dtf('time', { hour: '2-digit', minute: '2-digit' }).format(new Date(value * 1000));
+}
+
 // ============================================================================
 //                         DATES IN THE LOCALE'S FORMAT
 // ============================================================================
@@ -99,7 +105,7 @@ function dateLocale(): string {
 
 // One formatter per (format, locale): toLocaleString(locale, options) builds a new Intl.DateTimeFormat on every call.
 const dtfCache = new Map<string, Intl.DateTimeFormat>();
-function dtf(kind: 'dt' | 'date' | 'dtYear', opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+function dtf(kind: 'dt' | 'date' | 'dtYear' | 'time', opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
     const loc = dateLocale();
     const k = kind + '|' + loc;
     let f = dtfCache.get(k);

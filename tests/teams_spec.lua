@@ -882,6 +882,15 @@ H.eq(data, 'err.already_on_run', 'officer on a run cannot join')
 H.eq(O.boardCard(6).canJoin, false, 'card: cannot join while on a run')
 H.eq(O.boardCard(6).joinBlocked, 'err.already_on_run', 'joinBlocked = the join error (on a run)')
 runBySrc[6] = nil
+-- step P11: a supervisor's mission ban in force (CP.MissionBan) refuses the join and says so on the card
+CP.MissionBan = {
+    get = function(cid) return cid == 'CID4' and { ['until'] = os.time() + 3600 } or nil end,
+}
+ok, data = Act('server:joinOperation', 4, opId)
+H.eq(data, 'err.mission_banned', 'an officer with a mission ban cannot join')
+H.eq(O.boardCard(4).joinBlocked, 'err.mission_banned', 'joinBlocked = the join error (mission ban)')
+H.eq(O.boardCard(2).joinBlocked, nil, 'another officer is not affected')
+CP.MissionBan = nil
 
 Clear()
 ok, data = Act('server:joinOperation', 2, opId)

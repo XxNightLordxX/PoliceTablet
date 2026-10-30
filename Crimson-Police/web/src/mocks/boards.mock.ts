@@ -17,6 +17,7 @@ import type {
     DeptContributors,
     DeptReport,
     OfficerActivity,
+    MissionBanState,
     OfficerCooldowns,
     ProfileData,
     ProfileRunView,
@@ -1251,6 +1252,19 @@ reg('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) =
         ],
         // step P7: Clear cooldown offered (never on the viewer's own character)
         cooldownClear: o.citizenid === me.citizenid ? null : { perDay: 5, usedToday: supClears.length },
+        // step P11: Mission ban offered (never on the viewer's own character), the ban in force
+        missionBan:
+            o.citizenid === me.citizenid
+                ? null
+                : {
+                      min: 1,
+                      max: 24,
+                      perDay: 3,
+                      usedToday: Object.keys(mockBans).length,
+                      ban: mockBans[o.citizenid] ?? null,
+                      canLift: !!mockBans[o.citizenid],
+                  },
+        missionBanState: mockBans[o.citizenid] ?? null,
     };
     return activity;
 });
@@ -1262,6 +1276,27 @@ reg('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) =
 // staff) and the supervisor's (5) are counted in this mock session.
 
 const supClears: { citizenid: string; scope: string; key: string }[] = [];
+
+// step P11: the mission bans set in this mock session
+const mockBans: Record<string, MissionBanState> = {};
+
+reg('action', 'server:sup:missionBan', (p: { citizenid?: string; hours?: number; reason?: string }) => {
+    if (!p?.citizenid || !byCid(p.citizenid)) throw new Error('err.unknown_officer');
+    if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+    const hours = Number(p.hours);
+    if (!Number.isInteger(hours) || hours < 1 || hours > 24) throw new Error('err.mission_ban_hours');
+    if (Object.keys(mockBans).length >= 3) throw new Error('err.mission_ban_used');
+    const me = viewer();
+    mockBans[p.citizenid] = { until: now() + hours * 3600, by: `${me.rank} ${me.name}`, reason: p.reason };
+    return { citizenid: p.citizenid, until: mockBans[p.citizenid].until };
+});
+
+reg('action', 'server:sup:liftMissionBan', (p: { citizenid?: string; reason?: string }) => {
+    if (!p?.citizenid || !mockBans[p.citizenid]) throw new Error('err.mission_ban_none');
+    if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+    delete mockBans[p.citizenid];
+    return { citizenid: p.citizenid };
+});
 const cleared = (cid: string, scope: string, key: string) =>
     supClears.some(c => c.citizenid === cid && c.scope === scope && c.key === key);
 

@@ -31,6 +31,7 @@ type Pending =
     | { kind: 'clear'; scope: 'all' | 'type' | 'mission'; key?: string; label: string }
     | { kind: 'extra' }
     | { kind: 'boss' }
+    | { kind: 'ban' }
     | { kind: 'abandon'; row: AdminFreeAbandon };
 
 function secondsLeft(until: number, serverTime: number): number {
@@ -58,6 +59,13 @@ function pendingTexts(p: Pending | null, name: string): { title: string; message
             title: t('admin.runctl.boss_title'),
             message: t('admin.runctl.boss_message', { name }),
             confirm: t('admin.runctl.boss'),
+        };
+    }
+    if (p.kind === 'ban') {
+        return {
+            title: t('admin.runctl.ban_lift_title'),
+            message: t('admin.runctl.ban_lift_message', { name }),
+            confirm: t('admin.runctl.ban_lift'),
         };
     }
     return {
@@ -110,6 +118,12 @@ export function OfficerRunControls({ citizenid, officer, onChanged }: OfficerSlo
                 'server:admin:grantBossAttempt',
                 { citizenid, reason },
                 { success: 'admin.runctl.boss_done' },
+            );
+        } else if (p.kind === 'ban') {
+            res = await run(
+                'server:admin:liftMissionBan',
+                { citizenid, reason },
+                { success: 'admin.runctl.ban_lifted' },
             );
         } else {
             res = await run(
@@ -192,6 +206,26 @@ function RunState({
     const perType = asArray(data.counts.perType);
     return (
         <>
+            {data.missionBan ? (
+                <div className="admin-runctl-ban">
+                    <span className="admin-runctl-item__text">
+                        {t('admin.runctl.ban_state', {
+                            time: formatDateTime(data.missionBan.until),
+                            by: data.missionBan.by,
+                        })}
+                        {data.missionBan.reason ? (
+                            <>
+                                <br />
+                                <span className="admin-runctl-item__sub">{data.missionBan.reason}</span>
+                            </>
+                        ) : null}
+                    </span>
+                    <Countdown seconds={secondsLeft(data.missionBan.until, data.serverTime)} />
+                    <Button size="sm" variant="secondary" onClick={() => onPending({ kind: 'ban' })}>
+                        {t('admin.runctl.ban_lift')}
+                    </Button>
+                </div>
+            ) : null}
             <div className="admin-runctl-grid">
                 <div className="admin-runctl-box">
                     <span className="admin-runctl-box__title">

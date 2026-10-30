@@ -394,6 +394,8 @@ function LiveCtl.officerRunState(citizenid)
         },
         freeAbandons = FreeAbandons(citizenid),
         board = src and BoardView(src) or nil,
+        -- a supervisor's mission ban in force (step P11, CP.MissionBan): { until, by, reason }, lifted from here
+        missionBan = select(2, Call('MissionBan', 'view', citizenid)),
         serverTime = os.time(),
     }
 end

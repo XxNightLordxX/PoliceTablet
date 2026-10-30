@@ -574,6 +574,17 @@ Supervisor UI → **Mission controls** (below).
   - `featuredType = { on = false }` (**Recommended type**): one mission type his officers see as **Recommended by
     command**, right after their own favourite types. Points and pay never change. Reset to recommend none.
 
+- **Mission ban** (`missionBan = { on = false, min = 1, max = 24 }`, step P11, off when you install, under the
+  master switch): in Supervisor UI → **Department Report** a supervisor opens an officer of his own department and
+  presses **Mission ban**: hours (here 1 to 24) and a reason. Only an officer who is online, of a lower grade than
+  his, never himself. Until it ends the officer cannot accept from the Mission Board (nor can a unit he is in),
+  claim a mission call or join a Cross-Department Mission; his board shows "Mission ban until 18:40 (by Sergeant
+  Doe)" with every card locked. The tablet stays usable (it is not a suspension; suspensions stay admin-only) and a
+  mission he is already on goes on. The supervisor who set it may **Lift mission ban** early from the same dialog;
+  an admin lifts any ban in Admin UI → Officers → **Today & cooldowns**. The officer gets a toast; the ban and the
+  lift are in the audit log under flags (posted to `cp_webhook_flags`), and a restart keeps the ban.
+  `Config.MissionControls.missionBanPerDay` (`3`): bans one supervisor may set a day.
+
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
   supervisor may pick: `<control> = { on = true, min = ..., max = ... }`. Switching either off again brings back
@@ -1414,7 +1425,7 @@ Supervisors play missions like officers. The **Supervisor** button in the tablet
 | **Review Queue** | Flagged runs and disputes of their department, and a **Profiles** tab for pictures, bios and reports |
 | **Payouts** | Mission type payouts, within the allowed range |
 | **Mission Builder** | Build, test and publish their own missions ([9.12](#912-mission-builder)) |
-| **Department Report** | Activity per officer this week, and **Commend** |
+| **Department Report** | Activity per officer this week, and **Commend**; **Clear cooldown** and **Mission ban** when switched on ([4.4](#44-what-supervisors-may-do)) |
 
 Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44-what-supervisors-may-do)).
 
@@ -1908,6 +1919,9 @@ missions against the daily, hourly and per-type limits, the cash paid today, the
 abandons (runs that ended for a real call) of the last 24 hours, and, while they are online, **Board as they see
 it** (their type cards and why each is locked; never which mission they would get). The buttons:
 
+- **Lift ban** (shown above the boxes while a supervisor's mission ban is in force, with who set it, why and the time
+  left; [4.4](#44-what-supervisors-may-do)): the officer can take missions again at once. Works also while the
+  `missionBan` control is switched off. Needs a reason.
 - **Clear** one type's or one mission's cooldown, or **Clear every cooldown**: at most
   `Config.AdminControl.cooldownClearsPerDay` (3) per officer per day, and not while they are on a run. A restart
   keeps the clear.

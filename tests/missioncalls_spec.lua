@@ -1575,6 +1575,30 @@ do
     CP.Hooks.fire('deptControls:changed', { key = 'types' })
 end
 
+-- Step P11: a supervisor's mission ban (CP.MissionBan) runs through the accept check: no pop-up and no claim for the
+-- banned officer; another officer still gets the call.
+do
+    Reset()
+    local S = CENTRE.south_ls
+    AddPlayer(1, vec3(S.x, S.y, 30.0))
+    AddPlayer(4, vec3(S.x + 50, S.y, 30.0), { dept = 'fib', short = 'FIB' })
+    local banned = Cid(1)
+    CP.MissionBan = {
+        first = function(officers)
+            for _, o in ipairs(officers) do
+                if o.citizenid == banned then return o, { ['until'] = os.time() + 3600, name = 'Sgt Doe' } end
+            end
+            return nil
+        end,
+    }
+    local pc = NewCall('patrol', 'south_ls')
+    H.eq(Toasts(1), 0, 'mission ban: no pop-up for the banned officer')
+    H.eq(Toasts(4), 1, '...the other officer gets it')
+    local ok, err = Claim(1, pc.id)
+    H.ok(ok == false and err == 'err.mission_banned', 'and the banned officer cannot claim it')
+    CP.MissionBan = nil
+end
+
 -- Step O9: callAlerts 'favourites' (My options -> Dispatch): a call of another type shows on Dispatch with no pop-up;
 -- calls_muted still silences every call (the mute section above); with no favourite picked every call pops up.
 do

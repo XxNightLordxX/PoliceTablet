@@ -161,7 +161,16 @@ export interface AdminOfficerRunState {
     boss: { enabled: boolean; used: number; extra: number; left: number; grantedThisWeek: boolean };
     freeAbandons: AdminFreeAbandon[];
     board?: AdminBoardView | null;
+    // step P11: a supervisor's mission ban in force (Lift ban here)
+    missionBan?: MissionBanView | null;
     serverTime: number;
+}
+
+// A mission ban in force (step P11, CP.MissionBan.view): until = os.time() of its end, by = who set it
+export interface MissionBanView {
+    until: number;
+    by: string;
+    reason?: string | null;
 }
 
 // ============================================================================

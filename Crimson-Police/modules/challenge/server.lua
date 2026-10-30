@@ -1302,6 +1302,8 @@ function C.deptReport(dept)
             decisionsBest = Int(r.decisions_best),
             decisionsBad = Int(r.decisions_bad),
             calls = Int(r.calls),
+            -- a supervisor's mission ban in force (step P11): { until, by, reason }
+            missionBan = Has('MissionBan', 'view') and CP.MissionBan.view(tostring(r.citizenid)) or nil,
         }
     end
     return {
@@ -1472,6 +1474,10 @@ CP.Net.callback('sup:getOfficerActivity', function(src, args)
     -- Clear cooldown (step P7, Config.MissionControls.controls.clearCooldown): { perDay, usedToday } when allowed
     local _, clear = Call('LiveCtl', 'supClearView', src, args.citizenid)
     view.cooldownClear = clear
+    -- Mission ban (step P11, Config.MissionControls.controls.missionBan): { min, max, perDay, usedToday, ban, canLift }
+    local _, ban = Call('MissionBan', 'supView', src, args.citizenid)
+    view.missionBan = ban
+    view.missionBanState = select(2, Call('MissionBan', 'view', args.citizenid))
     return view
 end)
 
