@@ -31,6 +31,7 @@ import type {
     ReviewRulesValue,
     TeleportDepartment,
     TeleportGrant,
+    TwistsValue,
 } from '../../types/oversight';
 import { GradeGrantRow } from './GradeGrantRow';
 import { useAdminAction } from './kit';
@@ -72,6 +73,14 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
             return t('mc.value.reviewRules', {
                 void: one,
                 n: Array.isArray(r.adminOnlyKinds) ? r.adminOnlyKinds.length : 0,
+            });
+        }
+        // twists (step P15): how many twists the department offers and how many start ticked
+        if (key === 'twists') {
+            const w = v && typeof v === 'object' && !Array.isArray(v) ? (v as Partial<TwistsValue>) : {};
+            return t('mc.value.twists', {
+                n: Array.isArray(w.offered) ? w.offered.length : 0,
+                ticked: Array.isArray(w.ticked) ? w.ticked.length : 0,
             });
         }
         if (v === undefined || v === null) return '-';

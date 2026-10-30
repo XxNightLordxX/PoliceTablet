@@ -38,7 +38,7 @@ import type {
 import type { BoardCallsInfo } from '../../types/missioncalls';
 import { HappyHourBanner } from '../components/HappyHourBanner';
 import { CallsOpenLink, DailyLimitBadge, readyCheckSentText } from '../components/MissionCallsLink';
-import { TwistPicker } from '../components/TwistPicker';
+import { TwistPicker, tickedTwists } from '../components/TwistPicker';
 import { arrangeTypeCards, typeKeys } from './boardOrder';
 import './MissionBoard.css';
 
@@ -673,9 +673,10 @@ export default function MissionBoard() {
     const { data, loading, error, refetch } = useRequest<MissionBoardData>('getMissionTypes', {}, { pollMs: POLL_MS });
     const { run, busy } = useAction();
     const [pending, setPending] = useState<Pending>(null);
-    // the twists the leader picked in the accept dialog (PLAN M8b); a new dialog starts with none
+    // the twists the leader picked in the accept dialog (PLAN M8b); a new dialog starts with the ones his
+    // department pre-ticks (step P15), else none
     const [twists, setTwists] = useState<string[]>([]);
-    useEffect(() => setTwists([]), [pending]);
+    useEffect(() => setTwists(pending && pending.kind === 'type' ? tickedTwists(pending.card.twists) : []), [pending]);
     const [joining, setJoining] = useState(false);
     // My options -> Mission Board (step O8): favourite types first, hidden types folded, accept in one click
     const favouriteTypes = typeKeys(useOption('favouriteTypes'));

@@ -370,6 +370,11 @@ export interface ReviewRulesValue {
     secondVoid: boolean;
     adminOnlyKinds: string[];
 }
+// twists (step P15): the twists the department's leaders are offered at the accept step, and the pre-ticked ones
+export interface TwistsValue {
+    offered: string[];
+    ticked: string[];
+}
 export type MissionControlValue =
     | number
     | boolean
@@ -380,6 +385,7 @@ export type MissionControlValue =
     | CrossDeptValue
     | BoardsValue
     | ReviewRulesValue
+    | TwistsValue
     | null;
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
 export interface MissionControlState {
@@ -441,6 +447,8 @@ export interface MissionControlState {
     metricsAll?: string[];
     // reviewRules (step P14): the flag kinds a department may hand to admins
     flagKinds?: string[];
+    // twists (step P15): the twists the admin enabled (Config.Events.twists), with their labels
+    twistsAll?: { key: string; label: string }[];
     // notices (step P13): characters a department notice may hold (Config.MissionControls.noticeMaxLength)
     maxLength?: number;
 }

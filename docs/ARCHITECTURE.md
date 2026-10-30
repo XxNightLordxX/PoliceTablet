@@ -3544,6 +3544,14 @@ pattern, so a missing module reads as config).
   when a row is voided or approved. `RR.adminOnly(dept, kind)`: `Admin.flaggedRows(dept, cid, admin)` leaves such
   rows out of a supervisor's queue and `approveFlagged` / `voidFlagged` refuse a supervisor `err.review_admin_only`.
   Queue rows carry `voidPending { name, at }`. Admins and the console are never bound.
+- The department's twists (step P15). `twists`, kind `map` (modules/events, `Events.registerTwistControl`), per
+  department, under the master switch, scope `run`, unbounded, shipped off; value `{ offered, ticked }`
+  (`Events._cleanTwists`: only twists enabled in `Config.Events.twists`, ticked within offered; it never relaxes);
+  config value: every enabled twist offered, none ticked; `viewExtra` gives `twistsAll { key, label }`.
+  `Events.deptTwists(dept)` gives the sets; `Events.twistOffer(type, list, dept)` keeps only the offered twists and
+  marks `ticked = true`; `Events.checkTwists(raw, type, list, dept)` refuses another one with
+  `err.twist_department`. `CP.Draw` passes the leader's department (board cards: the unit leader's; the accept:
+  `ctx.leader`), CP.MissionCalls too (a unit's type state: `unit.leader`'s officer; a claim: the claimer, who leads).
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through

@@ -931,6 +931,8 @@ do
                 and cfgText:find('a supervisor\'s Void waits for a second', 1, true) ~= nil,
             'step P14: leaderboard visibility and the review rules ship off, with comments'
         )
+        H.ok(d.twists.on == false and cfgText:find('which of the twists enabled in Events.twists', 1, true) ~= nil,
+            'step P15: the twists a department offers and pre-ticks ship off, with a comment')
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

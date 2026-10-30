@@ -19,6 +19,13 @@ function times(m: number): string {
     return (Math.round(m * 100) / 100).toFixed(2);
 }
 
+// The keys the leader's department pre-ticks (step P15), in the offered order: what the accept step starts with.
+export function tickedTwists(offered?: TwistOffer[] | null): string[] {
+    return asArray(offered as TwistOffer[] | undefined)
+        .filter(o => o.ticked === true)
+        .map(o => o.key);
+}
+
 // The bonus of the picked twists: the points shares add up, the cash multipliers multiply, both stop at the caps
 // (CP.Twists.bonus on the server).
 export function twistTotal(offered: TwistOffer[], picked: string[], caps?: TwistCaps | null) {

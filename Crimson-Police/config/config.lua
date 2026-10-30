@@ -266,6 +266,10 @@ Config.MissionControls = {
         -- supervisor of the department, and flags of the kinds he picks go to admins only. Admins are never bound
         -- and the anti-cheat flag triggers stay as they are
         reviewRules = { on = false },
+        -- Mission Board and mission call claims: which of the twists enabled in Events.twists his department's
+        -- leaders are offered at the accept step, and which of them start ticked; a twist his department does not
+        -- offer is refused. The twists' bonuses never change
+        twists = { on = false },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 

@@ -193,6 +193,8 @@ export interface TwistOffer {
     points: number;
     cash: number;
     some?: boolean;
+    // pre-ticked at the accept step by the leader's department (its twists Mission control, step P15)
+    ticked?: boolean;
 }
 // The caps of stacked twists (Config.Events.twistMaxPoints, twistMaxCash).
 export interface TwistCaps {

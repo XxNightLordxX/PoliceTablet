@@ -241,5 +241,12 @@
   "mc.flagkind.rs_pair_repeat": "Repeated pairing",
   "err.void_second_needed": "You voided this run already. A second supervisor of the department must confirm it.",
   "err.void_second_dept": "Only a supervisor of the run's department may confirm this Void.",
-  "admin.action.voidPending": "Void waiting for a second supervisor"
+  "admin.action.voidPending": "Void waiting for a second supervisor",
+  "mc.control.twists": "Twists offered",
+  "mc.control_desc.twists": "Which twists your department's leaders are offered when they take a mission, and which of them start ticked. A twist your department does not offer is refused. The twists' bonuses never change.",
+  "mc.value.twists": "{n} offered, {ticked} ticked",
+  "sup.twists.offered": "Twists your leaders are offered",
+  "sup.twists.ticked": "Ticked when the accept step opens",
+  "sup.twists.none": "No twist is enabled on this server.",
+  "err.twist_department": "Your department does not offer that twist. Choose again."
 }

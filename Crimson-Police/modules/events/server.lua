@@ -319,17 +319,127 @@ function Events.twistFits(key, def)
     return true
 end
 
+-- ============================================================================
+--                  THE DEPARTMENT'S TWISTS (MISSION CONTROL)
+-- ============================================================================
+-- The twists Mission control (step P15, per department, under the master switch, off as shipped): which of the
+-- twists the admin enabled in Config.Events.twists the department's leaders are offered at the accept step, and
+-- which of them start ticked. Its value: { offered = { key, ... }, ticked = { key, ... } } (ticked within offered).
+
+local TWISTS_KEY = 'twists'
+
+-- The twists the admin enabled (Config.Events.twists), in CP.Twists.ORDER.
+local function EnabledTwists()
+    local out = {}
+    for _, key in ipairs(CP.Twists.ORDER) do
+        if CP.Twists.cfg(key).enabled then out[#out + 1] = key end
+    end
+    return out
+end
+
+-- A list of twist keys: the enabled ones, each once, in order. strict: anything else refused (nil).
+local function CleanList(raw, strict, allowed)
+    if raw == nil then return {} end
+    if type(raw) ~= 'table' then return nil end
+    local keep = {}
+    for k, v in pairs(raw) do
+        if math.type(k) ~= 'integer' or type(v) ~= 'string' then
+            if strict then return nil end
+        elseif allowed[v] then
+            keep[v] = true
+        elseif strict then
+            return nil
+        end
+    end
+    local out = {}
+    for _, key in ipairs(CP.Twists.ORDER) do
+        if keep[key] then out[#out + 1] = key end
+    end
+    return out
+end
+
+-- The control's value cleaned: { offered, ticked } with only enabled twists and ticked within offered. strict (a
+-- supervisor's or admin's change): an unknown or switched-off twist, or a ticked one not offered, is refused (nil);
+-- otherwise (a saved value read today) what the admin switched off since is left out.
+local function CleanTwists(v, strict)
+    if type(v) ~= 'table' then return nil end
+    for k in pairs(v) do
+        if strict and k ~= 'offered' and k ~= 'ticked' then return nil end
+    end
+    local enabled = {}
+    for _, key in ipairs(EnabledTwists()) do enabled[key] = true end
+    local offered = CleanList(v.offered, strict, enabled)
+    if not offered then return nil end
+    local inOffer = {}
+    for _, key in ipairs(offered) do inOffer[key] = true end
+    local ticked = CleanList(v.ticked, strict, inOffer)
+    if not ticked then return nil end
+    return { offered = offered, ticked = ticked }
+end
+Events._cleanTwists = CleanTwists
+
+-- The department's twists: { offered = { [key] = true }, ticked = { [key] = true } }, or nil when nothing narrows
+-- the offer (no department, no Mission controls). With the control off (as shipped): every enabled twist, none
+-- ticked, so the accept step is as before.
+function Events.deptTwists(dept)
+    local dc = CP.DeptControls
+    if type(dept) ~= 'string' or not (dc and dc.get and dc.def and dc.def(TWISTS_KEY)) then return nil end
+    local ok, v = pcall(dc.get, dept, TWISTS_KEY)
+    if not ok then
+        CP.err(TAG, 'reading the %s control of %s failed: %s', TWISTS_KEY, dept, tostring(v))
+        return nil
+    end
+    v = CleanTwists(v, false)
+    if not v then return nil end
+    local out = { offered = {}, ticked = {} }
+    for _, key in ipairs(v.offered) do out.offered[key] = true end
+    for _, key in ipairs(v.ticked) do out.ticked[key] = true end
+    return out
+end
+
+function Events.registerTwistControl()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(TWISTS_KEY, {
+        kind = 'map',
+        scope = 'run',
+        bounded = false,
+        configValue = function() return { offered = EnabledTwists(), ticked = {} } end,
+        check = function(v)
+            local clean = CleanTwists(v, true)
+            if not clean then return nil, 'err.control_value' end
+            return clean
+        end,
+        clamp = function(v) return CleanTwists(v, false) end,
+        -- offering fewer twists or pre-ticking some never makes a rule easier: it applies to the setter too
+        relaxes = function() return false end,
+        -- the twists the admin enabled, for the supervisor's switches
+        viewExtra = function()
+            local list = {}
+            for _, key in ipairs(EnabledTwists()) do
+                list[#list + 1] = { key = key, label = CP.L(MODIFIERS[key].label) }
+            end
+            return { twistsAll = list }
+        end,
+    })
+    return true
+end
+Events.registerTwistControl()
+
 -- The twists the officers may choose for a mission type whose pool for them is list (mission defs): every enabled
 -- twist that fits at least one mission of the pool. The mission is drawn after the accept (Hard rule: Mission
 -- choice), so a twist that fits only some of them is marked some = true: it is dropped, without its reward, when
 -- the drawn mission is not one of them. None for the Weekly Boss.
--- { { key, label, desc, points, cash, some } } in CP.Twists.ORDER.
-function Events.twistOffer(missionType, list)
+-- dept (optional): the leader's department; its twists Mission control (step P15) narrows the offer to the twists it
+-- offers and marks the ones it pre-ticks (ticked = true).
+-- { { key, label, desc, points, cash, some, ticked } } in CP.Twists.ORDER.
+function Events.twistOffer(missionType, list, dept)
     local out = {}
     if missionType == BOSS_KEY or type(list) ~= 'table' or #list == 0 then return out end
+    local own = Events.deptTwists(dept)
     for _, key in ipairs(CP.Twists.ORDER) do
         local c = CP.Twists.cfg(key)
-        if c.enabled then
+        if c.enabled and (not own or own.offered[key]) then
             local fit = 0
             for _, def in ipairs(list) do
                 if Events.twistFits(key, def) then fit = fit + 1 end
@@ -342,6 +452,7 @@ function Events.twistOffer(missionType, list)
                     points = c.points,
                     cash = c.cash,
                     some = fit < #list or nil,
+                    ticked = own and own.ticked[key] or nil,
                 }
             end
         end
@@ -350,8 +461,9 @@ function Events.twistOffer(missionType, list)
 end
 
 -- The twists the tablet sent with an accept, checked: a clean list in CP.Twists.ORDER, or nil and the error key.
--- raw: nil, or a list of twist keys; every one must be offered for this type now (Events.twistOffer).
-function Events.checkTwists(raw, missionType, list)
+-- raw: nil, or a list of twist keys; every one must be offered for this type now (Events.twistOffer) and, with dept
+-- (the leader's department), by that department (its twists Mission control, step P15: err.twist_department).
+function Events.checkTwists(raw, missionType, list, dept)
     if raw == nil then return {} end
     if type(raw) ~= 'table' then return nil, 'err.invalid_payload' end
     local n = 0
@@ -366,6 +478,10 @@ function Events.checkTwists(raw, missionType, list)
     local out = CP.Twists.sorted(raw)
     for _, key in ipairs(out) do
         if not offered[key] then return nil, 'err.twist_unavailable' end
+    end
+    local own = Events.deptTwists(dept)
+    for _, key in ipairs(out) do
+        if own and not own.offered[key] then return nil, 'err.twist_department' end
     end
     return out
 end

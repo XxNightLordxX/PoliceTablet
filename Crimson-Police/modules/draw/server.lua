@@ -1160,10 +1160,21 @@ local function HourlyBlocked(officers)
 end
 
 -- The twists the officers may choose for a type whose pool is list (CP.Events.twistOffer), {} without CP.Events.
-function Draw.twistOffer(key, list)
+-- dept (optional): the leader's department; its twists Mission control (step P15) narrows the offer and pre-ticks.
+function Draw.twistOffer(key, list, dept)
     if not (CP.Events and CP.Events.twistOffer) then return {} end
-    local ok, offer = Safe(CP.Events.twistOffer, key, list)
+    local ok, offer = Safe(CP.Events.twistOffer, key, list, dept)
     return ok and type(offer) == 'table' and offer or {}
+end
+
+-- The department of the leader of src's unit (src himself when solo or when the leader is not among officers).
+local function LeaderDept(src, viewer, officers)
+    local unit = UnitOf(src)
+    local leaderSrc = unit and unit.leader or src
+    for _, o in ipairs(officers or {}) do
+        if o.src ~= nil and o.src == leaderSrc then return o.department end
+    end
+    return type(viewer) == 'table' and viewer.department or nil
 end
 
 -- The caps of stacked twists for the accept step's bonus line: { points, cash } (Config.Events.twistMaxPoints, twistMaxCash).
@@ -1224,6 +1235,8 @@ function Draw.boardCards(src)
     local caps = Draw.limits(officers)
     local off = OffOf(officers)
     local featured = Draw.featuredFor(viewer.department)
+    -- the twists the accept step offers follow the leader's department (its twists Mission control, step P15)
+    local leaderDept = LeaderDept(src, viewer, officers)
     -- a mission ban of a member (step P11): every card locked until it ends; the board's banner says who set it
     local banWho, ban = BannedOf(officers, now)
     if ban then
@@ -1250,7 +1263,7 @@ function Draw.boardCards(src)
             onCall = onCall,
             typeOfTheDay = tod == key,
             -- the twists the leader may choose at the accept step (CP.Events.twistOffer)
-            twists = Draw.twistOffer(key, list),
+            twists = Draw.twistOffer(key, list, leaderDept),
             -- the type command recommends to the viewer's department (featuredType, step P10)
             featured = featured == key or nil,
         }
@@ -1435,12 +1448,13 @@ local function CheckAccept(src, typeKey, counts)
 end
 
 -- The twists sent with an accept of typeKey by these officers, checked (CP.Events.checkTwists against the type's
--- pool for them): a clean list, or nil and the error key. No twists: {} (and no pool lookup).
-function Draw.checkTwists(typeKey, officers, raw)
+-- pool for them and, with dept, the leader's department's twists Mission control, step P15): a clean list, or nil
+-- and the error key. No twists: {} (and no pool lookup).
+function Draw.checkTwists(typeKey, officers, raw, dept)
     if raw == nil or (type(raw) == 'table' and next(raw) == nil) then return {} end
     if not (CP.Events and CP.Events.checkTwists) then return nil, 'err.twist_unavailable' end
     local list = typeKey == BOSS_KEY and {} or Draw.pool(typeKey, officers)
-    local ok, clean, errKey = Safe(CP.Events.checkTwists, raw, typeKey, list)
+    local ok, clean, errKey = Safe(CP.Events.checkTwists, raw, typeKey, list, dept)
     if not ok then return nil, 'err.internal' end
     return clean, errKey
 end
@@ -1564,7 +1578,7 @@ local function AcceptStart(src, typeKey, opts, note)
     ctx.note = note
     local unit, srcs = ctx.unit, ctx.srcs
     -- the twists the leader chose (PLAN M8b): each must be one the type offers these officers now
-    local twists, twistErr = Draw.checkTwists(typeKey, ctx.officers, opts.twists)
+    local twists, twistErr = Draw.checkTwists(typeKey, ctx.officers, opts.twists, ctx.leader.department)
     if not twists then return false, twistErr end
     ctx.twists = twists
 

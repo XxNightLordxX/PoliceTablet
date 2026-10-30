@@ -1895,6 +1895,9 @@ Owns
   * Modifiers: the roll at accept (Config.Events.modifierChance, the run's seed): Armored Hostiles
     (Tactical only), Time Crunch, Radio Silence. Never for Cross-Department Missions, the Weekly Boss
     or test runs. The effects are applied by the engine (CP.Runs / CP.Scaling / blocks).
+  * The twists Mission control (step P15, Events.registerTwistControl): which enabled twists a
+    department's leaders are offered at the accept step and which start ticked (Events.deptTwists;
+    twistOffer and checkTwists take the leader's department).
   * Weekly Boss availability: enabled, the reset-adjusted weekday is in Config.Events.weeklyBoss.days,
     hidden while a Cross-Department Mission is active, once per officer per week (any
     weekly_boss_kingpin row since the reset of the week's first boss day, except end_reason
@@ -5026,6 +5029,14 @@ put on its parking point only once nobody is on it, and then waits frozen for an
 ground (CP.Spawn.again); a tow truck that never got a road point fades the car out instead of being made inside it.
 Before (a1 4.1 item 13, 5.4) the 60 s fallback put the van on its parking point or the scene with no player check,
 with a raw server SetEntityCoords at the file's height.
+```
+
+## tests/dept_twists_spec.lua
+
+```text
+The twists a department offers and pre-ticks (step P15): the twists Mission control narrows the accept step's offer
+to the leader's department's twists, marks the pre-ticked ones and refuses another (err.twist_department). Plain Lua
+with a stub CP.DeptControls; no database is read.
 ```
 
 ## tests/difficulty_unit_spec.lua

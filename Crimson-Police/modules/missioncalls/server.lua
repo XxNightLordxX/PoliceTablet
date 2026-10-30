@@ -375,8 +375,13 @@ local function BuildTypeState(unit, missionType)
     local _, pool = Call('Draw', 'pool', missionType, unit.officers)
     pool = type(pool) == 'table' and pool or {}
     st.board = #pool
-    -- the twists the leader may choose when claiming (the board's own offer for the type, CP.Draw.twistOffer)
-    local okT, twists = Call('Draw', 'twistOffer', missionType, pool)
+    -- the twists the leader may choose when claiming (the board's own offer for the type, CP.Draw.twistOffer, for the
+    -- leader's department: its twists Mission control, step P15)
+    local leaderDept
+    for _, o in ipairs(unit.officers or {}) do
+        if o.src == unit.leader then leaderDept = o.department end
+    end
+    local okT, twists = Call('Draw', 'twistOffer', missionType, pool, leaderDept)
     st.twists = okT and type(twists) == 'table' and twists or {}
     if #pool > 1 and CP.Draw and CP.Draw.noRepeat then
         -- the no-repeat rule switched off (the noRepeat Mission control): every member brings an empty history
@@ -1360,7 +1365,8 @@ function MC.claim(src, callId, twists)
     -- the twists are checked before the claim joins the window: a bad list never takes a turn
     local chosen = {}
     if type(twists) == 'table' and next(twists) ~= nil then
-        local okT, clean, twistErr = Call('Draw', 'checkTwists', call.type, info.unit.officers, twists)
+        local okT, clean, twistErr = Call('Draw', 'checkTwists', call.type, info.unit.officers, twists,
+            info.officer and info.officer.department)
         if not okT then return false, 'err.twist_unavailable' end
         if not clean then return false, twistErr or 'err.twist_unavailable' end
         chosen = clean

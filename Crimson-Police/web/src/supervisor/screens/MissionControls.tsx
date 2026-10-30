@@ -30,6 +30,7 @@ import type {
     MissionControlValue,
     MissionControlsView,
     ReviewRulesValue,
+    TwistsValue,
     TypeSwitchMission,
     TypeSwitches,
 } from '../../types/oversight';
@@ -381,6 +382,47 @@ function ReviewRulesEditor({
     );
 }
 
+// The twists control (step P15): the twists the department's leaders are offered, and the ones that start ticked.
+function TwistsEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const all = Array.isArray(c.twistsAll) ? c.twistsAll : [];
+    const keys = all.map(x => x.key);
+    const label = (k: string) => all.find(x => x.key === k)?.label ?? k;
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<TwistsValue>) : {};
+    const offered = v.offered ? asStrings(v.offered).filter(k => keys.includes(k)) : keys;
+    const w: TwistsValue = { offered, ticked: asStrings(v.ticked).filter(k => offered.includes(k)) };
+    if (!keys.length) return <p className="sup-mc-picks__label">{t('sup.twists.none')}</p>;
+    return (
+        <div className="sup-mc-sliders">
+            <span className="sup-mc-picks__label">{t('sup.twists.offered')}</span>
+            <PickList
+                names={keys}
+                picked={w.offered}
+                label={label}
+                disabled={disabled}
+                onChange={next => onChange({ offered: next, ticked: w.ticked.filter(k => next.includes(k)) })}
+            />
+            <span className="sup-mc-picks__label">{t('sup.twists.ticked')}</span>
+            <PickList
+                names={w.offered}
+                picked={w.ticked}
+                label={label}
+                disabled={disabled}
+                onChange={ticked => onChange({ ...w, ticked })}
+            />
+        </div>
+    );
+}
+
 function Slider({
     c,
     label,
@@ -432,6 +474,7 @@ function Editor({
     if (c.key === 'callLane') return <CallLaneEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'crossDept') return <CrossDeptEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'boards') return <BoardsEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'twists') return <TwistsEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'reviewRules') {
         return <ReviewRulesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     }

@@ -29,7 +29,7 @@ import { useFormatDistance, useOption } from '../../shared/options';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { ClaimCallResult, DispatchView, MissionCall, RecentCall } from '../../types/missioncalls';
-import { TwistPicker } from '../components/TwistPicker';
+import { TwistPicker, tickedTwists } from '../components/TwistPicker';
 import './Dispatch.css';
 
 const POLL_MS = 15000;
@@ -331,9 +331,10 @@ export default function Dispatch() {
     // My options -> Dispatch (step O9): Claim sends the claim at once; the dialog's lines are the footnote
     const oneClick = useOption('skipClaimConfirm') === true;
     const [pending, setPending] = useState<MissionCall | null>(null);
-    // the twists the leader picked in the claim dialog (PLAN M8b); a new dialog starts with none
+    // the twists the leader picked in the claim dialog (PLAN M8b); a new dialog starts with the ones his department
+    // pre-ticks (step P15), else none
     const [twists, setTwists] = useState<string[]>([]);
-    useEffect(() => setTwists([]), [pending]);
+    useEffect(() => setTwists(pending ? tickedTwists(pending.twists) : []), [pending]);
     const [muted, setMuted] = useState<boolean>(!!session.prefs?.callsMuted);
     const [stamp, setStamp] = useState(0);
     useEffect(() => {

@@ -626,6 +626,14 @@ Supervisor UI → **Mission controls** (below).
     approve or void them (Admin UI → Leaderboards → Flagged). Admins always void at once. The anti-cheat flag
     triggers (`Config.AntiCheat`) are never relaxed.
 
+- **Twists** (step P15, per department, off when you install, under the master switch):
+  - `twists = { on = false }` (**Twists offered**): a supervisor picks which of the twists you enabled in
+    `Config.Events.twists` his department's leaders are offered on the accept step (Mission Board and mission call
+    claims), and which of them start ticked. The accept step follows the department of the unit's leader; a twist
+    his department does not offer is refused ("Your department does not offer that twist."). Other departments keep
+    every twist. Each twist's bonus stays as `Config.Events.twists` sets it. Read when the run is accepted, so a
+    change never moves a run already going.
+
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
   supervisor may pick: `<control> = { on = true, min = ..., max = ... }`. Switching either off again brings back
