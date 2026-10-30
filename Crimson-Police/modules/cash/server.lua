@@ -133,22 +133,36 @@ local function RoundMoney(x)
     return math.floor(x + 0.5 + 1e-7)
 end
 
+-- The happy hour cash bonus a run carries (run.controls.cashBonus, fixed at the accept, step P16): x the cash, 1.0 =
+-- none. Never on test runs, Cross-Department runs or the Weekly Boss.
+function Cash.bonusOf(run)
+    if type(run) ~= 'table' or run.test or run.operationId or run.isBoss then return 1.0 end
+    local b = type(run.controls) == 'table' and tonumber(run.controls.cashBonus) or nil
+    if b == nil or b ~= b or b == math.huge then return 1.0 end
+    return math.max(1.0, b)
+end
+
 function Cash.compute(run, p)
     if type(run) ~= 'table' or type(p) ~= 'table' then
         return 0, { B = 0, mTier = 1.0, mMod = 1.0, amount = 0, status = 'none' }
     end
     local B = math.max(0, math.floor(Num(run.cashBase, 0) + 0.5))
     local mTier = Num(TierRow(run).cash, 1.0)
-    -- the run's twists (CP.Twists): their cash multipliers multiply, up to Config.Events.twistMaxCash
-    local mMod = CP.Twists.bonus(CP.Twists.of(run)).cash
+    -- the run's twists (CP.Twists): their cash multipliers multiply (each x the department's twist cash, step P16), up
+    -- to Config.Events.twistMaxCash
+    local mMod = CP.Twists.bonus(CP.Twists.of(run), CP.Twists.scaleOf(run)).cash
+    local mBonus = Cash.bonusOf(run)
     local amount = 0
     if p.result == 'completed' and not PresenceFailed(run, p) then
-        amount = math.max(0, RoundMoney(B * mTier * mMod))
+        amount = math.max(0, RoundMoney(B * mTier * mMod * mBonus))
     end
     local flagged = p.flagged ~= nil or run.flagged ~= nil
     local status = 'none'
     if p.result == 'completed' and flagged and not run.test then status = 'held' end
-    return amount, { B = B, mTier = mTier, mMod = mMod, amount = amount, status = status }
+    local cb = { B = B, mTier = mTier, mMod = mMod, amount = amount, status = status }
+    -- the happy hour cash bonus (step P16): on the breakdown only when there is one (the result card shows it)
+    if mBonus ~= 1.0 then cb.mBonus = mBonus end
+    return amount, cb
 end
 
 -- ============================================================================

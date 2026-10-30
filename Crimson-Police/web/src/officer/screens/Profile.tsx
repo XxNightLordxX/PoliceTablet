@@ -241,7 +241,11 @@ export function RunBreakdown({ result: raw, cashStatus }: { result: RunResult; c
                     <div className="cp-result__cash">
                         <span className="cp-result__formula cp-num">
                             {result.result === 'completed'
-                                ? `${formatMoney(c.B)} ${formatMultiplier(c.mTier)} ${formatMultiplier(c.mMod)} =`
+                                ? `${formatMoney(c.B)} ${formatMultiplier(c.mTier)} ${formatMultiplier(c.mMod)} ${
+                                      c.mBonus && c.mBonus !== 1
+                                          ? `${t('result.cash_bonus', { x: formatMultiplier(c.mBonus) })} `
+                                          : ''
+                                  }=`
                                 : t('result.no_cash')}
                         </span>
                         <span className="cp-result__amount cp-num">{formatMoney(c.amount)}</span>

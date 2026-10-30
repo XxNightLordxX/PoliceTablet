@@ -88,16 +88,26 @@ end
 
 -- What a set of twists adds together: points (a share of P: the shares add up), cash (a multiplier: the
 -- multipliers multiply), both stopped at the caps, and lines (each twist's share of the points after the cap, in
--- ORDER: the result card's bonus lines).
-function Twists.bonus(list)
+-- ORDER: the result card's bonus lines). scale (optional): { [twist] = x its cash } (a department's twistCash
+-- Mission control, step P16); points never change and the cash cap still applies.
+function Twists.bonus(list, scale)
     local caps = Twists.caps()
     local left, cash, lines = caps.points, 1.0, {}
+    scale = type(scale) == 'table' and scale or {}
     for _, key in ipairs(Twists.sorted(list)) do
         local c = Twists.cfg(key)
         local share = math.max(0, math.min(c.points, left))
         left = left - share
         lines[#lines + 1] = { key = key, points = share }
-        cash = cash * c.cash
+        cash = cash * c.cash * math.max(1.0, Num(scale[key], 1.0))
     end
     return { points = caps.points - left, cash = math.min(cash, caps.cash), lines = lines }
+end
+
+-- The twist cash scale a run carries (run.controls.twistCash, read at the accept, step P16), or nil: never on test
+-- runs, Cross-Department runs or the Weekly Boss.
+function Twists.scaleOf(run)
+    if type(run) ~= 'table' or run.test or run.operationId or run.isBoss then return nil end
+    local c = type(run.controls) == 'table' and run.controls.twistCash or nil
+    return type(c) == 'table' and c or nil
 end

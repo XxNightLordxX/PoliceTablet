@@ -426,6 +426,85 @@ function Events.registerTwistControl()
 end
 Events.registerTwistControl()
 
+-- ============================================================================
+--                            TWIST CASH (STEP P16)
+-- ============================================================================
+-- twistCash (Config.MissionControls.controls): per department, under the master switch, shipped off with
+-- min = max = 1.0. { [twist] = x its cash } on runs the department leads, inside the admin's min and max; read at the
+-- accept (scope run, run.controls.twistCash). The chosen twists together still stop at Config.Events.twistMaxCash
+-- (CP.Twists.bonus); points never change; never on test runs, Cross-Department runs or the Weekly Boss.
+local TWIST_CASH_KEY = 'twistCash'
+local TWIST_CASH_RANGE = { 1, 3 }
+
+-- { [twist] = x } with only known twists and numbers inside the bounds: clean | nil. strict (a change): anything
+-- else is refused; otherwise (a saved value read today) a number is moved into today's bounds.
+local function CleanTwistCash(v, bounds, strict)
+    if type(v) ~= 'table' then return nil end
+    local lo = tonumber(bounds and bounds.min) or 1
+    local hi = tonumber(bounds and bounds.max) or 1
+    local out = {}
+    for k, x in pairs(v) do
+        if not CP.Twists.known(k) or type(x) ~= 'number' or x ~= x then
+            if strict then return nil end
+        elseif x >= lo and x <= hi then
+            out[k] = x
+        elseif strict then
+            return nil
+        else
+            out[k] = math.min(hi, math.max(lo, x))
+        end
+    end
+    return out
+end
+Events._cleanTwistCash = CleanTwistCash
+
+local function EnabledTwistLabels()
+    local list = {}
+    for _, key in ipairs(EnabledTwists()) do
+        list[#list + 1] = { key = key, label = CP.L(MODIFIERS[key].label) }
+    end
+    return list
+end
+
+function Events.registerTwistCashControl()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    return dc.register(TWIST_CASH_KEY, {
+        kind = 'map',
+        scope = 'run',
+        range = TWIST_CASH_RANGE,
+        -- every enabled twist at x1.0 (its Config.Events.twists cash), for the supervisor's sliders
+        configValue = function()
+            local out = {}
+            for _, key in ipairs(EnabledTwists()) do out[key] = 1.0 end
+            return out
+        end,
+        check = function(v, b)
+            local clean = CleanTwistCash(v, b, true)
+            if not clean then return nil, 'err.control_value' end
+            return clean
+        end,
+        clamp = function(v, b) return CleanTwistCash(v, b, false) end,
+        relaxes = function(v)
+            for _, x in pairs(type(v) == 'table' and v or {}) do
+                if tonumber(x) and tonumber(x) > 1 then return true end
+            end
+            return false
+        end,
+        viewExtra = function() return { twistsAll = EnabledTwistLabels() } end,
+    })
+end
+Events.registerTwistCashControl()
+
+-- The department's twist cash: { [twist] = x its cash }, or nil (no department, no Mission controls).
+function Events.deptTwistCash(dept)
+    local dc = CP.DeptControls
+    if type(dept) ~= 'string' or not (dc and dc.get and dc.def and dc.def(TWIST_CASH_KEY)) then return nil end
+    local ok, v = pcall(dc.get, dept, TWIST_CASH_KEY)
+    if not ok or type(v) ~= 'table' then return nil end
+    return v
+end
+
 -- The twists the officers may choose for a mission type whose pool for them is list (mission defs): every enabled
 -- twist that fits at least one mission of the pool. The mission is drawn after the accept (Hard rule: Mission
 -- choice), so a twist that fits only some of them is marked some = true: it is dropped, without its reward, when
@@ -437,6 +516,7 @@ function Events.twistOffer(missionType, list, dept)
     local out = {}
     if missionType == BOSS_KEY or type(list) ~= 'table' or #list == 0 then return out end
     local own = Events.deptTwists(dept)
+    local scale = Events.deptTwistCash(dept)   -- the department's twist cash (step P16): the bonus shown
     for _, key in ipairs(CP.Twists.ORDER) do
         local c = CP.Twists.cfg(key)
         if c.enabled and (not own or own.offered[key]) then
@@ -450,7 +530,7 @@ function Events.twistOffer(missionType, list, dept)
                     label = CP.L(MODIFIERS[key].label),
                     desc = TwistDesc(key),
                     points = c.points,
-                    cash = c.cash,
+                    cash = CP.Twists.bonus({ key }, scale).cash,
                     some = fit < #list or nil,
                     ticked = own and own.ticked[key] or nil,
                 }

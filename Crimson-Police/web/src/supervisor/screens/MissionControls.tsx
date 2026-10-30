@@ -502,7 +502,11 @@ function Editor({
     }
     if (c.kind === 'map') {
         const map = asMap(draft);
-        const typeLabel = (k: string) => asArray(session.config?.missionTypes).find(m => m.key === k)?.label ?? k;
+        const typeLabel = (k: string) =>
+            // twistCash (step P16): one slider per enabled twist, by its name
+            (Array.isArray(c.twistsAll) ? c.twistsAll.find(x => x.key === k)?.label : undefined) ??
+            asArray(session.config?.missionTypes).find(m => m.key === k)?.label ??
+            k;
         return (
             <div className="sup-mc-sliders">
                 {Object.keys(asMap(c.configValue)).map(k => (

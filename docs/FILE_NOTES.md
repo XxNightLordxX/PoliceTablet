@@ -1563,7 +1563,9 @@ Owns
   * cash per participant = round(B x M_tier x M_mod) (SPEC "Cash payouts"): B = run.cashBase, locked at
     accept by CP.Payouts.baseFor; M_tier = the run's points and cash tier (Config.Scaling cash); M_mod =
     Config.Events.modifierCash when the run rolled a modifier. Only Completed results pay; a participant
-    who failed the presence share (runs with 2+ participants) gets $0.
+    who failed the presence share (runs with 2+ participants) gets $0. Step P16: x M_bonus, the happy hour
+    cash bonus fixed at the accept (Cash.bonusOf; never test, Cross-Department or boss runs), and M_mod uses
+    the department's twistCash scale (CP.Twists.scaleOf); breakdown.cash.mBonus when it is not 1.
   * the claim-then-pay flow of one cp_mission_runs row (cash_status none/held/pending -> paying -> paid |
     capped | unfunded; offline -> pending), the daily cap per reset-day (Config.Cash.dailyCap), the society
     source (Config.Cash.source = 'society': the department's Renewed-Banking account through CP.Banking),
@@ -1898,6 +1900,8 @@ Owns
   * The twists Mission control (step P15, Events.registerTwistControl): which enabled twists a
     department's leaders are offered at the accept step and which start ticked (Events.deptTwists;
     twistOffer and checkTwists take the leader's department).
+  * The twistCash Mission control (step P16, Events.registerTwistCashControl): x each twist's cash
+    for the leader's department inside the admin's bounds (Events.deptTwistCash; twistOffer shows it).
   * Weekly Boss availability: enabled, the reset-adjusted weekday is in Config.Events.weeklyBoss.days,
     hidden while a Cross-Department Mission is active, once per officer per week (any
     weekly_boss_kingpin row since the reset of the week's first boss day, except end_reason
@@ -1961,6 +1965,9 @@ that changes cooldowns is), outside the master switch, Config.MissionControls.ha
 supervisors, never for the supervisor who started it or a unit he is in (the self rule). It is one timed row of
 cp_dept_controls (expires_at), so a restart keeps the window; when it ends every cooldown is read against its real
 end time again (read-time cooldowns, step P2).
+Step P16: the happyHourCash control (per department, under the master switch, shipped off with min = max = 1.0):
+HH.cashBonusFor gives a run accepted during a happy hour its department's cash multiplier (run.controls.cashBonus),
+never for the one who started the hour or a unit he is in.
 ```
 
 ## Crimson-Police/modules/integrations/qbx/client.lua
@@ -5029,6 +5036,15 @@ put on its parking point only once nobody is on it, and then waits frozen for an
 ground (CP.Spawn.again); a tow truck that never got a road point fades the car out instead of being made inside it.
 Before (a1 4.1 item 13, 5.4) the 60 s fallback put the van on its parking point or the scene with no player check,
 with a raw server SetEntityCoords at the file's height.
+```
+
+## tests/cash_bonus_spec.lua
+
+```text
+Cash bonuses inside admin bounds (step P16): happyHourCash (x the cash of a run a department leads that was
+accepted while a happy hour ran, fixed at the accept) and twistCash (x each twist's cash for the leader's
+department, still under Config.Events.twistMaxCash). Paid only on a completed run, never on test runs,
+Cross-Department runs or the Weekly Boss. Plain Lua: stubbed controls, no database.
 ```
 
 ## tests/dept_twists_spec.lua

@@ -262,7 +262,11 @@ export function ResultScreen({ result, onDismiss }: { result: RunResult; onDismi
                 {completed ? (
                     <div className="cp-result__cash">
                         <span className="cp-result__formula cp-num">
-                            {formatMoney(c.B)} {formatMultiplier(c.mTier)} {formatMultiplier(c.mMod)} =
+                            {formatMoney(c.B)} {formatMultiplier(c.mTier)} {formatMultiplier(c.mMod)}{' '}
+                            {c.mBonus && c.mBonus !== 1
+                                ? `${t('result.cash_bonus', { x: formatMultiplier(c.mBonus) })} `
+                                : ''}
+                            =
                         </span>
                         <span className="cp-result__amount cp-num">{formatMoney(c.amount)}</span>
                     </div>

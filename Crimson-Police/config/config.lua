@@ -270,6 +270,13 @@ Config.MissionControls = {
         -- leaders are offered at the accept step, and which of them start ticked; a twist his department does not
         -- offer is refused. The twists' bonuses never change
         twists = { on = false },
+        -- Happy hour cash: x the cash of a completed run his department leads that was accepted while a happy hour
+        -- ran (kept for the run, so the end of the hour never cuts it); never on test runs, Cross-Department runs or
+        -- the Weekly Boss, and Cash.dailyCap still applies. min = max = 1.0 moves nothing: raise max (e.g. 1.25)
+        happyHourCash = { on = false, min = 1.0, max = 1.0 },
+        -- Twist cash: x each twist's cash (Events.twists) on runs his department leads, read at the accept; the chosen
+        -- twists together still stop at Events.twistMaxCash and points never change. min = max = 1.0 moves nothing
+        twistCash = { on = false, min = 1.0, max = 1.0 },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 

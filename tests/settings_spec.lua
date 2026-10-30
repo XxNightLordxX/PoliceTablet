@@ -933,6 +933,13 @@ do
         )
         H.ok(d.twists.on == false and cfgText:find('which of the twists enabled in Events.twists', 1, true) ~= nil,
             'step P15: the twists a department offers and pre-ticks ship off, with a comment')
+        H.ok(
+            d.happyHourCash.on == false and d.happyHourCash.min == 1.0 and d.happyHourCash.max == 1.0
+                and d.twistCash.on == false and d.twistCash.min == 1.0 and d.twistCash.max == 1.0
+                and cfgText:find('Happy hour cash: x the cash of a completed run', 1, true) ~= nil
+                and cfgText:find('Twist cash: x each twist\'s cash', 1, true) ~= nil,
+            'step P16: the cash bonuses ship off with bounds that move nothing, with comments'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

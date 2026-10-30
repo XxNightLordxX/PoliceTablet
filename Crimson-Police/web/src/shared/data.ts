@@ -128,6 +128,7 @@ export function normalizeResult(r: RunResult): RunResult {
             B: Number(r.cash?.B ?? 0),
             mTier: Number(r.cash?.mTier ?? 1),
             mMod: Number(r.cash?.mMod ?? 1),
+            mBonus: r.cash?.mBonus === undefined ? undefined : Number(r.cash.mBonus),
             amount: Number(r.cash?.amount ?? 0),
             status: r.cash?.status ?? 'none',
         },

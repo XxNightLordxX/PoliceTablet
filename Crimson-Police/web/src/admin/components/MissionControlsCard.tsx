@@ -46,7 +46,10 @@ const controlDesc = (key: string) => (hasKey(`mc.control_desc.${key}`) ? t(`mc.c
 
 export function useValueText(): (key: string, v: MissionControlValue | undefined) => string {
     const session = useOptionalSession();
-    const typeLabel = (k: string) => asArray(session?.config?.missionTypes).find(m => m.key === k)?.label ?? k;
+    const typeLabel = (k: string) =>
+        asArray(session?.config?.missionTypes).find(m => m.key === k)?.label ??
+        // twistCash (step P16): a twist's name
+        (hasKey(`modifier.${k}`) ? t(`modifier.${k}`) : k);
     return (key, v) => {
         // callLane (step P12): the gap and how many may be open; none = no lane
         if (key === 'callLane') {

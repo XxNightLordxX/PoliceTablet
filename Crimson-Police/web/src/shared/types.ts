@@ -420,7 +420,8 @@ export interface RunResult {
         scoreCap?: number;
         todMultiplier?: number;
     };
-    cash: { B: number; mTier: number; mMod: number; amount: number; status: string };
+    // mBonus (step P16): the happy hour cash bonus of a run accepted during a happy hour; absent = none
+    cash: { B: number; mTier: number; mMod: number; mBonus?: number; amount: number; status: string };
     flagged: null | { reason: string };
     // parity-plus sections (each shown only when present; older rows lack them)
     decisions?: DecisionEntry[];

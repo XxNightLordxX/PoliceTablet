@@ -24,7 +24,7 @@ These rules override everything else in this spec. If another section, example o
 
 - Teams and scaling: officers from any department MAY team up. Missions MUST scale with the number of participants, and cash MUST scale with the resulting difficulty.
 
-- Cash payouts: every mission pays its mission type's payout × its star multiplier (the Weekly Boss pays its own event payout from config) unless an admin has set a payout for that specific mission. Supervisors MAY change a type's payout only if no admin has set it, and only within Config.Payouts.supervisorRange. Only admins MAY set a single mission's payout. Any payout an admin sets is permanent until an admin changes or clears it.
+- Cash payouts: every mission pays its mission type's payout × its star multiplier (the Weekly Boss pays its own event payout from config) unless an admin has set a payout for that specific mission. Supervisors MAY change a type's payout only if no admin has set it, and only within Config.Payouts.supervisorRange. A supervisor may raise a cash bonus only inside admin-set bounds (the happyHourCash and twistCash Mission controls), never on test runs, Cross-Department runs or the Weekly Boss, and always under Config.Cash.dailyCap. Only admins MAY set a single mission's payout. Any payout an admin sets is permanent until an admin changes or clears it.
 
 - Points: leaderboard points come from Config.MissionTypes and the scoring rules. Officers and supervisors MUST NOT be able to change points in game. Only an admin MAY: by changing a point setting in the Admin UI Settings screen (every change is in the audit log) or by a logged manual award or deduction (a new signed row, never an edit of old rows; see Full admin control).
 
@@ -1639,7 +1639,9 @@ Every participant in a Completed run is paid cash: the mission's base payout mul
 
 - M_tier: the cash multiplier from the tier table (× 1.00 at Standard up to × 1.75 at Critical).
 
-- M_mod: the run's twists: each twist's cash multiplier (× 1.25 Armored Hostiles and Radio Silence, × 1.20 Time Crunch), multiplied together and capped at × 1.95 (Config.Events.twistMaxCash); × 1.00 without a twist.
+- M_mod: the run's twists: each twist's cash multiplier (× 1.25 Armored Hostiles and Radio Silence, × 1.20 Time Crunch), multiplied together and capped at × 1.95 (Config.Events.twistMaxCash); × 1.00 without a twist. A department's twistCash Mission control may raise each twist's multiplier inside the admin's bounds (read at the accept); the cap still applies.
+
+- M_bonus: a department's happyHourCash Mission control, for a run it leads that was accepted while a happy hour ran (fixed at the accept, so the end of the hour never cuts it); × 1.00 otherwise, and always × 1.00 on test runs, Cross-Department runs and the Weekly Boss. Cash per participant is then round(B · M_tier · M_mod · M_bonus), and Config.Cash.dailyCap still cuts the payment.
 
 - Only Completed results pay, rounded to the nearest dollar. Failed and Abandoned results pay $0. Type of the Day, streaks and bonuses change points only.
 
@@ -3039,6 +3041,13 @@ Config.MissionControls = {
         -- leaders are offered at the accept step, and which of them start ticked; a twist his department does not
         -- offer is refused. The twists' bonuses never change
         twists = { on = false },
+        -- Happy hour cash: x the cash of a completed run his department leads that was accepted while a happy hour
+        -- ran (kept for the run, so the end of the hour never cuts it); never on test runs, Cross-Department runs or
+        -- the Weekly Boss, and Cash.dailyCap still applies. min = max = 1.0 moves nothing: raise max (e.g. 1.25)
+        happyHourCash = { on = false, min = 1.0, max = 1.0 },
+        -- Twist cash: x each twist's cash (Events.twists) on runs his department leads, read at the accept; the chosen
+        -- twists together still stop at Events.twistMaxCash and points never change. min = max = 1.0 moves nothing
+        twistCash = { on = false, min = 1.0, max = 1.0 },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 
@@ -4811,6 +4820,7 @@ Supervisors work from the Supervisor UI and admins from the Admin UI. Admins can
 | Department's leaderboard visibility | Supervisor (boards Mission control: own department) | Supervisor UI → Mission controls | Names or callsigns only for other departments, the Rank by tabs his officers see; presentation only; audited with a reason |
 | Department's review rules | Supervisor (reviewRules Mission control: own department) | Supervisor UI → Mission controls | A Void needs a second supervisor of the department; picked flag kinds go to admins only; stricter only; audited with a reason |
 | Department's twists | Supervisor (twists Mission control: own department) | Supervisor UI → Mission controls | The enabled twists its leaders are offered at the accept step and the pre-ticked ones; another twist is refused; bonuses never change; audited with a reason |
+| Department's cash bonuses | Supervisor (happyHourCash and twistCash Mission controls: own department) | Supervisor UI → Mission controls | x the cash of runs accepted during a happy hour, x each twist's cash; only inside the admin's min and max, twists still under twistMaxCash; never test, Cross-Department or boss runs; under the daily cash cap; audited with a reason |
 | Suspend or unsuspend an officer | Admin | Admin UI → Officers; /CrimsonPoliceAdmin suspend <citizenid> <days> | Blocks an officer from Crimson-Police for that many days; 0 days lifts it |
 | Publish a draft (tested or not) | Supervisor (own missions; any mission with builderEditAny), Admin | Supervisor UI → Mission Builder; Admin UI → Missions | Makes the draft the live version and writes its Lua file |
 | Archive or restore a custom mission | Supervisor (own missions; any mission with builderEditAny), Admin | Supervisor UI → Mission Builder; Admin UI → Missions | Removes a custom mission from its pool, or puts it back |

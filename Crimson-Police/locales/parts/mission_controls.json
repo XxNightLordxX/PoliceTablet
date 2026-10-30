@@ -248,5 +248,11 @@
   "sup.twists.offered": "Twists your leaders are offered",
   "sup.twists.ticked": "Ticked when the accept step opens",
   "sup.twists.none": "No twist is enabled on this server.",
-  "err.twist_department": "Your department does not offer that twist. Choose again."
+  "err.twist_department": "Your department does not offer that twist. Choose again.",
+  "mc.control.happyHourCash": "Happy hour cash",
+  "mc.control_desc.happyHourCash": "Multiplies the cash of completed runs your department leads that were accepted while a happy hour ran. The bonus stays for the run when the hour ends. Never on test runs, Cross-Department runs or the Weekly Boss; points never change.",
+  "mc.unit.happyHourCash": "×{n}",
+  "mc.control.twistCash": "Twist cash",
+  "mc.control_desc.twistCash": "Multiplies each twist's cash bonus on runs your department leads. All chosen twists together still stop at the server's twist cash cap; points never change.",
+  "mc.unit.twistCash": "×{n}"
 }

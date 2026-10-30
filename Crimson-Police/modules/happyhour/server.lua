@@ -92,6 +92,43 @@ function HH.register()
 end
 HH.register()
 
+-- ============================================================================
+--                          HAPPY HOUR CASH (STEP P16)
+-- ============================================================================
+-- happyHourCash (Config.MissionControls.controls): per department, under the master switch, shipped off with
+-- min = max = 1.0. x the cash of a completed run the department leads that was accepted while a happy hour ran; read
+-- at the accept (scope run) and fixed in run.controls.cashBonus, so the end of the hour never cuts a live run.
+local CASH_KEY = 'happyHourCash'
+local CASH_RANGE = { 1, 3 }
+
+function HH.registerCash()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    return dc.register(CASH_KEY, {
+        kind = 'number',
+        scope = 'run',
+        range = CASH_RANGE,
+        configValue = function() return 1.0 end,
+        relaxes = function(v) return tonumber(v) ~= nil and v > 1 end,
+    })
+end
+HH.registerCash()
+
+-- The cash bonus of a run accepted now: value (the department's happyHourCash, read for the leader's unit) while a
+-- happy hour runs that applies to the unit (the one who started it and a unit he is in get none), else nil.
+function HH.cashBonusFor(value, members)
+    local v = tonumber(value)
+    if v == nil or v ~= v or v <= 1 or v > CASH_RANGE[2] then return nil end
+    local dc = CP.DeptControls
+    if not (dc and dc.get and dc.def and dc.def(KEY)) then return nil end
+    local hv, row = dc.get(nil, KEY)
+    if type(row) ~= 'table' or type(hv) ~= 'table' or not row.expiresAt or row.expiresAt <= os.time() then
+        return nil
+    end
+    if dc.heldBy and dc.heldBy({ members = members }, row) == true then return nil end
+    return v
+end
+
 -- "Sgt Doe": the rank and name of the officer who started it while he is online, else nil (the screens say who by
 -- role then).
 local function NameOf(cid)

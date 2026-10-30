@@ -129,6 +129,7 @@
   "result.final": "Final points",
   "result.cash": "Cash",
   "result.no_cash": "Only completed runs pay cash",
+  "result.cash_bonus": "{x} happy hour",
   "result.cash_status.none": "Not paid",
   "result.cash_status.paying": "Paying",
   "result.cash_status.paid": "Paid",

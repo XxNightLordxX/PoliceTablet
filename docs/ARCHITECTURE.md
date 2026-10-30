@@ -3552,6 +3552,16 @@ pattern, so a missing module reads as config).
   marks `ticked = true`; `Events.checkTwists(raw, type, list, dept)` refuses another one with
   `err.twist_department`. `CP.Draw` passes the leader's department (board cards: the unit leader's; the accept:
   `ctx.leader`), CP.MissionCalls too (a unit's type state: `unit.leader`'s officer; a claim: the claimer, who leads).
+- Cash bonuses (step P16), per department, under the master switch, scope `run`, range 1-3, shipped off with
+  `min = max = 1.0`; a raise relaxes (self rule). `happyHourCash`, kind `number` (modules/happyhour,
+  `HH.registerCash`): at the accept `Cd.rc.apply` calls `HH.cashBonusFor(value, officers)`, which gives the value
+  while a happy hour row is live and does not hold the unit (`DC.heldBy`), saved as `run.controls.cashBonus`.
+  `twistCash`, kind `map` `{ [twist] = x }` (modules/events, `Events.registerTwistCashControl`, `Events._cleanTwistCash`,
+  `Events.deptTwistCash`; config value every enabled twist at 1.0, `viewExtra` `twistsAll`). `CP.Twists.bonus(list,
+  scale)` multiplies each twist's cash by its scale before the `twistMaxCash` cap; `CP.Twists.scaleOf(run)` and
+  `CP.Cash.bonusOf(run)` give nothing for test, Cross-Department (`operationId`) and boss runs (`Cd.rc.apply` also
+  drops both there). `Cash.compute` pays `round(B * mTier * mMod * mBonus)` and puts `mBonus` on `breakdown.cash`
+  only when it is not 1 (the result card and Profile show it); `Events.twistOffer` shows the department's raised cash.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through

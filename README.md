@@ -634,6 +634,18 @@ Supervisor UI → **Mission controls** (below).
     every twist. Each twist's bonus stays as `Config.Events.twists` sets it. Read when the run is accepted, so a
     change never moves a run already going.
 
+- **Cash bonuses** (step P16, per department, off when you install, under the master switch). A supervisor moves cash
+  only inside the min and max you set; with the shipped `min = 1.0, max = 1.0` nothing moves even when switched on, so
+  open the max first (for example `max = 1.25`). Points never change. Both are paid only on a completed run, never on
+  test runs, Cross-Department runs or the Weekly Boss, and `Config.Cash.dailyCap` still applies (it ships at 0, no cap).
+  - `happyHourCash = { on = false, min = 1.0, max = 1.0 }` (**Happy hour cash**): x the cash of a run his department
+    leads that was accepted while a happy hour ran. The bonus is fixed at the accept, so the end of the hour never
+    cuts a live run; the one who started the happy hour (and a unit he is in) gets none. The result card shows it
+    (for example `x1.20 happy hour`).
+  - `twistCash = { on = false, min = 1.0, max = 1.0 }` (**Twist cash**): x each twist's cash (`Config.Events.twists`)
+    on runs his department leads, read at the accept; the accept step shows the raised bonus. All chosen twists
+    together still stop at `Config.Events.twistMaxCash`.
+
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
   supervisor may pick: `<control> = { on = true, min = ..., max = ... }`. Switching either off again brings back
@@ -2483,6 +2495,10 @@ however it ends.
   types or single missions off for their department and recommend one type. This is a catalog switch that stays until
   changed, like `Config.DisabledMissions`; it is not a mission pause (the **Do not build** list still has no mission
   pause), and other departments keep the type.
+- Cash bonuses inside admin bounds (step P16): the Cash payouts rule now says a supervisor may raise a cash bonus only
+  inside admin-set bounds: the Mission controls `happyHourCash` (a run accepted during a happy hour) and `twistCash`
+  (each twist's cash, still under `Config.Events.twistMaxCash`), per department, shipped off with bounds that move
+  nothing; never on test runs, Cross-Department runs or the Weekly Boss, and always under `Config.Cash.dailyCap`.
 
 - NPC combat, at the owner's request of 2026-10-19 ("make them also not do head shots at all also reduce the damage
   they shoot as they kill really quickly", no automatic weapons, lower accuracy): `Config.NpcCombat` ([5.9](#59-how-hard-npcs-fight-back)). Mission NPCs never carry an
