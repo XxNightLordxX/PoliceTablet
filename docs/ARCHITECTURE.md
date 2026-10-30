@@ -3239,6 +3239,13 @@ no option is registered by this module: each feature registers its own keys.
   `refresh()`. CP.Access (client) keeps the session's `prefs`, `options` and `config.officerOptions`. §8.5 lists the
   client actions, the NUI message and the hook. Web: `shared/options.ts` (`OptionsProvider` in App.tsx next to the
   session context; `useOption(key)` = this PC's value, else the session's, else the department default).
+- Screen (step O3): Officer UI `options` (web/src/officer/screens/MyOptions.tsx, after `profile`, hidden while
+  `config.officerOptions.enabled` is false). One column: the Tablet look and privacy card (`getProfileEdit` and
+  `server:profile:set` for appearance, accent, tablet size and call alerts; `getProfile` and `server:setHideName` for
+  hide my name), one card per `schema` group (rows by kind; a `server` row saves `server:options:set { [key]: value }`
+  500 ms after the last change, a `local` row the client action `setLocalOption`; an inline Saved; Back to default
+  per group) and My keys (client action `getKeyLabels`, §8.5). Edit profile's Look tab: More options ->
+  `navigate('options')`. Browser mock: web/src/mocks/options.mock.ts (`?options=locked`: officer options off).
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 
@@ -3929,6 +3936,11 @@ Events: `client:diagUnstick`, `client:diagState (token)` (server → one client)
   `err.option_locked`, `err.option_value`).
 - NUI message `{ type = 'localOptions', options }` on the NUI `ready` and after every change of this PC's values.
 - Hook `options:changed (key)` (client): an option's value changed (the session, the push `options`, or this PC).
+- Client action `getKeyLabels` (modules/tablet/client.lua, step O3) -> `{ keys = { { command, state, label } } }` for
+  `crimsonpolice_tablet`, `crimsonpolice_dispatch`, `crimsonpolice_ready` and `crimsonpolice_contact`, in that order:
+  `CP.Tablet.keyLabel(cmd)` reads `GetControlInstructionalButton(0, joaat(cmd) | 0x80000000, true)`; `'t_F5'` ->
+  state `set`, label `F5`; `'b_<n>'` -> `other` (a mouse or pad button); anything else or a failing native -> `unset`.
+  `Config.OfficerOptions.enabled = false`: `err.option_locked`.
 
 ## 9. NUI protocol
 

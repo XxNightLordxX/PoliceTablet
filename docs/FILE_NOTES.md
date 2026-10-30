@@ -4452,6 +4452,16 @@ Actions: 'server:acceptType' (payload = the type key, or 'weekly_boss' for the b
 Text:    locales/parts/run_ui.json (board.*); locked reasons arrive translated from the server.
 ```
 
+## Crimson-Police/web/src/officer/screens/MyOptions.tsx
+
+```text
+Officer UI · My options (screen key 'options'): one place where an officer sets the tablet up for himself. One
+column, one card per option group (rows from the getOptions schema: an option shows once its feature registered
+it and only while it is allowed), the Tablet look and privacy card (server:profile:set, server:setHideName) and
+the My keys card (client action getKeyLabels). Server options save through server:options:set 500 ms after the
+last change; options of this PC through the client action setLocalOption.
+```
+
 ## Crimson-Police/web/src/officer/screens/Profile.tsx
 
 ```text

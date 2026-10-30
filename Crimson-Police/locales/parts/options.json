@@ -1,5 +1,22 @@
 {
   "err.option_locked": "Your department has fixed this option, so you can't change it.",
   "err.option_value": "That choice isn't available for this option.",
-  "err.option_config": "An officer option here is unknown or has a value it can't take."
+  "err.option_config": "An officer option here is unknown or has a value it can't take.",
+  "ui.screen.options": "My options",
+  "options.subtitle": "Set the tablet up for yourself. Every change saves on its own.",
+  "options.chip.server": "This character",
+  "options.chip.server_hint": "Saved with this character, on any PC.",
+  "options.chip.local": "This PC",
+  "options.chip.local_hint": "Kept on this PC only, for every character you play here.",
+  "options.saved": "Saved",
+  "options.reset": "Back to default",
+  "options.locked_title": "My options are turned off",
+  "options.locked_text": "An admin has turned officer options off on this server, so everyone keeps the defaults.",
+  "options.group.general": "General",
+  "options.look.title": "Tablet look and privacy",
+  "options.keys.title": "My keys",
+  "options.keys.hint": "Change them in GTA Settings > Key Bindings > FiveM.",
+  "options.keys.unset": "not set",
+  "options.keys.other": "a mouse or pad button",
+  "options.more": "More options"
 }

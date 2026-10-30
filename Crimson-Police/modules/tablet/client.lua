@@ -762,6 +762,30 @@ local function registerCommand()
     RegisterKeyMapping(DISPATCH_MAPPING, CP.L('tablet.dispatch_key_label'), 'keyboard', dispatchKey)
 end
 
+-- My options -> My keys: the Crimson-Police key mappings (crimsonpolice_ready: modules/units, crimsonpolice_contact:
+-- modules/npc), in the order the card lists them. Players bind them in GTA Settings > Key Bindings > FiveM.
+local MY_KEYS = { KEY_MAPPING, DISPATCH_MAPPING, 'crimsonpolice_ready', 'crimsonpolice_contact' }
+
+-- The key a mapping is bound to: { command, state = 'set', label = 'F5' } | 'other' (a mouse or pad button: it has
+-- no text label) | 'unset' (not bound, or the native failed).
+function T.keyLabel(cmd)
+    local ok, button = pcall(function()
+        return GetControlInstructionalButton(0, (joaat(cmd) & 0xFFFFFFFF) | 0x80000000, true)
+    end)
+    if not ok or type(button) ~= 'string' then return { command = cmd, state = 'unset' } end
+    if button:sub(1, 2) == 't_' and #button > 2 then return { command = cmd, state = 'set', label = button:sub(3) } end
+    if button:sub(1, 2) == 'b_' and #button > 2 then return { command = cmd, state = 'other' } end
+    return { command = cmd, state = 'unset' }
+end
+
+-- Client action getKeyLabels: { keys = { T.keyLabel(cmd), ... } } (Config.OfficerOptions.enabled = false: refused).
+T.registerClientAction('getKeyLabels', function()
+    if CP.OptionDefs and not CP.OptionDefs.enabled() then return false, 'err.option_locked' end
+    local keys = {}
+    for i, cmd in ipairs(MY_KEYS) do keys[i] = T.keyLabel(cmd) end
+    return true, { keys = keys }
+end)
+
 -- Crimson-Arena placed the local player (fighter or spectator): nothing of Crimson-Police stays on
 -- screen or holds focus (docs/CRIMSON_ARENA.md rule 8).
 local RemoveDeskZones, CreateDeskZones

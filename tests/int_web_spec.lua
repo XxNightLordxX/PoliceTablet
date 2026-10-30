@@ -987,6 +987,58 @@ do
 end
 
 -- ============================================================================
+--                         MY OPTIONS AND MY KEYS (O3)
+-- ============================================================================
+
+do
+    local screens = Read(WEB .. 'layouts/screens.ts') or ''
+    local nav = Read(WEB .. 'shared/navigation.tsx') or ''
+    local screen = Read(WEB .. 'officer/screens/MyOptions.tsx') or ''
+    local dialog = Read(WEB .. 'officer/components/ProfileEditDialog.tsx') or ''
+    local mock = Read(WEB .. 'mocks/options.mock.ts') or ''
+    local tclientSrc = Read(ROOT .. 'modules/tablet/client.lua') or ''
+    Has(nav, '\'challenge\' | \'profile\' | \'options\';', 'OfficerScreenKey has options')
+    Has(screens, 'import MyOptions from \'../officer/screens/MyOptions\';', 'the screen registry imports MyOptions')
+    Has(
+        Squash(screens),
+        Squash([[{
+        key: 'options',
+        titleKey: 'ui.screen.options',
+        icon: 'sliders',
+        component: MyOptions,
+        visible: s => s.config?.officerOptions?.enabled !== false,
+    },
+];]]),
+        'options is the last officer screen, hidden while officer options are off'
+    )
+    local atProfile = screens:find('key: \'profile\'', 1, true) or math.huge
+    H.ok(atProfile < (screens:find('key: \'options\'', 1, true) or 0), 'and comes after profile')
+    -- every callback and action the screen uses has a browser mock
+    for _, use in ipairs({
+        { 'useRequest<OptionsView>(\'getOptions\'', 'registerMock(\'request\', \'getOptions\',' },
+        { 'run(\'server:options:set\', patch)', 'registerMock(\'action\', \'server:options:set\',' },
+        { 'setLocal(key, value)', 'registerMock(\'client\', \'setLocalOption\',' },
+        { 'clientAction<{ keys?: KeyLabel[] }>(\'getKeyLabels\')', 'registerMock(\'client\', \'getKeyLabels\',' },
+        { 'run(\'server:profile:set\', patch)' },
+        { 'run<{ hideName: boolean }>(\'server:setHideName\', value' },
+    }) do
+        Has(screen, use[1], 'My options uses ' .. use[1])
+        if use[2] then Has(mock, use[2], 'with a browser mock') end
+    end
+    Has(mock, 'registerMock(\'client\', \'getLocalOptions\',', 'browser mock: getLocalOptions')
+    Has(mock, 'get(\'options\')', 'the mock reads ?options=')
+    Has(mock, 'if (LOCKED) return { enabled: false, schema: [], values: [] };', '?options=locked: officer options off')
+    Has(screen, 'data.enabled === false ? (', 'the screen shows the off state')
+    Has(screen, 'const SAVE_DELAY_MS = 500;', 'server options save 500 ms after the last change')
+    Has(screen, '<StoreChip store={def.store} />', 'each row says This character or This PC')
+    Has(screen, 't(\'options.reset\')', 'each group has Back to default')
+    Has(screen, 't(\'options.keys.hint\')', 'My keys says where to change the keys')
+    Has(tclientSrc, 'T.registerClientAction(\'getKeyLabels\',', 'modules/tablet/client.lua registers getKeyLabels')
+    Has(dialog, 'navigate(\'options\');', 'the Edit profile Look tab opens My options')
+    Has(dialog, 't(\'options.more\')', 'with More options')
+end
+
+-- ============================================================================
 --                                SHIPPED FILES
 -- ============================================================================
 -- locales/en.json and web/dist are regenerated from their sources.

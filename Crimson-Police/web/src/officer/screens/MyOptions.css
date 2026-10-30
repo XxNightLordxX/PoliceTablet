@@ -1,0 +1,102 @@
+/* Officer UI · My options. One column (two were too cramped at 1280x800). Only --cp-* variables; classes my-options. */
+
+.my-options__column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 760px;
+    width: 100%;
+}
+
+.my-options__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.my-options__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-width: 0;
+}
+
+.my-options__text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.my-options__label {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.my-options__hint {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.my-options__control {
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.my-options__control.is-enum,
+.my-options__control.is-number {
+    width: 220px;
+}
+
+.my-options__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    justify-content: flex-end;
+    max-width: 360px;
+}
+
+.my-options__toggle {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.my-options__chips {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.my-options__saved {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--cp-success);
+    font-size: var(--cp-fs-xs);
+    font-weight: 600;
+}
+
+.my-options__kbd {
+    min-width: 32px;
+    padding: 3px 8px;
+    border: 1px solid var(--cp-border);
+    border-radius: 6px;
+    background: var(--cp-surface-2);
+    font-family: inherit;
+    font-size: var(--cp-fs-sm);
+    font-weight: 700;
+    text-align: center;
+}
+
+.my-options__unset {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+    font-style: italic;
+}

@@ -14,6 +14,7 @@ import ActiveMission from '../officer/screens/ActiveMission';
 import Leaderboard from '../officer/screens/Leaderboard';
 import Challenge from '../officer/screens/Challenge';
 import Profile from '../officer/screens/Profile';
+import MyOptions from '../officer/screens/MyOptions';
 
 import SupMissionList from '../supervisor/screens/MissionList';
 import SupCrossDept from '../supervisor/screens/CrossDept';
@@ -67,6 +68,13 @@ export const OFFICER_SCREENS: ScreenDef<OfficerScreenKey>[] = [
     { key: 'leaderboard', titleKey: 'ui.screen.leaderboard', icon: 'trophy', component: Leaderboard },
     { key: 'challenge', titleKey: 'ui.screen.challenge', icon: 'flag', component: Challenge },
     { key: 'profile', titleKey: 'ui.screen.profile', icon: 'user', component: Profile },
+    {
+        key: 'options',
+        titleKey: 'ui.screen.options',
+        icon: 'sliders',
+        component: MyOptions,
+        visible: s => s.config?.officerOptions?.enabled !== false,
+    },
 ];
 
 export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [

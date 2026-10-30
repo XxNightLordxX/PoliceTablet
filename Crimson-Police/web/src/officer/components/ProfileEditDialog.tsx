@@ -23,6 +23,7 @@ import { cx } from '../../shared/cx';
 import { formatDuration } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { Avatar as AvatarData } from '../../shared/types';
@@ -44,6 +45,9 @@ function appearanceLabel(key: string): string {
 
 export function ProfileEditDialog({ open, onClose, onSaved }: ProfileEditDialogProps) {
     const session = useSession();
+    const navigate = useNavigate();
+    // My options holds the look too, with every other option (hidden when Config.OfficerOptions.enabled = false)
+    const optionsOn = session.config?.officerOptions?.enabled !== false;
     const cfg = session.config?.profile;
     const { data, loading, error, refetch } = useRequest<ProfileEdit>('getProfileEdit', {}, { skip: !open });
     const { run, busy } = useAction();
@@ -347,6 +351,19 @@ export function ProfileEditDialog({ open, onClose, onSaved }: ProfileEditDialogP
                             <Badge tone="neutral" size="sm" icon="info">
                                 {t('profile.edit.look_own')}
                             </Badge>
+                            {optionsOn ? (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    icon="sliders"
+                                    onClick={() => {
+                                        onClose();
+                                        navigate('options');
+                                    }}
+                                >
+                                    {t('options.more')}
+                                </Button>
+                            ) : null}
                         </div>
                     ) : null}
                 </div>
