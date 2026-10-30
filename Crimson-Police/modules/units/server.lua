@@ -42,11 +42,63 @@ local function Call(modName, fnName, ...)
     return true, table.unpack(res, 2, res.n)
 end
 
-local function MaxSize()
+-- Config.Limits.maxUnitSize: the largest unit on the server (at least 2).
+local function CeilSize()
     local n = math.tointeger(tonumber(Config.Limits and Config.Limits.maxUnitSize) or 4) or 4
     if n < 2 then n = 2 end
     return n
 end
+
+-- The largest unit a department's leader may have: its unitSize (Mission controls, step P9) when a supervisor set
+-- one, never above Config.Limits.maxUnitSize. dept: the leader's department (nil = the server's cap).
+local function MaxSize(dept)
+    local n = CeilSize()
+    local dc = CP.DeptControls
+    if type(dept) ~= 'string' or not (dc and dc.get) then return n end
+    local ok, v = pcall(dc.get, dept, 'unitSize')
+    v = ok and math.tointeger(tonumber(v)) or nil
+    if v and v >= 2 and v < n then n = v end
+    return n
+end
+Units.maxSize = MaxSize
+
+-- The department of a unit's leader (its size cap).
+local function LeaderDept(unit)
+    local info = type(unit) == 'table' and unit.info and unit.info[unit.leader] or nil
+    return type(info) == 'table' and info.department or nil
+end
+
+-- Unit size (Mission controls, step P9): a supervisor sets the largest unit his department's leaders may lead,
+-- 2 to Config.Limits.maxUnitSize (never above it, so never a relaxed rule); read by invites, joins and the accept.
+function Units.registerControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register('unitSize', {
+        kind = 'number',
+        scope = 'run',
+        integer = true,
+        range = { 2, 16 },
+        configValue = CeilSize,
+        check = function(v, b)
+            if type(v) ~= 'number' or math.tointeger(v) == nil or v < 2 or v > CeilSize() then
+                return nil, 'err.control_value'
+            end
+            if (tonumber(b.min) and v < tonumber(b.min)) or (tonumber(b.max) and v > tonumber(b.max)) then
+                return nil, 'err.control_value'
+            end
+            return v
+        end,
+        clamp = function(v, b)
+            if type(v) ~= 'number' or math.tointeger(v) == nil then return nil end
+            if tonumber(b.min) then v = math.max(v, tonumber(b.min)) end
+            if tonumber(b.max) then v = math.min(v, tonumber(b.max)) end
+            return math.max(2, math.min(v, CeilSize()))
+        end,
+        relaxes = function() return false end,
+    })
+    return true
+end
+Units.registerControls()
 
 local function UnitsCfg()
     return type(Config.Units) == 'table' and Config.Units or {}
@@ -962,7 +1014,7 @@ local function AvatarFor(citizenid, name, level, viewer)
 end
 
 -- Per type: how many missions the unit could draw at its size and one bigger (counts only, never names).
-local function SizeFit(officers, size)
+local function SizeFit(officers, size, maxDept)
     local out = {}
     if not (CP.Draw and CP.Draw.pool) or type(Config.MissionTypes) ~= 'table' then return out end
     local function count(typeKey, n)
@@ -973,7 +1025,7 @@ local function SizeFit(officers, size)
         local ok, pool = Call('Draw', 'pool', typeKey, list)
         return ok and type(pool) == 'table' and #pool or 0
     end
-    local max = MaxSize()
+    local max = MaxSize(maxDept)
     for typeKey in pairs(Config.MissionTypes) do
         local now = count(typeKey, size)
         out[typeKey] = { now = now, plusOne = size < max and count(typeKey, size + 1) or now }
@@ -1000,8 +1052,8 @@ local function Invite(src, target)
 
     -- No yields below: the state checks and the change happen together.
     local now = os.time()
-    local max = MaxSize()
     local unit = Units.unitOf(src)
+    local max = MaxSize(unit and LeaderDept(unit) or me.department)
     if KickBlocked(target, src, unit, now) then return false, 'err.unit_kicked_recently' end
     if unit then
         if unit.locked then return false, 'err.unit_locked' end
@@ -1012,7 +1064,7 @@ local function Invite(src, target)
         if #unit.members + PendingCount(unit, now) >= max then return false, 'err.unit_full' end
     end
     local theirs = Units.unitOf(target)
-    if theirs and #theirs.members >= max then return false, 'err.unit_target_in_full_unit' end
+    if theirs and #theirs.members >= MaxSize(LeaderDept(theirs)) then return false, 'err.unit_target_in_full_unit' end
 
     if not unit then unit = NewUnit(src, InfoOf(me)) else unit.info[src] = InfoOf(me) end
     unit.invites[target] = now + INVITE_TTL
@@ -1086,7 +1138,7 @@ local function Respond(src, accepted, unitId)
     if OnRun(src) then return false, 'err.already_on_run' end
     if IndexOf(unit.members, src) then return false, 'err.unit_already_member' end
     if unit.locked then return false, 'err.unit_invite_locked' end
-    if #unit.members >= MaxSize() then return false, 'err.unit_full' end
+    if #unit.members >= MaxSize(LeaderDept(unit)) then return false, 'err.unit_full' end
 
     -- Leave the current unit first (not on a run, checked above).
     local old = Units.unitOf(src)
@@ -1178,8 +1230,8 @@ function Units.view(src)
     local me, errKey = GetOfficer(src)
     if not me then return nil, errKey or 'err.not_police' end
     local now = os.time()
-    local max = MaxSize()
     local unit = Units.unitOf(src)
+    local max = MaxSize(unit and LeaderDept(unit) or me.department)
     local meOnRun = OnRun(src)
 
     local view = {
@@ -1259,7 +1311,7 @@ function Units.view(src)
     else
         officers[1] = me
     end
-    view.sizeFit = SizeFit(officers, view.unit and #unit.members or 1)
+    view.sizeFit = SizeFit(officers, view.unit and #unit.members or 1, unit and LeaderDept(unit) or me.department)
     local okOp, opCard = Call('Operations', 'officerCard', src)
     view.operation = okOp and type(opCard) == 'table' and opCard or nil
 

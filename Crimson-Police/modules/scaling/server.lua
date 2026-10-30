@@ -138,10 +138,29 @@ end
 local FEEL_KEYS = { 'accuracyAdd', 'armourAdd', 'healthMult', 'surrenderMult', 'fleeMult' }
 local FEEL_DEFAULT = { accuracyAdd = 0, armourAdd = 0, healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 }
 
--- The Config.NpcDifficulty preset in use ('custom' reads its custom table); an unknown preset is 'normal'.
-local function Preset()
+local PRESET_NAMES = { 'easy', 'normal', 'hard', 'custom' }
+local PRESET_RANK = { easy = 1, normal = 2, hard = 3 }   -- lower = easier for officers ('custom' has no rank)
+local DIFFICULTY = 'difficulty'                          -- the Mission control (Config.MissionControls.controls)
+
+local function ConfigPreset()
     local cfg = Config.NpcDifficulty or {}
-    local name = cfg.preset or 'normal'
+    return type(cfg.preset) == 'string' and cfg.preset or 'normal'
+end
+
+-- The preset of a run: its department's difficulty (Mission controls, step P9) when a change applied at the accept
+-- (run.controls, kept for the whole run), else Config.NpcDifficulty.preset.
+local function PresetName(run)
+    if type(run) == 'table' and type(run.controls) == 'table' and type(run.controlsChanged) == 'table'
+        and run.controlsChanged[DIFFICULTY] and type(run.controls[DIFFICULTY]) == 'string' then
+        return run.controls[DIFFICULTY]
+    end
+    return ConfigPreset()
+end
+
+-- The Config.NpcDifficulty preset in use ('custom' reads its custom table); an unknown preset is 'normal'.
+local function Preset(run)
+    local cfg = Config.NpcDifficulty or {}
+    local name = PresetName(run)
     local p = name == 'custom' and cfg.custom or (type(cfg.presets) == 'table' and cfg.presets[name])
     if type(p) ~= 'table' then p = type(cfg.presets) == 'table' and cfg.presets.normal or nil end
     local out = {}
@@ -152,16 +171,16 @@ local function Preset()
     return out
 end
 
--- How NPCs feel under Config.NpcDifficulty (health, surrender and flee multipliers for the blocks). It never
--- changes points or cash.
-function Scaling.feel()
-    local p = Preset()
+-- How NPCs feel under Config.NpcDifficulty (health, surrender and flee multipliers for the blocks); run: the run
+-- (its department's difficulty, step P9). It never changes points or cash.
+function Scaling.feel(run)
+    local p = Preset(run)
     return { healthMult = p.healthMult, surrenderMult = p.surrenderMult, fleeMult = p.fleeMult }
 end
 
 function Scaling.combat(baseAccuracy, baseArmour, tier, run)
     local row = Resolve(tier) or Rows()[1] or {}
-    local preset = Preset()
+    local preset = Preset(run)
     local accuracy = (tonumber(baseAccuracy) or 0) + (tonumber(row.accuracy) or 0) + preset.accuracyAdd
     local armour = (tonumber(baseArmour) or 0) + (tonumber(row.armour) or 0) + preset.armourAdd
     -- Armored Hostiles (CP.Twists): on every armed NPC of a run that has it (the twist is only offered and kept where
@@ -179,3 +198,24 @@ end
 -- Internal helpers for modules/missions (same slice): validate scaling entries with the rules apply() uses.
 Scaling._entryPath = EntryPath
 Scaling._isScalable = function(value) return type(value) == 'number' or IsNumberList(value) end
+
+-- Difficulty (Mission controls, step P9): a supervisor picks one of the presets the admin lists for his department's
+-- runs; read at the accept (scope 'run'). The Config.NpcCombat caps still apply on top; points and cash never move.
+function Scaling.registerControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(DIFFICULTY, {
+        kind = 'choice',
+        scope = 'run',
+        list = 'presets',
+        choices = function() return PRESET_NAMES end,
+        configValue = ConfigPreset,
+        relaxes = function(v, c)
+            local rv, rc = PRESET_RANK[v], PRESET_RANK[c]
+            if rv and rc then return rv < rc end
+            return v ~= c
+        end,
+    })
+    return true
+end
+Scaling.registerControls()

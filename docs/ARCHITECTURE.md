@@ -3450,6 +3450,17 @@ pattern, so a missing module reads as config).
   config. `AC._idleCheck` uses min(`run.controls.idleCheck`, `Config.AntiCheat.idleCheck`). The ready check runs
   before the run: CP.Draw reads `Runs.readySeconds(leader officer, officers)` (0 = no check) and passes it as
   `Units.readyCheck(.., { timeout })`.
+- Difficulty and unit size (step P9), scope `run`, per department, under the master switch, shipped off. A new kind
+  `choice` in CP.DeptControls: one name from the list the bounds hold in the field `list` names (`DC.register(..,
+  { kind = 'choice', list = 'presets', choices = fn })`; `DC.checkConfig` accepts that field as names the `choices`
+  function knows, each once; the view sends `list`, `offered` and `choices`; the supervisor screen shows a segmented
+  pick, the admin card a box per name). `difficulty` (modules/scaling `Scaling.registerControls`): config value
+  `Config.NpcDifficulty.preset`; easier relaxes (easy < normal < hard). `Preset(run)` uses `run.controls.difficulty`
+  when `run.controlsChanged.difficulty`; `Scaling.feel(run)` and `Scaling.combat(.., run)`; the callers pass the run
+  (npc flee `FleeMult(run)`, hostile_waves `Feel(ctx)`, escort `feel(ctx.run)`). Config.NpcCombat still caps on top;
+  points and cash never read it. `unitSize` (modules/units `Units.registerControls`, 2 to `Config.Limits.maxUnitSize`,
+  never relaxes): `Units.maxSize(dept)` for the leader's department caps invites, joins and the view; CP.Draw's accept
+  check refuses `err.unit_too_large` above it.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through

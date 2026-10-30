@@ -45,6 +45,8 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
     return (key, v) => {
         if (v === undefined || v === null) return '-';
         if (typeof v === 'boolean') return v ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off');
+        // a choice control (step P9: difficulty): the preset's name
+        if (typeof v === 'string') return hasKey(`mc.value.preset.${v}`) ? t(`mc.value.preset.${v}`) : v;
         const one = (n: number) =>
             hasKey(`mc.unit.${key}`) ? t(`mc.unit.${key}`, { n: formatFactor(n) }) : formatFactor(n);
         // readyCheck (step P8): 0 = no ready check
@@ -116,7 +118,14 @@ function BoundsFields({
     switchLabel?: string;
     onSave: (next: MissionControlBounds) => void;
 }) {
-    const numeric = control.kind !== 'bool' && control.bounded !== false;
+    const numeric = control.kind !== 'bool' && control.kind !== 'choice' && control.bounded !== false;
+    // a choice control (step P9): the names supervisors may pick, a box for each
+    const listField = control.kind === 'choice' ? control.list : undefined;
+    const choiceNames = asArray<string>(control.choices);
+    const savedList = (): string[] => {
+        const v = listField ? bounds[listField] : undefined;
+        return Array.isArray(v) ? v : [];
+    };
     const key = JSON.stringify(bounds);
     const [on, setOn] = useState<boolean | undefined>(bounds.on);
     const [min, setMin] = useState<number | null>(bounds.min ?? null);
@@ -126,11 +135,13 @@ function BoundsFields({
     const [flags, setFlags] = useState<Record<string, boolean>>(() =>
         Object.fromEntries(flagNames.map(f => [f, bounds[f] === true])),
     );
+    const [picked, setPicked] = useState<string[]>(savedList);
     useEffect(() => {
         setOn(bounds.on);
         setMin(bounds.min ?? null);
         setMax(bounds.max ?? null);
         setFlags(Object.fromEntries(flagNames.map(f => [f, bounds[f] === true])));
+        setPicked(savedList());
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [key]);
     const next: MissionControlBounds = { ...bounds };
@@ -142,10 +153,13 @@ function BoundsFields({
     for (const f of flagNames) {
         if (flags[f] || bounds[f] !== undefined) next[f] = flags[f] === true;
     }
+    if (listField && (picked.length > 0 || bounds[listField] !== undefined)) {
+        next[listField] = choiceNames.filter(n => picked.includes(n));
+    }
     for (const k of Object.keys(next) as (keyof MissionControlBounds)[]) if (next[k] === undefined) delete next[k];
     const dirty = JSON.stringify(next) !== JSON.stringify(Object.fromEntries(Object.entries(bounds)));
     const invalid = min !== null && max !== null && min > max;
-    if (!numeric && switchLabel === undefined && flagNames.length === 0) return null;
+    if (!numeric && switchLabel === undefined && flagNames.length === 0 && !listField) return null;
     const lo = control.range?.[0];
     const hi = control.range?.[1];
     return (
@@ -182,6 +196,20 @@ function BoundsFields({
                         />
                     </label>
                 </>
+            ) : null}
+            {listField ? (
+                <div className="oversight-mc-field">
+                    <span>{t('admin.perms.mc.presets')}</span>
+                    {choiceNames.map(n => (
+                        <Checkbox
+                            key={n}
+                            checked={picked.includes(n)}
+                            disabled={busy}
+                            label={hasKey(`mc.value.preset.${n}`) ? t(`mc.value.preset.${n}`) : n}
+                            onChange={v => setPicked(prev => (v ? [...prev, n] : prev.filter(x => x !== n)))}
+                        />
+                    ))}
+                </div>
             ) : null}
             {flagNames.map(f => (
                 <Checkbox

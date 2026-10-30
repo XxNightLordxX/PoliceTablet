@@ -1163,6 +1163,16 @@ local function PedCoords(src)
     return GetEntityCoords(ped)
 end
 
+-- The largest unit the leader's department may take out: its unitSize (Mission controls, step P9, CP.Units.maxSize),
+-- never above Config.Limits.maxUnitSize.
+local function MaxUnit(dept)
+    local cap = tonumber(Config.Limits and Config.Limits.maxUnitSize) or 4
+    local ok, n = Safe(CP.Units and CP.Units.maxSize, dept)
+    n = ok and tonumber(n) or nil
+    if n and n < cap then return n end
+    return cap
+end
+
 -- Every check of accepting a type, without changing anything: the context for the accept, or false and the
 -- error key the officer sees. A mission call claim runs exactly these (CP.MissionCalls). counts (optional):
 -- { lastHour = fn(citizenid), today = fn(citizenid, type) } in place of CP.Runs' counts (the calls' cache).
@@ -1178,7 +1188,7 @@ local function CheckAccept(src, typeKey, counts)
         if unit.locked then return false, 'err.unit_locked' end
     end
     local srcs = UnitMembers(src)
-    if #srcs > (tonumber(Config.Limits and Config.Limits.maxUnitSize) or 4) then return false, 'err.unit_too_large' end
+    if #srcs > MaxUnit(leader.department) then return false, 'err.unit_too_large' end
     if OperationLocked() then return false, 'err.operation_locked' end
 
     local isBoss = typeKey == BOSS_KEY

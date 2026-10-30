@@ -13,6 +13,7 @@ import {
     Icon,
     LoadingBlock,
     Screen,
+    SegmentedControl,
     Textarea,
     Toggle,
 } from '../../shared/components';
@@ -111,6 +112,19 @@ function Editor({
     onChange: (v: MissionControlValue) => void;
 }) {
     const session = useSession();
+    const text = useValueText();
+    // a choice control (step P9: difficulty): the presets the admin offers
+    if (c.kind === 'choice') {
+        const offered = asArray<string>(c.offered);
+        return (
+            <SegmentedControl
+                aria-label={controlName(c.key)}
+                items={offered.map(n => ({ key: n, label: text(c.key, n), disabled }))}
+                value={typeof draft === 'string' ? draft : ''}
+                onChange={n => onChange(n)}
+            />
+        );
+    }
     if (c.kind === 'bool') {
         return (
             <Toggle

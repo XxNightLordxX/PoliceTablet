@@ -400,11 +400,11 @@ local function FleeNum(key, range)
     return U.clamp(v, range[1], range[2])
 end
 
--- Config.NpcDifficulty's fleeMult (CP.Scaling.feel), 1.0 without it.
-local function FleeMult()
+-- Config.NpcDifficulty's fleeMult (CP.Scaling.feel: the run's department difficulty, step P9), 1.0 without it.
+local function FleeMult(run)
     local feel = nil
     if CP.Scaling and CP.Scaling.feel then
-        local ok, f = pcall(CP.Scaling.feel)
+        local ok, f = pcall(CP.Scaling.feel, run)
         if ok and type(f) == 'table' then feel = f end
     end
     local m = tonumber(feel and feel.fleeMult) or 1.0
@@ -435,7 +435,7 @@ end
 -- The seconds of running at which the sprint, the jog and the walk of this ped end.
 local function Edges(run, rec)
     local jitter = FleeNum('jitter', FLEE_JITTER_RANGE)
-    local m = (1 + jitter * (2 * Stamina(run, rec) - 1)) * FleeMult()
+    local m = (1 + jitter * (2 * Stamina(run, rec) - 1)) * FleeMult(run)
     local edges, edge = {}, 0
     for i, key in ipairs({ 'sprintSeconds', 'jogSeconds', 'walkSeconds' }) do
         edge = edge + FleeNum(key, FLEE_SECONDS_RANGE) * m

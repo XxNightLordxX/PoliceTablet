@@ -118,5 +118,15 @@
   "mc.control.idleCheck": "Idle check",
   "mc.control_desc.idleCheck": "Seconds after a run of your department starts before officers who never reached the start are removed (with the usual idle result). Only stricter than the config.",
   "mc.unit.idleCheck": "{n} s",
-  "admin.perms.mc.flag.canTurnOff": "Supervisors may switch the ready check off"
+  "admin.perms.mc.flag.canTurnOff": "Supervisors may switch the ready check off",
+  "mc.control.difficulty": "NPC difficulty",
+  "mc.control_desc.difficulty": "How hard mission NPCs are on runs your department leads: one of the presets an admin lists. Set when the run is accepted. Points and cash never change.",
+  "mc.value.preset.easy": "Easy",
+  "mc.value.preset.normal": "Normal",
+  "mc.value.preset.hard": "Hard",
+  "mc.value.preset.custom": "Custom",
+  "admin.perms.mc.presets": "Presets supervisors may pick",
+  "mc.control.unitSize": "Largest unit",
+  "mc.control_desc.unitSize": "The most officers a unit led by your department may have (invites, joins and accepting a mission). Never above the server's largest unit.",
+  "mc.unit.unitSize": "{n} officers"
 }

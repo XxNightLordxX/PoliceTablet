@@ -894,7 +894,7 @@ local function SpawnAttacker(ctx, st, car, w)
     local x, y, z = U.xyz(EntCoords(car.entity) or car.coords)
     local acc, arm = ctx.combat(a.accuracy, a.armour)
     -- the attackers' health follows Config.NpcDifficulty like every other hostile (healthMult)
-    local feel = CP.Scaling and CP.Scaling.feel and CP.Scaling.feel() or {}
+    local feel = CP.Scaling and CP.Scaling.feel and CP.Scaling.feel(ctx.run) or {}
     local health = math.floor((tonumber(a.health) or 200) * (tonumber(feel.healthMult) or 1.0) + 0.5)
     local ent, netId = ctx.spawnPed({
         model = r:pick(a.peds) or Config.Blocks.hostile_waves.peds[1],

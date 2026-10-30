@@ -330,15 +330,17 @@ export interface MissionControlBounds {
     on?: boolean;
     min?: number;
     max?: number;
-    // a registered flag (step P8: readyCheck's canTurnOff)
-    [flag: string]: boolean | number | undefined;
+    // a registered flag (step P8: readyCheck's canTurnOff); a choice control's list (step P9: difficulty's presets)
+    [flag: string]: boolean | number | string[] | undefined;
 }
-export type MissionControlValue = number | boolean | Record<string, number>;
+// a string: a choice control's pick (step P9: difficulty)
+export type MissionControlValue = number | boolean | string | Record<string, number>;
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
 export interface MissionControlState {
     key: string;
     // 'action' (step P7): a supervisor action with no value (clearCooldown, addRunTime): only its switch and bounds
-    kind: 'number' | 'bool' | 'map' | 'action';
+    // 'choice' (step P9): one name from the list the admin's bounds give (difficulty: a Config.NpcDifficulty preset)
+    kind: 'number' | 'bool' | 'map' | 'action' | 'choice';
     scope: 'between' | 'run';
     serverWide: boolean;
     // false = outside the master switch (Config.Permissions.supervisor.missionControls)
@@ -374,6 +376,11 @@ export interface MissionControlState {
     flags?: string[];
     // readyCheck (step P8): the admin lets supervisors switch the ready check off (value 0)
     canTurnOff?: boolean;
+    // a choice control (step P9): the bounds field holding its list ('presets'), the names that list offers this
+    // department now and every name it may hold
+    list?: string;
+    offered?: string[];
+    choices?: string[];
 }
 export interface MissionControlsDepartment {
     key: string;

@@ -1711,9 +1711,15 @@ local function CheckControls(map, _, ctx)
     if not CP.DeptControls then return nil end
     return (CP.DeptControls.checkConfig(map, ctx and ctx.boot))
 end
--- canTurnOff: readyCheck's flag (supervisors may switch the ready check off), other flags a control registers
-local CONTROLS_TPL = MapOf(
-    Record({ on = true, min = Num(-MAX_ABS, MAX_ABS), max = Num(-MAX_ABS, MAX_ABS), canTurnOff = true }), '^%a[%w_]*$')
+-- canTurnOff: readyCheck's flag (supervisors may switch the ready check off), other flags a control registers;
+-- presets: the Config.NpcDifficulty presets a supervisor may pick for difficulty (step P9)
+local CONTROLS_TPL = MapOf(Record({
+    on = true,
+    min = Num(-MAX_ABS, MAX_ABS),
+    max = Num(-MAX_ABS, MAX_ABS),
+    canTurnOff = true,
+    presets = ListOf(Enum({ 'easy', 'normal', 'hard', 'custom' }), { max = 4, unique = true }),
+}), '^%a[%w_]*$')
 KNOWN['MissionControls.controls'] = { tpl = CONTROLS_TPL, check = CheckControls }
 -- A department's own bounds (Admin UI -> Permissions -> Mission controls): optional, checked by the department
 -- validator (registered controls only).

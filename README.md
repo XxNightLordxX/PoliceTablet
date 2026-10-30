@@ -555,6 +555,14 @@ Supervisor UI → **Mission controls** (below).
   - `idleCheck = { on = false, min = 60, max = 180 }` (**Idle check**, seconds): officers who never reached the start
     are removed this long after the run starts (`Config.AntiCheat.idleCheck`). Stricter only: never above the config
     value, so it can never become a free way out of a run.
+  - `difficulty = { on = false, presets = { 'easy', 'normal' } }` (**NPC difficulty**, step P9): he picks one of the
+    listed `Config.NpcDifficulty` presets (easy, normal, hard, custom; Admin UI → Permissions → Mission controls has a
+    box per preset) for runs his department leads: NPC health, aim, surrender and how long runners keep running. The
+    `Config.NpcCombat` limits still apply on top, and points and cash never change. A supervisor who picks an easier
+    preset keeps the config one himself (the self rule).
+  - `unitSize = { on = false, min = 2, max = 4 }` (**Largest unit**, step P9): the most officers a unit led by his
+    department may have; invites past it, joining a full unit and accepting a mission with a larger unit are refused.
+    Never above `Config.Limits.maxUnitSize`.
 
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a

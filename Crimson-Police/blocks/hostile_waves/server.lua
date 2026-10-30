@@ -522,9 +522,10 @@ local function Behaviour(ctx, st)
     return st.behaviour or (type(ctx.obj.behaviour) == 'string' and ctx.obj.behaviour) or 'balanced'
 end
 
--- Config.NpcDifficulty feel: health and surrender only; never points, cash or counts.
-local function Feel()
-    if CP.Scaling and CP.Scaling.feel then return CP.Scaling.feel() end
+-- Config.NpcDifficulty feel (the run's department difficulty, step P9): health and surrender only; never points,
+-- cash or counts.
+local function Feel(ctx)
+    if CP.Scaling and CP.Scaling.feel then return CP.Scaling.feel(ctx and ctx.run) end
     return { healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 }
 end
 
@@ -752,7 +753,7 @@ local function SpawnHostile(ctx, st, w, point, calm, alt)
     local model = r:pick(obj.peds) or c.peds[1]
     local weapon = r:pick(obj.weapons) or c.weapons[1]
     local acc, arm = ctx.combat(obj.accuracy, obj.armour)
-    local health = math.floor((tonumber(obj.health) or 200) * (tonumber(Feel().healthMult) or 1.0) + 0.5)
+    local health = math.floor((tonumber(obj.health) or 200) * (tonumber(Feel(ctx).healthMult) or 1.0) + 0.5)
     local ent, netId = ctx.spawnPed({
         model = model,
         coords = point,
@@ -814,7 +815,7 @@ local function SpawnBoss(ctx, st)
         end
         return false
     end
-    local health = math.floor((tonumber(b.health) or 300) * (tonumber(Feel().healthMult) or 1.0) + 0.5)
+    local health = math.floor((tonumber(b.health) or 300) * (tonumber(Feel(ctx).healthMult) or 1.0) + 0.5)
     local behaviour = type(b.behaviour) == 'string' and b.behaviour or Behaviour(ctx, st)
     -- the boss's accuracy takes the tier, the difficulty and the Config.NpcCombat cap like every hostile; its
     -- armour stays the file's (a boss does not scale)
@@ -1118,7 +1119,7 @@ local function CheckLowHealth(ctx, st, p)
     if ratio >= (tonumber(s.belowHealth) or 0) then return false, 'health_ok' end
     p.rolled = true
     st.dirty = true
-    local chance = math.min(1.0, (tonumber(s.chance) or 0) * (tonumber(Feel().surrenderMult) or 1.0))
+    local chance = math.min(1.0, (tonumber(s.chance) or 0) * (tonumber(Feel(ctx).surrenderMult) or 1.0))
     if chance > 0 and RollSurrender(ctx, p, chance) then Surrender(ctx, st, p) end
     return true
 end

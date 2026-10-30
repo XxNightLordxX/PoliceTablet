@@ -886,7 +886,17 @@ do
                 and d.idleCheck.max == 180,
             'step P8: the start timeout, ready check, time limit and idle check controls ship off'
         )
+        H.ok(
+            d.difficulty.on == false and table.concat(d.difficulty.presets, ',') == 'easy,normal'
+                and d.unitSize.on == false and d.unitSize.min == 2 and d.unitSize.max == 4,
+            'step P9: difficulty (easy, normal) and unit size (2-4) ship off'
+        )
     end
+    if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
+    H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),
+        'step P9: a presets list the admin picks')
+    H.ok(not (Check('MissionControls.controls', { difficulty = { presets = { 'brutal' } } })),
+        'step P9: only Config.NpcDifficulty presets')
     H.ok(
         E('Permissions.supervisor.missionControls').default == false
             and E('Permissions.supervisor.missionControls').desc:find('for their own department only', 1, true)

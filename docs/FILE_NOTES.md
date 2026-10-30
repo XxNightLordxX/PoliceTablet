@@ -5076,8 +5076,8 @@ items 5-6) the scene popped in 4-17 m from the officer crossing the start circle
 ## tests/fixtures/admin_live_world.lua
 
 ```text
-The world of tests/admin_live_spec.lua, tests/admin_runctl_spec.lua, tests/sup_actions_spec.lua and
-tests/run_controls_spec.lua: the real
+The world of tests/admin_live_spec.lua, tests/admin_runctl_spec.lua, tests/sup_actions_spec.lua,
+tests/run_controls_spec.lua and tests/difficulty_unit_spec.lua: the real
 permissions, access, admin, adminkit, deptcontrols, tablet, schedule, scaling, events, units, runs and livectl
 modules, stand-ins for the rest (Qbox, the Mission Board, scoring, cash, operations, the downed follow-up) and a
 one-objective mission whose block spawns one object.
@@ -5558,6 +5558,14 @@ For hunting order, clock and time zone effects (docs/TESTING.md):
   CP_TEST_NOW=<unix time>                 the harness' default fake clock H.time (1790000000 otherwise)
   CP_TEST_CLOCK=<unix time>               the wall clock itself: os.time() and MariaDB NOW() start there
   CP_TEST_TZ=<zone>                       the specs' TZ (UTC otherwise; shadow mode always runs UTC)
+```
+
+## tests/difficulty_unit_spec.lua
+
+```text
+Difficulty and unit size (step P9): two per-department Mission controls. difficulty picks one of the presets the
+admin lists (Config.NpcDifficulty) for runs the department leads, read at the accept; unitSize caps the units its
+leaders may lead, never above Config.Limits.maxUnitSize.
 ```
 
 ## tests/run_controls_spec.lua

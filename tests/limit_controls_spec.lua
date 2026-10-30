@@ -225,4 +225,21 @@ do
     saved.dailyCap, daily = nil, {}
 end
 
+-- ============================================================================
+--              4. UNIT SIZE PER DEPARTMENT (STEP P9, THE ACCEPT)
+-- ============================================================================
+
+do
+    CP.Units.maxSize = function(dept) return dept == 'sast' and 3 or 4 end
+    units[1] = { leader = 1, members = { 1, 3, 4, 5 } }
+    local ok, err = D.check(1, 'patrol')
+    H.ok(ok == false and err == 'err.unit_too_large', 'a SAST unit of 4 is refused under a SAST max of 3')
+    units[1] = nil
+    CP.Units.maxSize = function() return 9 end
+    units[1] = { leader = 1, members = { 1, 3, 4, 5, 6 } }
+    ok, err = D.check(1, 'patrol')
+    H.ok(ok == false and err == 'err.unit_too_large', 'never above Config.Limits.maxUnitSize')
+    units[1], CP.Units.maxSize = nil, nil
+end
+
 return H

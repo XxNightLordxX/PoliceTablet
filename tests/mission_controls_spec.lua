@@ -155,9 +155,9 @@ do
     table.sort(shipped)
     H.eq(
         table.concat(shipped, ','),
-        'abandonCooldown,addRunTime,clearCooldown,cooldownScale,dailyCap,happyHour,hourlyCap,idleCheck,noRepeat,'
-            .. 'readyCheck,startTimeout,timeLimit',
-        'the cooldown controls (P2, P3, P6 happy hour, P7 clear), P7 + minutes and the P8 run controls (off) ship'
+        'abandonCooldown,addRunTime,clearCooldown,cooldownScale,dailyCap,difficulty,happyHour,hourlyCap,idleCheck,'
+            .. 'noRepeat,readyCheck,startTimeout,timeLimit,unitSize',
+        'the cooldown controls (P2, P3, P6 happy hour, P7 clear), P7 + minutes and the P8 / P9 run controls (off) ship'
     )
     H.eq(Config.MissionControls.controls.addRunTime.on, false, 'only the cooldown controls ship on')
     H.ok(next(Config.MissionControls.grants) == nil, 'no grant ships')

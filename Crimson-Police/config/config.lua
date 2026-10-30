@@ -225,6 +225,13 @@ Config.MissionControls = {
         -- seconds after a run of his department starts before officers who never reached the start are removed
         -- (AntiCheat.idleCheck); stricter only: never more than that config value
         idleCheck = { on = false, min = 60, max = 180 },
+        -- how hard mission NPCs are on runs his department leads: one of the presets listed here
+        -- (NpcDifficulty.presets: easy, normal, hard, custom); read when the run is accepted; NpcCombat's limits
+        -- still apply on top, and points and cash never change
+        difficulty = { on = false, presets = { 'easy', 'normal' } },
+        -- the largest unit an officer of his department may lead (invites, joins and accepting a mission); never
+        -- above Limits.maxUnitSize
+        unitSize = { on = false, min = 2, max = 4 },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 

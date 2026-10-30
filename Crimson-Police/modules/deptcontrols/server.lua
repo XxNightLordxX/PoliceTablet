@@ -5,12 +5,13 @@ local DC = CP.DeptControls
 local U = CP.U
 local TAG = 'deptcontrols'
 
-local SERVER_WIDE = '*'           -- the department key of a server-wide control's row
+local SERVER_WIDE = '*'         -- the department key of a server-wide control's row
 local KEY_PATTERN = '^%a[%w_]*$'
-local KEY_MAX = 40                -- characters (cp_dept_controls.control_key)
-local MAP_MAX = 64                -- entries of a map value (one number per mission type)
-local AUDIT_TEXT = 64             -- characters cp_audit keeps of an old or new value
-local KINDS = { number = true, bool = true, map = true, action = true }
+local KEY_MAX = 40              -- characters (cp_dept_controls.control_key)
+local MAP_MAX = 64              -- entries of a map value (one number per mission type)
+local AUDIT_TEXT = 64           -- characters cp_audit keeps of an old or new value
+local KINDS = { number = true, bool = true, map = true, action = true, choice = true }
+local CHOICE_MAX = 16           -- names in a choice control's list (difficulty's presets)
 local SCOPES = { between = true, run = true }
 local WATCHED = { 'MissionControls', 'Permissions.supervisor.missionControls', 'Departments' }
 
@@ -90,8 +91,8 @@ local function Flags(list)
 end
 
 -- DC.register(key, def): a control other modules read with DC.get.
---   kind        'number' (one number), 'bool' (true or false), 'map' (a number per key, e.g. per mission type) or
---               'action' (a staff action with no saved value, e.g. clearing an officer's cooldown: only its admin
+--   kind        'number' (one number), 'bool' (true or false), 'map' (a number per key, e.g. per mission type),
+--               'choice' (one name from the list the admin's bounds give in the field named by list) or 'action' (a staff action with no saved value, e.g. clearing an officer's cooldown: only its admin
 --               switch and bounds; DC.canChange says who may use it, DC.get / DC.set / DC.reset never apply)
 --   scope       'between' (read between runs: cooldowns, limits) or 'run' (copied into run.controls at the start,
 --               DC.snapshot)
@@ -111,6 +112,8 @@ end
 --   viewExtra   optional fn(dept) -> table: more fields for this control's row in DC.view
 --   bounded     false: the control has no min and max (the admin's card shows only its switch)
 --   flags       optional { name, ... }: more true / false fields its bounds may carry (readyCheck's canTurnOff)
+--   list        a 'choice' control: the bounds field with the names a supervisor may pick (difficulty: 'presets')
+--   choices     a 'choice' control: fn() -> every name that list may hold (the Config.NpcDifficulty presets)
 function DC.register(key, def)
     if type(key) ~= 'string' or #key > KEY_MAX or not key:match(KEY_PATTERN) then
         CP.err(TAG, 'register: a control key is a name of at most %d characters (%s)', KEY_MAX, tostring(key))
@@ -124,6 +127,10 @@ function DC.register(key, def)
         return false
     end
     local scope = def.scope or 'between'
+    if def.kind == 'choice' and (type(def.list) ~= 'string' or type(def.choices) ~= 'function') then
+        CP.err(TAG, 'register(%s): a choice control needs list (a bounds field) and a choices function', key)
+        return false
+    end
     if not SCOPES[scope] then
         CP.err(TAG, 'register(%s): scope is between or run', key)
         return false
@@ -145,8 +152,10 @@ function DC.register(key, def)
         allow = type(def.allow) == 'function' and def.allow or nil,
         overlays = type(def.overlays) == 'table' and def.overlays or nil,
         viewExtra = type(def.viewExtra) == 'function' and def.viewExtra or nil,
-        bounded = def.bounded ~= false and def.kind ~= 'bool',
+        bounded = def.bounded ~= false and def.kind ~= 'bool' and def.kind ~= 'choice',
         flags = Flags(def.flags),
+        list = def.kind == 'choice' and def.list or nil,
+        choices = def.kind == 'choice' and def.choices or nil,
     }
     return true
 end
@@ -216,6 +225,29 @@ local function GoodNum(def, v)
     return not def.integer or math.tointeger(v) ~= nil
 end
 
+-- A choice control: the names the admin's bounds offer (only names its choices function knows).
+local function Offered(def, bounds)
+    local out = {}
+    local list = bounds[def.list]
+    if type(list) ~= 'table' then return out end
+    local ok, all = pcall(def.choices)
+    local known = {}
+    for _, n in ipairs(ok and type(all) == 'table' and all or {}) do known[n] = true end
+    for _, n in ipairs(list) do
+        if type(n) == 'string' and known[n] then out[#out + 1] = n end
+    end
+    return out
+end
+
+-- True when value is one of the names a choice control's bounds offer.
+local function Picked(def, value, bounds)
+    if type(value) ~= 'string' then return false end
+    for _, n in ipairs(Offered(def, bounds)) do
+        if n == value then return true end
+    end
+    return false
+end
+
 -- The value a supervisor or admin sent: clean value | nil, errKey. Outside the bounds is refused, never clamped.
 local function Check(def, value, bounds)
     if def.check then
@@ -229,6 +261,9 @@ local function Check(def, value, bounds)
     end
     if def.kind == 'bool' then
         if type(value) ~= 'boolean' then return nil, 'err.control_value' end
+        return value
+    elseif def.kind == 'choice' then
+        if not Picked(def, value, bounds) then return nil, 'err.control_value' end
         return value
     elseif def.kind == 'number' then
         if not GoodNum(def, value) or not InRange(value, bounds) then return nil, 'err.control_value' end
@@ -256,6 +291,7 @@ local function Clamp(def, value, bounds)
         return nil
     end
     if def.kind == 'bool' then return type(value) == 'boolean' and value or nil end
+    if def.kind == 'choice' then return Picked(def, value, bounds) and value or nil end
     if def.kind == 'number' then return GoodNum(def, value) and ClampNum(value, bounds) or nil end
     if type(value) ~= 'table' then return nil end
     local out = {}
@@ -646,6 +682,16 @@ local function FlagList(def)
     return #out > 0 and out or nil
 end
 
+-- Every name a choice control's list may hold (its choices function).
+local function ChoiceList(def)
+    local ok, all = pcall(def.choices)
+    local out = {}
+    for _, n in ipairs(ok and type(all) == 'table' and all or {}) do
+        if type(n) == 'string' then out[#out + 1] = n end
+    end
+    return out
+end
+
 local function ControlFields(def, dept)
     local bounds = BoundsOf(def, dept)
     local where = StoreDept(def, dept)
@@ -683,6 +729,9 @@ local function ControlFields(def, dept)
         range = def.range and { def.range[1], def.range[2] } or nil,
         own = OwnBounds(def, dept),
         flags = FlagList(def),
+        list = def.list,
+        offered = def.list and Offered(def, bounds) or nil,
+        choices = def.choices and ChoiceList(def) or nil,
     }
 end
 
@@ -766,6 +815,21 @@ end
 --                                CONFIG CHECKS
 -- ============================================================================
 
+-- A choice control's list in the config: names its choices function knows, each once, at most CHOICE_MAX.
+local function ChoicesOk(def, v)
+    if type(v) ~= 'table' or #v > CHOICE_MAX then return false end
+    local n = 0
+    for _ in pairs(v) do n = n + 1 end
+    if n ~= #v then return false end
+    local known, seen = {}, {}
+    for _, c in ipairs(ChoiceList(def)) do known[c] = true end
+    for _, c in ipairs(v) do
+        if type(c) ~= 'string' or not known[c] or seen[c] then return false end
+        seen[c] = true
+    end
+    return true
+end
+
 -- Config.MissionControls.controls or a department's missionControls: { <control> = { on, min, max } }. Registered
 -- controls only (unless boot: the modules register theirs after the saved settings are read), min not above max.
 -- Returns errKey, the control | nil.
@@ -780,6 +844,10 @@ function DC.checkConfig(map, boot)
                 if type(v) ~= 'boolean' then return 'err.control_config', key end
             elseif field == 'min' or field == 'max' then
                 if not IsNum(v) then return 'err.control_config', key end
+            elseif defs[key] and defs[key].list == field then
+                if not ChoicesOk(defs[key], v) then return 'err.control_config', key end
+            elseif boot and not defs[key] and type(v) == 'table' then
+                if #v > CHOICE_MAX then return 'err.control_config', key end
             elseif defs[key] and defs[key].flags[field] or (boot and not defs[key]) then
                 if type(v) ~= 'boolean' then return 'err.control_config', key end
             else
