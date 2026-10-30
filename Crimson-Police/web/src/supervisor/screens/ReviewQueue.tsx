@@ -27,6 +27,7 @@ import { asArray } from '../../shared/data';
 import { formatDateTime, formatDuration } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import { toast } from '../../shared/toast';
 import { useCan } from '../../shared/session';
 import type { DisputeView, FlaggedRow, ReviewQueueData, ReviewTab } from '../../types/oversight';
 import { ProfilesReview } from '../components/ProfilesReview';
@@ -104,6 +105,11 @@ function FlagCell({ row }: { row: FlaggedRow }) {
                 <span className="oversight-rq-flag__detail" title={row.flagDetail}>
                     {row.flagDetail}
                 </span>
+            ) : null}
+            {row.voidPending ? (
+                <Badge size="sm" tone="warning" variant="outline" icon="clock">
+                    {t('sup.review.void_waiting', { name: row.voidPending.name ?? '-' })}
+                </Badge>
             ) : null}
             {asArray(row.otherReasons).length ? (
                 <span className="oversight-rq-flag__also">
@@ -226,11 +232,18 @@ export default function SupReviewQueue() {
         if (!pending) return;
         let res;
         if (pending.kind === 'flag') {
-            res = await run(
-                'server:sup:reviewFlagged',
-                { rowId: pending.row.rowId, decision: pending.decision, reason },
-                { success: pending.decision === 'approve' ? 'sup.review.approved' : 'sup.review.voided' },
-            );
+            const flagRes = await run<{ pending?: boolean }>('server:sup:reviewFlagged', {
+                rowId: pending.row.rowId,
+                decision: pending.decision,
+                reason,
+            });
+            // step P14: the department wants a second supervisor's Void (the first only marks the row pending)
+            if (flagRes.ok) {
+                const waits = flagRes.data?.pending === true;
+                const key = pending.decision === 'approve' ? 'sup.review.approved' : 'sup.review.voided';
+                toast(waits ? 'info' : 'success', t(waits ? 'sup.review.void_pending' : key));
+            }
+            res = flagRes;
         } else {
             res = await run(
                 'server:sup:handleDispute',

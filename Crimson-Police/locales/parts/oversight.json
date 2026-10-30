@@ -662,5 +662,8 @@
   "admin.perms.mc.grant.supervisor_from": "Supervisors from grade {grade}",
   "admin.perms.mc.grant.summary_off": "Every supervisor",
   "admin.perms.mc.grant.summary_min": "Grade {grade} and up",
-  "admin.perms.mc.grant.summary_list": "Grades {grades}"
+  "admin.perms.mc.grant.summary_list": "Grades {grades}",
+  "err.review_admin_only": "The department hands this kind of flag to admins only.",
+  "sup.review.void_pending": "Void recorded. A second supervisor of the department must confirm it.",
+  "sup.review.void_waiting": "Void pending ({name})"
 }

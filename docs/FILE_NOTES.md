@@ -2799,6 +2799,16 @@ Public API (docs/ARCHITECTURE.md §5.3)
 can, actionsFor, tookPart and canReviewRun may yield (database): call them from a handler or thread.
 ```
 
+## Crimson-Police/modules/reviewrules/server.lua
+
+```text
+CP.ReviewRules (server): a department's stricter review rules for flagged runs (step P14, the Mission control
+reviewRules). { secondVoid = true }: a supervisor's Void of a flagged row of that department only marks it pending;
+a second supervisor of that department confirms it. { adminOnlyKinds = { kind, ... } }: flags of those kinds leave
+the supervisors' Review queue and only admins approve or void them. It never relaxes a rule (Config.AntiCheat's
+flag triggers are not offered) and admins are never bound by it.
+```
+
 ## Crimson-Police/modules/route/client.lua
 
 ```text
@@ -4938,6 +4948,15 @@ With Config.Backups.daily = true the daily backup runs on the daily job thread (
 reset does not wait for a slow backup, and the clean-up starts only once it has returned.
 Real runtime: the restore lock is a Lua variable (H.restart drops it), the store is kept (the database or the saves
 folder), MariaDB's strict mode refuses NULL in a NOT NULL column (the files engine too).
+```
+
+## tests/board_review_rules_spec.lua
+
+```text
+Department leaderboard visibility and stricter review rules (step P14): the boards Mission control (names or
+callsigns for other departments, the Rank by tabs a department's officers see) and reviewRules (a Void needs a
+second supervisor of the department; flags of the picked kinds go to admins only). Plain Lua with stubs: a stub
+CP.DeptControls holds the values, CP.Admin.getRow and the permission checks are stubbed, no database is read.
 ```
 
 ## tests/board_types_spec.lua

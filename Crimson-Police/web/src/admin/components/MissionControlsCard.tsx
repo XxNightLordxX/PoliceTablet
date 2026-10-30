@@ -20,6 +20,7 @@ import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useOptionalSession } from '../../shared/session';
 import type {
+    BoardsValue,
     CallLaneValue,
     CrossDeptValue,
     MissionControlBounds,
@@ -27,6 +28,7 @@ import type {
     MissionControlValue,
     MissionControlsDepartment,
     MissionControlsView,
+    ReviewRulesValue,
     TeleportDepartment,
     TeleportGrant,
 } from '../../types/oversight';
@@ -57,6 +59,20 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
             if (cd && cd.join === false) return t('mc.value.crossDept_out');
             if (cd && cd.places > 0) return t('mc.value.crossDept_places', { n: cd.places });
             return t('mc.value.crossDept_open');
+        }
+        // boards and reviewRules (step P14)
+        if (key === 'boards') {
+            const b = v && typeof v === 'object' && !Array.isArray(v) ? (v as Partial<BoardsValue>) : {};
+            const shown = b.showToOthers === false ? t('mc.value.boards_callsigns') : t('mc.value.boards_names');
+            return t('mc.value.boards', { shown, n: Array.isArray(b.metrics) ? b.metrics.length : 1 });
+        }
+        if (key === 'reviewRules') {
+            const r = v && typeof v === 'object' && !Array.isArray(v) ? (v as Partial<ReviewRulesValue>) : {};
+            const one = r.secondVoid === true ? t('mc.value.reviewRules_two') : t('mc.value.reviewRules_one');
+            return t('mc.value.reviewRules', {
+                void: one,
+                n: Array.isArray(r.adminOnlyKinds) ? r.adminOnlyKinds.length : 0,
+            });
         }
         if (v === undefined || v === null) return '-';
         if (typeof v === 'boolean') return v ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off');

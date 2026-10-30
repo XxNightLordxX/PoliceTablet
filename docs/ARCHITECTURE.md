@@ -3527,6 +3527,23 @@ pattern, so a missing module reads as config).
   relaxes, so it applies to the setter too); `viewExtra` gives `placesMax`. `Ops.join`, the waitlist refill and the
   card's `joinBlocked` refuse `err.op_department_out` (join = false) and `err.op_department_full` (the department's
   joiners reached places). The board lock (`Ops.isLocked`) and the launch cooldown are unchanged and server-wide.
+- Leaderboard visibility and review rules (step P14). `boards`, kind `map` (modules/leaderboard,
+  `LB.registerControls`), per department, under the master switch, unbounded, shipped off; value `{ showToOthers,
+  metrics }` (`LB._cleanBoards`: only `Config.Leaderboard.metrics` names, points always first; it never relaxes);
+  `viewExtra` gives `metricsAll`. `LB.boardMetrics(dept)` gives the Rank by tabs (Session.config.leaderboardMetrics in
+  `CP.Tablet`'s ExtraConfig, and `ParseBoardArgs` refuses another tab for an officer with `err.invalid_metric`);
+  `LB.hidesNamesFrom(dept, viewerDept)` makes `PublicRow` (through `LB._shownTo`, a copy with hideName and the
+  avatar row's hide_name set), `LB.profile` and the top 3 of `LB.announcements(dept)` (`ForViewer`, the text rebuilt
+  from `textKey` / `textVars`) show callsigns only. The cached boards, counts, the challenge and `LB.adminBoard`
+  never change. `reviewRules`, kind `map` (new modules/reviewrules, `CP.ReviewRules`), per department, under the
+  master switch, unbounded, shipped off; value `{ secondVoid, adminOnlyKinds }` (`RR._clean`, kinds from its
+  FLAG_KINDS list, `viewExtra` `flagKinds`; it never relaxes). `Admin.voidFlagged` for a supervisor asks
+  `RR.voidStep(officer, row)` for the row's department: the first Void is kept in memory (`pending[rowId]`, audit
+  `voidPending`, result `{ rowId, pending = true }`), the same user again `err.void_second_needed`, a supervisor of
+  another department `err.void_second_dept`, a second supervisor of the row's department voids it. `RR.clear` runs
+  when a row is voided or approved. `RR.adminOnly(dept, kind)`: `Admin.flaggedRows(dept, cid, admin)` leaves such
+  rows out of a supervisor's queue and `approveFlagged` / `voidFlagged` refuse a supervisor `err.review_admin_only`.
+  Queue rows carry `voidPending { name, at }`. Admins and the console are never bound.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through
@@ -3922,7 +3939,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:sup:opRelaunch` / `server:admin:opRelaunch` | — | launchCrossDept | operations |
 | `server:sup:opCancel` / `server:admin:opCancel` | `{ reason }` | launchCrossDept | operations |
 | `server:sup:forceRecall` | `{ runId, src }` | forceRecall | admin |
-| `server:sup:reviewFlagged` / `server:admin:reviewFlagged` | `{ rowId, decision = 'approve'|'void', reason }` | reviewFlagged | admin |
+| `server:sup:reviewFlagged` / `server:admin:reviewFlagged` | `{ rowId, decision = 'approve'|'void', reason }` (step P14: a supervisor's first Void under reviewRules.secondVoid → `{ rowId, pending = true }`) | reviewFlagged | admin |
 | `server:sup:handleDispute` / `server:admin:handleDispute` | `{ disputeId, decision = 'approve'|'reject', reason, awardPoints }` | handleDisputes / handleFailedDispute | disputes |
 | `server:admin:voidRun` | `{ rowId }` or `{ runUuid }`, `reason` | voidAnyRun | admin |
 | `server:admin:awardPoints` | `{ citizenid, points, reason }` | manualAward | admin → scoring |

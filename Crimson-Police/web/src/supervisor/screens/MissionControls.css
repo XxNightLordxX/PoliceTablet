@@ -169,3 +169,15 @@
     flex: 1 1 200px;
     overflow-wrap: anywhere;
 }
+
+/* step P14: a switch per name (Rank by tabs, flag kinds) */
+.sup-mc-picks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 4px 12px;
+}
+
+.sup-mc-picks__label {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}

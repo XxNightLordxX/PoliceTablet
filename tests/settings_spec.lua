@@ -922,6 +922,15 @@ do
                     ~= nil,
             'step P13: department notices (280 characters, 5 a day) and Cross-Department participation ship off'
         )
+        local cfgFile = io.open('Crimson-Police/config/config.lua', 'r')
+        local cfgText = cfgFile and cfgFile:read('a') or ''
+        if cfgFile then cfgFile:close() end
+        H.ok(
+            d.boards.on == false and d.reviewRules.on == false
+                and cfgText:find('by name or by callsign only', 1, true) ~= nil
+                and cfgText:find('a supervisor\'s Void waits for a second', 1, true) ~= nil,
+            'step P14: leaderboard visibility and the review rules ship off, with comments'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

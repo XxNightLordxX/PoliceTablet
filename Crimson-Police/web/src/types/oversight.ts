@@ -111,6 +111,8 @@ export interface FlaggedRow {
     notes: FlagNote[];
     durationS: number;
     createdAt: number;
+    // step P14: the first Void waiting for a second supervisor of the department (its reviewRules Mission control)
+    voidPending?: { name?: string; at?: number } | null;
 }
 export interface FlagNote {
     reason: string;
@@ -358,8 +360,27 @@ export interface CrossDeptValue {
     join: boolean;
     places: number;
 }
+// boards (step P14): whether other departments see names (else callsigns only) and the Rank by tabs shown
+export interface BoardsValue {
+    showToOthers: boolean;
+    metrics: string[];
+}
+// reviewRules (step P14): a Void needs a second supervisor; flags of these kinds go to admins only
+export interface ReviewRulesValue {
+    secondVoid: boolean;
+    adminOnlyKinds: string[];
+}
 export type MissionControlValue =
-    number | boolean | string | Record<string, number> | TypeSwitches | CallLaneValue | CrossDeptValue | null;
+    | number
+    | boolean
+    | string
+    | Record<string, number>
+    | TypeSwitches
+    | CallLaneValue
+    | CrossDeptValue
+    | BoardsValue
+    | ReviewRulesValue
+    | null;
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
 export interface MissionControlState {
     key: string;
@@ -416,6 +437,10 @@ export interface MissionControlState {
     weightMax?: number;
     // crossDept (step P13): the most places a department may keep (Config.CrossDept.maxParticipants)
     placesMax?: number;
+    // boards (step P14): the Rank by tabs the server offers (Config.Leaderboard.metrics)
+    metricsAll?: string[];
+    // reviewRules (step P14): the flag kinds a department may hand to admins
+    flagKinds?: string[];
     // notices (step P13): characters a department notice may hold (Config.MissionControls.noticeMaxLength)
     maxLength?: number;
 }

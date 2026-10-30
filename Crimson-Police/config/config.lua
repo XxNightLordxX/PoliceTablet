@@ -258,6 +258,14 @@ Config.MissionControls = {
         -- or caps how many of them may take part in one; every board still shows only the running operation and
         -- the wait between launches stays server-wide
         crossDept = { on = false },
+        -- Leaderboard: whether other departments see his department's officers by name or by callsign only, and
+        -- which Rank by tabs his department's officers see (Leaderboard.metrics; points always). Presentation only:
+        -- counts, the Department Challenge and the admin boards never change
+        boards = { on = false },
+        -- Review: stricter rules for his department's flagged runs: a supervisor's Void waits for a second
+        -- supervisor of the department, and flags of the kinds he picks go to admins only. Admins are never bound
+        -- and the anti-cheat flag triggers stay as they are
+        reviewRules = { on = false },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 

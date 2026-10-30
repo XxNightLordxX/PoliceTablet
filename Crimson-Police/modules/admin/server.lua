@@ -740,6 +740,14 @@ local function ReleaseHeld(row)
     if row.cash_status == 'held' then Call('Cash', 'release', row.id) end
 end
 
+-- Step P14: a flag of a kind the row's department hands to admins (its reviewRules Mission control); admins and
+-- the console are never bound by it.
+local function AdminOnlyRow(src, row)
+    if tonumber(src) == 0 or IsAdmin(src) then return false end
+    local ok, only = Call('ReviewRules', 'adminOnly', row.department, row.flag_reason)
+    return ok and only == true
+end
+
 local CLEAR_FLAG_SQL = [[UPDATE cp_mission_runs SET flagged = 0,
   breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.flagged', NULL), breakdown)
   WHERE id = ? AND flagged = 1 AND voided = 0]]
@@ -757,6 +765,7 @@ function Admin.approveFlagged(src, rowId, reason, opts)
     if not opts.skipPermission then
         local ok, e = ReviewAllowed(src, 'reviewFlagged', row)
         if not ok then return false, e end
+        if AdminOnlyRow(src, row) then return false, 'err.review_admin_only' end
     end
     local okOwn, eOwn = OwnRunCheck(src, row.run_uuid)
     if not okOwn then return false, eOwn end
@@ -764,6 +773,7 @@ function Admin.approveFlagged(src, rowId, reason, opts)
     local n = Update(CLEAR_FLAG_SQL, { row.id })
     if n == nil then return false, 'err.internal' end
     if n == 0 then return false, 'err.conflict' end
+    Call('ReviewRules', 'clear', row.id)
     ReleaseHeld(row)
     Call('Scoring', 'onRowApproved', row.id)
     Call('Leaderboard', 'invalidate')
@@ -792,6 +802,7 @@ local function VoidRow(src, row, reason, action, flaggedOnly, kind)
     if n == nil then return false, 'err.internal' end
     if n == 0 then return false, flaggedOnly and 'err.conflict' or 'err.already_voided' end
     Call('Scoring', 'onRowVoided', row.id)
+    Call('ReviewRules', 'clear', row.id)
     Admin.audit(src, RoleOf(src), 'flags', action, RowTarget(row), row.flagged and 'flagged' or row.state,
         kind == 'correction' and 'voided:correction' or 'voided', reason)
     Notify(OnlineSrc(row.citizenid), 'warning', 'admin.notice.run_voided',
@@ -813,8 +824,20 @@ function Admin.voidFlagged(src, rowId, reason)
     if NON_MISSION_TYPES[row.mission_type] then return false, 'err.not_reviewable' end
     local ok, e = ReviewAllowed(src, 'reviewFlagged', row)
     if not ok then return false, e end
+    if AdminOnlyRow(src, row) then return false, 'err.review_admin_only' end
     local okOwn, eOwn = OwnRunCheck(src, row.run_uuid)
     if not okOwn then return false, eOwn end
+    -- step P14: the row's department wants two supervisors for a Void (admins void at once)
+    if tonumber(src) ~= 0 and not IsAdmin(src) and Has('ReviewRules', 'voidStep') then
+        local officer = CP.Access and CP.Access.getOfficer and CP.Access.getOfficer(src) or nil
+        local okS, step, errS = Call('ReviewRules', 'voidStep', officer, row)
+        if not okS then return false, 'err.internal' end
+        if step == nil then return false, errS end
+        if step == 'pending' then
+            Admin.audit(src, RoleOf(src), 'flags', 'voidPending', RowTarget(row), 'flagged', 'pending', reason)
+            return true, { rowId = row.id, pending = true }
+        end
+    end
     local done, eVoid = VoidRow(src, row, reason, 'voidFlagged', true)
     if not done then return false, eVoid end
     Call('Leaderboard', 'invalidate')
@@ -2458,7 +2481,8 @@ local FLAGGED_SQL = [[SELECT r.id, r.run_uuid, r.citizenid, r.department, r.miss
   LEFT JOIN cp_officers o ON o.citizenid = r.citizenid
   WHERE r.flagged = 1 AND r.voided = 0]]
 
-function Admin.flaggedRows(dept, excludeCitizenid)
+-- admin: an admin's queue (step P14: rows his department hands to admins stay in it).
+function Admin.flaggedRows(dept, excludeCitizenid, admin)
     local sql, params = FLAGGED_SQL, {}
     if dept then
         sql = sql .. ' AND r.run_uuid IN (SELECT d.run_uuid FROM cp_mission_runs d WHERE d.department = ?)'
@@ -2471,8 +2495,14 @@ function Admin.flaggedRows(dept, excludeCitizenid)
     sql = sql .. (' ORDER BY r.created_at DESC, r.id DESC LIMIT %d'):format(FLAGGED_LIMIT)
     local rows = {}
     for _, r in ipairs(Query(sql, params) or {}) do
-        -- A run the viewer is still on (their own row is not written yet) is their own run too.
-        if not InLiveRun(excludeCitizenid, r.run_uuid) then rows[#rows + 1] = r end
+        -- A run the viewer is still on (their own row is not written yet) is their own run too. Step P14: a flag
+        -- kind the row's department hands to admins is not in a supervisor's queue.
+        local adminOnly = false
+        if dept and not admin then
+            local okA, only = Call('ReviewRules', 'adminOnly', r.department, r.flag_reason)
+            adminOnly = okA and only == true
+        end
+        if not adminOnly and not InLiveRun(excludeCitizenid, r.run_uuid) then rows[#rows + 1] = r end
     end
     local uuids, seen = {}, {}
     for _, r in ipairs(rows) do
@@ -2520,6 +2550,8 @@ function Admin.flaggedRows(dept, excludeCitizenid)
             notes = notes,
             durationS = math.floor(Num(r.duration_s, 0)),
             createdAt = math.floor(Num(r.created_ts, 0)),
+            -- step P14: the first Void waiting for a second supervisor of the department ({ name, at })
+            voidPending = select(2, Call('ReviewRules', 'pendingOf', math.tointeger(tonumber(r.id)))),
         }
     end
     return out
@@ -2531,7 +2563,7 @@ CP.Net.callback('sup:getReviewQueue', function(src)
     if not canReview and not canHandle then return nil, 'err.no_permission' end
     local dept, citizenid = ViewerDepartment(src)
     if not dept and not IsAdmin(src) then return nil, 'err.no_permission' end
-    local flagged = canReview and Admin.flaggedRows(dept, citizenid or '') or {}
+    local flagged = canReview and Admin.flaggedRows(dept, citizenid or '', IsAdmin(src)) or {}
     local disputes = {}
     if canHandle and Has('Disputes', 'forSupervisor') then
         local ok, list = Call('Disputes', 'forSupervisor', src)

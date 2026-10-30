@@ -400,13 +400,93 @@ local function MetricList()
     return out
 end
 
-local function ValidMetric(m)
-    if m == 'points' then return true end
-    for _, k in ipairs(MetricList()) do
-        if k == m then return true end
+-- ============================================================================
+--                      DEPARTMENT BOARD VISIBILITY (P14)
+-- ============================================================================
+-- A department's boards Mission control: { showToOthers = false } shows its officers to other departments by
+-- callsign only (boards, profiles and Home's top 3); metrics = the Rank by tabs its own officers see (points always).
+-- Presentation only: counts, the Department Challenge and the admin boards never change.
+
+local BOARDS_KEY = 'boards'
+
+-- The control's value: { showToOthers = true | false, metrics = { name, ... } } (only Config.Leaderboard.metrics
+-- names, points always first). strict: anything else is refused (a supervisor's change); else a saved value keeps
+-- only the names still in the config.
+local function CleanBoards(v, strict)
+    if type(v) ~= 'table' or type(v.showToOthers) ~= 'boolean' then return nil end
+    for k in pairs(v) do
+        if strict and k ~= 'showToOthers' and k ~= 'metrics' then return nil end
     end
-    return false
+    if v.metrics ~= nil and type(v.metrics) ~= 'table' then return nil end
+    local allowed = {}
+    for _, m in ipairs(MetricList()) do allowed[m] = true end
+    local picked = {}
+    for _, m in pairs(v.metrics or MetricList()) do
+        if type(m) ~= 'string' or not allowed[m] then
+            if strict then return nil end
+        else
+            picked[m] = true
+        end
+    end
+    local metrics = { 'points' }
+    for _, m in ipairs(MetricList()) do
+        if picked[m] and m ~= 'points' then metrics[#metrics + 1] = m end
+    end
+    return { showToOthers = v.showToOthers, metrics = metrics }
 end
+LB._cleanBoards = CleanBoards
+
+local function BoardsRule(dept)
+    local dc = CP.DeptControls
+    if not (dc and dc.get) or type(dept) ~= 'string' then return nil end
+    local ok, v = pcall(dc.get, dept, BOARDS_KEY)
+    if not ok then
+        CP.err(TAG, 'reading the %s control of %s failed: %s', BOARDS_KEY, dept, tostring(v))
+        return nil
+    end
+    return type(v) == 'table' and v or nil
+end
+
+-- The Rank by tabs a department's officers see (Config.Leaderboard.metrics, narrowed by its boards control).
+function LB.boardMetrics(dept)
+    local rule = BoardsRule(dept)
+    if not rule or type(rule.metrics) ~= 'table' then return MetricList() end
+    local keep = {}
+    for _, m in ipairs(rule.metrics) do keep[m] = true end
+    local out = {}
+    for _, m in ipairs(MetricList()) do
+        if m == 'points' or keep[m] then out[#out + 1] = m end
+    end
+    return out
+end
+
+-- True when officers of dept are shown to a viewer of another department by callsign only.
+function LB.hidesNamesFrom(dept, viewerDept)
+    if type(dept) ~= 'string' or dept == viewerDept then return false end
+    local rule = BoardsRule(dept)
+    return rule ~= nil and rule.showToOthers == false
+end
+
+function LB.registerControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(BOARDS_KEY, {
+        kind = 'map',
+        bounded = false,
+        configValue = function() return { showToOthers = true, metrics = MetricList() } end,
+        check = function(v)
+            local clean = CleanBoards(v, true)
+            if not clean then return nil, 'err.control_value' end
+            return clean
+        end,
+        clamp = function(v) return CleanBoards(v, false) end,
+        -- presentation only: it never relaxes a rule, so it applies to the supervisor who set it too
+        relaxes = function() return false end,
+        viewExtra = function() return { metricsAll = MetricList() } end,
+    })
+    return true
+end
+LB.registerControls()
 
 -- The value an entry is ranked by, and (judgement) the decisions behind it.
 local function MetricValue(e, metric)
@@ -576,8 +656,23 @@ local function RowAvatar(e, own)
 end
 LB._rowAvatar = RowAvatar
 
+-- The entry as a viewer of another department may see it: hideName set while its department shows callsigns only.
+local function ShownTo(e, viewerDept)
+    if e.hideName or not LB.hidesNamesFrom(e.department, viewerDept) then return e end
+    local c = {}
+    for k, v in pairs(e) do c[k] = v end
+    c.hideName = true
+    local row = {}
+    for k, v in pairs(type(e.avatarRow) == 'table' and e.avatarRow or {}) do row[k] = v end
+    row.hide_name = 1
+    c.avatarRow = row
+    return c
+end
+LB._shownTo = ShownTo
+
 local function PublicRow(e, viewer, metric)
     local own = viewer and viewer.citizenid == e.citizenid
+    if not own and viewer then e = ShownTo(e, viewer.department) end
     metric = metric or 'points'
     local value = e.value
     if value == nil then value = MetricValue(e, metric) end
@@ -716,9 +811,12 @@ local function ParseBoardArgs(args, defaultDept, admin)
     if not ValidFilter(filter) then return nil, 'err.invalid_filter' end
     local metric = args.metric
     if metric == nil or metric == '' then metric = 'points' end
-    if type(metric) ~= 'string' or not (ValidMetric(metric) or (admin and METRICS[metric])) then
-        return nil, 'err.invalid_metric'
+    -- an officer: the Rank by tabs his department shows (step P14); an admin: every metric
+    local shown = admin and METRICS[metric] == true or metric == 'points'
+    if not admin then
+        for _, m in ipairs(LB.boardMetrics(defaultDept)) do shown = shown or m == metric end
     end
+    if type(metric) ~= 'string' or not shown then return nil, 'err.invalid_metric' end
     local department = nil
     if filter == 'department' then
         department = args.department
@@ -780,6 +878,7 @@ local function TopEntries(ranked, n)
             citizenid = e.citizenid,
             name = LB.publicName(e),
             callsign = e.callsign,
+            department = e.department,
             departmentShort = e.department and DeptShort(e.department) or '',
             points = e.points,
         }
@@ -830,6 +929,30 @@ local function NoticeFor(n, dept)
     return false
 end
 
+-- A top 3 as a viewer of dept sees it (step P14): an officer whose department shows callsigns only to other
+-- departments is named by his callsign (dept nil = the admin preview, names as they are).
+local function ForViewer(a, dept)
+    if dept == nil or type(a.entries) ~= 'table' or not a.textKey then return a end
+    local entries, changed = {}, false
+    for i, e in ipairs(a.entries) do
+        entries[i] = e
+        if LB.hidesNamesFrom(e.department, dept) and e.name ~= (e.callsign or CP.L('leaderboard.hidden_name')) then
+            local c = {}
+            for k, v in pairs(e) do c[k] = v end
+            c.name = e.callsign or CP.L('leaderboard.hidden_name')
+            entries[i], changed = c, true
+        end
+    end
+    if not changed then return a end
+    local out = {}
+    for k, v in pairs(a) do out[k] = v end
+    local vars = {}
+    for k, v in pairs(a.textVars or {}) do vars[k] = v end
+    vars.list = JoinEntries(entries)
+    out.entries, out.text = entries, CP.L(a.textKey, vars)
+    return out
+end
+
 -- What Home shows: the weekly and monthly top 3 (each can be switched off, Config.Leaderboard.announceWeekly /
 -- announceMonthly) and the staff notices for that department (dept nil = every notice, the admin preview).
 function LB.announcements(dept)
@@ -845,7 +968,7 @@ function LB.announcements(dept)
         for _, n in ipairs(announceCache and announceCache.notices or {}) do
             if NoticeFor(n, dept) then out[#out + 1] = { kind = 'staff_notice', text = n.text, notice = n } end
         end
-        for _, a in ipairs(list) do out[#out + 1] = a end
+        for _, a in ipairs(list) do out[#out + 1] = ForViewer(a, dept) end
         return U.deepcopy(out)
     end
     if announceCache and announceCache.key == key and now - announceCache.at < CacheSeconds() then
@@ -862,6 +985,8 @@ function LB.announcements(dept)
         list[#list + 1] = {
             kind = 'weekly_top3',
             text = CP.L('leaderboard.announce_weekly', { week = DateKey(prevWeek), list = JoinEntries(weekTop) }),
+            textKey = 'leaderboard.announce_weekly',
+            textVars = { week = DateKey(prevWeek) },
             entries = weekTop,
             period = DateKey(prevWeek),
         }
@@ -875,6 +1000,8 @@ function LB.announcements(dept)
             kind = 'monthly_top3',
             text = CP.L('leaderboard.announce_monthly',
                 { month = os.date('%Y-%m', prevMonth + HALF_DAY), list = JoinEntries(monthTop) }),
+            textKey = 'leaderboard.announce_monthly',
+            textVars = { month = os.date('%Y-%m', prevMonth + HALF_DAY) },
             entries = monthTop,
             period = os.date('%Y-%m', prevMonth + HALF_DAY),
         }
@@ -887,7 +1014,7 @@ function LB.announcements(dept)
     for _, n in ipairs(notices) do
         if NoticeFor(n, dept) then out[#out + 1] = { kind = 'staff_notice', text = n.text, notice = n } end
     end
-    for _, a in ipairs(list) do out[#out + 1] = a end
+    for _, a in ipairs(list) do out[#out + 1] = ForViewer(a, dept) end
     return U.deepcopy(out)
 end
 
@@ -1539,8 +1666,11 @@ function LB.profile(viewer, target, opts)
     orow = orow or {}
     local hideName = U.truthy(orow.hide_name)
     local xp = Int(orow.xp)
-    local e = { name = NonEmpty(orow.display_name), callsign = NonEmpty(orow.callsign), hideName = hideName }
     local dept = own and viewer.department or NonEmpty(orow.department)
+    -- step P14: his department shows other departments his callsign only (the name and picture stay hidden)
+    local shownHidden = hideName or (not own and not staff and LB.hidesNamesFrom(dept, viewer.department))
+    if shownHidden and not hideName then orow.hide_name = 1 end
+    local e = { name = NonEmpty(orow.display_name), callsign = NonEmpty(orow.callsign), hideName = shownHidden }
     local d = DeptInfo(dept)
     local nowTs = os.time()
     local full = own or staff
@@ -1560,8 +1690,8 @@ function LB.profile(viewer, target, opts)
     -- a retired officer's picture and bio are hidden (never cleared) until an admin unretires them
     local retired = orow.retired_ts ~= nil and not staff
     if retired then orow.avatar_kind, orow.avatar_value, orow.bio = 'initials', nil, nil end
-    local avatar = RowAvatar({ name = e.name, callsign = e.callsign, hideName = hideName, xp = xp, avatarRow = orow },
-        own or staff)
+    local avatar = RowAvatar(
+        { name = e.name, callsign = e.callsign, hideName = shownHidden, xp = xp, avatarRow = orow }, own or staff)
     return {
         citizenid = cid,
         name = own and viewer.name or (staff and (e.name or CP.L('common.unknown'))) or LB.publicName(e),

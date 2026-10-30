@@ -612,6 +612,20 @@ Supervisor UI → **Mission controls** (below).
     take in one (0 = no cap, at most `Config.CrossDept.maxParticipants`). It applies to him too. Every department's
     board still shows only the running operation (the lock), and the wait between launches stays server-wide.
 
+- **Leaderboard and review** (step P14, per department, off when you install, under the master switch):
+  - `boards = { on = false }` (**Leaderboard visibility**): a supervisor picks whether officers of other departments
+    see his department's officers by name or by callsign only (on the Leaderboard, on their profiles and in Home's
+    top 3; the picture is hidden too), and which **Rank by** tabs his own officers see (from
+    `Config.Leaderboard.metrics`; Points always stays). A tab change shows the next time an officer opens the tablet.
+    Presentation only: the counts, the Department Challenge and the admin boards never change.
+  - `reviewRules = { on = false }` (**Review rules**, stricter only): with **A Void needs a second supervisor** on, a
+    supervisor's **Void** of a flagged run of his department only marks it pending ("Void pending (name)" in Review);
+    a second supervisor of that department confirms it (the same supervisor, another character of his, or a
+    supervisor of another department cannot). A server restart clears a pending Void (it is voided only by two).
+    Flags of the kinds he ticks (for example "Ran a suspect over") leave the supervisors' Review queue: only admins
+    approve or void them (Admin UI → Leaderboards → Flagged). Admins always void at once. The anti-cheat flag
+    triggers (`Config.AntiCheat`) are never relaxed.
+
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
   supervisor may pick: `<control> = { on = true, min = ..., max = ... }`. Switching either off again brings back

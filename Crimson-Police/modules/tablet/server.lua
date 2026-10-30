@@ -312,7 +312,13 @@ local function ExtraConfig(deptKey)
     end
     local metrics = {}
     local lb = Config.Leaderboard or {}
-    for _, m in ipairs(type(lb.metrics) == 'table' and lb.metrics or { 'points' }) do
+    local list = type(lb.metrics) == 'table' and lb.metrics or { 'points' }
+    -- step P14: the Rank by tabs the officer's department shows (its boards Mission control)
+    if CP.Leaderboard and CP.Leaderboard.boardMetrics then
+        local ok, own = pcall(CP.Leaderboard.boardMetrics, deptKey)
+        if ok and type(own) == 'table' then list = own end
+    end
+    for _, m in ipairs(list) do
         if type(m) == 'string' then metrics[#metrics + 1] = m end
     end
     local kinds = {}

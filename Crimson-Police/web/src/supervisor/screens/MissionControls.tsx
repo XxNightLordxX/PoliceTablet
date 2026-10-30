@@ -23,11 +23,13 @@ import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import type {
+    BoardsValue,
     CallLaneValue,
     CrossDeptValue,
     MissionControlState,
     MissionControlValue,
     MissionControlsView,
+    ReviewRulesValue,
     TypeSwitchMission,
     TypeSwitches,
 } from '../../types/oversight';
@@ -272,6 +274,113 @@ function CrossDeptEditor({
     );
 }
 
+// A list of names picked with one switch each (steps P14 boards and reviewRules); fixed names stay on.
+function PickList({
+    names,
+    picked,
+    fixed,
+    label,
+    disabled,
+    onChange,
+}: {
+    names: string[];
+    picked: string[];
+    fixed?: string;
+    label: (name: string) => string;
+    disabled: boolean;
+    onChange: (next: string[]) => void;
+}) {
+    const set = (name: string, on: boolean) =>
+        onChange(names.filter(n => n === fixed || (n === name ? on : picked.includes(n))));
+    return (
+        <div className="sup-mc-picks">
+            {names.map(n => (
+                <Toggle
+                    key={n}
+                    checked={n === fixed || picked.includes(n)}
+                    disabled={disabled || n === fixed}
+                    label={label(n)}
+                    onChange={on => set(n, on)}
+                />
+            ))}
+        </div>
+    );
+}
+
+function asStrings(v: unknown): string[] {
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+// The boards control (step P14): names or callsigns for other departments, and the Rank by tabs shown.
+function BoardsEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const all = asStrings(c.metricsAll);
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<BoardsValue>) : {};
+    const b: BoardsValue = { showToOthers: v.showToOthers !== false, metrics: v.metrics ? asStrings(v.metrics) : all };
+    return (
+        <div className="sup-mc-sliders">
+            <Toggle
+                checked={b.showToOthers}
+                disabled={disabled}
+                label={b.showToOthers ? t('sup.boards.show_on') : t('sup.boards.show_off')}
+                onChange={on => onChange({ ...b, showToOthers: on })}
+            />
+            <span className="sup-mc-picks__label">{t('sup.boards.metrics')}</span>
+            <PickList
+                names={all}
+                picked={b.metrics}
+                fixed="points"
+                label={m => t(`leaderboard.metric.${m}`)}
+                disabled={disabled}
+                onChange={metrics => onChange({ ...b, metrics })}
+            />
+        </div>
+    );
+}
+
+// The reviewRules control (step P14): a second supervisor per Void, and the flag kinds only admins review.
+function ReviewRulesEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<ReviewRulesValue>) : {};
+    const r: ReviewRulesValue = { secondVoid: v.secondVoid === true, adminOnlyKinds: asStrings(v.adminOnlyKinds) };
+    return (
+        <div className="sup-mc-sliders">
+            <Toggle
+                checked={r.secondVoid}
+                disabled={disabled}
+                label={r.secondVoid ? t('sup.rules.second_on') : t('sup.rules.second_off')}
+                onChange={on => onChange({ ...r, secondVoid: on })}
+            />
+            <span className="sup-mc-picks__label">{t('sup.rules.kinds')}</span>
+            <PickList
+                names={asStrings(c.flagKinds)}
+                picked={r.adminOnlyKinds}
+                label={k => t(`mc.flagkind.${k}`)}
+                disabled={disabled}
+                onChange={adminOnlyKinds => onChange({ ...r, adminOnlyKinds })}
+            />
+        </div>
+    );
+}
+
 function Slider({
     c,
     label,
@@ -322,6 +431,10 @@ function Editor({
     if (c.key === 'types') return <TypeSwitchesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'callLane') return <CallLaneEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'crossDept') return <CrossDeptEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'boards') return <BoardsEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'reviewRules') {
+        return <ReviewRulesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    }
     // a choice control (step P9: difficulty; step P10: featuredType): the names the admin offers
     if (c.kind === 'choice') {
         const offered = asArray<string>(c.offered);
