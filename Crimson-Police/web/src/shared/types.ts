@@ -120,6 +120,8 @@ export interface Session {
     prefs?: Prefs;
     // the officer's own options saved on the server (CP.Options.effective): every server option, default or chosen
     options?: Record<string, OfficerOptionValue>;
+    // the officer option openOn 'active_on_run' (step O9): on a run, and a ready check waiting for this officer's answer
+    opening?: { onRun: boolean; readyCheck: boolean };
     // how the tablet was opened: command, keybind, item, export, desk or dispatch (desk = its index)
     access?: { via: string; desk: number | null };
     // CP.Maintenance.view(): a storage copy or switch, a backup restore or a store left behind holds the lock

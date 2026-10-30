@@ -1,6 +1,5 @@
 // Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions,
 // setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
-// Pop-ups: ?toastTime=short|long, ?resultTime=10 (with ?result=parity). Board: ?fav=tactical&hide=training&oneClick=1.
 
 import { emitDebug, registerMock } from '../shared/nui';
 import type { OfficerOptionValue } from '../shared/types';
@@ -31,6 +30,17 @@ const SCHEMA: OptionDef[] = [
         order: 20,
     },
     { key: 'skipAcceptConfirm', kind: 'bool', default: false, store: 'server', group: 'board', order: 30 },
+    { key: 'skipClaimConfirm', kind: 'bool', default: false, store: 'server', group: 'dispatch', order: 10 },
+    {
+        key: 'callAlerts',
+        kind: 'enum',
+        values: ['all', 'favourites'],
+        default: 'all',
+        store: 'server',
+        group: 'dispatch',
+        order: 20,
+    },
+    { key: 'dispatchKeyAfterCall', kind: 'bool', default: false, store: 'server', group: 'dispatch', order: 30 },
     {
         key: 'hudSide',
         kind: 'enum',
@@ -52,6 +62,16 @@ const SCHEMA: OptionDef[] = [
     { key: 'hudCompact', kind: 'bool', default: false, store: 'local', group: 'hud', order: 30 },
     { key: 'reduceMotion', kind: 'bool', default: false, store: 'local', group: 'hud', order: 40 },
     { key: 'hudLook', kind: 'bool', default: false, store: 'server', group: 'look', order: 10 },
+    {
+        key: 'openOn',
+        kind: 'enum',
+        values: ['last', 'home', 'active_on_run'],
+        default: 'last',
+        store: 'server',
+        group: 'opening',
+        order: 10,
+    },
+    { key: 'rememberFilters', kind: 'bool', default: false, store: 'local', group: 'opening', order: 20 },
     {
         key: 'textSize',
         kind: 'enum',
@@ -92,8 +112,10 @@ const listParam = (name: string) => (PARAMS.get(name) ?? '').split(',').filter(B
 if (listParam('fav').length) server.favouriteTypes = listParam('fav');
 if (listParam('hide').length) server.hiddenTypes = listParam('hide');
 if (PARAMS.get('oneClick') === '1') server.skipAcceptConfirm = true;
+if (PARAMS.get('oneClickClaim') === '1') server.skipClaimConfirm = true;
 const local: Record<string, OfficerOptionValue> = {};
 if (PARAMS.get('hudSide') === 'left') local.hudSide = 'left';
+if (PARAMS.get('rememberFilters') === '1') local.rememberFilters = true;
 if (PARAMS.get('hudCompact') === '1') local.hudCompact = true;
 if (PARAMS.get('reduceMotion') === '1') local.reduceMotion = true;
 if (Number(PARAMS.get('hudScale')) > 0) local.hudScale = Math.min(1.3, Math.max(0.8, Number(PARAMS.get('hudScale'))));
@@ -157,6 +179,12 @@ registerMock('action', 'server:options:set', (patch: Record<string, OfficerOptio
 registerMock('client', 'getLocalOptions', () => ({ options: { ...local } }));
 
 registerMock('client', 'setLocalOption', (p: { key?: string; value?: OfficerOptionValue } | null) => {
+    // the remembered filters (step O9): a 'local' list that is not a row of My options
+    if (p?.key === 'filters' && Array.isArray(p.value)) {
+        local.filters = p.value;
+        emitDebug('localOptions', { options: { ...local } });
+        return { key: 'filters', value: p.value, options: { ...local } };
+    }
     const d = SCHEMA.find(x => x.key === p?.key);
     if (!d || d.store !== 'local' || p?.value === undefined) throw new Error('err.invalid_payload');
     let value = p.value;

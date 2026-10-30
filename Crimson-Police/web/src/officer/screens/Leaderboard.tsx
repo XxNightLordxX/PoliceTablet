@@ -1,6 +1,6 @@
 // Officer UI · Leaderboard (screen key 'leaderboard', callback getBoard).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
     Avatar,
     Badge,
@@ -21,6 +21,7 @@ import {
 import { cx } from '../../shared/cx';
 import { fmtDate, fmtDateTime, formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
+import { useRememberedFilter } from '../../shared/filters';
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
@@ -137,11 +138,20 @@ export default function Leaderboard() {
     const navigate = useNavigate();
     const myDept = session.officer?.department ?? '';
     const myCid = session.officer?.citizenid ?? '';
-    const [period, setPeriod] = useState<BoardPeriod>('weekly');
-    const [filter, setFilter] = useState<string>('overall');
-    const [department, setDepartment] = useState<string>(myDept);
-    const [metric, setMetric] = useState<string>('points');
     const metrics = asList(session.config?.leaderboardMetrics);
+    // My options -> Opening the tablet (step O9): with rememberFilters on, the choices of the last visit (this PC)
+    const [period, setPeriod] = useRememberedFilter<BoardPeriod>('leaderboard.period', 'weekly', v =>
+        BOARD_PERIODS.includes(v as BoardPeriod),
+    );
+    const [filter, setFilter] = useRememberedFilter<string>('leaderboard.filter', 'overall', v =>
+        boardFilters(session).includes(v),
+    );
+    const [department, setDepartment] = useRememberedFilter<string>('leaderboard.department', myDept, v =>
+        asList(session.config?.departments).some(d => d.key === v),
+    );
+    const [metric, setMetric] = useRememberedFilter<string>('leaderboard.metric', 'points', v =>
+        (metrics.length ? metrics : ['points']).includes(v),
+    );
 
     const allTime = period === 'alltime';
     const effectiveFilter = allTime ? 'overall' : filter;

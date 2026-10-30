@@ -1553,4 +1553,37 @@ do
     CP.Hooks.fire('deptControls:changed', { key = 'noRepeat' })
 end
 
+-- Step O9: callAlerts 'favourites' (My options -> Dispatch): a call of another type shows on Dispatch with no pop-up;
+-- calls_muted still silences every call (the mute section above); with no favourite picked every call pops up.
+do
+    Reset()
+    local S = CENTRE.south_ls
+    AddPlayer(1, vec3(S.x, S.y, 30.0))
+    AddPlayer(2, vec3(S.x + 50, S.y, 30.0))
+    local keepOptions = CP.Options
+    CP.Options = setmetatable({}, { __index = keepOptions })
+    local favs = { [Cid(1)] = { 'investigation' }, [Cid(2)] = { 'patrol' } }
+    CP.Options.effective = function(cid) return { callAlerts = 'favourites', favouriteTypes = favs[cid] or {} } end
+    MC._forgetMuted(Cid(1))
+    MC._forgetMuted(Cid(2))
+    local pc = NewCall('patrol', 'south_ls')
+    H.eq(Toasts(1), 0, 'favourites (Investigation): a Patrol call has no pop-up')
+    H.ok(CardOf(1, pc.id) ~= nil, '...and still shows on Dispatch')
+    H.eq(Toasts(2), 0, 'calls_muted wins over a favourite type')
+    H.events = {}
+    NewCall('investigation', 'south_ls')
+    H.eq(Toasts(1), 1, 'favourites: a call of a favourite type pops up')
+    favs[Cid(1)] = {}
+    H.events = {}
+    NewCall('patrol', 'south_ls')
+    H.eq(Toasts(1), 0, 'the answer is cached for 30 s, like calls_muted')
+    MC._forgetMuted(Cid(1))
+    H.events = {}
+    NewCall('patrol', 'south_ls')
+    H.eq(Toasts(1), 1, 'favourites with none picked: every call pops up')
+    CP.Options = keepOptions
+    MC._forgetMuted(Cid(1))
+    MC._forgetMuted(Cid(2))
+end
+
 return H

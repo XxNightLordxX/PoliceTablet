@@ -19,6 +19,7 @@ import { closeTopLayer, useHudScale, useKeyRelease, usePush, useViewport } from 
 import { LocaleProvider, t } from './shared/i18n';
 import { NavigationContext, type NavigationValue, type ScreenKey, type ScreenParams } from './shared/navigation';
 import { clientAction, fetchNui, isEnvBrowser, request, setTabletShown, useNuiEvent } from './shared/nui';
+import { openScreenFor } from './shared/openOn';
 import { OptionsProvider, useOption } from './shared/options';
 import { SessionContext, type SessionContextValue } from './shared/session';
 import { applyAppearance, DEFAULT_THEME, mergeAppearance } from './shared/theme';
@@ -149,8 +150,10 @@ export default function App() {
         setTabletShown(true);
         setUi(target);
         if (typeof m.seq === 'number') setOpenSeq(m.seq);
-        if (m.screen && screensFor(target, next).some(s => s.key === m.screen)) {
-            setScreens(prev => ({ ...prev, [target]: { key: m.screen as ScreenKey, params: {} } }));
+        // Lua names a screen (the Dispatch key, a call just now); else the officer option openOn picks one, or none
+        const screen = m.screen ?? openScreenFor(target, next);
+        if (screen && screensFor(target, next).some(s => s.key === screen)) {
+            setScreens(prev => ({ ...prev, [target]: { key: screen as ScreenKey, params: {} } }));
         }
     });
     useNuiEvent('close', () => {

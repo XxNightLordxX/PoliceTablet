@@ -273,6 +273,49 @@ do
     H.eq(Saved('OPT00001') and Saved('OPT00001').hiddenTypes, nil, 'back to the defaults: nothing saved')
 end
 
+-- Dispatch and opening (shared/options_dispatch.lua, step O9): one-click claim, call pop-ups, the tablet key after a
+-- call and the screen the tablet opens on are saved with the character; the remembered filters stay on the PC and are
+-- not a row of My options.
+do
+    local view = Cb('getOptions', 1).data
+    local v = view.values
+    H.ok(
+        v.skipClaimConfirm == false and v.callAlerts == 'all' and v.dispatchKeyAfterCall == false and v.openOn == 'last',
+        'the dispatch options ship as today: Claim asks, every call pops up, last screen')
+    H.eq(v.rememberFilters, nil, 'remember my filters is kept on the PC, not with the character')
+    local rows = {}
+    for _, d in ipairs(view.schema) do rows[d.key] = d end
+    H.ok(rows.openOn and rows.callAlerts and rows.rememberFilters and rows.rememberFilters.store == 'local',
+        'the new options are rows of My options')
+    H.eq(rows.filters, nil, 'the remembered filters are not a row of their own')
+    local ok, data = Act(1, { callAlerts = 'favourites', openOn = 'active_on_run', skipClaimConfirm = true })
+    H.ok(ok == true and data.values.callAlerts == 'favourites' and data.values.openOn == 'active_on_run',
+        'favourite types only, open on Active Mission on a run')
+    H.eq(Saved('OPT00001').skipClaimConfirm, true, '...saved with the character')
+    H.eq(select(2, Act(1, { callAlerts = 'none' })), 'err.option_value', '\'none\' stays Mute call alerts on Dispatch')
+    H.eq(select(2, Act(1, { openOn = 'board' })), 'err.option_value', 'open on: last, home or active_on_run only')
+    H.eq(select(2, Act(1, { filters = { 'dispatch.filter:near' } })), 'err.invalid_payload',
+        'the filters are not saved with the character')
+    H.ok(Defs.check('filters', { 'dispatch.filter:near', 'leaderboard.period:monthly' }) ~= nil,
+        'a remembered filter list of offered values is good')
+    H.eq(select(2, Defs.check('filters', { 'dispatch.filter:everything' })), 'err.option_value',
+        'a filter value no screen offers is refused')
+    local ses = Cb('getSession', 1, { ui = 'officer', via = 'command' }).data
+    H.ok(
+        ses.options.openOn == 'active_on_run' and type(ses.opening) == 'table' and ses.opening.onRun == false
+            and ses.opening.readyCheck == false,
+        'the session carries openOn and the officer\'s run and ready check'
+    )
+    local keepRuns = CP.Runs
+    CP.Runs = setmetatable({
+        getBySrc = function(src) return src == 1 and {} or nil end,
+    }, { __index = keepRuns })
+    H.eq(Cb('getSession', 1, { ui = 'officer', via = 'command' }).data.opening.onRun, true, 'on a run: onRun')
+    CP.Runs = keepRuns
+    Act(1, { callAlerts = 'all', openOn = 'last', skipClaimConfirm = false })
+    H.eq(Saved('OPT00001') and Saved('OPT00001').openOn, nil, 'back to the defaults: nothing saved')
+end
+
 -- the column the step adds, in every storage mode (files mode: the saves folder engine)
 H.ok(pcall(H.sql, 'SELECT options FROM cp_officers LIMIT 1'), 'migration 010: cp_officers.options exists')
 

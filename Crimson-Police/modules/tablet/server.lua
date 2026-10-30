@@ -494,6 +494,22 @@ local function WayOf(src, args)
     return via, (via == 'desk' and desk and desk > 0) and desk or nil
 end
 
+-- What the officer option openOn 'active_on_run' needs (My options -> Opening the tablet): whether the player is on a
+-- run, and whether his unit's ready check waits for his answer.
+local function Opening(src)
+    local onRun = CP.Runs and CP.Runs.getBySrc and CP.Runs.getBySrc(src) ~= nil or false
+    local waiting = false
+    local U = CP.Units
+    local unit = U and U.unitOf and U.unitOf(src) or nil
+    local check = unit and U.readyCheckOf and U.readyCheckOf(unit) or nil
+    if type(check) == 'table' and not check.done and type(check.answers) == 'table' then
+        for _, m in ipairs(type(check.members) == 'table' and check.members or {}) do
+            if m == src and check.answers[m] == nil then waiting = true end
+        end
+    end
+    return { onRun = onRun, readyCheck = waiting }
+end
+
 -- The Session (§9.2) for 'ui', or nil and an error key. May yield. args: { via, desk } (how it was opened).
 local function BuildSession(src, ui, args)
     if not CP.Access then return nil, 'err.internal' end
@@ -555,6 +571,7 @@ local function BuildSession(src, ui, args)
     return {
         ui = ui,
         title = type(title) == 'string' and title ~= '' and title or 'Crimson-Police',
+        opening = ui ~= 'admin' and officer and Opening(src) or nil,
         roles = roles,
         officer = officer and SessionOfficer(officer, row) or nil,
         theme = theme,

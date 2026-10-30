@@ -648,21 +648,44 @@ local function ToastPayload(call)
     }
 end
 
--- cp_officers.calls_muted (saved by the profile screen), cached per officer.
-local function IsMuted(citizenid)
+-- The officer option callAlerts (My options -> Dispatch): 'favourites' = the set of his favourite types (a call of
+-- another type shows on Dispatch with no pop-up), nil = every call pops up ('all', no favourites picked, or no
+-- CP.Options).
+local function FavouriteAlerts(citizenid, deptKey)
+    if not (CP.Options and CP.Options.effective) then return nil end
+    local ok, opts = pcall(CP.Options.effective, citizenid, deptKey)
+    if not ok or type(opts) ~= 'table' or opts.callAlerts ~= 'favourites' then return nil end
+    local set, any = {}, false
+    for _, k in ipairs(type(opts.favouriteTypes) == 'table' and opts.favouriteTypes or {}) do
+        set[k] = true
+        any = true
+    end
+    return any and set or nil
+end
+
+-- cp_officers.calls_muted (saved by the profile screen) and the callAlerts favourites, cached per officer.
+local function AlertsOf(citizenid, deptKey)
     local now = os.time()
     local m = muted[citizenid]
-    if m and now - m.at < MUTE_CACHE_S then return m.v end
+    if m and now - m.at < MUTE_CACHE_S then return m end
     CP.Migrations.ready()
     local ok, v = pcall(MySQL.scalar.await, 'SELECT calls_muted FROM cp_officers WHERE citizenid = ?', { citizenid })
     local val = ok and CP.U.truthy(v) or false
-    muted[citizenid] = { v = val, at = now }
-    return val
+    m = { v = val, fav = not val and FavouriteAlerts(citizenid, deptKey) or nil, at = now }
+    muted[citizenid] = m
+    return m
+end
+
+-- Whether a call of this type pops up for the officer: not muted, and a favourite type when he picked favourites.
+local function Alerts(citizenid, deptKey, callType)
+    local m = AlertsOf(citizenid, deptKey)
+    if m.v then return false end
+    return m.fav == nil or m.fav[callType] == true
 end
 MC._forgetMuted = function(citizenid) muted[citizenid] = nil end
 
--- The toast and tone for every member of the given idle units who could claim the call and has not muted calls
--- (skipCid: a unit with that member already had it, e.g. the paged unit).
+-- The toast and tone for every member of the given idle units who could claim the call and has not muted calls (or
+-- picked favourite types only and this is not one; skipCid: a unit with that member already had it, e.g. paged).
 local function Toast(call, units, skipCid)
     local payload = ToastPayload(call)
     local now = os.time()
@@ -673,8 +696,8 @@ local function Toast(call, units, skipCid)
         local skip = skipCid ~= nil and Contains(u.cids, skipCid)
         if not skip and st.ok and EffectivePool(st, area) > 0 and (not rule or soft == 'priority') then
             for i, m in ipairs(u.srcs) do
-                local cid = u.cids[i]
-                if cid and not IsMuted(cid) and not IsOnCall(m) then
+                local cid, o = u.cids[i], u.officers[i]
+                if cid and Alerts(cid, o and o.department, call.type) and not IsOnCall(m) then
                     TriggerClientEvent(CP.e('client:missionCall'), m, payload)
                 end
             end

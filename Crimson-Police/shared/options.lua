@@ -17,7 +17,8 @@ end
 -- def: { kind = 'bool'|'enum'|'list'|'number', values = list | function() -> list (enum and list), default,
 -- min, max (number: the widest bounds an owner may set), integer (number: whole numbers only), store = 'server'
 -- (saved per character, the default) | 'local' (kept by the tablet only), group, order, guard = function(clean) ->
--- nil | errKey (refuses a whole value, e.g. a list that hides every type) }. Returns true, or false and why.
+-- nil | errKey (refuses a whole value, e.g. a list that hides every type), hidden = true (kept like any option but
+-- not a row of My options, e.g. the remembered filters) }. Returns true, or false and why.
 function Defs.add(key, def)
     if type(key) ~= 'string' or key == '' or type(def) ~= 'table' then return false, 'a key and a table' end
     if not KINDS[def.kind] then return false, 'unknown kind ' .. tostring(def.kind) end
@@ -39,6 +40,7 @@ function Defs.add(key, def)
         group = type(def.group) == 'string' and def.group or 'general',
         order = Finite(def.order) or 100,
         guard = type(def.guard) == 'function' and def.guard or nil,
+        hidden = def.hidden == true,
     }
     if entry.kind == 'bool' and type(entry.default) ~= 'boolean' then entry.default = false end
     if entry.kind == 'list' and type(entry.default) ~= 'table' then entry.default = {} end

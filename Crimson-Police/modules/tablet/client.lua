@@ -474,6 +474,18 @@ function T.close()
     return wasOpen
 end
 
+-- The officer option dispatchKeyAfterCall (My options -> Dispatch): the tablet opens on Dispatch while the last
+-- mission call pop-up is younger than this. Nothing is claimed.
+local DISPATCH_AFTER_CALL_MS = 20000
+
+-- 'dispatch' when the officer turned dispatchKeyAfterCall on and a mission call popped up a moment ago, else nil.
+local function ScreenAfterCall(now)
+    if not (CP.Options and CP.Options.get and CP.Options.get('dispatchKeyAfterCall') == true) then return nil end
+    local at = CP.MissionCalls and CP.MissionCalls.lastCueAt and CP.MissionCalls.lastCueAt() or nil
+    if type(at) ~= 'number' or now - at >= DISPATCH_AFTER_CALL_MS then return nil end
+    return 'dispatch'
+end
+
 -- /CrimsonPolice and the key mapping land here (via = 'command' or 'keybind').
 local function ToggleOfficer(via)
     local now = GetGameTimer()
@@ -483,7 +495,7 @@ local function ToggleOfficer(via)
         T.close()
         return
     end
-    T.open('officer', { via = via })
+    T.open('officer', { via = via, screen = ScreenAfterCall(now) })
 end
 
 -- The item, the export and a desk (via = 'item', 'export' or 'desk').

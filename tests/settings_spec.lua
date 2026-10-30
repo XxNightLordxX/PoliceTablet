@@ -993,6 +993,26 @@ do
     end
 end
 
+-- Dispatch and opening (step O9): one-click claim, call pop-ups, the key after a call, open on, remember filters;
+-- allowed, shipped as today, each with its comment.
+do
+    local function E(p) return S.entry(p) or {} end
+    for _, key in ipairs({ 'skipClaimConfirm', 'callAlerts', 'dispatchKeyAfterCall', 'openOn', 'rememberFilters' }) do
+        H.eq(E('OfficerOptions.allow.' .. key).default, true, key .. ': officers may change it')
+        H.ok((E('OfficerOptions.defaults.' .. key).desc or '') ~= '', key .. ': its default has a comment')
+    end
+    H.eq(E('OfficerOptions.defaults.skipClaimConfirm').default, false, 'Claim asks first, as before')
+    H.eq(E('OfficerOptions.defaults.dispatchKeyAfterCall').default, false, 'the tablet key opens as usual')
+    H.eq(E('OfficerOptions.defaults.rememberFilters').default, false, 'every screen starts from its defaults')
+    H.eq(E('OfficerOptions.defaults.callAlerts').default, 'all', 'every call pops up, as before')
+    H.eq(E('OfficerOptions.defaults.callAlerts').kind, 'enum', 'call pop-ups are a choice')
+    Err('OfficerOptions.defaults.callAlerts', 'none', 'err.setting_option', 'call pop-ups: all or favourites')
+    H.eq(E('OfficerOptions.defaults.openOn').default, 'last', 'the tablet opens on the last screen, as before')
+    H.eq(E('OfficerOptions.defaults.openOn').kind, 'enum', 'open on is a choice')
+    Err('OfficerOptions.defaults.openOn', 'board', 'err.setting_option', 'open on: last, home or active_on_run')
+    H.ok((Check('OfficerOptions.defaults.openOn', 'active_on_run')), 'Active Mission on a run may be the default')
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

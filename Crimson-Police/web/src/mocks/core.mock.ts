@@ -18,6 +18,10 @@ function numberParam(name: string): number | null {
     return isFinite(n) ? n : null;
 }
 
+// ?openOn=home|active_on_run (step O9): the officer option the session carries; with active_on_run the dev panel's
+// run toggle (or ?readyCheck=1) picks the screen the next open lands on.
+const OPEN_ON = PARAMS.get('openOn');
+
 // URL overrides win over the profile mock's saved look.
 function withUrlLook(prefs: Prefs): Prefs {
     const scale = numberParam('uiScale');
@@ -55,6 +59,8 @@ async function sessionFor(ui: UiKind): Promise<Session> {
         },
         prefs: withUrlLook(saved?.prefs ?? DEFAULT_PREFS),
         access: { via: 'command', desk: null },
+        ...(OPEN_ON ? { options: { openOn: OPEN_ON } } : {}),
+        opening: { onRun: devState.runActive, readyCheck: PARAMS.get('readyCheck') === '1' },
         config: { ...s.config, format: s.config.format ?? { currency: '$', currencyAfter: false } },
     };
 }

@@ -61,5 +61,22 @@
   "options.key.hiddenTypes": "Hidden types",
   "options.key.hiddenTypes_hint": "These mission types fold under Hidden types at the bottom of the board. You can still open and accept them.",
   "options.key.skipAcceptConfirm": "Accept in one click",
-  "options.key.skipAcceptConfirm_hint": "Accept starts a mission type at once and the warnings show under the cards. To add twists, use the Twists button on the card. The Weekly Boss still asks first."
+  "options.key.skipAcceptConfirm_hint": "Accept starts a mission type at once and the warnings show under the cards. To add twists, use the Twists button on the card. The Weekly Boss still asks first.",
+  "options.group.dispatch": "Dispatch",
+  "options.key.skipClaimConfirm": "Claim in one click",
+  "options.key.skipClaimConfirm_hint": "Claim on a mission call takes it at once and the warnings show under the calls. To add twists, use the Twists button on the call. If several units claim together, the nearest still wins.",
+  "options.key.callAlerts": "Call pop-ups",
+  "options.key.callAlerts_hint": "Favourite types only: a new call pops up only for your favourite mission types (Mission Board). Every call still shows on Dispatch. With no favourite types picked, every call pops up. To silence all calls, use Mute call alerts on Dispatch.",
+  "options.value.callAlerts.all": "Every call",
+  "options.value.callAlerts.favourites": "Favourite types only",
+  "options.key.dispatchKeyAfterCall": "Tablet key opens Dispatch after a call",
+  "options.key.dispatchKeyAfterCall_hint": "For 20 seconds after a mission call pops up, the tablet key opens the tablet on Dispatch. Nothing is claimed.",
+  "options.group.opening": "Opening the tablet",
+  "options.key.openOn": "Open on",
+  "options.key.openOn_hint": "The screen the tablet opens on. On a mission: Active Mission while you are on a run, Unit while a ready check waits for you, otherwise the last screen.",
+  "options.value.openOn.last": "The last screen",
+  "options.value.openOn.home": "Home",
+  "options.value.openOn.active_on_run": "Active Mission on a mission",
+  "options.key.rememberFilters": "Remember my filters",
+  "options.key.rememberFilters_hint": "Dispatch and the Leaderboard open with the filters you used last time on this PC."
 }

@@ -157,6 +157,9 @@ H.eq(select(2, O.setLocal('toastTime', 'forever')), 'err.option_value', 'the toa
 H.ok((O.setLocal('resultTime', 10)) and O.get('resultTime') == 10, 'a 10 s result card is kept on this PC')
 H.eq(LastLocal() and LastLocal().resultTime, 10, 'the NUI got the result card time')
 
+-- the real modules/tablet/client.lua (its CP.Tablet), kept for the tablet key below
+local tabletModule = nil
+
 -- the real CP.Tablet.notify (modules/tablet/client.lua) with the options above
 do
     local nui = {}
@@ -175,6 +178,7 @@ do
     CP.Tablet = nil
     H.load('modules/tablet/client.lua')
     local T = CP.Tablet
+    tabletModule = T
     local function Last()
         for i = #nui, 1, -1 do
             if nui[i].type == 'notify' then return nui[i].notification end
@@ -269,6 +273,56 @@ do
     end
     CP.Tablet.notify = nil
     kvp['crimsonpolice:options'] = nil
+end
+
+-- Dispatch (shared/options_dispatch.lua, step O9): with dispatchKeyAfterCall the tablet key opens Dispatch for 20 s
+-- after a mission call pop-up; nothing is claimed. The option is saved with the character (the session's values).
+do
+    local T = tabletModule
+    local realOpen = T.open
+    local opened = {}
+    T.open = function(ui, opts)
+        opened[#opened + 1] = { ui = ui, screen = opts and opts.screen, via = opts and opts.via }
+        return true
+    end
+    local requests = 0
+    local realRequest = CP.Net.request
+    CP.Net.request = function(...)
+        requests = requests + 1
+        return realRequest(...)
+    end
+    local function Key()
+        H.clockMs = H.clockMs + 1000
+        H.commands.crimsonpolice_tablet.fn()
+        return opened[#opened]
+    end
+    local function Call()
+        H.clockMs = H.clockMs + 10000
+        H.fire('crimson-police:client:missionCall', nil, { code = 'MC-9', typeLabel = 'Patrol', priority = 2 })
+    end
+    CP.Access.setSession(Session({}, nil))
+    H.eq(O.get('dispatchKeyAfterCall'), false, 'dispatchKeyAfterCall ships off')
+    Call()
+    H.eq(Key().screen, nil, 'off: the tablet key opens the tablet as usual, just after a call (as before)')
+    CP.Access.setSession(Session({ dispatchKeyAfterCall = true }, nil))
+    H.clockMs = H.clockMs + 25000
+    H.eq(Key().screen, nil, 'on, but the last call popped up more than 20 s ago: as usual')
+    Call()
+    H.clockMs = H.clockMs + 5000
+    local k = Key()
+    H.ok(k.screen == 'dispatch' and k.ui == 'officer' and k.via == 'keybind',
+        'on: the tablet key within 20 s of a call opens the Officer UI on Dispatch')
+    H.eq(requests, 0, '...and claims nothing')
+    H.clockMs = H.clockMs + 14000
+    H.eq(Key().screen, nil, 'on: 20 s after the call the key opens as usual again')
+    local keepAllow = Config.OfficerOptions.allow.dispatchKeyAfterCall
+    Config.OfficerOptions.allow.dispatchKeyAfterCall = false
+    Call()
+    H.eq(Key().screen, nil, 'allow.dispatchKeyAfterCall = false: the saved choice is ignored')
+    Config.OfficerOptions.allow.dispatchKeyAfterCall = keepAllow
+    CP.Net.request = realRequest
+    T.open = realOpen
+    CP.Access.setSession(Session({}, nil))
 end
 
 -- the client file uses no os or io

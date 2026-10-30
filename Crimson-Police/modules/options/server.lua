@@ -53,13 +53,14 @@ function Options.effective(citizenid, deptKey, raw)
     return out
 end
 
--- The officer's options for the tablet: { enabled, schema, values } (schema: the allowed options only).
+-- The officer's options for the tablet: { enabled, schema, values } (schema: the allowed options that are rows of My
+-- options; a hidden one, such as the remembered filters, is set by its screen).
 function Options.view(officer)
     local allow, defaults, bounds = Defs.resolve(officer.department)
     local schema = {}
     for _, key in ipairs(Defs.keys()) do
         local d = Defs.get(key)
-        if allow[key] then
+        if allow[key] and not d.hidden then
             schema[#schema + 1] = {
                 key = key,
                 kind = d.kind,
@@ -130,6 +131,8 @@ function Options.set(src, patch)
     if not Write(officer, saved) then return false, 'err.internal' end
     local values = Options.effective(officer.citizenid, officer.department, saved)
     CP.log(TAG, '%s changed their options', officer.citizenid)
+    -- the call pop-ups (callAlerts, favouriteTypes) apply to the next call, not after the 30 s cache
+    if CP.MissionCalls and CP.MissionCalls._forgetMuted then CP.MissionCalls._forgetMuted(officer.citizenid) end
     if CP.Tablet and CP.Tablet.push then CP.Tablet.push(src, 'options', { values = values }) end
     return true, { values = values }
 end

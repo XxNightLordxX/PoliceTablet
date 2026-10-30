@@ -1786,6 +1786,8 @@ My options holds the choices each officer makes for their own tablet, saved per 
 - Pop-ups (kept on this PC, for every character played on it): Notification time (Short: 3 s, warnings and errors 5 s; Normal, as before: 5 s and 7 s; Long: 8 s and 12 s; a notification that brings its own time, such as the ready check, keeps it), Result card time (seconds the mission result card stays, inside Config.OfficerOptions.bounds.resultTime, shipped 8 to 60, default 25 as before; the officer can still close it sooner) and Fewer pop-ups during a mission (off by default: while it is on and the officer is on a run, unit invites, commendations, rewards and profile news that are not warnings or errors go only to the bell; route, custody and mission messages, warnings and errors always pop up). Each is allowed by default (Config.OfficerOptions.allow).
 
 - Mission Board (saved with the character, on any PC): Favourite types (these mission types come first on the board, in the board's order), Hidden types (these fold under "Hidden types (n) - Show" below the cards and can still be opened and accepted; a favourite is never folded, and at least one type is always left on the board, so a list that hides every type is refused) and Accept in one click (off by default: Accept on a type card starts it at once, without the confirm; the confirm's lines, the random draw, the type cooldown, the route and a unit leader's unit note, show as a footnote under the cards; the Twists button on a card opens the old dialog to add twists; the Weekly Boss still asks first). Only the order and folding of the type cards change: the Weekly Boss and the Cross-Department card stay where they are, and Accept still runs every check and draws a mission of the type at random (Hard rule Mission choice). Each is allowed by default (Config.OfficerOptions.allow).
+- Dispatch (saved with the character, on any PC): Claim in one click (off by default: Claim on a mission call takes it at once, without the confirm; the confirm's lines, the random draw and the abandon cooldown, show as a footnote under the calls; a Twists button on a call opens the old dialog to add twists; the claim window still ranks every claim by distance, then fewer claims), Call pop-ups ('all' by default; 'favourites' = a new mission call pops up, with its tone, only when its type is one of the officer's favourite types, and every call still shows on Dispatch; with no favourite type picked every call pops up; the answer is cached with calls_muted for 30 s and a change of the officer's options clears it; muting every call stays Mute call alerts on Dispatch, cp_officers.calls_muted) and Tablet key opens Dispatch after a call (off by default: for 20 seconds after a mission call pops up on this client, the tablet key or command opens the Officer UI on Dispatch; nothing is claimed). Each is allowed by default (Config.OfficerOptions.allow).
+- Opening the tablet: Open on (saved with the character; 'last' by default = the screen the tablet was closed on; 'home' = Home; 'active_on_run' = Unit while the unit's ready check waits for the officer's answer, Active Mission while he is on a run, else the last screen; the session carries opening { onRun, readyCheck }; a screen Lua names, the Dispatch key or the key after a call, wins) and Remember my filters (kept on this PC, off by default: Dispatch's filter and the Leaderboard's period, board, department and metric start from the choices of the last visit, kept in the local option filters, which is not a row of My options). Officer UI only. Each is allowed by default (Config.OfficerOptions.allow).
 
 - Sounds (kept on this PC, for every character played on it): Mission call tone, Unit tone (a unit invite and a ready check) and Objective cues (a checkpoint passed, a target defused, an item found on a run). Each is on by default, as before; off plays nothing and every pop-up and HUD line still shows. On or off only: the game's sounds have no volume. The Builder's own sounds are not affected. Each is allowed by default (Config.OfficerOptions.allow).
 
@@ -3980,6 +3982,11 @@ Config.OfficerOptions = {
         favouriteTypes = true,       -- the mission types shown first on the Mission Board (this character)
         hiddenTypes = true,          -- the mission types folded away on the Mission Board (this character)
         skipAcceptConfirm = true,    -- accept a mission type in one click, without the confirm (this character)
+        skipClaimConfirm = true,     -- claim a mission call in one click, without the confirm (this character)
+        callAlerts = true,           -- which new mission calls pop up: every call or favourite types (this character)
+        dispatchKeyAfterCall = true, -- the tablet key opens Dispatch just after a mission call (this character)
+        openOn = true,               -- the screen the tablet opens on (this character)
+        rememberFilters = true,      -- Dispatch and the Leaderboard keep their filters (kept on this PC)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -4004,6 +4011,16 @@ Config.OfficerOptions = {
                                      -- type; {} = none (as before)
         skipAcceptConfirm = false,   -- true = Accept starts a type at once, the warnings sit under the cards; false =
                                      -- Accept asks first (as before)
+        skipClaimConfirm = false,    -- true = Claim on a mission call takes it at once (the nearest unit still wins a
+                                     -- claim together); false = Claim asks first (as before)
+        callAlerts = 'all',          -- 'all' = every new mission call pops up (as before); 'favourites' = only calls
+                                     -- of the officer's favourite types, the rest still show on Dispatch
+        dispatchKeyAfterCall = false, -- true = for 20 s after a mission call pops up, the tablet key opens Dispatch
+                                     -- (nothing is claimed); false = it opens as usual (as before)
+        openOn = 'last',             -- the screen the tablet opens on: 'last' (the screen it was closed on, as before),
+                                     -- 'home' or 'active_on_run' (Active Mission on a run, Unit in a ready check)
+        rememberFilters = false,     -- true = Dispatch and the Leaderboard open with the filters used last on this
+                                     -- PC; false = their own defaults (as before)
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick

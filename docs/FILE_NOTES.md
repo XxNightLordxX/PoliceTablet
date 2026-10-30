@@ -3774,6 +3774,15 @@ Settings applies to the next NPC. The run-scoped damage settings of each officer
 modules/npccombat/client.lua; the combat caps are applied by modules/npc/client.lua.
 ```
 
+## Crimson-Police/shared/options_dispatch.lua
+
+```text
+The Dispatch and opening officer options (My options -> Dispatch and Opening the tablet): claim in one click
+(skipClaimConfirm), the tablet key opens Dispatch just after a call (dispatchKeyAfterCall), which call pop-ups show
+(callAlerts), the screen the tablet opens on (openOn), all saved with the character; and remember my filters
+(rememberFilters, kept on this PC) with the filters themselves (filters: not a row of My options).
+```
+
 ## Crimson-Police/shared/options_look.lua
 
 ```text
@@ -4382,6 +4391,8 @@ setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=l
 ?hudSide=left&hudCompact=1&hudScale=1.2&reduceMotion=1 start the HUD options of this PC (with ?hud=progress);
 ?hudLook=1&textSize=large (with ?look=colourblind and ?hud=progress) the Easier to read options of the character.
 Pop-ups (step O6): ?toastTime=short|long, ?resultTime=10 (with ?result=parity: the card closes after 10 s).
+Board: ?fav=tactical&hide=training&oneClick=1.
+Dispatch: ?oneClickClaim=1 (Claim takes a call at once), ?rememberFilters=1. Open on: ?openOn= (core.mock.ts).
 ```
 
 ## Crimson-Police/web/src/mocks/run_ui.mock.ts
@@ -4612,6 +4623,15 @@ src/shared/nui.ts · the NUI bridge (docs/ARCHITECTURE.md §9.1).
 In a normal browser (isEnvBrowser()) nothing is POSTed: request/action/client calls are answered
 by mocks registered with registerMock() (see src/mocks/*.mock.ts), and emitDebug() fakes Lua
 messages. Every call resolves (never rejects) to { ok, data?, error? } where error is an err.* key.
+```
+
+## Crimson-Police/web/src/shared/openOn.ts
+
+```text
+The screen an 'open' without a screen of its own lands on (step O9): the officer option openOn, saved with the
+character. 'last' (as before) keeps the screen the tablet was closed on; 'home' opens Home; 'active_on_run' opens
+Unit while the unit's ready check waits for the officer's answer, Active Mission while he is on a run, else the
+last screen. Only the Officer UI: the Supervisor and Admin UIs keep their screens.
 ```
 
 ## Crimson-Police/web/src/shared/options.ts

@@ -174,5 +174,7 @@
   "admin.action.mcCreate": "Mission call made",
   "admin.action.mcCreateSkipWait": "Mission call made without the wait",
   "admin.action.mcPage": "Unit paged for a mission call",
-  "admin.action.mcWithdraw": "Mission call withdrawn"
+  "admin.action.mcWithdraw": "Mission call withdrawn",
+  "mc.card.twists_hint": "Pick twists, then claim",
+  "mc.oneclick.note": "Claim takes a call at once. The mission is drawn at random after the claim, and abandoning it puts the type on cooldown. To add twists, use the Twists button on the call."
 }

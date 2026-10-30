@@ -119,6 +119,7 @@ PoliceTablet/                      (git repo)
     shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
     shared/options.lua             CP.OptionDefs: the officer options registry and its rules (§5.48)
     shared/options_board.lua       Mission Board: favourite types first, hidden types folded, one-click accept (§5.48)
+    shared/options_dispatch.lua    Dispatch and opening: one-click claim, call pop-ups, key after a call, open on (§5.48)
     shared/options_hud.lua         The mission HUD's officer options: side, size, compact, fewer animations (§5.48)
     shared/options_look.lua        Easier to read: the tablet look on the HUD, larger text (§5.48)
     shared/options_popups.lua      Pop-ups: toast time, result card time, fewer pop-ups on a run (§5.48)
@@ -3298,6 +3299,22 @@ no option is registered by this module: each feature registers its own keys.
   (random draw, cooldown, route, the unit note) show as a footnote under the cards; the Weekly Boss still asks.
   `server:acceptType` and the draw are unchanged. Shipped allowed, defaults `{}`, `{}`, false. Walk:
   officer/screens/boardOrder.walk.ts. Mock: `?fav=tactical&hide=training&oneClick=1`.
+- Dispatch and opening (step O9, shared/options_dispatch.lua, groups `dispatch` and `opening`): `skipClaimConfirm`
+  (bool, server; Dispatch.tsx `claimNow` sends `server:claimMissionCall` at once with no twists, a Twists button opens
+  the dialog, the dialog's lines are the footnote `mc.oneclick.note`; the claim window is unchanged), `callAlerts`
+  ('all' | 'favourites', server; modules/missioncalls/server.lua `AlertsOf` caches calls_muted and the favourite set
+  together for MUTE_CACHE_S, `CP.Options.set` clears it through `_forgetMuted`; `Toast` skips `client:missionCall`
+  for a type outside the set, Dispatch lists every call; a paged call still reaches the paged unit),
+  `dispatchKeyAfterCall` (bool, server; modules/tablet/client.lua `ScreenAfterCall`: `ToggleOfficer` opens with
+  screen 'dispatch' while `CP.MissionCalls.lastCueAt()` is under DISPATCH_AFTER_CALL_MS = 20000), `openOn` ('last' |
+  'home' | 'active_on_run', server; the session's `opening` { onRun, readyCheck } from modules/tablet/server.lua
+  `Opening` (CP.Runs.getBySrc, CP.Units.readyCheckOf with the officer's answer missing); App.tsx's 'open' handler uses
+  `openScreenFor` (web/src/shared/openOn.ts) when Lua names no screen), `rememberFilters` (bool, local) and `filters`
+  (list, local, `hidden = true`: kept like any option but not in `CP.Options.view`'s schema; values
+  'dispatch.filter:*', 'leaderboard.period|filter|department|metric:*' from the config, asked at every call;
+  web/src/shared/filters.ts `useRememberedFilter` in Dispatch.tsx and Leaderboard.tsx). Shipped allowed, defaults
+  false, 'all', false, 'last', false. Walk: shared/openOn.walk.ts. Mock: `?oneClickClaim=1`,
+  `?openOn=active_on_run` (with the dev panel's run toggle or `?readyCheck=1`), `?rememberFilters=1`.
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 

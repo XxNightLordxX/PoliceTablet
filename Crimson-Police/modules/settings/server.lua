@@ -1019,6 +1019,8 @@ local KNOWN = {
     ['OfficerOptions.defaults.hudSide'] = { tpl = Enum({ 'right', 'left' }), kind = 'enum' },
     ['OfficerOptions.defaults.toastTime'] = { tpl = Enum({ 'short', 'normal', 'long' }), kind = 'enum' },
     ['OfficerOptions.defaults.textSize'] = { tpl = Enum({ 'normal', 'large' }), kind = 'enum' },
+    ['OfficerOptions.defaults.callAlerts'] = { tpl = Enum({ 'all', 'favourites' }), kind = 'enum' },
+    ['OfficerOptions.defaults.openOn'] = { tpl = Enum({ 'last', 'home', 'active_on_run' }), kind = 'enum' },
     ['OfficerOptions.defaults.favouriteTypes'] = { tpl = ListOf(ID, { unique = true }), kind = 'list', item = 'string' },
     ['OfficerOptions.defaults.hiddenTypes'] = { tpl = ListOf(ID, { unique = true }), kind = 'list', item = 'string' },
     ['Profile.appearances'] = {

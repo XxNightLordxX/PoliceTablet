@@ -1425,6 +1425,11 @@ Config.OfficerOptions = {
         favouriteTypes = true,       -- the mission types shown first on the Mission Board (this character)
         hiddenTypes = true,          -- the mission types folded away on the Mission Board (this character)
         skipAcceptConfirm = true,    -- accept a mission type in one click, without the confirm (this character)
+        skipClaimConfirm = true,     -- claim a mission call in one click, without the confirm (this character)
+        callAlerts = true,           -- which new mission calls pop up: every call or favourite types (this character)
+        dispatchKeyAfterCall = true, -- the tablet key opens Dispatch just after a mission call (this character)
+        openOn = true,               -- the screen the tablet opens on (this character)
+        rememberFilters = true,      -- Dispatch and the Leaderboard keep their filters (kept on this PC)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -1449,6 +1454,16 @@ Config.OfficerOptions = {
                                      -- type; {} = none (as before)
         skipAcceptConfirm = false,   -- true = Accept starts a type at once, the warnings sit under the cards; false =
                                      -- Accept asks first (as before)
+        skipClaimConfirm = false,    -- true = Claim on a mission call takes it at once (the nearest unit still wins a
+                                     -- claim together); false = Claim asks first (as before)
+        callAlerts = 'all',          -- 'all' = every new mission call pops up (as before); 'favourites' = only calls
+                                     -- of the officer's favourite types, the rest still show on Dispatch
+        dispatchKeyAfterCall = false, -- true = for 20 s after a mission call pops up, the tablet key opens Dispatch
+        -- (nothing is claimed); false = it opens as usual (as before)
+        openOn = 'last',             -- the screen the tablet opens on: 'last' (the screen it was closed on, as before),
+                                     -- 'home' or 'active_on_run' (Active Mission on a run, Unit in a ready check)
+        rememberFilters = false,     -- true = Dispatch and the Leaderboard open with the filters used last on this
+                                     -- PC; false = their own defaults (as before)
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick

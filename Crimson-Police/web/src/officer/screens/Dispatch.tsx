@@ -24,7 +24,9 @@ import { asArray } from '../../shared/data';
 import { formatDistance } from '../../shared/format';
 import { useAction, usePush, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
+import { useRememberedFilter } from '../../shared/filters';
 import { useNavigate } from '../../shared/navigation';
+import { useOption } from '../../shared/options';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { ClaimCallResult, DispatchView, MissionCall, RecentCall } from '../../types/missioncalls';
@@ -38,6 +40,7 @@ const NEAR_M = 3000;
 const PROFILE_SET = 'server:profile:set';
 
 type Filter = 'all' | 'claimable' | 'near';
+const FILTERS: Filter[] = ['all', 'claimable', 'near'];
 
 const PRIORITY_TONE: Record<number, BadgeTone> = { 1: 'danger', 2: 'warning', 3: 'primary' };
 const TYPE_ICONS: Record<string, IconName> = {
@@ -157,6 +160,7 @@ function CallCard({
     busy,
     blocked,
     onClaim,
+    onTwists,
     onChanged,
 }: {
     call: MissionCall;
@@ -164,6 +168,8 @@ function CallCard({
     busy: boolean;
     blocked: boolean;
     onClaim: (call: MissionCall) => void;
+    // claim in one click (My options): the twists go through the claim dialog, opened by this button
+    onTwists?: (call: MissionCall) => void;
     onChanged: () => void;
 }) {
     const distance = distanceText(call);
@@ -248,6 +254,18 @@ function CallCard({
             </div>
             <div className="mc-card__foot">
                 <StatusLine call={call} stamp={stamp} onChanged={onChanged} />
+                {onTwists && asArray(call.twists).length > 0 ? (
+                    <Button
+                        variant="ghost"
+                        icon="sliders"
+                        size="sm"
+                        disabled={!canClaim || busy}
+                        onClick={() => onTwists(call)}
+                        title={t('mc.card.twists_hint')}
+                    >
+                        {t('board.card.twists')}
+                    </Button>
+                ) : null}
                 <Button
                     variant={canClaim ? 'primary' : 'secondary'}
                     icon="radio"
@@ -301,7 +319,12 @@ export default function Dispatch() {
         if (view && typeof view === 'object') setData(view);
     });
     const { run, busy } = useAction();
-    const [filter, setFilter] = useState<Filter>('all');
+    // My options -> Opening the tablet (step O9): with rememberFilters on, the filter of the last visit (this PC)
+    const [filter, setFilter] = useRememberedFilter<Filter>('dispatch.filter', 'all', v =>
+        FILTERS.includes(v as Filter),
+    );
+    // My options -> Dispatch (step O9): Claim sends the claim at once; the dialog's lines are the footnote
+    const oneClick = useOption('skipClaimConfirm') === true;
     const [pending, setPending] = useState<MissionCall | null>(null);
     // the twists the leader picked in the claim dialog (PLAN M8b); a new dialog starts with none
     const [twists, setTwists] = useState<string[]>([]);
@@ -321,17 +344,25 @@ export default function Dispatch() {
     const blocked = !!data?.activeRunId || !!data?.onCall || !!data?.operation || !data?.unit?.isLeader;
     const refresh = () => void refetch();
 
-    const claim = async () => {
-        if (!pending) return;
-        const call = pending;
+    const claimCall = async (call: MissionCall, picked: string[]) => {
         const res = await run<ClaimCallResult>(
             'server:claimMissionCall',
-            twists.length ? { callId: call.id, twists } : { callId: call.id },
+            picked.length ? { callId: call.id, twists: picked } : { callId: call.id },
         );
         setPending(null);
         if (res.ok && res.data?.runId) navigate('active');
         else if (res.ok && res.data?.pending) toast('info', t('mc.toast.ready_check', { code: call.code }));
         void refetch();
+    };
+    const claim = async () => {
+        if (!pending) return;
+        await claimCall(pending, twists);
+    };
+    // Claim on a card: at once with skipClaimConfirm (no twists; a Twists button opens the dialog), else the dialog.
+    // The server still ranks every claim of the claim window by distance, then fewer claims.
+    const claimNow = (call: MissionCall) => {
+        if (oneClick) void claimCall(call, []);
+        else setPending(call);
     };
 
     const toggleMute = async (next: boolean) => {
@@ -410,7 +441,8 @@ export default function Dispatch() {
                                     stamp={stamp}
                                     busy={busy}
                                     blocked={blocked}
-                                    onClaim={setPending}
+                                    onClaim={claimNow}
+                                    onTwists={oneClick ? setPending : undefined}
                                     onChanged={() => setTimeout(refresh, 400)}
                                 />
                             ))}
@@ -420,6 +452,12 @@ export default function Dispatch() {
                             <EmptyState icon="radio" title={t('mc.empty.title')} text={t('mc.empty.text')} />
                         </Card>
                     )}
+                    {oneClick && shown.length ? (
+                        <p className="mc-footnote" role="note">
+                            <Icon name="zap" size={13} />
+                            <span>{t('mc.oneclick.note')}</span>
+                        </p>
+                    ) : null}
                     <RecentList recent={asArray(data.recent as RecentCall[] | undefined)} />
                     <p className="mc-footnote">
                         <Icon name="info" size={13} />
