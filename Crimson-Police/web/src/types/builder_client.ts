@@ -1,0 +1,321 @@
+// Shapes of the builder client slice: the in-world tool overlays sent by
+
+import type { MissionListData, MissionListEntry } from './oversight';
+import type { MissionSwitchView } from './settings';
+import type {
+    BuilderClientResult,
+    BuilderPlaceKind,
+    BuilderPlacePayload,
+    BuilderRecordPayload,
+    BuilderRoute,
+    BuilderTestDrivePayload,
+    Vec,
+    Vec3,
+} from './builder_server';
+
+// ============================================================================
+//                 OVERLAYS (Lua → NUI, message type 'overlay')
+// ============================================================================
+
+// The placement tool (Lua sends it every ~150 ms while the tool runs). `reason` is translated text.
+export interface PlacementOverlay {
+    kind: 'placement';
+    key: string;
+    // display name of the points being placed (payload.label, else the key)
+    label?: string;
+    mode?: BuilderPlaceKind;
+    placed: number;
+    min: number;
+    max: number;
+    multiple?: boolean;
+    // the spot under the aim can be placed
+    valid: boolean;
+    reason?: string | false;
+    // degrees, false when the points carry no heading
+    heading?: number | false;
+    // metres (starts and areas), else false
+    radius?: number | false;
+    // metres every point keeps from the start (the drawn circle), false when the key has no start rule
+    keepOut?: number | false;
+    // the points are enemies (the keep-out is the start circle plus Config.Builder.spawnMargin)
+    armed?: boolean;
+    // 1-based index of the placed point under the aim (Delete removes it), else false
+    aimed?: number | false;
+}
+
+export type RecordingWaiting = false | 'vehicle' | 'return' | 'checking';
+
+// Route recording HUD.
+export interface RecordingOverlay {
+    kind: 'recording';
+    key: string;
+    label?: string;
+    // metres (waypoint polyline, as the server measures it)
+    length: number;
+    // road waypoints so far
+    points: number;
+    // snapped samples so far
+    samples: number;
+    stops: number;
+    maxStops: number;
+    // E adds stop points (escort)
+    stopsEnabled: boolean;
+    paused: boolean;
+    // the last sample was rejected as off road
+    offRoad: boolean;
+    rejected: number;
+    waiting: RecordingWaiting;
+    // metres back to the end of the recording (waiting 'return')
+    distance: number | false;
+    loop: boolean;
+    // race loop: metres from the current end to the first waypoint
+    toStart: number | false;
+    // label of the no-build zone the current end is in
+    zone: string | false;
+    tooLong: boolean;
+    // metres Backspace removes (Config.Builder.route.undoMetres)
+    undoMetres?: number;
+    minLength: number;
+    maxLength: number;
+    // short feedback text (translated), e.g. "Stop point 1 added"
+    message: string | false;
+}
+
+export type TestDriveWaiting = false | 'approach' | 'clear' | 'spawning';
+
+// Test drive HUD.
+export interface TestDriveOverlay {
+    kind: 'testdrive';
+    key: string;
+    label?: string;
+    // waypoint the vehicle is driving to (1-based)
+    waypoint: number;
+    total: number;
+    // waypoints not reached within testDriveTimeout
+    failed: number[];
+    // seconds left to reach the current waypoint
+    timeLeft: number | false;
+    // seconds left at an escort stop
+    stopLeft: number | false;
+    waiting: TestDriveWaiting;
+    // metres to the route start (waiting 'approach')
+    distance: number | false;
+    speed?: number;
+    done?: boolean;
+}
+
+export type BuilderToolOverlay = PlacementOverlay | RecordingOverlay | TestDriveOverlay;
+
+// ============================================================================
+//                          CLIENT PROTOCOL EXTENSIONS
+// ============================================================================
+// Optional fields; the Lua client accepts them.
+
+export type BuilderUi = 'supervisor' | 'admin';
+
+// builderPlace payload as the screens send it: protocol §6 plus display label, reopen UI and spacing.
+export interface BuilderPlaceRequest extends BuilderPlacePayload {
+    label?: string;
+    ui?: BuilderUi;
+    // metres between points of this key (escort ambush points: Config.Blocks.escort.ambushGap)
+    minGap?: number;
+    radiusMin?: number;
+    radiusMax?: number;
+}
+// builderHere (Config.Builder.useMyPosition): the builderPlace payload; the spot where the player stands is checked
+// like an aimed one and the answer comes at once (the tablet stays open). result: a placement result with the point
+// added (or set), only when ok.
+export interface BuilderHereReply {
+    ok: boolean;
+    // the refusal, in words (false when ok)
+    reason: string | false;
+    point: Vec;
+    // a start: the street it stands on (GetStreetNameAtCoord), '' when it has no name
+    street?: string;
+    result?: BuilderClientResultEx;
+}
+// builderTeleport: which stored point (key 'start' with index 1 for the start), never where: the server checks the
+// caller, reads the saved point, logs the jump and sends the player there.
+export interface BuilderTeleportRequest {
+    missionId: string;
+    location: number;
+    key: string;
+    index: number;
+}
+// builderShowMap: temporary blips on the pause map (start, spawns, checkpoints); the tablet closes and the blips go
+// when it opens again. At most 300 points.
+export type BuilderMapPointKind = 'start' | 'spawn' | 'checkpoint';
+export interface BuilderMapPoint {
+    kind: BuilderMapPointKind;
+    coords: Vec3;
+}
+export interface BuilderShowMapRequest {
+    points: BuilderMapPoint[];
+}
+// builderAutoPoints (Config.Builder.autoFill): the builderPlace payload of a ped or vehicle key with many points and a
+// start, plus count (points to add) and anchor (the ring's centre, the start when missing). The answer comes once the
+// game has tried its spots (a few seconds); the tablet stays open.
+export interface BuilderAutoPointsRequest extends BuilderPlaceRequest {
+    count: number;
+    anchor?: Vec3;
+}
+export interface BuilderAutoPointsReply {
+    // at least one point was proposed
+    ok: boolean;
+    // why none, or why fewer than wanted, in words (false when all were found)
+    reason: string | false;
+    wanted: number;
+    // the new points only
+    proposed: Vec[];
+    // a placement result with the points already there and the proposed ones (only when ok)
+    result?: BuilderClientResultEx;
+}
+// builderCheckPoints ("Move the whole location here", Config.Builder.useMyPosition): every point list of one location
+// (flattened, in defUtils vecsOf order) with how far its start moved. Lua moves each point by offset, puts it on the
+// ground there and checks it again (a route only moves). The tablet stays open.
+export interface BuilderCheckPointsKey {
+    key: string;
+    kind?: BuilderPlaceKind;
+    model?: string;
+    spawn?: boolean;
+    armed?: boolean;
+    minGap?: number;
+    // a path the mission travels along: moved, never checked
+    route?: boolean;
+    points: Vec[];
+}
+export interface BuilderCheckPointsRequest {
+    missionId: string;
+    location: number;
+    ui?: BuilderUi;
+    // where the start is now, its radius, and how far it moved
+    start: Vec3;
+    startRadius?: number;
+    offset: Vec3;
+    keys: BuilderCheckPointsKey[];
+}
+export interface BuilderCheckPointsFailure {
+    // 1-based, in the key's points
+    index: number;
+    reason: string;
+}
+export interface BuilderCheckPointsReply {
+    // false: nothing was checked (reason says why, in words)
+    ok: boolean;
+    reason: string | false;
+    moved: number;
+    failed: number;
+    keys: { key: string; points: Vec[]; failed: BuilderCheckPointsFailure[]; checked: boolean }[];
+}
+export interface BuilderRecordRequest extends BuilderRecordPayload {
+    label?: string;
+    ui?: BuilderUi;
+}
+export interface BuilderTestDriveRequest extends BuilderTestDrivePayload {
+    label?: string;
+    ui?: BuilderUi;
+}
+
+// A result as the Lua client delivers it: `seq` (increasing) plus recording extras.
+export type BuilderClientResultEx = BuilderClientResult & {
+    seq?: number;
+    // recording: stop points dropped because they were on the first or last waypoint
+    droppedStops?: number;
+};
+
+// ============================================================================
+//                                EDITOR HELPERS
+// ============================================================================
+
+export type BuilderStepKey = 'blocks' | 'details' | 'settings' | 'locations' | 'scaling' | 'test' | 'publish';
+
+// How one location key of an objective is placed (derived from the block and its settings).
+export interface PointSpec {
+    // location key the objective references
+    key: string;
+    // objective field path that names the key (e.g. 'spawns', 'boss.spawn', 'associates.spawns')
+    field: string;
+    // locale key of the label
+    labelKey: string;
+    // placement kind; 'route' = recorded by driving
+    kind: BuilderPlaceKind | 'route';
+    heading: boolean;
+    multiple: boolean;
+    // a list of lists (flee routes): each placement adds one list
+    lists?: boolean;
+    min: number;
+    max: number;
+    // a spawn key: >= minSpawnFromStart from the start
+    spawn: boolean;
+    // armed spawns (shootout, boss, ambush and pursuit cars, door associates): outside the start circle plus
+    // Config.Builder.spawnMargin (armedKeepOut)
+    armed?: boolean;
+    model?: string;
+    minGap?: number;
+    // marker: the circle drawn around the ghost (search area)
+    radius?: number;
+    // route: E adds stop points while recording (escort)
+    stops?: boolean;
+    // route: a closed race loop
+    loop?: boolean;
+    // route: also offer placing the points one by one (checkpoint routes)
+    placeable?: boolean;
+    // route: at most this many waypoints are kept (checkpoint routes: Config.Blocks.checkpoint_route.checkpoints[2])
+    thinTo?: number;
+    // route: a recording is saved as plain points about this many metres apart along the drive, not as a road route
+    // (checkpoint routes: Config.Builder.route.patrolSpacing)
+    spacing?: number;
+    // kerb spots: each point is { coords, rule, street } (field_contact parked mode); the rule is picked per spot
+    ruled?: boolean;
+    // test drive vehicle, speed and style for routes
+    vehicle?: string;
+    speed?: number;
+    style?: string;
+    // objective index (1-based)
+    objective: number;
+}
+
+// Client-side meta of a recorded route (not stored in the definition).
+export interface RouteMeta {
+    length: number;
+    rejected: number;
+    rejectedSamples: Vec3[];
+    unreachable: number[];
+    failed?: number[];
+    testedAt?: number;
+    completed?: boolean;
+    droppedStops?: number;
+    thinned?: number;
+}
+
+// The last draft test started from the builder (kept for recording its result).
+export interface BuilderTestMemory {
+    missionId: string;
+    version: number;
+    tier: string;
+    location: number | 'random';
+    useStartRoute: boolean;
+    startedAt: number;
+    recorded?: 'passed' | 'failed';
+}
+
+// ============================================================================
+//                              admin:getMissions
+// ============================================================================
+// modules/admin: getMissionList plus the Admin UI extras.
+
+export interface AdminMissionEntry extends MissionListEntry {
+    filePath?: string | null;
+    editedInCode?: boolean;
+    defHash?: string | null;
+    status?: string;
+    // listed in Config.DisabledMissions
+    disabledInConfig?: boolean;
+    // the on/off switches of the mission and its locations (modules/settings)
+    switch?: MissionSwitchView;
+}
+export interface AdminMissionsData extends Omit<MissionListData, 'missions'> {
+    missions: AdminMissionEntry[];
+}
+
+export type { BuilderRoute, Vec, Vec3 };

@@ -1,0 +1,183 @@
+/* Supervisor UI · Mission controls (step P5). Only --cp-* variables. */
+
+.sup-mc-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 12px;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.sup-mc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sup-mc-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid var(--cp-border);
+}
+
+.sup-mc-row__title {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.sup-mc-row__desc {
+    margin: 4px 0 0;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.sup-mc-row__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    font-size: var(--cp-fs-sm);
+}
+
+.sup-mc-row__who {
+    color: var(--cp-subtle);
+}
+
+.sup-mc-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* the types control (step P10): a switch per type, its missions folded under it */
+.sup-mc-types {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sup-mc-types__missions {
+    margin: 4px 0 0 18px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-subtle);
+}
+
+.sup-mc-types__missions[open] {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sup-mc-types__missions summary {
+    cursor: pointer;
+}
+
+.sup-mc-slider {
+    display: grid;
+    grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) 72px;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--cp-fs-sm);
+}
+
+.sup-mc-slider input {
+    width: 100%;
+    accent-color: var(--cp-accent);
+}
+
+.sup-mc-slider__value {
+    text-align: right;
+}
+
+.sup-mc-row__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+}
+
+.sup-mc-row__wait {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+    color: var(--cp-warning);
+    font-size: var(--cp-fs-sm);
+}
+
+/* the call lane (step P12): the areas a lane may name, as chips */
+.sup-mc-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sup-mc-chip {
+    padding: 3px 10px;
+    border-radius: var(--cp-radius-pill);
+    border: 1px solid var(--cp-border);
+    background: var(--cp-surface-2);
+    color: var(--cp-text);
+    font-size: var(--cp-fs-sm);
+    cursor: pointer;
+}
+
+.sup-mc-chip[aria-pressed='true'] {
+    border-color: var(--cp-accent);
+    background: var(--cp-accent);
+    color: var(--cp-accent-contrast);
+}
+
+.sup-mc-chip:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* Department notices (step P13): the post form and the notices still running */
+.sup-mc-notices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sup-mc-notices__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.sup-mc-notices__list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 8px 10px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid var(--cp-border);
+}
+
+.sup-mc-notices__list li > span:first-child {
+    flex: 1 1 200px;
+    overflow-wrap: anywhere;
+}
+
+/* step P14: a switch per name (Rank by tabs, flag kinds) */
+.sup-mc-picks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 4px 12px;
+}
+
+.sup-mc-picks__label {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}

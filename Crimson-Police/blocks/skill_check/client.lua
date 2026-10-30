@@ -1,0 +1,511 @@
+-- Objective block "skill_check" (client half)
+
+local BLOCK = 'skill_check'
+
+-- An objective cue, unless the officer turned the cues off on this PC (My options -> Sounds).
+local function Cue(name)
+    if CP.Options and CP.Options.sound then return CP.Options.sound('cues', name, 'HUD_MINI_GAME_SOUNDSET', false) end
+    PlaySoundFrontend(-1, name, 'HUD_MINI_GAME_SOUNDSET', false)
+end
+
+local MARKER_DISTANCE = 30.0
+local TARGET_RADIUS = 1.0
+local TARGET_DISTANCE = 2.5
+local EVENT_MS = 4000
+local LINE_MS = 250            -- the HUD line is checked this often while the markers draw every frame
+local KEYS = { 'w', 'a', 's', 'd' }
+local EXPLOSION_TYPE = 2       -- sticky bomb
+local ANIM_DICT = 'amb@medic@standing@kneel@base'
+local ANIM_CLIP = 'base'
+
+local live = {}     -- [state] = ctx, for resource-stop cleanup
+local states = {}   -- ['<runId>:<index>'] = state, one per objective across every hook call
+
+local function KeyOf(ctx)
+    return tostring(ctx.runId) .. ':' .. tostring(ctx.index)
+end
+
+local function StateOf(ctx)
+    local key = KeyOf(ctx)
+    local st = states[key]
+    if not st then
+        st = type(ctx.state) == 'table' and ctx.state or {}
+        st.runKey = tostring(ctx.runId)
+        states[key] = st
+    end
+    return st
+end
+
+-- Drop the states of other runs that are no longer running (late snapshots after a stop).
+local function Purge(ctx)
+    local run = tostring(ctx.runId)
+    for key, st in pairs(states) do
+        if st.runKey ~= run and not st.alive then states[key] = nil end
+    end
+end
+
+local function V3(t)
+    return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
+end
+
+local function Txt(s)
+    if type(s) ~= 'string' or s == '' then return nil end
+    if CP.Locale.has(s) then return CP.L(s) end
+    return s
+end
+
+local function Me()
+    return GetPlayerServerId(PlayerId())
+end
+
+local function Say(st, text, ms)
+    st.transient = text
+    st.transientUntil = GetGameTimer() + (ms or EVENT_MS)
+    st.lineAt = 0   -- shown on the next frame
+end
+
+local function TargetOf(st, i)
+    return st.data and st.data.targets and st.data.targets[i]
+end
+
+local function ChecksOf(ctx)
+    return type(ctx.obj.checks) == 'table' and ctx.obj.checks or Config.Blocks[BLOCK].difficulty.default
+end
+
+-- ============================================================================
+--                                   HUD LINE
+-- ============================================================================
+
+local function BaseLine(ctx, st)
+    local d = st.data
+    if not d then return nil end
+    if st.round then
+        return CP.L('block.skill_check.hud.round', { n = st.round, total = #ChecksOf(ctx) })
+    end
+    local done, total = 0, 0
+    for _, t in ipairs(d.targets or {}) do
+        total = total + 1
+        if t.status == 'defused' then done = done + 1 end
+        if t.status == 'setback' then
+            return CP.L('block.skill_check.hud.setback',
+                { action = (d.setback and d.setback.label) or CP.L('block.skill_check.recover_default') })
+        end
+        if t.status == 'cooldown' then return CP.L('block.skill_check.hud.retry', { seconds = t.retryIn or 0 }) end
+    end
+    return CP.L('block.skill_check.hud.progress', { done = done, total = total })
+end
+
+local function RefreshLine(ctx, st)
+    local text
+    if st.transient and GetGameTimer() < (st.transientUntil or 0) then
+        text = st.transient
+    else
+        st.transient = nil
+        text = BaseLine(ctx, st)
+    end
+    if text ~= st.line then
+        st.line = text
+        ctx.hudDetail(text)
+    end
+end
+
+-- ============================================================================
+--                                    BLIPS
+-- ============================================================================
+
+-- st.blips[i] = { id = blip, at = where it is, variant = its look }: one per device still to work (armed, set back,
+-- or waiting to be tried again), handed to the objective pointer as 'd<i>' (the server's marker): CP.Markers puts the
+-- GPS line on it and draws no second icon (BLIPS_FINAL R1). A snapshot keeps every blip that still shows the same
+-- device, so the line and the flash on it survive (R8); a device set back is restyled in place.
+local SHOWN = { armed = true, setback = true, cooldown = true }
+
+-- A blip handed over is taken back first, so its GPS line goes off before it goes (BLIPS_FINAL R10).
+local function DropBlip(st, i)
+    local e = st.blips[i]
+    if not e then return end
+    st.blips[i] = nil
+    if st.handed[i] then
+        CP.Markers.release('d' .. i, st.handed[i])
+        st.handed[i] = nil
+    end
+    if DoesBlipExist(e.id) then RemoveBlip(e.id) end
+end
+
+local function ClearBlips(st)
+    st.blips, st.handed = st.blips or {}, st.handed or {}
+    for i in pairs(st.blips) do DropBlip(st, i) end
+    st.blips, st.handed = {}, {}
+end
+
+-- The name of device i's blip: the mission's own name for its target (Drug Lab Raid "Shut down the lab"), else
+-- "Device <n>"; while it is set back, the recovery step and the number ("Ventilate 1"). Built only when the blip is
+-- drawn or restyled.
+local function BlipLabel(ctx, st, i, variant)
+    if variant == 'setback' then
+        local sb = st.data and st.data.setback
+        local action = sb and Txt(sb.label) or CP.L('block.skill_check.recover_default')
+        return CP.L('block.skill_check.blip_setback', { action = action, n = i })
+    end
+    local target = type(ctx.obj.target) == 'table' and ctx.obj.target or {}
+    return Txt(target.label) or CP.L('block.skill_check.blip', { n = i })
+end
+
+-- Config.Markers.kinds.device (yellow; setbackColour while set back, flashing until it is fixed with
+-- Config.Markers.setbackFlash), numbered, never short range. Under Radio Silence none of the block's own
+-- (Config.Markers.radioSilence 'area': CP.Markers shows the officer's nearest device itself; 'full': all of them).
+local function RefreshBlips(ctx, st)
+    st.blips, st.handed = st.blips or {}, st.handed or {}
+    local want = {}
+    if st.data and not CP.Markers.hidden(ctx, 'device') then
+        for i, t in ipairs(st.data.targets or {}) do
+            if SHOWN[t.status] then
+                local c = t.coords
+                want[i] = {
+                    at = ('%.2f:%.2f:%.2f'):format(c.x, c.y, c.z),
+                    c = c,
+                    variant = t.status == 'setback' and 'setback' or false,
+                }
+            end
+        end
+    end
+    for i, e in pairs(st.blips) do
+        local w = want[i]
+        if not w or w.at ~= e.at then DropBlip(st, i) end
+    end
+    for i, w in pairs(want) do
+        local e = st.blips[i]
+        if not e or e.variant ~= w.variant then
+            local b = e and e.id or AddBlipForCoord(w.c.x, w.c.y, w.c.z)
+            CP.Markers.style(b, 'device', BlipLabel(ctx, st, i, w.variant), { number = i, variant = w.variant or nil })
+            -- fixed after a setback: its flash stops (CP.Markers.style started it)
+            if e and e.variant == 'setback' then SetBlipFlashes(b, false) end
+            st.blips[i] = { id = b, at = w.at, variant = w.variant }
+            if not e and CP.Markers.adopt('d' .. i, b) then st.handed[i] = b end
+        end
+    end
+end
+
+-- ============================================================================
+--                                   DEFUSING
+-- ============================================================================
+
+-- A dictionary that fails to load (ox_lib raises on a streaming timeout) skips the kneel: the defuse goes on.
+local function PlayAnim(st)
+    local ped = PlayerPedId()
+    if lib.requestAnimDict and not pcall(lib.requestAnimDict, ANIM_DICT, 3000) then return end
+    TaskPlayAnim(ped, ANIM_DICT, ANIM_CLIP, 8.0, -8.0, -1, 1, 0.0, false, false, false)
+    st.animating = true
+end
+
+local function StopAnim(st)
+    if st.animating then
+        st.animating = false
+        StopAnimTask(PlayerPedId(), ANIM_DICT, ANIM_CLIP, 1.0)
+        RemoveAnimDict(ANIM_DICT)   -- lib.requestAnimDict loaded it for this defuse
+    end
+end
+
+local function Defuse(ctx, st, i)
+    if st.busy or not st.alive then return end
+    local t = TargetOf(st, i)
+    if not t or t.status ~= 'armed' then return end
+    if t.worker and t.worker ~= Me() then return end
+    local rounds = ChecksOf(ctx)
+    st.busy, st.working, st.cancelled = true, i, false
+    PlayAnim(st)
+    local k = t.next or 1
+    while st.alive and not st.cancelled and k <= #rounds do
+        st.round = k
+        st.lineAt = 0
+        local ok = lib.skillCheck(rounds[k], KEYS)
+        if not st.alive or st.cancelled then break end
+        st.seq = (st.seq or 0) + 1
+        ctx.report({ type = 'check', target = i, index = k, success = ok == true, seq = st.seq })
+        if not ok then
+            Say(st, CP.L('block.skill_check.hud.miss', { seconds = tonumber(ctx.obj.missPenalty) or 0 }))
+            break
+        end
+        k = k + 1
+        Wait(150)
+    end
+    st.round = nil
+    st.lineAt = 0
+    StopAnim(st)
+    st.busy, st.working = false, nil
+end
+
+-- ============================================================================
+--                               ox_target ZONES
+-- ============================================================================
+
+local function RemoveZone(st, i)
+    local z = st.zones[i]
+    if z then
+        pcall(function() exports.ox_target:removeZone(z) end)
+        st.zones[i] = nil
+        if st.zoneKind then st.zoneKind[i] = nil end
+    end
+end
+
+-- The recovery step of a setback (e.g. Ventilate): any participant, a progress bar at the target.
+local function Recover(ctx, st, i)
+    if st.busy or not st.alive then return end
+    local sb = st.data and st.data.setback or {}
+    st.busy = true
+    st.recovering = true   -- Cleanup cancels this bar when the objective or run ends
+    local ok = lib.progressBar({
+        duration = tonumber(sb.duration) or 10000,
+        label = sb.label or CP.L('block.skill_check.recover_default'),
+        useWhileDead = false,
+        canCancel = true,
+        disable = { move = true, car = true, combat = true },
+        anim = { scenario = 'WORLD_HUMAN_CLIPBOARD' },
+    })
+    st.recovering = false
+    st.busy = false
+    if ok and st.alive then
+        st.seq = (st.seq or 0) + 1
+        ctx.report({ type = 'recover', target = i, seq = st.seq })
+    end
+end
+
+local function AddRecoverZone(ctx, st, i, t)
+    local name = ('crimson-police:%s:%s:%s:%d:recover'):format(BLOCK, tostring(ctx.runId), tostring(ctx.index), i)
+    local sb = st.data and st.data.setback or {}
+    st.zones[i] = exports.ox_target:addSphereZone({
+        coords = V3(t.coords),
+        radius = TARGET_RADIUS,
+        debug = false,
+        drawSprite = true,
+        name = name,
+        options = {
+            {
+                name = name,
+                label = sb.label or CP.L('block.skill_check.recover_default'),
+                icon = 'fa-solid fa-fan',
+                distance = TARGET_DISTANCE,
+                canInteract = function()
+                    local cur = TargetOf(st, i)
+                    return st.alive == true and not st.busy and cur ~= nil and cur.status == 'setback'
+                end,
+                onSelect = function()
+                    CreateThread(function() Recover(ctx, st, i) end)
+                end,
+            },
+        },
+    })
+    st.zoneKind = st.zoneKind or {}
+    st.zoneKind[i] = 'recover'
+end
+
+local function ClearZones(st)
+    for i in pairs(st.zones or {}) do RemoveZone(st, i) end
+    st.zones = {}
+end
+
+local function AddZone(ctx, st, i, t)
+    local target = type(ctx.obj.target) == 'table' and ctx.obj.target or {}
+    local name = ('crimson-police:%s:%s:%s:%d'):format(BLOCK, tostring(ctx.runId), tostring(ctx.index), i)
+    st.zoneKind = st.zoneKind or {}
+    st.zoneKind[i] = 'check'
+    st.zones[i] = exports.ox_target:addSphereZone({
+        coords = V3(t.coords),
+        radius = TARGET_RADIUS,
+        debug = false,
+        drawSprite = true,
+        name = name,
+        options = {
+            {
+                name = name,
+                label = Txt(target.label) or CP.L('block.skill_check.target_default'),
+                icon = target.icon,
+                distance = TARGET_DISTANCE,
+                canInteract = function()
+                    local cur = TargetOf(st, i)
+                    return st.alive == true and not st.busy and cur ~= nil and cur.status == 'armed'
+                        and (cur.worker == nil or cur.worker == Me())
+                end,
+                onSelect = function()
+                    CreateThread(function() Defuse(ctx, st, i) end)
+                end,
+            },
+        },
+    })
+end
+
+local function SyncZones(ctx, st)
+    local list = (st.data and st.data.targets) or {}
+    st.zoneKind = st.zoneKind or {}
+    for i, t in ipairs(list) do
+        local want = (t.status == 'armed' and 'check') or (t.status == 'setback' and 'recover') or nil
+        if st.zones[i] and st.zoneKind[i] ~= want then RemoveZone(st, i) end
+        if want == 'check' and not st.zones[i] then
+            AddZone(ctx, st, i, t)
+        elseif want == 'recover' and not st.zones[i] then
+            AddRecoverZone(ctx, st, i, t)
+        end
+    end
+    for i in pairs(st.zones) do
+        if not list[i] then RemoveZone(st, i) end
+    end
+end
+
+-- ============================================================================
+--                                   MARKERS
+-- ============================================================================
+
+local function Loop(ctx, st)
+    local token = st.token
+    CreateThread(function()
+        while st.alive and st.token == token do
+            local sleep = 500
+            local pos = GetEntityCoords(cache.ped)
+            for _, t in ipairs((st.data and st.data.targets) or {}) do
+                if t.status == 'armed' or t.status == 'setback' then
+                    local c = t.coords
+                    local dx, dy, dz = pos.x - c.x, pos.y - c.y, pos.z - c.z
+                    if dx * dx + dy * dy + dz * dz < MARKER_DISTANCE * MARKER_DISTANCE then
+                        sleep = 0
+                        DrawMarker(2, c.x, c.y, c.z + 0.8, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.25, 0.25, 0.25, 220, 40,
+                            50, 170, true, true, 2, false, nil, nil, false)
+                    end
+                end
+            end
+            -- near a device (a frame loop) the line is checked every LINE_MS, and on the next frame after a snapshot,
+            -- a message, a round change or the end of a message; far away, every pass as before
+            local now = GetGameTimer()
+            if sleep ~= 0 or now >= (st.lineAt or 0) or (st.transient ~= nil and now >= (st.transientUntil or 0)) then
+                st.lineAt = now + LINE_MS
+                RefreshLine(ctx, st)
+            end
+            Wait(sleep)
+        end
+    end)
+end
+
+-- ============================================================================
+--                               SERVER MESSAGES
+-- ============================================================================
+
+local function Explode(ctx, st, data)
+    Say(st, CP.L('block.skill_check.hud.exploded'))
+    if st.working == data.target then
+        st.cancelled = true
+        if lib.skillCheckActive and lib.skillCheckActive() then lib.cancelSkillCheck() end
+    end
+    if data.effect ~= false and data.by == Me() and type(data.coords) == 'table' then
+        -- Effect only: damage scale 0, audible, visible, camera shake.
+        AddExplosion(data.coords.x + 0.0, data.coords.y + 0.0, data.coords.z + 0.0, EXPLOSION_TYPE, 0.0, true, false,
+            1.0)
+    end
+end
+
+-- A setback: a harmless effect at the target (it hurts nobody) and the recovery hint.
+local function SetbackEffect(ctx, st, data)
+    Say(st, CP.L('block.skill_check.hud.setback', {
+        action = (st.data and st.data.setback and st.data.setback.label)
+            or CP.L('block.skill_check.recover_default'),
+    }))
+    if st.working == data.target then
+        st.cancelled = true
+        if lib.skillCheckActive and lib.skillCheckActive() then lib.cancelSkillCheck() end
+    end
+    if type(data.coords) == 'table' then
+        UseParticleFxAsset('core')
+        StartParticleFxNonLoopedAtCoord('exp_grd_bzgas_smoke', data.coords.x + 0.0, data.coords.y + 0.0,
+            data.coords.z + 0.0, 0.0, 0.0, 0.0, 2.0, false, false, false)
+    end
+end
+
+local function Apply(ctx, st, data)
+    local prev = st.data
+    st.data = data
+    local old = prev and prev.targets or {}
+    for i, t in ipairs(data.targets or {}) do
+        local o = old[i]
+        if o and o.status == 'armed' and t.status == 'defused' then
+            Say(st, CP.L('block.skill_check.hud.defused'))
+            Cue('CHECKPOINT_PERFECT')
+        end
+    end
+    SyncZones(ctx, st)
+    RefreshBlips(ctx, st)
+    st.lineAt = 0
+end
+
+local function Cleanup(ctx, st)
+    st.alive = false
+    st.cancelled = true
+    st.token = (st.token or 0) + 1
+    if st.busy and lib.skillCheckActive and lib.skillCheckActive() then lib.cancelSkillCheck() end
+    -- the setback's recovery bar (e.g. Ventilate) stops with the objective, like every other block's bar
+    if st.recovering and lib.progressActive and lib.progressActive() then pcall(lib.cancelProgress) end
+    st.recovering = false
+    StopAnim(st)
+    st.busy, st.working, st.round = false, nil, nil
+    ClearZones(st)
+    ClearBlips(st)
+    if st.line ~= nil then
+        st.line = nil
+        ctx.hudDetail(nil)
+    end
+    live[st] = nil
+    if states[KeyOf(ctx)] == st then states[KeyOf(ctx)] = nil end
+end
+
+CP.Blocks.register(BLOCK, {
+    prepare = function(ctx)
+        Purge(ctx)
+        local st = StateOf(ctx)
+        st.zones = st.zones or {}
+        st.blips = st.blips or {}
+    end,
+
+    start = function(ctx)
+        Purge(ctx)
+        local st = StateOf(ctx)
+        st.zones = st.zones or {}
+        st.blips = st.blips or {}
+        st.alive = true
+        st.token = (st.token or 0) + 1
+        live[st] = ctx
+        if st.pending then
+            local data = st.pending
+            st.pending = nil
+            Apply(ctx, st, data)
+        end
+        Loop(ctx, st)
+    end,
+
+    update = function(ctx, data)
+        if type(data) ~= 'table' then return end
+        local st = StateOf(ctx)
+        st.zones = st.zones or {}
+        st.blips = st.blips or {}
+        if data.kind == 'explode' then
+            -- Plays even when it arrives together with the run's end.
+            Explode(ctx, st, data)
+            return
+        end
+        if data.kind == 'setback' then
+            SetbackEffect(ctx, st, data)
+            return
+        end
+        if data.kind ~= 'state' then return end
+        if st.alive then Apply(ctx, st, data) else st.pending = data end
+    end,
+
+    -- No NPCs in this block: nothing to re-task when the host changes.
+    hostChanged = function(ctx, isHost)
+        StateOf(ctx).isHost = isHost == true
+    end,
+
+    stop = function(ctx)
+        Cleanup(ctx, StateOf(ctx))
+    end,
+})
+
+AddEventHandler('onResourceStop', function(resource)
+    if resource ~= GetCurrentResourceName() then return end
+    for st, ctx in pairs(live) do Cleanup(ctx, st) end
+end)

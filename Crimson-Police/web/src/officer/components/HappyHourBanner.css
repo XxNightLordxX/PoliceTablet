@@ -1,0 +1,34 @@
+/* Officer UI · the happy hour banner (step P6). Only --cp-* variables. */
+
+.happy-hour {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: var(--cp-radius);
+    border: 1px solid rgba(var(--cp-accent-rgb), 0.45);
+    background: rgba(var(--cp-accent-rgb), 0.12);
+    color: var(--cp-text);
+}
+
+.happy-hour__icon {
+    display: inline-flex;
+    flex: none;
+    color: var(--cp-accent);
+}
+
+.happy-hour__main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy-hour__title {
+    font-weight: 700;
+    font-size: var(--cp-fs);
+}
+
+.happy-hour__text {
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+    margin-top: 2px;
+}

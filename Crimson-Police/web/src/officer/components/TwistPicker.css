@@ -1,0 +1,59 @@
+/* Officer UI · the twist picker of the accept step (Mission Board, mission call claim). Only --cp-* variables. */
+
+.twist-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid rgba(var(--cp-accent-rgb), 0.35);
+    background: rgba(var(--cp-accent-rgb), 0.06);
+}
+
+.twist-picker__head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--cp-accent);
+}
+
+.twist-picker__title {
+    font-weight: 700;
+    color: var(--cp-text);
+}
+
+.twist-picker__hint,
+.twist-picker__note {
+    margin: 0;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.twist-picker__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.twist-picker__label {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.twist-picker__some {
+    display: block;
+    margin-top: 2px;
+    color: var(--cp-subtle);
+}
+
+.twist-picker__total {
+    font-size: var(--cp-fs-sm);
+    font-weight: 600;
+    color: var(--cp-muted);
+}
+
+.twist-picker__total.is-on {
+    color: var(--cp-accent-text);
+}

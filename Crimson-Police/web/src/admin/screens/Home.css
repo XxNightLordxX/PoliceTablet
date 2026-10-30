@@ -1,0 +1,212 @@
+/* Admin UI · Home (the landing screen): the Live now strip, the six tiles and their quick forms.
+   Only --cp-* variables. */
+
+.admin-home-screen .admin-home-live {
+    margin-bottom: 14px;
+}
+
+.admin-home-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+}
+
+.admin-home-tile {
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-home-tile > .cp-card__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.admin-home-tile__head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.admin-home-tile__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: var(--cp-primary);
+}
+
+.admin-home-tile__titles {
+    min-width: 0;
+}
+
+.admin-home-tile__title {
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.admin-home-tile__text {
+    color: var(--cp-subtle);
+    font-size: 13px;
+    margin-top: 2px;
+}
+
+.admin-home-tile__actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: auto;
+}
+
+.admin-home-checks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-home-check,
+.admin-home-live__run {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-home-check:hover,
+.admin-home-live__run:hover {
+    border-color: var(--cp-primary);
+}
+
+.admin-home-check__label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.admin-home-live__runs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-home-live__run {
+    width: auto;
+}
+
+.admin-home-live__label {
+    font-weight: 600;
+}
+
+.admin-home-live__meta,
+.admin-home-live__more {
+    color: var(--cp-subtle);
+    font-size: 13px;
+}
+
+/* Quick forms (Config.AdminUi.homeForms) */
+
+.admin-home-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.admin-home-form__hint,
+.admin-home-form__meta {
+    color: var(--cp-subtle);
+    font-size: 13px;
+}
+
+.admin-home-form__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-home-form__item {
+    padding: 7px 10px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+}
+
+.admin-home-form__row,
+.admin-home-form__chosen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.admin-home-form__sub {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0 0 12px;
+}
+
+.admin-home-form__more {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--cp-primary);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.admin-home-form__pick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-home-form__pick:hover {
+    border-color: var(--cp-primary);
+}
+
+.admin-home-form__label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.admin-home-form__actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.admin-home-form__settings .settings-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 0;
+}

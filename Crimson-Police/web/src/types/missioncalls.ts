@@ -1,0 +1,141 @@
+// Shapes of the Dispatch screen (mission calls): getMissionCalls and push topic 'calls', the supervisor panel and
+// the admin area coverage matrix.
+
+import type { TwistCaps, TwistOffer } from '../shared/types';
+
+export interface MissionCall {
+    id: number;
+    code: string;
+    type: string;
+    typeLabel: string;
+    titleKey: string;
+    priority: 1 | 2 | 3;
+    // per viewer; null = county-wide for this viewer
+    area: { key: string; label: string } | null;
+    distance: number | null;
+    ageS: number;
+    offerEndsIn: number;
+    // paged or created by staff (never earns rapid response)
+    staff: boolean;
+    crew: 'solo' | 'unit' | 'none';
+    minUnit: number | null;
+    cash: [number, number];
+    points: number;
+    // the twists the leader may choose when claiming (the board's offer for the type)
+    twists?: TwistOffer[];
+    rapidPoints: number;
+    typeOfTheDay: boolean;
+    redispatched: boolean;
+    paged: boolean;
+    // a mission command pushed to a unit (step P19); missionLabel only for the paged unit itself
+    pushed?: boolean;
+    missionLabel?: string | null;
+    // a department lane's call (step P12): only that department's officers see it ("SAST call")
+    department?: string | null;
+    departmentShort?: string | null;
+    status: 'ready' | 'priority' | 'locked' | 'claiming' | 'claimed' | 'lapsed' | 'withdrawn';
+    priorityEndsIn: number | null;
+    locked: null | { reason: string; until?: number };
+    claimedBy: null | { callsign: string | null; departmentShort: string };
+    // the winning unit's ready check
+    claiming: null | { callsign: string | null; expiresIn: number };
+    // why this viewer's claim lost the window
+    lostBy: null | 'distance' | 'recent' | 'first';
+}
+
+export interface RecentCall {
+    code: string;
+    typeLabel: string;
+    claimedBy: string | null;
+    outcome: string | null;
+    at: number;
+}
+
+export interface DispatchView {
+    calls: MissionCall[];
+    unit: { size: number; isLeader: boolean };
+    activeRunId: string | null;
+    operation: null | { missionLabel: string };
+    onCall: boolean;
+    realCalls: null | { total: number; p1: number };
+    serverTime: number;
+    recent: RecentCall[];
+    // the caps of stacked twists (Config.Events.twistMaxPoints, twistMaxCash)
+    twistMax?: TwistCaps;
+}
+
+// A unit a supervisor may page (idle leaders and solo officers, never the viewer's own unit).
+export interface PageableUnit {
+    src: number;
+    name: string;
+    callsign: string | null;
+    departmentShort: string;
+    size: number;
+}
+
+// A department's own call lane (step P12, the callLane Mission control) as the staff panel lists it.
+export interface CallLaneView {
+    department: string;
+    departmentShort: string;
+    spawnEvery: [number, number];
+    maxOpen: number;
+    open: number;
+    nextIn: number;
+    areas: string[];
+    types: { key: string; label: string; weight: number }[];
+}
+
+// The missions a staff member may push to a unit; perDay / usedToday only for a supervisor.
+export interface PushView {
+    missions: { id: string; label: string; type: string }[];
+    department?: string | null;
+    perDay?: number | null;
+    usedToday?: number | null;
+}
+
+export interface SupCallsView {
+    open: MissionCall[];
+    units?: PageableUnit[];
+    // the lanes the viewer may see: his department's (admins: every one)
+    lanes?: CallLaneView[];
+    // pushing a chosen mission when paging (step P19, the pushMission Mission control); absent when not allowed
+    push?: PushView | null;
+    today: {
+        code: string;
+        type: string;
+        area: string | null;
+        status: string;
+        claimedBy: string | null;
+        claimants: number;
+        claimS: number | null;
+        responseS: number | null;
+        outcome: string | null;
+    }[];
+}
+
+export interface AreaCoverage {
+    types: string[];
+    areas: { key: string; label: string }[];
+    cells: Record<string, Record<string, { missions: number; locations: number }>>;
+}
+
+// server:claimMissionCall: the run when the claim won, or pending while the unit answers its ready check.
+export interface ClaimCallResult {
+    runId?: string;
+    pending?: boolean;
+    code?: string;
+}
+
+// The Mission Board's extra field: the mission calls this viewer's unit could claim right now.
+export interface BoardCallsInfo {
+    callsOpen?: number;
+}
+
+// admin:getLocationStats: how often each location of a mission was played.
+export interface LocationPlay {
+    index: number;
+    label: string;
+    plays: number;
+    lastPlayed: number | null;
+    area: string | null;
+}

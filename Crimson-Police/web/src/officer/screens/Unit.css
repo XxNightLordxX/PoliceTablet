@@ -1,0 +1,291 @@
+/* Officer UI · Unit screen (teams slice). Only --cp-* variables; no color-mix, nesting or :has(). */
+
+.teams-grid {
+    min-width: 0;
+}
+
+/* Lock / on-run banner */
+.teams-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--cp-radius);
+    border: 1px solid rgba(var(--cp-warning-rgb), 0.35);
+    background: rgba(var(--cp-warning-rgb), 0.1);
+    color: var(--cp-warning);
+}
+
+.teams-banner--info {
+    border-color: rgba(var(--cp-info-rgb), 0.35);
+    background: rgba(var(--cp-info-rgb), 0.1);
+    color: var(--cp-info);
+}
+
+.teams-banner .cp-icon {
+    flex: none;
+    margin-top: 1px;
+}
+
+.teams-banner__title {
+    font-weight: 700;
+    font-size: var(--cp-fs);
+    color: var(--cp-text);
+}
+
+.teams-banner__text {
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+    margin-top: 2px;
+}
+
+/* People lists */
+.teams-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.teams-list--scroll {
+    max-height: 264px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.teams-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 10px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid transparent;
+    background: rgba(var(--cp-text-rgb), 0.025);
+}
+
+.teams-row--leader {
+    border-color: rgba(var(--cp-accent-rgb), 0.28);
+    background: rgba(var(--cp-accent-rgb), 0.07);
+}
+
+.teams-row--pending {
+    border-style: dashed;
+    border-color: var(--cp-border);
+    background: transparent;
+}
+
+.teams-row--slot {
+    min-height: 44px;
+    border: 1px dashed var(--cp-border);
+    background: transparent;
+    color: var(--cp-subtle);
+}
+
+.teams-row--muted .teams-row__text,
+.teams-row--muted .teams-row__sub {
+    color: var(--cp-subtle);
+}
+
+.teams-row--pick:hover {
+    background: rgba(var(--cp-text-rgb), 0.05);
+}
+
+/* invites for the viewer: identity on top, answers below */
+.teams-invite {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid rgba(var(--cp-accent-rgb), 0.28);
+    background: rgba(var(--cp-accent-rgb), 0.06);
+}
+
+.teams-invite__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.teams-invite__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.teams-row__main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.teams-row__name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-weight: 650;
+    font-size: var(--cp-fs);
+}
+
+.teams-row__text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.teams-row__sub {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.teams-row__tags,
+.teams-row__actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.teams-row__timer,
+.teams-row__expires {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.teams-row__timer .cp-countdown,
+.teams-row__expires .cp-countdown {
+    color: var(--cp-text);
+    font-weight: 650;
+}
+
+.teams-row__timer .cp-countdown.is-warning,
+.teams-row__expires .cp-countdown.is-warning {
+    color: var(--cp-warning);
+}
+
+.teams-row__expires .cp-countdown.is-danger {
+    color: var(--cp-danger);
+}
+
+/* Avatar */
+.teams-avatar {
+    position: relative;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--cp-surface-3);
+    border: 1px solid var(--cp-border-strong);
+    color: var(--cp-text);
+    font-size: var(--cp-fs-sm);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.teams-avatar--leader {
+    border-color: var(--cp-accent);
+    box-shadow: 0 0 0 2px rgba(var(--cp-accent-rgb), 0.18);
+}
+
+.teams-avatar--muted {
+    color: var(--cp-muted);
+    background: var(--cp-surface-2);
+}
+
+.teams-avatar--slot {
+    width: 30px;
+    height: 30px;
+    background: transparent;
+    border-style: dashed;
+    border-color: var(--cp-border);
+    color: var(--cp-subtle);
+    margin: 0 3px;
+}
+
+.teams-avatar__crown {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: var(--cp-accent);
+    color: var(--cp-accent-contrast);
+    border: 2px solid var(--cp-surface);
+}
+
+/* Card footer / notes */
+.teams-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+.teams-footer__text {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.teams-footer__text .cp-icon {
+    flex: none;
+    margin-top: 2px;
+}
+
+.teams-note {
+    margin: 10px 2px 0;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+/* Missions the unit could draw (counts only) */
+.teams-fit {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.teams-fit__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: var(--cp-fs-sm);
+}
+
+.teams-fit__type {
+    font-weight: 600;
+    color: var(--cp-text);
+}
+
+.teams-fit__counts {
+    color: var(--cp-muted);
+    text-align: right;
+}
