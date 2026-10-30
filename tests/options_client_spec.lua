@@ -325,6 +325,46 @@ do
     CP.Access.setSession(Session({}, nil))
 end
 
+-- Key hints (shared/options_popups.lua keyHints, step O11): the real T.keyLabel reads the bound key; a new mission
+-- call names the Dispatch key, getKeyHints gives the NUI the ready and contact keys; an unbound key is never named.
+do
+    CP.Access.setSession(Session({}, nil))
+    kvp['crimsonpolice:options'] = nil
+    H.eq(O.get('keyHints'), true, 'keyHints ships on (it only adds text)')
+    local bound = {}
+    local function Hash(cmd) return (joaat(cmd) & 0xFFFFFFFF) | 0x80000000 end
+    _G.GetControlInstructionalButton = function(_, hash) return bound[hash] end
+    local stub = CP.Tablet
+    local toasts = {}
+    stub.keyLabel = tabletModule.keyLabel
+    stub.notify = function(_, text) toasts[#toasts + 1] = text end
+    H.load('modules/missioncalls/client.lua')
+    local function Call()
+        H.clockMs = H.clockMs + 10000
+        H.fire('crimson-police:client:missionCall', nil, { code = 'MC-7', typeLabel = 'Patrol', priority = 2 })
+        return toasts[#toasts] or ''
+    end
+    H.eq(O.keyHint('crimsonpolice_ready'), nil, 'an unbound ready key: no hint')
+    H.eq(Call():find('Dispatch', 1, true), nil, 'an unbound Dispatch key: the call toast names no key')
+    bound[Hash('crimsonpolice_ready')] = 't_K'
+    bound[Hash('crimsonpolice_dispatch')] = 't_F6'
+    bound[Hash('crimsonpolice_contact')] = 'b_1001'
+    H.eq(O.keyHint('crimsonpolice_ready'), 'K', 'the label t_K: the hint names K')
+    H.eq(O.keyHint('crimsonpolice_contact'), nil, 'a mouse or pad button has no text: no hint')
+    H.ok(Call():find(CP.L('mc.toast.dispatch_key', { key = 'F6' }), 1, true) ~= nil,
+        'a bound Dispatch key: the call toast adds "F6 opens Dispatch"')
+    local ok, res = actions.getKeyHints()
+    H.ok(ok and res.keys.ready == 'K' and res.keys.dispatch == 'F6' and res.keys.contact == nil,
+        'getKeyHints gives the NUI the bound keys only')
+    H.ok((O.setLocal('keyHints', false)) and O.keyHint('crimsonpolice_ready') == nil, 'keyHints off: no hint')
+    H.eq(Call():find('Dispatch', 1, true), nil, 'keyHints off: the call toast is as before')
+    ok, res = actions.getKeyHints()
+    H.ok(ok and next(res.keys) == nil, 'keyHints off: getKeyHints names no key')
+    stub.keyLabel, stub.notify = nil, nil
+    _G.GetControlInstructionalButton = nil
+    kvp['crimsonpolice:options'] = nil
+end
+
 -- the client file uses no os or io
 local f = assert(io.open(H.root .. 'modules/options/client.lua', 'r'))
 local src = f:read('a')

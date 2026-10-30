@@ -130,6 +130,24 @@ function O.sound(group, name, set, p3)
     return true
 end
 
+-- The key hints (option keyHints, step O11): the key mappings the NUI may name, by the name it asks for.
+O.KEY_HINTS = {
+    tablet = 'crimsonpolice_tablet',
+    dispatch = 'crimsonpolice_dispatch',
+    ready = 'crimsonpolice_ready',
+    contact = 'crimsonpolice_contact',
+}
+
+-- The text label of the key bound to a key mapping ('K', 'F6'), or nil: keyHints off on this PC, the key not bound,
+-- or bound to a mouse or pad button (no text label).
+function O.keyHint(cmd)
+    if O.get('keyHints') == false then return nil end
+    if not (CP.Tablet and CP.Tablet.keyLabel) then return nil end
+    local ok, res = pcall(CP.Tablet.keyLabel, cmd)
+    if not ok or type(res) ~= 'table' or res.state ~= 'set' or type(res.label) ~= 'string' then return nil end
+    return res.label
+end
+
 -- The push 'options' ({ values }): the officer's server options changed.
 RegisterNetEvent(CP.e('client:push'), function(topic, data)
     if topic ~= 'options' or type(data) ~= 'table' or type(data.values) ~= 'table' then return end
@@ -149,6 +167,12 @@ CreateThread(function()
         CP.err(TAG, 'modules/tablet is missing: the options of this PC cannot be changed from the tablet')
         return
     end
+    -- getKeyHints: { keys = { ready = 'K', ... } }, only the keys to name (none with keyHints off).
+    CP.Tablet.registerClientAction('getKeyHints', function()
+        local keys = {}
+        for name, cmd in pairs(O.KEY_HINTS) do keys[name] = O.keyHint(cmd) end
+        return true, { keys = keys }
+    end)
     CP.Tablet.registerClientAction('getLocalOptions', function()
         return true, { options = O.localValues() }
     end)

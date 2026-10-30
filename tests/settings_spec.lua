@@ -968,6 +968,15 @@ do
         'the result card time bounds edit as a shortest and a longest time')
 end
 
+-- Key hints (step O11): allowed, on by default (it only adds text), commented.
+do
+    local function E(p) return S.entry(p) or {} end
+    H.eq(E('OfficerOptions.allow.keyHints').default, true, 'keyHints: officers may change it')
+    H.eq(E('OfficerOptions.defaults.keyHints').default, true, 'keyHints ships on')
+    H.ok((E('OfficerOptions.defaults.keyHints').desc or ''):find('or press K', 1, true) ~= nil,
+        'keyHints: its default has a plain-English comment')
+end
+
 -- Sounds (step O7): the call tone, the unit tone and the objective cues, allowed, all on as today, commented.
 do
     local function E(p) return S.entry(p) or {} end

@@ -47,6 +47,9 @@ RegisterNetEvent(CP.e('client:missionCall'), function(call)
         priority = tostring(call.priority or ''),
         area = area,
     })
+    -- step O11: "F6 opens Dispatch" when the Dispatch key is bound and the officer keeps the key hints on
+    local key = CP.Options and CP.Options.keyHint and CP.Options.keyHint('crimsonpolice_dispatch')
+    if key then text = text .. ' ' .. CP.L('mc.toast.dispatch_key', { key = key }) end
     if CP.Tablet and CP.Tablet.notify then
         CP.Tablet.notify('info', text, { title = CP.L('mc.toast.new_title') })
     end

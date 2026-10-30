@@ -123,7 +123,7 @@ PoliceTablet/                      (git repo)
     shared/options_hud.lua         The mission HUD's officer options: side, size, compact, fewer animations (§5.48)
     shared/options_look.lua        Easier to read: the tablet look on the HUD, larger text (§5.48)
     shared/options_run.lua         During a mission: abandon in two presses, one-click recalculate, miles (§5.48)
-    shared/options_popups.lua      Pop-ups: toast time, result card time, fewer pop-ups on a run (§5.48)
+    shared/options_popups.lua      Pop-ups: toast time, result card time, fewer pop-ups on a run, key hints (§5.48)
     shared/options_sounds.lua      Sounds: mission call tone, unit tone, objective cues on or off (§5.48)
     shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
@@ -3283,6 +3283,13 @@ no option is registered by this module: each feature registers its own keys.
   on and `CP.Runs.current()` is set: App.tsx `addToast` skips it and the header bell (layouts/NotificationBell.tsx)
   still lists it. Any other channel (route, custody, run, warnings, errors) always shows. Shipped allowed, defaults
   'normal' / 25 / false (as before). Mock: `?result=parity&resultTime=10` (also `toastTime=short|long`).
+- Key hints (step O11, shared/options_popups.lua `keyHints`, local bool, shipped allowed and on: it only adds
+  text). `CP.Options.keyHint(cmd)` (modules/options/client.lua) is the text label of the key bound to a key
+  mapping (`CP.Tablet.keyLabel`, the `t_` instructional button) or nil (option off, unbound, a mouse or pad
+  button). modules/missioncalls/client.lua appends `mc.toast.dispatch_key` to the new-call toast; the client
+  action `getKeyHints` answers `{ keys = { tablet?, dispatch?, ready?, contact? } }` with the named keys only, read
+  by `useKeyHint(name)` (web/src/shared/keyHints.ts) in ReadyCheckBanner.tsx (`unit.ui.ready_key`, while the check
+  waits for the officer) and hud/ContactCard.tsx (`custody.hud.contact_key`). Mock: ready K, Dispatch F6.
 - Sounds (step O7, shared/options_sounds.lua, group `sounds`, all `local` bools): `soundCalls`, `soundUnit`,
   `soundCues`. `CP.Options.sound(group, name, set, p3)` (modules/options/client.lua) plays `PlaySoundFrontend` only
   while the group's option is on (group 'calls' | 'unit' | 'cues'); modules/missioncalls (calls), modules/units

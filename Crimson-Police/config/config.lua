@@ -1419,6 +1419,7 @@ Config.OfficerOptions = {
         toastTime = true,            -- how long notifications stay on screen (kept on this PC)
         resultTime = true,           -- how long the mission result card stays on screen (kept on this PC)
         quietRun = true,             -- fewer pop-ups during a mission: social news goes to the bell (kept on this PC)
+        keyHints = true,             -- the ready check, a new call and the contact HUD line name their key (this PC)
         soundCalls = true,           -- the tone of a new mission call (kept on this PC)
         soundUnit = true,            -- the tone of a unit invite and a ready check (kept on this PC)
         soundCues = true,            -- the objective cues on a run: checkpoints, a defused target (kept on this PC)
@@ -1448,6 +1449,9 @@ Config.OfficerOptions = {
         resultTime = 25,             -- seconds the mission result card stays on screen (25 = as before)
         quietRun = false,            -- true = during a mission, unit invites, commendations, rewards and profile news
                                      -- go only to the bell; false = they pop up as before
+        keyHints = true,             -- true = the ready check banner says "or press K", a new mission call names the
+                                     -- Dispatch key and the contact HUD line its key (an unbound key is never named);
+                                     -- false = no key hints (as before)
         soundCalls = true,           -- true = a new mission call plays its tone (as before); false = no tone
         soundUnit = true,            -- true = a unit invite and a ready check play a tone (as before); false = none
         soundCues = true,            -- true = a checkpoint, defused target or found item plays a cue (as before)

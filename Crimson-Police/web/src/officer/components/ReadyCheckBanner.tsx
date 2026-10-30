@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Badge, Button, Countdown, Icon } from '../../shared/components';
 import { useAction, usePush } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
+import { useKeyHint } from '../../shared/keyHints';
 import type { ReadyCheckView, UnitPushData } from '../../types/teams';
 import './ReadyCheckBanner.css';
 
@@ -22,6 +23,7 @@ export function ReadyCheckBanner({ check, onAnswered }: ReadyCheckBannerProps) {
     const [pushed, setPushed] = useState<ReadyCheckView | null | undefined>(undefined);
     const [busy, setBusy] = useState<'yes' | 'no' | null>(null);
     const { run } = useAction();
+    const readyKey = useKeyHint('ready');
 
     useEffect(() => setPushed(undefined), [check]);
     usePush<UnitPushData>('unit', data => setPushed(data?.readyCheck ?? null));
@@ -58,6 +60,7 @@ export function ReadyCheckBanner({ check, onAnswered }: ReadyCheckBannerProps) {
                     {current.waitingForMe
                         ? t('unit.ui.ready_text')
                         : t('unit.ui.ready_waiting', { n: waiting.length, total })}
+                    {current.waitingForMe && readyKey ? ` ${t('unit.ui.ready_key', { key: readyKey })}` : null}
                 </div>
                 {twistNames ? (
                     <div className="ready-check__twists">

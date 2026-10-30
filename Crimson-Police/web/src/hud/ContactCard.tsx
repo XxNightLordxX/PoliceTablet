@@ -4,9 +4,12 @@
 import { Icon } from '../shared/components';
 import { cx } from '../shared/cx';
 import { t } from '../shared/i18n';
+import { useKeyHint } from '../shared/keyHints';
 import type { HudContact } from '../types/custody';
 
 export function ContactCard({ contact }: { contact: HudContact | false | null | undefined }) {
+    // step O11: the contact key (escort, seat, hand over, run a plate), when bound and the key hints are on
+    const contactKey = useKeyHint('contact');
     if (!contact || typeof contact !== 'object') return null;
     const { label, fact, hint, confirm, suppressed } = contact;
     if (!fact && !hint && !confirm) return null;
@@ -27,6 +30,7 @@ export function ContactCard({ contact }: { contact: HudContact | false | null | 
                 ) : (
                     fact
                 )}
+                {contactKey ? ` ${t('custody.hud.contact_key', { key: contactKey })}` : null}
             </span>
         </div>
     );

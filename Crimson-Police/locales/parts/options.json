@@ -87,5 +87,7 @@
   "options.key.distanceUnits": "Distances",
   "options.key.distanceUnits_hint": "How distances read on the mission HUD, Active Mission and Dispatch on this PC.",
   "options.value.distanceUnits.metric": "Metres and kilometres",
-  "options.value.distanceUnits.imperial": "Feet and miles"
+  "options.value.distanceUnits.imperial": "Feet and miles",
+  "options.key.keyHints": "Key hints",
+  "options.key.keyHints_hint": "Name the key bound to it: \"or press K\" on the ready check, \"F6 opens Dispatch\" on a new mission call and the contact key on the contact HUD line. A key you have not bound is never named."
 }

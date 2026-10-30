@@ -100,6 +100,7 @@ const SCHEMA: OptionDef[] = [
         order: 20,
     },
     { key: 'quietRun', kind: 'bool', default: false, store: 'local', group: 'popups', order: 30 },
+    { key: 'keyHints', kind: 'bool', default: true, store: 'local', group: 'popups', order: 40 },
     { key: 'soundCalls', kind: 'bool', default: true, store: 'local', group: 'sounds', order: 10 },
     { key: 'soundUnit', kind: 'bool', default: true, store: 'local', group: 'sounds', order: 20 },
     { key: 'soundCues', kind: 'bool', default: true, store: 'local', group: 'sounds', order: 30 },
@@ -222,4 +223,10 @@ registerMock('client', 'getKeyLabels', (): { keys: KeyLabel[] } => {
             { command: 'crimsonpolice_contact', state: 'other' },
         ],
     };
+});
+
+// step O11: the keys the hints name (the ready key K, the Dispatch key F6; the contact key is not bound here).
+registerMock('client', 'getKeyHints', (): { keys: Record<string, string> } => {
+    if (local.keyHints === false) return { keys: {} };
+    return { keys: { tablet: 'F5', dispatch: 'F6', ready: 'K' } };
 });

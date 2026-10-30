@@ -111,6 +111,7 @@
   "custody.fact.weapon": "Weapon found in the frisk",
   "custody.hud.confirm_on_tablet": "Confirm on the tablet (Active Mission).",
   "custody.hud.contact": "{label}:",
+  "custody.hud.contact_key": "Contact key: {key}.",
   "custody.hud.inadmissible": "{fact} (inadmissible)",
   "custody.item.narcotics": "narcotics",
   "custody.item.tools": "burglary tools",

@@ -3799,7 +3799,9 @@ The pop-up officer options (My options -> Pop-ups, kept on this PC): how long no
 long the result card stays (resultTime, seconds) and fewer pop-ups during a mission (quietRun: unit invites,
 commendations, rewards and profile news go only to the bell while a run is on; route, custody, run messages,
 warnings and errors always show). The NUI applies the first two (web/src/shared/toast.ts, hud/ResultScreen.tsx);
-CP.Tablet.notify (client) applies quietRun. Config.OfficerOptions holds the allow, defaults and bounds.
+CP.Tablet.notify (client) applies quietRun. Key hints (keyHints, step O11, on by default) name the bound key on the
+ready check banner, a new mission call and the contact HUD line (CP.Options.keyHint, web/src/shared/keyHints.ts).
+Config.OfficerOptions holds the allow, defaults and bounds.
 ```
 
 ## Crimson-Police/shared/options_run.lua
@@ -4606,6 +4608,14 @@ An unknown key renders the key itself, so a missing string is visible instead of
 
 The foundation's own part (locales/parts/ui.json) is bundled as a last-resort fallback so the HUD,
 result card and toasts stay readable even before the first session arrives. Session text always wins.
+```
+
+## Crimson-Police/web/src/shared/keyHints.ts
+
+```text
+useKeyHint(name) (step O11): the label of the key bound to the ready, contact, tablet or Dispatch key mapping, from
+the client action getKeyHints, or null when the officer turned Key hints off on this PC or the key is not bound
+with a text label. ReadyCheckBanner says "Or press K."; the contact HUD line names the contact key.
 ```
 
 ## Crimson-Police/web/src/shared/navigation.tsx
