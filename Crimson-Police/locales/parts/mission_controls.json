@@ -260,5 +260,11 @@
   "err.tod_picked_today": "Your department already picked a Type of the Day today. Pick again after the daily reset.",
   "sup.tod.today": "Counts today for your department: {type}. A pick now counts on {day}.",
   "mc.control.pushMission": "Push a chosen mission",
-  "mc.control_desc.pushMission": "Supervisors page a unit of their own department (never their own) with one mission they choose instead of a random one, from Live Missions. Only that unit sees the mission's name and may accept or decline it; every accept rule stays and it never earns rapid response. A few a day per supervisor."
+  "mc.control_desc.pushMission": "Supervisors page a unit of their own department (never their own) with one mission they choose instead of a random one, from Live Missions. Only that unit sees the mission's name and may accept or decline it; every accept rule stays and it never earns rapid response. A few a day per supervisor.",
+  "mc.control.happyHourPoints": "Happy hour points",
+  "mc.control_desc.happyHourPoints": "Multiplies the final points of completed runs your department leads that were accepted while a happy hour ran. The bonus stays for the run when the hour ends. Never for the one who started the hour, on test runs, Cross-Department runs or the Weekly Boss.",
+  "mc.unit.happyHourPoints": "×{n}",
+  "mc.control.twistPoints": "Twist points",
+  "mc.control_desc.twistPoints": "Multiplies each twist's points share on runs your department leads. All chosen twists together still stop at the server's twist points cap.",
+  "mc.unit.twistPoints": "×{n}"
 }

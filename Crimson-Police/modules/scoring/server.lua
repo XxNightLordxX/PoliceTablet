@@ -639,9 +639,9 @@ local function ScoreLines(run, p, P, opts)
             + AddLine(bonuses, penalties, 'fast_finish', Num(common.fastBonus, 0) * P, 1, false, false,
                 { pct = math.floor(fastShare * 100 + 0.5) })
     end
-    -- one line per twist of the run (CP.Twists): each adds its share of P, together at most
-    -- Config.Events.twistMaxPoints
-    for _, line in ipairs(CP.Twists.bonus(CP.Twists.of(run)).lines) do
+    -- one line per twist of the run (CP.Twists): each adds its share of P (x the department's twist points, step
+    -- P20), together at most Config.Events.twistMaxPoints
+    for _, line in ipairs(CP.Twists.bonus(CP.Twists.of(run), nil, CP.Twists.pointsScaleOf(run)).lines) do
         total = total
             + AddLine(bonuses, penalties, 'modifier', line.points * P, 1, false, false,
                 { modifier = CP.L('modifier.' .. line.key) })
@@ -677,6 +677,15 @@ local function EmptyBreakdown(P)
         failedShare = nil,
         final = 0,
     }
+end
+
+-- The happy hour points bonus a run carries (run.controls.pointsBonus, fixed at the accept, step P20): x the final
+-- points, 1.0 = none. Never on test runs, Cross-Department runs or the Weekly Boss.
+function Scoring.bonusOf(run)
+    if type(run) ~= 'table' or run.test or run.operationId or run.isBoss then return 1.0 end
+    local b = type(run.controls) == 'table' and tonumber(run.controls.pointsBonus) or nil
+    if b == nil or b ~= b or b == math.huge then return 1.0 end
+    return math.max(1.0, b)
 end
 
 function Scoring.compute(run, p, result, opts)
@@ -725,9 +734,12 @@ function Scoring.compute(run, p, result, opts)
     end
     local todMultiplier = Num(Config.Events and Config.Events.todMultiplier, 2.0)
     if tod then final = math.floor(final * todMultiplier + 1e-9) end
+    -- the happy hour points bonus (step P20), after the cap like the Type of the Day
+    local mBonus = Scoring.bonusOf(run)
+    if mBonus ~= 1.0 then final = math.floor(final * mBonus + 1e-9) end
 
     if PresenceFailed(run, p) then
-        final, capped, tod = 0, false, false
+        final, capped, tod, mBonus = 0, false, false, 1.0
     end
     if not run.test and p.citizenid then MarkFirstDone(p.citizenid) end
 
@@ -737,6 +749,8 @@ function Scoring.compute(run, p, result, opts)
     out.capped, out.tod = capped, tod
     -- extras for the result card and the Profile breakdown: the cap (whole points) and the multipliers used
     out.cap, out.scoreCap, out.todMultiplier = math.floor(cap + 1e-9), scoreCap, todMultiplier
+    -- on the breakdown only when there is one (the result card shows it)
+    if mBonus ~= 1.0 then out.mBonus = mBonus end
     out.final = math.max(0, final)
     return out
 end

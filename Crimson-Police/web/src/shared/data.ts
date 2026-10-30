@@ -123,6 +123,7 @@ export function normalizeResult(r: RunResult): RunResult {
             cap: optionalNumber(p.cap),
             scoreCap: optionalNumber(p.scoreCap),
             todMultiplier: optionalNumber(p.todMultiplier),
+            mBonus: optionalNumber(p.mBonus),
         },
         cash: {
             B: Number(r.cash?.B ?? 0),

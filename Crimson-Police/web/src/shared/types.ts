@@ -419,6 +419,8 @@ export interface RunResult {
         cap?: number;
         scoreCap?: number;
         todMultiplier?: number;
+        // mBonus (step P20): the happy hour points bonus of a run accepted during a happy hour; absent = none
+        mBonus?: number;
     };
     // mBonus (step P16): the happy hour cash bonus of a run accepted during a happy hour; absent = none
     cash: { B: number; mTier: number; mMod: number; mBonus?: number; amount: number; status: string };

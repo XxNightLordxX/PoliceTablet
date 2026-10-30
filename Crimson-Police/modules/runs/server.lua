@@ -2615,12 +2615,16 @@ function Cd.rc.apply(run, leaderOfficer, officers)
     end
     run.controls = type(controls) == 'table' and controls or {}
     run.controlsChanged = type(changed) == 'table' and changed or {}
-    -- cash bonuses (step P16): never on Cross-Department runs or the Weekly Boss; the happy hour cash is fixed now
+    -- cash (step P16) and points (step P20) bonuses: never on Cross-Department runs or the Weekly Boss; the happy
+    -- hour bonuses are fixed now
     if run.operationId or run.isBoss then
         run.controls.twistCash, run.controls.happyHourCash = nil, nil
+        run.controls.twistPoints, run.controls.happyHourPoints = nil, nil
     else
         local okH, bonus = Call('HappyHour', 'cashBonusFor', run.controls.happyHourCash, officers)
         if okH and type(bonus) == 'number' and bonus > 1 then run.controls.cashBonus = bonus end
+        local okP, pBonus = Call('HappyHour', 'pointsBonusFor', run.controls.happyHourPoints, officers)
+        if okP and type(pBonus) == 'number' and pBonus > 1 then run.controls.pointsBonus = pBonus end
     end
     local start = run.controls[Cd.rc.START]
     if run.controlsChanged[Cd.rc.START] and Cd.rc.whole(start) and start > 0 then run.startTimeout = start end
@@ -4345,7 +4349,7 @@ local function ExpectedFor(run, p)
     local tier = run.payTier or TierByName(run.expectedTier) or TierFor(math.max(1, #Runs.activeSrcs(run)))
     local P = Num(run.pointsBase, 0)
     local ev = Config.Events or {}
-    local bonus = CP.Twists.bonus(CP.Twists.of(run), CP.Twists.scaleOf(run))
+    local bonus = CP.Twists.bonus(CP.Twists.of(run), CP.Twists.scaleOf(run), CP.Twists.pointsScaleOf(run))
     local modPts = bonus.points * P
     local nDepts = ActiveDepartments(run)
     local mCross = nDepts >= 2 and Num(Config.CrossDepartmentPoints, 1.10) or 1.0
@@ -4357,6 +4361,8 @@ local function ExpectedFor(run, p)
         local ok, tod = Call('Events', 'typeOfTheDay', nil, dept, run.participants)
         if ok and tod ~= nil and tod == run.missionType then pts = pts * Num(ev.todMultiplier, 2.0) end
     end
+    -- the happy hour points bonus (step P20)
+    if Has('Scoring', 'bonusOf') then pts = pts * CP.Scoring.bonusOf(run) end
     local mBonus = Has('Cash', 'bonusOf') and CP.Cash.bonusOf(run) or 1.0
     local cash = U.round(Num(run.cashBase, 0) * Num(tier and tier.cash, 1.0) * bonus.cash * mBonus)
     return { cash = cash, points = math.floor(pts) }

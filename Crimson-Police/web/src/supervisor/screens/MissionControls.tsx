@@ -504,7 +504,7 @@ function Editor({
     if (c.kind === 'map') {
         const map = asMap(draft);
         const typeLabel = (k: string) =>
-            // twistCash (step P16): one slider per enabled twist, by its name
+            // twistCash / twistPoints (steps P16, P20): one slider per enabled twist, by its name
             (Array.isArray(c.twistsAll) ? c.twistsAll.find(x => x.key === k)?.label : undefined) ??
             asArray(session.config?.missionTypes).find(m => m.key === k)?.label ??
             k;

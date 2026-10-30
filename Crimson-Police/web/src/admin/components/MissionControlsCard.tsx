@@ -48,7 +48,7 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
     const session = useOptionalSession();
     const typeLabel = (k: string) =>
         asArray(session?.config?.missionTypes).find(m => m.key === k)?.label ??
-        // twistCash (step P16): a twist's name
+        // twistCash / twistPoints (steps P16, P20): a twist's name
         (hasKey(`modifier.${k}`) ? t(`modifier.${k}`) : k);
     return (key, v) => {
         // callLane (step P12): the gap and how many may be open; none = no lane

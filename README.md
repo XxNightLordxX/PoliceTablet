@@ -645,6 +645,17 @@ Supervisor UI → **Mission controls** (below).
   - `twistCash = { on = false, min = 1.0, max = 1.0 }` (**Twist cash**): x each twist's cash (`Config.Events.twists`)
     on runs his department leads, read at the accept; the accept step shows the raised bonus. All chosen twists
     together still stop at `Config.Events.twistMaxCash`.
+- **Points bonuses** (step P20, per department, off when you install, under the master switch). Like the cash
+  bonuses, a supervisor moves points only inside the min and max you set; the shipped `min = 1.0, max = 1.0` moves
+  nothing even when switched on, so open the max first (for example `max = 1.25`). Only completed runs get them, never
+  test runs, Cross-Department runs or the Weekly Boss. Runs with them count normally on the boards and in the contest.
+  - `happyHourPoints = { on = false, min = 1.0, max = 1.0 }` (**Happy hour points**): x the final points of a run his
+    department leads that was accepted while a happy hour ran (applied after the points cap, like the Type of the
+    Day). Fixed at the accept, so the end of the hour never cuts a live run; the one who started the happy hour (and a
+    unit he is in) gets none. The result card and the Profile run card show a **Happy hour** line (for example `x1.2`).
+  - `twistPoints = { on = false, min = 1.0, max = 1.0 }` (**Twist points**): x each twist's points share
+    (`Config.Events.twists[k].points`) on runs his department leads, read at the accept; the accept step shows the
+    raised share. All chosen twists together still stop at `Config.Events.twistMaxPoints`.
 - **Type of the Day** (step P18, per department, off when you install, under the master switch):
   `typeOfTheDay = { on = false }`. A supervisor picks one mission type **for tomorrow** (never today, so nobody times
   it to a run), at most once a day for his department (admins may correct it). Tomorrow his department's officers earn
@@ -2527,6 +2538,11 @@ however it ends.
   points"): the Points Hard rule now says a supervisor may pick his department's Type of the Day for the next day (the
   `typeOfTheDay` Mission control, shipped off); the multiplier stays the admin's `Config.Events.todMultiplier`, and
   the pick never doubles the setter's own runs. Officers still never change points.
+- Points bonuses inside admin bounds (step P20, owner decision of 2026-10-19: "supervisors may give points"): the
+  Points Hard rule now also names the Mission controls `happyHourPoints` (x the final points of a run accepted during a
+  happy hour, never for its starter) and `twistPoints` (each twist's points share, still under
+  `Config.Events.twistMaxPoints`), per department, shipped off with bounds that move nothing; completed runs only,
+  never on test runs, Cross-Department runs or the Weekly Boss.
 
 - NPC combat, at the owner's request of 2026-10-19 ("make them also not do head shots at all also reduce the damage
   they shoot as they kill really quickly", no automatic weapons, lower accuracy): `Config.NpcCombat` ([5.9](#59-how-hard-npcs-fight-back)). Mission NPCs never carry an

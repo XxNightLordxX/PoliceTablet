@@ -277,6 +277,13 @@ Config.MissionControls = {
         -- Twist cash: x each twist's cash (Events.twists) on runs his department leads, read at the accept; the chosen
         -- twists together still stop at Events.twistMaxCash and points never change. min = max = 1.0 moves nothing
         twistCash = { on = false, min = 1.0, max = 1.0 },
+        -- Happy hour points: x the final points of a completed run his department leads that was accepted while a
+        -- happy hour ran (kept for the run); never for the one who started the hour, on test runs, Cross-Department
+        -- runs or the Weekly Boss. min = max = 1.0 moves nothing: raise max (e.g. 1.25)
+        happyHourPoints = { on = false, min = 1.0, max = 1.0 },
+        -- Twist points: x each twist's points share (Events.twists) on runs his department leads, read at the accept;
+        -- the chosen twists together still stop at Events.twistMaxPoints. min = max = 1.0 moves nothing
+        twistPoints = { on = false, min = 1.0, max = 1.0 },
         -- Type of the Day: a supervisor picks one mission type for TOMORROW, at most once a day for his department;
         -- tomorrow his department's officers earn the Type of the Day points (Events.todMultiplier) on that type
         -- instead of the server's type, other departments keep the server's. Never on his own runs or a unit he is in

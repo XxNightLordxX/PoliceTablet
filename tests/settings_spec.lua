@@ -947,6 +947,13 @@ do
             'step P18: a department\'s Type of the Day ships off, with a comment'
         )
         H.ok(
+            d.happyHourPoints.on == false and d.happyHourPoints.min == 1.0 and d.happyHourPoints.max == 1.0
+                and d.twistPoints.on == false and d.twistPoints.min == 1.0 and d.twistPoints.max == 1.0
+                and cfgText:find('Happy hour points: x the final points of a completed run', 1, true) ~= nil
+                and cfgText:find('Twist points: x each twist\'s points share', 1, true) ~= nil,
+            'step P20: the points bonuses ship off with bounds that move nothing, with comments'
+        )
+        H.ok(
             d.pushMission.on == false and E('MissionControls.pushMissionPerDay').default == 5
                 and E('MissionControls.pushMissionPerDay').max == 50
                 and E('MissionControls.pushMissionPerDay').desc:find('missions one supervisor may push', 1, true) ~= nil

@@ -3585,6 +3585,17 @@ pattern, so a missing module reads as config).
   `CP.Cash.bonusOf(run)` give nothing for test, Cross-Department (`operationId`) and boss runs (`Cd.rc.apply` also
   drops both there). `Cash.compute` pays `round(B * mTier * mMod * mBonus)` and puts `mBonus` on `breakdown.cash`
   only when it is not 1 (the result card and Profile show it); `Events.twistOffer` shows the department's raised cash.
+- Points bonuses (step P20), the same shape as the cash bonuses: per department, under the master switch, scope
+  `run`, range 1-3, shipped off with `min = max = 1.0`; a raise relaxes (self rule). `happyHourPoints`, kind `number`
+  (`HH.registerPoints`): `Cd.rc.apply` calls `HH.pointsBonusFor(value, officers)` (the same rule as
+  `HH.cashBonusFor`) and saves `run.controls.pointsBonus`; `Scoring.bonusOf(run)` (1.0 on test, Cross-Department and
+  boss runs) multiplies the final points after the cap and the Type of the Day, and `Scoring.compute` puts `mBonus`
+  on the points breakdown only when it is not 1 (the result card and Profile show a Happy hour line). `twistPoints`,
+  kind `map` `{ [twist] = x }` (`Events.registerTwistPointsControl`, `Events.deptTwistPoints`; both twist maps share
+  one registration helper). `CP.Twists.bonus(list, scale, pscale)` multiplies each twist's points share by `pscale`
+  before the `twistMaxPoints` cap; `CP.Twists.pointsScaleOf(run)` reads `run.controls.twistPoints`; the scoring's
+  twist lines, the run view's expected points and `Events.twistOffer` use it. `Cd.rc.apply` drops both on
+  Cross-Department and boss runs.
 - Type of the Day (step P18), `typeOfTheDay`, kind `choice` (every mission type), per department, under the master
   switch, shipped off; a pick relaxes (self rule). modules/events `Events.registerDeptTodControl`: `allow` refuses a
   supervisor's second change of the day (`err.tod_picked_today`); the pick counts on the next day only:

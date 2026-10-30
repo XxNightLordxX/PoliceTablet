@@ -219,6 +219,9 @@ export function RunBreakdown({ result: raw, cashStatus }: { result: RunResult; c
                     {p.tod ? (
                         <Line label={t('result.tod')} value={`×${formatFactor(limits.todMultiplier)}`} tone="mult" />
                     ) : null}
+                    {p.mBonus && p.mBonus !== 1 ? (
+                        <Line label={t('result.points_bonus')} value={`×${formatFactor(p.mBonus)}`} tone="mult" />
+                    ) : null}
                     <div className="cp-result__final">
                         <span>{t('result.final')}</span>
                         <span className="cp-num">

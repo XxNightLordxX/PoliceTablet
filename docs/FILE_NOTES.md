@@ -1975,6 +1975,8 @@ end time again (read-time cooldowns, step P2).
 Step P16: the happyHourCash control (per department, under the master switch, shipped off with min = max = 1.0):
 HH.cashBonusFor gives a run accepted during a happy hour its department's cash multiplier (run.controls.cashBonus),
 never for the one who started the hour or a unit he is in.
+Step P20: happyHourPoints, the same for points: HH.pointsBonusFor fixes run.controls.pointsBonus at the accept
+(CP.Scoring.compute multiplies the final points by it).
 ```
 
 ## Crimson-Police/modules/integrations/qbx/client.lua
@@ -5610,6 +5612,15 @@ tests/oversight_spec.lua · the oversight slice: modules/admin (audit, webhooks,
 review and void, force recall, supervisor/admin callbacks), modules/disputes and modules/anticheat.
 The real CP.Access and CP.Permissions modules run on a CP.Qbx stub; every other module is a stub that
 records its calls. Every SQL statement of the three modules runs here against MariaDB cp_test.
+```
+
+## tests/points_bonus_spec.lua
+
+```text
+Points bonuses inside admin bounds (step P20): happyHourPoints (x the final points of a completed run a department
+leads that was accepted while a happy hour ran, fixed at the accept, never for its starter) and twistPoints (x each
+twist's points share, still under Config.Events.twistMaxPoints). Never on failed runs, test runs, Cross-Department
+runs or the Weekly Boss; the accept step shows the raised share. Plain Lua: stubbed controls, no database.
 ```
 
 ## tests/protect_rescue_director_spec.lua

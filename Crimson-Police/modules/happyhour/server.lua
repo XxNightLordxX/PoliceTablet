@@ -114,9 +114,10 @@ function HH.registerCash()
 end
 HH.registerCash()
 
--- The cash bonus of a run accepted now: value (the department's happyHourCash, read for the leader's unit) while a
--- happy hour runs that applies to the unit (the one who started it and a unit he is in get none), else nil.
-function HH.cashBonusFor(value, members)
+-- The bonus of a run accepted now: value (the department's happyHourCash or happyHourPoints, read for the leader's
+-- unit) while a happy hour runs that applies to the unit (the one who started it and a unit he is in get none), else
+-- nil.
+local function BonusFor(value, members)
     local v = tonumber(value)
     if v == nil or v ~= v or v <= 1 or v > CASH_RANGE[2] then return nil end
     local dc = CP.DeptControls
@@ -128,6 +129,31 @@ function HH.cashBonusFor(value, members)
     if dc.heldBy and dc.heldBy({ members = members }, row) == true then return nil end
     return v
 end
+HH.cashBonusFor = BonusFor
+
+-- ============================================================================
+--                         HAPPY HOUR POINTS (STEP P20)
+-- ============================================================================
+-- happyHourPoints (Config.MissionControls.controls): per department, under the master switch, shipped off with
+-- min = max = 1.0. x the final points of a completed run the department leads that was accepted while a happy hour
+-- ran; read at the accept (scope run) and fixed in run.controls.pointsBonus (CP.Scoring.compute applies it).
+local POINTS_KEY = 'happyHourPoints'
+
+function HH.registerPoints()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    return dc.register(POINTS_KEY, {
+        kind = 'number',
+        scope = 'run',
+        range = CASH_RANGE,
+        configValue = function() return 1.0 end,
+        relaxes = function(v) return tonumber(v) ~= nil and v > 1 end,
+    })
+end
+HH.registerPoints()
+
+-- The points bonus of a run accepted now (the same rule as the cash bonus), else nil.
+HH.pointsBonusFor = BonusFor
 
 -- "Sgt Doe": the rank and name of the officer who started it while he is online, else nil (the screens say who by
 -- role then).
