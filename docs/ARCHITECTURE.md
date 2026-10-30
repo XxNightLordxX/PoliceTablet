@@ -125,6 +125,7 @@ PoliceTablet/                      (git repo)
     shared/options_run.lua         During a mission: abandon in two presses, one-click recalculate, miles (§5.48)
     shared/options_popups.lua      Pop-ups: toast time, result card time, fewer pop-ups on a run, key hints (§5.48)
     shared/options_sounds.lua      Sounds: mission call tone, unit tone, objective cues on or off (§5.48)
+    shared/options_unit.lua        Unit: Auto-Ready answers the unit ready check near the leader (§5.48)
     shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
     config/banned_words.txt        the default banned-word list for profile bios (one word or phrase a line)
@@ -3340,6 +3341,15 @@ no option is registered by this module: each feature registers its own keys.
   NUI only, no server change. Shipped allowed, defaults true, false, 'metric'. Walk:
   officer/screens/abandonPress.walk.ts. Mock: `?abandonConfirm=0&oneClickRecalc=1&units=imperial` (with
   `?hud=offroute`: the route line in miles).
+- Unit (step O13, shared/options_unit.lua, group `unit`): `autoReady` (bool, server, default false, shipped locked:
+  `Config.OfficerOptions.allow.autoReady = false`). Client: CP.Options.activeWithin(ms) (modules/options/client.lua: a
+  watcher polls a few game controls every 250 ms only while the option is on) and CP.Units.autoReadyNow() (option on,
+  no pause menu, input within 60 s) send `server:unitReady { accepted = true, auto = true }` on client:readyCheck.
+  Server: Units.ready(src, accepted, auto) counts it only when AutoCounts passes (CP.OptionDefs.resolve allows it for
+  the department, CP.Options.effective has it on, the ped is within Config.OfficerOptions.autoReadyRange, clamped 10 to
+  1000, of the leader's, server-side; a check started with extra.crossDepartment never does), else
+  'err.unit_ready_auto' and the member still answers. The answer is stored as 'auto': CheckView.autoForMe keeps the
+  banner's Not ready button and a manual Not ready still cancels the check.
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 

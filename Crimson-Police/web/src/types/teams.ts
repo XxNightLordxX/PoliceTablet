@@ -29,6 +29,8 @@ export interface ReadyCheckView {
     waiting: number[];
     // The viewer still has to answer.
     waitingForMe?: boolean;
+    // Auto-Ready answered Ready for the viewer: Not ready still shows (step O13).
+    autoForMe?: boolean;
 }
 
 // Push topic 'unit'.

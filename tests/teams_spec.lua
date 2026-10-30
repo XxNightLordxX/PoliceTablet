@@ -1653,6 +1653,65 @@ U._reset()
 H.eq(U.readyCheck({ id = 999 }, 'tactical', function() end, function() end), false,
     'no unit: no check (the draw goes on)')
 
+-- Auto-Ready (officer option autoReady, step O13): an automatic Ready counts only while the department allows it, the
+-- officer has it on and stands within Config.OfficerOptions.autoReadyRange of the leader; a manual Not ready wins.
+do
+    local keepOptions, keepAllow = CP.Options, Config.OfficerOptions.allow.autoReady
+    local autoOn = {}
+    CP.Options = {
+        effective = function(cid) return { autoReady = autoOn[cid] == true } end,
+    }
+    local function Auto(src) return Act('server:unitReady', src, { accepted = true, auto = true }) end
+    H.eq(Config.OfficerOptions.allow.autoReady, false, 'Auto-Ready ships locked')
+    H.eq(Config.OfficerOptions.autoReadyRange, 150.0, 'within 150 m of the leader')
+    U._reset()
+    u = Unit3()
+    Clear()
+    autoOn.CID2, autoOn.CID3 = true, true
+    H.players[1].coords, H.players[2].coords = vec3(0.0, 0.0, 0.0), vec3(50.0, 0.0, 0.0)
+    H.players[3].coords = vec3(500.0, 0.0, 0.0)
+    StartCheck(u)
+    local ok, data = Auto(2)
+    H.ok(ok == false and data == 'err.unit_ready_auto', 'allow false: the automatic answer is ignored')
+    H.eq(Cb('getUnit', 2).data.unit.readyCheck.waitingForMe, true, '...and the banner still asks')
+    Config.OfficerOptions.allow.autoReady = true
+    ok, data = Auto(2)
+    H.eq(ok, true, 'allowed, on and 50 m from the leader: Ready')
+    H.ok(HasNote(2, 'unit.ready.auto_done'), 'the member is told Auto-Ready answered')
+    local view = Cb('getUnit', 2).data.unit.readyCheck
+    H.ok(view.waitingForMe == false and view.autoForMe == true, 'the banner keeps Not ready after an automatic Ready')
+    ok, data = Auto(3)
+    H.ok(ok == false and data == 'err.unit_ready_auto', '500 m from the leader: still waiting')
+    H.eq(Cb('getUnit', 3).data.unit.readyCheck.waitingForMe, true, '...the far member answers himself')
+    ok = Act('server:unitReady', 2, { accepted = false })
+    H.eq(ok, true, 'a manual Not ready after an automatic Ready')
+    H.eq(LastCancel().key, 'err.unit_ready_declined', '...wins: the check is cancelled')
+    H.eq(U.readyCheckOf(u), nil, '...and over')
+    StartCheck(u)
+    autoOn.CID2 = false
+    H.eq(select(2, Auto(2)), 'err.unit_ready_auto', 'the officer\'s own option off: ignored')
+    autoOn.CID2 = true
+    H.players[3].coords = vec3(0.0, 100.0, 0.0)
+    Auto(2)
+    local before = readyCalls
+    Auto(3)
+    H.eq(readyCalls, before + 1, 'everyone near and on: the draw follows at once')
+    Config.Departments.sast.officerOptions = { allow = { autoReady = false } }
+    StartCheck(u)
+    H.eq(select(2, Auto(2)), 'err.unit_ready_auto', 'a department that locks it: ignored')
+    Config.Departments.sast.officerOptions = nil
+    H.eq(select(2, Act('server:unitReady', 2, { accepted = false, auto = true })), 'err.invalid_payload',
+        'Auto-Ready never answers Not ready')
+    Act('server:unitReady', 2, { accepted = false })
+    U.lock(u)
+    U.readyCheck(u, 'tactical', function() end, function() U.unlock(u) end, { crossDepartment = true })
+    H.eq(select(2, Auto(2)), 'err.unit_ready_auto', 'never for a Cross-Department join')
+    Act('server:unitReady', 2, { accepted = false })
+    CP.Options, Config.OfficerOptions.allow.autoReady = keepOptions, keepAllow
+    for _, sr in ipairs({ 1, 2, 3 }) do H.players[sr].coords = vec3(0.0, 0.0, 0.0) end
+    U._reset()
+end
+
 -- ============================================================================
 --                           LAST PARTNERS AND NEARBY
 -- ============================================================================

@@ -302,6 +302,7 @@ local RANGES = {
     ['Profile.bioMax'] = { 1, 2000 },
     ['OfficerOptions.defaults.hudScale'] = { 0.5, 2 },
     ['OfficerOptions.defaults.resultTime'] = { 5, 120 },
+    ['OfficerOptions.autoReadyRange'] = { 10, 1000 },
     ['Leaderboard.topN'] = { 1, 100 },
     ['Cash.minPayout'] = { 0, 10000000 },
     ['Cash.maxPayout'] = { 0, 10000000 },

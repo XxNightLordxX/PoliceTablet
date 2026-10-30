@@ -1791,6 +1791,8 @@ My options holds the choices each officer makes for their own tablet, saved per 
 
 - During a mission: Abandon asks in a dialog (saved with the character; on by default, as before; off = no dialog: the first press of Abandon on Active Mission turns the button into "Click again to abandon" for 3 seconds and only a second press within them abandons, so an abandon always takes two presses; server:abandon and the type cooldown, Config.Limits.abandonCooldown, are unchanged), Recalculate in one click (saved with the character; off by default: Recalculate route draws the new route at once, without the confirm; Config.Route.maxRecalcs still counts every recalculation) and Distances (kept on this PC: 'metric', as before, reads m under 1 km then km; 'imperial' reads ft under a tenth of a mile, then miles with one decimal under 10 mi; on the mission HUD, the run bar, Active Mission, the Contact panel and Dispatch; the Mission Builder stays metric). Each is allowed by default (Config.OfficerOptions.allow).
 
+- Unit (step O13): Auto-Ready (saved with the character; off by default and locked: Config.OfficerOptions.allow.autoReady = false, so an owner or a department turns it on). With it on, when the unit leader accepts a mission type the officer's tablet answers Ready for them, but only while they are at the keys (no pause menu, some game input in the last 60 seconds). The server counts that answer only while the officer's department allows the option, the officer has it on and the officer's ped stands within Config.OfficerOptions.autoReadyRange metres (150 by default, 10 to 1000) of the leader's, server-side positions; otherwise it is ignored and the banner still asks. Never for a Cross-Department join. A manual Not ready still wins: after an automatic Ready the banner keeps a Not ready button until the check ends.
+
 - Sounds (kept on this PC, for every character played on it): Mission call tone, Unit tone (a unit invite and a ready check) and Objective cues (a checkpoint passed, a target defused, an item found on a run). Each is on by default, as before; off plays nothing and every pop-up and HUD line still shows. On or off only: the game's sounds have no volume. The Builder's own sounds are not affected. Each is allowed by default (Config.OfficerOptions.allow).
 
 - Config.OfficerOptions: enabled (true; false = no My options screen and every option keeps its default for everyone), allow (per option: false = officers cannot change it and everyone gets the default), defaults (per option: what every officer starts with) and bounds (per number option: { min, max } officers may pick). A department may set its own allow, defaults and bounds in Config.Departments.<key>.officerOptions; they win over the global ones for its officers.
@@ -3993,6 +3995,7 @@ Config.OfficerOptions = {
         abandonConfirm = true,       -- Abandon asks in a dialog; off = press it twice (this character)
         skipRecalcConfirm = true,    -- recalculate the route in one click, without the confirm (this character)
         distanceUnits = true,        -- distances in metres or in miles (kept on this PC)
+        autoReady = false,           -- answers the unit ready check for the officer: off unless you want it
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -4036,11 +4039,14 @@ Config.OfficerOptions = {
                                      -- false = it asks first (as before)
         distanceUnits = 'metric',    -- 'metric' (m and km, as before) or 'imperial' (ft and miles) on the HUD, Active
                                      -- Mission and Dispatch
+        autoReady = false,           -- true = the officer is Ready at once when the unit leader accepts a mission type,
+                                     -- if they are at the keys and near the leader; false = they answer (as before)
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick
         resultTime = { 8, 60 },      -- shortest and longest time (seconds) an officer may keep the result card
     },
+    autoReadyRange = 150.0,          -- metres: Auto-Ready answers only while the officer is this close to the leader
 }
 
 Config.Commendations = {

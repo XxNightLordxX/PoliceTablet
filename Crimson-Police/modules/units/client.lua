@@ -42,6 +42,16 @@ end)
 -- ============================================================================
 -- The server asks every unit member "Ready for <type>?" (the type only, never the mission); nil clears it.
 
+local AUTO_READY_INPUT_MS = 60000   -- Auto-Ready answers only after game input within this long
+
+-- Auto-Ready (My options -> Unit, step O13): on, not in the pause menu and at the keys. The server still checks the
+-- department, the option and the distance to the leader; an answer it does not count leaves the banner asking.
+function Units.autoReadyNow()
+    if not (CP.Options and CP.Options.get and CP.Options.get('autoReady') == true) then return false end
+    if IsPauseMenuActive() then return false end
+    return CP.Options.activeWithin ~= nil and CP.Options.activeWithin(AUTO_READY_INPUT_MS)
+end
+
 RegisterNetEvent(CP.e('client:readyCheck'), function(data)
     if type(data) ~= 'table' then
         pendingCheck = nil
@@ -59,6 +69,7 @@ RegisterNetEvent(CP.e('client:readyCheck'), function(data)
     end
     pendingCheck = { typeLabel = label, expiresAt = GetGameTimer() + seconds * 1000 }
     Tone()
+    if Units.autoReadyNow() then TriggerServerEvent(CP.e('server:unitReady'), { accepted = true, auto = true }) end
     if not (CP.Tablet and CP.Tablet.notify) then return end
     local vars = { type = label, leader = leader, seconds = seconds, twists = table.concat(names, ', ') }
     CP.Tablet.notify('info', CP.L(#names > 0 and 'unit.ready.toast_twists' or 'unit.ready.toast', vars), {

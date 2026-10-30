@@ -3822,6 +3822,15 @@ a found item). On or off only: the game's frontend sounds have no volume. CP.Opt
 plays a tone only while its option is on. Config.OfficerOptions holds the allow and defaults.
 ```
 
+## Crimson-Police/shared/options_unit.lua
+
+```text
+The unit officer option (My options -> Unit, saved with the character): Auto-Ready answers the unit ready check for
+the officer (step O13). The client sends the answer only while the officer is at the keys; the server counts it only
+while the department allows it, the officer turned it on and stands within Config.OfficerOptions.autoReadyRange of
+the leader (CP.Units). Ships locked (allow false) and off.
+```
+
 ## Crimson-Police/web/build-stamp.mjs
 
 ```text
@@ -4566,6 +4575,14 @@ push 'invites') are answered here too with server:testRespond. Invites close (lo
 accepts a mission type and stay closed while the unit's run is active.
 ```
 
+## Crimson-Police/web/src/officer/screens/abandonPress.ts
+
+```text
+What a press of Abandon on Active Mission does (officer option abandonConfirm, step O10): with the option on, the
+dialog as before; off, the first press arms the button ("Click again to abandon") for 3 s and a second press while
+armed abandons. Walk: abandonPress.walk.ts.
+```
+
 ## Crimson-Police/web/src/shared/components/MaintenanceBanner.tsx
 
 ```text
@@ -4642,14 +4659,6 @@ src/shared/nui.ts · the NUI bridge (docs/ARCHITECTURE.md §9.1).
 In a normal browser (isEnvBrowser()) nothing is POSTed: request/action/client calls are answered
 by mocks registered with registerMock() (see src/mocks/*.mock.ts), and emitDebug() fakes Lua
 messages. Every call resolves (never rejects) to { ok, data?, error? } where error is an err.* key.
-```
-
-## Crimson-Police/web/src/officer/screens/abandonPress.ts
-
-```text
-What a press of Abandon on Active Mission does (officer option abandonConfirm, step O10): with the option on, the
-dialog as before; off, the first press arms the button ("Click again to abandon") for 3 s and a second press while
-armed abandons. Walk: abandonPress.walk.ts.
 ```
 
 ## Crimson-Police/web/src/shared/openOn.ts

@@ -229,6 +229,7 @@
   "admin.action.opAutoCancel": "Cross-Department Mission auto-cancelled",
   "err.unit_ready_none": "There is no ready check waiting for your answer.",
   "err.unit_ready_answered": "You already answered this ready check.",
+  "err.unit_ready_auto": "Auto-Ready could not answer for you: answer the ready check yourself.",
   "err.unit_ready_declined": "A unit member is not ready, so no mission was started. Nobody gets a cooldown.",
   "err.unit_ready_timeout": "Not every unit member answered the ready check in time, so no mission was started. Nobody gets a cooldown.",
   "err.unit_ready_cancelled": "The ready check was cancelled, so no mission was started. Nobody gets a cooldown.",
@@ -251,6 +252,7 @@
   "unit.you_disbanded": "You disbanded the unit.",
   "unit.ready.toast_title": "Ready for {type}?",
   "unit.ready.toast": "{leader} accepted {type} for your unit. Answer on the Unit screen within {seconds} s.",
+  "unit.ready.auto_done": "Auto-Ready: you are Ready for {type}. Press Not ready on the Unit screen if you are not.",
   "unit.ready.keybind_label": "Crimson-Police: ready for the unit's mission",
   "unit.ready.cancel_declined": "Ready check for {type} cancelled: {names} is not ready. No mission was started and nobody gets a cooldown.",
   "unit.ready.cancel_timeout": "Ready check for {type} cancelled: {names} did not answer in time. No mission was started and nobody gets a cooldown.",
@@ -314,5 +316,6 @@
   "unit.ui.ready_no": "Not ready",
   "unit.ready.toast_twists": "{leader} accepted {type} for your unit with these twists: {twists}. Answer on the Unit screen within {seconds} s.",
   "unit.ui.ready_twists": "Twists: {twists}",
-  "unit.ui.ready_key": "Or press {key}."
+  "unit.ui.ready_key": "Or press {key}.",
+  "unit.ui.ready_auto": "Auto-Ready answered Ready for you."
 }

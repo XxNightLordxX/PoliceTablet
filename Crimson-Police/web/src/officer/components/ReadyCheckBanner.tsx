@@ -61,6 +61,7 @@ export function ReadyCheckBanner({ check, onAnswered }: ReadyCheckBannerProps) {
                         ? t('unit.ui.ready_text')
                         : t('unit.ui.ready_waiting', { n: waiting.length, total })}
                     {current.waitingForMe && readyKey ? ` ${t('unit.ui.ready_key', { key: readyKey })}` : null}
+                    {current.autoForMe ? ` ${t('unit.ui.ready_auto')}` : null}
                 </div>
                 {twistNames ? (
                     <div className="ready-check__twists">
@@ -76,7 +77,7 @@ export function ReadyCheckBanner({ check, onAnswered }: ReadyCheckBannerProps) {
                 <Icon name="clock" size={14} />
                 <Countdown seconds={current.expiresIn} resetKey={current} warnBelow={10} dangerBelow={5} />
             </span>
-            {current.waitingForMe ? (
+            {current.waitingForMe || current.autoForMe ? (
                 <div className="ready-check__actions">
                     <Button
                         size="sm"
@@ -88,16 +89,18 @@ export function ReadyCheckBanner({ check, onAnswered }: ReadyCheckBannerProps) {
                     >
                         {t('unit.ui.ready_no')}
                     </Button>
-                    <Button
-                        size="sm"
-                        variant="primary"
-                        icon="check"
-                        loading={busy === 'yes'}
-                        disabled={!!busy}
-                        onClick={() => void answer(true)}
-                    >
-                        {t('unit.ui.ready_yes')}
-                    </Button>
+                    {current.waitingForMe ? (
+                        <Button
+                            size="sm"
+                            variant="primary"
+                            icon="check"
+                            loading={busy === 'yes'}
+                            disabled={!!busy}
+                            onClick={() => void answer(true)}
+                        >
+                            {t('unit.ui.ready_yes')}
+                        </Button>
+                    ) : null}
                 </div>
             ) : null}
         </div>

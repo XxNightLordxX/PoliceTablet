@@ -371,5 +371,56 @@ local src = f:read('a')
 f:close()
 H.ok(src:find('%f[%w]os%.') == nil and src:find('%f[%w]io%.') == nil, 'modules/options/client.lua uses no os or io')
 
+-- Auto-Ready (shared/options_unit.lua, step O13): with the option on, a ready check is answered for the officer only
+-- while they are at the keys (game input within 60 s) and not in the pause menu; off, nothing is sent.
+do
+    local pressed, paused = {}, false
+    _G.IsControlPressed = function(_, c) return pressed[c] == true end
+    _G.GetDisabledControlNormal = function() return 0.0 end
+    _G.IsPauseMenuActive = function() return paused end
+    local function AutoAnswers()
+        local n = 0
+        for _, e in ipairs(H.events) do
+            if e.name == 'crimson-police:server:unitReady' and type(e.args[1]) == 'table'
+                and e.args[1].auto == true then
+                n = n + 1
+            end
+        end
+        return n
+    end
+    local function Check()
+        H.fire('crimson-police:client:readyCheck', nil, { typeLabel = 'Patrol', expiresIn = 20, leaderName = 'A B' })
+        H.fire('crimson-police:client:readyCheck', nil, nil)
+    end
+    local keepAllow = Config.OfficerOptions.allow.autoReady
+    CP.Access.setSession(Session({ autoReady = true }, nil))
+    Check()
+    H.eq(AutoAnswers(), 0, 'Auto-Ready locked (as shipped): nothing is answered')
+    Config.OfficerOptions.allow.autoReady = true
+    H.eq(O.get('autoReady'), true, 'allowed: the officer\'s own Auto-Ready is on')
+    H.advance(3000)
+    Check()
+    H.eq(AutoAnswers(), 0, 'no game input yet: the officer answers himself')
+    pressed[32] = true
+    H.advance(1000)
+    pressed[32] = nil
+    Check()
+    H.eq(AutoAnswers(), 1, 'at the keys: Ready is sent for the officer, marked automatic')
+    paused = true
+    Check()
+    H.eq(AutoAnswers(), 1, 'in the pause menu: nothing is sent')
+    paused = false
+    H.advance(61000, 1000)
+    Check()
+    H.eq(AutoAnswers(), 1, 'idle for over a minute: nothing is sent')
+    CP.Access.setSession(Session({ autoReady = false }, nil))
+    pressed[32] = true
+    H.advance(1000)
+    Check()
+    H.eq(AutoAnswers(), 1, 'the officer\'s own option off: nothing is sent')
+    pressed[32] = nil
+    Config.OfficerOptions.allow.autoReady = keepAllow
+end
+
 for _, key in ipairs({ 'test_sound', 'test_size', 'test_volume', 'test_board' }) do Defs.remove(key) end
 return H

@@ -3088,6 +3088,7 @@ function H.boot(opts)
     H.load('shared/options_popups.lua')
     H.load('shared/options_run.lua')
     H.load('shared/options_sounds.lua')
+    H.load('shared/options_unit.lua')
     H.load('shared/twists.lua')
     H.load('shared/utils.lua')
     if H.storage == 'files' and server and not H.filesMySQL then

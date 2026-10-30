@@ -1062,6 +1062,23 @@ do
     H.ok((Check('OfficerOptions.defaults.distanceUnits', 'imperial')), 'miles may be the default')
 end
 
+-- Auto-Ready (step O13): locked and off as shipped (officers answer the ready check, as before), commented, a range.
+do
+    local function E(p) return S.entry(p) or {} end
+    H.eq(E('OfficerOptions.allow.autoReady').default, false, 'autoReady: locked as shipped')
+    H.ok((E('OfficerOptions.allow.autoReady').desc or ''):find('off unless you want it', 1, true) ~= nil,
+        'autoReady: allow has its comment')
+    H.eq(E('OfficerOptions.defaults.autoReady').default, false, 'autoReady: off, officers answer as before')
+    H.ok((E('OfficerOptions.defaults.autoReady').desc or '') ~= '', 'autoReady: its default has a comment')
+    H.eq(E('OfficerOptions.autoReadyRange').default, 150.0, 'Auto-Ready counts within 150 m of the leader')
+    H.ok((E('OfficerOptions.autoReadyRange').desc or ''):find('close to the leader', 1, true) ~= nil,
+        'the range has its comment')
+    H.ok(E('OfficerOptions.autoReadyRange').min == 10 and E('OfficerOptions.autoReadyRange').max == 1000,
+        'the range is 10 to 1000 m')
+    H.ok((Check('Departments.fib.officerOptions', { allow = { autoReady = true } })),
+        'a department may allow it on its own')
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

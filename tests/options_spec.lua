@@ -343,6 +343,28 @@ do
     H.eq(Saved('OPT00001') and Saved('OPT00001').abandonConfirm, nil, 'back to the defaults: nothing saved')
 end
 
+-- Unit (shared/options_unit.lua, step O13): Auto-Ready ships locked and off; allowed, it is a row of My options -> Unit
+-- saved with the character.
+do
+    local function Rows()
+        local rows = {}
+        for _, d in ipairs(Cb('getOptions', 1).data.schema) do rows[d.key] = d end
+        return rows
+    end
+    Config.OfficerOptions.allow.autoReady = false     -- as config.lua ships it (this spec cleared allow above)
+    H.eq(Rows().autoReady, nil, 'Auto-Ready is locked as shipped: no row')
+    H.eq(Cb('getOptions', 1).data.values.autoReady, false, '...and off: officers answer the ready check, as before')
+    H.eq(select(2, Act(1, { autoReady = true })), 'err.option_locked', 'a locked Auto-Ready cannot be turned on')
+    Config.OfficerOptions.allow.autoReady = true
+    local row = Rows().autoReady
+    H.ok(row and row.group == 'unit' and row.store == 'server' and row.default == false,
+        'allowed: a row of My options -> Unit, saved with the character, off by default')
+    local ok, data = Act(1, { autoReady = true })
+    H.ok(ok == true and data.values.autoReady == true, 'the officer turns it on')
+    Act(1, { autoReady = false })
+    Config.OfficerOptions.allow.autoReady = nil
+end
+
 -- the column the step adds, in every storage mode (files mode: the saves folder engine)
 H.ok(pcall(H.sql, 'SELECT options FROM cp_officers LIMIT 1'), 'migration 010: cp_officers.options exists')
 

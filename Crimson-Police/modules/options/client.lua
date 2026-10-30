@@ -148,6 +148,42 @@ function O.keyHint(cmd)
     return res.label
 end
 
+-- ============================================================================
+--              AUTO-READY: is the officer at the keys (step O13)
+-- ============================================================================
+-- While autoReady is on, a light watcher notes the last game input (moving, looking, shooting, driving), so Auto-Ready
+-- answers only for an officer at the keys. Off: nothing runs.
+
+local INPUT_POLL_MS = 250
+local INPUT_IDLE_POLL_MS = 2000
+local INPUT_CONTROLS = { 21, 22, 24, 25, 30, 31, 32, 33, 34, 35, 44, 51, 59, 71, 72, 75 }
+local lastInputAt = nil
+
+local function SawInput()
+    for _, c in ipairs(INPUT_CONTROLS) do
+        if IsControlPressed(0, c) then return true end
+    end
+    return GetDisabledControlNormal(0, 1) ~= 0.0 or GetDisabledControlNormal(0, 2) ~= 0.0
+end
+
+-- true when the officer gave game input within the last ms (the watcher saw it).
+function O.activeWithin(ms)
+    if not lastInputAt then return false end
+    return GetGameTimer() - lastInputAt <= (tonumber(ms) or 0)
+end
+
+CreateThread(function()
+    while true do
+        if O.get('autoReady') == true then
+            if SawInput() then lastInputAt = GetGameTimer() end
+            Wait(INPUT_POLL_MS)
+        else
+            lastInputAt = nil
+            Wait(INPUT_IDLE_POLL_MS)
+        end
+    end
+end)
+
 -- The push 'options' ({ values }): the officer's server options changed.
 RegisterNetEvent(CP.e('client:push'), function(topic, data)
     if topic ~= 'options' or type(data) ~= 'table' or type(data.values) ~= 'table' then return end

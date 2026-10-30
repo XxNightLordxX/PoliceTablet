@@ -154,6 +154,7 @@ local function CheckView(check, viewer, now)
         ready = ready,
         waiting = waiting,
         waitingForMe = viewer ~= nil and check.answers[viewer] == nil and IndexOf(check.members, viewer) ~= nil,
+        autoForMe = viewer ~= nil and check.answers[viewer] == 'auto',  -- Auto-Ready answered: Not ready still shows
     }
 end
 
@@ -487,7 +488,8 @@ end
 
 -- Starts the ready check of a locked unit of 2+ (CP.Draw.accept). onReady() once everyone accepted,
 -- onCancel(reasonKey, srcs) on a decline, a timeout, or a member who left, went off duty, took a real call
--- or entered the arena. extra (optional): { twists = { { key, label } } } the leader chose, shown to the members.
+-- or entered the arena. extra (optional): { twists = { { key, label } } } the leader chose, shown to the members;
+-- crossDepartment = true: a Cross-Department join, where Auto-Ready never answers.
 -- Returns false when no check is needed (the draw follows at once).
 function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
     local unit = Resolve(ref)
@@ -510,6 +512,8 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
         onCancel = onCancel,
         done = false,
         twists = {},
+        -- a Cross-Department join never takes an automatic Ready (Auto-Ready, step O13)
+        noAuto = type(extra) == 'table' and extra.crossDepartment == true,
     }
     for _, t in ipairs(type(extra) == 'table' and type(extra.twists) == 'table' and extra.twists or {}) do
         if type(t) == 'table' and type(t.key) == 'string' and type(t.label) == 'string' then
@@ -534,13 +538,60 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
     return true
 end
 
--- A member answers the pending check of their unit.
-function Units.ready(src, accepted)
+-- Auto-Ready (officer option autoReady, step O13): metres from the leader within which an automatic answer counts.
+local AUTO_RANGE_MIN, AUTO_RANGE_MAX, AUTO_RANGE_DEFAULT = 10, 1000, 150
+
+local function AutoRange()
+    local c = type(Config.OfficerOptions) == 'table' and Config.OfficerOptions or {}
+    local r = tonumber(c.autoReadyRange)
+    if not r or r ~= r then return AUTO_RANGE_DEFAULT end
+    return math.max(AUTO_RANGE_MIN, math.min(AUTO_RANGE_MAX, r))
+end
+
+local function ServerCoords(src)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return nil end
+    return GetEntityCoords(ped)
+end
+
+-- An automatic Ready from src counts: never for a Cross-Department join; the officer's department allows autoReady,
+-- the officer has it on and their ped is within AutoRange() of the leader's (server-side positions only).
+local function AutoCounts(check, src)
+    if check.noAuto then return false end
+    local Defs = CP.OptionDefs
+    if not Defs then return false end
+    local officer = GetOfficer(src)
+    if not officer then return false end
+    local allow, defaults = Defs.resolve(officer.department)
+    if not Defs.enabled() or not allow.autoReady then return false end
+    local on = defaults.autoReady
+    if CP.Options and CP.Options.effective then
+        local ok, values = Call('Options', 'effective', officer.citizenid, officer.department)
+        if not ok or type(values) ~= 'table' then return false end
+        on = values.autoReady
+    end
+    if on ~= true then return false end
+    if src == check.leader then return false end
+    local here, there = ServerCoords(src), ServerCoords(check.leader)
+    if not (here and there) then return false end
+    return #(here - there) <= AutoRange()
+end
+
+-- A member answers the pending check of their unit. auto = true: the answer Auto-Ready sent (AutoCounts decides;
+-- an automatic Ready that does not count is ignored and the member still has to answer). A manual Not ready after
+-- an automatic Ready still cancels the check.
+function Units.ready(src, accepted, auto)
     src = ToSrc(src)
     local unit = Units.unitOf(src)
     local check = unit and readyChecks[unit.id]
     if not check or check.done or not IndexOf(check.members, src) then return false, 'err.unit_ready_none' end
-    if check.answers[src] then return false, 'err.unit_ready_answered' end
+    if auto then
+        if not accepted then return false, 'err.invalid_payload' end
+        if check.answers[src] then return false, 'err.unit_ready_answered' end
+        if not AutoCounts(check, src) then return false, 'err.unit_ready_auto' end
+    end
+    local prior = check.answers[src]
+    if prior and (accepted or prior ~= 'auto') then return false, 'err.unit_ready_answered' end
     if not accepted then
         CancelCheck(unit, 'err.unit_ready_declined', { src }, 'unit.ready.cancel_declined')
         return true, { accepted = false }
@@ -550,7 +601,11 @@ function Units.ready(src, accepted)
         CancelCheck(unit, 'err.unit_ready_cancelled', { src }, 'unit.ready.cancel_arena')
         return false, 'err.in_arena'
     end
-    check.answers[src] = true
+    check.answers[src] = auto and 'auto' or true
+    if auto then
+        Notify(src, 'info', 'unit.ready.auto_done', { type = check.typeLabel })
+        CP.log(TAG, 'unit %d: Auto-Ready answered for %s', unit.id, tostring(src))
+    end
     for _, m in ipairs(check.members) do
         if not check.answers[m] then
             PushUnit(unit)
@@ -1350,7 +1405,7 @@ CP.Net.action('server:unitReady', function(src, payload)
     local accepted = payload
     if type(payload) == 'table' then accepted = payload.accepted end
     if type(accepted) ~= 'boolean' then return false, 'err.invalid_payload' end
-    return Units.ready(src, accepted)
+    return Units.ready(src, accepted, type(payload) == 'table' and payload.auto == true)
 end, { rate = 3 })
 
 -- ============================================================================
