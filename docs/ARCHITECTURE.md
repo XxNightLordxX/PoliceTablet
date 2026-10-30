@@ -3631,6 +3631,19 @@ pattern, so a missing module reads as config).
   (no next claimant), `MC.decline` (`server:declineMissionCall`, the paged unit's leader) withdraws it with reason
   `declined`, the issuer is told; `OnRunEnded` never re-dispatches it. `supView.push` gives the Page dialog the
   missions of the callable types and the supervisor's `perDay` / `usedToday`.
+- Give points (step P22, modules/supawards, CP.SupAwards), `awardPoints`, kind `action`, per department, under the
+  master switch, shipped off with `min = 1, max = 50` (points an award), range 1-10000 (`CP.Corrections.adjustMax`).
+  `server:sup:awardPoints { citizenid, points, reason, confirm? }` (`Kit.supAction`, permission
+  `DC.canChange(src, 'awardPoints')`; R, S strict (every character of the actor's licenses), L 1 per 10 s per
+  officer, T = the citizenid at or above `AdminControl.adjustConfirmAbove` via `Corr.adjustConfirm`): positive
+  points inside the department's bounds (`err.award_points_range`), `AdminControl.pointAdjust = false` refuses
+  (`err.award_off`); a supervisor only for an officer of his own department (online job, else
+  `cp_officers.department`; `err.other_department`) and at most `Config.MissionControls.awardPointsPerDay` points a
+  day (`Kit.dailySum` of today's `manual_award` rows by his license's characters, `err.award_daily_limit`; 0 = no
+  limit); admins skip both. Then `CP.Corrections.adjust(ctx, citizenid, points)`, the one point-adjust path the admin
+  action `server:admin:adjustPoints` also uses (adjustDailyLimit, `Scoring.adjust` row, audit `manualAward` with
+  `ctx.role`, caches). `SA.supView(src, citizenid)` feeds `sup:getOfficerActivity.awardPoints` (`{ min, max, perDay,
+  usedToday, confirmAbove }`, nil when not offered).
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through
@@ -4078,6 +4091,7 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `admin:getRun` | callback | officerRecords | `{ rowId, archived? }` | debrief, participants (both tables), dispute, goal rewards it completed, `txnId`, `own` |
 | `admin:getOfficerPoints` | callback | officerRecords | `{ citizenid }` | week/month/season/all-time points and ranks, `adjust.maxDeduction`, `confirmAbove`, `dailyLimit` |
 | `server:admin:adjustPoints` | action | pointsAdjust | `{ citizenid, points (−10,000..10,000, not 0), reason, confirm?, requestId }` | R I S(strict) L(1 per 10 s per officer); T = the citizenid at ≥ `adjustConfirmAbove`; a deduction never takes season points or XP below 0; `adjustDailyLimit` summed from today's rows of every character of the admin's licenses (license: and license2:); audit `manualAward` / `pointsAdjust` (flags) |
+| `server:sup:awardPoints` | supAction | missionControls (DC.canChange awardPoints) | `{ citizenid, points (the department's min..max), reason, confirm? }` | R S(strict) L(1 per 10 s per officer); T as above; a supervisor: own department, `awardPointsPerDay` from today's rows; then `CP.Corrections.adjust` (step P22) |
 | `admin:previewBulkVoid` | callback | bulkVoid | `{ filter = { citizenid?, department?, missionType?, missionId?, operationId?, from, to \| allTime, includeAwards? } }` | V: rows, officers (XP before/after), points, held cash, archived, left-out own runs, `confirmWord`, `previewToken` (none above `bulkMaxRows`) |
 | `server:admin:bulkVoid` | action | bulkVoid | `{ filter, kind?, reason, confirm = 'VOID <n>', previewToken, requestId }` | R I V T J; refused while the officer is on a run; audit `bulkVoid` (flags) + one `voidRun` per row |
 | `server:admin:resetProgression` | action | bulkVoid | `{ citizenid, reason, confirm = citizenid, previewToken, requestId }` | every row, all time, as a correction batch |

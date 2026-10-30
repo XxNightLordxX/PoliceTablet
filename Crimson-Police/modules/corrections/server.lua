@@ -1140,6 +1140,56 @@ function Corr.officerPoints(citizenid)
     }
 end
 
+-- The one point-adjust path (step P22): Admin UI -> Give or take points and a supervisor's Give points (the
+-- awardPoints Mission control, modules/supawards) both come here after their own guards. It keeps
+-- Config.AdminControl's rules (pointAdjust, the deduction floor, adjustDailyLimit per acting player), writes the signed
+-- row (Scoring.adjust: breakdown.by and the reason, shown in the officer's history) and audits it with ctx.audit (the
+-- role is ctx.role: 'supervisor' for a supervisor). ctx = an AdminKit action's ctx. ok, data | false, errKey.
+function Corr.adjust(ctx, citizenid, points)
+    local cid = citizenid
+    local o = Officer(cid)
+    if not o then return false, 'err.unknown_officer' end
+    local n = Int(points, -ADJUST_MAX, ADJUST_MAX)
+    if not n or n == 0 then return false, 'err.invalid_points' end
+    if n < 0 and Cfg('pointAdjust', true) == false then return false, 'err.adjust_off' end
+    if n < 0 then
+        local info = Corr.officerPoints(cid)
+        if not info or -n > info.adjust.maxDeduction then return false, 'err.adjust_too_low' end
+    end
+    local limit = math.floor(Num(Cfg('adjustDailyLimit', 0), 0))
+    if limit > 0 then
+        local used = Kit.dailySum({
+            missionIds = { 'manual_award', 'manual_adjust' },
+            actor = ctx.actor,
+            src = ctx.src,
+        })
+        if not used then return false, 'err.internal' end
+        if used + math.abs(n) > limit then return false, 'err.adjust_daily_limit' end
+    end
+    local ok, rowId, err = Call('Scoring', 'adjust', ctx.src, cid, n, ctx.reason)
+    if not ok or not rowId then return false, err or 'err.internal' end
+    if n > 0 then
+        ctx.audit('manualAward', cid, nil, ('%d'):format(n))
+    else
+        ctx.audit('pointsAdjust', cid, nil, ('%d'):format(n), { category = 'flags' })
+    end
+    Invalidate(cid, 'points')
+    return true, { rowId = rowId, citizenid = cid, points = n }
+end
+
+-- Points one adjustment may move either way (ADJUST_MAX).
+function Corr.adjustMax() return ADJUST_MAX end
+
+-- Points at or above which an adjustment needs the typed confirmation (Config.AdminControl.adjustConfirmAbove).
+function Corr.confirmAbove() return math.floor(Num(Cfg('adjustConfirmAbove', 500), 500)) end
+
+-- The typed confirmation an adjustment needs: the officer's citizenid, or nil.
+function Corr.adjustConfirm(p)
+    local n = math.abs(tonumber(type(p) == 'table' and p.points) or 0)
+    if n >= Corr.confirmAbove() then return p.citizenid end
+    return nil
+end
+
 -- ============================================================================
 --                                ADMIN ACTIONS
 -- ============================================================================
@@ -1254,46 +1304,13 @@ if Kit and Kit.action then
 
     -- Add or take away points: a new logged row, never an edit of old rows. Undo = void that row.
     Kit.action('server:admin:adjustPoints', 'pointsAdjust', function(ctx)
-        local p = ctx.payload
-        local cid = p.citizenid
-        local o = Officer(cid)
-        if not o then return false, 'err.unknown_officer' end
-        local n = Int(p.points, -ADJUST_MAX, ADJUST_MAX)
-        if not n or n == 0 then return false, 'err.invalid_points' end
-        if n < 0 and Cfg('pointAdjust', true) == false then return false, 'err.adjust_off' end
-        if n < 0 then
-            local info = Corr.officerPoints(cid)
-            if not info or -n > info.adjust.maxDeduction then return false, 'err.adjust_too_low' end
-        end
-        local limit = math.floor(Num(Cfg('adjustDailyLimit', 0), 0))
-        if limit > 0 then
-            local used = Kit.dailySum({
-                missionIds = { 'manual_award', 'manual_adjust' },
-                actor = ctx.actor,
-                src = ctx.src,
-            })
-            if not used then return false, 'err.internal' end
-            if used + math.abs(n) > limit then return false, 'err.adjust_daily_limit' end
-        end
-        local ok, rowId, err = Call('Scoring', 'adjust', ctx.src, cid, n, ctx.reason)
-        if not ok or not rowId then return false, err or 'err.internal' end
-        if n > 0 then
-            ctx.audit('manualAward', cid, nil, ('%d'):format(n))
-        else
-            ctx.audit('pointsAdjust', cid, nil, ('%d'):format(n), { category = 'flags' })
-        end
-        Invalidate(cid, 'points')
-        return true, { rowId = rowId, citizenid = cid, points = n }
+        return Corr.adjust(ctx, ctx.payload.citizenid, ctx.payload.points)
     end, {
         reason = true,
         requestId = true,
         targetRate = { 1, 10000 },
         self = SelfCidStrict,
-        confirm = function(p)
-            local n = math.abs(tonumber(p.points) or 0)
-            if n >= math.floor(Num(Cfg('adjustConfirmAbove', 500), 500)) then return p.citizenid end
-            return nil
-        end,
+        confirm = Corr.adjustConfirm,
     })
 
     -- ---- BULK VOID AND RESTORE ---------------------------------------------

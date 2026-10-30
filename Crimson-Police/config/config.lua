@@ -148,8 +148,9 @@ Config.Permissions = {
     -- the list form bcso = { grades = { 3, 5 } }. Empty = admins only.
     builderTeleport = {},
     -- Always admin-only, whatever is set above: single-mission payouts, clearing
-    -- admin payouts, manual awards, disputes about failed runs, voiding any run,
-    -- seasons, the bounty override, suspensions, reloading mission files and test runs.
+    -- admin payouts, manual awards (apart from the awardPoints Mission control), disputes
+    -- about failed runs, voiding any run, seasons, the bounty override, suspensions, reloading
+    -- mission files and test runs.
     -- Nobody may approve, void or answer a dispute about a run they took part in.
 }
 
@@ -296,6 +297,11 @@ Config.MissionControls = {
         -- his department's officers draw theirs from, starting at the next weekly reset (none picked = every goal);
         -- the goals' points never change and the supervisor himself keeps your whole lists
         goals = { on = false, min = 1, max = 5 },
+        -- Department Report: a supervisor gives min to max points at a time to an officer of his own department
+        -- (never to himself or another character of his license), with a reason, through the same logged manual award
+        -- as Admin UI -> Give or take points (AdminControl.pointAdjust off stops it too); shown in the officer's history
+        -- like an admin's award, at most awardPointsPerDay points a supervisor a day
+        awardPoints = { on = false, min = 1, max = 50 },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 
@@ -316,6 +322,8 @@ Config.MissionControls = {
     noticesPerDay = 5,
     -- missions one supervisor may push to a unit a day (the pushMission control; admins any)
     pushMissionPerDay = 5,
+    -- points one supervisor may give a day in all (the awardPoints control; admins any); 0 = no limit
+    awardPointsPerDay = 100,
 }
 
 -- ============================================================================

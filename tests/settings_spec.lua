@@ -965,6 +965,14 @@ do
                 and cfgText:find('Goals: a supervisor picks min to max of your daily goals', 1, true) ~= nil,
             'step P21: a department\'s goals ship off, with a comment'
         )
+        H.ok(
+            d.awardPoints.on == false and d.awardPoints.min == 1 and d.awardPoints.max == 50
+                and E('MissionControls.awardPointsPerDay').default == 100
+                and E('MissionControls.awardPointsPerDay').max == 10000
+                and E('MissionControls.awardPointsPerDay').desc:find('points one supervisor may give a day', 1, true) ~= nil
+                and cfgText:find('a supervisor gives min to max points at a time', 1, true) ~= nil,
+            'step P22: giving points ships off, 1-50 an award and 100 a supervisor a day, with comments'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

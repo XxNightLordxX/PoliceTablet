@@ -3430,6 +3430,16 @@ Lua file sandbox): the saves folder is a folder inside Crimson-Police, 'saves' u
 names another one.
 ```
 
+## Crimson-Police/modules/supawards/server.lua
+
+```text
+CP.SupAwards (server): a supervisor gives points to an officer of his own department (step P22, the Mission
+control Config.MissionControls.controls.awardPoints, owner decision 2026-10-19). Only through the admin's
+point-adjust path (CP.Corrections.adjust, Config.AdminControl), inside the admin's min and max per award and
+Config.MissionControls.awardPointsPerDay a day, never to one of his own characters, always with a reason and audited
+as 'supervisor'. The row is a manual award like an admin's, so the officer's history shows it the same way.
+```
+
 ## Crimson-Police/modules/tablet/client.lua
 
 ```text
@@ -4781,6 +4791,14 @@ Colours must be 6-digit hex (#1f4e8c); anything else falls back per key to the C
 default (text falls back to the best contrast for the background, as CP.U.contrastText does).
 ```
 
+## Crimson-Police/web/src/supervisor/components/AwardPointsDialog.tsx
+
+```text
+Supervisor UI · Department Report · Give points (step P22): points (the admin's min to max), a reason and, at or
+above AdminControl.adjustConfirmAbove, the officer's citizenid typed. The server checks every rule again (own
+department, never himself, the supervisor's points a day, Config.AdminControl).
+```
+
 ## Crimson-Police/web/src/supervisor/components/ClearCooldownDialog.tsx
 
 ```text
@@ -5069,15 +5087,6 @@ Before (a1 4.1 item 13, 5.4) the 60 s fallback put the van on its parking point 
 with a raw server SetEntityCoords at the file's height.
 ```
 
-## tests/dept_tod_spec.lua
-
-```text
-A department's Type of the Day (step P18): a supervisor picks one mission type for tomorrow; that day his
-department's officers earn the Type of the Day points on it instead of the server's type, other departments keep
-the server's, and the setter (or a unit he is in) keeps the server's too. Plain stubs: CP.DeptControls answers the
-switch and the self rule, MySQL.single.await answers the cp_audit row of yesterday's pick. No database.
-```
-
 ## tests/dept_goals_spec.lua
 
 ```text
@@ -5085,6 +5094,15 @@ A department's goals (step P21): a supervisor picks which of the admin's daily a
 officers draw from, counting from the next weekly reset; a second change in a week waits for the week after; the
 points stay the admin's; FIB officers and the setter keep the whole lists. Plain Lua: stubbed controls, schedule
 and SQL, no database.
+```
+
+## tests/dept_tod_spec.lua
+
+```text
+A department's Type of the Day (step P18): a supervisor picks one mission type for tomorrow; that day his
+department's officers earn the Type of the Day points on it instead of the server's type, other departments keep
+the server's, and the setter (or a unit he is in) keeps the server's too. Plain stubs: CP.DeptControls answers the
+switch and the self rule, MySQL.single.await answers the cp_audit row of yesterday's pick. No database.
 ```
 
 ## tests/dept_twists_spec.lua
@@ -6029,6 +6047,16 @@ every feature's data, survives a restart, and stays fast and small at 50,000 run
      Every timing and size is printed (CPU time, os.clock; the fsync writes in wall time).
 The spec always runs in files mode (H.useFiles), whatever CP_TEST_STORAGE says. sc-dispatch's mdt_dispatch is
 another resource's table: it stays on MariaDB and is read through the real oxmysql, as on a server.
+```
+
+## tests/sup_award_points_spec.lua
+
+```text
+A supervisor gives points (step P22, the awardPoints Mission control, owner decision 2026-10-19): only through the
+admin's point-adjust path (CP.Corrections.adjust), inside the admin's min and max and awardPointsPerDay, to an
+officer of his own department, never to a character of his own license, with a reason, audited as 'supervisor'.
+Plain stubs (no database): the real AdminKit, DeptControls, Corrections and SupAwards; MySQL, Scoring and the
+audit are tables in this file.
 ```
 
 ## tests/teams_spec.lua

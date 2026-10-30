@@ -275,5 +275,20 @@
   "sup.goals.daily": "Daily goals your officers draw from",
   "sup.goals.weekly": "Weekly goals your officers draw from",
   "sup.goals.hint": "Pick {min} to {max}, or none for every goal.",
-  "sup.goals.from": "Counts now: {now}. A pick saved now counts from the week of {day}."
+  "sup.goals.from": "Counts now: {now}. A pick saved now counts from the week of {day}.",
+  "mc.control.awardPoints": "Give points",
+  "mc.control_desc.awardPoints": "Supervisors give a few points at a time to an officer of their own department (never themselves or another character of theirs), with a reason, from Department Report. It is the same logged manual award as the Admin UI's Give or take points and shows in the officer's history like one. A daily total per supervisor.",
+  "mc.unit.awardPoints": "{n} pts",
+  "sup.award.button": "Give points",
+  "sup.award.title": "{name} · give points",
+  "sup.award.text": "A logged manual award: the officer is told, it shows in their history and it is in the audit log. Only an admin can undo it.",
+  "sup.award.points": "Points ({min}-{max})",
+  "sup.award.mine_used": "You: {used} of {n} points given today",
+  "sup.award.reason": "Reason (required)",
+  "sup.award.confirm_label": "Type {word} to confirm",
+  "sup.award.confirm": "Give points",
+  "sup.award.done": "Points given.",
+  "err.award_points_range": "Pick a number of points inside the limits.",
+  "err.award_daily_limit": "That is over the points you may give today.",
+  "err.award_off": "Giving points is switched off (Settings → AdminControl.pointAdjust)."
 }

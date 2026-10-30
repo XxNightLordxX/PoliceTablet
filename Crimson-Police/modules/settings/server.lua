@@ -392,6 +392,7 @@ local RANGES = {
     ['MissionControls.noticeMaxLength'] = { 20, 280 },
     ['MissionControls.noticesPerDay'] = { 0, 50 },
     ['MissionControls.pushMissionPerDay'] = { 0, 50 },
+    ['MissionControls.awardPointsPerDay'] = { 0, 10000 },
     ['MissionControls.callLaneMaxOpen'] = { 1, 10 },
     ['Cash.addFundsMax'] = { 0, 10000000 },
     ['Cash.manualDailyLimit'] = { 0, 10000000 },

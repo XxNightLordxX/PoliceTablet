@@ -1265,6 +1265,11 @@ reg('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) =
                       canLift: !!mockBans[o.citizenid],
                   },
         missionBanState: mockBans[o.citizenid] ?? null,
+        // step P22: Give points offered (never on the viewer's own character)
+        awardPoints:
+            o.citizenid === me.citizenid
+                ? null
+                : { min: 1, max: 50, perDay: 100, usedToday: mockAwarded, confirmAbove: 500 },
     };
     return activity;
 });
@@ -1289,6 +1294,19 @@ reg('action', 'server:sup:missionBan', (p: { citizenid?: string; hours?: number;
     const me = viewer();
     mockBans[p.citizenid] = { until: now() + hours * 3600, by: `${me.rank} ${me.name}`, reason: p.reason };
     return { citizenid: p.citizenid, until: mockBans[p.citizenid].until };
+});
+
+// step P22: the points the viewer gave in this mock session (Give points, 1-50 an award, 100 a day)
+let mockAwarded = 0;
+
+reg('action', 'server:sup:awardPoints', (p: { citizenid?: string; points?: number; reason?: string }) => {
+    if (!p?.citizenid || !byCid(p.citizenid)) throw new Error('err.unknown_officer');
+    if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+    const points = Number(p.points);
+    if (!Number.isInteger(points) || points < 1 || points > 50) throw new Error('err.award_points_range');
+    if (mockAwarded + points > 100) throw new Error('err.award_daily_limit');
+    mockAwarded += points;
+    return { citizenid: p.citizenid, points, rowId: 9000 + mockAwarded };
 });
 
 reg('action', 'server:sup:liftMissionBan', (p: { citizenid?: string; reason?: string }) => {

@@ -57,6 +57,7 @@ const CONTROL_GROUP: Record<string, GroupKey> = {
     featuredType: 'board',
     typeOfTheDay: 'board',
     goals: 'officers',
+    awardPoints: 'officers',
     callLane: 'calls',
     staffCallWait: 'calls',
 };

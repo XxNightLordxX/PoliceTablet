@@ -41,6 +41,7 @@ import { CommendationsCard } from '../../officer/components/CommendationsCard';
 import type { Commendation } from '../../types/profile';
 import { ClearCooldownDialog } from '../components/ClearCooldownDialog';
 import { MissionBanDialog } from '../components/MissionBanDialog';
+import { AwardPointsDialog } from '../components/AwardPointsDialog';
 import { CommendDialog } from '../components/CommendDialog';
 import './DeptReport.css';
 
@@ -57,6 +58,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     const [commending, setCommending] = useState(false);
     const [clearing, setClearing] = useState(false);
     const [banning, setBanning] = useState(false);
+    const [awarding, setAwarding] = useState(false);
     const [revoking, setRevoking] = useState<Commendation | null>(null);
     const [revokeReason, setRevokeReason] = useState('');
     const { run: act, busy } = useAction();
@@ -162,6 +164,11 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                             {t(current.missionBanState ? 'sup.ban.lift' : 'sup.ban.button')}
                         </Button>
                     ) : null}
+                    {officer && current?.awardPoints ? (
+                        <Button variant="secondary" icon="medal" onClick={() => setAwarding(true)}>
+                            {t('sup.award.button')}
+                        </Button>
+                    ) : null}
                     {officer && current?.cooldownClear ? (
                         <Button variant="secondary" icon="clock" onClick={() => setClearing(true)}>
                             {t('sup.cd.button')}
@@ -192,6 +199,12 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                 control={current?.missionBan ?? null}
                 state={current?.missionBanState ?? null}
                 onClose={() => setBanning(false)}
+                onDone={() => void refetch()}
+            />
+            <AwardPointsDialog
+                officer={awarding && officer ? { citizenid: officer.citizenid, name: officer.name } : null}
+                control={current?.awardPoints ?? null}
+                onClose={() => setAwarding(false)}
                 onDone={() => void refetch()}
             />
             <ClearCooldownDialog

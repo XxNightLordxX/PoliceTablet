@@ -1478,6 +1478,8 @@ CP.Net.callback('sup:getOfficerActivity', function(src, args)
     local _, ban = Call('MissionBan', 'supView', src, args.citizenid)
     view.missionBan = ban
     view.missionBanState = select(2, Call('MissionBan', 'view', args.citizenid))
+    -- Give points (step P22, Config.MissionControls.controls.awardPoints): { min, max, perDay, usedToday, confirmAbove }
+    view.awardPoints = select(2, Call('SupAwards', 'supView', src, args.citizenid))
     return view
 end)
 

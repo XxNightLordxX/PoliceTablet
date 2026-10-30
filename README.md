@@ -681,6 +681,16 @@ Supervisor UI → **Mission controls** (below).
   or a failed ready check ends the call (the supervisor is told), an abandoned run is never re-dispatched, and a push
   never earns rapid response. `Config.MissionControls.pushMissionPerDay` (`5`): pushes one supervisor may make a day
   (admins any). Every push is in the audit log (**Mission pushed to a unit**) with the mission.
+- **Give points** (step P22, per department, off when you install, under the master switch):
+  `awardPoints = { on = false, min = 1, max = 50 }`. In **Department Report** the officer's dialog gets a **Give
+  points** button: the supervisor gives `min` to `max` points at a time to an officer of his own department (also one
+  who is offline), never to himself or another character on his license (license: and license2:), always with a
+  reason. It is the same logged manual award as Admin UI → **Give or take points** (a new row, shown in the
+  officer's history like an admin's award; only an admin can undo it by voiding the row), so your
+  `Config.AdminControl` rules apply too: `pointAdjust = false` stops it, `adjustDailyLimit` and the typed confirmation
+  at `adjustConfirmAbove` count for supervisors as well. `Config.MissionControls.awardPointsPerDay` (`100`): points
+  one supervisor may give a day in all (`0` = no limit; admins any). Every award is in the audit log (**Manual
+  award**, role supervisor) with the reason.
 
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
@@ -773,7 +783,8 @@ These are always admin only. Setting one of them to `true` in `Config.Permission
 - Open the Admin UI.
 - Change settings in game (Admin UI → **Settings**), and turn missions and locations on or off.
 - Set or clear the payout of **one** mission, and clear any admin-set payout.
-- Give points by hand (manual award).
+- Give points by hand (manual award), apart from the **Give points** Mission control (step P22) you may switch on
+  for supervisors.
 - Answer disputes about **failed** runs.
 - Void any run.
 - Start and end seasons, and override the weekly bounty.
@@ -2555,6 +2566,10 @@ however it ends.
   Points Hard rule now names the `goals` Mission control (shipped off): a supervisor picks which of the admin's
   `Config.Goals` goals his department's officers draw from, from the next weekly reset, with the admin's points,
   never for the setter.
+- Supervisors give points to officers (step P22, owner decision of 2026-10-19: "supervisors may give points"): the
+  Points Hard rule now names the `awardPoints` Mission control (shipped off): a logged manual award through the admin's
+  own point-adjust path, inside the admin's min and max per award and `awardPointsPerDay`, to officers of the
+  supervisor's own department only, never to a character on his own license, always with a reason and audited.
 
 - NPC combat, at the owner's request of 2026-10-19 ("make them also not do head shots at all also reduce the damage
   they shoot as they kill really quickly", no automatic weapons, lower accuracy): `Config.NpcCombat` ([5.9](#59-how-hard-npcs-fight-back)). Mission NPCs never carry an

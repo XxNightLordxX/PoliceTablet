@@ -346,6 +346,16 @@ export interface MissionBanControl {
     canLift?: boolean;
 }
 
+// step P22: Give points for this viewer (nil = not offered); perDay / usedToday in points (admins: none)
+export interface AwardPointsControl {
+    min: number;
+    max: number;
+    perDay?: number;
+    usedToday?: number;
+    // points at or above this need the officer's citizenid typed (Config.AdminControl.adjustConfirmAbove)
+    confirmAbove?: number;
+}
+
 // sup:getDeptReport
 export interface DeptReport {
     department: DeptInfo | null;
@@ -391,6 +401,8 @@ export interface OfficerActivity {
     // step P11: Mission ban for this viewer (nil = not offered) and the ban in force
     missionBan?: MissionBanControl | null;
     missionBanState?: MissionBanState | null;
+    // step P22: Give points (the awardPoints Mission control)
+    awardPoints?: AwardPointsControl | null;
 }
 
 // sup:getOfficerCooldowns (step P7): the officer's cooldowns for Clear cooldown
