@@ -34,7 +34,7 @@ import {
     type SearchCircle,
 } from '../schema';
 import { editorMemory, routeMetaOf, setEditorMemory, setRouteMeta, shiftRouteMeta, subscribeBuilder } from '../store';
-import { startSpec } from '../useDraftEditor';
+import { startSpec, type MoveReport } from '../useDraftEditor';
 import { minLocationsFor, StepIntro, type StepProps } from './common';
 
 const KIND_ICON: Record<string, IconName> = {
@@ -87,9 +87,9 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     const [sel, setSel] = useState(() =>
         Math.min(Math.max(1, editorMemory(scope).location || 1), Math.max(1, def.locations.length)),
     );
-    const [confirm, setConfirm] = useState<{ kind: 'removeLocation' } | { kind: 'clear'; spec: PointSpec } | null>(
-        null,
-    );
+    const [confirm, setConfirm] = useState<
+        { kind: 'removeLocation' } | { kind: 'moveHere' } | { kind: 'clear'; spec: PointSpec } | null
+    >(null);
     const [focus, setFocus] = useState<string | null>(null);
     const [lit, setLit] = useState<{ key: string; index: number } | null>(null);
     // "Fill N for me": the proposal waiting for Keep / Try again / Place by hand (Config.Builder.autoFill)
@@ -106,6 +106,7 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
         setSel(n);
         setLit(null);
         setFill(null);
+        setMoveReport(null);
         setEditorMemory(scope, { location: n });
     };
     const meta = (key: string) => routeMetaOf(ed.id, li, key);
@@ -142,6 +143,36 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
         setRouteMeta(ed.id, li, key, null);
         keepFar(key);
         toast('success', t('builder.loc.far_moved', { label }));
+    };
+
+    // "Move the whole location here": the moved points that failed their check, until placed again or left
+    const [moveReport, setMoveReport] = useState<MoveReport | null>(null);
+    const moveHere = moveReport && moveReport.location === li ? moveReport : null;
+    const dropMoved = (key: string) =>
+        setMoveReport(r => (r ? { ...r, failed: r.failed.filter(f => f.key !== key) } : r));
+    const labelOfKey = (key: string) => {
+        const spec = specs.find(x => x.key === key);
+        return spec ? t(spec.labelKey) : key;
+    };
+    const moveAll = async () => {
+        setConfirm(null);
+        setFill(null);
+        setMoveReport(null);
+        const n = li;
+        const label = loc?.label || t('builder.location_default', { n });
+        const report = await ed.moveLocation(n, specs);
+        if (!report) return;
+        // the start moved with its points: no "points left behind" panel
+        seenStarts.current[n] = { ...report.start };
+        setMoved(null);
+        const bad = report.failed.reduce((sum, f) => sum + f.points.length, 0);
+        toast(
+            bad ? 'warning' : 'success',
+            bad
+                ? t('builder.loc.move_all_some', { label, dist: report.dist, bad, n: report.moved })
+                : t('builder.loc.move_all_done', { label, dist: report.dist, n: report.moved }),
+        );
+        setMoveReport(report.failed.length || report.routes.length ? report : null);
     };
 
     const addLocation = () => {
@@ -226,17 +257,19 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
             : null;
 
     const fillHere = fill && fill.li === li ? fill : null;
-    const runFill = async (spec: PointSpec, count: number) => {
+    const runFill = async (spec: PointSpec, count: number, drop?: number[]) => {
         setFill(null);
-        const reply = await ed.autoFill(spec, li, count);
+        const reply = await ed.autoFill(spec, li, count, drop);
         if (reply) setFill({ key: spec.key, li, reply });
     };
     const keepFill = async (spec: PointSpec) => {
         const f = fillHere;
         if (!f || f.key !== spec.key || !f.reply.result) return;
         setFill(null);
-        if (await ed.keepFill(spec, f.reply.result))
+        if (await ed.keepFill(spec, f.reply.result)) {
             toast('success', t('builder.auto.kept', { n: f.reply.proposed.length }));
+            dropMoved(spec.key);
+        }
     };
 
     const topErrors = errorsAt(ed.errors, 'locations');
@@ -346,6 +379,18 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                         }
                                     />
                                 </Field>
+                                {!ro && loc.start && cfg.useMyPosition !== false ? (
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        icon="user"
+                                        disabled={busy}
+                                        title={t('builder.loc.move_all_hint')}
+                                        onClick={() => setConfirm({ kind: 'moveHere' })}
+                                    >
+                                        {t('builder.loc.move_all')}
+                                    </Button>
+                                ) : null}
                                 {!ro ? (
                                     <IconButton
                                         icon="trash"
@@ -444,6 +489,66 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
                                         })
                                     }
                                 />
+                                {moveHere && moveHere.routes.length ? (
+                                    <div className="builder_client-inline-note">
+                                        {t('builder.loc.move_routes', {
+                                            labels: moveHere.routes.map(labelOfKey).join(', '),
+                                        })}
+                                    </div>
+                                ) : null}
+                                {(moveHere?.failed ?? []).map(f => {
+                                    const spec = specs.find(x => x.key === f.key);
+                                    const label = labelOfKey(f.key);
+                                    const drop = f.points.map(p => p.index);
+                                    const list = f.points
+                                        .map(p => t('builder.loc.move_failed_point', { n: p.index, reason: p.reason }))
+                                        .join(', ');
+                                    return (
+                                        <div key={`move-${f.key}`} className="builder_client-far" role="alert">
+                                            <span className="builder_client-far__text cp-num">
+                                                <Icon name="alert" size={13} />
+                                                {t('builder.loc.move_failed', { label, n: f.points.length, list })}
+                                            </span>
+                                            {!ro ? (
+                                                <>
+                                                    {spec && cfg.autoFill !== false && canAutoFill(spec) ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="primary"
+                                                            icon="zap"
+                                                            disabled={busy}
+                                                            onClick={() => void runFill(spec, drop.length, drop)}
+                                                        >
+                                                            {t('builder.auto.fill', { n: drop.length })}
+                                                        </Button>
+                                                    ) : null}
+                                                    {spec ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="secondary"
+                                                            icon="mapPin"
+                                                            disabled={busy}
+                                                            onClick={() => {
+                                                                dropMoved(f.key);
+                                                                void ed.place(spec, li);
+                                                            }}
+                                                        >
+                                                            {t('builder.auto.by_hand')}
+                                                        </Button>
+                                                    ) : null}
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        disabled={busy}
+                                                        onClick={() => dropMoved(f.key)}
+                                                    >
+                                                        {t('builder.loc.move_dismiss')}
+                                                    </Button>
+                                                </>
+                                            ) : null}
+                                        </div>
+                                    );
+                                })}
                                 {farLeft.map(e => {
                                     const key = e.path.slice(`locations.${li}.`.length);
                                     const spec = specs.find(x => x.key === key);
@@ -533,25 +638,42 @@ export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
             </div>
             <ConfirmDialog
                 open={!!confirm}
-                tone="danger"
+                tone={confirm?.kind === 'moveHere' ? 'primary' : 'danger'}
                 title={
-                    confirm?.kind === 'removeLocation' ? t('builder.loc.remove_title') : t('builder.loc.clear_title')
+                    confirm?.kind === 'removeLocation'
+                        ? t('builder.loc.remove_title')
+                        : confirm?.kind === 'moveHere'
+                          ? t('builder.loc.move_all_title')
+                          : t('builder.loc.clear_title')
                 }
                 message={
                     confirm?.kind === 'removeLocation'
                         ? t('builder.loc.remove_message', { label: loc?.label ?? '' })
-                        : t('builder.loc.clear_message', {
-                              label: confirm && confirm.kind === 'clear' ? t(confirm.spec.labelKey) : '',
-                              location: li,
-                          })
+                        : confirm?.kind === 'moveHere'
+                          ? t('builder.loc.move_all_message', {
+                                label: loc?.label || t('builder.location_default', { n: li }),
+                                n: rows.filter(r => r.key !== 'start').length,
+                            })
+                          : t('builder.loc.clear_message', {
+                                label: confirm && confirm.kind === 'clear' ? t(confirm.spec.labelKey) : '',
+                                location: li,
+                            })
                 }
-                confirmLabel={confirm?.kind === 'removeLocation' ? t('builder.loc.remove') : t('builder.loc.clear')}
+                confirmLabel={
+                    confirm?.kind === 'removeLocation'
+                        ? t('builder.loc.remove')
+                        : confirm?.kind === 'moveHere'
+                          ? t('builder.loc.move_all_confirm')
+                          : t('builder.loc.clear')
+                }
                 onConfirm={() =>
                     confirm?.kind === 'removeLocation'
                         ? removeLocation()
-                        : confirm && confirm.kind === 'clear'
-                          ? clearKey(confirm.spec)
-                          : undefined
+                        : confirm?.kind === 'moveHere'
+                          ? void moveAll()
+                          : confirm && confirm.kind === 'clear'
+                            ? clearKey(confirm.spec)
+                            : undefined
                 }
                 onCancel={() => setConfirm(null)}
             />

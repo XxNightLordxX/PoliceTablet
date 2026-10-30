@@ -131,6 +131,7 @@ overlays and of the protocol extensions are in `web/src/types/builder_client.ts`
 | `builderTeleport` | `{ missionId, location, key, index }` after the move (fade, freeze, collision, ground, unfreeze; only the server's `client:builder:teleport` coordinates for this request are used) |
 | `builderHere` | `{ ok, reason = text or false, point, result? }` (no tool starts; see builder_protocol.md) |
 | `builderAutoPoints` | `{ ok, reason = text or false, wanted, proposed, result? }` (no tool starts; pure core `B.autoFill(o, count, deps)`, ring `B.autoRing`; see builder_protocol.md) |
+| `builderCheckPoints` | `{ ok, reason = text or false, moved, failed, keys = { { key, points, failed = { { index, reason } }, checked } } }` (no tool starts; pure core `B.checkPoints(o, deps)`, payload `B.parseCheckPoints`; see builder_protocol.md) |
 
 Errors come back as the `err.*` keys listed above (`{ ok = false, error }` through the NUI `client` endpoint).
 

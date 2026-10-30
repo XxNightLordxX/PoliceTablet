@@ -274,6 +274,7 @@ for _, name in ipairs({
     'builderWaypoint',
     'builderHere',
     'builderAutoPoints',
+    'builderCheckPoints',
     'builderTeleport',
 }) do
     H.ok(type(T.actions[name]) == 'function', 'client action registered: ' .. name)
@@ -2227,6 +2228,145 @@ do
     Config.Builder.autoFill = true
     _G.GetSafeCoordForPed, _G.GetPointOnRoadSide, CP.Spawn = keep.safe, keep.side, keep.spawn
     W.pos = { x = 1017.5, y = -3108.4, z = 5.9 }
+end
+
+-- ============================================================================
+--                                     B12
+-- ============================================================================
+-- MOVE THE WHOLE LOCATION HERE (B.checkPoints, builderCheckPoints).
+
+do
+    local start = { x = 2000.0, y = 500.0, z = 30.0 }
+    local base = {
+        missionId = 'custom_shootout',
+        location = 1,
+        start = start,
+        startRadius = 60,
+        offset = { x = 1000.0, y = 3500.0, z = 24.1 },
+        keys = {
+            {
+                key = 'hostiles',
+                kind = 'ped',
+                spawn = true,
+                armed = true,
+                minGap = 4,
+                points = {
+                    { x = 880.0, y = -3000.0, z = 6.0, w = 90.0 },  -- 120 m from the old start: fine
+                    { x = 1000.0, y = -2880.0, z = 6.0, w = 0.0 },  -- in water at the new place
+                    { x = 1002.0, y = -2880.0, z = 6.0, w = 0.0 },  -- 2 m from the 2nd (failed: not counted)
+                    { x = 1120.0, y = -3000.0, z = 6.0, w = 0.0 },  -- in a wall
+                    { x = 1122.0, y = -3000.0, z = 6.0, w = 0.0 },  -- fine
+                    { x = 1124.0, y = -3000.0, z = 6.0, w = 0.0 },  -- 2 m from the 5th: too close
+                },
+            },
+            { key = 'cars', kind = 'vehicle', model = 'sultan', points = { { x = 1050.0, y = -3050.0, z = 5.5 } } },
+            { key = 'door', kind = 'marker', points = { { x = 1010.0, y = -3000.0, z = 5.0 } } },
+            {
+                key = 'route',
+                route = true,
+                points = { { x = 900.0, y = -3000.0, z = 5.0 }, { x = 1900.0, y = -3000.0, z = 9.0 } },
+            },
+        },
+    }
+    local o = assert(B.parseCheckPoints(base))
+    H.eq(#o.keys, 4, 'every point list of the location is read')
+    local probes = {}
+    local deps = {
+        ground = function(x) return x < 2500.0 and 30.0 + (x - 1880.0) / 1000.0 or nil end,
+        lift = function(kind) return kind == 'vehicle' and 0.6 or 1.0 end,
+        probe = function(kind, x, y, z)
+            probes[#probes + 1] = kind
+            if x == 2000.0 and y == 620.0 then return { status = 'in_water', water = true } end
+            if x == 2120.0 then return { status = 'in_wall', wall = true } end
+            if kind == 'vehicle' then return { status = 'snap', z = z + 0.4, groundZ = z - 0.6 } end
+            return { status = 'ok', z = z, groundZ = z - (kind == 'ped' and 1.0 or 0.0), normalZ = 1.0, wall = false }
+        end,
+    }
+    local r = B.checkPoints(o, deps)
+    local byKey = {}
+    for _, k in ipairs(r.keys) do byKey[k.key] = k end
+    local h = byKey.hostiles
+    H.eq(#h.points, 6, 'every point of a key moves')
+    H.eq(h.points[1].x .. '/' .. h.points[1].y, '1880.0/500.0', 'by the same offset as the start (x, y)')
+    H.eq(h.points[1].w, 90.0, 'and keeps its heading')
+    H.eq(h.points[1].z, 31.0, 'its height is put on the ground there (1 m over it for a person), not the old z + dz')
+    H.eq(byKey.cars.points[1].z, 31.17, 'a vehicle is put where the probe snapped it')
+    H.eq(byKey.door.points[1].z, 30.13, 'a marker sits on the ground')
+    local route = byKey.route
+    H.eq(route.points[2].x .. '/' .. route.points[2].z, '2900.0/33.1', 'a route only moves (no ground found is fine)')
+    H.eq(route.checked, false, 'and is not checked')
+    H.eq(#route.failed, 0, 'with no failures')
+    local failed = {}
+    for _, f in ipairs(h.failed) do failed[#failed + 1] = f.index .. ':' .. f.reasonKey end
+    H.eq(table.concat(failed, ' '),
+        '2:builder.place.reason.water 4:builder.place.reason.blocked 6:' .. 'builder.place.reason.spacing',
+        'the failed points are listed with why (a failed one keeps no spacing)')
+    H.eq(r.moved .. '/' .. r.failed, '10/3', '10 points moved, 3 need a new spot')
+
+    -- the keep-out of the new start, no ground, and the time limit
+    local near = assert(B.parseCheckPoints({
+        missionId = 'custom_shootout',
+        location = 1,
+        start = start,
+        startRadius = 60,
+        offset = { x = 0.0, y = 0.0, z = 0.0 },
+        keys = {
+            {
+                key = 'hostiles',
+                kind = 'ped',
+                spawn = true,
+                armed = true,
+                points = { { x = 2050.0, y = 500.0, z = 31.0 }, { x = 2600.0, y = 500.0, z = 31.0 } },
+            },
+        },
+    }))
+    r = B.checkPoints(near, deps)
+    failed = {}
+    for _, f in ipairs(r.keys[1].failed) do failed[#failed + 1] = f.index .. ':' .. f.reasonKey end
+    H.eq(table.concat(failed, ' '), '1:builder.place.reason.armed 2:builder.place.reason.not_ground',
+        'inside the new keep-out, and with no ground, a point fails')
+    r = B.checkPoints(o, {
+        ground = deps.ground,
+        probe = deps.probe,
+        timeUp = function() return true end,
+    })
+    H.eq(r.failed, 8, 'after the time limit the points not checked are listed (routes are never checked)')
+    H.eq(r.keys[1].failed[1].reasonKey, 'builder.move.reason.time', 'as not checked in time')
+
+    -- the payload
+    local bad = { missionId = 'custom_shootout', location = 1, start = start, keys = {} }
+    H.eq(select(2, B.parseCheckPoints(bad)), 'err.invalid_payload', 'a move needs the offset')
+    bad.offset, bad.keys = { x = 1, y = 2, z = 3 }, { { key = 'x', kind = 'tank', points = {} } }
+    H.eq(select(2, B.parseCheckPoints(bad)), 'err.invalid_payload', 'and known kinds')
+
+    -- the client action
+    while B.active() do
+        B.cancel('ui')
+        H.step(100)
+    end
+    local keep, collision = CP.Spawn, _G.RequestCollisionAtCoord
+    _G.RequestCollisionAtCoord = function() end
+    CP.Spawn = {
+        probe = function(kind, _, _, z)
+            return { status = 'ok', z = z, groundZ = z - (kind == 'ped' and 1.0 or 0.0), normalZ = 1.0 }
+        end,
+    }
+    W.groundZ = 30.0
+    W.pos = { x = 2005.0, y = 500.0, z = 31.0 }
+    local ok, reply = Act('builderCheckPoints', base)
+    H.eq(ok, true, 'builderCheckPoints answers: ' .. tostring(reply))
+    H.eq(reply.ok and reply.moved, 10, 'all 10 points moved')
+    H.eq(reply.keys[1].points[1].z, 31.0, 'on the ground where the player stands')
+    H.eq(reply.failed, 2, 'the two hostiles closer than 4 m to another are listed')
+    H.ok(type(reply.keys[1].failed[1].reason) == 'string' and reply.keys[1].failed[1].reasonKey == nil,
+        'with the reason in words')
+    W.pos = { x = 1017.5, y = -3108.4, z = 5.9 }
+    ok, reply = Act('builderCheckPoints', base)
+    H.eq(ok and reply.ok, false, 'refused while the player is far from the new start')
+    Config.Builder.useMyPosition = false
+    H.eq(select(2, Act('builderCheckPoints', base)), 'err.builder_here_off', 'Config.Builder.useMyPosition = false')
+    Config.Builder.useMyPosition = true
+    CP.Spawn, _G.RequestCollisionAtCoord = keep, collision
 end
 
 -- ============================================================================

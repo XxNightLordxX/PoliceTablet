@@ -1489,6 +1489,13 @@ in game, with no coding:
    each one checked like an aimed spot. They show as dashed rings on the map: **Keep** adds them, **Try again** proposes
    others, **Place by hand** opens the placement tool. Stand near the location first: the game only knows the ground
    close to you. `Config.Builder.autoFill = false` hides the button.
+   **Move the whole location here** (next to the location's name, once its start is placed) moves a location to
+   where you stand, e.g. a copied Gang Shootout's location 1 to a yard of your own: the start goes where you stand and
+   every point of the location moves with it by the same distance. Each moved point is put on the ground there and
+   checked again like an aimed spot (no-build zone, water, ground, room, the keep-out, the spacing); the ones that do
+   not fit are listed under the start with why, with **Fill N for me** (spawn points: new ones replace them),
+   **Place by hand** and **Leave them**. Routes only move: test drive or record them again. It is saved at once. It
+   is one of the "where you stand" buttons: `Config.Builder.useMyPosition = false` hides it too.
    Under the map, the point list has one row per point (its number, kind, distance from the start and, for kerb
    spots, the street) with **GPS** (a waypoint to it), **Set here** (moves only that point to where you stand) and
    **Delete** (removes only that point, saved at once). Pointing at a row rings its dot on the map. Admins (and

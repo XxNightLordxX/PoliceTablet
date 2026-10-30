@@ -16,6 +16,8 @@ import type {
     AdminMissionsData,
     BuilderAutoPointsReply,
     BuilderAutoPointsRequest,
+    BuilderCheckPointsReply,
+    BuilderCheckPointsRequest,
     BuilderHereReply,
     BuilderPlaceRequest,
     BuilderRecordRequest,
@@ -342,6 +344,25 @@ registerMock('client', 'builderTeleport', (p: BuilderTeleportRequest) => {
     if (!p || typeof p.missionId !== 'string' || typeof p.key !== 'string') throw new Error('err.invalid_payload');
     if (running) throw new Error('err.builder_busy');
     return { missionId: p.missionId, location: p.location, key: p.key, index: p.index };
+});
+
+// "Move the whole location here": the browser preview moves every point, keeps its height and fails none
+registerMock('client', 'builderCheckPoints', (p: BuilderCheckPointsRequest): BuilderCheckPointsReply => {
+    if (!p || typeof p.missionId !== 'string' || !p.offset || !Array.isArray(p.keys))
+        throw new Error('err.invalid_payload');
+    if (running) throw new Error('err.builder_busy');
+    let moved = 0;
+    const keys = p.keys.map(k => {
+        const points = k.points.map(pt => ({
+            ...pt,
+            x: pt.x + p.offset.x,
+            y: pt.y + p.offset.y,
+            z: pt.z + p.offset.z,
+        }));
+        moved += points.length;
+        return { key: k.key, points, failed: [], checked: !k.route };
+    });
+    return { ok: true, reason: false, moved, failed: 0, keys };
 });
 
 // "Fill N for me": the browser preview proposes count points on a ring 115-180 m round the start, facing it

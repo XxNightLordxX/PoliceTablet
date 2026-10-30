@@ -16,10 +16,14 @@ import type {
     BuilderRecord,
     BuilderSaveResult,
     BuilderValidateResult,
+    Vec3,
 } from '../types/builder_server';
 import type {
     BuilderAutoPointsReply,
     BuilderAutoPointsRequest,
+    BuilderCheckPointsKey,
+    BuilderCheckPointsReply,
+    BuilderCheckPointsRequest,
     BuilderClientResultEx,
     BuilderHereReply,
     BuilderPlaceRequest,
@@ -29,7 +33,7 @@ import type {
     PointSpec,
 } from '../types/builder_client';
 import { applyResult } from './applyResult';
-import { clone, isRoute, labelSlug, listsOf, normalizeDefinition, pointsOf } from './defUtils';
+import { clone, isRoute, labelSlug, listsOf, normalizeDefinition, pointsOf, vecsOf } from './defUtils';
 import { pointsWithout, removePointAt, resultReplacing } from './pointList';
 import { armedKeepOut, searchCircleOf, startRadiusRange, syncStartRadius } from './schema';
 import {
@@ -46,6 +50,18 @@ import {
     takeResults,
     type BuilderScope,
 } from './store';
+
+// What "Move the whole location here" did: how far the start moved, the points moved, and per key the moved points
+// that need a new spot (1-based indexes, with why) and the routes that only moved
+export interface MoveReport {
+    location: number;
+    // where the start is now
+    start: Vec3;
+    dist: number;
+    moved: number;
+    failed: { key: string; points: { index: number; reason: string }[] }[];
+    routes: string[];
+}
 
 export type ReadOnlyReason = 'builtin' | 'archived' | 'permission' | 'locked' | 'lost' | null;
 
@@ -88,8 +104,18 @@ export interface DraftEditor {
     removePoint: (key: string, location: number, index: number) => Promise<boolean>;
     // "Fill N for me" (Config.Builder.autoFill): the game proposes count new points around the start; the draft does
     // not change until keepFill applies the reply's result (null: refused, the toast says why)
-    autoFill: (spec: PointSpec, location: number, count: number) => Promise<BuilderAutoPointsReply | null>;
+    // drop: points (1-based) the proposal replaces (the moved points that failed their check)
+    autoFill: (
+        spec: PointSpec,
+        location: number,
+        count: number,
+        drop?: number[],
+    ) => Promise<BuilderAutoPointsReply | null>;
     keepFill: (spec: PointSpec, result: BuilderClientResultEx) => Promise<boolean>;
+    // "Move the whole location here" (Config.Builder.useMyPosition): the start goes where the player stands and every
+    // point of the location moves with it; each moved point is put on the ground and checked again (builderCheckPoints).
+    // One autosave. null: nothing changed (the toast says why)
+    moveLocation: (location: number, specs: PointSpec[]) => Promise<MoveReport | null>;
     recordRoute: (spec: PointSpec, location: number) => Promise<boolean>;
     testDrive: (spec: PointSpec, location: number) => Promise<boolean>;
 }
@@ -629,10 +655,11 @@ export function useDraftEditor(
         return true;
     };
 
-    const autoFill = async (spec: PointSpec, location: number, count: number) => {
+    const autoFill = async (spec: PointSpec, location: number, count: number, drop?: number[]) => {
         if (readOnly) return null;
         const base = placePayload(spec, location);
         if (!base) return null;
+        if (drop && drop.length) base.points = base.points.filter((_, i) => !drop.includes(i + 1));
         const payload: BuilderAutoPointsRequest = { ...base, count };
         setToolBusy(true);
         const res = await clientAction<BuilderAutoPointsReply>('builderAutoPoints', payload);
@@ -658,6 +685,109 @@ export function useDraftEditor(
         if (!applied.def) return false;
         await commitNow(applied.def, before);
         return true;
+    };
+
+    const moveLocation = async (location: number, specs: PointSpec[]): Promise<MoveReport | null> => {
+        const first = defRef.current;
+        const old = first?.locations[location - 1]?.start;
+        if (readOnly || !first || !old) {
+            if (!old) toast('warning', t('builder.loc.move_start_first'));
+            return null;
+        }
+        const startPayload = placePayload(START_SPEC, location);
+        if (!startPayload) return null;
+        setToolBusy(true);
+        try {
+            // 1. the start where the player stands, checked as "Set start here" checks it
+            const here = await clientAction<BuilderHereReply>('builderHere', startPayload);
+            if (!mounted.current) return null;
+            if (!here.ok || !here.data) {
+                toast('error', t(here.error ?? 'err.internal'));
+                return null;
+            }
+            if (!here.data.ok || !here.data.result) {
+                toast('warning', t('builder.loc.here_refused', { reason: here.data.reason || t('err.internal') }));
+                return null;
+            }
+            const now = here.data.point;
+            const offset = { x: now.x - old.coords.x, y: now.y - old.coords.y, z: now.z - old.coords.z };
+            // 2. every point list moves by the same offset; Lua puts each point on the ground and checks it again
+            const before = defRef.current ?? first;
+            const loc = before.locations[location - 1];
+            if (!loc) return null;
+            const keys: BuilderCheckPointsKey[] = [];
+            for (const key of Object.keys(loc)) {
+                if (key === 'label' || key === 'start') continue;
+                const value = loc[key];
+                const points = vecsOf(value);
+                if (!points.length) continue;
+                const spec = specs.find(s => s.key === key);
+                const route = !spec || spec.kind === 'route' || !!spec.lists || isRoute(value);
+                const k: BuilderCheckPointsKey = { key, points, route };
+                if (spec && !route) {
+                    k.kind = spec.kind === 'route' ? 'marker' : spec.kind;
+                    if (spec.model) k.model = spec.model;
+                    k.spawn = spec.spawn;
+                    if (spec.armed) k.armed = true;
+                    if (spec.minGap) k.minGap = spec.minGap;
+                }
+                keys.push(k);
+            }
+            const req: BuilderCheckPointsRequest = {
+                missionId: idRef.current,
+                location,
+                ui,
+                start: { x: now.x, y: now.y, z: now.z },
+                startRadius: startPayload.radius ?? old.radius,
+                offset,
+                keys,
+            };
+            const res = await clientAction<BuilderCheckPointsReply>('builderCheckPoints', req);
+            if (!mounted.current) return null;
+            if (!res.ok || !res.data) {
+                toast('error', t(res.error ?? 'err.internal'));
+                return null;
+            }
+            if (!res.data.ok) {
+                toast('warning', res.data.reason || t('err.internal'));
+                return null;
+            }
+            // 3. the new start, the moved points, one autosave
+            const cur = defRef.current ?? before;
+            const applied = applyResult(cur, here.data.result, START_SPEC, config);
+            if (!applied.def) {
+                toast(applied.tone, t(applied.messageKey, applied.vars));
+                return null;
+            }
+            const next = applied.def;
+            const nloc = next.locations[location - 1];
+            const report: MoveReport = {
+                location,
+                start: { x: now.x, y: now.y, z: now.z },
+                dist: 0,
+                moved: res.data.moved,
+                failed: [],
+                routes: [],
+            };
+            for (const k of res.data.keys) {
+                const refs = nloc ? vecsOf(nloc[k.key]) : [];
+                k.points.forEach((p, i) => {
+                    const r = refs[i];
+                    if (!r) return;
+                    r.x = p.x;
+                    r.y = p.y;
+                    r.z = p.z;
+                });
+                if (routeMetaOf(idRef.current, location, k.key)) setRouteMeta(idRef.current, location, k.key, null);
+                if (!k.checked) report.routes.push(k.key);
+                if (k.failed.length) report.failed.push({ key: k.key, points: k.failed });
+            }
+            report.dist = Math.round(Math.hypot(offset.x, offset.y));
+            await commitNow(next, cur);
+            return report;
+        } finally {
+            if (mounted.current) setToolBusy(false);
+        }
     };
 
     const removePoint = async (key: string, location: number, index: number) => {
@@ -736,6 +866,7 @@ export function useDraftEditor(
         removePoint,
         autoFill,
         keepFill,
+        moveLocation,
         recordRoute,
         testDrive,
     };

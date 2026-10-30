@@ -964,5 +964,19 @@
   "builder.auto.kept": "{n} points added",
   "builder.map.proposed": "Proposed",
   "err.builder_auto_off": "Filling points for you is turned off. Use the placement tool.",
-  "err.builder_auto_start": "Place the start first: the points are proposed around it."
+  "err.builder_auto_start": "Place the start first: the points are proposed around it.",
+  "builder.move.reason.interior": "Inside a building that did not load",
+  "builder.move.reason.time": "Not checked in time (stand closer and move it again)",
+  "builder.loc.move_all": "Move the whole location here",
+  "builder.loc.move_all_hint": "Puts the start where you stand and moves every point of this location with it, by the same distance. Each moved point is put on the ground and checked again.",
+  "builder.loc.move_all_title": "Move the whole location here?",
+  "builder.loc.move_all_message": "{label}: the start goes where you stand and its {n} points move with it, by the same distance. Each moved point is put on the ground there and checked again; the ones that do not fit are listed so you can place them again.",
+  "builder.loc.move_all_confirm": "Move it here",
+  "builder.loc.move_all_done": "{label} moved {dist} m: all {n} points moved with it",
+  "builder.loc.move_all_some": "{label} moved {dist} m: {bad} of {n} points need a new spot (listed under the start)",
+  "builder.loc.move_failed": "{label}: {n} moved points need a new spot: {list}",
+  "builder.loc.move_failed_point": "point {n} ({reason})",
+  "builder.loc.move_routes": "{labels}: moved with the location but not checked. Test drive or record it again.",
+  "builder.loc.move_dismiss": "Leave them",
+  "builder.loc.move_start_first": "Place the start first: the whole location moves with it."
 }

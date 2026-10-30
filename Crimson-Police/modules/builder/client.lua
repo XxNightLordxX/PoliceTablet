@@ -1410,6 +1410,196 @@ function B.parseAutoPoints(p)
 end
 
 -- ============================================================================
+--              MOVE THE WHOLE LOCATION HERE (builderCheckPoints)
+-- ============================================================================
+-- "Move the whole location here" (Config.Builder.useMyPosition): the start goes where the player stands (builderHere)
+-- and every point of the location moves by the same offset. This action moves the points, puts each one back on the
+-- ground there and checks it again; the screen lists the ones that fail.
+local MOVE_MS = 20000                       -- the check stops looking after this long
+local MOVE_MAX_KEYS = 40                    -- point lists one location may send
+local MOVE_GROUND_OVER = 3.0                -- metres over the moved point the ground is looked for first
+local MOVE_GROUND_HIGH = 50.0               -- then from this high (the new place lies higher)
+local MOVE_REASON = {                       -- CP.Spawn.probe statuses, in the placement tool's words
+    in_water = 'builder.place.reason.water',
+    in_wall = 'builder.place.reason.blocked',
+    no_ground = 'builder.place.reason.not_ground',
+    underground = 'builder.place.reason.not_ground',
+    floating = 'builder.place.reason.not_ground',
+    interior_not_loaded = 'builder.move.reason.interior',
+}
+
+-- The pure move and check. o = { start, startRadius, offset, keys = { { key, kind, model, heading, spawn, armed,
+-- minGap, route, points } } } (B.parseCheckPoints). Every point of every key moves by o.offset. A route (a path the
+-- mission travels along) only moves. Any other point is put on the ground there (deps.ground(x, y, z) -> the ground
+-- z or nil; stored deps.lift(kind, model) over it, a marker on it), judged by deps.probe (CP.Spawn.probe's answer: ok,
+-- or snap onto the ground) and B.checkSpot with the key's points checked before it (no-build zones, water, ground,
+-- room, the keep-out, the spacing). deps.timeUp() -> true leaves the points not yet checked as failed. Returns
+-- { keys = { { key, points, failed = { { index, reasonKey, vars } }, checked } }, moved, failed }.
+function B.checkPoints(o, deps)
+    deps = deps or {}
+    local d = o.offset
+    local out = { keys = {}, moved = 0, failed = 0 }
+    local late = false
+    for _, k in ipairs(o.keys) do
+        local res = { key = k.key, points = {}, failed = {}, checked = not k.route }
+        local ctx = PlaceCtx({
+            kind = k.kind,
+            multiple = true,
+            spawn = k.spawn,
+            start = o.start,
+            armed = k.armed,
+            startRadius = o.startRadius,
+            minGap = k.minGap,
+            otherStarts = {},
+        }, {})
+        ctx.max, ctx.maxDistance = nil, nil
+        local lift = deps.lift and deps.lift(k.kind, k.model) or 0.0
+        for i, p in ipairs(k.points) do
+            local x, y, z = p.x + d.x, p.y + d.y, p.z + d.z
+            local moved = { x = x, y = y, z = z, w = p.w }
+            local reasonKey, vars = nil, nil
+            if not k.route then
+                late = late or (deps.timeUp and deps.timeUp()) == true
+                local gz = (not late and deps.ground) and deps.ground(x, y, z) or nil
+                if late then
+                    reasonKey = 'builder.move.reason.time'
+                elseif not IsNum(gz) then
+                    reasonKey = 'builder.place.reason.not_ground'
+                else
+                    local storeZ = gz + ((k.kind == 'ped' or k.kind == 'vehicle') and lift or 0.0)
+                    moved.z = storeZ
+                    local pr = deps.probe and deps.probe(k.kind, x, y, storeZ, p.w or 0.0, k.model) or { status = 'ok' }
+                    if pr.status == 'ok' or pr.status == 'snap' then
+                        if pr.status == 'snap' and IsNum(pr.z) then moved.z = pr.z end
+                        local ground = IsNum(pr.groundZ) and pr.groundZ or gz
+                        local spot = {
+                            hit = true,
+                            x = x,
+                            y = y,
+                            z = ground,
+                            groundZ = ground,
+                            normalZ = pr.normalZ,
+                            distance = 0.0,
+                            water = pr.water == true,
+                            blocked = pr.wall == true,
+                            stored = { x = x, y = y, z = moved.z },
+                        }
+                        local ok, key, v = B.checkSpot(spot, ctx)
+                        if not ok then reasonKey, vars = key, v end
+                    else
+                        reasonKey = MOVE_REASON[pr.status] or 'builder.place.reason.not_ground'
+                    end
+                end
+            end
+            local stored = RoundVec(moved, moved.w ~= nil, moved.w)
+            res.points[i] = stored
+            if reasonKey then
+                res.failed[#res.failed + 1] = { index = i, reasonKey = reasonKey, vars = vars }
+            elseif not k.route then
+                ctx.points[#ctx.points + 1] = stored
+            end
+        end
+        out.moved = out.moved + #res.points
+        out.failed = out.failed + #res.failed
+        out.keys[#out.keys + 1] = res
+    end
+    return out
+end
+
+-- The builderCheckPoints payload: { missionId, location, ui?, start (where the start is now), startRadius?,
+-- offset (how far it moved), keys = { { key, kind, model?, heading?, spawn?, armed?, minGap?, route?, points } } }.
+function B.parseCheckPoints(p)
+    if type(p) ~= 'table' then return nil, 'err.invalid_payload' end
+    local o = Common({ missionId = p.missionId, location = p.location, key = 'start', ui = p.ui })
+    if not o then return nil, 'err.invalid_payload' end
+    o.start = VecOf(p.start)
+    o.offset = VecOf(p.offset)
+    if not (o.start and o.offset) then return nil, 'err.invalid_payload' end
+    o.start.w, o.offset.w = nil, nil
+    if p.startRadius ~= nil then
+        if not (IsNum(p.startRadius) and p.startRadius >= 0 and p.startRadius <= 2000) then
+            return nil, 'err.invalid_payload'
+        end
+        o.startRadius = p.startRadius
+    end
+    if type(p.keys) ~= 'table' or #p.keys > MOVE_MAX_KEYS then return nil, 'err.invalid_payload' end
+    o.keys = {}
+    for i, k in ipairs(p.keys) do
+        if type(k) ~= 'table' or not ValidKey(k.key) then return nil, 'err.invalid_payload' end
+        local route = k.route == true
+        local kind = k.kind
+        if not route and not KINDS[kind] then return nil, 'err.invalid_payload' end
+        if k.model ~= nil and (type(k.model) ~= 'string' or #k.model > 64 or not k.model:match(MODEL_PATTERN)) then
+            return nil, 'err.invalid_payload'
+        end
+        if k.minGap ~= nil and not (IsNum(k.minGap) and k.minGap >= 0 and k.minGap <= 2000) then
+            return nil, 'err.invalid_payload'
+        end
+        local points = VecList(k.points, route and MAX_ROUTE_POINTS or MAX_POINTS)
+        if not points then return nil, 'err.invalid_payload' end
+        o.keys[i] = {
+            key = k.key,
+            kind = route and 'marker' or kind,
+            model = k.model,
+            spawn = k.spawn == true,
+            armed = k.spawn == true and k.armed == true,
+            minGap = k.minGap,
+            route = route,
+            points = points,
+        }
+    end
+    return o
+end
+
+local moveBusy = false
+
+-- The game's side of a move: the ground under the moved point (from a little over it, else from high over it).
+local function MoveGround(x, y, z)
+    RequestCollisionAtCoord(x + 0.0, y + 0.0, z + 0.0)
+    for _, over in ipairs({ MOVE_GROUND_OVER, MOVE_GROUND_HIGH }) do
+        local found, gz = GetGroundZFor_3dCoord(x + 0.0, y + 0.0, z + over, false)
+        if (found == true or found == 1) and IsNum(gz) then return gz end
+    end
+    return nil
+end
+
+-- builderCheckPoints: { ok, reason, moved, failed, keys = { { key, points, failed = { { index, reason } }, checked } } }.
+-- reason: why nothing was checked (the player is far from the start), in words, else false.
+local function CheckPoints(o)
+    local reply = { ok = false, reason = false, moved = 0, failed = 0, keys = {} }
+    local pos = GetEntityCoords(PlayerPedId())
+    if U.dist2d(pos, o.start) > AUTO_NEAR then
+        reply.reason = CP.L('builder.auto.too_far', { m = math.floor(AUTO_NEAR) })
+        return reply
+    end
+    local Spawn = CP.Spawn
+    local deadline = GetGameTimer() + MOVE_MS
+    local r = B.checkPoints(o, {
+        ground = MoveGround,
+        lift = function(kind, model)
+            if kind == 'vehicle' then return VehicleDims(model or DefaultModel('vehicle')).lift end
+            return PED_HEIGHT
+        end,
+        probe = function(kind, x, y, z, h, model)
+            if not (Spawn and Spawn.probe) then return { status = 'ok' } end
+            local m = kind == 'vehicle' and (model or DefaultModel('vehicle')) or model
+            return Spawn.probe(kind, x, y, z, h, m)
+        end,
+        timeUp = function() return GetGameTimer() >= deadline end,
+    })
+    for _, k in ipairs(r.keys) do
+        for _, f in ipairs(k.failed) do
+            f.reason = CP.L(f.reasonKey, f.vars)
+            f.reasonKey, f.vars = nil, nil
+        end
+    end
+    CP.log(TAG, 'move of %s location %d: %d points moved, %d need a new spot', o.missionId, o.location, r.moved,
+        r.failed)
+    reply.ok, reply.moved, reply.failed, reply.keys = true, r.moved, r.failed, r.keys
+    return reply
+end
+
+-- ============================================================================
 --                               ROUTE RECORDING
 -- ============================================================================
 
@@ -2146,12 +2336,28 @@ local function RegisterActions()
         if not o then return false, count end
         local why = Refusal()
         if why then return false, why end
-        if autoBusy then return false, 'err.builder_busy' end
+        if autoBusy or moveBusy then return false, 'err.builder_busy' end
         autoBusy = true
         local ok, reply = pcall(AutoPoints, o, count)
         autoBusy = false
         if not ok then
             CP.err(TAG, 'fill failed: %s', tostring(reply))
+            return false, 'err.internal'
+        end
+        return true, reply
+    end)
+    T.registerClientAction('builderCheckPoints', function(payload)
+        if BuilderCfg().useMyPosition == false then return false, 'err.builder_here_off' end
+        local o, err = B.parseCheckPoints(payload)
+        if not o then return false, err end
+        local why = Refusal()
+        if why then return false, why end
+        if moveBusy or autoBusy then return false, 'err.builder_busy' end
+        moveBusy = true
+        local ok, reply = pcall(CheckPoints, o)
+        moveBusy = false
+        if not ok then
+            CP.err(TAG, 'move check failed: %s', tostring(reply))
             return false, 'err.internal'
         end
         return true, reply

@@ -217,23 +217,31 @@ export function setAt(obj: Record<string, unknown>, path: string, value: unknown
 //                                    ERRORS
 // ============================================================================
 
-// Moves every vector of a location value (vec, list, labelled points, list of lists, route) by d, in place: the
-// "Move them too" of a moved start (headings kept).
-export function shiftPoints(v: unknown, d: Vec3): void {
+// Every vector of a location value (vec, list, labelled points, list of lists, route), the objects themselves (a
+// change to one changes the value), in one fixed order: the order builderCheckPoints answers in.
+export function vecsOf(v: unknown, out: Vec[] = []): Vec[] {
     if (isVec(v)) {
-        v.x += d.x;
-        v.y += d.y;
-        v.z += d.z;
-        return;
+        out.push(v);
+        return out;
     }
-    if (!v || typeof v !== 'object') return;
+    if (!v || typeof v !== 'object') return out;
     if (Array.isArray(v)) {
-        v.forEach(item => shiftPoints(item, d));
-        return;
+        v.forEach(item => vecsOf(item, out));
+        return out;
     }
     const o = v as { coords?: unknown; points?: unknown };
-    if (o.coords !== undefined) shiftPoints(o.coords, d);
-    if (o.points !== undefined) shiftPoints(o.points, d);
+    if (o.coords !== undefined) vecsOf(o.coords, out);
+    if (o.points !== undefined) vecsOf(o.points, out);
+    return out;
+}
+
+// Moves every vector of a location value by d, in place: the "Move them too" of a moved start (headings kept).
+export function shiftPoints(v: unknown, d: Vec3): void {
+    for (const p of vecsOf(v)) {
+        p.x += d.x;
+        p.y += d.y;
+        p.z += d.z;
+    }
 }
 
 export function errorsAt(errors: BuilderError[], path: string): BuilderError[] {

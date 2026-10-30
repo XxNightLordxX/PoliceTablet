@@ -158,6 +158,43 @@ export interface BuilderAutoPointsReply {
     // a placement result with the points already there and the proposed ones (only when ok)
     result?: BuilderClientResultEx;
 }
+// builderCheckPoints ("Move the whole location here", Config.Builder.useMyPosition): every point list of one location
+// (flattened, in defUtils vecsOf order) with how far its start moved. Lua moves each point by offset, puts it on the
+// ground there and checks it again (a route only moves). The tablet stays open.
+export interface BuilderCheckPointsKey {
+    key: string;
+    kind?: BuilderPlaceKind;
+    model?: string;
+    spawn?: boolean;
+    armed?: boolean;
+    minGap?: number;
+    // a path the mission travels along: moved, never checked
+    route?: boolean;
+    points: Vec[];
+}
+export interface BuilderCheckPointsRequest {
+    missionId: string;
+    location: number;
+    ui?: BuilderUi;
+    // where the start is now, its radius, and how far it moved
+    start: Vec3;
+    startRadius?: number;
+    offset: Vec3;
+    keys: BuilderCheckPointsKey[];
+}
+export interface BuilderCheckPointsFailure {
+    // 1-based, in the key's points
+    index: number;
+    reason: string;
+}
+export interface BuilderCheckPointsReply {
+    // false: nothing was checked (reason says why, in words)
+    ok: boolean;
+    reason: string | false;
+    moved: number;
+    failed: number;
+    keys: { key: string; points: Vec[]; failed: BuilderCheckPointsFailure[]; checked: boolean }[];
+}
 export interface BuilderRecordRequest extends BuilderRecordPayload {
     label?: string;
     ui?: BuilderUi;
