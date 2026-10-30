@@ -1658,6 +1658,8 @@ H.eq(perm.forceRecall, true, 'on')
 H.eq(gp.data.supervisor[1].action, 'setTypePayout', 'listed in the spec order')
 H.eq(gp.data.supervisor[11].action, 'breakEditLock', 'last in the spec order')
 H.eq(perm.builderRollback, false, 'off')
+H.eq(perm.missionControls, false, 'Mission controls (P1): listed, shipped off')
+H.eq(gp.data.supervisor[12].action, 'missionControls', 'right after breakEditLock')
 -- B9: Builder teleport by department: the Qbox grades of its jobs (0-10 when Qbox names none) and the grant
 H.ok(
     gp.data.teleport.enabled == true and #gp.data.teleport.departments == 2

@@ -3619,14 +3619,8 @@ do
         local grants = Config.Permissions and Config.Permissions.builderTeleport
         local officer = CP.Access and CP.Access.getOfficer and CP.Access.getOfficer(src)
         if type(grants) ~= 'table' or type(officer) ~= 'table' then return false end
-        local g = grants[officer.department]
-        local grade = tonumber(officer.gradeLevel)
-        if type(g) ~= 'table' or not grade then return false end
-        if tonumber(g.minGrade) and grade >= tonumber(g.minGrade) then return true end
-        for _, v in ipairs(type(g.grades) == 'table' and g.grades or {}) do
-            if tonumber(v) == grade then return true end
-        end
-        return false
+        return CP.Permissions ~= nil and CP.Permissions.gradeGrant ~= nil
+            and CP.Permissions.gradeGrant(officer, grants[officer.department])
     end
 
     -- The definition this actor sees for id: his draft or the published one, or the built-in as it plays.

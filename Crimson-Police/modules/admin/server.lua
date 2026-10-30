@@ -84,6 +84,7 @@ local SUPERVISOR_ORDER = {
     'builderEditAny',
     'builderRollback',
     'breakEditLock',
+    'missionControls',
 }
 
 local warned = {}

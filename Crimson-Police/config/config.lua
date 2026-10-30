@@ -140,6 +140,8 @@ Config.Permissions = {
         missionCalls = true,      -- view, withdraw, page and create mission calls
         issueCommendation = true, -- commend officers of their own department
         reviewProfiles = true,    -- approve or reject pictures and clear bios of their department
+        -- change the Mission controls an admin switched on, for their own department only (Config.MissionControls)
+        missionControls = false,
     },
     -- Who besides admins may use the Mission Builder Teleport button (admins always may), by department key: minGrade
     -- (that grade or higher) or grades (only those grades). For example sast = { minGrade = 4 } or
@@ -176,6 +178,21 @@ Config.AdminControl = {
     -- Refused mission starts the server remembers for admins (who tried, which mission, why), newest kept. Memory
     -- only: a restart empties the list.
     refusalsKept = 200,
+}
+
+-- ============================================================================
+--                               MISSION CONTROLS
+-- ============================================================================
+-- Rules a department's supervisors may change for their own department from the Supervisor UI, only inside the
+-- bounds set here and only while an admin switched them on: Config.Permissions.supervisor.missionControls and the
+-- control's own on. A department may have its own bounds (Config.Departments.<key>.missionControls = { <control> =
+-- { on, min, max } }); they win over the ones below for it. Every change needs a reason and is in the audit log.
+-- Shipped off: no control is on, so every rule stays as config.lua sets it.
+Config.MissionControls = {
+    changeWait = 300,   -- seconds between two changes of one control in one department
+    selfExempt = true,  -- a control that relaxes a rule never applies to the supervisor who set it or a unit he is in
+    grants = {},        -- per department who may use them, e.g. { sast = { minGrade = 4 } }; {} = every supervisor
+    controls = {},      -- per control: on = the admin switch, min/max = the only values a supervisor may pick
 }
 
 -- ============================================================================

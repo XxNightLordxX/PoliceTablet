@@ -482,6 +482,7 @@ it. Admins can always do all of these.
 | `missionCalls` | `true` | View, withdraw, page and create mission calls | 2 minutes between calls they create; never paging their own unit |
 | `issueCommendation` | `true` | Commend officers, and revoke a commendation | Their department only, 3 a day, never themselves |
 | `reviewProfiles` | `true` | Approve or reject pictures and bios, clear a bio | Their department; never their own profile |
+| `missionControls` | `false` | Change the Mission controls an admin switched on (below) | Their department only, inside the admin's limits |
 
 Supervisors can always see the Mission List, Live Missions and the Department Report of their own department. The
 other screens hide when their switch is `false`: **Cross-Department Mission** (`launchCrossDept`), **Payouts**
@@ -491,6 +492,25 @@ other screens hide when their switch is `false`: **Cross-Department Mission** (`
 Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%), `Config.Payouts.supervisorCooldown`
 (`1800` seconds), `Config.Commendations.crossDepartment` (`true` lets supervisors commend other departments),
 `Config.Commendations.perSupervisorPerDay` (`3`).
+
+**Mission controls** let a department's supervisors change a few mission rules for their own department, inside
+limits you set. They are **off on install**: nothing changes until you switch them on, and this version has no
+control and no screen for them yet (later updates add both); the server part is in place.
+
+- To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
+  **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
+  supervisor may pick: `<control> = { on = true, min = ..., max = ... }`. Switching either off again brings back
+  the config.lua rule at once.
+- A department can have its own limits: `Config.Departments.<key>.missionControls = { <control> = { min = ..., max =
+  ... } }`.
+- `Config.MissionControls.grants` limits it to some grades, like the teleport grant: `sast = { minGrade = 4 }`.
+  Empty = every supervisor.
+- `Config.MissionControls.changeWait` (`300` seconds): how often one control may change in one department.
+  Admins are not held to it.
+- `Config.MissionControls.selfExempt` (`true`): a control that makes a rule easier never applies to the supervisor
+  who set it, his other characters, or a unit he is in.
+- Every change needs a reason and is in the audit log (who, old and new value). Admins can change or reset any
+  department's controls, still inside the limits.
 
 ### 4.5 Mission Builder permissions
 

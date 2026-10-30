@@ -69,6 +69,18 @@ local function InDepartments(dept, ctx)
     return false
 end
 
+-- A grade grant of the shape { minGrade = N } (that grade and up) or { grades = { ... } } (only those grades), as
+-- Config.Permissions.builderTeleport and Config.MissionControls.grants hold it: true when officer.gradeLevel fits.
+function P.gradeGrant(officer, grant)
+    local grade = type(officer) == 'table' and tonumber(officer.gradeLevel) or nil
+    if type(grant) ~= 'table' or not grade then return false end
+    if tonumber(grant.minGrade) and grade >= tonumber(grant.minGrade) then return true end
+    for _, v in ipairs(type(grant.grades) == 'table' and grant.grades or {}) do
+        if tonumber(v) == grade then return true end
+    end
+    return false
+end
+
 -- A row of that run for that citizenid, live or archived.
 function P.tookPart(citizenid, runUuid)
     if type(citizenid) ~= 'string' or citizenid == '' or not ValidRunUuid(runUuid) then return false end

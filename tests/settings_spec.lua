@@ -828,6 +828,51 @@ do
     H.ok((Check('Profile.bannedWordsFile', false)), 'no banned-words file')
 end
 
+-- Config.MissionControls (step P1): its own section after Admin control, each comment its description, the master
+-- switch with the supervisor permissions, grants checked like the teleport grants, registered controls only.
+do
+    local function E(p) return S.entry(p) or {} end
+    if not CP.DeptControls then H.load('modules/deptcontrols/server.lua') end
+    local DC = CP.DeptControls
+    H.eq(E('MissionControls.changeWait').section, 'mission_controls', 'Mission controls: their own section')
+    H.eq(E('MissionControls.changeWait').default, 300, 'changeWait ships 300 s')
+    H.ok(E('MissionControls.changeWait').desc:find('seconds between two changes', 1, true) ~= nil, 'its comment')
+    H.ok(E('MissionControls.changeWait').max == 86400, 'at most a day')
+    Err('MissionControls.changeWait', 90000, 'err.setting_range', 'changeWait above a day')
+    H.ok(
+        E('MissionControls.selfExempt').default == true
+            and E('MissionControls.selfExempt').desc:find('never applies to the supervisor who set it', 1, true)
+                ~= nil,
+        'selfExempt ships on, with its comment'
+    )
+    H.ok(E('MissionControls.grants').desc:find('{} = every supervisor', 1, true) ~= nil, 'grants: its comment')
+    H.ok(E('MissionControls.controls').desc:find('on = the admin switch', 1, true) ~= nil, 'controls: its comment')
+    H.ok(
+        E('Permissions.supervisor.missionControls').default == false
+            and E('Permissions.supervisor.missionControls').desc:find('for their own department only', 1, true)
+                ~= nil,
+        'the master switch ships off, with its comment'
+    )
+    H.ok((Check('MissionControls.grants', { sast = { minGrade = 4 } })), 'a grant from a grade')
+    Err('MissionControls.grants', { nope = { minGrade = 4 } }, 'err.setting_grant_department',
+        'a grant names a department')
+    Err('MissionControls.grants', { sast = { minGrade = 4, grades = { 4 } } }, 'err.setting_grant_grant',
+        'from a grade or a list, not both')
+    DC.register('t_ctl', {
+        kind = 'number',
+        configValue = function() return 1 end,
+    })
+    H.ok((Check('MissionControls.controls', { t_ctl = { on = true, min = 0, max = 2 } })), 'a registered control')
+    Err('MissionControls.controls', { t_nope = { on = true } }, 'err.control_config', 'an unknown control')
+    Err('MissionControls.controls', { t_ctl = { on = true, min = 3, max = 2 } }, 'err.control_config', 'min above max')
+    Err('MissionControls.controls', { t_ctl = { on = 'yes' } }, 'err.setting_type', 'on is true or false')
+    H.eq(S.checkDepartments('Departments.sast.missionControls', { t_nope = { on = true } }), 'err.control_config',
+        'a department\'s missionControls: registered controls only')
+    H.eq(S.checkDepartments('Departments.sast.missionControls', { t_ctl = { max = 1 } }), nil,
+        'a good department override')
+    DC.unregister('t_ctl')
+end
+
 -- Config.OfficerOptions (step O1): with the officer profile, each comment its description, only known options.
 do
     local function E(p) return S.entry(p) or {} end

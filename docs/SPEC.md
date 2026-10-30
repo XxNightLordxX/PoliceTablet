@@ -2520,7 +2520,21 @@ CREATE TABLE IF NOT EXISTS cp_pvp_pairs (
 -- JSON of only the options that differ from the default; NULL = every option at its default.
 ALTER TABLE cp_officers ADD COLUMN options JSON NULL;
 
-sql/migrations/001_initial.sql creates the first fourteen tables, and 002–010 add the columns and the thirteen tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. 010 (officer options) adds cp_officers.options, the JSON of the My options choices of that character that differ from the default (NULL = all defaults). cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
+-- sql/migrations/011_dept_controls.sql · Mission controls (CP.DeptControls): what a department's supervisors (or an
+-- admin) changed inside the bounds an admin set. One row per department and control; '*' = a server-wide control.
+-- No row = the config value. expires_at NULL = until it is changed or reset; a row past expires_at is ignored.
+CREATE TABLE IF NOT EXISTS cp_dept_controls (
+  department  VARCHAR(32) NOT NULL,
+  control_key VARCHAR(40) NOT NULL,
+  value_json  JSON NOT NULL,                      -- {"v": <value>}
+  expires_at  DATETIME NULL,
+  set_by      VARCHAR(50) NOT NULL,               -- citizenid, or 'console'
+  set_role    VARCHAR(12) NOT NULL,               -- supervisor, admin or console
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (department, control_key)
+);
+
+sql/migrations/001_initial.sql creates the first fourteen tables, and 002–011 add the columns and the fourteen tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. 010 (officer options) adds cp_officers.options, the JSON of the My options choices of that character that differ from the default (NULL = all defaults). 011 (Mission controls) adds cp_dept_controls: one row per department and control a supervisor or admin changed (no row = the config value); a backup restores it like any other table, and a restored row that has expired stays ignored. cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
 
 Database upgrades
 
@@ -2874,6 +2888,8 @@ Config.Permissions = {
         missionCalls = true,      -- view, withdraw, page and create mission calls
         issueCommendation = true, -- commend officers of their own department
         reviewProfiles = true,    -- approve or reject pictures and clear bios of their department
+        -- change the Mission controls an admin switched on, for their own department only (Config.MissionControls)
+        missionControls = false,
     },
     -- Who besides admins may use the Mission Builder Teleport button (admins always may), by department key: minGrade
     -- (that grade or higher) or grades (only those grades). For example sast = { minGrade = 4 } or
@@ -2908,6 +2924,19 @@ Config.AdminControl = {
     -- Refused mission starts the server remembers for admins (who tried, which mission, why), newest kept. Memory
     -- only: a restart empties the list.
     refusalsKept = 200,
+}
+
+-- ── Mission controls ────────────────────────────────────────────────────────
+-- Rules a department's supervisors may change for their own department from the Supervisor UI, only inside the
+-- bounds set here and only while an admin switched them on: Config.Permissions.supervisor.missionControls and the
+-- control's own on. A department may have its own bounds (Config.Departments.<key>.missionControls = { <control> =
+-- { on, min, max } }); they win over the ones below for it. Every change needs a reason and is in the audit log.
+-- Shipped off: no control is on, so every rule stays as config.lua sets it.
+Config.MissionControls = {
+    changeWait = 300,   -- seconds between two changes of one control in one department
+    selfExempt = true,  -- a control that relaxes a rule never applies to the supervisor who set it or a unit he is in
+    grants = {},        -- per department who may use them, e.g. { sast = { minGrade = 4 } }; {} = every supervisor
+    controls = {},      -- per control: on = the admin switch, min/max = the only values a supervisor may pick
 }
 
 -- ── Departments ─────────────────────────────────────────────────────────────
@@ -4563,6 +4592,8 @@ A mission can give any objective its own presenceRange, and the Mission Builder 
 
 Flagged runs are held off the leaderboards, and their cash is held, until a supervisor approves or voids them, and each one records why it was flagged (flag_reason). Three voided runs in 30 days suspends that officer from Crimson-Police for 7 days (all three numbers are in Config.AntiCheat).
 
+Mission controls (rules 11.1). Supervisors may change a few mission rules for their own department only while an admin switched them on (Config.Permissions.supervisor.missionControls, the master switch, and the control's own on in Config.MissionControls.controls), only to values inside the admin's min and max (a department may have its own in Config.Departments.<key>.missionControls), at most once per Config.MissionControls.changeWait per control and department, always with a reason, every change in the audit log with who, old and new value. Narrowing the bounds later moves a saved value into them at once; switching a control or the master switch off brings back the config value at once. A control that relaxes a rule never applies to the supervisor who set it, any other character of his license, or a unit he is in (Config.MissionControls.selfExempt). Admins change any department, within the same bounds. Everything ships off.
+
 ## Supervisor & admin actions
 
 Supervisors work from the Supervisor UI and admins from the Admin UI. Admins can always do every action marked Admin below. Config.Permissions.supervisor switches the supervisor actions on or off; by default all are on except rolling back missions, breaking edit locks and editing other people's missions. Nobody can approve, void or answer a dispute about a run they, or another character on their license, took part in. Actions that list a /CrimsonPoliceAdmin subcommand can also be run from the server console.
@@ -4591,6 +4622,7 @@ Supervisors work from the Supervisor UI and admins from the Admin UI. Admins can
 | Commend an officer, or revoke a commendation | Supervisor (issueCommendation; own department, never themselves or a run they took part in, 3 a day), Admin | Supervisor UI → Department Report; Admin UI → Officers | A citation with no points and no cash; revoking needs a reason |
 | Moderate a profile | Supervisor (reviewProfiles, their department), Admin | Supervisor UI → Review Queue → Profiles; Admin UI → Officers | Approve or reject a pending picture or bio, clear a bio or picture, clear or dismiss a report; reason required |
 | Remove a joiner from a Cross-Department Mission | Supervisor (launchCrossDept), Admin | Supervisor UI → Cross-Department Mission | Before the start only; reason required |
+| Change or reset a Mission control | Supervisor (missionControls, own department, inside the admin's bounds, once per Config.MissionControls.changeWait per control, a grant when one is set), Admin (any department, bounds still apply) | Supervisor UI → Mission controls; Admin UI → Mission controls (later steps; server only for now) | Changes a rule for that department, or puts it back to the config value; reason required |
 | Start a test run | Admin | Admin UI → Testing; /CrimsonPoliceAdmin test <missionId> [tier] [location] | Starts any mission at the chosen location and tier; nothing is saved or paid (see Admin test mode) |
 
 Every action is written to cp_audit (who, role, action, target, old and new value, reason, time) and posted to its webhook: payout changes and admin actions to cp_webhook_audit, flagged runs, voids and disputes to cp_webhook_flags, Mission Builder actions to cp_webhook_builder, and Cross-Department Missions to cp_webhook_operations (see Config).

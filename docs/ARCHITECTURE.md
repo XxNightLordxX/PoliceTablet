@@ -144,7 +144,7 @@ PoliceTablet/                      (git repo)
                                    docs/WEB_UI.md
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
-                   009_real_suspects.sql, 010_officer_options.sql
+                   009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -796,6 +796,9 @@ Full admin control, System (P5):
   `actor.isAdmin` first.
 - `canReviewRun(src, runUuid) -> boolean, errKey` — false when the reviewer, or any character of their licenses
   (`CP.AdminKit.selfRun`), took part (`err.own_run`)
+- `gradeGrant(officer, grant) -> boolean` — a grade grant `{ minGrade = N }` (that grade and up) or `{ grades = { ... } }`
+  (only those) against `officer.gradeLevel`; `Config.Permissions.builderTeleport` (B8) and
+  `Config.MissionControls.grants` (P1) use it.
 
 ### 5.4 CP.Tablet — modules/tablet (owns the NUI)
 Server:
@@ -2320,6 +2323,7 @@ the file by name (so it loads before every module) and again through `modules/**
 the file starts with a load guard (`CP.AdminKit._installed`, as CP.Storage) and the second run changes nothing. Hook names the
 packages share: `admin:changed { kind, citizenid?, missionId? }` (each module clears the caches it owns),
 `row:voided`, `row:restored`, `row:forfeitUndone` (fired by the corrections package, §5.38), `settings:changed (paths)`,
+`deptControls:changed { dept, key }` (a Mission control was set or reset, §5.49),
 `maintenance:changed (view|nil)`, `adminjob:progress (AdminJobProgress)`.
 
 **`Kit.action(name, permKey, fn, opts)`** registers `CP.Net.action(name)` (rate `opts.rate`, default 2/s). Guards, in
@@ -2337,6 +2341,13 @@ this order:
 | — | the action | `fn(ctx) -> ok, data \| false, errKey`; `ctx = { src, payload, name, reason, requestId, actor, role, target, old, new, audit(action, target, old, new, aopts) -> id\|false, consume(token, kind, ids), changed(kind, cid, missionId), notify(cid, kind, key, vars) }` |
 | A | audit | `ctx.audit` writes synchronously (`Admin.auditSync`): a money action writes it **before** money moves and stops when it returns false; `opts.audit` = an action name written after success when fn wrote none (with `ctx.target/old/new`) |
 | C, N | caches, toasts | `ctx.changed` fires `admin:changed`; `ctx.notify` toasts an online officer |
+
+**`Kit.supAction(name, permKey, fn, opts)`** (step P1) registers an action supervisors may use too, with the same
+guards, ctx and order as `Kit.action` except P: `CP.Permissions.can(src, permKey, { department = opts.department(payload) })`
+(admins always; a supervisor needs his `Config.Permissions.supervisor[permKey]` and, when a department is named, his
+own department, else `err.other_department`), or `opts.permission(src, payload) -> ok, errKey` when the action decides
+itself. A supervisor is never probed (§5.4); his `ctx.role` is `'supervisor'` and `ctx.audit` (and
+`Kit.auditSync(..., { role = 'supervisor' })`) writes the audit row with that role.
 
 V and K are helpers the action calls, because only it knows its ids and old state:
 - **V** `Kit.preview(src, kind, ids, effect) -> token, expiresAt` (120 s, bound to the admin, the kind and an order-free
@@ -3229,6 +3240,51 @@ no option is registered by this module: each feature registers its own keys.
   client actions, the NUI message and the hook. Web: `shared/options.ts` (`OptionsProvider` in App.tsx next to the
   session context; `useOption(key)` = this PC's value, else the session's, else the department default).
 
+### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
+
+Rules a department's supervisors may change for their own department (Supervisor UI → Mission controls, a later
+step), only while an admin switched them on and only inside the admin's bounds. One row of `cp_dept_controls` per
+department and control (migration 011; `'*'` = a server-wide control); no row, an expired row (`expires_at` passed;
+a restored backup's expired row stays ignored) or a switched-off control = the config value. This module registers
+no control: each feature registers its own and reads it with `get` (callers use the `Call('DeptControls', ...)`
+pattern, so a missing module reads as config).
+- `register(key, { kind = 'number'|'bool'|'map', scope = 'between'|'run', configValue(officer), check?(value, bounds),
+  clamp?(value, bounds), relaxes?(value, configValue), integer?, serverWide?, master? })`; `unregister(key)`,
+  `def(key)`, `keys()`. `serverWide = true`: one value for every department, saved under `'*'`, changed by a
+  supervisor of any department. `master = false`: the master switch does not apply (the control's own `on` does).
+- `bounds(dept, key)` = `Config.MissionControls.controls[key]` with `Config.Departments[dept].missionControls[key]`
+  over it, field by field (`{ on, min, max }`; `{}` = off).
+- `get(dept, key, officer) -> value, row?`: the row while the master switch
+  (`Config.Permissions.supervisor.missionControls`) and the control's `on` are true and the row has not expired,
+  clamped into today's bounds; else `configValue(officer)`. `officer` = an officer table, a list (a unit) or
+  `{ members }`: when `Config.MissionControls.selfExempt` and one of them is the row's `set_by` or another character of
+  that license (`CP.Access.licenseOf`, `sameUser`) and the value relaxes the rule, the config value.
+- `snapshot(leader) -> { key = value }`: the scope 'run' controls for `run.controls`.
+- `canChange(src, key, dept) -> ok, errKey, role, dept`: admins any department (`err.control_off` while the control
+  is off); a supervisor his own (`err.other_department`), with `CP.Permissions.can(src, 'missionControls')` unless
+  `master = false`, his department's grade grant in `Config.MissionControls.grants` (`CP.Permissions.gradeGrant`) and
+  the control on.
+- `set(src, key, value, reason, opts?) -> true, { department, key, value } | false, errKey`: the only write.
+  `canChange`, the reason (`Kit.reason`), the value inside the bounds (`err.control_value`, never clamped), for a
+  supervisor the change wait (`Config.MissionControls.changeWait` seconds per department and control,
+  `err.control_wait`; admins are exempt), then `INSERT ... ON DUPLICATE KEY UPDATE`, audit `missionControlSet`
+  (target `dept:key`, old, new, reason; role supervisor or admin), hook `deptControls:changed { dept, key }`, push
+  `missionControls { department, key }` to that department's supervisors (every department for `'*'`) and the admins.
+  `opts.department` (admins), `opts.expiresAt` (os.time; server code only).
+- `reset(src, dept, key, reason)`: deletes the row (`err.control_not_set` when there is none), audit
+  `missionControlReset`, the same hook and push.
+- `view(src) -> { master, changeWait, selfExempt, departments = { { key, label, short, controls } }, serverWide }`: a
+  supervisor his department (with the master switch, or while a control outside it is on), an admin every department;
+  each control `{ key, kind, scope, serverWide, master, on, active, min, max, value, configValue, saved, setBy,
+  setRole, at, expiresAt, timeLeft, waitLeft }`.
+- `checkConfig(map, boot) -> errKey?`: `Config.MissionControls.controls` and a department's `missionControls` name
+  registered controls only, with `on` true/false and `min` not above `max` (`err.control_config`).
+- Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
+  `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
+- Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through
+  `Kit.supAction`; `admin:getMissionControls`, `server:admin:setMissionControl`, `server:admin:resetMissionControl`
+  through `Kit.callback` / `Kit.action`).
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -3585,7 +3641,8 @@ Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome
 Parity-plus: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
-`admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`);
+`admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls` and
+`admin:getMissionControls` (§5.49; rate 3);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 
 Actions (write), each checks `CP.Permissions.can`:
@@ -3594,6 +3651,8 @@ Actions (write), each checks `CP.Permissions.can`:
 |---|---|---|---|
 | `server:sup:setTypePayout` / `server:admin:setTypePayout` | `{ type, amount (nil=clear, admin), reason }` | setTypePayout / admin | payouts |
 | `server:admin:setMissionPayout` | `{ missionId, amount (nil=clear), reason }` | setMissionPayout | payouts |
+| `server:sup:setMissionControl` / `server:admin:setMissionControl` | `{ key, value, reason, requestId, department? (admin) }` → `{ department, key, value }` (rate 2; §5.49) | missionControls (supervisor: own department) / admin | deptcontrols |
+| `server:sup:resetMissionControl` / `server:admin:resetMissionControl` | `{ key, reason, requestId, department? (admin) }` → `{ department, key }` | missionControls / admin | deptcontrols |
 | `server:sup:opLaunch` / `server:admin:opLaunch` | `{ missionId }` | launchCrossDept | operations |
 | `server:sup:opStart` / `server:admin:opStart` | — | launchCrossDept | operations |
 | `server:sup:opRelaunch` / `server:admin:opRelaunch` | — | launchCrossDept | operations |
@@ -3868,7 +3927,7 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.l
 | `notify` | `notification = { id, kind, title?, text, duration }` | Crimson-Police toast |
 | `hud` | `hud = HudState \| null` | mission HUD (full state) |
 | `result` | `result = RunResult` | result screen |
-| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `options` (own officer options changed, `{ values }`), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `spawnCheck` (the admin's spawn point check, §5.27); `unit` gains `readyCheck`, `run` gains `contact` |
+| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `options` (own officer options changed, `{ values }`), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `missionControls` (a department's supervisors and the admins: a Mission control changed, `{ department, key }`, §5.49), `spawnCheck` (the admin's spawn point check, §5.27); `unit` gains `readyCheck`, `run` gains `contact` |
 | `overlay` | `overlay = null \| { kind: 'placement'\|'recording'\|'testdrive'\|'fade', ... }` | full-screen/HUD overlays |
 | `theme` | `theme`, `locale?` | the department theme for the HUD (login, duty, job, unload); only the reply to `ready` carries `locale` (`CP.Locale.all()`), the NUI's one copy of the text |
 | `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names at once) |

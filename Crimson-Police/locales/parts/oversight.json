@@ -544,6 +544,8 @@
   "admin.perm_desc.builderRollback": "Restore a custom mission's previous version from its backup.",
   "admin.perm.breakEditLock": "Break edit locks",
   "admin.perm_desc.breakEditLock": "Unlock a mission someone else is editing.",
+  "admin.perm.missionControls": "Mission controls",
+  "admin.perm_desc.missionControls": "Change the Mission controls an admin switched on, for their own department only, inside the admin's limits.",
   "admin.perm.viewMissionList": "Mission List",
   "admin.perm_desc.viewMissionList": "See every mission, its payout and who is running it.",
   "admin.perm.setMissionPayout": "Mission payouts",

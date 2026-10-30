@@ -1,0 +1,10 @@
+{
+  "err.control_unknown": "That Mission control doesn't exist.",
+  "err.control_off": "An admin hasn't switched this Mission control on.",
+  "err.control_value": "That value is outside what an admin allows for this Mission control.",
+  "err.control_wait": "This Mission control was changed a moment ago. Try again in a few minutes.",
+  "err.control_not_set": "This Mission control already uses the config value.",
+  "err.control_config": "A Mission control here is unknown, or has a minimum above its maximum.",
+  "err.setting_grant_department": "Each Mission controls grant needs a department key of Config.Departments (such as sast).",
+  "err.setting_grant_grant": "Each Mission controls grant needs either minGrade (that grade and up) or grades (only those), not both."
+}

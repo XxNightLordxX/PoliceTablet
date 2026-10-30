@@ -285,6 +285,8 @@ function Kit.auditSync(src, category, action, target, old, new, reason, opts)
     local n = ToSrc(src) or 0
     local actor = n > 0 and n or 'console'
     local role = n > 0 and 'admin' or 'console'
+    -- a supervisor's action (Kit.supAction) is audited as 'supervisor'
+    if n > 0 and type(opts) == 'table' and opts.role == 'supervisor' then role = 'supervisor' end
     local _, id = Call('Admin', 'auditSync', actor, role, category or 'audit', action, target, old, new, reason, opts)
     return id or false
 end
@@ -674,6 +676,31 @@ end
 -- audit(action, target, old, new, aopts), consume(token, kind, ids), changed(kind, citizenid, missionId),
 -- notify(citizenid, kind, key, vars) }.
 
+local GuardRest
+
+-- Kit.supAction's permission: opts.permission(src, payload) when given, else CP.Permissions.can(src, permKey, {
+-- department }) with the department opts.department(payload) names (nil: no department check).
+local function SupPermission(entry, n, p)
+    if not (CP.Access and CP.Access.isAdmin and CP.Permissions and CP.Permissions.can) then
+        return false, 'err.no_permission'
+    end
+    local opts = entry.opts
+    if type(opts.permission) == 'function' then
+        local okF, ok, err = pcall(opts.permission, n, p)
+        if not okF then
+            CP.err(TAG, '%s: its permission check failed: %s', entry.name, tostring(ok))
+            return false, 'err.internal'
+        end
+        return ok == true, err
+    end
+    local dept = nil
+    if type(opts.department) == 'function' then
+        local okD, d = pcall(opts.department, p)
+        if okD and type(d) == 'string' then dept = d end
+    end
+    return CP.Permissions.can(n, entry.permKey, dept and { department = dept } or nil)
+end
+
 local function Refuse(ctx, err)
     if ctx.claimed then Kit.releaseRequest(ctx.requestId) end
     return false, err
@@ -687,6 +714,13 @@ local function Guard(entry, src, payload)
     local ctx = { src = n, payload = p, name = name, actor = ActorId(n), role = n == 0 and 'console' or 'admin' }
     -- M
     if not opts.maintenance and Maint.active() then return false, 'err.maintenance' end
+    -- P (Kit.supAction): admins, and supervisors with the key for the department the action is about
+    if entry.supervisor then
+        local okP, errP = SupPermission(entry, n, p)
+        if not okP then return false, errP or 'err.no_permission' end
+        if n ~= 0 and not CP.Access.isAdmin(n) then ctx.role = 'supervisor' end
+        return GuardRest(entry, n, p, ctx)
+    end
     -- P: an admin key (supervisors never pass) and the admin rule itself; a player who is not an admin is logged
     -- (CP.Permissions.probe: no officer or supervisor screen sends an AdminKit action)
     if not (CP.Access and CP.Access.isAdmin) then return false, 'err.no_permission' end
@@ -697,6 +731,12 @@ local function Guard(entry, src, payload)
     if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
     local okP, errP = CP.Permissions.can(n, permKey)
     if not okP then return false, errP or 'err.no_permission' end
+    return GuardRest(entry, n, p, ctx)
+end
+
+-- L, I, R, T and S: the guards after the permission, the same for Kit.action and Kit.supAction.
+GuardRest = function(entry, n, p, ctx)
+    local name, opts = entry.name, entry.opts
     -- L (per target)
     local tr = opts.targetRate
     if type(tr) == 'table' then
@@ -756,6 +796,10 @@ local function MakeCtx(ctx, entry)
         aopts = type(aopts) == 'table' and aopts or {}
         local reason = aopts.reason or ctx.reason
         if ctx.licenceUnknown and reason then reason = ('%s (%s)'):format(reason, CP.L('adminkit.licence_unknown')) end
+        if aopts.role == nil and ctx.role == 'supervisor' then
+            aopts = U.copy(aopts)
+            aopts.role = 'supervisor'
+        end
         local id = Kit.auditSync(ctx.src, aopts.category or entry.opts.category or 'audit', action, target, old, new,
             reason, aopts)
         if id then ctx.audited = true end
@@ -798,6 +842,24 @@ function Kit.action(name, permKey, fn, opts)
     end
     opts = type(opts) == 'table' and opts or {}
     local entry = { name = name, permKey = permKey, fn = fn, opts = opts }
+    actions[name] = entry
+    CP.Net.action(name, function(src, payload)
+        return Run(entry, src, payload)
+    end, { rate = opts.rate or 2, maintenance = opts.maintenance })
+    return true
+end
+
+-- Kit.supAction(name, permKey, fn, opts): an action for supervisors and admins with the same guards as Kit.action
+-- (M, L, I, R, T, S) and the same ctx. P: CP.Permissions.can(src, permKey, { department = opts.department(payload)
+-- }) (a supervisor only for his own department; admins always), or opts.permission(src, payload) -> ok, errKey when
+-- the action decides itself. A supervisor's audit rows carry the role 'supervisor' (ctx.role).
+function Kit.supAction(name, permKey, fn, opts)
+    if type(name) ~= 'string' or type(permKey) ~= 'string' or type(fn) ~= 'function' then
+        CP.err(TAG, 'AdminKit.supAction(%s) needs a name, a permission key and a function', tostring(name))
+        return false
+    end
+    opts = type(opts) == 'table' and opts or {}
+    local entry = { name = name, permKey = permKey, fn = fn, opts = opts, supervisor = true }
     actions[name] = entry
     CP.Net.action(name, function(src, payload)
         return Run(entry, src, payload)

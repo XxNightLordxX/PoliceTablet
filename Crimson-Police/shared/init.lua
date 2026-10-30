@@ -263,6 +263,7 @@ local CONFIG_SECTIONS = {
     'AdminUi',
     'Permissions',
     'AdminControl',
+    'MissionControls',
     'Departments',
     'MissionTypes',
     'DisabledMissions',

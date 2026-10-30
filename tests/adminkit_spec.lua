@@ -411,6 +411,56 @@ do
 end
 
 -- ============================================================================
+--                 4c. KIT.SUPACTION: SUPERVISORS TOO (STEP P1)
+-- ============================================================================
+-- The same guards as Kit.action; the permission is CP.Permissions.can(src, permKey, { department }), so a supervisor
+-- passes for his own department while his Config.Permissions.supervisor key is on, and his audit rows say supervisor.
+
+local supActed = 0
+Kit.supAction('server:sup:kitSup', 'forceRecall', function(ctx)
+    supActed = supActed + 1
+    ctx.audit('kitSup', ctx.payload.department, nil, nil)
+    return true, { n = supActed, role = ctx.role }
+end, {
+    rate = 20,
+    reason = true,
+    requestId = true,
+    department = function(p) return p.department end,
+})
+
+do
+    local function SupRole()
+        local r = H.sql('SELECT role FROM cp_audit WHERE action = \'kitSup\' ORDER BY id DESC LIMIT 1')[1]
+        return r and r.role
+    end
+    local ok, data = Act('server:sup:kitSup', 7, { requestId = Rid(40), reason = 'r', department = 'sast' })
+    H.ok(ok == false and data == 'err.no_permission', 'supAction: an officer is refused')
+    ok, data = Act('server:sup:kitSup', 2, { requestId = Rid(40), reason = 'r', department = 'fib' })
+    H.ok(ok == false and data == 'err.other_department', 'a supervisor of another department is refused')
+    ok, data = Act('server:sup:kitSup', 2, { requestId = Rid(40), reason = ' ', department = 'sast' })
+    H.ok(ok == false and data == 'err.reason_required', 'the reason guard runs')
+    ok, data = Act('server:sup:kitSup', 2, { reason = 'r', department = 'sast' })
+    H.ok(ok == false and data == 'err.request_id', 'the request id guard runs')
+    ok, data = Act('server:sup:kitSup', 2, { requestId = Rid(40), reason = 'r', department = 'sast' })
+    H.ok(ok == true and data.role == 'supervisor', 'his own department: done, as supervisor')
+    H.eq(SupRole(), 'supervisor', 'the audit row has the role supervisor')
+    local again = Act('server:sup:kitSup', 2, { requestId = Rid(40), reason = 'r', department = 'sast' })
+    H.ok(again == true and supActed == 1, 'a repeated request id acts once')
+    Config.Permissions.supervisor = U.copy(Config.Permissions.supervisor)
+    Config.Permissions.supervisor.forceRecall = false
+    ok, data = Act('server:sup:kitSup', 2, { requestId = Rid(41), reason = 'r', department = 'sast' })
+    H.ok(ok == false and data == 'err.no_permission', 'the key switched off: refused')
+    ok, data = Act('server:sup:kitSup', 1, { requestId = Rid(42), reason = 'r', department = 'fib' })
+    H.ok(ok == true and data.role == 'admin', 'an admin passes for any department')
+    H.eq(SupRole(), 'admin', 'audited as admin')
+    Config.Permissions.supervisor = U.deepcopy(S._defaults().Permissions.supervisor)
+    H.ok(Maint.begin('storage', { by = 'ADM00001' }), 'maintenance')
+    ok, data = Act('server:sup:kitSup', 2, { requestId = Rid(43), reason = 'r', department = 'sast' })
+    H.ok(ok == false and data == 'err.maintenance', 'the maintenance guard runs')
+    Maint.finish('storage')
+end
+
+-- ============================================================================
 --                        5. V, K, A AND THE DAY COUNTS
 -- ============================================================================
 

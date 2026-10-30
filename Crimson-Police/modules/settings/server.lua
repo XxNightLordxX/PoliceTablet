@@ -169,6 +169,7 @@ local GROUPS = {
             'storage',
             'permissions',
             'admin_control',
+            'mission_controls',
             'anti_exploit',
             'time',
             'retention',
@@ -219,6 +220,8 @@ local OPEN = {
     'Rewards.season',
     'LiveCrime.types',              -- the crime keys are Crimson-Contracts' contract keys
     'Permissions.builderTeleport',  -- department keys
+    'MissionControls.grants',       -- department keys
+    'MissionControls.controls',     -- control keys
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
@@ -376,6 +379,7 @@ local RANGES = {
     ['AdminControl.logoChunkGapMs'] = { 200, 2000 },
     ['AdminControl.jobProgressEveryMs'] = { 0, 5000 },
     ['AdminControl.refusalsKept'] = { 10, 2000 },
+    ['MissionControls.changeWait'] = { 0, 86400 },
     ['Cash.addFundsMax'] = { 0, 10000000 },
     ['Cash.manualDailyLimit'] = { 0, 10000000 },
     ['Cash.lowBalanceWarn'] = { 0, 100000000 },
@@ -1649,19 +1653,38 @@ KNOWN['LiveCrime.types'].check = LiveTypes
 
 -- Config.Permissions.builderTeleport (Admin UI -> Permissions -> Builder teleport): by department key of
 -- Config.Departments, either { minGrade = N } (that grade and up) or { grades = { ... } } (only those), never both.
+-- Config.MissionControls.grants has the same shape (its own wording).
 local GRADE = Num(0, 100, true)
-local function TeleportGrants(map, _, ctx)
-    local deps = type(Config.Departments) == 'table' and Config.Departments or {}
-    for key, g in pairs(map) do
-        if not (ctx and ctx.boot) and type(deps[key]) ~= 'table' then return 'err.setting_teleport_department' end
-        if (g.minGrade == nil) == (g.grades == nil) then return 'err.setting_teleport_grant' end
+local GRANTS_TPL = MapOf(Record({ minGrade = GRADE, grades = ListOf(GRADE, { min = 1, max = 101, unique = true }) }),
+    '^[%w_%-]+$')
+local function GradeGrants(errDept, errGrant)
+    return function(map, _, ctx)
+        local deps = type(Config.Departments) == 'table' and Config.Departments or {}
+        for key, g in pairs(map) do
+            if not (ctx and ctx.boot) and type(deps[key]) ~= 'table' then return errDept end
+            if (g.minGrade == nil) == (g.grades == nil) then return errGrant end
+        end
+        return nil
     end
-    return nil
 end
 KNOWN['Permissions.builderTeleport'] = {
-    tpl = MapOf(Record({ minGrade = GRADE, grades = ListOf(GRADE, { min = 1, max = 101, unique = true }) }),
-        '^[%w_%-]+$'),
-    check = TeleportGrants,
+    tpl = GRANTS_TPL,
+    check = GradeGrants('err.setting_teleport_department', 'err.setting_teleport_grant'),
+}
+KNOWN['MissionControls.grants'] = {
+    tpl = GRANTS_TPL,
+    check = GradeGrants('err.setting_grant_department', 'err.setting_grant_grant'),
+}
+
+-- Config.MissionControls.controls (and a department's missionControls): { <control> = { on, min, max } }, registered
+-- controls only (CP.DeptControls.checkConfig).
+local function CheckControls(map, _, ctx)
+    if not CP.DeptControls then return nil end
+    return (CP.DeptControls.checkConfig(map, ctx and ctx.boot))
+end
+KNOWN['MissionControls.controls'] = {
+    tpl = MapOf(Record({ on = true, min = Num(-MAX_ABS, MAX_ABS), max = Num(-MAX_ABS, MAX_ABS) }), '^%a[%w_]*$'),
+    check = CheckControls,
 }
 
 -- ============================================================================
@@ -3339,6 +3362,17 @@ function Settings.checkDepartments(path, clean, ctx, none)
             local was = type(before[key]) == 'table' and before[key].officerOptions or nil
             if opts ~= nil and not Same(opts, was) then
                 local errKey, at = CP.OptionDefs.checkConfig(opts)
+                if errKey then return errKey, at end
+            end
+        end
+    end
+    -- a department's own Mission controls bounds (Config.Departments.<key>.missionControls): registered controls only
+    if CP.DeptControls then
+        for key, d in pairs(after) do
+            local mc = type(d) == 'table' and d.missionControls or nil
+            local was = type(before[key]) == 'table' and before[key].missionControls or nil
+            if mc ~= nil and not Same(mc, was) then
+                local errKey, at = CP.DeptControls.checkConfig(mc)
                 if errKey then return errKey, at end
             end
         end
