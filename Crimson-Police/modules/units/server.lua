@@ -92,7 +92,12 @@ local function InArena(src)
     return ok and v == true
 end
 
+-- Invite toasts (unit.invite*) are social news: the officer option quietRun keeps them in the bell during a run.
 local function Notify(src, kind, key, vars, opts)
+    if type(key) == 'string' and key:find('^unit%.invite') then
+        opts = type(opts) == 'table' and opts or {}
+        opts.channel = 'social'
+    end
     Call('Tablet', 'notify', src, kind, key, vars, opts)
 end
 

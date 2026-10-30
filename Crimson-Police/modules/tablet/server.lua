@@ -627,6 +627,8 @@ end, { rate = 3 })
 --                                CLIENT HELPERS
 -- ============================================================================
 
+-- opts: title (a locale key), duration (ms), channel ('social' = unit invites, commendations, rewards and profile
+-- news: the officer option quietRun keeps its info and success toasts in the bell during a run; nil = always shown).
 function T.notify(src, kind, key, vars, opts)
     local n = ToSrc(src)
     if not n or type(key) ~= 'string' or key == '' then return false end
@@ -639,6 +641,7 @@ function T.notify(src, kind, key, vars, opts)
         vars = type(vars) == 'table' and CP.U.serialize(vars) or nil,
         title = type(opts.title) == 'string' and opts.title ~= '' and opts.title or nil,
         duration = duration and math.floor(duration) or nil,
+        channel = opts.channel == 'social' and 'social' or nil,
     })
     return true
 end

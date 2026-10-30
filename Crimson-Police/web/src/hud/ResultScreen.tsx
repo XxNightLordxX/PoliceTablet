@@ -1,5 +1,6 @@
 // The result card (ARCHITECTURE §9.6): points, cash, and when present the level bar, the mission call, the debrief
-// (decision ledger and people) and item rewards. Shown on the HUD for 25 s or until dismissed.
+// (decision ledger and people) and item rewards. Shown on the HUD for the officer option resultTime (25 s shipped) or
+// until dismissed.
 
 import { useEffect, useState } from 'react';
 import { Badge, Icon, IconButton, ProgressBar, TierBadge } from '../shared/components';
@@ -14,11 +15,17 @@ import {
     formatPercent,
 } from '../shared/format';
 import { t, tOr } from '../shared/i18n';
+import { useOption } from '../shared/options';
 import type { RunResult } from '../shared/types';
 import type { RunItem, RunMissionCall, RunProgress } from '../types/run_ui';
 import { DecisionsBlock, PeopleBlock } from './Debrief';
 
 export const RESULT_SECONDS = 25;
+
+// The seconds the card stays for the officer option resultTime (step O6; Lua already keeps it inside the bounds).
+export function resultSecondsOf(v: unknown): number {
+    return typeof v === 'number' && Number.isFinite(v) && v >= 5 && v <= 120 ? v : RESULT_SECONDS;
+}
 
 const RESULT_ICON = { completed: 'checkCircle', failed: 'xCircle', abandoned: 'minusCircle' } as const;
 
@@ -119,12 +126,13 @@ function ItemsBlock({ items }: { items: RunItem[] }) {
 
 export function ResultScreen({ result, onDismiss }: { result: RunResult; onDismiss: () => void }) {
     const [closing, setClosing] = useState(false);
+    const seconds = resultSecondsOf(useOption('resultTime'));
 
     useEffect(() => {
         setClosing(false);
-        const id = setTimeout(() => setClosing(true), RESULT_SECONDS * 1000);
+        const id = setTimeout(() => setClosing(true), seconds * 1000);
         return () => clearTimeout(id);
-    }, [result]);
+    }, [result, seconds]);
 
     useEffect(() => {
         if (!closing) return;
@@ -274,7 +282,7 @@ export function ResultScreen({ result, onDismiss }: { result: RunResult; onDismi
 
             <div
                 className="cp-result__timer"
-                style={{ animationDuration: `${RESULT_SECONDS}s` }}
+                style={{ animationDuration: `${seconds}s` }}
                 key={result.runId + result.endReason}
                 aria-hidden
             />

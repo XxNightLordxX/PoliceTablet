@@ -118,9 +118,13 @@ local function Audit(src, category, action, target, old, new, reason)
     Call('Admin', 'audit', src, nil, category, action, target, old, new, reason)
 end
 
+-- Profile news (commendations, reviews, admin changes) is social: the officer option quietRun keeps its info and
+-- success toasts in the bell during a run.
 local function Notify(citizenid, kind, key, vars)
     local ok, src = Call('Qbx', 'getByCitizenId', citizenid)
-    if ok and src and Has('Tablet', 'notify') then Call('Tablet', 'notify', src, kind, key, vars) end
+    if ok and src and Has('Tablet', 'notify') then
+        Call('Tablet', 'notify', src, kind, key, vars, { channel = 'social' })
+    end
     return ok and src or nil
 end
 

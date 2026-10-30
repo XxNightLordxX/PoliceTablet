@@ -1,5 +1,6 @@
 // Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions,
 // setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
+// Pop-ups (step O6): ?toastTime=short|long, ?resultTime=10 (with ?result=parity: the card closes after 10 s).
 
 import { emitDebug, registerMock } from '../shared/nui';
 import type { OfficerOptionValue } from '../shared/types';
@@ -59,6 +60,25 @@ const SCHEMA: OptionDef[] = [
         group: 'look',
         order: 20,
     },
+    {
+        key: 'toastTime',
+        kind: 'enum',
+        values: ['short', 'normal', 'long'],
+        default: 'normal',
+        store: 'local',
+        group: 'popups',
+        order: 10,
+    },
+    {
+        key: 'resultTime',
+        kind: 'number',
+        default: 25,
+        bounds: { min: 8, max: 60 },
+        store: 'local',
+        group: 'popups',
+        order: 20,
+    },
+    { key: 'quietRun', kind: 'bool', default: false, store: 'local', group: 'popups', order: 30 },
 ];
 
 const defaults = Object.fromEntries(SCHEMA.map(d => [d.key, d.default])) as Record<string, OfficerOptionValue>;
@@ -68,6 +88,11 @@ if (PARAMS.get('hudSide') === 'left') local.hudSide = 'left';
 if (PARAMS.get('hudCompact') === '1') local.hudCompact = true;
 if (PARAMS.get('reduceMotion') === '1') local.reduceMotion = true;
 if (Number(PARAMS.get('hudScale')) > 0) local.hudScale = Math.min(1.3, Math.max(0.8, Number(PARAMS.get('hudScale'))));
+const toastTime = PARAMS.get('toastTime');
+if (toastTime === 'short' || toastTime === 'long') local.toastTime = toastTime;
+if (Number(PARAMS.get('resultTime')) > 0) {
+    local.resultTime = Math.round(Math.min(60, Math.max(8, Number(PARAMS.get('resultTime')))));
+}
 // the client sends the options of this PC on the NUI ready
 if (Object.keys(local).length) emitDebug('localOptions', { options: { ...local } }, 300);
 if (PARAMS.get('hudLook') === '1') server.hudLook = true;
@@ -92,7 +117,7 @@ if (server.hudLook !== undefined || server.textSize !== undefined) {
         enabled: true,
         allow: Object.fromEntries(SCHEMA.map(d => [d.key, true])),
         defaults,
-        bounds: { hudScale: { min: 0.8, max: 1.3 } },
+        bounds: { hudScale: { min: 0.8, max: 1.3 }, resultTime: { min: 8, max: 60 } },
     };
 }
 

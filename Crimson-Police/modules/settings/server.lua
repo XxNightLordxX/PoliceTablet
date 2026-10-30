@@ -300,6 +300,7 @@ local RANGES = {
     ['Profile.bioLines'] = { 1, 20 },
     ['Profile.bioMax'] = { 1, 2000 },
     ['OfficerOptions.defaults.hudScale'] = { 0.5, 2 },
+    ['OfficerOptions.defaults.resultTime'] = { 5, 120 },
     ['Leaderboard.topN'] = { 1, 100 },
     ['Cash.minPayout'] = { 0, 10000000 },
     ['Cash.maxPayout'] = { 0, 10000000 },
@@ -454,6 +455,7 @@ local RANGE_LISTS = {
     'Commendations.citation',
     'Profile.uiScale',
     'OfficerOptions.bounds.hudScale',
+    'OfficerOptions.bounds.resultTime',
     'Spawning.ground.pedAbove',
     'Spawning.ground.vehicleAbove',
     'Spawning.ground.propAbove',
@@ -1015,6 +1017,7 @@ local KNOWN = {
     ['Leaderboard.weekStartsOn'] = { tpl = Enum(WEEKDAYS), kind = 'enum' },
     ['Profile.bannedWords'] = { tpl = ListOf(Text(nil, 64)), kind = 'list', item = 'string' },
     ['OfficerOptions.defaults.hudSide'] = { tpl = Enum({ 'right', 'left' }), kind = 'enum' },
+    ['OfficerOptions.defaults.toastTime'] = { tpl = Enum({ 'short', 'normal', 'long' }), kind = 'enum' },
     ['OfficerOptions.defaults.textSize'] = { tpl = Enum({ 'normal', 'large' }), kind = 'enum' },
     ['Profile.appearances'] = {
         tpl = ListOf(Enum(APPEARANCES), { min = 1, unique = true }),

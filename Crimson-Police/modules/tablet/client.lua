@@ -6,7 +6,13 @@ local TAG = 'tablet'
 
 local UIS = { officer = true, supervisor = true, admin = true }
 local KINDS = { info = true, success = true, warning = true, error = true }
-local DEFAULT_DURATION = { info = 5000, success = 5000, warning = 7000, error = 7000 }
+-- How long a toast stays (ms) for the officer option toastTime (step O6); web/src/shared/toast.ts holds the same table.
+local TOAST_MS = {
+    short = { info = 3000, success = 3000, warning = 5000, error = 5000 },
+    normal = { info = 5000, success = 5000, warning = 7000, error = 7000 },
+    long = { info = 8000, success = 8000, warning = 12000, error = 12000 },
+}
+local QUIET_KINDS = { info = true, success = true } -- the social toasts quietRun keeps in the bell during a run
 local DEFAULT_THEME = {
     primary = '#a4161a',
     accent = '#e5383b',
@@ -137,11 +143,26 @@ function T.send(msg)
     SendNUIMessage(CP.U.serialize(msg))
 end
 
+local function Option(key)
+    if not (CP.Options and CP.Options.get) then return nil end
+    local ok, v = pcall(CP.Options.get, key)
+    return ok and v or nil
+end
+
+local function OnRun()
+    if not (CP.Runs and CP.Runs.current) then return false end
+    local ok, run = pcall(CP.Runs.current)
+    return ok and run ~= nil
+end
+
+-- A toast. opts: title, duration (ms; else the officer option toastTime picks it), channel ('social': with the option
+-- quietRun on, an info or success one goes only to the bell while a run is on; any other channel always shows).
 function T.notify(kind, text, opts)
     if text == nil then return end
     if not KINDS[kind] then kind = 'info' end
     if type(opts) ~= 'table' then opts = {} end
     state.notifySeq = state.notifySeq + 1
+    local quiet = opts.channel == 'social' and QUIET_KINDS[kind] and Option('quietRun') == true and OnRun()
     T.send({
         type = 'notify',
         notification = {
@@ -149,7 +170,8 @@ function T.notify(kind, text, opts)
             kind = kind,
             title = type(opts.title) == 'string' and opts.title or nil,
             text = tostring(text),
-            duration = tonumber(opts.duration) or DEFAULT_DURATION[kind],
+            duration = tonumber(opts.duration) or (TOAST_MS[Option('toastTime')] or TOAST_MS.normal)[kind],
+            bellOnly = quiet or nil,
         },
     })
 end
@@ -572,7 +594,11 @@ RegisterNetEvent(CP.e('client:notify'), function(n)
     if type(n) ~= 'table' or type(n.key) ~= 'string' then return end
     local vars = type(n.vars) == 'table' and n.vars or nil
     local title = type(n.title) == 'string' and n.title ~= '' and CP.L(n.title, vars) or nil
-    T.notify(n.kind, CP.L(n.key, vars), { title = title, duration = tonumber(n.duration) })
+    T.notify(n.kind, CP.L(n.key, vars), {
+        title = title,
+        duration = tonumber(n.duration),
+        channel = n.channel == 'social' and 'social' or nil,
+    })
 end)
 
 RegisterNetEvent(CP.e('client:push'), function(topic, data)

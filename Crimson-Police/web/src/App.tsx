@@ -23,7 +23,7 @@ import { OptionsProvider, useOption } from './shared/options';
 import { SessionContext, type SessionContextValue } from './shared/session';
 import { applyAppearance, DEFAULT_THEME, mergeAppearance } from './shared/theme';
 import { normalizeHud, normalizeResult, normalizeSession } from './shared/data';
-import { pushNotification, subscribeToasts, toast, TOAST_DEFAULT_MS } from './shared/toast';
+import { pushNotification, setToastTime, subscribeToasts, toast, toastMs } from './shared/toast';
 import type {
     HudState,
     Notification,
@@ -74,6 +74,13 @@ function AmbientLook({
     return null;
 }
 
+// The officer option toastTime (step O6): how long the toasts that carry no time of their own stay.
+function ToastTimePref(): null {
+    const time = useOption('toastTime');
+    useLayoutEffect(() => setToastTime(time), [time]);
+    return null;
+}
+
 type ScreenState = Record<UiKind, { key: ScreenKey; params: ScreenParams }>;
 
 const initialScreens = (): ScreenState => ({
@@ -111,12 +118,13 @@ export default function App() {
     }, []);
 
     const addToast = useCallback((n: Notification) => {
-        if (!n || !n.text) return;
+        // a bell-only toast (quietRun during a run) is listed by the bell (NotificationBell) and not shown
+        if (!n || !n.text || n.bellOnly) return;
         const kind = n.kind ?? 'info';
         const item: Notification = {
             ...n,
             kind,
-            duration: typeof n.duration === 'number' ? n.duration : (TOAST_DEFAULT_MS[kind] ?? 5000),
+            duration: typeof n.duration === 'number' ? n.duration : toastMs(kind),
         };
         setToasts(list => [...list.filter(x => x.id !== item.id), item].slice(-MAX_TOASTS));
     }, []);
@@ -322,6 +330,7 @@ export default function App() {
             <SessionContext.Provider value={sessionValue}>
                 <OptionsProvider session={session} ambient={ambientOptions}>
                     <MotionPref />
+                    <ToastTimePref />
                     <AmbientLook
                         theme={ambientTheme}
                         prefs={ambientPrefs}

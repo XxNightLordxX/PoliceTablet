@@ -145,6 +145,79 @@ H.eq(O.get('hudSide'), 'right', 'allow.hudSide = false: every officer gets the d
 Config.OfficerOptions.allow.hudSide = keepAllow
 kvp['crimsonpolice:options'] = nil
 
+-- Pop-ups (shared/options_popups.lua, step O6): the toast time, the result card time and fewer pop-ups on a run
+CP.Access.setSession(Session({}, nil))
+kvp['crimsonpolice:options'] = nil
+local pop = O.localValues()
+H.ok(pop.toastTime == 'normal' and pop.resultTime == 25 and pop.quietRun == false,
+    'the pop-up options ship as today: normal toasts, a 25 s result card, every pop-up shown')
+local okR, secs = O.setLocal('resultTime', 200)
+H.ok(okR and secs == 60, 'a result card time of 200 s is clamped to Config.OfficerOptions.bounds.resultTime (60)')
+H.eq(select(2, O.setLocal('toastTime', 'forever')), 'err.option_value', 'the toast time is short, normal or long')
+H.ok((O.setLocal('resultTime', 10)) and O.get('resultTime') == 10, 'a 10 s result card is kept on this PC')
+H.eq(LastLocal() and LastLocal().resultTime, 10, 'the NUI got the result card time')
+
+-- the real CP.Tablet.notify (modules/tablet/client.lua) with the options above
+do
+    local nui = {}
+    _G.SendNUIMessage = function(m) nui[#nui + 1] = m end
+    for _, name in ipairs({
+        'RegisterNUICallback',
+        'RegisterKeyMapping',
+        'SetNuiFocus',
+        'PlayerId',
+        'GetPlayerServerId',
+        'AddStateBagChangeHandler',
+    }) do
+        _G[name] = _G[name] or function() return 1 end
+    end
+    local stub = CP.Tablet
+    CP.Tablet = nil
+    H.load('modules/tablet/client.lua')
+    local T = CP.Tablet
+    local function Last()
+        for i = #nui, 1, -1 do
+            if nui[i].type == 'notify' then return nui[i].notification end
+        end
+        return nil
+    end
+    local onRun = nil
+    CP.Runs = {
+        current = function() return onRun end,
+    }
+    T.notify('info', 'plain')
+    H.eq(Last().duration, 5000, 'toastTime normal: an info toast stays 5 s, as before')
+    O.setLocal('toastTime', 'long')
+    T.notify('warning', 'w')
+    H.eq(Last().duration, 12000, 'toastTime long: a warning stays 12 s')
+    T.notify('info', 'ready', { duration = 20000 })
+    H.eq(Last().duration, 20000, 'an explicit duration (the ready check) is kept')
+    O.setLocal('toastTime', 'short')
+    T.notify('success', 's')
+    H.eq(Last().duration, 3000, 'toastTime short: a success toast stays 3 s')
+
+    O.setLocal('quietRun', true)
+    onRun = { runId = 'r1' }
+    T.notify('info', 'invite', { channel = 'social' })
+    H.eq(Last().bellOnly, true, 'quietRun on a run: a social toast goes only to the bell')
+    T.notify('warning', 'off route')
+    H.eq(Last().bellOnly, nil, '...a route warning (default channel) still pops up')
+    T.notify('warning', 'social warning', { channel = 'social' })
+    H.eq(Last().bellOnly, nil, '...and so does a social warning')
+    H.fire('crimson-police:client:notify', nil, { kind = 'success', key = 'some.key', channel = 'social' })
+    H.eq(Last().bellOnly, true, 'a server toast on the social channel is kept in the bell too')
+    onRun = nil
+    T.notify('info', 'invite', { channel = 'social' })
+    H.eq(Last().bellOnly, nil, 'quietRun off a run: the social toast pops up')
+    onRun = { runId = 'r1' }
+    O.setLocal('quietRun', false)
+    T.notify('info', 'invite', { channel = 'social' })
+    H.eq(Last().bellOnly, nil, 'quietRun off: every toast pops up during a run, as before')
+    CP.Runs = nil
+    CP.Tablet = stub
+end
+kvp['crimsonpolice:options'] = nil
+
 -- the client file uses no os or io
 local f = assert(io.open(H.root .. 'modules/options/client.lua', 'r'))
 local src = f:read('a')

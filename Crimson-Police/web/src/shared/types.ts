@@ -449,6 +449,8 @@ export interface Notification {
     title?: string;
     text: string;
     duration: number; // ms; 0 or less = stays until dismissed
+    // step O6: a social toast during a run with the officer option quietRun on: only the bell lists it
+    bellOnly?: boolean;
 }
 
 export type OverlayKind = 'placement' | 'recording' | 'testdrive' | 'fade';

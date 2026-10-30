@@ -1783,6 +1783,8 @@ My options holds the choices each officer makes for their own tablet, saved per 
 
 - Easier to read (saved with the character, on any PC; they apply at once, even before the tablet opens): Use my tablet look on the HUD (off by default: the mission HUD, the result card and notifications keep the department theme; on: they take the officer's tablet look, the appearance such as colour-blind, midnight or high contrast and the accent; the open Admin UI keeps its own theme) and Text size (Normal, as before, or Large: the text on the tablet and the mission HUD is 15% bigger). Each is allowed by default (Config.OfficerOptions.allow).
 
+- Pop-ups (kept on this PC, for every character played on it): Notification time (Short: 3 s, warnings and errors 5 s; Normal, as before: 5 s and 7 s; Long: 8 s and 12 s; a notification that brings its own time, such as the ready check, keeps it), Result card time (seconds the mission result card stays, inside Config.OfficerOptions.bounds.resultTime, shipped 8 to 60, default 25 as before; the officer can still close it sooner) and Fewer pop-ups during a mission (off by default: while it is on and the officer is on a run, unit invites, commendations, rewards and profile news that are not warnings or errors go only to the bell; route, custody and mission messages, warnings and errors always pop up). Each is allowed by default (Config.OfficerOptions.allow).
+
 - Config.OfficerOptions: enabled (true; false = no My options screen and every option keeps its default for everyone), allow (per option: false = officers cannot change it and everyone gets the default), defaults (per option: what every officer starts with) and bounds (per number option: { min, max } officers may pick). A department may set its own allow, defaults and bounds in Config.Departments.<key>.officerOptions; they win over the global ones for its officers.
 - An option is a switch, one choice from a list, several choices from a list, or a number. A choice that is no longer offered (a mission type or twist that was removed) is dropped from the saved value, and a number outside the bounds now is clamped to them. Only the options that differ from the default are saved: picking the default again removes it.
 - An option that is not allowed now is ignored, never deleted: allowing it again brings the officer's own choice back.
@@ -3965,6 +3967,9 @@ Config.OfficerOptions = {
         reduceMotion = true,         -- no slide-in or flashing on the HUD and the toasts (kept on this PC)
         hudLook = true,              -- the officer's tablet look on the HUD, result card and toasts (this character)
         textSize = true,             -- larger text on the tablet and the mission HUD (this character)
+        toastTime = true,            -- how long notifications stay on screen (kept on this PC)
+        resultTime = true,           -- how long the mission result card stays on screen (kept on this PC)
+        quietRun = true,             -- fewer pop-ups during a mission: social news goes to the bell (kept on this PC)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -3975,9 +3980,15 @@ Config.OfficerOptions = {
         hudLook = false,             -- true = the HUD, result card and toasts use the officer's tablet look
                                      -- (appearance and accent); false = the department theme (as before)
         textSize = 'normal',         -- 'normal' (as before) or 'large': text size on the tablet and the mission HUD
+        toastTime = 'normal',        -- how long notifications stay: 'short' (3 s, warnings 5 s), 'normal' (5 s,
+                                     -- warnings 7 s, as before) or 'long' (8 s, warnings 12 s)
+        resultTime = 25,             -- seconds the mission result card stays on screen (25 = as before)
+        quietRun = false,            -- true = during a mission, unit invites, commendations, rewards and profile news
+                                     -- go only to the bell; false = they pop up as before
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick
+        resultTime = { 8, 60 },      -- shortest and longest time (seconds) an officer may keep the result card
     },
 }
 

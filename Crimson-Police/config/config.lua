@@ -1416,6 +1416,9 @@ Config.OfficerOptions = {
         reduceMotion = true,         -- no slide-in or flashing on the HUD and the toasts (kept on this PC)
         hudLook = true,              -- the officer's tablet look on the HUD, result card and toasts (this character)
         textSize = true,             -- larger text on the tablet and the mission HUD (this character)
+        toastTime = true,            -- how long notifications stay on screen (kept on this PC)
+        resultTime = true,           -- how long the mission result card stays on screen (kept on this PC)
+        quietRun = true,             -- fewer pop-ups during a mission: social news goes to the bell (kept on this PC)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -1426,9 +1429,15 @@ Config.OfficerOptions = {
         hudLook = false,             -- true = the HUD, result card and toasts use the officer's tablet look
                                      -- (appearance and accent); false = the department theme (as before)
         textSize = 'normal',         -- 'normal' (as before) or 'large': text size on the tablet and the mission HUD
+        toastTime = 'normal',        -- how long notifications stay: 'short' (3 s, warnings 5 s), 'normal' (5 s,
+                                     -- warnings 7 s, as before) or 'long' (8 s, warnings 12 s)
+        resultTime = 25,             -- seconds the mission result card stays on screen (25 = as before)
+        quietRun = false,            -- true = during a mission, unit invites, commendations, rewards and profile news
+                                     -- go only to the bell; false = they pop up as before
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick
+        resultTime = { 8, 60 },      -- shortest and longest time (seconds) an officer may keep the result card
     },
 }
 

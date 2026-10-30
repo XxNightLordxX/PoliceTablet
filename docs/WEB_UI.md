@@ -140,9 +140,9 @@ the `*ScreenKey` types of `shared/navigation.tsx` and one registry entry.
 | `open` | `ui`, `session`, `screen?` | show that UI (optional screen key to open) |
 | `close` | — | hide the UI (HUD stays) |
 | `session` | `session` | replace the session |
-| `notify` | `notification = { id, kind, title?, text, duration }` | toast (text already translated) |
+| `notify` | `notification = { id, kind, title?, text, duration, bellOnly? }` | toast (text already translated); `bellOnly`: only the bell lists it (quietRun on a run) |
 | `hud` | `hud = HudState \| null` | mission HUD (full state; null hides) |
-| `result` | `result = RunResult \| null` | result card for 25 s (null hides) |
+| `result` | `result = RunResult \| null` | result card for the officer option resultTime, 25 s shipped (null hides) |
 | `push` | `topic`, `data` | live updates: `run` `unit` `board` `operation` `invites` `test` `builder` `payouts` `calls` `nav` `profile` `rewards` `settings` |
 | `overlay` | `overlay = null \| { kind, … }` | `fade { text }`, or builder kinds `placement` `recording` `testdrive` |
 | `theme` | `theme`, `locale?` | the officer's department theme (HUD/toasts) at login, duty, job and unload; only the reply to `ready` carries the locale, the NUI's one copy of the text (a session has none) |

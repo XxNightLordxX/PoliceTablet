@@ -3783,6 +3783,16 @@ and larger text on the tablet and the HUD. The tablet applies them (web/src/App.
 layouts/TabletFrame.tsx, hud/HudColumn.tsx); Config.OfficerOptions holds the allow and defaults.
 ```
 
+## Crimson-Police/shared/options_popups.lua
+
+```text
+The pop-up officer options (My options -> Pop-ups, kept on this PC): how long notifications stay (toastTime), how
+long the result card stays (resultTime, seconds) and fewer pop-ups during a mission (quietRun: unit invites,
+commendations, rewards and profile news go only to the bell while a run is on; route, custody, run messages,
+warnings and errors always show). The NUI applies the first two (web/src/shared/toast.ts, hud/ResultScreen.tsx);
+CP.Tablet.notify (client) applies quietRun. Config.OfficerOptions holds the allow, defaults and bounds.
+```
+
 ## Crimson-Police/web/build-stamp.mjs
 
 ```text
@@ -4362,6 +4372,7 @@ Browser mocks of My options: getOptions, server:options:set, the options of this
 setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
 ?hudSide=left&hudCompact=1&hudScale=1.2&reduceMotion=1 start the HUD options of this PC (with ?hud=progress);
 ?hudLook=1&textSize=large (with ?look=colourblind and ?hud=progress) the Easier to read options of the character.
+Pop-ups (step O6): ?toastTime=short|long, ?resultTime=10 (with ?result=parity: the card closes after 10 s).
 ```
 
 ## Crimson-Police/web/src/mocks/run_ui.mock.ts

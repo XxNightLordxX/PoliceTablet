@@ -120,6 +120,7 @@ PoliceTablet/                      (git repo)
     shared/options.lua             CP.OptionDefs: the officer options registry and its rules (§5.48)
     shared/options_hud.lua         The mission HUD's officer options: side, size, compact, fewer animations (§5.48)
     shared/options_look.lua        Easier to read: the tablet look on the HUD, larger text (§5.48)
+    shared/options_popups.lua      Pop-ups: toast time, result card time, fewer pop-ups on a run (§5.48)
     shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
     config/banned_words.txt        the default banned-word list for profile bios (one word or phrase a line)
@@ -3266,6 +3267,18 @@ no option is registered by this module: each feature registers its own keys.
   sent again on the hook `options:changed` for those two keys, so the HUD has them before the first open; the NUI
   uses the theme message's values until a newer officer or supervisor session arrives (`OptionsProvider ambient`).
   Shipped allowed, defaults false / 'normal'. Mock: `?hud=progress&look=colourblind&hudLook=1&textSize=large`.
+- Pop-ups (step O6, shared/options_popups.lua, group `popups`, all `local`): `toastTime` ('short' | 'normal' |
+  'long'; the toast time table 3/5 s, 5/7 s or 8/12 s for info and success / warning and error, in
+  web/src/shared/toast.ts `TOAST_MS` and modules/tablet/client.lua `TOAST_MS`; a Lua toast without a duration gets
+  it from the client's table, a UI toast from `toastMs()`, which App.tsx `ToastTimePref` keeps on the option; an
+  explicit duration, such as the ready check's, is kept), `resultTime` (integer seconds 5-120, bounded by
+  `Config.OfficerOptions.bounds.resultTime`, shipped 8-60, default 25; `ResultScreen` closes after it and its timer
+  bar runs that long) and `quietRun` (bool). The server `CP.Tablet.notify(src, kind, key, vars, opts)` forwards
+  `opts.channel = 'social'`; units (the `unit.invite*` toasts), profile (commendations, reviews, admin changes) and
+  rewards send it. The client `CP.Tablet.notify` marks a social info or success toast `bellOnly` while quietRun is
+  on and `CP.Runs.current()` is set: App.tsx `addToast` skips it and the header bell (layouts/NotificationBell.tsx)
+  still lists it. Any other channel (route, custody, run, warnings, errors) always shows. Shipped allowed, defaults
+  'normal' / 25 / false (as before). Mock: `?result=parity&resultTime=10` (also `toastTime=short|long`).
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 

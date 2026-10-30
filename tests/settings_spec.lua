@@ -951,6 +951,23 @@ do
     H.ok((Check('OfficerOptions.defaults.textSize', 'large')), 'large text may be the default')
 end
 
+-- Pop-ups (step O6): toast time, result card time and fewer pop-ups on a run, allowed, shipped as today, commented.
+do
+    local function E(p) return S.entry(p) or {} end
+    for _, key in ipairs({ 'toastTime', 'resultTime', 'quietRun' }) do
+        H.eq(E('OfficerOptions.allow.' .. key).default, true, key .. ': officers may change it')
+        H.ok((E('OfficerOptions.defaults.' .. key).desc or '') ~= '', key .. ': its default has a comment')
+    end
+    H.eq(E('OfficerOptions.defaults.toastTime').default, 'normal', 'toasts stay as long as before')
+    H.eq(E('OfficerOptions.defaults.toastTime').kind, 'enum', 'the toast time is a choice')
+    Err('OfficerOptions.defaults.toastTime', 'forever', 'err.setting_option', 'the toast time is short, normal or long')
+    H.eq(E('OfficerOptions.defaults.resultTime').default, 25, 'the result card stays 25 s, as before')
+    H.eq(E('OfficerOptions.defaults.resultTime').max, 120, 'the result card time goes up to 120 s')
+    H.eq(E('OfficerOptions.defaults.quietRun').default, false, 'every pop-up shows on a run, as before')
+    H.ok(E('OfficerOptions.bounds.resultTime').kind == 'range' and E('OfficerOptions.bounds.resultTime').size == 2,
+        'the result card time bounds edit as a shortest and a longest time')
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

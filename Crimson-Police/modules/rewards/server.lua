@@ -115,8 +115,9 @@ local function InArena(src)
     return ok and v == true
 end
 
+-- Reward toasts are social: the officer option quietRun keeps their info and success ones in the bell during a run.
 local function Notify(src, kind, key, vars)
-    if src and CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(src, kind, key, vars) end
+    if src and CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(src, kind, key, vars, { channel = 'social' }) end
 end
 
 local function Push(citizenid)
