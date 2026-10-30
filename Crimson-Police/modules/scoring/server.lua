@@ -631,7 +631,8 @@ local function ScoreLines(run, p, P, opts)
     local duration = DurationOf(run, opts)
     -- Process the scene stops the fast-completion clock (CP.Runs.pauseFastClock)
     if opts.fastDurationS ~= nil then duration = math.min(duration, Num(opts.fastDurationS, duration)) end
-    local limit = Num(run.timeLimit, Num(mission.timeLimit, 0))
+    -- a run whose department scaled its time limit (P8) is judged on the unscaled limit, so points never move
+    local limit = Num(run.fastBaseLimit, Num(run.timeLimit, Num(mission.timeLimit, 0)))
     local fastShare = Num(common.fastShare, 0.75)
     if not (run.flags and run.flags.medals) and limit > 0 and duration <= fastShare * limit then
         total = total

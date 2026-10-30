@@ -1399,7 +1399,17 @@ local function AcceptStart(src, typeKey, opts, note)
 
     -- ---- THE READY CHECK (CP.Units, units of 2+; without it the draw follows at once) ----
     local readyCheck = CP.Units and CP.Units.readyCheck
-    local wantCheck = not (Config.Units and Config.Units.readyCheck == false)
+    -- seconds to answer, 0 = none: the config, or the leader's department's ready check (Mission controls, P8)
+    local readySecs = (Config.Units and Config.Units.readyCheck == false) and 0 or nil
+    if CP.Runs and CP.Runs.readySeconds then
+        local leaderOfficer = ctx.officers[1]
+        for _, o in ipairs(ctx.officers) do
+            if o.src == src then leaderOfficer = o end
+        end
+        local okRs, secs = pcall(CP.Runs.readySeconds, leaderOfficer, ctx.officers)
+        if okRs and type(secs) == 'number' then readySecs = secs end
+    end
+    local wantCheck = readySecs ~= 0
     if unit and #srcs >= 2 and wantCheck and type(readyCheck) == 'function' and not opts.noReadyCheck then
         local answered = false
         local function done(ok, data, who)
@@ -1438,7 +1448,8 @@ local function AcceptStart(src, typeKey, opts, note)
             done(false, type(reasonKey) == 'string' and reasonKey or 'err.ready_declined', who)
         end
         -- the teammates see the twists their leader chose on the ready check
-        local okRc, res = pcall(readyCheck, unit, typeKey, onReady, onCancel, { twists = TwistLabels(ctx.twists) })
+        local okRc, res = pcall(readyCheck, unit, typeKey, onReady, onCancel,
+            { twists = TwistLabels(ctx.twists), timeout = readySecs })
         if okRc and res ~= false then return true, { pending = true } end
         CP.warn(TAG, 'the ready check could not start (%s); the draw follows at once', tostring(res))
     end

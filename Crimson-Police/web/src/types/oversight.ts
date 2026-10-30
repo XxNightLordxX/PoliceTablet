@@ -330,6 +330,8 @@ export interface MissionControlBounds {
     on?: boolean;
     min?: number;
     max?: number;
+    // a registered flag (step P8: readyCheck's canTurnOff)
+    [flag: string]: boolean | number | undefined;
 }
 export type MissionControlValue = number | boolean | Record<string, number>;
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
@@ -368,6 +370,10 @@ export interface MissionControlState {
     usedToday?: number;
     // addRunTime (step P7): seconds supervisors may add to one run in all
     maxSeconds?: number;
+    // the true / false bounds this control takes besides on (step P8: ['canTurnOff'] for readyCheck)
+    flags?: string[];
+    // readyCheck (step P8): the admin lets supervisors switch the ready check off (value 0)
+    canTurnOff?: boolean;
 }
 export interface MissionControlsDepartment {
     key: string;

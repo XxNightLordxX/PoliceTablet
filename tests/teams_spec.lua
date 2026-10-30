@@ -1535,8 +1535,10 @@ H.eq(U.readyCheck(u, 'tactical', function() end, function() U.unlock(u) end, {
         { key = 'radio_silence', label = 'Radio Silence' },
         'junk',
     },
+    timeout = 30,
 }), true, 'a check with the leader\'s twists')
 local twistPrompt = ClientEvents('client:readyCheck')[1].args[1]
+H.eq(twistPrompt.expiresIn, 30, 'step P8: the leader\'s department ready check (30 s) over Config.Units.readyTimeout')
 H.eq(#twistPrompt.twists, 2, 'the prompt names the two twists (a bad entry is dropped)')
 H.eq(twistPrompt.twists[2].label, 'Radio Silence', '...with their labels')
 local twistPush

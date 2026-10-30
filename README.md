@@ -541,6 +541,21 @@ Supervisor UI → **Mission controls** (below).
   additions counted, never above `Config.AdminControl.runTimeAddMax`; `Config.MissionControls.addRunTimePerDay` (`10`):
   additions one supervisor may make a day.
 
+- **In a run** (step P8, per department, off when you install, under the master switch). A supervisor sets them for
+  his own department; each is read for the leader (and his unit) when the run is accepted and kept for that run, so a
+  change never moves a run already going:
+  - `startTimeout = { on = false, min = 300, max = 900 }` (**Time to reach the start**, seconds): replaces
+    `Config.Limits.startTimeout` and the mission's own start timeout for runs his department leads. The HUD shows the
+    new time after the accept (900 = 15:00).
+  - `readyCheck = { on = false, min = 10, max = 40, canTurnOff = false }` (**Ready check**, seconds to answer): replaces
+    `Config.Units.readyTimeout` for units his department leads. With `canTurnOff = true` (Admin UI → Permissions →
+    Mission controls, "Supervisors may switch the ready check off") he may also switch the ready check off (0).
+  - `timeLimit = { on = false, min = 1.0, max = 1.25 }` (**Mission time limit**, x the mission's time limit): the run
+    lasts longer; the fast-finish bonus is still judged on the unscaled limit, so points never move.
+  - `idleCheck = { on = false, min = 60, max = 180 }` (**Idle check**, seconds): officers who never reached the start
+    are removed this long after the run starts (`Config.AntiCheat.idleCheck`). Stricter only: never above the config
+    value, so it can never become a free way out of a run.
+
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
   supervisor may pick: `<control> = { on = true, min = ..., max = ... }`. Switching either off again brings back

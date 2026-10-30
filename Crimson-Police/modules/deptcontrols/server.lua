@@ -81,6 +81,14 @@ end
 --                                 THE CONTROLS
 -- ============================================================================
 
+local function Flags(list)
+    local out = {}
+    for _, f in ipairs(type(list) == 'table' and list or {}) do
+        if type(f) == 'string' and f ~= 'on' and f ~= 'min' and f ~= 'max' then out[f] = true end
+    end
+    return out
+end
+
 -- DC.register(key, def): a control other modules read with DC.get.
 --   kind        'number' (one number), 'bool' (true or false), 'map' (a number per key, e.g. per mission type) or
 --               'action' (a staff action with no saved value, e.g. clearing an officer's cooldown: only its admin
@@ -102,6 +110,7 @@ end
 --               of the other key returns fn's value (the self rule of this change still applies)
 --   viewExtra   optional fn(dept) -> table: more fields for this control's row in DC.view
 --   bounded     false: the control has no min and max (the admin's card shows only its switch)
+--   flags       optional { name, ... }: more true / false fields its bounds may carry (readyCheck's canTurnOff)
 function DC.register(key, def)
     if type(key) ~= 'string' or #key > KEY_MAX or not key:match(KEY_PATTERN) then
         CP.err(TAG, 'register: a control key is a name of at most %d characters (%s)', KEY_MAX, tostring(key))
@@ -137,6 +146,7 @@ function DC.register(key, def)
         overlays = type(def.overlays) == 'table' and def.overlays or nil,
         viewExtra = type(def.viewExtra) == 'function' and def.viewExtra or nil,
         bounded = def.bounded ~= false and def.kind ~= 'bool',
+        flags = Flags(def.flags),
     }
     return true
 end
@@ -410,14 +420,20 @@ function DC.heldBy(officer, row)
     return type(row) == 'table' and officer ~= nil and SelfHeld(officer, row) or false
 end
 
--- The scope 'run' values for run.controls, read for the leader (an officer table with its department) at the start.
+-- The scope 'run' values for run.controls, read for the leader (an officer table with its department, or
+-- { department, members } for a unit) at the start. Returns values, changed (key -> true where a change applied
+-- rather than the config value).
 function DC.snapshot(leader)
-    local out = {}
+    local out, changed = {}, {}
     local dept = type(leader) == 'table' and leader.department or nil
     for _, key in ipairs(order) do
-        if defs[key].scope == 'run' then out[key] = DC.get(dept, key, leader) end
+        if defs[key].scope == 'run' then
+            local v, row = DC.get(dept, key, leader)
+            out[key] = v
+            if row ~= nil then changed[key] = true end
+        end
     end
-    return out
+    return out, changed
 end
 
 -- ============================================================================
@@ -622,6 +638,14 @@ local function OwnBounds(def, dept)
     return type(own) == 'table' and U.deepcopy(own) or nil
 end
 
+-- The flag names a control registered, sorted (nil when none).
+local function FlagList(def)
+    local out = {}
+    for f in pairs(def.flags) do out[#out + 1] = f end
+    table.sort(out)
+    return #out > 0 and out or nil
+end
+
 local function ControlFields(def, dept)
     local bounds = BoundsOf(def, dept)
     local where = StoreDept(def, dept)
@@ -658,6 +682,7 @@ local function ControlFields(def, dept)
         bounded = def.bounded,
         range = def.range and { def.range[1], def.range[2] } or nil,
         own = OwnBounds(def, dept),
+        flags = FlagList(def),
     }
 end
 
@@ -755,6 +780,8 @@ function DC.checkConfig(map, boot)
                 if type(v) ~= 'boolean' then return 'err.control_config', key end
             elseif field == 'min' or field == 'max' then
                 if not IsNum(v) then return 'err.control_config', key end
+            elseif defs[key] and defs[key].flags[field] or (boot and not defs[key]) then
+                if type(v) ~= 'boolean' then return 'err.control_config', key end
             else
                 return 'err.control_config', key
             end

@@ -500,7 +500,12 @@ function Runs.adjustTimer(run, seconds)
     SyncTimer(run)
     run.timer.remaining = math.max(0, run.timer.remaining + seconds)
     if not run.timer.running then
+        local before = run.timeLimit
         run.timeLimit = math.max(0, math.floor(run.timer.remaining))
+        -- a scaled run (P8): the unscaled limit the fast-finish bonus uses moves by the same seconds
+        if run.fastBaseLimit then
+            run.fastBaseLimit = math.max(0, run.fastBaseLimit + (run.timeLimit - Num(before, run.timeLimit)))
+        end
         return
     end
     CP.log(TAG, 'run %s timer %+d s -> %.1f s', run.id, seconds, run.timer.remaining)
@@ -2475,8 +2480,150 @@ function Runs.registerControls()
         configValue = function() return math.floor(Cd.abandonConfig()) end,
         relaxes = function(v, c) return tonumber(v) ~= nil and tonumber(c) ~= nil and v < c end,
     })
+    Runs.registerRunControls()
     return true
 end
+
+-- ============================================================================
+--                    IN A RUN: PER-DEPARTMENT CONTROLS (P8)
+-- ============================================================================
+-- Four Mission controls of scope 'run' (Config.MissionControls.controls), per department, under the master switch,
+-- shipped off. Read for the leader (and his unit, for the self rule) when the run is accepted and kept in
+-- run.controls: a change later never moves a live run. readyCheck runs before the run exists, so CP.Draw reads it
+-- through Runs.readySeconds at the accept.
+
+-- (kept in Cd: this file is at Lua's limit of 200 locals in its main chunk)
+Cd.rc = { START = 'startTimeout', READY = 'readyCheck', TIME = 'timeLimit', IDLE = 'idleCheck' }
+Runs.RUN_CONTROLS = Cd.rc
+
+function Cd.rc.whole(v) return type(v) == 'number' and v == v and math.tointeger(v) ~= nil end
+
+function Cd.rc.inBounds(v, b)
+    if tonumber(b.min) and v < tonumber(b.min) then return false end
+    if tonumber(b.max) and v > tonumber(b.max) then return false end
+    return true
+end
+
+function Cd.rc.intoBounds(v, b)
+    if tonumber(b.min) then v = math.max(v, tonumber(b.min)) end
+    if tonumber(b.max) then v = math.min(v, tonumber(b.max)) end
+    return v
+end
+
+-- The config ready check: seconds to answer, 0 = no ready check (Config.Units.readyCheck = false).
+function Runs.readyConfig()
+    local u = type(Config.Units) == 'table' and Config.Units or {}
+    if u.readyCheck == false then return 0 end
+    return math.max(1, math.floor(Num(u.readyTimeout, 20)))
+end
+
+-- Config.AntiCheat.idleCheck: seconds after In progress before officers who never reached the start are removed.
+function Runs.idleConfig()
+    return math.max(1, math.floor(Num(Config.AntiCheat and Config.AntiCheat.idleCheck, 180)))
+end
+
+function Runs.registerRunControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(Cd.rc.START, {
+        kind = 'number',
+        scope = 'run',
+        integer = true,
+        range = { 60, 3600 },
+        configValue = function() return math.floor(Num(limits().startTimeout, 600)) end,
+        relaxes = function(v, c) return tonumber(v) ~= nil and tonumber(c) ~= nil and v > c end,
+    })
+    -- seconds to answer; 0 = no ready check, only while the admin's bounds say canTurnOff = true
+    dc.register(Cd.rc.READY, {
+        kind = 'number',
+        scope = 'run',
+        integer = true,
+        range = { 5, 120 },
+        flags = { 'canTurnOff' },
+        configValue = function() return Runs.readyConfig() end,
+        check = function(v, b)
+            if not Cd.rc.whole(v) then return nil, 'err.control_value' end
+            if v == 0 then
+                if b.canTurnOff == true then return 0 end
+                return nil, 'err.control_value'
+            end
+            if not Cd.rc.inBounds(v, b) then return nil, 'err.control_value' end
+            return v
+        end,
+        clamp = function(v, b)
+            if not Cd.rc.whole(v) then return nil end
+            if v == 0 then return b.canTurnOff == true and 0 or nil end
+            return Cd.rc.intoBounds(v, b)
+        end,
+        relaxes = function(v, c) return v == 0 or (tonumber(v) ~= nil and tonumber(c) ~= nil and v > c) end,
+        viewExtra = function(dept) return { canTurnOff = dc.bounds(dept, Cd.rc.READY).canTurnOff == true } end,
+    })
+    -- x the mission's time limit; the fast-finish bonus is still judged on the unscaled limit (run.fastBaseLimit)
+    dc.register(Cd.rc.TIME, {
+        kind = 'number',
+        scope = 'run',
+        range = { 0.5, 2 },
+        configValue = function() return 1 end,
+        relaxes = function(v) return tonumber(v) ~= nil and v > 1 end,
+    })
+    -- stricter only: never above Config.AntiCheat.idleCheck (a later idle check would be a free way out)
+    dc.register(Cd.rc.IDLE, {
+        kind = 'number',
+        scope = 'run',
+        integer = true,
+        range = { 30, 1800 },
+        configValue = function() return Runs.idleConfig() end,
+        check = function(v, b)
+            if not Cd.rc.whole(v) or not Cd.rc.inBounds(v, b) or v > Runs.idleConfig() then
+                return nil, 'err.control_value'
+            end
+            return v
+        end,
+        clamp = function(v, b)
+            if not Cd.rc.whole(v) then return nil end
+            return math.min(Cd.rc.intoBounds(v, b), Runs.idleConfig())
+        end,
+        relaxes = function() return false end,
+    })
+    return true
+end
+
+-- The ready check of a unit's accept: seconds to answer, 0 = none. leader: the leader's officer table (its
+-- department); members: the unit's officers (the self rule). The config ready check without CP.DeptControls.
+function Runs.readySeconds(leader, members)
+    local dc = CP.DeptControls
+    local v
+    if dc and dc.get and type(leader) == 'table' then
+        local ok, got = pcall(dc.get, leader.department, Cd.rc.READY, { members = members or { leader } })
+        if ok then v = got end
+    end
+    if not Cd.rc.whole(v) or v < 0 then v = Runs.readyConfig() end
+    return v
+end
+
+-- run.controls at the accept (DC.snapshot for the leader and the unit) and what follows from it now: the start
+-- timeout (a department's change, else the mission's own) and the time limit scale (run.fastBaseLimit keeps the
+-- unscaled limit). Test runs keep the config.
+function Cd.rc.apply(run, leaderOfficer, officers)
+    run.controls, run.controlsChanged = {}, {}
+    local dc = CP.DeptControls
+    if run.test or not (dc and dc.snapshot) or type(leaderOfficer) ~= 'table' then return end
+    local ok, controls, changed = pcall(dc.snapshot, { department = leaderOfficer.department, members = officers })
+    if not ok then
+        CP.err(TAG, 'reading the Mission controls of run %s failed: %s', run.id, tostring(controls))
+        return
+    end
+    run.controls = type(controls) == 'table' and controls or {}
+    run.controlsChanged = type(changed) == 'table' and changed or {}
+    local start = run.controls[Cd.rc.START]
+    if run.controlsChanged[Cd.rc.START] and Cd.rc.whole(start) and start > 0 then run.startTimeout = start end
+    local scale = tonumber(run.controls[Cd.rc.TIME])
+    if run.controlsChanged[Cd.rc.TIME] and scale and scale > 0 and scale ~= 1 then
+        run.fastBaseLimit = run.timeLimit
+        run.timeLimit = math.max(1, math.floor(run.timeLimit * scale))
+    end
+end
+
 Runs.registerControls()
 
 local function ApplyCooldowns(run, p, endReason)
@@ -3274,6 +3421,14 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         end
         run.routeRequired = required
     end
+    -- Mission controls of scope 'run' (P8), read for the leader and his unit now and locked for the run
+    do
+        local leaderOfficer = officers[1]
+        for _, o in ipairs(officers) do
+            if ToSrc(o.src) == leader then leaderOfficer = o end
+        end
+        Cd.rc.apply(run, leaderOfficer, officers)
+    end
     -- A claimed mission call (CP.MissionCalls): { id, code, area, targetS, staff }. Rapid response needs a
     -- server-posted call (staff = paged or created, never) and a target.
     if type(opts.missionCall) == 'table' then
@@ -3349,6 +3504,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     if CP.Twists.has(run, 'time_crunch') then
         local cut = Num(Config.Events and Config.Events.timeCrunchCut, 0.25)
         run.timeLimit = math.max(1, U.round(run.timeLimit * (1 - cut)))
+        if run.fastBaseLimit then run.fastBaseLimit = math.max(1, U.round(run.fastBaseLimit * (1 - cut))) end
     end
     run.timer.remaining = run.timeLimit
 

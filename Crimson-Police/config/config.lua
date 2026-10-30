@@ -214,6 +214,17 @@ Config.MissionControls = {
         -- Live Missions: a supervisor adds min to max minutes per click to a running mission of his department
         -- (never his own); the time limit the fast-finish bonus is judged on stays the same
         addRunTime = { on = false, min = 1, max = 5 },
+        -- seconds a unit of his department has to reach the start after accepting (Limits.startTimeout and the
+        -- mission's own); read when the run is accepted, so a change never moves a run already going
+        startTimeout = { on = false, min = 300, max = 900 },
+        -- seconds a unit of his department has to answer the ready check (Units.readyTimeout); 0 switches the ready
+        -- check off for his department, allowed only while canTurnOff = true
+        readyCheck = { on = false, min = 10, max = 40, canTurnOff = false },
+        -- x the mission's time limit for runs of his department; the fast-finish bonus still uses the unscaled limit
+        timeLimit = { on = false, min = 1.0, max = 1.25 },
+        -- seconds after a run of his department starts before officers who never reached the start are removed
+        -- (AntiCheat.idleCheck); stricter only: never more than that config value
+        idleCheck = { on = false, min = 60, max = 180 },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 

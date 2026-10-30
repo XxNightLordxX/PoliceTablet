@@ -47,6 +47,8 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
         if (typeof v === 'boolean') return v ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off');
         const one = (n: number) =>
             hasKey(`mc.unit.${key}`) ? t(`mc.unit.${key}`, { n: formatFactor(n) }) : formatFactor(n);
+        // readyCheck (step P8): 0 = no ready check
+        if (typeof v === 'number' && v === 0 && key === 'readyCheck') return t('admin.perms.mc.value_off');
         if (typeof v === 'number') return one(v);
         if (key === 'happyHour') {
             // { minutes, noRepeat } while one runs (step P6); {} = none
@@ -119,10 +121,16 @@ function BoundsFields({
     const [on, setOn] = useState<boolean | undefined>(bounds.on);
     const [min, setMin] = useState<number | null>(bounds.min ?? null);
     const [max, setMax] = useState<number | null>(bounds.max ?? null);
+    // more true / false bounds a control registers (step P8: readyCheck's canTurnOff)
+    const flagNames = asArray<string>(control.flags);
+    const [flags, setFlags] = useState<Record<string, boolean>>(() =>
+        Object.fromEntries(flagNames.map(f => [f, bounds[f] === true])),
+    );
     useEffect(() => {
         setOn(bounds.on);
         setMin(bounds.min ?? null);
         setMax(bounds.max ?? null);
+        setFlags(Object.fromEntries(flagNames.map(f => [f, bounds[f] === true])));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [key]);
     const next: MissionControlBounds = { ...bounds };
@@ -131,10 +139,13 @@ function BoundsFields({
         next.min = min ?? undefined;
         next.max = max ?? undefined;
     }
+    for (const f of flagNames) {
+        if (flags[f] || bounds[f] !== undefined) next[f] = flags[f] === true;
+    }
     for (const k of Object.keys(next) as (keyof MissionControlBounds)[]) if (next[k] === undefined) delete next[k];
     const dirty = JSON.stringify(next) !== JSON.stringify(Object.fromEntries(Object.entries(bounds)));
     const invalid = min !== null && max !== null && min > max;
-    if (!numeric && switchLabel === undefined) return null;
+    if (!numeric && switchLabel === undefined && flagNames.length === 0) return null;
     const lo = control.range?.[0];
     const hi = control.range?.[1];
     return (
@@ -172,6 +183,15 @@ function BoundsFields({
                     </label>
                 </>
             ) : null}
+            {flagNames.map(f => (
+                <Checkbox
+                    key={f}
+                    checked={flags[f] === true}
+                    disabled={busy}
+                    label={hasKey(`admin.perms.mc.flag.${f}`) ? t(`admin.perms.mc.flag.${f}`) : f}
+                    onChange={v => setFlags(prev => ({ ...prev, [f]: v }))}
+                />
+            ))}
             <Button size="sm" icon="check" disabled={busy || !dirty || invalid} onClick={() => onSave(next)}>
                 {t('admin.perms.mc.save')}
             </Button>

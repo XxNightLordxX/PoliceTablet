@@ -878,6 +878,14 @@ do
                     ~= nil,
             'step P7: the per-day counts and the per-run total, with their comments'
         )
+        H.ok(
+            d.startTimeout.on == false and d.startTimeout.min == 300 and d.startTimeout.max == 900
+                and d.readyCheck.on == false and d.readyCheck.min == 10 and d.readyCheck.max == 40
+                and d.readyCheck.canTurnOff == false and d.timeLimit.on == false and d.timeLimit.min == 1.0
+                and d.timeLimit.max == 1.25 and d.idleCheck.on == false and d.idleCheck.min == 60
+                and d.idleCheck.max == 180,
+            'step P8: the start timeout, ready check, time limit and idle check controls ship off'
+        )
     end
     H.ok(
         E('Permissions.supervisor.missionControls').default == false

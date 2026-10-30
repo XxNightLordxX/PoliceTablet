@@ -1705,14 +1705,15 @@ KNOWN['MissionControls.grants'] = {
     check = GradeGrants('err.setting_grant_department', 'err.setting_grant_grant'),
 }
 
--- Config.MissionControls.controls (and a department's missionControls): { <control> = { on, min, max } }, registered
+-- Config.MissionControls.controls (and a department's missionControls): { <control> = { on, min, max, flags } }, registered
 -- controls only (CP.DeptControls.checkConfig).
 local function CheckControls(map, _, ctx)
     if not CP.DeptControls then return nil end
     return (CP.DeptControls.checkConfig(map, ctx and ctx.boot))
 end
-local CONTROLS_TPL = MapOf(Record({ on = true, min = Num(-MAX_ABS, MAX_ABS), max = Num(-MAX_ABS, MAX_ABS) }),
-    '^%a[%w_]*$')
+-- canTurnOff: readyCheck's flag (supervisors may switch the ready check off), other flags a control registers
+local CONTROLS_TPL = MapOf(
+    Record({ on = true, min = Num(-MAX_ABS, MAX_ABS), max = Num(-MAX_ABS, MAX_ABS), canTurnOff = true }), '^%a[%w_]*$')
 KNOWN['MissionControls.controls'] = { tpl = CONTROLS_TPL, check = CheckControls }
 -- A department's own bounds (Admin UI -> Permissions -> Mission controls): optional, checked by the department
 -- validator (registered controls only).

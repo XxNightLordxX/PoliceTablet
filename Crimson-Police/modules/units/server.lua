@@ -490,6 +490,7 @@ end
 -- onCancel(reasonKey, srcs) on a decline, a timeout, or a member who left, went off duty, took a real call
 -- or entered the arena. extra (optional): { twists = { { key, label } } } the leader chose, shown to the members;
 -- crossDepartment = true: a Cross-Department join, where Auto-Ready never answers.
+-- timeout = seconds to answer (else Config.Units.readyTimeout).
 -- Returns false when no check is needed (the draw follows at once).
 function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
     local unit = Resolve(ref)
@@ -499,7 +500,9 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
         return true
     end
     local now = os.time()
-    local timeout = math.max(1, CfgSeconds('readyTimeout', 20))
+    -- extra.timeout: the leader's department's ready check (CP.Runs.readySeconds, Mission controls, P8)
+    local own = type(extra) == 'table' and math.tointeger(tonumber(extra.timeout)) or nil
+    local timeout = math.max(1, (own and own > 0) and own or CfgSeconds('readyTimeout', 20))
     local check = {
         unitId = unit.id,
         typeKey = typeKey,

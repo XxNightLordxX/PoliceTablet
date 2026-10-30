@@ -494,7 +494,10 @@ function AC._idleCheck(nowTs)
     for _, run in ipairs(list) do
         if run.state == 'in_progress' and run.startedAt then
             local st = StateOf(run)
-            if not st.idleDone and nowTs - run.startedAt >= after then
+            -- a department's stricter idle check (P8), locked at accept in run.controls
+            local own = type(run.controls) == 'table' and tonumber(run.controls.idleCheck) or nil
+            local limit = (own and own > 0) and math.min(own, after) or after
+            if not st.idleDone and nowTs - run.startedAt >= limit then
                 st.idleDone = true
                 for _, s in ipairs(ActiveSrcs(run)) do
                     local p = run.participants[s]

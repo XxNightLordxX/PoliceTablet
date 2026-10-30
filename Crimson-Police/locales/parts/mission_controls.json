@@ -105,5 +105,18 @@
   "sup.live.add_time_minutes": "Minutes",
   "sup.live.add_time_left": "Up to {left} more minutes may be added to this mission; you have {n} additions left today.",
   "sup.live.add_time_done": "{minutes} minutes added.",
-  "sup.live.time_added": "+{minutes} min added"
+  "sup.live.time_added": "+{minutes} min added",
+  "mc.control.startTimeout": "Time to reach the start",
+  "mc.control_desc.startTimeout": "Seconds a unit of your department has after accepting to reach the start. Set when the run is accepted, so a change never moves a run already going.",
+  "mc.unit.startTimeout": "{n} s",
+  "mc.control.readyCheck": "Ready check",
+  "mc.control_desc.readyCheck": "Seconds a unit led by your department has to answer the ready check. Off skips the ready check, only while an admin allows it.",
+  "mc.unit.readyCheck": "{n} s",
+  "mc.control.timeLimit": "Mission time limit",
+  "mc.control_desc.timeLimit": "Multiplies the mission's time limit for runs of your department. The fast-finish bonus still uses the unscaled limit.",
+  "mc.unit.timeLimit": "×{n}",
+  "mc.control.idleCheck": "Idle check",
+  "mc.control_desc.idleCheck": "Seconds after a run of your department starts before officers who never reached the start are removed (with the usual idle result). Only stricter than the config.",
+  "mc.unit.idleCheck": "{n} s",
+  "admin.perms.mc.flag.canTurnOff": "Supervisors may switch the ready check off"
 }

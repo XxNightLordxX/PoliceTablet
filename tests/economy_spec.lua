@@ -977,6 +977,15 @@ H.eq(b.capped, false, 'not capped')
 H.eq(b.tod, false, 'no ToD')
 H.eq(b.failedShare, nil, 'no failed share')
 H.eq(CP.Scoring.isFirstRunSinceDuty(1), false, 'first-run bonus used by the completed run')
+do -- step P8: a department scaled the time limit (x1.25): the fast bonus still needs 75 % of the unscaled limit
+    local scaled = FakeRun({ duration = 500, timeLimit = 750 })
+    scaled.fastBaseLimit = 600
+    local sb = CP.Scoring.compute(scaled, FakeP({ result = 'completed' }), 'completed', { durationS = 500 })
+    H.eq(Find(sb.bonuses, 'fast_finish'), nil, '500 s of a 600 s mission scaled to 750 s: no fast bonus')
+    scaled.fastBaseLimit = nil
+    sb = CP.Scoring.compute(scaled, FakeP({ result = 'completed' }), 'completed', { durationS = 500 })
+    H.ok(Find(sb.bonuses, 'fast_finish') ~= nil, 'an unscaled 750 s limit would give it')
+end
 
 -- several twists (PLAN M8b): one bonus line each, together at most Config.Events.twistMaxPoints of P
 do

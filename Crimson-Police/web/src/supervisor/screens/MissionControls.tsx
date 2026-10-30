@@ -139,15 +139,35 @@ function Editor({
             </div>
         );
     }
-    return (
+    const slider = (
         <Slider
             c={c}
             label={controlName(c.key)}
-            value={fit(c, typeof draft === 'number' ? draft : Number(c.value) || 0)}
-            disabled={disabled}
+            value={fit(
+                c,
+                typeof draft === 'number' && !(c.canTurnOff === true && draft === 0)
+                    ? draft
+                    : Number(c.value) || c.min || 0,
+            )}
+            disabled={disabled || (c.canTurnOff === true && draft === 0)}
             onChange={n => onChange(n)}
         />
     );
+    // readyCheck (step P8): 0 = no ready check, offered only while the admin allows it (canTurnOff)
+    if (c.canTurnOff === true) {
+        return (
+            <div className="sup-mc-sliders">
+                <Toggle
+                    checked={draft !== 0}
+                    disabled={disabled}
+                    label={draft !== 0 ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off')}
+                    onChange={v => onChange(v ? fit(c, Number(c.configValue) || c.min || 0) : 0)}
+                />
+                {slider}
+            </div>
+        );
+    }
+    return slider;
 }
 
 // ============================================================================
