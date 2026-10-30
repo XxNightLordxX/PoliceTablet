@@ -1647,3 +1647,57 @@
         gap: 5px;
     }
 }
+
+/* New mission wizard (QuickMission.tsx, Config.Builder.quickWizard) */
+.builder_client-quick__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.builder_client-quick__head > .builder_client-steps {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.builder_client-quick__types {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.builder_client-quick__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid var(--cp-border);
+    background: rgba(var(--cp-surface-rgb), 0.7);
+}
+
+.builder_client-quick__state {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-weight: 650;
+}
+
+.builder_client-quick__state.is-ok {
+    color: var(--cp-success);
+}
+
+.builder_client-quick__state.is-bad {
+    color: var(--cp-muted);
+}
+
+.builder_client-quick__list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}

@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node build-stamp.mjs",
     "typecheck": "tsc --noEmit",
+    "walk": "node walk.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

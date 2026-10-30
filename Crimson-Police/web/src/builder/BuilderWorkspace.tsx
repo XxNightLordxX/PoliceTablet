@@ -7,6 +7,7 @@ import { Button, EmptyState, ErrorState, LoadingBlock } from '../shared/componen
 import { t } from '../shared/i18n';
 import { BuilderEditor } from './BuilderEditor';
 import { MissionList } from './MissionList';
+import { QuickMissionStart } from './QuickMission';
 import { editorMemory, hasResults, setEditorMemory, subscribeBuilder, currentTool, type BuilderScope } from './store';
 import { useBuilderConfig } from './useBuilderConfig';
 
@@ -21,6 +22,9 @@ export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps)
     const [openId, setOpenId] = useState<string | null>(() => editorMemory(scope).openId);
     // a new editor for every opened mission; a save that renames the draft keeps the same editor (and its lock)
     const [editorKey, setEditorKey] = useState(0);
+    // the New mission wizard's first step (Config.Builder.quickWizard), and the dialog its "Open the full editor" opens
+    const [starting, setStarting] = useState(false);
+    const [classic, setClassic] = useState(false);
 
     // a tool result for a mission that is not open (e.g. the NUI reloaded): open it so it can be applied
     useEffect(
@@ -38,13 +42,13 @@ export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps)
     );
 
     const open = (id: string) => {
-        setEditorMemory(scope, { openId: id });
+        setEditorMemory(scope, { openId: id, quick: null });
         setEditorKey(k => k + 1);
         setOpenId(id);
         onOpenChange?.(id);
     };
     const close = () => {
-        setEditorMemory(scope, { openId: null, step: 'blocks', location: 1, objective: 1 });
+        setEditorMemory(scope, { openId: null, step: 'blocks', location: 1, objective: 1, quick: null });
         setOpenId(null);
         onOpenChange?.(null);
     };
@@ -83,5 +87,48 @@ export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps)
             />
         );
     }
-    return <MissionList scope={scope} config={config} onOpen={open} />;
+    if (starting) {
+        return (
+            <QuickMissionStart
+                config={config}
+                onCancel={() => setStarting(false)}
+                onFullEditor={() => {
+                    setStarting(false);
+                    setClassic(true);
+                }}
+                onCreated={(id, base) => {
+                    setStarting(false);
+                    setEditorMemory(scope, {
+                        openId: id,
+                        step: 'locations',
+                        location: 1,
+                        objective: 1,
+                        quick: { step: 'where', base },
+                    });
+                    setEditorKey(k => k + 1);
+                    setOpenId(id);
+                    onOpenChange?.(id);
+                }}
+            />
+        );
+    }
+    return (
+        <MissionList
+            scope={scope}
+            config={config}
+            onOpen={id => {
+                setClassic(false);
+                open(id);
+            }}
+            onNew={
+                config.quickWizard !== false
+                    ? () => {
+                          setClassic(false);
+                          setStarting(true);
+                      }
+                    : undefined
+            }
+            createOpen={classic}
+        />
+    );
 }

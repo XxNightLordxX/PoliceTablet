@@ -21,7 +21,8 @@ import type { BuilderStepKey, BuilderUi } from '../types/builder_client';
 import { StatusBadge } from './MissionList';
 import { stepOfError } from './defUtils';
 import { totalArmed } from './schema';
-import { editorMemory, forgetDraft, setEditorMemory, type BuilderScope } from './store';
+import { QuickMission } from './QuickMission';
+import { editorMemory, forgetDraft, setEditorMemory, type BuilderScope, type QuickMemory } from './store';
 import { useDraftEditor, type DraftEditor } from './useDraftEditor';
 import { StepBlocks } from './steps/StepBlocks';
 import { StepDetails } from './steps/StepDetails';
@@ -178,6 +179,8 @@ export function BuilderEditor({ id, scope, config, onClose, onRenamed, onOpen }:
     const session = useSession();
     const ui: BuilderUi = session.ui === 'admin' ? 'admin' : 'supervisor';
     const [step, setStep] = useState<BuilderStepKey>(() => editorMemory(scope).step || 'blocks');
+    // the New mission wizard (Config.Builder.quickWizard) while it runs on this draft, null = the full editor
+    const [quick, setQuickState] = useState<QuickMemory | null>(() => editorMemory(scope).quick ?? null);
     const [confirmBreak, setConfirmBreak] = useState(false);
     const [closing, setClosing] = useState(false);
     const { run, busy } = useAction();
@@ -193,6 +196,15 @@ export function BuilderEditor({ id, scope, config, onClose, onRenamed, onOpen }:
         if (opts?.location) patch.location = opts.location;
         setEditorMemory(scope, { step: s, ...patch });
         setStep(s);
+    };
+    const setQuick = (q: QuickMemory | null) => {
+        setEditorMemory(scope, { quick: q });
+        setQuickState(q);
+    };
+    // "Open the full editor" (and the wizard's Fix links): the same draft and lock, at that step
+    const openFull: StepProps['goTo'] = (s, opts) => {
+        setQuick(null);
+        goTo(s, opts);
     };
 
     const close = async () => {
@@ -356,59 +368,78 @@ export function BuilderEditor({ id, scope, config, onClose, onRenamed, onOpen }:
                 ) : null}
             </div>
             <LockBanner ed={ed} onDuplicate={duplicate} onBreak={() => setConfirmBreak(true)} />
-            <nav className="builder_client-steps" aria-label={t('builder.editor.steps')}>
-                {STEPS.map((s, i) => (
-                    <button
-                        key={s.key}
-                        type="button"
-                        className={cx(
-                            'builder_client-steps__item',
-                            step === s.key && 'is-active',
-                            done[s.key] && 'is-done',
-                        )}
-                        onClick={() => goTo(s.key)}
-                        aria-current={step === s.key ? 'step' : undefined}
-                    >
-                        <span className="builder_client-steps__num cp-num">
-                            {done[s.key] && step !== s.key ? <Icon name="check" size={12} strokeWidth={3} /> : i + 1}
+            {quick ? <QuickMission {...props} quick={quick} setQuick={setQuick} onFull={openFull} /> : null}
+            {quick ? null : (
+                <>
+                    <nav className="builder_client-steps" aria-label={t('builder.editor.steps')}>
+                        {STEPS.map((s, i) => (
+                            <button
+                                key={s.key}
+                                type="button"
+                                className={cx(
+                                    'builder_client-steps__item',
+                                    step === s.key && 'is-active',
+                                    done[s.key] && 'is-done',
+                                )}
+                                onClick={() => goTo(s.key)}
+                                aria-current={step === s.key ? 'step' : undefined}
+                            >
+                                <span className="builder_client-steps__num cp-num">
+                                    {done[s.key] && step !== s.key ? (
+                                        <Icon name="check" size={12} strokeWidth={3} />
+                                    ) : (
+                                        i + 1
+                                    )}
+                                </span>
+                                <span className="builder_client-steps__label">
+                                    {t(`builder.step.${s.key}`)}
+                                    {optional[s.key] ? (
+                                        <span className="builder_client-steps__optional">
+                                            {' '}
+                                            {t('builder.step.optional')}
+                                        </span>
+                                    ) : null}
+                                </span>
+                                {counts[s.key] ? (
+                                    <span className="builder_client-steps__err cp-num">{counts[s.key]}</span>
+                                ) : null}
+                            </button>
+                        ))}
+                    </nav>
+                    <div className="builder_client-editor__body">
+                        {step === 'blocks' ? <StepBlocks {...props} /> : null}
+                        {step === 'details' ? <StepDetails {...props} /> : null}
+                        {step === 'settings' ? <StepSettings {...props} /> : null}
+                        {step === 'locations' ? <StepLocations {...props} /> : null}
+                        {step === 'scaling' ? <StepScaling {...props} /> : null}
+                        {step === 'test' ? <StepTest {...props} /> : null}
+                        {step === 'publish' ? <StepPublish {...props} /> : null}
+                    </div>
+                    <div className="builder_client-editor__foot">
+                        <Button
+                            variant="ghost"
+                            icon="chevronLeft"
+                            disabled={idx <= 0}
+                            onClick={() => goTo(STEPS[idx - 1].key)}
+                        >
+                            {idx > 0 ? t(`builder.step.${STEPS[idx - 1].key}`) : t('builder.editor.back')}
+                        </Button>
+                        <span className="builder_client-muted cp-num">
+                            {t('builder.editor.step_of', { n: idx + 1, total: STEPS.length })}
                         </span>
-                        <span className="builder_client-steps__label">
-                            {t(`builder.step.${s.key}`)}
-                            {optional[s.key] ? (
-                                <span className="builder_client-steps__optional"> {t('builder.step.optional')}</span>
-                            ) : null}
-                        </span>
-                        {counts[s.key] ? (
-                            <span className="builder_client-steps__err cp-num">{counts[s.key]}</span>
-                        ) : null}
-                    </button>
-                ))}
-            </nav>
-            <div className="builder_client-editor__body">
-                {step === 'blocks' ? <StepBlocks {...props} /> : null}
-                {step === 'details' ? <StepDetails {...props} /> : null}
-                {step === 'settings' ? <StepSettings {...props} /> : null}
-                {step === 'locations' ? <StepLocations {...props} /> : null}
-                {step === 'scaling' ? <StepScaling {...props} /> : null}
-                {step === 'test' ? <StepTest {...props} /> : null}
-                {step === 'publish' ? <StepPublish {...props} /> : null}
-            </div>
-            <div className="builder_client-editor__foot">
-                <Button variant="ghost" icon="chevronLeft" disabled={idx <= 0} onClick={() => goTo(STEPS[idx - 1].key)}>
-                    {idx > 0 ? t(`builder.step.${STEPS[idx - 1].key}`) : t('builder.editor.back')}
-                </Button>
-                <span className="builder_client-muted cp-num">
-                    {t('builder.editor.step_of', { n: idx + 1, total: STEPS.length })}
-                </span>
-                <Button
-                    variant="secondary"
-                    iconRight="chevronRight"
-                    disabled={idx >= STEPS.length - 1}
-                    onClick={() => goTo(STEPS[idx + 1].key)}
-                >
-                    {idx < STEPS.length - 1 ? t(`builder.step.${STEPS[idx + 1].key}`) : t('builder.step.publish')}
-                </Button>
-            </div>
+                        <Button
+                            variant="secondary"
+                            iconRight="chevronRight"
+                            disabled={idx >= STEPS.length - 1}
+                            onClick={() => goTo(STEPS[idx + 1].key)}
+                        >
+                            {idx < STEPS.length - 1
+                                ? t(`builder.step.${STEPS[idx + 1].key}`)
+                                : t('builder.step.publish')}
+                        </Button>
+                    </div>
+                </>
+            )}
             <ConfirmDialog
                 open={confirmBreak}
                 tone="danger"

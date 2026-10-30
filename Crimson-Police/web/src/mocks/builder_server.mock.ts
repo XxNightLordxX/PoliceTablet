@@ -27,6 +27,8 @@ const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.s
 const LUA = qs.get('blua') === '1';
 const EDGE = qs.get('bedge') === '1';
 const EMPTY = qs.get('bempty') === '1';
+// ?btest=1: Config.Builder.requireTestToPublish = true (as shipped testing is optional)
+const REQUIRE_TEST = qs.get('btest') === '1';
 
 // What a Lua table looks like after msgpack/JSON: an empty list is {}, a nil field is missing.
 function luaShape(v: unknown): unknown {
@@ -424,6 +426,15 @@ function buildConfig(): BuilderConfig {
         useStartRoute: false,
         // as shipped: admins only (Config.Permissions.builderTeleport is empty)
         teleport: admin,
+        requireTestToPublish: REQUIRE_TEST && !admin,
+        // as shipped: "New mission" opens the wizard; the built-ins of Config.Builder.templates the preview has
+        quickWizard: true,
+        templates: TEMPLATE_IDS.filter(id => BUILTINS.some(b => b.id === id)).map(id => ({
+            id,
+            type: BUILTINS.find(b => b.id === id)!.type,
+            label: tr(`builder.template.${id}`),
+            blurb: tr(`builder.template_desc.${id}`),
+        })),
         permissions: {
             builderEdit: true,
             builderEditAny: admin,
@@ -859,7 +870,8 @@ function validate(def: BuilderDefinition): BuilderError[] {
     if (!def.objectives?.length) add('objectives', 'builder.error.no_objectives');
     if ((def.objectives?.length ?? 0) > 6) add('objectives', 'builder.error.max_blocks', { max: 6 });
     const locs = def.locations ?? [];
-    if (locs.length < 3) add('locations', 'builder.error.min_locations', { min: 3, have: locs.length });
+    // Config.Builder.minLocations as shipped: one location is enough for a custom mission
+    if (locs.length < 1) add('locations', 'builder.error.min_locations', { min: 1, have: locs.length });
     locs.forEach((l, i) => {
         if (!l.start) add(`locations.${i + 1}.start`, 'builder.error.start_missing', { location: i + 1 });
         for (let j = 0; j < i; j++) {
@@ -1130,7 +1142,38 @@ function newDraft(id: string, label: string, def: BuilderDefinition): MockMissio
     return m;
 }
 
-reg('action', 'server:builder:create', (p: { type?: string; label?: string }) => {
+// Config.Builder.templates as shipped
+const TEMPLATE_IDS = [
+    'beat_patrol',
+    'business_check',
+    'parking_patrol',
+    'pursuit_sim',
+    'manhunt',
+    'warrant_service',
+    'gang_shootout',
+    'hostage_rescue',
+    'armored_truck_escort',
+    'bomb_disposal',
+];
+
+reg('action', 'server:builder:create', (p: { type?: string; label?: string; template?: string }) => {
+    if (p?.template !== undefined) {
+        // a template: the built-in's type, team, times, bonuses and objectives, one empty location
+        const src = TEMPLATE_IDS.includes(String(p.template)) ? builtinRecord(String(p.template)) : null;
+        if (!src) throw new Error('err.builder_unknown_template');
+        const label = (p.label?.trim() || src.definition.label).slice(0, 64);
+        const id = uniqueId(label);
+        const def: BuilderDefinition = {
+            ...clone(src.definition),
+            id,
+            label,
+            description: '',
+            locations: [{ label: tr('builder.location_default', { n: 1 }) }],
+            scaling: [],
+            items: [],
+        };
+        return { id, record: record(newDraft(id, label, def)) };
+    }
     const type = MISSION_TYPES.find(t => t.key === p?.type);
     if (!type) throw new Error('err.builder_bad_type');
     const label = p.label?.trim() || tr('builder.default_label', { type: type.label });
@@ -1251,7 +1294,7 @@ reg('action', 'server:builder:publish', (p: { id?: string }) => {
     if (lock && !lock.mine) throw new Error('err.builder_locked');
     if (!m.draft) throw new Error('err.builder_no_draft');
     if (validate(m.draft).length) throw new Error('err.builder_invalid');
-    if (!m.draftTested) throw new Error('err.builder_not_tested');
+    if (REQUIRE_TEST && !isAdminView() && !m.draftTested) throw new Error('err.builder_not_tested');
     const backup = m.version != null ? `missions/custom/${m.id}.v${m.version}.lua.bak` : null;
     if (m.version != null) m.backups = [m.version, ...m.backups];
     m.version = m.draftVersion ?? (m.version ?? 0) + 1;

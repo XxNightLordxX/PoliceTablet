@@ -18,6 +18,7 @@
 #   suite-files   lua5.4 tests/run.lua --storage=files    (database off, the saves folder engine)
 #   suite-shadow  lua5.4 tests/run.lua --storage=shadow   (all three answers compared, 0 differences)
 #   tsc           cd Crimson-Police/web && npx tsc --noEmit
+#   walk          cd Crimson-Police/web && node walk.mjs: every src/**/*.walk.ts against the browser mocks
 #   build         npm run build in a scratch copy of the web sources; web/dist must equal its output
 #
 # The suites run 2 specs at a time (CP_TEST_JOBS=N changes it for all three, 1 = one after another).
@@ -44,10 +45,10 @@ for f in tools/lint_*.py tools/check_*.py; do
     LINT_SCRIPT[$name]=$f
     ALL_STEPS+=("lint-$name")
 done
-ALL_STEPS+=(style suite-db suite-files suite-shadow tsc build)
+ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build)
 
 usage() {
-    sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 VERBOSE=0
@@ -185,6 +186,18 @@ detail_tsc() {
     local n
     n=$(grep -c 'error TS' "$1")
     if [ "$n" -gt 0 ]; then echo "$n type errors"; else grep -m1 -E '^tsc: no errors|missing|no tsc' "$1"; fi
+}
+
+# The browser walk-throughs (e.g. the New mission wizard: create, here, fill, publish) against the mocks.
+run_walk() {
+    web_ready || return 1
+    (cd Crimson-Police/web && node walk.mjs)
+}
+detail_walk() {
+    local n bad
+    n=$(grep -c -E '^(ok  |FAIL) ' "$1")
+    bad=$(grep -c '^FAIL ' "$1")
+    echo "$n walks, $bad failed"
 }
 
 # npm run build (tsc, vite build, build-stamp.mjs) in a scratch copy of web/ and locales/parts (everything the

@@ -1478,6 +1478,11 @@ Config.Builder = {
     autoFillRing = { 15.0, 80.0 },             -- metres beyond the keep-out that "Fill N for me" puts points at
                                                -- (nearest, furthest)
 
+    quickWizard = true,                        -- true = the New mission button opens a 4-step wizard (What,
+                                               -- Where, Check, Publish): pick a template, stand at the spot, fill
+                                               -- the points, publish; Open the full editor is on every step;
+                                               -- false = the New mission dialog and the full editor only
+
     -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
     -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.
     teleport = true,

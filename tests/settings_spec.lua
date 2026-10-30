@@ -230,6 +230,12 @@ do
         'Builder.teleport is a true/false setting, shipped on, with its comment'
     )
     H.ok(
+        E('Builder.quickWizard') ~= nil and E('Builder.quickWizard').kind == 'boolean'
+            and E('Builder.quickWizard').default == true
+            and (E('Builder.quickWizard').desc or ''):find('4-step wizard', 1, true) ~= nil,
+        'Builder.quickWizard is a true/false setting, shipped on, with its comment'
+    )
+    H.ok(
         E('Builder.templates') ~= nil and E('Builder.templates').kind == 'list'
             and #(E('Builder.templates').default or {}) == 10
             and (E('Builder.templates').desc or ''):find('none of their locations', 1, true) ~= nil,

@@ -3994,6 +3994,18 @@ by session.actions (builderEdit / builderArchive / builderRollback / breakEditLo
 from the server; destructive ones ask for confirmation.
 ```
 
+## Crimson-Police/web/src/builder/QuickMission.tsx
+
+```text
+The New mission wizard (Config.Builder.quickWizard): What (template cards from builder:config templates, or Start
+from scratch with a type), Where (Use my position for the start, named "<template> - <street at the start>" from
+the builderHere answer; Fill the points for me = builderAutoPoints for every fillable key, kept at once; the points
+still missing with Add here / Place / Record; Add another location here), Check (server:builder:validate in plain
+words, Fix opens the full editor there, Test it now = StepTest) and Publish (StepPublish, its confirm). Steps 2-4 run
+inside BuilderEditor on the same draft and lock; Open the full editor leaves the wizard at that step. The logic
+without React is quickMission.ts; quickMission.walk.ts walks it against the browser mocks (node walk.mjs).
+```
+
 ## Crimson-Police/web/src/builder/admin/QuickEditPanel.tsx
 
 ```text

@@ -18,6 +18,7 @@ passes (docs/ARCHITECTURE.md §11). How work flows around the checks is in docs/
 | `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 35–38 s |
 | `suite-shadow` | `lua5.4 tests/run.lua --storage=shadow`: MariaDB, the oxmysql twin and the engine compared, 0 differences | 70–76 s |
 | `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 10 s |
+| `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish | 2 s |
 | `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 14–15 s |
 
 A whole run takes about 4 minutes (57 specs, full admin control included). Every `tools/lint_<name>.py` and `tools/check_<name>.py` (other than
@@ -333,6 +334,9 @@ lint_fivem FAIL: 1 new hits, 7 known (baseline), 1 stale baseline lines
 - `contracts`: `## <check>: <count>` and one line per problem, then `TOTAL problems: N`. `nui-build` means
   `web/dist` was not rebuilt after a change to `web/src`, the build config or `locales/parts`.
 - `tsc`: `src/<file>(<line>,<col>): error TS<code>: <message>`.
+- `walk`: `ok   <walk>: N passed, 0 failed` per walk, or `FAIL <walk>` and one `FAIL <what>` line per step that did
+  not hold (`stopped: <action>: <err key>` when a mock refused). A new walk is a `src/**/<name>.walk.ts` exporting
+  `walk(): Promise<{ passed, failures }>`.
 - `build`: `web/dist is stale: N files differ from a fresh build`, then the files (`Only in ...`, `Files ...
   differ`). Run `cd Crimson-Police/web && npm run build` and commit `web/dist`. The fresh build is kept in the
   logs folder. A build of the same sources is byte-identical, so a difference is never noise.

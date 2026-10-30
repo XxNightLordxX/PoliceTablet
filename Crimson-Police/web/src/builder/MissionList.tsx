@@ -83,9 +83,13 @@ export interface MissionListProps {
     scope: BuilderScope;
     config: BuilderConfig | null;
     onOpen: (id: string) => void;
+    // "New mission" opens the wizard instead of the dialog (Config.Builder.quickWizard)
+    onNew?: () => void;
+    // open with the New mission dialog showing (the wizard's "Open the full editor" on its first step)
+    createOpen?: boolean;
 }
 
-export function MissionList({ scope, config, onOpen }: MissionListProps) {
+export function MissionList({ scope, config, onOpen, onNew, createOpen }: MissionListProps) {
     const can = useCan();
     const { data, loading, error, refetch } = useRequest<BuilderList>(
         'builder:list',
@@ -95,7 +99,8 @@ export function MissionList({ scope, config, onOpen }: MissionListProps) {
     const { run, busy } = useAction();
     const [query, setQuery] = useState('');
     const [filter, setFilter] = useState<Filter>('all');
-    const [creating, setCreating] = useState(false);
+    const [creating, setCreating] = useState(!!createOpen);
+    const startNew = () => (onNew ? onNew() : setCreating(true));
     const [dupOpen, setDupOpen] = useState(false);
     const [confirm, setConfirm] = useState<Confirm>(null);
 
@@ -365,7 +370,7 @@ export function MissionList({ scope, config, onOpen }: MissionListProps) {
                         >
                             {t('builder.list.from_builtin')}
                         </Button>
-                        <Button variant="primary" icon="plus" size="sm" onClick={() => setCreating(true)}>
+                        <Button variant="primary" icon="plus" size="sm" onClick={startNew}>
                             {t('builder.list.new')}
                         </Button>
                     </>
@@ -383,7 +388,7 @@ export function MissionList({ scope, config, onOpen }: MissionListProps) {
                     text={t('builder.list.empty_text')}
                     action={
                         can('builderEdit') ? (
-                            <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
+                            <Button variant="primary" icon="plus" onClick={startNew}>
                                 {t('builder.list.new')}
                             </Button>
                         ) : undefined

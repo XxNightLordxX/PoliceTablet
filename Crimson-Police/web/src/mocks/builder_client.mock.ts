@@ -336,7 +336,8 @@ registerMock('client', 'builderHere', (p: BuilderPlaceRequest): BuilderHereReply
         points,
         ...(p.kind === 'start' ? { radius: typeof p.radius === 'number' ? p.radius : 60 } : {}),
     } as BuilderClientResult;
-    return { ok: true, reason: false, point, result };
+    // a start names its street (the New mission wizard names the mission after it)
+    return { ok: true, reason: false, point, result, ...(p.kind === 'start' ? { street: 'Elysian Fields Fwy' } : {}) };
 });
 
 // The browser preview has no world: the teleport only answers what it was asked

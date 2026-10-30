@@ -24,6 +24,7 @@ import { CountBadge, ErrorNotes } from '../controls';
 import { dist2d, errorsAt, errorsUnder, isRoute, listsOf, pointsOf, routeLength, shiftPoints } from '../defUtils';
 import { KEY_COLOURS, LocationMap, PointList } from '../LocationMap';
 import { pointListRows, type PointListRow } from '../pointList';
+import { canAutoFill } from '../quickMission';
 import {
     KERB_RULES,
     armedKeepOut,
@@ -76,11 +77,6 @@ function locationProgress(loc: BuilderLocation, specs: PointSpec[]): { done: num
 
 // a hint, never an error: this many locations or more make a mission repeat less
 const VARIETY_LOCATIONS = 3;
-
-// "Fill N for me" fills keys of people or vehicles with many points that appear around a start (Config.Builder.autoFill)
-function canAutoFill(spec: PointSpec): boolean {
-    return spec.multiple && !spec.lists && !!spec.spawn && (spec.kind === 'ped' || spec.kind === 'vehicle');
-}
 
 export function StepLocations({ ed, cfg, def, ro, scope }: StepProps) {
     useStoreVersion();

@@ -130,6 +130,8 @@ export interface BuilderHereReply {
     // the refusal, in words (false when ok)
     reason: string | false;
     point: Vec;
+    // a start: the street it stands on (GetStreetNameAtCoord), '' when it has no name
+    street?: string;
     result?: BuilderClientResultEx;
 }
 // builderTeleport: which stored point (key 'start' with index 1 for the start), never where: the server checks the

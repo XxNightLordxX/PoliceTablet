@@ -1894,8 +1894,13 @@ do
         otherStarts = {},
         ui = 'admin',
     }
+    -- B14: the start names its street (the New mission wizard names the mission after it)
+    local streetAt, streetName = _G.GetStreetNameAtCoord, _G.GetStreetNameFromHashKey
+    _G.GetStreetNameAtCoord = function(x) return x == 1300.0 and 4242 or 0, 0 end
+    _G.GetStreetNameFromHashKey = function(h) return h == 4242 and 'Vespucci Blvd' or '' end
     local ok, r = Act('builderHere', startPayload)
     H.eq(ok, true, 'builderHere answers at once')
+    H.eq(r.street, 'Vespucci Blvd', 'a start answers the street it stands on')
     H.eq(r.ok, true, 'the start is set where the player stands')
     H.eq(r.reason, false, 'no reason when it is ok')
     H.eq(json.encode({ r.point.x, r.point.y, r.point.z }), '[1300,-3000,5]',
@@ -1920,6 +1925,7 @@ do
     H.eq(json.encode({ r.point.x, r.point.y, r.point.z, r.point.w }), '[1300,-3000,6,120]',
         'a ped point: 1 m above the ground, with the player\'s heading')
     H.eq(#r.result.points, 2, 'added after the point already placed')
+    H.eq(r.street, nil, 'only a start names its street')
     H.eq(r.result.points[1].x, 1250.0, 'the placed point is kept')
 
     -- in a vehicle: the vehicle's position and heading, a vehicle point lifted by the model's height
@@ -1979,6 +1985,7 @@ do
     H.eq(B.active(), nil, 'still no tool')
     W.pos = { x = 1017.5, y = -3108.4, z = 5.9 }
     W.heading = 90.0
+    _G.GetStreetNameAtCoord, _G.GetStreetNameFromHashKey = streetAt, streetName
 end
 
 -- ============================================================================

@@ -98,8 +98,14 @@ export interface DraftEditor {
     releaseLock: () => Promise<void>;
     place: (spec: PointSpec, location: number) => Promise<boolean>;
     // the point where the player stands (Config.Builder.useMyPosition): set or added at once, the tablet stays open.
-    // With index (1-based, a multiple key): that point is moved there (the point list's "Set here")
-    here: (spec: PointSpec, location: number, index?: number) => Promise<boolean>;
+    // With index (1-based, a multiple key): that point is moved there (the point list's "Set here"). onReply sees the
+    // game's answer (a start names its street: the New mission wizard names the mission after it)
+    here: (
+        spec: PointSpec,
+        location: number,
+        index?: number,
+        onReply?: (reply: BuilderHereReply) => void,
+    ) => Promise<boolean>;
     // the point list's Delete: point index (1-based) of a key goes, stored at once (autosave)
     removePoint: (key: string, location: number, index: number) => Promise<boolean>;
     // "Fill N for me" (Config.Builder.autoFill): the game proposes count new points around the start; the draft does
@@ -627,7 +633,12 @@ export function useDraftEditor(
         await autosaveNow();
     };
 
-    const here = async (spec: PointSpec, location: number, index?: number) => {
+    const here = async (
+        spec: PointSpec,
+        location: number,
+        index?: number,
+        onReply?: (reply: BuilderHereReply) => void,
+    ) => {
         if (readOnly) return false;
         const payload = placePayload(spec, location);
         if (!payload) return false;
@@ -652,6 +663,7 @@ export function useDraftEditor(
         toast(applied.tone, t(applied.messageKey, applied.vars));
         if (!applied.def) return false;
         await commitNow(applied.def, before);
+        onReply?.(reply);
         return true;
     };
 

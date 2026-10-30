@@ -1187,7 +1187,7 @@ local function VehicleDims(name)
 end
 
 -- Config.Builder.useMyPosition: the spot where the player stands, or his vehicle is, checked like an aimed spot
--- (B.checkSpot) and stored at the height the placement tool stores. Answers { ok, reason, point, result } at once:
+-- (B.checkSpot) and stored at the height the placement tool stores. Answers { ok, reason, point, street, result }:
 -- result is a placement result with the point added (multiple) or set; the tablet stays open.
 local function Here(o)
     local ped = PlayerPedId()
@@ -1222,6 +1222,8 @@ local function Here(o)
     local ok, reasonKey, vars = B.checkSpot(spot, PlaceCtx(o, o.points))
     local point = RoundVec({ x = pos.x, y = pos.y, z = storeZ }, o.heading, heading)
     local reply = { ok = ok == true, reason = (not ok and reasonKey) and CP.L(reasonKey, vars) or false, point = point }
+    -- a start also names its street: the New mission wizard (Config.Builder.quickWizard) names the mission after it
+    if o.kind == 'start' then reply.street = StreetsOf({ point })[1] end
     if not ok then return reply end
     local pts = {}
     if o.multiple then

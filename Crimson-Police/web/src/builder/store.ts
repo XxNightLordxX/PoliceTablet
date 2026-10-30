@@ -20,6 +20,14 @@ export interface EditorMemory {
     objective: number;
     // Admin UI → Missions tab
     tab?: 'catalog' | 'builder' | 'operation';
+    // the New mission wizard (Config.Builder.quickWizard) of the open mission: its step and the name it was created
+    // with; null = the full editor
+    quick?: QuickMemory | null;
+}
+
+export interface QuickMemory {
+    step: 'where' | 'check' | 'publish';
+    base: string;
 }
 
 export interface DraftMemory {
