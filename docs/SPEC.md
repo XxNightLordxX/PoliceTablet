@@ -3992,6 +3992,21 @@ Config.Builder = {
     -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
     -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.
     teleport = true,
+
+    -- built-in missions a new mission can start from: it copies their type, difficulty, team, times, bonuses,
+    -- penalties and objectives, but none of their locations (you place your own). Empty = no templates
+    templates = {
+        'beat_patrol',
+        'business_check',
+        'parking_patrol',
+        'pursuit_sim',
+        'manhunt',
+        'warrant_service',
+        'gang_shootout',
+        'hostage_rescue',
+        'armored_truck_escort',
+        'bomb_disposal',
+    },
     testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
     editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
     defaultTeam = { patrol = 2, training = 2, investigation = 2, tactical = 4 }, -- most officers a new mission

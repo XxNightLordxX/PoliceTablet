@@ -229,6 +229,12 @@ do
             and E('Builder.teleport').desc:find('the server reads the saved point', 1, true) ~= nil,
         'Builder.teleport is a true/false setting, shipped on, with its comment'
     )
+    H.ok(
+        E('Builder.templates') ~= nil and E('Builder.templates').kind == 'list'
+            and #(E('Builder.templates').default or {}) == 10
+            and (E('Builder.templates').desc or ''):find('none of their locations', 1, true) ~= nil,
+        'Builder.templates is a list of built-in ids, shipped with ten, with its comment'
+    )
     local grants = E('Permissions.builderTeleport')
     H.ok(
         grants ~= nil and grants.kind == 'json' and next(grants.default or { 1 }) == nil

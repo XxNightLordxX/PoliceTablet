@@ -311,6 +311,8 @@ export interface BuilderConfig {
     // "Teleport" next to each point: Config.Builder.teleport is on and this caller may (admins, or a
     // Config.Permissions.builderTeleport grant for his department and grade); missing = no
     teleport?: boolean;
+    // built-ins a new mission can start from (Config.Builder.templates; create { template }); missing = none
+    templates?: { id: string; type: string; label: string; blurb: string }[];
     // the caller's builder permissions (admins: all true)
     permissions: Record<
         'builderEdit' | 'builderEditAny' | 'builderPublish' | 'builderArchive' | 'builderRollback' | 'breakEditLock',

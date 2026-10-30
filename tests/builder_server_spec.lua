@@ -1930,6 +1930,85 @@ local function Body()
         H.ok(okD2 and dd2.deleted == true and row('custom_harbour_sweep') == nil, 'a never-published draft is deleted')
     end
 
+    -- B13: templates made from the built-in missions
+    do
+        local okC, conf = cb(1, 'builder:config', {})
+        local listed = {}
+        for _, t in ipairs(okC and conf.templates or {}) do
+            listed[#listed + 1] = t.id
+            H.ok(
+                type(t.label) == 'string' and not t.label:find('builder.', 1, true) and type(t.blurb) == 'string'
+                    and not t.blurb:find('builder.', 1, true),
+                'template ' .. t.id .. ' has a plain name and a blurb'
+            )
+        end
+        H.eq(table.concat(listed, ','), table.concat(Config.Builder.templates, ','),
+            'builder:config lists every configured template, in order')
+        -- the points the built-ins place, so none may reach a draft made from them
+        local shipped = {}
+        local function collect(v)
+            if type(v) ~= 'table' then return end
+            local x, y = tonumber(v.x), tonumber(v.y)
+            if x and y then shipped[string.format('%.1f,%.1f', x, y)] = true end
+            for _, c in pairs(v) do collect(c) end
+        end
+        local function leaked(v, out)
+            if type(v) ~= 'table' then return out end
+            local x, y = tonumber(v.x), tonumber(v.y)
+            if x and y and shipped[string.format('%.1f,%.1f', x, y)] then out[#out + 1] = x .. ',' .. y end
+            for _, c in pairs(v) do leaked(c, out) end
+            return out
+        end
+        local placeLater = {
+            ['builder.error.start_missing'] = true,
+            ['builder.error.point_missing'] = true,
+            ['builder.error.route_points'] = true,
+        }
+        for _, tid in ipairs(Config.Builder.templates) do
+            local bm = CP.Missions.get(tid)
+            shipped = {}
+            collect(bm.locations)
+            local okT, dt = act(1, 'create', { template = tid })
+            H.ok(okT, 'create from template ' .. tid .. ': ' .. tostring(okT or dt))
+            if okT then
+                local d = dt.record.definition
+                H.ok(
+                    d.type == bm.type and d.difficulty == bm.difficulty and d.maxOfficers == bm.maxOfficers
+                        and #d.objectives == #bm.objectives,
+                    tid .. ': type, stars, team and objectives copied'
+                )
+                H.ok(#d.locations == 1 and d.locations[1].start == nil, tid .. ': one empty location')
+                H.eq(table.concat(leaked(d, {}), ' '), '', tid .. ': no built-in point is copied')
+                local other = {}
+                for _, e in ipairs(B.validate(B.sanitize(d, dt.id), { publish = true })) do
+                    -- a block's own "nothing placed under <key> yet" reasons come without a key
+                    local msg = tostring(e.message)
+                    local unplaced = e.key == nil
+                        and (
+                            msg:find(' has no ', 1, true)
+                            or msg:find('(has 0)', 1, true)
+                            or msg:find(': place the ', 1, true)
+                        )
+                    if not placeLater[e.key] and not unplaced then
+                        other[#other + 1] = tostring(e.key) .. ' ' .. tostring(e.message)
+                    end
+                end
+                H.eq(table.concat(other, ' | '), '', tid .. ': only "not placed yet" is left to fix')
+            end
+        end
+        H.eq(select(2, act(1, 'create', { template = 'no_such_mission' })), 'err.builder_unknown_template',
+            'an unknown template is refused')
+        H.eq(select(2, act(1, 'create', { template = 'prison_break' })), 'err.builder_unknown_template',
+            'a built-in left out of Config.Builder.templates is refused')
+        local saved = Config.Builder.templates
+        Config.Builder.templates = {}
+        local okE, confE = cb(1, 'builder:config', {})
+        H.ok(okE and #confE.templates == 0, 'an empty list offers no templates')
+        H.eq(select(2, act(1, 'create', { template = 'beat_patrol' })), 'err.builder_unknown_template',
+            'and creates none')
+        Config.Builder.templates = saved
+    end
+
     -- duplicate
     do
         local okDu, du = act(1, 'duplicate', { id = id })

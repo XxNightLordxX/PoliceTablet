@@ -1489,7 +1489,7 @@ Stop: every value we set is removed.
     CP.Builder.slug(label) -> string
   Net (docs/notes/builder_protocol.md §3/§4)
     callbacks  builder:list · builder:get { id } · builder:config
-    actions    server:builder:create { type, label? } · duplicate { id } · lock { id } · unlock { id } ·
+    actions    server:builder:create { type, label? } or { template, label? } · duplicate { id } · lock { id } · unlock { id } ·
                save { id, definition } · autosave { id, definition } · validate { id, definition? } ·
                test { id, tier?, location?, useStartRoute? } · publish { id } · archive { id } ·
                restore { id } · rollback { id } · breakLock { id } · discardDraft { id }

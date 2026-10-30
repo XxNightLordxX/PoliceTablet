@@ -239,6 +239,7 @@ for a malformed payload, `err.builder_unknown_mission`, `err.no_permission`, `er
 | Action | Payload | Result data | Other errors |
 |---|---|---|---|
 | `server:builder:create` | `{ type, label? }` | `{ id, record: BuilderRecord }` — a draft v1 with one location stub, locked by me | `err.builder_bad_type` |
+| `server:builder:create` (template) | `{ template, label? }` | as above: the built-in's type, difficulty, team, times, bonuses, penalties and objectives, one empty location (no built-in point); `template` is an id from `builder:config` `templates` (`Config.Builder.templates`) | `err.builder_unknown_template` |
 | `server:builder:duplicate` | `{ id }` (built-in or custom) | `{ id, record }` — editable copy "‹label› (copy)", draft v1, my lock, `record.errors` shows what to fix (built-in values outside builder ranges, non-standard bonuses dropped) | |
 | `server:builder:lock` | `{ id }` | `{ id, lock }` | `err.builder_locked`, `err.builder_read_only` |
 | `server:builder:unlock` | `{ id }` | `{ id }` | |

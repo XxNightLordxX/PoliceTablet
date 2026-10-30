@@ -3819,6 +3819,16 @@ CP.Net.callback('builder:config', function(src)
         end
         allowed.weapons = weapons
     end
+    local templates = {}
+    for _, id in ipairs(B.templateIds()) do
+        local def = CP.Missions.get(id)
+        templates[#templates + 1] = {
+            id = id,
+            type = def.type,
+            label = L('builder.template.' .. id),
+            blurb = L('builder.template_desc.' .. id),
+        }
+    end
     return {
         enabled = bc.enabled ~= false,
         blocks = Config.Blocks,
@@ -3864,6 +3874,8 @@ CP.Net.callback('builder:config', function(src)
         autoFill = bc.autoFill ~= false,
         -- "Teleport" next to each point (Config.Builder.teleport; admins, or a Config.Permissions.builderTeleport grant)
         teleport = B.canTeleport(src),
+        -- the built-ins a new mission can start from (Config.Builder.templates): name and one-line blurb
+        templates = templates,
         permissions = perms,
     }
 end, { rate = 2 })
@@ -3929,11 +3941,84 @@ local function InsertDraft(label, def, actor)
     return nil, 'err.internal'
 end
 
+-- the built-in copied into the Builder's own units, with the standard bonus list only (duplicate and templates)
+local function CopyOfBuiltin(srcDef)
+    local copy = B.sanitize(srcDef, nil)
+    if not copy then return nil end
+    -- custom missions only use the standard bonus list
+    for _, listKey in ipairs({ 'bonuses', 'penalties' }) do
+        copy[listKey] = U.filter(copy[listKey] or {}, function(e)
+            return type(e) == 'table' and BonusCfg(e.id) ~= nil
+        end)
+    end
+    B.customBonusFields(copy)
+    return copy
+end
+
+-- the built-ins offered as templates (Config.Builder.templates), in that order, that are loaded and built-in
+function B.templateIds()
+    local out, seen = {}, {}
+    local list = CfgB().templates
+    for _, id in ipairs(type(list) == 'table' and list or {}) do
+        local def = type(id) == 'string' and CP.Missions and CP.Missions.get and CP.Missions.get(id)
+        if def and def.source == 'builtin' and not seen[id] then
+            seen[id] = true
+            out[#out + 1] = id
+        end
+    end
+    return out
+end
+
+-- a new draft from a template: the built-in's type, difficulty, team, times, bonuses, penalties and objectives,
+-- with none of its locations (one empty location to place). nil = not a template
+function B.fromTemplate(templateId)
+    if type(templateId) ~= 'string' then return nil end
+    local listed = false
+    for _, id in ipairs(B.templateIds()) do
+        if id == templateId then listed = true end
+    end
+    if not listed then return nil end
+    local srcDef = BuiltinDefinition(templateId)
+    local copy = srcDef and CopyOfBuiltin(srcDef)
+    if not copy then return nil end
+    local missionType = copy.type
+    if not (Config.MissionTypes and Config.MissionTypes[missionType]) then return nil end
+    local def = NewSkeleton(nil, tostring(srcDef.label or templateId), missionType)
+    for _, k in ipairs({
+        'difficulty',
+        'minOfficers',
+        'maxOfficers',
+        'timeLimit',
+        'startTimeout',
+        'cooldown',
+        'vehiclePenalties',
+        'bonuses',
+        'penalties',
+        'objectives',
+    }) do
+        if copy[k] ~= nil then def[k] = U.deepcopy(copy[k]) end
+    end
+    return B.sanitize(def, nil)
+end
+
 CP.Net.action('server:builder:create', function(src, payload)
     local actor, perms = Begin(src)
     if not actor then return false, perms end
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     if not CP.Net.rateOk(src, 'builder:create', 1, 2000) then return false, 'err.rate_limited' end
+    if payload.template ~= nil then
+        local def = B.fromTemplate(payload.template)
+        if not def then return false, 'err.builder_unknown_template' end
+        local label = payload.label
+        if type(label) ~= 'string' or U.trim(label) == '' then label = def.label end
+        label = ClipText(U.trim(label), LIMITS.label)
+        def.label = label
+        local id, err = InsertDraft(label, def, actor)
+        if not id then return false, err end
+        Audit(actor, 'create', id, payload.template, 'v1', def.type)
+        PushAll({ event = 'changed', id = id, by = actor.name })
+        return true, { id = id, record = RecordView(FetchRow(id), actor, perms) }
+    end
     local missionType = payload.type
     if type(missionType) ~= 'string' or not (Config.MissionTypes and Config.MissionTypes[missionType]) then
         return false, 'err.builder_bad_type'
@@ -3969,15 +4054,8 @@ CP.Net.action('server:builder:duplicate', function(src, payload)
         srcDef = BuiltinDefinition(payload.id)
         if not srcDef then return false, 'err.builder_unknown_mission' end
     end
-    local copy = B.sanitize(srcDef, nil)
+    local copy = CopyOfBuiltin(srcDef)
     if not copy then return false, 'err.builder_unknown_mission' end
-    -- custom missions only use the standard bonus list
-    for _, listKey in ipairs({ 'bonuses', 'penalties' }) do
-        copy[listKey] = U.filter(copy[listKey] or {}, function(e)
-            return type(e) == 'table' and BonusCfg(e.id) ~= nil
-        end)
-    end
-    B.customBonusFields(copy)
     local label = ClipText(L('builder.copy_label', { label = tostring(srcDef.label or payload.id) }), LIMITS.label)
     copy.label = label
     if not (Config.MissionTypes and Config.MissionTypes[copy.type]) then
