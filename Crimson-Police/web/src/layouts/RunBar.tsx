@@ -5,13 +5,14 @@
 import { Badge, Countdown, Icon, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';
 import { ACTION_LEFT_SHOWN, asArray } from '../shared/data';
-import { formatDistance } from '../shared/format';
 import { useCountdown, usePush, useRequest } from '../shared/hooks';
 import { t } from '../shared/i18n';
 import { useNavigation } from '../shared/navigation';
+import { useFormatDistance } from '../shared/options';
 import type { ActiveMissionView } from '../shared/types';
 
 function RouteStatus({ route }: { route: ActiveMissionView['route'] }) {
+    const formatDistance = useFormatDistance();
     const left = useCountdown(route?.status === 'off' || route?.status === 'action' ? route.secondsLeft : null);
     if (!route) return null;
     if (route.status === 'off') {

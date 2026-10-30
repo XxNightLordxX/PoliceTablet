@@ -20,11 +20,11 @@ import {
 import type { IconName } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { asArray } from '../../shared/data';
-import { formatDistance } from '../../shared/format';
 import { useAction, useCountdown, usePush, useRequest } from '../../shared/hooks';
 import { t, tOr } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import { clientAction } from '../../shared/nui';
+import { useFormatDistance, useOption } from '../../shared/options';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { Session } from '../../shared/types';
@@ -41,6 +41,7 @@ import type {
     SetGpsResult,
 } from '../../types/run_ui';
 import { ContactPanel } from '../components/ContactPanel';
+import { ABANDON_ARM_MS, abandonPress } from './abandonPress';
 import { IntelLine, MissionCallLine } from '../components/RunNotices';
 import './MissionBoard.css';
 import './ActiveMission.css';
@@ -268,6 +269,7 @@ function Hero({
 // ============================================================================
 
 function RouteStatus({ route, test, stamp }: { route: RunRoute | null; test: boolean; stamp: unknown }) {
+    const formatDistance = useFormatDistance();
     const offLeft = useCountdown(route?.status === 'off' ? route.secondsLeft : null, { resetKey: stamp });
     if (!route || route.status === 'disabled') {
         return (
@@ -621,6 +623,15 @@ export default function ActiveMission() {
     const { run, busy } = useAction();
     const [confirmAbandon, setConfirmAbandon] = useState(false);
     const [confirmRecalc, setConfirmRecalc] = useState(false);
+    // My options -> During a mission: Abandon without the dialog takes two presses within 3 s; Recalculate in one click
+    const abandonConfirm = useOption('abandonConfirm') !== false;
+    const recalcOneClick = useOption('skipRecalcConfirm') === true;
+    const [abandonArmed, setAbandonArmed] = useState(false);
+    useEffect(() => {
+        if (!abandonArmed) return;
+        const id = window.setTimeout(() => setAbandonArmed(false), ABANDON_ARM_MS);
+        return () => window.clearTimeout(id);
+    }, [abandonArmed]);
     const [gpsBusy, setGpsBusy] = useState(false);
     const [objGpsBusy, setObjGpsBusy] = useState(false);
     const [recalcBusy, setRecalcBusy] = useState(false);
@@ -723,6 +734,13 @@ export default function ActiveMission() {
         void refetch();
     };
 
+    const pressAbandon = () => {
+        const next = abandonPress(abandonConfirm, abandonArmed);
+        setAbandonArmed(next === 'arm');
+        if (next === 'dialog') setConfirmAbandon(true);
+        else if (next === 'abandon') void abandon();
+    };
+
     if (!view) {
         return (
             <Screen title={t('ui.screen.active')} className="run_ui-active">
@@ -765,18 +783,17 @@ export default function ActiveMission() {
         view.objectiveGps === true &&
         !(view.radioSilence && view.silenceMode !== 'full');
 
+    const abandonWarning = view.test
+        ? t('run.abandon.test')
+        : view.isBoss
+          ? t('run.abandon.boss')
+          : t('run.abandon.cooldown', { type: typeName });
     const abandonMessage = (
         <div className="run_ui-confirm">
             <p>{t('run.abandon.text')}</p>
             <p className="run_ui-confirm__warn">
                 <Icon name="alert" size={14} />
-                <span>
-                    {view.test
-                        ? t('run.abandon.test')
-                        : view.isBoss
-                          ? t('run.abandon.boss')
-                          : t('run.abandon.cooldown', { type: typeName })}
-                </span>
+                <span>{abandonWarning}</span>
             </p>
             {activeOthers > 0 ? <p className="run_ui-confirm__note">{t('run.abandon.team')}</p> : null}
         </div>
@@ -788,8 +805,14 @@ export default function ActiveMission() {
             subtitle={view.state === 'in_progress' ? t('run.subtitle_in_progress') : t('run.subtitle_accepted')}
             className="run_ui-active"
             actions={
-                <Button variant="danger" icon="x" onClick={() => setConfirmAbandon(true)} disabled={busy}>
-                    {t('run.abandon.button')}
+                <Button
+                    variant="danger"
+                    icon="x"
+                    onClick={pressAbandon}
+                    disabled={busy}
+                    title={abandonArmed ? abandonWarning : undefined}
+                >
+                    {abandonArmed ? t('run.abandon.again') : t('run.abandon.button')}
                 </Button>
             }
         >
@@ -840,7 +863,7 @@ export default function ActiveMission() {
                             gpsBusy={gpsBusy}
                             recalcBusy={recalcBusy}
                             onGps={() => void setGps()}
-                            onRecalc={() => setConfirmRecalc(true)}
+                            onRecalc={() => (recalcOneClick ? void recalc() : setConfirmRecalc(true))}
                         />
                     ) : null}
                     <ObjectivesCard

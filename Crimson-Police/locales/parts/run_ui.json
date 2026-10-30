@@ -169,5 +169,6 @@
   "board.oneclick.abandon": "Abandoning it, leaving the start route or not reaching the start in time puts the whole type on cooldown.",
   "board.oneclick.abandon_guide": "Abandoning it or not reaching the start in time puts the whole type on cooldown.",
   "board.card.twists": "Twists",
-  "board.card.twists_hint": "Pick twists, then accept"
+  "board.card.twists_hint": "Pick twists, then accept",
+  "run.abandon.again": "Click again to abandon"
 }

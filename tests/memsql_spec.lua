@@ -3672,14 +3672,19 @@ do
     local okS, resS = coroutine.resume(co)
     H.ok(okS and resS == 'done' and turns == 0, 'SELECTs in a thread never give a turn for saving: ' .. tostring(resS))
     -- a thread that was away (suspended) since its last save starts counting again
-    local w = 0
-    co = coroutine.create(function()
-        local t = clock()
-        sh.update.await('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00002' })
-        w = Ms(t)
-    end)
+    -- one save's time: the quicker of two, after a full collection (a collector step inside the only measured save
+    -- made the budget so wide that two back to back saves stayed under it)
+    local w = math.huge
     d.slice.saveMs = 1e9
-    coroutine.resume(co)
+    collectgarbage('collect')
+    for _ = 1, 2 do
+        co = coroutine.create(function()
+            local t = clock()
+            sh.update.await('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00002' })
+            w = math.min(w, Ms(t))
+        end)
+        coroutine.resume(co)
+    end
     d.slice.saveMs = w * 1.5
     co = coroutine.create(function()
         sh.update.await('UPDATE cp_officers SET xp = xp + 1 WHERE citizenid = ?', { 'CID00002' })

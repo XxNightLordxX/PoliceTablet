@@ -1430,6 +1430,9 @@ Config.OfficerOptions = {
         dispatchKeyAfterCall = true, -- the tablet key opens Dispatch just after a mission call (this character)
         openOn = true,               -- the screen the tablet opens on (this character)
         rememberFilters = true,      -- Dispatch and the Leaderboard keep their filters (kept on this PC)
+        abandonConfirm = true,       -- Abandon asks in a dialog; off = press it twice (this character)
+        skipRecalcConfirm = true,    -- recalculate the route in one click, without the confirm (this character)
+        distanceUnits = true,        -- distances in metres or in miles (kept on this PC)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -1464,6 +1467,12 @@ Config.OfficerOptions = {
                                      -- 'home' or 'active_on_run' (Active Mission on a run, Unit in a ready check)
         rememberFilters = false,     -- true = Dispatch and the Leaderboard open with the filters used last on this
                                      -- PC; false = their own defaults (as before)
+        abandonConfirm = true,       -- true = Abandon asks in a dialog (as before); false = no dialog: the button turns
+                                     -- into "Click again to abandon" for 3 s, so it still takes two presses
+        skipRecalcConfirm = false,   -- true = Recalculate route works at once (Config.Route.maxRecalcs still counts);
+                                     -- false = it asks first (as before)
+        distanceUnits = 'metric',    -- 'metric' (m and km, as before) or 'imperial' (ft and miles) on the HUD, Active
+                                     -- Mission and Dispatch
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick

@@ -234,6 +234,26 @@ Has(active, 'LogResultPayload = { point: view.log.point, choice }', 'logResult p
 Has(active, 'tone="danger"', 'abandon confirm dialog is a danger dialog')
 Has(active, 'disabled={!routeOn || left <= 0}', 'recalculate is disabled with no recalculations left')
 Has(active, 'export default function ActiveMission() {', 'ActiveMission default export without props')
+-- My options -> During a mission (step O10): Abandon pressed twice without the dialog, Recalculate in one click, miles
+Has(active, 'const abandonConfirm = useOption(\'abandonConfirm\') !== false;', 'the dialog is the officer option')
+Has(active, 'const next = abandonPress(abandonConfirm, abandonArmed);', 'a press: dialog, arm or abandon')
+Has(active, '{abandonArmed ? t(\'run.abandon.again\') : t(\'run.abandon.button\')}', 'armed: Click again to abandon')
+Has(active, 'window.setTimeout(() => setAbandonArmed(false), ABANDON_ARM_MS)', '...for 3 s, then it is Abandon again')
+Has(active, 'onRecalc={() => (recalcOneClick ? void recalc() : setConfirmRecalc(true))}',
+    'Recalculate in one click, else the confirm as before')
+Has(active, 'const formatDistance = useFormatDistance();', 'the route distance in the officer\'s units')
+local pressTs = Read(WEB .. 'officer/screens/abandonPress.ts') or ''
+Has(pressTs, 'export const ABANDON_ARM_MS = 3000;', 'the second press counts for 3 s')
+Has(pressTs, 'return armed ? \'abandon\' : \'arm\';', 'the first press only arms the button')
+for _, f in ipairs({
+    'hud/Hud.tsx',
+    'layouts/RunBar.tsx',
+    'officer/screens/Dispatch.tsx',
+    'officer/components/ContactPanel.tsx',
+}) do
+    Has(Read(WEB .. f) or '', 'const formatDistance = useFormatDistance();', f .. ': distances in the officer\'s units')
+end
+Has(Read(WEB .. 'shared/format.ts') or '', 'return `${mi.toFixed(mi < 10 ? 1 : 0)} mi`;', 'imperial distances in miles')
 
 local mock = src.mock or ''
 for _, name in ipairs({

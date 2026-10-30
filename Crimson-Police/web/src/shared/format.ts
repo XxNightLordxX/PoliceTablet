@@ -57,9 +57,20 @@ export function formatDuration(seconds: number | null | undefined): string {
     return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
-// Metres -> "850 m" / "1.2 km".
-export function formatDistance(metres: number | null | undefined): string {
+// The officer option distanceUnits (step O10): 'metric' (as before) or 'imperial'.
+export type DistanceUnits = 'metric' | 'imperial';
+
+const METRES_PER_MILE = 1609.344;
+const FEET_PER_METRE = 3.28084;
+
+// Metres -> "850 m" / "1.2 km"; imperial: "500 ft" under a tenth of a mile, then "0.4 mi" / "12 mi".
+export function formatDistance(metres: number | null | undefined, units: DistanceUnits = 'metric'): string {
     const m = Math.max(0, Number(metres) || 0);
+    if (units === 'imperial') {
+        const mi = m / METRES_PER_MILE;
+        if (mi < 0.1) return `${Math.round(m * FEET_PER_METRE)} ft`;
+        return `${mi.toFixed(mi < 10 ? 1 : 0)} mi`;
+    }
     return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
 }
 

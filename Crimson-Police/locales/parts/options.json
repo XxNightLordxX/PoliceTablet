@@ -78,5 +78,14 @@
   "options.value.openOn.home": "Home",
   "options.value.openOn.active_on_run": "Active Mission on a mission",
   "options.key.rememberFilters": "Remember my filters",
-  "options.key.rememberFilters_hint": "Dispatch and the Leaderboard open with the filters you used last time on this PC."
+  "options.key.rememberFilters_hint": "Dispatch and the Leaderboard open with the filters you used last time on this PC.",
+  "options.group.run": "During a mission",
+  "options.key.abandonConfirm": "Abandon asks in a dialog",
+  "options.key.abandonConfirm_hint": "Off: no dialog. Abandon turns into Click again to abandon for 3 seconds, so it still takes two presses. Abandoning still puts the mission type on cooldown.",
+  "options.key.skipRecalcConfirm": "Recalculate in one click",
+  "options.key.skipRecalcConfirm_hint": "Recalculate route draws the new route at once, without asking. It still uses one of your recalculations.",
+  "options.key.distanceUnits": "Distances",
+  "options.key.distanceUnits_hint": "How distances read on the mission HUD, Active Mission and Dispatch on this PC.",
+  "options.value.distanceUnits.metric": "Metres and kilometres",
+  "options.value.distanceUnits.imperial": "Feet and miles"
 }

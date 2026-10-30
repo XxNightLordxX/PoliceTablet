@@ -316,6 +316,33 @@ do
     H.eq(Saved('OPT00001') and Saved('OPT00001').openOn, nil, 'back to the defaults: nothing saved')
 end
 
+-- During a mission (shared/options_run.lua, step O10): abandon without the dialog (still two presses) and recalculate
+-- in one click are saved with the character; distances in miles stay on the PC.
+do
+    local view = Cb('getOptions', 1).data
+    local v = view.values
+    H.ok(v.abandonConfirm == true and v.skipRecalcConfirm == false,
+        'the run options ship as today: Abandon and Recalculate ask in a dialog')
+    H.eq(v.distanceUnits, nil, 'the distance units are kept on the PC, not with the character')
+    local rows = {}
+    for _, d in ipairs(view.schema) do rows[d.key] = d end
+    H.ok(
+        rows.abandonConfirm and rows.skipRecalcConfirm and rows.distanceUnits and rows.distanceUnits.store == 'local'
+            and rows.distanceUnits.group == 'run',
+        'the three are rows of My options -> During a mission'
+    )
+    H.eq(rows.distanceUnits.default, 'metric', 'metres by default, as before')
+    local ok, data = Act(1, { abandonConfirm = false, skipRecalcConfirm = true })
+    H.ok(ok == true and data.values.abandonConfirm == false and data.values.skipRecalcConfirm == true,
+        'Abandon without the dialog, Recalculate in one click')
+    H.eq(Saved('OPT00001').abandonConfirm, false, '...saved with the character')
+    H.eq(select(2, Act(1, { distanceUnits = 'imperial' })), 'err.invalid_payload', 'units are not saved on the server')
+    H.eq(Defs.check('distanceUnits', 'imperial'), 'imperial', 'miles may be picked on the PC')
+    H.eq(select(2, Defs.check('distanceUnits', 'nautical')), 'err.option_value', 'metric or imperial only')
+    Act(1, { abandonConfirm = true, skipRecalcConfirm = false })
+    H.eq(Saved('OPT00001') and Saved('OPT00001').abandonConfirm, nil, 'back to the defaults: nothing saved')
+end
+
 -- the column the step adds, in every storage mode (files mode: the saves folder engine)
 H.ok(pcall(H.sql, 'SELECT options FROM cp_officers LIMIT 1'), 'migration 010: cp_officers.options exists')
 

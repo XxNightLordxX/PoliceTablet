@@ -21,12 +21,11 @@ import {
 import type { BadgeTone, IconName } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { asArray } from '../../shared/data';
-import { formatDistance } from '../../shared/format';
 import { useAction, usePush, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useRememberedFilter } from '../../shared/filters';
 import { useNavigate } from '../../shared/navigation';
-import { useOption } from '../../shared/options';
+import { useFormatDistance, useOption } from '../../shared/options';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { ClaimCallResult, DispatchView, MissionCall, RecentCall } from '../../types/missioncalls';
@@ -58,7 +57,7 @@ function areaText(call: MissionCall): string {
     return call.area ? call.area.label : t('mc.county_wide');
 }
 
-function distanceText(call: MissionCall): string | null {
+function distanceText(call: MissionCall, formatDistance: (metres: number) => string): string | null {
     if (call.distance === null || call.distance === undefined) return null;
     const km = formatDistance(call.distance);
     return call.area ? t('mc.card.distance_area', { distance: km }) : t('mc.card.distance_county', { distance: km });
@@ -172,7 +171,8 @@ function CallCard({
     onTwists?: (call: MissionCall) => void;
     onChanged: () => void;
 }) {
-    const distance = distanceText(call);
+    const formatDistance = useFormatDistance();
+    const distance = distanceText(call, formatDistance);
     const canClaim = call.status === 'ready' && !blocked;
     return (
         <Card

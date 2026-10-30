@@ -6,10 +6,11 @@ import { Badge, Button, Card, ConfirmDialog, Icon, Select } from '../../shared/c
 import type { IconName } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { asArray } from '../../shared/data';
-import { fmtDateTime, formatDistance } from '../../shared/format';
+import { fmtDateTime } from '../../shared/format';
 import { useAction, usePush } from '../../shared/hooks';
 import { t, tOr } from '../../shared/i18n';
 import { clientAction } from '../../shared/nui';
+import { useFormatDistance } from '../../shared/options';
 import { toast } from '../../shared/toast';
 import type {
     ContactActionPayload,
@@ -198,6 +199,7 @@ function EntryCard({
 }
 
 export function ContactPanel({ view, runId }: { view: ContactView; runId: string }) {
+    const formatDistance = useFormatDistance();
     const { run, busy } = useAction();
     const [pending, setPending] = useState<Pending | null>(null);
     const entries = asArray(view.entries);

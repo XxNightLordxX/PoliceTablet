@@ -3802,6 +3802,15 @@ warnings and errors always show). The NUI applies the first two (web/src/shared/
 CP.Tablet.notify (client) applies quietRun. Config.OfficerOptions holds the allow, defaults and bounds.
 ```
 
+## Crimson-Police/shared/options_run.lua
+
+```text
+During a mission's officer options (My options -> During a mission): abandon without the dialog (abandonConfirm off:
+the button needs a second press within 3 s), recalculate the route in one click (skipRecalcConfirm), both saved with
+the character, and distances in feet and miles (distanceUnits, kept on this PC). The NUI only: the abandon cooldown
+and Config.Route.maxRecalcs are unchanged.
+```
+
 ## Crimson-Police/shared/options_sounds.lua
 
 ```text
@@ -4623,6 +4632,14 @@ src/shared/nui.ts · the NUI bridge (docs/ARCHITECTURE.md §9.1).
 In a normal browser (isEnvBrowser()) nothing is POSTed: request/action/client calls are answered
 by mocks registered with registerMock() (see src/mocks/*.mock.ts), and emitDebug() fakes Lua
 messages. Every call resolves (never rejects) to { ok, data?, error? } where error is an err.* key.
+```
+
+## Crimson-Police/web/src/officer/screens/abandonPress.ts
+
+```text
+What a press of Abandon on Active Mission does (officer option abandonConfirm, step O10): with the option on, the
+dialog as before; off, the first press arms the button ("Click again to abandon") for 3 s and a second press while
+armed abandons. Walk: abandonPress.walk.ts.
 ```
 
 ## Crimson-Police/web/src/shared/openOn.ts

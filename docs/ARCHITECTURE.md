@@ -122,6 +122,7 @@ PoliceTablet/                      (git repo)
     shared/options_dispatch.lua    Dispatch and opening: one-click claim, call pop-ups, key after a call, open on (§5.48)
     shared/options_hud.lua         The mission HUD's officer options: side, size, compact, fewer animations (§5.48)
     shared/options_look.lua        Easier to read: the tablet look on the HUD, larger text (§5.48)
+    shared/options_run.lua         During a mission: abandon in two presses, one-click recalculate, miles (§5.48)
     shared/options_popups.lua      Pop-ups: toast time, result card time, fewer pop-ups on a run (§5.48)
     shared/options_sounds.lua      Sounds: mission call tone, unit tone, objective cues on or off (§5.48)
     shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
@@ -3315,6 +3316,16 @@ no option is registered by this module: each feature registers its own keys.
   web/src/shared/filters.ts `useRememberedFilter` in Dispatch.tsx and Leaderboard.tsx). Shipped allowed, defaults
   false, 'all', false, 'last', false. Walk: shared/openOn.walk.ts. Mock: `?oneClickClaim=1`,
   `?openOn=active_on_run` (with the dev panel's run toggle or `?readyCheck=1`), `?rememberFilters=1`.
+- During a mission (step O10, shared/options_run.lua, group `run`): `abandonConfirm` (bool, server, default true;
+  ActiveMission.tsx `pressAbandon` runs `abandonPress(confirm, armed)` from officer/screens/abandonPress.ts: 'dialog'
+  as before, else 'arm' (the button reads `run.abandon.again` for ABANDON_ARM_MS = 3000) then 'abandon', which
+  sends `server:abandon` unchanged), `skipRecalcConfirm` (bool, server; the route card's Recalculate calls
+  `recalcRoute` at once, Config.Route.maxRecalcs unchanged) and `distanceUnits` ('metric' | 'imperial', local;
+  `formatDistance(m, units)` in web/src/shared/format.ts, `useFormatDistance()` in shared/options.ts, used by
+  hud/Hud.tsx, layouts/RunBar.tsx, ActiveMission.tsx, ContactPanel.tsx and Dispatch.tsx; the Builder stays metric).
+  NUI only, no server change. Shipped allowed, defaults true, false, 'metric'. Walk:
+  officer/screens/abandonPress.walk.ts. Mock: `?abandonConfirm=0&oneClickRecalc=1&units=imperial` (with
+  `?hud=offroute`: the route line in miles).
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 

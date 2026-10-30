@@ -1013,6 +1013,22 @@ do
     H.ok((Check('OfficerOptions.defaults.openOn', 'active_on_run')), 'Active Mission on a run may be the default')
 end
 
+-- During a mission (step O10): abandon without the dialog, recalculate in one click, distances in miles; allowed,
+-- shipped as today, each with its comment.
+do
+    local function E(p) return S.entry(p) or {} end
+    for _, key in ipairs({ 'abandonConfirm', 'skipRecalcConfirm', 'distanceUnits' }) do
+        H.eq(E('OfficerOptions.allow.' .. key).default, true, key .. ': officers may change it')
+        H.ok((E('OfficerOptions.defaults.' .. key).desc or '') ~= '', key .. ': its default has a comment')
+    end
+    H.eq(E('OfficerOptions.defaults.abandonConfirm').default, true, 'Abandon asks in a dialog, as before')
+    H.eq(E('OfficerOptions.defaults.skipRecalcConfirm').default, false, 'Recalculate asks first, as before')
+    H.eq(E('OfficerOptions.defaults.distanceUnits').default, 'metric', 'metres, as before')
+    H.eq(E('OfficerOptions.defaults.distanceUnits').kind, 'enum', 'the units are a choice')
+    Err('OfficerOptions.defaults.distanceUnits', 'nautical', 'err.setting_option', 'units: metric or imperial')
+    H.ok((Check('OfficerOptions.defaults.distanceUnits', 'imperial')), 'miles may be the default')
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

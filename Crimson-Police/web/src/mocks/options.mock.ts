@@ -103,6 +103,17 @@ const SCHEMA: OptionDef[] = [
     { key: 'soundCalls', kind: 'bool', default: true, store: 'local', group: 'sounds', order: 10 },
     { key: 'soundUnit', kind: 'bool', default: true, store: 'local', group: 'sounds', order: 20 },
     { key: 'soundCues', kind: 'bool', default: true, store: 'local', group: 'sounds', order: 30 },
+    { key: 'abandonConfirm', kind: 'bool', default: true, store: 'server', group: 'run', order: 10 },
+    { key: 'skipRecalcConfirm', kind: 'bool', default: false, store: 'server', group: 'run', order: 20 },
+    {
+        key: 'distanceUnits',
+        kind: 'enum',
+        values: ['metric', 'imperial'],
+        default: 'metric',
+        store: 'local',
+        group: 'run',
+        order: 30,
+    },
 ];
 
 const defaults = Object.fromEntries(SCHEMA.map(d => [d.key, d.default])) as Record<string, OfficerOptionValue>;
@@ -113,9 +124,14 @@ if (listParam('fav').length) server.favouriteTypes = listParam('fav');
 if (listParam('hide').length) server.hiddenTypes = listParam('hide');
 if (PARAMS.get('oneClick') === '1') server.skipAcceptConfirm = true;
 if (PARAMS.get('oneClickClaim') === '1') server.skipClaimConfirm = true;
+// During a mission (step O10): ?abandonConfirm=0 (Abandon pressed twice) ?oneClickRecalc=1 ?units=imperial (with
+// ?hud=progress: miles on the HUD)
+if (PARAMS.get('abandonConfirm') === '0') server.abandonConfirm = false;
+if (PARAMS.get('oneClickRecalc') === '1') server.skipRecalcConfirm = true;
 const local: Record<string, OfficerOptionValue> = {};
 if (PARAMS.get('hudSide') === 'left') local.hudSide = 'left';
 if (PARAMS.get('rememberFilters') === '1') local.rememberFilters = true;
+if (PARAMS.get('units') === 'imperial') local.distanceUnits = 'imperial';
 if (PARAMS.get('hudCompact') === '1') local.hudCompact = true;
 if (PARAMS.get('reduceMotion') === '1') local.reduceMotion = true;
 if (Number(PARAMS.get('hudScale')) > 0) local.hudScale = Math.min(1.3, Math.max(0.8, Number(PARAMS.get('hudScale'))));

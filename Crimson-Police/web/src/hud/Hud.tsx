@@ -5,10 +5,10 @@ import { useMemo } from 'react';
 import { Badge, Icon, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';
 import { ACTION_LEFT_SHOWN, secondsSince } from '../shared/data';
-import { formatDistance, formatDuration } from '../shared/format';
+import { formatDuration } from '../shared/format';
 import { useCountdown } from '../shared/hooks';
 import { t } from '../shared/i18n';
-import { useOption } from '../shared/options';
+import { useFormatDistance, useOption } from '../shared/options';
 import type { HudObjective, HudState } from '../shared/types';
 import type { HudContact } from '../types/custody';
 import { ContactCard } from './ContactCard';
@@ -35,6 +35,7 @@ function Timer({ timer }: { timer: NonNullable<HudState['timer']> }) {
 }
 
 function RouteLine({ route }: { route: NonNullable<HudState['route']> }) {
+    const formatDistance = useFormatDistance();
     const start = useMemo(
         () =>
             (route.status === 'off' || route.status === 'action') && route.secondsLeft !== null
@@ -114,6 +115,7 @@ function RouteLine({ route }: { route: NonNullable<HudState['route']> }) {
 
 // Where the objective pointer leads and how far (CP.Markers, Config.Markers.hudLine): the look of the route line.
 function TargetLine({ target }: { target: NonNullable<HudState['target']> }) {
+    const formatDistance = useFormatDistance();
     return (
         <div className="cp-hud__route is-target">
             <Icon name="navigation" size={15} />

@@ -10,6 +10,7 @@ import {
     useState,
     type ReactNode,
 } from 'react';
+import { formatDistance, type DistanceUnits } from './format';
 import { usePush } from './hooks';
 import { clientAction, useNuiEvent } from './nui';
 import type { ApiResult, OfficerOptionValue, Session } from './types';
@@ -96,4 +97,10 @@ export function useOption<T extends OfficerOptionValue = OfficerOptionValue>(key
     if (key in local) return local[key] as T;
     if (key in server) return server[key] as T;
     return defaults[key] as T | undefined;
+}
+
+// The officer's distance format (option distanceUnits, kept on this PC): metres -> "1.2 km" or "0.7 mi".
+export function useFormatDistance(): (metres: number | null | undefined) => string {
+    const units: DistanceUnits = useOption('distanceUnits') === 'imperial' ? 'imperial' : 'metric';
+    return useCallback((metres: number | null | undefined) => formatDistance(metres, units), [units]);
 }
