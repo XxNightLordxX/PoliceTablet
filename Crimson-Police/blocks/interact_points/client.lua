@@ -2,6 +2,12 @@
 
 local BLOCK = 'interact_points'
 
+-- An objective cue, unless the officer turned the cues off on this PC (My options -> Sounds).
+local function Cue(name)
+    if CP.Options and CP.Options.sound then return CP.Options.sound('cues', name, 'HUD_MINI_GAME_SOUNDSET', false) end
+    PlaySoundFrontend(-1, name, 'HUD_MINI_GAME_SOUNDSET', false)
+end
+
 local MARKER_DISTANCE = 40.0
 local TARGET_DISTANCE = 2.5
 local EVENT_MS = 5000
@@ -372,7 +378,7 @@ local function Announce(ctx, st, prev, data)
                 local f = p.followUp or {}
                 Say(st, CP.L('block.interact_points.hud.found_seize',
                     { label = what, action = Txt(f.label) or CP.L('block.interact_points.followup_default') }))
-                PlaySoundFrontend(-1, 'CHECKPOINT_NORMAL', 'HUD_MINI_GAME_SOUNDSET', false)
+                Cue('CHECKPOINT_NORMAL')
             elseif p.find and p.status == 'done' then
                 Say(st, CP.L('block.interact_points.hud.find',
                     { item = CP.L(('block.interact_points.find.%s'):format(p.find)) }))
@@ -384,7 +390,7 @@ local function Announce(ctx, st, prev, data)
                                 or 'block.interact_points.device_default'
                         )
                     Say(st, CP.L('block.interact_points.hud.found', { label = what }))
-                    PlaySoundFrontend(-1, 'CHECKPOINT_NORMAL', 'HUD_MINI_GAME_SOUNDSET', false)
+                    Cue('CHECKPOINT_NORMAL')
                 else
                     Say(st, CP.L('block.interact_points.hud.nothing'))
                 end

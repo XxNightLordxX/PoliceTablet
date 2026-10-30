@@ -1419,6 +1419,9 @@ Config.OfficerOptions = {
         toastTime = true,            -- how long notifications stay on screen (kept on this PC)
         resultTime = true,           -- how long the mission result card stays on screen (kept on this PC)
         quietRun = true,             -- fewer pop-ups during a mission: social news goes to the bell (kept on this PC)
+        soundCalls = true,           -- the tone of a new mission call (kept on this PC)
+        soundUnit = true,            -- the tone of a unit invite and a ready check (kept on this PC)
+        soundCues = true,            -- the objective cues on a run: checkpoints, a defused target (kept on this PC)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -1434,6 +1437,9 @@ Config.OfficerOptions = {
         resultTime = 25,             -- seconds the mission result card stays on screen (25 = as before)
         quietRun = false,            -- true = during a mission, unit invites, commendations, rewards and profile news
                                      -- go only to the bell; false = they pop up as before
+        soundCalls = true,           -- true = a new mission call plays its tone (as before); false = no tone
+        soundUnit = true,            -- true = a unit invite and a ready check play a tone (as before); false = none
+        soundCues = true,            -- true = a checkpoint, defused target or found item plays a cue (as before)
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick

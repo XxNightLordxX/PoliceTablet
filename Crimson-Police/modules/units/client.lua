@@ -6,9 +6,16 @@ local Units = CP.Units
 local CUE_MIN_GAP_MS = 3000          -- at most one sound per 3 s (several invites at once)
 local SOUND_NAME = 'Text_Arrive_Tone'
 local SOUND_SET = 'Phone_SoundSet_Default'
+
 local READY_KEY = 'crimsonpolice_ready'
 local LABEL_MAX = 64
 local SETTINGS_WAIT_MS = 10000       -- the key waits this long at most for the settings changed in game
+
+-- The tone, unless the officer turned the unit tone off on this PC (My options -> Sounds).
+local function Tone()
+    if CP.Options and CP.Options.sound then return CP.Options.sound('unit', SOUND_NAME, SOUND_SET, true) end
+    PlaySoundFrontend(-1, SOUND_NAME, SOUND_SET, true)
+end
 
 local lastCueAt = nil
 local pendingCheck = nil             -- { typeLabel, expiresAt (game timer ms) } while a ready check waits for us
@@ -27,7 +34,7 @@ RegisterNetEvent(CP.e('client:push'), function(topic, data)
     local now = GetGameTimer()
     if lastCueAt and now - lastCueAt < CUE_MIN_GAP_MS then return end
     lastCueAt = now
-    PlaySoundFrontend(-1, SOUND_NAME, SOUND_SET, true)
+    Tone()
 end)
 
 -- ============================================================================
@@ -51,7 +58,7 @@ RegisterNetEvent(CP.e('client:readyCheck'), function(data)
         end
     end
     pendingCheck = { typeLabel = label, expiresAt = GetGameTimer() + seconds * 1000 }
-    PlaySoundFrontend(-1, SOUND_NAME, SOUND_SET, true)
+    Tone()
     if not (CP.Tablet and CP.Tablet.notify) then return end
     local vars = { type = label, leader = leader, seconds = seconds, twists = table.concat(names, ', ') }
     CP.Tablet.notify('info', CP.L(#names > 0 and 'unit.ready.toast_twists' or 'unit.ready.toast', vars), {

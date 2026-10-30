@@ -79,6 +79,9 @@ const SCHEMA: OptionDef[] = [
         order: 20,
     },
     { key: 'quietRun', kind: 'bool', default: false, store: 'local', group: 'popups', order: 30 },
+    { key: 'soundCalls', kind: 'bool', default: true, store: 'local', group: 'sounds', order: 10 },
+    { key: 'soundUnit', kind: 'bool', default: true, store: 'local', group: 'sounds', order: 20 },
+    { key: 'soundCues', kind: 'bool', default: true, store: 'local', group: 'sounds', order: 30 },
 ];
 
 const defaults = Object.fromEntries(SCHEMA.map(d => [d.key, d.default])) as Record<string, OfficerOptionValue>;

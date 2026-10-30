@@ -218,6 +218,59 @@ do
 end
 kvp['crimsonpolice:options'] = nil
 
+-- Sounds (shared/options_sounds.lua, step O7): the call tone, the unit tone and the objective cues (this PC)
+do
+    CP.Access.setSession(Session({}, nil))
+    kvp['crimsonpolice:options'] = nil
+    local snd = O.localValues()
+    H.ok(snd.soundCalls == true and snd.soundUnit == true and snd.soundCues == true,
+        'the sound options ship as today: every tone plays')
+    local played, toasts = {}, {}
+    _G.PlaySoundFrontend = function(_, name, set) played[#played + 1] = name .. '/' .. set end
+    CP.Tablet.notify = function(kind, text) toasts[#toasts + 1] = text end
+    for _, name in ipairs({ 'RegisterKeyMapping', 'RegisterCommand', 'AddStateBagChangeHandler' }) do
+        _G[name] = _G[name] or function() end
+    end
+    H.load('modules/missioncalls/client.lua')
+    H.load('modules/units/client.lua')
+    local function Call()
+        H.clockMs = H.clockMs + 10000
+        H.fire('crimson-police:client:missionCall', nil, { code = 'MC-1', typeLabel = 'Patrol', priority = 2 })
+    end
+    Call()
+    H.ok(#played == 1 and #toasts == 1, 'soundCalls on: a new call pops up with its tone')
+    H.ok((O.setLocal('soundCalls', false)) and O.get('soundCalls') == false, 'the call tone is turned off on this PC')
+    Call()
+    H.ok(#played == 1 and #toasts == 2, 'soundCalls off: the next call pops up silently')
+    H.clockMs = H.clockMs + 10000
+    H.fire('crimson-police:client:push', nil, 'unit', { invited = true })
+    H.eq(#played, 2, 'the call tone off leaves the unit invite tone on')
+    O.setLocal('soundUnit', false)
+    H.clockMs = H.clockMs + 10000
+    H.fire('crimson-police:client:push', nil, 'unit', { invited = true })
+    H.fire('crimson-police:client:readyCheck', nil, { typeLabel = 'Patrol', expiresIn = 20, leaderName = 'A B' })
+    H.ok(#played == 2 and #toasts == 3, 'soundUnit off: the invite and the ready check are silent, the toast shows')
+    H.eq(O.sound('cues', 'CHECKPOINT_NORMAL', 'HUD_MINI_GAME_SOUNDSET'), true, 'soundCues on: an objective cue plays')
+    O.setLocal('soundCues', false)
+    H.eq(O.sound('cues', 'CHECKPOINT_NORMAL', 'HUD_MINI_GAME_SOUNDSET'), false, 'soundCues off: the cue is silent')
+    H.eq(#played, 3, 'only the one cue played')
+    local keepAllow = Config.OfficerOptions.allow.soundCalls
+    Config.OfficerOptions.allow.soundCalls = false
+    Call()
+    H.eq(#played, 4, 'allow.soundCalls = false: the stored off is ignored and the call tone plays')
+    Config.OfficerOptions.allow.soundCalls = keepAllow
+    for _, b in ipairs({ 'checkpoint_route', 'skill_check', 'interact_points' }) do
+        local fb = assert(io.open(H.root .. 'blocks/' .. b .. '/client.lua', 'r'))
+        local code = fb:read('a')
+        fb:close()
+        local _, direct = code:gsub('PlaySoundFrontend%(', '')
+        H.ok(direct == 1 and code:find('CP.Options.sound(\'cues\'', 1, true) ~= nil,
+            b .. ': its cues go through CP.Options.sound (soundCues)')
+    end
+    CP.Tablet.notify = nil
+    kvp['crimsonpolice:options'] = nil
+end
+
 -- the client file uses no os or io
 local f = assert(io.open(H.root .. 'modules/options/client.lua', 'r'))
 local src = f:read('a')

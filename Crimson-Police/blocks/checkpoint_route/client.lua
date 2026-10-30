@@ -2,6 +2,12 @@
 
 local BLOCK = 'checkpoint_route'
 
+-- An objective cue, unless the officer turned the cues off on this PC (My options -> Sounds).
+local function Cue(name)
+    if CP.Options and CP.Options.sound then return CP.Options.sound('cues', name, 'HUD_MINI_GAME_SOUNDSET', false) end
+    PlaySoundFrontend(-1, name, 'HUD_MINI_GAME_SOUNDSET', false)
+end
+
 local VIEW_DISTANCE = 150.0      -- markers are drawn only this close to the current checkpoint
 local STOP_SPEED = 1.5           -- m/s: slower than this counts as stopped
 local RETRY_MS = 2500            -- re-report a checkpoint the server has not confirmed yet
@@ -363,7 +369,7 @@ local function Apply(ctx, st, data)
     st.courseRunning = running
     if st.lastCurrent ~= data.current then
         if st.lastCurrent ~= nil and data.current ~= nil then
-            PlaySoundFrontend(-1, 'CHECKPOINT_NORMAL', 'HUD_MINI_GAME_SOUNDSET', false)
+            Cue('CHECKPOINT_NORMAL')
         end
         st.lastCurrent = data.current
         st.holdStart, st.reported, st.missedHint, st.street, st.transient = nil, nil, nil, nil, nil
@@ -372,7 +378,7 @@ local function Apply(ctx, st, data)
     if data.finished and not st.finishedShown then
         st.finishedShown = true
         ClearBlips(st)
-        PlaySoundFrontend(-1, 'CHECKPOINT_PERFECT', 'HUD_MINI_GAME_SOUNDSET', false)
+        Cue('CHECKPOINT_PERFECT')
     end
 end
 

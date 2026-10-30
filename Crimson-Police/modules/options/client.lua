@@ -117,6 +117,19 @@ function O.setLocal(key, value)
     return true, clean
 end
 
+-- The sound groups and the option that turns each on or off on this PC (shared/options_sounds.lua).
+local SOUND_OPTION = { calls = 'soundCalls', unit = 'soundUnit', cues = 'soundCues' }
+
+-- Plays a frontend sound of a group ('calls', 'unit' or 'cues') unless the officer turned that group off on this PC.
+-- Returns true when it played.
+function O.sound(group, name, set, p3)
+    local key = SOUND_OPTION[group]
+    if key and O.get(key) == false then return false end
+    if type(PlaySoundFrontend) ~= 'function' then return false end
+    PlaySoundFrontend(-1, name, set, p3 == true)
+    return true
+end
+
 -- The push 'options' ({ values }): the officer's server options changed.
 RegisterNetEvent(CP.e('client:push'), function(topic, data)
     if topic ~= 'options' or type(data) ~= 'table' or type(data.values) ~= 'table' then return end

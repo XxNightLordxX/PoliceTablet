@@ -968,6 +968,16 @@ do
         'the result card time bounds edit as a shortest and a longest time')
 end
 
+-- Sounds (step O7): the call tone, the unit tone and the objective cues, allowed, all on as today, commented.
+do
+    local function E(p) return S.entry(p) or {} end
+    for _, key in ipairs({ 'soundCalls', 'soundUnit', 'soundCues' }) do
+        H.eq(E('OfficerOptions.allow.' .. key).default, true, key .. ': officers may change it')
+        H.eq(E('OfficerOptions.defaults.' .. key).default, true, key .. ': the tone plays, as before')
+        H.ok((E('OfficerOptions.defaults.' .. key).desc or '') ~= '', key .. ': its default has a comment')
+    end
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

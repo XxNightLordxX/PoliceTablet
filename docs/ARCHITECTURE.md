@@ -121,6 +121,7 @@ PoliceTablet/                      (git repo)
     shared/options_hud.lua         The mission HUD's officer options: side, size, compact, fewer animations (§5.48)
     shared/options_look.lua        Easier to read: the tablet look on the HUD, larger text (§5.48)
     shared/options_popups.lua      Pop-ups: toast time, result card time, fewer pop-ups on a run (§5.48)
+    shared/options_sounds.lua      Sounds: mission call tone, unit tone, objective cues on or off (§5.48)
     shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
     config/banned_words.txt        the default banned-word list for profile bios (one word or phrase a line)
@@ -3279,6 +3280,11 @@ no option is registered by this module: each feature registers its own keys.
   on and `CP.Runs.current()` is set: App.tsx `addToast` skips it and the header bell (layouts/NotificationBell.tsx)
   still lists it. Any other channel (route, custody, run, warnings, errors) always shows. Shipped allowed, defaults
   'normal' / 25 / false (as before). Mock: `?result=parity&resultTime=10` (also `toastTime=short|long`).
+- Sounds (step O7, shared/options_sounds.lua, group `sounds`, all `local` bools): `soundCalls`, `soundUnit`,
+  `soundCues`. `CP.Options.sound(group, name, set, p3)` (modules/options/client.lua) plays `PlaySoundFrontend` only
+  while the group's option is on (group 'calls' | 'unit' | 'cues'); modules/missioncalls (calls), modules/units
+  (invite and ready check) and the blocks checkpoint_route, skill_check and interact_points (cues) call it. The
+  toasts and HUD lines are not affected; the Builder's own sound is not grouped. Shipped allowed, all true.
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 

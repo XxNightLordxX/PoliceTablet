@@ -6,7 +6,14 @@ local MC = CP.MissionCalls
 
 local SOUND_NAME = 'Event_Message_Purple'
 local SOUND_SET = 'GTAO_FM_Events_Soundset'
+
 local CUE_MIN_GAP_MS = 4000          -- at most one tone per 4 s (several calls at once)
+
+-- The tone, unless the officer turned the mission call tone off on this PC (My options -> Sounds).
+local function Tone()
+    if CP.Options and CP.Options.sound then return CP.Options.sound('calls', SOUND_NAME, SOUND_SET, true) end
+    PlaySoundFrontend(-1, SOUND_NAME, SOUND_SET, true)
+end
 
 local lastCueAt = nil
 
@@ -46,5 +53,5 @@ RegisterNetEvent(CP.e('client:missionCall'), function(call)
     local now = GetGameTimer()
     if lastCueAt and now - lastCueAt < CUE_MIN_GAP_MS then return end
     lastCueAt = now
-    PlaySoundFrontend(-1, SOUND_NAME, SOUND_SET, true)
+    Tone()
 end)

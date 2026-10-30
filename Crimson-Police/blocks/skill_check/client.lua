@@ -2,6 +2,12 @@
 
 local BLOCK = 'skill_check'
 
+-- An objective cue, unless the officer turned the cues off on this PC (My options -> Sounds).
+local function Cue(name)
+    if CP.Options and CP.Options.sound then return CP.Options.sound('cues', name, 'HUD_MINI_GAME_SOUNDSET', false) end
+    PlaySoundFrontend(-1, name, 'HUD_MINI_GAME_SOUNDSET', false)
+end
+
 local MARKER_DISTANCE = 30.0
 local TARGET_RADIUS = 1.0
 local TARGET_DISTANCE = 2.5
@@ -419,7 +425,7 @@ local function Apply(ctx, st, data)
         local o = old[i]
         if o and o.status == 'armed' and t.status == 'defused' then
             Say(st, CP.L('block.skill_check.hud.defused'))
-            PlaySoundFrontend(-1, 'CHECKPOINT_PERFECT', 'HUD_MINI_GAME_SOUNDSET', false)
+            Cue('CHECKPOINT_PERFECT')
         end
     end
     SyncZones(ctx, st)
