@@ -913,6 +913,15 @@ do
                     ~= nil,
             'step P12: the call lane (120-600 s, 2 open) and the staff call wait (60-120 s) ship off, with comments'
         )
+        H.ok(
+            d.notices.on == false and d.crossDept.on == false and E('MissionControls.noticeMaxLength').default == 280
+                and E('MissionControls.noticeMaxLength').max == 280
+                and E('MissionControls.noticeMaxLength').desc:find('characters a department notice may hold', 1, true) ~= nil
+                and E('MissionControls.noticesPerDay').default == 5 and E('MissionControls.noticesPerDay').max == 50
+                and E('MissionControls.noticesPerDay').desc:find('department notices one supervisor', 1, true)
+                    ~= nil,
+            'step P13: department notices (280 characters, 5 a day) and Cross-Department participation ship off'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

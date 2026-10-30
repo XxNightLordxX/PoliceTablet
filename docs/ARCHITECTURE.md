@@ -3509,6 +3509,24 @@ pattern, so a missing module reads as config).
   check. `staffCallWait`, kind `number`, range 0-3600, shipped off with 60-120: `MC.create` reads it for the issuer's
   department and the issuer (`MC.staffWait`; a shorter wait relaxes, so the self rule keeps the setter on
   `Config.MissionCalls.staffCooldown`).
+- Department notices and Cross-Department participation (step P13). `notices`, kind `action` (modules/deptnotices,
+  `CP.DeptNotices`), per department, under the master switch, unbounded, shipped off: `server:sup:postNotice
+  { text, days, reason? }` (`Kit.supAction`, permission `DC.canChange`; the department is always the poster's own;
+  text through `CP.Corrections.noticeText` with `Config.MissionControls.noticeMaxLength` (`err.notice_text`,
+  `err.notice_banned`), days 1-30 `err.notice_expiry`, one a minute per player, `Config.MissionControls.noticesPerDay`
+  for supervisors `err.notice_per_day` (audit count), at most `CP.Corrections.NOTICES_ACTIVE` running for the
+  department `err.dept_notice_too_many`) saves a `cp_staff_notices` row with `departments = [dept]` and `by_actor =
+  'sup:<citizenid>'` (`Corr.insertNotice`; audit `deptNoticePost`, category board; `CP.Leaderboard.invalidate`), so
+  `LB.announcements(dept)` shows it on that department's Home only. `server:sup:endNotice { id }` ends a running
+  notice of the poster's department (`err.dept_notice_unknown` otherwise; audit `deptNoticeEnd`).
+  `sup:getDeptNotices` -> `{ department, short, maxLength, perDay?, usedToday?, activeMax, maxDays, notices }`
+  (web/src/supervisor/components/DeptNoticesCard.tsx on the Mission controls screen). The admin's staff notice limit
+  counts only notices whose `by_actor` is not `sup:` (`Corr.runningNotices`, `Corr.isDeptNotice`). `crossDept`, kind
+  `map` (modules/operations, `Ops.registerControls`), per department, under the master switch, unbounded, shipped
+  off; value `{ join, places (0 = no cap, at most Config.CrossDept.maxParticipants) }` (`Ops._cleanCross`; it never
+  relaxes, so it applies to the setter too); `viewExtra` gives `placesMax`. `Ops.join`, the waitlist refill and the
+  card's `joinBlocked` refuse `err.op_department_out` (join = false) and `err.op_department_full` (the department's
+  joiners reached places). The board lock (`Ops.isLocked`) and the launch cooldown are unchanged and server-wide.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through
@@ -3885,7 +3903,7 @@ Parity-plus: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfi
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
 `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`,
-`sup:getOfficerCooldowns` (`{ citizenid }`, step P7) and `admin:getMissionControls` (§5.49; rate 3);
+`sup:getDeptNotices` (step P13, §5.49), `sup:getOfficerCooldowns` (`{ citizenid }`, step P7) and `admin:getMissionControls` (§5.49; rate 3);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 
 Actions (write), each checks `CP.Permissions.can`:
@@ -3897,6 +3915,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:sup:setMissionControl` / `server:admin:setMissionControl` | `{ key, value, reason, requestId, department? (admin) }` → `{ department, key, value }` (rate 2; §5.49) | missionControls (supervisor: own department) / admin | deptcontrols |
 | `server:sup:resetMissionControl` / `server:admin:resetMissionControl` | `{ key, reason, requestId, department? (admin) }` → `{ department, key }` | missionControls / admin | deptcontrols |
 | `server:sup:clearCooldowns` | `{ citizenid, scope = type\|mission, key, reason }` → `{ used, max }` (§5.49, step P7) | Mission control clearCooldown | livectl |
+| `server:sup:postNotice` / `server:sup:endNotice` | `{ text, days, reason? }` → `{ id, department }` / `{ id, reason? }` → `{ id }` (§5.49, step P13) | Mission control notices (own department) | deptnotices |
 | `server:sup:addRunTime` | `{ runId, minutes, reason }` → `{ runId, timeAdded }` (§5.49, step P7) | Mission control addRunTime (own department) | livectl |
 | `server:sup:opLaunch` / `server:admin:opLaunch` | `{ missionId }` | launchCrossDept | operations |
 | `server:sup:opStart` / `server:admin:opStart` | — | launchCrossDept | operations |

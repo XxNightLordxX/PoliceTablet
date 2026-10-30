@@ -250,6 +250,14 @@ Config.MissionControls = {
         -- seconds a supervisor of his department waits between two mission calls he creates
         -- (MissionCalls.staffCooldown); the one who shortens it keeps the config wait for himself
         staffCallWait = { on = false, min = 60, max = 120 },
+        -- Supervisor UI: a supervisor posts a short notice (up to noticeMaxLength characters, 1 to 30 days) for his
+        -- own department only; its officers see it on Home -> Announcements, other departments never do. At most 5
+        -- run at once per department, the banned-word list applies, and every post and end is audited
+        notices = { on = false },
+        -- Cross-Department Missions: a supervisor keeps his department's officers out of them (they cannot join)
+        -- or caps how many of them may take part in one; every board still shows only the running operation and
+        -- the wait between launches stays server-wide
+        crossDept = { on = false },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 
@@ -264,6 +272,10 @@ Config.MissionControls = {
     missionBanPerDay = 3,
     -- calls one department's lane may have open at once (every open call still counts against MissionCalls.maxOpen)
     callLaneMaxOpen = 2,
+    -- characters a department notice may hold (at most 280, the length of an admin's staff notice)
+    noticeMaxLength = 280,
+    -- department notices one supervisor may post a day (admins any)
+    noticesPerDay = 5,
 }
 
 -- ============================================================================

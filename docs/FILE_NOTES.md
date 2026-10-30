@@ -1682,6 +1682,16 @@ expired row or a switched-off control = the config value. Other modules register
 read them with DC.get (callers use the Call('DeptControls', ...) pattern, so a missing module reads as config).
 ```
 
+## Crimson-Police/modules/deptnotices/server.lua
+
+```text
+CP.DeptNotices (server): a supervisor's department notices (step P13, the Mission control notices). A supervisor
+posts a short notice for his own department only; it shows on that department's Officer Home Announcements card
+next to the staff notices (cp_staff_notices, shared with CP.Corrections). Limits: Config.MissionControls
+noticeMaxLength characters, noticesPerDay a supervisor a day (admins any), at most CP.Corrections.NOTICES_ACTIVE
+running per department; the banned-word check of the profile applies. Every post and end is audited.
+```
+
 ## Crimson-Police/modules/disputes/server.lua
 
 ```text

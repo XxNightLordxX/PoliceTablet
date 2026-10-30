@@ -99,6 +99,83 @@ local function BannedSrc(src)
     return ok and type(info) == 'table' and Banned(info.citizenid)
 end
 
+-- ============================================================================
+--                     CROSS-DEPARTMENT PARTICIPATION (P13)
+-- ============================================================================
+-- A department's crossDept Mission control: { join = false } keeps its officers out of Cross-Department Missions;
+-- places caps how many of them take part in one (0 = no cap, never above Config.CrossDept.maxParticipants). The
+-- launch wait and the Hard rule lock (every board shows only the operation) stay server-wide.
+
+local CROSS_KEY = 'crossDept'
+
+local function CfgMax() return math.max(2, math.floor(tonumber(Cfg().maxParticipants) or 8)) end
+
+-- The control's value: { join = true | false, places = 0 .. maxParticipants }. strict: anything else is refused (a
+-- supervisor's change); else a saved value is moved inside (places past today's maximum become the maximum).
+local function CleanCross(v, strict)
+    if type(v) ~= 'table' or type(v.join) ~= 'boolean' then return nil end
+    for k in pairs(v) do
+        if k ~= 'join' and k ~= 'places' then
+            if strict then return nil end
+        end
+    end
+    local places = v.places == nil and 0 or math.tointeger(tonumber(v.places))
+    if not places or places < 0 then return nil end
+    if places > CfgMax() then
+        if strict then return nil end
+        places = CfgMax()
+    end
+    return { join = v.join, places = places }
+end
+Ops._cleanCross = CleanCross
+
+local function CrossRule(officer)
+    local dc = CP.DeptControls
+    if not (dc and dc.get) or type(officer) ~= 'table' or type(officer.department) ~= 'string' then return nil end
+    local ok, v = pcall(dc.get, officer.department, CROSS_KEY, officer)
+    if not ok then
+        CP.err(TAG, 'reading the %s control of %s failed: %s', CROSS_KEY, officer.department, tostring(v))
+        return nil
+    end
+    return type(v) == 'table' and v or nil
+end
+
+-- Why this officer's department keeps him out of the operation (errKey), or nil.
+local function DeptRefuses(cur, officer)
+    local rule = CrossRule(officer)
+    if not rule then return nil end
+    if rule.join == false then return 'err.op_department_out' end
+    local places = math.tointeger(tonumber(rule.places) or 0) or 0
+    if places <= 0 or not cur then return nil end
+    local n = 0
+    for _, p in ipairs(cur.participants or {}) do
+        if p.department == officer.department then n = n + 1 end
+    end
+    if n >= places then return 'err.op_department_full' end
+    return nil
+end
+
+function Ops.registerControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(CROSS_KEY, {
+        kind = 'map',
+        bounded = false,
+        configValue = function() return { join = true, places = 0 } end,
+        check = function(v)
+            local clean = CleanCross(v, true)
+            if not clean then return nil, 'err.control_value' end
+            return clean
+        end,
+        clamp = function(v) return CleanCross(v, false) end,
+        -- it only keeps officers out or caps places: it applies to the supervisor who set it too
+        relaxes = function() return false end,
+        viewExtra = function() return { placesMax = CfgMax() } end,
+    })
+    return true
+end
+Ops.registerControls()
+
 local function RunGet(runId)
     if not runId then return nil end
     local ok, run = Call('Runs', 'get', runId)
@@ -772,6 +849,8 @@ function Ops.join(src, opId)
     local cur, why = stateCheck()
     if not cur then return false, why end
     if Banned(officer.citizenid) then return false, 'err.mission_banned' end
+    local deptErr = DeptRefuses(cur, officer)
+    if deptErr then return false, deptErr end
     if InArena(src) then return false, 'err.in_arena' end
     if OnRun(src) then return false, 'err.already_on_run' end
     if IsOnCall(src) then
@@ -781,6 +860,8 @@ function Ops.join(src, opId)
     cur, why = stateCheck()
     if not cur then return false, why end
     if OnRun(src) then return false, 'err.already_on_run' end
+    deptErr = DeptRefuses(cur, officer)
+    if deptErr then return false, deptErr end
     local entry = Entry(officer, src)
     -- (while anyone waits, a freed place is theirs: new joiners queue behind them)
     if #cur.participants >= max or #(cur.waitlist or {}) > 0 then
@@ -808,7 +889,7 @@ local function FillFromWaitlist(cur)
         local w = table.remove(cur.waitlist, 1)
         local o = GetOfficer(w.src)
         local fits = o and o.citizenid == w.citizenid and not InArena(w.src) and not OnRun(w.src)
-            and not IsOnCall(w.src) and not Banned(w.citizenid)
+            and not IsOnCall(w.src) and not Banned(w.citizenid) and not DeptRefuses(cur, o)
         if fits and op == cur and cur.status == 'joining' and not cur.joinClosed and #cur.participants < max then
             w.joinedAt = os.time()
             cur.participants[#cur.participants + 1] = w
@@ -971,6 +1052,9 @@ function Ops.boardCard(src)
     local open = cur.status == 'joining' and not cur.joinClosed and cur.joinEndsAt ~= nil and cur.joinEndsAt > now
     -- joinBlocked (extra, docs/notes/run_ui.md): why this viewer cannot join, the error key Join would return.
     local joinBlocked = nil
+    -- step P13: his department opted out or its places are taken (the card still shows: the lock applies to all)
+    local deptErr = nil
+    if open and src ~= nil and not mine and not position then deptErr = DeptRefuses(cur, (GetOfficer(src))) end
     if not open then
         joinBlocked = 'err.op_join_closed'
     elseif mine then
@@ -983,6 +1067,8 @@ function Ops.boardCard(src)
         joinBlocked = 'err.invalid_payload'
     elseif BannedSrc(src) then
         joinBlocked = 'err.mission_banned'
+    elseif deptErr then
+        joinBlocked = deptErr
     elseif InArena(src) then
         joinBlocked = 'err.in_arena'
     elseif OnRun(src) then

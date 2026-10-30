@@ -21,6 +21,7 @@ import { hasKey, t } from '../../shared/i18n';
 import { useOptionalSession } from '../../shared/session';
 import type {
     CallLaneValue,
+    CrossDeptValue,
     MissionControlBounds,
     MissionControlState,
     MissionControlValue,
@@ -49,6 +50,13 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
             const lane = v && typeof v === 'object' && !Array.isArray(v) ? (v as CallLaneValue) : null;
             if (!lane || !Array.isArray(lane.spawnEvery)) return t('mc.value.callLane_none');
             return t('mc.value.callLane', { lo: lane.spawnEvery[0], hi: lane.spawnEvery[1], max: lane.maxOpen });
+        }
+        // crossDept (step P13): out, or joining with a cap on places (0 = no cap)
+        if (key === 'crossDept') {
+            const cd = v && typeof v === 'object' && !Array.isArray(v) ? (v as CrossDeptValue) : null;
+            if (cd && cd.join === false) return t('mc.value.crossDept_out');
+            if (cd && cd.places > 0) return t('mc.value.crossDept_places', { n: cd.places });
+            return t('mc.value.crossDept_open');
         }
         if (v === undefined || v === null) return '-';
         if (typeof v === 'boolean') return v ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off');

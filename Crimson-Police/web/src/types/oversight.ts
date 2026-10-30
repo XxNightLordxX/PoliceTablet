@@ -352,8 +352,14 @@ export interface CallLaneValue {
     areas: string[];
     types: Record<string, number>;
 }
+// crossDept (step P13): join = false keeps the department out of Cross-Department Missions; places caps how many of
+// its officers take part in one (0 = no cap)
+export interface CrossDeptValue {
+    join: boolean;
+    places: number;
+}
 export type MissionControlValue =
-    number | boolean | string | Record<string, number> | TypeSwitches | CallLaneValue | null;
+    number | boolean | string | Record<string, number> | TypeSwitches | CallLaneValue | CrossDeptValue | null;
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
 export interface MissionControlState {
     key: string;
@@ -408,6 +414,28 @@ export interface MissionControlState {
     laneAreas?: { key: string; label: string }[];
     maxOpenCap?: number;
     weightMax?: number;
+    // crossDept (step P13): the most places a department may keep (Config.CrossDept.maxParticipants)
+    placesMax?: number;
+    // notices (step P13): characters a department notice may hold (Config.MissionControls.noticeMaxLength)
+    maxLength?: number;
+}
+// Supervisor UI · Department notices (step P13, sup:getDeptNotices): his department's notices still running.
+export interface DeptNotice {
+    id: number;
+    text?: string;
+    expiresAt?: number;
+    createdAt?: number;
+}
+export interface DeptNoticesView {
+    department: string;
+    short: string;
+    maxLength: number;
+    // supervisors only (admins post any number)
+    perDay?: number;
+    usedToday?: number;
+    activeMax: number;
+    maxDays: number;
+    notices: DeptNotice[];
 }
 export interface MissionControlsDepartment {
     key: string;

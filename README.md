@@ -599,6 +599,19 @@ Supervisor UI → **Mission controls** (below).
     supervisors wait between two mission calls they create, instead of `Config.MissionCalls.staffCooldown`. The one
     who shortens it keeps the config wait for himself.
 
+- **Department** (step P13, per department, off when you install, under the master switch):
+  - `notices = { on = false }` (**Department notices**): in Supervisor UI → Mission controls a supervisor posts a
+    short notice for his own department only (1 to 30 days). Its officers see it on Home → **Announcements**; other
+    departments never do. Up to `Config.MissionControls.noticeMaxLength` (`280`) characters, the banned-word list
+    applies, at most `Config.MissionControls.noticesPerDay` (`5`) a supervisor a day (admins any) and at most 5
+    running per department (they do not count against the 5 staff notices an admin may run). Any supervisor of the
+    department may **End** one early. Every post and end is in the audit log; admins see and remove them with the
+    staff notices (Leaderboards → Recognition, posted by `sup:<citizenid>`).
+  - `crossDept = { on = false }` (**Cross-Department participation**): a supervisor keeps his department's officers
+    out of Cross-Department Missions (their Join is refused and the card says why) or caps how many places they may
+    take in one (0 = no cap, at most `Config.CrossDept.maxParticipants`). It applies to him too. Every department's
+    board still shows only the running operation (the lock), and the wait between launches stays server-wide.
+
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
   supervisor may pick: `<control> = { on = true, min = ..., max = ... }`. Switching either off again brings back

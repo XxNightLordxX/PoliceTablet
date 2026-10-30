@@ -24,6 +24,7 @@ import { hasKey, t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import type {
     CallLaneValue,
+    CrossDeptValue,
     MissionControlState,
     MissionControlValue,
     MissionControlsView,
@@ -33,6 +34,7 @@ import type {
 import { controlName, useValueText } from '../../admin/components/MissionControlsCard';
 import { ReasonChips } from '../../admin/components/ReasonChips';
 import { useAdminAction } from '../../admin/components/kit';
+import { DeptNoticesCard } from '../components/DeptNoticesCard';
 import './MissionControls.css';
 
 const REASON_MAX = 255;
@@ -231,6 +233,45 @@ function CallLaneEditor({
     );
 }
 
+// The crossDept control (step P13): whether the department's officers join Cross-Department Missions and how many
+// places they may take in one (0 = no cap).
+function crossOf(draft: MissionControlValue): CrossDeptValue {
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<CrossDeptValue>) : {};
+    return { join: v.join !== false, places: typeof v.places === 'number' ? v.places : 0 };
+}
+
+function CrossDeptEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const cd = crossOf(draft);
+    const places = { ...c, min: 0, max: c.placesMax ?? 8, integer: true, key: 'crossDeptPlaces' };
+    return (
+        <div className="sup-mc-sliders">
+            <Toggle
+                checked={cd.join}
+                disabled={disabled}
+                label={cd.join ? t('sup.cross.join_on') : t('sup.cross.join_off')}
+                onChange={v => onChange({ ...cd, join: v })}
+            />
+            <Slider
+                c={places}
+                label={t('sup.cross.places')}
+                value={fit(places, cd.places)}
+                disabled={disabled || !cd.join}
+                onChange={n => onChange({ ...cd, places: n })}
+            />
+        </div>
+    );
+}
+
 function Slider({
     c,
     label,
@@ -280,6 +321,7 @@ function Editor({
     const text = useValueText();
     if (c.key === 'types') return <TypeSwitchesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     if (c.key === 'callLane') return <CallLaneEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'crossDept') return <CrossDeptEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     // a choice control (step P9: difficulty; step P10: featuredType): the names the admin offers
     if (c.kind === 'choice') {
         const offered = asArray<string>(c.offered);
@@ -670,6 +712,8 @@ export default function MissionControls() {
     const groups = GROUPS.map(g => ({ key: g, rows: controls.filter(c => groupOf(c) === g) })).filter(
         g => g.rows.length > 0,
     );
+    // Department notices (step P13): an action control with its own card
+    const notices = asArray(dept?.controls).some(c => c.key === 'notices' && c.active);
 
     const confirm = async (reason: string) => {
         if (!pending) return;
@@ -715,7 +759,7 @@ export default function MissionControls() {
             ) : null}
             {!data && loading ? <LoadingBlock /> : null}
             {!data && !loading && error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
-            {data && groups.length === 0 ? (
+            {data && groups.length === 0 && !notices ? (
                 <Card>
                     <EmptyState icon="clock" title={t('sup.controls.empty')} text={t('sup.controls.empty_text')} />
                 </Card>
@@ -736,6 +780,7 @@ export default function MissionControls() {
                     </div>
                 </Card>
             ))}
+            {notices ? <DeptNoticesCard /> : null}
             <ReasonDialog
                 pending={pending}
                 busy={busy}

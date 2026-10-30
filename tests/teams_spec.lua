@@ -891,6 +891,29 @@ H.eq(data, 'err.mission_banned', 'an officer with a mission ban cannot join')
 H.eq(O.boardCard(4).joinBlocked, 'err.mission_banned', 'joinBlocked = the join error (mission ban)')
 H.eq(O.boardCard(2).joinBlocked, nil, 'another officer is not affected')
 CP.MissionBan = nil
+-- step P13: a department that opted out (the crossDept Mission control) cannot join, and its board still shows the
+-- operation (the Hard rule lock applies to every department); a department's places cap its joiners
+local savedDC = CP.DeptControls
+local cross = { fib = { join = false, places = 0 } }
+CP.DeptControls = {
+    get = function(dept, key) return key == 'crossDept' and cross[dept] or nil end,
+}
+ok, data = Act('server:joinOperation', 5, opId)
+H.eq(data, 'err.op_department_out', 'an FIB officer cannot join while FIB opted out')
+H.eq(O.boardCard(5).joinBlocked, 'err.op_department_out', 'his card says why')
+H.ok(O.boardCard(5).id == opId and O.isLocked(), 'his board still shows only the operation (the lock)')
+H.eq(O.boardCard(2).joinBlocked, nil, 'SAST is not affected')
+cross = { sast = { join = true, places = 1 } }
+ok = Act('server:joinOperation', 2, opId)
+H.eq(ok, true, 'the first SAST officer takes the one SAST place')
+ok, data = Act('server:joinOperation', 3, opId)
+H.eq(data, 'err.op_department_full', 'the second SAST officer is refused (places 1)')
+H.eq(O.boardCard(3).joinBlocked, 'err.op_department_full', 'and his card says why')
+Act('server:leaveOperation', 2)
+CP.DeptControls = savedDC
+H.eq(O._cleanCross({ join = true, places = 99 }, true), nil, 'check: more places than maxParticipants is refused')
+H.eq(O._cleanCross({ join = true, places = 99 }, false).places, 8, 'a saved value is moved inside')
+H.eq(O._cleanCross({ join = 'yes' }, true), nil, 'join is true or false')
 
 Clear()
 ok, data = Act('server:joinOperation', 2, opId)

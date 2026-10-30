@@ -109,6 +109,66 @@ local function Scalar(sql, params)
     return res
 end
 
+-- ============================================================================
+--                STAFF NOTICES (SHARED WITH DEPARTMENT NOTICES)
+-- ============================================================================
+-- The admin's staff notices and a supervisor's department notices (step P13, CP.DeptNotices) share cp_staff_notices
+-- and the Home Announcements card. A department notice is saved with by_actor 'sup:<citizenid>' and only its own
+-- department in departments; it never counts against the NOTICES_ACTIVE staff notices an admin may run.
+
+Corr.NOTICE_MAX = NOTICE_MAX
+Corr.NOTICE_DAYS = NOTICE_DAYS
+Corr.NOTICES_ACTIVE = NOTICES_ACTIVE
+Corr.NOTICE_EVERY_MS = NOTICE_EVERY_MS
+Corr.DEPT_NOTICE_PREFIX = 'sup:'
+
+-- A notice's text: control characters as spaces, trimmed, 1 to maxLen characters, no < or >, no banned word.
+-- Returns text | nil, errKey.
+function Corr.noticeText(raw, maxLen)
+    if type(raw) ~= 'string' then return nil, 'err.notice_text' end
+    local text = U.trim(raw:gsub('[%c]', ' '))
+    local n = utf8.len(text)
+    if text == '' or not n or n > (maxLen or NOTICE_MAX) or text:find('[<>]') then return nil, 'err.notice_text' end
+    if Has('Profile', 'hasBannedWord') and CP.Profile.hasBannedWord(text) then return nil, 'err.notice_banned' end
+    return text
+end
+
+-- True for a supervisor's department notice (by_actor starts with 'sup:').
+function Corr.isDeptNotice(byActor)
+    local p = Corr.DEPT_NOTICE_PREFIX
+    return type(byActor) == 'string' and byActor:sub(1, #p) == p
+end
+
+-- The notices still running: { { id, departments = { ... } | nil, by } }, or nil when the database failed.
+function Corr.runningNotices(now)
+    local rows = Query([[SELECT id, departments, by_actor FROM cp_staff_notices WHERE removed_at IS NULL
+        AND expires_at > FROM_UNIXTIME(?)]], { now or os.time() })
+    if not rows then return nil end
+    local out = {}
+    for _, r in ipairs(rows) do
+        local depts = U.jsonField(r.departments)
+        out[#out + 1] = {
+            id = math.floor(Num(r.id, 0)),
+            departments = type(depts) == 'table' and #depts > 0 and depts or nil,
+            by = tostring(r.by_actor),
+        }
+    end
+    return out
+end
+
+-- Saves a notice: id | nil.
+function Corr.insertNotice(text, depts, expires, byActor, now)
+    Db()
+    local okI, id = pcall(MySQL.insert.await, [[INSERT INTO cp_staff_notices (text, departments, expires_at, by_actor,
+        created_at) VALUES (?, ?, FROM_UNIXTIME(?), ?, FROM_UNIXTIME(?))]],
+        { text, depts and json.encode(depts) or nil, expires, byActor, now or os.time() })
+    if not okI or not id then
+        CP.err(TAG, 'saving a notice failed: %s', tostring(id))
+        return nil
+    end
+    return math.floor(Num(id, 0))
+end
+
 local function Marks(n)
     local t = {}
     for i = 1, n do t[i] = '?' end
@@ -1728,11 +1788,8 @@ if Kit and Kit.action then
 
     Kit.action('server:admin:postNotice', 'officerRecords', function(ctx)
         local p = ctx.payload
-        if type(p.text) ~= 'string' then return false, 'err.notice_text' end
-        local text = U.trim(p.text:gsub('[%c]', ' '))
-        local n = utf8.len(text)
-        if text == '' or not n or n > NOTICE_MAX or text:find('[<>]') then return false, 'err.notice_text' end
-        if Has('Profile', 'hasBannedWord') and CP.Profile.hasBannedWord(text) then return false, 'err.notice_banned' end
+        local text, errT = Corr.noticeText(p.text, NOTICE_MAX)
+        if not text then return false, errT end
         local now = os.time()
         local expires = Int(p.expiresAt, 1, 2147483647)
         if not expires or expires <= now or expires > now + NOTICE_DAYS * 86400 then
@@ -1749,18 +1806,16 @@ if Kit and Kit.action then
             end
         end
         if not CP.Net.rateOk(ctx.src, 'notice:post', 1, NOTICE_EVERY_MS) then return false, 'err.rate_limited' end
-        local active = math.floor(Num(
-            Scalar([[SELECT COUNT(*) AS n FROM cp_staff_notices WHERE removed_at IS NULL
-            AND expires_at > FROM_UNIXTIME(?)]], { now }),
-            0
-        ))
+        -- the staff notices running (a supervisor's department notices have their own limit, CP.DeptNotices)
+        local running = Corr.runningNotices(now)
+        if not running then return false, 'err.internal' end
+        local active = 0
+        for _, r in ipairs(running) do
+            if not Corr.isDeptNotice(r.by) then active = active + 1 end
+        end
         if active >= NOTICES_ACTIVE then return false, 'err.notice_too_many' end
-        Db()
-        local okI, id = pcall(MySQL.insert.await,
-            [[INSERT INTO cp_staff_notices (text, departments, expires_at, by_actor,
-            created_at) VALUES (?, ?, FROM_UNIXTIME(?), ?, FROM_UNIXTIME(?))]],
-            { text, depts and json.encode(depts) or nil, expires, Clip(ctx.actor, 50), now })
-        if not okI or not id then return false, 'err.internal' end
+        local id = Corr.insertNotice(text, depts, expires, Clip(ctx.actor, 50), now)
+        if not id then return false, 'err.internal' end
         ctx.audit('noticePost', ('notice:%s'):format(tostring(id)), nil, Clip(text, 64), { category = 'board' })
         Call('Leaderboard', 'invalidate')
         return true, { id = math.floor(Num(id, 0)) }

@@ -317,5 +317,7 @@
   "unit.ready.toast_twists": "{leader} accepted {type} for your unit with these twists: {twists}. Answer on the Unit screen within {seconds} s.",
   "unit.ui.ready_twists": "Twists: {twists}",
   "unit.ui.ready_key": "Or press {key}.",
-  "unit.ui.ready_auto": "Auto-Ready answered Ready for you."
+  "unit.ui.ready_auto": "Auto-Ready answered Ready for you.",
+  "err.op_department_out": "Your department has opted out of Cross-Department Missions.",
+  "err.op_department_full": "Every place your department may take in this Cross-Department Mission is taken."
 }
