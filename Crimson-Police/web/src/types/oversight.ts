@@ -30,6 +30,8 @@ export interface MissionListEntry {
     basePayout: number;
     payoutSource: 'admin' | 'type' | 'event';
     cooldown: number;
+    // seconds as it applies now: cooldown x the supervisors' scale for the type (Mission controls)
+    cooldownNow?: number;
     timeLimit: number;
     locations: number;
     enabled: boolean;

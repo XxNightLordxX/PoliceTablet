@@ -93,6 +93,7 @@ end
 --   integer     true: a number must be whole
 --   serverWide  true: one value for every department (saved under '*'); a supervisor of any department changes it
 --   master      false: the master switch does not apply (the control's own on still does)
+--   range       optional { lo, hi }: the admin's min and max (config and Settings) must lie inside it
 function DC.register(key, def)
     if type(key) ~= 'string' or #key > KEY_MAX or not key:match(KEY_PATTERN) then
         CP.err(TAG, 'register: a control key is a name of at most %d characters (%s)', KEY_MAX, tostring(key))
@@ -119,6 +120,7 @@ function DC.register(key, def)
         check = def.check,
         clamp = def.clamp,
         relaxes = def.relaxes,
+        range = type(def.range) == 'table' and IsNum(def.range[1]) and IsNum(def.range[2]) and def.range or nil,
     }
     return true
 end
@@ -639,6 +641,12 @@ function DC.checkConfig(map, boot)
             end
         end
         if IsNum(b.min) and IsNum(b.max) and b.min > b.max then return 'err.control_config', key end
+        local range = defs[key] and defs[key].range
+        if range then
+            for _, v in ipairs({ b.min, b.max }) do
+                if IsNum(v) and (v < range[1] or v > range[2]) then return 'err.control_config', key end
+            end
+        end
     end
     return nil
 end

@@ -2931,12 +2931,19 @@ Config.AdminControl = {
 -- bounds set here and only while an admin switched them on: Config.Permissions.supervisor.missionControls and the
 -- control's own on. A department may have its own bounds (Config.Departments.<key>.missionControls = { <control> =
 -- { on, min, max } }); they win over the ones below for it. Every change needs a reason and is in the audit log.
--- Shipped off: no control is on, so every rule stays as config.lua sets it.
+-- The cooldown controls are server-wide (one value for every department), outside the master switch and ship
+-- on: a supervisor may change them out of the box; until one does, every cooldown stays as config.lua sets it.
+-- Every other control ships off.
 Config.MissionControls = {
     changeWait = 300,   -- seconds between two changes of one control in one department
     selfExempt = true,  -- a control that relaxes a rule never applies to the supervisor who set it or a unit he is in
     grants = {},        -- per department who may use them, e.g. { sast = { minGrade = 4 } }; {} = every supervisor
-    controls = {},      -- per control: on = the admin switch, min/max = the only values a supervisor may pick
+    controls = {        -- per control: on = the admin switch, min/max = the only values a supervisor may pick
+        -- x every mission's cooldown, per mission type, for every department; min 0 = a type with no mission cooldown
+        cooldownScale = { on = true, min = 0, max = 2 },
+        -- the abandon cooldown in seconds (Limits.abandonCooldown) for every department; 0 = none
+        abandonCooldown = { on = true, min = 0, max = 900 },
+    },
 }
 
 -- ── Departments ─────────────────────────────────────────────────────────────
@@ -4592,7 +4599,7 @@ A mission can give any objective its own presenceRange, and the Mission Builder 
 
 Flagged runs are held off the leaderboards, and their cash is held, until a supervisor approves or voids them, and each one records why it was flagged (flag_reason). Three voided runs in 30 days suspends that officer from Crimson-Police for 7 days (all three numbers are in Config.AntiCheat).
 
-Mission controls (rules 11.1). Supervisors may change a few mission rules for their own department only while an admin switched them on (Config.Permissions.supervisor.missionControls, the master switch, and the control's own on in Config.MissionControls.controls), only to values inside the admin's min and max (a department may have its own in Config.Departments.<key>.missionControls), at most once per Config.MissionControls.changeWait per control and department, always with a reason, every change in the audit log with who, old and new value. Narrowing the bounds later moves a saved value into them at once; switching a control or the master switch off brings back the config value at once. A control that relaxes a rule never applies to the supervisor who set it, any other character of his license, or a unit he is in (Config.MissionControls.selfExempt). Admins change any department, within the same bounds. Everything ships off.
+Mission controls (rules 11.1). Supervisors may change a few mission rules for their own department only while an admin switched them on (Config.Permissions.supervisor.missionControls, the master switch, and the control's own on in Config.MissionControls.controls), only to values inside the admin's min and max (a department may have its own in Config.Departments.<key>.missionControls), at most once per Config.MissionControls.changeWait per control and department, always with a reason, every change in the audit log with who, old and new value. Narrowing the bounds later moves a saved value into them at once; switching a control or the master switch off brings back the config value at once. A control that relaxes a rule never applies to the supervisor who set it, any other character of his license, or a unit he is in (Config.MissionControls.selfExempt). Admins change any department, within the same bounds. Everything ships off except the two cooldown controls (owner decision): cooldownScale (x every mission's cooldown, per mission type, 0-2 shipped, 0 = none) and abandonCooldown (the abandon type cooldown, 0-900 s shipped) are server-wide (one value for every department), outside the master switch and on as shipped, so any supervisor may change them; both are applied when a cooldown is read, so a change, a reset or the admin switch counts at once for cooldowns already running and after a restart.
 
 ## Supervisor & admin actions
 

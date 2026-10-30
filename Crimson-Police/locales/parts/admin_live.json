@@ -80,6 +80,7 @@
   "admin.runctl.cooldowns": "Cooldowns · {used} of {max} clears used today",
   "admin.runctl.no_cooldowns": "No cooldowns right now.",
   "admin.runctl.clear": "Clear",
+  "admin.runctl.cooldown_scaled": "{label} (cooldown x{n})",
   "admin.runctl.clear_all": "Clear every cooldown",
   "admin.runctl.everything": "every cooldown",
   "admin.runctl.clears_used_up": "Today's cooldown clears for this officer are used up.",

@@ -218,7 +218,11 @@ function RunState({
                             ))}
                             {missions.map(c => (
                                 <li key={`m-${c.id}`} className="admin-runctl-item">
-                                    <span className="admin-runctl-item__text">{c.label}</span>
+                                    <span className="admin-runctl-item__text">
+                                        {typeof c.scale === 'number' && c.scale !== 1
+                                            ? t('admin.runctl.cooldown_scaled', { label: c.label, n: c.scale })
+                                            : c.label}
+                                    </span>
                                     <Countdown seconds={secondsLeft(c.until, data.serverTime)} />
                                     <Button
                                         size="sm"

@@ -3278,7 +3278,17 @@ pattern, so a missing module reads as config).
   each control `{ key, kind, scope, serverWide, master, on, active, min, max, value, configValue, saved, setBy,
   setRole, at, expiresAt, timeLeft, waitLeft }`.
 - `checkConfig(map, boot) -> errKey?`: `Config.MissionControls.controls` and a department's `missionControls` name
-  registered controls only, with `on` true/false and `min` not above `max` (`err.control_config`).
+  registered controls only, with `on` true/false, `min` not above `max` and both inside the control's `range`
+  (`register(..., { range = { lo, hi } })`) (`err.control_config`).
+- Registered controls (step P2, modules/runs `Runs.registerControls`): `cooldownScale` (map mission type -> x the
+  mission cooldown, range 0-4, config `{}` = 1) and `abandonCooldown` (number, seconds, range 0-86400, config
+  `Config.Limits.abandonCooldown`), both `serverWide`, `master = false`, shipped on. The cooldown cache keeps
+  `missions[id] = { at, secs, type }` and `types[type] = at`; `Runs.cooldowns(citizenid, { officer })` works the end
+  out when read (the live mission definition's cooldown x the scale for its type; at + the abandon cooldown), read for
+  `officer` (default the character; Draw passes the unit, so the self rule covers it). An entry is pruned, and the
+  rows are read back, as far as the bound `max` reaches. `Runs.cooldownScale(type)` feeds the Mission list
+  (`cooldownNow`) and Today & cooldowns (`scale`). Mission calls clear their eligibility cache on
+  `deptControls:changed`.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through

@@ -150,8 +150,11 @@ local keepMC = U.deepcopy(Config.MissionControls)
 
 do
     H.eq(Config.Permissions.supervisor.missionControls, false, 'the master switch ships off')
-    H.ok(next(Config.MissionControls.controls) == nil and next(Config.MissionControls.grants) == nil,
-        'no control and no grant ship')
+    local shipped = {}
+    for k in pairs(Config.MissionControls.controls) do shipped[#shipped + 1] = k end
+    table.sort(shipped)
+    H.eq(table.concat(shipped, ','), 'abandonCooldown,cooldownScale', 'only the two cooldown controls ship (P2)')
+    H.ok(next(Config.MissionControls.grants) == nil, 'no grant ships')
     H.eq(Config.MissionControls.changeWait, 300, 'change wait 300 s')
     H.eq(Config.MissionControls.selfExempt, true, 'the self rule ships on')
     local ok, err = SupSet(2, 't_wait', 400)

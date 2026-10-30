@@ -131,6 +131,7 @@
   "sup.missions.payout_hint.type": "The mission type's payout × its star multiplier",
   "sup.missions.payout_hint.event": "The Weekly Boss event payout from the config",
   "sup.missions.cooldown_none": "None",
+  "sup.missions.cooldown_scaled": "{base} → {now}",
   "sup.missions.seconds": "{n} s",
   "sup.missions.minutes": "{n} min",
   "sup.missions.hours": "{n} h",

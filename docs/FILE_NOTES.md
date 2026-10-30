@@ -4799,6 +4799,15 @@ Mission files are written to a temporary folder missions/custom/test_builder_<n>
 the end, whatever happens. The spec uses its own database (<run database>_builder_server).
 ```
 
+## tests/cooldown_controls_spec.lua
+
+```text
+Mission cooldowns as Mission controls (step P2): cooldownScale (x every mission's cooldown, per mission type) and
+abandonCooldown (the abandon type cooldown), both server-wide and outside the master switch. Runs.cooldowns works
+the end out when it is read from { at, secs, type } entries, so a change, a reset or the admin switch counts at once,
+the self rule holds for the setter and any unit he is in, and a restart (rebuild from the rows) gives the same.
+```
+
 ## tests/custody_clearance_spec.lua
 
 ```text

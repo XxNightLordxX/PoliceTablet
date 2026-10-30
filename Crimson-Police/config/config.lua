@@ -187,12 +187,19 @@ Config.AdminControl = {
 -- bounds set here and only while an admin switched them on: Config.Permissions.supervisor.missionControls and the
 -- control's own on. A department may have its own bounds (Config.Departments.<key>.missionControls = { <control> =
 -- { on, min, max } }); they win over the ones below for it. Every change needs a reason and is in the audit log.
--- Shipped off: no control is on, so every rule stays as config.lua sets it.
+-- The cooldown controls are server-wide (one value for every department), outside the master switch and ship
+-- on: a supervisor may change them out of the box; until one does, every cooldown stays as config.lua sets it.
+-- Every other control ships off.
 Config.MissionControls = {
     changeWait = 300,   -- seconds between two changes of one control in one department
     selfExempt = true,  -- a control that relaxes a rule never applies to the supervisor who set it or a unit he is in
     grants = {},        -- per department who may use them, e.g. { sast = { minGrade = 4 } }; {} = every supervisor
-    controls = {},      -- per control: on = the admin switch, min/max = the only values a supervisor may pick
+    controls = {        -- per control: on = the admin switch, min/max = the only values a supervisor may pick
+        -- x every mission's cooldown, per mission type, for every department; min 0 = a type with no mission cooldown
+        cooldownScale = { on = true, min = 0, max = 2 },
+        -- the abandon cooldown in seconds (Limits.abandonCooldown) for every department; 0 = none
+        abandonCooldown = { on = true, min = 0, max = 900 },
+    },
 }
 
 -- ============================================================================

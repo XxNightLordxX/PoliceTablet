@@ -2284,6 +2284,13 @@ local function OperationInfo()
     }
 end
 
+-- A mission's cooldown in seconds as it applies now: config x the supervisors' scale for its type (Mission controls).
+local function CooldownNow(def)
+    local base = Num(def.cooldown, 0)
+    local ok, scale = Call('Runs', 'cooldownScale', def.type)
+    return math.floor(base * (ok and tonumber(scale) or 1))
+end
+
 -- MissionListData (docs/notes/oversight.md). adminExtras adds what the Admin UI Missions screen lists besides
 -- (SPEC Interfaces: "version, Lua file path, 'edited in code' flag"): filePath, editedInCode, defHash, status,
 -- disabledInConfig (Config.DisabledMissions).
@@ -2315,6 +2322,7 @@ local function MissionListData(src, adminExtras)
             basePayout = BaseFor(def),
             payoutSource = SourceFor(def),
             cooldown = math.floor(Num(def.cooldown, 0)),
+            cooldownNow = CooldownNow(def),
             timeLimit = math.floor(Num(def.timeLimit, 0)),
             locations = #(def.locations or {}),
             enabled = enabled,

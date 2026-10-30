@@ -106,6 +106,8 @@ export interface AdminCooldownMission {
     id: string;
     label: string;
     until: number;
+    // x the cooldown a supervisor set for the mission's type (Mission controls); absent = 1
+    scale?: number;
 }
 
 export interface AdminFreeAbandon {

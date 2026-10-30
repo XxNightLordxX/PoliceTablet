@@ -494,8 +494,20 @@ Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%),
 `Config.Commendations.perSupervisorPerDay` (`3`).
 
 **Mission controls** let a department's supervisors change a few mission rules for their own department, inside
-limits you set. They are **off on install**: nothing changes until you switch them on, and this version has no
-control and no screen for them yet (later updates add both); the server part is in place.
+limits you set. They are **off on install** except the two cooldown controls below: nothing changes until you switch
+them on. This version has no screen for them yet (a later update adds it); the server part is in place.
+
+- **Mission cooldowns** (on when you install, owner decision): any department's supervisor may change them, without
+  the master switch, and a change counts for **every department** (server-wide):
+  - `cooldownScale = { on = true, min = 0, max = 2 }`: x every mission's cooldown, one number per mission type
+    (`0.5` = half, `0` = no mission cooldown for that type, `2` = double). `min`/`max` may be 0-4.
+  - `abandonCooldown = { on = true, min = 0, max = 900 }`: the abandon cooldown in seconds (normally
+    `Config.Limits.abandonCooldown`, `300`), for quits, going down, leaving duty and the like.
+  - Both apply at once to cooldowns already running, also after a restart, and go back to config.lua when reset or
+    when you switch the control off (`on = false`). The supervisor who shortened a cooldown keeps the config.lua one
+    himself (and so does any unit he is in). An admin's Quick edit of a mission's cooldown now applies at once too.
+  - The supervisor Mission list shows a changed cooldown as `20 min → 10 min`; Admin UI → Officers → Today & cooldowns
+    shows `(cooldown x0.5)` next to the mission.
 
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a

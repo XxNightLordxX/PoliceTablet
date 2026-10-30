@@ -125,9 +125,10 @@ local function CapsOk(missionType)
     return capOk ~= false
 end
 
-local function CooldownsOf(citizenid)
+-- unit: the officers the cooldowns are read for (the supervisors' cooldown changes and their self rule), nil = alone.
+local function CooldownsOf(citizenid, unit)
     if CP.Runs and CP.Runs.cooldowns then
-        local _, cd = Safe(CP.Runs.cooldowns, citizenid)
+        local _, cd = Safe(CP.Runs.cooldowns, citizenid, unit and { officer = unit } or nil)
         if type(cd) == 'table' then
             cd.types = type(cd.types) == 'table' and cd.types or {}
             cd.missions = type(cd.missions) == 'table' and cd.missions or {}
@@ -248,7 +249,7 @@ local function Eligibility(def, officers, size, now)
     end
     local untilTs, who
     for _, o in ipairs(officers) do
-        local u = tonumber(CooldownsOf(o.citizenid).missions[def.id])
+        local u = tonumber(CooldownsOf(o.citizenid, officers).missions[def.id])
         if u and u > now and (not untilTs or u > untilTs) then untilTs, who = u, o end
     end
     if untilTs then return false, 'cooldown', untilTs, who end
@@ -917,7 +918,7 @@ end
 local function TypeCooldown(officers, key, now)
     local untilTs, who
     for _, o in ipairs(officers) do
-        local u = tonumber(CooldownsOf(o.citizenid).types[key])
+        local u = tonumber(CooldownsOf(o.citizenid, officers).types[key])
         if u and u > now and (not untilTs or u > untilTs) then untilTs, who = u, o end
     end
     return untilTs, who
@@ -1136,7 +1137,7 @@ local function CheckAccept(src, typeKey, counts)
             return false, own and 'err.type_daily_cap' or 'err.member_type_daily_cap'
         end
         if not isBoss then
-            local u = tonumber(CooldownsOf(o.citizenid).types[missionType])
+            local u = tonumber(CooldownsOf(o.citizenid, officers).types[missionType])
             if u and u > now then return false, own and 'err.type_cooldown' or 'err.member_type_cooldown' end
         end
     end

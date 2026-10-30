@@ -847,6 +847,14 @@ do
     )
     H.ok(E('MissionControls.grants').desc:find('{} = every supervisor', 1, true) ~= nil, 'grants: its comment')
     H.ok(E('MissionControls.controls').desc:find('on = the admin switch', 1, true) ~= nil, 'controls: its comment')
+    do -- step P2: the two server-wide cooldown controls ship on, inside their ranges
+        local d = E('MissionControls.controls').default
+        H.ok(
+            d.cooldownScale.on == true and d.cooldownScale.min == 0 and d.cooldownScale.max == 2
+                and d.abandonCooldown.on == true and d.abandonCooldown.max == 900,
+            'the cooldown controls ship on'
+        )
+    end
     H.ok(
         E('Permissions.supervisor.missionControls').default == false
             and E('Permissions.supervisor.missionControls').desc:find('for their own department only', 1, true)

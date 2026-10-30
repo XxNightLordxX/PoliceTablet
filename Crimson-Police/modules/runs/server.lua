@@ -179,7 +179,64 @@ local function Int(v, lo, hi)
 end
 
 local function limits() return Config.Limits or {} end
-local function AbandonCooldown() return Num(limits().abandonCooldown, 300) end
+
+-- Mission controls (Config.MissionControls.controls): the server-wide cooldown changes supervisors may make. A cooldown
+-- entry keeps when it started and both are applied when it is read, so a change, its end or a reset counts at once.
+local Cd = { SCALE = 'cooldownScale', ABANDON = 'abandonCooldown' }
+
+-- The abandon (type) cooldown config.lua sets (Config.Limits.abandonCooldown).
+function Cd.abandonConfig() return Num(limits().abandonCooldown, 300) end
+
+function Cd.control(key, reader)
+    local ok, v = Call('DeptControls', 'get', nil, key, reader)
+    if ok then return v end
+    return nil
+end
+
+-- The highest value the control may reach while an admin has it on (pruning and the rebuild window keep that much).
+function Cd.controlMax(key, base)
+    local ok, b = Call('DeptControls', 'bounds', nil, key)
+    local m = ok and type(b) == 'table' and b.on == true and tonumber(b.max) or nil
+    if m and m == m and m > base then return m end
+    return base
+end
+
+-- x a mission's cooldown for its type, read for reader (an officer { citizenid }, a unit's members or nil); 1 = config.
+function Cd.scale(missionType, reader)
+    local map = Cd.control(Cd.SCALE, reader)
+    local v = type(map) == 'table' and type(missionType) == 'string' and tonumber(map[missionType]) or nil
+    if not v or v ~= v or v < 0 then return 1 end
+    return v
+end
+
+-- The abandon (type) cooldown in seconds, read for reader.
+function Cd.abandonFor(reader)
+    local v = tonumber(Cd.control(Cd.ABANDON, reader))
+    if not v or v ~= v or v < 0 then return Cd.abandonConfig() end
+    return v
+end
+
+-- A mission's cooldown as its definition says now (an admin's Quick edit counts at once), else the one kept.
+function Cd.liveMission(missionId, kept)
+    local ok, def = Call('Missions', 'get', missionId)
+    if ok and type(def) == 'table' then return Num(def.cooldown, 0) end
+    return Num(kept, 0)
+end
+
+-- Cooldown entries: missions[id] = { at, secs, type } and types[type] = at (os.time() the run ended).
+function Cd.missionUntil(e, missionId, reader)
+    return e.at + math.floor(Cd.liveMission(missionId, e.secs) * Cd.scale(e.type, reader))
+end
+
+function Cd.typeUntil(at, reader) return at + math.floor(Cd.abandonFor(reader)) end
+
+-- Spent for every reader, whatever a supervisor may still pick inside the admin's bounds.
+function Cd.missionSpent(e, missionId, now)
+    return e.at + Cd.liveMission(missionId, e.secs) * Cd.controlMax(Cd.SCALE, 1) <= now
+end
+
+function Cd.typeSpent(at, now) return at + Cd.controlMax(Cd.ABANDON, Cd.abandonConfig()) <= now end
+
 local function CorpseCleanup() return Num(limits().corpseCleanup, 30) end
 
 local function IsVec(v)
@@ -2165,8 +2222,8 @@ local cids = { online = {}, of = {}, seen = {}, trusted = false }
 
 -- Spent values (until <= now) leave the entry; true when what is left is nothing and no load is running.
 function cids.idle(c, now)
-    for k, v in pairs(c.types) do if v <= now then c.types[k] = nil end end
-    for k, v in pairs(c.missions) do if v <= now then c.missions[k] = nil end end
+    for k, at in pairs(c.types) do if Cd.typeSpent(at, now) then c.types[k] = nil end end
+    for k, e in pairs(c.missions) do if Cd.missionSpent(e, k, now) then c.missions[k] = nil end end
     return not c.loading and next(c.types) == nil and next(c.missions) == nil
 end
 
@@ -2229,12 +2286,14 @@ local function MissionCooldownOf(missionId)
     return 0
 end
 
+-- How far back the rows are read: the longest cooldown any reader may have (a supervisor's scale above 1 included).
 local function RebuildWindow()
-    local window = AbandonCooldown()
+    local window = Cd.controlMax(Cd.ABANDON, Cd.abandonConfig())
+    local scale = Cd.controlMax(Cd.SCALE, 1)
     local ok, defs = Call('Missions', 'all')
     if ok and type(defs) == 'table' then
         for _, def in pairs(defs) do
-            local c = Num(def.cooldown, 0)
+            local c = Num(def.cooldown, 0) * scale
             if c > window then window = c end
         end
     end
@@ -2286,35 +2345,58 @@ local function LoadCooldowns(citizenid)
         local ts = U.num(row.created_ts)
         local reason = row.end_reason
         if MISSION_COOLDOWN[reason] and ts > all and ts > Num(byMission[row.mission_id], 0) then
-            local untilTs = ts + MissionCooldownOf(row.mission_id)
-            if untilTs > (c.missions[row.mission_id] or 0) then c.missions[row.mission_id] = untilTs end
+            local e = c.missions[row.mission_id]
+            if not e or ts > e.at then
+                c.missions[row.mission_id] = {
+                    at = ts,
+                    secs = MissionCooldownOf(row.mission_id),
+                    type = row.mission_type,
+                }
+            end
         end
         if TYPE_COOLDOWN[reason] and row.mission_id ~= BOSS_ID and ts > all
             and ts > Num(byType[row.mission_type], 0) then
-            local untilTs = ts + AbandonCooldown()
-            if untilTs > (c.types[row.mission_type] or 0) then c.types[row.mission_type] = untilTs end
+            if ts > (c.types[row.mission_type] or 0) then c.types[row.mission_type] = ts end
         end
     end
     CP.log(TAG, 'cooldowns of %s rebuilt from %d row(s)', tostring(citizenid), #(rows or {}))
     return c
 end
 
-function Runs.cooldowns(citizenid)
+-- { types = { [type] = until }, missions = { [id] = until } } of one character, worked out now: the supervisors'
+-- cooldown changes (Mission controls) read for opts.officer (an officer, a unit's members; default the character
+-- itself), so the self rule holds for him and any unit he is in.
+function Runs.cooldowns(citizenid, opts)
     local out = { types = {}, missions = {} }
     if type(citizenid) ~= 'string' or citizenid == '' then return out end
     local c = LoadCooldowns(citizenid)
+    local reader = type(opts) == 'table' and opts.officer or nil
+    if type(reader) ~= 'table' then reader = { citizenid = citizenid } end
     local now = os.time()
-    for k, v in pairs(c.types) do
-        if v > now then out.types[k] = v else c.types[k] = nil end
+    for k, at in pairs(c.types) do
+        local u = Cd.typeUntil(at, reader)
+        if u > now then
+            out.types[k] = u
+        elseif Cd.typeSpent(at, now) then
+            c.types[k] = nil
+        end
     end
-    for k, v in pairs(c.missions) do
-        if v > now then out.missions[k] = v else c.missions[k] = nil end
+    for k, e in pairs(c.missions) do
+        local u = Cd.missionUntil(e, k, reader)
+        if u > now then
+            out.missions[k] = u
+        elseif Cd.missionSpent(e, k, now) then
+            c.missions[k] = nil
+        end
     end
     return out
 end
 
-function Runs.onCooldown(citizenid, missionType, missionId)
-    local cd = Runs.cooldowns(citizenid)
+-- x a mission type's cooldown as the server reads it now (no reader: the saved value, for screens); 1 = config.
+function Runs.cooldownScale(missionType, reader) return Cd.scale(missionType, reader) end
+
+function Runs.onCooldown(citizenid, missionType, missionId, opts)
+    local cd = Runs.cooldowns(citizenid, opts)
     local untilTs = nil
     local t = missionType and cd.types[missionType]
     local m = missionId and cd.missions[missionId]
@@ -2353,20 +2435,59 @@ function Runs._forgetOfficer(citizenid)
     end
 end
 
+-- The two server-wide cooldown controls (Config.MissionControls.controls; outside the master switch, owner decision):
+-- cooldownScale x every mission's cooldown, per mission type (0 = none), abandonCooldown the abandon (type) cooldown.
+function Cd.scaleCheck(value, bounds)
+    if type(value) ~= 'table' then return nil, 'err.control_value' end
+    local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
+    local lo, hi = tonumber(bounds.min) or 0, tonumber(bounds.max) or 1
+    local out = {}
+    for k, v in pairs(value) do
+        if type(k) ~= 'string' or type(types[k]) ~= 'table' then return nil, 'err.control_value' end
+        if type(v) ~= 'number' or v ~= v or v < lo or v > hi then return nil, 'err.control_value' end
+        out[k] = v
+    end
+    return out
+end
+
+function Runs.registerControls()
+    if not Has('DeptControls', 'register') then return false end
+    CP.DeptControls.register(Cd.SCALE, {
+        kind = 'map',
+        serverWide = true,
+        master = false,
+        range = { 0, 4 },
+        configValue = function() return {} end,
+        check = Cd.scaleCheck,
+        relaxes = function(v)
+            for _, x in pairs(type(v) == 'table' and v or {}) do
+                if tonumber(x) and tonumber(x) < 1 then return true end
+            end
+            return false
+        end,
+    })
+    CP.DeptControls.register(Cd.ABANDON, {
+        kind = 'number',
+        serverWide = true,
+        master = false,
+        integer = true,
+        range = { 0, 86400 },
+        configValue = function() return math.floor(Cd.abandonConfig()) end,
+        relaxes = function(v, c) return tonumber(v) ~= nil and tonumber(c) ~= nil and v < c end,
+    })
+    return true
+end
+Runs.registerControls()
+
 local function ApplyCooldowns(run, p, endReason)
     if run.test or not p.citizenid then return end
     local c = CdEntry(p.citizenid)
     local now = os.time()
     if MISSION_COOLDOWN[endReason] then
-        local secs = Num(run.mission.cooldown, 0)
-        if secs > 0 then
-            local untilTs = now + math.floor(secs)
-            if untilTs > (c.missions[run.missionId] or 0) then c.missions[run.missionId] = untilTs end
-        end
+        c.missions[run.missionId] = { at = now, secs = Num(run.mission.cooldown, 0), type = run.missionType }
     end
     if TYPE_COOLDOWN[endReason] and not run.isBoss then
-        local untilTs = now + math.floor(AbandonCooldown())
-        if untilTs > (c.types[run.missionType] or 0) then c.types[run.missionType] = untilTs end
+        c.types[run.missionType] = math.max(c.types[run.missionType] or 0, now)
     end
 end
 
@@ -4019,10 +4140,10 @@ function Runs.reclassify(citizenid, runId, newEndReason)
         local c = CdEntry(citizenid)
         local now = os.time()
         if MISSION_COOLDOWN[newEndReason] and cooldown and cooldown > 0 then
-            c.missions[missionId] = math.max(c.missions[missionId] or 0, now + math.floor(cooldown))
+            c.missions[missionId] = { at = now, secs = cooldown, type = missionType }
         end
         if TYPE_COOLDOWN[newEndReason] and not isBoss then
-            c.types[missionType] = math.max(c.types[missionType] or 0, now + math.floor(AbandonCooldown()))
+            c.types[missionType] = math.max(c.types[missionType] or 0, now)
         end
     end
     if p then p.endReason, p.result = newEndReason, RESULT[newEndReason] end

@@ -276,7 +276,17 @@ local function CooldownList(citizenid)
             types[#types + 1] = { key = key, label = TypeLabel(key), ['until'] = untilTs }
         end
         for id, untilTs in pairs(cd.missions or {}) do
-            missions[#missions + 1] = { id = id, label = MissionLabel(id), ['until'] = untilTs }
+            -- scale: x the mission's cooldown a supervisor set for its type (Mission controls), when it is not 1
+            local okD, def = Call('Missions', 'get', id)
+            local okS, scale = Call('Runs', 'cooldownScale', okD and type(def) == 'table' and def.type or nil,
+                { citizenid = citizenid })
+            scale = okS and tonumber(scale) or 1
+            missions[#missions + 1] = {
+                id = id,
+                label = MissionLabel(id),
+                ['until'] = untilTs,
+                scale = scale ~= 1 and scale or nil,
+            }
         end
     end
     table.sort(types, function(a, b) return a.key < b.key end)

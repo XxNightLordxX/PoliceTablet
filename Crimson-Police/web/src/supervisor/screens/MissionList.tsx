@@ -223,9 +223,18 @@ export default function SupMissionList() {
         {
             key: 'cooldown',
             header: t('sup.missions.col.cooldown'),
-            width: 86,
+            width: 120,
             numeric: true,
-            render: m => <span className="cp-num">{cooldownText(m.cooldown)}</span>,
+            render: m => (
+                <span className="cp-num">
+                    {typeof m.cooldownNow === 'number' && m.cooldownNow !== m.cooldown
+                        ? t('sup.missions.cooldown_scaled', {
+                              base: cooldownText(m.cooldown),
+                              now: cooldownText(m.cooldownNow),
+                          })
+                        : cooldownText(m.cooldown)}
+                </span>
+            ),
         },
         { key: 'running', header: t('sup.missions.col.running'), width: 156, render: m => <Runners m={m} /> },
         {

@@ -1860,6 +1860,8 @@ if CP.Hooks and CP.Hooks.on then
         Invalidate(type(p) == 'table' and p.citizenid or nil)
     end)
     CP.Hooks.on('participant:left', function() Invalidate(nil) end)
+    -- a supervisor changed a Mission control (a cooldown): every unit's eligibility is worked out again
+    CP.Hooks.on('deptControls:changed', function() Invalidate(nil) end)
     CP.Hooks.on('home:extras', function(_, src, extras)
         if type(extras) == 'table' and ToSrc(src) then extras.callsOpen = MC.claimableCount(src) end
     end)
