@@ -946,6 +946,13 @@ do
                     ~= nil,
             'step P18: a department\'s Type of the Day ships off, with a comment'
         )
+        H.ok(
+            d.pushMission.on == false and E('MissionControls.pushMissionPerDay').default == 5
+                and E('MissionControls.pushMissionPerDay').max == 50
+                and E('MissionControls.pushMissionPerDay').desc:find('missions one supervisor may push', 1, true) ~= nil
+                and cfgText:find('with one mission he chooses instead', 1, true) ~= nil,
+            'step P19: pushing a chosen mission to a unit ships off, 5 a supervisor a day, with comments'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

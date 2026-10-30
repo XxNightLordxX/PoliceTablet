@@ -403,7 +403,7 @@ do
     H.ok(Has(Bullet(spec, 'NPCs only:'), 'except live crimes (Config.LiveCrime) and volunteer suspects'),
         'NPCs only names the two exceptions')
     H.ok(Has(Bullet(spec, 'Real calls first:'), 'There are exactly three exceptions'), 'Real calls first: three')
-    H.ok(Has(Bullet(spec, 'Mission choice:'), 'Only four exceptions exist'), 'Mission choice: four')
+    H.ok(Has(Bullet(spec, 'Mission choice:'), 'Only five exceptions exist'), 'Mission choice: five (step P19 push)')
 
     local arch = ReadRepo('docs/ARCHITECTURE.md')
     for _, head in ipairs({

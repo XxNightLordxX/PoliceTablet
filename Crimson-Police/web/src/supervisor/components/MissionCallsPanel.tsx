@@ -30,6 +30,7 @@ import type {
     LocationPlay,
     MissionCall,
     PageableUnit,
+    PushView,
     SupCallsView,
 } from '../../types/missioncalls';
 import './MissionCallsPanel.css';
@@ -39,6 +40,8 @@ const COUNTY = 'county';
 
 type TodayRow = SupCallsView['today'][number];
 type Staff = null | { kind: 'create' | 'page' };
+type StaffPayload = { type: string; area: string | null; leaderSrc?: number; missionId?: string };
+const ANY = '';
 
 function useCallableTypes(): { key: string; label: string }[] {
     const session = useSession();
@@ -57,22 +60,29 @@ function useAreas(): { key: string; label: string }[] {
 function StaffDialog({
     staff,
     units,
+    push,
     busy,
     onClose,
     onSubmit,
 }: {
     staff: Staff;
     units: PageableUnit[];
+    // step P19: pushing a chosen mission when paging (absent: the mission is drawn at random)
+    push: PushView | null;
     busy: boolean;
     onClose: () => void;
-    onSubmit: (payload: { type: string; area: string | null; leaderSrc?: number }) => void;
+    onSubmit: (payload: StaffPayload) => void;
 }) {
     const types = useCallableTypes();
     const areas = useAreas();
     const [type, setType] = useState('');
     const [area, setArea] = useState(COUNTY);
     const [leader, setLeader] = useState('');
+    const [mission, setMission] = useState(ANY);
     const page = staff?.kind === 'page';
+    const missions = asArray(push?.missions).filter(m => m.type === type);
+    const pushLeft = push && typeof push.perDay === 'number' ? Math.max(0, push.perDay - (push.usedToday ?? 0)) : null;
+    const canPush = page && !!push && pushLeft !== 0 && missions.length > 0;
     const ready = type !== '' && (!page || leader !== '');
     return (
         <Dialog
@@ -96,6 +106,7 @@ function StaffDialog({
                                 type,
                                 area: area === COUNTY ? null : area,
                                 leaderSrc: page ? Number(leader) : undefined,
+                                missionId: canPush && mission !== ANY ? mission : undefined,
                             })
                         }
                     >
@@ -108,7 +119,10 @@ function StaffDialog({
                 <Field label={t('mc.staff.type')}>
                     <Select
                         value={type}
-                        onChange={setType}
+                        onChange={v => {
+                            setType(v);
+                            setMission(ANY);
+                        }}
                         placeholder={t('mc.staff.pick_type')}
                         options={types.map(m => ({ value: m.key, label: m.label }))}
                     />
@@ -140,6 +154,29 @@ function StaffDialog({
                         />
                     </Field>
                 ) : null}
+                {page && push ? (
+                    <Field
+                        label={t('mc.staff.mission')}
+                        hint={
+                            pushLeft !== null
+                                ? `${t('mc.staff.mission_hint')} ${t('mc.staff.push_left', {
+                                      n: pushLeft,
+                                      max: push.perDay ?? 0,
+                                  })}`
+                                : t('mc.staff.mission_hint')
+                        }
+                    >
+                        <Select
+                            value={mission}
+                            onChange={setMission}
+                            disabled={!canPush}
+                            options={[
+                                { value: ANY, label: t('mc.staff.mission_any') },
+                                ...missions.map(m => ({ value: m.id, label: m.label })),
+                            ]}
+                        />
+                    </Field>
+                ) : null}
             </div>
         </Dialog>
     );
@@ -161,6 +198,7 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
     const today = asArray(data?.today as TodayRow[] | undefined);
     const units = asArray(data?.units as PageableUnit[] | undefined);
     const lanes = asArray(data?.lanes as CallLaneView[] | undefined);
+    const push = data?.push ?? null;
 
     const reload = async () => {
         await refetch();
@@ -178,10 +216,10 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
         if (res.ok) void reload();
     };
 
-    const submit = async (payload: { type: string; area: string | null; leaderSrc?: number }) => {
+    const submit = async (payload: StaffPayload) => {
         const page = staff?.kind === 'page';
         const res = await run(page ? `server:${scope}:mcPage` : `server:${scope}:mcCreate`, payload, {
-            success: page ? 'mc.staff.paged' : 'mc.staff.created',
+            success: page ? (payload.missionId ? 'mc.staff.pushed' : 'mc.staff.paged') : 'mc.staff.created',
             silent: !page && scope === 'admin',
         });
         if (res.ok) {
@@ -352,7 +390,14 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
                 busy={busy}
             />
             {staff ? (
-                <StaffDialog staff={staff} units={units} busy={busy} onClose={() => setStaff(null)} onSubmit={submit} />
+                <StaffDialog
+                    staff={staff}
+                    units={units}
+                    push={push}
+                    busy={busy}
+                    onClose={() => setStaff(null)}
+                    onSubmit={submit}
+                />
             ) : null}
             <ConfirmDialog
                 open={!!early}

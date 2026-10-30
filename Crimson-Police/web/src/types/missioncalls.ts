@@ -27,6 +27,9 @@ export interface MissionCall {
     typeOfTheDay: boolean;
     redispatched: boolean;
     paged: boolean;
+    // a mission command pushed to a unit (step P19); missionLabel only for the paged unit itself
+    pushed?: boolean;
+    missionLabel?: string | null;
     // a department lane's call (step P12): only that department's officers see it ("SAST call")
     department?: string | null;
     departmentShort?: string | null;
@@ -82,11 +85,21 @@ export interface CallLaneView {
     types: { key: string; label: string; weight: number }[];
 }
 
+// The missions a staff member may push to a unit; perDay / usedToday only for a supervisor.
+export interface PushView {
+    missions: { id: string; label: string; type: string }[];
+    department?: string | null;
+    perDay?: number | null;
+    usedToday?: number | null;
+}
+
 export interface SupCallsView {
     open: MissionCall[];
     units?: PageableUnit[];
     // the lanes the viewer may see: his department's (admins: every one)
     lanes?: CallLaneView[];
+    // pushing a chosen mission when paging (step P19, the pushMission Mission control); absent when not allowed
+    push?: PushView | null;
     today: {
         code: string;
         type: string;

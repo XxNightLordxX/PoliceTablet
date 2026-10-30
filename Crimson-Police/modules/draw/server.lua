@@ -1076,6 +1076,27 @@ function Draw.draw(missionType, members, opts)
     return nil, 'err.no_location'
 end
 
+-- A mission a supervisor pushed to a unit (step P19, the pushMission Mission control: the Mission choice Hard
+-- rule's exception): the definition when these officers may play it now as a mission of typeKey, in area when one is
+-- named, else nil and the error key. Every rule of the draw's pool applies (enabled, unit size, departments, a
+-- mission switched off for a member's department, every member's mission cooldown, a location in the area); only
+-- the random pick is skipped. Never the Weekly Boss.
+function Draw.checkMission(missionId, typeKey, members, area)
+    local def = type(missionId) == 'string' and CP.Missions and CP.Missions.get and CP.Missions.get(missionId) or nil
+    if type(def) ~= 'table' or def.isBoss or def.id == BOSS_ID then return nil, 'err.unknown_mission' end
+    if def.type ~= typeKey then return nil, 'err.mc_push_type' end
+    local officers = ToOfficers(members)
+    local size = math.max(#(members or {}), #officers, 1)
+    local ok, why = Eligibility(def, officers, size, os.time())
+    if not ok then
+        if why == 'cooldown' then return nil, 'err.pool_cooldown' end
+        if why == 'size' then return nil, 'err.mc_push_size' end
+        return nil, why == 'disabled' and 'err.unknown_mission' or 'err.mc_push_not_eligible'
+    end
+    if area and not HasLocationIn(def, area) then return nil, 'err.mc_push_area' end
+    return def
+end
+
 -- ============================================================================
 --                                MISSION BOARD
 -- ============================================================================
@@ -1508,10 +1529,20 @@ local function FinishAccept(src, typeKey, ctx, opts)
             near = {}
             for _, m in ipairs(srcs) do near[#near + 1] = PedCoords(m) end
         end
-        local second
-        def, second = Draw.draw(ctx.missionType, officers, { participants = srcs, area = opts.area, nearCoords = near })
-        if not def then return fail(second or 'err.pool_empty') end
-        index = second
+        if opts.missionId ~= nil then
+            -- a pushed mission (step P19): that mission, never a draw; the location is still picked at random
+            local errM
+            def, errM = Draw.checkMission(opts.missionId, ctx.missionType, officers, opts.area)
+            if not def then return fail(errM) end
+            index = Draw.pickLocation(def, srcs, Rng(), { area = opts.area, nearCoords = near })
+            if not index then return fail('err.no_location') end
+        else
+            local second
+            def, second = Draw.draw(ctx.missionType, officers,
+                { participants = srcs, area = opts.area, nearCoords = near })
+            if not def then return fail(second or 'err.pool_empty') end
+            index = second
+        end
     end
     if ctx.note then ctx.note.missionId = def.id end
 
@@ -1574,7 +1605,8 @@ end
 
 -- Accepting a type (the Mission Board, or a mission call that won its claim). opts: area, nearCoords,
 -- missionCall ({ id, code, area, staff }; the response target is set here from the drawn start), twists (the keys
--- the leader chose; checked here), onDone
+-- the leader chose; checked here), missionId (a mission a supervisor pushed, step P19: that mission instead of a
+-- draw, Draw.checkMission), onDone
 -- (called with ok, data|errKey, srcs only when a unit's ready check made the accept wait).
 -- Returns true, { runId } or true, { pending = true } while a unit of 2+ answers the ready check.
 local function AcceptStart(src, typeKey, opts, note)

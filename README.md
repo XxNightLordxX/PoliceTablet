@@ -653,6 +653,15 @@ Supervisor UI → **Mission controls** (below).
   setter's own runs or a unit he is in (they keep the server's type). Switching the control off drops the pick at once;
   a restart keeps it (it is read back from the audit log). The Mission Board, Home, Dispatch, the run screen and the
   scoring all use the officer's department's type.
+- **Push a chosen mission** (step P19, per department, off when you install, under the master switch):
+  `pushMission = { on = false }`. In **Page a unit** (Live Missions) the supervisor may pick one mission of the call's
+  type instead of **Any (drawn at random)**, for a unit of his own department (never his own unit). Only that unit gets
+  the call, for its whole offer, and only that unit sees the mission's name ("Mission: ..." on Dispatch); its leader
+  accepts or declines it. Every accept rule stays (cooldowns, caps, unit size, missions switched off for the
+  department, a start in the area named); only the random pick of the mission is skipped. A decline, a refused accept
+  or a failed ready check ends the call (the supervisor is told), an abandoned run is never re-dispatched, and a push
+  never earns rapid response. `Config.MissionControls.pushMissionPerDay` (`5`): pushes one supervisor may make a day
+  (admins any). Every push is in the audit log (**Mission pushed to a unit**) with the mission.
 
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
@@ -1595,6 +1604,8 @@ a radio-style title, the type, a priority (Tactical P1, Investigation P2, Patrol
 never names the mission. The first unit leader (or solo officer) to claim it gets a random mission of that type in
 that area. Nearby units get the first 15 seconds. Reaching the start fast earns +10% points (rapid response).
 Mission calls never go to sc-dispatch. Supervisors and admins can withdraw a call, page a unit or create a call.
+With the **Push a chosen mission** Mission control on, a page may name one mission for that unit alone; its leader
+accepts or declines it.
 Staff-posted calls wait 2 minutes between them (a department's **Wait between staff calls** Mission control may
 change that); an admin may **Post anyway** with a reason. A department may also get its own **call lane** (Mission
 controls → Calls, [4.4](#44-what-supervisors-may-do)): extra calls only its officers see and claim.
@@ -2507,6 +2518,11 @@ however it ends.
   inside admin-set bounds: the Mission controls `happyHourCash` (a run accepted during a happy hour) and `twistCash`
   (each twist's cash, still under `Config.Events.twistMaxCash`), per department, shipped off with bounds that move
   nothing; never on test runs, Cross-Department runs or the Weekly Boss, and always under `Config.Cash.dailyCap`.
+- A mission staff push to one unit (step P19, owner decision of 2026-10-19: "a paged call the unit can accept or
+  decline"): the Mission choice Hard rule now lists a fifth exception, the `pushMission` Mission control (shipped off):
+  a paged call that names one mission, only for that unit (never the issuer's own), which may accept or decline it;
+  only that unit sees the mission's name, every accept rule stays, no rapid response, a supervisor only for units of
+  his own department and at most `Config.MissionControls.pushMissionPerDay` a day, and the audit names the mission.
 - Supervisors give points through Type of the Day (step P18, owner decision of 2026-10-19: "supervisors may give
   points"): the Points Hard rule now says a supervisor may pick his department's Type of the Day for the next day (the
   `typeOfTheDay` Mission control, shipped off); the multiplier stays the admin's `Config.Events.todMultiplier`, and

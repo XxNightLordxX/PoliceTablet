@@ -281,6 +281,10 @@ Config.MissionControls = {
         -- tomorrow his department's officers earn the Type of the Day points (Events.todMultiplier) on that type
         -- instead of the server's type, other departments keep the server's. Never on his own runs or a unit he is in
         typeOfTheDay = { on = false },
+        -- Dispatch: a supervisor pages a unit of his department (never his own) with one mission he chooses instead
+        -- of a random one; only that unit sees the mission's name and may accept or decline it, every accept rule
+        -- stays (cooldowns, caps, unit size), the call never earns rapid response and the audit names the mission
+        pushMission = { on = false },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 
@@ -299,6 +303,8 @@ Config.MissionControls = {
     noticeMaxLength = 280,
     -- department notices one supervisor may post a day (admins any)
     noticesPerDay = 5,
+    -- missions one supervisor may push to a unit a day (the pushMission control; admins any)
+    pushMissionPerDay = 5,
 }
 
 -- ============================================================================

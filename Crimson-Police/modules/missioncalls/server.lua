@@ -19,6 +19,7 @@ local DAY_S = 86400
 local LANE_KEY = 'callLane'          -- the Mission control of a department's own call lane (step P12)
 local WAIT_KEY = 'staffCallWait'     -- the Mission control of a department's wait between staff calls (step P12)
 local LANE_WEIGHT_MAX = 10           -- the highest weight a lane gives one mission type
+local PUSH_KEY = 'pushMission'       -- the Mission control of a mission a supervisor pushes to a unit (step P19)
 
 -- End reasons of a claimed run that reopen the call when nobody had reached the start (SPEC Dispatch).
 local REDISPATCH = {
@@ -156,6 +157,15 @@ end
 local function TypeLabel(key)
     local t = Config.MissionTypes and Config.MissionTypes[key]
     return (t and t.label) or tostring(key)
+end
+
+-- A mission's name as officers see it (its locale label).
+local function MissionName(id)
+    local _, def = Call('Missions', 'get', id)
+    if type(def) ~= 'table' then return tostring(id or '') end
+    local okL, label = Call('Missions', 'label', def, 'label')
+    if okL and type(label) == 'string' and label ~= '' then return label end
+    return tostring(def.label or def.id)
 end
 
 local function AreaDef(key)
@@ -512,6 +522,8 @@ local function CallRule(call, unit, dist, now)
         if call.excluded[cid] then return 'err.mc_excluded' end
     end
     if call.staff and call.issuerCid and Contains(unit.cids, call.issuerCid) then return 'err.mc_own_call' end
+    -- a pushed mission (step P19) stays the paged unit's for as long as the call is open
+    if call.missionId and not Contains(unit.cids, call.pagedCid) then return 'err.mc_paged' end
     if call.pagedCid and now < (call.pagedUntil or 0) and not Contains(unit.cids, call.pagedCid) then
         return 'err.mc_paged'
     end
@@ -532,6 +544,13 @@ local function ClaimCheck(src, call, now)
     local dist = UnitDistance(unit.srcs, call)
     local rule = CallRule(call, unit, dist, now)
     if rule then return false, rule end
+    if call.missionId then
+        -- a pushed mission: that mission for this unit now, in the area the call names (never the type's pool)
+        local okM, def, errM = Call('Draw', 'checkMission', call.missionId, call.type, unit.officers, call.area)
+        if not okM then return false, 'err.internal' end
+        if not def then return false, errM or 'err.refused' end
+        return true, { unit = unit, dist = dist, area = call.area, officer = officer }
+    end
     local st = TypeState(UnitState(src, true, unit), call.type)
     local area = AreaForState(st, call)
     if EffectivePool(st, area) <= 0 then return false, 'err.mc_no_missions_here' end
@@ -594,7 +613,7 @@ end
 
 -- A new call: the row, the record and the toasts. opts: staff, issuer (citizenid or 'console'), issuerCid,
 -- pagedSrc, pagedCid, pageTime, priorityUntil, units (idle units for the toasts), department and laneSetBy (a
--- department lane's call, step P12).
+-- department lane's call, step P12), missionId and issuerSrc (a mission pushed to the paged unit, step P19).
 local function NewCall(missionType, area, opts)
     opts = opts or {}
     local cfg = Cfg()
@@ -647,6 +666,8 @@ local function NewCall(missionType, area, opts)
         priorityUntil = opts.priorityUntil,
         department = opts.department,
         laneSetBy = opts.laneSetBy,
+        missionId = opts.missionId,
+        issuerSrc = opts.issuerSrc,
         redispatched = false,
         reopened = false,
         excluded = {},
@@ -731,7 +752,7 @@ end
 -- A paged call whose pageTime is over is offered to everyone: the other idle units get the toast then.
 local function ToastPageEnded(units, now)
     for _, call in pairs(calls) do
-        if call.pagedCid and not call.pageToasted and now >= (call.pagedUntil or 0) then
+        if call.pagedCid and not call.missionId and not call.pageToasted and now >= (call.pagedUntil or 0) then
             call.pageToasted = true
             if call.status == 'open' and not call.window then Toast(call, units, call.pagedCid) end
         end
@@ -1074,6 +1095,12 @@ function MC.registerControls()
         -- a shorter wait relaxes the rule (the self rule keeps the config wait for the one who set it)
         relaxes = function(v, configValue) return tonumber(v) ~= nil and v < (tonumber(configValue) or 0) end,
     })
+    -- step P19: a staff action with no saved value (the Mission choice Hard rule's push exception)
+    dc.register(PUSH_KEY, {
+        kind = 'action',
+        bounded = false,
+        viewExtra = function() return { perDay = MC.pushPerDay and MC.pushPerDay() or nil } end,
+    })
     return true
 end
 MC.registerControls()
@@ -1091,6 +1118,19 @@ local function Lapse(call, now)
     end
     NoteFinished(call, 'lapsed', now)
     MarkDirty()
+end
+
+-- A pushed mission's issuer (step P19), while the same character is still on that player id.
+local function NotifyIssuer(call, key, vars)
+    local src = ToSrc(call.issuerSrc)
+    if not src or not call.issuerCid then return end
+    local o = GetOfficer(src)
+    local cid = type(o) == 'table' and o.citizenid or nil
+    if not cid then
+        local _, info = Call('Qbx', 'getInfo', src)
+        cid = type(info) == 'table' and info.citizenid or nil
+    end
+    if cid == call.issuerCid then Notify(src, 'info', key, vars) end
 end
 
 local function Withdraw(call, reason, now)
@@ -1173,7 +1213,8 @@ local function OnRunEnded(run, state, endReason)
     end
     local cfg = Cfg()
     local reopenOn = not (cfg.reopen and cfg.reopen.enabled == false)
-    if not arrived and REDISPATCH[endReason] and reopenOn and not call.reopened then
+    -- a pushed mission (step P19) is never offered again: it was that unit's alone
+    if not arrived and REDISPATCH[endReason] and reopenOn and not call.reopened and not call.missionId then
         NoteFinished(call, 'reopened', now)
         return Reopen(call, now)
     end
@@ -1251,6 +1292,12 @@ local function Accepted(call, c, ok, data)
         Exec([[UPDATE cp_mission_calls SET status = 'open', claimed_by = NULL, claimed_at = NULL
             WHERE id = ? AND status = 'claimed']], { call.id })
     end
+    if call.missionId then
+        -- a pushed mission was that unit's alone: it ends here (step P19)
+        call.queue, call.window = nil, nil
+        Withdraw(call, errKey, now)
+        NotifyIssuer(call, 'mc.toast.push_ended', { code = call.code })
+    end
     if c.result then
         Notify(c.src, 'error', errKey)
     else
@@ -1258,7 +1305,7 @@ local function Accepted(call, c, ok, data)
     end
     MarkDirty()
     CP.log(TAG, '%s: the claim of %s did not start a run (%s)', call.code, tostring(c.src), errKey)
-    TryNext(call)
+    if not call.missionId then TryNext(call) end
 end
 
 TryNext = function(call)
@@ -1297,6 +1344,7 @@ TryNext = function(call)
                 local okA, ok, data = Call('Draw', 'accept', c.src, call.type, {
                     area = c.area,
                     twists = c.twists,
+                    missionId = call.missionId,
                     missionCall = {
                         id = call.id > 0 and call.id or nil,
                         code = call.code,
@@ -1465,32 +1513,131 @@ function MC.create(src, typeKey, area, opts)
     return true, { id = call.id, code = call.code }
 end
 
-function MC.page(src, typeKey, area, leaderSrc)
+-- Missions one supervisor may push a day (Config.MissionControls.pushMissionPerDay; admins any).
+local function PushPerDay()
+    local mc = type(Config.MissionControls) == 'table' and Config.MissionControls or {}
+    return math.max(0, math.floor(Num(mc.pushMissionPerDay, 5)))
+end
+MC.pushPerDay = PushPerDay
+
+-- May src push a chosen mission (step P19, the pushMission Mission control) to a unit led by an officer of dept?
+-- A supervisor only to his own department; an admin to any department the control is on for (dept nil: any one).
+-- ok, errKey, role, department.
+local function CanPush(src, dept)
+    local dc = CP.DeptControls
+    if not (dc and dc.canChange) then return false, 'err.control_off' end
+    local n = ToSrc(src) or 0
+    local _, admin = Call('Access', 'isAdmin', n)
+    if (admin == true or n == 0) and dept == nil then
+        local keys = {}
+        for key in pairs(type(Config.Departments) == 'table' and Config.Departments or {}) do keys[#keys + 1] = key end
+        table.sort(keys)
+        for _, key in ipairs(keys) do
+            local ok, e, role, d = dc.canChange(n, PUSH_KEY, key)
+            if ok then return ok, e, role, d end
+        end
+        return false, 'err.control_off'
+    end
+    return dc.canChange(n, PUSH_KEY, dept)
+end
+
+-- Today's pushes by one issuer (cp_audit rows; a restart never resets them).
+local function PushesToday(issuer)
+    local okK, n = Call('AdminKit', 'dailyCount', 'mcPush', { actor = issuer })
+    if not okK then return nil end
+    return tonumber(n)
+end
+
+-- The checks of a push before the call is posted: nil, or the error key. role and dept come from CanPush.
+local function PushCheck(src, role, dept, missionId, typeKey, areaKey, unit, issuer)
+    if type(missionId) ~= 'string' or missionId == '' or #missionId > 64 then return 'err.unknown_mission' end
+    if role == 'supervisor' then
+        -- his own department's units only: every member of the unit is of his department
+        for _, o in ipairs(unit.officers) do
+            if o.department ~= dept then return 'err.mc_push_department' end
+        end
+        local used = PushesToday(issuer)
+        if used == nil then return 'err.internal' end
+        if used >= PushPerDay() then return 'err.mc_push_used' end
+    end
+    local okM, def, errM = Call('Draw', 'checkMission', missionId, typeKey, unit.officers, areaKey)
+    if not okM then return 'err.internal' end
+    if not def then return errM or 'err.refused' end
+    return nil
+end
+
+-- opts.missionId (step P19): push that mission to the unit instead of a random one; the pushMission Mission control,
+-- at most Config.MissionControls.pushMissionPerDay a supervisor a day, a unit of his own department.
+function MC.page(src, typeKey, area, leaderSrc, opts)
+    opts = type(opts) == 'table' and opts or {}
     if Cfg().enabled == false then return false, 'err.mc_disabled' end
     if not Callable(typeKey) then return false, 'err.mc_type_not_callable' end
     local okA, areaKey = ParseArea(area)
     if not okA then return false, 'err.mc_unknown_area' end
     if OperationLocked() then return false, 'err.operation_locked' end
+    local push, role, dept = opts.missionId ~= nil, nil, nil
+    if push then
+        local okP, errP = CanPush(src, nil)
+        if not okP then return false, errP or 'err.no_permission' end
+    end
     local target = ToSrc(leaderSrc)
     local leaderO = target and GetOfficer(target)
     if not leaderO then return false, 'err.mc_page_target' end
+    if push then
+        -- the control for the leader's department: a supervisor's own only (err.other_department)
+        local okP, errP, r, d = CanPush(src, leaderO.department)
+        if errP == 'err.other_department' then errP = 'err.mc_push_department' end
+        if not okP then return false, errP or 'err.no_permission' end
+        role, dept = r, d
+    end
     if not IsLeader(target) then return false, 'err.mc_page_not_leader' end
     local unit = UnitInfo(target)
     local issuer, issuerCid = StaffIssuer(src)
     if ToSrc(src) and (Contains(unit.srcs, ToSrc(src)) or (issuerCid and Contains(unit.cids, issuerCid))) then
         return false, 'err.mc_page_self'
     end
+    if push then
+        local errP = PushCheck(src, role, dept, opts.missionId, typeKey, areaKey, unit, issuer)
+        if errP then return false, errP end
+    end
     local call = NewCall(typeKey, areaKey, {
         staff = true,
         issuer = issuer,
         issuerCid = issuerCid,
+        issuerSrc = ToSrc(src),
         pagedCid = leaderO.citizenid,
+        missionId = push and opts.missionId or nil,
     })
     local payload = ToastPayload(call)
     payload.paged = true
+    if push then
+        payload.pushed = true
+        payload.missionLabel = MissionName(call.missionId)
+    end
     for _, m in ipairs(unit.srcs) do TriggerClientEvent(CP.e('client:missionCall'), m, payload) end
-    Audit(src, 'mcPage', call.code, nil, ('%s %s -> %s'):format(typeKey, areaKey or 'county', leaderO.citizenid), nil)
+    local what = ('%s %s -> %s'):format(typeKey, areaKey or 'county', leaderO.citizenid)
+    if push then
+        -- the audit names the mission (the Mission choice exception is always on record)
+        Audit(src, 'mcPush', call.code, call.missionId, what, nil)
+    else
+        Audit(src, 'mcPage', call.code, nil, what, nil)
+    end
     return true, { id = call.id, code = call.code }
+end
+
+-- The paged unit's leader turns a pushed mission down (step P19): the call ends, nobody else gets it.
+function MC.decline(src, callId)
+    src = ToSrc(src)
+    if not src then return false, 'err.not_in_game' end
+    local call = calls[math.tointeger(tonumber(callId) or 0)]
+    if not call or not call.missionId or call.status ~= 'open' or call.window then return false, 'err.mc_not_open' end
+    local unit = UnitInfo(src)
+    if not Contains(unit.cids, call.pagedCid) then return false, 'err.mc_paged' end
+    if not IsLeader(src) then return false, 'err.mc_page_not_leader' end
+    -- the call's history row keeps it (withdrawn, reason 'declined')
+    Withdraw(call, 'declined', os.time())
+    NotifyIssuer(call, 'mc.toast.push_declined', { code = call.code })
+    return true
 end
 
 function MC.withdraw(src, id, reason)
@@ -1547,8 +1694,10 @@ local function DeptShort(dept)
     return d.short or dept
 end
 
--- A department lane's call (step P12) is shown only to that department's officers (staff: admins see every one).
-local function Shown(call, officer)
+-- A department lane's call (step P12) is shown only to that department's officers (staff: admins see every one); a
+-- pushed mission (step P19) only to the paged unit (unitCids: the viewer's unit's citizenids).
+local function Shown(call, officer, unitCids)
+    if call.missionId and not Contains(unitCids or {}, call.pagedCid) then return false end
     if not call.department then return true end
     return type(officer) == 'table' and officer.department == call.department
 end
@@ -1561,6 +1710,15 @@ local function Card(call, v, tod)
     local pool = EffectivePool(st, area)
     local size = #v.unit.srcs
     local rr = cfg.rapidResponse or {}
+    -- a pushed mission (step P19): its own area and that one mission; only the paged unit learns its name
+    local pushedTo = call.missionId ~= nil and Contains(v.unit.cids, call.pagedCid)
+    local pushErr = nil
+    if call.missionId then
+        area = call.area
+        local okM, def, errM = Call('Draw', 'checkMission', call.missionId, call.type, v.unit.officers, call.area)
+        pool = okM and def and 1 or 0
+        if not (okM and def) then pushErr = errM or 'err.refused' end
+    end
     local card = {
         id = call.id,
         code = call.code,
@@ -1582,6 +1740,8 @@ local function Card(call, v, tod)
         typeOfTheDay = tod == call.type,
         redispatched = call.redispatched,
         paged = call.pagedCid ~= nil,
+        pushed = call.missionId ~= nil,
+        missionLabel = pushedTo and MissionName(call.missionId) or nil,
         department = call.department,
         departmentShort = DeptShort(call.department),
         status = 'ready',
@@ -1612,6 +1772,9 @@ local function Card(call, v, tod)
     elseif not st.ok then
         card.status = 'locked'
         card.locked = { reason = CP.L(st.errKey or 'err.refused') }
+    elseif pushErr then
+        card.status = 'locked'
+        card.locked = { reason = CP.L(pushErr) }
     elseif pool <= 0 then
         card.status = 'locked'
         card.locked = { reason = CP.L('mc.locked.no_missions', { type = card.typeLabel }) }
@@ -1673,7 +1836,7 @@ function MC.list(src)
     local _, tod = Call('Events', 'typeOfTheDay', nil, v.officer.department, v.officer)
     local cards = {}
     for _, call in pairs(calls) do
-        if Visible(call, v.now) and Shown(call, v.officer) then cards[#cards + 1] = Card(call, v, tod) end
+        if Visible(call, v.now) and Shown(call, v.officer, v.unit.cids) then cards[#cards + 1] = Card(call, v, tod) end
     end
     local _, run = Call('Runs', 'getBySrc', src)
     local onCall = false
@@ -1708,7 +1871,7 @@ function MC.claimableCount(src)
     if not v or not v.isLeader then return 0 end
     local n = 0
     for _, call in pairs(calls) do
-        if call.status == 'open' and not call.window and Shown(call, v.officer) then
+        if call.status == 'open' and not call.window and Shown(call, v.officer, v.unit.cids) then
             local card = Card(call, v, nil)
             if card.status == 'ready' then n = n + 1 end
         end
@@ -1812,6 +1975,37 @@ local function LaneViews(dept, now)
     return out
 end
 
+-- What the Page dialog needs to push a chosen mission (step P19): nil when src may not push, else the missions of
+-- the callable types ({ id, label, type }), and for a supervisor his department, perDay and usedToday.
+local function PushView(src)
+    local ok, _, role, dept = CanPush(src, nil)
+    if not ok then return nil end
+    local missions = {}
+    for key in pairs(Cfg().types or {}) do
+        if Callable(key) then
+            local _, list = Call('Missions', 'byType', key)
+            for _, def in ipairs(type(list) == 'table' and list or {}) do
+                local _, on = Call('Missions', 'isEnabled', def.id)
+                if on and not def.isBoss then
+                    missions[#missions + 1] = { id = def.id, label = MissionName(def.id), type = key }
+                end
+            end
+        end
+    end
+    table.sort(missions, function(a, b)
+        if a.type ~= b.type then return a.type < b.type end
+        return a.label < b.label
+    end)
+    local sup = role == 'supervisor'
+    local issuer = sup and StaffIssuer(src) or nil
+    return {
+        missions = missions,
+        department = sup and dept or nil,
+        perDay = sup and PushPerDay() or nil,
+        usedToday = sup and (PushesToday(issuer) or 0) or nil,
+    }
+end
+
 function MC.supView(src)
     local v = Viewer(src)
     local open = {}
@@ -1875,7 +2069,13 @@ function MC.supView(src)
             }
         end
     end
-    return { open = SortCards(open), today = SupToday(src), units = units, lanes = LaneViews(ownDept, now) }
+    return {
+        open = SortCards(open),
+        today = SupToday(src),
+        units = units,
+        lanes = LaneViews(ownDept, now),
+        push = PushView(src),
+    }
 end
 
 -- ============================================================================
@@ -1978,6 +2178,12 @@ CP.Net.callback('getMissionCalls', function(src)
     return MC.list(src)
 end, { rate = 4 })
 
+-- Decline a mission pushed to the unit (step P19): only the paged unit's leader.
+CP.Net.action('server:declineMissionCall', function(src, payload)
+    if type(payload) ~= 'table' or not tonumber(payload.callId) then return false, 'err.invalid_payload' end
+    return MC.decline(src, payload.callId)
+end, { rate = 3 })
+
 CP.Net.action('server:claimMissionCall', function(src, payload)
     if type(payload) ~= 'table' or not tonumber(payload.callId) then return false, 'err.invalid_payload' end
     if payload.twists ~= nil and type(payload.twists) ~= 'table' then return false, 'err.invalid_payload' end
@@ -2025,7 +2231,9 @@ for _, scope in ipairs({ 'sup', 'admin' }) do
         if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
         local okA, area = StaffArea(payload)
         if not okA then return false, 'err.mc_unknown_area' end
-        return MC.page(src, payload.type, area, payload.leaderSrc)
+        local missionId = payload.missionId
+        if missionId ~= nil and type(missionId) ~= 'string' then return false, 'err.invalid_payload' end
+        return MC.page(src, payload.type, area, payload.leaderSrc, { missionId = missionId })
     end, { rate = 2 })
     CP.Net.action(('server:%s:mcCreate'):format(scope), function(src, payload)
         local ok, e = StaffAllowed(src, adminOnly)

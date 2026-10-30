@@ -258,5 +258,7 @@
   "mc.control.typeOfTheDay": "Type of the Day",
   "mc.control_desc.typeOfTheDay": "Pick one mission type for tomorrow. Tomorrow your department's officers earn the Type of the Day points on it instead of the server's type; other departments keep the server's. One pick a day, and never on your own runs or a unit you are in.",
   "err.tod_picked_today": "Your department already picked a Type of the Day today. Pick again after the daily reset.",
-  "sup.tod.today": "Counts today for your department: {type}. A pick now counts on {day}."
+  "sup.tod.today": "Counts today for your department: {type}. A pick now counts on {day}.",
+  "mc.control.pushMission": "Push a chosen mission",
+  "mc.control_desc.pushMission": "Supervisors page a unit of their own department (never their own) with one mission they choose instead of a random one, from Live Missions. Only that unit sees the mission's name and may accept or decline it; every accept rule stays and it never earns rapid response. A few a day per supervisor."
 }

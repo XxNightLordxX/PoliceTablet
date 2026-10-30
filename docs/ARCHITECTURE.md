@@ -2096,8 +2096,8 @@ Full notes: docs/notes/missioncalls.md.
   is quit, off_route, start_timeout, idle, real_call or force_recall), row:settled and participant:left (cache),
   home:extras (callsOpen). `CP.Schedule.onDaily` deletes history older than Config.Retention.missionCallDays.
 - Net: callbacks `getMissionCalls`, `sup:getMissionCalls`, `admin:getAreaCoverage`; actions
-  `server:claimMissionCall`, `server:sup:mcWithdraw|mcPage|mcCreate` and `server:admin:*`; plain `server:mcWatch`
-  (deprecated, kept for older clients; the `tablet:closed` hook ends the watch);
+  `server:claimMissionCall`, `server:declineMissionCall` (step P19), `server:sup:mcWithdraw|mcPage|mcCreate` and
+  `server:admin:*`; plain `server:mcWatch` (deprecated, kept for older clients; the `tablet:closed` hook ends the watch);
   `client:missionCall` (toast and tone, only to idle units that could claim and have not muted calls); push `calls`.
   Nothing is ever sent to SC-Dispatch.
 
@@ -3594,6 +3594,21 @@ pattern, so a missing module reads as config).
   the server type (admin override, then the roll). Callers pass the department: the board (viewer, unit), the boss
   card, `Scoring.compute` (participant, run participants), Home, Dispatch (`MC.list`) and the run view's expected
   points. `viewExtra`: `todFor` (tomorrow), `todToday`, `todServer` for the supervisor's line.
+- Push a chosen mission (step P19), `pushMission`, kind `action`, per department, under the master switch, shipped
+  off (the Mission choice Hard rule's fifth exception). modules/missioncalls registers it; `MC.page(src, type, area,
+  leaderSrc, { missionId })` checks `DC.canChange(src, 'pushMission', leader's department)` (a supervisor's own
+  department only, `err.mc_push_department`; admins any department the control is on for), every unit member of
+  that department, `Config.MissionControls.pushMissionPerDay` (`Kit.dailyCount('mcPush', { actor })`,
+  `err.mc_push_used`; admins any) and `CP.Draw.checkMission(id, type, officers, area)` (enabled, not the boss, of the
+  call's type, `Eligibility` with the department's switched-off missions and every member's mission cooldown, a
+  location in the area); the call keeps `missionId` and `issuerSrc`, is audited `mcPush` (old value: the mission)
+  and toasts only the paged unit (`pushed`, `missionLabel`). `CallRule` keeps it the paged unit's for the whole offer
+  (`err.mc_paged`), `Shown` hides it from everyone else, `ToastPageEnded` skips it, the card's pool is that mission
+  (`missionLabel` only for the paged unit), the claim passes `missionId` to `Draw.accept`, whose `FinishAccept`
+  replaces `Draw.draw` with `Draw.checkMission` + `Draw.pickLocation`. A failed accept or ready check withdraws it
+  (no next claimant), `MC.decline` (`server:declineMissionCall`, the paged unit's leader) withdraws it with reason
+  `declined`, the issuer is told; `OnRunEnded` never re-dispatches it. `supView.push` gives the Page dialog the
+  missions of the callable types and the supervisor's `perDay` / `usedToday`.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through
@@ -3927,6 +3942,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:tabletClosed` | — (plain event, once per close; 4 per s): ends the `nav` watch, fires `tablet:closed` | tablet |
 | `server:mcWatch` | false = the tablet closed (plain event; deprecated, no longer sent: `server:tabletClosed` replaces it) | missioncalls |
 | `server:claimMissionCall` | `{ callId, twists? }` → `{ runId }` or `{ pending }` (the twists are checked before the claim joins the window) | missioncalls |
+| `server:declineMissionCall` | `{ callId }`: the paged unit's leader turns a pushed mission down (step P19) | missioncalls |
 | `server:contactDecide` | `{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }` | custody |
 | `server:profile:set` / `server:profile:report` | see §5.32 | profile |
 | `server:options:set` | `{ key = value, ... }` → `{ values }` (rate 4; see §5.48) | options |
@@ -4007,7 +4023,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:builder:*` | see builder section of its own module header | builderEdit/Publish/Archive/EditAny/Rollback/breakEditLock | builder |
 | `server:builder:teleport` | `{ missionId, location, key, index }` → `{ missionId, location, key, index }` + `client:builder:teleport` with the stored point (no coordinates are accepted from the client) | builderEdit + `Config.Builder.teleport` + admin or a `Config.Permissions.builderTeleport` grant (department, grade) | builder; refused in the arena, on a run, while down; audit `builderTeleport` |
 | `server:sup:mcWithdraw` / `server:admin:mcWithdraw` | `{ callId, reason }` | missionCalls | missioncalls |
-| `server:sup:mcPage` / `server:admin:mcPage` | `{ type, area, leaderSrc }` | missionCalls | missioncalls |
+| `server:sup:mcPage` / `server:admin:mcPage` | `{ type, area, leaderSrc, missionId? }` (missionId: step P19, the pushMission control) | missionCalls | missioncalls |
 | `server:sup:mcCreate` / `server:admin:mcCreate` | `{ type, area }` | missionCalls | missioncalls |
 | `server:sup:commend` / `server:admin:commend` | `{ citizenid, kind, citation, runUuid? }` → `{ id }` | issueCommendation / openAdmin | profile |
 | `server:sup:revokeCommendation` / `server:admin:revokeCommendation` | `{ id, reason }` | issuer or admin | profile |

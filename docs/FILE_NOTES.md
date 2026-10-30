@@ -1856,6 +1856,9 @@ Public API (server)
       opts = { rng = CP.U.rng(...), participants = { src... } }; errKeys err.pool_empty,
       err.pool_cooldown, err.no_location
   CP.Draw.pickLocation(def, participantSrcs, rng, opts) -> index|nil     opts = { exclude = { [index] = true } }
+  CP.Draw.checkMission(missionId, typeKey, members, area) -> def | nil, errKey   (step P19: a mission
+      staff pushed to a unit; the pool's rules for that one mission, never the boss; Draw.accept's
+      opts.missionId uses it instead of the draw, the location still picked at random)
   CP.Draw.reserve(runId, missionId, index) -> wasFree
   CP.Draw.release(runId) -> boolean
   CP.Draw.isReserved(missionId, index) -> boolean
@@ -5625,6 +5628,18 @@ pursuit cars through the spawn director (Config.Spawning, PLAN S13) on the real 
 placement module: road clearance (vehicleLift), the second violator up the road from the officers
 (secondViolatorUpstream), every car's point through the director (minDistance, after waveDelayMax hardMin), the
 placer's other slots, and never a car on a player's position.
+```
+
+## tests/push_mission_spec.lua
+
+```text
+A mission a supervisor pushes to a unit (step P19, the pushMission Mission control): shipped off nothing moves; on,
+the push is refused for his own unit, another department, another type, the wrong unit size, a mission with no start
+in the area and a member's mission cooldown; a push names the mission in the audit, only the paged unit gets the
+toast and sees the call (with the mission's name), even after the page time, and its accept starts that mission
+(staff call, no rapid response); a decline ends it and tells the supervisor; pushMissionPerDay a supervisor a day,
+admins any. Plain stubs (MySQL, CP.AdminKit.dailyCount from the stubbed audit rows); the real deptcontrols, draw
+and missioncalls modules. No database.
 ```
 
 ## tests/qbx_cache_spec.lua

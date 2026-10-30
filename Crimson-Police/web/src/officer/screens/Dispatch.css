@@ -140,6 +140,13 @@
     color: var(--cp-text);
 }
 
+/* a mission command pushed to this unit (step P19) */
+.mc-card__pushed {
+    font-size: var(--cp-fs-sm);
+    font-weight: 600;
+    color: var(--cp-primary);
+}
+
 .mc-card__meta {
     display: flex;
     flex-wrap: wrap;

@@ -131,6 +131,21 @@ const state: { calls: MockCall[]; recent: RecentCall[]; onRun: boolean } = {
                 rapidPoints: 0,
             }),
         },
+        {
+            // step P19: a mission command pushed to this unit (only the paged unit sees its name)
+            postedAt: t - 15,
+            offer: 180,
+            call: base(6, {
+                titleKey: 'mc.title.patrol.2',
+                area: AREAS[1],
+                distance: 900,
+                paged: true,
+                pushed: true,
+                missionLabel: 'Grove Street Patrol',
+                staff: true,
+                rapidPoints: 0,
+            }),
+        },
     ];
 })();
 
@@ -167,6 +182,14 @@ registerMock('action', 'server:claimMissionCall', (payload: { callId?: number })
     return { pending: true, code: m.call.code };
 });
 
+// A mission command pushed to this unit (step P19): only the paged unit's leader declines it.
+registerMock('action', 'server:declineMissionCall', (payload: { callId?: number }) => {
+    const m = state.calls.find(c => c.call.id === Number(payload?.callId));
+    if (!m || !m.call.missionLabel) throw new Error('err.mc_not_open');
+    state.calls = state.calls.filter(c => c !== m);
+    return true;
+});
+
 registerMock('request', 'sup:getMissionCalls', (): SupCallsView => {
     const v = view();
     return {
@@ -175,6 +198,16 @@ registerMock('request', 'sup:getMissionCalls', (): SupCallsView => {
             { src: 14, name: 'Maria Lopez', callsign: '2L-21', departmentShort: 'SAST', size: 2 },
             { src: 28, name: 'Leo Park', callsign: 'F-12', departmentShort: 'FIB', size: 1 },
         ],
+        push: {
+            missions: [
+                { id: 'patrol_grove_street', label: 'Grove Street Patrol', type: 'patrol' },
+                { id: 'patrol_vinewood_hills', label: 'Vinewood Hills Patrol', type: 'patrol' },
+                { id: 'tactical_bank_hold', label: 'Bank Hold-up', type: 'tactical' },
+            ],
+            department: 'sast',
+            perDay: 5,
+            usedToday: 1,
+        },
         today: [
             {
                 code: 'MC-0417',
@@ -214,13 +247,13 @@ for (const scope of ['sup', 'admin']) {
         state.calls.push({ postedAt: nowS(), offer: 180, call: base(id, { area, staff: true, rapidPoints: 0 }) });
         return { id, code: `MC-04${20 + id}` };
     });
-    registerMock('action', `server:${scope}:mcPage`, (payload: { leaderSrc?: number }) => {
+    registerMock('action', `server:${scope}:mcPage`, (payload: { leaderSrc?: number; missionId?: string }) => {
         if (!payload?.leaderSrc) throw new Error('err.mc_page_target');
         const id = Math.max(0, ...state.calls.map(c => c.call.id)) + 1;
         state.calls.push({
             postedAt: nowS(),
             offer: 180,
-            call: base(id, { paged: true, staff: true, rapidPoints: 0 }),
+            call: base(id, { paged: true, pushed: !!payload.missionId, staff: true, rapidPoints: 0 }),
         });
         return { id, code: `MC-04${20 + id}` };
     });

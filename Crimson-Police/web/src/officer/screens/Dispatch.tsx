@@ -160,6 +160,7 @@ function CallCard({
     blocked,
     onClaim,
     onTwists,
+    onDecline,
     onChanged,
 }: {
     call: MissionCall;
@@ -167,6 +168,8 @@ function CallCard({
     busy: boolean;
     blocked: boolean;
     onClaim: (call: MissionCall) => void;
+    // a mission command pushed to this unit (step P19): the leader may turn it down
+    onDecline?: (call: MissionCall) => void;
     // claim in one click (My options): the twists go through the claim dialog, opened by this button
     onTwists?: (call: MissionCall) => void;
     onChanged: () => void;
@@ -205,7 +208,7 @@ function CallCard({
                         ) : null}
                         {call.paged ? (
                             <Badge size="sm" tone="primary" icon="bell">
-                                {t('mc.card.paged')}
+                                {call.pushed ? t('mc.card.pushed') : t('mc.card.paged')}
                             </Badge>
                         ) : null}
                         {call.departmentShort ? (
@@ -215,6 +218,11 @@ function CallCard({
                         ) : null}
                     </div>
                     <div className="mc-card__title">{t(call.titleKey)}</div>
+                    {call.missionLabel ? (
+                        <div className="mc-card__pushed">
+                            {t('mc.card.pushed_mission', { mission: call.missionLabel })}
+                        </div>
+                    ) : null}
                     <div className="mc-card__meta">
                         <span>
                             <Icon name="mapPin" size={12} /> {areaText(call)}
@@ -269,6 +277,17 @@ function CallCard({
                         title={t('mc.card.twists_hint')}
                     >
                         {t('board.card.twists')}
+                    </Button>
+                ) : null}
+                {onDecline && call.missionLabel ? (
+                    <Button
+                        variant="ghost"
+                        icon="x"
+                        size="sm"
+                        disabled={busy || (call.status !== 'ready' && call.status !== 'locked')}
+                        onClick={() => onDecline(call)}
+                    >
+                        {t('mc.card.decline')}
                     </Button>
                 ) : null}
                 <Button
@@ -374,6 +393,12 @@ export default function Dispatch() {
         else setPending(call);
     };
 
+    // a pushed mission (step P19): the leader turns it down; nobody else gets it
+    const decline = async (call: MissionCall) => {
+        const res = await run('server:declineMissionCall', { callId: call.id }, { success: 'mc.card.declined' });
+        if (res.ok) void refetch();
+    };
+
     const toggleMute = async (next: boolean) => {
         setMuted(next);
         const res = await run(PROFILE_SET, { callsMuted: next }, { success: next ? 'mc.mute.on' : 'mc.mute.off' });
@@ -452,6 +477,7 @@ export default function Dispatch() {
                                     blocked={blocked}
                                     onClaim={claimNow}
                                     onTwists={oneClick ? setPending : undefined}
+                                    onDecline={data.unit.isLeader ? c2 => void decline(c2) : undefined}
                                     onChanged={() => setTimeout(refresh, 400)}
                                 />
                             ))}
@@ -480,7 +506,11 @@ export default function Dispatch() {
                 message={
                     pending ? (
                         <div className="mc-confirm">
-                            <p>{t('mc.confirm.random', { type: pending.typeLabel })}</p>
+                            <p>
+                                {pending.missionLabel
+                                    ? t('mc.confirm.pushed', { mission: pending.missionLabel, type: pending.typeLabel })
+                                    : t('mc.confirm.random', { type: pending.typeLabel })}
+                            </p>
                             <p className="mc-confirm__warn">
                                 <Icon name="alert" size={14} />
                                 <span>{t('mc.confirm.abandon', { type: pending.typeLabel })}</span>
