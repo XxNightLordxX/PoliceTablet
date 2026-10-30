@@ -92,5 +92,15 @@
   "options.value.distanceUnits.metric": "Metres and kilometres",
   "options.value.distanceUnits.imperial": "Feet and miles",
   "options.key.keyHints": "Key hints",
-  "options.key.keyHints_hint": "Name the key bound to it: \"or press K\" on the ready check, \"F6 opens Dispatch\" on a new mission call and the contact key on the contact HUD line. A key you have not bound is never named."
+  "options.key.keyHints_hint": "Name the key bound to it: \"or press K\" on the ready check, \"F6 opens Dispatch\" on a new mission call and the contact key on the contact HUD line. A key you have not bound is never named.",
+  "options.group.map": "Map",
+  "options.key.objectiveGps": "Objective GPS",
+  "options.key.objectiveGps_hint": "How the map leads you to each objective once you are at the action. Radio Silence still hides it, and the drive to the start keeps its own route.",
+  "options.value.objectiveGps.route": "GPS line",
+  "options.value.objectiveGps.waypoint": "Waypoint",
+  "options.value.objectiveGps.off": "Nothing (the Objective GPS button still sets one)",
+  "options.key.hudTargetLine": "Objective line on the HUD",
+  "options.key.hudTargetLine_hint": "The mission HUD names the objective your map points to and how far it is.",
+  "options.key.colourblindMap": "Colour-blind map colours",
+  "options.key.colourblindMap_hint": "Objective blips and the GPS line use blue, yellow, orange, white and purple on this PC, never red or green. Enemies are purple."
 }

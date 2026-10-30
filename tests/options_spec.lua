@@ -365,6 +365,28 @@ do
     Config.OfficerOptions.allow.autoReady = nil
 end
 
+-- Map (shared/options_map.lua, step O14): Objective GPS saved with the character, the HUD line and colour-blind colours
+-- kept on this PC; shipped as today.
+do
+    local rows = {}
+    for _, d in ipairs(Cb('getOptions', 1).data.schema) do rows[d.key] = d end
+    local g = rows.objectiveGps
+    H.ok(
+        g and g.group == 'map' and g.store == 'server' and g.default == 'route'
+            and table.concat(g.values, ',') == 'route,waypoint,off',
+        'Objective GPS: route (as before), waypoint or off'
+    )
+    H.ok(rows.hudTargetLine and rows.hudTargetLine.store == 'local' and rows.hudTargetLine.default == true,
+        'the HUD objective line: on as before, kept on this PC')
+    H.ok(rows.colourblindMap and rows.colourblindMap.store == 'local' and rows.colourblindMap.default == false,
+        'colour-blind map colours: off as before, kept on this PC')
+    H.eq(Cb('getOptions', 1).data.values.objectiveGps, 'route', 'officers get the GPS line as before')
+    local ok, data = Act(1, { objectiveGps = 'waypoint' })
+    H.ok(ok == true and data.values.objectiveGps == 'waypoint', 'an officer picks the waypoint')
+    H.eq(select(2, Act(1, { objectiveGps = 'start' })), 'err.option_value', 'only route, waypoint or off')
+    Act(1, { objectiveGps = 'route' })
+end
+
 -- the column the step adds, in every storage mode (files mode: the saves folder engine)
 H.ok(pcall(H.sql, 'SELECT options FROM cp_officers LIMIT 1'), 'migration 010: cp_officers.options exists')
 

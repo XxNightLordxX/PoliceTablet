@@ -2063,4 +2063,219 @@ do
     M.clear()
 end
 
+-- ============================================================================
+--                                     O14
+-- ============================================================================
+-- THE OFFICER'S MAP OPTIONS (My options -> Map, shared/options_map.lua).
+-- objectiveGps: 'route' = the GPS line (as before), 'waypoint' = a map waypoint set on each new pointer, 'off' = none
+-- (the Objective GPS button still sets one); Radio Silence still wins. hudTargetLine off: no HUD objective line.
+-- colourblindMap: only the colour ids of SetBlipColour and SetBlipRouteColour change, never to red or green.
+
+do
+    Reset()
+    CP.Tablet = TABLET
+    CP.Route = {
+        current = function() return world.route end,
+    }
+    local OPT = {}
+    local savedOptions = CP.Options
+    CP.Options = {
+        get = function(key) return OPT[key] end,
+    }
+    local wp, waypoints = nil, 0
+    local saved = { IsWaypointActive = _G.IsWaypointActive, DoesBlipExist = _G.DoesBlipExist }
+    _G.SetNewWaypoint = function(x, y)
+        wp = vec3(x, y, 0.0)
+        waypoints = waypoints + 1
+    end
+    _G.IsWaypointActive = function() return wp ~= nil end
+    _G.GetFirstBlipInfoId = function(sprite) return (sprite == 8 and wp) and 9100 or 0 end
+    _G.GetBlipInfoIdCoord = function() return wp or vec3(0.0, 0.0, 0.0) end
+    _G.SetWaypointOff = function() wp = nil end
+    _G.DoesBlipExist = function(id)
+        if id == 9100 then return wp ~= nil end
+        return saved.DoesBlipExist(id)
+    end
+    local function Doors(...)
+        local list = {}
+        for _, x in ipairs({ ... }) do list[#list + 1] = { key = x, x = x + 0.0, y = 0.0, z = 30.0, look = 'point' } end
+        return { kind = 'targets', targets = list, label = 'Door' }
+    end
+
+    -- 'route' (shipped): the line, no waypoint
+    OPT.objectiveGps = 'route'
+    M.set('run-o14', 1, Doors(500, 1500))
+    H.eq(#Routed(), 1, 'o14: route: the GPS line to the nearest door')
+    H.ok(wp == nil and waypoints == 0, 'o14: route: no waypoint')
+    M.clear()
+
+    -- 'off': no line and no waypoint; the Objective GPS button still sets one
+    OPT.objectiveGps = 'off'
+    M.set('run-o14', 1, Doors(500, 1500))
+    Tick(2)
+    H.ok(#Routed() == 0 and wp == nil, 'o14: off: no line, no waypoint')
+    H.eq(M.leads({}), false, 'o14: off: a late partner keeps the start (no objective line for him)')
+    H.eq((TB.actions.setObjectiveGps()), true, 'o14: off: the Objective GPS button still sets one')
+    H.ok(wp and wp.x == 500.0, 'o14: off: ...on the nearest door')
+    M.clear()
+    H.eq(wp, nil, 'o14: off: the button\'s waypoint goes with the run')
+
+    -- 'waypoint': one waypoint per new pointer, never a line; it jumps to the next door
+    OPT.objectiveGps = 'waypoint'
+    waypoints = 0
+    M.set('run-o14', 1, Doors(500, 1500))
+    H.ok(wp and wp.x == 500.0 and waypoints == 1, 'o14: waypoint: set on the nearest door')
+    H.eq(#Routed(), 0, 'o14: waypoint: no GPS line')
+    Tick(3)
+    H.eq(waypoints, 1, 'o14: waypoint: the same pointer: set once')
+    M.update('run-o14', 1, Doors(1500))
+    Tick()
+    H.ok(wp and wp.x == 1500.0 and waypoints == 2, 'o14: waypoint: the door done, it jumps to the next one')
+    wp = nil
+    Tick(3)
+    H.ok(wp == nil and #Routed() == 0, 'o14: waypoint: cleared by the officer, not set again for the same door')
+    M.clear()
+    M.set('run-o14', 2, Doors(800))
+    H.ok(wp and wp.x == 800.0, 'o14: waypoint: the next objective gets its own')
+    M.clear('run-o14', 2)
+    H.eq(wp, nil, 'o14: waypoint: removed at the objective stop while it is ours')
+
+    -- his own waypoint is never replaced; nothing while he drives to the start
+    local MINE = vec3(-500.0, -500.0, 0.0)
+    wp, waypoints = MINE, 0
+    M.set('run-o14', 3, Doors(500))
+    Tick(2)
+    H.ok(wp == MINE and waypoints == 0, 'o14: waypoint: a waypoint of his own is kept')
+    M.clear()
+    H.ok(wp == MINE, 'o14: waypoint: ...and not removed')
+    wp = nil
+    world.route = { runId = 'run-o14', arrived = false, routeOn = true }
+    M.set('run-o14', 4, Doors(500))
+    Tick(2)
+    H.eq(waypoints, 0, 'o14: waypoint: none while he drives to the start')
+    world.route = nil
+    M.clear()
+
+    -- Radio Silence: nothing in any mode that would lead to the objective
+    waypoints = 0
+    M.set('run-o14', 5, Doors(500, 1500), { radioSilence = true })
+    Tick(3)
+    H.ok(wp == nil and waypoints == 0 and #Routed() == 0, 'o14: Radio Silence + waypoint: no waypoint, no line')
+    M.clear()
+
+    -- switching back to 'route' drops the waypoint 'waypoint' set; the line comes back
+    M.set('run-o14', 6, Doors(500))
+    H.ok(wp ~= nil, 'o14: waypoint set')
+    OPT.objectiveGps = 'route'
+    CP.Hooks.fire('options:changed', 'objectiveGps')
+    Tick()
+    H.ok(wp == nil and #Routed() == 1, 'o14: back to route: the waypoint goes, the line is back')
+    M.clear()
+
+    -- hudTargetLine
+    TB.huds = {}
+    OPT.hudTargetLine = false
+    M.set('run-o14', 7, { kind = 'point', coords = { x = 900.0, y = 0.0, z = 30.0 }, label = 'Scene' })
+    Tick(2)
+    local lines = 0
+    for _, p in ipairs(TB.huds) do if p.target then lines = lines + 1 end end
+    H.eq(lines, 0, 'o14: hudTargetLine off: no HUD objective line')
+    OPT.hudTargetLine = true
+    Tick()
+    local last = TB.huds[#TB.huds]
+    H.ok(last and last.target and last.target.label == 'Scene', 'o14: hudTargetLine on: the line (as before)')
+    M.clear()
+
+    -- colourblindMap: the same calls, only the colour ids differ
+    local NATIVES = {
+        'AddBlipForCoord',
+        'AddBlipForRadius',
+        'SetBlipRoute',
+        'SetBlipSprite',
+        'SetBlipColour',
+        'SetBlipScale',
+        'SetBlipAlpha',
+        'SetBlipRouteColour',
+        'SetBlipPriority',
+        'RemoveBlip',
+        'SetNewWaypoint',
+    }
+    local HAS_ID = { AddBlipForCoord = false, AddBlipForRadius = false, SetNewWaypoint = false }
+    local function Record(on)
+        Reset()
+        Config.Markers.routeColour = 1
+        Config.Markers.radioSilenceLastKnown = 5
+        OPT.objectiveGps, OPT.colourblindMap = 'route', on
+        local log, real = {}, {}
+        for _, n in ipairs(NATIVES) do
+            real[n] = _G[n]
+            _G[n] = function(...)
+                local args = { ... }
+                if HAS_ID[n] == nil then table.remove(args, 1) end
+                log[#log + 1] = { n = n, args = args }
+                return real[n](...)
+            end
+        end
+        M.set('run-cb', 1, {
+            kind = 'targets',
+            targets = {
+                { key = 1, x = 800.0, y = 0.0, z = 30.0, look = 'hostile' },
+                { key = 2, x = 900.0, y = 0.0, z = 30.0, look = 'fleeing' },
+                { key = 3, x = 950.0, y = 0.0, z = 30.0, look = 'hostage' },
+                { key = 4, x = 990.0, y = 0.0, z = 30.0, look = 'point', variant = 'followUp' },
+            },
+        })
+        Tick()
+        M.set('run-cb', 2,
+            { kind = 'area', coords = { x = 0.0, y = 900.0, z = 30.0 }, radius = 80.0, look = 'fightArea' })
+        Tick()
+        M.set('run-cb', 3,
+            { kind = 'targets', targets = { { key = 9, netId = 9, x = 700.0, y = 0.0, z = 30.0, look = 'suspect' } } },
+            { radioSilence = true })
+        Tick()
+        M.style(AddBlipForCoord(1.0, 2.0, 3.0), 'start', 'Mission start')
+        M.clear()
+        for n, f in pairs(real) do _G[n] = f end
+        Config.Markers.radioSilenceLastKnown = 0
+        return log
+    end
+    local plain, cb = Record(false), Record(true)
+    local same, swapped, redGreen = #plain == #cb, {}, false
+    for i, a in ipairs(plain) do
+        local b = cb[i]
+        if not b or a.n ~= b.n or #a.args ~= #b.args then
+            same = false
+        else
+            local colour = a.n == 'SetBlipColour' or a.n == 'SetBlipRouteColour'
+            for j, v in ipairs(a.args) do
+                if v ~= b.args[j] then
+                    if colour then
+                        swapped[#swapped + 1] = a.n .. ':' .. tostring(v) .. '>' .. tostring(b.args[j])
+                    else
+                        same = false
+                    end
+                end
+            end
+            if colour and (b.args[1] == 1 or b.args[1] == 2) then redGreen = true end
+        end
+    end
+    H.ok(same, 'o14: colour-blind map: the same blips, sprites, sizes, lines and waypoints')
+    H.ok(#swapped > 0, 'o14: colour-blind map: some colours change')
+    H.eq(redGreen, false, 'o14: colour-blind map: no red or green blip or line')
+    local seen = table.concat(swapped, ' ')
+    H.ok(seen:find('SetBlipColour:1>27', 1, true) ~= nil, 'o14: a hostile, a suspect or a fight goes red to purple')
+    H.ok(seen:find('SetBlipRouteColour:1>5', 1, true) ~= nil, 'o14: the line goes red to yellow')
+    H.ok(seen:find('SetBlipColour:1>0', 1, true) ~= nil, 'o14: Radio Silence\'s last-known circle goes white')
+    OPT.colourblindMap = nil
+    H.eq(M.colour('area', 1), 1, 'o14: off: M.colour gives the config colour')
+    OPT.colourblindMap = true
+    H.eq(M.colour('area', 1), 0, 'o14: on: the last-known circle is white')
+    H.eq(M.colour('friendly', 2), 3, 'o14: on: friendly is blue')
+    OPT.colourblindMap = nil
+
+    CP.Options = savedOptions
+    _G.IsWaypointActive, _G.DoesBlipExist = saved.IsWaypointActive, saved.DoesBlipExist
+    M.clear()
+end
+
 return H

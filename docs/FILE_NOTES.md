@@ -3844,6 +3844,15 @@ and larger text on the tablet and the HUD. The tablet applies them (web/src/App.
 layouts/TabletFrame.tsx, hud/HudColumn.tsx); Config.OfficerOptions holds the allow and defaults.
 ```
 
+## Crimson-Police/shared/options_map.lua
+
+```text
+The map officer options (My options -> Map, step O14): how Objective GPS leads to each objective (saved with the
+character: the GPS line as before, a map waypoint, or nothing), the HUD's objective direction line and colour-blind
+map colours (both kept on this PC). modules/markers/client.lua reads them; they only hide or recolour, never show
+more than the run allows (Radio Silence still wins).
+```
+
 ## Crimson-Police/shared/options_popups.lua
 
 ```text
@@ -5016,6 +5025,15 @@ Mission files are written to a temporary folder missions/custom/test_builder_<n>
 the end, whatever happens. The spec uses its own database (<run database>_builder_server).
 ```
 
+## tests/cash_bonus_spec.lua
+
+```text
+Cash bonuses inside admin bounds (step P16): happyHourCash (x the cash of a run a department leads that was
+accepted while a happy hour ran, fixed at the accept) and twistCash (x each twist's cash for the leader's
+department, still under Config.Events.twistMaxCash). Paid only on a completed run, never on test runs,
+Cross-Department runs or the Weekly Boss. Plain Lua: stubbed controls, no database.
+```
+
 ## tests/cooldown_controls_spec.lua
 
 ```text
@@ -5036,15 +5054,6 @@ put on its parking point only once nobody is on it, and then waits frozen for an
 ground (CP.Spawn.again); a tow truck that never got a road point fades the car out instead of being made inside it.
 Before (a1 4.1 item 13, 5.4) the 60 s fallback put the van on its parking point or the scene with no player check,
 with a raw server SetEntityCoords at the file's height.
-```
-
-## tests/cash_bonus_spec.lua
-
-```text
-Cash bonuses inside admin bounds (step P16): happyHourCash (x the cash of a run a department leads that was
-accepted while a happy hour ran, fixed at the accept) and twistCash (x each twist's cash for the leader's
-department, still under Config.Events.twistMaxCash). Paid only on a completed run, never on test runs,
-Cross-Department runs or the Weekly Boss. Plain Lua: stubbed controls, no database.
 ```
 
 ## tests/dept_twists_spec.lua

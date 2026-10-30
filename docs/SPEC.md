@@ -1793,6 +1793,8 @@ My options holds the choices each officer makes for their own tablet, saved per 
 
 - During a mission: Abandon asks in a dialog (saved with the character; on by default, as before; off = no dialog: the first press of Abandon on Active Mission turns the button into "Click again to abandon" for 3 seconds and only a second press within them abandons, so an abandon always takes two presses; server:abandon and the type cooldown, Config.Limits.abandonCooldown, are unchanged), Recalculate in one click (saved with the character; off by default: Recalculate route draws the new route at once, without the confirm; Config.Route.maxRecalcs still counts every recalculation) and Distances (kept on this PC: 'metric', as before, reads m under 1 km then km; 'imperial' reads ft under a tenth of a mile, then miles with one decimal under 10 mi; on the mission HUD, the run bar, Active Mission, the Contact panel and Dispatch; the Mission Builder stays metric). Each is allowed by default (Config.OfficerOptions.allow).
 
+- Map (step O14): Objective GPS (saved with the character: 'route', as before, a GPS line to each objective; 'waypoint' = a map waypoint put on each new objective pointer instead, such as the next door of a Business Check, never over a waypoint the officer set himself, removed with the objective while it is still there; 'off' = neither, the Active Mission Objective GPS button still sets one), Objective line on the HUD (kept on this PC; on, as before: the HUD names what the map points to and how far; off = no such line) and Colour-blind map colours (kept on this PC; off, as before; on = objective blips, circles and the GPS line use blue, yellow, orange, white and purple, never red or green: enemies purple, fleeing and follow-ups orange, friendly blue, Radio Silence's last-known circle white). They only hide or recolour: Radio Silence still hides the line and the waypoint, and the drive to the start keeps its own route whatever the officer picks. Each is allowed by default (Config.OfficerOptions.allow).
+
 - Unit (step O13): Auto-Ready (saved with the character; off by default and locked: Config.OfficerOptions.allow.autoReady = false, so an owner or a department turns it on). With it on, when the unit leader accepts a mission type the officer's tablet answers Ready for them, but only while they are at the keys (no pause menu, some game input in the last 60 seconds). The server counts that answer only while the officer's department allows the option, the officer has it on and the officer's ped stands within Config.OfficerOptions.autoReadyRange metres (150 by default, 10 to 1000) of the leader's, server-side positions; otherwise it is ignored and the banner still asks. Never for a Cross-Department join. A manual Not ready still wins: after an automatic Ready the banner keeps a Not ready button until the check ends.
 
 - Sounds (kept on this PC, for every character played on it): Mission call tone, Unit tone (a unit invite and a ready check) and Objective cues (a checkpoint passed, a target defused, an item found on a run). Each is on by default, as before; off plays nothing and every pop-up and HUD line still shows. On or off only: the game's sounds have no volume. The Builder's own sounds are not affected. Each is allowed by default (Config.OfficerOptions.allow).
@@ -4095,6 +4097,9 @@ Config.OfficerOptions = {
         skipRecalcConfirm = true,    -- recalculate the route in one click, without the confirm (this character)
         distanceUnits = true,        -- distances in metres or in miles (kept on this PC)
         autoReady = false,           -- answers the unit ready check for the officer: off unless you want it
+        objectiveGps = true,         -- how the map leads to each objective: line, waypoint or none (this character)
+        hudTargetLine = true,        -- the HUD line naming the objective and how far it is (kept on this PC)
+        colourblindMap = true,       -- colour-blind colours for objective blips, no red or green (kept on this PC)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -4140,6 +4145,14 @@ Config.OfficerOptions = {
                                      -- Mission and Dispatch
         autoReady = false,           -- true = the officer is Ready at once when the unit leader accepts a mission type,
                                      -- if they are at the keys and near the leader; false = they answer (as before)
+        objectiveGps = 'route',      -- 'route' = a GPS line to each objective (as before); 'waypoint' = a map waypoint
+                                     -- set on each new objective instead; 'off' = none (the Objective GPS button
+                                     -- still sets one). Radio Silence still hides it; the drive to the start keeps
+                                     -- its own line
+        hudTargetLine = true,        -- true = the HUD names the objective and how far it is (as before); false = no
+                                     -- such line
+        colourblindMap = false,      -- true = objective blips and lines use blue, yellow, orange, white and purple,
+                                     -- never red or green; false = Config.Markers.kinds colours (as before)
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick

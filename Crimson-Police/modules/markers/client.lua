@@ -43,6 +43,23 @@ local NEAREST_ONLY = { point = true, device = true }
 local ALWAYS_SHOWN = { start = true, prisonerVan = true, towTruck = true }
 local SERVICE_LABELS = { prisonerVan = 'markers.prisoner_van', towTruck = 'markers.tow_truck' }
 local FIELDS = { 'adoptKey', 'look', 'variant', 'label', 'number', 'coords', 'radius', 'netId', 'moving', 'beyond' }
+-- Colour-blind map colours (My options -> Map -> colourblindMap, step O14): each blip's role and its colour id, never
+-- red (1) or green (2). A kind not listed is an objective; a follow-up or set-back variant is a target.
+local COLOURBLIND = { start = 5, objective = 5, target = 17, hostile = 27, friendly = 3, area = 0 }
+local KIND_ROLE = {
+    start = 'start',
+    fleeing = 'target',
+    hostile = 'hostile',
+    suspect = 'hostile',
+    vehicle = 'hostile',
+    fightArea = 'hostile',
+    escort = 'friendly',
+    hostage = 'friendly',
+    safePoint = 'friendly',
+    prisonerVan = 'friendly',
+    towTruck = 'friendly',
+}
+local TARGET_VARIANTS = { followUp = true, setback = true }
 
 local cur = nil         -- { runId, index, ctx, routeMode = 'on'|'off'|'block', elements = { [id] = el }, order,
                         --   single (Radio Silence 'area': the id of the one point shown), pointed (the id of the
@@ -53,7 +70,8 @@ local routeBlip = nil   -- the only blip with SetBlipRoute(true)
 local routeColour = nil -- the line colour routeBlip got
 local loopOn = false
 local hudSent = ''      -- the HUD's objective line as last sent ('' = none on the HUD)
-local gps = nil         -- the waypoint Objective GPS set: { runId, index, x, y }
+local gps = nil         -- the waypoint Objective GPS set: { runId, index, x, y, auto (set by objectiveGps 'waypoint') }
+local autoKey = nil     -- objectiveGps 'waypoint': the pointer ('run|index|element') the last waypoint went to
 
 -- ============================================================================
 --                                   HELPERS
@@ -95,6 +113,19 @@ local function Seconds(key, default)
     return math.max(0, n)
 end
 
+-- The officer's own choice (My options, CP.Options), default when modules/options is not there.
+local function Opt(key, default)
+    local v = CP.Options and CP.Options.get and CP.Options.get(key)
+    if v == nil then return default end
+    return v
+end
+
+-- How the map leads to each objective (option objectiveGps): 'route' (the GPS line), 'waypoint' or 'off'.
+local function GpsMode()
+    local m = Opt('objectiveGps', 'route')
+    return (m == 'waypoint' or m == 'off') and m or 'route'
+end
+
 local function AreaAlpha() return CP.U.clamp(Int(Cfg().areaAlpha) or 80, 0, 255) end
 
 local function NameBlip(blip, label)
@@ -117,7 +148,8 @@ local function Look(kind, variant)
     if variant == 'surrendered' then scale = tonumber(k.surrenderedScale) or SURRENDERED_SCALE end
     if variant == 'followUp' and Int(k.followUpColour) then colour = Int(k.followUpColour) end
     if variant == 'setback' and Int(k.setbackColour) then colour = Int(k.setbackColour) end
-    return sprite, colour, scale + 0.0
+    local role = TARGET_VARIANTS[variant] and 'target' or KIND_ROLE[kind] or 'objective'
+    return sprite, M.colour(role, colour), scale + 0.0
 end
 
 local function Exists(blip) return blip ~= nil and blip ~= 0 and DoesBlipExist(blip) end
@@ -288,6 +320,7 @@ local function LastKnown(el, on)
         return
     end
     local _, colour = Look(el.look, el.variant)
+    colour = M.colour('area', colour)
     local blip = AddBlipForRadius(pos.x, pos.y, pos.z, LAST_KNOWN_RADIUS)
     if not blip or blip == 0 then return end
     SetBlipColour(blip, colour)
@@ -423,6 +456,7 @@ end
 local function HudLine(el, d)
     local cfg = Cfg()
     if not el or cfg.enabled == false or cfg.hudLine == false or Driving() then return SendHud(nil) end
+    if Opt('hudTargetLine', true) == false then return SendHud(nil) end
     -- an area: how far to its edge, or inside it
     local inside = el.radius ~= nil and d <= el.radius
     local m = el.radius and d - el.radius or d
@@ -461,6 +495,26 @@ local function FollowGps(el)
     end
 end
 
+-- objectiveGps 'waypoint' (My options -> Map): a map waypoint on each new pointer instead of the line (a door done, the
+-- next door), only where a line could go (Config.Markers on with its line, not Radio Silence, not while he drives to
+-- the start) and never over a waypoint of his own. It is then Objective GPS's: it follows the pointer while it stays
+-- ours and goes with the objective. A waypoint he cleared comes back only with the next pointer.
+local function AutoWaypoint(el, d)
+    if GpsMode() ~= 'waypoint' or not el or cur.routeMode == 'off' then return end
+    local cfg = Cfg()
+    if cfg.enabled == false or cfg.route == false or M.hidden(cur.ctx, 'route') or Driving() then return end
+    local key = ('%s|%d|%s'):format(cur.runId, cur.index, el.id)
+    if key == autoKey then return end
+    if d <= (el.radius or math.max(0, tonumber(cfg.routeOffWithin) or 40.0)) then return end
+    autoKey = key
+    if IsWaypointActive() and not OurGps() then return end
+    local p = Where(el)
+    if not p then return end
+    SetNewWaypoint(p.x + 0.0, p.y + 0.0)
+    gps = { runId = cur.runId, index = cur.index, x = p.x, y = p.y, auto = true }
+    RouteOff()
+end
+
 -- Radio Silence 'area' shows one point per objective: of the points still shown (no net id, a kind 'area' keeps), the
 -- id of this officer's nearest, which changes only when another one is 25 % closer; nil when there is one or none.
 local function PickSingle()
@@ -486,6 +540,7 @@ local function Tick()
         local el, d = Pick()
         Line(el, d)
         HudLine(el, d)
+        AutoWaypoint(el, d)
         FollowGps(el)
     end
     for _, el in pairs(services) do Place(el) end
@@ -633,6 +688,7 @@ function M.clear(runId, index)
     DropMarker()
     SendHud(nil)
     DropGps()
+    autoKey = nil
     for k, blip in pairs(adopted) do
         if blip == routeBlip then RouteOff() end
         adopted[k] = nil
@@ -719,21 +775,23 @@ function M.hidden(ctx, kind, variant) return Hides(ctx, kind, variant, true) end
 
 -- May a Crimson-Police GPS line show now? Not while the drive to the start is on (CP.Route samples the start's line
 -- from the blip route first), not while the officer has a waypoint (his own, or the one Objective GPS set), not under
--- Radio Silence, not when Config.Markers says no (BLIPS_FINAL R2: one line per officer).
+-- Radio Silence, not when Config.Markers says no (BLIPS_FINAL R2: one line per officer), not when the officer's
+-- objectiveGps is 'waypoint' or 'off' (My options -> Map). The start's own line does not ask.
 function M.canRoute(ctx)
     local cfg = Cfg()
     if cfg.enabled == false or cfg.route == false or M.hidden(ctx, 'route') then return false end
+    if GpsMode() ~= 'route' then return false end
     if Driving() then return false end
     if IsWaypointActive() then return false end
     return true
 end
 
 -- Can this officer get a GPS line to the objective at all for ctx's run (Config.Markers on with its line, and Radio
--- Silence not hiding lines)? A late partner's game asks before it drops the start's line for the objective's
--- (PLAN M11); without it he keeps the start's waypoint.
+-- Silence not hiding lines, and the officer's objectiveGps not 'off')? A late partner's game asks before it drops the
+-- start's line for the objective's (PLAN M11); without it he keeps the start's waypoint.
 function M.leads(ctx)
     local cfg = Cfg()
-    return cfg.enabled ~= false and cfg.route ~= false and not M.hidden(ctx, 'route')
+    return cfg.enabled ~= false and cfg.route ~= false and not M.hidden(ctx, 'route') and GpsMode() ~= 'off'
 end
 
 -- Objective GPS (the Active Mission screen's button, Config.Markers.objectiveGps, PLAN M10): a map waypoint on what
@@ -759,7 +817,15 @@ end
 
 -- The colour of every Crimson-Police GPS line (Config.Markers.routeColour, 0-85), a block's own line included
 -- (checkpoint_route).
-function M.routeColour() return CP.U.clamp(Int(Cfg().routeColour) or 5, 0, 85) end
+-- With colour-blind map colours on: the objective's colour.
+function M.routeColour() return M.colour('objective', CP.U.clamp(Int(Cfg().routeColour) or 5, 0, 85)) end
+
+-- The colour id of a blip's role ('start', 'objective', 'target', 'hostile', 'friendly', 'area') on this officer's
+-- map: the colour-blind one while his colourblindMap option is on (My options -> Map), else fallback.
+function M.colour(role, fallback)
+    if Opt('colourblindMap', false) ~= true then return fallback end
+    return COLOURBLIND[role] or fallback
+end
 
 -- The look of kind (Config.Markers.kinds) and the settings every objective blip gets: short range, legend category,
 -- a name, a number. opts = { variant = 'boss'|'next'|'followUp'|'setback'|'surrendered', number = n }. A 'setback' blip flashes from
@@ -793,6 +859,13 @@ end
 -- ============================================================================
 --                                RESOURCE STOP
 -- ============================================================================
+
+-- The officer changed objectiveGps: a waypoint 'waypoint' set goes, and the new way leads from the next check.
+CP.Hooks.on('options:changed', function(key)
+    if key ~= 'objectiveGps' then return end
+    if gps and gps.auto then DropGps() end
+    autoKey = nil
+end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= CP.resource then return end

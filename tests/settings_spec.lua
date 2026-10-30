@@ -1165,6 +1165,22 @@ do
         'a department may allow it on its own')
 end
 
+-- Map (step O14): Objective GPS, the HUD objective line and colour-blind map colours, allowed and shipped as today.
+do
+    local function E(p) return S.entry(p) or {} end
+    for _, key in ipairs({ 'objectiveGps', 'hudTargetLine', 'colourblindMap' }) do
+        H.eq(E('OfficerOptions.allow.' .. key).default, true, key .. ': officers may change it')
+        H.ok((E('OfficerOptions.allow.' .. key).desc or '') ~= '', key .. ': allow has its comment')
+        H.ok((E('OfficerOptions.defaults.' .. key).desc or '') ~= '', key .. ': its default has a comment')
+    end
+    H.eq(E('OfficerOptions.defaults.objectiveGps').default, 'route', 'the GPS line to each objective, as before')
+    H.eq(E('OfficerOptions.defaults.objectiveGps').kind, 'enum', 'Objective GPS is a choice')
+    Err('OfficerOptions.defaults.objectiveGps', 'start', 'err.setting_option', 'route, waypoint or off only')
+    H.ok((Check('OfficerOptions.defaults.objectiveGps', 'waypoint')), 'a waypoint may be the default')
+    H.eq(E('OfficerOptions.defaults.hudTargetLine').default, true, 'the HUD objective line shows, as before')
+    H.eq(E('OfficerOptions.defaults.colourblindMap').default, false, 'the kinds colours, as before')
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

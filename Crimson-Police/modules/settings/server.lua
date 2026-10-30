@@ -1032,6 +1032,7 @@ local KNOWN = {
     ['OfficerOptions.defaults.callAlerts'] = { tpl = Enum({ 'all', 'favourites' }), kind = 'enum' },
     ['OfficerOptions.defaults.openOn'] = { tpl = Enum({ 'last', 'home', 'active_on_run' }), kind = 'enum' },
     ['OfficerOptions.defaults.distanceUnits'] = { tpl = Enum({ 'metric', 'imperial' }), kind = 'enum' },
+    ['OfficerOptions.defaults.objectiveGps'] = { tpl = Enum({ 'route', 'waypoint', 'off' }), kind = 'enum' },
     ['OfficerOptions.defaults.favouriteTypes'] = { tpl = ListOf(ID, { unique = true }), kind = 'list', item = 'string' },
     ['OfficerOptions.defaults.hiddenTypes'] = { tpl = ListOf(ID, { unique = true }), kind = 'list', item = 'string' },
     ['Profile.appearances'] = {

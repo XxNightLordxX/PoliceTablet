@@ -2862,6 +2862,21 @@ without arguments also removes the run's service vehicles, PLAN M7).
   15 m of where we put it) each check moves it to the pointer once that is more than 50 m off (a moving car or suspect,
   the next nearest door); `clear` (the objective's stop, the run's end) and a `set` for another objective remove it
   (`SetWaypointOff`). A waypoint the officer put in its place is never moved or removed.
+- The officer's map options (step O14, My options -> Map, `shared/options_map.lua`, read with `CP.Options.get`):
+  `objectiveGps` (server enum, default `'route'`): `'route'` = the line above; `'waypoint'` = no line (`canRoute`
+  false) and, at each new pointer (`run|index|element`, not within `routeOffWithin` or an area's radius), a
+  `SetNewWaypoint` where a line could go (`enabled`, `route`, not `hidden(ctx, 'route')`, not driving to the start,
+  the marker's `route` not false) and never over a waypoint of the officer's own; it is then Objective GPS's (followed,
+  removed with the objective) and one he cleared comes back only with the next pointer; `'off'` = no line, no
+  waypoint and `leads` false (the Objective GPS button still sets one). A change of `objectiveGps`
+  (`options:changed`) drops a waypoint `'waypoint'` set. `hudTargetLine` (local bool, default true): false sends
+  `{ target = false }` like `hudLine` off. `colourblindMap` (local bool, default false): `colour(role, fallback)` gives
+  the colour id of a role (`start` 5, `objective` 5, `target` 17, `hostile` 27, `friendly` 3, `area` 0) while it is
+  on, else `fallback`; `style`, `styleArea`, CP.Markers' own circles (kind roles: fleeing and the followUp / setback
+  variants = target; hostile, suspect, vehicle, fightArea = hostile; escort, hostage, safePoint, prisonerVan, towTruck
+  = friendly; start = start; anything else = objective), the last-known circle (`area`) and `routeColour()`
+  (`objective`) ask it, so the start pin and every block that styles through CP.Markers follow. Only colour arguments
+  change; blips drawn before a switch keep theirs.
 - `hidden(ctx, kind, variant?) -> boolean` (R9, PLAN M8): true when Radio Silence (`ctx.radioSilence`; nil ctx = the
   current pointer's) hides a block's own blip of `kind` (a `Config.Markers.kinds` key, or `'route'` for a GPS line) by
   `Config.Markers.radioSilence` (an unknown value counts as `'area'`). Every block client asks it before it draws a

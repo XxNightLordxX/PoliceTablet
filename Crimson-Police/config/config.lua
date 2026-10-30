@@ -1524,6 +1524,9 @@ Config.OfficerOptions = {
         skipRecalcConfirm = true,    -- recalculate the route in one click, without the confirm (this character)
         distanceUnits = true,        -- distances in metres or in miles (kept on this PC)
         autoReady = false,           -- answers the unit ready check for the officer: off unless you want it
+        objectiveGps = true,         -- how the map leads to each objective: line, waypoint or none (this character)
+        hudTargetLine = true,        -- the HUD line naming the objective and how far it is (kept on this PC)
+        colourblindMap = true,       -- colour-blind colours for objective blips, no red or green (kept on this PC)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -1569,6 +1572,14 @@ Config.OfficerOptions = {
                                      -- Mission and Dispatch
         autoReady = false,           -- true = the officer is Ready at once when the unit leader accepts a mission type,
                                      -- if they are at the keys and near the leader; false = they answer (as before)
+        objectiveGps = 'route',      -- 'route' = a GPS line to each objective (as before); 'waypoint' = a map waypoint
+                                     -- set on each new objective instead; 'off' = none (the Objective GPS button
+                                     -- still sets one). Radio Silence still hides it; the drive to the start keeps
+                                     -- its own line
+        hudTargetLine = true,        -- true = the HUD names the objective and how far it is (as before); false = no
+                                     -- such line
+        colourblindMap = false,      -- true = objective blips and lines use blue, yellow, orange, white and purple,
+                                     -- never red or green; false = Config.Markers.kinds colours (as before)
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick
