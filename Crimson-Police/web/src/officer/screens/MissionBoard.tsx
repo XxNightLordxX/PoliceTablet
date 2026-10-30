@@ -23,6 +23,7 @@ import { formatNumber } from '../../shared/format';
 import { useAction, usePush, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
+import { useOption } from '../../shared/options';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { Session } from '../../shared/types';
@@ -37,6 +38,7 @@ import type {
 import type { BoardCallsInfo } from '../../types/missioncalls';
 import { CallsOpenLink, DailyLimitBadge, readyCheckSentText } from '../components/MissionCallsLink';
 import { TwistPicker } from '../components/TwistPicker';
+import { arrangeTypeCards, typeKeys } from './boardOrder';
 import './MissionBoard.css';
 
 const BOSS_KEY = 'weekly_boss';
@@ -268,7 +270,9 @@ function TypeCardView({
     stamp,
     busy,
     todX,
+    favourite,
     onAccept,
+    onTwists,
     onUnlocked,
 }: {
     card: TypeCard;
@@ -278,10 +282,15 @@ function TypeCardView({
     stamp: unknown;
     busy: boolean;
     todX: string;
+    // one of the officer's favourite types (My options): a badge
+    favourite?: boolean;
     onAccept: (card: TypeCard) => void;
+    // accept in one click (My options): the twists go through the accept dialog, opened by this button
+    onTwists?: (card: TypeCard) => void;
     onUnlocked: () => void;
 }) {
     const blocked = cardBlocked(card, board);
+    const twistsOffered = asArray(card.twists).length > 0;
     const icon = TYPE_ICONS[card.key] ?? 'layers';
     return (
         <Card
@@ -304,6 +313,11 @@ function TypeCardView({
                     </div>
                     <div className="run_ui-type__tags">
                         {modeBadge(card, size)}
+                        {favourite ? (
+                            <Badge size="sm" tone="primary" icon="star">
+                                {t('board.card.favourite')}
+                            </Badge>
+                        ) : null}
                         {card.typeOfTheDay ? (
                             <Badge
                                 size="sm"
@@ -365,6 +379,17 @@ function TypeCardView({
                     blocker={board}
                     unit={size > 1}
                 />
+                {onTwists && twistsOffered ? (
+                    <Button
+                        variant="ghost"
+                        icon="sliders"
+                        disabled={blocked || busy}
+                        onClick={() => onTwists(card)}
+                        title={t('board.card.twists_hint')}
+                    >
+                        {t('board.card.twists')}
+                    </Button>
+                ) : null}
                 <Button
                     variant={blocked ? 'secondary' : 'primary'}
                     icon="play"
@@ -646,6 +671,11 @@ export default function MissionBoard() {
     const [twists, setTwists] = useState<string[]>([]);
     useEffect(() => setTwists([]), [pending]);
     const [joining, setJoining] = useState(false);
+    // My options -> Mission Board (step O8): favourite types first, hidden types folded, accept in one click
+    const favouriteTypes = typeKeys(useOption('favouriteTypes'));
+    const hiddenTypes = typeKeys(useOption('hiddenTypes'));
+    const oneClick = useOption('skipAcceptConfirm') === true;
+    const [showHidden, setShowHidden] = useState(false);
 
     // Live updates: push topics 'board', 'operation' and 'run' (active run and cooldowns) schedule one
     // coalesced refetch, so a burst of pushes never runs into the callback's rate limit (a refused refetch
@@ -692,6 +722,8 @@ export default function MissionBoard() {
     const offset = clockOffset(session, data, receivedAt);
 
     const cards = asArray(data?.cards as TypeCard[] | undefined);
+    // the order of the type cards only: server:acceptType still checks every accept and draws at random
+    const order = arrangeTypeCards(cards, favouriteTypes, hiddenTypes);
     const size = Math.max(1, Number(data?.unit?.size) || 1);
     const blocker = data ? boardBlocker(data) : null;
     const onCall = cards.some(c => c.onCall) || !!data?.boss?.onCall;
@@ -700,10 +732,8 @@ export default function MissionBoard() {
     const refresh = () => void refetch();
     const refreshSoon = () => schedule(300);
 
-    const accept = async () => {
-        if (!pending) return;
-        const key = pending.kind === 'boss' ? BOSS_KEY : pending.card.key;
-        const payload = pending.kind === 'type' && twists.length ? { missionType: key, twists } : key;
+    const acceptKey = async (key: string, picked: string[]) => {
+        const payload = key !== BOSS_KEY && picked.length ? { missionType: key, twists: picked } : key;
         const res = await run<AcceptTypeResult & { pending?: boolean }>('server:acceptType', payload);
         setPending(null);
         // a unit of 2+ answers the ready check first: the run starts when everyone accepted
@@ -711,6 +741,31 @@ export default function MissionBoard() {
         else if (res.ok) navigate('active');
         else void refetch();
     };
+    const accept = async () => {
+        if (!pending) return;
+        await acceptKey(pending.kind === 'boss' ? BOSS_KEY : pending.card.key, pending.kind === 'type' ? twists : []);
+    };
+    // Accept on a type card: at once with skipAcceptConfirm (no twists; the warnings are the footnote), else the dialog
+    const acceptType = (card: TypeCard) => {
+        if (oneClick) void acceptKey(card.key, []);
+        else setPending({ kind: 'type', card });
+    };
+    const typeCard = (card: TypeCard) => (
+        <TypeCardView
+            key={card.key}
+            card={card}
+            size={size}
+            board={blocker}
+            offset={offset}
+            stamp={stamp}
+            busy={busy}
+            todX={todX}
+            favourite={order.favourites.has(card.key)}
+            onAccept={acceptType}
+            onTwists={oneClick ? c => setPending({ kind: 'type', card: c }) : undefined}
+            onUnlocked={refreshSoon}
+        />
+    );
 
     const join = async (op: BoardOperation) => {
         setJoining(true);
@@ -863,22 +918,7 @@ export default function MissionBoard() {
                             ) : null}
 
                             {cards.length ? (
-                                <div className="run_ui-types">
-                                    {cards.map(card => (
-                                        <TypeCardView
-                                            key={card.key}
-                                            card={card}
-                                            size={size}
-                                            board={blocker}
-                                            offset={offset}
-                                            stamp={stamp}
-                                            busy={busy}
-                                            todX={todX}
-                                            onAccept={c => setPending({ kind: 'type', card: c })}
-                                            onUnlocked={refreshSoon}
-                                        />
-                                    ))}
-                                </div>
+                                <div className="run_ui-types">{order.shown.map(typeCard)}</div>
                             ) : (
                                 <Card>
                                     <EmptyState
@@ -888,6 +928,50 @@ export default function MissionBoard() {
                                     />
                                 </Card>
                             )}
+
+                            {order.folded.length ? (
+                                <div className={cx('run_ui-hidden', showHidden && 'is-open')}>
+                                    <button
+                                        type="button"
+                                        className="run_ui-hidden__toggle"
+                                        aria-expanded={showHidden}
+                                        onClick={() => setShowHidden(v => !v)}
+                                    >
+                                        <Icon name={showHidden ? 'chevronDown' : 'chevronRight'} size={14} />
+                                        <span className="run_ui-hidden__title">
+                                            {t('board.hidden.title', { n: order.folded.length })}
+                                        </span>
+                                        <span className="run_ui-hidden__action">
+                                            {showHidden ? t('board.hidden.hide') : t('board.hidden.show')}
+                                        </span>
+                                    </button>
+                                    {showHidden ? (
+                                        <>
+                                            <p className="run_ui-hidden__hint">{t('board.hidden.hint')}</p>
+                                            <div className="run_ui-types">{order.folded.map(typeCard)}</div>
+                                        </>
+                                    ) : null}
+                                </div>
+                            ) : null}
+
+                            {oneClick && cards.length ? (
+                                <div className="run_ui-oneclick" role="note">
+                                    <span className="run_ui-oneclick__title">
+                                        <Icon name="alert" size={13} />
+                                        {t('board.oneclick.title')}
+                                    </span>
+                                    <span>{t('board.oneclick.random')}</span>
+                                    <span>
+                                        {routeRequired
+                                            ? t('board.oneclick.abandon')
+                                            : t('board.oneclick.abandon_guide')}
+                                    </span>
+                                    <span>
+                                        {routeRequired ? t('board.confirm.route') : t('board.confirm.route_guide')}
+                                    </span>
+                                    {size > 1 ? <span>{t('board.confirm.unit', { size })}</span> : null}
+                                </div>
+                            ) : null}
 
                             <p className="run_ui-footnote">
                                 <Icon name="info" size={13} />

@@ -158,5 +158,16 @@
   "run.hero.action_hint": "The run started before you arrived: head for the objective. The route to the start no longer applies.",
   "run.hero.start_label": "Reach the start",
   "run.hero.start_hint": "Otherwise the run ends as Abandoned",
-  "board.boss.ready": "Ready · your attempt for this week"
+  "board.boss.ready": "Ready · your attempt for this week",
+  "board.hidden.title": "Hidden types ({n})",
+  "board.hidden.show": "Show",
+  "board.hidden.hide": "Hide",
+  "board.hidden.hint": "You folded these in My options. You can still accept them.",
+  "board.card.favourite": "Favourite",
+  "board.oneclick.title": "Accept starts at once",
+  "board.oneclick.random": "Accept draws a random mission of the type and starts it at once. There is no reroll.",
+  "board.oneclick.abandon": "Abandoning it, leaving the start route or not reaching the start in time puts the whole type on cooldown.",
+  "board.oneclick.abandon_guide": "Abandoning it or not reaching the start in time puts the whole type on cooldown.",
+  "board.card.twists": "Twists",
+  "board.card.twists_hint": "Pick twists, then accept"
 }

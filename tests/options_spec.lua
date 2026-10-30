@@ -243,6 +243,36 @@ do
     Act(1, { hudLook = false, textSize = 'normal' })
 end
 
+-- Mission Board (shared/options_board.lua, step O8): favourite and hidden types (the Config.MissionTypes keys, asked
+-- at every call) and accept in one click, saved with the character; never every type hidden.
+do
+    local v = Cb('getOptions', 1).data.values
+    H.ok(#v.favouriteTypes == 0 and #v.hiddenTypes == 0 and v.skipAcceptConfirm == false,
+        'the board options ship as today: no favourites, nothing hidden, Accept asks first')
+    local offered = table.concat(Defs.values('hiddenTypes'), ',')
+    H.eq(offered, 'patrol,training,investigation,tactical', 'the values are the mission types, in the board order')
+    local ok, data = Act(1, { favouriteTypes = { 'tactical', 'tactical' }, hiddenTypes = { 'training' } })
+    H.ok(ok == true and #data.values.favouriteTypes == 1 and data.values.hiddenTypes[1] == 'training',
+        'favourite tactical (de-duplicated), training hidden')
+    H.eq(Saved('OPT00001').hiddenTypes[1], 'training', '...saved with the character')
+    H.eq(select(2, Act(1, { favouriteTypes = { 'racing' } })), 'err.option_value', 'an unknown type is refused')
+    H.eq(select(2, Act(1, { hiddenTypes = { 'patrol', 'training', 'investigation', 'tactical' } })),
+        'err.option_hide_all', 'hiding every type is refused')
+    H.eq(Saved('OPT00001').hiddenTypes[1], 'training', '...and the saved list is kept')
+    H.ok(Act(1, { skipAcceptConfirm = true }) == true, 'accept in one click')
+    H.eq(Defs.checkConfig({ defaults = { hiddenTypes = { 'patrol', 'training', 'investigation', 'tactical' } } }),
+        'err.option_config', 'a config default hiding every type is refused')
+    H.eq(Defs.checkConfig({ defaults = { hiddenTypes = { 'training' } } }), nil, 'a config default hiding one is fine')
+    -- a new type is offered at once; a removed one is dropped from the saved list
+    Config.MissionTypes.k9 = { label = 'K9', points = 120, payout = 400 }
+    H.ok(Act(1, { favouriteTypes = { 'k9', 'tactical' } }) == true, 'a type added to Config.MissionTypes is offered')
+    Config.MissionTypes.k9 = nil
+    v = Cb('getOptions', 1).data.values
+    H.eq(table.concat(v.favouriteTypes, ','), 'tactical', 'a removed type is dropped from the saved list')
+    Act(1, { favouriteTypes = {}, hiddenTypes = {}, skipAcceptConfirm = false })
+    H.eq(Saved('OPT00001') and Saved('OPT00001').hiddenTypes, nil, 'back to the defaults: nothing saved')
+end
+
 -- the column the step adds, in every storage mode (files mode: the saves folder engine)
 H.ok(pcall(H.sql, 'SELECT options FROM cp_officers LIMIT 1'), 'migration 010: cp_officers.options exists')
 

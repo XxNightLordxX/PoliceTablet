@@ -978,6 +978,21 @@ do
     end
 end
 
+-- Mission Board (step O8): favourite and hidden types, accept in one click; allowed, as today, commented.
+do
+    local function E(p) return S.entry(p) or {} end
+    for _, key in ipairs({ 'favouriteTypes', 'hiddenTypes', 'skipAcceptConfirm' }) do
+        H.eq(E('OfficerOptions.allow.' .. key).default, true, key .. ': officers may change it')
+        H.ok((E('OfficerOptions.defaults.' .. key).desc or '') ~= '', key .. ': its default has a comment')
+    end
+    H.eq(E('OfficerOptions.defaults.skipAcceptConfirm').default, false, 'Accept asks first, as before')
+    for _, key in ipairs({ 'favouriteTypes', 'hiddenTypes' }) do
+        local e = E('OfficerOptions.defaults.' .. key)
+        H.ok(type(e.default) == 'table' and #e.default == 0, key .. ': none, as before')
+        H.eq(e.kind, 'list', key .. ': edits as a list')
+    end
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

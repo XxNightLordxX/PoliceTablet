@@ -16,8 +16,8 @@ end
 
 -- def: { kind = 'bool'|'enum'|'list'|'number', values = list | function() -> list (enum and list), default,
 -- min, max (number: the widest bounds an owner may set), integer (number: whole numbers only), store = 'server'
--- (saved per character, the default) | 'local' (kept by the tablet only), group, order }. Returns true, or false
--- and why.
+-- (saved per character, the default) | 'local' (kept by the tablet only), group, order, guard = function(clean) ->
+-- nil | errKey (refuses a whole value, e.g. a list that hides every type) }. Returns true, or false and why.
 function Defs.add(key, def)
     if type(key) ~= 'string' or key == '' or type(def) ~= 'table' then return false, 'a key and a table' end
     if not KINDS[def.kind] then return false, 'unknown kind ' .. tostring(def.kind) end
@@ -38,6 +38,7 @@ function Defs.add(key, def)
         store = store,
         group = type(def.group) == 'string' and def.group or 'general',
         order = Finite(def.order) or 100,
+        guard = type(def.guard) == 'function' and def.guard or nil,
     }
     if entry.kind == 'bool' and type(entry.default) ~= 'boolean' then entry.default = false end
     if entry.kind == 'list' and type(entry.default) ~= 'table' then entry.default = {} end
@@ -149,6 +150,15 @@ function Defs.check(key, value, bounds, opts)
     return n
 end
 
+-- The option's guard on a clean value: nil when it passes (or there is none), else the error key.
+function Defs.refused(key, clean)
+    local d = Defs._list[key]
+    if not (d and d.guard) then return nil end
+    local ok, errKey = pcall(d.guard, clean)
+    if not ok then return 'err.option_value' end
+    return type(errKey) == 'string' and errKey or nil
+end
+
 -- Two clean values alike (lists in order).
 function Defs.same(a, b)
     if type(a) ~= 'table' or type(b) ~= 'table' then return a == b end
@@ -221,7 +231,10 @@ function Defs.checkConfig(t)
             local d = Defs._list[key]
             if not d then return 'err.option_config', tostring(key) end
             if part == 'allow' and type(v) ~= 'boolean' then return 'err.option_config', key end
-            if part == 'defaults' and Defs.check(key, v) == nil then return 'err.option_config', key end
+            if part == 'defaults' then
+                local clean = Defs.check(key, v)
+                if clean == nil or Defs.refused(key, clean) then return 'err.option_config', key end
+            end
             if part == 'bounds' then
                 local lo = type(v) == 'table' and Finite(v.min or v[1]) or nil
                 local hi = type(v) == 'table' and Finite(v.max or v[2]) or nil

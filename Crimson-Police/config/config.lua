@@ -1422,6 +1422,9 @@ Config.OfficerOptions = {
         soundCalls = true,           -- the tone of a new mission call (kept on this PC)
         soundUnit = true,            -- the tone of a unit invite and a ready check (kept on this PC)
         soundCues = true,            -- the objective cues on a run: checkpoints, a defused target (kept on this PC)
+        favouriteTypes = true,       -- the mission types shown first on the Mission Board (this character)
+        hiddenTypes = true,          -- the mission types folded away on the Mission Board (this character)
+        skipAcceptConfirm = true,    -- accept a mission type in one click, without the confirm (this character)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -1440,6 +1443,12 @@ Config.OfficerOptions = {
         soundCalls = true,           -- true = a new mission call plays its tone (as before); false = no tone
         soundUnit = true,            -- true = a unit invite and a ready check play a tone (as before); false = none
         soundCues = true,            -- true = a checkpoint, defused target or found item plays a cue (as before)
+        favouriteTypes = {},         -- mission type keys shown first on the Mission Board, e.g. { 'tactical' }; {} = the
+                                     -- board's own order (as before)
+        hiddenTypes = {},            -- mission type keys folded under "Hidden types" on the Mission Board; never every
+                                     -- type; {} = none (as before)
+        skipAcceptConfirm = false,   -- true = Accept starts a type at once, the warnings sit under the cards; false =
+                                     -- Accept asks first (as before)
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick

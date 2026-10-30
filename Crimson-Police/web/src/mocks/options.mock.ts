@@ -1,6 +1,6 @@
 // Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions,
 // setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
-// Pop-ups (step O6): ?toastTime=short|long, ?resultTime=10 (with ?result=parity: the card closes after 10 s).
+// Pop-ups: ?toastTime=short|long, ?resultTime=10 (with ?result=parity). Board: ?fav=tactical&hide=training&oneClick=1.
 
 import { emitDebug, registerMock } from '../shared/nui';
 import type { OfficerOptionValue } from '../shared/types';
@@ -13,23 +13,24 @@ const LOCKED = MODE === 'locked';
 
 const SCHEMA: OptionDef[] = [
     {
-        key: 'board_view',
-        kind: 'enum',
-        values: ['list', 'cards'],
-        default: 'list',
+        key: 'favouriteTypes',
+        kind: 'list',
+        values: ['patrol', 'training', 'investigation', 'tactical'],
+        default: [],
         store: 'server',
-        group: 'mission_board',
+        group: 'board',
         order: 10,
     },
     {
-        key: 'board_types',
+        key: 'hiddenTypes',
         kind: 'list',
-        values: ['traffic', 'pursuit', 'rescue'],
+        values: ['patrol', 'training', 'investigation', 'tactical'],
         default: [],
         store: 'server',
-        group: 'mission_board',
+        group: 'board',
         order: 20,
     },
+    { key: 'skipAcceptConfirm', kind: 'bool', default: false, store: 'server', group: 'board', order: 30 },
     {
         key: 'hudSide',
         kind: 'enum',
@@ -85,7 +86,12 @@ const SCHEMA: OptionDef[] = [
 ];
 
 const defaults = Object.fromEntries(SCHEMA.map(d => [d.key, d.default])) as Record<string, OfficerOptionValue>;
-const server: Record<string, OfficerOptionValue> = { board_view: 'cards' };
+const server: Record<string, OfficerOptionValue> = {};
+// Mission Board (step O8): ?fav=tactical,patrol ?hide=training ?oneClick=1
+const listParam = (name: string) => (PARAMS.get(name) ?? '').split(',').filter(Boolean);
+if (listParam('fav').length) server.favouriteTypes = listParam('fav');
+if (listParam('hide').length) server.hiddenTypes = listParam('hide');
+if (PARAMS.get('oneClick') === '1') server.skipAcceptConfirm = true;
 const local: Record<string, OfficerOptionValue> = {};
 if (PARAMS.get('hudSide') === 'left') local.hudSide = 'left';
 if (PARAMS.get('hudCompact') === '1') local.hudCompact = true;
@@ -96,6 +102,8 @@ if (toastTime === 'short' || toastTime === 'long') local.toastTime = toastTime;
 if (Number(PARAMS.get('resultTime')) > 0) {
     local.resultTime = Math.round(Math.min(60, Math.max(8, Number(PARAMS.get('resultTime')))));
 }
+// the mock session carries no options: the board's come as the push 'options' once the tablet is open
+if (Object.keys(server).length) emitDebug('push', { topic: 'options', data: { values: { ...server } } }, 1500);
 // the client sends the options of this PC on the NUI ready
 if (Object.keys(local).length) emitDebug('localOptions', { options: { ...local } }, 300);
 if (PARAMS.get('hudLook') === '1') server.hudLook = true;
@@ -136,6 +144,9 @@ registerMock('action', 'server:options:set', (patch: Record<string, OfficerOptio
     for (const [key, value] of Object.entries(patch ?? {})) {
         const d = SCHEMA.find(x => x.key === key);
         if (!d || d.store !== 'server') throw new Error('err.invalid_payload');
+        // like shared/options_board.lua: the board keeps at least one type
+        if (key === 'hiddenTypes' && Array.isArray(value) && (d.values ?? []).every(v => value.includes(v)))
+            throw new Error('err.option_hide_all');
         server[key] = value;
     }
     const values = { ...defaults, ...server };

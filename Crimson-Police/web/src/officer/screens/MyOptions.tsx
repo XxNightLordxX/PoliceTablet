@@ -134,8 +134,12 @@ function OptionControl({
     label: string;
     onChange: (v: OfficerOptionValue) => void;
 }) {
+    const session = useSession();
     const values = Array.isArray(def.values) ? def.values : [];
-    const valueLabel = (v: string | number) => textOr(`options.value.${def.key}.${v}`, humanize(String(v)));
+    // a mission type (favouriteTypes, hiddenTypes) reads as its Config.MissionTypes label
+    const types = Array.isArray(session.config?.missionTypes) ? session.config.missionTypes : [];
+    const valueLabel = (v: string | number) =>
+        textOr(`options.value.${def.key}.${v}`, types.find(m => m.key === v)?.label ?? humanize(String(v)));
     if (def.kind === 'bool') return <Toggle checked={value === true} onChange={onChange} />;
     if (def.kind === 'enum') {
         return (

@@ -53,5 +53,13 @@
   "options.key.soundUnit": "Unit tone",
   "options.key.soundUnit_hint": "Play a tone for a unit invite and a ready check. Off: they still pop up, silently.",
   "options.key.soundCues": "Objective cues",
-  "options.key.soundCues_hint": "Play a short cue on a mission when you pass a checkpoint, defuse a target or find an item."
+  "options.key.soundCues_hint": "Play a short cue on a mission when you pass a checkpoint, defuse a target or find an item.",
+  "err.option_hide_all": "You can't hide every mission type: keep at least one on the board.",
+  "options.group.board": "Mission Board",
+  "options.key.favouriteTypes": "Favourite types",
+  "options.key.favouriteTypes_hint": "These mission types come first on the Mission Board, in the board's order.",
+  "options.key.hiddenTypes": "Hidden types",
+  "options.key.hiddenTypes_hint": "These mission types fold under Hidden types at the bottom of the board. You can still open and accept them.",
+  "options.key.skipAcceptConfirm": "Accept in one click",
+  "options.key.skipAcceptConfirm_hint": "Accept starts a mission type at once and the warnings show under the cards. To add twists, use the Twists button on the card. The Weekly Boss still asks first."
 }

@@ -115,6 +115,8 @@ function Options.set(src, patch)
         if not allow[key] then return false, 'err.option_locked' end
         local v = Defs.check(key, value, bounds[key])
         if v == nil then return false, 'err.option_value' end
+        local refused = Defs.refused(key, v)
+        if refused then return false, refused end
         clean[key] = v
     end
     local saved = Options.decode(ReadRaw(officer.citizenid))

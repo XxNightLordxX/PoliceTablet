@@ -1785,6 +1785,8 @@ My options holds the choices each officer makes for their own tablet, saved per 
 
 - Pop-ups (kept on this PC, for every character played on it): Notification time (Short: 3 s, warnings and errors 5 s; Normal, as before: 5 s and 7 s; Long: 8 s and 12 s; a notification that brings its own time, such as the ready check, keeps it), Result card time (seconds the mission result card stays, inside Config.OfficerOptions.bounds.resultTime, shipped 8 to 60, default 25 as before; the officer can still close it sooner) and Fewer pop-ups during a mission (off by default: while it is on and the officer is on a run, unit invites, commendations, rewards and profile news that are not warnings or errors go only to the bell; route, custody and mission messages, warnings and errors always pop up). Each is allowed by default (Config.OfficerOptions.allow).
 
+- Mission Board (saved with the character, on any PC): Favourite types (these mission types come first on the board, in the board's order), Hidden types (these fold under "Hidden types (n) - Show" below the cards and can still be opened and accepted; a favourite is never folded, and at least one type is always left on the board, so a list that hides every type is refused) and Accept in one click (off by default: Accept on a type card starts it at once, without the confirm; the confirm's lines, the random draw, the type cooldown, the route and a unit leader's unit note, show as a footnote under the cards; the Twists button on a card opens the old dialog to add twists; the Weekly Boss still asks first). Only the order and folding of the type cards change: the Weekly Boss and the Cross-Department card stay where they are, and Accept still runs every check and draws a mission of the type at random (Hard rule Mission choice). Each is allowed by default (Config.OfficerOptions.allow).
+
 - Sounds (kept on this PC, for every character played on it): Mission call tone, Unit tone (a unit invite and a ready check) and Objective cues (a checkpoint passed, a target defused, an item found on a run). Each is on by default, as before; off plays nothing and every pop-up and HUD line still shows. On or off only: the game's sounds have no volume. The Builder's own sounds are not affected. Each is allowed by default (Config.OfficerOptions.allow).
 
 - Config.OfficerOptions: enabled (true; false = no My options screen and every option keeps its default for everyone), allow (per option: false = officers cannot change it and everyone gets the default), defaults (per option: what every officer starts with) and bounds (per number option: { min, max } officers may pick). A department may set its own allow, defaults and bounds in Config.Departments.<key>.officerOptions; they win over the global ones for its officers.
@@ -3975,6 +3977,9 @@ Config.OfficerOptions = {
         soundCalls = true,           -- the tone of a new mission call (kept on this PC)
         soundUnit = true,            -- the tone of a unit invite and a ready check (kept on this PC)
         soundCues = true,            -- the objective cues on a run: checkpoints, a defused target (kept on this PC)
+        favouriteTypes = true,       -- the mission types shown first on the Mission Board (this character)
+        hiddenTypes = true,          -- the mission types folded away on the Mission Board (this character)
+        skipAcceptConfirm = true,    -- accept a mission type in one click, without the confirm (this character)
     },
     defaults = {                     -- per option: what every officer starts with
         hudSide = 'right',           -- 'right' (as before) or 'left': the side of the screen the mission HUD sits on
@@ -3993,6 +3998,12 @@ Config.OfficerOptions = {
         soundCalls = true,           -- true = a new mission call plays its tone (as before); false = no tone
         soundUnit = true,            -- true = a unit invite and a ready check play a tone (as before); false = none
         soundCues = true,            -- true = a checkpoint, defused target or found item plays a cue (as before)
+        favouriteTypes = {},         -- mission type keys shown first on the Mission Board, e.g. { 'tactical' }; {} = the
+                                     -- board's own order (as before)
+        hiddenTypes = {},            -- mission type keys folded under "Hidden types" on the Mission Board; never every
+                                     -- type; {} = none (as before)
+        skipAcceptConfirm = false,   -- true = Accept starts a type at once, the warnings sit under the cards; false =
+                                     -- Accept asks first (as before)
     },
     bounds = {                       -- per number option: { min, max } officers may pick
         hudScale = { 0.8, 1.3 },     -- smallest and biggest mission HUD size an officer may pick

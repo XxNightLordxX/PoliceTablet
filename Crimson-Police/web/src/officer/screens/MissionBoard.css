@@ -595,3 +595,67 @@
     font-size: var(--cp-fs-sm);
     color: var(--cp-subtle);
 }
+
+/* Hidden types (My options -> Mission Board): folded under one row, opened on demand */
+.run_ui-hidden {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.run_ui-hidden__toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px dashed var(--cp-border);
+    border-radius: var(--cp-radius);
+    background: transparent;
+    color: var(--cp-subtle);
+    font: inherit;
+    font-size: var(--cp-fs-sm);
+    text-align: left;
+    cursor: pointer;
+}
+
+.run_ui-hidden__toggle:hover {
+    color: var(--cp-text);
+    border-color: rgba(var(--cp-primary-rgb), 0.6);
+}
+
+.run_ui-hidden__title {
+    flex: 1;
+    font-weight: 600;
+}
+
+.run_ui-hidden__action {
+    color: var(--cp-primary);
+}
+
+.run_ui-hidden__hint {
+    margin: 0;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-subtle);
+}
+
+/* Accept in one click: the accept dialog's warnings, under the cards */
+.run_ui-oneclick {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--cp-warning);
+    border-radius: var(--cp-radius-sm);
+    background: rgba(var(--cp-primary-rgb), 0.05);
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-subtle);
+}
+
+.run_ui-oneclick__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: var(--cp-text);
+}

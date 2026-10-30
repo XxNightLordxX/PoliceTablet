@@ -118,6 +118,7 @@ PoliceTablet/                      (git repo)
     shared/net.lua                 CP.Net (actions and callbacks)
     shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
     shared/options.lua             CP.OptionDefs: the officer options registry and its rules (§5.48)
+    shared/options_board.lua       Mission Board: favourite types first, hidden types folded, one-click accept (§5.48)
     shared/options_hud.lua         The mission HUD's officer options: side, size, compact, fewer animations (§5.48)
     shared/options_look.lua        Easier to read: the tablet look on the HUD, larger text (§5.48)
     shared/options_popups.lua      Pop-ups: toast time, result card time, fewer pop-ups on a run (§5.48)
@@ -3285,6 +3286,18 @@ no option is registered by this module: each feature registers its own keys.
   while the group's option is on (group 'calls' | 'unit' | 'cues'); modules/missioncalls (calls), modules/units
   (invite and ready check) and the blocks checkpoint_route, skill_check and interact_points (cues) call it. The
   toasts and HUD lines are not affected; the Builder's own sound is not grouped. Shipped allowed, all true.
+- Mission Board (step O8, shared/options_board.lua, group `board`, all `server`): `favouriteTypes` and `hiddenTypes`
+  (lists; values = the Config.MissionTypes keys in the board's points order, a function asked at every call, so a new
+  type is offered at once and a removed one dropped from a saved list) and `skipAcceptConfirm` (bool). A def may carry
+  `guard(clean) -> nil | errKey` (`CP.OptionDefs.refused`): `hiddenTypes` refuses a list that hides every type
+  (`err.option_hide_all`, in `CP.Options.set` and in `checkConfig` for a config default). The NUI only: MissionBoard.tsx
+  runs `arrangeTypeCards` (officer/screens/boardOrder.ts: favourites first in the server order, then the rest; hidden
+  types folded under "Hidden types (n)"; a favourite is never folded; with every type hidden the first card stays). The
+  Weekly Boss card and the Cross-Department card are never reordered or folded. `skipAcceptConfirm`: a type card's
+  Accept sends `server:acceptType` at once (no twists; a Twists button opens the old dialog), the dialog's lines
+  (random draw, cooldown, route, the unit note) show as a footnote under the cards; the Weekly Boss still asks.
+  `server:acceptType` and the draw are unchanged. Shipped allowed, defaults `{}`, `{}`, false. Walk:
+  officer/screens/boardOrder.walk.ts. Mock: `?fav=tactical&hide=training&oneClick=1`.
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls, step P1)
 
