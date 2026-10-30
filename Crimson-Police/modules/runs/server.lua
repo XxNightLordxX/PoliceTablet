@@ -4341,7 +4341,7 @@ local function ModifierView(run)
     return { key = list[1].key, label = table.concat(names, ' · ') }, list
 end
 
-local function ExpectedFor(run)
+local function ExpectedFor(run, p)
     local tier = run.payTier or TierByName(run.expectedTier) or TierFor(math.max(1, #Runs.activeSrcs(run)))
     local P = Num(run.pointsBase, 0)
     local ev = Config.Events or {}
@@ -4352,7 +4352,9 @@ local function ExpectedFor(run)
     local cap = Num(Config.Scoring and Config.Scoring.scoreCap, 2.0) * P
     local pts = math.min(cap, (P + modPts) * Num(tier and tier.points, 1.0) * mCross)
     if ev.typeOfTheDay ~= false then
-        local ok, tod = Call('Events', 'typeOfTheDay')
+        -- the viewer's department's pick for today (step P18), as the scoring reads it
+        local dept = type(p) == 'table' and p.department or nil
+        local ok, tod = Call('Events', 'typeOfTheDay', nil, dept, run.participants)
         if ok and tod ~= nil and tod == run.missionType then pts = pts * Num(ev.todMultiplier, 2.0) end
     end
     local mBonus = Has('Cash', 'bonusOf') and CP.Cash.bonusOf(run) or 1.0
@@ -4450,7 +4452,7 @@ function Runs.view(run, src)
         remaining = remaining and math.max(0, math.ceil(remaining)) or nil,
         paused = run.timer and run.timer.paused == true or false,
         partners = partners,
-        expected = ExpectedFor(run),
+        expected = ExpectedFor(run, p),
         modifier = modifierView,
         twists = twistsView,
         test = run.test ~= nil,

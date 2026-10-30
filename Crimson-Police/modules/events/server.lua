@@ -241,8 +241,8 @@ end
 
 function Events.todDay() return DayKeyNow() end
 
-function Events.typeOfTheDay(dayKey)
-    if not (Config.Events and Config.Events.typeOfTheDay) then return nil end
+-- The server's Type of the Day: today's admin override, else the day's roll.
+local function ServerTypeOfTheDay(dayKey)
     if dayKey == nil or dayKey == DayKeyNow() then
         local o = Events.todOverride()
         if o then
@@ -252,6 +252,139 @@ function Events.typeOfTheDay(dayKey)
     end
     return Events.rolledTypeOfTheDay(dayKey)
 end
+
+-- ============================================================================
+--                    DEPARTMENT TYPE OF THE DAY (STEP P18)
+-- ============================================================================
+-- typeOfTheDay (Config.MissionControls.controls): per department, under the master switch, shipped off. A supervisor
+-- picks one mission type for TOMORROW (never today, so nobody times it to a run he is about to take), at most once a
+-- day for his department. Tomorrow his department's officers earn the Type of the Day multiplier
+-- (Config.Events.todMultiplier, the admin's) on that type instead of the server's type; other departments keep the
+-- server's. Never on the setter's own runs or a unit he is in (Config.MissionControls.selfExempt): they keep the
+-- server's type. The pick that counts today is the last change made yesterday, read back from its cp_audit row
+-- (missionControlSet / missionControlReset, target '<dept>:typeOfTheDay'), so a restart keeps it and a change made
+-- today never moves today's type.
+local DEPT_TOD_KEY = 'typeOfTheDay'
+local deptTod = {}   -- deptTod['dept|day'] = { type = key | false, by = citizenid | nil } (one read per day)
+
+local function DayStartOf(ts)
+    if CP.Schedule and CP.Schedule.dayStart then return CP.Schedule.dayStart(ts) end
+    local d = os.date('*t', ts or os.time())
+    return os.time({ year = d.year, month = d.month, day = d.day, hour = 0, min = 0, sec = 0 })
+end
+
+local function TypeKnown(k)
+    return type(k) == 'string' and type(Config.MissionTypes) == 'table' and type(Config.MissionTypes[k]) == 'table'
+end
+
+-- The pick a department made yesterday for today: { type, by } | nil. Read once per department and day.
+local function DeptPick(dept)
+    local day = DayKeyNow()
+    local slot = dept .. '|' .. day
+    local hit = deptTod[slot]
+    if hit == nil then
+        if not (CP.Migrations and CP.Migrations.ready) then return nil end
+        local todayStart = DayStartOf()
+        local yStart = DayStartOf(todayStart - 1)
+        local ok, row = pcall(function()
+            CP.Migrations.ready()
+            return MySQL.single.await([[SELECT action, new_value, actor FROM cp_audit WHERE target = ?
+                AND action IN ('missionControlSet', 'missionControlReset') AND created_at >= FROM_UNIXTIME(?)
+                AND created_at < FROM_UNIXTIME(?) ORDER BY id DESC LIMIT 1]],
+                { ('%s:%s'):format(dept, DEPT_TOD_KEY), yStart, todayStart })
+        end)
+        if not ok then
+            CP.err(TAG, 'reading the Type of the Day pick of %s failed: %s', dept, tostring(row))
+            return nil
+        end
+        hit = { type = false }
+        if type(row) == 'table' and row.action == 'missionControlSet' and TypeKnown(row.new_value) then
+            hit = { type = row.new_value, by = type(row.actor) == 'string' and row.actor or nil }
+        end
+        for k in pairs(deptTod) do
+            if k:sub(-#day) ~= day then
+                deptTod[k] = nil
+            end -- earlier days are never read again
+        end
+        deptTod[slot] = hit
+    end
+    if not hit.type or not TypeKnown(hit.type) then return nil end
+    return hit
+end
+
+-- True while the department's control counts (its on and the master switch): a switched-off control drops the pick.
+local function DeptControlOn(dept)
+    local dc = CP.DeptControls
+    if type(dept) ~= 'string' or not (dc and dc.active and dc.def and dc.def(DEPT_TOD_KEY)) then return false end
+    local ok, on = pcall(dc.active, dept, DEPT_TOD_KEY)
+    return ok and on == true
+end
+
+-- The type a department picked for today ({ type, by }), or nil: none picked, or the control is off.
+function Events.deptTypeOfTheDay(dept)
+    if not (Config.Events and Config.Events.typeOfTheDay) or not DeptControlOn(dept) then return nil end
+    return DeptPick(dept)
+end
+
+-- Forgets the read picks (tests; a restore of cp_audit rows).
+function Events.forgetDeptTod() deptTod = {} end
+
+-- Type of the Day: dayKey nil = today. department (optional): the officer's department; its supervisor's pick for
+-- today wins over the server's type. who (optional): the officer, a unit's members or a run's participants the value
+-- is read for; when the pick's setter is among them, the server's type applies (the self rule).
+function Events.typeOfTheDay(dayKey, department, who)
+    if not (Config.Events and Config.Events.typeOfTheDay) then return nil end
+    if department ~= nil and (dayKey == nil or dayKey == DayKeyNow()) then
+        local pick = Events.deptTypeOfTheDay(department)
+        local dc = CP.DeptControls
+        local held = pick and who ~= nil and pick.by and dc and dc.heldBy and dc.heldBy(who, { setBy = pick.by })
+        if pick and not held then return pick.type end
+    end
+    return ServerTypeOfTheDay(dayKey)
+end
+
+-- Tomorrow's day key (the day a pick made now counts on).
+local function TomorrowKey()
+    local start = DayStartOf()
+    if CP.Schedule and CP.Schedule.dayKey then return CP.Schedule.dayKey(start + 36 * 3600) end
+    return os.date('%Y-%m-%d', start + 36 * 3600)
+end
+
+local function SameDay(a, b)
+    if not (tonumber(a) and tonumber(b)) then return false end
+    return DayStartOf(tonumber(a)) == DayStartOf(tonumber(b))
+end
+
+function Events.registerDeptTodControl()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    return dc.register(DEPT_TOD_KEY, {
+        kind = 'choice',
+        -- every mission type (the Weekly Boss is not one)
+        choices = function()
+            local keys = CP.U.keys(Config.MissionTypes or {})
+            table.sort(keys)
+            return keys
+        end,
+        configValue = function() return nil end,
+        -- the pick never doubles the setter's own runs (Events.typeOfTheDay reads it with the self rule)
+        relaxes = function() return true end,
+        -- one pick per department per day: a supervisor who (or whose colleague) already picked today waits until
+        -- the daily reset; admins may correct it
+        allow = function(ctx)
+            if ctx.role ~= 'supervisor' then return nil end
+            if Config.Events and Config.Events.typeOfTheDay == false then return 'err.live_tod_off' end
+            if type(ctx.row) == 'table' and SameDay(ctx.row.at, os.time()) then return 'err.tod_picked_today' end
+            return nil
+        end,
+        -- what the supervisor's screen shows: the day the pick counts on and the type that counts today
+        viewExtra = function(dept)
+            local today = Events.deptTypeOfTheDay(dept)
+            return { todFor = TomorrowKey(), todToday = today and today.type or nil, todServer = ServerTypeOfTheDay() }
+        end,
+    })
+end
+Events.registerDeptTodControl()
 
 -- ============================================================================
 --                                  MODIFIERS
@@ -683,7 +816,7 @@ function Events.bossCard(src)
         locked = nil,
         busy = false,
         onCall = false,
-        typeOfTheDay = Events.typeOfTheDay() == 'tactical',
+        typeOfTheDay = Events.typeOfTheDay(nil, viewer.department, officers) == 'tactical',
         twists = {},   -- the Weekly Boss never has a twist
         available = false,
     }

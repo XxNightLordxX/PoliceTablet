@@ -277,6 +277,10 @@ Config.MissionControls = {
         -- Twist cash: x each twist's cash (Events.twists) on runs his department leads, read at the accept; the chosen
         -- twists together still stop at Events.twistMaxCash and points never change. min = max = 1.0 moves nothing
         twistCash = { on = false, min = 1.0, max = 1.0 },
+        -- Type of the Day: a supervisor picks one mission type for TOMORROW, at most once a day for his department;
+        -- tomorrow his department's officers earn the Type of the Day points (Events.todMultiplier) on that type
+        -- instead of the server's type, other departments keep the server's. Never on his own runs or a unit he is in
+        typeOfTheDay = { on = false },
     },
     happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 

@@ -645,6 +645,14 @@ Supervisor UI → **Mission controls** (below).
   - `twistCash = { on = false, min = 1.0, max = 1.0 }` (**Twist cash**): x each twist's cash (`Config.Events.twists`)
     on runs his department leads, read at the accept; the accept step shows the raised bonus. All chosen twists
     together still stop at `Config.Events.twistMaxCash`.
+- **Type of the Day** (step P18, per department, off when you install, under the master switch):
+  `typeOfTheDay = { on = false }`. A supervisor picks one mission type **for tomorrow** (never today, so nobody times
+  it to a run), at most once a day for his department (admins may correct it). Tomorrow his department's officers earn
+  the Type of the Day points on that type instead of the server's type; other departments keep the server's type. The
+  multiplier stays yours (`Config.Events.todMultiplier`), points only, cash never doubles. The pick never doubles the
+  setter's own runs or a unit he is in (they keep the server's type). Switching the control off drops the pick at once;
+  a restart keeps it (it is read back from the audit log). The Mission Board, Home, Dispatch, the run screen and the
+  scoring all use the officer's department's type.
 
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a
@@ -2499,6 +2507,10 @@ however it ends.
   inside admin-set bounds: the Mission controls `happyHourCash` (a run accepted during a happy hour) and `twistCash`
   (each twist's cash, still under `Config.Events.twistMaxCash`), per department, shipped off with bounds that move
   nothing; never on test runs, Cross-Department runs or the Weekly Boss, and always under `Config.Cash.dailyCap`.
+- Supervisors give points through Type of the Day (step P18, owner decision of 2026-10-19: "supervisors may give
+  points"): the Points Hard rule now says a supervisor may pick his department's Type of the Day for the next day (the
+  `typeOfTheDay` Mission control, shipped off); the multiplier stays the admin's `Config.Events.todMultiplier`, and
+  the pick never doubles the setter's own runs. Officers still never change points.
 
 - NPC combat, at the owner's request of 2026-10-19 ("make them also not do head shots at all also reduce the damage
   they shoot as they kill really quickly", no automatic weapons, lower accuracy): `Config.NpcCombat` ([5.9](#59-how-hard-npcs-fight-back)). Mission NPCs never carry an

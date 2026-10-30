@@ -157,10 +157,10 @@ do
         table.concat(shipped, ','),
         'abandonCooldown,addRunTime,boards,callLane,clearCooldown,cooldownScale,crossDept,dailyCap,difficulty,'
             .. 'featuredType,happyHour,happyHourCash,hourlyCap,idleCheck,missionBan,noRepeat,notices,readyCheck,reviewRules,'
-            .. 'staffCallWait,startTimeout,timeLimit,twistCash,twists,types,unitSize',
+            .. 'staffCallWait,startTimeout,timeLimit,twistCash,twists,typeOfTheDay,types,unitSize',
         'the cooldown controls (P2, P3, P6 happy hour, P7 clear), P7 + minutes, the P8 / P9 run controls, the P11'
             .. ' mission ban, the P12 call lane and staff call wait, the P13 notices and participation and the P14'
-            .. ' boards and review rules, the P15 twists and the P16 cash bonuses (off) ship'
+            .. ' boards and review rules, the P15 twists, the P16 cash bonuses and the P18 Type of the Day (off) ship'
     )
     H.eq(Config.MissionControls.controls.addRunTime.on, false, 'only the cooldown controls ship on')
     H.ok(next(Config.MissionControls.grants) == nil, 'no grant ships')

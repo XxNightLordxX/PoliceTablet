@@ -88,8 +88,8 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
         }
         if (v === undefined || v === null) return '-';
         if (typeof v === 'boolean') return v ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off');
-        // featuredType (step P10): the type's label
-        if (typeof v === 'string' && key === 'featuredType') return typeLabel(v);
+        // featuredType (step P10) and typeOfTheDay (step P18): the type's label
+        if (typeof v === 'string' && (key === 'featuredType' || key === 'typeOfTheDay')) return typeLabel(v);
         // a choice control (step P9: difficulty): the preset's name
         if (typeof v === 'string') return hasKey(`mc.value.preset.${v}`) ? t(`mc.value.preset.${v}`) : v;
         // types (step P10): the types switched off and how many single missions

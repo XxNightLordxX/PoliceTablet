@@ -3585,6 +3585,15 @@ pattern, so a missing module reads as config).
   `CP.Cash.bonusOf(run)` give nothing for test, Cross-Department (`operationId`) and boss runs (`Cd.rc.apply` also
   drops both there). `Cash.compute` pays `round(B * mTier * mMod * mBonus)` and puts `mBonus` on `breakdown.cash`
   only when it is not 1 (the result card and Profile show it); `Events.twistOffer` shows the department's raised cash.
+- Type of the Day (step P18), `typeOfTheDay`, kind `choice` (every mission type), per department, under the master
+  switch, shipped off; a pick relaxes (self rule). modules/events `Events.registerDeptTodControl`: `allow` refuses a
+  supervisor's second change of the day (`err.tod_picked_today`); the pick counts on the next day only:
+  `Events.deptTypeOfTheDay(dept)` reads yesterday's last `missionControlSet` / `missionControlReset` cp_audit row of
+  target `<dept>:typeOfTheDay` once per day (cached by day), while `DC.active(dept, key)` (new) says the control
+  counts. `Events.typeOfTheDay(dayKey, department, who)` returns that pick unless `DC.heldBy(who, { setBy })`, else
+  the server type (admin override, then the roll). Callers pass the department: the board (viewer, unit), the boss
+  card, `Scoring.compute` (participant, run participants), Home, Dispatch (`MC.list`) and the run view's expected
+  points. `viewExtra`: `todFor` (tomorrow), `todToday`, `todServer` for the supervisor's line.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through

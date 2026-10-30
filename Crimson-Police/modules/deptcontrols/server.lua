@@ -460,6 +460,14 @@ function DC.get(dept, key, officer)
     return v, row
 end
 
+-- True while a change of the control counts for the department: its on (the department's bounds) and the master
+-- switch unless the control is outside it. A module that keeps its own record of a change reads this (step P18).
+function DC.active(dept, key)
+    local def = defs[key]
+    if not def then return false end
+    return Active(def, BoundsOf(def, dept))
+end
+
 -- True when the change in row does not apply to officer (an officer, a unit's members): the self rule.
 function DC.heldBy(officer, row)
     return type(row) == 'table' and officer ~= nil and SelfHeld(officer, row) or false

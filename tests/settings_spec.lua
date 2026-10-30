@@ -940,6 +940,12 @@ do
                 and cfgText:find('Twist cash: x each twist\'s cash', 1, true) ~= nil,
             'step P16: the cash bonuses ship off with bounds that move nothing, with comments'
         )
+        H.ok(
+            d.typeOfTheDay.on == false
+                and cfgText:find('Type of the Day: a supervisor picks one mission type for TOMORROW', 1, true)
+                    ~= nil,
+            'step P18: a department\'s Type of the Day ships off, with a comment'
+        )
     end
     if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),

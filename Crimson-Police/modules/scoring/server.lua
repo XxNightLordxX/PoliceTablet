@@ -719,7 +719,8 @@ function Scoring.compute(run, p, result, opts)
     local final = math.floor(value + 1e-9)
     local tod = false
     if CP.Events and CP.Events.typeOfTheDay then
-        local okT, key = pcall(CP.Events.typeOfTheDay)
+        -- the officer's department's pick for today (step P18); the server's type when the setter is in the run
+        local okT, key = pcall(CP.Events.typeOfTheDay, nil, p.department, run.participants or { p })
         tod = okT and key ~= nil and key == run.missionType
     end
     local todMultiplier = Num(Config.Events and Config.Events.todMultiplier, 2.0)
@@ -1462,9 +1463,9 @@ local function ChampionsBanner(dept)
     return nil
 end
 
-local function TypeOfTheDayCard()
+local function TypeOfTheDayCard(officer)
     if not (CP.Events and CP.Events.typeOfTheDay) then return nil end
-    local ok, key = pcall(CP.Events.typeOfTheDay)
+    local ok, key = pcall(CP.Events.typeOfTheDay, nil, officer.department, officer)
     if not ok or type(key) ~= 'string' then return nil end
     local t = Config.MissionTypes and Config.MissionTypes[key]
     if not t then return nil end
@@ -1516,7 +1517,7 @@ local function HomeData(officer)
             cashThisWeek = CP.Cash and CP.Cash.earnedThisWeek and CP.Cash.earnedThisWeek(cid) or 0,
         },
         goals = goals,
-        typeOfTheDay = TypeOfTheDayCard(),
+        typeOfTheDay = TypeOfTheDayCard(officer),
         announcements = AnnouncementsList(officer.department),
         champions = ChampionsBanner(officer.department),
     }

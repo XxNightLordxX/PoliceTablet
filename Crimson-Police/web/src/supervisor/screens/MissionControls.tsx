@@ -54,6 +54,7 @@ const CONTROL_GROUP: Record<string, GroupKey> = {
     happyHour: 'delays',
     types: 'board',
     featuredType: 'board',
+    typeOfTheDay: 'board',
     callLane: 'calls',
     staffCallWait: 'calls',
 };
@@ -714,6 +715,15 @@ function PlainRow({
                         </Badge>
                     </div>
                     {desc ? <p className="sup-mc-row__desc">{desc}</p> : null}
+                    {c.key === 'typeOfTheDay' && c.todFor ? (
+                        // step P18: the type that counts today and the day a pick made now counts on
+                        <p className="sup-mc-row__desc">
+                            {t('sup.tod.today', {
+                                type: text('typeOfTheDay', c.todToday ?? c.todServer ?? null),
+                                day: c.todFor,
+                            })}
+                        </p>
+                    ) : null}
                 </div>
             </div>
             <div className="sup-mc-row__facts">

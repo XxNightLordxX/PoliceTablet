@@ -1902,6 +1902,10 @@ Owns
     twistOffer and checkTwists take the leader's department).
   * The twistCash Mission control (step P16, Events.registerTwistCashControl): x each twist's cash
     for the leader's department inside the admin's bounds (Events.deptTwistCash; twistOffer shows it).
+  * The typeOfTheDay Mission control (step P18, Events.registerDeptTodControl): a department's pick
+    for the next day; Events.typeOfTheDay(dayKey, department, who) gives today's pick (read once a day
+    from yesterday's last cp_audit change, Events.deptTypeOfTheDay) unless its setter is among who,
+    else the server type (admin override, then the roll).
   * Weekly Boss availability: enabled, the reset-adjusted weekday is in Config.Events.weeklyBoss.days,
     hidden while a Cross-Department Mission is active, once per officer per week (any
     weekly_boss_kingpin row since the reset of the week's first boss day, except end_reason
@@ -5054,6 +5058,15 @@ put on its parking point only once nobody is on it, and then waits frozen for an
 ground (CP.Spawn.again); a tow truck that never got a road point fades the car out instead of being made inside it.
 Before (a1 4.1 item 13, 5.4) the 60 s fallback put the van on its parking point or the scene with no player check,
 with a raw server SetEntityCoords at the file's height.
+```
+
+## tests/dept_tod_spec.lua
+
+```text
+A department's Type of the Day (step P18): a supervisor picks one mission type for tomorrow; that day his
+department's officers earn the Type of the Day points on it instead of the server's type, other departments keep
+the server's, and the setter (or a unit he is in) keeps the server's too. Plain stubs: CP.DeptControls answers the
+switch and the self rule, MySQL.single.await answers the cp_audit row of yesterday's pick. No database.
 ```
 
 ## tests/dept_twists_spec.lua

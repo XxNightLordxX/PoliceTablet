@@ -1226,7 +1226,12 @@ function Draw.boardCards(src)
     end
 
     local now = os.time()
-    local tod = CP.Events and CP.Events.typeOfTheDay and CP.Events.typeOfTheDay() or nil
+    -- the viewer's department's pick for today wins (step P18), unless its setter is in the unit (the self rule)
+    local tod = nil
+    if CP.Events and CP.Events.typeOfTheDay then
+        local okT, key = Safe(CP.Events.typeOfTheDay, nil, viewer.department, officers)
+        tod = okT and key or nil
+    end
     local onCall = false
     for _, m in ipairs(srcs) do
         if IsOnCall(m) then onCall = true; break end

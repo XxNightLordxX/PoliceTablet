@@ -406,7 +406,7 @@ local hudBody = FnBody(runsSrv, 'local function HudObjectives(run, includePendin
 for _, f in ipairs({ 'value', 'max', 'detail' }) do
     H.ok(hudBody:find('entry.' .. f .. ' =', 1, true) ~= nil, 'view.objectives[] may carry ' .. f)
 end
-local expectedBody = FnBody(runsSrv, 'local function ExpectedFor(run)') or ''
+local expectedBody = FnBody(runsSrv, 'local function ExpectedFor(run, p)') or ''
 H.ok(expectedBody:find('return { cash = cash, points = ', 1, true) ~= nil, 'view.expected = { cash, points }')
 local modBody = FnBody(runsSrv, 'local function ModifierView(run)') or ''
 H.ok(modBody:find('return { key = list[1].key, label = ', 1, true) ~= nil,

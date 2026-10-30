@@ -449,6 +449,10 @@ export interface MissionControlState {
     flagKinds?: string[];
     // twists (step P15): the twists the admin enabled (Config.Events.twists), with their labels
     twistsAll?: { key: string; label: string }[];
+    // typeOfTheDay (step P18): the day a pick made now counts on, the department's pick for today, the server's type
+    todFor?: string;
+    todToday?: string;
+    todServer?: string;
     // notices (step P13): characters a department notice may hold (Config.MissionControls.noticeMaxLength)
     maxLength?: number;
 }

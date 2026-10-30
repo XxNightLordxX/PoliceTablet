@@ -1669,7 +1669,8 @@ end
 function MC.list(src)
     local v = Viewer(src)
     if not v then return nil end
-    local _, tod = Call('Events', 'typeOfTheDay')
+    -- the officer's department's pick for today (step P18), as the scoring reads it
+    local _, tod = Call('Events', 'typeOfTheDay', nil, v.officer.department, v.officer)
     local cards = {}
     for _, call in pairs(calls) do
         if Visible(call, v.now) and Shown(call, v.officer) then cards[#cards + 1] = Card(call, v, tod) end
