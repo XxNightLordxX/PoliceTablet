@@ -2,12 +2,13 @@
 // Mission Builder and Admin UI → Missions → Builder. The open mission and step live in the module store (store.ts), so
 // the editor comes back after a tool closed and reopened the tablet.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, EmptyState, ErrorState, LoadingBlock } from '../shared/components';
 import { t } from '../shared/i18n';
 import { BuilderEditor } from './BuilderEditor';
 import { MissionList } from './MissionList';
 import { QuickMissionStart } from './QuickMission';
+import { newMissionOpens } from './quickMission';
 import { editorMemory, hasResults, setEditorMemory, subscribeBuilder, currentTool, type BuilderScope } from './store';
 import { useBuilderConfig } from './useBuilderConfig';
 
@@ -15,9 +16,12 @@ export interface BuilderWorkspaceProps {
     scope: BuilderScope;
     // called when a mission is opened or closed (the admin screen switches tabs)
     onOpenChange?: (id: string | null) => void;
+    // counts "New mission" presses outside the list (the Missions header, Home's tile): each new value opens the
+    // wizard at once (Config.Builder.quickWizard), or the New mission dialog when it is off
+    newRequest?: number;
 }
 
-export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps) {
+export function BuilderWorkspace({ scope, onOpenChange, newRequest = 0 }: BuilderWorkspaceProps) {
     const { config, error, retry } = useBuilderConfig(scope);
     const [openId, setOpenId] = useState<string | null>(() => editorMemory(scope).openId);
     // a new editor for every opened mission; a save that renames the draft keeps the same editor (and its lock)
@@ -25,6 +29,9 @@ export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps)
     // the New mission wizard's first step (Config.Builder.quickWizard), and the dialog its "Open the full editor" opens
     const [starting, setStarting] = useState(false);
     const [classic, setClassic] = useState(false);
+    // a new list for every outside "New mission" with the wizard off, so its dialog opens again
+    const [listKey, setListKey] = useState(0);
+    const handledNew = useRef(0);
 
     // a tool result for a mission that is not open (e.g. the NUI reloaded): open it so it can be applied
     useEffect(
@@ -52,6 +59,23 @@ export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps)
         setOpenId(null);
         onOpenChange?.(null);
     };
+
+    // an outside "New mission" press: leave an open mission (its lock is released, an unsaved change kept) and open
+    // the wizard or the dialog once builder:config has arrived
+    useEffect(() => {
+        if (!config || config.enabled === false || newRequest <= handledNew.current) return;
+        handledNew.current = newRequest;
+        if (openId) close();
+        if (newMissionOpens(config) === 'wizard') {
+            setClassic(false);
+            setStarting(true);
+        } else {
+            setStarting(false);
+            setClassic(true);
+            setListKey(k => k + 1);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [config, newRequest]);
 
     if (!config) {
         return error ? <ErrorState error={error} onRetry={retry} /> : <LoadingBlock />;
@@ -114,6 +138,7 @@ export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps)
     }
     return (
         <MissionList
+            key={listKey}
             scope={scope}
             config={config}
             onOpen={id => {
@@ -121,7 +146,7 @@ export function BuilderWorkspace({ scope, onOpenChange }: BuilderWorkspaceProps)
                 open(id);
             }}
             onNew={
-                config.quickWizard !== false
+                newMissionOpens(config) === 'wizard'
                     ? () => {
                           setClassic(false);
                           setStarting(true);

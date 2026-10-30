@@ -4004,6 +4004,9 @@ still missing with Add here / Place / Record; Add another location here), Check 
 words, Fix opens the full editor there, Test it now = StepTest) and Publish (StepPublish, its confirm). Steps 2-4 run
 inside BuilderEditor on the same draft and lock; Open the full editor leaves the wizard at that step. The logic
 without React is quickMission.ts; quickMission.walk.ts walks it against the browser mocks (node walk.mjs).
+Every New mission opens it in one press: MissionList's button (onNew), the Admin Missions header and Home's tile
+(navigate with NEW_MISSION_PARAMS, wizard: 'new') bump BuilderWorkspace's newRequest; newMissionOpens(config) picks
+the wizard or, with quickWizard false, the New mission dialog.
 ```
 
 ## Crimson-Police/web/src/builder/admin/QuickEditPanel.tsx

@@ -17,7 +17,17 @@ import type {
 } from '../types/builder_server';
 import type { BuilderAutoPointsReply, BuilderHereReply, PointSpec } from '../types/builder_client';
 import { applyResult } from './applyResult';
-import { checkGroups, fillPlan, keepsBaseName, missingPoints, wizardName, workLocation } from './quickMission';
+import {
+    NEW_MISSION_PARAMS,
+    asksNewMission,
+    checkGroups,
+    fillPlan,
+    keepsBaseName,
+    missingPoints,
+    newMissionOpens,
+    wizardName,
+    workLocation,
+} from './quickMission';
 import { missionPointSpecs } from './schema';
 import { QuickMissionStart } from './QuickMission';
 import { normalizeConfig } from './useBuilderConfig';
@@ -72,6 +82,13 @@ async function steps(): Promise<void> {
     // 1 · What: the wizard is on and offers the templates
     const cfg: BuilderConfig = normalizeConfig(await data(request<BuilderConfig>('builder:config', {}), 'config'));
     ok(cfg.quickWizard === true, 'builder:config says the wizard is on (Config.Builder.quickWizard)');
+    // every "New mission" (the Missions header, Home's tile, the Builder list) opens it in one press
+    ok(newMissionOpens(cfg) === 'wizard', 'New mission opens the wizard');
+    ok(newMissionOpens({ quickWizard: false }) === 'dialog', 'quickWizard = false: New mission opens the dialog');
+    ok(newMissionOpens({}) === 'wizard' && newMissionOpens(null) === 'wizard', 'a missing quickWizard means on');
+    ok(asksNewMission({ ...NEW_MISSION_PARAMS }), "Home's Make a new mission tile asks for New mission");
+    ok(NEW_MISSION_PARAMS.tab === 'builder', "Home's tile opens the Builder tab");
+    ok(!asksNewMission({ tab: 'builder' }) && !asksNewMission({ tab: 'catalog' }), 'the other links only switch tab');
     const tpl = (cfg.templates ?? []).find(x => x.id === 'gang_shootout');
     ok(tpl && tpl.label && tpl.blurb, 'the Gang shootout template card has a name and a blurb');
     const first = renderToStaticMarkup(

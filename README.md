@@ -1474,7 +1474,9 @@ Supervisors (Supervisor UI → **Mission Builder**) and admins (Admin UI → **M
 in game, with no coding:
 
 **New mission** opens a 4-step wizard (`Config.Builder.quickWizard = true`, as shipped), about 8 clicks for a
-mission:
+mission. Every New mission does it in one press: the Mission Builder list, the **New mission** button at the top of
+Admin UI -> Missions (from any tab, also while a mission is open: its edit lock is released and an unsaved change kept)
+and Home's **Make a new mission** tile. With the wizard off they open the New mission dialog instead.
 
 1. **What**: pick a template card (a built-in mission's objectives, team, times, bonuses and penalties, none of its
    locations; `Config.Builder.templates`) or **Start from scratch** with a mission type.

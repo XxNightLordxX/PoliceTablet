@@ -30,7 +30,7 @@ import { useCan } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import OperationPanel from '../../supervisor/components/OperationPanel';
 import MissionCallsPanel, { LocationPlays } from '../../supervisor/components/MissionCallsPanel';
-import { BuilderWorkspace, LockBadge, StatusBadge, editorMemory, setEditorMemory } from '../../builder';
+import { BuilderWorkspace, LockBadge, StatusBadge, asksNewMission, editorMemory, setEditorMemory } from '../../builder';
 import {
     ChangeOwnerDialog,
     CompareDialog,
@@ -111,6 +111,9 @@ type Confirm =
     | { kind: 'reload' }
     | null;
 
+// the navigate() params whose New mission already opened (each Home press passes a new object)
+let handledNewParams: unknown = null;
+
 export default function AdminMissions() {
     const can = useCan();
     const [tab, setTabState] = useState<Tab>(
@@ -121,10 +124,23 @@ export default function AdminMissions() {
         // the builder remembers its own three tabs; the Dispatch and admin-only tabs are not among them
         if (next === 'catalog' || next === 'builder' || next === 'operation') setEditorMemory('admin', { tab: next });
     };
-    // Home links here with navigate('admin_missions', { tab }): 'builder' (make a mission) or 'catalog' (on/off)
+    // "New mission" presses (the header button, Home's tile): the Builder tab opens the wizard at once
+    const [newRequest, setNewRequest] = useState(0);
+    const startNew = () => {
+        // a Builder tab that mounts now starts on the list, not on the mission it had open
+        setEditorMemory('admin', { openId: null });
+        setTab('builder');
+        setNewRequest(n => n + 1);
+    };
+    // Home links here with navigate('admin_missions', { tab }): 'builder' (make a mission, with wizard: 'new' the
+    // wizard opens) or 'catalog' (on/off)
     const { params } = useNavigation();
     useEffect(() => {
-        if (params.tab === 'builder' || params.tab === 'catalog') setTab(params.tab);
+        // once per press: the params stay while the screen is shown, a reopened tablet must not start it again
+        if (asksNewMission(params)) {
+            if (params !== handledNewParams) startNew();
+            handledNewParams = params;
+        } else if (params.tab === 'builder' || params.tab === 'catalog') setTab(params.tab);
     }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
     const missions = useRequest<AdminMissionsData>('admin:getMissions', {}, { pushTopic: 'operation', pollMs: 30000 });
     const builder = useRequest<BuilderList>('builder:list', {}, { pushTopic: 'builder', pollMs: 30000 });
@@ -757,14 +773,7 @@ export default function AdminMissions() {
                         </Button>
                     ) : null}
                     {can('builderEdit') ? (
-                        <Button
-                            variant="primary"
-                            icon="plus"
-                            onClick={() => {
-                                setEditorMemory('admin', { openId: null });
-                                setTab('builder');
-                            }}
-                        >
+                        <Button variant="primary" icon="plus" onClick={startNew}>
                             {t('admin.missions.new')}
                         </Button>
                     ) : null}
@@ -878,7 +887,7 @@ export default function AdminMissions() {
                     </>
                 )
             ) : null}
-            {tab === 'builder' ? <BuilderWorkspace scope="admin" /> : null}
+            {tab === 'builder' ? <BuilderWorkspace scope="admin" newRequest={newRequest} /> : null}
             {tab === 'dispatch' ? (
                 <div className="builder_client-op">
                     <MissionCallsPanel scope="admin" />

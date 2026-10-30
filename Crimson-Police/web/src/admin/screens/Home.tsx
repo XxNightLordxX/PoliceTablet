@@ -10,6 +10,7 @@ import { useNavigate, type AdminScreenKey, type ScreenParams } from '../../share
 import type { ConfigHealthItem } from '../../shared/types';
 import { useSession } from '../../shared/session';
 import { useNavCounts } from '../../layouts/navBadges';
+import { NEW_MISSION_PARAMS } from '../../builder/quickMission';
 import { MissionSwitchForm, PayForm, PointsForm, QuickSettingsForm } from '../components/HomeForms';
 import type { AdminLiveRunsData, AdminRefusalsData } from '../../types/admin_live';
 import type { MissionLoadSummary } from '../../types/admin_missions';
@@ -245,7 +246,7 @@ export default function AdminHome() {
                     title={t('admin.home.new_title')}
                     text={t('admin.home.new_text')}
                     screen="admin_missions"
-                    params={{ tab: 'builder' }}
+                    params={{ ...NEW_MISSION_PARAMS }}
                 />
                 <Tile
                     icon="layers"

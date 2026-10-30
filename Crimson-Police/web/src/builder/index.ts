@@ -9,3 +9,4 @@ export { BuilderEditor, STEPS } from './BuilderEditor';
 export { useBuilderConfig } from './useBuilderConfig';
 export { editorMemory, setEditorMemory } from './store';
 export type { BuilderScope } from './store';
+export { NEW_MISSION_PARAMS, asksNewMission, newMissionOpens } from './quickMission';

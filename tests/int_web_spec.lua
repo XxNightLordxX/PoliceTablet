@@ -377,7 +377,11 @@ do
     end
     for _ in home:gmatch('<SomethingWrong%s') do tiles = tiles + 1 end
     H.eq(tiles, 6, 'Home has six tiles')
-    Has(home, 'screen="admin_missions" params={{ tab: \'builder\' }}', 'Make a new mission opens the builder tab')
+    Has(home, 'screen="admin_missions" params={{ ...NEW_MISSION_PARAMS }}', 'Make a new mission opens the wizard')
+    -- B15: the Missions header's New mission opens the wizard too (not only the Builder tab)
+    local missionsScreen = Read(WEB .. 'admin/screens/Missions.tsx') or ''
+    Has(missionsScreen, 'onClick={startNew}', 'the Missions header New mission opens the wizard')
+    Has(missionsScreen, '<BuilderWorkspace scope="admin" newRequest={newRequest} />', 'the Builder tab gets the press')
     Has(home, 'screen="admin_missions" params={{ tab: \'catalog\' }}', 'Turn missions on/off opens the list')
     Has(home, 'screen="admin_officers" param="citizenid"', 'Give or take points opens Officers at the citizen')
     Has(home, 'screen="admin_settings" param="q"', 'Quick settings opens Settings with the search')
