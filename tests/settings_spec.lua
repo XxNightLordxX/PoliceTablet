@@ -854,6 +854,11 @@ do
                 and d.abandonCooldown.on == true and d.abandonCooldown.max == 900,
             'the cooldown controls ship on'
         )
+        H.ok(
+            d.noRepeat.on == true and d.hourlyCap.on == true and d.hourlyCap.min == 1 and d.hourlyCap.max == 16
+                and d.dailyCap.on == true and d.dailyCap.min == 0 and d.dailyCap.max == 40,
+            'step P3: the no-repeat rule and the hourly and daily caps ship on'
+        )
     end
     H.ok(
         E('Permissions.supervisor.missionControls').default == false

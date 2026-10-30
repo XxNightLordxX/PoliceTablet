@@ -199,6 +199,12 @@ Config.MissionControls = {
         cooldownScale = { on = true, min = 0, max = 2 },
         -- the abandon cooldown in seconds (Limits.abandonCooldown) for every department; 0 = none
         abandonCooldown = { on = true, min = 0, max = 900 },
+        -- false switches the no-repeat rule (Draw.avoidLast) off for every department: a mission may come up twice
+        noRepeat = { on = true },
+        -- completed missions per officer per hour (Limits.maxCompletionsHour) for every department
+        hourlyCap = { on = true, min = 1, max = 16 },
+        -- completed missions per officer per day (Limits.maxCompletionsDay) for every department; 0 = no cap
+        dailyCap = { on = true, min = 0, max = 40 },
     },
 }
 

@@ -3289,6 +3289,13 @@ pattern, so a missing module reads as config).
   rows are read back, as far as the bound `max` reaches. `Runs.cooldownScale(type)` feeds the Mission list
   (`cooldownNow`) and Today & cooldowns (`scale`). Mission calls clear their eligibility cache on
   `deptControls:changed`.
+- Registered controls (step P3, modules/draw `Draw.registerControls`): `noRepeat` (bool, config `true`),
+  `hourlyCap` (whole number, range 1-1000, config `Config.Limits.maxCompletionsHour`) and `dailyCap` (whole number,
+  range 0-1000, 0 = no cap, config `Config.Limits.maxCompletionsDay`), all `serverWide`, `master = false`, shipped on.
+  `Draw.limits(officers) -> { noRepeat, hour, day }` reads them for a unit's members (nil = server-wide, no self
+  rule). `noRepeat = false`: `Draw.draw` and the calls' `BuildTypeState` give every member an empty history. The caps
+  feed the accept checks, the board and boss locks (modules/events), livectl `Counts` and the home screen's
+  `missionsToday`; the calls' count cache is re-read at the lower of the config and server-wide cap.
 - Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
   `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
 - Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through

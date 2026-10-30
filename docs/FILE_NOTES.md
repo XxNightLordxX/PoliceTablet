@@ -5173,6 +5173,15 @@ changed or relies on:
     the server's console status words; every text the dialog and store show exists.
 ```
 
+## tests/limit_controls_spec.lua
+
+```text
+The no-repeat rule, the hourly cap and the daily cap as Mission controls (step P3): noRepeat, hourlyCap and
+dailyCap, server-wide (owner decision: a cooldown change counts for every department). CP.DeptControls is a stub
+here (its rows, bounds and self rule are covered by mission_controls_spec and cooldown_controls_spec): this spec
+checks what CP.Draw registers and that the draw, the accept checks and the board read the values.
+```
+
 ## tests/memsql_spec.lua
 
 ```text

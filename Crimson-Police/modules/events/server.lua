@@ -59,7 +59,12 @@ local function IsBossDay()
     return IsBossWeekday(WeekdayNow())
 end
 
-local function HourlyCap()
+-- The hourly cap for officers (a unit's members): the hourlyCap Mission control via CP.Draw.limits, else config.
+local function HourlyCap(officers)
+    if CP.Draw and CP.Draw.limits then
+        local ok, l = pcall(CP.Draw.limits, officers)
+        if ok and type(l) == 'table' and tonumber(l.hour) then return l.hour end
+    end
     return tonumber(Config.Limits and Config.Limits.maxCompletionsHour) or 8
 end
 
@@ -519,7 +524,7 @@ function Events.bossCard(src)
 
     -- The boss counts toward the hourly cap (Mission cards: Weekly Boss): the accept refuses it then.
     if not locked then
-        local max = HourlyCap()
+        local max = HourlyCap(officers)
         for _, o in ipairs(officers) do
             if CompletionsLastHour(o.citizenid) >= max then
                 if o.src == src then

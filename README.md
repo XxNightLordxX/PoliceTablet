@@ -508,6 +508,14 @@ them on. This version has no screen for them yet (a later update adds it); the s
     himself (and so does any unit he is in). An admin's Quick edit of a mission's cooldown now applies at once too.
   - The supervisor Mission list shows a changed cooldown as `20 min → 10 min`; Admin UI → Officers → Today & cooldowns
     shows `(cooldown x0.5)` next to the mission.
+  - `noRepeat = { on = true }`: `false` switches the no-repeat rule (`Config.Draw.avoidLast`) off, so an officer
+    or unit may get the same mission twice in a row. The board still never names a mission.
+  - `hourlyCap = { on = true, min = 1, max = 16 }`: completed missions per officer per hour (normally
+    `Config.Limits.maxCompletionsHour`, `8`). The board lock, mission calls and the Weekly Boss card use it.
+  - `dailyCap = { on = true, min = 0, max = 40 }`: completed missions per officer per day (normally
+    `Config.Limits.maxCompletionsDay`, `0` = no cap); `0` here also means no cap.
+  - These three count for every department too, and the self rule applies: the supervisor who switched the
+    no-repeat rule off or raised a cap keeps the config.lua rule himself (and so does any unit he is in).
 
 - To switch them on: set `Config.Permissions.supervisor.missionControls = true` (the master switch; Admin UI →
   **Permissions**), then switch on each control you want in `Config.MissionControls.controls`, with the only values a

@@ -310,12 +310,15 @@ local function Counts(citizenid)
         }
     end
     table.sort(perType, function(a, b) return a.key < b.key end)
-    local maxDay = math.floor(Num(limits.maxCompletionsDay, 0))
+    -- the caps this officer is checked against (config.lua or the hourlyCap / dailyCap Mission controls)
+    local _, caps = Call('Draw', 'limits', { { citizenid = citizenid } })
+    caps = type(caps) == 'table' and caps or {}
+    local maxDay = math.floor(Num(caps.day, Num(limits.maxCompletionsDay, 0)))
     return {
         today = math.floor(Num(today, 0)),
         maxDay = maxDay > 0 and maxDay or nil,
         hour = math.floor(Num(hour, 0)),
-        maxHour = math.floor(Num(limits.maxCompletionsHour, 8)),
+        maxHour = math.floor(Num(caps.hour, Num(limits.maxCompletionsHour, 8))),
         perType = perType,
     }
 end

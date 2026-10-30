@@ -144,9 +144,80 @@ local function CompletionsLastHour(citizenid)
     return tonumber(n) or 0
 end
 
-local function HourlyCap()
-    return tonumber(Config.Limits and Config.Limits.maxCompletionsHour) or 8
+-- ============================================================================
+--                  NO-REPEAT RULE AND CAPS (MISSION CONTROLS)
+-- ============================================================================
+-- Three server-wide Mission controls (Config.MissionControls.controls, owner decision: a cooldown change is for every
+-- department and sits outside the master switch): noRepeat (false = the no-repeat rule is off), hourlyCap (completed
+-- runs per officer in the last hour) and dailyCap (per officer per day; 0 = no cap). Read for the officers a check is
+-- about (a unit's members), so the self rule keeps the config value for the supervisor who relaxed one and any unit
+-- he is in. Without a change every value is the config.lua one.
+local LIMIT_KEYS = { noRepeat = 'noRepeat', hour = 'hourlyCap', day = 'dailyCap' }
+
+local function HourlyConfig()
+    return math.max(0, math.floor(tonumber(Config.Limits and Config.Limits.maxCompletionsHour) or 8))
 end
+local function DailyConfig()
+    return math.max(0, math.floor(tonumber(Config.Limits and Config.Limits.maxCompletionsDay) or 0))
+end
+
+local function ControlValue(key, officers, fallback)
+    local dc = CP.DeptControls
+    if not (dc and dc.get and dc.def and dc.def(key)) then return fallback end
+    local ok, v = Safe(dc.get, nil, key, officers)
+    if not ok or v == nil then return fallback end
+    return v
+end
+
+-- { noRepeat = bool, hour = n, day = n (0 = no cap) } for officers (a list of officer tables, or nil = the
+-- server-wide value without the self rule).
+function Draw.limits(officers)
+    local hour = tonumber(ControlValue(LIMIT_KEYS.hour, officers, HourlyConfig())) or HourlyConfig()
+    local day = tonumber(ControlValue(LIMIT_KEYS.day, officers, DailyConfig())) or DailyConfig()
+    return {
+        noRepeat = ControlValue(LIMIT_KEYS.noRepeat, officers, true) ~= false,
+        hour = math.max(0, math.floor(hour)),
+        day = math.max(0, math.floor(day)),
+    }
+end
+
+local function HourlyCap(officers) return Draw.limits(officers).hour end
+
+function Draw.registerControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(LIMIT_KEYS.noRepeat, {
+        kind = 'bool',
+        serverWide = true,
+        master = false,
+        configValue = function() return true end,
+        relaxes = function(v) return v == false end,
+    })
+    dc.register(LIMIT_KEYS.hour, {
+        kind = 'number',
+        serverWide = true,
+        master = false,
+        integer = true,
+        range = { 1, 1000 },
+        configValue = HourlyConfig,
+        relaxes = function(v, c) return tonumber(v) ~= nil and tonumber(c) ~= nil and v > c end,
+    })
+    dc.register(LIMIT_KEYS.day, {
+        kind = 'number',
+        serverWide = true,
+        master = false,
+        integer = true,
+        range = { 0, 1000 },
+        configValue = DailyConfig,
+        relaxes = function(v, c)
+            v, c = tonumber(v), tonumber(c)
+            if not v or not c or c <= 0 then return false end
+            return v == 0 or v > c
+        end,
+    })
+    return true
+end
+Draw.registerControls()
 
 local function ToOfficers(members)
     local out = {}
@@ -189,10 +260,9 @@ local function CompletionsToday(citizenid, missionType)
     return tonumber(n) or 0
 end
 
--- Config.Limits.maxCompletionsDay (0 = no cap) and the type's dailyLimit (nil = no limit).
-local function DailyCap()
-    return math.max(0, math.floor(tonumber(Config.Limits and Config.Limits.maxCompletionsDay) or 0))
-end
+-- The daily cap for officers (Config.Limits.maxCompletionsDay or the dailyCap control; 0 = no cap) and the type's
+-- dailyLimit (nil = no limit).
+local function DailyCap(officers) return Draw.limits(officers).day end
 
 local function TypeDailyLimit(key)
     local t = Config.MissionTypes and Config.MissionTypes[key]
@@ -202,7 +272,7 @@ end
 
 -- The first officer at a daily limit and which one ('day' or 'type'), or nil.
 local function DailyBlocked(officers, key)
-    local max, perType = DailyCap(), TypeDailyLimit(key)
+    local max, perType = DailyCap(officers), TypeDailyLimit(key)
     for _, o in ipairs(officers) do
         if max > 0 and CompletionsToday(o.citizenid) >= max then return o, 'day' end
         if perType and CompletionsToday(o.citizenid, key) >= perType then return o, 'type' end
@@ -822,8 +892,9 @@ function Draw.draw(missionType, members, opts)
 
     local candidates = list
     if #list > 1 then
-        local hist = {}
-        for i, o in ipairs(officers) do hist[i] = HistoryFor(o.citizenid, missionType) end
+        -- the no-repeat rule switched off (the noRepeat control): every officer brings an empty history
+        local hist, on = {}, Draw.limits(officers).noRepeat
+        for i, o in ipairs(officers) do hist[i] = on and HistoryFor(o.citizenid, missionType) or {} end
         candidates = Draw.noRepeat(list, hist)
     end
 
@@ -925,7 +996,7 @@ local function TypeCooldown(officers, key, now)
 end
 
 local function HourlyBlocked(officers)
-    local max = HourlyCap()
+    local max = HourlyCap(officers)
     for _, o in ipairs(officers) do
         if CompletionsLastHour(o.citizenid) >= max then return o end
     end
@@ -992,6 +1063,7 @@ function Draw.boardCards(src)
         if IsOnCall(m) then onCall = true; break end
     end
     local hourlyWho = HourlyBlocked(officers)
+    local caps = Draw.limits(officers)
 
     for _, key in ipairs(TypeKeysByPoints()) do
         local label = TypeLabel(key)
@@ -1024,10 +1096,10 @@ function Draw.boardCards(src)
             end
         elseif hourlyWho then
             if hourlyWho.src == src then
-                card.locked = { reason = CP.L('board.locked_hourly', { max = HourlyCap() }) }
+                card.locked = { reason = CP.L('board.locked_hourly', { max = caps.hour }) }
             else
                 card.locked = {
-                    reason = CP.L('board.locked_hourly_member', { name = hourlyWho.name or '?', max = HourlyCap() }),
+                    reason = CP.L('board.locked_hourly_member', { name = hourlyWho.name or '?', max = caps.hour }),
                 }
             end
         elseif #list == 0 then
@@ -1041,7 +1113,7 @@ function Draw.boardCards(src)
                 local vars = {
                     type = label,
                     name = dailyWho.name or '?',
-                    max = which == 'day' and DailyCap() or TypeDailyLimit(key),
+                    max = which == 'day' and caps.day or TypeDailyLimit(key),
                 }
                 local lockKey = which == 'day' and 'board.locked_daily' or 'board.locked_type_daily'
                 if dailyWho.src ~= src then lockKey = lockKey .. '_member' end
@@ -1119,7 +1191,8 @@ local function CheckAccept(src, typeKey, counts)
         officers[#officers + 1] = o
     end
 
-    local max, dayMax, typeDay = HourlyCap(), DailyCap(), TypeDailyLimit(missionType)
+    local caps = Draw.limits(officers)
+    local max, dayMax, typeDay = caps.hour, caps.day, TypeDailyLimit(missionType)
     local lastHour = type(counts) == 'table' and counts.lastHour or CompletionsLastHour
     local today = type(counts) == 'table' and counts.today or CompletionsToday
     for _, o in ipairs(officers) do

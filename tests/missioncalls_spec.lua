@@ -1531,4 +1531,26 @@ do
     stub.twistOffer, stub.checkTwists, stub.twistFits = nil, nil, nil
 end
 
+-- Step P3: the noRepeat Mission control switched off (CP.Draw.limits): a call's eligible pool keeps the unit's last
+-- mission (every member brings an empty history).
+do
+    Reset()
+    local S = CENTRE.south_ls
+    AddPlayer(1, vec3(S.x + 100, S.y, 30.0))
+    D.recordLast(Cid(1), 'patrol', 'patrol_a')
+    local st = MC.eligibility(1).types.patrol
+    H.eq(st.eligible, st.board - 1, 'the rule on: the last patrol is not eligible')
+    local limits = D.limits
+    D.limits = function(o)
+        local l = limits(o)
+        l.noRepeat = false
+        return l
+    end
+    CP.Hooks.fire('deptControls:changed', { key = 'noRepeat' })
+    st = MC.eligibility(1).types.patrol
+    H.eq(st.eligible, st.board, 'the rule off: a change empties the cache and the whole pool is eligible')
+    D.limits = limits
+    CP.Hooks.fire('deptControls:changed', { key = 'noRepeat' })
+end
+
 return H

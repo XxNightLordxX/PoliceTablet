@@ -1488,6 +1488,10 @@ local function HomeData(officer)
         if ok and type(g) == 'table' then goals = { daily = g.daily, weekly = g.weekly } end
     end
     local maxDay = math.floor(Num(Config.Limits and Config.Limits.maxCompletionsDay, 0))
+    if CP.Draw and CP.Draw.limits then   -- the dailyCap Mission control, when a supervisor changed it
+        local okL, l = pcall(CP.Draw.limits, { officer })
+        if okL and type(l) == 'table' and tonumber(l.day) then maxDay = math.floor(l.day) end
+    end
     local missionsToday = nil
     if maxDay > 0 and CP.Runs and CP.Runs.completionsToday then
         local ok, n = pcall(CP.Runs.completionsToday, cid)

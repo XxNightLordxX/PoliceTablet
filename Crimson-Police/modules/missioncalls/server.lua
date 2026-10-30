@@ -287,13 +287,21 @@ local function Invalidate(citizenid)
 end
 MC._invalidate = Invalidate
 
--- The cap a count is checked against (Draw's accept checks): nil = no cap.
+-- The server-wide caps (CP.Draw.limits: config.lua or the hourlyCap / dailyCap Mission controls).
+local function Caps()
+    local _, l = Call('Draw', 'limits', nil)
+    return type(l) == 'table' and l or {}
+end
+
+-- The cap a count is re-read at (Draw's accept checks): nil = no cap. The lower of config.lua and the server-wide
+-- control, so a count is never kept past the cap any officer is checked against (the self rule keeps config).
 local function CountCap(key, missionType)
     local limits = Config.Limits or {}
-    if key == 'hour' then return Num(limits.maxCompletionsHour, 8) end
+    if key == 'hour' then return math.min(Num(limits.maxCompletionsHour, 8), Num(Caps().hour, math.huge)) end
     local n
     if missionType == nil then
-        n = Num(limits.maxCompletionsDay, 0)
+        local a, b = Num(limits.maxCompletionsDay, 0), Num(Caps().day, 0)
+        n = (a > 0 and b > 0) and math.min(a, b) or math.max(a, b)
     else
         local t = Config.MissionTypes and Config.MissionTypes[missionType]
         n = Num(t and t.dailyLimit, 0)
@@ -367,8 +375,11 @@ local function BuildTypeState(unit, missionType)
     local okT, twists = Call('Draw', 'twistOffer', missionType, pool)
     st.twists = okT and type(twists) == 'table' and twists or {}
     if #pool > 1 and CP.Draw and CP.Draw.noRepeat then
+        -- the no-repeat rule switched off (the noRepeat Mission control): every member brings an empty history
+        local _, l = Call('Draw', 'limits', unit.officers)
+        local on = not (type(l) == 'table' and l.noRepeat == false)
         local hist = {}
-        for i, cid in ipairs(unit.cids) do hist[i] = HistoryOf(cid, missionType) end
+        for i, cid in ipairs(unit.cids) do hist[i] = on and HistoryOf(cid, missionType) or {} end
         local _, list = Call('Draw', 'noRepeat', pool, hist)
         if type(list) == 'table' then pool = list end
     end
