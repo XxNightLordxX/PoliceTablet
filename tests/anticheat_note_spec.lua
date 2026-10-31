@@ -363,6 +363,8 @@ do
     local saved = Config.AntiCheat.stunNeedsProof
     H.eq(saved, 'flag', 'stunNeedsProof ships \'flag\'')
     local sr = NewRun('run-stun', { 3, 6 })
+    H.eq(Config.AntiCheat.stunRecheck, 2, 'stunRecheck ships 2 s')
+    Config.AntiCheat.stunRecheck = 0   -- decide at once (R7 below covers the wait)
     H.eq(AC.stunReport(sr, 3, false, 5003), true, 'flag: an unseen stun counts')
     local n = Audits('runNoted', 'run-stun')[1] or {}
     H.eq(n.new_value, 'stun_unproven', 'flag: a stun_unproven note')
@@ -383,6 +385,15 @@ do
     H.ok(#Audits('runNoted', 'run-stun') == 1 and #Audits('runFlagged', 'run-stun') == 1,
         'strict and off write nothing')
     Config.AntiCheat.stunNeedsProof = saved
+    Config.AntiCheat.stunRecheck = 2
+    -- R7: the note waits stunRecheck seconds (one timer per run, officer and person), then is written when the
+    -- server still saw no fall
+    local wr = NewRun('run-stun-wait', { 3 })
+    H.eq(AC.stunReport(wr, 3, false, 5003), true, 'wait: an unseen stun counts at once')
+    H.eq(AC.stunReport(wr, 3, false, 5003), true, 'wait: the report again')
+    H.eq(#Audits('runNoted', 'run-stun-wait'), 0, 'wait: no note yet')
+    H.advance(2100)
+    H.eq(#Audits('runNoted', 'run-stun-wait'), 1, 'wait: one note once the fall is still unseen 2 s later')
 end
 
 return H

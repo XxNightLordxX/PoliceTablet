@@ -1101,8 +1101,9 @@ end
 -- goes through CP.Npc.stunCheck (Config.AntiCheat.stunNeedsProof): 'strict' needs the server to have seen him ragdoll
 -- within 1 s; 'flag' (shipped) takes it as before and notes an unseen stun for staff; 'hold' flags that officer.
 
--- A runner of a new run reported stunned by officer 1 while the server saw no ragdoll, in one mode.
-local function UnseenStun(mode)
+-- A runner of a new run reported stunned by officer 1 while the server saw no ragdoll, in one mode. The note or flag
+-- waits Config.AntiCheat.stunRecheck (2 s, R7); lateFallMs: the server's copy of him falls this long after the report.
+local function UnseenStun(mode, lateFallMs)
     Demeanour('warrant', 'runner')
     local m = SceneMission({ profileSet = 'test_warrant', scene = { loitering = 1 }, returning = { chance = 0 } })
     local run = W.start({ 1 }, m)
@@ -1117,7 +1118,14 @@ local function UnseenStun(mode)
     W.near(1, run, p.netId, 6.0)
     Report(1, run, 1, { type = 'stunned', netId = p.netId, coords = H.players[1].coords, time = H.clockMs })
     Config.AntiCheat.stunNeedsProof = saved
-    return { run = run, p = p, notes = #W.acNotes - n0, flags = #W.flags - f0, saved = saved }
+    local early = #W.acNotes - n0 + #W.flags - f0
+    if lateFallMs then
+        H.advance(lateFallMs)
+        W.model(run, p.netId).ragdoll = true
+    end
+    H.advance(2100 - (lateFallMs or 0))
+    W.model(run, p.netId).ragdoll = nil
+    return { run = run, p = p, notes = #W.acNotes - n0, flags = #W.flags - f0, saved = saved, early = early }
 end
 local function Finish(r)
     RestoreDemeanour()
@@ -1152,6 +1160,16 @@ do
         'flag: the note names the person (' .. tostring(n and n.detail) .. ')')
     H.eq(r.flags, 0, 'flag: no flag')
     H.ok(r.run.flagged == nil and r.run.participants[1].flagged == nil, 'flag: the row is not held')
+    H.eq(r.early, 0, 'flag: the note waits for the re-check (R7)')
+    Finish(r)
+end
+
+-- R7: a real taser hit whose fall reaches the server 500 ms after the report: no note, no hold
+for _, mode in ipairs({ 'flag', 'hold' }) do
+    local r = UnseenStun(mode, 500)
+    H.eq(r.p.state, 'surrendered', mode .. ' late fall: he gives up')
+    H.ok(r.notes == 0 and r.flags == 0, mode .. ' late fall: no note, no flag')
+    H.eq(r.run.participants[1].flagged, nil, mode .. ' late fall: his row is not held')
     Finish(r)
 end
 
@@ -1333,6 +1351,8 @@ do -- scene: a pin until the scene is out, then the people and the car; a runner
     Report(1, run, 1, { type = 'aim', netId = p.netId })
     H.eq(p.state, 'surrendered', 'fc scene marker: aimed at, he gives up')
     H.eq(TargetOf(impl.marker(ctx), p.netId).look, 'suspect', 'fc scene marker: then in kinds.suspect (red)')
+    H.eq(TargetOf(impl.marker(ctx), p.netId).variant, 'surrendered',
+        'fc scene marker: ...at kinds.suspect.surrenderedScale, like the other blocks (R7)')
     RestoreDemeanour()
     Config.Custody.profileSets.test_warrant = nil
     Runs.endRun(run, 'completed', 'completed')

@@ -1256,6 +1256,11 @@ do
     H.ok(okT and cleanT == 'strict', 'a true from before it was a choice reads as strict')
     local okF, cleanF = Check('AntiCheat.stunNeedsProof', false)
     H.ok(okF and cleanF == 'off', 'a false reads as off')
+    -- R7: an unseen stun's note or flag waits for the server's copy of the fall
+    local rc = E('AntiCheat.stunRecheck')
+    H.eq(rc.default, 2, 'stunRecheck ships 2 s')
+    H.ok(rc.desc and rc.desc:find('0 = decide at once', 1, true) ~= nil, 'stunRecheck says what 0 does')
+    Err('AntiCheat.stunRecheck', 11, 'err.setting_range', 'at most 10 s')
     local re = E('NpcCombat.reassertAiDamage')
     H.eq(re.kind, 'boolean', 'reassertAiDamage is an on/off switch')
     H.eq(re.default, true, 'reassertAiDamage ships true')

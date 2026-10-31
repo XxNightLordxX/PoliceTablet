@@ -120,9 +120,9 @@ local function EnsureClueBlip(S, cl)
 end
 
 -- A fugitive's blip in its Config.Markers.kinds look: kinds.fleeing (orange) while he runs, kinds.suspect at its
--- surrenderedScale (as flee_arrest) once he gave up, restyled in place when that changes. Handed to the objective pointer
--- under his net id: it IS the pointer, and CP.Markers shows the same look from the server's position once he is too
--- far away for this game (BLIPS_FINAL R1, R3, R7).
+-- surrenderedScale (as flee_arrest) once he gave up, restyled in place when that changes. Handed to the objective
+-- pointer under his net id: it IS the pointer, and CP.Markers shows the same look from the server's position once he is
+-- too far away for this game (BLIPS_FINAL R1, R3, R7).
 local function EnsureFugitiveBlip(S, netId, ent, state)
     local k = 'f' .. tostring(netId)
     local look = state == 'fleeing' and 'fleeing' or 'suspect'

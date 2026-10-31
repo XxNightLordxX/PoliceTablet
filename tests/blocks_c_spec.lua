@@ -120,11 +120,12 @@ do
 end
 -- One 'stunned' report the server did not see, in a stunNeedsProof mode: what came of it.
 local function UnseenStun(mode, report)
-    local saved = Config.AntiCheat.stunNeedsProof
+    local saved, savedWait = Config.AntiCheat.stunNeedsProof, Config.AntiCheat.stunRecheck
     Config.AntiCheat.stunNeedsProof = mode
+    Config.AntiCheat.stunRecheck = 0   -- decide at once (the wait: tests/field_contact_spec.lua, R7)
     local n0, f0 = #AC_NOTES, #AC_FLAGS
     local ok, why = report()
-    Config.AntiCheat.stunNeedsProof = saved
+    Config.AntiCheat.stunNeedsProof, Config.AntiCheat.stunRecheck = saved, savedWait
     return { ok = ok, why = why, notes = #AC_NOTES - n0, flags = #AC_FLAGS - f0 }
 end
 local function LastAsk(netId)

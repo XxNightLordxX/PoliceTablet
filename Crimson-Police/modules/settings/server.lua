@@ -268,6 +268,7 @@ local RANGES = {
     ['Draw.hardClearance'] = { 0, 500 },
     ['AntiCheat.presenceShare'] = { 0, 1 },
     ['AntiCheat.adminProbeLines'] = { 0, 60 },
+    ['AntiCheat.stunRecheck'] = { 0, 10 },
     ['Scoring.failedCredit'] = { 0, 1 },
     ['Scoring.common.fastShare'] = { 0, 1 },
     ['Scoring.scoreCap'] = { 0, 10 },

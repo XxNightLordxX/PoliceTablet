@@ -1277,8 +1277,9 @@ do
         return done
     end
     Config.AntiCheat = Config.AntiCheat or {}
-    local savedProof = Config.AntiCheat.stunNeedsProof
+    local savedProof, savedWait = Config.AntiCheat.stunNeedsProof, Config.AntiCheat.stunRecheck
     H.eq(savedProof, 'flag', 'stunNeedsProof ships \'flag\' (config.lua)')
+    Config.AntiCheat.stunRecheck = 0   -- decide at once (the wait: tests/field_contact_spec.lua, R7)
     Config.AntiCheat.stunNeedsProof = true
     H.eq(Npc.stunProof(c1), false, 'stunProof: no ragdoll within 1 s: no proof')
     _G.IsPedRagdoll = function(e) return e == e1 end
@@ -1353,7 +1354,7 @@ do
     H.eq(realAC.stunMode(), 'flag', 'a missing key reads as flag')
     H.ok(#acNotes == 1 and #acFlags == 1, 'the legacy values wrote no note or flag')
     Unflagged('nothing is held after all modes')
-    Config.AntiCheat.stunNeedsProof = savedProof
+    Config.AntiCheat.stunNeedsProof, Config.AntiCheat.stunRecheck = savedProof, savedWait
     stubAC.stunMode, stubAC.stunReport = nil, nil
     H.eq(Npc.runOf(c1), run, 'runOf')
     -- the lethal stat: a participant kills a person the mission is about

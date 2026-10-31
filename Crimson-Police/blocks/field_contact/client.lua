@@ -57,26 +57,28 @@ local function DropBlip(S, k)
 end
 
 -- A contact's blip in its Config.Markers.kinds look (a car kinds.contactVehicle, a person kinds.contact, or as
--- PERSON_LOOK for his state; restyled in place when that changes), handed to the objective pointer under his net id,
--- the key the server's pointer names him by: it IS the pointer (one icon, the GPS line on it), and CP.Markers shows
--- the same look from the server's position while he is too far away for this game (BLIPS_FINAL R1, R7).
+-- PERSON_LOOK for his state, one who gave up at kinds.suspect.surrenderedScale; restyled in place when that changes),
+-- handed to the objective pointer under his net id, the key the server's pointer names him by: it IS the pointer (one
+-- icon, the GPS line on it), and CP.Markers shows the same look from the server's position while he is too far away for
+-- this game (BLIPS_FINAL R1, R7).
 local function EnsureBlip(S, info, ent, state)
     if not S.alive then return end
     local look = info.kind == 'vehicle' and 'contactVehicle' or PERSON_LOOK[state] or 'contact'
+    local variant = info.kind ~= 'vehicle' and state == 'surrendered' and 'surrendered' or nil
     -- Radio Silence: Config.Markers.radioSilence decides ('area' and 'none': no blip on a person or a car)
     if CP.Markers.hidden(S.ctx, look) then return DropBlip(S, info.netId) end
     local b = S.blips[info.netId]
     if b and b.ent == ent and DoesBlipExist(b.id) then
-        if b.look ~= look then
-            CP.Markers.style(b.id, look)
-            b.look = look
+        if b.look ~= look or b.variant ~= variant then
+            CP.Markers.style(b.id, look, nil, { variant = variant })
+            b.look, b.variant = look, variant
         end
         return
     end
     DropBlip(S, info.netId)
     local id = AddBlipForEntity(ent)
-    CP.Markers.style(id, look, CP.L('block.field_contact.blip', { label = info.label }))
-    S.blips[info.netId] = { id = id, ent = ent, look = look }
+    CP.Markers.style(id, look, CP.L('block.field_contact.blip', { label = info.label }), { variant = variant })
+    S.blips[info.netId] = { id = id, ent = ent, look = look, variant = variant }
     CP.Markers.adopt(info.netId, id)
 end
 

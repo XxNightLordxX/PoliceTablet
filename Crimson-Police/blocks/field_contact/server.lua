@@ -1415,6 +1415,8 @@ local function Marker(ctx)
                 netId = netId,
                 coords = pc,
                 look = t.kind == 'vehicle' and 'contactVehicle' or PERSON_LOOK[c and c.state] or 'contact',
+                -- one who gave up at kinds.suspect.surrenderedScale (the same as flee_arrest, search_area, pursuit)
+                variant = t.kind ~= 'vehicle' and c and c.state == 'surrendered' and 'surrendered' or nil,
                 label = CP.Lt('block.field_contact.blip', { label = t.label }),
             }
         end

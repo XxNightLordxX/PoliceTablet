@@ -1186,6 +1186,15 @@ local function StunSeen(netId)
     return RagdollSeen(netId, rec, STUN_PROOF_MS)
 end
 
+-- The re-check of an unseen stun (CP.AntiCheat.stunReport, Config.AntiCheat.stunRecheck): the server saw him fall
+-- within the proof window before the report or in the sinceMs since it.
+function Npc.stunSeenSince(netId, sinceMs)
+    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    local rec = netId and FindRec(netId) or nil
+    if not rec or rec.dead then return false end
+    return RagdollSeen(netId, rec, STUN_PROOF_MS + math.max(0, tonumber(sinceMs) or 0))
+end
+
 local function StunMode()
     local AC = CP.AntiCheat
     if AC and type(AC.stunMode) == 'function' then return AC.stunMode() end

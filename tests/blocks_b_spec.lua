@@ -2259,6 +2259,7 @@ end
 do -- flee_arrest: a stun the server did not see, in every Config.AntiCheat.stunNeedsProof mode
     H.eq(Config.AntiCheat.stunNeedsProof, 'flag', 'stunNeedsProof ships \'flag\'')
     local saved = Config.AntiCheat.stunNeedsProof
+    Config.AntiCheat.stunRecheck = 0   -- decide at once (the wait: tests/field_contact_spec.lua, R7)
     local function Unseen(mode)
         Place(1, 4000, 4000, 30)
         Place(2, 4000, 4000, 30)
@@ -2299,6 +2300,7 @@ do -- flee_arrest: a stun the server did not see, in every Config.AntiCheat.stun
     H.eq(NPC.states[r.a], 'surrendered', 'off: the suspect gives up')
     H.ok(r.notes == 0 and r.flags == 0 and NotHeld(r), 'off: no note, no flag')
     Config.AntiCheat.stunNeedsProof = saved
+    Config.AntiCheat.stunRecheck = 2
 end
 
 do -- validation guardrails added in review

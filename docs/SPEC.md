@@ -3528,6 +3528,9 @@ Config.AntiCheat = {
                               -- note for staff (nobody's points are held); 'hold' = the same, but that officer's
                               -- points wait for review; 'strict' = a fleeing person only gives up to a stun the
                               -- server saw; 'off' = no check (the old way)
+    stunRecheck = 2,          -- seconds 'flag' and 'hold' wait before the note or flag: a report that reaches the
+                              -- server before its copy of the suspect shows the fall gets no note when the fall
+                              -- shows by then. 0 = decide at once
 
     -- A player who is not an admin sends a request only admins may send (the money, void and other Admin UI tools;
     -- no officer or supervisor screen sends one, so it is almost always a cheat menu). It is refused as always, and

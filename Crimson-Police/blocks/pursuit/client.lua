@@ -144,11 +144,11 @@ local function DropBlip(S, k)
     S.blips[k] = nil
 end
 
--- A car's or a suspect's blip in its Config.Markers.kinds look (vehicle; a suspect on foot fleeing while he runs,
--- else suspect; variant 'surrendered': kinds.suspect.surrenderedScale for one who gave up), restyled in place when that changes, handed to the
--- objective pointer under the net id the server's pointer names it by: it IS the pointer (one icon, the GPS line on
--- it), and CP.Markers shows the same look from the server's position once the entity is too far away for this game
--- (BLIPS_FINAL R1, R3, R7).
+-- A car's or a suspect's blip in its Config.Markers.kinds look (vehicle; a suspect on foot fleeing while he runs, else
+-- suspect; variant 'surrendered': kinds.suspect.surrenderedScale for one who gave up), restyled in place when that
+-- changes, handed to the objective pointer under the net id the server's pointer names it by: it IS the pointer (one
+-- icon, the GPS line on it), and CP.Markers shows the same look from the server's position once the entity is too far
+-- away for this game (BLIPS_FINAL R1, R3, R7).
 local function EnsureBlip(S, k, ent, net, kind, labelKey, variant)
     -- never a blip drawn after the cleanup
     if not S.alive then return end

@@ -2778,7 +2778,7 @@ without arguments also removes the run's service vehicles, PLAN M7).
   label, variant, number, beyond } } }`. `look` is a `Config.Markers.kinds` key (default `'objective'`, an area
   `'searchArea'`); `variant` `'boss'|'next'|'followUp'|'setback'|'surrendered'` picks the kind's bossScale, nextScale,
   followUpColour, setbackColour or surrenderedScale (R6: 0.6 when the kind has none; the server's flee_arrest,
-  search_area and pursuit markers send `'surrendered'` for one who gave up, and their blocks style their own blip with
+  search_area, pursuit and (R7) field_contact markers send `'surrendered'` for one who gave up, and their blocks style their own blip with
   it, so he is one size near and far). `beyond` (metres, PLAN M3): this target takes the line before the others while this officer is
   farther than that from it (kept until he is within 75 % of it), and never closer: then the others share it (escort:
   the truck while HE is farther than clearRadius from it, else the destination; BLIPS_FINAL X17, decided in each

@@ -828,8 +828,9 @@ function M.colour(role, fallback)
 end
 
 -- The look of kind (Config.Markers.kinds) and the settings every objective blip gets: short range, legend category,
--- a name, a number. opts = { variant = 'boss'|'next'|'followUp'|'setback'|'surrendered', number = n }. A 'setback' blip flashes from
--- now on (Config.Markers.setbackFlash); a block that restyles it to another variant stops that (SetBlipFlashes false).
+-- a name, a number. opts = { variant = 'boss'|'next'|'followUp'|'setback'|'surrendered', number = n }. A 'setback'
+-- blip flashes from now on (Config.Markers.setbackFlash); a block that restyles it to another variant stops that
+-- (SetBlipFlashes false).
 function M.style(blip, kind, label, opts)
     if not Exists(blip) then return false end
     opts = type(opts) == 'table' and opts or {}

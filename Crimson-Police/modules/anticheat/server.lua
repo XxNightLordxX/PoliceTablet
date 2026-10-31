@@ -14,6 +14,7 @@ local SIGNATURE_MAX = 512
 
 local state = {}                 -- runId -> { idleDone, kills, killers = { [src] = { name, n } }, recorded = { [key] = true }, noted = { [key] = true }, recent = { [src] = { [sig] = ms } } }
 local STUN_MODES = { flag = true, hold = true, strict = true, off = true }
+local StunPending = {}  -- { ['<run id>|<src>|<net id>'] = true } while an unseen stun waits for its re-check
 local lastPresenceMs = nil
 
 -- ============================================================================
@@ -244,23 +245,47 @@ function AC.stunMode()
     return 'flag'
 end
 
--- A participant's 'stunned' report (flee_arrest, pursuit, search_area, field_contact) about the person netId, given
--- whether the server saw him fall (CP.Npc.stunCheck): true when it counts. One the server did not see counts in
--- 'flag' (with a staff note) and 'hold' (with a flag on that officer: his points wait for review), never in
--- 'strict'; 'off' takes every report with no note.
-function AC.stunReport(run, src, seen, netId)
-    local mode = AC.stunMode()
-    if mode == 'off' or seen then return true end
-    if mode == 'strict' then return false end
-    local detail = CP.L('admin.anticheat.stun_detail', {
-        objective = type(run) == 'table' and math.tointeger(tonumber(run.objectiveIndex)) or 0,
-        netId = math.tointeger(tonumber(netId)) or '?',
-    })
+-- The note ('flag') or flag ('hold') on an officer whose stun report the server did not see.
+local function StunVerdict(run, src, netId, objective, mode)
+    local detail = CP.L('admin.anticheat.stun_detail', { objective = objective, netId = netId })
     if mode == 'hold' then
         AC.flag(run, src, 'stun_unproven', detail)
     else
         AC.note(run, src, 'stun_unproven', detail)
     end
+end
+
+-- A participant's 'stunned' report (flee_arrest, pursuit, search_area, field_contact) about the person netId, given
+-- whether the server saw him fall (CP.Npc.stunCheck): true when it counts. One the server did not see counts in
+-- 'flag' (with a staff note) and 'hold' (with a flag on that officer: his points wait for review), never in
+-- 'strict'; 'off' takes every report with no note. The note or flag waits Config.AntiCheat.stunRecheck seconds
+-- (one timer per run, officer and person) and is dropped when the server saw the fall by then: the report often
+-- arrives before the server's copy of the ped shows it, and the suspect gives up at once, so no report follows.
+function AC.stunReport(run, src, seen, netId)
+    local mode = AC.stunMode()
+    if mode == 'off' or seen then return true end
+    if mode == 'strict' then return false end
+    local objective = type(run) == 'table' and math.tointeger(tonumber(run.objectiveIndex)) or 0
+    local id = math.tointeger(tonumber(netId)) or '?'
+    local waitMs = math.floor((tonumber(Cfg().stunRecheck) or 0) * 1000)
+    if waitMs <= 0 or type(run) ~= 'table' or run.id == nil then
+        StunVerdict(run, src, id, objective, mode)
+        return true
+    end
+    local key = tostring(run.id) .. '|' .. tostring(src) .. '|' .. tostring(id)
+    if StunPending[key] then return true end
+    StunPending[key] = true
+    local at = GetGameTimer()
+    SetTimeout(waitMs, function()
+        StunPending[key] = nil
+        local Npc = CP.Npc
+        local ok, later = false, false
+        if Npc and type(Npc.stunSeenSince) == 'function' then
+            ok, later = pcall(Npc.stunSeenSince, netId, GetGameTimer() - at)
+        end
+        if ok and later then return end
+        StunVerdict(run, src, id, objective, mode)
+    end)
     return true
 end
 
