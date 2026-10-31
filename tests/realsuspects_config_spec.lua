@@ -166,8 +166,8 @@ do
         excludeAdmins = 'true = Crimson-Police admins (Config.AdminAce / Config.QboxAdmins) are never suspects either',
         jobHopMinutes = 'A character can\'t be a suspect within this many minutes of police duty, and can\'t take a '
             .. 'case within this many minutes of being a suspect',
-        afkSeconds = 'No movement and no camera turn this long = AFK: never a suspect, and a suspect cuffed while AFK '
-            .. 'scores nothing',
+        afkSeconds = 'Seconds with no movement and no camera turn = AFK: never a suspect, and a suspect cuffed while '
+            .. 'AFK scores nothing',
         afkSampleEvery = 'seconds between AFK samples (only suspects, volunteers and reported crews)',
         noStartZones = 'a player standing here can\'t become a suspect',
         contactRange = 'metres: an officer this close to a suspect has made contact',
@@ -175,7 +175,7 @@ do
             .. '\'void\' = he counts for nobody; \'caught\' = it counts as a detain for the officers; \'escaped\' = '
             .. 'it counts as getting away. Staff always get a note, and it never holds the officers\' points',
         disconnectGrace = 'seconds a suspect who lost connection may come back and stay in the case',
-        reconnectNoticeMinutes = 'tell the officers when a suspect who left in cuffs comes back within this time',
+        reconnectNoticeMinutes = 'minutes: officers are told when a suspect who left cuffed is back this soon',
         evadeWindow = 'The staff note says "left soon after contact" when he left within this many seconds of it',
         ['trail.every'] = 'seconds between points',
         ['trail.max'] = 'points kept per suspect',
@@ -184,9 +184,9 @@ do
         cuffPairWindow = 'Proof the server checks before anything scores: seconds between the officer\'s sc-police '
             .. 'cuff and the suspect\'s cuffed state',
         cuffRange = 'metres between them at the cuff (sc-police allows 2.5; the rest is lag)',
-        custodyHoldSeconds = 'the cuffs must hold this long before a detain counts',
-        breakFreeSeconds = 'Free this soon after the cuff = he won sc-police\'s cuff-break game (fair, once per case '
-            .. 'and not in the first 2 s); later, with no officer uncuff and no bobby pin, it is a self-uncuff: it '
+        custodyHoldSeconds = 'seconds the cuffs must hold before a detain counts',
+        breakFreeSeconds = 'Seconds: free this soon after the cuff = he won sc-police\'s cuff-break game (fair, once '
+            .. 'per case and not in the first 2 s); later, with no officer uncuff and no bobby pin, it is a self-uncuff: it '
             .. 'counts as detained and staff get a note',
         rescueRange = 'Metres: a friend\'s successful bobby pin frees him with no note when that friend stood this '
             .. 'close for 2 s or more (once per case)',
@@ -196,9 +196,9 @@ do
         jailTimeMax = 'longer sentences are recorded as this',
         bookingZones = 'A booking counts only inside one of these ({} = anywhere): sc-police\'s station duty points '
             .. 'and the prison; check them on your MLOs',
-        spawnProtectSeconds = 'After a hospital respawn he can\'t be detained for points this long (unless officers '
+        spawnProtectSeconds = 'Seconds after a hospital respawn he can\'t be detained for points (unless officers '
             .. 'were with him when he went down)',
-        earlyRespawnSeconds = 'Keep equal to sc-ambulance\'s Config.DeathTime: a respawn sooner voids him and staff '
+        earlyRespawnSeconds = 'Seconds; keep equal to sc-ambulance\'s Config.DeathTime: a respawn sooner voids him and staff '
             .. 'get a note',
         -- V6: officer conduct
         lessLethal = 'Officer conduct: these weapons are never a "shot" (a hit with one on a suspect who was never '
@@ -215,7 +215,7 @@ do
         suspectCooldownMinutes = 'After a case, the same officers score nothing on that suspect for this many minutes',
         ['pairFlag.count'] = 'cases of the same pair (matched by license)',
         ['pairFlag.days'] = 'within this many days',
-        fastCatchSeconds = 'a detain this soon after the case started is a warning sign',
+        fastCatchSeconds = 'seconds: a detain this soon after the case started is a warning sign',
         pairLedgerDays = 'days the pair ledger keeps case rows (admin blocks stay until they expire)',
     }) do
         H.eq((S.entry('RealSuspects.' .. path) or {}).desc, desc, 'RealSuspects.' .. path .. ': its own comment')

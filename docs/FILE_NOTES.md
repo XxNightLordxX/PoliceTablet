@@ -3077,7 +3077,12 @@ where the officer is).
     * An in-arena participant who leaves never has the crimsonArena bag touched (CRIMSON_ARENA rule 1):
       CP.Alerts.forget(src) (when present) drops the intent instead of CP.Alerts.clear.
     * Mission items (metadata.cpItem) cannot leave their holder's inventory: an ox_inventory swapItems hook
-      refuses give / drop / stash / vehicle moves (re-registered when ox_inventory restarts).
+      refuses give / drop / stash / vehicle moves. ox_inventory restarted while Crimson-Police runs: its old hook
+      is gone (itemHookId cleared on onResourceStart) and the hook is registered again 1 s later. While
+      ox_inventory is stopped, a run's items are not given (one console warning) and items to take back are kept
+      as orphans; the once-a-minute maintenance sweeps them from an online officer who is not on a run once
+      ox_inventory is back. Every other ox_inventory call (tablet item count, rewards, custody evidence) checks
+      GetResourceState first, so nothing has to be re-registered for them.
     * Vehicle damage (p.vehicle) is sampled by the server every VEHICLE_SAMPLE_MS from the vehicle each
       active participant drives; client 'vehicle' telemetry only adds samples.
     * The `cp` state bag is written, never read back on the server (a client can write the bag of an
@@ -5119,6 +5124,14 @@ with a stub CP.DeptControls; no database is read.
 Difficulty and unit size (step P9): two per-department Mission controls. difficulty picks one of the presets the
 admin lists (Config.NpcDifficulty) for runs the department leads, read at the accept; unitSize caps the units its
 leaders may lead, never above Config.Limits.maxUnitSize.
+```
+
+## tests/docs_restart_spec.lua
+
+```text
+The docs against the code (step C14): README 11.9 and the run engine's FILE_NOTES entry say what an ox_inventory
+restart does (the swapItems hook dropped and registered again 1 s later, as runs/server.lua's onResourceStart
+handler does), and the README option rows give the unit of each number. Reads files only; no stubs, no database.
 ```
 
 ## tests/e2e_spec.lua

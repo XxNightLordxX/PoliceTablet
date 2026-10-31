@@ -920,7 +920,8 @@ Config.RealSuspects = {
     -- A character can't be a suspect within this many minutes of police duty, and can't take a case within this many
     -- minutes of being a suspect
     jobHopMinutes = 30,
-    -- No movement and no camera turn this long = AFK: never a suspect, and a suspect cuffed while AFK scores nothing
+    -- Seconds with no movement and no camera turn = AFK: never a suspect, and a suspect cuffed while AFK scores
+    -- nothing
     afkSeconds = 300,
     afkSampleEvery = 15,             -- seconds between AFK samples (only suspects, volunteers and reported crews)
     noStartZones = {                 -- a player standing here can't become a suspect
@@ -935,7 +936,7 @@ Config.RealSuspects = {
     -- Staff always get a note, and it never holds the officers' points
     onLeave = 'void',
     disconnectGrace = 120,           -- seconds a suspect who lost connection may come back and stay in the case
-    reconnectNoticeMinutes = 30,     -- tell the officers when a suspect who left in cuffs comes back within this time
+    reconnectNoticeMinutes = 30,     -- minutes: officers are told when a suspect who left cuffed is back this soon
     -- The staff note says "left soon after contact" when he left within this many seconds of it
     evadeWindow = 120,
     trail = {                        -- position trail kept for review
@@ -946,10 +947,10 @@ Config.RealSuspects = {
     -- Proof the server checks before anything scores:
     cuffPairWindow = 10,             -- seconds between the officer's sc-police cuff and the suspect's cuffed state
     cuffRange = 3.5,                 -- metres between them at the cuff (sc-police allows 2.5; the rest is lag)
-    custodyHoldSeconds = 30,         -- the cuffs must hold this long before a detain counts
-    -- Free this soon after the cuff = he won sc-police's cuff-break game (fair, once per case and not in the first
-    -- 2 s); later, with no officer uncuff and no bobby pin, it is a self-uncuff: it counts as detained and staff get a
-    -- note
+    custodyHoldSeconds = 30,         -- seconds the cuffs must hold before a detain counts
+    -- Seconds: free this soon after the cuff = he won sc-police's cuff-break game (fair, once per case and not in
+    -- the first 2 s); later, with no officer uncuff and no bobby pin, it is a self-uncuff: it counts as detained and
+    -- staff get a note
     breakFreeSeconds = 20,
     -- Metres: a friend's successful bobby pin frees him with no note when that friend stood this close for 2 s or
     -- more (once per case)
@@ -966,10 +967,10 @@ Config.RealSuspects = {
         { label = 'SASP', coords = vec3(1560.38, 815.76, 76.21), radius = 80.0 },
         { label = 'Bolingbroke Penitentiary', coords = vec3(1768.73, 2570.43, 44.73), radius = 180.0 },
     },
-    -- After a hospital respawn he can't be detained for points this long (unless officers were with him when he
+    -- Seconds after a hospital respawn he can't be detained for points (unless officers were with him when he
     -- went down)
     spawnProtectSeconds = 600,
-    -- Keep equal to sc-ambulance's Config.DeathTime: a respawn sooner voids him and staff get a note
+    -- Seconds; keep equal to sc-ambulance's Config.DeathTime: a respawn sooner voids him and staff get a note
     earlyRespawnSeconds = 400,
     -- Officer conduct: these weapons are never a "shot" (a hit with one on a suspect who was never armed costs
     -- nothing)
@@ -994,7 +995,7 @@ Config.RealSuspects = {
         count = 2,                   -- cases of the same pair (matched by license)
         days = 7,                    -- within this many days
     },
-    fastCatchSeconds = 60,           -- a detain this soon after the case started is a warning sign
+    fastCatchSeconds = 60,           -- seconds: a detain this soon after the case started is a warning sign
     pairLedgerDays = 30,             -- days the pair ledger keeps case rows (admin blocks stay until they expire)
 }
 
