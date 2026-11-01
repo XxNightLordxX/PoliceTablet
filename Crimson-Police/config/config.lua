@@ -1139,6 +1139,12 @@ Config.Volunteers = {
     -- How such a mission ends: 'cancelled' = Abandoned with no cooldown, penalty or pay; 'keep_earned' = Completed
     -- with what the officers earned so far
     voidRun = 'cancelled',
+    -- A volunteer who is caught while AFK (he did not move for a while, Config.RealSuspects): true = his part is
+    -- void (a strike, and the mission ends as in voidRun); false = the catch counts like any other catch
+    afkCatchVoids = true,
+    -- Warrant Service's armed associates while a volunteer plays the wanted person at the door: false = they stay
+    -- away (the NPCs would shoot him too); true = they come out at the knock as usual
+    doorAssociates = false,
     -- What a mission played against a volunteer (once he said yes) takes part in; true = like any other mission
     typeOfTheDay = false,            -- true = today's Type of the Day points multiplier applies to it too
     goals = false,                   -- true = it counts for the officers' daily and weekly goals

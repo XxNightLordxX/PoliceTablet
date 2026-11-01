@@ -3533,10 +3533,12 @@ run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc
   `client:volunteerCase { phase = 'over' }`; the hold goes.
 - Blocks: `ctx.volunteer()` (CP.Runs' ctx, `V.matchView(run, index)`): nil unless the objective is the run's volunteer
   slot, else `{ role, mode, phase = 'asking'|'travel'|'in_position'|'engaged'|'npc'|'void', meet, label, real,
-  engaged }`: never a citizenid, server id or live position. No built-in block reads it before V23.
+  engaged }`: never a citizenid, server id or live position. flee_arrest's door mode reads it (V23, §7.3).
 - Config.Volunteers keys of V22: `askSeconds` (30, 10-120), `askTries` (3, 1-10), `travelSeconds` (300, 60-1800),
   `meetRadius` (25, 5-200 m), `cancelGraceSeconds` (60, 0-600), `onVoid` ('npc' | 'end'), `voidRun` ('cancelled' |
   'keep_earned'). Specs: tests/volunteer_match_spec.lua, tests/volunteers_client_spec.lua.
+- Config.Volunteers keys of V23: `afkCatchVoids` (true: an AFK catch is a void, `Voided(m, 'afk')`, a strike) and
+  `doorAssociates` (false: flee_arrest's door spawns no associate while a volunteer may play, §7.3).
 
 **Gates (V22b, modules/volunteers/match/server.lua; critic 2 #9, #11, #12).** Before any built-in block offers a slot:
 - Caps: `V.capsOk(run, cid) -> true | false, why`, part of every ask check (`Fits`): `suspect_used` (his
@@ -4222,8 +4224,30 @@ mission, location) -> { role, meet = vec3, ... } | nil` is an optional server-ha
 fugitive) offer one, and CP.Volunteers (§5.47) uses it to find the objective a volunteer can play. The registry
 (V21, shared/init.lua): `CP.Blocks.register` drops a `volunteerSlot` that is no function (with a warning) and
 `CP.Blocks.withSlot()` lists the block ids that offer one; the answer must carry a §5.47 role (runner, driver,
-fugitive) or it is no slot. No built-in block offers one before V23. Built in steps
+fugitive) or it is no slot. flee_arrest offers one from V23 (below); pursuit and search_area later. Built in steps
 V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
+
+**flee_arrest's runner slot (V23, blocks/flee_arrest).** Door mode only (Warrant Service): `volunteerSlot` answers
+`{ role = 'runner', meet = <the location's suspect point> }`, none for scatter mode or a location with no suspect point.
+The block reads `ctx.volunteer()` on start, every tick and on every `opp_*` event (`st.vol`):
+- nil (no match, `enabled` off, a mode 'npc', or phase `npc`): everything as before (the NPC at the door).
+- `'wait'` (phase `asking`): nobody at the door; the knock is taken with no response line, the HUD says
+  `block.flee_arrest.detail_waiting`; the objective cannot complete. Phase `npc` later spawns the NPC as usual (a
+  knock already made applies his rolled response at once).
+- `'real'` (travel, in_position, engaged): no NPC suspect; the knock shows `block.flee_arrest.response_volunteer`. The
+  wanted person counts as present; he is done once CP.Opponents' view (`Opp.view(run)`, this objective's index) has
+  him `detained` with a share above 0 or `booked`; a share of 0 (an AFK catch) never counts while
+  `Config.Volunteers.afkCatchVoids` is on (shipped), and counts like any detain with it off; `lost` fails the objective
+  `block.flee_arrest.fail_escaped` (as an NPC who escaped). The pointer stays the door point while no NPC of the
+  objective is out (never his position); presence measures to the door.
+- `'void'` (phase `void`: the run ends for want of him): nothing spawns.
+- Associates: `Config.Volunteers.doorAssociates` false (shipped) = none while `st.vol` is set (the hostile group shoots
+  every player, the volunteer too); true = they come out at the knock as usual.
+- Voids go through CP.Volunteers (§5.47, `onVoid` / `voidRun`); the block never ends the run for them. An AFK catch
+  (CP.Opponents set `share = 0` at the cuff) is a void there: the match's 1 s watch sees him `detained`/`booked` with
+  share 0 -> `Voided(m, 'afk', strike)` (a strike, timeline `volunteer_afk`, his note `volunteer.case.afk`; the proof
+  already wrote `rs_afk_catch`), counted as engaged, so the run ends as `voidRun` says. Specs:
+  tests/flee_arrest_volunteer_spec.lua, tests/volunteer_match_spec.lua.
 
 **The block (V12, blocks/live_response).** `engineOnly = true` in its `CP.Blocks.register` table:
 `Missions.normalize` refuses it unless `meta.engine == true` ("objective N uses engine-only block", plain reason

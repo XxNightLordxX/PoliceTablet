@@ -62,6 +62,7 @@ local LINE_KEYS = {
     no_show = true,
     volunteer_cancel = true,
     volunteer_npc = true,
+    volunteer_afk = true,    -- caught while AFK: his part is void (V23)
 }
 
 local STATE_KEY = {

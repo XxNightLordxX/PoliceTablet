@@ -645,8 +645,15 @@ local function LeftOut(ctx, role)
     return lo and lo[role] or 0
 end
 
+-- Config.Volunteers.doorAssociates: false (shipped) = no armed associate while a volunteer may play the wanted person
+-- (the NPCs' hostile group shoots every player, the volunteer too).
+local function NoAssociates(ctx)
+    local vol = type(ctx.state) == 'table' and ctx.state.vol or nil
+    return vol ~= nil and (Config.Volunteers or {}).doorAssociates ~= true
+end
+
 local function AssocTarget(ctx)
-    if ctx.obj.mode ~= 'door' then return 0 end
+    if ctx.obj.mode ~= 'door' or NoAssociates(ctx) then return 0 end
     return math.max(0, Int(ctx.obj.associates and ctx.obj.associates.count) - LeftOut(ctx, 'associate'))
 end
 
@@ -1062,7 +1069,10 @@ local function Reveal(ctx, st)
         if p.state == 'idle' then ApplyResponse(ctx, st, p) end
     end
     st.dirty = true
-    ctx.hud({ message = { text = CP.L(RESPONSE_TEXT[st.response] or RESPONSE_TEXT.fight), kind = 'warning' } })
+    if st.vol == 'wait' then return end
+    local key = st.vol == 'real' and 'block.flee_arrest.response_volunteer' or RESPONSE_TEXT[st.response]
+        or RESPONSE_TEXT.fight
+    ctx.hud({ message = { text = CP.L(key), kind = 'warning' } })
 end
 
 -- The associates at the knock (AtKnock): each on a point of his own, through the spawn director (the indoor distance
@@ -1102,7 +1112,7 @@ end
 local function SpawnDoorLoop(ctx, st)
     local obj = ctx.obj
     local ok = true
-    if st.counts.suspect < 1 and not st.noSuspect then
+    if st.counts.suspect < 1 and not st.noSuspect and not st.vol then
         local armed = st.response == 'fight'
         local point = PointList(ctx.location, obj.suspect)[1]
         if not point then
@@ -1169,8 +1179,8 @@ local DOOR_RESPONSE = {
 }
 
 local function SpawnDoor(ctx, st)
-    if st.spawning or st.stopped then return false end
-    if not st.response then
+    if st.spawning or st.stopped or st.vol == 'void' then return false end
+    if not st.response and not st.vol then
         if ctx.obj.demeanour ~= nil then
             -- the door suspect's demeanour decides the response (a hostile one is armed)
             local fight = ctx.obj.demeanour == 'hostile' or ctx.obj.demeanour == 'rolled'
@@ -1327,24 +1337,83 @@ local function BagCuffed(p)
     return CP.Npc.getState and CP.Npc.getState(p.netId) == 'cuffed'
 end
 
+-- ============================================================================
+--                    THE VOLUNTEER AT THE DOOR (V23, §7.3)
+-- ============================================================================
+
+-- The wanted person of door mode is the run's volunteer slot: a volunteer runner who waits at the suspect point.
+-- Scatter mode and a location with no suspect point offer none (CP.Volunteers.slotOf reads this).
+local function VolunteerSlot(obj, mission, location)
+    if type(obj) ~= 'table' or type(location) ~= 'table' then return nil end
+    if (obj.mode or 'door') ~= 'door' then return nil end
+    local p = PointList(location, obj.suspect or 'suspect')[1]
+    if not p then return nil end
+    local x, y, z = U.xyz(p)
+    return { role = 'runner', meet = { x = x, y = y, z = z } }
+end
+
+-- Who plays the wanted person now (ctx.volunteer(), CP.Volunteers.matchView): 'wait' while volunteers are asked,
+-- 'real' while one who said yes plays him, 'void' while the run ends for want of one, nil = the NPC (no match, the
+-- NPC took over, scatter mode).
+local function VolunteerMode(ctx)
+    if ctx.obj.mode ~= 'door' or type(ctx.volunteer) ~= 'function' then return nil end
+    local v = ctx.volunteer()
+    if type(v) ~= 'table' then return nil end
+    if v.phase == 'asking' then return 'wait' end
+    if v.phase == 'void' then return 'void' end
+    if v.real == true then return 'real' end
+    return nil
+end
+
+-- The volunteer's case state, from CP.Opponents' server-only facts (never his position): done once he is detained
+-- with a share above 0 or booked. A catch while he was AFK (share 0) never counts: CP.Volunteers voids it
+-- (Config.Volunteers.afkCatchVoids, shipped true); with that off it counts like any detain. Lost = he got away.
+local function VolunteerFacts(ctx, st)
+    st.volDone, st.volLost = false, false
+    if st.vol ~= 'real' or not (CP.Opponents and CP.Opponents.view) then return end
+    local view = CP.Opponents.view(ctx.run)
+    if type(view) ~= 'table' or (view.index and ctx.index and view.index ~= ctx.index) then return end
+    local afkVoids = (Config.Volunteers or {}).afkCatchVoids ~= false
+    for _, cid in ipairs(view.order or {}) do
+        local r = view.suspects[cid]
+        if r and (r.state == 'detained' or r.state == 'booked') then
+            if not (afkVoids and tonumber(r.share) == 0) then st.volDone = true end
+        elseif r and r.state == 'lost' then
+            st.volLost = true
+        end
+    end
+end
+
+local function Volunteer(ctx, st)
+    local vol = VolunteerMode(ctx)
+    if vol ~= st.vol then
+        st.vol = vol
+        st.dirty = true
+    end
+    VolunteerFacts(ctx, st)
+end
+
 local function Totals(ctx, st)
     local total, done = 0, 0
     for _, p in pairs(st.peds) do
         total = total + 1
         if Neutralised(p) then done = done + 1 end
     end
+    if st.volDone then done = done + 1 end
     local want = st.mode == 'scatter' and InmateTarget(ctx) or ((st.noSuspect and 0 or 1) + AssocTarget(ctx))
     return done, math.max(total, want)
 end
 
 local function AllSpawned(ctx, st)
     if st.mode == 'scatter' then return st.counts.inmate >= InmateTarget(ctx) end
-    return (st.counts.suspect >= 1 or st.noSuspect == true) and st.counts.associate >= AssocTarget(ctx)
+    local suspect = st.counts.suspect >= 1 or st.noSuspect == true or st.vol == 'real'
+    return suspect and st.counts.associate >= AssocTarget(ctx)
 end
 
 local function TryComplete(ctx, st)
     if st.completed or st.failed or st.stopped then return end
     if st.mode == 'door' and not st.knocked then return end
+    if st.vol == 'wait' or st.vol == 'void' or (st.vol == 'real' and not st.volDone) then return end
     if not AllSpawned(ctx, st) then return end
     for _, p in pairs(st.peds) do
         if not Done(p) then return end
@@ -1354,6 +1423,7 @@ local function TryComplete(ctx, st)
     for _, p in pairs(st.peds) do
         if p.state == 'cuffed' then arrested = arrested + 1 end
     end
+    if st.volDone then arrested = arrested + 1 end
     if ctx.complete({ neutralised = done, total = total, arrested = arrested }) ~= false then
         st.completed = true
     end
@@ -1463,6 +1533,8 @@ local function UpdateHud(ctx, st)
         text = CP.L('block.flee_arrest.escaping', { seconds = st.escaping })
     elseif st.mode == 'door' and not st.knocked then
         text = CP.L('block.flee_arrest.detail_knock')
+    elseif st.mode == 'door' and st.vol == 'wait' then
+        text = CP.L('block.flee_arrest.detail_waiting')
     elseif st.mode == 'door' then
         text = CP.L('block.flee_arrest.detail_door', { done = done, total = total })
     else
@@ -1522,7 +1594,13 @@ local function OnEvent(ctx, src, ev)
     if type(ev) ~= 'table' then return false, 'bad_event' end
     local t = ev.type
     local ok, why
-    if t == 'knock_start' or t == 'knock' then
+    if type(t) == 'string' and t:sub(1, 4) == 'opp_' then
+        -- CP.Opponents' server-only facts about the volunteer (server:objective refuses them from a client)
+        if st.mode ~= 'door' then return false, 'wrong_mode' end
+        Volunteer(ctx, st)
+        if st.volLost then Fail(ctx, st, 'block.flee_arrest.fail_escaped') return true end
+        ok = true
+    elseif t == 'knock_start' or t == 'knock' then
         ok, why = KnockEvent(ctx, st, src, t)
     else
         local netId = tonumber(ev.netId)
@@ -1622,6 +1700,7 @@ end
 local function Start(ctx)
     local st = StateOf(ctx)
     st.stopped = nil
+    Volunteer(ctx, st)
     Spawn(ctx, st)
     st.dirty = true
     Flush(ctx, st)
@@ -1631,6 +1710,8 @@ local function Tick(ctx, dt)
     local st = StateOf(ctx)
     if st.stopped or st.failed then return end
     if not st.completed then
+        Volunteer(ctx, st)
+        if st.volLost then return Fail(ctx, st, 'block.flee_arrest.fail_escaped') end
         Spawn(ctx, st)
         if st.failed then return end
         Watch(ctx, st, tonumber(dt) or 1)
@@ -1700,7 +1781,7 @@ local function Checklist(ctx)
             },
         }
     end
-    local suspectDone, assocDone = st.noSuspect == true, 0
+    local suspectDone, assocDone = st.noSuspect == true or st.volDone == true, 0
     for _, p in pairs(st.peds) do
         if p.role == 'suspect' and Neutralised(p) then suspectDone = true end
         if p.role == 'associate' and Neutralised(p) then assocDone = assocDone + 1 end
@@ -1761,7 +1842,12 @@ end
 -- objective's anchor (the first inmate point, or the door).
 local function Marker(ctx)
     local st = StateOf(ctx)
-    if st.mode == 'door' and not st.knocked then
+    local out = {}
+    for _, p in pairs(st.peds) do
+        if not Neutralised(p) and PedCoords(p) then out[#out + 1] = p end
+    end
+    -- the door stays the pointer while a volunteer may play the wanted person: never where a real player is (V23)
+    if st.mode == 'door' and (not st.knocked or (st.vol and #out == 0)) then
         local door = PointList(ctx.location, ctx.obj.door)[1]
         if not door then return nil end
         return {
@@ -1771,10 +1857,6 @@ local function Marker(ctx)
             coords = door,
             label = CP.Lt('block.flee_arrest.blip_door'),
         }
-    end
-    local out = {}
-    for _, p in pairs(st.peds) do
-        if not Neutralised(p) and PedCoords(p) then out[#out + 1] = p end
     end
     if #out == 0 and not AllSpawned(ctx, st) then return nil end
     table.sort(out, function(a, b) return a.netId < b.netId end)
@@ -1816,4 +1898,5 @@ CP.Blocks.register(BLOCK, {
     marker = Marker,
     restart = Restart,
     stop = Stop,
+    volunteerSlot = VolunteerSlot,
 })

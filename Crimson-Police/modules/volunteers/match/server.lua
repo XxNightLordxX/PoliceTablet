@@ -9,7 +9,7 @@ local TAG = 'volunteers'
 local TICK_MS = 1000                                   -- the asking, travel and engagement check, only while a run has a match
 local LATE_MS = 2000                                   -- an answer this late after the pop-up closed still counts (lag)
 local CANCEL_PHASES = { travel = true, in_position = true, engaged = true }
-local STRIKE_WHY = { no_show = true, cancelled = true, left = true }
+local STRIKE_WHY = { no_show = true, cancelled = true, left = true, afk = true }
 local NOTE_WHY = { no_show = true, cancelled = true }  -- a leave already has CP.Opponents' rs_combat_log note
 -- What a volunteer case takes part in -> its Config.Volunteers switch (each shipped false)
 local COUNTS = {
@@ -133,7 +133,8 @@ local function EndRun(m)
 end
 
 -- Nobody (else) plays the suspect. players_only always ends the run; players_when_available gives the NPC back, but
--- after a yes only while Config.Volunteers.onVoid is 'npc' (shipped) and no officer engaged him yet.
+-- after a yes only while Config.Volunteers.onVoid is 'npc' (shipped) and no officer engaged him yet (an AFK catch
+-- counts as engaged).
 local function NoVolunteer(m, afterYes)
     local npc = m.mode ~= 'players_only'
     if afterYes and (Cfg().onVoid == 'end' or m.engagedAt) then npc = false end
@@ -149,7 +150,7 @@ local function NoVolunteer(m, afterYes)
     EndRun(m)
 end
 
--- The volunteer who said yes drops out (why: no_show, cancelled, left, void). A no-show, a cancel after
+-- The volunteer who said yes drops out (why: no_show, cancelled, left, void, afk: caught while AFK, V23). A no-show, a cancel after
 -- cancelGraceSeconds and a leave are strikes. His suspect counts for nobody.
 local function Voided(m, why, strike)
     if m.phase == 'void' or m.phase == 'npc' or m.phase == 'over' then return end
@@ -161,6 +162,8 @@ local function Voided(m, why, strike)
     if NOTE_WHY[why] then
         Line(m, why == 'no_show' and 'no_show' or 'volunteer_cancel')
         Opp('note', m.run, 'rs_volunteer_dropout', ('%s: %s'):format(rec and rec.label or '?', why), m.cid)
+    elseif why == 'afk' then
+        Line(m, 'volunteer_afk')  -- CP.Opponents' proof already wrote the rs_afk_catch note
     end
     if strike and STRIKE_WHY[why] and V.strike then V.strike(m.cid, why) end
     Note(m.src, 'warning', 'volunteer.case.' .. why)
@@ -332,6 +335,12 @@ local function Watch(m, now)
         return Voided(m, why, why == 'left')
     end
     if rec.src then m.src = rec.src end
+    -- an AFK catch (share 0) is a void (Config.Volunteers.afkCatchVoids, shipped true): never a catch that counts
+    local caught = rec.state == 'detained' or rec.state == 'booked'
+    if caught and tonumber(rec.share) == 0 and Cfg().afkCatchVoids ~= false then
+        m.engagedAt = m.engagedAt or GetGameTimer()  -- officers had him in cuffs: the NPC never takes over now
+        return Voided(m, 'afk', true)
+    end
     if m.phase ~= 'engaged' and rec.contactAt then return Engage(m) end
     if m.phase == 'travel' then
         local here = rec.src and Coords(rec.src)

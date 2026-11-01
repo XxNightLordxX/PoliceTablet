@@ -213,5 +213,6 @@
   "opp.line.engaged": "Officers reached suspect {label}: the case is engaged",
   "opp.line.no_show": "Suspect {label} did not reach the starting point in time (no-show)",
   "opp.line.volunteer_cancel": "Suspect {label} cancelled the case",
-  "opp.line.volunteer_npc": "Suspect {label} dropped out: the NPC plays the suspect"
+  "opp.line.volunteer_npc": "Suspect {label} dropped out: the NPC plays the suspect",
+  "opp.line.volunteer_afk": "Suspect {label} was caught while AFK: his part is void"
 }

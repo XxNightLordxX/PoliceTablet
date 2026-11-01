@@ -600,6 +600,50 @@ do
 end
 
 -- ============================================================================
+--                 AN AFK CATCH IS A VOID (V23, afkCatchVoids)
+-- ============================================================================
+
+do
+    H.eq(Config.Volunteers.afkCatchVoids, true, 'an AFK catch voids his part (ships true)')
+    H.eq(Config.Volunteers.doorAssociates, false, 'no armed associate while a volunteer plays the door (ships false)')
+    for _, v in ipairs(V.list()) do V.stop(v.src) end
+    Civilian(20, 'VMA00020')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(20, RUNNER), 'a fresh volunteer joins')
+    local function Caught(share)
+        Reset()
+        local run = NewRun()
+        Answer(20, LastAsk(20), true)
+        H.step(0)
+        recs.VMA00020.contactAt = H.clockMs
+        H.advance(1000, 1000)
+        recs.VMA00020.state, recs.VMA00020.share = 'detained', share
+        H.advance(1000, 1000)
+        H.step(0)
+        return run
+    end
+    local run = Caught(0)
+    H.eq(V.strikes('VMA00020'), 1, 'caught while AFK: a strike')
+    H.eq(states[1] and states[1].state, 'void', 'his suspect counts for nobody')
+    H.eq(states[1] and states[1].why, 'volunteer_afk', 'why: afk')
+    H.ok(Has(lines, 'volunteer_afk'), 'staff timeline: the AFK catch')
+    H.eq(LastNote(20), 'volunteer.case.afk', 'he is told')
+    H.eq(ended[1] and ended[1].reason, 'cancelled', 'officers had reached him: the run ends as voidRun says')
+    H.eq(run.state, 'ended', 'the run is over')
+
+    Config.Volunteers.afkCatchVoids = false
+    run = Caught(0)
+    H.eq(#states, 0, 'afkCatchVoids false: the AFK catch stands')
+    H.eq(V.matchView(run, 2).phase, 'engaged', 'and the case goes on')
+    Finish(run, 'completed', 'completed')
+    Config.Volunteers.afkCatchVoids = true
+
+    run = Caught(1)
+    H.eq(#states, 0, 'a catch with a share is never a void')
+    Finish(run, 'completed', 'completed')
+end
+
+-- ============================================================================
 --                     ctx.volunteer() IN THE ENGINE'S CTX
 -- ============================================================================
 

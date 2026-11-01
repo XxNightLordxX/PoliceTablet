@@ -288,6 +288,11 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     the 'hostile' state (fight response, associates after the knock, an armed inmate within
     fireWithin) puts it in CRIMSONPOLICE_HOSTILE through CP.Npc's combat task, so nobody opens fire
     before the knock or from beyond fireWithin.
+    Volunteer slot (V23, ARCHITECTURE 7.3): door mode offers volunteerSlot { role = 'runner', meet = the
+    suspect point }. ctx.volunteer() decides st.vol: 'wait' (asking: nobody at the door), 'real' (a volunteer
+    plays him: no NPC suspect, done when CP.Opponents.view has him detained with a share or booked, lost fails),
+    'void' (nothing spawns), nil (the NPC as before). No associate while st.vol is set unless
+    Config.Volunteers.doorAssociates; the pointer stays the door. Voids are CP.Volunteers' (onVoid).
     validate: spawn points, the door marker and every fleeTo / route waypoint must lie outside
     Config.Builder.noBuildZones for every mission; custom missions also get the allowed lists, the
     associate spawn-point count and the minimum distance of spawn points from the start, and:
