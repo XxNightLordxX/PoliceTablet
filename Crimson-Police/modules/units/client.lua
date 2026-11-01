@@ -72,6 +72,18 @@ RegisterNetEvent(CP.e('client:readyCheck'), function(data)
     if Units.autoReadyNow() then TriggerServerEvent(CP.e('server:unitReady'), { accepted = true, auto = true }) end
     if not (CP.Tablet and CP.Tablet.notify) then return end
     local vars = { type = label, leader = leader, seconds = seconds, twists = table.concat(names, ', ') }
+    -- a live case (V16): the LIVE line names the reported crime and its suspect count, as a red toast
+    local live = type(data.live) == 'table' and data.live or nil
+    if live then
+        vars.title = type(live.title) == 'string' and live.title:sub(1, LABEL_MAX) or label
+        vars.street = type(live.street) == 'string' and live.street:sub(1, LABEL_MAX) or '-'
+        vars.n = math.max(1, math.floor(tonumber(live.suspects) or 1))
+        CP.Tablet.notify('error', CP.L('unit.ready.toast_live', vars), {
+            title = CP.L('unit.ready.toast_live_title'),
+            duration = seconds * 1000,
+        })
+        return
+    end
     CP.Tablet.notify('info', CP.L(#names > 0 and 'unit.ready.toast_twists' or 'unit.ready.toast', vars), {
         title = CP.L('unit.ready.toast_title', { type = label }),
         duration = seconds * 1000,

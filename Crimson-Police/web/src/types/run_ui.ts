@@ -98,6 +98,28 @@ export interface ActiveMissionData extends ActiveMissionView {
     // The Objective GPS button is on (Config.Markers.objectiveGps; the officer's game refuses it while he drives to the
     // start or Radio Silence hides the objective's line).
     objectiveGps?: boolean;
+    // A live case's card (CP.LiveCrime.caseView, Config.LiveCrime.caseCard, step V16); absent for any other run.
+    live?: LiveCaseView | null;
+}
+
+// The live case card on Active Mission: the crime, the suspect count, the step (the same for every suspect) and
+// when the "last reported" points were taken, by label. Never a suspect's state or a position.
+export interface LiveCaseView {
+    title?: string | null;
+    street?: string | null;
+    suspects: number;
+    // This officer is the run host (End case is in his radial menu).
+    host?: boolean;
+    phase: 'respond' | 'secure' | 'detain';
+    secureS?: number;
+    secureNeed?: number;
+    // The labels of the last-reported points (free suspects at the last report).
+    reported?: string[];
+    // Seconds since the last report (absent = none yet) and to the next one (absent = none coming).
+    reportedAgoS?: number | null;
+    nextReportS?: number | null;
+    // false = Config.LiveCrime.lastReportedEvery is 0 (no last-reported points on this server).
+    reportsOn?: boolean;
 }
 
 // ============================================================================

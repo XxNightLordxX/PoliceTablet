@@ -2878,6 +2878,14 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   `live_scene`. The unit leader ends it with **End case** in the radial menu; the time limit ends it as completed,
   and it ends by itself `Config.LiveCrime.deadCaseSeconds` (30 s) after no suspect is left to work. The block
   (`live_response`) can't be used in a mission file or the Mission Builder.
+  The officers' tablet (step V16, `Config.LiveCrime.caseCard = true` and `resultOutcomes = true`, shipped behind
+  `enabled`): with `Config.LiveCrime.readyCheck = true` the unit's ready check carries a red **LIVE case, real
+  players** line with the alert, the street and the suspect count. Active Mission shows a red **Live case** card: the
+  three steps (the same for every suspect), the suspect count, when the last-reported map points were taken and by
+  which suspect labels ("Last reported 40s ago: Suspect A"), when the next report comes, and for the leader where
+  **End case** is. It never shows a suspect's state or a live position. The result card lists each suspect's outcome
+  by label once the case is over (Detained, Booked, Got away, Left the city, Did not count, Stopped outside the
+  case); an officer who left early sees that the case was still running.
   Live scoring (step V13): a live case earns only those lines (`Config.LiveCrime.linesOnly = true`; `false` adds the
   mission type's base points and the end-of-run lines like a mission); the result card says **Live case: the lines
   below are the points** instead of Base points. Its tier (the points and cash multiplier of `Config.Scaling`) comes

@@ -5557,6 +5557,15 @@ it out of each of those until the owner turns them on. Every live-case detain is
 Rank by tab. Plain Lua with stubs (no SQL); the 014 column is checked by foundation_spec.
 ```
 
+## tests/live_tablet_spec.lua
+
+```text
+The officers' tablet for a live case (step V16): the LIVE line of the ready check (CP.LiveCrime.readyLine), the
+Active Mission case card (CP.LiveCrime.caseView through CP.Runs.view, the live_response block's caseView) and the
+outcomes on the result card (CP.LiveCrime.resultView in the RunResult). Labels and counts only: never a citizenid,
+a server id, a position or one suspect's state while the case runs. Plain Lua with stubs.
+```
+
 ## tests/memsql_spec.lua
 
 ```text

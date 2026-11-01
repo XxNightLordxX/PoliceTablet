@@ -16,7 +16,7 @@ import {
 } from '../shared/format';
 import { t, tOr } from '../shared/i18n';
 import { useOption } from '../shared/options';
-import type { RunResult } from '../shared/types';
+import type { RunLiveResult, RunResult } from '../shared/types';
 import type { RunItem, RunMissionCall, RunProgress } from '../types/run_ui';
 import { DecisionsBlock, PeopleBlock } from './Debrief';
 
@@ -102,6 +102,31 @@ function MissionCallBlock({ call }: { call: RunMissionCall }) {
                 value={call.rapid ? t('result.rapid') : ''}
                 tone={call.rapid ? 'plus' : undefined}
             />
+        </div>
+    );
+}
+
+// A live case (step V16): each suspect's outcome by label, or a note when this officer left while it still ran.
+const LIVE_TONE: Record<string, 'plus' | 'minus' | undefined> = { detained: 'plus', booked: 'plus', got_away: 'minus' };
+
+function LiveBlock({ live }: { live: RunLiveResult }) {
+    const outcomes = Array.isArray(live.outcomes) ? live.outcomes : [];
+    if (!live.open && outcomes.length === 0) return null;
+    return (
+        <div className="cp-result__block">
+            <div className="cp-result__block-head">
+                <Icon name="shield" size={14} />
+                <span>{t('result.live.title')}</span>
+            </div>
+            {live.open ? <Line label={t('result.live.open')} value="" note /> : null}
+            {outcomes.map(o => (
+                <Line
+                    key={o.label}
+                    label={t('run.live.suspect_label', { label: o.label })}
+                    value={tOr(`result.live.outcome.${o.outcome}`, 'result.live.outcome.got_away')}
+                    tone={LIVE_TONE[o.outcome]}
+                />
+            ))}
         </div>
     );
 }
@@ -286,6 +311,7 @@ export function ResultScreen({ result, onDismiss }: { result: RunResult; onDismi
             </div>
 
             {result.progress ? <LevelBlock progress={result.progress} /> : null}
+            {result.live ? <LiveBlock live={result.live} /> : null}
             {result.missionCall ? <MissionCallBlock call={result.missionCall} /> : null}
             {result.decisions ? <DecisionsBlock decisions={result.decisions} /> : null}
             {result.people ? <PeopleBlock people={result.people} /> : null}

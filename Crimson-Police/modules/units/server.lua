@@ -207,6 +207,7 @@ local function CheckView(check, viewer, now)
         waiting = waiting,
         waitingForMe = viewer ~= nil and check.answers[viewer] == nil and IndexOf(check.members, viewer) ~= nil,
         autoForMe = viewer ~= nil and check.answers[viewer] == 'auto',  -- Auto-Ready answered: Not ready still shows
+        live = check.live,
     }
 end
 
@@ -542,7 +543,8 @@ end
 -- onCancel(reasonKey, srcs) on a decline, a timeout, or a member who left, went off duty, took a real call
 -- or entered the arena. extra (optional): { twists = { { key, label } } } the leader chose, shown to the members;
 -- crossDepartment = true: a Cross-Department join, where Auto-Ready never answers.
--- timeout = seconds to answer (else Config.Units.readyTimeout).
+-- timeout = seconds to answer (else Config.Units.readyTimeout). live = { title, street, suspects }: a live case's
+-- LIVE line (CP.LiveCrime.readyLine, V16).
 -- Returns false when no check is needed (the draw follows at once).
 function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
     local unit = Resolve(ref)
@@ -569,6 +571,8 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
         twists = {},
         -- a Cross-Department join never takes an automatic Ready (Auto-Ready, step O13)
         noAuto = type(extra) == 'table' and extra.crossDepartment == true,
+        -- a live case's ready check (V16): { title, street, suspects }, shown as the LIVE line
+        live = type(extra) == 'table' and type(extra.live) == 'table' and extra.live or nil,
     }
     for _, t in ipairs(type(extra) == 'table' and type(extra.twists) == 'table' and extra.twists or {}) do
         if type(t) == 'table' and type(t.key) == 'string' and type(t.label) == 'string' then
@@ -585,6 +589,7 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
                 expiresIn = timeout,
                 leaderName = leaderInfo and leaderInfo.name or '?',
                 twists = check.twists,
+                live = check.live,
             })
         end
     end

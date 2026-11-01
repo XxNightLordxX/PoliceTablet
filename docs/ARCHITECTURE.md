@@ -3320,6 +3320,25 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
   officers are told, `participant:joined` fires (CP.LiveCrime: the timeline line `officer_joined`, the
   `rs_linked_accounts` flag as at the open) and the run view is pushed. The timeline also keeps `join_offered` and
   `join_declined`. Pair rows at the end include him (he is in `run.participants`).
+- **The officers' tablet (V16).** `Config.LiveCrime.caseCard` and `resultOutcomes` (both shipped true, behind
+  `enabled`). Labels and counts only: never a citizenid, a server id, a position or, while the case runs, one
+  suspect's state (the steps are the same for every suspect, like the HUD).
+  - Ready check: with `readyCheck = true`, CP.Draw passes `extra.live = LC.readyLine(ctx.live)` (`{ title, street,
+    suspects }`, nil with `caseCard = false` or a crime that is gone) to `Units.readyCheck`; it is kept in the check
+    and sent in `client:readyCheck` and the ReadyCheckView (`live`). The banner shows the red LIVE line ("LIVE case,
+    real players: <title>, <street>. Suspects: n") and the member's game a red toast (`unit.ready.toast_live`).
+  - Active Mission: `Runs.view` adds `live = LC.caseView(run, src)` (`LiveCaseView`, web/src/types/run_ui.ts):
+    `{ title, street, suspects (LC.crewSize), host, phase }`, and while the live_response objective runs the block's
+    `caseView(ctx)` (§7.3): `phase`, `secureS`, `secureNeed`, `reported` (labels of the last-reported points),
+    `reportedAgoS`, `nextReportS`, `reportsOn`. The card (`LiveCaseCard`) shows the three steps, the suspect count,
+    "Last reported 40s ago: Suspect A" and when the next report comes, a fairness line and, for the host, where End
+    case is. Nothing on it changes between two reports or with one suspect's state.
+  - Result card: `Settle` adds `rr.live = LC.resultView(run)` (stored in the row's breakdown like the rest):
+    `{ title, street }`, plus `open = true` for an officer who left while the case still ran, or, once the run has
+    ended, `outcomes = { { label, outcome } }` sorted by label (`detained`, `booked`, `got_away`, `left`, `void`,
+    `stopped`). The run has ended before the participants are settled, so `LC.resultView` closes the case
+    (`Opp.close` is idempotent: the `run:ended` hook gets the same outcomes from the closed list). With
+    `resultOutcomes = false` only the title and street are sent and the card shows no live part.
 - **Scoring (V13).** A run is live when it carries `run.live` (V14) or `run.realSuspect = 'live'`; the rules read
   the run, never `enabled`, so a case that runs when the owner turns live crimes off ends by the rules it started
   with. CP.LiveCrime answers, and CP.Scoring, CP.Cash, CP.Rewards, CP.Goals and CP.Challenge ask:
@@ -4044,6 +4063,9 @@ Config.Blocks entry, so builder:config never lists it). Its settings are Config.
   coordinate target per suspect who was free, online and outside an instance at the last report (`rec.lastCoords`,
   key `last:<label>`, look `searchArea`, "Suspect A: last reported"), refreshed every `lastReportedEvery` s (60; 0 =
   none), never in between, so a suspect is never followed live.
+- Case card (V16): `caseView(ctx) -> { phase, secureS, secureNeed, reported = { label... }, reportedAgoS,
+  nextReportS, reportsOn }` for the officers' Active Mission card (CP.LiveCrime.caseView); `st.reportedAt` is the
+  os.time() of the last report. Labels and times only, never a position or one suspect's state.
 - Client half: only "End case" in the ox_lib radial menu (`lib.addRadialItem`, id `crimson-police:live_end_case`) for
   the run host while the objective runs, with an alert dialog; removed at stop, on a host change and at resource stop.
 
@@ -4085,7 +4107,7 @@ Config.Blocks entry, so builder:config never lists it). Its settings are Config.
 | `client:objective` (new action) | runId, index, `{ action = 'adopt', op = 'adopt', netId, obj, from }`: the host moves the AI of netId to objective obj's client half | runs |
 | `client:missionCall` | `{ id, code, typeLabel, priority, areaLabel, paged?, live?, title?, street? }` (live: a LIVE call, V11) (toast and tone; the client drops it when muted, on a run or in the arena) | missioncalls |
 | `client:liveJoinOffer` | `{ runId, token, title, street, seconds }` (V15: the yes/no pop-up to join a live case; one at a time, closed after `seconds`) | livecrime |
-| `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName, twists = { { key, label } } }` or nil to clear | units |
+| `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName, twists = { { key, label } }, live? = { title, street, suspects } }` (live: a live case's LIVE line, V16) or nil to clear | units |
 | `client:contactAct` | `{ runId, netId, behaviour, args, seconds }` to the run host only, when the behaviour starts | custody |
 | `client:contactConfirm` | `{ netId, choice, factKey }`: open the tablet with the case-fail confirm | custody |
 | `client:serviceVehicle` | `{ runId, id, op = 'drive'|'load'|'leave', kind, veh, driver, dest, target, away }` to the driving client | custody |
@@ -4613,7 +4635,7 @@ OperationView additions), `types/rewards.ts` (RewardRow, RewardsLocker, AdminRew
 (TabletAccessView), `types/settings.ts` (SettingView, SettingsData, SettingsReply, SettingsHistory, MissionSwitchView) and
 `types/run_ui.ts` (DecisionEntry, DecisionFact, DebriefPerson, RunProgress, RunStats,
 RunMissionCall, RunItem and the
-ActiveMissionView extras intel, missionCall and contact). BoardData gains `callsOpen` and daily locks; HomeData
+ActiveMissionView extras intel, missionCall, contact and live (LiveCaseView, V16)). BoardData gains `callsOpen` and daily locks; HomeData
 gains `level` (LevelInfo), `missionsToday` and `extras` (callsOpen, commendations, news, rewardsWaiting).
 
 ### 9.5 Supervisor / admin shapes (owners define the rest in their module header comment)
@@ -4725,7 +4747,9 @@ interface RunResult { runId: string; missionLabel: string; missionType: string;
   flagged: null | { reason: string };
   // parity-plus sections, each shown only when present (older rows lack them)
   decisions?: DecisionEntry[]; people?: DebriefPerson[] | null; progress?: RunProgress | null; stats?: RunStats;
-  missionCall?: RunMissionCall | null; items?: RunItem[] }
+  missionCall?: RunMissionCall | null; items?: RunItem[];
+  live?: { title?: string; street?: string; open?: boolean; outcomes?: { label: string; outcome: string }[] } | null }
+// live (V16): a live case, each suspect's outcome by label once it is over (§5.46 "The officers' tablet")
 // DecisionEntry.factLog?: { key, text, atS }[] (the facts the decider had); DebriefPerson = { contact, demeanour,
 // did: string[] } (web/src/types/run_ui.ts); the result card, the Profile breakdown and the dispute reviews render
 // both through web/src/hud/Debrief.tsx

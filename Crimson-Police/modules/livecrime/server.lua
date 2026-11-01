@@ -569,6 +569,86 @@ function LC.liveOf(crime)
     }
 end
 
+-- ============================================================================
+--                THE OFFICERS' TABLET (V16, ARCHITECTURE 5.46)
+-- ============================================================================
+-- What the officers' screens show of a live case: the LIVE line of the ready check, the Active Mission case card
+-- and the outcomes on the result card. Labels and counts only: never a citizenid, a server id, a position or (while
+-- the case runs) one suspect's state. Config.LiveCrime.caseCard and resultOutcomes (both shipped true).
+
+local OUTCOMES = { detained = true, booked = true, got_away = true, left = true, void = true, stopped = true }
+
+local function Text(v, max)
+    if type(v) ~= 'string' or v == '' then return nil end
+    return v:sub(1, max)
+end
+
+-- The LIVE line of a unit's ready check (CP.Draw, a live accept with Config.LiveCrime.readyCheck): the alert title,
+-- the street and the suspect count, or nil (caseCard off, or the crime is gone).
+function LC.readyLine(live)
+    if Cfg().caseCard == false or type(live) ~= 'table' then return nil end
+    local crime = LC.get(live.crimeKey)
+    if not crime then return nil end
+    return { title = Text(crime.title, 64), street = Text(crime.street, 100), suspects = CP.U.count(crime.suspects) }
+end
+
+-- The Active Mission case card of a live run for one officer, or nil (not live, caseCard off). The steps come from
+-- the live_response block's own caseView (the same phase as the HUD); host = this officer can end the case.
+function LC.caseView(run, src)
+    if not LC.isLive(run) or Cfg().caseCard == false then return nil end
+    local live = type(run.live) == 'table' and run.live or {}
+    local out = {
+        title = Text(live.title, 64),
+        street = Text(live.street, 100),
+        suspects = LC.crewSize(run),
+        host = src ~= nil and run.host == src,
+        phase = 'respond',
+    }
+    if run.state ~= 'in_progress' then return out end
+    local i = run.objectiveIndex
+    local o = type(run.objectives) == 'table' and run.objectives[i] or nil
+    local impl = CP.Blocks and CP.Blocks.get and CP.Blocks.get('live_response')
+    if not (o and o.status == 'active' and impl and type(impl.caseView) == 'function') then return out end
+    if not (CP.Runs and CP.Runs.ctx) then return out end
+    local ctx = CP.Runs.ctx(run, i)
+    if not (ctx and type(ctx.obj) == 'table' and ctx.obj.block == 'live_response') then return out end
+    local ok, v = pcall(impl.caseView, ctx)
+    if not ok or type(v) ~= 'table' then
+        WarnOnce('caseView', 'live_response caseView failed: %s', tostring(v))
+        return out
+    end
+    for k, val in pairs(v) do out[k] = val end
+    return out
+end
+
+-- The outcomes on one officer's result card (RunResult.live), or nil (not live). Once the run has ended, the case
+-- is closed here (CP.Opponents.close answers the same outcomes again to the run:ended hook) and each suspect's
+-- outcome is listed by label; an officer who left a case that still runs gets open = true and no outcome.
+function LC.resultView(run)
+    if not LC.isLive(run) then return nil end
+    local live = type(run.live) == 'table' and run.live or {}
+    local out = { title = Text(live.title, 64), street = Text(live.street, 100) }
+    if Cfg().resultOutcomes == false then return out end
+    if run.state ~= 'ended' then
+        out.open = true
+        return out
+    end
+    local outcomes, case = Opp('close', run)
+    if type(outcomes) ~= 'table' or type(case) ~= 'table' then return out end
+    local list = {}
+    for _, cid in ipairs(case.order or {}) do
+        local rec = case.suspects and case.suspects[cid] or {}
+        local o = outcomes[cid]
+        list[#list + 1] = {
+            label = Text(rec.label, 4) or '?',
+            outcome = OUTCOMES[o] and o or 'got_away',
+        }
+    end
+    table.sort(list, function(a, b) return a.label < b.label end)
+    out.outcomes = list
+    return out
+end
+
 -- An officer who shares only a connection or PC with a suspect (CP.Opponents.selfBlock's flags) gets the
 -- officer-conduct flag rs_linked_accounts (his own points only): at the open, and at a late join (V15).
 local function FlagLinked(run, case, crime, src)

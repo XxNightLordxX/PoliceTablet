@@ -391,6 +391,12 @@ do
             .. 'only the unit that claimed the LIVE call works the case',
         maxOfficers = 'officers on one live case at most (the unit that claimed it counts)',
         joinOfferSeconds = 'seconds the join pop-up waits for an answer',
+        -- V16: the officers' tablet
+        caseCard = 'The officers\' tablet: true = a LIVE line on the unit\'s ready check and a case card on Active '
+            .. 'Mission (the three steps, the suspect count and when the "last reported" points were taken; never a '
+            .. 'suspect\'s state or a live position); false = the case shows like any mission',
+        resultOutcomes = 'true = the result card lists each suspect\'s outcome by label (Suspect A: booked, Suspect '
+            .. 'B: got away) once the case is over; false = no outcomes on the result card',
     }) do
         local e = S.entry('LiveCrime.' .. path) or {}
         H.eq(e.desc, desc, 'LiveCrime.' .. path .. ': its own comment')
@@ -420,6 +426,10 @@ do
     H.eq((S.check('LiveCrime.joinOfferSeconds', 5)), false, 'joinOfferSeconds stays within 10-120 s')
     H.ok((S.check('LiveCrime.joinOfferSeconds', 60)), 'joinOfferSeconds 60 is allowed')
     H.eq((S.entry('LiveCrime.backup') or {}).kind, 'boolean', 'LiveCrime.backup is an on/off setting')
+    for _, k in ipairs({ 'caseCard', 'resultOutcomes' }) do
+        H.eq((S.entry('LiveCrime.' .. k) or {}).kind, 'boolean', 'LiveCrime.' .. k .. ' is an on/off setting (V16)')
+        H.eq(Config.LiveCrime[k], true, 'LiveCrime.' .. k .. ' ships on (behind enabled = false)')
+    end
     for _, k in ipairs({ 'readyCheck', 'typeCooldown', 'duringOperation' }) do
         H.eq((S.entry('LiveCrime.' .. k) or {}).kind, 'boolean', 'LiveCrime.' .. k .. ' is an on/off setting')
     end

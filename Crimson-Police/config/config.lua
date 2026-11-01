@@ -1044,6 +1044,13 @@ Config.LiveCrime = {
     backup = true,
     maxOfficers = 6,                 -- officers on one live case at most (the unit that claimed it counts)
     joinOfferSeconds = 30,           -- seconds the join pop-up waits for an answer
+    -- The officers' tablet: true = a LIVE line on the unit's ready check and a case card on Active Mission (the
+    -- three steps, the suspect count and when the "last reported" points were taken; never a suspect's state or a
+    -- live position); false = the case shows like any mission
+    caseCard = true,
+    -- true = the result card lists each suspect's outcome by label (Suspect A: booked, Suspect B: got away) once the
+    -- case is over; false = no outcomes on the result card
+    resultOutcomes = true,
     -- The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and book the
     -- suspects. Metres around the reported place that count as being at the scene
     sceneRadius = 75.0,

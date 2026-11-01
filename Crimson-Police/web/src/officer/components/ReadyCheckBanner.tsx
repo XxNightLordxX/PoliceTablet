@@ -63,6 +63,18 @@ export function ReadyCheckBanner({ check, onAnswered }: ReadyCheckBannerProps) {
                     {current.waitingForMe && readyKey ? ` ${t('unit.ui.ready_key', { key: readyKey })}` : null}
                     {current.autoForMe ? ` ${t('unit.ui.ready_auto')}` : null}
                 </div>
+                {current.live ? (
+                    <div className="ready-check__live">
+                        <Icon name="alert" size={12} />
+                        <span>
+                            {t('unit.ui.ready_live', {
+                                title: current.live.title || current.typeLabel,
+                                street: current.live.street || '-',
+                                n: Math.max(1, Number(current.live.suspects) || 1),
+                            })}
+                        </span>
+                    </div>
+                ) : null}
                 {twistNames ? (
                     <div className="ready-check__twists">
                         <Icon name="zap" size={12} />

@@ -30,6 +30,7 @@ local function StateOf(ctx)
         st.lines = { live_detain = {}, live_book = {} }  -- [cid] = weight recorded (once per suspect)
         st.reported = {}                                 -- the last-reported points, refreshed every lastReportedEvery seconds
         st.reportAt = nil                                -- GetGameTimer() of the next refresh
+        st.reportedAt = nil                              -- os.time() of the last report (the tablet's case card)
     end
     return st
 end
@@ -132,6 +133,7 @@ end
 -- The last-reported points: each free suspect where the server saw him at the report (never followed live).
 local function Report(ctx, st)
     st.reported = {}
+    st.reportedAt = os.time()
     local case = CP.Opponents and CP.Opponents.caseOf and CP.Opponents.caseOf(ctx.run) or nil
     if not case then return end
     for _, cid in ipairs(case.order) do
@@ -168,7 +170,7 @@ local function Tick(ctx, dt)
         st.reportAt = now + every * 1000
         Report(ctx, st)
     elseif every <= 0 then
-        st.reported = {}
+        st.reported, st.reportedAt = {}, nil
     end
     -- the dead case: no suspect left to work (all booked, lost, left or void), for deadCaseSeconds
     if Workable(ctx) then
@@ -265,6 +267,29 @@ local function Marker(ctx)
     return { kind = 'targets', route = false, targets = targets }
 end
 
+-- The officers' case card (Active Mission, V16): the phase, the secure seconds and when the last-reported points were
+-- taken, with their labels only. Never a suspect's state or a position: it reads the same as the HUD and the map.
+local function CaseView(ctx)
+    local st = StateOf(ctx)
+    local need = math.max(0, math.floor(Num(Cfg().secureSeconds, 60)))
+    local labels = {}
+    for _, r in ipairs(st.reported) do labels[#labels + 1] = r.label end
+    local every = math.floor(Num(Cfg().lastReportedEvery, 60))
+    local nextS = nil
+    if every > 0 and st.phase ~= 'respond' and st.reportAt then
+        nextS = math.max(0, math.ceil((st.reportAt - GetGameTimer()) / 1000))
+    end
+    return {
+        phase = st.phase,
+        secureS = math.min(need, math.floor(st.secureS)),
+        secureNeed = need,
+        reported = labels,
+        reportedAgoS = st.reportedAt and math.max(0, os.time() - st.reportedAt) or nil,
+        nextReportS = nextS,
+        reportsOn = every > 0,
+    }
+end
+
 CP.Blocks.register(BLOCK, {
     -- only the live_crime engine mission uses it: the mission loader and the Mission Builder refuse it in a file
     engineOnly = true,
@@ -280,5 +305,6 @@ CP.Blocks.register(BLOCK, {
     presence = Presence,
     marker = Marker,
     checklist = Checklist,
+    caseView = CaseView,
     stop = function(ctx) StateOf(ctx).stopped = true end,
 })

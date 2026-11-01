@@ -436,6 +436,17 @@ export interface RunResult {
     stats?: RunStats;
     missionCall?: RunMissionCall | null;
     items?: RunItem[];
+    // A live case (step V16): each suspect's outcome by label once the case is over (Config.LiveCrime.resultOutcomes);
+    // open = this officer left while it still ran.
+    live?: RunLiveResult | null;
+}
+
+export type LiveOutcome = 'detained' | 'booked' | 'got_away' | 'left' | 'void' | 'stopped';
+export interface RunLiveResult {
+    title?: string | null;
+    street?: string | null;
+    open?: boolean;
+    outcomes?: { label: string; outcome: LiveOutcome }[];
 }
 
 // Sidebar badge counts (push topic 'nav').

@@ -55,3 +55,14 @@
     font-size: var(--cp-fs-sm);
     color: var(--cp-accent-text);
 }
+
+/* a live case's LIVE line (step V16): real players are the suspects */
+.ready-check__live {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+    font-size: var(--cp-fs-sm);
+    font-weight: 600;
+    color: var(--cp-danger);
+}

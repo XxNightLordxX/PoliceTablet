@@ -3096,6 +3096,9 @@ local function Settle(run, p, result, endReason, others)
         progress = nil,
         items = {},
     }
+    -- a live case: each suspect's outcome by label once it is over (Config.LiveCrime.resultOutcomes, V16)
+    local okLv, liveView = Call('LiveCrime', 'resultView', run)
+    if okLv and type(liveView) == 'table' then rr.live = liveView end
     rr.stats.lethal = nil   -- private: the officer's own clean-arrest rate only, never on the result screen
     if isTest then return nil, rr end
 
@@ -4609,6 +4612,9 @@ function Runs.view(run, src)
     -- The Objective GPS button (Config.Markers.objectiveGps, PLAN M10); the officer's game decides when it can set one.
     local markers = type(Config.Markers) == 'table' and Config.Markers or {}
     local objectiveGps = markers.enabled ~= false and markers.objectiveGps ~= false
+    -- a live case's card (Config.LiveCrime.caseCard, V16): steps, suspect count, last-reported time; nil otherwise
+    local okLive, liveCase = Call('LiveCrime', 'caseView', run, src)
+    if not (okLive and type(liveCase) == 'table') then liveCase = nil end
     return {
         -- Optional extras for the Active Mission screen (web/src/types/run_ui.ts): the viewer, the boss flag,
         -- the operation, the seconds left to reach the start and the area (street · zone).
@@ -4642,6 +4648,7 @@ function Runs.view(run, src)
         intel = intel,
         missionCall = mcView,
         contact = contact,
+        live = liveCase,
     }
 end
 

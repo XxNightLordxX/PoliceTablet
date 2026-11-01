@@ -38,4 +38,19 @@ H.eq(toasts[2].text, CP.L('unit.ready.toast', { type = 'Patrol', leader = 'John 
 H.fire('crimson-police:client:readyCheck', nil, nil)
 H.eq(CP.Units.pendingReadyCheck(), nil, 'nil clears the check')
 
+-- a live case's ready check (V16): a red toast that names the reported crime and the suspect count
+H.fire('crimson-police:client:readyCheck', nil, {
+    typeKey = 'tactical',
+    typeLabel = 'Tactical',
+    expiresIn = 20,
+    leaderName = 'John Doe',
+    live = { title = 'Shots at the lab', street = 'Seaview Rd', suspects = 2 },
+})
+local live = toasts[#toasts]
+H.eq(live.kind, 'error', 'a live case: the red toast')
+H.eq(live.opts.title, CP.L('unit.ready.toast_live_title'), '...titled LIVE case')
+H.ok(live.text:find('Shots at the lab, Seaview Rd', 1, true) ~= nil, '...naming the reported crime')
+H.ok(live.text:find('Suspects: 2', 1, true) ~= nil, '...and the suspect count')
+H.ok(CP.Units.pendingReadyCheck() ~= nil, 'the Ready key answers it like any check')
+
 return H

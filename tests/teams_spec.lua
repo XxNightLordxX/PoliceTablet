@@ -1497,6 +1497,25 @@ u = Unit3()
 Clear()
 H.eq(U.readyCheck(u, 'tactical', function() end, function() end), true, 'a unit of 3 gets a check')
 U._reset()
+-- a live case's ready check (V16): the prompt and the unit push carry the LIVE line (title, street, count only)
+u = Unit3()
+Clear()
+H.eq(U.readyCheck(
+    u,
+    'tactical',
+    function() end,
+    function() end,
+    { live = { title = 'Shots at the lab', street = 'Seaview Rd', suspects = 2 } }
+), true, 'a live case\'s check')
+local livePrompt = ClientEvents('client:readyCheck')[1].args[1]
+H.eq(livePrompt.live and livePrompt.live.title, 'Shots at the lab', 'the prompt carries the LIVE line')
+H.eq(livePrompt.live and livePrompt.live.suspects, 2, '...with the suspect count')
+local livePushed
+for _, p in ipairs(pushes) do
+    if p.src == 2 and p.topic == 'unit' and p.data.readyCheck then livePushed = p.data.readyCheck end
+end
+H.eq(livePushed and livePushed.live and livePushed.live.street, 'Seaview Rd', 'the unit push shows it on the banner')
+U._reset()
 u = Unit3()
 Clear()
 H.ok(StartCheck(u), 'ready check started')

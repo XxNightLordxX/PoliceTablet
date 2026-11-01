@@ -41,6 +41,7 @@ import type {
     SetGpsResult,
 } from '../../types/run_ui';
 import { ContactPanel } from '../components/ContactPanel';
+import { LiveCaseCard } from '../components/LiveCaseCard';
 import { ABANDON_ARM_MS, abandonPress } from './abandonPress';
 import { IntelLine, MissionCallLine } from '../components/RunNotices';
 import './MissionBoard.css';
@@ -837,6 +838,8 @@ export default function ActiveMission() {
                     </span>
                 </div>
             ) : null}
+
+            {view.live ? <LiveCaseCard live={view.live} /> : null}
 
             {view.intel ? <IntelLine intel={view.intel} /> : null}
 

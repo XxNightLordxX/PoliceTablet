@@ -121,6 +121,13 @@ local function LiveExcept(live, srcs)
     return type(set) == 'table' and set or nil
 end
 
+-- The LIVE line of the ready check (Config.LiveCrime.caseCard, V16): the alert title, street and suspect count.
+local function ReadyLine(live)
+    if not (live and CP.LiveCrime and CP.LiveCrime.readyLine) then return nil end
+    local _, line = Safe(CP.LiveCrime.readyLine, live)
+    return type(line) == 'table' and line or nil
+end
+
 -- Whether the Cross-Department lock stops this accept: always for a mission; for a live case only while
 -- Config.LiveCrime.duringOperation is false.
 local function LockStops(live)
@@ -1762,7 +1769,7 @@ local function AcceptStart(src, typeKey, opts, note)
         end
         -- the teammates see the twists their leader chose on the ready check
         local okRc, res = pcall(readyCheck, unit, typeKey, onReady, onCancel,
-            { twists = TwistLabels(ctx.twists), timeout = readySecs })
+            { twists = TwistLabels(ctx.twists), timeout = readySecs, live = ReadyLine(ctx.live) })
         if okRc and res ~= false then return true, { pending = true } end
         CP.warn(TAG, 'the ready check could not start (%s); the draw follows at once', tostring(res))
     end

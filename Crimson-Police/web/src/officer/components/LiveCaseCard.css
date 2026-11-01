@@ -1,0 +1,47 @@
+/* Officer UI · Active Mission · the live case card (step V16). Only --cp-* variables. */
+
+.live-case {
+    align-items: flex-start;
+}
+
+.live-case__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.live-case__steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin: 6px 0 4px;
+    padding: 0;
+    list-style: none;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.live-case__step {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.live-case__step.is-done {
+    color: var(--cp-success);
+}
+
+.live-case__step.is-current {
+    color: var(--cp-text);
+    font-weight: 700;
+}
+
+.live-case__secure {
+    font-weight: 400;
+    color: var(--cp-muted);
+}
+
+.live-case__fair {
+    font-style: italic;
+}
