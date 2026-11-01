@@ -4,6 +4,12 @@
 
 Config = {}
 
+-- ############################################################################
+--                               PART 1 · GENERAL
+-- Debug lines, the language, where data is saved, the tablet and its commands, the admins and the
+-- Admin UI, what supervisors and admins may do, the departments and the names admins give.
+-- ############################################################################
+
 Config.Debug = true              -- true = each module prints tagged debug lines
 Config.Locale = 'en'
 
@@ -19,8 +25,8 @@ Config.Locale = 'en'
 -- folder only matters when enabled = false: a folder inside the Crimson-Police folder (FXServer only lets
 -- a resource write inside resource folders). A full path works when it points inside the resource.
 Config.Database = {
-    enabled = false,
-    folder = 'saves',
+    enabled = false,  -- true = MySQL/MariaDB through oxmysql; false = files in the saves folder
+    folder = 'saves', -- files mode: the folder inside Crimson-Police the files are saved in
     -- Files mode: after this many milliseconds of saving, Crimson-Police lets the server run its other work for a
     -- moment before the next save (what oxmysql does in database mode); 0 = never pause (the old timing)
     saveTurnMs = 4,
@@ -35,7 +41,7 @@ Config.Database = {
 
 Config.Format = {
     currency = '$',              -- money symbol
-    currencyAfter = false,       -- true = "250 $"
+    currencyAfter = false,       -- true = the symbol goes after the amount (250 $)
 }
 
 -- ============================================================================
@@ -93,12 +99,12 @@ Config.Tablet = {
 Config.AdminAce = 'crimsonpolice.admin'     -- the admin permission; supervisors come from job grade
 Config.QboxAdmins = true                    -- true = your Qbox admins (group.admin, which holds the 'admin'
                                             -- permission) are Crimson-Police admins too; false = only AdminAce
-Config.AdminTheme = {
-    primary = '#a4161a',
-    accent = '#e5383b',
-    background = '#0b090a',
-    surface = '#161a1d',
-    text = '#f5f3f4',
+Config.AdminTheme = {          -- Admin UI colours (hex)
+    primary = '#a4161a',       -- buttons and highlights
+    accent = '#e5383b',        -- links and secondary highlights
+    background = '#0b090a',    -- the page behind the panels
+    surface = '#161a1d',       -- panels and cards
+    text = '#f5f3f4',          -- body text
 }
 Config.AdminUi = {
     -- true = the Admin UI sidebar shows the everyday screens (Home, Payouts, Missions, Live, Officers, Settings) and
@@ -132,7 +138,7 @@ Config.Permissions = {
     supervisor = {
         setTypePayout = true,     -- within Config.Payouts limits; never a type an admin has set
         launchCrossDept = true,   -- launch, start now, relaunch and cancel; also remove a joiner before the start
-        forceRecall = true,
+        forceRecall = true,       -- end one officer's run with no penalty (their department's runs only)
         reviewFlagged = true,     -- approve or void flagged runs involving their department
         handleDisputes = true,    -- disputes about flagged or voided runs in their department
         builderEdit = true,       -- create, edit, record routes and test their own missions
@@ -183,151 +189,6 @@ Config.AdminControl = {
     -- Refused mission starts the server remembers for admins (who tried, which mission, why), newest kept. Memory
     -- only: a restart empties the list.
     refusalsKept = 200,
-}
-
--- ============================================================================
---                               MISSION CONTROLS
--- ============================================================================
--- Rules a department's supervisors may change for their own department from the Supervisor UI, only inside the
--- bounds set here and only while an admin switched them on: Config.Permissions.supervisor.missionControls and the
--- control's own on. A department may have its own bounds (Config.Departments.<key>.missionControls = { <control> =
--- { on, min, max } }); they win over the ones below for it. Every change needs a reason and is in the audit log.
--- The cooldown controls are server-wide (one value for every department), outside the master switch and ship
--- on: a supervisor may change them out of the box; until one does, every cooldown stays as config.lua sets it.
--- Clearing one officer's cooldown is a cooldown control too (server-wide, ships on). Every other control ships off.
-Config.MissionControls = {
-    changeWait = 300,   -- seconds between two changes of one control in one department
-    selfExempt = true,  -- a control that relaxes a rule never applies to the supervisor who set it or a unit he is in
-    grants = {},        -- per department who may use them, e.g. { sast = { minGrade = 4 } }; {} = every supervisor
-    controls = {        -- per control: on = the admin switch, min/max = the only values a supervisor may pick
-        -- x every mission's cooldown, per mission type, for every department; min 0 = a type with no mission cooldown
-        cooldownScale = { on = true, min = 0, max = 2 },
-        -- the abandon cooldown in seconds (Limits.abandonCooldown) for every department; 0 = none
-        abandonCooldown = { on = true, min = 0, max = 900 },
-        -- false switches the no-repeat rule (Draw.avoidLast) off for every department: a mission may come up twice
-        noRepeat = { on = true },
-        -- completed missions per officer per hour (Limits.maxCompletionsHour) for every department
-        hourlyCap = { on = true, min = 1, max = 16 },
-        -- completed missions per officer per day (Limits.maxCompletionsDay) for every department; 0 = no cap
-        dailyCap = { on = true, min = 0, max = 40 },
-        -- happy hour minutes: no mission cooldowns for anyone on the server (abandon cooldown and caps stay)
-        happyHour = { on = true, min = 5, max = 30 },
-        -- Department Report: a supervisor clears one officer's mission or type cooldown (any department, never his
-        -- own character, never while the officer is on a run); each officer still at most
-        -- AdminControl.cooldownClearsPerDay clears a day by all staff together
-        clearCooldown = { on = true },
-        -- Live Missions: a supervisor adds min to max minutes per click to a running mission of his department
-        -- (never his own); the time limit the fast-finish bonus is judged on stays the same
-        addRunTime = { on = false, min = 1, max = 5 },
-        -- seconds a unit of his department has to reach the start after accepting (Limits.startTimeout and the
-        -- mission's own); read when the run is accepted, so a change never moves a run already going
-        startTimeout = { on = false, min = 300, max = 900 },
-        -- seconds a unit of his department has to answer the ready check (Units.readyTimeout); 0 switches the ready
-        -- check off for his department, allowed only while canTurnOff = true
-        readyCheck = { on = false, min = 10, max = 40, canTurnOff = false },
-        -- x the mission's time limit for runs of his department; the fast-finish bonus still uses the unscaled limit
-        timeLimit = { on = false, min = 1.0, max = 1.25 },
-        -- seconds after a run of his department starts before officers who never reached the start are removed
-        -- (AntiCheat.idleCheck); stricter only: never more than that config value
-        idleCheck = { on = false, min = 60, max = 180 },
-        -- how hard mission NPCs are on runs his department leads: one of the presets listed here
-        -- (NpcDifficulty.presets: easy, normal, hard, custom); read when the run is accepted; NpcCombat's limits
-        -- still apply on top, and points and cash never change
-        difficulty = { on = false, presets = { 'easy', 'normal' } },
-        -- the largest unit an officer of his department may lead (invites, joins and accepting a mission); never
-        -- above Limits.maxUnitSize
-        unitSize = { on = false, min = 2, max = 4 },
-        -- Mission Board: mission types (or single missions) a supervisor switches off for his department; its
-        -- officers see the type locked, other departments still take it; it stays until switched back on
-        types = { on = false },
-        -- Mission Board: one mission type shown to his department's officers as "Recommended by command", right
-        -- after their favourites; points and pay never change
-        featuredType = { on = false },
-        -- Department Report: a supervisor bars one officer of his department (a lower grade, never himself) from
-        -- taking missions for min to max hours, with a reason: no Mission Board accept, mission call claim or
-        -- Cross-Department join; the tablet stays usable and a mission already running goes on. The one who set it
-        -- and admins (Officers -> Today & cooldowns) may lift it early
-        missionBan = { on = false, min = 1, max = 24 },
-        -- Dispatch: his department's own lane of mission calls next to the server's: min to max seconds between two
-        -- lane calls (he picks a range inside it), how many may be open at once (up to callLaneMaxOpen), the areas
-        -- and the mission types (MissionCalls.types) with a weight each; only his department sees and claims them
-        callLane = { on = false, min = 120, max = 600 },
-        -- seconds a supervisor of his department waits between two mission calls he creates
-        -- (MissionCalls.staffCooldown); the one who shortens it keeps the config wait for himself
-        staffCallWait = { on = false, min = 60, max = 120 },
-        -- Supervisor UI: a supervisor posts a short notice (up to noticeMaxLength characters, 1 to 30 days) for his
-        -- own department only; its officers see it on Home -> Announcements, other departments never do. At most 5
-        -- run at once per department, the banned-word list applies, and every post and end is audited
-        notices = { on = false },
-        -- Cross-Department Missions: a supervisor keeps his department's officers out of them (they cannot join)
-        -- or caps how many of them may take part in one; every board still shows only the running operation and
-        -- the wait between launches stays server-wide
-        crossDept = { on = false },
-        -- Leaderboard: whether other departments see his department's officers by name or by callsign only, and
-        -- which Rank by tabs his department's officers see (Leaderboard.metrics; points always). Presentation only:
-        -- counts, the Department Challenge and the admin boards never change
-        boards = { on = false },
-        -- Review: stricter rules for his department's flagged runs: a supervisor's Void waits for a second
-        -- supervisor of the department, and flags of the kinds he picks go to admins only. Admins are never bound
-        -- and the anti-cheat flag triggers stay as they are
-        reviewRules = { on = false },
-        -- Mission Board and mission call claims: which of the twists enabled in Events.twists his department's
-        -- leaders are offered at the accept step, and which of them start ticked; a twist his department does not
-        -- offer is refused. The twists' bonuses never change
-        twists = { on = false },
-        -- Happy hour cash: x the cash of a completed run his department leads that was accepted while a happy hour
-        -- ran (kept for the run, so the end of the hour never cuts it); never on test runs, Cross-Department runs or
-        -- the Weekly Boss, and Cash.dailyCap still applies. min = max = 1.0 moves nothing: raise max (e.g. 1.25)
-        happyHourCash = { on = false, min = 1.0, max = 1.0 },
-        -- Twist cash: x each twist's cash (Events.twists) on runs his department leads, read at the accept; the chosen
-        -- twists together still stop at Events.twistMaxCash and points never change. min = max = 1.0 moves nothing
-        twistCash = { on = false, min = 1.0, max = 1.0 },
-        -- Happy hour points: x the final points of a completed run his department leads that was accepted while a
-        -- happy hour ran (kept for the run); never for the one who started the hour, on test runs, Cross-Department
-        -- runs or the Weekly Boss. min = max = 1.0 moves nothing: raise max (e.g. 1.25)
-        happyHourPoints = { on = false, min = 1.0, max = 1.0 },
-        -- Twist points: x each twist's points share (Events.twists) on runs his department leads, read at the accept;
-        -- the chosen twists together still stop at Events.twistMaxPoints. min = max = 1.0 moves nothing
-        twistPoints = { on = false, min = 1.0, max = 1.0 },
-        -- Type of the Day: a supervisor picks one mission type for TOMORROW, at most once a day for his department;
-        -- tomorrow his department's officers earn the Type of the Day points (Events.todMultiplier) on that type
-        -- instead of the server's type, other departments keep the server's. Never on his own runs or a unit he is in
-        typeOfTheDay = { on = false },
-        -- Dispatch: a supervisor pages a unit of his department (never his own) with one mission he chooses instead
-        -- of a random one; only that unit sees the mission's name and may accept or decline it, every accept rule
-        -- stays (cooldowns, caps, unit size), the call never earns rapid response and the audit names the mission
-        pushMission = { on = false },
-        -- Goals: a supervisor picks min to max of your daily goals and of your weekly goals (Goals.daily, Goals.weekly)
-        -- his department's officers draw theirs from, starting at the next weekly reset (none picked = every goal);
-        -- the goals' points never change and the supervisor himself keeps your whole lists
-        goals = { on = false, min = 1, max = 5 },
-        -- Department Report: a supervisor gives min to max points at a time to an officer of his own department
-        -- (never to himself or another character of his license), with a reason, through the same logged manual award
-        -- as Admin UI -> Give or take points (AdminControl.pointAdjust off stops it too); shown in the officer's history
-        -- like an admin's award, at most awardPointsPerDay points a supervisor a day
-        awardPoints = { on = false, min = 1, max = 50 },
-    },
-    happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
-
-    -- officers' cooldowns one supervisor may clear a day (admins any)
-    clearCooldownPerDay = 5,
-    -- times one supervisor may add minutes to a running mission a day (admins any)
-    addRunTimePerDay = 10,
-    -- seconds supervisors may add to one running mission in all, counted together with an admin's additions and
-    -- never above AdminControl.runTimeAddMax
-    addRunTimeMax = 300,
-    -- mission bans one supervisor may set a day (admins any)
-    missionBanPerDay = 3,
-    -- calls one department's lane may have open at once (every open call still counts against MissionCalls.maxOpen)
-    callLaneMaxOpen = 2,
-    -- characters a department notice may hold (at most 280, the length of an admin's staff notice)
-    noticeMaxLength = 280,
-    -- department notices one supervisor may post a day (admins any)
-    noticesPerDay = 5,
-    -- missions one supervisor may push to a unit a day (the pushMission control; admins any)
-    pushMissionPerDay = 5,
-    -- points one supervisor may give a day in all (the awardPoints control; admins any); 0 = no limit
-    awardPointsPerDay = 100,
 }
 
 -- ============================================================================
@@ -400,6 +261,22 @@ Config.Departments = {
 }
 
 -- ============================================================================
+--                                    NAMES
+-- ============================================================================
+-- English names an admin gives to ids (Admin UI → Settings → Names). Only these kinds: custody.offence.<id>,
+-- profile.commend.kind.<id>, badge.<id>, bonus.<id> and penalty.<id>. A name changes text only, never an id.
+Config.Labels = {
+    -- ['custody.offence.loitering'] = 'Loitering',
+}
+
+-- ############################################################################
+--                            PART 2 · NPC MISSIONS
+-- Missions against NPCs: mission types, stars, the team size, where people appear and how they act,
+-- the route and the map, the draw, mission calls, real calls and alerts, custody, events, the
+-- built-in mission tweaks and the Mission Builder.
+-- ############################################################################
+
+-- ============================================================================
 --                                MISSION TYPES
 -- ============================================================================
 -- points: leaderboard points, config only (never editable in-game).
@@ -416,7 +293,7 @@ Config.MissionTypes = {
 Config.DisabledMissions = {}   -- mission ids to turn off (built-in or custom), e.g. { 'prison_break' }
 -- Locations to turn off without removing them, by mission id: their labels (or numbers, 1 = the first), e.g.
 -- { prison_break = { 'North gate' } }. Admin UI → Missions has an on/off switch for every mission and location.
-Config.DisabledLocations = {}
+Config.DisabledLocations = {} -- locations turned off, by mission id (see above)
 
 -- ============================================================================
 --                              DIFFICULTY (stars)
@@ -424,42 +301,8 @@ Config.DisabledLocations = {}
 -- Multipliers by a mission's difficulty: index 1, 2 or 3 stars.
 -- 1.0 = stars change nothing, so a builder can't raise pay or points by picking 3 stars.
 Config.Difficulty = {
-    pointsByStars = { 1.0, 1.0, 1.0 },
-    cashByStars = { 1.0, 1.0, 1.0 },
-}
-
--- ============================================================================
---                                     CASH
--- ============================================================================
-
-Config.Cash = {
-    account = 'bank',     -- 'bank' or 'cash'
-    source = 'server',    -- 'server' (new money) or 'society' (the department's Renewed-Banking account)
-    minPayout = 0,        -- limits for any base payout set in-game
-    maxPayout = 25000,
-    dailyCap = 0,         -- max cash per officer per day; 0 = no cap
-    -- Money tools outside the normal flow (Admin UI → Payments, Departments). All ship off: turning one on in
-    -- Settings needs the typed word ENABLE and is audited.
-    allowUnfundedRetry = false,  -- retry payments the department account could not cover
-    allowCapTopUp = false,       -- pay the part of a payment the daily cap cut
-    allowPayAgain = false,       -- pay a payment stuck in 'paying' again (after checking the bank history)
-    restoreForfeited = false,    -- a restored run pays its forfeited cash after all
-    allowAddFunds = false,       -- add money to a department's account
-    addFundsMax = 50000,         -- dollars per Add funds
-    allowClawback = false,       -- take back cash already paid
-    allowManualCash = false,     -- pay an officer by hand
-    manualDailyLimit = 10000,    -- dollars one admin may pay by hand per day
-    lowBalanceWarn = 0,          -- warn below this department balance (0 = off)
-}
-
--- ============================================================================
---                                PAYOUT EDITING
--- ============================================================================
-
-Config.Payouts = {
-    supervisorRange = { 0.5, 2.0 },   -- supervisors: 50%–200% of the type's payout in Config.MissionTypes
-    supervisorCooldown = 1800,        -- seconds between changes to the same type (any supervisor)
-    requireReason = true,             -- a reason is required for every payout change
+    pointsByStars = { 1.0, 1.0, 1.0 }, -- points multiplier for 1, 2 and 3 stars
+    cashByStars = { 1.0, 1.0, 1.0 },   -- cash multiplier for 1, 2 and 3 stars
 }
 
 -- ============================================================================
@@ -473,39 +316,14 @@ Config.Scaling = {
     { maxParticipants = 6, tier = 'major', count = 2.0, accuracy = 15, armour = 50, points = 1.20, cash = 1.50 },
     { maxParticipants = 8, tier = 'critical', count = 2.5, accuracy = 20, armour = 75, points = 1.25, cash = 1.75 },
 }
+-- See also Part 4 (Police teamwork): Cross-department missions.
+
 Config.CrossDepartmentPoints = 1.10    -- points multiplier when 2+ departments are on a run
 
 -- When the team shrinks mid-run (see When someone leaves mid-run)
 Config.Rescale = {
     enabled = true,                                              -- NPCs not yet spawned use the tier for the team that's left
     keepPayTierFor = { 'real_call', 'force_recall', 'downed' },  -- leave reasons that keep the points and cash tier
-}
-
-Config.Limits = {
-    maxUnitSize = 4,
-    maxArmedAlive = 25,          -- armed NPCs alive at any one moment per run
-    maxEntities = 80,            -- spawned entities at any one moment per run
-    corpseCleanup = 30,          -- seconds before dead NPCs and wrecked vehicles are deleted (bodies a
-                                 -- Process the scene objective keeps are deleted when it ends)
-    maxCompletionsHour = 8,
-    maxCompletionsDay = 0,       -- completed runs per officer per day (from the daily reset); 0 = no cap
-    abandonCooldown = 300,       -- seconds; covers the whole mission type
-    startTimeout = 600,          -- default seconds to reach the start (a mission can override it)
-    maxConcurrentRuns = 12,      -- runs active server-wide at once; Cross-Department Missions don't count
-    maxConcurrentTactical = 4,   -- of those, Tactical runs
-    reserveLocations = true,     -- a location in use by one run can't be drawn for another
-    -- Milliseconds a player's Qbox data (job, duty, name, callsign) is reused before Qbox is asked again; every Qbox
-    -- job, duty or data change clears it at once; 0 = ask Qbox every time (the old behaviour)
-    playerInfoCacheMs = 1000,
-    -- What happens when a player keeps sending one tablet request past its limit (most allow 6 to 8 a second):
-    -- 'block' = the extra requests are refused quietly, as before; 'log' = also one console warning a minute per
-    -- player once one request is refused 3 times its limit (at least 20 times) in a minute; 'kick' = that warning,
-    -- and the player is dropped from the server. Admins are never warned about or dropped for this
-    netRateResponse = 'block',
-    -- Bytes a second for the big Admin UI downloads (Audit and Payments → Export, up to 5000 rows): they come in the
-    -- background, so the rest of the tablet keeps answering while one loads (below 100000 counts as 100000; 0 = send
-    -- each one in one go, as before)
-    exportBps = 200000,
 }
 
 -- ============================================================================
@@ -641,6 +459,94 @@ Config.Spawning = {
 }
 
 -- ============================================================================
+--                              SUSPECT BEHAVIOUR
+-- ============================================================================
+
+Config.Npc = {
+    tellSeconds = { 1.5, 3.0 },      -- how long a tell plays before a person runs or draws
+    tellHints = true,                -- HUD hint ("Watch his hands") for participants within tellRange
+    tellRange = 25.0,                -- metres
+    feintRange = 6.0,                -- a feint needs no participant this close...
+    feintAfter = 5,                  -- ...and nobody aiming for this many seconds
+}
+
+-- How NPCs feel. It never changes points or cash.
+Config.NpcDifficulty = {
+    preset = 'normal',               -- 'easy' | 'normal' | 'hard' | 'custom'
+    -- fleeMult: how long runners keep running (Config.Flee): 1.2 = 20 % longer
+    custom = { accuracyAdd = 0, armourAdd = 0, healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 },
+    presets = {
+        easy = { accuracyAdd = -8, armourAdd = 0, healthMult = 0.85, surrenderMult = 1.3, fleeMult = 0.8 },
+        normal = { accuracyAdd = 0, armourAdd = 0, healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 },
+        hard = { accuracyAdd = 8, armourAdd = 15, healthMult = 1.15, surrenderMult = 0.7, fleeMult = 1.2 },
+    },
+}
+
+-- How hard armed mission NPCs fight back. Only mission NPCs and the officers on their run are changed, and only
+-- while the run is live. For every number here: lower = easier for your officers.
+Config.NpcCombat = {
+    enabled = true,                  -- false = NPCs fight as GTA makes them (every value below is ignored)
+    -- The only weapons a mission NPC is ever given. Automatic weapons (SMGs, rifles, machine guns) are never given,
+    -- even when one is added here.
+    weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_HEAVYPISTOL', 'WEAPON_PUMPSHOTGUN' },
+    -- A mission that names a weapon outside the list above gets the weapon this list gives for it...
+    replace = {
+        WEAPON_MICROSMG = 'WEAPON_PISTOL',
+        WEAPON_SMG = 'WEAPON_COMBATPISTOL',
+        WEAPON_ASSAULTRIFLE = 'WEAPON_HEAVYPISTOL',
+    },
+    fallback = 'WEAPON_PISTOL',      -- ...or this one when the list has none for it
+    ammo = 60,                       -- rounds each armed NPC gets
+    accuracyScale = 0.7,             -- NPC accuracy (after the team size and Config.NpcDifficulty) times this...
+    accuracyMax = 18,                -- ...and never above this (0-100; bosses and shots from cars too)
+    shootRate = 60,                  -- how fast NPCs pull the trigger (0-1000)
+    firingPattern = 'single',        -- 'single' (one shot at a time), 'burst' (short bursts), 'delayed' (a pause
+                                     -- before each shot) or 'default' (GTA picks)
+    abilityMax = 1,                  -- combat skill at most: 0 poor, 1 average, 2 professional
+    noCharge = true,                 -- NPCs never charge at officers
+    aiDamage = 0.5,                  -- damage of NPC bullets (1.0 = normal GTA damage, 0.5 = half)
+    aiMeleeDamage = 0.5,             -- damage of NPC punches and melee weapons (1.0 = normal)
+    reassertAiDamage = true,         -- true = the run's NPC damage value is set again every second (other scripts
+                                     -- such as Crimson-Contracts share it); false = set once at the start (the old way)
+    officerDefense = 1.0,            -- damage officers on a run take from every weapon, players' too (1.0 = off)
+    noCriticalHits = true,           -- officers on a run take no extra headshot damage (it hurts like a body shot)
+    cancelLethalHeadshots = true,    -- the server drops a one-shot kill by a mission NPC on an officer of its run...
+    lethalCancelAbove = 0.75,        -- ...who still has at least this share of his health (0.25-1, 0.75 = three
+                                     -- quarters). The shot that finishes off a hurt officer always counts
+    playerHitDropsProtection = false, -- true = an officer on an NPC mission loses noCriticalHits and officerDefense for
+                                      -- the rest of that run once a real player who is not on the run shoots him
+}
+
+-- How long a suspect who runs from your officers can keep running. GTA's NPCs never tire, so the server times every
+-- mission NPC that runs on foot (time in a car does not count): first a sprint, then a jog, then a walk, then worn
+-- out, and he slows down to match. A worn-out runner gives up when an officer gets close. Config.NpcDifficulty's
+-- fleeMult stretches every time here ('hard' runners last 20 % longer, 'easy' ones 20 % shorter).
+Config.Flee = {
+    enabled = true,                  -- false = suspects run as GTA makes them: they never tire
+    sprintSeconds = 10,              -- seconds a runner sprints before he slows to a jog
+    jogSeconds = 12,                 -- seconds he then jogs before he slows to a walk
+    walkSeconds = 8,                 -- seconds he then walks before he is worn out
+    -- Each suspect lasts up to this share longer or shorter, rolled once per suspect from the run's seed (0.25 = 25 %,
+    -- 0 = every suspect lasts the same)
+    jitter = 0.25,
+    -- Seconds with no officer within recoverRange before a runner gets his breath back and sprints again
+    recoverSeconds = 20,
+    recoverRange = 60.0,             -- metres: an officer this close stops a runner from getting his breath back
+    armedTire = true,                -- false = a suspect who carries a weapon you can see never tires
+    jogRate = 0.95,                  -- a jogging runner's speed: 1.0 = a normal jog, 0.9 = 10 % slower (0.5-1.0)
+    walkRate = 0.85,                 -- a walking or worn-out runner's speed: 1.0 = a normal walk (0.5-1.0)
+    windedClipset = true,            -- true = a tired runner looks it: he jogs, then walks winded
+    -- What a worn-out runner does when an officer comes within giveUpRange: 'surrender' (he gives up and kneels),
+    -- 'handsUp' (he gives up and stands with his hands up) or 'walk' (he walks on and never gives up on his own)
+    exhausted = 'surrender',
+    giveUpRange = 30.0,              -- metres: a worn-out runner gives up when an officer is this close (5-100)
+    -- true = a runner, cook or inmate who scatters (Gang Hideout Raid, Drug Lab Raid, Prison Break) flees along the
+    -- escape route that starts nearest where he appears, so nobody runs back across the site past your officers
+    -- (routes that start about as near, within 5 m, take turns); false = the routes take turns wherever he appears
+    nearestRoute = true,
+}
+
+-- ============================================================================
 --                              ROUTE TO THE START
 -- ============================================================================
 
@@ -733,6 +639,78 @@ Config.Markers = {
 }
 
 -- ============================================================================
+--                                 RANDOM DRAW
+-- ============================================================================
+
+Config.Draw = {
+    avoidLast = 1,              -- never repeat the last mission in that type
+    avoidLastLarge = 2,         -- skip the last two when the pool has largePool+ missions
+    largePool = 4,              -- missions in a type's pool that make it large (see avoidLastLarge)
+    playerClearance = 75.0,     -- skip locations with a non-participant within this many metres
+    zoneClearance = 200.0,      -- skip a location within this many metres of another active run's location
+                                -- (any mission), while another is free
+    hardClearance = 100.0,      -- never draw a location within this many metres of another active run's
+                                -- location, even when nothing else is free (0 = off: zone clearance only)
+    avoidLastLocations = 2,     -- skip the last N locations any participant played in this mission, while
+                                -- another is free
+    locationFreshness = 3600,   -- seconds: a location used server-wide this recently gets half the weight
+}
+
+-- ============================================================================
+--                           DISPATCH (MISSION CALLS)
+-- ============================================================================
+-- Tablet-only NPC calls. The first unit to claim one gets a random mission of that type that starts in
+-- the call's area. Mission calls are never sent to SC-Dispatch, and real calls always come first.
+Config.MissionCalls = {
+    enabled = true,                  -- true = the server posts NPC mission calls to the tablet
+    checkEvery = 10,                 -- seconds between server checks
+    types = {                        -- types that can be called: how often (weight) and priority (1 = highest)
+        patrol = { weight = 5, priority = 3 },
+        investigation = { weight = 3, priority = 2 },
+        tactical = { weight = 2, priority = 1 },
+        -- training = { weight = 1, priority = 3 },   -- training and the Weekly Boss are never called
+    },
+    unitsPerCall = 2,                         -- at most one open call per this many idle units...
+    maxOpen = 4,                              -- ...and never more than this many open at once
+    spawnEvery = { 60, 150 },                 -- seconds between new calls, random in this range
+    offerTime = 180,                          -- seconds a call stays open
+    lapsedShown = 10,                         -- seconds a lapsed call stays on screen
+    claimWindowMs = 1500,                     -- claims this soon after the first are ranked (0 = pure first click)
+    priorityWindow = 15,                      -- seconds during which only nearby units may claim...
+    priorityRadius = 1500.0,                  -- ...within this many metres of the area's centre
+    -- A call names its area to a viewer only when the viewer's eligible pool there (after unit size,
+    -- no-repeat, cooldowns and daily limits) has this many missions and locations; else "County-wide".
+    minMissionsPerArea = 2,
+    minLocationsPerArea = 3,                                   -- locations the area needs before a call names it
+    countyWeightKm = 2.0,                                      -- county-wide draws weight locations by 1 / (1 + km / this)
+    titles = { patrol = 8, investigation = 6, tactical = 6 },  -- flavour titles per type (mc.title.<type>.<n>)
+    eligibilityCache = 10,                                     -- seconds an officer's cached eligibility may be reused
+    recentShown = 5,                                           -- calls in the Recent calls list
+    reopen = { enabled = true, time = 120 },                   -- a claim dropped before anyone reached the start reopens once
+    -- +10% of P (points only) for reaching the start within distance ÷ speed (m/s) + grace (seconds)
+    -- Server-posted calls only: paged and staff-created calls never earn it.
+    rapidResponse = { pctOfP = 0.10, speed = 20.0, grace = 45 },
+    pageTime = 30,                   -- seconds a paged call is offered only to the paged unit
+    staffCooldown = 120,             -- seconds between calls created by the same supervisor
+    -- the issuer's own unit can never be paged, and can't claim a call the issuer paged or created
+    claimRate = 1500,                -- milliseconds between claim attempts per player
+    realCallStrip = true,            -- show the read-only SC-Dispatch real-call count
+    realCallCache = 15,              -- seconds
+    -- A location belongs to the area whose centre is nearest. Labels show on the calls.
+    areas = {
+        { key = 'south_ls', label = 'South Los Santos', center = vec3(150.0, -1750.0, 29.0) },
+        { key = 'downtown', label = 'Downtown', center = vec3(-150.0, -850.0, 30.0) },
+        { key = 'west_ls', label = 'West Los Santos', center = vec3(-1250.0, -650.0, 25.0) },
+        { key = 'vinewood', label = 'Vinewood', center = vec3(250.0, 250.0, 105.0) },
+        { key = 'east_ls', label = 'East Los Santos', center = vec3(1100.0, -1250.0, 40.0) },
+        { key = 'port', label = 'Port & Airport', center = vec3(100.0, -2700.0, 6.0) },
+        { key = 'senora', label = 'Grand Senora', center = vec3(1400.0, 3200.0, 40.0) },
+        { key = 'north', label = 'Grapeseed & Paleto', center = vec3(700.0, 5600.0, 35.0) },
+        { key = 'west_county', label = 'West Blaine County', center = vec3(-2500.0, 2000.0, 20.0) },
+    },
+}
+
+-- ============================================================================
 --                                  REAL CALLS
 -- ============================================================================
 
@@ -767,132 +745,353 @@ Config.Downed = {
 }
 
 -- ============================================================================
---                                 ANTI-EXPLOIT
+--                          POLICE ACTIONS AND CUSTODY
 -- ============================================================================
+-- See also Part 3 (Player vs police): a real suspect's cuffs and detain are timed in Config.RealSuspects.
 
-Config.AntiCheat = {
-    maxSpeed = 80.0,        -- m/s between objective events before a run is flagged
-    presenceRadius = 150.0, -- runs with 2+ participants: fallback presence range for a block with none of its own...
-    presenceShare = 0.70,   -- ...for this share of the run to earn points and cash
-    idleCheck = 180,        -- seconds after the run moves to In progress to remove participants who haven't reached the start
-    jobRecheck = 10,        -- seconds between active-job and duty re-checks during a run
-    outsideKillsToFlag = 1, -- kills of mission NPCs by players who aren't on the run that flag it for review
-    voidsToSuspend = 3,     -- this many voided runs...
-    voidWindowDays = 30,    -- ...within this many days...
-    suspendDays = 7,        -- ...suspends the officer for this many days
-
-    stunNeedsProof = 'flag',  -- 'flag' = a stun counts as before, and one the server did not see (no fall) adds a
-                              -- note for staff (nobody's points are held); 'hold' = the same, but that officer's
-                              -- points wait for review; 'strict' = a fleeing person only gives up to a stun the
-                              -- server saw; 'off' = no check (the old way)
-    stunRecheck = 2,          -- seconds 'flag' and 'hold' wait before the note or flag: a report that reaches the
-                              -- server before its copy of the suspect shows the fall gets no note when the fall
-                              -- shows by then. 0 = decide at once
-
-    -- A player who is not an admin sends a request only admins may send (the money, void and other Admin UI tools;
-    -- no officer or supervisor screen sends one, so it is almost always a cheat menu). It is refused as always, and
-    -- a console line, kept in Admin UI → System → Problems, names the player and the request: once a minute per
-    -- player and request, at most this many lines a minute per player. 0 = refused without a line.
-    adminProbeLines = 5,
-}
-
--- ============================================================================
---                          CROSS-DEPARTMENT MISSIONS
--- ============================================================================
-
-Config.CrossDept = {
-    enabled = true,
-    minParticipants = 2,
-    maxParticipants = 8,
-    joinWindow = 300,        -- seconds until joining closes (or the launcher taps Start now)
-    idleCancel = 1800,       -- auto-cancel after this long with no run in progress
-    cooldown = 1800,         -- seconds between launches, server-wide
-    waitlist = true,         -- officers can queue when every place is taken; a freed place goes to the first
-}
-
--- ============================================================================
---                                 RANDOM DRAW
--- ============================================================================
-
-Config.Draw = {
-    avoidLast = 1,              -- never repeat the last mission in that type
-    avoidLastLarge = 2,         -- skip the last two when the pool has largePool+ missions
-    largePool = 4,
-    playerClearance = 75.0,     -- skip locations with a non-participant within this many metres
-    zoneClearance = 200.0,      -- skip a location within this many metres of another active run's location
-                                -- (any mission), while another is free
-    hardClearance = 100.0,      -- never draw a location within this many metres of another active run's
-                                -- location, even when nothing else is free (0 = off: zone clearance only)
-    avoidLastLocations = 2,     -- skip the last N locations any participant played in this mission, while
-                                -- another is free
-    locationFreshness = 3600,   -- seconds: a location used server-wide this recently gets half the weight
-}
-
--- ============================================================================
---                                    UNITS
--- ============================================================================
-
-Config.Units = {
-    invitePolicy = 'anyone',            -- 'anyone' (every member may invite) | 'leader'
-    readyCheck = true,                  -- units of 2+ confirm before the draw
-    readyTimeout = 20,                  -- seconds to answer
-    kickReinvite = 60,                  -- seconds before a kicked officer can be invited again
-    nearbyBands = { 250, 1000, 3000 },  -- metres: distance bands in the invite list
-}
-
--- ============================================================================
---                           DISPATCH (MISSION CALLS)
--- ============================================================================
--- Tablet-only NPC calls. The first unit to claim one gets a random mission of that type that starts in
--- the call's area. Mission calls are never sent to SC-Dispatch, and real calls always come first.
-Config.MissionCalls = {
-    enabled = true,
-    checkEvery = 10,                 -- seconds between server checks
-    types = {                        -- types that can be called: how often (weight) and priority (1 = highest)
-        patrol = { weight = 5, priority = 3 },
-        investigation = { weight = 3, priority = 2 },
-        tactical = { weight = 2, priority = 1 },
-        -- training = { weight = 1, priority = 3 },   -- training and the Weekly Boss are never called
+Config.Custody = {
+    times = {                        -- seconds each action's progress bar takes
+        talk = 4,
+        frisk = 4,
+        detain = 3,
+        searchPerson = 4,
+        lookInside = 2,
+        runPlate = 3,
+        inspect = 3,
+        orderOut = 2,
+        searchVehicle = 8,
+        warn = 2,
+        cite = 6,
+        release = 2,
+        impound = 10,
+        noAction = 1,
+        explain = 4,
+        escort = 1,
+        seat = 2,
+        handover = 4,
     },
-    unitsPerCall = 2,                         -- at most one open call per this many idle units...
-    maxOpen = 4,                              -- ...and never more than this many open at once
-    spawnEvery = { 60, 150 },                 -- seconds between new calls, random in this range
-    offerTime = 180,                          -- seconds a call stays open
-    lapsedShown = 10,                         -- seconds a lapsed call stays on screen
-    claimWindowMs = 1500,                     -- claims this soon after the first are ranked (0 = pure first click)
-    priorityWindow = 15,                      -- seconds during which only nearby units may claim...
-    priorityRadius = 1500.0,                  -- ...within this many metres of the area's centre
-    -- A call names its area to a viewer only when the viewer's eligible pool there (after unit size,
-    -- no-repeat, cooldowns and daily limits) has this many missions and locations; else "County-wide".
-    minMissionsPerArea = 2,
-    minLocationsPerArea = 3,
-    countyWeightKm = 2.0,                                      -- county-wide draws weight locations by 1 / (1 + km / this)
-    titles = { patrol = 8, investigation = 6, tactical = 6 },  -- flavour titles per type (mc.title.<type>.<n>)
-    eligibilityCache = 10,                                     -- seconds an officer's cached eligibility may be reused
-    recentShown = 5,                                           -- calls in the Recent calls list
-    reopen = { enabled = true, time = 120 },                   -- a claim dropped before anyone reached the start reopens once
-    -- +10% of P (points only) for reaching the start within distance ÷ speed (m/s) + grace (seconds)
-    -- Server-posted calls only: paged and staff-created calls never earn it.
-    rapidResponse = { pctOfP = 0.10, speed = 20.0, grace = 45 },
-    pageTime = 30,                   -- seconds a paged call is offered only to the paged unit
-    staffCooldown = 120,             -- seconds between calls created by the same supervisor
-    -- the issuer's own unit can never be paged, and can't claim a call the issuer paged or created
-    claimRate = 1500,                -- milliseconds between claim attempts per player
-    realCallStrip = true,            -- show the read-only SC-Dispatch real-call count
-    realCallCache = 15,              -- seconds
-    -- A location belongs to the area whose centre is nearest. Labels show on the calls.
-    areas = {
-        { key = 'south_ls', label = 'South Los Santos', center = vec3(150.0, -1750.0, 29.0) },
-        { key = 'downtown', label = 'Downtown', center = vec3(-150.0, -850.0, 30.0) },
-        { key = 'west_ls', label = 'West Los Santos', center = vec3(-1250.0, -650.0, 25.0) },
-        { key = 'vinewood', label = 'Vinewood', center = vec3(250.0, 250.0, 105.0) },
-        { key = 'east_ls', label = 'East Los Santos', center = vec3(1100.0, -1250.0, 40.0) },
-        { key = 'port', label = 'Port & Airport', center = vec3(100.0, -2700.0, 6.0) },
-        { key = 'senora', label = 'Grand Senora', center = vec3(1400.0, 3200.0, 40.0) },
-        { key = 'north', label = 'Grapeseed & Paleto', center = vec3(700.0, 5600.0, 35.0) },
-        { key = 'west_county', label = 'West Blaine County', center = vec3(-2500.0, 2000.0, 20.0) },
+    reach = {                        -- metres, checked with server-side coordinates
+        person = 2.0,
+        frisk = 1.5,
+        vehicle = 3.0,
+        plateFromVehicle = 20.0,     -- Run plate from the driver seat of any vehicle
+        seatVehicle = 5.0,
+        van = 20.0,                  -- Hand over moves escorted and seated people this close to the van
+    },
+    -- chance a person agrees to a vehicle search
+    consent = { clean = 0.60, guilty = 0.15 },
+    admission = 0.20,                -- chance a guilty person admits it when talked to (probable cause)
+    handcuffsItem = false,           -- e.g. 'handcuffs': Detain and Cuff suspect need it (checked, not used)
+    evidenceItem = false,            -- e.g. 'evidence_bag': one per participant, removed at the run's end
+    releaseDespawn = 30,             -- seconds before a released person or car is removed
+    actionSlack = 0.5,               -- seconds an action's finish may come early (begin → finish check)
+    -- Cues rolled with a guilty truth, so contraband in a car can usually be found lawfully.
+    cues = { plainView = 0.40, odour = 0.30 },
+    -- Mission vehicle plates: prefix + random letters and digits (8 characters in all), rerolled up to
+    -- 5 times when player_vehicles already has the plate.
+    plates = { prefix = 'CP', length = 8 },
+    -- Service vehicles (transport, tow, coroner): driven by the nearest participant's client.
+    serviceTimeout = 60,             -- seconds to park or load before the fallback (placed / faded out)
+    serviceHandoff = 250.0,          -- metres: AI moves to another participant beyond this
+    -- Metres (10-100): a prisoner van, tow truck or coroner van never appears or is put down closer than this to any
+    -- player. After serviceTimeout with its parking point taken by an officer it comes to a road point beside the scene
+    -- instead (or waits until the officer steps away); a tow truck that never got a road point fades the car out
+    serviceClearance = 30.0,
+    transport = {                    -- the prisoner van
+        model = 'policet',
+        driver = 's_m_y_cop_01',
+        spawnDistance = { 150.0, 250.0 },
+        parkWithin = 60.0,           -- metres: with no transport point it parks anywhere this close to the scene
+        leaveAfter = 60,             -- seconds after the objective that called it ends; called again if needed
+    },
+    tow = {                          -- the tow truck; enabled = false fades the car out instead
+        enabled = true,
+        model = 'flatbed',
+        driver = 's_m_m_trucker_01',
+        spawnDistance = { 150.0, 250.0 },
+        leaveAfter = 45,
+    },
+    coroner = {
+        model = 'burrito3',
+        driver = 's_m_y_autopsy_01',
+        bagProp = 'xm_prop_body_bag',
+        spawnDistance = { 150.0, 250.0 },
+    },
+    offences = {                     -- what a citation can name (labels: locale custody.offence.<id>)
+        person = {
+            'speeding',
+            'reckless',
+            'no_licence',
+            'suspended_licence',
+            'expired_registration',
+            'open_container',
+            'loitering',
+            'possession_small',
+            'equipment',
+        },
+        vehicle = { 'expired_meter', 'no_permit', 'no_parking', 'hydrant', 'loading_zone' },
+    },
+    -- Hidden truths, as weights. A mission objective names the set (profileSet).
+    profileSets = {
+        scene = {
+            person = { clean = 35, minor = 15, warrant = 15, narcotics = 15, tools = 12, armed = 8 },
+            vehicle = { legal = 85, stolen = 15 },
+        },
+        traffic = {
+            driver = { clean = 50, minor = 20, suspended = 10, warrant = 8, intoxicated = 7, narcotics = 3, armed = 2 },
+            passenger = { clean = 70, warrant = 12, narcotics = 10, armed = 8 },
+            vehicle = { legal = 90, stolen = 10 },
+        },
+        parking = {
+            vehicle = { legal = 45, violation = 50, stolen = 5 },
+        },
+        stolenCar = {
+            driver = { evading = 60, warrant = 25, armed = 15 },
+            passenger = { evading = 60, warrant = 20, armed = 20 },
+            vehicle = { stolen = 100 },
+        },
+    },
+    -- Demeanour weights by truth. Only armed people can be hostile.
+    demeanour = {
+        clean = { compliant = 80, nervous = 15, evasive = 5 },
+        minor = { compliant = 60, nervous = 30, evasive = 10 },
+        suspended = { compliant = 55, nervous = 35, evasive = 10 },
+        warrant = { compliant = 35, nervous = 25, evasive = 15, runner = 25 },
+        narcotics = { compliant = 40, nervous = 35, evasive = 10, runner = 15 },
+        tools = { compliant = 40, nervous = 30, evasive = 15, runner = 15 },
+        intoxicated = { compliant = 60, nervous = 25, evasive = 15 },
+        armed = { compliant = 30, nervous = 20, runner = 20, hostile = 30 },
+        evading = { compliant = 30, nervous = 20, runner = 50 },
+    },
+    -- Parking: which spot rules make a violation ticket-level ('cite') or tow-level ('impound').
+    parkingRules = {
+        metered = 'cite',
+        permit = 'cite',
+        no_parking = 'impound',
+        hydrant = 'impound',
+        loading = 'impound',
+        free = false,                -- a free spot is legal, or the car is stolen
     },
 }
+
+-- ============================================================================
+--                                  DECISIONS
+-- ============================================================================
+-- The point value of each grade is in Config.Bonuses (correct_disposition, wrongful_arrest, ...).
+Config.Decisions = {
+    -- releasing a person after their warrant or weapon reached the decider fails the case
+    failOnKnownDanger = true,
+    -- No action or a citation for a car whose stolen plate reached the decider fails the case
+    failOnKnownStolen = true,
+    confirmKnownErrors = true,          -- a case-failing choice asks "this will fail the case" first
+    undiscoverableIsOk = true,          -- Release or No action is Acceptable when no lawful path existed
+    undecidedAtEnd = 'missed_offence',  -- what a contact still undecided at the end counts as
+    debrief = true,                     -- list every decision on the result screen and in history
+}
+
+-- ============================================================================
+--                                SPECIAL EVENTS
+-- ============================================================================
+
+Config.Events = {
+    typeOfTheDay = true,     -- true = one mission type a day earns the points multiplier below
+    todMultiplier = 2.0,     -- points only
+    -- share of runs that also get one random twist on top of the ones the officers chose (0 = never: officers
+    -- choose their own twists when they take a mission; 0.25 = one run in four)
+    modifierChance = 0,
+    armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs
+    timeCrunchCut = 0.25,    -- Time Crunch: share of the time limit removed
+    weeklyBoss = { enabled = true, days = { 'friday', 'saturday', 'sunday' }, points = 500, payout = 2500 },
+    -- Twists the officers may choose when they take a mission from the Mission Board or a mission call (the unit
+    -- leader decides for the unit). Each chosen twist adds its own reward and they stack, up to twistMaxPoints and
+    -- twistMaxCash. Rewards are paid only for a completed run. Never on the Weekly Boss, test runs or
+    -- Cross-Department Missions.
+    twists = {
+        armored_hostiles = {     -- armed NPCs get armoredArmour extra armour (offered only where armed NPCs spawn)
+            enabled = true,      -- false = officers cannot choose it and it is never rolled
+            points = 0.25,       -- share of P it adds (0.25 = +25 % points; 0 = no extra points)
+            cash = 1.25,         -- cash multiplier (1.25 = x1.25 cash; 1.0 = no extra cash)
+        },
+        time_crunch = {          -- the time limit is timeCrunchCut shorter
+            enabled = true,      -- false = officers cannot choose it and it is never rolled
+            points = 0.20,       -- share of P it adds (0.20 = +20 % points; 0 = no extra points)
+            cash = 1.20,         -- cash multiplier (1.20 = x1.20 cash; 1.0 = no extra cash)
+        },
+        radio_silence = {        -- the map hides what Config.Markers.radioSilence says
+            enabled = true,      -- false = officers cannot choose it and it is never rolled
+            points = 0.25,       -- share of P it adds (0.25 = +25 % points; 0 = no extra points)
+            cash = 1.25,         -- cash multiplier (1.25 = x1.25 cash; 1.0 = no extra cash)
+        },
+    },
+    twistMaxPoints = 0.70,   -- the most all chosen twists add together, as a share of P (0.70 = +70 % points)
+    twistMaxCash = 1.95,     -- the highest cash multiplier all chosen twists give together (the multipliers multiply)
+}
+
+-- ============================================================================
+--                           BUILT-IN MISSION TWEAKS
+-- ============================================================================
+-- Change built-in missions without editing their files, so the change survives updates. Every tweak is
+-- checked by the same rules as the file; a tweak that breaks one is ignored with a console warning.
+-- Allowed keys: cooldown, timeLimit, startTimeout, disabledLocations (labels), peds, vehicles, weapons.
+-- weapons replaces every weapon list of the mission (waves, ambushes, associates); a boss carries its last one.
+Config.MissionTweaks = {
+    -- prison_break = { cooldown = 1800, timeLimit = 720, disabledLocations = { 'North gate' } },
+    -- gang_shootout = { peds = { 'g_m_y_lost_01' }, weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' } },
+}
+
+-- ============================================================================
+--                               MISSION BUILDER
+-- ============================================================================
+-- Block setting ranges and defaults are in config/blocks.lua.
+Config.Builder = {
+    enabled = true,                            -- true = supervisors may use the Mission Builder (admins always can)
+    maxHostiles = 40,                          -- armed NPCs per mission across all blocks, before scaling
+    maxBlocks = 6,                             -- objective blocks in one custom mission at most
+    minLocations = 1,                          -- locations a new custom mission needs before it can be published
+                                               -- (more locations = it repeats less; 3 or more is a good habit)
+    minLocationsOverride = 3,                  -- locations an edited built-in mission must keep before it can be
+                                               -- published
+    minLocationGap = 100.0,                    -- metres between locations of one mission
+    minSpawnFromStart = 30.0,                  -- metres between any spawn point and the start point
+    spawnMargin = 40.0,                        -- metres outside the start circle that armed NPCs of a new custom mission
+                                               -- keep (shootout, boss, ambush and pursuit cars, door associates);
+                                               -- files published before still load, with a warning
+    maxPointFromStart = 300.0,                 -- metres a location's points may be outside its start circle: a
+                                               -- point further away (left behind by a moved start) blocks
+                                               -- publishing; routes, patrol checkpoints, escort ambush points and
+                                               -- flee paths are exempt (50-2000)
+    bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
+    requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
+                                               -- (admins never need one); false = testing is optional for everyone
+    supervisorItems = false,                   -- false = only admins may put items in a custom mission (items a run
+                                               -- hands out can be used or sold before they are taken back); true =
+                                               -- supervisors too
+    useMyPosition = true,                      -- true = the Locations step has "Set start here" and "Add here":
+                                               -- the point goes where you stand (or your vehicle is) and the tablet
+                                               -- stays open; false = points are only placed with the aim tool
+    autoFill = true,                           -- true = a spawn point row has "Fill N for me": the game proposes
+                                               -- the points around the start, outside its keep-out, on safe ground
+                                               -- (you keep them, try again or place them by hand); false = no button
+    autoFillRing = { 15.0, 80.0 },             -- metres beyond the keep-out that "Fill N for me" puts points at
+                                               -- (nearest, furthest)
+
+    quickWizard = true,                        -- true = the New mission button opens a 4-step wizard (What,
+                                               -- Where, Check, Publish): pick a template, stand at the spot, fill
+                                               -- the points, publish; Open the full editor is on every step;
+                                               -- false = the New mission dialog and the full editor only
+    foldAdvanced = true,                       -- true = each block's settings show the few that matter
+                                               -- (e.g. a shootout: waves, enemies per wave, weapons, difficulty)
+                                               -- and fold the rest under "More settings"; false = every setting
+                                               -- is shown open, as before
+
+    -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
+    -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.
+    teleport = true,
+
+    -- built-in missions a new mission can start from: it copies their type, difficulty, team, times, bonuses,
+    -- penalties and objectives, but none of their locations (you place your own). Empty = no templates
+    templates = {
+        'beat_patrol',
+        'business_check',
+        'parking_patrol',
+        'pursuit_sim',
+        'manhunt',
+        'warrant_service',
+        'gang_shootout',
+        'hostage_rescue',
+        'armored_truck_escort',
+        'bomb_disposal',
+    },
+    testAtMaxTier = true, -- a test counts as passed only at the tier maxOfficers reaches
+    editLockMinutes = 30, -- one editor at a time; renewed while they keep editing
+    defaultTeam = { patrol = 2, training = 2, investigation = 2, tactical = 4 }, -- most officers a new mission
+    -- starts with, by its type (the builder can change it on Details)
+    autosaveSeconds = 30,
+    exportPath = 'missions/custom/',           -- folder (inside missions/custom/) for missions made in the Builder.
+                                               -- Another folder must be created by hand first, with archived,
+                                               -- overrides, overrides/archived and deleted inside it (the server
+                                               -- cannot create folders on Linux)
+    keepBackups = true,                        -- keep <mission_id>.v<version>.lua.bak on every publish
+    route = {                                  -- route recording (see Mission Builder, Route recording)
+        snapEvery = 25.0,       -- metres between samples while recording
+        maxOffRoad = 8.0,       -- samples further than this from a road node are rejected
+        turnAngle = 30.0,       -- heading change (degrees) that keeps a waypoint
+        maxGap = 150.0,         -- at least one waypoint this often, in metres
+        minLength = 800.0,      -- metres a recorded route must be at least
+        maxLength = 8000.0,     -- metres a recorded route may be at most
+        minStartEndGap = 300.0, -- open routes: start and end at least this far apart
+        loopClose = 50.0,       -- a race loop must end this close to its start
+        undoMetres = 100.0,     -- Backspace removes this much of the recording
+        testDriveTimeout = 30,  -- seconds to reach each waypoint in a test drive
+        patrolSpacing = 300.0,  -- a patrol (checkpoint route) recorded by driving is saved as checkpoints about
+                                -- this many metres apart along the drive, not as a road route
+    },
+    allowed = {                 -- the only models, weapons and animations builders can pick
+        -- no automatic weapons: an NPC never gets one (Config.NpcCombat), so the Builder never offers one
+        weapons = {
+            'WEAPON_PISTOL',
+            'WEAPON_COMBATPISTOL',
+            'WEAPON_HEAVYPISTOL',
+            'WEAPON_PUMPSHOTGUN',
+        },
+        -- base-game ped models only. The list holds every ped a built-in mission or a block default uses
+        -- (inmates, the Kingpin, the escort driver), so a copy of any built-in mission can be published.
+        peds = {
+            'g_m_y_ballaeast_01',
+            'g_m_y_famca_01',
+            'g_m_y_mexgoon_01',
+            'g_m_y_lost_01',
+            'a_m_m_business_01',
+            'a_f_y_business_01',
+            's_m_y_prisoner_01',
+            's_m_y_prismuscl_01',
+            'g_m_m_armboss_01',
+            's_m_m_armoured_01',
+            'a_m_y_stbla_01',
+            'a_m_m_eastsa_02',
+            'a_m_y_mexthug_01',
+            'a_f_y_eastsa_03',
+            'a_m_m_salton_02',
+            'g_m_y_salvagoon_01',
+            'g_m_m_chicold_01',
+        },
+        vehicles = {
+            'sultan',
+            'buffalo',
+            'elegy2',
+            'kuruma',
+            'dominator',
+            'asea',
+            'primo',
+            'emperor',
+            'tornado',
+            'stanier',
+            'rancherxl',
+            'bison',
+        },
+        escortVehicles = { 'stockade', 'stockade3' },
+        animations = { 'clipboard', 'search', 'kneel', 'mechanic', 'notepad', 'photo' },
+    },
+    noBuildZones = {            -- no spawn point, marker or route waypoint inside these
+        { label = 'Mission Row PD and FIB HQ', coords = vec3(470.63, -974.11, 30.18), radius = 120.0 },
+        { label = 'Sandy Shores BCSO', coords = vec3(1833.06, 3679.32, 33.19), radius = 80.0 },
+        { label = 'SASP HQ', coords = vec3(1560.38, 815.76, 76.21), radius = 80.0 },
+        { label = 'Pillbox Hill Medical', coords = vec3(308.19, -595.35, 43.29), radius = 100.0 },
+        { label = 'Paleto Bay Medical', coords = vec3(-254.54, 6331.78, 32.43), radius = 80.0 },
+        { label = 'Bolingbroke Penitentiary', coords = vec3(1691.5, 2578.5, 44.7), radius = 215.0 },  -- the whole prison, every tower
+        { label = 'Fort Zancudo', coords = vec3(-2075.0, 3225.0, 33.0), radius = 320.0 },             -- the base: 4 circles
+        { label = 'Fort Zancudo south-east', coords = vec3(-1875.0, 3050.0, 33.0), radius = 320.0 },
+        { label = 'Fort Zancudo south-west', coords = vec3(-2300.0, 2950.0, 33.0), radius = 280.0 },
+        { label = 'Fort Zancudo north-west', coords = vec3(-2250.0, 3300.0, 33.0), radius = 280.0 },
+        { label = 'Crimson-Arena Trailer Park', coords = vec3(2344.43, 2565.06, 46.67), radius = 160.0 }, -- live match boundary (up to 135 m) + push-back
+        { label = 'Crimson-Arena lobby', coords = vec3(-282.01, -2030.46, 30.15), radius = 60.0 }, -- where arena players return after a match
+    },
+}
+
+-- ############################################################################
+--                          PART 3 · PLAYER VS POLICE
+-- Real players as suspects: the rules for every such case, live crimes and volunteer suspects.
+-- ############################################################################
 
 -- ============================================================================
 --                    REAL SUSPECTS (rules for real players)
@@ -1189,385 +1388,207 @@ Config.Volunteers = {
     payRewards = false,              -- true = it rolls the item rewards of its type too (Config.Rewards)
 }
 
+-- ############################################################################
+--                           PART 4 · POLICE TEAMWORK
+-- Officers working together: units, Cross-Department Missions, supervisor mission controls, field
+-- training, leaderboards, the department challenge and officer profiles.
+-- ############################################################################
+
 -- ============================================================================
---                          POLICE ACTIONS AND CUSTODY
+--                                    UNITS
 -- ============================================================================
 
-Config.Custody = {
-    times = {                        -- seconds each action's progress bar takes
-        talk = 4,
-        frisk = 4,
-        detain = 3,
-        searchPerson = 4,
-        lookInside = 2,
-        runPlate = 3,
-        inspect = 3,
-        orderOut = 2,
-        searchVehicle = 8,
-        warn = 2,
-        cite = 6,
-        release = 2,
-        impound = 10,
-        noAction = 1,
-        explain = 4,
-        escort = 1,
-        seat = 2,
-        handover = 4,
-    },
-    reach = {                        -- metres, checked with server-side coordinates
-        person = 2.0,
-        frisk = 1.5,
-        vehicle = 3.0,
-        plateFromVehicle = 20.0,     -- Run plate from the driver seat of any vehicle
-        seatVehicle = 5.0,
-        van = 20.0,                  -- Hand over moves escorted and seated people this close to the van
-    },
-    -- chance a person agrees to a vehicle search
-    consent = { clean = 0.60, guilty = 0.15 },
-    admission = 0.20,                -- chance a guilty person admits it when talked to (probable cause)
-    handcuffsItem = false,           -- e.g. 'handcuffs': Detain and Cuff suspect need it (checked, not used)
-    evidenceItem = false,            -- e.g. 'evidence_bag': one per participant, removed at the run's end
-    releaseDespawn = 30,             -- seconds before a released person or car is removed
-    actionSlack = 0.5,               -- seconds an action's finish may come early (begin → finish check)
-    -- Cues rolled with a guilty truth, so contraband in a car can usually be found lawfully.
-    cues = { plainView = 0.40, odour = 0.30 },
-    -- Mission vehicle plates: prefix + random letters and digits (8 characters in all), rerolled up to
-    -- 5 times when player_vehicles already has the plate.
-    plates = { prefix = 'CP', length = 8 },
-    -- Service vehicles (transport, tow, coroner): driven by the nearest participant's client.
-    serviceTimeout = 60,             -- seconds to park or load before the fallback (placed / faded out)
-    serviceHandoff = 250.0,          -- metres: AI moves to another participant beyond this
-    -- Metres (10-100): a prisoner van, tow truck or coroner van never appears or is put down closer than this to any
-    -- player. After serviceTimeout with its parking point taken by an officer it comes to a road point beside the scene
-    -- instead (or waits until the officer steps away); a tow truck that never got a road point fades the car out
-    serviceClearance = 30.0,
-    transport = {                    -- the prisoner van
-        model = 'policet',
-        driver = 's_m_y_cop_01',
-        spawnDistance = { 150.0, 250.0 },
-        parkWithin = 60.0,           -- metres: with no transport point it parks anywhere this close to the scene
-        leaveAfter = 60,             -- seconds after the objective that called it ends; called again if needed
-    },
-    tow = {                          -- the tow truck; enabled = false fades the car out instead
-        enabled = true,
-        model = 'flatbed',
-        driver = 's_m_m_trucker_01',
-        spawnDistance = { 150.0, 250.0 },
-        leaveAfter = 45,
-    },
-    coroner = {
-        model = 'burrito3',
-        driver = 's_m_y_autopsy_01',
-        bagProp = 'xm_prop_body_bag',
-        spawnDistance = { 150.0, 250.0 },
-    },
-    offences = {                     -- what a citation can name (labels: locale custody.offence.<id>)
-        person = {
-            'speeding',
-            'reckless',
-            'no_licence',
-            'suspended_licence',
-            'expired_registration',
-            'open_container',
-            'loitering',
-            'possession_small',
-            'equipment',
-        },
-        vehicle = { 'expired_meter', 'no_permit', 'no_parking', 'hydrant', 'loading_zone' },
-    },
-    -- Hidden truths, as weights. A mission objective names the set (profileSet).
-    profileSets = {
-        scene = {
-            person = { clean = 35, minor = 15, warrant = 15, narcotics = 15, tools = 12, armed = 8 },
-            vehicle = { legal = 85, stolen = 15 },
-        },
-        traffic = {
-            driver = { clean = 50, minor = 20, suspended = 10, warrant = 8, intoxicated = 7, narcotics = 3, armed = 2 },
-            passenger = { clean = 70, warrant = 12, narcotics = 10, armed = 8 },
-            vehicle = { legal = 90, stolen = 10 },
-        },
-        parking = {
-            vehicle = { legal = 45, violation = 50, stolen = 5 },
-        },
-        stolenCar = {
-            driver = { evading = 60, warrant = 25, armed = 15 },
-            passenger = { evading = 60, warrant = 20, armed = 20 },
-            vehicle = { stolen = 100 },
-        },
-    },
-    -- Demeanour weights by truth. Only armed people can be hostile.
-    demeanour = {
-        clean = { compliant = 80, nervous = 15, evasive = 5 },
-        minor = { compliant = 60, nervous = 30, evasive = 10 },
-        suspended = { compliant = 55, nervous = 35, evasive = 10 },
-        warrant = { compliant = 35, nervous = 25, evasive = 15, runner = 25 },
-        narcotics = { compliant = 40, nervous = 35, evasive = 10, runner = 15 },
-        tools = { compliant = 40, nervous = 30, evasive = 15, runner = 15 },
-        intoxicated = { compliant = 60, nervous = 25, evasive = 15 },
-        armed = { compliant = 30, nervous = 20, runner = 20, hostile = 30 },
-        evading = { compliant = 30, nervous = 20, runner = 50 },
-    },
-    -- Parking: which spot rules make a violation ticket-level ('cite') or tow-level ('impound').
-    parkingRules = {
-        metered = 'cite',
-        permit = 'cite',
-        no_parking = 'impound',
-        hydrant = 'impound',
-        loading = 'impound',
-        free = false,                -- a free spot is legal, or the car is stolen
-    },
+Config.Units = {
+    invitePolicy = 'anyone',            -- 'anyone' (every member may invite) | 'leader'
+    readyCheck = true,                  -- units of 2+ confirm before the draw
+    readyTimeout = 20,                  -- seconds to answer
+    kickReinvite = 60,                  -- seconds before a kicked officer can be invited again
+    nearbyBands = { 250, 1000, 3000 },  -- metres: distance bands in the invite list
 }
 
 -- ============================================================================
---                                  DECISIONS
+--                          CROSS-DEPARTMENT MISSIONS
 -- ============================================================================
--- The point value of each grade is in Config.Bonuses (correct_disposition, wrongful_arrest, ...).
-Config.Decisions = {
-    -- releasing a person after their warrant or weapon reached the decider fails the case
-    failOnKnownDanger = true,
-    -- No action or a citation for a car whose stolen plate reached the decider fails the case
-    failOnKnownStolen = true,
-    confirmKnownErrors = true,          -- a case-failing choice asks "this will fail the case" first
-    undiscoverableIsOk = true,          -- Release or No action is Acceptable when no lawful path existed
-    undecidedAtEnd = 'missed_offence',  -- what a contact still undecided at the end counts as
-    debrief = true,                     -- list every decision on the result screen and in history
+
+Config.CrossDept = {
+    enabled = true,          -- true = officers may launch cross-department missions
+    minParticipants = 2,     -- officers a cross-department run needs to start
+    maxParticipants = 8,     -- officers one cross-department run takes at most
+    joinWindow = 300,        -- seconds until joining closes (or the launcher taps Start now)
+    idleCancel = 1800,       -- auto-cancel after this long with no run in progress
+    cooldown = 1800,         -- seconds between launches, server-wide
+    waitlist = true,         -- officers can queue when every place is taken; a freed place goes to the first
 }
 
 -- ============================================================================
---                              SUSPECT BEHAVIOUR
+--                               MISSION CONTROLS
 -- ============================================================================
+-- See also Part 2 (NPC missions): these controls change the NPC missions of one department.
 
-Config.Npc = {
-    tellSeconds = { 1.5, 3.0 },      -- how long a tell plays before a person runs or draws
-    tellHints = true,                -- HUD hint ("Watch his hands") for participants within tellRange
-    tellRange = 25.0,                -- metres
-    feintRange = 6.0,                -- a feint needs no participant this close...
-    feintAfter = 5,                  -- ...and nobody aiming for this many seconds
-}
-
--- How NPCs feel. It never changes points or cash.
-Config.NpcDifficulty = {
-    preset = 'normal',               -- 'easy' | 'normal' | 'hard' | 'custom'
-    -- fleeMult: how long runners keep running (Config.Flee): 1.2 = 20 % longer
-    custom = { accuracyAdd = 0, armourAdd = 0, healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 },
-    presets = {
-        easy = { accuracyAdd = -8, armourAdd = 0, healthMult = 0.85, surrenderMult = 1.3, fleeMult = 0.8 },
-        normal = { accuracyAdd = 0, armourAdd = 0, healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 },
-        hard = { accuracyAdd = 8, armourAdd = 15, healthMult = 1.15, surrenderMult = 0.7, fleeMult = 1.2 },
+-- Rules a department's supervisors may change for their own department from the Supervisor UI, only inside the
+-- bounds set here and only while an admin switched them on: Config.Permissions.supervisor.missionControls and the
+-- control's own on. A department may have its own bounds (Config.Departments.<key>.missionControls = { <control> =
+-- { on, min, max } }); they win over the ones below for it. Every change needs a reason and is in the audit log.
+-- The cooldown controls are server-wide (one value for every department), outside the master switch and ship
+-- on: a supervisor may change them out of the box; until one does, every cooldown stays as config.lua sets it.
+-- Clearing one officer's cooldown is a cooldown control too (server-wide, ships on). Every other control ships off.
+Config.MissionControls = {
+    changeWait = 300,   -- seconds between two changes of one control in one department
+    selfExempt = true,  -- a control that relaxes a rule never applies to the supervisor who set it or a unit he is in
+    grants = {},        -- per department who may use them, e.g. { sast = { minGrade = 4 } }; {} = every supervisor
+    controls = {        -- per control: on = the admin switch, min/max = the only values a supervisor may pick
+        -- x every mission's cooldown, per mission type, for every department; min 0 = a type with no mission cooldown
+        cooldownScale = { on = true, min = 0, max = 2 },
+        -- the abandon cooldown in seconds (Limits.abandonCooldown) for every department; 0 = none
+        abandonCooldown = { on = true, min = 0, max = 900 },
+        -- false switches the no-repeat rule (Draw.avoidLast) off for every department: a mission may come up twice
+        noRepeat = { on = true },
+        -- completed missions per officer per hour (Limits.maxCompletionsHour) for every department
+        hourlyCap = { on = true, min = 1, max = 16 },
+        -- completed missions per officer per day (Limits.maxCompletionsDay) for every department; 0 = no cap
+        dailyCap = { on = true, min = 0, max = 40 },
+        -- happy hour minutes: no mission cooldowns for anyone on the server (abandon cooldown and caps stay)
+        happyHour = { on = true, min = 5, max = 30 },
+        -- Department Report: a supervisor clears one officer's mission or type cooldown (any department, never his
+        -- own character, never while the officer is on a run); each officer still at most
+        -- AdminControl.cooldownClearsPerDay clears a day by all staff together
+        clearCooldown = { on = true },
+        -- Live Missions: a supervisor adds min to max minutes per click to a running mission of his department
+        -- (never his own); the time limit the fast-finish bonus is judged on stays the same
+        addRunTime = { on = false, min = 1, max = 5 },
+        -- seconds a unit of his department has to reach the start after accepting (Limits.startTimeout and the
+        -- mission's own); read when the run is accepted, so a change never moves a run already going
+        startTimeout = { on = false, min = 300, max = 900 },
+        -- seconds a unit of his department has to answer the ready check (Units.readyTimeout); 0 switches the ready
+        -- check off for his department, allowed only while canTurnOff = true
+        readyCheck = { on = false, min = 10, max = 40, canTurnOff = false },
+        -- x the mission's time limit for runs of his department; the fast-finish bonus still uses the unscaled limit
+        timeLimit = { on = false, min = 1.0, max = 1.25 },
+        -- seconds after a run of his department starts before officers who never reached the start are removed
+        -- (AntiCheat.idleCheck); stricter only: never more than that config value
+        idleCheck = { on = false, min = 60, max = 180 },
+        -- how hard mission NPCs are on runs his department leads: one of the presets listed here
+        -- (NpcDifficulty.presets: easy, normal, hard, custom); read when the run is accepted; NpcCombat's limits
+        -- still apply on top, and points and cash never change
+        difficulty = { on = false, presets = { 'easy', 'normal' } },
+        -- the largest unit an officer of his department may lead (invites, joins and accepting a mission); never
+        -- above Limits.maxUnitSize
+        unitSize = { on = false, min = 2, max = 4 },
+        -- Mission Board: mission types (or single missions) a supervisor switches off for his department; its
+        -- officers see the type locked, other departments still take it; it stays until switched back on
+        types = { on = false },
+        -- Mission Board: one mission type shown to his department's officers as "Recommended by command", right
+        -- after their favourites; points and pay never change
+        featuredType = { on = false },
+        -- Department Report: a supervisor bars one officer of his department (a lower grade, never himself) from
+        -- taking missions for min to max hours, with a reason: no Mission Board accept, mission call claim or
+        -- Cross-Department join; the tablet stays usable and a mission already running goes on. The one who set it
+        -- and admins (Officers -> Today & cooldowns) may lift it early
+        missionBan = { on = false, min = 1, max = 24 },
+        -- Dispatch: his department's own lane of mission calls next to the server's: min to max seconds between two
+        -- lane calls (he picks a range inside it), how many may be open at once (up to callLaneMaxOpen), the areas
+        -- and the mission types (MissionCalls.types) with a weight each; only his department sees and claims them
+        callLane = { on = false, min = 120, max = 600 },
+        -- seconds a supervisor of his department waits between two mission calls he creates
+        -- (MissionCalls.staffCooldown); the one who shortens it keeps the config wait for himself
+        staffCallWait = { on = false, min = 60, max = 120 },
+        -- Supervisor UI: a supervisor posts a short notice (up to noticeMaxLength characters, 1 to 30 days) for his
+        -- own department only; its officers see it on Home -> Announcements, other departments never do. At most 5
+        -- run at once per department, the banned-word list applies, and every post and end is audited
+        notices = { on = false },
+        -- Cross-Department Missions: a supervisor keeps his department's officers out of them (they cannot join)
+        -- or caps how many of them may take part in one; every board still shows only the running operation and
+        -- the wait between launches stays server-wide
+        crossDept = { on = false },
+        -- Leaderboard: whether other departments see his department's officers by name or by callsign only, and
+        -- which Rank by tabs his department's officers see (Leaderboard.metrics; points always). Presentation only:
+        -- counts, the Department Challenge and the admin boards never change
+        boards = { on = false },
+        -- Review: stricter rules for his department's flagged runs: a supervisor's Void waits for a second
+        -- supervisor of the department, and flags of the kinds he picks go to admins only. Admins are never bound
+        -- and the anti-cheat flag triggers stay as they are
+        reviewRules = { on = false },
+        -- Mission Board and mission call claims: which of the twists enabled in Events.twists his department's
+        -- leaders are offered at the accept step, and which of them start ticked; a twist his department does not
+        -- offer is refused. The twists' bonuses never change
+        twists = { on = false },
+        -- Happy hour cash: x the cash of a completed run his department leads that was accepted while a happy hour
+        -- ran (kept for the run, so the end of the hour never cuts it); never on test runs, Cross-Department runs or
+        -- the Weekly Boss, and Cash.dailyCap still applies. min = max = 1.0 moves nothing: raise max (e.g. 1.25)
+        happyHourCash = { on = false, min = 1.0, max = 1.0 },
+        -- Twist cash: x each twist's cash (Events.twists) on runs his department leads, read at the accept; the chosen
+        -- twists together still stop at Events.twistMaxCash and points never change. min = max = 1.0 moves nothing
+        twistCash = { on = false, min = 1.0, max = 1.0 },
+        -- Happy hour points: x the final points of a completed run his department leads that was accepted while a
+        -- happy hour ran (kept for the run); never for the one who started the hour, on test runs, Cross-Department
+        -- runs or the Weekly Boss. min = max = 1.0 moves nothing: raise max (e.g. 1.25)
+        happyHourPoints = { on = false, min = 1.0, max = 1.0 },
+        -- Twist points: x each twist's points share (Events.twists) on runs his department leads, read at the accept;
+        -- the chosen twists together still stop at Events.twistMaxPoints. min = max = 1.0 moves nothing
+        twistPoints = { on = false, min = 1.0, max = 1.0 },
+        -- Type of the Day: a supervisor picks one mission type for TOMORROW, at most once a day for his department;
+        -- tomorrow his department's officers earn the Type of the Day points (Events.todMultiplier) on that type
+        -- instead of the server's type, other departments keep the server's. Never on his own runs or a unit he is in
+        typeOfTheDay = { on = false },
+        -- Dispatch: a supervisor pages a unit of his department (never his own) with one mission he chooses instead
+        -- of a random one; only that unit sees the mission's name and may accept or decline it, every accept rule
+        -- stays (cooldowns, caps, unit size), the call never earns rapid response and the audit names the mission
+        pushMission = { on = false },
+        -- Goals: a supervisor picks min to max of your daily goals and of your weekly goals (Goals.daily, Goals.weekly)
+        -- his department's officers draw theirs from, starting at the next weekly reset (none picked = every goal);
+        -- the goals' points never change and the supervisor himself keeps your whole lists
+        goals = { on = false, min = 1, max = 5 },
+        -- Department Report: a supervisor gives min to max points at a time to an officer of his own department
+        -- (never to himself or another character of his license), with a reason, through the same logged manual award
+        -- as Admin UI -> Give or take points (AdminControl.pointAdjust off stops it too); shown in the officer's history
+        -- like an admin's award, at most awardPointsPerDay points a supervisor a day
+        awardPoints = { on = false, min = 1, max = 50 },
     },
-}
+    happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
 
--- How hard armed mission NPCs fight back. Only mission NPCs and the officers on their run are changed, and only
--- while the run is live. For every number here: lower = easier for your officers.
-Config.NpcCombat = {
-    enabled = true,                  -- false = NPCs fight as GTA makes them (every value below is ignored)
-    -- The only weapons a mission NPC is ever given. Automatic weapons (SMGs, rifles, machine guns) are never given,
-    -- even when one is added here.
-    weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL', 'WEAPON_HEAVYPISTOL', 'WEAPON_PUMPSHOTGUN' },
-    -- A mission that names a weapon outside the list above gets the weapon this list gives for it...
-    replace = {
-        WEAPON_MICROSMG = 'WEAPON_PISTOL',
-        WEAPON_SMG = 'WEAPON_COMBATPISTOL',
-        WEAPON_ASSAULTRIFLE = 'WEAPON_HEAVYPISTOL',
-    },
-    fallback = 'WEAPON_PISTOL',      -- ...or this one when the list has none for it
-    ammo = 60,                       -- rounds each armed NPC gets
-    accuracyScale = 0.7,             -- NPC accuracy (after the team size and Config.NpcDifficulty) times this...
-    accuracyMax = 18,                -- ...and never above this (0-100; bosses and shots from cars too)
-    shootRate = 60,                  -- how fast NPCs pull the trigger (0-1000)
-    firingPattern = 'single',        -- 'single' (one shot at a time), 'burst' (short bursts), 'delayed' (a pause
-                                     -- before each shot) or 'default' (GTA picks)
-    abilityMax = 1,                  -- combat skill at most: 0 poor, 1 average, 2 professional
-    noCharge = true,                 -- NPCs never charge at officers
-    aiDamage = 0.5,                  -- damage of NPC bullets (1.0 = normal GTA damage, 0.5 = half)
-    aiMeleeDamage = 0.5,             -- damage of NPC punches and melee weapons (1.0 = normal)
-    reassertAiDamage = true,         -- true = the run's NPC damage value is set again every second (other scripts
-                                     -- such as Crimson-Contracts share it); false = set once at the start (the old way)
-    officerDefense = 1.0,            -- damage officers on a run take from every weapon, players' too (1.0 = off)
-    noCriticalHits = true,           -- officers on a run take no extra headshot damage (it hurts like a body shot)
-    cancelLethalHeadshots = true,    -- the server drops a one-shot kill by a mission NPC on an officer of its run...
-    lethalCancelAbove = 0.75,        -- ...who still has at least this share of his health (0.25-1, 0.75 = three
-                                     -- quarters). The shot that finishes off a hurt officer always counts
-    playerHitDropsProtection = false, -- true = an officer on an NPC mission loses noCriticalHits and officerDefense for
-                                      -- the rest of that run once a real player who is not on the run shoots him
-}
-
--- How long a suspect who runs from your officers can keep running. GTA's NPCs never tire, so the server times every
--- mission NPC that runs on foot (time in a car does not count): first a sprint, then a jog, then a walk, then worn
--- out, and he slows down to match. A worn-out runner gives up when an officer gets close. Config.NpcDifficulty's
--- fleeMult stretches every time here ('hard' runners last 20 % longer, 'easy' ones 20 % shorter).
-Config.Flee = {
-    enabled = true,                  -- false = suspects run as GTA makes them: they never tire
-    sprintSeconds = 10,              -- seconds a runner sprints before he slows to a jog
-    jogSeconds = 12,                 -- seconds he then jogs before he slows to a walk
-    walkSeconds = 8,                 -- seconds he then walks before he is worn out
-    -- Each suspect lasts up to this share longer or shorter, rolled once per suspect from the run's seed (0.25 = 25 %,
-    -- 0 = every suspect lasts the same)
-    jitter = 0.25,
-    -- Seconds with no officer within recoverRange before a runner gets his breath back and sprints again
-    recoverSeconds = 20,
-    recoverRange = 60.0,             -- metres: an officer this close stops a runner from getting his breath back
-    armedTire = true,                -- false = a suspect who carries a weapon you can see never tires
-    jogRate = 0.95,                  -- a jogging runner's speed: 1.0 = a normal jog, 0.9 = 10 % slower (0.5-1.0)
-    walkRate = 0.85,                 -- a walking or worn-out runner's speed: 1.0 = a normal walk (0.5-1.0)
-    windedClipset = true,            -- true = a tired runner looks it: he jogs, then walks winded
-    -- What a worn-out runner does when an officer comes within giveUpRange: 'surrender' (he gives up and kneels),
-    -- 'handsUp' (he gives up and stands with his hands up) or 'walk' (he walks on and never gives up on his own)
-    exhausted = 'surrender',
-    giveUpRange = 30.0,              -- metres: a worn-out runner gives up when an officer is this close (5-100)
-    -- true = a runner, cook or inmate who scatters (Gang Hideout Raid, Drug Lab Raid, Prison Break) flees along the
-    -- escape route that starts nearest where he appears, so nobody runs back across the site past your officers
-    -- (routes that start about as near, within 5 m, take turns); false = the routes take turns wherever he appears
-    nearestRoute = true,
+    -- officers' cooldowns one supervisor may clear a day (admins any)
+    clearCooldownPerDay = 5,
+    -- times one supervisor may add minutes to a running mission a day (admins any)
+    addRunTimePerDay = 10,
+    -- seconds supervisors may add to one running mission in all, counted together with an admin's additions and
+    -- never above AdminControl.runTimeAddMax
+    addRunTimeMax = 300,
+    -- mission bans one supervisor may set a day (admins any)
+    missionBanPerDay = 3,
+    -- calls one department's lane may have open at once (every open call still counts against MissionCalls.maxOpen)
+    callLaneMaxOpen = 2,
+    -- characters a department notice may hold (at most 280, the length of an admin's staff notice)
+    noticeMaxLength = 280,
+    -- department notices one supervisor may post a day (admins any)
+    noticesPerDay = 5,
+    -- missions one supervisor may push to a unit a day (the pushMission control; admins any)
+    pushMissionPerDay = 5,
+    -- points one supervisor may give a day in all (the awardPoints control; admins any); 0 = no limit
+    awardPointsPerDay = 100,
 }
 
 -- ============================================================================
---                           BUILT-IN MISSION TWEAKS
+--                                FIELD TRAINING
 -- ============================================================================
--- Change built-in missions without editing their files, so the change survives updates. Every tweak is
--- checked by the same rules as the file; a tweak that breaks one is ignored with a console warning.
--- Allowed keys: cooldown, timeLimit, startTimeout, disabledLocations (labels), peds, vehicles, weapons.
--- weapons replaces every weapon list of the mission (waves, ambushes, associates); a boss carries its last one.
-Config.MissionTweaks = {
-    -- prison_break = { cooldown = 1800, timeLimit = 720, disabledLocations = { 'North gate' } },
-    -- gang_shootout = { peds = { 'g_m_y_lost_01' }, weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' } },
-}
-
--- ============================================================================
---                                     TIME
--- ============================================================================
--- Hour (0–23, server time) of the daily reset: Type of the Day, daily goals,
--- streak days, the daily cash cap and the retention job. Weekly things reset
--- at this hour on Config.Leaderboard.weekStartsOn.
-Config.Time = { resetHour = 0 }
-
--- ============================================================================
---                         SCORING, XP LEVELS AND GOALS
--- ============================================================================
-
-Config.Scoring = {
-    scoreCap = 2.0,          -- × P
-    streakStep = 0.05,
-    streakMax = 0.25,
-    streakGraceDays = 1,     -- missed days per week that don't reset the streak (0 = off)
-    failedCredit = 0.25,
-    common = {
-        fastShare = 0.75,        -- finished within this share of the time limit...
-        fastBonus = 0.20,        -- ...earns this share of P
-        noDamage = 10,
-        firstRun = 15,
-        heavyDamage = -25,
-        pedestrianHit = -30,
-        lightsSiren = -10,       -- missions with quietPatrol = true only (Beat Patrol, Business Check,
-                                 -- Illegal Parking Patrol), and only after arrival at the start
-        shotSurrendered = -20,
-        noDamageAbove = 950,     -- engine and body health above this earns noDamage
-        heavyDamageBelow = 500,  -- body health below this costs heavyDamage
-    },
-}
-
--- ============================================================================
---                            BONUSES AND PENALTIES
--- ============================================================================
--- The standard list, and the only one the Mission Builder offers. kind 'points'
--- = flat points (each = per occurrence); kind 'pct' = a share of P. block = the
--- block the mission must contain (none = any mission). Ids with positive values go in a mission file's bonuses,
--- negative ones in its penalties; either may override the value with points or pctOfPoints.
--- Labels live in locales/en.json. Built-in missions may also use the extra
--- bonuses written on their mission cards. Decision grades are personal to the officer who decided.
--- engineOnly = true: awarded by the engine or a block's own setting (e.g. bestPoints); never listed by
--- builder:config, and the loader refuses it in a mission file's bonuses or penalties.
-Config.Bonuses = {
-    no_participant_downed = { kind = 'pct', value = 0.10 },
-    no_weapons_fired = { kind = 'points', value = 10 },
-    hostile_arrested = { kind = 'points', value = 5, each = true, block = 'hostile_waves' },
-    suspect_alive = { kind = 'points', value = 15, block = 'flee_arrest' },
-    no_hostage_hurt = { kind = 'points', value = 15, block = 'protect_rescue' },
-    vehicle_stopped_fast = { kind = 'points', value = 15, block = 'pursuit' },            -- stopped within 2 minutes of the start
-    truck_healthy = { kind = 'pct', value = 0.10, block = 'escort' },                     -- arrives above 50% health
-    clues_first = { kind = 'points', value = 10, block = 'search_area' },                 -- every clue checked before the first arrest
-    no_missed_checks = { kind = 'points', value = 15, block = 'skill_check' },
-    correct_log = { kind = 'points', value = 5, each = true, block = 'interact_points' },
-    wrong_log = { kind = 'points', value = -5, each = true, block = 'interact_points' },  -- penalty
-    hard_ram = { kind = 'points', value = -10, each = true, block = 'pursuit' },          -- penalty: ramming at over 100 km/h
-    correct_disposition = { kind = 'points', value = 10, each = true, block = 'field_contact', engineOnly = true },
-    procedure_complete = { kind = 'points', value = 10, block = 'field_contact' },        -- once per officer
-    all_correct = { kind = 'points', value = 10, block = 'field_contact' },
-    subject_alive = { kind = 'points', value = 15, each = true, block = 'field_contact' },
-    vehicle_impounded = { kind = 'points', value = 10, each = true, block = 'field_contact' },
-    -- decision grades (negative values are penalties)
-    wrong_citation = { kind = 'points', value = -5, each = true, block = 'field_contact', engineOnly = true },
-    missed_offence = { kind = 'points', value = -5, each = true, block = 'field_contact', engineOnly = true },
-    wrongful_arrest = { kind = 'points', value = -25, each = true, block = 'field_contact', engineOnly = true },
-    missed_arrest = { kind = 'points', value = -15, each = true, block = 'field_contact', engineOnly = true },
-    wrongful_impound = { kind = 'points', value = -15, each = true, block = 'field_contact', engineOnly = true },
-    missed_impound = { kind = 'points', value = -10, each = true, block = 'field_contact', engineOnly = true },
-    unlawful_search = { kind = 'points', value = -15, each = true, block = 'field_contact', engineOnly = true },
-    unsearched_transport = { kind = 'points', value = -10, each = true, engineOnly = true },
-    excessive_force = { kind = 'points', value = -10, each = true, engineOnly = true },
-    all_taken_alive = { kind = 'points', value = 15, block = 'process_scene', engineOnly = true },
-    stop_without_cause = { kind = 'points', value = -15, block = 'pursuit', engineOnly = true },
-    lab_fire = { kind = 'points', value = -15, block = 'skill_check' },                 -- penalty: setback
-    cook_arrested = { kind = 'points', value = 10, each = true, block = 'flee_arrest' },
-    stash_found_fast = { kind = 'points', value = 10, block = 'interact_points' },
-    lieutenant_alive = { kind = 'points', value = 25, block = 'hostile_waves' },
-    rapid_response = { kind = 'pct', value = 0.10, engineOnly = true },                 -- claimed server-posted mission calls
-    rs_unarmed_shot = { kind = 'pct', value = -0.25, each = true, engineOnly = true },  -- penalty: shot a real suspect who was never armed
-    rs_ran_over = { kind = 'pct', value = -0.25, each = true, engineOnly = true },      -- penalty: ran a real suspect over on foot
-    live_scene = { kind = 'pct', value = 0.25, engineOnly = true },                     -- live case: secured the scene
-    live_detain = { kind = 'pct', value = 0.50, each = true, engineOnly = true },       -- live case: per suspect detained (x his share)
-    live_book = { kind = 'pct', value = 0.25, each = true, engineOnly = true },         -- live case: per suspect booked (x his share)
-    peaceful_arrest = { kind = 'pct', value = 0.15, each = true, engineOnly = true },   -- live case: per suspect detained after a surrender, no officer hit (x his share)
-}
-
--- Cosmetic badges only; never the Qbox rank. Each name is a band of numbered levels starting at level;
--- xp stays for old callers.
-Config.XPLevels = {
-    { label = 'Probationary', xp = 0, badge = 'grey', level = 1 },
-    { label = 'Patrol Officer', xp = 1000, badge = 'bronze', level = 10 },
-    { label = 'Senior Patrol', xp = 5000, badge = 'silver', level = 25 },
-    { label = 'Veteran', xp = 15000, badge = 'gold', level = 38 },
-    { label = 'Elite', xp = 40000, badge = 'platinum', level = 50 },
-}
-
--- Level n needs round(first × (growth^(n − 1) − 1) ÷ (growth − 1)) XP. Cosmetic only: never the rank,
--- never pay, never missions. Lv 10 ≈ 1,200 XP, Lv 25 ≈ 5,800, Lv 50 ≈ 37,900.
-Config.XPCurve = {
-    maxLevel = 50,
-    first = 100,             -- XP from level 1 to level 2
-    growth = 1.07,           -- each level needs this much more than the one before
-    prestigeEvery = 10000,   -- after maxLevel, one prestige star per this much XP
-}
-
-Config.Badges = {            -- achievement badge counts
-    ironWheels = 20,     -- completed runs with no vehicle damage
-    sharpshooter = 10,   -- Gang Shootouts with no participant downed
-    roadWarrior = 100,   -- Patrol missions
-    partnerInCrime = 50, -- unit runs
-    jointTaskForce = 10, -- runs with 2 or more departments
-    byTheBook = 100,     -- Best dispositions
-    firstResponder = 25, -- mission calls answered with rapid response
-}
-
--- A goal's stat is one of: arrests, citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok
--- (Best or Acceptable), decisions_best. Stat goals count completed rows only.
-Config.Goals = {
-    dailyPoints = 50,
-    weeklyPoints = 200,
-    daily = {
-        { id = 'patrol_2', label = 'Complete 2 Patrol missions', type = 'patrol', count = 2 },
-        { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 },
-        { id = 'unit_1', label = 'Complete 1 unit run', unit = true, count = 1 },
-        { id = 'calls_2', label = 'Answer 2 mission calls', missionCall = true, count = 2 },
-        { id = 'arrests_2', label = 'Make 2 arrests', stat = 'arrests', count = 2 },
-    },
-    weekly = {
-        { id = 'tactical_5', label = 'Complete 5 Tactical missions', type = 'tactical', count = 5 },
-        { id = 'cross_2', label = 'Complete 2 cross-department runs', crossDepartment = true, count = 2 },
-        { id = 'any_15', label = 'Complete 15 missions', count = 15 },
-        { id = 'judgement_15', label = 'Make 15 correct decisions', stat = 'decisions_ok', count = 15 },
-        { id = 'impound_3', label = 'Impound 3 vehicles', stat = 'impounds', count = 3 },
-    },
+-- Field training (FTO): a supervisor (or an admin) pairs a trainer with a rookie of his own department in Supervisor
+-- UI -> Department Report. Completed missions the rookie runs together with his trainer (both finish the same run)
+-- count towards the sign-off tasks below. Once a task's count is reached the trainer signs it off on his tablet
+-- (Profile -> Field training), with an optional note. When every task is signed off the rookie gets the badge below
+-- and the training is done. Every pairing and sign-off is in the audit log. Off when you install.
+Config.FieldTraining = {
+    enabled = false,                 -- true = supervisors can pair trainers and rookies, and runs count for them
+    -- Who may train, per department key: the lowest Qbox grade number of a trainer (that grade and up). A department
+    -- not listed here uses its supervisorGrade (so only supervisors train there)
+    trainerGrades = { sast = 2, fib = 2 },
+    -- Sign-off tasks, per mission type key: the completed missions of that type the rookie must run with his trainer
+    -- before the trainer may sign the task off. A type left out (or 0) is no task
+    tasks = { patrol = 3, investigation = 2, tactical = 1 },
+    rookiesPerTrainer = 2,           -- rookies one trainer may train at the same time
+    badge = 'field_training',        -- the badge a rookie gets when every task is signed off (Profile -> Badges)
+    -- Ride-along rule: mission type keys (e.g. { 'tactical' }) a rookie in training may only accept (or claim) with his
+    -- trainer in the same unit. Empty = a rookie runs every type with anyone
+    requireTrainerFor = {},
+    trainerBonus = 0,                -- points the trainer gets for each task he signs off (0 = none)
 }
 
 -- ============================================================================
@@ -1575,9 +1596,9 @@ Config.Goals = {
 -- ============================================================================
 
 Config.Leaderboard = {
-    cacheSeconds = 60,
-    minRunsToRank = 3,
-    topN = 25,
+    cacheSeconds = 60,       -- seconds a board is reused before it is counted again
+    minRunsToRank = 3,       -- runs in the window an officer needs to be ranked
+    topN = 25,               -- rows a board shows
     weekStartsOn = 'monday',
     seasonWeeks = 8,         -- suggested season length for "weeks left"; an admin ends the season
     -- Rank by tabs; 'live_catches' (suspects detained in live cases, Config.LiveCrime) can be added
@@ -1589,53 +1610,15 @@ Config.Leaderboard = {
 }
 
 -- ============================================================================
---                                SPECIAL EVENTS
--- ============================================================================
-
-Config.Events = {
-    typeOfTheDay = true,
-    todMultiplier = 2.0,     -- points only
-    -- share of runs that also get one random twist on top of the ones the officers chose (0 = never: officers
-    -- choose their own twists when they take a mission; 0.25 = one run in four)
-    modifierChance = 0,
-    armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs
-    timeCrunchCut = 0.25,    -- Time Crunch: share of the time limit removed
-    weeklyBoss = { enabled = true, days = { 'friday', 'saturday', 'sunday' }, points = 500, payout = 2500 },
-    -- Twists the officers may choose when they take a mission from the Mission Board or a mission call (the unit
-    -- leader decides for the unit). Each chosen twist adds its own reward and they stack, up to twistMaxPoints and
-    -- twistMaxCash. Rewards are paid only for a completed run. Never on the Weekly Boss, test runs or
-    -- Cross-Department Missions.
-    twists = {
-        armored_hostiles = {     -- armed NPCs get armoredArmour extra armour (offered only where armed NPCs spawn)
-            enabled = true,      -- false = officers cannot choose it and it is never rolled
-            points = 0.25,       -- share of P it adds (0.25 = +25 % points; 0 = no extra points)
-            cash = 1.25,         -- cash multiplier (1.25 = x1.25 cash; 1.0 = no extra cash)
-        },
-        time_crunch = {          -- the time limit is timeCrunchCut shorter
-            enabled = true,      -- false = officers cannot choose it and it is never rolled
-            points = 0.20,       -- share of P it adds (0.20 = +20 % points; 0 = no extra points)
-            cash = 1.20,         -- cash multiplier (1.20 = x1.20 cash; 1.0 = no extra cash)
-        },
-        radio_silence = {        -- the map hides what Config.Markers.radioSilence says
-            enabled = true,      -- false = officers cannot choose it and it is never rolled
-            points = 0.25,       -- share of P it adds (0.25 = +25 % points; 0 = no extra points)
-            cash = 1.25,         -- cash multiplier (1.25 = x1.25 cash; 1.0 = no extra cash)
-        },
-    },
-    twistMaxPoints = 0.70,   -- the most all chosen twists add together, as a share of P (0.70 = +70 % points)
-    twistMaxCash = 1.95,     -- the highest cash multiplier all chosen twists give together (the multipliers multiply)
-}
-
--- ============================================================================
 --                             DEPARTMENT CHALLENGE
 -- ============================================================================
 
 Config.Challenge = {
-    enabled = true,
+    enabled = true,            -- true = departments compete in seasons (the department challenge)
     scoring = 'average',       -- 'average' (per active officer) | 'total' | 'top10'
-    minRunsActive = 3,
-    weeklyBounty = true,
-    bountyBonus = 0.10,
+    minRunsActive = 3,         -- runs in the week that make an officer active (the average counts only these)
+    weeklyBounty = true,       -- true = a weekly bounty is picked every week
+    bountyBonus = 0.10,        -- share of its week's challenge points the bounty winner gets on top (0.10 = +10%)
     bounties = {               -- one is picked at random each week; counted per active officer
         { id = 'most_tactical', label = 'Most Tactical missions' },
         { id = 'most_cross', label = 'Most cross-department runs' },
@@ -1652,7 +1635,7 @@ Config.Challenge = {
 
 Config.Profile = {
     bioMax = 280,                                 -- characters
-    bioLines = 3,
+    bioLines = 3,                                 -- lines a bio may have at most
     editCooldown = 300,                           -- seconds between profile changes
     bannedWords = {},                             -- extra words refused in bios (any case, whole words)
     bannedWordsFile = 'config/banned_words.txt',  -- the shipped default list; false = none
@@ -1784,38 +1767,192 @@ Config.OfficerOptions = {
 }
 
 Config.Commendations = {
-    enabled = true,
+    enabled = true,                  -- true = supervisors may commend officers
     kinds = { 'valor', 'lifesaving', 'teamwork', 'professionalism', 'leadership', 'investigation' },
     citation = { 10, 255 },          -- characters
-    perSupervisorPerDay = 3,
+    perSupervisorPerDay = 3,         -- commendations one supervisor may give per day
     sameKindCooldownDays = 7,        -- same officer, same kind
     crossDepartment = false,         -- true = supervisors may commend officers of other departments
     announceDays = 7,                -- days the Home announcement shows for the recipient
     announce = false,                -- also post it to the board webhook
 }
 
+-- ############################################################################
+--                         PART 5 · ECONOMY AND REWARDS
+-- Cash, payout changes, disputes, points, XP, badges, goals, bonuses and item rewards.
+-- ############################################################################
+
 -- ============================================================================
---                                FIELD TRAINING
+--                                     CASH
 -- ============================================================================
--- Field training (FTO): a supervisor (or an admin) pairs a trainer with a rookie of his own department in Supervisor
--- UI -> Department Report. Completed missions the rookie runs together with his trainer (both finish the same run)
--- count towards the sign-off tasks below. Once a task's count is reached the trainer signs it off on his tablet
--- (Profile -> Field training), with an optional note. When every task is signed off the rookie gets the badge below
--- and the training is done. Every pairing and sign-off is in the audit log. Off when you install.
-Config.FieldTraining = {
-    enabled = false,                 -- true = supervisors can pair trainers and rookies, and runs count for them
-    -- Who may train, per department key: the lowest Qbox grade number of a trainer (that grade and up). A department
-    -- not listed here uses its supervisorGrade (so only supervisors train there)
-    trainerGrades = { sast = 2, fib = 2 },
-    -- Sign-off tasks, per mission type key: the completed missions of that type the rookie must run with his trainer
-    -- before the trainer may sign the task off. A type left out (or 0) is no task
-    tasks = { patrol = 3, investigation = 2, tactical = 1 },
-    rookiesPerTrainer = 2,           -- rookies one trainer may train at the same time
-    badge = 'field_training',        -- the badge a rookie gets when every task is signed off (Profile -> Badges)
-    -- Ride-along rule: mission type keys (e.g. { 'tactical' }) a rookie in training may only accept (or claim) with his
-    -- trainer in the same unit. Empty = a rookie runs every type with anyone
-    requireTrainerFor = {},
-    trainerBonus = 0,                -- points the trainer gets for each task he signs off (0 = none)
+
+Config.Cash = {
+    account = 'bank',     -- 'bank' or 'cash'
+    source = 'server',    -- 'server' (new money) or 'society' (the department's Renewed-Banking account)
+    minPayout = 0,        -- limits for any base payout set in-game
+    maxPayout = 25000,    -- dollars
+    dailyCap = 0,         -- max cash per officer per day; 0 = no cap
+    -- Money tools outside the normal flow (Admin UI → Payments, Departments). All ship off: turning one on in
+    -- Settings needs the typed word ENABLE and is audited.
+    allowUnfundedRetry = false,  -- retry payments the department account could not cover
+    allowCapTopUp = false,       -- pay the part of a payment the daily cap cut
+    allowPayAgain = false,       -- pay a payment stuck in 'paying' again (after checking the bank history)
+    restoreForfeited = false,    -- a restored run pays its forfeited cash after all
+    allowAddFunds = false,       -- add money to a department's account
+    addFundsMax = 50000,         -- dollars per Add funds
+    allowClawback = false,       -- take back cash already paid
+    allowManualCash = false,     -- pay an officer by hand
+    manualDailyLimit = 10000,    -- dollars one admin may pay by hand per day
+    lowBalanceWarn = 0,          -- warn below this department balance (0 = off)
+}
+
+-- ============================================================================
+--                                PAYOUT EDITING
+-- ============================================================================
+
+Config.Payouts = {
+    supervisorRange = { 0.5, 2.0 },   -- supervisors: 50%–200% of the type's payout in Config.MissionTypes
+    supervisorCooldown = 1800,        -- seconds between changes to the same type (any supervisor)
+    requireReason = true,             -- a reason is required for every payout change
+}
+
+-- ============================================================================
+--                                   DISPUTES
+-- ============================================================================
+
+Config.Disputes = {
+    windowHours = 48,   -- hours after a run that its officers may dispute it
+}
+
+-- ============================================================================
+--                         SCORING, XP LEVELS AND GOALS
+-- ============================================================================
+
+Config.Scoring = {
+    scoreCap = 2.0,          -- × P
+    streakStep = 0.05,       -- × points added per day of streak (0.05 = +5% a day)
+    streakMax = 0.25,        -- the streak adds at most this (0.25 = +25%)
+    streakGraceDays = 1,     -- missed days per week that don't reset the streak (0 = off)
+    failedCredit = 0.25,     -- a failed run earns this share of P times the share of objectives done
+    common = {
+        fastShare = 0.75,        -- finished within this share of the time limit...
+        fastBonus = 0.20,        -- ...earns this share of P
+        noDamage = 10,
+        firstRun = 15,
+        heavyDamage = -25,
+        pedestrianHit = -30,
+        lightsSiren = -10,       -- missions with quietPatrol = true only (Beat Patrol, Business Check,
+                                 -- Illegal Parking Patrol), and only after arrival at the start
+        shotSurrendered = -20,
+        noDamageAbove = 950,     -- engine and body health above this earns noDamage
+        heavyDamageBelow = 500,  -- body health below this costs heavyDamage
+    },
+}
+
+-- ============================================================================
+--                            BONUSES AND PENALTIES
+-- ============================================================================
+-- See also Part 3 (Player vs police): the rs_ penalties below are for real-suspect cases.
+
+-- The standard list, and the only one the Mission Builder offers. kind 'points'
+-- = flat points (each = per occurrence); kind 'pct' = a share of P. block = the
+-- block the mission must contain (none = any mission). Ids with positive values go in a mission file's bonuses,
+-- negative ones in its penalties; either may override the value with points or pctOfPoints.
+-- Labels live in locales/en.json. Built-in missions may also use the extra
+-- bonuses written on their mission cards. Decision grades are personal to the officer who decided.
+-- engineOnly = true: awarded by the engine or a block's own setting (e.g. bestPoints); never listed by
+-- builder:config, and the loader refuses it in a mission file's bonuses or penalties.
+Config.Bonuses = {
+    no_participant_downed = { kind = 'pct', value = 0.10 },
+    no_weapons_fired = { kind = 'points', value = 10 },
+    hostile_arrested = { kind = 'points', value = 5, each = true, block = 'hostile_waves' },
+    suspect_alive = { kind = 'points', value = 15, block = 'flee_arrest' },
+    no_hostage_hurt = { kind = 'points', value = 15, block = 'protect_rescue' },
+    vehicle_stopped_fast = { kind = 'points', value = 15, block = 'pursuit' },            -- stopped within 2 minutes of the start
+    truck_healthy = { kind = 'pct', value = 0.10, block = 'escort' },                     -- arrives above 50% health
+    clues_first = { kind = 'points', value = 10, block = 'search_area' },                 -- every clue checked before the first arrest
+    no_missed_checks = { kind = 'points', value = 15, block = 'skill_check' },
+    correct_log = { kind = 'points', value = 5, each = true, block = 'interact_points' },
+    wrong_log = { kind = 'points', value = -5, each = true, block = 'interact_points' },  -- penalty
+    hard_ram = { kind = 'points', value = -10, each = true, block = 'pursuit' },          -- penalty: ramming at over 100 km/h
+    correct_disposition = { kind = 'points', value = 10, each = true, block = 'field_contact', engineOnly = true },
+    procedure_complete = { kind = 'points', value = 10, block = 'field_contact' },        -- once per officer
+    all_correct = { kind = 'points', value = 10, block = 'field_contact' },
+    subject_alive = { kind = 'points', value = 15, each = true, block = 'field_contact' },
+    vehicle_impounded = { kind = 'points', value = 10, each = true, block = 'field_contact' },
+    -- decision grades (negative values are penalties)
+    wrong_citation = { kind = 'points', value = -5, each = true, block = 'field_contact', engineOnly = true },
+    missed_offence = { kind = 'points', value = -5, each = true, block = 'field_contact', engineOnly = true },
+    wrongful_arrest = { kind = 'points', value = -25, each = true, block = 'field_contact', engineOnly = true },
+    missed_arrest = { kind = 'points', value = -15, each = true, block = 'field_contact', engineOnly = true },
+    wrongful_impound = { kind = 'points', value = -15, each = true, block = 'field_contact', engineOnly = true },
+    missed_impound = { kind = 'points', value = -10, each = true, block = 'field_contact', engineOnly = true },
+    unlawful_search = { kind = 'points', value = -15, each = true, block = 'field_contact', engineOnly = true },
+    unsearched_transport = { kind = 'points', value = -10, each = true, engineOnly = true },
+    excessive_force = { kind = 'points', value = -10, each = true, engineOnly = true },
+    all_taken_alive = { kind = 'points', value = 15, block = 'process_scene', engineOnly = true },
+    stop_without_cause = { kind = 'points', value = -15, block = 'pursuit', engineOnly = true },
+    lab_fire = { kind = 'points', value = -15, block = 'skill_check' },                 -- penalty: setback
+    cook_arrested = { kind = 'points', value = 10, each = true, block = 'flee_arrest' },
+    stash_found_fast = { kind = 'points', value = 10, block = 'interact_points' },
+    lieutenant_alive = { kind = 'points', value = 25, block = 'hostile_waves' },
+    rapid_response = { kind = 'pct', value = 0.10, engineOnly = true },                 -- claimed server-posted mission calls
+    rs_unarmed_shot = { kind = 'pct', value = -0.25, each = true, engineOnly = true },  -- penalty: shot a real suspect who was never armed
+    rs_ran_over = { kind = 'pct', value = -0.25, each = true, engineOnly = true },      -- penalty: ran a real suspect over on foot
+    live_scene = { kind = 'pct', value = 0.25, engineOnly = true },                     -- live case: secured the scene
+    live_detain = { kind = 'pct', value = 0.50, each = true, engineOnly = true },       -- live case: per suspect detained (x his share)
+    live_book = { kind = 'pct', value = 0.25, each = true, engineOnly = true },         -- live case: per suspect booked (x his share)
+    peaceful_arrest = { kind = 'pct', value = 0.15, each = true, engineOnly = true },   -- live case: per suspect detained after a surrender, no officer hit (x his share)
+}
+
+-- Cosmetic badges only; never the Qbox rank. Each name is a band of numbered levels starting at level;
+-- xp stays for old callers.
+Config.XPLevels = {
+    { label = 'Probationary', xp = 0, badge = 'grey', level = 1 },
+    { label = 'Patrol Officer', xp = 1000, badge = 'bronze', level = 10 },
+    { label = 'Senior Patrol', xp = 5000, badge = 'silver', level = 25 },
+    { label = 'Veteran', xp = 15000, badge = 'gold', level = 38 },
+    { label = 'Elite', xp = 40000, badge = 'platinum', level = 50 },
+}
+
+-- Level n needs round(first × (growth^(n − 1) − 1) ÷ (growth − 1)) XP. Cosmetic only: never the rank,
+-- never pay, never missions. Lv 10 ≈ 1,200 XP, Lv 25 ≈ 5,800, Lv 50 ≈ 37,900.
+Config.XPCurve = {
+    maxLevel = 50,           -- the last numbered level
+    first = 100,             -- XP from level 1 to level 2
+    growth = 1.07,           -- each level needs this much more than the one before
+    prestigeEvery = 10000,   -- after maxLevel, one prestige star per this much XP
+}
+
+Config.Badges = {            -- achievement badge counts
+    ironWheels = 20,     -- completed runs with no vehicle damage
+    sharpshooter = 10,   -- Gang Shootouts with no participant downed
+    roadWarrior = 100,   -- Patrol missions
+    partnerInCrime = 50, -- unit runs
+    jointTaskForce = 10, -- runs with 2 or more departments
+    byTheBook = 100,     -- Best dispositions
+    firstResponder = 25, -- mission calls answered with rapid response
+}
+
+-- A goal's stat is one of: arrests, citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok
+-- (Best or Acceptable), decisions_best. Stat goals count completed rows only.
+Config.Goals = {
+    dailyPoints = 50,
+    weeklyPoints = 200,
+    daily = {
+        { id = 'patrol_2', label = 'Complete 2 Patrol missions', type = 'patrol', count = 2 },
+        { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 },
+        { id = 'unit_1', label = 'Complete 1 unit run', unit = true, count = 1 },
+        { id = 'calls_2', label = 'Answer 2 mission calls', missionCall = true, count = 2 },
+        { id = 'arrests_2', label = 'Make 2 arrests', stat = 'arrests', count = 2 },
+    },
+    weekly = {
+        { id = 'tactical_5', label = 'Complete 5 Tactical missions', type = 'tactical', count = 5 },
+        { id = 'cross_2', label = 'Complete 2 cross-department runs', crossDepartment = true, count = 2 },
+        { id = 'any_15', label = 'Complete 15 missions', count = 15 },
+        { id = 'judgement_15', label = 'Make 15 correct decisions', stat = 'decisions_ok', count = 15 },
+        { id = 'impound_3', label = 'Impound 3 vehicles', stat = 'impounds', count = 3 },
+    },
 }
 
 -- ============================================================================
@@ -1824,7 +1961,7 @@ Config.FieldTraining = {
 -- Off by default. Admin config only: mission files and the Mission Builder never hold rewards.
 -- Items must exist in ox_inventory. Never weapons, ammo, armour, bandages or money items.
 Config.Rewards = {
-    enabled = false,
+    enabled = false,                 -- true = officers can earn items (see the rules above)
     allowTakeBack = false,           -- Admin UI: take a given item back from an online officer (needs ENABLE)
     dailyItemCap = 10,               -- items per officer per day, every source together
     dailyValueCap = 2000,            -- total value of those items per officer per day
@@ -1841,10 +1978,10 @@ Config.Rewards = {
     },
     byMission = {},                  -- same shape as byType, keyed by mission id; replaces the type's entry
     medals = {},                     -- e.g. gold = { item = 'water', count = 1, value = 20 }
-    goals = {},                      -- daily = { ... }, weekly = { ... }
+    goals = {},                      -- items for finished goals, by daily and weekly
     levels = {},                     -- e.g. [10] = { item = 'radio', count = 1, value = 150 }
     weeklyBoss = nil,                -- a guaranteed item for a completed Weekly Boss
-    season = {},                     -- champion = { ... }, top10 = { ... }
+    season = {},                     -- items at a season's end, by champion and top10
     -- matched case-insensitively (WEAPON_PISTOL is refused too)
     forbidden = { 'weapon_*', 'ammo-*', 'armour', 'bandage', 'money', 'black_money', 'cash' },
     useExamplePools = false,         -- true = use examplePools for any type byType leaves empty
@@ -1869,167 +2006,86 @@ Config.Rewards = {
     },
 }
 
+-- ############################################################################
+--                               PART 6 · SYSTEM
+-- Run limits, anti-exploit checks, the daily reset, admin test mode, retention, backups and webhooks.
+-- ############################################################################
+
 -- ============================================================================
---                                   DISPUTES
+--                                  RUN LIMITS
 -- ============================================================================
-
-Config.Disputes = { windowHours = 48 }
-
--- ============================================================================
---                               MISSION BUILDER
--- ============================================================================
--- Block setting ranges and defaults are in config/blocks.lua.
-Config.Builder = {
-    enabled = true,
-    maxHostiles = 40,                          -- armed NPCs per mission across all blocks, before scaling
-    maxBlocks = 6,
-    minLocations = 1,                          -- locations a new custom mission needs before it can be published
-                                               -- (more locations = it repeats less; 3 or more is a good habit)
-    minLocationsOverride = 3,                  -- locations an edited built-in mission must keep before it can be
-                                               -- published
-    minLocationGap = 100.0,                    -- metres between locations of one mission
-    minSpawnFromStart = 30.0,                  -- metres between any spawn point and the start point
-    spawnMargin = 40.0,                        -- metres outside the start circle that armed NPCs of a new custom mission
-                                               -- keep (shootout, boss, ambush and pursuit cars, door associates);
-                                               -- files published before still load, with a warning
-    maxPointFromStart = 300.0,                 -- metres a location's points may be outside its start circle: a
-                                               -- point further away (left behind by a moved start) blocks
-                                               -- publishing; routes, patrol checkpoints, escort ambush points and
-                                               -- flee paths are exempt (50-2000)
-    bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
-    requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
-                                               -- (admins never need one); false = testing is optional for everyone
-    supervisorItems = false,                   -- false = only admins may put items in a custom mission (items a run
-                                               -- hands out can be used or sold before they are taken back); true =
-                                               -- supervisors too
-    useMyPosition = true,                      -- true = the Locations step has "Set start here" and "Add here":
-                                               -- the point goes where you stand (or your vehicle is) and the tablet
-                                               -- stays open; false = points are only placed with the aim tool
-    autoFill = true,                           -- true = a spawn point row has "Fill N for me": the game proposes
-                                               -- the points around the start, outside its keep-out, on safe ground
-                                               -- (you keep them, try again or place them by hand); false = no button
-    autoFillRing = { 15.0, 80.0 },             -- metres beyond the keep-out that "Fill N for me" puts points at
-                                               -- (nearest, furthest)
-
-    quickWizard = true,                        -- true = the New mission button opens a 4-step wizard (What,
-                                               -- Where, Check, Publish): pick a template, stand at the spot, fill
-                                               -- the points, publish; Open the full editor is on every step;
-                                               -- false = the New mission dialog and the full editor only
-    foldAdvanced = true,                       -- true = each block's settings show the few that matter
-                                               -- (e.g. a shootout: waves, enemies per wave, weapons, difficulty)
-                                               -- and fold the rest under "More settings"; false = every setting
-                                               -- is shown open, as before
-
-    -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
-    -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.
-    teleport = true,
-
-    -- built-in missions a new mission can start from: it copies their type, difficulty, team, times, bonuses,
-    -- penalties and objectives, but none of their locations (you place your own). Empty = no templates
-    templates = {
-        'beat_patrol',
-        'business_check',
-        'parking_patrol',
-        'pursuit_sim',
-        'manhunt',
-        'warrant_service',
-        'gang_shootout',
-        'hostage_rescue',
-        'armored_truck_escort',
-        'bomb_disposal',
-    },
-    testAtMaxTier = true, -- a test counts as passed only at the tier maxOfficers reaches
-    editLockMinutes = 30, -- one editor at a time; renewed while they keep editing
-    defaultTeam = { patrol = 2, training = 2, investigation = 2, tactical = 4 }, -- most officers a new mission
-    -- starts with, by its type (the builder can change it on Details)
-    autosaveSeconds = 30,
-    exportPath = 'missions/custom/',           -- folder (inside missions/custom/) for missions made in the Builder.
-                                               -- Another folder must be created by hand first, with archived,
-                                               -- overrides, overrides/archived and deleted inside it (the server
-                                               -- cannot create folders on Linux)
-    keepBackups = true,                        -- keep <mission_id>.v<version>.lua.bak on every publish
-    route = {                                  -- route recording (see Mission Builder, Route recording)
-        snapEvery = 25.0,       -- metres between samples while recording
-        maxOffRoad = 8.0,       -- samples further than this from a road node are rejected
-        turnAngle = 30.0,       -- heading change (degrees) that keeps a waypoint
-        maxGap = 150.0,         -- at least one waypoint this often, in metres
-        minLength = 800.0,
-        maxLength = 8000.0,
-        minStartEndGap = 300.0, -- open routes: start and end at least this far apart
-        loopClose = 50.0,       -- a race loop must end this close to its start
-        undoMetres = 100.0,     -- Backspace removes this much of the recording
-        testDriveTimeout = 30,  -- seconds to reach each waypoint in a test drive
-        patrolSpacing = 300.0,  -- a patrol (checkpoint route) recorded by driving is saved as checkpoints about
-                                -- this many metres apart along the drive, not as a road route
-    },
-    allowed = {                 -- the only models, weapons and animations builders can pick
-        -- no automatic weapons: an NPC never gets one (Config.NpcCombat), so the Builder never offers one
-        weapons = {
-            'WEAPON_PISTOL',
-            'WEAPON_COMBATPISTOL',
-            'WEAPON_HEAVYPISTOL',
-            'WEAPON_PUMPSHOTGUN',
-        },
-        -- base-game ped models only. The list holds every ped a built-in mission or a block default uses
-        -- (inmates, the Kingpin, the escort driver), so a copy of any built-in mission can be published.
-        peds = {
-            'g_m_y_ballaeast_01',
-            'g_m_y_famca_01',
-            'g_m_y_mexgoon_01',
-            'g_m_y_lost_01',
-            'a_m_m_business_01',
-            'a_f_y_business_01',
-            's_m_y_prisoner_01',
-            's_m_y_prismuscl_01',
-            'g_m_m_armboss_01',
-            's_m_m_armoured_01',
-            'a_m_y_stbla_01',
-            'a_m_m_eastsa_02',
-            'a_m_y_mexthug_01',
-            'a_f_y_eastsa_03',
-            'a_m_m_salton_02',
-            'g_m_y_salvagoon_01',
-            'g_m_m_chicold_01',
-        },
-        vehicles = {
-            'sultan',
-            'buffalo',
-            'elegy2',
-            'kuruma',
-            'dominator',
-            'asea',
-            'primo',
-            'emperor',
-            'tornado',
-            'stanier',
-            'rancherxl',
-            'bison',
-        },
-        escortVehicles = { 'stockade', 'stockade3' },
-        animations = { 'clipboard', 'search', 'kneel', 'mechanic', 'notepad', 'photo' },
-    },
-    noBuildZones = {            -- no spawn point, marker or route waypoint inside these
-        { label = 'Mission Row PD and FIB HQ', coords = vec3(470.63, -974.11, 30.18), radius = 120.0 },
-        { label = 'Sandy Shores BCSO', coords = vec3(1833.06, 3679.32, 33.19), radius = 80.0 },
-        { label = 'SASP HQ', coords = vec3(1560.38, 815.76, 76.21), radius = 80.0 },
-        { label = 'Pillbox Hill Medical', coords = vec3(308.19, -595.35, 43.29), radius = 100.0 },
-        { label = 'Paleto Bay Medical', coords = vec3(-254.54, 6331.78, 32.43), radius = 80.0 },
-        { label = 'Bolingbroke Penitentiary', coords = vec3(1691.5, 2578.5, 44.7), radius = 215.0 },  -- the whole prison, every tower
-        { label = 'Fort Zancudo', coords = vec3(-2075.0, 3225.0, 33.0), radius = 320.0 },             -- the base: 4 circles
-        { label = 'Fort Zancudo south-east', coords = vec3(-1875.0, 3050.0, 33.0), radius = 320.0 },
-        { label = 'Fort Zancudo south-west', coords = vec3(-2300.0, 2950.0, 33.0), radius = 280.0 },
-        { label = 'Fort Zancudo north-west', coords = vec3(-2250.0, 3300.0, 33.0), radius = 280.0 },
-        { label = 'Crimson-Arena Trailer Park', coords = vec3(2344.43, 2565.06, 46.67), radius = 160.0 }, -- live match boundary (up to 135 m) + push-back
-        { label = 'Crimson-Arena lobby', coords = vec3(-282.01, -2030.46, 30.15), radius = 60.0 }, -- where arena players return after a match
-    },
+-- Caps for each run and for the whole server, with the request limits of the tablet.
+Config.Limits = {
+    maxUnitSize = 4,             -- officers in one unit at most
+    maxArmedAlive = 25,          -- armed NPCs alive at any one moment per run
+    maxEntities = 80,            -- spawned entities at any one moment per run
+    corpseCleanup = 30,          -- seconds before dead NPCs and wrecked vehicles are deleted (bodies a
+                                 -- Process the scene objective keeps are deleted when it ends)
+    maxCompletionsHour = 8,      -- completed runs per officer per hour
+    maxCompletionsDay = 0,       -- completed runs per officer per day (from the daily reset); 0 = no cap
+    abandonCooldown = 300,       -- seconds; covers the whole mission type
+    startTimeout = 600,          -- default seconds to reach the start (a mission can override it)
+    maxConcurrentRuns = 12,      -- runs active server-wide at once; Cross-Department Missions don't count
+    maxConcurrentTactical = 4,   -- of those, Tactical runs
+    reserveLocations = true,     -- a location in use by one run can't be drawn for another
+    -- Milliseconds a player's Qbox data (job, duty, name, callsign) is reused before Qbox is asked again; every Qbox
+    -- job, duty or data change clears it at once; 0 = ask Qbox every time (the old behaviour)
+    playerInfoCacheMs = 1000,
+    -- What happens when a player keeps sending one tablet request past its limit (most allow 6 to 8 a second):
+    -- 'block' = the extra requests are refused quietly, as before; 'log' = also one console warning a minute per
+    -- player once one request is refused 3 times its limit (at least 20 times) in a minute; 'kick' = that warning,
+    -- and the player is dropped from the server. Admins are never warned about or dropped for this
+    netRateResponse = 'block',
+    -- Bytes a second for the big Admin UI downloads (Audit and Payments → Export, up to 5000 rows): they come in the
+    -- background, so the rest of the tablet keeps answering while one loads (below 100000 counts as 100000; 0 = send
+    -- each one in one go, as before)
+    exportBps = 200000,
 }
+
+-- ============================================================================
+--                                 ANTI-EXPLOIT
+-- ============================================================================
+
+Config.AntiCheat = {
+    maxSpeed = 80.0,        -- m/s between objective events before a run is flagged
+    presenceRadius = 150.0, -- runs with 2+ participants: fallback presence range for a block with none of its own...
+    presenceShare = 0.70,   -- ...for this share of the run to earn points and cash
+    idleCheck = 180,        -- seconds after the run moves to In progress to remove participants who haven't reached the start
+    jobRecheck = 10,        -- seconds between active-job and duty re-checks during a run
+    outsideKillsToFlag = 1, -- kills of mission NPCs by players who aren't on the run that flag it for review
+    voidsToSuspend = 3,     -- this many voided runs...
+    voidWindowDays = 30,    -- ...within this many days...
+    suspendDays = 7,        -- ...suspends the officer for this many days
+
+    stunNeedsProof = 'flag',  -- 'flag' = a stun counts as before, and one the server did not see (no fall) adds a
+                              -- note for staff (nobody's points are held); 'hold' = the same, but that officer's
+                              -- points wait for review; 'strict' = a fleeing person only gives up to a stun the
+                              -- server saw; 'off' = no check (the old way)
+    stunRecheck = 2,          -- seconds 'flag' and 'hold' wait before the note or flag: a report that reaches the
+                              -- server before its copy of the suspect shows the fall gets no note when the fall
+                              -- shows by then. 0 = decide at once
+
+    -- A player who is not an admin sends a request only admins may send (the money, void and other Admin UI tools;
+    -- no officer or supervisor screen sends one, so it is almost always a cheat menu). It is refused as always, and
+    -- a console line, kept in Admin UI → System → Problems, names the player and the request: once a minute per
+    -- player and request, at most this many lines a minute per player. 0 = refused without a line.
+    adminProbeLines = 5,
+}
+
+-- ============================================================================
+--                                     TIME
+-- ============================================================================
+-- Hour (0–23, server time) of the daily reset: Type of the Day, daily goals,
+-- streak days, the daily cash cap and the retention job. Weekly things reset
+-- at this hour on Config.Leaderboard.weekStartsOn.
+Config.Time = { resetHour = 0 }
 
 -- ============================================================================
 --                               ADMIN TEST MODE
 -- ============================================================================
 
 Config.Testing = {
-    enabled = true,
+    enabled = true,        -- true = admins may run test runs of missions (Admin test mode)
     maxTesters = 8,        -- players in one test run, including the admin
     useStartRoute = false, -- default for the start-route toggle
     allowTeleport = true,  -- teleport controls in test runs
@@ -2078,15 +2134,6 @@ Config.Backups = {
     -- true = after a restore that stopped part way, payments and new runs stay held (also after a restart) until a
     -- restore works; false = a restart ends that lock and the server goes on with the store as it is
     holdAfterFailedRestore = true,
-}
-
--- ============================================================================
---                                    NAMES
--- ============================================================================
--- English names an admin gives to ids (Admin UI → Settings → Names). Only these kinds: custody.offence.<id>,
--- profile.commend.kind.<id>, badge.<id>, bonus.<id> and penalty.<id>. A name changes text only, never an id.
-Config.Labels = {
-    -- ['custody.offence.loitering'] = 'Loitering',
 }
 
 -- Discord webhooks are read from convars in server.cfg, never stored here.

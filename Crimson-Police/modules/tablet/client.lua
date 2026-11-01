@@ -517,21 +517,30 @@ local function OpenDispatch()
     T.open('officer', { via = 'dispatch', screen = 'dispatch' })
 end
 
-local function IsDepartmentJob(jobName)
-    if type(jobName) ~= 'string' or type(Config.Departments) ~= 'table' then return false end
-    for _, dept in pairs(Config.Departments) do
-        if type(dept) == 'table' then
-            local jobs = dept.jobs
+-- Job name -> department key, built from Config.Departments the first time it is asked and again after a settings
+-- change (or when Config.Departments is another table): a mission desk's canInteract asks every frame while the eye
+-- rests on the desk, so it never walks every department and its jobs there.
+local deptCache = { from = nil, byJob = nil }
+
+local function DepartmentOfJob(jobName)
+    if type(jobName) ~= 'string' or type(Config.Departments) ~= 'table' then return nil end
+    if deptCache.byJob == nil or deptCache.from ~= Config.Departments then
+        local byJob = {}
+        for key, dept in pairs(Config.Departments) do
+            local jobs = type(dept) == 'table' and dept.jobs or nil
             if type(jobs) == 'string' then jobs = { jobs } end
-            if type(jobs) == 'table' then
-                for _, j in ipairs(jobs) do
-                    if j == jobName then return true end
-                end
+            for _, j in ipairs(type(jobs) == 'table' and jobs or {}) do
+                if type(j) == 'string' and byJob[j] == nil then byJob[j] = key end
             end
         end
+        deptCache.from, deptCache.byJob = Config.Departments, byJob
     end
-    return false
+    return deptCache.byJob[jobName]
 end
+
+CP.Hooks.on('settings:changed', function() deptCache.byJob = nil end)
+
+local function IsDepartmentJob(jobName) return DepartmentOfJob(jobName) ~= nil end
 
 -- ============================================================================
 --                                THEME AT LOGIN
@@ -910,15 +919,8 @@ end
 local function DeskDepartment()
     local pd = CP.Qbx and CP.Qbx.getPlayerData and CP.Qbx.getPlayerData() or {}
     local job = type(pd.job) == 'table' and pd.job or nil
-    if not job or job.onduty == false or type(Config.Departments) ~= 'table' then return nil end
-    for key, dept in pairs(Config.Departments) do
-        local jobs = type(dept) == 'table' and dept.jobs or nil
-        if type(jobs) == 'string' then jobs = { jobs } end
-        for _, j in ipairs(type(jobs) == 'table' and jobs or {}) do
-            if j == job.name then return key end
-        end
-    end
-    return nil
+    if not job or job.onduty == false then return nil end
+    return DepartmentOfJob(job.name)
 end
 
 local function DeskAllows(desk, deptKey)

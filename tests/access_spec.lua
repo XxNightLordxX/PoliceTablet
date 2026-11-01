@@ -1083,6 +1083,29 @@ do
     H.eq(DeskOption(1).canInteract(), false, 'in Crimson-Arena: hidden')
     LocalPlayer.state.crimsonArena = nil
 
+    -- canInteract runs every frame while the eye rests on a desk: the job's department is looked up in a map built
+    -- once, not by walking every department and its jobs at each call; a settings change builds the map again
+    local depts, walks = Config.Departments, 0
+    local copy = { sast = { jobs = { 'sast' } }, fib = { jobs = { 'fib' } } }
+    Config.Departments = setmetatable({}, {
+        __index = copy,
+        __pairs = function()
+            walks = walks + 1
+            return next, copy, nil
+        end,
+    })
+    for _ = 1, 50 do DeskOption(1).canInteract() end
+    H.ok(walks <= 1, ('50 canInteract calls walk the departments at most once (%d)'):format(walks))
+    H.eq(DeskOption(2).canInteract(), false, 'desk B (fib) still hidden for sast')
+    copy.sast.jobs, copy.fib.jobs = { 'none' }, { 'fib', 'sast' }
+    H.eq(DeskOption(2).canInteract(), false, 'until the settings change, the map is kept')
+    CP.Hooks.fire('settings:changed')
+    H.eq(DeskOption(2).canInteract(), true, 'after a settings change the sast job is fib\'s: desk B shows')
+    Config.Departments = depts
+    CP.Hooks.fire('settings:changed')
+    H.eq(DeskOption(1).canInteract(), true, 'the real departments again: desk A shows for sast')
+    H.eq(DeskOption(2).canInteract(), false, 'and desk B is fib\'s only')
+
     -- opening at the desk: no handheld tablet, the standing scenario, closed beyond deskDistance
     pedCoords = vec3(101.0, 100.0, 30.0)
     DeskOption(1).onSelect()

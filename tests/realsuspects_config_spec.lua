@@ -73,9 +73,10 @@ do
     end
     H.ok(order.live_crimes ~= nil and order.volunteer_suspects ~= nil, 'the two banners are Settings sections')
     H.ok(
-        (order.dispatch or 0) < (order.live_crimes or 0) and (order.live_crimes or 0) < (order.volunteer_suspects or 0)
-            and (order.volunteer_suspects or 0) < (order.police_actions_and_custody or 0),
-        'right after Dispatch (mission calls), before Police actions and custody'
+        (order.police_actions_and_custody or 0) < (order.real_suspects or 0)
+            and (order.real_suspects or 0) < (order.live_crimes or 0)
+            and (order.live_crimes or 0) < (order.volunteer_suspects or 0),
+        'in Part 3 (Player vs police): after the NPC sections, Real suspects, then live crimes, then volunteers'
     )
     H.eq((byKey.live_crimes or {}).title, 'Live crimes (option A)', 'the live crimes title')
     H.eq((byKey.volunteer_suspects or {}).title, 'Volunteer suspects (options B and C)', 'the volunteers title')

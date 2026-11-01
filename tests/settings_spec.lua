@@ -138,6 +138,93 @@ do
 
     local function E(p) return S.entry(p) or {} end
     H.eq(E('Debug').desc, 'true = each module prints tagged debug lines', 'a trailing comment is the description')
+
+    -- AP2: config.lua is laid out like the Admin UI (General, NPC missions, Player vs police, Police teamwork, Economy
+    -- and rewards, System), so the sections, and the All view that lists them, come in that order
+    local at = {}
+    for i, k in ipairs(keys) do at[k] = i end
+    local chain = {
+        'general',
+        'storage',
+        'tablet_and_commands',
+        'permissions',
+        'departments',
+        'names',
+        'mission_types',
+        'spawning',
+        'dispatch',
+        'police_actions_and_custody',
+        'mission_builder',
+        'real_suspects',
+        'live_crimes',
+        'volunteer_suspects',
+        'units',
+        'mission_controls',
+        'field_training',
+        'officer_profile',
+        'cash',
+        'disputes',
+        'bonuses_and_penalties',
+        'item_rewards',
+        'run_limits',
+        'anti_exploit',
+        'admin_test_mode',
+        'backups',
+        'blocks',
+    }
+    for i = 2, #chain do
+        H.ok(at[chain[i - 1]] ~= nil and at[chain[i]] ~= nil and at[chain[i - 1]] < at[chain[i]],
+            ('section %s comes before %s'):format(chain[i - 1], chain[i]))
+    end
+    local allKeys = {}
+    for _, sec in ipairs(S.all().sections) do allKeys[#allKeys + 1] = sec.key end
+    H.eq(table.concat(allKeys, ','), table.concat(keys, ','), 'the All view lists the sections in config.lua order')
+    H.eq(E('Limits.maxUnitSize').section, 'run_limits', 'Config.Limits has its own System section, Run limits')
+    H.eq(titles.run_limits, 'Run limits', 'titled from its banner')
+    H.eq(E('Rescale.enabled').section, 'scaling_by_participants', 'the rest of the scaling section stays')
+    H.eq(E('Limits.maxUnitSize').desc, 'officers in one unit at most', 'each run limit has its own comment')
+    H.eq(E('Disputes.windowHours').desc, 'hours after a run that its officers may dispute it', 'the dispute window')
+    H.eq(E('Format.currencyAfter').desc, 'true = the symbol goes after the amount (250 $)',
+        'a comment that reads like code no longer hides the description')
+    -- the comment pass: a plain key with no comment of its own now has one (its unit where it has one)
+    H.eq(E('Database.enabled').desc, 'true = MySQL/MariaDB through oxmysql; false = files in the saves folder',
+        'Database.enabled has a description')
+    H.eq(E('Scoring.streakStep').desc, '× points added per day of streak (0.05 = +5% a day)', 'streakStep: its unit')
+    H.eq(E('Builder.route.minLength').desc, 'metres a recorded route must be at least', 'a nested key gets its own')
+    H.eq(E('Rewards.goals').desc, 'items for finished goals, by daily and weekly', 'an e.g. comment became plain words')
+    for _, p in ipairs({
+        'MissionCalls.enabled',
+        'Builder.enabled',
+        'CrossDept.maxParticipants',
+        'Challenge.bountyBonus',
+        'Commendations.perSupervisorPerDay',
+        'Testing.enabled',
+        'AdminTheme.primary',
+        'Profile.bioLines',
+    }) do
+        H.ok(E(p).desc ~= nil and E(p).desc ~= '', p .. ': has a description')
+    end
+    local cfgText = ''
+    local cf = io.open('Crimson-Police/config/config.lua', 'r')
+    if cf then
+        cfgText = cf:read('a')
+        cf:close()
+    end
+    local last = 0
+    for i, part in ipairs({
+        'GENERAL',
+        'NPC MISSIONS',
+        'PLAYER VS POLICE',
+        'POLICE TEAMWORK',
+        'ECONOMY AND REWARDS',
+        'SYSTEM',
+    }) do
+        local pos = cfgText:find('PART ' .. i .. ' · ' .. part, 1, true)
+        H.ok(pos ~= nil and pos > last, ('config.lua part %d is %s, in order'):format(i, part))
+        last = pos or last
+    end
+    -- a part header is not a section banner: no section is named after one
+    for _, k in ipairs(keys) do H.ok(not k:match('^part_'), k .. ': not a part header') end
     H.eq(E('Tablet.deskDistance').kind, 'number', 'numbers edit as numbers')
     H.eq(E('Tablet.deskDistance').integer, false, '3.0 in config.lua: a decimal number')
     H.eq(E('Tablet.deskDistance').min, 0, 'a positive number cannot go below 0')

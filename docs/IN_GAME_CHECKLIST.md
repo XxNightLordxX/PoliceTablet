@@ -75,6 +75,7 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 ## Admin UI and Settings
 
 - [ ] The Admin sidebar shows the headings NPC missions, Police teamwork, Pay and rewards and Server (Player vs police while live crimes or volunteers are on); every screen still opens; groupByPlay = false brings the old order back. (AP1)
+- [ ] config.lua opens with PART 1 · GENERAL and its six parts follow the Admin UI; Settings -> All settings lists the sections in that order, with Run limits (Config.Limits) under Server; a mission desk still shows for its department after a department's jobs change in Settings. (AP2)
 - [ ] Settings -> Features lists the features by section; turning "Runners tire" off asks nothing and shows Off at once; turning Live crimes on asks first; Cash for live cases still wants ENABLE; each change is in Settings -> History and the audit log; Settings opens that setting in All settings. (AP1)
 - [ ] /CrimsonPoliceAdmin lands on Home with Live now and six tiles; each tile opens the right screen; Something wrong? lines open Missions, Permissions, System, Payments. Landing = 'payouts' in Settings: Payouts opens first. (A3)
 - [ ] Sidebar shows 5 items + More (8); a stuck payment shows its count on More while folded; More stays open after reopening; groupSidebar off gives one flat list. (A2)
