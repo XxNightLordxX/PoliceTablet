@@ -25,6 +25,10 @@ CP.Access = {
 
 local recs, opened, states, lines = {}, {}, {}, {}
 local srcOfCid = {}
+-- the V22b gates: caps, conduct flags, staff notes and pair rows
+local caps = { day = {}, suspended = {}, lastSuspect = {}, pair = {} }
+local linked = {}            -- [officer src] = true: shares only a connection or PC with the volunteer
+local notes, pairRows, closeOut = {}, {}, nil
 CP.Opponents = {
     eligible = function(src)
         if eligibleWhy[src] then return false, eligibleWhy[src] end
@@ -54,7 +58,35 @@ CP.Opponents = {
         lines[#lines + 1] = e.what
         return true
     end,
-    selfBlock = function(officer, list) return selfBlocked[officer .. ':' .. list[1]] == true, nil, {} end,
+    selfBlock = function(officer, list)
+        if linked[officer] then return false, nil, { 'rs_linked_accounts' }, { cid = list[1], kinds = { 'ip' } } end
+        return selfBlocked[officer .. ':' .. list[1]] == true, nil, {}
+    end,
+    suspectDayCount = function(cid) return caps.day[cid] or 0 end,
+    suspended = function(cid) return caps.suspended[cid] == true end,
+    lastSuspectAt = function(cid) return caps.lastSuspect[cid] end,
+    pairOk = function(o, sCid)
+        local why = caps.pair[o .. '|' .. sCid]
+        if why then return false, why end
+        return true
+    end,
+    note = function(_, reason, detail, cid)
+        notes[#notes + 1] = { reason = reason, detail = detail, cid = cid }
+        return true
+    end,
+    close = function() if closeOut then return closeOut[1], closeOut[2] end return {} end,
+    recordPairs = function(_, rows)
+        for _, r in ipairs(rows) do pairRows[#pairRows + 1] = r end
+        return #rows
+    end,
+    checkPairFlags = function() return {} end,
+}
+local acFlags = {}
+CP.AntiCheat = {
+    flag = function(run, src, reason, detail)
+        acFlags[#acFlags + 1] = { runId = run.id, src = src, reason = reason, detail = detail }
+        return true
+    end,
 }
 
 local dropped, released, ended, toasts = {}, {}, {}, {}
@@ -461,6 +493,110 @@ do
     H.step(0)
     H.eq(ended[1] and ended[1].reason, 'cancelled', 'players_only and nobody said yes: the run is cancelled')
     H.eq(V.matchView(run, 2), nil, 'and the match is gone')
+end
+
+-- ============================================================================
+--                                  THE GATES
+-- ============================================================================
+-- (V22b): CAPS, CONDUCT FLAGS, STAFF NOTES, PAIR ROWS.
+
+do
+    Reset()
+    for _, v in ipairs(V.list()) do V.stop(v.src) end
+    Civilian(20, 'VMG00001')
+    H.ok(V.join(20, RUNNER), 'a volunteer for the gates')
+    local P = { [1] = { citizenid = 'OFG00001' }, [2] = { citizenid = 'OFG00002' } }
+    local probe = { id = 'probe', participants = P, officers = OFFICERS }
+    H.eq(V.capsOk(probe, 'VMG00001'), true, 'no cap reached: he may play it')
+    caps.day.VMG00001 = 2
+    H.eq(select(2, V.capsOk(probe, 'VMG00001')), 'suspect_used', 'maxCatchesPerSuspectDay reached')
+    caps.day.VMG00001 = nil
+    caps.suspended.OFG00002 = true
+    H.eq(select(2, V.capsOk(probe, 'VMG00001')), 'officer_suspended', 'an officer suspended from these cases')
+    caps.suspended.OFG00002 = nil
+    caps.lastSuspect.OFG00001 = os.time() - 60
+    H.eq(select(2, V.capsOk(probe, 'VMG00001')), 'officer_recent_suspect', 'an officer was a suspect within jobHop')
+    caps.lastSuspect.OFG00001 = nil
+    caps.pair['OFG00001|VMG00001'] = 'blocked'
+    H.eq(select(2, V.capsOk(probe, 'VMG00001')), 'pair_blocked', 'an admin pair block')
+    caps.pair['OFG00001|VMG00001'] = 'suspect_cooldown'
+    H.eq(select(2, V.capsOk(probe, 'VMG00001')), 'pair_cooldown', 'a recent case of the pair')
+    caps.pair['OFG00001|VMG00001'] = nil
+
+    -- a cap reached: he is never asked, the NPC plays the suspect
+    caps.day.VMG00001 = 2
+    runN = runN + 1
+    local run = {
+        id = 'vm-run-' .. runN,
+        state = 'accepted',
+        mission = WARRANT,
+        locationIndex = 1,
+        location = WARRANT.locations[1],
+        volunteer = { mode = 'players_when_available', role = 'runner', obj = 2 },
+        participants = P,
+    }
+    CP.Hooks.fire('run:created', run)
+    H.step(0)
+    H.eq(LastAsk(20), nil, 'a suspect who scored his catches today is not asked')
+    H.eq(V.matchView(run, 2).phase, 'npc', 'the NPC plays him')
+    CP.Hooks.fire('run:ended', run, 'completed', 'completed')
+    H.eq(#pairRows, 0, 'no yes: no pair rows')
+    caps.day.VMG00001 = nil
+
+    -- a yes: the linked-accounts flag on the officer who shares a connection
+    Reset()
+    notes, acFlags = {}, {}
+    linked[2] = true
+    runN = runN + 1
+    run = {
+        id = 'vm-run-' .. runN,
+        state = 'accepted',
+        mission = WARRANT,
+        locationIndex = 1,
+        location = WARRANT.locations[1],
+        volunteer = { mode = 'players_when_available', role = 'runner', obj = 2 },
+        participants = P,
+    }
+    CP.Hooks.fire('run:created', run)
+    H.step(0)
+    Answer(20, LastAsk(20), true)
+    H.step(0)
+    H.eq(run.realSuspect, 'volunteer', 'he plays it')
+    H.eq(#acFlags, 1, 'one officer-conduct flag')
+    H.eq(acFlags[1] and acFlags[1].src, 2, 'on the officer who shares a connection or PC')
+    H.eq(acFlags[1] and acFlags[1].reason, 'rs_linked_accounts', 'rs_linked_accounts (his points wait for review)')
+    linked[2] = nil
+
+    -- no-show: a staff note besides the strike
+    H.advance(301000, 1000)
+    H.step(0)
+    H.eq(notes[1] and notes[1].reason, 'rs_volunteer_dropout', 'a no-show is a staff note')
+    H.eq(notes[1] and notes[1].cid, 'VMG00001', 'about him')
+
+    -- the pair rows at the end: nobody reached him = 'gone' (never a cap)
+    closeOut = {
+        { VMG00001 = 'void' },
+        { kind = 'volunteer', order = { 'VMG00001' }, suspects = { VMG00001 = { license = 'license:VMG00001' } } },
+    }
+    CP.Hooks.fire('run:ended', run, 'completed', 'completed')
+    H.eq(#pairRows, 2, 'one pair row per officer')
+    H.eq(pairRows[1] and pairRows[1].kind, 'volunteer', 'of kind volunteer')
+    H.eq(pairRows[1] and pairRows[1].outcome, 'gone', 'nobody reached him: gone')
+    H.eq(pairRows[1] and pairRows[1].scored, false, 'and nothing scored')
+
+    -- detained after contact in a completed run: scored
+    pairRows = {}
+    closeOut = {
+        { VMG00001 = 'detained' },
+        { kind = 'volunteer', order = { 'VMG00001' }, suspects = { VMG00001 = { contactAt = 1, share = 1 } } },
+    }
+    H.eq(V._recordPairs({ engagedAt = 5 }, { id = 'r', participants = P }, 'completed'), 2, 'two rows')
+    H.eq(pairRows[1].outcome, 'detained', 'the outcome')
+    H.eq(pairRows[1].scored, true, 'scored')
+    pairRows = {}
+    V._recordPairs({ engagedAt = 5 }, { id = 'r', participants = P }, 'abandoned')
+    H.eq(pairRows[1].scored, false, 'a run that did not complete scores nothing')
+    closeOut = nil
 end
 
 -- ============================================================================

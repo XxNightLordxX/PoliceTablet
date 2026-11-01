@@ -3538,6 +3538,29 @@ run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc
   `meetRadius` (25, 5-200 m), `cancelGraceSeconds` (60, 0-600), `onVoid` ('npc' | 'end'), `voidRun` ('cancelled' |
   'keep_earned'). Specs: tests/volunteer_match_spec.lua, tests/volunteers_client_spec.lua.
 
+**Gates (V22b, modules/volunteers/match/server.lua; critic 2 #9, #11, #12).** Before any built-in block offers a slot:
+- Caps: `V.capsOk(run, cid) -> true | false, why`, part of every ask check (`Fits`): `suspect_used` (his
+  `Opp.suspectDayCount` reached `maxCatchesPerSuspectDay`), and per active participant's citizenid
+  `officer_suspended` (`Opp.suspended`), `officer_recent_suspect` (`Opp.lastSuspectAt` within jobHopMinutes),
+  `pair_blocked` / `pair_cooldown` (`Opp.pairOk`). Memory only. A refusal asks the next one (never a strike).
+- Officer-conduct flags: at the yes, every active officer whose `Opp.selfBlock` answers flags (`rs_linked_accounts`:
+  only an ip or token shared) gets `CP.AntiCheat.flag(run, officerSrc, reason, 'suspect <label>, shared <kinds>')`;
+  an officer who joins while a volunteer plays (`participant:joined`, in a thread) is checked the same way.
+- Staff note: a no-show or his own cancel is `Opp.note(run, 'rs_volunteer_dropout', '<label>: <why>', cid)` (a leave
+  already has `rs_combat_log`); never a flag.
+- Pair ledger: at `run:ended` of a run with a yes, `Opp.close(run)` and one `Opp.recordPairs` row per participant
+  with a citizenid and the volunteer: kind `volunteer`, scored = the run completed and he was detained or booked for
+  a share above 0, outcome `gone` while no officer reached him (no `engagedAt` / `contactAt`), the suspect's license
+  from his case record; then `Opp.checkPairFlags(run)`.
+- What a volunteer case (`V.isCase(run)`: `run.realSuspect == 'volunteer'`, from the yes on) takes part in:
+  `V.counts(run, what)` for `typeOfTheDay`, `goals`, `challenge`, `cash` (Config.Volunteers.payCash) and `items`
+  (payRewards), each shipped false; any other run true. CP.Cash.compute sets B = 0 (cash 0), CP.Rewards rolls no
+  items, CP.Scoring gives no Type of the Day. The result breakdown carries `realSuspect = 'volunteer'`;
+  `V.rowFilter(what, alias)` adds `AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(<alias>breakdown, '$.realSuspect')), '')
+  <> 'volunteer'` to CP.Goals' progress and CP.Challenge's aggregates while that switch is off. `payCash` and
+  `payRewards` are Settings money switches (ENABLE). Specs: tests/volunteer_match_spec.lua,
+  tests/live_scoring_spec.lua, tests/boards_metrics_spec.lua.
+
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 
 Each character's own tablet choices (My options), saved sparse in `cp_officers.options` (JSON of only the keys that

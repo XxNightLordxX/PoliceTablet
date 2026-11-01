@@ -120,6 +120,7 @@ H.load('modules/scoring/server.lua')
 H.load('modules/goals/server.lua')
 H.load('modules/leaderboard/server.lua')
 H.load('modules/livecrime/server.lua')
+H.load('modules/volunteers/match/server.lua')
 H.load('modules/challenge/server.lua')
 H.load('modules/profile/server.lua')
 local LB, C = CP.Leaderboard, CP.Challenge
@@ -193,6 +194,7 @@ local function Row(t)
         decisions_bad = t.bad or 0,
         lethal = t.lethal or 0,
         live_catches = t.live or 0,
+        breakdown = t.breakdown,
     }
     local names, vals, params = {}, {}, {}
     for k, v in pairs(cols) do names[#names + 1] = k; vals[#vals + 1] = '?'; params[#params + 1] = v end
@@ -551,6 +553,10 @@ do
     Row({ cid = 'M6', mission = 'live_crime', arrests = 3, season = SID })
     H.eq(CP.Goals.forOfficer('M6').daily.progress, 0, 'arrests_2: a live case counts nothing while goals is off')
     H.sql('DELETE FROM cp_mission_runs WHERE mission_id = \'live_crime\'')
+    -- and a volunteer case's only with Config.Volunteers.goals (V22b, shipped false)
+    Row({ cid = 'M6', arrests = 3, season = SID, breakdown = '{"realSuspect":"volunteer"}' })
+    H.eq(CP.Goals.forOfficer('M6').daily.progress, 0, 'arrests_2: a volunteer case counts nothing while goals is off')
+    H.sql('DELETE FROM cp_mission_runs WHERE citizenid = \'M6\' AND breakdown IS NOT NULL')
     Config.Goals = goals
     H.sql('DELETE FROM cp_mission_runs WHERE mission_type = \'goal\'')
     LB.invalidate()

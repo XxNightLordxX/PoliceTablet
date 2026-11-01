@@ -402,10 +402,13 @@ local function EmptyWeek()
 end
 
 -- Every aggregate the standings, bounties and contributor lists need, cached per season.
--- Live-case rows count for the challenge and the bounty only with Config.LiveCrime.challenge (V13, shipped false).
+-- Live-case rows count for the challenge and the bounty only with Config.LiveCrime.challenge (V13, shipped false),
+-- volunteer-case rows only with Config.Volunteers.challenge (V22b, shipped false).
 local function LiveFilter()
-    if CP.LiveCrime and CP.LiveCrime.rowFilter then return CP.LiveCrime.rowFilter('challenge', 'r.') end
-    return ''
+    local sql = ''
+    if CP.LiveCrime and CP.LiveCrime.rowFilter then sql = CP.LiveCrime.rowFilter('challenge', 'r.') end
+    if CP.Volunteers and CP.Volunteers.rowFilter then sql = sql .. CP.Volunteers.rowFilter('challenge', 'r.') end
+    return sql
 end
 
 local function Collect(seasonId, fresh)

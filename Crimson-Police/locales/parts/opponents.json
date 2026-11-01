@@ -10,6 +10,7 @@
   "flag.rs_fake_arena_flag": "A suspect carried another script's arena flag in the open world. He stayed in the case.",
   "flag.rs_teleport": "A suspect moved faster than a player can (teleport or noclip).",
   "flag.rs_combat_log": "A suspect logged off or switched character during the case.",
+  "flag.rs_volunteer_dropout": "A volunteer suspect said yes, then did not reach the starting point in time or cancelled the case (a strike when it came late).",
   "flag.rs_evade_instance": "A suspect went into an instance (an apartment, Crimson-Arena or another world) during the case.",
   "flag.rs_went_on_duty": "A suspect went on police duty during the case and no longer counts.",
   "opp.detail.self_uncuff": "Suspect {label}: the cuffs came off {seconds} s after the cuff with no officer uncuff, bobby pin or cuff-break game (self-uncuff or admin reset)",

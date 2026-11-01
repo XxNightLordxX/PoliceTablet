@@ -2964,6 +2964,16 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   (Completed with what was earned). When the mission ends he is told he is free to go. Staff see the yes, in
   position, engaged, no-show and cancel lines on the case timeline (Real suspects screen). The built-in missions get
   their volunteer suspects in the next steps, so until then nobody is asked.
+  Gates (step V22b): a volunteer is asked only while the anti-farm caps of `Config.RealSuspects` allow it, the same as
+  a live crime: he scored fewer than `maxCatchesPerSuspectDay` cases today, and no officer of the unit is suspended
+  from these cases, was a suspect within `jobHopMinutes`, has an admin pair block with him or a recent case with him
+  (`pairCooldownHours`, `suspectCooldownMinutes`); otherwise the next one is asked (else the NPC). An officer who
+  shares only a connection or PC with him gets the Linked accounts flag (his points wait for review), and a no-show
+  or a cancel is a staff note on the case. When the mission ends each officer and the volunteer get a pair row
+  (kind `volunteer`), which feeds those caps and the repeated-pairing flag. From his yes on the mission pays points
+  only: `Config.Volunteers.payCash` and `payRewards` (money switches, the typed word ENABLE in Settings; both shipped
+  false) turn on its cash and item rewards, and `typeOfTheDay`, `goals` and `challenge` (each shipped false) let it
+  count for the Type of the Day multiplier, the officers' goals and the department challenge and bounty.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

@@ -3107,6 +3107,8 @@ local function Settle(run, p, result, endReason, others)
     -- a live case: each suspect's outcome by label once it is over (Config.LiveCrime.resultOutcomes, V16)
     local okLv, liveView = Call('LiveCrime', 'resultView', run)
     if okLv and type(liveView) == 'table' then rr.live = liveView end
+    -- a volunteer case (V22b): goals and the challenge leave its row out by this breakdown key unless switched on
+    if run.realSuspect == 'volunteer' then rr.realSuspect = 'volunteer' end
     rr.stats.lethal = nil   -- private: the officer's own clean-arrest rate only, never on the result screen
     if isTest then return nil, rr end
 

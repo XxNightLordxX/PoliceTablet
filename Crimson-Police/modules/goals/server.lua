@@ -262,6 +262,8 @@ local function ProgressOf(goal, citizenid, start)
     if goal.missionCall == true then sql[#sql + 1] = 'AND mission_call_id IS NOT NULL' end
     -- live-case rows count only with Config.LiveCrime.goals (V13, shipped false)
     if CP.LiveCrime and CP.LiveCrime.rowFilter then sql[#sql + 1] = CP.LiveCrime.rowFilter('goals', '') end
+    -- and volunteer-case rows only with Config.Volunteers.goals (V22b, shipped false)
+    if CP.Volunteers and CP.Volunteers.rowFilter then sql[#sql + 1] = CP.Volunteers.rowFilter('goals', '') end
     local ok, n = pcall(MySQL.scalar.await, table.concat(sql, ' '), params)
     if not ok then
         CP.err(TAG, 'goal progress of %s (%s) failed: %s', citizenid, goal.id, tostring(n))

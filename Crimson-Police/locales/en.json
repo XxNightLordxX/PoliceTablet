@@ -3888,6 +3888,7 @@
   "flag.rs_teleport": "A suspect moved faster than a player can (teleport or noclip).",
   "flag.rs_unarmed_shot": "An officer shot a real suspect who was never seen armed in the case. He gets a penalty and his points wait for a supervisor.",
   "flag.rs_vdm": "An officer ran a real suspect over while the suspect was on foot. He gets a penalty and his points wait for a supervisor.",
+  "flag.rs_volunteer_dropout": "A volunteer suspect said yes, then did not reach the starting point in time or cancelled the case (a strike when it came late).",
   "flag.rs_went_on_duty": "A suspect went on police duty during the case and no longer counts.",
   "flag.speed": "Impossible speed",
   "flag.stun_unproven": "A stun was reported that the server did not see (the suspect did not fall). Check it before approving.",

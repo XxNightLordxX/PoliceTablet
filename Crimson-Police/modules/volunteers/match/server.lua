@@ -6,10 +6,19 @@ CP.Volunteers = CP.Volunteers or {}
 local V = CP.Volunteers
 local TAG = 'volunteers'
 
-local TICK_MS = 1000         -- the asking, travel and engagement check, only while a run has a match
-local LATE_MS = 2000         -- an answer this late after the pop-up closed still counts (lag)
+local TICK_MS = 1000                                   -- the asking, travel and engagement check, only while a run has a match
+local LATE_MS = 2000                                   -- an answer this late after the pop-up closed still counts (lag)
 local CANCEL_PHASES = { travel = true, in_position = true, engaged = true }
 local STRIKE_WHY = { no_show = true, cancelled = true, left = true }
+local NOTE_WHY = { no_show = true, cancelled = true }  -- a leave already has CP.Opponents' rs_combat_log note
+-- What a volunteer case takes part in -> its Config.Volunteers switch (each shipped false)
+local COUNTS = {
+    typeOfTheDay = 'typeOfTheDay',
+    goals = 'goals',
+    challenge = 'challenge',
+    cash = 'payCash',
+    items = 'payRewards',
+}
 
 local matches = {}           -- [runId] = match (below)
 local byCid = {}             -- [citizenid] = runId while he is asked or plays that run's suspect
@@ -149,7 +158,10 @@ local function Voided(m, why, strike)
     if rec and rec.state ~= 'void' and rec.state ~= 'left' then
         Opp('setState', m.run, m.cid, 'void', { why = 'volunteer_' .. why })
     end
-    if why == 'no_show' or why == 'cancelled' then Line(m, why == 'no_show' and 'no_show' or 'volunteer_cancel') end
+    if NOTE_WHY[why] then
+        Line(m, why == 'no_show' and 'no_show' or 'volunteer_cancel')
+        Opp('note', m.run, 'rs_volunteer_dropout', ('%s: %s'):format(rec and rec.label or '?', why), m.cid)
+    end
     if strike and STRIKE_WHY[why] and V.strike then V.strike(m.cid, why) end
     Note(m.src, 'warning', 'volunteer.case.' .. why)
     TriggerClientEvent(CP.e('client:volunteerCase'), m.src, { phase = 'over' })
@@ -169,10 +181,25 @@ local function Fits(m, cid, src)
     if not ok then return false, why end
     local okI, whyI = Opp('eligible', src, { intake = true })
     if okI == false then return false, whyI end
+    local okC, whyC = V.capsOk(m.run, cid)
+    if not okC then return false, whyC end
     for _, officer in ipairs(ActiveSrcs(m.run)) do
         if Opp('selfBlock', officer, { cid }) == true then return false, 'own_officer' end
     end
     return true
+end
+
+-- An officer who shares only a connection or PC with the volunteer (CP.Opponents.selfBlock's flags) gets the
+-- officer-conduct flag rs_linked_accounts (his own points wait for review): at the yes, and at a late join. May yield.
+local function FlagLinked(m, officer)
+    local blocked, _, flags, match = Opp('selfBlock', officer, { m.cid })
+    if blocked == true or type(flags) ~= 'table' then return end
+    local _, rec = Opp('byCid', m.cid)
+    local kinds = type(match) == 'table' and type(match.kinds) == 'table' and match.kinds or {}
+    local detail = ('suspect %s, shared %s'):format(rec and rec.label or '?', table.concat(kinds, ', '))
+    for _, reason in ipairs(flags) do
+        if CP.AntiCheat and CP.AntiCheat.flag then pcall(CP.AntiCheat.flag, m.run, officer, reason, detail) end
+    end
 end
 
 local function Candidates(m)
@@ -258,6 +285,7 @@ local function Accept(m)
     m.run.realSuspect = 'volunteer'
     if CP.Alerts and CP.Alerts.releaseRun then pcall(CP.Alerts.releaseRun, m.run) end
     Line(m, 'volunteer_yes', { count = m.tries })
+    for _, officer in ipairs(ActiveSrcs(m.run)) do FlagLinked(m, officer) end
     Note(src, 'success', 'volunteer.ask.accepted')
     TriggerClientEvent(CP.e('client:volunteerCase'), src, {
         phase = 'travel',
@@ -348,6 +376,88 @@ StartTick = function()
         end
         if tick.token == token then tick.on = false end
     end)
+end
+
+-- ============================================================================
+--                     THE GATES (V22b, ARCHITECTURE 5.47)
+-- ============================================================================
+-- A run whose suspect a volunteer plays (run.realSuspect = 'volunteer', from his yes on) takes part in the Type of
+-- the Day, goals, the challenge, cash and item rewards only with Config.Volunteers' switch of that name (shipped
+-- false: points only). They read the run (never Config.Volunteers.enabled), so a case running when the owner turns
+-- volunteers off still ends by its rules.
+
+-- Whether a run is a volunteer case (a volunteer said yes).
+function V.isCase(run) return type(run) == 'table' and run.realSuspect == 'volunteer' end
+
+-- Whether a run takes part in 'typeOfTheDay', 'goals', 'challenge', 'cash' or 'items'. Any other run: true.
+function V.counts(run, what)
+    if not V.isCase(run) then return true end
+    local key = COUNTS[what]
+    return key ~= nil and Cfg()[key] == true
+end
+
+-- SQL to add to a WHERE that sums run rows for 'goals' or 'challenge': leaves out the rows of volunteer cases (their
+-- breakdown's realSuspect) while that switch is off ('' when it is on). alias: the table alias with its dot or ''.
+function V.rowFilter(what, alias)
+    local key = COUNTS[what]
+    if key and Cfg()[key] == true then return '' end
+    return (' AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(%sbreakdown, \'$.realSuspect\')), \'\') <> \'volunteer\''):format(
+        alias or '')
+end
+
+local function RS() return Config.RealSuspects or {} end
+
+-- The caps of Config.RealSuspects (live crimes and volunteers together) between this volunteer and the run's active
+-- officers -> true | false, reason: the volunteer already scored maxCatchesPerSuspectDay times today
+-- ('suspect_used'); an officer suspended from these cases ('officer_suspended'), a suspect within jobHopMinutes
+-- ('officer_recent_suspect'), with an admin pair block ('pair_blocked') or a recent case with him ('pair_cooldown').
+-- Memory only: CP.Opponents' caps never query the database.
+function V.capsOk(run, cid)
+    if type(run) ~= 'table' or type(cid) ~= 'string' then return false, 'gone' end
+    local perDay = math.floor(Num(RS().maxCatchesPerSuspectDay, 2, 0))
+    if Num(Opp('suspectDayCount', cid), 0) >= perDay then return false, 'suspect_used' end
+    local hop = Num(RS().jobHopMinutes, 30, 0) * 60
+    for _, src in ipairs(ActiveSrcs(run)) do
+        local p = type(run.participants) == 'table' and run.participants[src] or nil
+        local oCid = type(p) == 'table' and p.citizenid or nil
+        if type(oCid) == 'string' then
+            if Opp('suspended', oCid) == true then return false, 'officer_suspended' end
+            local was = tonumber(Opp('lastSuspectAt', oCid))
+            if was and os.time() - was < hop then return false, 'officer_recent_suspect' end
+            local ok, why = Opp('pairOk', oCid, cid)
+            if ok == false then return false, why == 'blocked' and 'pair_blocked' or 'pair_cooldown' end
+        end
+    end
+    return true
+end
+
+-- The pair rows of a volunteer case at the run's end (CP.Opponents.recordPairs, kind 'volunteer'): one per officer
+-- who took part and the volunteer; scored = the run completed and he was detained or booked for a share above 0;
+-- outcome 'gone' when no officer reached him (it never counts for the caps). Then the pair-repeat check.
+local function RecordPairs(m, run, state)
+    local outcomes, case = Opp('close', run)
+    if type(case) ~= 'table' or type(outcomes) ~= 'table' or case.kind ~= 'volunteer' then return 0 end
+    local rows = {}
+    for _, p in pairs(run.participants or {}) do
+        if type(p) == 'table' and type(p.citizenid) == 'string' then
+            for _, cid in ipairs(case.order or {}) do
+                local rec = case.suspects and case.suspects[cid] or {}
+                local out = outcomes[cid]
+                local caught = (out == 'detained' or out == 'booked') and Num(rec.share, 1) > 0
+                rows[#rows + 1] = {
+                    officer = p.citizenid,
+                    suspect = cid,
+                    kind = 'volunteer',
+                    scored = state == 'completed' and caught,
+                    outcome = (m.engagedAt or rec.contactAt) and out or 'gone',
+                    suspectLicense = rec.license,
+                }
+            end
+        end
+    end
+    local n = Opp('recordPairs', run, rows) or 0
+    Opp('checkPairFlags', run)
+    return n
 end
 
 -- ============================================================================
@@ -464,18 +574,26 @@ CP.Hooks.on('run:created', function(run)
     SetTimeout(0, function() V.match(run) end)
 end)
 
--- An officer who joins after the engagement loses the protection too.
+-- An officer who joins while a volunteer plays the suspect is checked for a linked account (rs_linked_accounts);
+-- one who joins after the engagement loses the protection too.
 CP.Hooks.on('participant:joined', function(run, src)
     local m = type(run) == 'table' and matches[run.id] or nil
-    if not m or m.phase ~= 'engaged' or (Config.RealSuspects or {}).npcCombat == true then return end
+    if not m or not CANCEL_PHASES[m.phase] then return end
+    CreateThread(function() FlagLinked(m, src) end)
+    if m.phase ~= 'engaged' or (Config.RealSuspects or {}).npcCombat == true then return end
     if CP.NpcCombat and CP.NpcCombat.dropFor then pcall(CP.NpcCombat.dropFor, run, src, 'volunteer') end
 end)
 
--- The release: a pop-up still open closes, a volunteer who played the suspect is told he is free to go.
-CP.Hooks.on('run:ended', function(run)
+-- The release: a pop-up still open closes, a volunteer who played the suspect is told he is free to go; a case
+-- that opened (a yes came) writes its pair rows.
+CP.Hooks.on('run:ended', function(run, state)
     local m = type(run) == 'table' and matches[run.id] or nil
     if not m then return end
     matches[run.id] = nil
+    if m.yesAt then
+        local ok, err = pcall(RecordPairs, m, run, state)
+        if not ok then CP.err(TAG, 'the pair rows of run %s failed: %s', m.runId, tostring(err)) end
+    end
     if m.phase == 'asking' and m.token then
         TriggerClientEvent(CP.e('client:volunteerAskClose'), m.src, m.token)
     elseif CANCEL_PHASES[m.phase] then
@@ -494,3 +612,4 @@ AddEventHandler('onResourceStop', function(res)
 end)
 
 V._matchTick = Tick
+V._recordPairs = RecordPairs

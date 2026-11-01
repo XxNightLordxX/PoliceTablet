@@ -748,7 +748,10 @@ function Scoring.compute(run, p, result, opts)
     local value = math.max(0, math.min(cap, raw))
     local final = math.floor(value + 1e-9)
     local tod = false
-    if CP.Events and CP.Events.typeOfTheDay and LiveCall('counts', run, 'typeOfTheDay') ~= false then
+    -- a live or volunteer case only with its typeOfTheDay switch (Config.LiveCrime V13, Config.Volunteers V22b)
+    local todOk = LiveCall('counts', run, 'typeOfTheDay') ~= false
+        and not (CP.Volunteers and CP.Volunteers.counts and CP.Volunteers.counts(run, 'typeOfTheDay') == false)
+    if CP.Events and CP.Events.typeOfTheDay and todOk then
         -- the officer's department's pick for today (step P18); the server's type when the setter is in the run
         local okT, key = pcall(CP.Events.typeOfTheDay, nil, p.department, run.participants or { p })
         tod = okT and key ~= nil and key == run.missionType

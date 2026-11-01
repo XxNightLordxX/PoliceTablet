@@ -245,4 +245,56 @@ do
     H.ok((S.check('Leaderboard.metrics', { 'points', 'live_catches' })), 'live_catches can be put on the board')
 end
 
+-- ============================================================================
+--            VOLUNTEER CASES (V22b): POINTS ONLY UNLESS SWITCHED ON
+-- ============================================================================
+
+do
+    H.load('modules/volunteers/match/server.lua')
+    local V = CP.Volunteers
+    local vc = Config.Volunteers
+    for _, k in ipairs({ 'typeOfTheDay', 'goals', 'challenge', 'payCash', 'payRewards' }) do
+        H.eq(vc[k], false, 'Volunteers.' .. k .. ' ships false')
+    end
+    local run, p = Run(false)
+    H.eq(V.counts(run, 'cash'), true, 'an NPC run (no yes) is a plain mission')
+    run.realSuspect = 'volunteer'
+    local keys = {
+        typeOfTheDay = 'typeOfTheDay',
+        goals = 'goals',
+        challenge = 'challenge',
+        cash = 'payCash',
+        items = 'payRewards',
+    }
+    for what, key in pairs(keys) do
+        H.eq(V.counts(run, what), false, 'a volunteer case: no ' .. what .. ' while ' .. key .. ' is off')
+        vc[key] = true
+        H.eq(V.counts(run, what), true, key .. ' on: it takes part')
+        vc[key] = false
+    end
+    H.ok(V.rowFilter('goals', 'r.'):find('r.breakdown', 1, true) ~= nil, 'goals off: volunteer rows left out')
+    vc.goals = true
+    H.eq(V.rowFilter('goals', ''), '', 'goals on: nothing left out')
+    vc.goals = false
+
+    local amount, cb = CP.Cash.compute(run, p)
+    H.eq(amount, 0, 'payCash off: a volunteer case pays nothing (cash 0)')
+    H.eq(cb.B, 0, 'its base is 0')
+    vc.payCash = true
+    H.eq((CP.Cash.compute(run, p)), 1000, 'payCash on: pays like a mission of its type')
+    vc.payCash = false
+    local b = CP.Scoring.compute(run, p, 'completed', { durationS = 60, departments = 1 })
+    H.eq(b.tod, false, 'no Type of the Day while typeOfTheDay is off')
+    vc.typeOfTheDay = true
+    b = CP.Scoring.compute(run, p, 'completed', { durationS = 60, departments = 1 })
+    H.eq(b.tod, true, 'typeOfTheDay on: today\'s type doubles it')
+    vc.typeOfTheDay = false
+
+    local S = CP.Settings
+    H.eq((S.entry('Volunteers.payCash') or {}).money, true, 'Volunteers.payCash is a money switch')
+    H.eq((S.entry('Volunteers.payRewards') or {}).money, true, 'Volunteers.payRewards is a money switch')
+    H.eq((S.entry('Volunteers.payRewards') or {}).desc,
+        'true = it rolls the item rewards of its type too (Config.Rewards)', 'Volunteers.payRewards: its comment')
+end
+
 return H

@@ -56,6 +56,9 @@ local MONEY_SWITCHES = {
     -- a live case pays cash or rolls items only with these on (Config.LiveCrime, V13)
     'LiveCrime.cash',
     'LiveCrime.items',
+    -- a volunteer case pays cash or rolls items only with these on (Config.Volunteers, V22b)
+    'Volunteers.payCash',
+    'Volunteers.payRewards',
 }
 local MONEY_WORD = 'ENABLE'
 

@@ -154,6 +154,8 @@ function Cash.compute(run, p)
     local B = math.max(0, math.floor(Num(run.cashBase, 0) + 0.5))
     -- a live case pays nothing unless the owner turned on Config.LiveCrime.cash (a money switch, V13)
     if CP.LiveCrime and CP.LiveCrime.counts and CP.LiveCrime.counts(run, 'cash') == false then B = 0 end
+    -- a volunteer case pays nothing unless the owner turned on Config.Volunteers.payCash (a money switch, V22b)
+    if CP.Volunteers and CP.Volunteers.counts and CP.Volunteers.counts(run, 'cash') == false then B = 0 end
     local mTier = Num(TierRow(run).cash, 1.0)
     -- the run's twists (CP.Twists): their cash multipliers multiply (each x the department's twist cash, step P16), up
     -- to Config.Events.twistMaxCash

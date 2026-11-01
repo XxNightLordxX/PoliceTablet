@@ -3934,6 +3934,14 @@ Config.Volunteers = {
     -- How such a mission ends: 'cancelled' = Abandoned with no cooldown, penalty or pay; 'keep_earned' = Completed
     -- with what the officers earned so far
     voidRun = 'cancelled',
+    -- What a mission played against a volunteer (once he said yes) takes part in; true = like any other mission
+    typeOfTheDay = false,            -- true = today's Type of the Day points multiplier applies to it too
+    goals = false,                   -- true = it counts for the officers' daily and weekly goals
+    challenge = false,               -- true = it counts for the department challenge and the weekly bounty
+    -- Money switches (the typed word ENABLE turns them on in Settings). true = it pays the officers cash like any
+    -- mission of its type; false = points only (its cash is 0)
+    payCash = false,
+    payRewards = false,              -- true = it rolls the item rewards of its type too (Config.Rewards)
 }
 
 -- ============================================================================
