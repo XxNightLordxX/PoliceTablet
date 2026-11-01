@@ -2654,6 +2654,7 @@ Feature folders
 | modules/admin/ | server | Supervisor and admin actions, /CrimsonPoliceAdmin, audit log, webhooks |
 | modules/anticheat/ | server | Objective validation, presence and idle checks, flagged runs |
 | modules/opponents/ | server | Real-player suspects of live crimes and volunteer cases (off by default): cases keyed by citizenid, the watch, leaving and instances, staff notes; proof/: the cuff pair and custody hold, release, rescue, cuff-break and self-uncuff, downs, bookings and the hospital rules; conduct/: the armed definition, the damage ledger, excessive force, the unarmed-shot and ran-over penalties, the cash-seizure audit |
+| modules/volunteers/ | server, client | Volunteer suspects (off by default): the volunteer command, its ox_lib consent, roles and menu, the window, ends and strikes |
 | modules/integrations/qbx/ | server, client | Every qbx_core call |
 | modules/integrations/sc_dispatch/ | server | Responding listener, mdt_dispatch lookup, shots-fired and person-down listeners, ClearNotification, suspension check |
 | modules/integrations/sc_ambulance/ | server, client | EMS on duty, the revive event, the EMS request, and the listen-only hospital-respawn fact for real suspects (CP.Ambulance.on) |
@@ -3892,6 +3893,16 @@ Config.LiveCrime = {
 -- nothing changes even with enabled = true.
 Config.Volunteers = {
     enabled = false,                 -- true = players can volunteer with the command below
+    -- The chat command (without the /) a player volunteers with: it asks him to agree to the rules and pick the
+    -- suspects he will play, and while he volunteers it opens a menu to renew, change them or stop (restart to change)
+    command = 'crimsonheat',
+    windowMinutes = 60,              -- minutes a volunteer stays on the list; he can renew it from the menu
+    -- A volunteer who says yes and then does not show up or walks away from the case gets a strike (kept in memory:
+    -- a restart clears them). This many strikes within strikeHours stop that player, on every character, from
+    -- volunteering for blockHours
+    strikes = 3,
+    strikeHours = 24,                -- hours a strike counts towards the block
+    blockHours = 24,                 -- hours a player who reached the strikes can't volunteer
 }
 
 -- ============================================================================

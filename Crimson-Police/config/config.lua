@@ -1098,6 +1098,16 @@ Config.LiveCrime = {
 -- nothing changes even with enabled = true.
 Config.Volunteers = {
     enabled = false,                 -- true = players can volunteer with the command below
+    -- The chat command (without the /) a player volunteers with: it asks him to agree to the rules and pick the
+    -- suspects he will play, and while he volunteers it opens a menu to renew, change them or stop (restart to change)
+    command = 'crimsonheat',
+    windowMinutes = 60,              -- minutes a volunteer stays on the list; he can renew it from the menu
+    -- A volunteer who says yes and then does not show up or walks away from the case gets a strike (kept in memory:
+    -- a restart clears them). This many strikes within strikeHours stop that player, on every character, from
+    -- volunteering for blockHours
+    strikes = 3,
+    strikeHours = 24,                -- hours a strike counts towards the block
+    blockHours = 24,                 -- hours a player who reached the strikes can't volunteer
 }
 
 -- ============================================================================

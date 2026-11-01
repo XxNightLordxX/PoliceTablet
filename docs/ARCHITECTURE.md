@@ -3433,6 +3433,30 @@ pop-up instead of the NPC; 'players_only' is offered only while a volunteer who 
 'npc', so nothing changes even with `enabled = true`. Built in steps V4-V26
 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
 
+**The opt-in (V20, modules/volunteers).** Memory only; nothing is matched yet (V22). Server:
+- `check(src) -> ok, reason, info, untilAt`: `enabled`, a loaded character, `CP.Opponents.eligible(src)` (no intake
+  test: where he stands counts only at a match), an admin's Exclude (`Opp.excluded`), and the strikes block of his
+  player key (the license, else `cid:<citizenid>`, so another character of the same player is blocked too).
+- `join(src, roles)` (roles: `{ runner|driver|fugitive = true }`, the §7.3 slot roles; at least one) puts him on the
+  list for `windowMinutes` (60) and starts his AFK samples (`Opp.sampleCrew('volunteers', { cid })`); `renew(src)`
+  (the same checks, a fresh window from now), `setRoles(src, roles)`, `stop(src)`, `list()` (copies, oldest first:
+  cid, src, name, roles, since, untilAt), `isListed(cid)`, `strikes(cid)`, `endListing(cid, why)`.
+- Ends (`why`, each but `left` told to the player as `volunteer.ended.<why>`): stopped, expired, on_duty (the qbx duty
+  and job listeners, and the sweep), excluded, strikes, disabled (`settings:changed` with enabled off), left (drop or
+  character unload). A 15 s sweep runs only while the list holds someone (expiry, enabled, exclusion, block, duty).
+- `strike(cid, why) -> count, blockedUntil|nil`: later steps give one for a yes followed by a no-show or walking away;
+  `strikes` (3) within `strikeHours` (24) block the player for `blockHours` (24) and end his listing. Strikes and
+  blocks are memory only (a restart clears them).
+- Net: `server:volunteer` (action, data; rate 4 per 2 s): `open` answers `client:volunteerMenu` (`{ active = false,
+  minutes, roles, strikes, maxStrikes }` for the start, `{ active = true, minutesLeft, roles, strikes, maxStrikes }`
+  while listed) or a refusal; `join`, `renew`, `roles` (`data.roles`) and `stop`. Every answer is
+  `client:volunteerNote` (kind, locale key, vars): `volunteer.refused.<reason>` (`.other` for an unknown one).
+- Client: the command (`command`, restart to rename) is registered once `enabled` is on (at the start or on
+  `settings:changed`); with enabled off later it answers `volunteer.refused.off`. The start is an ox_lib alert (the
+  rules, "I agree") then an input dialog with one checkbox per role; the listed menu is an ox_lib context menu (time
+  left with roles and strikes, Renew, Change the suspects you play, Stop with a confirm). Notes are `lib.notify`.
+  Specs: tests/volunteers_spec.lua, tests/volunteers_client_spec.lua.
+
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 
 Each character's own tablet choices (My options), saved sparse in `cp_officers.options` (JSON of only the keys that

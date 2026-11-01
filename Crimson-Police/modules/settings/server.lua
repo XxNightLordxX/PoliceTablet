@@ -84,6 +84,7 @@ local POINTS = {
 local RESTART = {
     'Tablet.command',
     'Tablet.adminCommand',
+    'Volunteers.command',
     'Tablet.keybind',
     'Tablet.dispatchKey',
     'Tablet.readyKey',
@@ -378,6 +379,11 @@ local RANGES = {
     ['LiveCrime.deadCaseSeconds'] = { 5, 600 },
     ['LiveCrime.maxOfficers'] = { 1, 16 },
     ['LiveCrime.joinOfferSeconds'] = { 10, 120 },
+    -- volunteer suspects (Config.Volunteers, V20)
+    ['Volunteers.windowMinutes'] = { 10, 240 },
+    ['Volunteers.strikes'] = { 1, 10 },
+    ['Volunteers.strikeHours'] = { 1, 168 },
+    ['Volunteers.blockHours'] = { 1, 168 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -1033,6 +1039,7 @@ local KNOWN = {
         kind = 'optionalText',
     },
     ['Tablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
+    ['Volunteers.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['Tablet.adminCommand'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['Tablet.keybind'] = { tpl = Text('^[%w_%-]*$', 32) },
     ['Tablet.dispatchKey'] = { tpl = Text('^[%w_%-]*$', 32) },

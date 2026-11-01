@@ -166,6 +166,7 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V10, K7-K23, Q8-
 - [ ] Crimson-Contracts guards keep their own damage while an officer is on a run nearby (the crimsonPoliceRun bag). (V8)
 - [ ] Config.RealSuspects (officerAlerts, routeEnds, downed, downedPickupDelay) and Config.LiveCrime.requireRoute show in Settings; nothing changes until a live case exists. (V9, V10)
 - [ ] As shipped, the Admin UI has no Real suspects screen. With Config.LiveCrime.enabled = true (reopen the Admin UI), More -> Real suspects lists the cases; a case opens its timeline and damage ledger; your own case is greyed; Block pair, Exclude and Suspend need days and a reason, then show under Pairs and blocks and in the audit log. (V18)
+- [ ] As shipped, /crimsonheat does nothing. With Config.Volunteers.enabled = true (restart, or turn it on in Settings), a civilian types /crimsonheat: the rules alert, then the suspects to play; he gets "You volunteer as a suspect for 60 minutes". /crimsonheat again shows the menu (time left, Renew, Change, Stop). An on-duty officer is refused; going on police duty, logging out or Stop ends it. (V20)
 
 ## Restarts and logout
 

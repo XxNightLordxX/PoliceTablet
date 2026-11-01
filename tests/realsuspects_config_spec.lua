@@ -110,6 +110,22 @@ do
         H.eq(e.desc, desc, path .. ': its trailing comment is the description')
         H.ok(not e.restart and not e.money, path .. ' needs no restart and is not a money switch')
     end
+
+    -- V20: the command, the window and strikes, each with its own description and bounds
+    for path, want in pairs({
+        ['Volunteers.command'] = { 'crimsonheat', true },
+        ['Volunteers.windowMinutes'] = { 60, false },
+        ['Volunteers.strikes'] = { 3, false },
+        ['Volunteers.strikeHours'] = { 24, false },
+        ['Volunteers.blockHours'] = { 24, false },
+    }) do
+        local e = S.entry(path) or {}
+        H.eq(e.default, want[1], path .. ' ships ' .. tostring(want[1]))
+        H.ok(type(e.desc) == 'string' and e.desc ~= '', path .. ' has a description')
+        H.eq(e.restart == true, want[2], path .. (want[2] and ' needs a restart' or ' applies live'))
+    end
+    H.ok(not S.check('Volunteers.windowMinutes', 5), 'a window under 10 minutes is refused')
+    H.ok(not S.check('Volunteers.command', 'crimson heat'), 'a command with a space is refused')
 end
 
 -- ============================================================================

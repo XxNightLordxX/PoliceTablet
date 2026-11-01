@@ -2923,6 +2923,17 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   opened. **Pairs and blocks** shows the pair statistics (type a citizen ID to see only that player, with his
   exclusion and suspension) and the running blocks, exclusions and suspensions; **Block, exclude or suspend** opens
   the form (citizen IDs, days, a reason; a longer one replaces a shorter one and none can be lifted early).
+  Volunteering (step V20, `Config.Volunteers`): with `enabled = true` a player who is not on police duty types
+  **/crimsonheat** (`command`; restart to rename it), agrees to the rules in an ox_lib alert and ticks the suspects he
+  will play (the wanted person who runs, the getaway or race driver in his own car, the fugitive in a search area). He
+  stays on the list for `windowMinutes` (60); the same command then opens a menu with the time left, **Renew** (a fresh
+  window from now), **Change the suspects you play** and **Stop**. It is refused, or ends, for police on duty or off
+  duty less than `Config.RealSuspects.jobHopMinutes` ago, AFK players, players in an instance or the arena, admins
+  (`excludeAdmins`), players an admin excluded on Real suspects, and players with too many strikes. Going on police
+  duty, logging out, the window running out or the owner turning `enabled` off ends it, and he is told why. A yes
+  followed by a no-show or walking away from the case is a strike (from the matching steps): `strikes` (3) within
+  `strikeHours` (24) block that player, on every character, for `blockHours` (24); strikes are kept in memory, so a
+  restart clears them. Nobody is matched to a mission yet: the list only fills.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route
