@@ -148,6 +148,7 @@ CP.Admin = {
             category = category,
             action = action,
             target = target,
+            new = new,
             reason = reason,
         }
     end,
@@ -1752,6 +1753,94 @@ do
     CP.Options = keepOptions
     MC._forgetMuted(Cid(1))
     MC._forgetMuted(Cid(2))
+end
+
+-- Step V11: a reported crime with suspects becomes a red LIVE call (CP.LiveCrime.post -> MC.postLive): memory only,
+-- priority 1, a red toast that ignores favourite types, never counted in maxOpen or the claimable badge, capped by
+-- Config.LiveCrime.maxLiveRuns, lapsed by offerTime or the crime's end; its claim answers err.live_not_ready.
+do
+    Reset()
+    H.load('modules/livecrime/server.lua')
+    local LC = CP.LiveCrime
+    local keepLive = Config.LiveCrime
+    Config.LiveCrime = setmetatable({ enabled = false }, { __index = keepLive })
+    local S = CENTRE.south_ls
+    AddPlayer(1, vec3(S.x, S.y, 30.0))
+    AddPlayer(2, vec3(S.x + 50, S.y, 30.0))     -- calls_muted = 1 (the mute section above)
+    MC._forgetMuted(Cid(1))
+    MC._forgetMuted(Cid(2))
+    local function Crime(n)
+        return {
+            crimeKey = 'crimson-contracts:' .. n .. '_1',
+            key = 'warehouse_burglary',
+            label = 'Warehouse Burglary',
+            locationLabel = 'Elysian Island',
+            title = 'Burglary alarm',
+            street = 'Signal St',
+            coords = vec3(S.x + 300, S.y, 30.0),
+            members = { A = true, B = true },
+            suspects = { A = true, B = true },
+            missionType = 'investigation',
+        }
+    end
+    H.eq(keepLive.offerTime, 300, 'offerTime ships 300 s')
+    H.eq(keepLive.maxLiveRuns, 2, 'maxLiveRuns ships 2')
+
+    local c1 = Crime(1)
+    H.eq(LC.post(c1), false, 'live crimes off: no LIVE call')
+    H.eq(next(MC._calls()), nil, '...and nothing on the board')
+
+    Config.LiveCrime.enabled = true
+    H.events = {}
+    local scdBefore = #scdCalls
+    H.eq(LC.post(c1), true, 'on: the crime gets its LIVE call')
+    local call = MC._calls()[c1.callId]
+    H.ok(call and call.live and call.id < 0, 'a memory-only call (negative id, no cp_mission_calls row)')
+    H.eq(call.code, 'LIVE-001', 'its code')
+    H.eq(call.priority, 1, 'priority 1')
+    H.eq(Toasts(1), 1, 'the idle officer gets the toast')
+    H.eq(Toasts(2), 0, 'calls_muted still silences it')
+    local toast = Find(H.events, function(e) return e.name == 'crimson-police:client:missionCall' end)
+    H.ok(toast and toast.args[1].live == true and toast.args[1].title == 'Burglary alarm', 'the toast is a LIVE one')
+    H.eq(#scdCalls, scdBefore, 'nothing reaches SC-Dispatch')
+
+    local card = CardOf(1, call.id)
+    H.ok(card and card.live == true, 'the Dispatch card is a LIVE card')
+    H.eq(card.liveTitle, 'Burglary alarm', 'with the alert\'s title')
+    H.eq(card.liveStreet, 'Signal St', '...its street')
+    H.eq(card.suspects, 2, '...and the number of suspects')
+    H.eq(card.distance, 300, 'the distance is to the crime\'s reported place')
+    H.eq(card.status, 'ready', 'shown as ready')
+    H.eq(MC.claimableCount(1), 0, 'not in the claimable badge before step V14')
+    local okC, errC = Claim(1, call.id)
+    H.ok(okC == false and errC == 'err.live_not_ready', 'its claim answers err.live_not_ready')
+
+    H.eq(LC.post(c1), false, 'one LIVE call per crime')
+    local c2 = Crime(2)
+    H.eq(LC.post(c2), true, 'a second crime: a second LIVE call')
+    audits = {}
+    local c3 = Crime(3)
+    H.eq(LC.post(c3), false, 'maxLiveRuns 2: a third crime gets none')
+    H.eq(MC.liveCount(), 2, 'two LIVE calls count')
+    H.advance(100)
+    local a = Find(audits, function(x) return x.action == 'liveCrimeIgnored' end)
+    H.ok(a and a.new == 'max_live' and a.reason == 'livecrime.audit.not_posted', '...audited liveCrimeIgnored max_live')
+
+    opLocked = true
+    MC._tick()
+    H.ok(MC._calls()[call.id] ~= nil, 'a Cross-Department lock does not withdraw a LIVE call')
+    opLocked = false
+
+    H.eq(MC.endLive(c2.crimeKey), true, 'the crime ended: its LIVE call lapses')
+    H.eq(MC._calls()[c2.callId].status, 'lapsed', '...status lapsed')
+    H.eq(MC.liveCount(), 1, '...and no longer counts')
+    H.eq(LC.post(c3), true, 'so the next crime gets its call')
+
+    H.time = H.time + 301
+    MC._tick()
+    H.eq(MC._calls()[c1.callId] and MC._calls()[c1.callId].status, 'lapsed', 'offerTime over: the call lapses')
+    H.time = H.time - 301
+    Config.LiveCrime = keepLive
 end
 
 return H

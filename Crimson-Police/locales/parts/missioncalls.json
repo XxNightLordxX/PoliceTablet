@@ -203,5 +203,13 @@
   "mc.staff.push_left": "Pushes left today: {n} of {max}.",
   "mc.staff.pushed": "Mission pushed to the unit.",
   "admin.action.mcPush": "Mission pushed to a unit",
-  "mc.confirm.pushed": "Command pushed {mission} ({type}) to your unit. Every accept rule still applies."
+  "mc.confirm.pushed": "Command pushed {mission} ({type}) to your unit. Every accept rule still applies.",
+  "mc.live.title": "Live crime in progress",
+  "mc.card.live": "LIVE",
+  "mc.card.live_hint": "A real crime reported to police: the suspects are players. No mission is drawn.",
+  "mc.card.live_suspects": "{n} suspect(s)",
+  "mc.card.live_pay": "Points for securing the scene, detaining and booking the suspects",
+  "mc.toast.live": "{code} · LIVE: {title} · {street} · {area}",
+  "mc.toast.live_title": "LIVE call",
+  "err.live_not_ready": "LIVE calls can't be claimed yet: live cases come in a later update."
 }

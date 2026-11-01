@@ -352,6 +352,9 @@ do
         sources = 'the only scripts allowed to report a crime',
         types = 'which crimes become LIVE calls, and the mission type whose points they use',
         suspectRadius = 'crew members further than this from the crime at the alert are not suspects',
+        -- V11: the LIVE call
+        offerTime = 'seconds a LIVE call stays open before it lapses (the crime\'s end lapses it too)',
+        maxLiveRuns = 'LIVE calls and live cases at once; a crime past this gets no LIVE call',
     }) do
         local e = S.entry('LiveCrime.' .. path) or {}
         H.eq(e.desc, desc, 'LiveCrime.' .. path .. ': its own comment')
@@ -367,6 +370,9 @@ do
     H.ok((S.check('LiveCrime.sources', { 'crimson-contracts', 'my_heists' })), 'LiveCrime.sources takes resource names')
     H.eq((S.check('LiveCrime.sources', { 'bad name!' })), false, 'LiveCrime.sources refuses other text')
     H.eq((S.check('LiveCrime.suspectRadius', 5000.0)), false, 'suspectRadius stays within 10-2000 m')
+    H.eq((S.check('LiveCrime.offerTime', 10)), false, 'offerTime stays within 30-3600 s')
+    H.eq((S.check('LiveCrime.maxLiveRuns', 0)), false, 'maxLiveRuns stays within 1-20')
+    H.ok((S.check('LiveCrime.maxLiveRuns', 5)), 'maxLiveRuns 5 is allowed')
 end
 
 -- ============================================================================

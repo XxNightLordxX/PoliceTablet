@@ -3210,10 +3210,11 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
   `liveCrimeIgnored` (`no_suspect`, the reasons counted) and the samples stop. Else `suspects`, `alertedAt`,
   `dispatchId`, `title`, `street`, `missionType` are stored, the members who are not suspects stop being sampled, the
   audit `liveCrimeReported` (new value `<suspects>/<crew>`, the reasons for the others) is written and
-  `CP.LiveCrime.post(crime)` is called (V10: it only logs "would post"; V11 posts the LIVE call). Audit lines are
+  `CP.LiveCrime.post(crime)` is called (V11: it posts the LIVE call, below). Audit lines are
   category `audit`, actor console, target the crime key, written in their own thread; they carry no citizenid.
 - `onEnded`: `ended`, `endedAt`, `outcome`, `endReason`; the open run of `crime.runId` (V14 sets it; its
-  `run.live.crimeKey` must match) gets `CP.Opponents.crimeEnded(run)`; the samples stop.
+  `run.live.crimeKey` must match) gets `CP.Opponents.crimeEnded(run)`; the samples stop; its LIVE call lapses
+  (`CP.MissionCalls.endLive`, also when the reporting resource stops).
 - `onRejoined`: a member of a crime whose case runs gets a `crew_rejoined` timeline line (CP.Opponents re-resolves him
   on the qbx load event itself, V4).
 - `onCrewShot` (C6): `crime.armed[cid] = os.time()` for a member, and `CP.Opponents.noteArmed(cid)` when he is a
@@ -3223,6 +3224,21 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
   reported: CP.Opponents' own weapon sample and damage ledger (V6) decide whether he is armed in the case.
 - API: `LC.get(crimeKey)`, `LC.crimeOf(run)` (`run.live.crimeKey`), `LC.inCrew(cid) -> bool, crime` (a member of a
   crime that has not ended; always false while `enabled` is off and for test crimes; V22 uses it), `LC.post(crime)`.
+- **The LIVE call (V11).** `LC.post(crime)` calls `CP.MissionCalls.postLive(crime)` and stores `crime.callId`; a
+  refusal other than `posted` is audited `liveCrimeIgnored` with its reason (`max_live`, `calls_off`, `off`,
+  `invalid`). `postLive` keeps the call in memory only (no cp_mission_calls row: a negative id, code `LIVE-<n>`, its
+  own counter), `type` = the crime's mission type, `area` = `MC.areaOf(crime.coords)`, priority 1, `offerEnds` = now +
+  `Config.LiveCrime.offerTime` (300 s, 30-3600), `live = { crimeKey, title, street, coords, suspects = <count> }`. It
+  refuses while `Config.LiveCrime.enabled ~= true` or `Config.MissionCalls.enabled == false`, a second call for the
+  same crime, and a call while `MC.liveCount()` (LIVE calls open, claiming or claimed) is at
+  `Config.LiveCrime.maxLiveRuns` (2, 1-20; a claimed call stays until its case ends, V14). The toast
+  (`client:missionCall` with `live = true, title, street`) goes to every member of an idle unit who has not muted
+  call alerts (favourite types are ignored: it is a real crime) and is not on a real call; the client shows it as an
+  `error` (red) notification titled "LIVE call". The card (`LiveCard`) carries `live, liveTitle, liveStreet,
+  suspects`, the distance to the crime's reported place (never a suspect's), no cash, points or twists, and is locked
+  for a non-leader. LIVE calls never count in `OpenCalls` (maxOpen and lanes), in `MC.claimableCount`, or in
+  `WithdrawAll` (a Cross-Department lock leaves them); they lapse in `Expire` like any call and through
+  `MC.endLive(crimeKey)` when the crime ends. Until V14, `MC.claim` answers `err.live_not_ready` for them.
 - Config.LiveCrime keys of V10: `sources = { 'crimson-contracts' }` (a list of resource names), `types` (an OPEN table
   in Settings: Crimson-Contracts' contract keys -> a Config.MissionTypes key or false, checked by Settings),
   `suspectRadius = 300.0` (10-2000 m).
@@ -3934,7 +3950,7 @@ V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa
 | `client:builder` | `{ ... }` builder-specific | builder |
 | `client:builder:teleport` | `{ missionId, location, key, index, coords }`: the answer to the caller's own `server:builder:teleport` (the stored point's coordinates; the client ignores one it did not ask for) | builder |
 | `client:objective` (new action) | runId, index, `{ action = 'adopt', op = 'adopt', netId, obj, from }`: the host moves the AI of netId to objective obj's client half | runs |
-| `client:missionCall` | `{ id, code, typeLabel, priority, areaLabel, paged? }` (toast and tone; the client drops it when muted, on a run or in the arena) | missioncalls |
+| `client:missionCall` | `{ id, code, typeLabel, priority, areaLabel, paged?, live?, title?, street? }` (live: a LIVE call, V11) (toast and tone; the client drops it when muted, on a run or in the arena) | missioncalls |
 | `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName, twists = { { key, label } } }` or nil to clear | units |
 | `client:contactAct` | `{ runId, netId, behaviour, args, seconds }` to the run host only, when the behaviour starts | custody |
 | `client:contactConfirm` | `{ netId, choice, factKey }`: open the tablet with the case-fail confirm | custody |

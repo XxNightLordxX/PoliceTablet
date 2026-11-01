@@ -22,5 +22,10 @@
   "livecrime.why.excluded": "excluded by the server.cfg ace",
   "livecrime.why.admin": "a Crimson-Police admin",
   "livecrime.why.too_far": "too far from the crime",
-  "err.setting_live_type": "Each crime needs the name of a mission type in Config.MissionTypes (such as investigation or tactical), or false."
+  "err.setting_live_type": "Each crime needs the name of a mission type in Config.MissionTypes (such as investigation or tactical), or false.",
+  "livecrime.audit.not_posted": "{label} ({key}) at {place}, {street}: it has suspects, but no LIVE call was posted ({why})",
+  "livecrime.why.max_live": "too many LIVE calls and live cases at once (Config.LiveCrime.maxLiveRuns)",
+  "livecrime.why.calls_off": "mission calls are off (Config.MissionCalls.enabled)",
+  "livecrime.why.off": "live crimes are off",
+  "livecrime.why.invalid": "the crime record was incomplete"
 }

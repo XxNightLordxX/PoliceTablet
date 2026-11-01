@@ -355,6 +355,8 @@ local RANGES = {
     ['RealSuspects.pairLedgerDays'] = { 1, 365 },
     -- live crimes (Config.LiveCrime)
     ['LiveCrime.suspectRadius'] = { 10, 2000 },
+    ['LiveCrime.offerTime'] = { 30, 3600 },
+    ['LiveCrime.maxLiveRuns'] = { 1, 20 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },

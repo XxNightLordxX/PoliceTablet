@@ -122,6 +122,14 @@ local function Audit(action, crime, value, reason)
     end)
 end
 
+-- The crime's LIVE call lapses if nobody has it yet (step V11).
+local function EndCall(crime)
+    local M = CP.MissionCalls
+    if not (crime.callId and M and M.endLive) then return end
+    local ok, err = pcall(M.endLive, crime.crimeKey)
+    if not ok then WarnOnce('endLive', 'the LIVE call of %s could not lapse: %s', crime.crimeKey, tostring(err)) end
+end
+
 -- Ended records an hour after the end, and records that never got an end after KEEP_OPEN.
 local function Prune(now)
     for k, crime in pairs(crimes) do
@@ -286,6 +294,7 @@ function LC.onEnded(res, data)
     local run = RunOf(crime)
     if run then Opp('crimeEnded', run) end
     Unsample(crime)
+    EndCall(crime)
     CP.log(TAG, 'crime %s (%s) ended: %s', crime.crimeKey, crime.key, data.outcome)
     Prune(now)
     return true
@@ -324,10 +333,23 @@ end
 --                                     API
 -- ============================================================================
 
--- The LIVE call for a crime with suspects (step V11). Until then it is only logged.
+-- The red LIVE call on the Dispatch screen for a crime with suspects (step V11, CP.MissionCalls.postLive). A crime
+-- that cannot be posted (Config.LiveCrime.maxLiveRuns reached, mission calls off) gets the audit line
+-- liveCrimeIgnored with the reason; true when the call is up.
 function LC.post(crime)
-    CP.log(TAG, 'crime %s (%s): would post a LIVE call (%s, %d suspect(s))', crime.crimeKey, crime.key,
-        tostring(crime.missionType), CP.U.count(crime.suspects))
+    local M = CP.MissionCalls
+    if not (M and M.postLive) then return false end
+    local call, why = M.postLive(crime)
+    if call then
+        crime.callId = call.id
+        return true
+    end
+    why = why or 'invalid'
+    if why ~= 'posted' then
+        local key = 'livecrime.why.' .. why
+        local text = CP.Locale and CP.Locale.has and CP.Locale.has(key) and CP.L(key) or why
+        Audit('liveCrimeIgnored', crime, why, CP.L('livecrime.audit.not_posted', Params(crime, { why = text })))
+    end
     return false
 end
 
@@ -363,6 +385,7 @@ AddEventHandler('onResourceStop', function(res)
             local run = RunOf(crime)
             if run then Opp('crimeEnded', run) end
             Unsample(crime)
+            EndCall(crime)
         end
     end
 end)

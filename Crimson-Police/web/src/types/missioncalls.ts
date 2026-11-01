@@ -33,6 +33,12 @@ export interface MissionCall {
     // a department lane's call (step P12): only that department's officers see it ("SAST call")
     department?: string | null;
     departmentShort?: string | null;
+    // a LIVE call (step V11): a real crime reported by Crimson-Contracts; liveTitle and liveStreet are the alert's
+    // own text, suspects how many crew members are suspects (never where they are)
+    live?: boolean;
+    liveTitle?: string | null;
+    liveStreet?: string | null;
+    suspects?: number;
     status: 'ready' | 'priority' | 'locked' | 'claiming' | 'claimed' | 'lapsed' | 'withdrawn';
     priorityEndsIn: number | null;
     locked: null | { reason: string; until?: number };

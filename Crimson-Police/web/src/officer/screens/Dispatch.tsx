@@ -180,8 +180,13 @@ function CallCard({
     return (
         <Card
             padding="none"
-            className={cx('mc-card', `mc-card--p${call.priority}`, call.status !== 'ready' && 'is-muted')}
-            highlight={call.priority === 1 ? 'danger' : undefined}
+            className={cx(
+                'mc-card',
+                `mc-card--p${call.priority}`,
+                call.live && 'mc-card--live',
+                call.status !== 'ready' && 'is-muted',
+            )}
+            highlight={call.priority === 1 || call.live ? 'danger' : undefined}
         >
             <div className="mc-card__head">
                 <span className="mc-card__icon" aria-hidden>
@@ -190,6 +195,11 @@ function CallCard({
                 <div className="mc-card__titles">
                     <div className="mc-card__line">
                         <span className="mc-card__code cp-num">{call.code}</span>
+                        {call.live ? (
+                            <Badge size="sm" tone="danger" variant="solid" icon="flame" title={t('mc.card.live_hint')}>
+                                {t('mc.card.live')}
+                            </Badge>
+                        ) : null}
                         <Badge size="sm" tone={PRIORITY_TONE[call.priority] ?? 'neutral'} variant="solid">
                             {t('mc.card.priority', { n: call.priority })}
                         </Badge>
@@ -217,7 +227,9 @@ function CallCard({
                             </Badge>
                         ) : null}
                     </div>
-                    <div className="mc-card__title">{t(call.titleKey)}</div>
+                    <div className="mc-card__title">
+                        {call.live && call.liveTitle ? call.liveTitle : t(call.titleKey)}
+                    </div>
                     {call.missionLabel ? (
                         <div className="mc-card__pushed">
                             {t('mc.card.pushed_mission', { mission: call.missionLabel })}
@@ -225,7 +237,8 @@ function CallCard({
                     ) : null}
                     <div className="mc-card__meta">
                         <span>
-                            <Icon name="mapPin" size={12} /> {areaText(call)}
+                            <Icon name="mapPin" size={12} />{' '}
+                            {call.live && call.liveStreet ? `${call.liveStreet} · ${areaText(call)}` : areaText(call)}
                         </span>
                         {distance ? (
                             <span>
@@ -233,7 +246,8 @@ function CallCard({
                             </span>
                         ) : null}
                         <span>
-                            <Icon name="users" size={12} /> {crewText(call)}
+                            <Icon name="users" size={12} />{' '}
+                            {call.live ? t('mc.card.live_suspects', { n: call.suspects ?? 0 }) : crewText(call)}
                         </span>
                     </div>
                 </div>
@@ -252,19 +266,23 @@ function CallCard({
                     )}
                 </div>
             </div>
-            <div className="mc-card__pay">
-                <MoneyRange range={asArray(call.cash as number[])} />
-                <span className="mc-card__sep">·</span>
-                <Points value={call.points} />
-                {call.rapidPoints > 0 ? (
-                    <span className="mc-card__rapid" title={t('mc.card.rapid_hint')}>
-                        <Icon name="zap" size={12} />
-                        {t('mc.card.rapid', { n: call.rapidPoints })}
-                    </span>
-                ) : call.staff ? (
-                    <span className="mc-card__rapid is-off">{t('mc.card.staff')}</span>
-                ) : null}
-            </div>
+            {call.live ? (
+                <div className="mc-card__pay mc-card__pay--live">{t('mc.card.live_pay')}</div>
+            ) : (
+                <div className="mc-card__pay">
+                    <MoneyRange range={asArray(call.cash as number[])} />
+                    <span className="mc-card__sep">·</span>
+                    <Points value={call.points} />
+                    {call.rapidPoints > 0 ? (
+                        <span className="mc-card__rapid" title={t('mc.card.rapid_hint')}>
+                            <Icon name="zap" size={12} />
+                            {t('mc.card.rapid', { n: call.rapidPoints })}
+                        </span>
+                    ) : call.staff ? (
+                        <span className="mc-card__rapid is-off">{t('mc.card.staff')}</span>
+                    ) : null}
+                </div>
+            )}
             <div className="mc-card__foot">
                 <StatusLine call={call} stamp={stamp} onChanged={onChanged} />
                 {onTwists && asArray(call.twists).length > 0 ? (

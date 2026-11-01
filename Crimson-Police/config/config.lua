@@ -1022,6 +1022,8 @@ Config.LiveCrime = {
         atm_robbery = false,         -- false = never a LIVE call (a solo ATM hack has no crew to track)
     },
     suspectRadius = 300.0,           -- crew members further than this from the crime at the alert are not suspects
+    offerTime = 300,                 -- seconds a LIVE call stays open before it lapses (the crime's end lapses it too)
+    maxLiveRuns = 2,                 -- LIVE calls and live cases at once; a crime past this gets no LIVE call
 }
 
 -- ============================================================================

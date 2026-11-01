@@ -2840,6 +2840,13 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 
   All three features ship off (`Config.LiveCrime.enabled = false`, `Config.Volunteers.enabled = false`, every mode
   `'npc'`), so nothing changes until you switch one on. Undo: leave both switches off.
+  LIVE calls on the Dispatch screen (step V11): with `Config.LiveCrime.enabled = true`, a crime with suspects shows as
+  a red **LIVE** card (code `LIVE-001`, priority 1, the alert's title and street, the area, how many suspects, never
+  where they are) and idle officers who have not muted call alerts get a red toast. It lapses after
+  `Config.LiveCrime.offerTime` (300 s) or when the crime ends, and at most `Config.LiveCrime.maxLiveRuns` (2) LIVE calls
+  and live cases run at once (a crime past that is audited **Live crime ignored**). Until step V14 a claim answers
+  "LIVE calls can't be claimed yet". A LIVE call never counts against `Config.MissionCalls.maxOpen` and a Cross-Department
+  lock does not withdraw it.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

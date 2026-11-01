@@ -41,20 +41,27 @@ RegisterNetEvent(CP.e('client:missionCall'), function(call)
     if type(call) ~= 'table' or type(call.code) ~= 'string' then return end
     if OnRun() or InArena() then return end
     local area = type(call.areaLabel) == 'string' and call.areaLabel or CP.L('mc.county_wide')
+    -- a LIVE call (step V11): a real crime, shown as a red toast with the place police were told
+    local live = call.live == true
     -- a pushed mission (step P19) names the mission; only the paged unit ever gets this toast
     local pushed = call.pushed == true and type(call.missionLabel) == 'string'
-    local text = CP.L(pushed and 'mc.toast.pushed' or call.paged and 'mc.toast.paged' or 'mc.toast.new', {
+    local textKey = pushed and 'mc.toast.pushed' or call.paged and 'mc.toast.paged' or 'mc.toast.new'
+    if live then textKey = 'mc.toast.live' end
+    local text = CP.L(textKey, {
         code = call.code,
         type = tostring(call.typeLabel or ''),
         priority = tostring(call.priority or ''),
         area = area,
         mission = pushed and call.missionLabel or '',
+        title = live and tostring(call.title or '') or '',
+        street = live and tostring(call.street or '-') or '',
     })
     -- step O11: "F6 opens Dispatch" when the Dispatch key is bound and the officer keeps the key hints on
     local key = CP.Options and CP.Options.keyHint and CP.Options.keyHint('crimsonpolice_dispatch')
     if key then text = text .. ' ' .. CP.L('mc.toast.dispatch_key', { key = key }) end
     if CP.Tablet and CP.Tablet.notify then
-        CP.Tablet.notify('info', text, { title = CP.L('mc.toast.new_title') })
+        CP.Tablet.notify(live and 'error' or 'info', text,
+            { title = CP.L(live and 'mc.toast.live_title' or 'mc.toast.new_title') })
     end
     local now = GetGameTimer()
     if lastCueAt and now - lastCueAt < CUE_MIN_GAP_MS then return end

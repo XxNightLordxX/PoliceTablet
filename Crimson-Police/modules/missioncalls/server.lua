@@ -48,6 +48,7 @@ local codeDay, codeSeq = nil, 0
 local nextPostAt = 0
 local laneNext = {}    -- laneNext[department] = os.time() its lane may post its next call (step P12)
 local tempId = 0
+local liveSeq = 0      -- the number of the last LIVE call (step V11): LIVE-001, LIVE-002, ...
 local claimSeq = 0
 local dirty = false
 local rng = nil
@@ -760,12 +761,14 @@ local function ToastPageEnded(units, now)
 end
 
 -- The open calls (open or claiming). lane: nil = every call, false = the server's own and staff calls only, a
--- department key = that department's lane calls only (step P12).
+-- department key = that department's lane calls only (step P12). LIVE calls (step V11) never count here: they have
+-- their own cap, Config.LiveCrime.maxLiveRuns.
 local function OpenCalls(lane)
     local out = {}
     for _, call in pairs(calls) do
         local mine = lane == nil or (lane == false and call.department == nil) or (lane and call.department == lane)
-        if mine and (call.status == 'open' or call.status == 'claiming') then out[#out + 1] = call end
+        local open = call.status == 'open' or call.status == 'claiming'
+        if mine and open and not call.live then out[#out + 1] = call end
     end
     return out
 end
@@ -1144,10 +1147,11 @@ local function Withdraw(call, reason, now)
     MarkDirty()
 end
 
+-- A LIVE call (step V11) is a real crime: it stays until it lapses or its crime ends.
 local function WithdrawAll(reason)
     local now = os.time()
     for _, call in pairs(calls) do
-        if call.status == 'open' and not call.window then Withdraw(call, reason, now) end
+        if call.status == 'open' and not call.window and not call.live then Withdraw(call, reason, now) end
     end
 end
 
@@ -1404,6 +1408,8 @@ function MC.claim(src, callId, twists)
     end
     local call = calls[math.tointeger(tonumber(callId) or 0)]
     if not call or not VISIBLE[call.status] or call.status == 'lapsed' then return false, 'err.mc_gone' end
+    -- a LIVE call (step V11) is shown and toasted, but its case (the live_crime mission) comes with step V14
+    if call.live then return false, 'err.live_not_ready' end
     if call.status == 'claiming' then return false, 'err.mc_claiming' end
     if call.status == 'claimed' then return false, 'err.mc_taken_by' end
     local now = os.time()
@@ -1702,7 +1708,56 @@ local function Shown(call, officer, unitCids)
     return type(officer) == 'table' and officer.department == call.department
 end
 
+-- The red LIVE card (step V11): a real crime, no draw and no pay range; its distance is to the crime's reported
+-- place, never to a suspect.
+local function LiveCard(call, v)
+    local now = v.now
+    local L = call.live
+    local card = {
+        id = call.id,
+        code = call.code,
+        type = call.type,
+        typeLabel = TypeLabel(call.type),
+        titleKey = 'mc.live.title',
+        live = true,
+        liveTitle = L.title,
+        liveStreet = L.street,
+        suspects = L.suspects,
+        priority = 1,
+        area = call.area and { key = call.area, label = AreaLabel(call.area) } or nil,
+        distance = v.coords and L.coords and math.floor(CP.U.dist2d(v.coords, L.coords) + 0.5) or nil,
+        ageS = math.max(0, now - call.createdAt),
+        offerEndsIn = math.max(0, call.offerEnds - now),
+        staff = false,
+        crew = #v.unit.srcs > 1 and 'unit' or 'solo',
+        cash = { 0, 0 },
+        points = 0,
+        twists = {},
+        rapidPoints = 0,
+        typeOfTheDay = false,
+        redispatched = false,
+        paged = false,
+        pushed = false,
+        status = 'ready',
+    }
+    local w = call.winner
+    if call.status == 'lapsed' then
+        card.status = 'lapsed'
+        card.offerEndsIn = 0
+    elseif call.status == 'claimed' then
+        card.status = 'claimed'
+        card.claimedBy = w and { callsign = w.callsign or w.name, departmentShort = w.departmentShort or '' } or nil
+    elseif call.status == 'claiming' then
+        card.status = 'claiming'
+    elseif not v.isLeader then
+        card.status = 'locked'
+        card.locked = { reason = CP.L('mc.locked.not_leader') }
+    end
+    return card
+end
+
 local function Card(call, v, tod)
+    if call.live then return LiveCard(call, v) end
     local cfg = Cfg()
     local now = v.now
     local st = TypeState(v.state, call.type)
@@ -1871,7 +1926,8 @@ function MC.claimableCount(src)
     if not v or not v.isLeader then return 0 end
     local n = 0
     for _, call in pairs(calls) do
-        if call.status == 'open' and not call.window and Shown(call, v.officer, v.unit.cids) then
+        -- LIVE calls (step V11) are not claimable before step V14
+        if call.status == 'open' and not call.window and not call.live and Shown(call, v.officer, v.unit.cids) then
             local card = Card(call, v, nil)
             if card.status == 'ready' then n = n + 1 end
         end
@@ -2046,6 +2102,8 @@ function MC.supView(src)
                     departmentShort = DeptShort(call.department),
                     status = call.status == 'claiming' and 'claiming' or 'ready',
                     lostBy = nil,
+                    live = call.live and true or nil,
+                    liveTitle = call.live and call.live.title or nil,
                 }
             end
         end
@@ -2107,6 +2165,108 @@ function MC.stats(citizenid)
 end
 
 -- ============================================================================
+--                            LIVE CALLS (step V11)
+-- ============================================================================
+-- A crime CP.LiveCrime reported with suspects (Config.LiveCrime) becomes a red LIVE call: memory only (no
+-- cp_mission_calls row, a negative id), priority 1, no draw. It lapses after Config.LiveCrime.offerTime or when its
+-- crime ends, and Config.LiveCrime.maxLiveRuns caps the LIVE calls and live cases at once. Its claim answers
+-- err.live_not_ready until step V14 opens the case.
+
+local function LiveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
+
+-- The LIVE calls open, being claimed or claimed (a claimed one stays until its case ends): the count
+-- Config.LiveCrime.maxLiveRuns caps.
+function MC.liveCount()
+    local n = 0
+    for _, call in pairs(calls) do
+        local busy = call.status == 'open' or call.status == 'claiming' or call.status == 'claimed'
+        if call.live and busy then n = n + 1 end
+    end
+    return n
+end
+
+local function LiveOf(crimeKey)
+    for _, call in pairs(calls) do
+        if call.live and call.live.crimeKey == crimeKey then return call end
+    end
+    return nil
+end
+
+-- The red toast for every member of an idle unit who has not muted call alerts (a real crime ignores the favourite
+-- types) and is not on a real call.
+local function LiveToast(call, units)
+    local payload = ToastPayload(call)
+    payload.live = true
+    payload.title = call.live.title
+    payload.street = call.live.street
+    payload.titleKey = nil
+    for _, u in ipairs(units) do
+        for i, m in ipairs(u.srcs) do
+            local cid = u.cids[i]
+            if cid and not AlertsOf(cid).v and not IsOnCall(m) then
+                TriggerClientEvent(CP.e('client:missionCall'), m, payload)
+            end
+        end
+    end
+end
+
+-- Posts the LIVE call of a crime (CP.LiveCrime.post): the call, or nil and why ('off', 'calls_off', 'posted',
+-- 'max_live', 'invalid').
+function MC.postLive(crime)
+    if type(crime) ~= 'table' or type(crime.crimeKey) ~= 'string' or type(crime.missionType) ~= 'string' then
+        return nil, 'invalid'
+    end
+    local lc = LiveCfg()
+    if lc.enabled ~= true then return nil, 'off' end
+    if Cfg().enabled == false then return nil, 'calls_off' end
+    if LiveOf(crime.crimeKey) then return nil, 'posted' end
+    if MC.liveCount() >= math.floor(Num(lc.maxLiveRuns, 2)) then return nil, 'max_live' end
+    local now = os.time()
+    tempId = tempId - 1
+    liveSeq = liveSeq + 1
+    local okC, hasXY = pcall(function() return tonumber(crime.coords.x) ~= nil and tonumber(crime.coords.y) ~= nil end)
+    local coords = okC and hasXY and crime.coords or nil
+    local call = {
+        id = tempId,
+        code = ('LIVE-%03d'):format(liveSeq % 1000),
+        type = crime.missionType,
+        area = coords and MC.areaOf(coords) or nil,
+        priority = 1,
+        titleIdx = 1,
+        createdAt = now,
+        offerEnds = now + math.floor(Num(lc.offerTime, 300)),
+        status = 'open',
+        staff = false,
+        redispatched = false,
+        reopened = false,
+        excluded = {},
+        lostBy = {},
+        claimants = 0,
+        live = {
+            crimeKey = crime.crimeKey,
+            title = tostring(crime.title or crime.label or ''),
+            street = crime.street,
+            coords = coords,
+            suspects = CP.U.count(crime.suspects or {}),
+        },
+    }
+    calls[call.id] = call
+    MarkDirty()
+    CP.log(TAG, 'posted LIVE call %s for crime %s (%s, %d suspect(s))', call.code, crime.crimeKey, call.type,
+        call.live.suspects)
+    LiveToast(call, IdleUnits())
+    return call
+end
+
+-- The crime ended (or its script stopped): its LIVE call lapses if nobody has it yet.
+function MC.endLive(crimeKey)
+    local call = LiveOf(crimeKey)
+    if not call or call.status ~= 'open' or call.window then return false end
+    Lapse(call, os.time())
+    return true
+end
+
+-- ============================================================================
 --                                   THE TICK
 -- ============================================================================
 
@@ -2143,6 +2303,7 @@ function MC._reset()
     calls, runToCall, finished, states, history, watchers, muted, wins, staffLast = {}, {}, {}, {}, {}, {}, {}, {}, {}
     counts = {}
     coverage, codeDay, codeSeq, nextPostAt, tempId, claimSeq, dirty = nil, nil, 0, 0, 0, 0, false
+    liveSeq = 0
     laneNext = {}
 end
 MC._calls = function() return calls end
