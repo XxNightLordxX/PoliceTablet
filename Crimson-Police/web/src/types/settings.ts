@@ -141,6 +141,22 @@ export interface SettingsData {
     common?: string[];
     // the view the screen opens in (Config.AdminUi.settingsView)
     view?: SettingsViewMode;
+    // Config.AdminUi.groupByPlay: groups are NPC missions, Player vs police, Police teamwork, then the rest
+    byPlay?: boolean;
+    // Settings -> Features: every feature switch, with its section and the setting it writes
+    features?: FeatureEntry[];
+}
+
+// The section of play a feature belongs to (Settings -> Features and the Admin sidebar).
+export type FeaturePlay = 'npc' | 'pvp' | 'team' | 'economy' | 'system';
+
+// One feature of Settings -> Features: its name is settings.feature.<key>; path = the boolean setting it switches.
+export interface FeatureEntry {
+    key: string;
+    play: FeaturePlay;
+    path: string;
+    // the toggle asks first (it changes what players get at once)
+    risky?: boolean;
 }
 
 // The reply of every change: the changed settings, the Config health run right after it.

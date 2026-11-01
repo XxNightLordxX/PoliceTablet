@@ -184,11 +184,30 @@ const data: SettingsData = {
                 },
             ],
         },
+        {
+            key: 'live_crimes',
+            title: 'Live crimes (option A)',
+            file: 'config',
+            group: 'police',
+            changed: 0,
+            count: 2,
+            groups: [
+                {
+                    path: 'LiveCrime',
+                    label: 'Live crimes',
+                    desc: '',
+                    settings: [
+                        s('LiveCrime.enabled', 'boolean', false, 'true = real players doing crimes become suspects'),
+                        s('LiveCrime.cash', 'boolean', false, 'true = a live case pays cash', { money: true }),
+                    ],
+                },
+            ],
+        },
     ],
     changed: 1,
     pending: 0,
     invalid: 0,
-    total: 12,
+    total: 14,
     // the Simple view (Config.AdminUi.settingsView = 'simple'; ?settingsView=all opens on All settings)
     groups: [
         { key: 'tablet', title: 'Tablet', help: 'How officers open the tablet.', sections: ['tablet_and_commands'] },
@@ -197,6 +216,12 @@ const data: SettingsData = {
         { key: 'server', title: 'Server', help: 'Logs and language.', sections: ['general'] },
     ],
     common: ['Debug', 'Locale', 'Tablet.deskDistance'],
+    // Settings -> Features (modules/settings Play.features); Spawning.enabled is not in this list, so it is left out
+    features: [
+        { key: 'spawning', play: 'npc', path: 'Spawning.enabled', risky: true },
+        { key: 'live_crimes', play: 'pvp', path: 'LiveCrime.enabled', risky: true },
+        { key: 'live_cash', play: 'pvp', path: 'LiveCrime.cash' },
+    ],
     view: typeof window !== 'undefined' && /[?&]settingsView=all\b/.test(window.location.search) ? 'all' : 'simple',
 };
 

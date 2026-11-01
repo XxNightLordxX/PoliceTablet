@@ -314,7 +314,10 @@ do
         H.eq(sec.group, seen[sec.key], sec.key .. ': the section carries its group')
     end
     H.eq(seen.suspect_behaviour, 'npcs', 'NPC combat and running away are under NPCs')
+    -- the eight plain groups (Config.AdminUi.groupByPlay = false; the play groups: tests/admin_features_spec.lua)
+    Config.AdminUi.groupByPlay = false
     local view = S.all()
+    Config.AdminUi.groupByPlay = true
     local n = 0
     for _, g in ipairs(view.groups) do n = n + #g.sections end
     H.eq(n, #view.sections, 'the view lists every section under one group')

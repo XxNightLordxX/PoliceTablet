@@ -194,7 +194,136 @@ local GROUPS = {
         },
     },
 }
-local FALLBACK_GROUP = 'server'
+-- the group of a section no group names, and Config.AdminUi.groupByPlay's groups (below)
+local Play = { plainFallback = 'server' }
+
+-- Config.AdminUi.groupByPlay: the same sections folded by who the play is against (title settings.group.<key>, help
+-- settings.group_help.<key>): NPC missions, Player vs police (real players as suspects), Police teamwork (cop and
+-- cop), then the tablet, money and the server as before. A section no group names goes under play_system.
+Play.groups = {
+    {
+        key = 'play_npc',
+        sections = {
+            'mission_types',
+            'difficulty',
+            'spawning',
+            'suspect_behaviour',
+            'scaling_by_participants',
+            'route_to_the_start',
+            'map_markers',
+            'random_draw',
+            'dispatch',
+            'special_events',
+            'bonuses_and_penalties',
+            'built_in_mission_tweaks',
+            'downed_participants',
+            'police_actions_and_custody',
+            'decisions',
+            'mission_builder',
+            'blocks',
+        },
+    },
+    { key = 'play_pvp', sections = { 'real_suspects', 'live_crimes', 'volunteer_suspects' } },
+    {
+        key = 'play_team',
+        sections = {
+            'units',
+            'cross_department_missions',
+            'mission_controls',
+            'field_training',
+            'scoring_xp_levels_and_goals',
+            'leaderboard',
+            'department_challenge',
+            'officer_profile',
+        },
+    },
+    {
+        key = 'play_tablet',
+        sections = {
+            'tablet_and_commands',
+            'formats',
+            'departments',
+            'names',
+            'real_calls',
+            'alert_suppression',
+        },
+    },
+    { key = 'play_economy', sections = { 'cash', 'payout_editing', 'disputes', 'item_rewards' } },
+    {
+        key = 'play_system',
+        sections = {
+            'general',
+            'storage',
+            'permissions',
+            'admin_control',
+            'anti_exploit',
+            'time',
+            'retention',
+            'backups',
+            'admin_test_mode',
+            'other',
+        },
+    },
+}
+Play.fallback = 'play_system'
+Play.ofSection = {}
+for _, g in ipairs(Play.groups) do
+    for _, key in ipairs(g.sections) do Play.ofSection[key] = g.key end
+end
+
+-- Config.AdminUi.groupByPlay, read at every call (anything but false = on).
+function Play.on()
+    return not (type(Config.AdminUi) == 'table' and Config.AdminUi.groupByPlay == false)
+end
+
+-- Admin UI -> Settings -> Features: every feature an owner can turn on or off, with the section of play it belongs
+-- to and the one setting that switches it (the same setting as in the list, saved and audited the same way; a
+-- money switch still needs the typed ENABLE). Name: settings.feature.<key>. risky = the toggle asks first.
+-- Every switch here is read when it is used, so a change works at once. Mission blocks have no switch of their own:
+-- a mission or one of its locations is switched in Admin UI -> Missions.
+Play.features = {
+    { key = 'spawning', play = 'npc', path = 'Spawning.enabled', risky = true },
+    { key = 'npc_combat', play = 'npc', path = 'NpcCombat.enabled' },
+    { key = 'flee', play = 'npc', path = 'Flee.enabled' },
+    { key = 'tell_hints', play = 'npc', path = 'Npc.tellHints' },
+    { key = 'rescale', play = 'npc', path = 'Rescale.enabled' },
+    { key = 'markers', play = 'npc', path = 'Markers.enabled' },
+    { key = 'route', play = 'npc', path = 'Route.required', risky = true },
+    { key = 'mission_calls', play = 'npc', path = 'MissionCalls.enabled', risky = true },
+    { key = 'mission_calls_reopen', play = 'npc', path = 'MissionCalls.reopen.enabled' },
+    { key = 'type_of_the_day', play = 'npc', path = 'Events.typeOfTheDay' },
+    { key = 'weekly_boss', play = 'npc', path = 'Events.weeklyBoss.enabled' },
+    { key = 'twist_armored', play = 'npc', path = 'Events.twists.armored_hostiles.enabled' },
+    { key = 'twist_radio', play = 'npc', path = 'Events.twists.radio_silence.enabled' },
+    { key = 'twist_time', play = 'npc', path = 'Events.twists.time_crunch.enabled' },
+    { key = 'tow', play = 'npc', path = 'Custody.tow.enabled' },
+    { key = 'debrief', play = 'npc', path = 'Decisions.debrief' },
+    { key = 'builder', play = 'npc', path = 'Builder.enabled' },
+    { key = 'live_crimes', play = 'pvp', path = 'LiveCrime.enabled', risky = true },
+    { key = 'volunteers', play = 'pvp', path = 'Volunteers.enabled', risky = true },
+    { key = 'surrender', play = 'pvp', path = 'RealSuspects.surrender.enabled' },
+    { key = 'rs_screen', play = 'pvp', path = 'RealSuspects.adminScreen' },
+    { key = 'live_cash', play = 'pvp', path = 'LiveCrime.cash' },
+    { key = 'live_items', play = 'pvp', path = 'LiveCrime.items' },
+    { key = 'volunteer_cash', play = 'pvp', path = 'Volunteers.payCash' },
+    { key = 'volunteer_items', play = 'pvp', path = 'Volunteers.payRewards' },
+    { key = 'cross_dept', play = 'team', path = 'CrossDept.enabled' },
+    { key = 'ready_check', play = 'team', path = 'Units.readyCheck' },
+    { key = 'mission_controls', play = 'team', path = 'Permissions.supervisor.missionControls', risky = true },
+    { key = 'field_training', play = 'team', path = 'FieldTraining.enabled', risky = true },
+    { key = 'commendations', play = 'team', path = 'Commendations.enabled' },
+    { key = 'challenge', play = 'team', path = 'Challenge.enabled' },
+    { key = 'announce_weekly', play = 'team', path = 'Leaderboard.announceWeekly' },
+    { key = 'announce_monthly', play = 'team', path = 'Leaderboard.announceMonthly' },
+    { key = 'officer_options', play = 'team', path = 'OfficerOptions.enabled' },
+    { key = 'avatar_urls', play = 'team', path = 'Profile.avatarUrls.enabled' },
+    { key = 'item_rewards', play = 'economy', path = 'Rewards.enabled', risky = true },
+    { key = 'testing', play = 'system', path = 'Testing.enabled' },
+    { key = 'spawn_check', play = 'system', path = 'Testing.spawnCheck.enabled' },
+    { key = 'daily_backup', play = 'system', path = 'Backups.daily' },
+}
+Settings._features = Play.features
+Settings._playGroups = Play.groups
 local groupOfSection = {}
 for _, g in ipairs(GROUPS) do
     for _, key in ipairs(g.sections) do groupOfSection[key] = g.key end
@@ -2308,7 +2437,7 @@ local function BuildSchema()
             key = s.key,
             title = s.title,
             file = s.file,
-            group = groupOfSection[s.key] or FALLBACK_GROUP,
+            group = groupOfSection[s.key] or Play.plainFallback,
             groups = {},
             groupByPath = {},
         }
@@ -2322,7 +2451,7 @@ local function BuildSchema()
                 key = e.section,
                 title = CP.L('settings.section.other'),
                 file = 'config',
-                group = groupOfSection[e.section] or FALLBACK_GROUP,
+                group = groupOfSection[e.section] or Play.plainFallback,
                 groups = {},
                 groupByPath = {},
             }
@@ -2804,7 +2933,8 @@ end
 -- the fallback group, after its own).
 function Settings.plainGroups()
     local out, byKey = {}, {}
-    for _, g in ipairs(GROUPS) do
+    local play = Play.on()
+    for _, g in ipairs(play and Play.groups or GROUPS) do
         local v = {
             key = g.key,
             title = CP.L('settings.group.' .. g.key),
@@ -2815,8 +2945,26 @@ function Settings.plainGroups()
         byKey[g.key] = v
     end
     for _, sec in ipairs(Schema().sections) do
-        local v = byKey[sec.group] or byKey[FALLBACK_GROUP]
+        local v = play and (byKey[Play.ofSection[sec.key]] or byKey[Play.fallback]) or byKey[sec.group]
+            or byKey[Play.plainFallback]
         v.sections[#v.sections + 1] = sec.key
+    end
+    return out
+end
+
+-- The plain group a section shows under in the Settings screen (Config.AdminUi.groupByPlay picks the set).
+function Play.groupOf(sec)
+    if Play.on() then return Play.ofSection[sec.key] or Play.fallback end
+    return sec.group
+end
+
+-- Settings -> Features: the features whose switch config.lua has, each with its play section and its setting.
+function Settings.features()
+    local out = {}
+    for _, f in ipairs(Play.features) do
+        if Schema().byPath[f.path] then
+            out[#out + 1] = { key = f.key, play = f.play, path = f.path, risky = f.risky or nil }
+        end
     end
     return out
 end
@@ -2840,7 +2988,7 @@ function Settings.all()
             key = sec.key,
             title = sec.title,
             file = sec.file,
-            group = sec.group,
+            group = Play.groupOf(sec),
             groups = {},
             changed = 0,
             count = 0,
@@ -2874,6 +3022,9 @@ function Settings.all()
     end
     out.groups = Settings.plainGroups()
     out.common = Settings.commonPaths()
+    -- Config.AdminUi.groupByPlay: the groups are NPC missions, Player vs police, Police teamwork, then the rest
+    out.byPlay = Play.on() or nil
+    out.features = Settings.features()
     -- Config.AdminUi.settingsView: the view the screen opens in (anything unknown = 'simple')
     local aui = type(Config.AdminUi) == 'table' and Config.AdminUi or {}
     out.view = aui.settingsView == 'all' and 'all' or 'simple'

@@ -103,6 +103,8 @@ export interface Session {
         // reasonChips = the ready-made reasons under a reason box (ReasonChips; [] = none)
         adminUi?: {
             groupSidebar: boolean;
+            // true (or left out) = the Admin sidebar and Settings group by NPC missions, Player vs police, Police teamwork
+            groupByPlay?: boolean;
             landing?: 'home' | 'payouts' | 'missions';
             homeForms?: boolean;
             reasonChips?: string[];

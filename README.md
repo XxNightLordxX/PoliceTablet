@@ -1007,6 +1007,18 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
   the Mission Builder ranges of `blocks.lua`), with the note from `config.lua` as its description. Use the search box
   (a name, a path like `Tablet.deskDistance`, or a word of the note), or the **Changed** and **Needs a server restart**
   filters.
+- **Grouped by who you play against** (`Config.AdminUi.groupByPlay`, on): Simple and All settings put the sections
+  under **NPC missions** (mission types, stars, spawning, NPC combat and running away, markers, mission calls, events
+  and twists, custody, the Builder), **Player vs police** (Real suspects rules, Live crimes, Volunteer suspects),
+  **Police teamwork** (units, cross-department operations, Mission controls, field training, points, goals,
+  leaderboard, challenge, profile), then **Tablet and dispatch**, **Pay and rewards** and **Server**. A section with
+  no everyday setting shows a button to its settings in All settings. `false` = the 8 plain groups above.
+- The **Features** tab lists every feature you can turn on or off, by the same sections: each with its name, its
+  `Config.` switch, On or Off, and a **Settings** link that shows that setting in All settings. The switch there saves
+  the same setting as the list (audited, Reset puts `config.lua`'s value back) and works at once. Risky ones (safe
+  spawning, the GPS route, mission calls, live crimes, volunteers, Mission controls, field training, item rewards)
+  ask first; the money switches (cash and items for live and volunteer cases) still need the typed **ENABLE**.
+  Mission blocks have no switch of their own: turn a mission or one of its locations off in **Missions**.
 - **Clicking a section in the list** shows that section from its top, even when the page was scrolled far down. A
   few settings whose names would read alike have their own plain names (for example **Default tablet key** and
   **Players may open the tablet with a key**); they come from `settings.label.<path>` in `locales/parts/settings.json`.
@@ -1631,6 +1643,18 @@ The sidebar shows the everyday screens (**Home**, **Payouts**, **Missions**, **L
 **More** button with the other eight. While More is folded its badge adds up theirs, so nothing waiting is hidden; a
 link or notification that opens one of them unfolds it, and the panel remembers whether you left it open. To get one
 flat list again, set `Config.AdminUi.groupSidebar = false` (Admin UI → **Settings**).
+
+The sidebar is also split into three plain sections, so NPC work, player work and police teamwork never mix:
+
+- **NPC missions**: Missions (with the Mission Builder and the mission switches) and Live.
+- **Player vs police**: Real suspects (real players as suspects: live crimes, volunteers, surrender and talk-down,
+  the pair ledger, blocks and exclusions; it shows while live crimes or volunteers are on).
+- **Police teamwork**: Officers, Departments, Leaderboards, Seasons and Permissions (supervisor Mission controls).
+- Then **Pay and rewards** (Payouts, Payments) and **Server** (Settings, System, Audit, Testing). Home stays on top.
+
+Each section has a small heading; the More folding works as before inside it, and every screen keeps its links. The
+Settings screen uses the same split (see [5.7](#57-change-any-setting-in-game-the-settings-screen)). To get the old
+order and the eight Settings groups back, set `Config.AdminUi.groupByPlay = false` (Admin UI → **Settings**).
 
 ### 9.4 The missions
 

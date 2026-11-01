@@ -12,7 +12,7 @@ import { applyTheme } from '../shared/theme';
 import { navBadge, useNavCounts } from './navBadges';
 import { NotificationBell } from './NotificationBell';
 import { ScreenHost } from './ScreenHost';
-import { screensFor } from './screens';
+import { PLAY_SECTIONS, screensFor } from './screens';
 import { Sidebar } from './Sidebar';
 
 export function AdminLayout() {
@@ -23,6 +23,8 @@ export function AdminLayout() {
     const counts = useNavCounts();
     // Config.AdminUi.groupSidebar: everyday screens first, the rest under More (false = one flat list)
     const grouped = session.config?.adminUi?.groupSidebar !== false;
+    // Config.AdminUi.groupByPlay: NPC missions, Player vs police, Police teamwork, then money and the server
+    const byPlay = session.config?.adminUi?.groupByPlay !== false;
     const root = useRef<HTMLDivElement>(null);
     const [layer, setLayer] = useState<HTMLDivElement | null>(null);
     const { width, height } = useViewport();
@@ -70,9 +72,15 @@ export function AdminLayout() {
                         label: t(s.titleKey),
                         icon: s.icon,
                         group: s.group,
+                        play: s.play,
                         ...navBadge(s.key, counts),
                     }))}
                     more={grouped ? t('ui.nav.more') : undefined}
+                    sections={
+                        byPlay
+                            ? PLAY_SECTIONS.map(k => ({ key: k, label: t(`settings.features.play.${k}`) }))
+                            : undefined
+                    }
                     active={screen}
                     onSelect={k => navigate(k as ScreenKey)}
                     className="cp-sidebar--admin"

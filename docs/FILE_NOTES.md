@@ -4092,6 +4092,15 @@ location, point }; hidden while Config.Testing.spawnCheck.teleport is off, disab
 server refused are listed under "Locations not checked". Start is disabled while the admin's own test runs.
 ```
 
+## Crimson-Police/web/src/admin/components/features.walk.ts
+
+```text
+Admin UI split by play (step AP1) walked against the browser mocks (node walk.mjs, a gate step): the sidebar lists
+the admin screens under NPC missions, Player vs police, Police teamwork, then money and the server, and Settings ->
+Features lists each feature switch by section with the setting it writes (a risky one asks first, a money one
+keeps its typed ENABLE).
+```
+
 ## Crimson-Police/web/src/admin/components/spawnCheckStore.ts
 
 ```text
@@ -4526,6 +4535,15 @@ Buttons call client actions of the Lua testing client:
   teleport { target: 'start' | 'objective' } · toggleDebug { enabled }
 (the client forwards them to server:test:control). Force complete / Force fail / End test ask first.
 Text keys: locales/parts/testing.json (test.*).
+```
+
+## Crimson-Police/web/src/layouts/Sidebar.tsx
+
+```text
+Left navigation: one button per visible screen (active item in --cp-primary with an accent edge), each with an
+optional count badge or live dot (the 'nav' counts), plus a footer slot for the role switch. With a `more` label,
+items of group 'more' fold under one More button that carries the sum of their badges (Config.AdminUi.groupSidebar).
+With `sections` (Config.AdminUi.groupByPlay) each list is ordered by section, with a small heading over each one.
 ```
 
 ## Crimson-Police/web/src/layouts/TabletFrame.tsx
@@ -5135,6 +5153,15 @@ Lua sends `false` for "no value" (a Lua table cannot hold nil) and may encode an
 read every list through asList(). Check spawn points (PLAN S7, S8): SpawnCheckPoint, SpawnCheckResult,
 SpawnCheckProgress, SpawnCheckTotals, SpawnCheckPush (push 'spawnCheck'), SpawnCheckScope, and
 TestsView.config.spawnCheck { enabled, teleport, routes }.
+```
+
+## tests/admin_features_spec.lua
+
+```text
+Admin UI split by play, step AP1 (the owner: "ensure the admin panel separates npc stuff and player player stuff
+and cop cop stuff and every feature is able to be turned on and off etc edited"): Config.AdminUi.groupByPlay folds
+the Settings sections into NPC missions, Player vs police and Police teamwork, and Settings -> Features lists every
+feature switch with its section and the setting it writes.
 ```
 
 ## tests/backup_restore_spec.lua

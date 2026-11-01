@@ -545,3 +545,17 @@
 .cp-sidebar__more-item .cp-nav-item {
     padding-left: 22px;
 }
+
+/* Config.AdminUi.groupByPlay: a small heading over each section of the sidebar */
+.cp-sidebar__section {
+    padding: 10px 12px 4px;
+    font-size: var(--cp-fs-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cp-subtle);
+}
+
+.cp-sidebar__more-item .cp-sidebar__section {
+    padding-left: 22px;
+}

@@ -351,6 +351,7 @@ local function ExtraConfig(deptKey)
         },
         adminUi = {
             groupSidebar = aui.groupSidebar ~= false,
+            groupByPlay = aui.groupByPlay ~= false,
             landing = AdminLanding(aui.landing),
             homeForms = aui.homeForms ~= false,
             reasonChips = ReasonChips(aui.reasonChips),

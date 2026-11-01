@@ -16,6 +16,13 @@ export interface SidebarItem {
     live?: boolean;
     // 'more' = folded under the More button when the sidebar is grouped
     group?: 'main' | 'more';
+    // the section it is listed under when the sidebar has sections (Config.AdminUi.groupByPlay)
+    play?: string;
+}
+
+export interface SidebarSection {
+    key: string;
+    label: string;
 }
 
 // Per viewer: whether More was left open (browser storage; a blocked storage just starts folded).
@@ -49,6 +56,27 @@ export function sumBadges(items: SidebarItem[]): string | undefined {
     return total > 99 ? '99+' : String(total);
 }
 
+// Items in section order (items with no section first, the order inside a section kept), each carrying the heading
+// to show above it when it is the first of its section. No sections: the items as they are.
+export function inSections<T extends { play?: string }>(
+    items: T[],
+    sections?: SidebarSection[],
+): { item: T; heading?: string }[] {
+    if (!sections || !sections.length) return items.map(item => ({ item }));
+    const rank = (it: T) => {
+        const i = it.play === undefined ? -1 : sections.findIndex(s => s.key === it.play);
+        return it.play === undefined ? -1 : i < 0 ? sections.length : i;
+    };
+    const sorted = items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it) - rank(b.it) || a.i - b.i);
+    let last: string | undefined;
+    return sorted.map(({ it }) => {
+        const label = sections.find(s => s.key === it.play)?.label;
+        const heading = label && it.play !== last ? label : undefined;
+        last = it.play;
+        return { item: it, heading };
+    });
+}
+
 function NavButton({ it, on, onClick }: { it: SidebarItem; on: boolean; onClick: () => void }) {
     return (
         <button
@@ -75,6 +103,7 @@ export function Sidebar({
     footer,
     className,
     more,
+    sections,
 }: {
     items: SidebarItem[];
     active: string;
@@ -84,6 +113,8 @@ export function Sidebar({
     className?: string;
     // the More button's label; left out = one flat list
     more?: string;
+    // the sections the items are listed under (left out = no headings)
+    sections?: SidebarSection[];
 }) {
     const folded = more ? items.filter(it => it.group === 'more') : [];
     const shown = folded.length > 0 ? items.filter(it => it.group !== 'more') : items;
@@ -106,8 +137,9 @@ export function Sidebar({
         <nav className={cx('cp-sidebar', className)} aria-label={typeof heading === 'string' ? heading : undefined}>
             {heading ? <div className="cp-sidebar__heading">{heading}</div> : null}
             <ul className="cp-sidebar__list">
-                {shown.map(it => (
+                {inSections(shown, sections).map(({ item: it, heading: h }) => (
                     <li key={it.key}>
+                        {h ? <div className="cp-sidebar__section">{h}</div> : null}
                         <NavButton it={it} on={it.key === active} onClick={() => onSelect(it.key)} />
                     </li>
                 ))}
@@ -127,8 +159,9 @@ export function Sidebar({
                     </li>
                 ) : null}
                 {open
-                    ? folded.map(it => (
+                    ? inSections(folded, sections).map(({ item: it, heading: h }) => (
                           <li key={it.key} className="cp-sidebar__more-item">
+                              {h ? <div className="cp-sidebar__section">{h}</div> : null}
                               <NavButton it={it} on={it.key === active} onClick={() => onSelect(it.key)} />
                           </li>
                       ))

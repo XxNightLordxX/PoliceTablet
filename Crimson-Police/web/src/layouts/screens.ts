@@ -51,7 +51,14 @@ export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     visible?: (session: Session) => boolean;
     // Admin sidebar (Config.AdminUi.groupSidebar): 'main' items always show, 'more' items fold under More.
     group?: 'main' | 'more';
+    // Admin sidebar (Config.AdminUi.groupByPlay): the section it is listed under (PLAY_SECTIONS); none = on top
+    play?: PlaySection;
 }
+
+// The sections of the Admin sidebar (Config.AdminUi.groupByPlay), in order: missions against NPCs, real players as
+// suspects, officers working together, then money and the server. Titles: settings.features.play.<key>.
+export type PlaySection = 'npc' | 'pvp' | 'team' | 'economy' | 'system';
+export const PLAY_SECTIONS: PlaySection[] = ['npc', 'pvp', 'team', 'economy', 'system'];
 
 const has = (s: Session, ...actions: string[]) => Array.isArray(s.actions) && actions.some(a => s.actions.includes(a));
 
@@ -142,6 +149,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_payouts',
         icon: 'dollar',
         component: AdminPayouts,
+        play: 'economy',
         group: 'main',
     },
     {
@@ -149,6 +157,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_payments',
         icon: 'creditCard',
         component: AdminPayments,
+        play: 'economy',
         group: 'more',
     },
     {
@@ -156,14 +165,23 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_missions',
         icon: 'layers',
         component: AdminMissions,
+        play: 'npc',
         group: 'main',
     },
-    { key: 'admin_live', titleKey: 'ui.screen.admin_live', icon: 'activity', component: AdminLive, group: 'main' },
+    {
+        key: 'admin_live',
+        titleKey: 'ui.screen.admin_live',
+        icon: 'activity',
+        component: AdminLive,
+        play: 'npc',
+        group: 'main',
+    },
     {
         key: 'admin_seasons',
         titleKey: 'ui.screen.admin_seasons',
         icon: 'calendar',
         component: AdminSeasons,
+        play: 'team',
         group: 'more',
     },
     {
@@ -171,6 +189,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_leaderboards',
         icon: 'podium',
         component: AdminLeaderboards,
+        play: 'team',
         group: 'more',
     },
     {
@@ -178,6 +197,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_officers',
         icon: 'search',
         component: AdminOfficers,
+        play: 'team',
         group: 'main',
     },
     {
@@ -185,6 +205,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_departments',
         icon: 'building',
         component: AdminDepartments,
+        play: 'team',
         group: 'more',
     },
     {
@@ -192,6 +213,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_permissions',
         icon: 'key',
         component: AdminPermissions,
+        play: 'team',
         group: 'more',
     },
     {
@@ -199,6 +221,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_settings',
         icon: 'sliders',
         component: AdminSettings,
+        play: 'system',
         group: 'main',
     },
     {
@@ -208,15 +231,31 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         icon: 'shield',
         component: AdminRealSuspects,
         visible: s => has(s, 'antiFarmOverride') && s.config?.realSuspects?.screen === true,
+        play: 'pvp',
         group: 'more',
     },
-    { key: 'admin_system', titleKey: 'ui.screen.admin_system', icon: 'server', component: AdminSystem, group: 'more' },
-    { key: 'admin_audit', titleKey: 'ui.screen.admin_audit', icon: 'fileText', component: AdminAudit, group: 'more' },
+    {
+        key: 'admin_system',
+        titleKey: 'ui.screen.admin_system',
+        icon: 'server',
+        component: AdminSystem,
+        play: 'system',
+        group: 'more',
+    },
+    {
+        key: 'admin_audit',
+        titleKey: 'ui.screen.admin_audit',
+        icon: 'fileText',
+        component: AdminAudit,
+        play: 'system',
+        group: 'more',
+    },
     {
         key: 'admin_testing',
         titleKey: 'ui.screen.admin_testing',
         icon: 'flask',
         component: AdminTesting,
+        play: 'system',
         group: 'more',
     },
 ];

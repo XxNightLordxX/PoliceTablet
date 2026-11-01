@@ -104,6 +104,10 @@ Config.AdminUi = {
     -- true = the Admin UI sidebar shows the everyday screens (Home, Payouts, Missions, Live, Officers, Settings) and
     -- folds the rest under More, whose badge adds up theirs; false = every screen in one flat list
     groupSidebar = true,
+    -- true = the Admin UI sidebar and Settings put screens and settings under three plain sections, NPC missions,
+    -- Player vs police (real players as suspects) and Police teamwork (cop and cop), with money and the server
+    -- after them; false = the sidebar order and the Settings groups as before. Only the layout changes
+    groupByPlay = true,
     -- The screen the Admin UI opens on: 'home' = a landing screen with the common jobs (new mission, missions on or
     -- off, pay, points, quick settings, what is wrong) and the live runs; 'payouts' or 'missions' = open straight
     -- on that screen, with no Home screen

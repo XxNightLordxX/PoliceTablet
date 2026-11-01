@@ -36,6 +36,7 @@ import type { ConfigHealthItem } from '../../shared/types';
 import { RewardPoolEditor, handlesRewardPool } from '../components/RewardPoolEditor';
 import { GoalsField, LabelsField, RowsField, TransferPanel } from '../components/SettingsTools';
 import { copyLine } from '../components/copyText';
+import { FeaturesPanel } from '../components/FeaturesPanel';
 import { JobProgress, useAdminAction } from '../components/kit';
 import type { CashSourcePreview } from '../../types/admin_economy';
 import type {
@@ -51,9 +52,11 @@ import type {
 import './Settings.css';
 
 // The panels of this screen, in tab order. A new admin panel about settings is one more entry here.
-type Panel = 'settings' | 'history' | 'transfer';
-const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'clock' | 'swap' }[] = [
+type Panel = 'settings' | 'features' | 'history' | 'transfer';
+const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'zap' | 'clock' | 'swap' }[] = [
     { key: 'settings', labelKey: 'settings.tab.settings', icon: 'sliders' },
+    // every feature switch by section of play (admin/components/FeaturesPanel.tsx)
+    { key: 'features', labelKey: 'settings.tab.features', icon: 'zap' },
     { key: 'history', labelKey: 'settings.tab.history', icon: 'clock' },
     { key: 'transfer', labelKey: 'sysadmin.ui.tab.transfer', icon: 'swap' },
 ];
@@ -1319,6 +1322,20 @@ export default function AdminSettings() {
                 <ErrorState error={error} onRetry={() => void refetch()} />
             </Card>
         );
+    else if (panel === 'features')
+        body = (
+            <FeaturesPanel
+                data={data}
+                disabled={busy || !!data?.safeMode}
+                save={save}
+                onOpen={path => {
+                    setPanel('settings');
+                    setPicked('all');
+                    setFilter('all');
+                    setQuery(path.toLowerCase());
+                }}
+            />
+        );
     else if (panel === 'history') body = <HistoryPanel />;
     else if (panel === 'transfer') body = <TransferPanel onImported={() => void refetch()} />;
     else {
@@ -1327,6 +1344,47 @@ export default function AdminSettings() {
             : [];
         const plain = simple ? simpleGroups(sections, asArray(data?.groups), asArray(data?.common)) : [];
         const shown = plain.reduce((n, g) => n + g.settings.length, 0);
+        // Config.AdminUi.groupByPlay: every play group shows, one with no everyday setting points to All settings
+        const playGroups = asArray(data?.groups);
+        const plainShown = data?.byPlay
+            ? playGroups.map(g => plain.find(p => p.group.key === g.key) ?? { group: g, settings: [] })
+            : plain;
+        const openGroup = (sectionKeys: string[]) => {
+            setPicked('all');
+            if (sectionKeys[0]) setSectionKey(sectionKeys[0]);
+            setJump(n => n + 1);
+        };
+        // All settings: the section list, under the play headings while grouped by play
+        const navItem = (sec: SettingsSection) => (
+            <button
+                key={sec.key}
+                type="button"
+                className={`settings-nav__item${current?.key === sec.key ? ' is-active' : ''}`}
+                onClick={() => {
+                    setSectionKey(sec.key);
+                    setJump(n => n + 1);
+                }}
+            >
+                <span>{sec.title}</span>
+                {changedIn(sec) > 0 ? (
+                    <Badge size="sm" tone="accent">
+                        {changedIn(sec)}
+                    </Badge>
+                ) : null}
+            </button>
+        );
+        const navList = data?.byPlay
+            ? playGroups.flatMap(g => {
+                  const secs = asArray(g.sections).flatMap(k => sections.filter(sec => sec.key === k));
+                  if (!secs.length) return [];
+                  return [
+                      <div key={`play-${g.key}`} className="settings-nav__heading">
+                          {g.title}
+                      </div>,
+                      ...secs.map(navItem),
+                  ];
+              })
+            : sections.map(navItem);
         body = (
             <>
                 <div className="settings-intro">
@@ -1417,7 +1475,7 @@ export default function AdminSettings() {
                     )
                 ) : simple ? (
                     <div className="settings-results">
-                        {plain.map(({ group, settings }) => (
+                        {plainShown.map(({ group, settings }) => (
                             <Card
                                 key={group.key}
                                 title={group.title}
@@ -1426,7 +1484,21 @@ export default function AdminSettings() {
                                 padding="none"
                                 className="settings-section"
                             >
-                                <div className="settings-group">{settings.map(row)}</div>
+                                {settings.length ? (
+                                    <div className="settings-group">{settings.map(row)}</div>
+                                ) : (
+                                    <div className="settings-play-empty">
+                                        <span>{t('settings.play_empty')}</span>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            iconRight="chevronRight"
+                                            onClick={() => openGroup(asArray(group.sections))}
+                                        >
+                                            {t('settings.view.all')}
+                                        </Button>
+                                    </div>
+                                )}
                             </Card>
                         ))}
                         <div className="settings-more">
@@ -1445,24 +1517,7 @@ export default function AdminSettings() {
                 ) : (
                     <div className="settings-layout">
                         <nav className="settings-nav" aria-label={t('settings.sections')}>
-                            {sections.map(sec => (
-                                <button
-                                    key={sec.key}
-                                    type="button"
-                                    className={`settings-nav__item${current?.key === sec.key ? ' is-active' : ''}`}
-                                    onClick={() => {
-                                        setSectionKey(sec.key);
-                                        setJump(n => n + 1);
-                                    }}
-                                >
-                                    <span>{sec.title}</span>
-                                    {changedIn(sec) > 0 ? (
-                                        <Badge size="sm" tone="accent">
-                                            {changedIn(sec)}
-                                        </Badge>
-                                    ) : null}
-                                </button>
-                            ))}
+                            {navList}
                         </nav>
                         <div ref={mainRef} className="settings-main">
                             {current ? renderSection(current, () => true, true) : null}
