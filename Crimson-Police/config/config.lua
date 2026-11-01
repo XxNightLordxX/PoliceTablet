@@ -1058,6 +1058,12 @@ Config.LiveCrime = {
     -- true = the result card lists each suspect's outcome by label (Suspect A: booked, Suspect B: got away) once the
     -- case is over; false = no outcomes on the result card
     resultOutcomes = true,
+    -- Results for other scripts: true = when a live case ends, Crimson-Police sends the server-only event
+    -- crimson-police:server:liveCrimeEnded (the crime, how the case ended and each suspect's outcome); false = no event
+    endEvent = true,
+    -- Who the export GetAvailablePolice counts: 'idle' = on-duty officers on no mission (they could answer a crime
+    -- now); 'duty' = every on-duty officer. The export answers nil while enabled is false
+    availablePolice = 'idle',
     -- The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and book the
     -- suspects. Metres around the reported place that count as being at the scene
     sceneRadius = 75.0,

@@ -401,6 +401,13 @@ do
             .. 'suspect\'s state or a live position); false = the case shows like any mission',
         resultOutcomes = 'true = the result card lists each suspect\'s outcome by label (Suspect A: booked, Suspect '
             .. 'B: got away) once the case is over; false = no outcomes on the result card',
+        -- V19: results for other scripts
+        endEvent = 'Results for other scripts: true = when a live case ends, Crimson-Police sends the server-only '
+            .. 'event crimson-police:server:liveCrimeEnded (the crime, how the case ended and each suspect\'s '
+            .. 'outcome); false = no event',
+        availablePolice = 'Who the export GetAvailablePolice counts: \'idle\' = on-duty officers on no mission (they '
+            .. 'could answer a crime now); \'duty\' = every on-duty officer. The export answers nil while enabled is '
+            .. 'false',
     }) do
         local e = S.entry('LiveCrime.' .. path) or {}
         H.eq(e.desc, desc, 'LiveCrime.' .. path .. ': its own comment')
@@ -434,6 +441,9 @@ do
         H.eq((S.entry('LiveCrime.' .. k) or {}).kind, 'boolean', 'LiveCrime.' .. k .. ' is an on/off setting (V16)')
         H.eq(Config.LiveCrime[k], true, 'LiveCrime.' .. k .. ' ships on (behind enabled = false)')
     end
+    H.eq((S.entry('LiveCrime.availablePolice') or {}).kind, 'enum', 'LiveCrime.availablePolice is a choice (V19)')
+    H.eq((S.check('LiveCrime.availablePolice', 'all')), false, 'availablePolice takes only idle or duty')
+    H.eq((S.entry('LiveCrime.endEvent') or {}).kind, 'boolean', 'LiveCrime.endEvent is an on/off setting (V19)')
     for _, k in ipairs({ 'readyCheck', 'typeCooldown', 'duringOperation' }) do
         H.eq((S.entry('LiveCrime.' .. k) or {}).kind, 'boolean', 'LiveCrime.' .. k .. ' is an on/off setting')
     end

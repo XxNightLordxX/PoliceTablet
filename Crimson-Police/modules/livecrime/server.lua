@@ -696,7 +696,7 @@ end
 -- run:ended of a live run: one pair row per officer and suspect (CP.Opponents.recordPairs; scored = the case
 -- completed and the suspect was detained or booked for a share above 0; outcome 'gone' when no officer reached the
 -- scene), then the pair-repeat check.
-local function Closed(run, state)
+local function Closed(run, state, reason)
     local outcomes, case = Opp('close', run)
     if type(case) ~= 'table' or type(outcomes) ~= 'table' then return end
     local arrived = false
@@ -721,7 +721,95 @@ local function Closed(run, state)
     end
     Opp('recordPairs', run, rows)
     Opp('checkPairFlags', run)
+    LC.sendEnded(run, state, reason, outcomes, case)
 end
+
+-- ============================================================================
+--              RESULTS FOR OTHER SCRIPTS (V19, ARCHITECTURE 5.46)
+-- ============================================================================
+-- The server-only event crimson-police:server:liveCrimeEnded when a live case ends (Config.LiveCrime.endEvent,
+-- shipped true; live cases exist only while enabled), and the read-only export GetAvailablePolice
+-- (Config.LiveCrime.availablePolice, 'idle' or 'duty'; nil while enabled is off). Neither ever requires another
+-- resource, and nothing another script sends back is read.
+
+LC.END_EVENT = 'server:liveCrimeEnded'
+
+-- The payload of the end event: the reporting script's own names for the crime, how the run ended and each
+-- suspect's outcome by citizenid (the reporting script sent those citizenids itself). No server id, no position.
+function LC.endPayload(run, state, reason, outcomes, case)
+    local live = type(run) == 'table' and type(run.live) == 'table' and run.live or nil
+    if not live or type(live.crimeKey) ~= 'string' then return nil end
+    local crime = LC.get(live.crimeKey)
+    local res, uid = live.crimeKey:match('^(.*):([^:]+)$')
+    local suspects, caught = {}, 0
+    for _, cid in ipairs(type(case) == 'table' and case.order or {}) do
+        local o = type(outcomes) == 'table' and outcomes[cid] or nil
+        o = OUTCOMES[o] and o or 'got_away'
+        suspects[cid] = o
+        if o == 'detained' or o == 'booked' then caught = caught + 1 end
+    end
+    local officers = 0
+    for _, p in pairs(run.participants or {}) do
+        if type(p) == 'table' and type(p.citizenid) == 'string' then officers = officers + 1 end
+    end
+    return {
+        resource = crime and crime.res or res,
+        uid = crime and crime.uid or uid,
+        id = crime and crime.id or nil,
+        key = crime and crime.key or nil,
+        result = type(state) == 'string' and state or 'ended',
+        reason = type(reason) == 'string' and reason or nil,
+        suspects = suspects,
+        caught = caught,
+        officers = officers,
+        endedAt = os.time(),
+    }
+end
+
+-- Sends the end event of a live case once (run.liveEndSent). -> true when it was sent.
+function LC.sendEnded(run, state, reason, outcomes, case)
+    if Cfg().endEvent == false or type(run) ~= 'table' or run.liveEndSent then return false end
+    local crime = LC.crimeOf(run)
+    if crime and crime.test then return false end
+    local payload = LC.endPayload(run, state, reason, outcomes, case)
+    if not payload then return false end
+    run.liveEndSent = true
+    local ok, err = pcall(TriggerEvent, CP.e(LC.END_EVENT), payload)
+    if not ok then WarnOnce('endEvent', 'the liveCrimeEnded event failed: %s', tostring(err)) end
+    return ok
+end
+
+-- The export GetAvailablePolice: on-duty officers in a turned-on department job ('idle': and on no Crimson-Police
+-- mission), from cached player data only (never yields). -> count, { [department] = count } | nil while off.
+function LC.availablePolice()
+    local c = Cfg()
+    if c.enabled ~= true then return nil end
+    local idleOnly = c.availablePolice ~= 'duty'
+    local total, byDept = 0, {}
+    local Q, A, R = CP.Qbx, CP.Access, CP.Runs
+    for _, src in ipairs(Q and Q.getOnlinePlayers and Q.getOnlinePlayers() or {}) do
+        local info = Q.getInfo and Q.getInfo(src) or nil
+        local job = type(info) == 'table' and info.job or nil
+        local dept = type(job) == 'table'
+                and job.onduty == true
+                and A
+                and A.departmentForJob
+                and A.departmentForJob(job.name)
+            or nil
+        if dept and not (idleOnly and R and R.isOnMission and R.isOnMission(src)) then
+            total = total + 1
+            byDept[dept] = (byDept[dept] or 0) + 1
+        end
+    end
+    return total, byDept
+end
+
+exports('GetAvailablePolice', function()
+    local ok, total, byDept = pcall(LC.availablePolice)
+    if ok then return total, byDept end
+    WarnOnce('available', 'GetAvailablePolice failed: %s', tostring(total))
+    return nil
+end)
 
 -- ============================================================================
 --                BACKUP JOINS THE CASE (V15, ARCHITECTURE 5.46)
@@ -904,10 +992,10 @@ if CP.Hooks and CP.Hooks.on then
     CP.Hooks.on('run:created', function(run)
         if type(run) == 'table' and type(run.live) == 'table' then Opened(run) end
     end)
-    CP.Hooks.on('run:ended', function(run, state)
+    CP.Hooks.on('run:ended', function(run, state, reason)
         if type(run) ~= 'table' then return end
         offers[run.id], scanAt[run.id] = nil, nil
-        if type(run.live) == 'table' then Closed(run, state) end
+        if type(run.live) == 'table' then Closed(run, state, reason) end
     end)
     CP.Hooks.on('participant:joined', function(run, src)
         if type(run) == 'table' and type(run.live) == 'table' then Joined(run, src) end

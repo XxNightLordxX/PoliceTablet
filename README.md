@@ -1484,6 +1484,14 @@ FiveM**, then look for the Crimson-Police lines.
 | `exports['Crimson-Police']:OpenTablet()` | client | Opens the tablet, with the same officer checks as `/CrimsonPolice` (on duty, department job, not suspended; the item when `requireItem = true`). It works even when `access.command = false` |
 | `exports['Crimson-Police']:GetDepartment(src)` | server | The department key of the player's active job (`'sast'`, `'fib'` ...) or `nil` |
 | `exports['Crimson-Police']:IsOnMission(src)` | server | `true` while the player is on a Crimson-Police mission |
+| `exports['Crimson-Police']:GetAvailablePolice()` | server | Read-only, for crime scripts: the number of on-duty officers who could answer a crime now (on no Crimson-Police mission with `Config.LiveCrime.availablePolice = 'idle'`, every on-duty officer with `'duty'`) and a table `{ [department] = count }`; `nil` while `Config.LiveCrime.enabled = false` (count police your own way then) |
+
+Server-only event for other scripts: `crimson-police:server:liveCrimeEnded` (`Config.LiveCrime.endEvent = true`)
+when a live case ends, with `{ resource, uid, id, key, result, reason, suspects = { [citizenid] = outcome }, caught,
+officers, endedAt }`: `resource`, `uid`, `id` and `key` are the reporting script's own names for the crime, `result`
+is how the run ended (`completed`, `failed`, `abandoned`), each outcome is `detained`, `booked`, `got_away`, `left`,
+`void` or `stopped`, `caught` counts the detained and booked suspects and `officers` the case's officers. Listen with
+`AddEventHandler` only (never `RegisterNetEvent`, so no client can send it). It carries no server id and no position.
 
 The tablet item uses the client export `useTablet` (`export = 'Crimson-Police.useTablet'` in the item).
 
@@ -2886,6 +2894,10 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   **End case** is. It never shows a suspect's state or a live position. The result card lists each suspect's outcome
   by label once the case is over (Detained, Booked, Got away, Left the city, Did not count, Stopped outside the
   case); an officer who left early sees that the case was still running.
+  Results for other scripts (step V19): when a live case ends, Crimson-Police sends the server-only event
+  `crimson-police:server:liveCrimeEnded` (`Config.LiveCrime.endEvent = true`, shipped behind `enabled`) and offers the
+  export `GetAvailablePolice` (see 8.3; `Config.LiveCrime.availablePolice = 'idle'` counts on-duty officers on no
+  mission, `'duty'` every on-duty officer). Crimson-Contracts does not read either yet; another script may.
   Live scoring (step V13): a live case earns only those lines (`Config.LiveCrime.linesOnly = true`; `false` adds the
   mission type's base points and the end-of-run lines like a mission); the result card says **Live case: the lines
   below are the points** instead of Base points. Its tier (the points and cash multiplier of `Config.Scaling`) comes

@@ -3404,6 +3404,21 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
     whose detain line was recorded (share > 0; a booking is no catch); `cp_mission_runs.live_catches` (and the
     archive's, migration 014) holds it per row, never on the result card. The board metric `live_catches` sums it
     over counted completed rows; the owner adds it to Config.Leaderboard.metrics (and weeklyBadges) to show it.
+- **Results for other scripts (V19, critic C21).** The design is silent past "a read-only export and a server-only
+  end event"; the simplest safe one, all in modules/livecrime/server.lua:
+  - `LC.sendEnded(run, state, reason, outcomes, case)` from the `run:ended` hook (after the pair rows), once per run
+    (`run.liveEndSent`), not for a test crime, while `Config.LiveCrime.endEvent ~= false` (shipped true; live runs
+    exist only while `enabled`): `TriggerEvent('crimson-police:server:liveCrimeEnded', LC.endPayload(...))` inside
+    pcall. Payload `{ resource, uid, id, key, result = state, reason, suspects = { [cid] = outcome }, caught,
+    officers, endedAt }`: the crime record's names (or `resource` / `uid` split from `run.live.crimeKey` when the
+    record was pruned; `id`, `key` nil then), outcomes as on the result card (an unknown one reads `got_away`),
+    `caught` = detained + booked. Citizenids are the reporting script's own crew list; no server id, no position.
+    Crimson-Contracts is frozen and does not listen yet.
+  - `LC.availablePolice() -> count, { [dept] = count } | nil` and the server export `GetAvailablePolice` (pcall, nil
+    on an error): nil while `enabled ~= true`; else every online player whose cached qbx job is on duty in a
+    turned-on department (`CP.Access.departmentForJob`), and with `Config.LiveCrime.availablePolice = 'idle'`
+    (shipped; Settings enum `idle` / `duty`) only those `CP.Runs.isOnMission` says are on no mission. Memory only,
+    never yields (no suspension or real-call lookup). Spec: tests/live_results_spec.lua.
 - Config.LiveCrime keys of V10: `sources = { 'crimson-contracts' }` (a list of resource names), `types` (an OPEN table
   in Settings: Crimson-Contracts' contract keys -> a Config.MissionTypes key or false, checked by Settings),
   `suspectRadius = 300.0` (10-2000 m).
