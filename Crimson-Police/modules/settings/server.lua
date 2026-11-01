@@ -168,7 +168,14 @@ local GROUPS = {
     },
     {
         key = 'police',
-        sections = { 'police_actions_and_custody', 'decisions', 'real_suspects', 'live_crimes', 'volunteer_suspects' },
+        sections = {
+            'police_actions_and_custody',
+            'decisions',
+            'real_suspects',
+            'live_crimes',
+            'volunteer_suspects',
+            'field_training',
+        },
     },
     { key = 'dispatch', sections = { 'dispatch', 'real_calls', 'alert_suppression' } },
     {
@@ -233,6 +240,8 @@ local OPEN = {
     'Permissions.builderTeleport',  -- department keys
     'MissionControls.grants',       -- department keys
     'MissionControls.controls',     -- control keys
+    'FieldTraining.trainerGrades',  -- department keys (T1)
+    'FieldTraining.tasks',          -- mission type keys (T1)
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
@@ -443,6 +452,7 @@ local RANGES = {
     ['MissionControls.noticesPerDay'] = { 0, 50 },
     ['MissionControls.pushMissionPerDay'] = { 0, 50 },
     ['MissionControls.awardPointsPerDay'] = { 0, 10000 },
+    ['FieldTraining.rookiesPerTrainer'] = { 1, 20 },
     ['MissionControls.callLaneMaxOpen'] = { 1, 10 },
     ['Cash.addFundsMax'] = { 0, 10000000 },
     ['Cash.manualDailyLimit'] = { 0, 10000000 },

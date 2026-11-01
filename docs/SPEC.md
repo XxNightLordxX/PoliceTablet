@@ -1776,6 +1776,13 @@ Commendations
 
 - Optional (Config.Profile.showMdtCommendations, off by default): SC-Dispatch MDT commendations are shown read-only, tagged "MDT".
 
+Field training (step T1, Config.FieldTraining, off as shipped)
+
+- A supervisor (Department Report → Field training → Pair trainer) or an admin pairs a rookie of the department with an online trainer of the same department whose Qbox grade is at least Config.FieldTraining.trainerGrades.<department> (else the department's supervisorGrade). Never his own character as the rookie; a rookie has one trainer; a trainer takes at most rookiesPerTrainer rookies and is not in training himself. End training (two clicks) removes the pairing.
+- A completed, unflagged run counts for the rookie when his trainer finished the same run too: one run towards the task of its mission type (Config.FieldTraining.tasks, a count per type), up to the task's count. Test runs never count.
+- Once a task's count is reached the trainer is told and signs it off on his tablet (Profile → Field training), with an optional note (up to 255 characters). Only the rookie's own trainer signs off, once per task. When every task is signed off the training is done and the rookie gets the badge Config.FieldTraining.badge (Profile → Badges).
+- Pairing, ending and every sign-off are in the audit log (ftoPair, ftoUnpair, ftoSignOff); the record is cp_officers.field_training (015), so the database and the saves folder keep it alike. Supervisors see every rookie's progress per task in Department Report.
+
 Moderation: Supervisor UI → Review Queue → Profiles (their department) and Admin UI → Officers: approve or reject a pending picture or bio (reason required), clear a bio or a picture (reason required), and handle reports. Every action is audited.
 
 Officer options
@@ -2568,8 +2575,13 @@ ALTER TABLE cp_mission_calls ADD COLUMN department VARCHAR(32) NULL;
 -- retention job copies rows with INSERT ... SELECT *.
 ALTER TABLE cp_mission_runs ADD COLUMN live_catches SMALLINT NOT NULL DEFAULT 0;
 ALTER TABLE cp_mission_runs_archive ADD COLUMN live_catches SMALLINT NOT NULL DEFAULT 0;
+-- sql/migrations/015_field_training.sql · a rookie's field training (CP.FieldTraining, step T1), on his officer row.
+-- JSON {"trainer": <citizenid>, "trainerName": <text>, "dept": <department>, "by": <who paired them>, "byName": <text>,
+-- "at": <unix time>, "tasks": {"<mission type>": {"runs": <n>, "signedBy": <citizenid>, "signedName": <text>,
+-- "signedAt": <unix time>, "note": <text>}}, "doneAt": <unix time>}; NULL = not in field training.
+ALTER TABLE cp_officers ADD COLUMN field_training JSON NULL;
 
-sql/migrations/001_initial.sql creates the first fourteen tables, and 002–014 add the columns and the fourteen tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. 010 (officer options) adds cp_officers.options, the JSON of the My options choices of that character that differ from the default (NULL = all defaults). 011 (Mission controls) adds cp_dept_controls: one row per department and control a supervisor or admin changed (no row = the config value); a backup restores it like any other table, and a restored row that has expired stays ignored. 012 (mission ban) adds cp_officers.mission_ban, a supervisor's temporary mission ban of that officer (NULL = none; one past its end counts as none). 013 (department call lanes) adds cp_mission_calls.department, the department whose lane posted the call (NULL = a server-wide call). 014 (live catches) adds live_catches to both run tables: the suspects detained in a live case on that row (0 on every other row). cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
+sql/migrations/001_initial.sql creates the first fourteen tables, and 002–015 add the columns and the fourteen tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. 010 (officer options) adds cp_officers.options, the JSON of the My options choices of that character that differ from the default (NULL = all defaults). 011 (Mission controls) adds cp_dept_controls: one row per department and control a supervisor or admin changed (no row = the config value); a backup restores it like any other table, and a restored row that has expired stays ignored. 012 (mission ban) adds cp_officers.mission_ban, a supervisor's temporary mission ban of that officer (NULL = none; one past its end counts as none). 013 (department call lanes) adds cp_mission_calls.department, the department whose lane posted the call (NULL = a server-wide call). 014 (live catches) adds live_catches to both run tables: the suspects detained in a live case on that row (0 on every other row). 015 (field training) adds cp_officers.field_training, a rookie's field training: his trainer, who paired them, the runs counted and the sign-offs per task, and when it was done (NULL = not in field training). cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
 
 Database upgrades
 
@@ -4585,6 +4597,26 @@ Config.Commendations = {
     crossDepartment = false,         -- true = supervisors may commend officers of other departments
     announceDays = 7,                -- days the Home announcement shows for the recipient
     announce = false,                -- also post it to the board webhook
+}
+
+-- ============================================================================
+--                                FIELD TRAINING
+-- ============================================================================
+-- Field training (FTO): a supervisor (or an admin) pairs a trainer with a rookie of his own department in Supervisor
+-- UI -> Department Report. Completed missions the rookie runs together with his trainer (both finish the same run)
+-- count towards the sign-off tasks below. Once a task's count is reached the trainer signs it off on his tablet
+-- (Profile -> Field training), with an optional note. When every task is signed off the rookie gets the badge below
+-- and the training is done. Every pairing and sign-off is in the audit log. Off when you install.
+Config.FieldTraining = {
+    enabled = false,                 -- true = supervisors can pair trainers and rookies, and runs count for them
+    -- Who may train, per department key: the lowest Qbox grade number of a trainer (that grade and up). A department
+    -- not listed here uses its supervisorGrade (so only supervisors train there)
+    trainerGrades = { sast = 2, fib = 2 },
+    -- Sign-off tasks, per mission type key: the completed missions of that type the rookie must run with his trainer
+    -- before the trainer may sign the task off. A type left out (or 0) is no task
+    tasks = { patrol = 3, investigation = 2, tactical = 1 },
+    rookiesPerTrainer = 2,           -- rookies one trainer may train at the same time
+    badge = 'field_training',        -- the badge a rookie gets when every task is signed off (Profile -> Badges)
 }
 
 -- ============================================================================

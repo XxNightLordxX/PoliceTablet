@@ -1610,6 +1610,28 @@ do
     S.resetMission(1, 'beat_patrol')
 end
 
+-- Config.FieldTraining (step T1): its own section with the police settings, shipped off, each comment its description.
+do
+    local function E(p) return S.entry(p) or {} end
+    local groups, section = {}, nil
+    for _, sec in ipairs(S._schema().sections) do
+        for _, g in ipairs(sec.groups) do groups[g.path] = g end
+        if sec.key == 'field_training' then section = sec end
+    end
+    H.ok(section and section.title == 'Field training' and section.group == 'police', 'Field training: police')
+    H.eq(E('FieldTraining.enabled').default, false, 'field training ships off')
+    H.ok(E('FieldTraining.enabled').desc:find('supervisors can pair trainers and rookies', 1, true) ~= nil,
+        'enabled: its comment')
+    H.ok(((groups['FieldTraining.tasks'] or {}).desc or E('FieldTraining.tasks').desc or ''):find(
+        'the completed missions of that type',
+        1,
+        true
+    ) ~= nil, 'tasks: its comment')
+    H.ok(E('FieldTraining.rookiesPerTrainer').default == 2 and E('FieldTraining.rookiesPerTrainer').max == 20,
+        'two rookies a trainer, at most 20')
+    H.eq(E('FieldTraining.badge').default, 'field_training', 'the badge id')
+end
+
 -- ============================================================================
 --                               THE CLIENT HALF
 -- ============================================================================

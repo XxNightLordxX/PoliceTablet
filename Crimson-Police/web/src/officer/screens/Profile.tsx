@@ -47,6 +47,7 @@ import { useSession } from '../../shared/session';
 import type { RunResult, Session } from '../../shared/types';
 import { asList, type ProfileData, type ProfileRunView } from '../../types/boards';
 import { CommendationsCard } from '../components/CommendationsCard';
+import { FieldTrainingCard } from '../components/FieldTrainingCard';
 import { LookCard } from '../components/LookCard';
 import { ProfileEditDialog } from '../components/ProfileEditDialog';
 import { ServiceRecordCard } from '../components/ServiceRecordCard';
@@ -607,6 +608,7 @@ export default function Profile() {
                 />
                 <div className="boards-profile-side">
                     <CommendationsCard commendations={profile.commendations} mdt={profile.mdtCommendations} />
+                    {own ? <FieldTrainingCard /> : null}
                     {own ? <LookCard version={lookVersion} onEdit={() => setEditing(true)} /> : null}
                 </div>
             </Grid>

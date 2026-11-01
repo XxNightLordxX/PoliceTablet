@@ -43,6 +43,7 @@ import { ClearCooldownDialog } from '../components/ClearCooldownDialog';
 import { MissionBanDialog } from '../components/MissionBanDialog';
 import { AwardPointsDialog } from '../components/AwardPointsDialog';
 import { CommendDialog } from '../components/CommendDialog';
+import { FieldTrainingPanel } from '../components/FieldTrainingPanel';
 import './DeptReport.css';
 
 // Best dispositions as a share of all of them ("–" without decisions).
@@ -594,6 +595,7 @@ export default function DeptReport() {
                     }
                 />
             </Card>
+            <FieldTrainingPanel />
             <Row gap={2} className="boards-report-note">
                 <Icon name="info" size={13} />
                 <span>{t('sup.report.note')}</span>

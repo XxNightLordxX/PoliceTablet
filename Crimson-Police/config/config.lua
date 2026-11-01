@@ -1791,6 +1791,26 @@ Config.Commendations = {
 }
 
 -- ============================================================================
+--                                FIELD TRAINING
+-- ============================================================================
+-- Field training (FTO): a supervisor (or an admin) pairs a trainer with a rookie of his own department in Supervisor
+-- UI -> Department Report. Completed missions the rookie runs together with his trainer (both finish the same run)
+-- count towards the sign-off tasks below. Once a task's count is reached the trainer signs it off on his tablet
+-- (Profile -> Field training), with an optional note. When every task is signed off the rookie gets the badge below
+-- and the training is done. Every pairing and sign-off is in the audit log. Off when you install.
+Config.FieldTraining = {
+    enabled = false,                 -- true = supervisors can pair trainers and rookies, and runs count for them
+    -- Who may train, per department key: the lowest Qbox grade number of a trainer (that grade and up). A department
+    -- not listed here uses its supervisorGrade (so only supervisors train there)
+    trainerGrades = { sast = 2, fib = 2 },
+    -- Sign-off tasks, per mission type key: the completed missions of that type the rookie must run with his trainer
+    -- before the trainer may sign the task off. A type left out (or 0) is no task
+    tasks = { patrol = 3, investigation = 2, tactical = 1 },
+    rookiesPerTrainer = 2,           -- rookies one trainer may train at the same time
+    badge = 'field_training',        -- the badge a rookie gets when every task is signed off (Profile -> Badges)
+}
+
+-- ============================================================================
 --                           ITEM REWARDS (OPTIONAL)
 -- ============================================================================
 -- Off by default. Admin config only: mission files and the Mission Builder never hold rewards.

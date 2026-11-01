@@ -153,7 +153,8 @@ PoliceTablet/                      (git repo)
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
                    009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql,
-                   012_mission_ban.sql, 013_call_department.sql, 014_live_catches.sql
+                   012_mission_ban.sql, 013_call_department.sql, 014_live_catches.sql,
+                   015_field_training.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -4065,6 +4066,35 @@ pattern, so a missing module reads as config).
   one control) is sent as `session.config.missionControls`, so the screen shows with the master switch off while a
   control outside it (the cooldown controls, as shipped) is on.
 
+### 5.50 CP.FieldTraining — modules/fieldtraining (S; field training, step T1)
+Config.FieldTraining (ships `enabled = false`: the hook counts nothing, every action answers `err.fto_off`, both reads
+answer `false`). The record is the rookie's `cp_officers.field_training` JSON (migration 015): `{ trainer, trainerName,
+dept, by, byName, at, tasks = { [missionType] = { runs, signedBy, signedName, signedAt, note } }, doneAt }`; NULL = not
+in training. Every read-change-write of one record runs under a per-rookie lock (`WithLock`, 50 ms waits).
+- `FT.enabled()`, `FT.tasks() -> { { type, need, label } }` (Config tasks with a count above 0, sorted),
+  `FT.trainerGrade(dept)` (trainerGrades, else the department's supervisorGrade), `FT.badge()` (a safe badge id),
+  `FT.view(cid, name, record) -> FtoView` (web/src/types/fieldTraining.ts).
+- `FT.onRowSettled(run, p, rowId, row)` on the `row:settled` hook: a completed, unflagged, non-test row of a rookie
+  in active training counts one run towards the task of `run.missionType` (never above its count) when his trainer is
+  a participant of the same run with `result = 'completed'`; the trainer is toasted when the count is reached.
+- `server:sup:ftoPair { rookie, trainer }` and `server:sup:ftoUnpair { rookie }` (`Kit.supAction`, key
+  viewMissionList, `opts.permission`: the feature on and `CP.Permissions.can(src, 'viewMissionList', { department =
+  the rookie's department })`; S on the rookie, non-strict). Pair: trainer online (`CP.Access.getOfficer`), same
+  department, grade at or above `FT.trainerGrade`, the rookie not in training, the trainer not in training himself and
+  under `rookiesPerTrainer`; audited `ftoPair` (target the rookie, new the trainer), both toasted. Unpair clears the
+  record; audited `ftoUnpair`.
+- `server:fto:signOff { rookie, task, note? }` (CP.Net.action, rate 2): only the rookie's trainer, a task of the
+  config whose count is reached and not signed yet; the note through `Kit.reason(v, true)`; audited `ftoSignOff`
+  (role supervisor: cp_audit has no officer role); the last task sets `doneAt` and inserts the badge into `cp_badges`
+  (`INSERT IGNORE`), both toasted.
+- Reads: `fto:getMine` (Profile → Field training: `{ training?, rookies }`, `false` when off or nothing to show) and
+  `sup:getFieldTraining { department? }` (Department Report: `FtoDept`, the department's pairings, up to 300 officers
+  as rookie candidates and the online trainers; a supervisor only his own department, admins any).
+- Web: web/src/officer/components/FieldTrainingCard.tsx (FtoTaskList, FtoProgress, the Profile card with Sign off) and
+  web/src/supervisor/components/FieldTrainingPanel.tsx (Department Report: Pair trainer, End training on two clicks).
+- Tests: tests/field_training_spec.lua (plain Lua, stubbed rows); the 015 column and its JSON_VALUE read in
+  tests/foundation_spec.lua.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -4616,6 +4646,8 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `admin:getOfficerPoints` | callback | officerRecords | `{ citizenid }` | week/month/season/all-time points and ranks, `adjust.maxDeduction`, `confirmAbove`, `dailyLimit` |
 | `server:admin:adjustPoints` | action | pointsAdjust | `{ citizenid, points (−10,000..10,000, not 0), reason, confirm?, requestId }` | R I S(strict) L(1 per 10 s per officer); T = the citizenid at ≥ `adjustConfirmAbove`; a deduction never takes season points or XP below 0; `adjustDailyLimit` summed from today's rows of every character of the admin's licenses (license: and license2:); audit `manualAward` / `pointsAdjust` (flags) |
 | `server:sup:awardPoints` | supAction | missionControls (DC.canChange awardPoints) | `{ citizenid, points (the department's min..max), reason, confirm? }` | R S(strict) L(1 per 10 s per officer); T as above; a supervisor: own department, `awardPointsPerDay` from today's rows; then `CP.Corrections.adjust` (step P22) |
+| `server:sup:ftoPair` / `server:sup:ftoUnpair` | supAction | viewMissionList (own department; Config.FieldTraining.enabled) | `{ rookie, trainer }` / `{ rookie }` | S on the rookie; audit `ftoPair` / `ftoUnpair` (step T1, §5.50) |
+| `server:fto:signOff` | action | the rookie's own trainer | `{ rookie, task, note? }` | a ready task, once; audit `ftoSignOff`; the last one gives the badge (§5.50) |
 | `admin:previewBulkVoid` | callback | bulkVoid | `{ filter = { citizenid?, department?, missionType?, missionId?, operationId?, from, to \| allTime, includeAwards? } }` | V: rows, officers (XP before/after), points, held cash, archived, left-out own runs, `confirmWord`, `previewToken` (none above `bulkMaxRows`) |
 | `server:admin:bulkVoid` | action | bulkVoid | `{ filter, kind?, reason, confirm = 'VOID <n>', previewToken, requestId }` | R I V T J; refused while the officer is on a run; audit `bulkVoid` (flags) + one `voidRun` per row |
 | `server:admin:resetProgression` | action | bulkVoid | `{ citizenid, reason, confirm = citizenid, previewToken, requestId }` | every row, all time, as a correction batch |

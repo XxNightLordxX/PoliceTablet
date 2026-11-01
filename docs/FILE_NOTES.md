@@ -1984,6 +1984,16 @@ Contract interpretations (details in docs/notes/engine_a.md)
   * rollModifier uses CP.U.rng(CP.U.hash(run.seed .. ':modifier'))
 ```
 
+## Crimson-Police/modules/fieldtraining/server.lua
+
+```text
+CP.FieldTraining (server): field training, part 1 (step T1, Config.FieldTraining). A supervisor (or an admin) pairs a
+trainer with a rookie of the department; completed runs the two finish together count towards the sign-off tasks
+(per mission type); the trainer signs a task off once its count is reached; every task signed off gives the badge.
+The record lives on the rookie's officer row (cp_officers.field_training, migration 015), so the database and the
+saves folder keep it alike. Shipped off: no hook does anything and every action is refused.
+```
+
 ## Crimson-Police/modules/goals/server.lua
 
 ```text

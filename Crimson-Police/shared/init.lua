@@ -324,6 +324,7 @@ local CONFIG_SECTIONS = {
     'Profile',
     'OfficerOptions',
     'Commendations',
+    'FieldTraining',
     'Rewards',
     'Disputes',
     'Builder',

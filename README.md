@@ -47,6 +47,7 @@ say the same things in short and point back here.
    - [6.8 Paying from the department's bank account](#68-paying-from-the-departments-bank-account)
    - [6.9 Handcuff and evidence items](#69-handcuff-and-evidence-items)
    - [6.10 Adding a department](#610-adding-a-department)
+   - [6.11 Field training (FTO)](#611-field-training-fto)
 7. [Settings to check in your other resources](#7-settings-to-check-in-your-other-resources)
 8. [All commands and keys](#8-all-commands-and-keys)
    - [8.1 Commands](#81-commands)
@@ -1377,6 +1378,26 @@ Then do step 4 below for sc-dispatch and sc-police.
    `Config.DispatchIntegration.PoliceJobs` (`bcso` already is in both).
 5. Restart Crimson-Police. No code and no SQL changes. A department added in the middle of a season starts at 0.
 
+### 6.11 Field training (FTO)
+
+Off by default (`Config.FieldTraining.enabled = false`): nothing changes until you switch it on (in config.lua or
+Admin UI → Settings → Police → Field training).
+
+1. Set who may train: `Config.FieldTraining.trainerGrades`, the lowest Qbox grade of a trainer per department
+   (`{ sast = 2, fib = 2 }` shipped; a department you leave out uses its `supervisorGrade`).
+2. Set the sign-off tasks: `Config.FieldTraining.tasks`, how many completed missions of each type the rookie must run
+   with his trainer (`{ patrol = 3, investigation = 2, tactical = 1 }` shipped).
+3. `rookiesPerTrainer` (2) caps the rookies one trainer has at once; `badge` (`field_training`) is the badge a rookie
+   gets at the end.
+
+How it plays: a supervisor opens **Supervisor UI → Department Report → Field training → Pair trainer**, picks a rookie
+of his department and an online trainer, and confirms (an admin can do it for any department). Missions the rookie
+completes in a unit with his trainer, both finishing the same run, count towards the task of that mission type. When a
+task's count is reached the trainer gets a toast and signs it off in **Profile → Field training**, with an optional
+note; the rookie sees his progress on the same card. When every task is signed off the rookie gets the **Field
+Training** badge. **End training** (click twice) removes a pairing. Pairing, ending and every sign-off are in the audit
+log. Nothing is lost on a restart: the training is saved with the officer (database or saves folder).
+
 ---
 
 ## 7. Settings to check in your other resources
@@ -1557,7 +1578,7 @@ Supervisors play missions like officers. The **Supervisor** button in the tablet
 | **Review Queue** | Flagged runs and disputes of their department, and a **Profiles** tab for pictures, bios and reports |
 | **Payouts** | Mission type payouts, within the allowed range |
 | **Mission Builder** | Build, test and publish their own missions ([9.12](#912-mission-builder)) |
-| **Department Report** | Activity per officer this week, and **Commend**; **Clear cooldown** and **Mission ban** when switched on ([4.4](#44-what-supervisors-may-do)) |
+| **Department Report** | Activity per officer this week, and **Commend**; **Clear cooldown** and **Mission ban** when switched on ([4.4](#44-what-supervisors-may-do)); the **Field training** card (pair trainers and rookies, progress per task) when it is switched on ([6.11](#611-field-training-fto)) |
 
 Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44-what-supervisors-may-do)).
 

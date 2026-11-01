@@ -1,6 +1,7 @@
 // Browser mocks for the boards slice (Leaderboard, Department Challenge, Profile & History, Admin Seasons &
 
 import { registerMock, type MockFn, type MockKind } from '../shared/nui';
+import type { FtoView } from '../types/fieldTraining';
 import type { Avatar, LevelInfo, RunResult } from '../shared/types';
 import type {
     ActivityRun,
@@ -1351,3 +1352,40 @@ reg(
         return { used: supClears.filter(c => c.citizenid === p.citizenid).length, max: 3 };
     },
 );
+
+// Field training (step T1): one rookie in training with a ready task, signed off and paired in memory.
+const mockFto: FtoView = {
+    rookie: { citizenid: 'CPS20003', name: 'Sam Rookie' },
+    trainer: { citizenid: 'CPS10001', name: 'Alex Mercer' },
+    department: 'sast',
+    pairedAt: Math.floor(Date.now() / 1000) - 86400,
+    pairedBy: 'Sgt. Hale',
+    signed: 0,
+    total: 2,
+    tasks: [
+        { type: 'patrol', label: 'Patrol', need: 3, runs: 3, ready: true },
+        { type: 'tactical', label: 'Tactical', need: 1, runs: 0, ready: false },
+    ],
+};
+reg('request', 'fto:getMine', () => ({ training: null, rookies: [mockFto] }));
+reg('request', 'sup:getFieldTraining', () => ({
+    department: 'sast',
+    departmentLabel: 'SAST',
+    trainerGrade: 2,
+    rookiesPerTrainer: 2,
+    tasks: mockFto.tasks.map(x => ({ type: x.type, label: x.label, need: x.need })),
+    pairs: [mockFto],
+    candidates: [{ citizenid: 'CPS20004', name: 'Jo Newman', callsign: '2L-31' }],
+    trainers: [{ citizenid: 'CPS10001', name: 'Alex Mercer', rank: 'Corporal' }],
+}));
+reg('action', 'server:fto:signOff', (p: { task?: string }) => {
+    const task = mockFto.tasks.find(x => x.type === p?.task);
+    if (!task) throw new Error('err.fto_task_unknown');
+    if (!task.ready) throw new Error('err.fto_task_not_ready');
+    task.ready = false;
+    task.signed = { by: mockFto.trainer.name, at: Math.floor(Date.now() / 1000) };
+    mockFto.signed += 1;
+    return mockFto;
+});
+reg('action', 'server:sup:ftoPair', () => mockFto);
+reg('action', 'server:sup:ftoUnpair', () => ({ rookie: mockFto.rookie.citizenid }));
