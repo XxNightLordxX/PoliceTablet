@@ -140,6 +140,19 @@ ok, err = Ban(12, 'OFF00009', 1)
 H.eq(err, 'err.mission_ban_offline', 'an officer who is offline cannot be banned (his grade is unknown)')
 W.people[9].offline = nil
 
+-- a ban in force belongs to its setter: another supervisor cannot replace it with a shorter one he could then lift
+ok = Ban(12, 'OFF00009', 24)
+H.eq(ok, true, 'a 24 h ban by Pat')
+ok, err = Ban(11, 'OFF00009', 1)
+H.eq(err, 'err.mission_ban_exists', 'another supervisor cannot replace it')
+H.eq(MB.get('OFF00009').by, 'SUP00012', 'the 24 h ban stays his')
+ok, err = W.act('server:sup:liftMissionBan', 11, { citizenid = 'OFF00009', reason = 'x' })
+H.eq(err, 'err.mission_ban_not_yours', 'nor lift it')
+ok = Ban(12, 'OFF00009', 2)
+H.eq(ok, true, 'the setter may change his own ban')
+ok = W.act('server:admin:liftMissionBan', 1, { citizenid = 'OFF00009', reason = 'x' })
+H.eq(ok, true, 'an admin lifts it')
+
 MC.controls.missionBan.on = false
 Config.Permissions.supervisor.missionControls = false
 return H

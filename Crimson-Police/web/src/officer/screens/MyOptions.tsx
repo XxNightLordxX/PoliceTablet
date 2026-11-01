@@ -28,6 +28,7 @@ import type { KeyLabel, OptionDef, OptionsView } from '../../types/options';
 import type { ProfileEdit, ProfileSetPayload } from '../../types/profile';
 import '../components/ProfileCards.css';
 import './MyOptions.css';
+import { makeDebouncer, type Debouncer } from './debouncedSave';
 
 const SAVE_DELAY_MS = 500;
 const SAVED_SHOW_MS = 2500;
@@ -56,29 +57,14 @@ function same(a: OfficerOptionValue | undefined, b: OfficerOptionValue | undefin
 }
 
 // Saves one value after the officer stops changing it (SAVE_DELAY_MS); pending saves run at once on unmount.
+// cancel(keys) drops pending saves (a group's Reset).
 function useDebouncedSave(save: (key: string, value: OfficerOptionValue) => void) {
-    const timers = useRef<Record<string, { id: ReturnType<typeof setTimeout>; value: OfficerOptionValue }>>({});
     const saveRef = useRef(save);
     saveRef.current = save;
-    useEffect(
-        () => () => {
-            for (const [key, p] of Object.entries(timers.current)) {
-                clearTimeout(p.id);
-                saveRef.current(key, p.value);
-            }
-            timers.current = {};
-        },
-        [],
-    );
-    return useCallback((key: string, value: OfficerOptionValue) => {
-        const old = timers.current[key];
-        if (old) clearTimeout(old.id);
-        const id = setTimeout(() => {
-            delete timers.current[key];
-            saveRef.current(key, value);
-        }, SAVE_DELAY_MS);
-        timers.current[key] = { id, value };
-    }, []);
+    const deb = useRef<Debouncer<OfficerOptionValue> | null>(null);
+    if (!deb.current) deb.current = makeDebouncer((k, v) => saveRef.current(k, v), SAVE_DELAY_MS);
+    useEffect(() => () => deb.current?.flush(), []);
+    return deb.current;
 }
 
 // The keys saved a moment ago (the inline "Saved").
@@ -290,7 +276,7 @@ function LookCard() {
     );
     const saveLater = useDebouncedSave((_key, v) => {
         void save({ uiScale: v as number }, 'uiScale');
-    });
+    }).later;
 
     const toggleHide = async (value: boolean) => {
         const res = await run<{ hideName: boolean }>('server:setHideName', value, {
@@ -513,7 +499,7 @@ export default function MyOptions() {
         },
         [setLocal, mark],
     );
-    const saveLater = useDebouncedSave((key, value) => {
+    const debounced = useDebouncedSave((key, value) => {
         const def = schema.find(d => d.key === key);
         const done = () =>
             setDraft(d => {
@@ -528,10 +514,11 @@ export default function MyOptions() {
 
     const change = (def: OptionDef, value: OfficerOptionValue) => {
         setDraft(d => ({ ...d, [def.key]: value }));
-        saveLater(def.key, value);
+        debounced.later(def.key, value);
     };
 
     const reset = async (defs: OptionDef[]) => {
+        debounced.cancel(defs.map(d => d.key));
         const patch: Record<string, OfficerOptionValue> = {};
         for (const def of defs) {
             if (def.store === 'local') await saveLocal(def.key, def.default);

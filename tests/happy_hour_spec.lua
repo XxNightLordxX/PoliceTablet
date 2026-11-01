@@ -234,4 +234,21 @@ H.sql('DELETE FROM cp_dept_controls')
 H.sql('DELETE FROM cp_mission_runs')
 H.sql('DELETE FROM cp_audit')
 
+-- a failed start (CP.Migrations.started() false): the 15 s loop ends quietly instead of logging err.not_started
+do
+    local saved, realErr, lines = CP.Migrations, CP.err, {}
+    CP.Migrations = {
+        started = function() return false end,
+        ready = function() error('err.not_started', 0) end,
+        failed = function() return 'a migration failed' end,
+    }
+    CP.err = function(tag, msg, ...) lines[#lines + 1] = tostring(tag) .. ': ' .. tostring(msg):format(...) end
+    H.killThreads()                                     -- the loop of the start that worked
+    DC.clearCache()
+    H.load('modules/happyhour/server.lua')
+    H.advance(5 * 60 * 1000, 5000)
+    CP.err, CP.Migrations = realErr, saved
+    H.eq(table.concat(lines, ' | '), '', 'no check failed line after a failed start')
+end
+
 return H

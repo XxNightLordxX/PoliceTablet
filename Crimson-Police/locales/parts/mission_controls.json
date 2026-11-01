@@ -151,6 +151,7 @@
   "err.mission_ban_used": "You have set all your mission bans for today.",
   "err.mission_ban_none": "This officer has no mission ban.",
   "err.mission_ban_not_yours": "Only the supervisor who set this ban, or an admin, can lift it.",
+  "err.mission_ban_exists": "This officer already has a mission ban from another supervisor. Only that supervisor, or an admin, can change it.",
   "sup.notice.mission_banned": "{name} gave you a mission ban for {hours} h. The tablet works as usual; the Mission Board shows when it ends.",
   "sup.notice.mission_ban_lifted": "Your mission ban was lifted.",
   "sup.ban.button": "Mission ban",

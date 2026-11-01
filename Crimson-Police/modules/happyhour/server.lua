@@ -223,6 +223,8 @@ if CP.Hooks and CP.Hooks.on then
 end
 
 CreateThread(function()
+    -- a failed start (a migration, the saves folder): end quietly, as the other loops do
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     while true do
         Wait(TICK_MS)
         local ok, err = pcall(HH._tick)

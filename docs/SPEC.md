@@ -2792,7 +2792,9 @@ Config = {}
 Config.Debug = true              -- true = each module prints tagged debug lines
 Config.Locale = 'en'
 
--- ── Storage ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   STORAGE
+-- ============================================================================
 -- enabled = true:  keep everything in your MySQL/MariaDB database through oxmysql. The tables are
 --                  created automatically on start; there is no SQL file to import.
 -- enabled = false: database off. Everything is saved as files in the resource's saves folder
@@ -2812,14 +2814,18 @@ Config.Database = {
     jsonCacheEntries = 100000,
 }
 
--- ── Formats ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   FORMATS
+-- ============================================================================
 
 Config.Format = {
     currency = '$',              -- money symbol
     currencyAfter = false,       -- true = "250 $"
 }
 
--- ── Tablet and commands ─────────────────────────────────────────────────────
+-- ============================================================================
+--                             TABLET AND COMMANDS
+-- ============================================================================
 
 Config.Tablet = {
     title = 'Crimson-Police',            -- app title on every screen
@@ -2898,7 +2904,9 @@ Config.AdminUi = {
     reasonChips = { 'Balance change', 'Event', 'Correction' },
 }
 
--- ── Permissions ─────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 PERMISSIONS
+-- ============================================================================
 -- What supervisors may do. Admins can always do every admin action.
 -- false hides the action in the Supervisor UI, and the server refuses it.
 Config.Permissions = {
@@ -2931,7 +2939,9 @@ Config.Permissions = {
     -- Nobody may approve, void or answer a dispute about a run they took part in.
 }
 
--- ── Admin control ───────────────────────────────────────────────────────────
+-- ============================================================================
+--                                ADMIN CONTROL
+-- ============================================================================
 -- What admins may do beyond the normal rules, from the Admin UI. Supervisors never get these. Every action is in
 -- the audit log; limits are counted from saved rows, so a restart never resets them.
 Config.AdminControl = {
@@ -2956,7 +2966,9 @@ Config.AdminControl = {
     refusalsKept = 200,
 }
 
--- ── Mission controls ────────────────────────────────────────────────────────
+-- ============================================================================
+--                               MISSION CONTROLS
+-- ============================================================================
 -- Rules a department's supervisors may change for their own department from the Supervisor UI, only inside the
 -- bounds set here and only while an admin switched them on: Config.Permissions.supervisor.missionControls and the
 -- control's own on. A department may have its own bounds (Config.Departments.<key>.missionControls = { <control> =
@@ -3099,7 +3111,9 @@ Config.MissionControls = {
     awardPointsPerDay = 100,
 }
 
--- ── Departments ─────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 DEPARTMENTS
+-- ============================================================================
 -- Every entry is used automatically for access, the tablet name, colours and
 -- logo watermark, leaderboards, the department challenge, unit invites and the
 -- Mission Builder. Add a block, put its logo in logos/, restart. No code or SQL changes.
@@ -3166,7 +3180,9 @@ Config.Departments = {
     -- },
 }
 
--- ── Mission types ───────────────────────────────────────────────────────────
+-- ============================================================================
+--                                MISSION TYPES
+-- ============================================================================
 -- points: leaderboard points, config only (never editable in-game).
 -- payout: default base cash payout. Supervisors and admins change it in-game;
 -- admin-set values are stored permanently in cp_type_payouts.
@@ -3183,7 +3199,9 @@ Config.DisabledMissions = {}   -- mission ids to turn off (built-in or custom), 
 -- { prison_break = { 'North gate' } }. Admin UI → Missions has an on/off switch for every mission and location.
 Config.DisabledLocations = {}
 
--- ── Difficulty (stars) ──────────────────────────────────────────────────────
+-- ============================================================================
+--                              DIFFICULTY (stars)
+-- ============================================================================
 -- Multipliers by a mission's difficulty: index 1, 2 or 3 stars.
 -- 1.0 = stars change nothing, so a builder can't raise pay or points by picking 3 stars.
 Config.Difficulty = {
@@ -3191,7 +3209,9 @@ Config.Difficulty = {
     cashByStars = { 1.0, 1.0, 1.0 },
 }
 
--- ── Cash ────────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                     CASH
+-- ============================================================================
 
 Config.Cash = {
     account = 'bank',     -- 'bank' or 'cash'
@@ -3213,7 +3233,9 @@ Config.Cash = {
     lowBalanceWarn = 0,          -- warn below this department balance (0 = off)
 }
 
--- ── Payout editing ──────────────────────────────────────────────────────────
+-- ============================================================================
+--                                PAYOUT EDITING
+-- ============================================================================
 
 Config.Payouts = {
     supervisorRange = { 0.5, 2.0 },   -- supervisors: 50%–200% of the type's payout in Config.MissionTypes
@@ -3221,7 +3243,9 @@ Config.Payouts = {
     requireReason = true,             -- a reason is required for every payout change
 }
 
--- ── Scaling by participants ─────────────────────────────────────────────────
+-- ============================================================================
+--                           SCALING BY PARTICIPANTS
+-- ============================================================================
 -- The first row whose maxParticipants >= the participant count is used.
 Config.Scaling = {
     { maxParticipants = 1, tier = 'standard', count = 1.0, accuracy = 0, armour = 0, points = 1.00, cash = 1.00 },
@@ -3265,7 +3289,9 @@ Config.Limits = {
     exportBps = 200000,
 }
 
--- ── Spawning (where mission people appear) ──────────────────────────────────
+-- ============================================================================
+--                    SPAWNING (where mission people appear)
+-- ============================================================================
 -- Where a mission's people may appear, so they never pop up next to, behind or all around your officers. A mission
 -- asks for its spawn points here: a point that breaks a rule below is skipped, and a mission that gets too few points
 -- waits for more. Distances are measured on the map (height does not count).
@@ -3395,7 +3421,9 @@ Config.Spawning = {
     log = true,
 }
 
--- ── Route to the start ──────────────────────────────────────────────────────
+-- ============================================================================
+--                              ROUTE TO THE START
+-- ============================================================================
 
 Config.Route = {
     -- true = officers must follow the GPS route to the mission start; leaving it for abandonAfter seconds ends their
@@ -3420,7 +3448,9 @@ Config.Route = {
     followActionSeconds = 300,
 }
 
--- ── Map markers ─────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 MAP MARKERS
+-- ============================================================================
 -- How the objective your officers are on shows on their map: one blip (for a fight or a search area, a circle and its
 -- centre) with one GPS line to it. While an officer still drives to the start, the line to the start is the only one he
 -- gets from us; one who has set a waypoint of his own gets no objective line. Under kinds, each kind of blip has a
@@ -3483,7 +3513,9 @@ Config.Markers = {
     },
 }
 
--- ── Real calls ──────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                  REAL CALLS
+-- ============================================================================
 
 Config.Calls = {
     npcCallPrefix = 'npccall-', -- SC-NPCPolice call ids start with this; those calls never end a run
@@ -3492,7 +3524,9 @@ Config.Calls = {
     respondingExpiry = 1200, -- seconds; a responding entry with no update expires (auto-cleared calls fire no event)
 }
 
--- ── Alert suppression ───────────────────────────────────────────────────────
+-- ============================================================================
+--                              ALERT SUPPRESSION
+-- ============================================================================
 -- The flag is the crimsonArena state bag, which SC-Dispatch and SC-Ambulance
 -- already check; its name is fixed in those resources, so it is not configurable.
 Config.Alerts = {
@@ -3500,7 +3534,9 @@ Config.Alerts = {
     backstopDelay = 1,      -- seconds to wait for SC-Dispatch to create the call before clearing it
 }
 
--- ── Downed participants ─────────────────────────────────────────────────────
+-- ============================================================================
+--                             DOWNED PARTICIPANTS
+-- ============================================================================
 
 Config.Downed = {
     checkEvery = 2,     -- seconds between downed checks
@@ -3511,7 +3547,9 @@ Config.Downed = {
     },
 }
 
--- ── Anti-exploit ────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 ANTI-EXPLOIT
+-- ============================================================================
 
 Config.AntiCheat = {
     maxSpeed = 80.0,        -- m/s between objective events before a run is flagged
@@ -3539,7 +3577,9 @@ Config.AntiCheat = {
     adminProbeLines = 5,
 }
 
--- ── Cross-Department Missions ───────────────────────────────────────────────
+-- ============================================================================
+--                          CROSS-DEPARTMENT MISSIONS
+-- ============================================================================
 
 Config.CrossDept = {
     enabled = true,
@@ -3551,7 +3591,9 @@ Config.CrossDept = {
     waitlist = true,         -- officers can queue when every place is taken; a freed place goes to the first
 }
 
--- ── Random draw ─────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 RANDOM DRAW
+-- ============================================================================
 
 Config.Draw = {
     avoidLast = 1,              -- never repeat the last mission in that type
@@ -3567,7 +3609,9 @@ Config.Draw = {
     locationFreshness = 3600,   -- seconds: a location used server-wide this recently gets half the weight
 }
 
--- ── Units ───────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    UNITS
+-- ============================================================================
 
 Config.Units = {
     invitePolicy = 'anyone',            -- 'anyone' (every member may invite) | 'leader'
@@ -3577,7 +3621,9 @@ Config.Units = {
     nearbyBands = { 250, 1000, 3000 },  -- metres: distance bands in the invite list
 }
 
--- ── Dispatch (mission calls) ────────────────────────────────────────────────
+-- ============================================================================
+--                           DISPATCH (MISSION CALLS)
+-- ============================================================================
 -- Tablet-only NPC calls. The first unit to claim one gets a random mission of that type that starts in
 -- the call's area. Mission calls are never sent to SC-Dispatch, and real calls always come first.
 Config.MissionCalls = {
@@ -3629,16 +3675,143 @@ Config.MissionCalls = {
     },
 }
 
--- ── Live crimes (option A) ──────────────────────────────────────────────────
+-- ============================================================================
+--                    REAL SUSPECTS (rules for real players)
+-- ============================================================================
+-- Rules for every case where the suspect is a real player instead of an NPC: a LIVE crime (Config.LiveCrime) or a
+-- mission played against a volunteer (Config.Volunteers). Nothing here does anything while both are off.
+-- Crimson-Police never gives a suspect anything (no points, cash or items) and never tells officers who he is.
+Config.RealSuspects = {
+    -- The NPC-mission rules that do not fit a fight with a real player (each can be set back). 'normal' = an
+    -- officer's own shots-fired, person-down and EMS calls go out like any officer's, so backup can come; 'silenced'
+    -- = the NPC-mission rule (no alerts)
+    officerAlerts = 'normal',
+    -- 'first_contact' = an officer who gets near a suspect (contactRange) counts as arrived and his route check stops;
+    -- 'start' = the NPC-mission rule (only the mission start counts)
+    routeEnds = 'first_contact',
+    -- 'keep_earned' = a downed officer leaves with what he earned so far and no type cooldown; 'failed' = the
+    -- NPC-mission rule (his run is Failed)
+    downed = 'keep_earned',
+    -- Seconds down, with no EMS on duty, before the pick-up (keep equal to sc-ambulance's Config.DeathTime; NPC
+    -- missions use Config.Downed.pickupDelay)
+    downedPickupDelay = 400,
+    -- false = no NPC-combat headshot protection or damage cut for officers once a real suspect is in the case; true =
+    -- they keep Config.NpcCombat's officer settings
+    npcCombat = false,
+    -- Who can be a suspect:
+    excludeAce = 'crimsonpolice.realsuspect.exclude',  -- players with this ace (server.cfg) are never suspects
+    -- true = Crimson-Police admins (Config.AdminAce / Config.QboxAdmins) are never suspects either
+    excludeAdmins = true,
+    -- A character can't be a suspect within this many minutes of police duty, and can't take a case within this many
+    -- minutes of being a suspect
+    jobHopMinutes = 30,
+    -- Seconds with no movement and no camera turn = AFK: never a suspect, and a suspect cuffed while AFK scores
+    -- nothing
+    afkSeconds = 300,
+    afkSampleEvery = 15,             -- seconds between AFK samples (only suspects, volunteers and reported crews)
+    noStartZones = {                 -- a player standing here can't become a suspect
+        { label = 'Pillbox Hill Medical', coords = vec3(308.19, -595.35, 43.29), radius = 100.0 },
+        { label = 'Paleto Bay Medical', coords = vec3(-254.54, 6331.78, 32.43), radius = 80.0 },
+        { label = 'Crimson-Arena lobby', coords = vec3(-282.01, -2030.46, 30.15), radius = 60.0 },
+        { label = 'Crimson-Arena Trailer Park', coords = vec3(2344.43, 2565.06, 46.67), radius = 160.0 },
+    },
+    contactRange = 100.0,            -- metres: an officer this close to a suspect has made contact
+    -- When a suspect leaves (logs off, switches character, enters Crimson-Arena or another instance): 'void' = he
+    -- counts for nobody; 'caught' = it counts as a detain for the officers; 'escaped' = it counts as getting away.
+    -- Staff always get a note, and it never holds the officers' points
+    onLeave = 'void',
+    disconnectGrace = 120,           -- seconds a suspect who lost connection may come back and stay in the case
+    reconnectNoticeMinutes = 30,     -- minutes: officers are told when a suspect who left cuffed is back this soon
+    -- The staff note says "left soon after contact" when he left within this many seconds of it
+    evadeWindow = 120,
+    trail = {                        -- position trail kept for review
+        every = 5,                   -- seconds between points
+        max = 360,                   -- points kept per suspect
+    },
+    timelineMax = 300,               -- timeline entries kept per case
+    -- Proof the server checks before anything scores:
+    cuffPairWindow = 10,             -- seconds between the officer's sc-police cuff and the suspect's cuffed state
+    cuffRange = 3.5,                 -- metres between them at the cuff (sc-police allows 2.5; the rest is lag)
+    custodyHoldSeconds = 30,         -- seconds the cuffs must hold before a detain counts
+    -- Seconds: free this soon after the cuff = he won sc-police's cuff-break game (fair, once per case and not in
+    -- the first 2 s); later, with no officer uncuff and no bobby pin, it is a self-uncuff: it counts as detained and
+    -- staff get a note
+    breakFreeSeconds = 20,
+    -- Metres: a friend's successful bobby pin frees him with no note when that friend stood this close for 2 s or
+    -- more (once per case)
+    rescueRange = 4.0,
+    neutralisedShare = 0.5,          -- a suspect cuffed while down (whoever downed him) counts this share of a detain
+    jailRange = 6.0,                 -- metres between officer and suspect at the jail (sc-police allows 5)
+    minJailTime = 5,                 -- a booking needs at least this sentence (sc-police counts months)
+    jailTimeMax = 120,               -- longer sentences are recorded as this
+    -- A booking counts only inside one of these ({} = anywhere): sc-police's station duty points and the prison;
+    -- check them on your MLOs
+    bookingZones = {
+        { label = 'Mission Row PD', coords = vec3(470.63, -974.11, 30.18), radius = 120.0 },
+        { label = 'Sandy Shores (BCSO)', coords = vec3(1833.06, 3679.32, 33.19), radius = 80.0 },
+        { label = 'SASP', coords = vec3(1560.38, 815.76, 76.21), radius = 80.0 },
+        { label = 'Bolingbroke Penitentiary', coords = vec3(1768.73, 2570.43, 44.73), radius = 180.0 },
+    },
+    -- Seconds after a hospital respawn he can't be detained for points (unless officers were with him when he
+    -- went down)
+    spawnProtectSeconds = 600,
+    -- Seconds; keep equal to sc-ambulance's Config.DeathTime: a respawn sooner voids him and staff get a note
+    earlyRespawnSeconds = 400,
+    -- Officer conduct: these weapons are never a "shot" (a hit with one on a suspect who was never armed costs
+    -- nothing)
+    lessLethal = { 'WEAPON_STUNGUN', 'WEAPON_STUNGUN_MP', 'WEAPON_NIGHTSTICK', 'WEAPON_FLASHLIGHT' },
+    armedMemory = 15,                -- seconds a suspect counts as armed after the server saw a gun in his hands
+    downGrace = 3,                   -- seconds after he goes down before a hit counts as hitting a downed person
+    damageLogMax = 200,              -- weapon hits between officers and suspects kept per case
+    -- Anti-farm (admins only): nobody can take a case against one of his own characters or licenses, and the
+    -- identifiers of both players are compared live, never stored or shown
+    identityMatch = {
+        block = { 'license', 'license2', 'discord', 'fivem', 'steam', 'xbl', 'live' }, -- same account = refused
+        flag = { 'ip', 'token' }, -- same connection or PC = allowed but flagged (families share them)
+    },
+    -- One scored case of the same suspect per officer in this many hours (live crimes and volunteers together)
+    pairCooldownHours = 24,
+    maxCatchesPerSuspectDay = 2,     -- a suspect is worth points this many times a day, server-wide
+    -- After a case, the same officers score nothing on that suspect for this many minutes
+    suspectCooldownMinutes = 30,
+    -- The same officer and suspect this often, with a second warning sign (a detain within fastCatchSeconds, a
+    -- suspect never armed who moved under 30 m after contact, or a case under 3 minutes), flags that officer
+    pairFlag = {
+        count = 2,                   -- cases of the same pair (matched by license)
+        days = 7,                    -- within this many days
+    },
+    fastCatchSeconds = 60,           -- seconds: a detain this soon after the case started is a warning sign
+    pairLedgerDays = 30,             -- days the pair ledger keeps case rows (admin blocks stay until they expire)
+}
+
+-- ============================================================================
+--                            LIVE CRIMES (option A)
+-- ============================================================================
 -- A live crime is a real crime that Crimson-Contracts reports once its police alert goes out; the crew that started
 -- the contract are the suspects. It shows as a red LIVE call on the Dispatch screen; officers who claim it respond
 -- to the real crew and earn points for securing the scene, detaining and booking the suspects (the shares are the
 -- live_* entries in Config.Bonuses). Crimson-Contracts needs ContractsConfig.LifecycleEvents = true.
 Config.LiveCrime = {
     enabled = false,                 -- true = reported crimes become LIVE calls on the Dispatch screen
+    -- false = officers on a live case may leave the GPS route to chase; true = the normal route rule
+    -- (Config.Route.required)
+    requireRoute = false,
+    sources = { 'crimson-contracts' },  -- the only scripts allowed to report a crime
+    types = {                           -- which crimes become LIVE calls, and the mission type whose points they use
+        warehouse_burglary = 'investigation',
+        container_heist = 'investigation',
+        hostile_drug_pickup = 'tactical',
+        drug_lab_raid = 'tactical',
+        weapon_shipment = 'tactical',
+        prisoner_ambush = 'tactical',
+        atm_robbery = false,         -- false = never a LIVE call (a solo ATM hack has no crew to track)
+    },
+    suspectRadius = 300.0,           -- crew members further than this from the crime at the alert are not suspects
 }
 
--- ── Volunteer suspects (options B and C) ────────────────────────────────────
+-- ============================================================================
+--                     VOLUNTEER SUSPECTS (options B and C)
+-- ============================================================================
 -- A player who is not on police duty can volunteer, with the command below, to be the suspect of a police tablet
 -- mission for an hour. When officers take a mission whose suspect a real player can play (Warrant Service's wanted
 -- person, Street Race Bust's driver, Manhunt's fugitive) and a volunteer fits, he gets a yes/no pop-up; if he says
@@ -3649,7 +3822,9 @@ Config.Volunteers = {
     enabled = false,                 -- true = players can volunteer with the command below
 }
 
--- ── Police actions and custody ──────────────────────────────────────────────
+-- ============================================================================
+--                          POLICE ACTIONS AND CUSTODY
+-- ============================================================================
 
 Config.Custody = {
     times = {                        -- seconds each action's progress bar takes
@@ -3776,7 +3951,9 @@ Config.Custody = {
     },
 }
 
--- ── Decisions ───────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                  DECISIONS
+-- ============================================================================
 -- The point value of each grade is in Config.Bonuses (correct_disposition, wrongful_arrest, ...).
 Config.Decisions = {
     -- releasing a person after their warrant or weapon reached the decider fails the case
@@ -3789,7 +3966,9 @@ Config.Decisions = {
     debrief = true,                     -- list every decision on the result screen and in history
 }
 
--- ── Suspect behaviour ───────────────────────────────────────────────────────
+-- ============================================================================
+--                              SUSPECT BEHAVIOUR
+-- ============================================================================
 
 Config.Npc = {
     tellSeconds = { 1.5, 3.0 },      -- how long a tell plays before a person runs or draws
@@ -3875,7 +4054,9 @@ Config.Flee = {
     nearestRoute = true,
 }
 
--- ── Built-in mission tweaks ─────────────────────────────────────────────────
+-- ============================================================================
+--                           BUILT-IN MISSION TWEAKS
+-- ============================================================================
 -- Change built-in missions without editing their files, so the change survives updates. Every tweak is
 -- checked by the same rules as the file; a tweak that breaks one is ignored with a console warning.
 -- Allowed keys: cooldown, timeLimit, startTimeout, disabledLocations (labels), peds, vehicles, weapons.
@@ -3885,13 +4066,17 @@ Config.MissionTweaks = {
     -- gang_shootout = { peds = { 'g_m_y_lost_01' }, weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' } },
 }
 
--- ── Time ────────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                     TIME
+-- ============================================================================
 -- Hour (0–23, server time) of the daily reset: Type of the Day, daily goals,
 -- streak days, the daily cash cap and the retention job. Weekly things reset
 -- at this hour on Config.Leaderboard.weekStartsOn.
 Config.Time = { resetHour = 0 }
 
--- ── Scoring, XP levels and goals ────────────────────────────────────────────
+-- ============================================================================
+--                         SCORING, XP LEVELS AND GOALS
+-- ============================================================================
 
 Config.Scoring = {
     scoreCap = 2.0,          -- × P
@@ -3914,7 +4099,9 @@ Config.Scoring = {
     },
 }
 
--- ── Bonuses and penalties ───────────────────────────────────────────────────
+-- ============================================================================
+--                            BONUSES AND PENALTIES
+-- ============================================================================
 -- The standard list, and the only one the Mission Builder offers. kind 'points'
 -- = flat points (each = per occurrence); kind 'pct' = a share of P. block = the
 -- block the mission must contain (none = any mission). Ids with positive values go in a mission file's bonuses,
@@ -3953,11 +4140,13 @@ Config.Bonuses = {
     excessive_force = { kind = 'points', value = -10, each = true, engineOnly = true },
     all_taken_alive = { kind = 'points', value = 15, block = 'process_scene', engineOnly = true },
     stop_without_cause = { kind = 'points', value = -15, block = 'pursuit', engineOnly = true },
-    lab_fire = { kind = 'points', value = -15, block = 'skill_check' },  -- penalty: setback
+    lab_fire = { kind = 'points', value = -15, block = 'skill_check' },                 -- penalty: setback
     cook_arrested = { kind = 'points', value = 10, each = true, block = 'flee_arrest' },
     stash_found_fast = { kind = 'points', value = 10, block = 'interact_points' },
     lieutenant_alive = { kind = 'points', value = 25, block = 'hostile_waves' },
-    rapid_response = { kind = 'pct', value = 0.10, engineOnly = true },  -- claimed server-posted mission calls
+    rapid_response = { kind = 'pct', value = 0.10, engineOnly = true },                 -- claimed server-posted mission calls
+    rs_unarmed_shot = { kind = 'pct', value = -0.25, each = true, engineOnly = true },  -- penalty: shot a real suspect who was never armed
+    rs_ran_over = { kind = 'pct', value = -0.25, each = true, engineOnly = true },      -- penalty: ran a real suspect over on foot
 }
 
 -- Cosmetic badges only; never the Qbox rank. Each name is a band of numbered levels starting at level;
@@ -4010,7 +4199,9 @@ Config.Goals = {
     },
 }
 
--- ── Leaderboard ─────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                 LEADERBOARD
+-- ============================================================================
 
 Config.Leaderboard = {
     cacheSeconds = 60,
@@ -4025,27 +4216,47 @@ Config.Leaderboard = {
     announceMonthly = true,  -- the monthly top 3 on Home and the board webhook
 }
 
--- ── Special events ──────────────────────────────────────────────────────────
+-- ============================================================================
+--                                SPECIAL EVENTS
+-- ============================================================================
 
 Config.Events = {
     typeOfTheDay = true,
     todMultiplier = 2.0,     -- points only
-    modifierChance = 0,      -- share of runs that also get one random twist (0 = never: officers choose their own)
+    -- share of runs that also get one random twist on top of the ones the officers chose (0 = never: officers
+    -- choose their own twists when they take a mission; 0.25 = one run in four)
+    modifierChance = 0,
     armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs
     timeCrunchCut = 0.25,    -- Time Crunch: share of the time limit removed
     weeklyBoss = { enabled = true, days = { 'friday', 'saturday', 'sunday' }, points = 500, payout = 2500 },
-    -- the twists officers may choose at accept: enabled = false never offered or rolled; points = share of P added;
-    -- cash = cash multiplier; several stack up to twistMaxPoints / twistMaxCash
+    -- Twists the officers may choose when they take a mission from the Mission Board or a mission call (the unit
+    -- leader decides for the unit). Each chosen twist adds its own reward and they stack, up to twistMaxPoints and
+    -- twistMaxCash. Rewards are paid only for a completed run. Never on the Weekly Boss, test runs or
+    -- Cross-Department Missions.
     twists = {
-        armored_hostiles = { enabled = true, points = 0.25, cash = 1.25 },   -- only where armed NPCs spawn
-        time_crunch = { enabled = true, points = 0.20, cash = 1.20 },
-        radio_silence = { enabled = true, points = 0.25, cash = 1.25 },
+        armored_hostiles = {     -- armed NPCs get armoredArmour extra armour (offered only where armed NPCs spawn)
+            enabled = true,      -- false = officers cannot choose it and it is never rolled
+            points = 0.25,       -- share of P it adds (0.25 = +25 % points; 0 = no extra points)
+            cash = 1.25,         -- cash multiplier (1.25 = x1.25 cash; 1.0 = no extra cash)
+        },
+        time_crunch = {          -- the time limit is timeCrunchCut shorter
+            enabled = true,      -- false = officers cannot choose it and it is never rolled
+            points = 0.20,       -- share of P it adds (0.20 = +20 % points; 0 = no extra points)
+            cash = 1.20,         -- cash multiplier (1.20 = x1.20 cash; 1.0 = no extra cash)
+        },
+        radio_silence = {        -- the map hides what Config.Markers.radioSilence says
+            enabled = true,      -- false = officers cannot choose it and it is never rolled
+            points = 0.25,       -- share of P it adds (0.25 = +25 % points; 0 = no extra points)
+            cash = 1.25,         -- cash multiplier (1.25 = x1.25 cash; 1.0 = no extra cash)
+        },
     },
-    twistMaxPoints = 0.70,   -- the most all chosen twists add together (+70% of P)
-    twistMaxCash = 1.95,     -- the highest cash multiplier all chosen twists give together
+    twistMaxPoints = 0.70,   -- the most all chosen twists add together, as a share of P (0.70 = +70 % points)
+    twistMaxCash = 1.95,     -- the highest cash multiplier all chosen twists give together (the multipliers multiply)
 }
 
--- ── Department challenge ────────────────────────────────────────────────────
+-- ============================================================================
+--                             DEPARTMENT CHALLENGE
+-- ============================================================================
 
 Config.Challenge = {
     enabled = true,
@@ -4063,7 +4274,9 @@ Config.Challenge = {
     },
 }
 
--- ── Officer profile ─────────────────────────────────────────────────────────
+-- ============================================================================
+--                               OFFICER PROFILE
+-- ============================================================================
 
 Config.Profile = {
     bioMax = 280,                                 -- characters
@@ -4169,7 +4382,7 @@ Config.OfficerOptions = {
         callAlerts = 'all',          -- 'all' = every new mission call pops up (as before); 'favourites' = only calls
                                      -- of the officer's favourite types, the rest still show on Dispatch
         dispatchKeyAfterCall = false, -- true = for 20 s after a mission call pops up, the tablet key opens Dispatch
-                                     -- (nothing is claimed); false = it opens as usual (as before)
+        -- (nothing is claimed); false = it opens as usual (as before)
         openOn = 'last',             -- the screen the tablet opens on: 'last' (the screen it was closed on, as before),
                                      -- 'home' or 'active_on_run' (Active Mission on a run, Unit in a ready check)
         rememberFilters = false,     -- true = Dispatch and the Leaderboard open with the filters used last on this
@@ -4209,7 +4422,9 @@ Config.Commendations = {
     announce = false,                -- also post it to the board webhook
 }
 
--- ── Item rewards (optional) ─────────────────────────────────────────────────
+-- ============================================================================
+--                           ITEM REWARDS (OPTIONAL)
+-- ============================================================================
 -- Off by default. Admin config only: mission files and the Mission Builder never hold rewards.
 -- Items must exist in ox_inventory. Never weapons, ammo, armour, bandages or money items.
 Config.Rewards = {
@@ -4258,11 +4473,15 @@ Config.Rewards = {
     },
 }
 
--- ── Disputes ────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   DISPUTES
+-- ============================================================================
 
 Config.Disputes = { windowHours = 48 }
 
--- ── Mission Builder ─────────────────────────────────────────────────────────
+-- ============================================================================
+--                               MISSION BUILDER
+-- ============================================================================
 -- Block setting ranges and defaults are in config/blocks.lua.
 Config.Builder = {
     enabled = true,
@@ -4323,10 +4542,10 @@ Config.Builder = {
         'armored_truck_escort',
         'bomb_disposal',
     },
-    testAtMaxTier = true,                      -- a test counts as passed only at the tier maxOfficers reaches
-    editLockMinutes = 30,                      -- one editor at a time; renewed while they keep editing
+    testAtMaxTier = true, -- a test counts as passed only at the tier maxOfficers reaches
+    editLockMinutes = 30, -- one editor at a time; renewed while they keep editing
     defaultTeam = { patrol = 2, training = 2, investigation = 2, tactical = 4 }, -- most officers a new mission
-                                               -- starts with, by its type (the builder can change it on Details)
+    -- starts with, by its type (the builder can change it on Details)
     autosaveSeconds = 30,
     exportPath = 'missions/custom/',           -- folder (inside missions/custom/) for missions made in the Builder.
                                                -- Another folder must be created by hand first, with archived,
@@ -4399,8 +4618,8 @@ Config.Builder = {
         { label = 'SASP HQ', coords = vec3(1560.38, 815.76, 76.21), radius = 80.0 },
         { label = 'Pillbox Hill Medical', coords = vec3(308.19, -595.35, 43.29), radius = 100.0 },
         { label = 'Paleto Bay Medical', coords = vec3(-254.54, 6331.78, 32.43), radius = 80.0 },
-        { label = 'Bolingbroke Penitentiary', coords = vec3(1691.5, 2578.5, 44.7), radius = 215.0 }, -- the whole prison, every tower
-        { label = 'Fort Zancudo', coords = vec3(-2075.0, 3225.0, 33.0), radius = 320.0 }, -- the base: 4 circles
+        { label = 'Bolingbroke Penitentiary', coords = vec3(1691.5, 2578.5, 44.7), radius = 215.0 },  -- the whole prison, every tower
+        { label = 'Fort Zancudo', coords = vec3(-2075.0, 3225.0, 33.0), radius = 320.0 },             -- the base: 4 circles
         { label = 'Fort Zancudo south-east', coords = vec3(-1875.0, 3050.0, 33.0), radius = 320.0 },
         { label = 'Fort Zancudo south-west', coords = vec3(-2300.0, 2950.0, 33.0), radius = 280.0 },
         { label = 'Fort Zancudo north-west', coords = vec3(-2250.0, 3300.0, 33.0), radius = 280.0 },
@@ -4409,7 +4628,9 @@ Config.Builder = {
     },
 }
 
--- ── Admin test mode ─────────────────────────────────────────────────────────
+-- ============================================================================
+--                               ADMIN TEST MODE
+-- ============================================================================
 
 Config.Testing = {
     enabled = true,
@@ -4441,7 +4662,9 @@ Config.Testing = {
     },
 }
 
--- ── Retention ───────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                  RETENTION
+-- ============================================================================
 
 Config.Retention = {
     runArchiveMonths = 12,  -- move older runs to cp_mission_runs_archive; 0 = never
@@ -4449,7 +4672,9 @@ Config.Retention = {
     missionCallDays = 90,   -- delete older mission call history; 0 = keep forever
 }
 
--- ── Backups ─────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                   BACKUPS
+-- ============================================================================
 -- Admin UI → System → Backups: copies of every Crimson-Police table and the mission files, in saves/_backups.
 Config.Backups = {
     keep = 7,               -- backups kept; the newest and the latest automatic one are never removed
@@ -4459,7 +4684,9 @@ Config.Backups = {
     holdAfterFailedRestore = true,
 }
 
--- ── Names ───────────────────────────────────────────────────────────────────
+-- ============================================================================
+--                                    NAMES
+-- ============================================================================
 -- English names an admin gives to ids (Admin UI → Settings → Names). Only these kinds: custody.offence.<id>,
 -- profile.commend.kind.<id>, badge.<id>, bonus.<id> and penalty.<id>. A name changes text only, never an id.
 Config.Labels = {
@@ -4845,7 +5072,7 @@ A mission can give any objective its own presenceRange, and the Mission Builder 
 
 Flagged runs are held off the leaderboards, and their cash is held, until a supervisor approves or voids them, and each one records why it was flagged (flag_reason). Three voided runs in 30 days suspends that officer from Crimson-Police for 7 days (all three numbers are in Config.AntiCheat).
 
-Mission controls (rules 11.1). Supervisors may change a few mission rules for their own department only while an admin switched them on (Config.Permissions.supervisor.missionControls, the master switch, and the control's own on in Config.MissionControls.controls), only to values inside the admin's min and max (a department may have its own in Config.Departments.<key>.missionControls), at most once per Config.MissionControls.changeWait per control and department, always with a reason, every change in the audit log with who, old and new value. Narrowing the bounds later moves a saved value into them at once; switching a control or the master switch off brings back the config value at once. A control that relaxes a rule never applies to the supervisor who set it, any other character of his license, or a unit he is in (Config.MissionControls.selfExempt). Admins change any department, within the same bounds. Everything ships off except the two cooldown controls (owner decision): cooldownScale (x every mission's cooldown, per mission type, 0-2 shipped, 0 = none) and abandonCooldown (the abandon type cooldown, 0-900 s shipped) are server-wide (one value for every department), outside the master switch and on as shipped, so any supervisor may change them; both are applied when a cooldown is read, so a change, a reset or the admin switch counts at once for cooldowns already running and after a restart. Three more server-wide cooldown controls ship on the same way (step P3): noRepeat (false = the no-repeat rule is off; the draw and a mission call's eligible pool then ignore every member's history), hourlyCap (1-16 shipped; config Limits.maxCompletionsHour) and dailyCap (0-40 shipped, 0 = no cap; config Limits.maxCompletionsDay). The accept checks, the Mission Board and Weekly Boss locks, mission call claims, the home screen and Live missions read them for the officers concerned (CP.Draw.limits), so the self rule applies. Happy hour (step P6, happyHour, server-wide, outside the master switch, on as shipped, 5-30 minutes): a supervisor starts it for the minutes he picks; until it ends no mission has a cooldown for anyone (cooldownScale reads 0 for every type) and, when ticked, the no-repeat rule is off; the abandon cooldown, the caps and the cash rules stay; the self rule keeps the setter's and his unit's cooldowns; it is a timed row (expires_at), so a restart keeps it, and when it ends every cooldown counts against its real end again. One at a time; a supervisor at most Config.MissionControls.happyHourPerDay a day (1 shipped). Officers see a banner on Home and the Mission Board; admins end it from Admin UI → Live (End now) or Permissions → Mission controls (Reset). Two supervisor actions (step P7, controls of kind action, no saved value): clearCooldown (server-wide, outside the master switch, on as shipped) lets a supervisor clear one mission or type cooldown of an officer of any department from Department Report, never his own character, never while the officer is on a run, with a reason; each officer at most Config.AdminControl.cooldownClearsPerDay clears a day by all staff, a supervisor at most Config.MissionControls.clearCooldownPerDay (5). addRunTime (per department, under the master switch, off as shipped, 1-5 minutes a click) adds time to a running mission of his department from Live Missions, never his own; the run's total with an admin's additions stays within Config.MissionControls.addRunTimeMax (300 s, never above Config.AdminControl.runTimeAddMax), a supervisor at most Config.MissionControls.addRunTimePerDay (10) a day, and the time limit the fast-finish bonus is judged on never changes. In a run (step P8, per department, under the master switch, off as shipped, read for the leader and his unit at the accept and locked in run.controls, so a change never moves a live run): startTimeout (300-900 s shipped) replaces Config.Limits.startTimeout and the mission's own; readyCheck (10-40 s shipped) replaces Config.Units.readyTimeout, and 0 (no ready check) only while its bounds carry canTurnOff = true (false as shipped); timeLimit (x1.0-1.25 shipped) scales the mission's time limit while the fast-finish bonus still uses the unscaled limit; idleCheck (60-180 s shipped) is stricter only, never above Config.AntiCheat.idleCheck. Step P9 (per department, under the master switch, off as shipped): difficulty picks one of the Config.NpcDifficulty presets the admin lists (easy and normal shipped) for runs the department leads, read at the accept; NPC health, aim, surrender and flee follow it, Config.NpcCombat still caps on top, points and cash never change; unitSize (2-4 shipped) is the largest unit the department's leaders may lead (invites, joins, the accept), never above Config.Limits.maxUnitSize. Step P10 (per department, under the master switch, off as shipped): types switches mission types, or single missions, off for the department until switched back on (a catalog switch like Config.DisabledMissions, not a mission pause): its officers see the type card locked ("Off for SAST by command"), the accept and mission call claims refuse a unit with a member of that department (err.type_off_department), a single mission off is never drawn for such a unit, other departments are not affected, the Weekly Boss never; at least one type stays on. featuredType names one mission type its officers see as "Recommended by command", sorted right after their own favourite types; points and pay never change. Step P11 (missionBan, kind action, per department, under the master switch, off as shipped, 1-24 hours): from Department Report a supervisor bars one online officer of his own department with a lower grade (never himself or another character of his license) from taking missions for the hours he picks, with a reason; at most Config.MissionControls.missionBanPerDay (3) a day. Until it ends the officer cannot accept from the Mission Board (nor can a unit he is in), claim a mission call or join a Cross-Department Mission (err.mission_banned / err.member_mission_banned); his board shows "Mission ban until 18:40 (by Sgt Doe)" with every card locked. The tablet stays usable (it is not a suspension, which stays admin-only) and a mission already running goes on. The supervisor who set it lifts it early from the same dialog, an admin from Admin UI → Officers → Today & cooldowns (antiFarmOverride); both, and the ban, are audited under flags (cp_webhook_flags). Saved in cp_officers.mission_ban, so a restart keeps it. Step P12 (per department, under the master switch, off as shipped): callLane gives the department its own lane of mission calls next to the server's: the seconds between two lane calls (a range inside the admin's min and max, 120-600 shipped), how many may be open at once (1 to Config.MissionControls.callLaneMaxOpen, 2 shipped), the areas (none picked = every area) and the callable mission types with a weight 0-10 each. The lane posts on its own gap, one call at a time, only to idle units whose every member is of that department; officers of other departments never see its calls (Dispatch, pop-ups, the claimable count) and a unit with a member of another department cannot claim one (err.mc_other_department), nor the unit of the supervisor who set the lane (the self rule, err.mc_own_call). Lane calls count against Config.MissionCalls.maxOpen; the server's own flow counts only its own calls against its target, so with no lane it is unchanged. The call row keeps the department (cp_mission_calls.department), Dispatch tags the card "SAST call" and the staff mission calls panel lists the lane. staffCallWait (60-120 s shipped) replaces Config.MissionCalls.staffCooldown for staff calls created by the department's supervisors; the one who shortened it keeps the config wait. Step P13 (per department, under the master switch, off as shipped): notices lets a supervisor post a short notice (up to Config.MissionControls.noticeMaxLength characters, 280 shipped, 1-30 days) for his own department only, shown on that department's Home Announcements card and never another's; the banned-word list applies, a supervisor posts at most Config.MissionControls.noticesPerDay (5) a day, at most 5 run at once per department (apart from the admins' 5 staff notices), any supervisor of the department may end one, and every post and end is audited. crossDept { join, places } keeps the department's officers out of Cross-Department Missions (err.op_department_out) or caps how many of them take part in one (err.op_department_full, 0 = no cap); it never relaxes a rule, so it applies to the setter too; every board still shows only the running operation and the launch wait stays server-wide. Step P14 (per department, under the master switch, off as shipped): boards { showToOthers, metrics } shows other departments the department's officers by callsign only (Leaderboard rows, profiles, Home's top 3; the picture hidden too) and limits the Rank by tabs its own officers see to the ticked Config.Leaderboard.metrics (Points always); presentation only, counts, the Department Challenge and the admin boards never change. reviewRules { secondVoid, adminOnlyKinds } is stricter only: with secondVoid a supervisor's Void of a flagged row of the department only marks it pending until a second supervisor of that department voids it too (a restart clears a pending Void); flags of the kinds in adminOnlyKinds leave the supervisors' Review queue and only admins approve or void them; admins always void at once and Config.AntiCheat's flag triggers are never relaxed. Step P15 (per department, under the master switch, off as shipped): twists { offered, ticked } narrows the accept step (Mission Board, mission call claims) of units the department leads to the offered twists among those enabled in Config.Events.twists and pre-ticks the ticked ones; a chosen twist the leader's department does not offer is refused (err.twist_department); other departments keep every twist and the bonuses never change. Step P18 (typeOfTheDay, kind choice, per department, under the master switch, off as shipped): a supervisor picks one mission type for the next day (never today), at most once a day for his department (err.tod_picked_today; admins may correct it); on that day his department's officers earn the Type of the Day multiplier (Config.Events.todMultiplier, the admin's) on that type instead of the server's type, other departments keep the server's; the setter and a unit he is in keep the server's type; the pick counting today is read back from yesterday's last audit row of the control, so a restart keeps it and a change today never moves today's type; switching the control off drops it at once. Step P20 (per department, under the master switch, off as shipped with min = max = 1.0, so nothing moves until an admin opens the max): happyHourPoints (kind number, scope run) multiplies the final points of a completed run the department leads that was accepted while a happy hour ran, after the cap and the Type of the Day; it is fixed at the accept (run.controls.pointsBonus), so the end of the hour never cuts a live run, and the one who started the happy hour and a unit he is in get none. twistPoints (kind map, scope run) multiplies each twist's points share on runs the department leads, read at the accept; the chosen twists together still stop at Config.Events.twistMaxPoints and the accept step shows the raised share. Both never apply to test runs, Cross-Department runs or the Weekly Boss, and the runs count normally on the boards, in the contest and the weekly bounty. Step P19 (pushMission, kind action, per department, under the master switch, off as shipped; the Mission choice Hard rule's push exception): in the Page a unit dialog (Live Missions, Admin UI → Missions) a supervisor may pick one mission of the call's type for a unit of his own department (never his own unit); the call names that mission, stays offered only to that unit for its whole offer (no pop-up for anyone else, other officers never see it on Dispatch) and only that unit sees the mission's name; its leader accepts (the accept runs every rule: cooldowns, caps, unit size, the department's switched-off missions, a start in the named area; only the random draw is skipped, the location is still picked at random) or declines it; a declined push, a refused accept or a failed ready check ends the call, an abandoned run is never re-dispatched, and the issuer is told. It is a staff call, so it never earns rapid response. A supervisor pushes at most Config.MissionControls.pushMissionPerDay (5) a day (counted from the audit log, admins any); every push is audited as mcPush with the mission. Step P22 (awardPoints, kind action, per department, under the master switch, off as shipped, 1-50 points an award; owner decision 2026-10-19, the Points Hard rule): from Department Report a supervisor gives an officer of his own department (online job, else cp_officers.department; offline officers too) a logged manual award of the points he picks, with a reason; never to himself or any character of his license (license: and license2:). It goes through the admin's own point-adjust path (CP.Corrections.adjust): Config.AdminControl.pointAdjust = false stops it, adjustDailyLimit and the typed confirmation at adjustConfirmAbove apply too, the row is a manual award like an admin's (breakdown.by, the reason, shown in the officer's history; only an admin undoes it by voiding the row), audited as manualAward with role supervisor. A supervisor gives at most Config.MissionControls.awardPointsPerDay (100, 0 = no limit) points a day in all, counted from today's rows; admins skip the department and per-day rule. Admins set it all in Admin UI → Permissions → Mission controls: per control the admin switch and min / max, the value in force with who set it, when and how long it still runs, and Reset (with a reason); a control that is not server-wide also per department its own bounds and Reset; and the grants per department.
+Mission controls (rules 11.1). Supervisors may change a few mission rules for their own department only while an admin switched them on (Config.Permissions.supervisor.missionControls, the master switch, and the control's own on in Config.MissionControls.controls), only to values inside the admin's min and max (a department may have its own in Config.Departments.<key>.missionControls), at most once per Config.MissionControls.changeWait per control and department, always with a reason, every change in the audit log with who, old and new value. Narrowing the bounds later moves a saved value into them at once; switching a control or the master switch off brings back the config value at once. A control that relaxes a rule never applies to the supervisor who set it, any other character of his license, or a unit he is in (Config.MissionControls.selfExempt). Admins change any department, within the same bounds. Everything ships off except the seven server-wide cooldown controls (cooldownScale, abandonCooldown, noRepeat, hourlyCap, dailyCap, happyHour, clearCooldown; owner decision): cooldownScale (x every mission's cooldown, per mission type, 0-2 shipped, 0 = none) and abandonCooldown (the abandon type cooldown, 0-900 s shipped) are server-wide (one value for every department), outside the master switch and on as shipped, so any supervisor may change them; both are applied when a cooldown is read, so a change, a reset or the admin switch counts at once for cooldowns already running and after a restart. Three more server-wide cooldown controls ship on the same way (step P3): noRepeat (false = the no-repeat rule is off; the draw and a mission call's eligible pool then ignore every member's history), hourlyCap (1-16 shipped; config Limits.maxCompletionsHour) and dailyCap (0-40 shipped, 0 = no cap; config Limits.maxCompletionsDay). The accept checks, the Mission Board and Weekly Boss locks, mission call claims, the home screen and Live missions read them for the officers concerned (CP.Draw.limits), so the self rule applies. Happy hour (step P6, happyHour, server-wide, outside the master switch, on as shipped, 5-30 minutes): a supervisor starts it for the minutes he picks; until it ends no mission has a cooldown for anyone (cooldownScale reads 0 for every type) and, when ticked, the no-repeat rule is off; the abandon cooldown, the caps and the cash rules stay; the self rule keeps the setter's and his unit's cooldowns; it is a timed row (expires_at), so a restart keeps it, and when it ends every cooldown counts against its real end again. One at a time; a supervisor at most Config.MissionControls.happyHourPerDay a day (1 shipped). Officers see a banner on Home and the Mission Board; admins end it from Admin UI → Live (End now) or Permissions → Mission controls (Reset). Two supervisor actions (step P7, controls of kind action, no saved value): clearCooldown (server-wide, outside the master switch, on as shipped) lets a supervisor clear one mission or type cooldown of an officer of any department from Department Report, never his own character, never while the officer is on a run, with a reason; each officer at most Config.AdminControl.cooldownClearsPerDay clears a day by all staff, a supervisor at most Config.MissionControls.clearCooldownPerDay (5). addRunTime (per department, under the master switch, off as shipped, 1-5 minutes a click) adds time to a running mission of his department from Live Missions, never his own; the run's total with an admin's additions stays within Config.MissionControls.addRunTimeMax (300 s, never above Config.AdminControl.runTimeAddMax), a supervisor at most Config.MissionControls.addRunTimePerDay (10) a day, and the time limit the fast-finish bonus is judged on never changes. In a run (step P8, per department, under the master switch, off as shipped, read for the leader and his unit at the accept and locked in run.controls, so a change never moves a live run): startTimeout (300-900 s shipped) replaces Config.Limits.startTimeout and the mission's own; readyCheck (10-40 s shipped) replaces Config.Units.readyTimeout, and 0 (no ready check) only while its bounds carry canTurnOff = true (false as shipped); timeLimit (x1.0-1.25 shipped) scales the mission's time limit while the fast-finish bonus still uses the unscaled limit; idleCheck (60-180 s shipped) is stricter only, never above Config.AntiCheat.idleCheck. Step P9 (per department, under the master switch, off as shipped): difficulty picks one of the Config.NpcDifficulty presets the admin lists (easy and normal shipped) for runs the department leads, read at the accept; NPC health, aim, surrender and flee follow it, Config.NpcCombat still caps on top, points and cash never change; unitSize (2-4 shipped) is the largest unit the department's leaders may lead (invites, joins, the accept), never above Config.Limits.maxUnitSize. Step P10 (per department, under the master switch, off as shipped): types switches mission types, or single missions, off for the department until switched back on (a catalog switch like Config.DisabledMissions, not a mission pause): its officers see the type card locked ("Off for SAST by command"), the accept and mission call claims refuse a unit with a member of that department (err.type_off_department), a single mission off is never drawn for such a unit, other departments are not affected, the Weekly Boss never; at least one type stays on. featuredType names one mission type its officers see as "Recommended by command", sorted right after their own favourite types; points and pay never change. Step P11 (missionBan, kind action, per department, under the master switch, off as shipped, 1-24 hours): from Department Report a supervisor bars one online officer of his own department with a lower grade (never himself or another character of his license) from taking missions for the hours he picks, with a reason; at most Config.MissionControls.missionBanPerDay (3) a day. Until it ends the officer cannot accept from the Mission Board (nor can a unit he is in), claim a mission call or join a Cross-Department Mission (err.mission_banned / err.member_mission_banned); his board shows "Mission ban until 18:40 (by Sgt Doe)" with every card locked. The tablet stays usable (it is not a suspension, which stays admin-only) and a mission already running goes on. The supervisor who set it lifts it early from the same dialog, an admin from Admin UI → Officers → Today & cooldowns (antiFarmOverride); both, and the ban, are audited under flags (cp_webhook_flags). Saved in cp_officers.mission_ban, so a restart keeps it. Step P12 (per department, under the master switch, off as shipped): callLane gives the department its own lane of mission calls next to the server's: the seconds between two lane calls (a range inside the admin's min and max, 120-600 shipped), how many may be open at once (1 to Config.MissionControls.callLaneMaxOpen, 2 shipped), the areas (none picked = every area) and the callable mission types with a weight 0-10 each. The lane posts on its own gap, one call at a time, only to idle units whose every member is of that department; officers of other departments never see its calls (Dispatch, pop-ups, the claimable count) and a unit with a member of another department cannot claim one (err.mc_other_department), nor the unit of the supervisor who set the lane (the self rule, err.mc_own_call). Lane calls count against Config.MissionCalls.maxOpen; the server's own flow counts only its own calls against its target, so with no lane it is unchanged. The call row keeps the department (cp_mission_calls.department), Dispatch tags the card "SAST call" and the staff mission calls panel lists the lane. staffCallWait (60-120 s shipped) replaces Config.MissionCalls.staffCooldown for staff calls created by the department's supervisors; the one who shortened it keeps the config wait. Step P13 (per department, under the master switch, off as shipped): notices lets a supervisor post a short notice (up to Config.MissionControls.noticeMaxLength characters, 280 shipped, 1-30 days) for his own department only, shown on that department's Home Announcements card and never another's; the banned-word list applies, a supervisor posts at most Config.MissionControls.noticesPerDay (5) a day, at most 5 run at once per department (apart from the admins' 5 staff notices), any supervisor of the department may end one, and every post and end is audited. crossDept { join, places } keeps the department's officers out of Cross-Department Missions (err.op_department_out) or caps how many of them take part in one (err.op_department_full, 0 = no cap); it never relaxes a rule, so it applies to the setter too; every board still shows only the running operation and the launch wait stays server-wide. Step P14 (per department, under the master switch, off as shipped): boards { showToOthers, metrics } shows other departments the department's officers by callsign only (Leaderboard rows, profiles, Home's top 3; the picture hidden too) and limits the Rank by tabs its own officers see to the ticked Config.Leaderboard.metrics (Points always); presentation only, counts, the Department Challenge and the admin boards never change. reviewRules { secondVoid, adminOnlyKinds } is stricter only: with secondVoid a supervisor's Void of a flagged row of the department only marks it pending until a second supervisor of that department voids it too (a restart clears a pending Void); flags of the kinds in adminOnlyKinds leave the supervisors' Review queue and only admins approve or void them; admins always void at once and Config.AntiCheat's flag triggers are never relaxed. Step P15 (per department, under the master switch, off as shipped): twists { offered, ticked } narrows the accept step (Mission Board, mission call claims) of units the department leads to the offered twists among those enabled in Config.Events.twists and pre-ticks the ticked ones; a chosen twist the leader's department does not offer is refused (err.twist_department); other departments keep every twist and the bonuses never change. Step P18 (typeOfTheDay, kind choice, per department, under the master switch, off as shipped): a supervisor picks one mission type for the next day (never today), at most once a day for his department (err.tod_picked_today; admins may correct it); on that day his department's officers earn the Type of the Day multiplier (Config.Events.todMultiplier, the admin's) on that type instead of the server's type, other departments keep the server's; the setter and a unit he is in keep the server's type; the pick counting today is read back from yesterday's last audit row of the control, so a restart keeps it and a change today never moves today's type; switching the control off drops it at once. Step P20 (per department, under the master switch, off as shipped with min = max = 1.0, so nothing moves until an admin opens the max): happyHourPoints (kind number, scope run) multiplies the final points of a completed run the department leads that was accepted while a happy hour ran, after the cap and the Type of the Day; it is fixed at the accept (run.controls.pointsBonus), so the end of the hour never cuts a live run, and the one who started the happy hour and a unit he is in get none. twistPoints (kind map, scope run) multiplies each twist's points share on runs the department leads, read at the accept; the chosen twists together still stop at Config.Events.twistMaxPoints and the accept step shows the raised share. Both never apply to test runs, Cross-Department runs or the Weekly Boss, and the runs count normally on the boards, in the contest and the weekly bounty. Step P19 (pushMission, kind action, per department, under the master switch, off as shipped; the Mission choice Hard rule's push exception): in the Page a unit dialog (Live Missions, Admin UI → Missions) a supervisor may pick one mission of the call's type for a unit of his own department (never his own unit); the call names that mission, stays offered only to that unit for its whole offer (no pop-up for anyone else, other officers never see it on Dispatch) and only that unit sees the mission's name; its leader accepts (the accept runs every rule: cooldowns, caps, unit size, the department's switched-off missions, a start in the named area; only the random draw is skipped, the location is still picked at random) or declines it; a declined push, a refused accept or a failed ready check ends the call, an abandoned run is never re-dispatched, and the issuer is told. It is a staff call, so it never earns rapid response. A supervisor pushes at most Config.MissionControls.pushMissionPerDay (5) a day (counted from the audit log, admins any); every push is audited as mcPush with the mission. Step P22 (awardPoints, kind action, per department, under the master switch, off as shipped, 1-50 points an award; owner decision 2026-10-19, the Points Hard rule): from Department Report a supervisor gives an officer of his own department (online job, else cp_officers.department; offline officers too) a logged manual award of the points he picks, with a reason; never to himself or any character of his license (license: and license2:). It goes through the admin's own point-adjust path (CP.Corrections.adjust): Config.AdminControl.pointAdjust = false stops it, adjustDailyLimit and the typed confirmation at adjustConfirmAbove apply too, the row is a manual award like an admin's (breakdown.by, the reason, shown in the officer's history; only an admin undoes it by voiding the row), audited as manualAward with role supervisor. A supervisor gives at most Config.MissionControls.awardPointsPerDay (100, 0 = no limit) points a day in all, counted from today's rows; admins skip the department and per-day rule. Admins set it all in Admin UI → Permissions → Mission controls: per control the admin switch and min / max, the value in force with who set it, when and how long it still runs, and Reset (with a reason); a control that is not server-wide also per department its own bounds and Reset; and the grants per department.
 
 ## Supervisor & admin actions
 

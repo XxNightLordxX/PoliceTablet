@@ -495,8 +495,8 @@ Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%),
 `Config.Commendations.perSupervisorPerDay` (`3`).
 
 **Mission controls** let a department's supervisors change a few mission rules for their own department, inside
-limits you set. They are **off on install** except the two cooldown controls below: nothing changes until you switch
-them on. You set them in Admin UI → **Permissions** → **Mission controls** (below); supervisors change them in
+limits you set. They are **off on install** except the seven server-wide cooldown controls below (cooldownScale,
+abandonCooldown, noRepeat, hourlyCap, dailyCap, happyHour, clearCooldown): nothing changes until you switch them on. You set them in Admin UI → **Permissions** → **Mission controls** (below); supervisors change them in
 Supervisor UI → **Mission controls** (below).
 
 - **Mission cooldowns** (on when you install, owner decision): any department's supervisor may change them, without
@@ -2521,6 +2521,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 | `docs/WEB_UI.md` | The web UI developer guide |
 | `docs/STYLE.md` | The code style. `python3 tools/restyle.py` formats the tree, `--check` lists what isn't |
 | `docs/TESTING.md` | How to set up a machine, run the checks and read a failure |
+| `docs/IN_GAME_CHECKLIST.md` | What to check in game after an update, one line per change |
 | `docs/PROCESS.md` | How work gets done (branches, the gate, reviews) |
 | `docs/FILE_NOTES.md` | The long file headers |
 | `docs/notes/` | What each part of the build added (history) |

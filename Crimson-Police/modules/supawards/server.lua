@@ -60,10 +60,10 @@ end
 
 local function DC() return CP.DeptControls end
 
-local function CanUse(src)
+local function CanUse(src, dept)
     local dc = DC()
     if not (dc and dc.canChange) then return false, 'err.module_unavailable' end
-    return dc.canChange(src, KEY, nil)
+    return dc.canChange(src, KEY, dept)
 end
 
 local function Register()
@@ -109,6 +109,12 @@ local function DeptOf(citizenid)
     return nil
 end
 
+-- CanUse for one officer: an admin works in the officer's department (its switch and bounds), not his own.
+local function CanUseFor(src, cid)
+    local d = cid and IsAdmin(src) and DeptOf(cid) or nil
+    return CanUse(src, d)
+end
+
 -- Points this player gave today (manual award rows with his license's characters as breakdown.by).
 local function UsedToday(src, actor)
     return Kit.dailySum({ missionIds = { 'manual_award' }, actor = actor, src = src })
@@ -127,7 +133,7 @@ function SA.supView(src, citizenid)
     if not n or n <= 0 or not AdjustOn() then return nil end
     local cid = Cid(citizenid)
     if not cid then return nil end
-    local ok, _, _, dept = CanUse(n)
+    local ok, _, _, dept = CanUseFor(n, cid)
     if not ok or Kit.isSelf(n, cid) ~= false then return nil end
     local admin = IsAdmin(n)
     if not admin and DeptOf(cid) ~= dept then return nil end
@@ -155,14 +161,13 @@ local function Confirm(p)
     return word
 end
 
+local Busy = {}  -- { [actor] = true }: one award at a time per player, so two at once cannot pass the daily limits
+
 -- { citizenid, points, reason, confirm? }: min to max points to an officer of his own department, never one of his
 -- own characters; a supervisor gives at most Config.MissionControls.awardPointsPerDay points a day. Admins skip the
 -- department and the per-day rule (the self rule and Config.AdminControl's limits stay).
-Kit.supAction('server:sup:awardPoints', 'missionControls', function(ctx)
-    local cid = Cid(ctx.payload.citizenid)
-    if not cid then return false, 'err.invalid_payload' end
-    if not AdjustOn() then return false, 'err.award_off' end
-    local _, _, _, dept = CanUse(ctx.src)
+local function Award(ctx, cid)
+    local _, _, _, dept = CanUseFor(ctx.src, cid)
     local lo, hi = PointsRange(dept)
     local points = math.tointeger(tonumber(ctx.payload.points) or 0)
     if not lo or not points or points < lo or points > hi then return false, 'err.award_points_range' end
@@ -179,10 +184,26 @@ Kit.supAction('server:sup:awardPoints', 'missionControls', function(ctx)
     end
     if not (CP.Corrections and CP.Corrections.adjust) then return false, 'err.module_unavailable' end
     return CP.Corrections.adjust(ctx, cid, points)
+end
+
+Kit.supAction('server:sup:awardPoints', 'missionControls', function(ctx)
+    local cid = Cid(ctx.payload.citizenid)
+    if not cid then return false, 'err.invalid_payload' end
+    if not AdjustOn() then return false, 'err.award_off' end
+    local key = tostring(ctx.actor or ctx.src)
+    if Busy[key] then return false, 'err.busy' end
+    Busy[key] = true
+    local res = table.pack(pcall(Award, ctx, cid))
+    Busy[key] = nil
+    if not res[1] then
+        CP.err(TAG, 'awardPoints failed: %s', tostring(res[2]))
+        return false, 'err.internal'
+    end
+    return table.unpack(res, 2, res.n)
 end, {
     reason = true,
     self = OfficerTarget,
     targetRate = { 1, 10000 },
     confirm = Confirm,
-    permission = function(src) return CanUse(src) end,
+    permission = function(src, payload) return CanUseFor(src, type(payload) == 'table' and Cid(payload.citizenid)) end,
 })

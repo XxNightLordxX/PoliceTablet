@@ -231,6 +231,8 @@ Kit.supAction('server:sup:missionBan', 'missionControls', function(ctx)
     end
     local now = os.time()
     local old = MB.get(cid, now)
+    -- a ban in force belongs to its setter: another supervisor may not replace it (and so own and lift it)
+    if sup and old and old.by ~= ctx.actor then return false, 'err.mission_ban_exists' end
     local name
     if type(by) == 'table' then
         name = ('%s %s'):format(by.rank or '', by.name or ''):gsub('^%s+', '')

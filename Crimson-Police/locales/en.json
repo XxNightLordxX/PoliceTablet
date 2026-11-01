@@ -3479,6 +3479,7 @@
   "err.member_type_cooldown": "A unit member has this mission type on cooldown.",
   "err.member_type_daily_cap": "A unit member reached today's limit for this mission type.",
   "err.member_unavailable": "A unit member can't take missions right now.",
+  "err.mission_ban_exists": "This officer already has a mission ban from another supervisor. Only that supervisor, or an admin, can change it.",
   "err.mission_ban_grade": "You can only ban an officer of a lower grade than yours.",
   "err.mission_ban_hours": "Pick a number of hours inside the limits.",
   "err.mission_ban_none": "This officer has no mission ban.",

@@ -17,6 +17,7 @@ local people = {
     [3] = { cid = 'AP_OFF03', license = 'license:o3', dept = 'sast', grade = 1 },
     [4] = { cid = 'AP_FIB04', license = 'license:f4', dept = 'fib', grade = 1 },
     [5] = { cid = 'AP_SUP05', license = 'license:s5', dept = 'sast', sup = true, grade = 4 },
+    [6] = { cid = 'AP_ADM06', license = 'license:a6', admin = true },     -- an admin without a police job
 }
 -- offline officers: citizenid -> department (cp_officers)
 local offline = { AP_ALT02 = 'sast', AP_OFF06 = 'sast' }
@@ -79,7 +80,7 @@ CP.Access = {
     isAdmin = function(src) return src == 0 or (people[src] and people[src].admin == true) or false end,
     getOfficer = function(src)
         local p = people[src]
-        if not p then return nil, 'err.not_police' end
+        if not p or not p.dept then return nil, 'err.not_police' end
         return { src = src, citizenid = p.cid, department = p.dept, isSupervisor = p.sup == true, gradeLevel = p.grade }
     end,
     departmentForJob = function(job) return job end,
@@ -267,9 +268,37 @@ Config.AdminControl.adjustConfirmAbove = 500
 -- an admin: no department or per-day rule; the self rule stays
 ok = Give(1, 'AP_FIB04', 50)
 H.eq(ok, true, 'an admin gives to any department')
+ok = Give(6, 'AP_OFF03', 10)
+H.eq(ok, true, 'an admin without a police job gives too (the officer\'s department)')
+H.ok(SA.supView(6, 'AP_FIB04') ~= nil, 'and Department Report offers it to him')
+Config.Departments.fib.missionControls = { awardPoints = { max = 10 } }
+ok, err = Give(1, 'AP_FIB04', 20)
+H.eq(err, 'err.award_points_range', 'the officer\'s department bounds apply to an admin, not his own')
+H.eq(SA.supView(1, 'AP_FIB04').max, 10, 'and the dialog shows them')
+Config.Departments.fib.missionControls = { awardPoints = { on = false } }
+ok, err = Give(1, 'AP_FIB04', 5)
+H.eq(err, 'err.control_off', 'the officer\'s department switched off: refused')
+Config.Departments.fib.missionControls = nil
 H.eq(Awards('manualAward')[#Awards('manualAward')].role, 'admin', 'audited as admin')
 ok, err = Give(1, 'AP_ADMIN', 5)
 H.eq(err, 'err.self_target', 'an admin never to himself')
+
+-- one award at a time per player: two sent together cannot both pass awardPointsPerDay (65 given today)
+local realSum, inner = Kit.dailySum, nil
+Kit.dailySum = function(opts)
+    if inner == nil then
+        inner = false
+        inner = table.pack(Give(5, 'AP_OFF06', 30))
+    end
+    return realSum(opts)
+end
+ok = Give(5, 'AP_OFF03', 30)
+Kit.dailySum = realSum
+H.eq(ok, true, 'the first award is given')
+H.eq(inner and inner[2], 'err.busy', 'the second, sent while the first runs, is refused')
+H.eq(SA.supView(5, 'AP_OFF03').usedToday, 95, 'the daily limit holds (65 + 30)')
+ok = Give(5, 'AP_OFF06', 5)
+H.eq(ok, true, 'once the first is done he gives again')
 
 -- one path: Admin UI Give or take points and Give points both end in CP.Corrections.adjust
 H.eq(Kit._actions()['server:admin:adjustPoints'].opts.confirm, CP.Corrections.adjustConfirm,
