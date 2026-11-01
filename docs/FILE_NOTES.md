@@ -5548,6 +5548,15 @@ limit, the dead-case end, presence and the last-reported points; the mission loa
 the block. Plain Lua with a stubbed CP.Opponents: no database.
 ```
 
+## tests/live_scoring_spec.lua
+
+```text
+Live scoring (step V13): a live case scores only its weighted live_* lines (Config.LiveCrime.linesOnly), its tier
+comes from the crew (Config.LiveCrime.tier), and the Type of the Day, goals, challenge, cash and item switches keep
+it out of each of those until the owner turns them on. Every live-case detain is a live catch on the row and a
+Rank by tab. Plain Lua with stubs (no SQL); the 014 column is checked by foundation_spec.
+```
+
 ## tests/memsql_spec.lua
 
 ```text

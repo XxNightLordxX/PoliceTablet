@@ -2881,6 +2881,7 @@ local INSERT_COLUMNS = {
     'medal',
     'mission_call_id',
     'response_s',
+    'live_catches',
 }
 
 -- NULL literals for nil values so the parameter list never has holes.
@@ -3059,6 +3060,9 @@ local function Settle(run, p, result, endReason, others)
     cash.status = status
 
     local payTier = run.payTier or TierByName(run.expectedTier)
+    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew', V13)
+    local okL, liveTier = Call('LiveCrime', 'tierRow', run)
+    if okL and type(liveTier) == 'table' then payTier = liveTier end
     local rr = {
         runId = run.id,
         missionLabel = run.mission.label,
@@ -3127,6 +3131,8 @@ local function Settle(run, p, result, endReason, others)
     }
     local stats = StatsOf(run, p)
     for _, k in ipairs(STAT_KEYS) do row[k] = Int(stats[k], 0, 32767) end
+    -- suspects detained in a live case (V13, the live_catches Rank by tab); never on the result card
+    row.live_catches = Int(p.stats and p.stats.live_catches, 0, 32767)
     local rowId = InsertRow(row)
     p.rowId = rowId
     if not rowId then return nil, rr end
@@ -3920,6 +3926,8 @@ function Runs.penalize(run, id, opts) return Record(run, id, opts, 'penalty') en
 -- ============================================================================
 
 local STAT_SET = Set(STAT_KEYS)
+-- live_catches (V13): a row column only (cp_mission_runs, 014), noted by the live_response block
+STAT_SET.live_catches = true
 
 local function AddStat(p, key, n)
     p.stats = p.stats or {}
@@ -3927,8 +3935,8 @@ local function AddStat(p, key, n)
 end
 
 -- A service-record count (citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok,
--- decisions_best, decisions_bad, lethal) for src, or for every active participant when src is nil. Written
--- to each row; only completed rows are ever summed. Arrests go through noteArrest.
+-- decisions_best, decisions_bad, lethal, live_catches) for src, or for every active participant when src is nil.
+-- Written to each row; only completed rows are ever summed. Arrests go through noteArrest.
 function Runs.noteStat(run, src, key, n)
     if type(run) ~= 'table' or run.state == 'ended' or not STAT_SET[key] or key == 'arrests' then return false end
     n = math.floor(Num(n, 1))

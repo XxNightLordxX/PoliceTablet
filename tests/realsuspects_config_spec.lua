@@ -363,6 +363,15 @@ do
             .. 'position; 0 = no points)',
         deadCaseSeconds = 'Seconds a case stays open once no suspect is left to work (all booked, lost, left or void) '
             .. 'before it ends',
+        -- V13: live scoring (the cash and items money switches: live_scoring_spec)
+        linesOnly = 'Points of a live case: true = only its live lines (scene secured, each detain and booking x the '
+            .. 'suspect\'s share) and its conduct penalties; false = the mission type\'s points plus those lines, like '
+            .. 'a mission',
+        tier = 'Which team sets a live case\'s tier (the points and cash multiplier of Config.Scaling): \'crew\' = the '
+            .. 'number of suspects at the alert; \'officers\' = the officers on the case, like a mission',
+        typeOfTheDay = 'true = a live case of today\'s Type of the Day gets its points multiplier too',
+        goals = 'true = live cases count for the officers\' daily and weekly goals',
+        challenge = 'true = live cases count for the department challenge and the weekly bounty',
     }) do
         local e = S.entry('LiveCrime.' .. path) or {}
         H.eq(e.desc, desc, 'LiveCrime.' .. path .. ': its own comment')

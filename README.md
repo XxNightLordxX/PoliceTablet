@@ -2857,6 +2857,15 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   `live_scene`. The unit leader ends it with **End case** in the radial menu; the time limit ends it as completed,
   and it ends by itself `Config.LiveCrime.deadCaseSeconds` (30 s) after no suspect is left to work. The block
   (`live_response`) can't be used in a mission file or the Mission Builder.
+  Live scoring (step V13): a live case earns only those lines (`Config.LiveCrime.linesOnly = true`; `false` adds the
+  mission type's base points and the end-of-run lines like a mission); the result card says **Live case: the lines
+  below are the points** instead of Base points. Its tier (the points and cash multiplier of `Config.Scaling`) comes
+  from the number of suspects (`Config.LiveCrime.tier = 'crew'`; `'officers'` = the officers, like a mission). It
+  gets no Type of the Day multiplier, counts for no daily or weekly goal and not for the department challenge or the
+  weekly bounty, pays no cash and rolls no item rewards until the owner turns on `Config.LiveCrime.typeOfTheDay`,
+  `goals`, `challenge`, `cash` or `items` (all `false`; `cash` and `items` are money switches: Settings asks for the
+  typed word ENABLE). Each suspect detained is a **live catch** for every officer on the case (stored per run row,
+  migration 014); add `'live_catches'` to `Config.Leaderboard.metrics` to show a **Live catches** Rank by tab.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

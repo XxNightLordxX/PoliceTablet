@@ -367,7 +367,7 @@ SELECT r.department, r.citizenid,
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') THEN 1 ELSE 0 END) AS completed,
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.participants >= 2 THEN 1 ELSE 0 END) AS unit_runs
 FROM cp_mission_runs r
-WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0
+WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0%s
 GROUP BY r.department, r.citizenid]]
 
 -- Summed per season week, its bounds made here (WeekCase), not per DATE(): a calendar date computed in SQL
@@ -382,7 +382,7 @@ SELECT r.department, %s AS week,
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') THEN r.arrests ELSE 0 END) AS arrests,
   SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.mission_call_id IS NOT NULL THEN 1 ELSE 0 END) AS calls
 FROM cp_mission_runs r
-WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0
+WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0%s
 GROUP BY r.department, week]]
 
 -- CASE WHEN r.created_at < FROM_UNIXTIME(<start of week 2>) THEN 1 ... ELSE <the last week> END, and its values.
@@ -402,6 +402,12 @@ local function EmptyWeek()
 end
 
 -- Every aggregate the standings, bounties and contributor lists need, cached per season.
+-- Live-case rows count for the challenge and the bounty only with Config.LiveCrime.challenge (V13, shipped false).
+local function LiveFilter()
+    if CP.LiveCrime and CP.LiveCrime.rowFilter then return CP.LiveCrime.rowFilter('challenge', 'r.') end
+    return ''
+end
+
 local function Collect(seasonId, fresh)
     seasonId = Int(seasonId)
     local c = collectCache[seasonId]
@@ -411,7 +417,8 @@ local function Collect(seasonId, fresh)
     Db()
     local gen = collectGen
     local data = { at = os.time(), season = season, officers = {}, weeks = {}, bounties = {} }
-    for _, r in ipairs(MySQL.query.await(OFFICER_SQL, { seasonId }) or {}) do
+    local live = LiveFilter()
+    for _, r in ipairs(MySQL.query.await(OFFICER_SQL:format(live), { seasonId }) or {}) do
         local dept = tostring(r.department)
         data.officers[dept] = data.officers[dept] or {}
         data.officers[dept][tostring(r.citizenid)] = {
@@ -422,7 +429,7 @@ local function Collect(seasonId, fresh)
     end
     local weekSql, weekParams = WeekCase(season)
     weekParams[#weekParams + 1] = seasonId
-    for _, r in ipairs(MySQL.query.await(WEEK_SQL:format(weekSql), weekParams) or {}) do
+    for _, r in ipairs(MySQL.query.await(WEEK_SQL:format(weekSql, live), weekParams) or {}) do
         local n = Int(r.week)
         local dept = tostring(r.department)
         data.weeks[n] = data.weeks[n] or {}

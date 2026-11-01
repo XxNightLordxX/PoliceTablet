@@ -243,9 +243,11 @@ local METRIC_SUMS = ([[
     SUM(CASE WHEN %s AND r.mission_call_id IS NOT NULL THEN 1 ELSE 0 END) AS calls,
     SUM(CASE WHEN %s THEN r.decisions_ok ELSE 0 END) AS decisions_ok,
     SUM(CASE WHEN %s THEN r.decisions_best ELSE 0 END) AS decisions_best,
-    SUM(CASE WHEN %s THEN r.decisions_bad ELSE 0 END) AS decisions_bad]]):gsub('%%s', DONE)
+    SUM(CASE WHEN %s THEN r.decisions_bad ELSE 0 END) AS decisions_bad,
+    SUM(CASE WHEN %s THEN r.live_catches ELSE 0 END) AS live_catches]]):gsub('%%s', DONE)
 
-local METRIC_COLS = 's.arrests, s.impounds, s.citations, s.rescues, s.calls, s.decisions_ok, s.decisions_best, s.decisions_bad'
+local METRIC_COLS = 's.arrests, s.impounds, s.citations, s.rescues, s.calls, s.decisions_ok, s.decisions_best, '
+    .. 's.decisions_bad, s.live_catches'
 
 local AGG_SQL = [[
 SELECT s.citizenid, s.points, s.runs, s.failed, s.reached_ts, s.cash, s.row_department, ]] .. METRIC_COLS .. [[,
@@ -292,7 +294,7 @@ LEFT JOIN (
   SELECT u.citizenid, SUM(u.runs) AS runs, SUM(u.failed) AS failed, MAX(u.reached_ts) AS reached_ts, SUM(u.cash) AS cash,
     SUM(u.arrests) AS arrests, SUM(u.impounds) AS impounds, SUM(u.citations) AS citations, SUM(u.rescues) AS rescues,
     SUM(u.calls) AS calls, SUM(u.decisions_ok) AS decisions_ok, SUM(u.decisions_best) AS decisions_best,
-    SUM(u.decisions_bad) AS decisions_bad
+    SUM(u.decisions_bad) AS decisions_bad, SUM(u.live_catches) AS live_catches
   FROM (
 ]] .. ALLTIME_PART:format('cp_mission_runs') .. [[
 
@@ -367,6 +369,7 @@ local function EntryFrom(row)
             decisionsOk = Int(row.decisions_ok),
             decisionsBest = Int(row.decisions_best),
             decisionsBad = Int(row.decisions_bad),
+            live_catches = Int(row.live_catches),
         },
     }
 end
@@ -376,7 +379,8 @@ end
 -- ============================================================================
 -- Rank by (Config.Leaderboard.metrics): points (the default; XP on the All-time tab), missions (completed runs),
 -- arrests, impounds, citations, rescues, calls (completed runs claimed from a mission call) and judgement
--- (Best dispositions as a share of all dispositions). Ratios are worked out here, never in SQL.
+-- (Best dispositions as a share of all dispositions) and live_catches (suspects detained in live cases, V13; shipped
+-- off the list). Ratios are worked out here, never in SQL.
 
 local METRICS = {
     points = true,
@@ -387,6 +391,7 @@ local METRICS = {
     rescues = true,
     calls = true,
     judgement = true,
+    live_catches = true,
 }
 
 local function MinDecisions() return math.max(0, Int(Cfg('Leaderboard', 'minDecisions', 10))) end
@@ -492,8 +497,8 @@ LB.registerControls()
 local function MetricValue(e, metric)
     local st = e.stats or {}
     if metric == 'missions' then return e.runs end
-    if metric == 'arrests' or metric == 'impounds' or metric == 'citations' or metric == 'rescues'
-        or metric == 'calls' then
+    if metric == 'arrests' or metric == 'impounds' or metric == 'citations' or metric == 'rescues' or metric == 'calls'
+        or metric == 'live_catches' then
         return st[metric] or 0
     end
     if metric == 'judgement' then
@@ -1337,7 +1342,7 @@ local function BadgeLabel(id)
     if sid then return CP.L('profile.badge.season_champion', { season = SeasonName(sid) }), 'champion' end
     sid = id:match('^season_(%d+)_top10$')
     if sid then return CP.L('profile.badge.season_top10', { season = SeasonName(sid) }), 'top10' end
-    local metric, mweek = id:match('^top_(%a+)_(%d%d%d%d%-%d%d%-%d%d)$')
+    local metric, mweek = id:match('^top_([%a_]+)_(%d%d%d%d%-%d%d%-%d%d)$')
     if metric and METRICS[metric] then
         return CP.L('profile.badge.top_metric', { metric = CP.L('leaderboard.metric.' .. metric), week = mweek }),
             'week'
@@ -1855,7 +1860,17 @@ function LB.adminBoard(args)
         window = WindowView(data.q),
         season = SeasonView(data.q),
         windows = PastWindows(),
-        metrics = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' },
+        metrics = {
+            'points',
+            'missions',
+            'arrests',
+            'impounds',
+            'citations',
+            'rescues',
+            'calls',
+            'judgement',
+            'live_catches',
+        },
     }
     if cid then out.citizenid = cid; out.runs = AdminRuns(data.q, cid) end
     return out

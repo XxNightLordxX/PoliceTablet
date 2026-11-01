@@ -190,7 +190,13 @@ local function Line(ctx, st, id, ev)
     if type(ev.cid) ~= 'string' or st.lines[id][ev.cid] ~= nil then return true end
     local weight = U.clamp(Num(ev.share, 1), 0, 1)
     st.lines[id][ev.cid] = weight
-    if weight > 0 then ctx.award(id, { weight = weight }) end
+    if weight > 0 then
+        ctx.award(id, { weight = weight })
+        -- one live catch per suspect detained, for every active participant (the live_catches Rank by tab, V13)
+        if id == 'live_detain' and CP.Runs and CP.Runs.noteStat then
+            CP.Runs.noteStat(ctx.run, nil, 'live_catches', 1)
+        end
+    end
     return true
 end
 

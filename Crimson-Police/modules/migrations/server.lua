@@ -19,6 +19,7 @@ local FILES = {
     '011_dept_controls.sql',
     '012_mission_ban.sql',
     '013_call_department.sql',
+    '014_live_catches.sql',
 }
 
 local WAIT_HINT_MS = 30000   -- no database after this long: say what to check (oxmysql waits without a word)

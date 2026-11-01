@@ -153,7 +153,7 @@ PoliceTablet/                      (git repo)
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
                    009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql,
-                   012_mission_ban.sql, 013_call_department.sql
+                   012_mission_ban.sql, 013_call_department.sql, 014_live_catches.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -1641,7 +1641,8 @@ Full admin control (economy, §5.40 calls these inside its AdminKit actions):
 
 Parity-plus additions (WP6; docs/notes/boards.md):
 - `getBoard` arg `metric` (Config.Leaderboard.metrics: points, missions, arrests, impounds, citations, rescues, calls,
-  judgement; `err.invalid_metric` otherwise). Every stat is summed from `voided = 0 AND flagged = 0 AND state =
+  judgement, live_catches (V13, the `live_catches` column of 014; not on the shipped list); `err.invalid_metric`
+  otherwise). Every stat is summed from `voided = 0 AND flagged = 0 AND state =
   'completed'` rows (all-time through the archive union); judgement = decisions_best ÷ (decisions_ok +
   decisions_bad), ranked only with Config.Leaderboard.minDecisions decisions; the cache key includes the metric.
   Rows gain `value`, `metric`, `level = { n, badge }` and `avatar`; kills (`lethal`) are never read by a board query.
@@ -3241,6 +3242,30 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
   for a non-leader. LIVE calls never count in `OpenCalls` (maxOpen and lanes), in `MC.claimableCount`, or in
   `WithdrawAll` (a Cross-Department lock leaves them); they lapse in `Expire` like any call and through
   `MC.endLive(crimeKey)` when the crime ends. Until V14, `MC.claim` answers `err.live_not_ready` for them.
+- **Scoring (V13).** A run is live when it carries `run.live` (V14) or `run.realSuspect = 'live'`; the rules read
+  the run, never `enabled`, so a case that runs when the owner turns live crimes off ends by the rules it started
+  with. CP.LiveCrime answers, and CP.Scoring, CP.Cash, CP.Rewards, CP.Goals and CP.Challenge ask:
+  - `LC.isLive(run)`, `LC.linesOnly(run)` (Config.LiveCrime.linesOnly, shipped true): `Scoring.compute` makes the
+    subtotal the lines only (the live_* lines, each detain and booking weighted by the suspect's share since V12, and
+    whatever conduct penalties are recorded) and skips the end-of-run lines (fast finish, twists, first run, vehicle
+    damage); P stays the base of the pct shares and of the cap (`scoreCap` x P). The breakdown carries
+    `linesOnly = true`, and the result card and the Profile breakdown show "Live case: the lines below are the
+    points" instead of the Base points line. A failed live case keeps today's failed credit (its one objective is
+    never done, so 0).
+  - `LC.tierRow(run)` (Config.LiveCrime.tier, shipped 'crew'): the Config.Scaling row for `LC.crewSize(run)` (the
+    crime's suspects, else the case's, else `run.live.suspects`; at least 1) is the points and cash multiplier and
+    the pay tier on the result card; 'officers' = the run's own pay tier, like a mission.
+  - `LC.counts(run, what)` for 'typeOfTheDay', 'goals', 'challenge', 'cash', 'items': true for any other run, and for
+    a live run only while that Config.LiveCrime switch is true (all shipped false). Type of the Day: the x2 is not
+    applied. Cash: `Cash.compute` uses B = 0 (nothing paid, nothing to pay again). Items: `row:settled` rolls no item
+    reward. `cash` and `items` are money switches in Settings (`MONEY_SWITCHES`: the typed word ENABLE).
+  - `LC.rowFilter(what, alias)`: `AND COALESCE(<alias>mission_id, '') <> 'live_crime'` while the switch is off ('' when
+    on), added to the goal progress query (`goals`) and to the challenge's officer and week sums (`challenge`; the
+    weekly bounty reads the same sums). `LC.MISSION_ID = 'live_crime'` is the live case's mission id (V14).
+  - Live catches: the live_response block notes `CP.Runs.noteStat(run, nil, 'live_catches', 1)` once per suspect
+    whose detain line was recorded (share > 0; a booking is no catch); `cp_mission_runs.live_catches` (and the
+    archive's, migration 014) holds it per row, never on the result card. The board metric `live_catches` sums it
+    over counted completed rows; the owner adds it to Config.Leaderboard.metrics (and weeklyBadges) to show it.
 - Config.LiveCrime keys of V10: `sources = { 'crimson-contracts' }` (a list of resource names), `types` (an OPEN table
   in Settings: Crimson-Contracts' contract keys -> a Config.MissionTypes key or false, checked by Settings),
   `suspectRadius = 300.0` (10-2000 m).

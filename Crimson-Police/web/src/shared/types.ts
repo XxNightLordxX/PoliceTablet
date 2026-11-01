@@ -422,6 +422,9 @@ export interface RunResult {
         todMultiplier?: number;
         // mBonus (step P20): the happy hour points bonus of a run accepted during a happy hour; absent = none
         mBonus?: number;
+        // linesOnly (step V13): a live case scored by its lines only (Config.LiveCrime.linesOnly); P is only the
+        // base of their shares
+        linesOnly?: boolean;
     };
     // mBonus (step P16): the happy hour cash bonus of a run accepted during a happy hour; absent = none
     cash: { B: number; mTier: number; mMod: number; mBonus?: number; amount: number; status: string };

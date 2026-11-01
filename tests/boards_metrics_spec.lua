@@ -119,6 +119,7 @@ H.load('modules/schedule/server.lua')
 H.load('modules/scoring/server.lua')
 H.load('modules/goals/server.lua')
 H.load('modules/leaderboard/server.lua')
+H.load('modules/livecrime/server.lua')
 H.load('modules/challenge/server.lua')
 H.load('modules/profile/server.lua')
 local LB, C = CP.Leaderboard, CP.Challenge
@@ -191,6 +192,7 @@ local function Row(t)
         decisions_best = t.best or 0,
         decisions_bad = t.bad or 0,
         lethal = t.lethal or 0,
+        live_catches = t.live or 0,
     }
     local names, vals, params = {}, {}, {}
     for k, v in pairs(cols) do names[#names + 1] = k; vals[#vals + 1] = '?'; params[#params + 1] = v end
@@ -291,9 +293,9 @@ Row({
     uuid = 'shared-2',
     p = 2,
 })
-Row({ cid = 'M1', pts = 60, season = SID, dur = 250, uuid = 'shared-3', p = 2 })
+Row({ cid = 'M1', pts = 60, season = SID, dur = 250, uuid = 'shared-3', p = 2, live = 2 })
 -- rows that must count nowhere: abandoned, failed, voided and flagged
-Row({ cid = 'M1', state = 'abandoned', pts = 0, arrests = 5, impounds = 3, call = 3, season = SID })
+Row({ cid = 'M1', state = 'abandoned', pts = 0, arrests = 5, impounds = 3, call = 3, season = SID, live = 4 })
 Row({
     cid = 'M1',
     state = 'failed',
@@ -361,6 +363,11 @@ local function MetricChecks(period)
     H.eq(ByCid(cit.rows, 'M1').value, 2, tag .. 'citations')
     local res = Board(11, { period = period, metric = 'rescues' })
     H.eq(ByCid(res.rows, 'M1').value, 1, tag .. 'rescues')
+    -- live_catches (V13, off the shipped list): completed rows only
+    local shipped = Config.Leaderboard.metrics
+    Config.Leaderboard.metrics = { 'points', 'live_catches' }
+    H.eq(ByCid(Board(11, { period = period, metric = 'live_catches' }).rows, 'M1').value, 2, tag .. 'live catches')
+    Config.Leaderboard.metrics = shipped
     local mis = Board(11, { period = period, metric = 'missions' })
     H.eq(ByCid(mis.rows, 'M1').value, 3, tag .. 'missions: completed runs only')
     local j = Board(13, { period = period, metric = 'judgement' })
@@ -540,6 +547,10 @@ do
     -- an abandoned row's arrests never count for the goal
     Row({ cid = 'M6', state = 'abandoned', arrests = 3, season = SID })
     H.eq(CP.Goals.forOfficer('M6').daily.progress, 0, 'arrests_2: abandoned rows count nothing')
+    -- a live case's row counts for goals only with Config.LiveCrime.goals (V13, shipped false)
+    Row({ cid = 'M6', mission = 'live_crime', arrests = 3, season = SID })
+    H.eq(CP.Goals.forOfficer('M6').daily.progress, 0, 'arrests_2: a live case counts nothing while goals is off')
+    H.sql('DELETE FROM cp_mission_runs WHERE mission_id = \'live_crime\'')
     Config.Goals = goals
     H.sql('DELETE FROM cp_mission_runs WHERE mission_type = \'goal\'')
     LB.invalidate()

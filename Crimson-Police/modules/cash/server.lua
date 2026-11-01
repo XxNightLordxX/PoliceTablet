@@ -52,6 +52,11 @@ local function FmtMoney(n)
 end
 
 local function TierRow(run)
+    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew', V13)
+    if CP.LiveCrime and CP.LiveCrime.tierRow then
+        local ok, row = pcall(CP.LiveCrime.tierRow, run)
+        if ok and type(row) == 'table' then return row end
+    end
     local t = run.payTier
     if type(t) == 'table' then return t end
     if CP.Scaling and CP.Scaling.tierByName then
@@ -147,6 +152,8 @@ function Cash.compute(run, p)
         return 0, { B = 0, mTier = 1.0, mMod = 1.0, amount = 0, status = 'none' }
     end
     local B = math.max(0, math.floor(Num(run.cashBase, 0) + 0.5))
+    -- a live case pays nothing unless the owner turned on Config.LiveCrime.cash (a money switch, V13)
+    if CP.LiveCrime and CP.LiveCrime.counts and CP.LiveCrime.counts(run, 'cash') == false then B = 0 end
     local mTier = Num(TierRow(run).cash, 1.0)
     -- the run's twists (CP.Twists): their cash multipliers multiply (each x the department's twist cash, step P16), up
     -- to Config.Events.twistMaxCash

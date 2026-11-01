@@ -117,7 +117,18 @@ end
 local function ScoringCfg() return Config.Scoring or {} end
 local function CommonCfg() return ScoringCfg().common or {} end
 
+local function LiveCall(fn, run, ...)
+    local LC = CP.LiveCrime
+    if not (LC and LC[fn]) then return nil end
+    local ok, v = pcall(LC[fn], run, ...)
+    if ok then return v end
+    return nil
+end
+
 local function TierRow(run)
+    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew', V13)
+    local live = LiveCall('tierRow', run)
+    if live then return live end
     local t = run.payTier
     if type(t) == 'table' then return t end
     if CP.Scaling and CP.Scaling.tierByName then
@@ -553,6 +564,7 @@ local function ScoreLines(run, p, P, opts)
     local bonuses, penalties = {}, {}
     local total = 0
     local mission = run.mission or {}
+    local linesOnly = LiveCall('linesOnly', run) == true
     local common = CommonCfg()
     local listed, order = ListedEntries(mission)
     local stats = run.stats or {}
@@ -631,7 +643,8 @@ local function ScoreLines(run, p, P, opts)
         end
     end
 
-    -- 3. common end-evaluated bonuses and penalties
+    -- 3. common end-evaluated bonuses and penalties; a live case scores only its lines (Config.LiveCrime.linesOnly)
+    if linesOnly then return bonuses, penalties, total end
     local duration = DurationOf(run, opts)
     -- Process the scene stops the fast-completion clock (CP.Runs.pauseFastClock)
     if opts.fastDurationS ~= nil then duration = math.min(duration, Num(opts.fastDurationS, duration)) end
@@ -710,7 +723,9 @@ function Scoring.compute(run, p, result, opts)
     if result ~= 'completed' then return out end
 
     local bonuses, penalties, total = ScoreLines(run, p, P, opts)
-    local subtotal = P + total
+    -- a live case with Config.LiveCrime.linesOnly: the lines only, P stays the base of their shares (V13)
+    local linesOnly = LiveCall('linesOnly', run) == true
+    local subtotal = linesOnly and total or P + total
     local mTeam = Num(TierRow(run).points, 1.0)
     local nDepts = Num(opts.departments, nil) or DepartmentsOf(run, p)
     local mCross = nDepts >= 2 and Num(Config.CrossDepartmentPoints, 1.10) or 1.0
@@ -731,7 +746,7 @@ function Scoring.compute(run, p, result, opts)
     local value = math.max(0, math.min(cap, raw))
     local final = math.floor(value + 1e-9)
     local tod = false
-    if CP.Events and CP.Events.typeOfTheDay then
+    if CP.Events and CP.Events.typeOfTheDay and LiveCall('counts', run, 'typeOfTheDay') ~= false then
         -- the officer's department's pick for today (step P18); the server's type when the setter is in the run
         local okT, key = pcall(CP.Events.typeOfTheDay, nil, p.department, run.participants or { p })
         tod = okT and key ~= nil and key == run.missionType
@@ -749,6 +764,7 @@ function Scoring.compute(run, p, result, opts)
 
     out.bonuses, out.penalties = bonuses, penalties
     out.subtotal = subtotal
+    if linesOnly then out.linesOnly = true end
     out.mTeam, out.mCross, out.mStreak = mTeam, mCross, mStreak
     out.capped, out.tod = capped, tod
     -- extras for the result card and the Profile breakdown: the cap (whole points) and the multipliers used

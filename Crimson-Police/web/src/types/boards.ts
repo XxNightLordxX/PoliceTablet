@@ -7,7 +7,7 @@ export type BoardPeriod = 'weekly' | 'monthly' | 'season' | 'alltime';
 
 // Rank by (Config.Leaderboard.metrics). points ranks by XP on the All-time tab.
 export type BoardMetric =
-    'points' | 'missions' | 'arrests' | 'impounds' | 'citations' | 'rescues' | 'calls' | 'judgement';
+    'points' | 'missions' | 'arrests' | 'impounds' | 'citations' | 'rescues' | 'calls' | 'judgement' | 'live_catches';
 
 // A board row with its metric value (judgement: the Best share in percent), level number and picture.
 export interface BoardRowView extends BoardRow {

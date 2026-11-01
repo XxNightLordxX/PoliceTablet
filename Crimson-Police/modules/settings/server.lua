@@ -53,6 +53,9 @@ local MONEY_SWITCHES = {
     'Cash.allowClawback',
     'Cash.allowManualCash',
     'Rewards.allowTakeBack',
+    -- a live case pays cash or rolls items only with these on (Config.LiveCrime, V13)
+    'LiveCrime.cash',
+    'LiveCrime.items',
 }
 local MONEY_WORD = 'ENABLE'
 
@@ -228,7 +231,17 @@ local OPEN = {
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
 -- FXServer's identifier kinds (the text before ':') and 'token' (GetPlayerToken): Config.RealSuspects.identityMatch
 local IDENTITY_KINDS = { 'license', 'license2', 'discord', 'fivem', 'steam', 'xbl', 'live', 'ip', 'token' }
-local METRICS = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' }
+local METRICS = {
+    'points',
+    'missions',
+    'arrests',
+    'impounds',
+    'citations',
+    'rescues',
+    'calls',
+    'judgement',
+    'live_catches',
+}
 local APPEARANCES = { 'department', 'midnight', 'high_contrast', 'colourblind' }
 local END_REASONS = {
     'real_call',
@@ -1117,6 +1130,8 @@ local KNOWN = {
         item = 'string',
     },
     ['LiveCrime.types'] = { tpl = MapOf(Alts(FALSE, ID), '^[%w_%-]+$') },
+    -- V13: which team sets a live case's tier
+    ['LiveCrime.tier'] = { tpl = Enum({ 'crew', 'officers' }), kind = 'enum' },
     ['Spawning.onTimeout'] = { tpl = Enum({ 'unfreeze', 'delete' }), kind = 'enum' },
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },

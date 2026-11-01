@@ -185,7 +185,11 @@ export function RunBreakdown({ result: raw, cashStatus }: { result: RunResult; c
                         <Icon name="star" size={14} />
                         <span>{t('result.points')}</span>
                     </div>
-                    <Line label={t('result.base')} value={formatNumber(p.P)} />
+                    {p.linesOnly ? (
+                        <Line label={t('result.lines_only')} value="" note />
+                    ) : (
+                        <Line label={t('result.base')} value={formatNumber(p.P)} />
+                    )}
                     {asList(p.bonuses).map((b, i) => (
                         <Line
                             key={`b${i}`}

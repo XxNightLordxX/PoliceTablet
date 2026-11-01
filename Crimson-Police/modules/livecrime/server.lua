@@ -375,6 +375,66 @@ function LC.inCrew(cid)
     return false
 end
 
+-- ============================================================================
+--                       SCORING (V13, ARCHITECTURE 5.46)
+-- ============================================================================
+-- The rules CP.Scoring, CP.Cash, CP.Rewards, CP.Goals and CP.Challenge ask about a live run. They read the run
+-- itself (never Config.LiveCrime.enabled), so a case that is running when the owner turns live crimes off still
+-- ends by the rules it started with.
+
+LC.MISSION_ID = 'live_crime'      -- the engine mission of a live case (V14), its rows' mission_id
+
+-- Whether a run is a live case (run.live from V14, or run.realSuspect = 'live').
+function LC.isLive(run)
+    if type(run) ~= 'table' then return false end
+    return type(run.live) == 'table' or run.realSuspect == 'live'
+end
+
+-- true = only the live lines score (no base points, no end-of-run lines); Config.LiveCrime.linesOnly, shipped true.
+function LC.linesOnly(run) return LC.isLive(run) and Cfg().linesOnly ~= false end
+
+-- Whether a live run takes part in something a mission gets: 'typeOfTheDay', 'goals', 'challenge', 'cash' or
+-- 'items' (the Config.LiveCrime switch of that name, each shipped false). Any other run: true.
+local COUNTS = { typeOfTheDay = true, goals = true, challenge = true, cash = true, items = true }
+function LC.counts(run, what)
+    if not LC.isLive(run) then return true end
+    return COUNTS[what] == true and Cfg()[what] == true
+end
+
+-- The suspects of a live run: the crime's, else the case's, else run.live.suspects (a count); at least 1.
+function LC.crewSize(run)
+    local n = 0
+    local crime = LC.crimeOf(run)
+    if crime and type(crime.suspects) == 'table' then
+        for _ in pairs(crime.suspects) do n = n + 1 end
+    end
+    if n == 0 and CP.Opponents and CP.Opponents.view then
+        local ok, view = pcall(CP.Opponents.view, run)
+        if ok and type(view) == 'table' and type(view.order) == 'table' then n = #view.order end
+    end
+    if n == 0 and type(run) == 'table' and type(run.live) == 'table' then
+        n = math.floor(Num(run.live.suspects, 0))
+    end
+    return math.max(1, n)
+end
+
+-- The Config.Scaling row of a live run whose tier comes from its crew (Config.LiveCrime.tier = 'crew', shipped),
+-- or nil (not live, 'officers', or no scaling rows): the caller then uses the run's own pay tier.
+function LC.tierRow(run)
+    if not LC.isLive(run) or Cfg().tier == 'officers' then return nil end
+    if not (CP.Scaling and CP.Scaling.tierFor) then return nil end
+    local ok, row = pcall(CP.Scaling.tierFor, LC.crewSize(run))
+    if ok and type(row) == 'table' then return row end
+    return nil
+end
+
+-- SQL to add to a WHERE that sums run rows for goals or the challenge: leaves out live-case rows while that
+-- switch is off ('' when it is on). alias: the table alias with its dot ('r.') or ''.
+function LC.rowFilter(what, alias)
+    if Cfg()[what] == true then return '' end
+    return (' AND COALESCE(%smission_id, \'\') <> \'%s\''):format(alias or '', LC.MISSION_ID)
+end
+
 -- A reporting script stopped without ending its crimes: they end now.
 AddEventHandler('onResourceStop', function(res)
     if count == 0 then return end

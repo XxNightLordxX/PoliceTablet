@@ -41,5 +41,7 @@
   "block.live_response.end_confirm": "End this live case now? Your unit keeps what it has earned so far.",
   "bonus.live_scene": "Secured the scene of a live crime",
   "bonus.live_detain": "Detained a suspect",
-  "bonus.live_book": "Booked a suspect"
+  "bonus.live_book": "Booked a suspect",
+  "leaderboard.metric.live_catches": "Live catches",
+  "result.lines_only": "Live case: the lines below are the points (no base points)"
 }

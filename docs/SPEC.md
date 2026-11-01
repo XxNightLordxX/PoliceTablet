@@ -1711,7 +1711,7 @@ Four time-boxed boards rank officers by points earned in each period. Cash is ne
 
 Filters: Overall · Patrol · Training · Investigation · Tactical · Unit (points from runs with 2+ participants) · Cross-Department (points from runs with 2+ departments) · Department (one board per entry in Config.Departments).
 
-Rank by: Points (default) · Missions · Arrests · Impounds · Citations · Rescues · Mission calls · Judgement. The All-time tab keeps ranking by XP and shows each officer's level.
+Rank by: Points (default) · Missions · Arrests · Impounds · Citations · Rescues · Mission calls · Judgement. The All-time tab keeps ranking by XP and shows each officer's level. Live catches (suspects detained in live cases, Config.LiveCrime) is one more tab the owner can add to Config.Leaderboard.metrics (not on the shipped list).
 
 - Missions counts completed runs; Mission calls counts completed runs claimed from a call; Arrests, Impounds, Citations and Rescues sum those columns over completed rows only (`WHERE state = 'completed'` plus the void and flag rules); Judgement ranks Best dispositions (decisions_best) as a share of all dispositions (decisions_ok + decisions_bad), and needs at least 10 decisions in the window (Config.Leaderboard.minDecisions), with more decisions winning a tie.
 
@@ -2562,8 +2562,13 @@ ALTER TABLE cp_officers ADD COLUMN mission_ban JSON NULL;
 -- sql/migrations/013_call_department.sql · the department lane a mission call was posted in (CP.MissionCalls, step
 -- P12: the callLane Mission control); NULL = a server-wide call (the server's own, or one staff created or paged).
 ALTER TABLE cp_mission_calls ADD COLUMN department VARCHAR(32) NULL;
+-- sql/migrations/014_live_catches.sql · suspects detained in a live case per run row (CP.LiveCrime, step V13: the
+-- live_catches Rank by tab). Added to cp_mission_runs AND cp_mission_runs_archive in the same order, because the
+-- retention job copies rows with INSERT ... SELECT *.
+ALTER TABLE cp_mission_runs ADD COLUMN live_catches SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE cp_mission_runs_archive ADD COLUMN live_catches SMALLINT NOT NULL DEFAULT 0;
 
-sql/migrations/001_initial.sql creates the first fourteen tables, and 002–013 add the columns and the fourteen tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. 010 (officer options) adds cp_officers.options, the JSON of the My options choices of that character that differ from the default (NULL = all defaults). 011 (Mission controls) adds cp_dept_controls: one row per department and control a supervisor or admin changed (no row = the config value); a backup restores it like any other table, and a restored row that has expired stays ignored. 012 (mission ban) adds cp_officers.mission_ban, a supervisor's temporary mission ban of that officer (NULL = none; one past its end counts as none). 013 (department call lanes) adds cp_mission_calls.department, the department whose lane posted the call (NULL = a server-wide call). cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
+sql/migrations/001_initial.sql creates the first fourteen tables, and 002–014 add the columns and the fourteen tables above (see Database upgrades). 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. 010 (officer options) adds cp_officers.options, the JSON of the My options choices of that character that differ from the default (NULL = all defaults). 011 (Mission controls) adds cp_dept_controls: one row per department and control a supervisor or admin changed (no row = the config value); a backup restores it like any other table, and a restored row that has expired stays ignored. 012 (mission ban) adds cp_officers.mission_ban, a supervisor's temporary mission ban of that officer (NULL = none; one past its end counts as none). 013 (department call lanes) adds cp_mission_calls.department, the department whose lane posted the call (NULL = a server-wide call). 014 (live catches) adds live_catches to both run tables: the suspects detained in a live case on that row (0 on every other row). cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
 
 Database upgrades
 
@@ -3817,6 +3822,19 @@ Config.LiveCrime = {
     lastReportedEvery = 60,
     -- Seconds a case stays open once no suspect is left to work (all booked, lost, left or void) before it ends
     deadCaseSeconds = 30,
+    -- Points of a live case: true = only its live lines (scene secured, each detain and booking x the suspect's
+    -- share) and its conduct penalties; false = the mission type's points plus those lines, like a mission
+    linesOnly = true,
+    -- Which team sets a live case's tier (the points and cash multiplier of Config.Scaling): 'crew' = the number of
+    -- suspects at the alert; 'officers' = the officers on the case, like a mission
+    tier = 'crew',
+    typeOfTheDay = false,            -- true = a live case of today's Type of the Day gets its points multiplier too
+    goals = false,                   -- true = live cases count for the officers' daily and weekly goals
+    challenge = false,               -- true = live cases count for the department challenge and the weekly bounty
+    -- Money switches (the typed word ENABLE turns them on in Settings). true = a live case pays cash like a mission
+    -- of its type; false = points only
+    cash = false,
+    items = false,                   -- true = a live case rolls the item rewards of its type too (Config.Rewards)
 }
 
 -- ============================================================================
@@ -4222,6 +4240,7 @@ Config.Leaderboard = {
     topN = 25,
     weekStartsOn = 'monday',
     seasonWeeks = 8,         -- suggested season length for "weeks left"; an admin ends the season
+    -- Rank by tabs; 'live_catches' (suspects detained in live cases, Config.LiveCrime) can be added
     metrics = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' },
     minDecisions = 10,       -- Judgement: decisions needed in the window
     weeklyBadges = {},       -- extra weekly badges by metric, e.g. { 'arrests' }; Officer of the Week stays by points

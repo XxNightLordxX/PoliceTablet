@@ -1032,6 +1032,19 @@ Config.LiveCrime = {
     lastReportedEvery = 60,
     -- Seconds a case stays open once no suspect is left to work (all booked, lost, left or void) before it ends
     deadCaseSeconds = 30,
+    -- Points of a live case: true = only its live lines (scene secured, each detain and booking x the suspect's
+    -- share) and its conduct penalties; false = the mission type's points plus those lines, like a mission
+    linesOnly = true,
+    -- Which team sets a live case's tier (the points and cash multiplier of Config.Scaling): 'crew' = the number of
+    -- suspects at the alert; 'officers' = the officers on the case, like a mission
+    tier = 'crew',
+    typeOfTheDay = false,            -- true = a live case of today's Type of the Day gets its points multiplier too
+    goals = false,                   -- true = live cases count for the officers' daily and weekly goals
+    challenge = false,               -- true = live cases count for the department challenge and the weekly bounty
+    -- Money switches (the typed word ENABLE turns them on in Settings). true = a live case pays cash like a mission
+    -- of its type; false = points only
+    cash = false,
+    items = false,                   -- true = a live case rolls the item rewards of its type too (Config.Rewards)
 }
 
 -- ============================================================================
@@ -1437,6 +1450,7 @@ Config.Leaderboard = {
     topN = 25,
     weekStartsOn = 'monday',
     seasonWeeks = 8,         -- suggested season length for "weeks left"; an admin ends the season
+    -- Rank by tabs; 'live_catches' (suspects detained in live cases, Config.LiveCrime) can be added
     metrics = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' },
     minDecisions = 10,       -- Judgement: decisions needed in the window
     weeklyBadges = {},       -- extra weekly badges by metric, e.g. { 'arrests' }; Officer of the Week stays by points
