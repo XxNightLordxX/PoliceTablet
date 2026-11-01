@@ -923,6 +923,10 @@ Server:
   `byType(type) -> list` (excludes the boss), `isEnabled(id)` (published, not archived, not in
   `Config.DisabledMissions`), `normalize(def, meta) -> def|nil, err`, `serializeForClient(def)`
 - `register(def)` / `unregister(id)` — used by the builder for publish/archive without a reload.
+- `registerEngine(def) -> def|nil, err` / `engine(id)` (V14) — a mission the engine builds itself (CP.LiveCrime's
+  `live_crime`, §5.46), normalized with `meta.engine` (it may use an engine-only block) and kept in a registry of its
+  own: `get`, `all`, `list`, `byType`, the draw, `client:missions` and the Mission Builder never see it, and
+  `register` refuses its id.
 - `parse(luaSource, chunkName) -> def|nil, err` — reads one mission file's source as the loader does and returns the raw definition (used by the builder for custom files and hand-edit reloads, and by CP.Testing).
 - The mission file reader (shared/utils.lua): mission files are data and are never run. FXServer builds its Lua
   with `LUA_SANDBOX`, so its `debug` table has only getinfo, getmetatable, setmetatable, getupvalue and traceback
@@ -2914,8 +2918,8 @@ The real suspects of a case, shared by live crimes (§5.46) and volunteer suspec
 keyed by citizenid and carries his state (free, cuffed, detained, booked, lost, left or void), the proof the server
 checks before anything scores (the sc-police cuff pair and custody hold, bookings, downs: V5), the officers' conduct
 ledger (V6), the identity and pair rules (V7), a position trail and a timeline for review, and staff notes that never
-hold points. Nothing opens a case yet (V14 and V22 do), so nothing runs while Config.LiveCrime.enabled and
-Config.Volunteers.enabled are false (both shipped false). Rules: Config.RealSuspects. Built in steps V4-V26
+hold points. A claimed LIVE call opens a live case (V14; volunteers: V22), so nothing runs while
+Config.LiveCrime.enabled and Config.Volunteers.enabled are false (both shipped false). Rules: Config.RealSuspects. Built in steps V4-V26
 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
 
 Core (V4, modules/opponents/server.lua). Times inside a record are GetGameTimer() milliseconds; `t` in the timeline,
@@ -3241,7 +3245,51 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
   suspects`, the distance to the crime's reported place (never a suspect's), no cash, points or twists, and is locked
   for a non-leader. LIVE calls never count in `OpenCalls` (maxOpen and lanes), in `MC.claimableCount`, or in
   `WithdrawAll` (a Cross-Department lock leaves them); they lapse in `Expire` like any call and through
-  `MC.endLive(crimeKey)` when the crime ends. Until V14, `MC.claim` answers `err.live_not_ready` for them.
+  `MC.endLive(crimeKey)` when the crime ends. Their claim opens the crime's case (V14, below).
+- **The claim and the case (V14).** `MC.claim` of a LIVE call: `err.live_case_off` while `Config.LiveCrime.enabled ~=
+  true`; any twists are dropped. `ClaimCheck` calls `Draw.check(src, type, nil, live = { crimeKey })` and the call's
+  own rules (`CallRule`), never the type's pool. The window and `TryNext` work as for any call; `Draw.accept` gets
+  `opts.live` and `missionCall.staff = true` (no rapid response for a real crime).
+  - CP.Draw's live path (`CheckAccept(src, type, counts, live)`): every accept rule of a mission (leader, unit size,
+    duty, arena, on a run, mission ban, P10 types off, hourly / daily / type daily caps) except: no server run caps
+    (`CapsOk`; `maxLiveRuns` caps live cases), the type cooldown only with `Config.LiveCrime.typeCooldown` (shipped
+    false), the Cross-Department lock only without `duringOperation` (shipped true), and `IsOnCall(src, except)` with
+    `CP.Calls.exemptFor` of the case-to-be (the crime's `dispatchId` and the claimants' own shots / down calls). Then
+    `LC.claimCheck(crime, officers)`. `AcceptStart` skips the twists and the ready check unless
+    `Config.LiveCrime.readyCheck` (shipped false); the ready check's re-checks use the same `except` and lock rule.
+    `FinishAccept` runs `claimCheck` again (the window may have waited), takes `LC.missionFor(crime)` (no draw, no
+    no-repeat record) and calls `CP.Runs.create` with `live = LC.liveOf(crime)` and `npcCombat = false`.
+  - `LC.claimCheck(crime, officers) -> true | false, err` (memory only): `err.live_case_off`; `err.live_case_gone` (no,
+    ended or test crime, or every suspect in another case: `Opp.byCid`); `err.mc_taken_by` (its run is open);
+    `err.live_case_suspect_used` (every free suspect has `Opp.suspectDayCount >= maxCatchesPerSuspectDay`); then per
+    officer `err.live_case_own_suspect` (a crew member, or `Opp.selfBlock` blocked: own character, own license, linked
+    account), `err.live_case_suspended` (`Opp.suspended`), `err.live_case_recent_suspect` (`Opp.lastSuspectAt` within
+    `jobHopMinutes`), and per suspect `err.live_case_pair_blocked` / `err.live_case_pair_cooldown` (`Opp.pairOk`:
+    `blocked`, or `pair_cooldown` / `suspect_cooldown`). The simplest safe rule: a pair cap refuses the claim (another
+    unit may take it) instead of scoring nothing.
+  - The engine mission: `LC.engineMission()` registers `live_crime` once with `CP.Missions.registerEngine(def)` (a
+    registry of its own: `Missions.engine(id)` answers it, `Missions.get`, `list`, `byType`, the draw, client:missions,
+    the boards and the Mission Builder never see it, and `Missions.register` refuses its id); one `live_response`
+    objective, `cooldown = 0`, `vehiclePenalties = false`, a placeholder location. `LC.missionFor(crime) -> def, 1`: a
+    copy with the crime's mission type, the label "Live case: <alert title>", `timeLimit = caseTime` (1800 s,
+    60-3600) and one location, the crime's place with `sceneRadius` as its start circle. `LC.liveOf(crime) = {
+    crimeKey, dispatchId, title, street, suspects = <count> }` (no citizenid, no server id).
+  - `CP.Runs.create` opts.live: `run.live` (a clean copy) and `run.realSuspect = 'live'` before the route lock
+    (`requiredFor`: `Config.LiveCrime.requireRoute`); no `Runs.capsOk`; the operation lock only with
+    `duringOperation = false`; the on-call re-check passes `{ except = Calls.exemptFor(run) }`. A row of mission
+    `live_crime` starts the abandon (type) cooldown only with `Config.LiveCrime.typeCooldown` (at the end, at the
+    rebuild from the rows and at a reclassify).
+  - `run:created` (CP.LiveCrime): `crime.runId = run.id`; `Opp.open(run, { kind = 'live', index = 1, members =
+    crime.suspects, scene = crime.coords })`; each suspect in `crime.armed` gets `Opp.noteArmed`; a participant whose
+    `Opp.selfBlock` answers the `rs_linked_accounts` flag gets `CP.AntiCheat.flag(run, src, 'rs_linked_accounts',
+    'suspect <label>, shared <kinds>')`; a timeline line per officer. No case (the crime is gone, or every suspect is in
+    another case by now): the run ends at once as `cancelled` (no cooldown, no penalty).
+  - `run:ended` (CP.LiveCrime): `Opp.close(run)` (the same outcomes as CP.Opponents' own close), then
+    `Opp.recordPairs(run, rows)`, one row per participant and suspect: `scored` = the run completed and the suspect
+    was detained or booked with a share above 0; `outcome` = the suspect's, or `gone` when no participant arrived;
+    then `Opp.checkPairFlags(run)`. CP.MissionCalls closes a claimed LIVE call with its run and never re-dispatches it.
+- Config.LiveCrime keys of V14: `caseTime = 1800` (60-3600 s), `readyCheck = false`, `typeCooldown = false`,
+  `duringOperation = true`.
 - **Scoring (V13).** A run is live when it carries `run.live` (V14) or `run.realSuspect = 'live'`; the rules read
   the run, never `enabled`, so a case that runs when the owner turns live crimes off ends by the rules it started
   with. CP.LiveCrime answers, and CP.Scoring, CP.Cash, CP.Rewards, CP.Goals and CP.Challenge ask:

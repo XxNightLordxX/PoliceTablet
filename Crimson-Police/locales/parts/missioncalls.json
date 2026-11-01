@@ -210,6 +210,5 @@
   "mc.card.live_suspects": "{n} suspect(s)",
   "mc.card.live_pay": "Points for securing the scene, detaining and booking the suspects",
   "mc.toast.live": "{code} · LIVE: {title} · {street} · {area}",
-  "mc.toast.live_title": "LIVE call",
-  "err.live_not_ready": "LIVE calls can't be claimed yet: live cases come in a later update."
+  "mc.toast.live_title": "LIVE call"
 }

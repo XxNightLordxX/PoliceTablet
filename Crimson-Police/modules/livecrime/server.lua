@@ -435,6 +435,211 @@ function LC.rowFilter(what, alias)
     return (' AND COALESCE(%smission_id, \'\') <> \'%s\''):format(alias or '', LC.MISSION_ID)
 end
 
+-- ============================================================================
+--               THE CLAIM AND THE CASE (V14, ARCHITECTURE 5.46)
+-- ============================================================================
+-- A unit that claims a LIVE call gets no draw: CP.Draw's live path runs LC.claimCheck, builds the run from
+-- LC.missionFor(crime) (the engine-only live_crime mission at the crime's reported place) and CP.Runs.create opts.live;
+-- the run:created hook below opens the CP.Opponents case for the crime's suspects, and run:ended writes the pair rows.
+
+local function RS() return type(Config.RealSuspects) == 'table' and Config.RealSuspects or {} end
+
+local function SceneRadius() return math.max(1.0, Num(Cfg().sceneRadius, 75.0)) end
+
+-- Seconds a live case lasts at most (Config.LiveCrime.caseTime, 60-3600; the mission loader's time limit range).
+local function CaseTime() return math.floor(CP.U.clamp(Num(Cfg().caseTime, 1800), 60, 3600)) end
+
+-- The mission type the engine mission is registered with (each case uses its crime's own type).
+local function AnyType()
+    local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
+    if type(types.investigation) == 'table' then return 'investigation' end
+    return Sorted(types)[1]
+end
+
+local engine = nil
+
+-- The live_crime engine mission (CP.Missions.registerEngine: a registry of its own, never drawn, listed or sent to
+-- clients), registered on first use. Its one location is a placeholder: every case gets its crime's place.
+function LC.engineMission()
+    if engine then return engine end
+    local M = CP.Missions
+    if not (M and M.registerEngine) then return nil end
+    local existing = M.engine and M.engine(LC.MISSION_ID)
+    if existing then
+        engine = existing
+        return engine
+    end
+    local typeKey = AnyType()
+    if not typeKey then return nil end
+    local d = M.registerEngine({
+        id = LC.MISSION_ID,
+        label = CP.L('livecrime.mission.label'),
+        description = CP.L('livecrime.mission.description'),
+        type = typeKey,
+        minOfficers = 1,
+        maxOfficers = math.max(1, math.floor(Num(Config.Limits and Config.Limits.maxUnitSize, 4))),
+        timeLimit = CaseTime(),
+        cooldown = 0,
+        vehiclePenalties = false,
+        locations = {
+            { label = CP.L('livecrime.mission.place'), start = { coords = vec3(0.0, 0.0, 0.0), radius = 75.0 } },
+        },
+        objectives = { { block = 'live_response', label = CP.L('livecrime.mission.objective') } },
+    })
+    engine = d
+    return engine
+end
+
+-- The mission of this crime's case: a copy of the engine mission with the crime's mission type, Config.LiveCrime's
+-- caseTime and one location, the crime's reported place (sceneRadius). -> def, 1 | nil.
+function LC.missionFor(crime)
+    if type(crime) ~= 'table' or type(crime.missionType) ~= 'string' then return nil end
+    local x, y, z = CP.U.xyz(crime.coords)
+    if not x then return nil end
+    local base = LC.engineMission()
+    if not base then return nil end
+    local d = CP.U.deepcopy(base)
+    d.type = crime.missionType
+    d.label = CP.L('livecrime.mission.label_of', { crime = crime.title or crime.label or crime.key or '?' })
+    d.timeLimit = CaseTime()
+    d.locations = {
+        {
+            label = crime.locationLabel or crime.street or base.locations[1].label,
+            start = { coords = vec3(x + 0.0, y + 0.0, z + 0.0), radius = SceneRadius() },
+        },
+    }
+    return d, 1
+end
+
+-- Whether these officers may take this crime's case -> true | false, err (checked at the claim and again at the
+-- accept; memory only: CP.Opponents' caps never query the database). officers = { { src, citizenid } }.
+function LC.claimCheck(crime, officers)
+    if Cfg().enabled ~= true then return false, 'err.live_case_off' end
+    if type(crime) ~= 'table' or crime.ended or crime.test or type(crime.suspects) ~= 'table' then
+        return false, 'err.live_case_gone'
+    end
+    if RunOf(crime) then return false, 'err.mc_taken_by' end
+    local suspects = Sorted(crime.suspects)
+    local open, worth = 0, 0
+    local perDay = math.floor(Num(RS().maxCatchesPerSuspectDay, 2))
+    for _, cid in ipairs(suspects) do
+        if not Opp('byCid', cid) then
+            open = open + 1
+            if Num(Opp('suspectDayCount', cid), 0) < perDay then worth = worth + 1 end
+        end
+    end
+    if open == 0 then return false, 'err.live_case_gone' end
+    if worth == 0 then return false, 'err.live_case_suspect_used' end
+    local hopS = Num(RS().jobHopMinutes, 30) * 60
+    local now = os.time()
+    for _, o in ipairs(type(officers) == 'table' and officers or {}) do
+        local cid = type(o) == 'table' and o.citizenid or nil
+        if type(cid) ~= 'string' then return false, 'err.member_unavailable' end
+        if crime.members[cid] then return false, 'err.live_case_own_suspect' end
+        if Opp('suspended', cid) == true then return false, 'err.live_case_suspended' end
+        local was = tonumber(Opp('lastSuspectAt', cid))
+        if was and now - was < hopS then return false, 'err.live_case_recent_suspect' end
+        if Opp('selfBlock', o.src, crime.suspects) == true then return false, 'err.live_case_own_suspect' end
+        for _, sCid in ipairs(suspects) do
+            local ok, why = Opp('pairOk', cid, sCid)
+            if ok == false and why == 'blocked' then return false, 'err.live_case_pair_blocked' end
+            if ok == false and (why == 'pair_cooldown' or why == 'suspect_cooldown') then
+                return false, 'err.live_case_pair_cooldown'
+            end
+        end
+    end
+    return true
+end
+
+-- What CP.Runs.create keeps in run.live for this crime (opts.live): no server id, no citizenid.
+function LC.liveOf(crime)
+    return {
+        crimeKey = crime.crimeKey,
+        dispatchId = crime.dispatchId,
+        title = crime.title,
+        street = crime.street,
+        suspects = CP.U.count(crime.suspects),
+    }
+end
+
+-- run:created of a live run: the crime remembers it, the case opens for its suspects (the crime's coords are the
+-- scene), Crimson-Contracts' crew shots mark those suspects armed (C6), and an officer who shares a connection or PC
+-- with a suspect gets the officer-conduct flag rs_linked_accounts (his own points only). A case that cannot open
+-- (every suspect in another case meanwhile) ends the run as cancelled: no cooldown, no penalty.
+local function Opened(run)
+    local crime = LC.crimeOf(run)
+    local case = nil
+    if crime and not crime.ended then
+        crime.runId = run.id
+        case = Opp('open', run, { kind = 'live', index = 1, members = crime.suspects, scene = crime.coords })
+    end
+    if type(case) ~= 'table' then
+        CP.warn(TAG, 'run %s: the live case could not open (%s): the run is cancelled', run.id,
+            crime and 'no suspect left' or 'the crime is gone')
+        SetTimeout(0, function()
+            if run.state ~= 'ended' and CP.Runs and CP.Runs.endRun then
+                CP.Runs.endRun(run, 'abandoned', 'cancelled')
+            end
+        end)
+        return
+    end
+    for cid in pairs(crime.armed or {}) do
+        if case.suspects and case.suspects[cid] then Opp('noteArmed', cid) end
+    end
+    for src, p in pairs(run.participants or {}) do
+        local blocked, _, flags, match = Opp('selfBlock', src, crime.suspects)
+        if blocked ~= true and type(flags) == 'table' then
+            for _, reason in ipairs(flags) do
+                local kinds = type(match) == 'table' and type(match.kinds) == 'table' and match.kinds or {}
+                local rec = type(match) == 'table' and case.suspects[match.cid] or nil
+                local detail = ('suspect %s, shared %s'):format(rec and rec.label or '?', table.concat(kinds, ', '))
+                if CP.AntiCheat and CP.AntiCheat.flag then pcall(CP.AntiCheat.flag, run, src, reason, detail) end
+            end
+        end
+        if p.citizenid then Opp('timeline', run, { what = 'officer', label = p.callsign or p.name }) end
+    end
+    CP.log(TAG, 'crime %s: case opened on run %s', crime.crimeKey, run.id)
+end
+
+-- run:ended of a live run: one pair row per officer and suspect (CP.Opponents.recordPairs; scored = the case
+-- completed and the suspect was detained or booked for a share above 0; outcome 'gone' when no officer reached the
+-- scene), then the pair-repeat check.
+local function Closed(run, state)
+    local outcomes, case = Opp('close', run)
+    if type(case) ~= 'table' or type(outcomes) ~= 'table' then return end
+    local arrived = false
+    for _, p in pairs(run.participants or {}) do
+        if p.arrived then arrived = true end
+    end
+    local rows = {}
+    for _, p in pairs(run.participants or {}) do
+        if type(p.citizenid) == 'string' then
+            for _, cid in ipairs(case.order or {}) do
+                local rec = case.suspects[cid] or {}
+                local out = outcomes[cid]
+                local caught = (out == 'detained' or out == 'booked') and Num(rec.share, 1) > 0
+                rows[#rows + 1] = {
+                    officer = p.citizenid,
+                    suspect = cid,
+                    scored = state == 'completed' and caught,
+                    outcome = arrived and out or 'gone',
+                }
+            end
+        end
+    end
+    Opp('recordPairs', run, rows)
+    Opp('checkPairFlags', run)
+end
+
+if CP.Hooks and CP.Hooks.on then
+    CP.Hooks.on('run:created', function(run)
+        if type(run) == 'table' and type(run.live) == 'table' then Opened(run) end
+    end)
+    CP.Hooks.on('run:ended', function(run, state)
+        if type(run) == 'table' and type(run.live) == 'table' then Closed(run, state) end
+    end)
+end
+
 -- A reporting script stopped without ending its crimes: they end now.
 AddEventHandler('onResourceStop', function(res)
     if count == 0 then return end

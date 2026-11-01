@@ -1757,7 +1757,8 @@ end
 
 -- Step V11: a reported crime with suspects becomes a red LIVE call (CP.LiveCrime.post -> MC.postLive): memory only,
 -- priority 1, a red toast that ignores favourite types, never counted in maxOpen or the claimable badge, capped by
--- Config.LiveCrime.maxLiveRuns, lapsed by offerTime or the crime's end; its claim answers err.live_not_ready.
+-- Config.LiveCrime.maxLiveRuns, lapsed by offerTime or the crime's end. Step V14: its claim opens the crime's live case
+-- (no draw, the live_crime engine mission at the crime's place, CP.Runs.create opts.live) and the call closes with it.
 do
     Reset()
     H.load('modules/livecrime/server.lua')
@@ -1811,9 +1812,9 @@ do
     H.eq(card.suspects, 2, '...and the number of suspects')
     H.eq(card.distance, 300, 'the distance is to the crime\'s reported place')
     H.eq(card.status, 'ready', 'shown as ready')
-    H.eq(MC.claimableCount(1), 0, 'not in the claimable badge before step V14')
+    H.eq(MC.claimableCount(1), 0, 'never in the claimable badge')
     local okC, errC = Claim(1, call.id)
-    H.ok(okC == false and errC == 'err.live_not_ready', 'its claim answers err.live_not_ready')
+    H.ok(okC == false and errC == 'err.live_case_gone', 'a call whose crime record is gone cannot be claimed')
 
     H.eq(LC.post(c1), false, 'one LIVE call per crime')
     local c2 = Crime(2)
@@ -1841,6 +1842,91 @@ do
     H.eq(MC._calls()[c1.callId] and MC._calls()[c1.callId].status, 'lapsed', 'offerTime over: the call lapses')
     H.time = H.time - 301
     Config.LiveCrime = keepLive
+end
+
+-- Step V14: claiming a LIVE call. The live checks (Config.LiveCrime.typeCooldown, duringOperation, readyCheck: no
+-- server run caps, no twists), then the crime's case: CP.Runs.create gets the engine mission at the crime's reported
+-- place, opts.live and npcCombat = false; the claimed call closes with its case and is never re-dispatched.
+do
+    Reset()
+    local LC = CP.LiveCrime
+    local keepLive, keepMissions = Config.LiveCrime, CP.Missions
+    Config.LiveCrime = setmetatable({ enabled = true }, { __index = keepLive })
+    CP.Missions = setmetatable({
+        registerEngine = function(d) return d end,
+        engine = function() return nil end,
+    }, { __index = keepMissions })
+    local crimes, realGet = {}, LC.get
+    LC.get = function(key) return crimes[key] or realGet(key) end
+    local S = CENTRE.south_ls
+    AddPlayer(1, vec3(S.x, S.y, 30.0))
+    AddPlayer(3, vec3(S.x + 20, S.y, 30.0))
+    units = { { id = 1, leader = 1, members = { 1, 3 } } }
+    local readyChecks = 0
+    CP.Units.readyCheck = function() readyChecks = readyChecks + 1 return true end
+    local crime = {
+        crimeKey = 'crimson-contracts:9_1',
+        key = 'drug_lab_raid',
+        label = 'Drug Lab Raid',
+        locationLabel = 'Grapeseed',
+        title = 'Shots at the lab',
+        street = 'Seaview Rd',
+        dispatchId = 'crimson_contract_9_1',
+        coords = vec3(S.x + 400, S.y, 31.0),
+        members = { A = true, B = true },
+        suspects = { A = true, B = true },
+        armed = {},
+        missionType = 'tactical',
+    }
+    crimes[crime.crimeKey] = crime
+    H.eq(LC.post(crime), true, 'the LIVE call is up')
+    local call = MC._calls()[crime.callId]
+
+    Config.LiveCrime.enabled = false
+    local ok, err = Claim(1, call.id)
+    H.ok(ok == false and err == 'err.live_case_off', 'live crimes switched off: no claim')
+    Config.LiveCrime.enabled = true
+
+    -- an abandon cooldown of the type: ignored with typeCooldown = false (shipped), refused with true
+    cooldowns[Cid(3)] = { types = { tactical = H.time + 600 }, missions = {} }
+    Config.LiveCrime.typeCooldown = true
+    ok, err = Claim(1, call.id)
+    H.ok(ok == false and err == 'err.member_type_cooldown', 'typeCooldown = true: a member\'s type cooldown refuses')
+    Config.LiveCrime.typeCooldown = nil
+    -- the Cross-Department lock: refused only with duringOperation = false
+    opLocked = true
+    Config.LiveCrime.duringOperation = false
+    ok, err = Claim(1, call.id)
+    H.ok(ok == false and err == 'err.operation_locked', 'duringOperation = false: the lock refuses')
+    Config.LiveCrime.duringOperation = nil
+    capBusy.tactical = true                -- the server run caps never stop a live case
+
+    ok, err = Claim(1, call.id)
+    H.ok(ok == true and type(err) == 'table' and err.runId ~= nil, 'claimed: the case starts (lock, caps, cooldown)')
+    H.eq(readyChecks, 0, 'readyCheck = false (shipped): no ready check, the case opens at once')
+    local opts = created[#created]
+    H.eq(opts.mission.id, 'live_crime', 'the engine mission, never a draw')
+    H.eq(opts.missionType, 'tactical', 'the crime\'s mission type')
+    H.eq(#opts.mission.locations, 1, 'one location...')
+    H.eq(opts.mission.locations[1].start.coords.x, crime.coords.x, '...at the crime\'s reported place')
+    H.eq(opts.live and opts.live.crimeKey, crime.crimeKey, 'opts.live names the crime')
+    H.eq(opts.live and opts.live.dispatchId, crime.dispatchId, '...and its SC-Dispatch call')
+    H.eq(opts.live and opts.live.suspects, 2, '...and the number of suspects')
+    H.eq(opts.npcCombat, false, 'no NPC-combat protection on a live case')
+    H.eq(next(opts.twists or {}), nil, 'no twists')
+    H.eq(opts.missionCall and opts.missionCall.staff, true, 'no rapid response for a LIVE call')
+    H.eq(call.status, 'claimed', 'the call is claimed')
+    H.eq(MC.liveCount(), 1, 'and still counts against maxLiveRuns while its case runs')
+    opLocked, capBusy.tactical = false, nil
+
+    CP.Hooks.fire('run:ended', runs[err.runId], 'abandoned', 'quit')
+    H.eq(MC._calls()[call.id], nil, 'the case ended before anyone arrived: the call closes, never re-dispatched')
+    H.eq(MC.liveCount(), 0, '...and no longer counts')
+
+    LC.get = realGet
+    CP.Missions = keepMissions
+    Config.LiveCrime = keepLive
+    CP.Units.readyCheck = nil
 end
 
 return H

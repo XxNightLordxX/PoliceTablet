@@ -43,5 +43,18 @@
   "bonus.live_detain": "Detained a suspect",
   "bonus.live_book": "Booked a suspect",
   "leaderboard.metric.live_catches": "Live catches",
-  "result.lines_only": "Live case: the lines below are the points (no base points)"
+  "result.lines_only": "Live case: the lines below are the points (no base points)",
+  "livecrime.mission.label": "Live case",
+  "livecrime.mission.label_of": "Live case: {crime}",
+  "livecrime.mission.description": "A real crime reported to the police: respond, secure the scene, then detain and book the suspects.",
+  "livecrime.mission.place": "Reported scene",
+  "livecrime.mission.objective": "Respond to the live crime",
+  "err.live_case_off": "Live crimes are switched off.",
+  "err.live_case_gone": "This crime is over, or its suspects are already in another case.",
+  "err.live_case_suspect_used": "These suspects already gave the police all their points for today.",
+  "err.live_case_own_suspect": "You, or someone in your unit, can't take a case against your own character or account.",
+  "err.live_case_suspended": "You, or someone in your unit, is suspended from live cases by an admin.",
+  "err.live_case_recent_suspect": "You, or someone in your unit, was a suspect too recently to take a live case.",
+  "err.live_case_pair_blocked": "An admin has blocked you, or someone in your unit, from cases against one of these suspects.",
+  "err.live_case_pair_cooldown": "You, or someone in your unit, had a case against one of these suspects too recently."
 }

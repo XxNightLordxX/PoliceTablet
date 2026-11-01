@@ -183,6 +183,15 @@ local function limits() return Config.Limits or {} end
 -- Mission controls (Config.MissionControls.controls): the server-wide cooldown changes supervisors may make. A cooldown
 -- entry keeps when it started and both are applied when it is read, so a change, its end or a reset counts at once.
 local Cd = { SCALE = 'cooldownScale', ABANDON = 'abandonCooldown' }
+-- A live case (V14, CP.LiveCrime) on Cd too (the file is at Lua's 200 locals): its mission id and Config.LiveCrime.
+Cd.LIVE_ID = 'live_crime'
+function Cd.liveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
+
+-- Whether a run row of this mission starts the abandon (type) cooldown: a live case only with
+-- Config.LiveCrime.typeCooldown, read now (a restart rebuilds the cooldowns by the same rule).
+function Cd.liveType(missionId)
+    return missionId ~= Cd.LIVE_ID or Cd.liveCfg().typeCooldown == true
+end
 
 -- The abandon (type) cooldown config.lua sets (Config.Limits.abandonCooldown).
 function Cd.abandonConfig() return Num(limits().abandonCooldown, 300) end
@@ -2359,7 +2368,7 @@ local function LoadCooldowns(citizenid)
                 }
             end
         end
-        if TYPE_COOLDOWN[reason] and row.mission_id ~= BOSS_ID and ts > all
+        if TYPE_COOLDOWN[reason] and row.mission_id ~= BOSS_ID and Cd.liveType(row.mission_id) and ts > all
             and ts > Num(byType[row.mission_type], 0) then
             if ts > (c.types[row.mission_type] or 0) then c.types[row.mission_type] = ts end
         end
@@ -2644,7 +2653,7 @@ local function ApplyCooldowns(run, p, endReason)
     if MISSION_COOLDOWN[endReason] then
         c.missions[run.missionId] = { at = now, secs = Num(run.mission.cooldown, 0), type = run.missionType }
     end
-    if TYPE_COOLDOWN[endReason] and not run.isBoss then
+    if TYPE_COOLDOWN[endReason] and not run.isBoss and Cd.liveType(run.missionId) then
         c.types[run.missionType] = math.max(c.types[run.missionType] or 0, now)
     end
 end
@@ -3333,6 +3342,19 @@ local function BasePoints(mission, missionType, isBoss)
     return Num(t and t.points, 0) * stars
 end
 
+-- opts.live of a live case (V14, CP.LiveCrime.liveOf): a clean copy, or nil. No server id or citizenid is kept.
+function Cd.liveOpts(v)
+    if type(v) ~= 'table' or type(v.crimeKey) ~= 'string' or v.crimeKey == '' then return nil end
+    local function Text(t, n) return type(t) == 'string' and U.clip(t, n) or nil end
+    return {
+        crimeKey = U.clip(v.crimeKey, 128),
+        dispatchId = Text(v.dispatchId, 64),
+        title = Text(v.title, 50),
+        street = Text(v.street, 100),
+        suspects = math.max(0, math.floor(Num(v.suspects, 0))),
+    }
+end
+
 function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     if type(opts) ~= 'table' or type(opts.mission) ~= 'table' then return nil, 'err.invalid_mission' end
     local mission = opts.mission
@@ -3368,7 +3390,9 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
             officers[#officers + 1] = o
         end
     end
-    if not test and not opts.operationId then
+    -- a live case (opts.live, V14) is capped by Config.LiveCrime.maxLiveRuns, never by the server run caps
+    local live = Cd.liveOpts(opts.live)
+    if not test and not opts.operationId and not live then
         local ok, errKey = Runs.capsOk(missionType)
         if not ok then return nil, errKey end
     end
@@ -3428,6 +3452,12 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         -- false (opts.npcCombat = false, V14's live runs): no participant's game starts the Config.NpcCombat settings
         npcCombat = opts.npcCombat ~= false,
     }
+    -- A live case (V14, CP.LiveCrime): run.live = { crimeKey, dispatchId, title, street, suspects } and a real suspect
+    -- of kind 'live' (CP.Calls, CP.Alerts, CP.Downed and CP.Route read run.realSuspect)
+    if live then
+        run.live = live
+        run.realSuspect = 'live'
+    end
     -- Hard rule 17's switch, locked at accept: whether leaving the start route ends the run. CP.Route.requiredFor
     -- decides (a test run follows its own Start route switch, test.useStartRoute: on = with the route rules; a live
     -- crime Config.LiveCrime.requireRoute; every other run Config.Route.required); V14 sets run.live above this line.
@@ -3435,6 +3465,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         local okR, required = Call('Route', 'requiredFor', run)
         if not (okR and type(required) == 'boolean') then
             required = test ~= nil or not (Config.Route and Config.Route.required == false)
+            if run.live and not test then required = Cd.liveCfg().requireRoute == true end
         end
         run.routeRequired = required
     end
@@ -3534,8 +3565,14 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     -- Availability). CP.Calls.isOnCall may itself yield (active-call lookup), so it runs before the
     -- no-yield block below.
     if not test and not opts.operationId then
+        -- a live case: the crime's own call and the officers' shots / down calls are part of it (CP.Calls.exemptFor)
+        local except = nil
+        if run.live then
+            local okE, set = Call('Calls', 'exemptFor', run)
+            except = okE and type(set) == 'table' and { except = set } or nil
+        end
         for _, src in ipairs(run.order) do
-            local okC, onCall = Call('Calls', 'isOnCall', src)
+            local okC, onCall = Call('Calls', 'isOnCall', src, except)
             if okC and onCall == true then
                 return nil, (src == leader) and 'err.on_call' or 'err.member_on_call'
             end
@@ -3558,11 +3595,15 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         cids.note(src, cid)
     end
     if CP.Maintenance and CP.Maintenance.active and CP.Maintenance.active() then return nil, 'err.maintenance' end
-    if not test and not opts.operationId then
+    if not test and not opts.operationId and not live then
         local okLock, locked = Call('Operations', 'isLocked')
         if okLock and locked == true then return nil, 'err.operation_locked' end
         local okCaps, capsErr = Runs.capsOk(missionType)
         if not okCaps then return nil, capsErr end
+    elseif live and Cd.liveCfg().duringOperation == false then
+        -- Config.LiveCrime.duringOperation = false: the Cross-Department lock stops live cases too
+        local okLock, locked = Call('Operations', 'isLocked')
+        if okLock and locked == true then return nil, 'err.operation_locked' end
     end
 
     runs[id] = run
@@ -4324,7 +4365,7 @@ function Runs.reclassify(citizenid, runId, newEndReason)
         if MISSION_COOLDOWN[newEndReason] and cooldown and cooldown > 0 then
             c.missions[missionId] = { at = now, secs = cooldown, type = missionType }
         end
-        if TYPE_COOLDOWN[newEndReason] and not isBoss then
+        if TYPE_COOLDOWN[newEndReason] and not isBoss and Cd.liveType(missionId) then
             c.types[missionType] = math.max(c.types[missionType] or 0, now)
         end
     end

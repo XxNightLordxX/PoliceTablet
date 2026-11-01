@@ -372,6 +372,15 @@ do
         typeOfTheDay = 'true = a live case of today\'s Type of the Day gets its points multiplier too',
         goals = 'true = live cases count for the officers\' daily and weekly goals',
         challenge = 'true = live cases count for the department challenge and the weekly bounty',
+        -- V14: the claim
+        caseTime = 'seconds a live case lasts at most; it then ends with the points earned',
+        readyCheck = 'true = a unit of 2+ answers the ready check before its live case opens, like a mission; false = '
+            .. 'the case opens at once (a real crime does not wait)',
+        typeCooldown = 'true = an officer with a type cooldown (he abandoned a mission of that type) can\'t claim a '
+            .. 'LIVE call of that type, and leaving a live case early starts that cooldown; false = live cases ignore '
+            .. 'type cooldowns',
+        duringOperation = 'true = LIVE calls can still be claimed while a Cross-Department Mission runs (its lock stops '
+            .. 'missions only); false = the Cross-Department lock stops live cases too',
     }) do
         local e = S.entry('LiveCrime.' .. path) or {}
         H.eq(e.desc, desc, 'LiveCrime.' .. path .. ': its own comment')
@@ -394,6 +403,11 @@ do
     H.eq((S.check('LiveCrime.secureSeconds', 1000)), false, 'secureSeconds stays within 0-900 s')
     H.ok((S.check('LiveCrime.lastReportedEvery', 0)), 'lastReportedEvery 0 (no points) is allowed')
     H.eq((S.check('LiveCrime.deadCaseSeconds', 1)), false, 'deadCaseSeconds stays within 5-600 s')
+    H.eq((S.check('LiveCrime.caseTime', 30)), false, 'caseTime stays within 60-3600 s')
+    H.ok((S.check('LiveCrime.caseTime', 3600)), 'caseTime 3600 is allowed')
+    for _, k in ipairs({ 'readyCheck', 'typeCooldown', 'duringOperation' }) do
+        H.eq((S.entry('LiveCrime.' .. k) or {}).kind, 'boolean', 'LiveCrime.' .. k .. ' is an on/off setting')
+    end
     for id, desc in pairs({
         live_scene = 'live case: secured the scene',
         live_detain = 'live case: per suspect detained (x his share)',

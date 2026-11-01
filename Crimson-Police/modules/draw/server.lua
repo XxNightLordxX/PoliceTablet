@@ -89,10 +89,43 @@ local function BannedOf(officers, now)
     return o, ban
 end
 
-local function IsOnCall(src)
+-- except (optional, an exemptFor-shaped set): calls of the live case being claimed are ignored (V14).
+local function IsOnCall(src, except)
     if not (CP.Calls and CP.Calls.isOnCall) then return false end
-    local _, onCall = Safe(CP.Calls.isOnCall, src)
+    local _, onCall = Safe(CP.Calls.isOnCall, src, except and { except = except } or nil)
     return onCall == true
+end
+
+-- ============================================================================
+--                             A LIVE CALL'S CLAIM
+-- ============================================================================
+-- (step V14, ARCHITECTURE 5.46): live = { crimeKey } from CP.MissionCalls.
+
+local function LiveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
+
+-- The crime of a live accept, or nil.
+local function LiveCrimeOf(live)
+    if type(live) ~= 'table' or not (CP.LiveCrime and CP.LiveCrime.get) then return nil end
+    local _, crime = Safe(CP.LiveCrime.get, live.crimeKey)
+    return type(crime) == 'table' and crime or nil
+end
+
+-- The calls the claimants (srcs) of this crime may be responding to and still claim: the crime's own SC-Dispatch call
+-- and their own shots / down calls (CP.Calls.exemptFor of the case-to-be).
+local function LiveExcept(live, srcs)
+    local crime = LiveCrimeOf(live)
+    if not (crime and CP.Calls and CP.Calls.exemptFor) then return nil end
+    local participants = {}
+    for _, m in ipairs(srcs or {}) do participants[m] = true end
+    local _, set = Safe(CP.Calls.exemptFor, { live = { dispatchId = crime.dispatchId }, participants = participants })
+    return type(set) == 'table' and set or nil
+end
+
+-- Whether the Cross-Department lock stops this accept: always for a mission; for a live case only while
+-- Config.LiveCrime.duringOperation is false.
+local function LockStops(live)
+    if live and LiveCfg().duringOperation ~= false then return false end
+    return OperationLocked()
 end
 
 -- docs/CRIMSON_ARENA.md rules 5 and 7: a foreign crimsonArena flag or a routing bucket other than 0.
@@ -1397,7 +1430,11 @@ end
 -- Every check of accepting a type, without changing anything: the context for the accept, or false and the
 -- error key the officer sees. A mission call claim runs exactly these (CP.MissionCalls). counts (optional):
 -- { lastHour = fn(citizenid), today = fn(citizenid, type) } in place of CP.Runs' counts (the calls' cache).
-local function CheckAccept(src, typeKey, counts)
+-- live (V14): a LIVE call's claim ({ crimeKey }): no server run caps, the type cooldown only with
+-- Config.LiveCrime.typeCooldown, the Cross-Department lock only without Config.LiveCrime.duringOperation, the crime's
+-- own call is no "real call", and CP.LiveCrime.claimCheck (the crime and the real-suspect rules) on top.
+local function CheckAccept(src, typeKey, counts, live)
+    live = type(live) == 'table' and live or nil
     local leader, errKey = GetOfficer(src)
     if not leader then return false, errKey or 'err.not_police' end
     -- the maintenance lock (a storage copy or switch, a restore): no new runs until the restart
@@ -1410,7 +1447,8 @@ local function CheckAccept(src, typeKey, counts)
     end
     local srcs = UnitMembers(src)
     if #srcs > MaxUnit(leader.department) then return false, 'err.unit_too_large' end
-    if OperationLocked() then return false, 'err.operation_locked' end
+    if LockStops(live) then return false, 'err.operation_locked' end
+    local except = live and LiveExcept(live, srcs) or nil
 
     local isBoss = typeKey == BOSS_KEY
     local missionType = isBoss and 'tactical' or typeKey
@@ -1432,7 +1470,7 @@ local function CheckAccept(src, typeKey, counts)
         local own = o.src == src
         if InArena(o.src) then return false, 'err.in_arena' end
         if OnMission(o.src) then return false, own and 'err.already_on_run' or 'err.member_on_run' end
-        if IsOnCall(o.src) then return false, own and 'err.on_call' or 'err.member_on_call' end
+        if IsOnCall(o.src, except) then return false, own and 'err.on_call' or 'err.member_on_call' end
         if BannedOf({ o }, now) then return false, own and 'err.mission_banned' or 'err.member_mission_banned' end
         if not isBoss and OffBy({ o }, OffOf({ o }), missionType) then return false, 'err.type_off_department' end
         if lastHour(o.citizenid) >= max then
@@ -1444,13 +1482,20 @@ local function CheckAccept(src, typeKey, counts)
         if typeDay and today(o.citizenid, missionType) >= typeDay then
             return false, own and 'err.type_daily_cap' or 'err.member_type_daily_cap'
         end
-        if not isBoss then
+        if not isBoss and not (live and LiveCfg().typeCooldown ~= true) then
             local u = tonumber(CooldownsOf(o.citizenid, officers).types[missionType])
             if u and u > now then return false, own and 'err.type_cooldown' or 'err.member_type_cooldown' end
         end
     end
 
-    if not CapsOk(missionType) then return false, 'err.server_busy' end
+    -- a live case is capped by Config.LiveCrime.maxLiveRuns (its LIVE call), never by the NPC missions' run caps
+    if not live and not CapsOk(missionType) then return false, 'err.server_busy' end
+    if live then
+        if not (CP.LiveCrime and CP.LiveCrime.claimCheck) then return false, 'err.live_case_off' end
+        local okL, allowed, liveErr = Safe(CP.LiveCrime.claimCheck, LiveCrimeOf(live), officers)
+        if not okL then return false, 'err.internal' end
+        if allowed ~= true then return false, liveErr or 'err.live_case_gone' end
+    end
 
     if isBoss then
         if not (CP.Events and CP.Events.bossAvailable) then return false, 'err.boss_unavailable' end
@@ -1470,6 +1515,8 @@ local function CheckAccept(src, typeKey, counts)
         isBoss = isBoss,
         missionType = missionType,
         now = now,
+        live = live,
+        except = except,
     }
 end
 
@@ -1486,8 +1533,9 @@ function Draw.checkTwists(typeKey, officers, raw, dept)
 end
 
 -- true, or false and the error key: whether src could accept typeKey right now (nothing is changed).
-function Draw.check(src, typeKey, counts)
-    local ctx, errKey = CheckAccept(src, typeKey, counts)
+-- live (V14): the checks of a LIVE call's claim ({ crimeKey }, CheckAccept).
+function Draw.check(src, typeKey, counts, live)
+    local ctx, errKey = CheckAccept(src, typeKey, counts, live)
     if not ctx then return false, errKey end
     return true
 end
@@ -1516,7 +1564,18 @@ local function FinishAccept(src, typeKey, ctx, opts)
         return false, key
     end
     local def, index
-    if ctx.isBoss then
+    if ctx.live then
+        -- a live case (V14): no draw; the engine mission at the crime's reported place
+        local crime = LiveCrimeOf(ctx.live)
+        if not crime then return fail('err.live_case_gone') end
+        local okL, allowed, liveErr = Safe(CP.LiveCrime.claimCheck, crime, officers)
+        if not okL then return fail('err.internal') end
+        if allowed ~= true then return fail(liveErr or 'err.live_case_gone') end
+        local okM, d, i = Safe(CP.LiveCrime.missionFor, crime)
+        if not (okM and type(d) == 'table' and i) then return fail('err.live_case_gone') end
+        def, index = d, i
+        ctx.liveData = CP.LiveCrime.liveOf(crime)
+    elseif ctx.isBoss then
         def = CP.Missions and CP.Missions.get(BOSS_ID)
         if not def then return fail('err.boss_unavailable') end
         local ok, why = Eligibility(def, officers, #officers, ctx.now)
@@ -1573,7 +1632,9 @@ local function FinishAccept(src, typeKey, ctx, opts)
         isBoss = def.isBoss == true,
         missionCall = missionCall,
         twists = ctx.twists,
-        noteRefusal = false,   -- Accept keeps the refusal, with the type the leader picked
+        noteRefusal = false,              -- Accept keeps the refusal, with the type the leader picked
+        live = ctx.liveData,
+        npcCombat = ctx.liveData == nil,  -- false for a live case: no NPC-combat protection (§5.42)
     })
     Draw.release(token)
     if not okCall then
@@ -1582,7 +1643,9 @@ local function FinishAccept(src, typeKey, ctx, opts)
     end
     if type(run) ~= 'table' then return fail(createErr or 'err.run_create_failed') end
     if run.id and not byHolder[run.id] then Draw.reserve(run.id, def.id, index) end
-    for _, o in ipairs(officers) do Draw.recordLocation(o.citizenid, def.id, index) end
+    if not ctx.live then
+        for _, o in ipairs(officers) do Draw.recordLocation(o.citizenid, def.id, index) end
+    end
     CP.log(TAG, '%s accepted %s: %s #%d (run %s, %d officer(s))', tostring(src), typeKey, def.id, index,
         tostring(run.id), #officers)
     return true,
@@ -1610,12 +1673,15 @@ end
 -- (called with ok, data|errKey, srcs only when a unit's ready check made the accept wait).
 -- Returns true, { runId } or true, { pending = true } while a unit of 2+ answers the ready check.
 local function AcceptStart(src, typeKey, opts, note)
-    local ctx, errKey = CheckAccept(src, typeKey)
+    local ctx, errKey = CheckAccept(src, typeKey, nil, opts.live)
     if not ctx then return false, errKey end
     ctx.note = note
     local unit, srcs = ctx.unit, ctx.srcs
-    -- the twists the leader chose (PLAN M8b): each must be one the type offers these officers now
-    local twists, twistErr = Draw.checkTwists(typeKey, ctx.officers, opts.twists, ctx.leader.department)
+    -- the twists the leader chose (PLAN M8b): each must be one the type offers these officers now; a live case has none
+    local twists, twistErr = {}, nil
+    if not ctx.live then
+        twists, twistErr = Draw.checkTwists(typeKey, ctx.officers, opts.twists, ctx.leader.department)
+    end
     if not twists then return false, twistErr end
     ctx.twists = twists
 
@@ -1655,6 +1721,8 @@ local function AcceptStart(src, typeKey, opts, note)
         if okRs and type(secs) == 'number' then readySecs = secs end
     end
     local wantCheck = readySecs ~= 0
+    -- a live case waits for the ready check only with Config.LiveCrime.readyCheck (shipped false: a real crime)
+    if ctx.live and LiveCfg().readyCheck ~= true then wantCheck = false end
     if unit and #srcs >= 2 and wantCheck and type(readyCheck) == 'function' and not opts.noReadyCheck then
         local answered = false
         local function done(ok, data, who)
@@ -1670,12 +1738,12 @@ local function AcceptStart(src, typeKey, opts, note)
                 -- the members answered: check them again, the unit stayed locked meanwhile
                 for _, o in ipairs(ctx.officers) do
                     local own = o.src == src
-                    if IsOnCall(o.src) then
+                    if IsOnCall(o.src, ctx.except) then
                         UnlockUnit(unit)
                         return done(false, own and 'err.on_call' or 'err.member_on_call')
                     end
                 end
-                if OperationLocked() then
+                if LockStops(ctx.live) then
                     UnlockUnit(unit)
                     return done(false, 'err.operation_locked')
                 end

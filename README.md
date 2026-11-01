@@ -2844,10 +2844,21 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   a red **LIVE** card (code `LIVE-001`, priority 1, the alert's title and street, the area, how many suspects, never
   where they are) and idle officers who have not muted call alerts get a red toast. It lapses after
   `Config.LiveCrime.offerTime` (300 s) or when the crime ends, and at most `Config.LiveCrime.maxLiveRuns` (2) LIVE calls
-  and live cases run at once (a crime past that is audited **Live crime ignored**). Until step V14 a claim answers
-  "LIVE calls can't be claimed yet". A LIVE call never counts against `Config.MissionCalls.maxOpen` and a Cross-Department
-  lock does not withdraw it.
-  The live case (step V12, used once claims open in step V14): officers see three steps on the HUD: **Respond to the
+  and live cases run at once (a crime past that is audited **Live crime ignored**). A LIVE call never counts against
+  `Config.MissionCalls.maxOpen` and a Cross-Department lock does not withdraw it.
+  Claiming a LIVE call (step V14): the unit leader claims it like any mission call and the case opens at once at the
+  crime's reported place (no draw, no twists, no rapid response; the crime's own SC-Dispatch call does not count as
+  "on a call"). Every accept rule still applies (on duty, unit size, hourly and daily caps, mission ban, arena), except
+  the server run caps (`Config.LiveCrime.maxLiveRuns` caps live cases) and three switches: `readyCheck` (`false`: no
+  ready check; `true`: a unit of 2+ answers it first), `typeCooldown` (`false`: type cooldowns are ignored and a live
+  case starts none) and `duringOperation` (`true`: LIVE calls can be claimed while a Cross-Department Mission runs).
+  The claim is refused when the crime is over or its suspects are in another case, when every suspect already scored
+  `Config.RealSuspects.maxCatchesPerSuspectDay` times today, and when an officer of the unit is in the crew, plays
+  one of the suspects on another character or account, is suspended from these cases, was a suspect within
+  `jobHopMinutes`, or has an admin block or a recent case (`pairCooldownHours`, `suspectCooldownMinutes`) with a
+  suspect. An officer who shares only a connection or PC with a suspect may take it and is flagged for review. A case
+  lasts at most `Config.LiveCrime.caseTime` (1800 s) and its call closes with it (never re-dispatched).
+  The live case (step V12): officers see three steps on the HUD: **Respond to the
   reported scene**, **Secure the scene** (hold it for `Config.LiveCrime.secureSeconds`, 60 s, within
   `Config.LiveCrime.sceneRadius`, 75 m) and **Detain and book the suspects**, which stays open and never shows how many
   suspects are left. The map shows the reported scene and, after that, a **last reported** point per suspect still

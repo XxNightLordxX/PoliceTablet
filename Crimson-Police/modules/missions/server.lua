@@ -877,6 +877,35 @@ function Missions.isEnabled(id)
     return true
 end
 
+-- ============================================================================
+--                          ENGINE MISSIONS (step V14)
+-- ============================================================================
+-- A mission the engine builds itself (CP.LiveCrime's live_crime, ARCHITECTURE 5.46) lives in a registry of its own,
+-- never in defs: it is never listed, drawn, sent with client:missions, shown on a board or opened in the Mission
+-- Builder, and Missions.get never answers it (Missions.engine does). Only it may use an engine-only block.
+local engineDefs = {}
+
+-- The definition, normalized (meta.engine) -> def | nil, err. An id a registered mission uses is refused.
+function Missions.registerEngine(def)
+    if type(def) ~= 'table' then return nil, 'the definition is not a table' end
+    if type(def.id) == 'string' and defs[def.id] then
+        CP.warn(TAG, 'engine mission %s was not registered: a mission uses this id', def.id)
+        return nil, 'a mission already uses this id'
+    end
+    local d, err = Missions.normalize(def, { source = 'builtin', engine = true, quiet = true })
+    if not d then
+        CP.warn(TAG, 'engine mission %s was not registered: %s', tostring(def.id), tostring(err))
+        return nil, err
+    end
+    d.engine = true
+    engineDefs[d.id] = d
+    CP.log(TAG, 'engine mission %s registered', d.id)
+    return d
+end
+
+-- The engine mission of that id (Missions.registerEngine), or nil.
+function Missions.engine(id) return type(id) == 'string' and engineDefs[id] or nil end
+
 local function MetaFromDef(def, defaults)
     defaults = defaults or {}
     return {
@@ -905,6 +934,10 @@ function Missions.register(def)
     if not d then
         CP.warn(TAG, 'mission %s was not registered: %s', tostring(def.id), tostring(err))
         return nil, err
+    end
+    if engineDefs[d.id] then
+        CP.warn(TAG, 'mission %s was not registered: the server\'s own %s case uses this id', d.id, d.id)
+        return nil, 'the server already uses this id'
     end
     local existing = defs[d.id]
     if existing and existing.source == 'builtin' and d.source ~= 'builtin' then

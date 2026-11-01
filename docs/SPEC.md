@@ -1267,6 +1267,7 @@ Real calls, SC-Dispatch and dispatcher mode
 - The Dispatch screen shows a read-only strip: "SC-Dispatch: 3 active real calls (1 Priority 1) — real calls come first". It is counted from mdt_dispatch (NPC calls excluded), refreshed every 15 seconds, lists no calls and gates nothing. If the lookup fails, the strip is hidden.
 
 - SC-Dispatch's dispatcher mode (AssignedOnlyAlerts) has no effect on mission calls, and human dispatchers never see them: mission calls never involve real players; a LIVE call mirrors a real SC-Dispatch call that dispatchers already see. A dispatcher assigning an officer on a mission to a real call ends that officer's run as today.
+- LIVE calls (Config.LiveCrime, off by default): claiming one opens the crime's live case at once at its reported place, with no draw, no twists and no rapid response. Every accept rule applies except the server run caps (Config.LiveCrime.maxLiveRuns caps live cases) and three switches: readyCheck (false: no ready check), typeCooldown (false: type cooldowns are ignored and a live case starts none) and duringOperation (true: claimable while a Cross-Department Mission runs). The claim is refused when the crime is over or its suspects are all in another case, when every suspect already scored Config.RealSuspects.maxCatchesPerSuspectDay times today, and when an officer of the unit is in the crew, is one of the suspects on another character or account, is suspended from these cases by an admin, was a suspect within jobHopMinutes, or has an admin block or a recent case with a suspect (pairCooldownHours, suspectCooldownMinutes). Sharing only a connection or PC with a suspect is allowed and flags that officer for review. A case lasts at most Config.LiveCrime.caseTime; its call closes with it and is never re-dispatched.
 
 Supervisor and admin controls (Config.Permissions.supervisor.missionCalls)
 
@@ -3814,6 +3815,16 @@ Config.LiveCrime = {
     suspectRadius = 300.0,           -- crew members further than this from the crime at the alert are not suspects
     offerTime = 300,                 -- seconds a LIVE call stays open before it lapses (the crime's end lapses it too)
     maxLiveRuns = 2,                 -- LIVE calls and live cases at once; a crime past this gets no LIVE call
+    caseTime = 1800,                 -- seconds a live case lasts at most; it then ends with the points earned
+    -- true = a unit of 2+ answers the ready check before its live case opens, like a mission; false = the case
+    -- opens at once (a real crime does not wait)
+    readyCheck = false,
+    -- true = an officer with a type cooldown (he abandoned a mission of that type) can't claim a LIVE call of that
+    -- type, and leaving a live case early starts that cooldown; false = live cases ignore type cooldowns
+    typeCooldown = false,
+    -- true = LIVE calls can still be claimed while a Cross-Department Mission runs (its lock stops missions only);
+    -- false = the Cross-Department lock stops live cases too
+    duringOperation = true,
     -- The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and book the
     -- suspects. Metres around the reported place that count as being at the scene
     sceneRadius = 75.0,

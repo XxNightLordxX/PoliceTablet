@@ -1024,6 +1024,16 @@ Config.LiveCrime = {
     suspectRadius = 300.0,           -- crew members further than this from the crime at the alert are not suspects
     offerTime = 300,                 -- seconds a LIVE call stays open before it lapses (the crime's end lapses it too)
     maxLiveRuns = 2,                 -- LIVE calls and live cases at once; a crime past this gets no LIVE call
+    caseTime = 1800,                 -- seconds a live case lasts at most; it then ends with the points earned
+    -- true = a unit of 2+ answers the ready check before its live case opens, like a mission; false = the case
+    -- opens at once (a real crime does not wait)
+    readyCheck = false,
+    -- true = an officer with a type cooldown (he abandoned a mission of that type) can't claim a LIVE call of that
+    -- type, and leaving a live case early starts that cooldown; false = live cases ignore type cooldowns
+    typeCooldown = false,
+    -- true = LIVE calls can still be claimed while a Cross-Department Mission runs (its lock stops missions only);
+    -- false = the Cross-Department lock stops live cases too
+    duringOperation = true,
     -- The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and book the
     -- suspects. Metres around the reported place that count as being at the scene
     sceneRadius = 75.0,

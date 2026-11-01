@@ -534,17 +534,22 @@ local function CallRule(call, unit, dist, now)
     return nil
 end
 
+local function LiveOn() return type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true end
+
 -- ok, info | false, errKey: can src's unit claim the call right now (every accept check, then the call's rules).
 local function ClaimCheck(src, call, now)
     local officer, e = GetOfficer(src)
     if not officer then return false, e or 'err.not_police' end
-    local okD, allowed, errKey = Call('Draw', 'check', src, call.type)
+    -- a LIVE call (step V14): the live checks of CP.Draw and CP.LiveCrime.claimCheck, no draw and no pool
+    local live = call.live and { crimeKey = call.live.crimeKey } or nil
+    local okD, allowed, errKey = Call('Draw', 'check', src, call.type, nil, live)
     if not okD then return false, 'err.internal' end
     if allowed ~= true then return false, errKey or 'err.refused' end
     local unit = UnitInfo(src)
     local dist = UnitDistance(unit.srcs, call)
     local rule = CallRule(call, unit, dist, now)
     if rule then return false, rule end
+    if live then return true, { unit = unit, dist = dist, area = nil, officer = officer } end
     if call.missionId then
         -- a pushed mission: that mission for this unit now, in the area the call names (never the type's pool)
         local okM, def, errM = Call('Draw', 'checkMission', call.missionId, call.type, unit.officers, call.area)
@@ -1217,8 +1222,10 @@ local function OnRunEnded(run, state, endReason)
     end
     local cfg = Cfg()
     local reopenOn = not (cfg.reopen and cfg.reopen.enabled == false)
-    -- a pushed mission (step P19) is never offered again: it was that unit's alone
-    if not arrived and REDISPATCH[endReason] and reopenOn and not call.reopened and not call.missionId then
+    -- a pushed mission (step P19) is never offered again: it was that unit's alone; nor a LIVE call (its crime's
+    -- case ran, V14)
+    if not arrived and REDISPATCH[endReason] and reopenOn and not call.reopened and not call.missionId
+        and not call.live then
         NoteFinished(call, 'reopened', now)
         return Reopen(call, now)
     end
@@ -1349,11 +1356,13 @@ TryNext = function(call)
                     area = c.area,
                     twists = c.twists,
                     missionId = call.missionId,
+                    -- a LIVE call (step V14): the crime's case, no draw; it never earns rapid response (staff)
+                    live = call.live and { crimeKey = call.live.crimeKey } or nil,
                     missionCall = {
                         id = call.id > 0 and call.id or nil,
                         code = call.code,
                         area = c.area,
-                        staff = call.staff,
+                        staff = call.staff or call.live ~= nil,
                     },
                     onDone = function(ok2, data2) Accepted(call, c, ok2, data2) end,
                 })
@@ -1408,8 +1417,11 @@ function MC.claim(src, callId, twists)
     end
     local call = calls[math.tointeger(tonumber(callId) or 0)]
     if not call or not VISIBLE[call.status] or call.status == 'lapsed' then return false, 'err.mc_gone' end
-    -- a LIVE call (step V11) is shown and toasted, but its case (the live_crime mission) comes with step V14
-    if call.live then return false, 'err.live_not_ready' end
+    -- a LIVE call (step V14): only while live crimes are on; it has no twists
+    if call.live then
+        if LiveOn() ~= true then return false, 'err.live_case_off' end
+        twists = nil
+    end
     if call.status == 'claiming' then return false, 'err.mc_claiming' end
     if call.status == 'claimed' then return false, 'err.mc_taken_by' end
     local now = os.time()
@@ -2169,8 +2181,8 @@ end
 -- ============================================================================
 -- A crime CP.LiveCrime reported with suspects (Config.LiveCrime) becomes a red LIVE call: memory only (no
 -- cp_mission_calls row, a negative id), priority 1, no draw. It lapses after Config.LiveCrime.offerTime or when its
--- crime ends, and Config.LiveCrime.maxLiveRuns caps the LIVE calls and live cases at once. Its claim answers
--- err.live_not_ready until step V14 opens the case.
+-- crime ends, and Config.LiveCrime.maxLiveRuns caps the LIVE calls and live cases at once. Its claim (step V14) opens
+-- the crime's live case: CP.Draw's live path, no draw; a claimed LIVE call closes with its case, never re-dispatched.
 
 local function LiveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
 

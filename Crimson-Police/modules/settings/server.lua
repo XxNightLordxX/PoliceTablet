@@ -370,6 +370,7 @@ local RANGES = {
     ['LiveCrime.suspectRadius'] = { 10, 2000 },
     ['LiveCrime.offerTime'] = { 30, 3600 },
     ['LiveCrime.maxLiveRuns'] = { 1, 20 },
+    ['LiveCrime.caseTime'] = { 60, 3600 },
     ['LiveCrime.sceneRadius'] = { 10, 500 },
     ['LiveCrime.secureSeconds'] = { 0, 900 },
     ['LiveCrime.lastReportedEvery'] = { 0, 600 },
