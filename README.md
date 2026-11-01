@@ -1450,6 +1450,7 @@ In the server console, type every command **without** the slash.
 | `CrimsonPoliceAdmin settings reset all` | Console only | Puts every setting changed in game back to config.lua |
 | `/CrimsonPoliceAdmin missioncall <type> [area]` | Admins, console | Posts a mission call now. Type = `patrol`, `investigation` or `tactical`. Area = `south_ls`, `downtown`, `west_ls`, `vinewood`, `east_ls`, `port`, `senora`, `north`, `west_county` or `county` (the default). Not while a Cross-Department Mission runs; 2 minutes between calls from the same person (the console counts as one) |
 | `/crimsonheat` | Players who are **not** on police duty, only with `Config.Volunteers.enabled = true` | Volunteers to play a mission's suspect for `Config.Volunteers.windowMinutes` (60): agree to the rules, tick the suspects to play. Typed again it opens the menu (time left, Renew, Change the suspects you play, Stop, and Cancel this case while you play one). The name is `Config.Volunteers.command` (restart to change it). See [9.16](#916-real-suspects-live-crimes-and-volunteers) |
+| `/surrender` | A suspect of a live case, only with `Config.LiveCrime.enabled = true` | Asks him to confirm, then surrenders him to the officers of his case (one must be within `Config.RealSuspects.surrender.surrenderRange`, 50 m). The name is `Config.RealSuspects.surrender.command` (restart to change it). See [9.16.2](#9162-rules-for-cases-with-real-suspects) |
 
 "Admins, console" means an admin in game **and** the server console. "Console only" commands are the three ways
 back in for when the Admin UI can't open ([4.7](#47-the-server-console)). Mission ids (for `payout mission` and `test`)
@@ -2305,6 +2306,10 @@ For officers:
 - Cuff, wait for the cuffs to hold, then book at a station or the prison. A booking far from a station does not
   count.
 - Let a suspect who gives up give up. Hitting someone who is down or cuffed is never part of the job.
+- Talk first. Within `Config.RealSuspects.surrender.talkRange` (15 m) of a free suspect you are told you can talk
+  him down: **Talk them down** in the radial menu asks him to surrender. A suspect who surrenders and is then
+  cuffed with no officer hitting him is a **Peaceful arrest** (`peaceful_arrest` in Config.Bonuses, for the whole
+  unit), and staff see on the timeline who talked him down.
 - The unit leader ends a case with **End case** in the radial menu once nobody is left to work.
 
 For suspects (crew members of a live crime and volunteers):
@@ -2315,6 +2320,10 @@ For suspects (crew members of a live crime and volunteers):
   to stay in. A no or no answer costs nothing; a yes followed by a no-show or walking away is a strike (3 strikes
   in a day block volunteering for a day).
 - Do not stand still to be caught (AFK): an AFK catch counts for nobody and is a strike for a volunteer.
+- Live crimes: you can give up at any time with `/surrender` (`Config.RealSuspects.surrender.command`) while an
+  officer of your case is within `surrenderRange` (50 m), or say yes when an officer talks you down; you can always
+  say no. Once you surrender, stay where you are and keep your hands empty: moving `breakRange` (10 m) away, drawing
+  a weapon or getting out of the cuffs ends it, and it runs out after `holdSeconds` (120 s) with no cuff.
 - No combat logging, no exploiting, no friends feeding you police positions from the tablet or the radio.
 - You can stop at any time: `/crimsonheat` → **Stop** (or **Cancel this case**). It is free within
   `Config.Volunteers.cancelGraceSeconds` (60 s) of your yes and before officers reached you, a strike after that.
@@ -2332,6 +2341,10 @@ For staff:
 - **No points for hurting players.** Points come from securing the scene, detaining and booking. A suspect cuffed
   while down counts only `Config.RealSuspects.neutralisedShare` (half) of a detain, one cuffed while AFK counts
   nothing, and shooting an unarmed suspect or running one over is a penalty (`rs_unarmed_shot`, `rs_ran_over`).
+- **De-escalation counts.** In a live case a suspect can surrender (`/surrender`) or be talked down (**Talk them
+  down**, radial menu); the suspect always chooses. A surrender followed by a cuff with no officer hit scores the
+  `peaceful_arrest` line (15% of P per suspect, x his share), and the timeline names the officer who talked him down.
+  `Config.RealSuspects.surrender` (on, but only while `Config.LiveCrime.enabled` is on).
 - **No live position.** Officers see the reported place and, every `Config.LiveCrime.lastReportedEvery` seconds
   (60), each free suspect's **last reported** point. A volunteer driver's point moves every
   `Config.Volunteers.driverReportEvery` seconds (30); a volunteer at the door or in a search area is never on the
@@ -2354,6 +2367,7 @@ For staff:
 | `/crimsonheat` says it is off | `Config.Volunteers.enabled` is `false`. A player who is refused for another reason is told why (on duty, AFK, excluded, too many strikes) |
 | Nobody is ever asked to play a suspect | Every mode is `'npc'`, the unit did not tick **Real suspect OK**, or no volunteer fits (listed for that suspect, not AFK, not down, no recent case with one of the officers) |
 | A cuff did not count | The officer must be on the case and within `Config.RealSuspects.cuffRange` (3.5 m), and the cuffs must hold `custodyHoldSeconds` (30 s). The timeline shows each cuff and why it did not count |
+| `/surrender` or **Talk them down** does nothing | `Config.LiveCrime.enabled` or `Config.RealSuspects.surrender.enabled` is `false`, the player is not a free suspect of a live case (volunteer cases have no surrender), no officer of the case is within `surrenderRange` (50 m), or the officer is not within `talkRange` (15 m) of a free suspect. A new command name needs a restart |
 | The Real suspects screen is missing | Both features are off, the admin has no `antiFarmOverride` key, or `Config.RealSuspects.adminScreen = false` |
 
 ---
@@ -3165,6 +3179,15 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   staff timeline) and a table of what to check when something does not happen. `/crimsonheat` is in 8.1, the
   in-game checklist has a check for every step V11-V27, and SPEC's SOP has the rules for cases with real suspects.
   No behaviour changes.
+  Surrender and talk-down (step RP1, `Config.RealSuspects.surrender`, shipped on but only while
+  `Config.LiveCrime.enabled` is on): a suspect of a live case can give up with `/surrender` (an ox_lib yes/no
+  pop-up; an officer of the case must be within `surrenderRange`, 50 m), and every officer of the case has **Talk
+  them down** in the radial menu, which asks the nearest free suspect within `talkRange` (15 m) to surrender (once
+  per officer and suspect every `talkCooldown`, 30 s; an officer who comes that close is told once). The suspect
+  always chooses. A surrender ends when he moves `breakRange` (10 m), draws a weapon, gets out of the cuffs or nobody
+  cuffs him within `holdSeconds` (120 s). A surrendered suspect who is detained with no officer hit since scores the
+  shared `peaceful_arrest` line (Config.Bonuses, 15% of P x his share); the case timeline keeps talk_down,
+  talk_refused, surrendered, surrender_ended and peaceful_arrest with the officer's name for staff.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

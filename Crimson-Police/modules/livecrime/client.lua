@@ -1,6 +1,4 @@
 -- CP.LiveCrime (client, step V15): the pop-up that asks an officer to join a live case as backup. The server decides
--- who is asked (a response to the crime's call, the scene, a cuff on a suspect) and checks the answer again; this
--- side only shows the question and sends yes or no with the offer's token.
 
 local open = nil   -- the offer whose pop-up is showing: { runId, token }
 
@@ -33,8 +31,32 @@ RegisterNetEvent(CP.e('client:liveJoinOffer'), function(offer)
     end)
 end)
 
+local asked = nil  -- the surrender question showing: { token }
+
+RegisterNetEvent(CP.e('client:liveSurrenderAsk'), function(q)
+    if type(q) ~= 'table' or type(q.token) ~= 'string' then return end
+    if asked or open then return end
+    asked = { token = q.token }
+    local mine = asked
+    local seconds = math.max(5, math.floor(tonumber(q.seconds) or 20))
+    SetTimeout(seconds * 1000, function()
+        if asked == mine then pcall(lib.closeAlertDialog) end
+    end)
+    CreateThread(function()
+        local which = q.talk == true and 'talk' or 'self'
+        local answer = lib.alertDialog({
+            header = CP.L('livecrime.surrender.ask_title_' .. which),
+            content = CP.L('livecrime.surrender.ask_content_' .. which),
+            centered = true,
+            cancel = true,
+        })
+        if asked == mine then asked = nil end
+        TriggerServerEvent(CP.e('server:liveSurrender'), mine.token, answer == 'confirm')
+    end)
+end)
+
 AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() or not open then return end
-    open = nil
+    if res ~= GetCurrentResourceName() or not (open or asked) then return end
+    open, asked = nil, nil
     pcall(lib.closeAlertDialog)
 end)

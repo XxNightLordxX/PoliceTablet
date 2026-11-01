@@ -126,6 +126,30 @@ do
     end
     H.ok(not S.check('Volunteers.windowMinutes', 5), 'a window under 10 minutes is refused')
     H.ok(not S.check('Volunteers.command', 'crimson heat'), 'a command with a space is refused')
+
+    -- RP1: surrender and Talk them down, each key with its config.lua comment as the description
+    local sw = S.entry('RealSuspects.surrender.enabled') or {}
+    H.eq(sw.kind, 'boolean', 'RealSuspects.surrender.enabled is a switch')
+    H.eq(sw.desc, 'true = the surrender command and Talk them down work in live cases',
+        'its comment is its description')
+    H.ok(not sw.restart and not sw.money, 'the surrender switch applies live and is not a money switch')
+    local sc = S.entry('RealSuspects.surrender.command') or {}
+    H.eq(sc.default, 'surrender', 'the surrender command ships /surrender')
+    H.eq(sc.restart, true, 'a new command name needs a restart (RegisterCommand cannot be undone)')
+    H.ok(not S.check('RealSuspects.surrender.command', 'give up'), 'a command with a space is refused')
+    for path, bad in pairs({
+        ['RealSuspects.surrender.talkRange'] = 100,
+        ['RealSuspects.surrender.surrenderRange'] = 1,
+        ['RealSuspects.surrender.askSeconds'] = 1,
+        ['RealSuspects.surrender.talkCooldown'] = 1,
+        ['RealSuspects.surrender.holdSeconds'] = 5,
+        ['RealSuspects.surrender.breakRange'] = 500,
+    }) do
+        local e = S.entry(path) or {}
+        H.ok(type(e.desc) == 'string' and e.desc ~= '', path .. ' has a description')
+        H.ok(not S.check(path, bad), path .. ' refuses ' .. bad)
+        H.ok((S.check(path, e.default)), path .. ' takes its shipped value')
+    end
 end
 
 -- ============================================================================

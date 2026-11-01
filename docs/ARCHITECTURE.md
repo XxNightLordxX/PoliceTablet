@@ -3419,6 +3419,35 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
     turned-on department (`CP.Access.departmentForJob`), and with `Config.LiveCrime.availablePolice = 'idle'`
     (shipped; Settings enum `idle` / `duty`) only those `CP.Runs.isOnMission` says are on no mission. Memory only,
     never yields (no suspension or real-call lookup). Spec: tests/live_results_spec.lua.
+- **Surrender and Talk them down (RP1).** modules/opponents/surrender/server.lua; `Config.RealSuspects.surrender`
+  (`enabled` shipped true; every path also needs `Config.LiveCrime.enabled`). Live cases only (a volunteer case has
+  none). The design was silent past "surrender or talk-down choices, server checks distance, case membership and
+  states"; the simplest safe one: a surrender is a mark on the suspect's record (`rec.surrender = { at, coords, by,
+  ended }`), never a CP.Opponents state, so the cuff, the detain and the booking stay the proof's (V5).
+  - The suspect's command (`command`, shipped `surrender`; RegisterCommand on the server the first time the feature
+    is on at start or on `settings:changed`, a new name needs a restart; 2 per 3 s): `Opp.surrenderCommand(src)`
+    refuses `livecrime.surrender.off`, `not_wanted` (no free suspect of a live case), `already`, `cannot` (down, in an
+    instance), `pending`; else the question.
+  - Talk them down (`server:liveTalkDown`, no args, 2 per 2 s): `Opp.talkDown(src)` -> the officer must be an active
+    participant of an open live case (`livecrime.talk.no_case`); the nearest free suspect (online, bucket 0, not down,
+    not surrendered) within `talkRange` (15 m) by server coords of both, else `livecrime.talk.none`; one open question
+    per suspect (`busy`); the same officer and suspect again only after `talkCooldown` (30 s, `cooldown`). Timeline
+    `talk_down` (by = the officer).
+  - The question: `client:liveSurrenderAsk { token, seconds = askSeconds (20, 5-60), talk }`, an ox_lib alert dialog
+    closed after `seconds`; the answer `server:liveSurrender(token, yes)` (3 a second). The token must be the
+    suspect's open one for this case. No: timeline `talk_refused` and the officer is told. Yes, before `untilMs`:
+    `Enabled`, still a free live suspect not down, bucket 0, and an active officer of the case within
+    `surrenderRange` (50 m) of his server position (`livecrime.surrender.no_officer`); then `rec.surrender`, timeline
+    `surrendered` (by = the talker), the suspect and the case's officers are told (labels only).
+  - The watch pass (`Opp.onTick`): while he is free a surrender ends (`surrender_ended`, why) when he was cuffed after
+    it and is free again (`released`), a weapon was seen after it (`armedUntil - armedMemory > at`, `armed`), his last
+    watch position is more than `breakRange` (10 m) from where he gave up (`moved`), or `holdSeconds` (120 s) passed
+    (`lapsed`); lost, left or void end it silently. The prompt: an active officer within `talkRange` of a free,
+    unsurrendered suspect is told once per officer and suspect (`livecrime.talk.hint`, the label only).
+  - `Opp.peaceful(run, cid) -> bool, by`: a live case, a surrender that has not ended, `cuffedAt >= at`, not
+    detained by a leave, and no officer hit since (`rec.lastHitAt < at`, V6's ledger). The staff screen reads the new
+    lines through `opp.line.<what>`. Memory only; a question is dropped at the run's end. Spec:
+    tests/live_surrender_spec.lua.
 - Config.LiveCrime keys of V10: `sources = { 'crimson-contracts' }` (a list of resource names), `types` (an OPEN table
   in Settings: Crimson-Contracts' contract keys -> a Config.MissionTypes key or false, checked by Settings),
   `suspectRadius = 300.0` (10-2000 m).
@@ -4367,6 +4396,12 @@ Config.Blocks entry, so builder:config never lists it). Its settings are Config.
   -> `live_book`, once per suspect each, shared (every active participant); share defaults to 1, 0 (an AFK catch)
   records no line. Config.Bonuses `live_scene` (pct 0.25), `live_detain` (pct 0.50, each), `live_book` (pct 0.25,
   each) are engine-only. Other opp_* events are accepted and ignored.
+- Peaceful arrest (RP1): on `opp_detained`, after the detain line, `CP.Opponents.peaceful(run, cid)` true and a share
+  above 0 -> `ctx.award('peaceful_arrest', { weight = share })` once per suspect (shared) and the timeline line
+  `peaceful_arrest` with `by` = the officer who talked him down (nil for his own surrender). Config.Bonuses
+  `peaceful_arrest` (pct 0.15, each) is engine-only. The client half adds the radial item **Talk them down**
+  (`crimson-police:live_talk_down`, every officer of the case, while `Config.LiveCrime.enabled` and
+  `Config.RealSuspects.surrender.enabled`; `server:liveTalkDown`), removed at stop and onResourceStop.
 - End: client evidence `{ type = 'end_case' }` from the run host completes the objective (timeline `end_case`;
   others: `not_host`); `onTimeout` answers `'completed'` (a real case ends with what was earned); the dead case: no
   suspect free, cuffed or detained (or no case) for `deadCaseSeconds` (30) -> `ctx.complete({ reason = 'dead_case' })`
@@ -4420,6 +4455,7 @@ Config.Blocks entry, so builder:config never lists it). Its settings are Config.
 | `client:objective` (new action) | runId, index, `{ action = 'adopt', op = 'adopt', netId, obj, from }`: the host moves the AI of netId to objective obj's client half | runs |
 | `client:missionCall` | `{ id, code, typeLabel, priority, areaLabel, paged?, live?, title?, street? }` (live: a LIVE call, V11) (toast and tone; the client drops it when muted, on a run or in the arena) | missioncalls |
 | `client:liveJoinOffer` | `{ runId, token, title, street, seconds }` (V15: the yes/no pop-up to join a live case; one at a time, closed after `seconds`) | livecrime |
+| `client:liveSurrenderAsk` | `{ token, seconds, talk }` (RP1: a live suspect's surrender question, his own command or an officer's Talk them down; closed after `seconds`) | livecrime |
 | `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName, twists = { { key, label } }, live? = { title, street, suspects } }` (live: a live case's LIVE line, V16) or nil to clear | units |
 | `client:contactAct` | `{ runId, netId, behaviour, args, seconds }` to the run host only, when the behaviour starts | custody |
 | `client:contactConfirm` | `{ netId, choice, factKey }`: open the tablet with the case-fail confirm | custody |
@@ -4448,6 +4484,8 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:objective` | runId, index, evidence (three args, no reqId; the server-only types of §5.10, CP.Opponents' opp_* types among them, are refused and flag the sender) | runs |
 | `server:telemetry` | runId, kind, data (three args, no reqId) | runs |
 | `server:liveJoin` | runId, token, yes (three args, no reqId; 3 a second; only the token of a live offer that has not run out joins, through `CP.Runs.addParticipant`) | livecrime |
+| `server:liveSurrender` | token, yes (RP1; 3 a second; only the suspect's own open question, checked again: free, not down, an officer of the case within `surrenderRange`) | opponents/surrender |
+| `server:liveTalkDown` | none (RP1; 2 per 2 s; an active officer of an open live case, the nearest free suspect within `talkRange` by server coords) | opponents/surrender |
 | `server:abandon` | runId | runs |
 | `server:dispute` | `{ rowId, reason }` | disputes |
 | `server:setHideName` | boolean | leaderboard |

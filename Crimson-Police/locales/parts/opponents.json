@@ -252,5 +252,10 @@
   "rs.ui.col.roles": "Suspects he plays",
   "rs.ui.col.since": "Since",
   "rs.ui.col.strikes": "Strikes",
-  "rs.ui.col.playing": "Now"
+  "rs.ui.col.playing": "Now",
+  "opp.line.talk_down": "{by} asked suspect {label} to surrender (Talk them down)",
+  "opp.line.talk_refused": "Suspect {label} said no to the Talk them down of {by}",
+  "opp.line.surrendered": "Suspect {label} surrendered (talked down by: {by})",
+  "opp.line.surrender_ended": "Suspect {label} stopped surrendering ({why})",
+  "opp.line.peaceful_arrest": "Peaceful arrest of suspect {label} (talked down by: {by})"
 }

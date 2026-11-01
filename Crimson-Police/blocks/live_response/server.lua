@@ -25,12 +25,12 @@ local function StateOf(ctx)
     local st = ctx.state
     if not st.init then
         st.init = true
-        st.phase = 'respond'                             -- 'respond' | 'secure' | 'detain'
-        st.secureS = 0                                   -- seconds an officer held the scene
-        st.lines = { live_detain = {}, live_book = {} }  -- [cid] = weight recorded (once per suspect)
-        st.reported = {}                                 -- the last-reported points, refreshed every lastReportedEvery seconds
-        st.reportAt = nil                                -- GetGameTimer() of the next refresh
-        st.reportedAt = nil                              -- os.time() of the last report (the tablet's case card)
+        st.phase = 'respond' -- 'respond' | 'secure' | 'detain'
+        st.secureS = 0 -- seconds an officer held the scene
+        st.lines = { live_detain = {}, live_book = {}, peaceful_arrest = {} } -- [cid] = weight (once per suspect)
+        st.reported = {} -- the last-reported points, refreshed every lastReportedEvery seconds
+        st.reportAt = nil -- GetGameTimer() of the next refresh
+        st.reportedAt = nil -- os.time() of the last report (the tablet's case card)
     end
     return st
 end
@@ -202,11 +202,29 @@ local function Line(ctx, st, id, ev)
     return true
 end
 
+-- A detain of a suspect who surrendered and was not hit since (CP.Opponents.peaceful, step RP1): the shared
+-- peaceful_arrest line, weighted by his share, and a timeline line naming who talked him down.
+local function Peaceful(ctx, st, ev)
+    if type(ev.cid) ~= 'string' or st.lines.peaceful_arrest[ev.cid] ~= nil then return end
+    local O = CP.Opponents
+    if not (O and O.peaceful) then return end
+    local ok, by = O.peaceful(ctx.run, ev.cid)
+    local weight = U.clamp(Num(ev.share, 1), 0, 1)
+    if not ok or weight <= 0 then return end
+    st.lines.peaceful_arrest[ev.cid] = weight
+    ctx.award('peaceful_arrest', { weight = weight })
+    if O.timeline then O.timeline(ctx.run, { what = 'peaceful_arrest', label = ev.label, by = by }) end
+end
+
 local function OnEvent(ctx, src, ev)
     local st = StateOf(ctx)
     if src == nil then
         -- CP.Opponents' server-only events (a client's opp_* is refused before it gets here)
-        if ev.type == 'opp_detained' then return Line(ctx, st, 'live_detain', ev) end
+        if ev.type == 'opp_detained' then
+            Line(ctx, st, 'live_detain', ev)
+            Peaceful(ctx, st, ev)
+            return true
+        end
         if ev.type == 'opp_booked' then return Line(ctx, st, 'live_book', ev) end
         return true
     end

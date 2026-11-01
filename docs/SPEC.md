@@ -3805,6 +3805,20 @@ Config.RealSuspects = {
     },
     fastCatchSeconds = 60,           -- seconds: a detain this soon after the case started is a warning sign
     pairLedgerDays = 30,             -- days the pair ledger keeps case rows (admin blocks stay until they expire)
+    -- Surrender and Talk them down in a live case (Config.LiveCrime; nothing while live crimes are off). A suspect
+    -- gives himself up with the command below, or says yes when an officer of the case close to him uses Talk them
+    -- down (radial menu); the suspect always chooses. A surrendered suspect then detained with no officer hit on him
+    -- scores the peaceful_arrest line (Config.Bonuses), and the case timeline shows who talked him down
+    surrender = {
+        enabled = true,              -- true = the surrender command and Talk them down work in live cases
+        command = 'surrender',       -- the suspect's chat command (without the /)
+        talkRange = 15.0,            -- metres: an officer this close to a free suspect can talk him down
+        surrenderRange = 50.0,       -- metres: a surrender counts only with an officer of the case this close
+        askSeconds = 20,             -- seconds the suspect's yes/no pop-up waits for an answer
+        talkCooldown = 30,           -- seconds before the same officer can talk the same suspect down again
+        holdSeconds = 120,           -- seconds a surrender lasts with no cuff before it lapses
+        breakRange = 10.0,           -- metres: a surrendered suspect who moves this far from where he gave up ends it
+    },
 }
 
 -- ============================================================================
@@ -4296,6 +4310,7 @@ Config.Bonuses = {
     live_scene = { kind = 'pct', value = 0.25, engineOnly = true },                     -- live case: secured the scene
     live_detain = { kind = 'pct', value = 0.50, each = true, engineOnly = true },       -- live case: per suspect detained (x his share)
     live_book = { kind = 'pct', value = 0.25, each = true, engineOnly = true },         -- live case: per suspect booked (x his share)
+    peaceful_arrest = { kind = 'pct', value = 0.15, each = true, engineOnly = true },   -- live case: per suspect detained after a surrender, no officer hit (x his share)
 }
 
 -- Cosmetic badges only; never the Qbox rank. Each name is a band of numbered levels starting at level;

@@ -2315,6 +2315,15 @@ Public API (docs/ARCHITECTURE.md §5.22)
 Test hooks: CP.Leaderboard._weeklyJob(prevStartTs, curStartTs), CP.Leaderboard._boot()
 ```
 
+## Crimson-Police/modules/livecrime/client.lua
+
+```text
+CP.LiveCrime (client, step V15): the pop-up that asks an officer to join a live case as backup. The server decides
+who is asked (a response to the crime's call, the scene, a cuff on a suspect) and checks the answer again; this
+side only shows the question and sends yes or no with the offer's token. Step RP1: the same for a suspect's
+surrender question (his own command, or an officer's Talk them down).
+```
+
 ## Crimson-Police/modules/migrations/server.lua
 
 ```text
@@ -2785,6 +2794,18 @@ case data here (names, citizenids, the timeline, the damage ledger, the flags an
 to an admin's Admin UI through these callbacks and never to an officer's tablet (Opp.view has no names). Reads
 are memory only (open cases and the last Config.RealSuspects.casesKept closed ones; the pair ledger's window).
 Nothing here runs while nobody asks; the actions are refused while both features are off.
+```
+
+## Crimson-Police/modules/opponents/surrender/server.lua
+
+```text
+CP.Opponents surrender (server, step RP1): a real suspect of a live case gives himself up, by his own command or
+when an officer of the case close to him uses Talk them down (the suspect always chooses). Config.RealSuspects
+.surrender, behind Config.LiveCrime.enabled. The server decides everything from its own positions and the case's
+states; the clients only show the question and send the answer with its token. A surrender is a mark on the
+suspect (rec.surrender), never a state: the cuff, the detain and the booking stay the proof's (V5). A surrendered
+suspect detained with no officer hit on him since he gave up is a peaceful arrest (Opp.peaceful, read by the
+live_response block for the peaceful_arrest line), and the case timeline keeps who talked him down.
 ```
 
 ## Crimson-Police/modules/options/client.lua
@@ -5636,6 +5657,15 @@ Live scoring (step V13): a live case scores only its weighted live_* lines (Conf
 comes from the crew (Config.LiveCrime.tier), and the Type of the Day, goals, challenge, cash and item switches keep
 it out of each of those until the owner turns them on. Every live-case detain is a live catch on the row and a
 Rank by tab. Plain Lua with stubs (no SQL); the 014 column is checked by foundation_spec.
+```
+
+## tests/live_surrender_spec.lua
+
+```text
+Surrender and Talk them down in a live case (step RP1, modules/opponents/surrender): the suspect's own command, an
+officer's Talk them down within talkRange, the suspect's yes or no, the server's distance, case and state checks,
+the lapse rules, the officers' prompt, Opp.peaceful and the staff timeline lines. All off while
+Config.LiveCrime.enabled is false.
 ```
 
 ## tests/live_tablet_spec.lua

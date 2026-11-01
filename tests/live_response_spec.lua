@@ -83,7 +83,7 @@ do
     H.eq(lc.secureSeconds, 60, 'secureSeconds ships 60 s')
     H.eq(lc.lastReportedEvery, 60, 'lastReportedEvery ships 60 s')
     H.eq(lc.deadCaseSeconds, 30, 'deadCaseSeconds ships 30 s')
-    for id, value in pairs({ live_scene = 0.25, live_detain = 0.50, live_book = 0.25 }) do
+    for id, value in pairs({ live_scene = 0.25, live_detain = 0.50, live_book = 0.25, peaceful_arrest = 0.15 }) do
         local b = Config.Bonuses[id] or {}
         H.eq(b.kind, 'pct', id .. ' is a share of P')
         H.eq(b.value, value, id .. ' ships ' .. value)
@@ -167,6 +167,27 @@ do
     H.eq(#Lines(ctx, 'live_detain'), 1, 'an AFK catch (share 0) records no line')
     B.onEvent(ctx, nil, { type = 'opp_booked', cid = 'CA', label = 'A', share = 0.5 })
     H.eq(Lines(ctx, 'live_book')[1].opts.weight, 0.5, 'the booking line carries the same share')
+    H.eq(#Lines(ctx, 'peaceful_arrest'), 0, 'no surrender module answer: no peaceful arrest line')
+
+    -- RP1: a detain CP.Opponents.peaceful calls peaceful scores the shared peaceful_arrest line (x his share) once,
+    -- and the staff timeline names who talked him down
+    local peaceful = { CB = 2 }
+    CP.Opponents.peaceful = function(_, cid) return peaceful[cid] ~= nil, peaceful[cid] end
+    local entries = {}
+    local plainTimeline = CP.Opponents.timeline
+    CP.Opponents.timeline = function(run, entry)
+        entries[#entries + 1] = entry
+        return plainTimeline(run, entry)
+    end
+    B.onEvent(ctx, nil, { type = 'opp_detained', cid = 'CB', label = 'B', share = 0.5 })
+    B.onEvent(ctx, nil, { type = 'opp_detained', cid = 'CB', label = 'B', share = 0.5 })
+    local p = Lines(ctx, 'peaceful_arrest')
+    H.eq(#p, 1, 'a peaceful detain: one peaceful_arrest line per suspect')
+    H.eq(p[1].opts.weight, 0.5, 'weighted by his share')
+    H.eq(p[1].opts.src, nil, 'shared by the unit')
+    local pl = entries[#entries]
+    H.ok(pl and pl.what == 'peaceful_arrest' and pl.by == 2 and pl.label == 'B', 'the timeline names officer 2')
+    CP.Opponents.peaceful, CP.Opponents.timeline = nil, plainTimeline
     local ok, why = B.onEvent(ctx, 2, { type = 'end_case' })
     H.ok(ok == false and why == 'not_host', 'End case: only the unit leader')
     H.eq(ctx.completed, nil, 'a partner cannot end the case')

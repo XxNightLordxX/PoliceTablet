@@ -1,6 +1,6 @@
 # In-game checklist
 
-Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, K7-K23, Q8-Q23, L2-L7, A1-A12, B1-B17, O1-O15, P1-P22, C14, X11). The step id in brackets says which commit a check belongs to.
+Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23, Q8-Q23, L2-L7, A1-A12, B1-B17, O1-O15, P1-P22, C14, X11). The step id in brackets says which commit a check belongs to.
 
 ## Before you start
 
@@ -180,6 +180,7 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, K7-K23, Q8-
 - [ ] Admin UI -> Real suspects shows the case with its timeline (claim, responded, scene secured, contact, cuffed, detained, end case), the damage ledger and the flags; shoot an unarmed suspect: the officer's run is flagged rs_unarmed_shot. (V17, V18)
 - [ ] With a test script listening (AddEventHandler 'crimson-police:server:liveCrimeEnded'), the end of a live case prints the crime's uid and each suspect's outcome by citizenid, with no position; `exports['Crimson-Police']:GetAvailablePolice()` answers the idle on-duty officers (nil while live crimes are off). (V19)
 - [ ] A volunteer mission ends: a script listening to 'crimson-police:server:volunteerEnded' gets his citizenid, the suspect he played and his outcome; Admin UI -> Real suspects -> Cases filter Volunteers shows the case (the suspect played, the mode, where the match got to), and the Volunteers tab lists who volunteers now with their strikes. (V26)
+- [ ] Surrender in a live case (Config.LiveCrime.enabled = true): as the suspect type /surrender with an officer of the case within 50 m: a Surrender pop-up; Yes tells the officers "Suspect A has surrendered: cuff them". Cuff him and hold 30 s: the result has the Peaceful arrest line. Walk 10 m away, draw a weapon or wait 120 s uncuffed: the surrender ends and both sides are told. As an officer within 15 m of a free suspect you get "close enough to talk down" once; radial Talk them down gives the suspect "An officer is talking you down" (No: the officer is told, nothing else changes). Admin UI -> Real suspects timeline shows talk_down, surrendered (with the officer's name), peaceful_arrest. With enabled = false /surrender does nothing and the radial item is missing. Resmon idle stays at 0.02 ms or less. (RP1)
 - [ ] Owner walk-through: follow README 9.16.1 (Owner checklist) on a test server, share README 9.16.2 (Rules for cases with real suspects) with officers and players, then set both switches back to false: nothing new starts and idle resmon stays at 0.02 ms or less. (V27)
 
 ## Restarts and logout
