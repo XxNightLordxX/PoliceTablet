@@ -7,6 +7,7 @@ local registered = nil   -- the command name once registered (RegisterCommand ca
 local busy = false       -- a dialog is open
 local ask = nil          -- the server's open question (V22): { token, closed }
 local waypoint = false   -- this script set the meet point as the map waypoint
+local area = nil         -- his play area's radius blip (search_area's fugitive, V25)
 
 local function Send(action, data) TriggerServerEvent(CP.e('server:volunteer'), action, data) end
 
@@ -180,6 +181,11 @@ RegisterNetEvent(CP.e('client:volunteerAskClose'), function(token)
     pcall(lib.closeAlertDialog)
 end)
 
+local function ClearArea()
+    if area then RemoveBlip(area) end
+    area = nil
+end
+
 -- His own case: the meet point as his map waypoint while he travels, removed when it is over.
 RegisterNetEvent(CP.e('client:volunteerCase'), function(state)
     if type(state) ~= 'table' then return end
@@ -201,6 +207,19 @@ RegisterNetEvent(CP.e('client:volunteerCase'), function(state)
         waypoint = false
         SetWaypointOff()
     end
+    if state.phase == 'over' then ClearArea() end
+end)
+
+-- The area he must stay in (V25: the search circle of a fugitive he plays): a radius blip on his own map, redrawn
+-- each time the circle shrinks; nil removes it. Only the server sends it, only while he plays.
+RegisterNetEvent(CP.e('client:volunteerArea'), function(a)
+    ClearArea()
+    if type(a) ~= 'table' then return end
+    local x, y, z, r = tonumber(a.x), tonumber(a.y), tonumber(a.z), tonumber(a.r)
+    if not (x and y and r and r > 0) then return end
+    area = AddBlipForRadius(x + 0.0, y + 0.0, (z or 0.0) + 0.0, r + 0.0)
+    SetBlipColour(area, 1)
+    SetBlipAlpha(area, 90)
 end)
 
 -- The command exists only once Config.Volunteers.enabled is on (at the start, or when an admin turns it on).
@@ -219,6 +238,7 @@ CP.Hooks.on('settings:changed', Register)
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
     if waypoint then SetWaypointOff() end
+    ClearArea()
     if not busy then return end
     pcall(lib.closeAlertDialog)
     pcall(lib.closeInputDialog)

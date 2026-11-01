@@ -395,7 +395,8 @@ local RANGES = {
     ['Volunteers.travelSeconds'] = { 60, 1800 },
     ['Volunteers.meetRadius'] = { 5, 200 },
     ['Volunteers.cancelGraceSeconds'] = { 0, 600 },
-    ['Volunteers.driverReportEvery'] = { 0, 300 },  -- V24
+    ['Volunteers.driverReportEvery'] = { 0, 300 },   -- V24
+    ['Volunteers.fugitiveOutSeconds'] = { 0, 300 },  -- V25
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },

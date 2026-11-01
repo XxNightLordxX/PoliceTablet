@@ -62,7 +62,8 @@ local LINE_KEYS = {
     no_show = true,
     volunteer_cancel = true,
     volunteer_npc = true,
-    volunteer_afk = true,    -- caught while AFK: his part is void (V23)
+    volunteer_afk = true,            -- caught while AFK: his part is void (V23)
+    volunteer_out_of_bounds = true,  -- a fugitive outside the search circle too long: void (V25)
 }
 
 local STATE_KEY = {

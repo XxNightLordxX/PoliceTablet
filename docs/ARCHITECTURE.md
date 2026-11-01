@@ -3541,6 +3541,10 @@ run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc
   `doorAssociates` (false: flee_arrest's door spawns no associate while a volunteer may play, §7.3).
 - Config.Volunteers keys of V24: `driverNpcCars` (false: a volunteer driver's pursuit spawns no NPC car; true: one
   fewer) and `driverReportEvery` (30 s, Settings 0-300; 0 = no last-reported point), §7.3.
+- Config.Volunteers keys of V25: `fugitiveNpcs` (false: no NPC fugitive while a volunteer hides; true: one fewer)
+  and `fugitiveOutSeconds` (30 s, Settings 0-300; 0 = no circle rule), §7.3. What a block may tell the volunteer who
+  plays (only in travel, in_position, engaged): `V.caseNote(run, kind, key, vars)`, `V.caseArea(run, area|nil)`
+  (`client:volunteerArea`) and `V.outOfBounds(run)` (`Voided(m, 'out_of_bounds')`, a strike).
 
 **Gates (V22b, modules/volunteers/match/server.lua; critic 2 #9, #11, #12).** Before any built-in block offers a slot:
 - Caps: `V.capsOk(run, cid) -> true | false, why`, part of every ask check (`Fits`): `suspect_used` (his
@@ -4226,7 +4230,7 @@ mission, location) -> { role, meet = vec3, ... } | nil` is an optional server-ha
 fugitive) offer one, and CP.Volunteers (§5.47) uses it to find the objective a volunteer can play. The registry
 (V21, shared/init.lua): `CP.Blocks.register` drops a `volunteerSlot` that is no function (with a warning) and
 `CP.Blocks.withSlot()` lists the block ids that offer one; the answer must carry a §5.47 role (runner, driver,
-fugitive) or it is no slot. flee_arrest offers one from V23, pursuit from V24 (below); search_area later. Built in steps
+fugitive) or it is no slot. flee_arrest offers one from V23, pursuit from V24, search_area from V25 (below). Built in steps
 V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
 
 **flee_arrest's runner slot (V23, blocks/flee_arrest).** Door mode only (Warrant Service): `volunteerSlot` answers
@@ -4277,6 +4281,34 @@ own car (no car is made for him). The block reads `ctx.volunteer()` on start, ev
   sent), else the start.
 - `'void'`: nothing spawns. Voids (no-show, cancel, leave, AFK catch) stay with CP.Volunteers' `onVoid` / `voidRun`.
   Spec: tests/pursuit_volunteer_spec.lua.
+
+**search_area's fugitive slot (V25, blocks/search_area).** Every search_area objective (Manhunt): `volunteerSlot`
+answers `{ role = 'fugitive', meet = <the location's first hiding spot> }` (inside the start circle, so being in
+position means being inside it). He hides on foot or by car anywhere in the circle. The block reads
+`ctx.volunteer()` on start, every tick and on every `opp_*` event (`st.vol`; all its code sits in one local table
+`Vol`):
+- nil (no match, `enabled` off, a mode 'npc', or phase `npc`): everything as before (the NPC fugitives).
+- `'wait'` (phase `asking`): no fugitive is made (clues still are), the HUD says
+  `block.search_area.hud_volunteer_wait`; the objective cannot complete. Phase `npc` later makes the fugitives.
+- `'real'` (travel, in_position, engaged): `FugTarget` is 0, or one fewer than the objective's (scaled) fugitives
+  with `Config.Volunteers.fugitiveNpcs` true. He is one more fugitive on the counts and the checklist; done once
+  CP.Opponents' view (this objective's index) has him `detained` with a share above 0 or `booked` (the AFK rule of
+  V23, `afkCatchVoids`); done is kept and counts one arrest. `lost` fails the objective
+  `block.search_area.fail_escaped`. HUD: `block.search_area.hud_volunteer` once every NPC fugitive is caught.
+- The circle shrinks towards him: at each clue, `FugitiveAnchor` is his server-side `rec.lastCoords` (free, online,
+  outside an instance) once he was seen inside the circle and while he still is, else his meet point; the new centre
+  lies within `CENTER_SHARE` of the new radius from it, as for an NPC. Officers get the circle, never a point of him
+  (the pointer is the circle and the clues; there is no last-reported point for a fugitive).
+- His own map: `CP.Volunteers.caseArea(run, { x, y, z, r })` (`client:volunteerArea`, a red radius blip on his
+  game only) when he starts playing and after each shrink; `nil` once he is caught, and phase `over` removes it.
+- The circle rule (out of bounds): from `in_position` / `engaged` on and once he was seen inside the current circle,
+  being outside it (2D, the server's coordinates) sends one warning (`CP.Volunteers.caseNote`,
+  `volunteer.case.out_warn`); back inside resets the clock; `Config.Volunteers.fugitiveOutSeconds` (30, Settings
+  0-300; 0 = no rule) outside -> `CP.Volunteers.outOfBounds(run)`: `Voided(m, 'out_of_bounds')` (a strike, timeline
+  `volunteer_out_of_bounds`, staff note `rs_volunteer_dropout`, his note `volunteer.case.out_of_bounds`), then the
+  run goes on as `onVoid` / `voidRun` say. While travelling, cuffed or never yet inside there is no rule.
+- `'void'`: no fugitive is made. Spec: tests/search_area_volunteer_spec.lua (and tests/volunteer_match_spec.lua for
+  caseArea / caseNote / outOfBounds).
 
 **The block (V12, blocks/live_response).** `engineOnly = true` in its `CP.Blocks.register` table:
 `Missions.normalize` refuses it unless `meta.engine == true` ("objective N uses engine-only block", plain reason

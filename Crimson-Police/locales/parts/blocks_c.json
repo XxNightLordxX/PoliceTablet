@@ -123,6 +123,8 @@
   "block.search_area.hud_find": "Find the fugitives: {done} of {total} in custody · search area {radius} m",
   "block.search_area.hud_escaping": "A fugitive is getting away: {seconds} s",
   "block.search_area.hint_close": "Stay close and they will give up",
+  "block.search_area.hud_volunteer_wait": "Stand by: a real suspect may play the fugitive",
+  "block.search_area.hud_volunteer": "Real suspect: a real player hides in the search area ({radius} m). Find him and detain him",
   "block.search_area.msg_shrink": "Clue found: the search area shrinks to {radius} m",
   "block.search_area.msg_running": "A fugitive is running!",
   "block.search_area.fail_escaped": "A fugitive escaped",

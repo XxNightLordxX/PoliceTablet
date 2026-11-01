@@ -401,7 +401,17 @@ local function Message(ctx, key, vars, kind)
     ctx.hud({ message = { text = CP.L(key, vars), kind = kind or 'info' } })
 end
 
-local function FugTarget(ctx) return Int(ctx.obj.fugitives) end
+local function VCfg() return type(Config.Volunteers) == 'table' and Config.Volunteers or {} end
+
+-- The NPC fugitives to make. A volunteer fugitive (V25, §7.3): none while volunteers are asked or the run ends for want
+-- of one; while he plays, the others only with Config.Volunteers.fugitiveNpcs (he takes one fugitive's place).
+local function FugTarget(ctx)
+    local n = Int(ctx.obj.fugitives)
+    local vol = type(ctx.state) == 'table' and ctx.state.vol or nil
+    if vol == nil then return n end
+    if vol == 'real' and VCfg().fugitiveNpcs == true then return math.max(0, n - 1) end
+    return 0
+end
 
 -- ============================================================================
 --                                   SPAWNING
@@ -667,12 +677,163 @@ local function SpawnMissing(ctx, st)
 end
 
 -- ============================================================================
+--                      THE VOLUNTEER FUGITIVE (V25, §7.3)
+-- ============================================================================
+-- One of the search's fugitives is the run's volunteer slot: a real player who hides inside the circle. The server
+-- decides everything from CP.Opponents' server-side record; officers never see where he is, only the circle, which
+-- shrinks towards where the server last saw him at each clue. He must stay inside it: outside it for
+-- Config.Volunteers.fugitiveOutSeconds is a void (CP.Volunteers.outOfBounds: a strike, the run goes on as onVoid says).
+
+local Vol = {}
+do
+    -- volunteerSlot(obj, mission, location): { role = 'fugitive', meet = the location's first hiding spot } or nil.
+    function Vol.slot(obj, mission, location)
+        if type(obj) ~= 'table' or type(location) ~= 'table' then return nil end
+        local o = Defaults(U.deepcopy(obj))
+        local p = PointList(location, o.hiding)[1]
+        if not p then return nil end
+        local x, y, z = U.xyz(p)
+        return { role = 'fugitive', meet = { x = x, y = y, z = z } }
+    end
+
+    -- Who hides now (ctx.volunteer()): 'wait' while volunteers are asked, 'real' while one who said yes plays, 'void'
+    -- while the run ends for want of one, nil = the NPCs (no match, the NPC took over). Second value: his phase.
+    local function Mode(ctx)
+        if type(ctx.volunteer) ~= 'function' then return nil end
+        local v = ctx.volunteer()
+        if type(v) ~= 'table' then return nil end
+        if v.phase == 'asking' then return 'wait' end
+        if v.phase == 'void' then return 'void' end
+        if v.real == true then return 'real', v.phase end
+        return nil
+    end
+
+    -- His CP.Opponents record (server only: never sent to a client).
+    function Vol.rec(ctx)
+        local case = CP.Opponents and CP.Opponents.caseOf and CP.Opponents.caseOf(ctx.run) or nil
+        if type(case) ~= 'table' or (case.index and ctx.index and case.index ~= ctx.index) then return nil end
+        local cid = case.order and case.order[1]
+        return cid and case.suspects and case.suspects[cid] or nil
+    end
+
+    -- Where the server last saw him, while he is free, online and outside an instance; else nil.
+    function Vol.where(ctx, st)
+        if st.vol ~= 'real' or st.volDone then return nil end
+        local rec = Vol.rec(ctx)
+        if not (rec and rec.state == 'free' and rec.src and not rec.inInstance) then return nil end
+        return rec.lastCoords
+    end
+
+    -- Done once CP.Opponents has him detained with a share above 0 or booked (an AFK catch, share 0, never counts while
+    -- Config.Volunteers.afkCatchVoids is on: CP.Volunteers voids it); lost = he got away. Done is kept (one arrest).
+    local function Facts(ctx, st)
+        st.volLost = false
+        if st.vol ~= 'real' or st.volDone or not (CP.Opponents and CP.Opponents.view) then return end
+        local view = CP.Opponents.view(ctx.run)
+        if type(view) ~= 'table' or (view.index and ctx.index and view.index ~= ctx.index) then return end
+        local afkVoids = VCfg().afkCatchVoids ~= false
+        for _, cid in ipairs(view.order or {}) do
+            local r = view.suspects[cid]
+            if r and (r.state == 'detained' or r.state == 'booked') then
+                if not (afkVoids and tonumber(r.share) == 0) then st.volDone = true end
+            elseif r and r.state == 'lost' then
+                st.volLost = true
+            end
+        end
+        if st.volDone then
+            st.volLost = false
+            st.arrests = st.arrests + 1
+            st.volOut = nil
+            st.dirty = true
+            if CP.Volunteers and CP.Volunteers.caseArea then CP.Volunteers.caseArea(ctx.run, nil) end
+        end
+    end
+
+    -- His own map circle: sent when he starts playing and each time the circle changes, while he is not caught.
+    local function SendArea(ctx, st)
+        local c = st.circle
+        if st.vol ~= 'real' or st.volDone or not c.center then return end
+        local key = ('%d:%.0f'):format(c.n, c.radius)
+        if st.volArea == key or not (CP.Volunteers and CP.Volunteers.caseArea) then return end
+        local x, y, z = U.xyz(c.center)
+        if CP.Volunteers.caseArea(ctx.run, { x = x, y = y, z = z, r = c.radius }) then st.volArea = key end
+    end
+
+    -- The circle rule, from in_position on (once he was seen inside the circle): outside it (flat distance, the
+    -- server's coordinates) a warning, then after fugitiveOutSeconds his part is void. 0 = no rule.
+    local function Bounds(ctx, st, phase, dt)
+        local limit = tonumber(VCfg().fugitiveOutSeconds) or 0
+        local c = st.circle
+        if st.volOutDone or not c.center or (phase ~= 'in_position' and phase ~= 'engaged') then
+            st.volOut = nil
+            return
+        end
+        local at = Vol.where(ctx, st)
+        if not at then return end
+        if U.dist2d(at, c.center) <= c.radius then
+            st.volInside = true
+            st.volOut = nil
+            return
+        end
+        if not st.volInside or limit <= 0 then return end
+        local V = CP.Volunteers or {}
+        if not st.volOut then
+            st.volOut = 0
+            if V.caseNote then
+                V.caseNote(ctx.run, 'warning', 'volunteer.case.out_warn', { seconds = math.ceil(limit) })
+            end
+            return
+        end
+        st.volOut = st.volOut + (tonumber(dt) or 1)
+        if st.volOut >= limit then
+            st.volOutDone = true
+            -- CP.Volunteers writes the timeline line, the staff note and the strike
+            if V.outOfBounds then V.outOfBounds(ctx.run) end
+        end
+    end
+
+    -- Where the circle shrinks to while he plays: where the server last saw him once he was inside the circle and
+    -- while he still is; before that (travel) or while he is outside it, his starting point (the meet point).
+    function Vol.anchor(ctx, st)
+        if st.vol ~= 'real' or st.volDone then return nil end
+        local at, c = Vol.where(ctx, st), st.circle
+        if at and st.volInside and c.center and U.dist2d(at, c.center) <= c.radius then return at end
+        local slot = Vol.slot(ctx.obj, nil, ctx.location)
+        return slot and slot.meet or nil
+    end
+
+    -- Read on start, every tick (dt) and on every opp_* event.
+    function Vol.update(ctx, st, dt)
+        local vol, phase = Mode(ctx)
+        if vol ~= st.vol then
+            st.vol = vol
+            st.dirty = true
+        end
+        Facts(ctx, st)
+        if dt then Bounds(ctx, st, phase, dt) end
+        SendArea(ctx, st)
+    end
+
+    -- Whether the objective may complete yet: never while asking or voided, and not before he is caught.
+    function Vol.blocks(st)
+        return st.vol == 'wait' or st.vol == 'void' or (st.vol == 'real' and not st.volDone)
+    end
+
+    -- He is one more fugitive on the counts, done once caught.
+    function Vol.extra(st) return st.vol == 'real' and 1 or 0 end
+    function Vol.done(st) return st.volDone and 1 or 0 end
+end
+
+-- ============================================================================
 --                                    CIRCLE
 -- ============================================================================
 
--- Where the circle shrinks to: a hidden fugitive (one still waiting for an officer to come near his hiding spot hides
--- there), else a running one; nil when none is left.
+-- Where the circle shrinks to: a volunteer fugitive while he plays (Vol.anchor), else a hidden fugitive (one still
+-- waiting for an officer to come near his hiding spot hides there), else a running one; nil when none is left.
 local function FugitiveAnchor(ctx, st)
+    -- a volunteer fugitive (V25): where the server last saw him, free (never sent: only the new circle is)
+    local him = Vol.anchor(ctx, st)
+    if him then return him end
     local hidden, running = {}, {}
     for _, f in pairs(st.fugitives) do
         if not Neutralised(f) and f.state ~= 'surrendered' then
@@ -857,12 +1018,13 @@ local function Totals(ctx, st)
         total = total + 1
         if Neutralised(f) then done = done + 1 end
     end
-    return done, math.max(total, FugTarget(ctx))
+    -- a volunteer fugitive (V25) is one more, done once caught
+    return done + Vol.done(st), math.max(total, FugTarget(ctx)) + Vol.extra(st)
 end
 
 local function TryComplete(ctx, st)
     if st.completed or st.failed or st.halted then return end
-    if st.count < FugTarget(ctx) then return end
+    if Vol.blocks(st) or st.count < FugTarget(ctx) then return end
     for _, f in pairs(st.fugitives) do
         if not Neutralised(f) then return end
     end
@@ -907,6 +1069,9 @@ local function Snapshot(ctx, st)
         total = total,
         entered = st.entered == true,
         escaping = st.escaping,
+        -- V25: 'wait' while volunteers are asked, 'real' while one hides (the HUD's lines; never where he is)
+        volunteer = st.vol,
+        volunteerDone = st.volDone == true or nil,
     }
 end
 
@@ -948,7 +1113,15 @@ local function OnEvent(ctx, src, ev)
     if st.failed or st.halted then return false, 'ended' end
     local t = ev.type
     local ok, why
-    if t == 'clue_start' or t == 'clue' then
+    if type(t) == 'string' and t:sub(1, 4) == 'opp_' then
+        -- CP.Opponents' server-only facts about the volunteer fugitive (server:objective refuses them from a client)
+        Vol.update(ctx, st)
+        if st.volLost then
+            Fail(ctx, st, 'block.search_area.fail_escaped')
+            return true
+        end
+        ok = true
+    elseif t == 'clue_start' or t == 'clue' then
         ok, why = ClueEvent(ctx, st, src, ev)
     elseif t == 'stunned' or t == 'cuffed' or t == 'shot' then
         local f = st.fugitives[tostring(tonumber(ev.netId) or '')]
@@ -996,6 +1169,7 @@ end
 local function Start(ctx)
     local st = StateOf(ctx)
     st.halted = nil
+    Vol.update(ctx, st)
     SpawnMissing(ctx, st)
     st.dirty = true
     Flush(ctx, st)
@@ -1004,6 +1178,8 @@ end
 local function Tick(ctx, dt)
     local st = StateOf(ctx)
     if st.halted or st.failed or st.completed then return end
+    Vol.update(ctx, st, tonumber(dt) or 1)
+    if st.volLost then return Fail(ctx, st, 'block.search_area.fail_escaped') end
     SpawnMissing(ctx, st)
     if st.failed then return end
     Watch(ctx, st, tonumber(dt) or 1, Party(ctx))
@@ -1182,6 +1358,7 @@ CP.Blocks.register(BLOCK, {
     checklist = Checklist,
     marker = Marker,
     restart = Restart,
+    volunteerSlot = Vol.slot,
     stop = function(ctx)
         local st = StateOf(ctx)
         st.halted = true

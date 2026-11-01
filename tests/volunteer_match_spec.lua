@@ -644,6 +644,33 @@ do
 end
 
 -- ============================================================================
+--                           A BLOCK'S PLAY-AREA RULE
+-- ============================================================================
+-- OUT OF BOUNDS IS A VOID (V25, search_area).
+
+do
+    Reset()
+    local run = NewRun()
+    H.eq(V.outOfBounds(run), false, 'nobody plays yet: nothing to void')
+    H.eq(V.caseArea(run, { x = 1, y = 2, z = 3, r = 300 }), false, 'and no area to send')
+    Answer(20, LastAsk(20), true)
+    H.step(0)
+    H.ok(V.caseArea(run, { x = 1, y = 2, z = 3, r = 300 }), 'while he plays a block may send his map circle')
+    local sent = ClientEvents('client:volunteerArea')
+    H.eq(sent[#sent] and sent[#sent].args[1].r, 300, 'to his own game only')
+    H.ok(V.caseNote(run, 'warning', 'volunteer.case.out_warn', { seconds = 30 }), 'and warn him')
+    H.eq(LastNote(20), 'volunteer.case.out_warn', 'he is warned')
+    local before = V.strikes('VMA00020')
+    H.ok(V.outOfBounds(run), 'out of bounds')
+    H.eq(V.strikes('VMA00020'), before + 1, 'staying outside the play area is a strike')
+    H.eq(states[1] and states[1].why, 'volunteer_out_of_bounds', 'his suspect is void: out_of_bounds')
+    H.ok(Has(lines, 'volunteer_out_of_bounds'), 'staff timeline: the out-of-bounds line')
+    H.eq(LastNote(20), 'volunteer.case.out_of_bounds', 'he is told')
+    H.eq(V.outOfBounds(run), false, 'only once')
+    Finish(run, 'completed', 'completed')
+end
+
+-- ============================================================================
 --                     ctx.volunteer() IN THE ENGINE'S CTX
 -- ============================================================================
 

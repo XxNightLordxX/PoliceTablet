@@ -2992,6 +2992,17 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   he is in position his "last reported" point every `driverReportEvery` seconds (shipped `30`; `0` = none, the map
   keeps the grid slot), never his live position. He counts as a detained racer (the racer bonus) once he is detained
   or booked; an AFK catch is voided as above; if he gets away the race fails. Both keys are in Settings.
+  Manhunt's fugitive (step V25): a volunteer who ticked the fugitive role can be the fugitive hiding in the search
+  area. With the investigation mode set to `'players_when_available'` or `'players_only'`, the volunteer who says yes
+  is sent to one of the location's hiding spots and gets the search circle as a red circle on his own map. While the
+  volunteers are asked no fugitive appears ("Stand by"); while he hides no NPC fugitive appears
+  (`Config.Volunteers.fugitiveNpcs`, shipped `false`; `true` = the other fugitives more officers bring still hide).
+  Officers see only the circle and the clues, never where he is; each clue shrinks the circle towards where the
+  server last saw him, and his own map circle shrinks with it. He must stay inside the circle: once he has been
+  inside, leaving it gives him a warning and staying out for `fugitiveOutSeconds` (shipped `30`; `0` = no circle
+  rule) voids his part (a strike, and the mission goes on as `onVoid` / `voidRun` say). Detaining or booking him
+  completes the search (an AFK catch is voided as above); if he gets away the search fails. Both keys are in
+  Settings.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

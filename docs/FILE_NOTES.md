@@ -948,6 +948,16 @@ Config.LiveCrime.lastReportedEvery seconds (0 = never).
     escapes: the run fails. Killing a fugitive or the witness (a participant kill) fails the run.
     Done when every fugitive is neutralised (cuffed, or dead without a participant kill).
     clues_first is awarded once when every clue was checked before the first arrest.
+    Volunteer slot (V25, ARCHITECTURE 7.3; one local table Vol): volunteerSlot { role = 'fugitive', meet = the
+    location's first hiding spot } (Manhunt). ctx.volunteer() decides st.vol: 'wait' (asking: no fugitive, no
+    completion), 'real' (a real player hides: no NPC fugitive unless Config.Volunteers.fugitiveNpcs, then one fewer;
+    he is one more fugitive, done when CP.Opponents.view has him detained with a share or booked, one arrest; lost
+    fails block.search_area.fail_escaped), 'void' (nothing spawns), nil (the NPCs as before). The circle shrinks
+    towards his server-side rec.lastCoords once he was seen inside it (else his meet point); his own map gets the
+    circle (CP.Volunteers.caseArea) at the start and after each shrink, removed once he is caught. Circle rule from
+    in_position on, once he was inside: outside it (2D, server coords) one warning (caseNote volunteer.case.out_warn),
+    then after Config.Volunteers.fugitiveOutSeconds CP.Volunteers.outOfBounds (a void and a strike); 0 = no rule.
+    The pointer never shows him (the circle and the clues only); the snapshot carries volunteer / volunteerDone.
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.search_area)
     minSeconds [60] · presenceRange [presenceRange[3] = 100] (margin outside the current circle) · label
@@ -3847,6 +3857,8 @@ The server then follows him: in position, engaged (an officer within Config.Real
 lose the NPC-combat protection), a no-show, his own Cancel this case, and the release when the run ends. Nobody who
 says yes, or a volunteer who drops out, gives the NPC back (players_when_available) or ends the run
 (Config.Volunteers.onVoid / voidRun; 'players_only' always ends). Blocks read it with ctx.volunteer().
+A block may also tell the volunteer who plays (V25): V.caseNote (a notification), V.caseArea (his own map circle,
+client:volunteerArea) and V.outOfBounds (he broke its play-area rule: a void and a strike).
 Memory only; nothing runs while Config.Volunteers.enabled is off or every mode is 'npc'.
 ```
 

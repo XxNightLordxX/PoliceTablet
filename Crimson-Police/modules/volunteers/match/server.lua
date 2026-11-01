@@ -9,8 +9,9 @@ local TAG = 'volunteers'
 local TICK_MS = 1000                                   -- the asking, travel and engagement check, only while a run has a match
 local LATE_MS = 2000                                   -- an answer this late after the pop-up closed still counts (lag)
 local CANCEL_PHASES = { travel = true, in_position = true, engaged = true }
-local STRIKE_WHY = { no_show = true, cancelled = true, left = true, afk = true }
-local NOTE_WHY = { no_show = true, cancelled = true }  -- a leave already has CP.Opponents' rs_combat_log note
+local STRIKE_WHY = { no_show = true, cancelled = true, left = true, afk = true, out_of_bounds = true }
+-- a leave already has CP.Opponents' rs_combat_log note; each other dropout writes rs_volunteer_dropout and this line
+local NOTE_WHY = { no_show = 'no_show', cancelled = 'volunteer_cancel', out_of_bounds = 'volunteer_out_of_bounds' }
 -- What a volunteer case takes part in -> its Config.Volunteers switch (each shipped false)
 local COUNTS = {
     typeOfTheDay = 'typeOfTheDay',
@@ -150,8 +151,9 @@ local function NoVolunteer(m, afterYes)
     EndRun(m)
 end
 
--- The volunteer who said yes drops out (why: no_show, cancelled, left, void, afk: caught while AFK, V23). A no-show, a cancel after
--- cancelGraceSeconds and a leave are strikes. His suspect counts for nobody.
+-- The volunteer who said yes drops out (why: no_show, cancelled, left, void, afk: caught while AFK, V23; out_of_bounds:
+-- a fugitive who stayed outside the search circle, V25). A no-show, a cancel after cancelGraceSeconds, a leave, an AFK
+-- catch and out_of_bounds are strikes. His suspect counts for nobody.
 local function Voided(m, why, strike)
     if m.phase == 'void' or m.phase == 'npc' or m.phase == 'over' then return end
     m.why = why
@@ -160,7 +162,7 @@ local function Voided(m, why, strike)
         Opp('setState', m.run, m.cid, 'void', { why = 'volunteer_' .. why })
     end
     if NOTE_WHY[why] then
-        Line(m, why == 'no_show' and 'no_show' or 'volunteer_cancel')
+        Line(m, NOTE_WHY[why])
         Opp('note', m.run, 'rs_volunteer_dropout', ('%s: %s'):format(rec and rec.label or '?', why), m.cid)
     elseif why == 'afk' then
         Line(m, 'volunteer_afk')  -- CP.Opponents' proof already wrote the rs_afk_catch note
@@ -560,6 +562,41 @@ function V.cancelCase(src)
     local grace = math.floor(Num(Cfg().cancelGraceSeconds, 60, 0, 600)) * 1000
     local free = not m.engagedAt and GetGameTimer() - (m.yesAt or 0) <= grace
     Voided(m, 'cancelled', not free)
+    return true
+end
+
+-- ============================================================================
+--                  WHAT A BLOCK MAY TELL ITS VOLUNTEER (V25)
+-- ============================================================================
+-- Only while he plays (travel, in_position, engaged): a block never learns who he is, it names the run.
+
+local function Playing(run)
+    local m = type(run) == 'table' and matches[run.id] or nil
+    if not m or not CANCEL_PHASES[m.phase] or not m.src then return nil end
+    return m
+end
+
+-- A notification to the run's volunteer (a volunteer.* locale key).
+function V.caseNote(run, kind, key, vars)
+    local m = Playing(run)
+    if not m or type(key) ~= 'string' then return false end
+    Note(m.src, kind, key, vars)
+    return true
+end
+
+-- His own map circle (search_area's fugitive, V25): area = { x, y, z, r }, or nil to remove it.
+function V.caseArea(run, area)
+    local m = Playing(run)
+    if not m then return false end
+    TriggerClientEvent(CP.e('client:volunteerArea'), m.src, type(area) == 'table' and area or nil)
+    return true
+end
+
+-- He broke the block's play-area rule (a fugitive outside the search circle too long): his part is void, a strike.
+function V.outOfBounds(run)
+    local m = Playing(run)
+    if not m then return false end
+    Voided(m, 'out_of_bounds', true)
     return true
 end
 

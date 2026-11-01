@@ -318,6 +318,8 @@ local function HudText(S, close)
     local d = S.data
     if d.escaping then return CP.L('block.search_area.hud_escaping', { seconds = d.escaping }) end
     if close then return CP.L('block.search_area.hint_close') end
+    -- a volunteer hides as the fugitive (V25): nothing to find until he said yes; never where he is
+    if d.volunteer == 'wait' then return CP.L('block.search_area.hud_volunteer_wait') end
     if not d.entered then return CP.L('block.search_area.hud_enter') end
     local r = d.circle and math.floor(d.circle.r + 0.5) or 0
     -- a lost clue (the witness killed, a prop gone) counts as handled: only a pending one is left to check
@@ -327,6 +329,9 @@ local function HudText(S, close)
     end
     if pending > 0 then
         return CP.L('block.search_area.hud_search', { checked = d.checked or 0, total = d.clueTotal or 0, radius = r })
+    end
+    if d.volunteer == 'real' and not d.volunteerDone and (d.neutralised or 0) >= (d.total or 0) - 1 then
+        return CP.L('block.search_area.hud_volunteer', { radius = r })
     end
     return CP.L('block.search_area.hud_find', { done = d.neutralised or 0, total = d.total or 0, radius = r })
 end

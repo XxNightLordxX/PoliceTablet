@@ -1151,6 +1151,12 @@ Config.Volunteers = {
     -- Seconds between the map's "last reported" points of a volunteer driver once he is in position (where the server
     -- last saw him, never a live position); 0 = no points, the map keeps the starting point
     driverReportEvery = 30,
+    -- Manhunt's other NPC fugitives (more officers bring more) while a volunteer hides as one of them: false = he is
+    -- the only fugitive; true = the others still hide (he takes one fugitive's place)
+    fugitiveNpcs = false,
+    -- Seconds a volunteer fugitive may stay outside the search circle (the red circle on his own map; it shrinks
+    -- towards where the server last saw him at each clue) before his part is void (a strike); 0 = no circle rule
+    fugitiveOutSeconds = 30,
     -- What a mission played against a volunteer (once he said yes) takes part in; true = like any other mission
     typeOfTheDay = false,            -- true = today's Type of the Day points multiplier applies to it too
     goals = false,                   -- true = it counts for the officers' daily and weekly goals
