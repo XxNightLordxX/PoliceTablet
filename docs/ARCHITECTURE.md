@@ -3591,6 +3591,25 @@ twin of V19:
   Specs: tests/volunteer_match_spec.lua, tests/opponents_staff_spec.lua, tests/realsuspects_config_spec.lua,
   web/src/admin/components/realSuspects.walk.ts.
 
+**Docs and end-to-end checks (V27).** No code: the design's last step is what an owner, his players and his staff
+read, and one spec that runs both features through the whole real server side.
+- README 9.16 (Real suspects: live crimes and volunteers): 9.16.1 the owner checklist (Crimson-Contracts'
+  `ContractsConfig.LifecycleEvents`, `sources`, `types`, `maxLiveRuns`, the money switches, `excludeAdmins` /
+  `excludeAce`, the modes, Config health, the in-game checklist), 9.16.2 the rules to paste into a server's rules
+  (officers, suspects, staff), 9.16.3 what the server does for fairness (no points for hurting players:
+  `neutralisedShare`, the AFK share 0, `rs_unarmed_shot` / `rs_ran_over`; no live position: the last reported points;
+  consent and opt-out; the anti-farm caps; the staff timeline), 9.16.4 an Issue | Solution table. 8.1 lists
+  `/crimsonheat`, 10.1 says to keep both switches off until then. SPEC's SOP carries the same rules.
+- docs/IN_GAME_CHECKLIST.md has a check for every step V11-V27.
+- tests/realsuspects_e2e_spec.lua (files mode always, as shipped: H.useFiles): every modules/**/server.lua and
+  blocks/**/server.lua loaded, only the other resources and natives stubbed. As shipped a reported crime, the
+  volunteer command and the Mission Board change nothing; a live crime from Crimson-Contracts' events to the LIVE
+  card, the claim, the scene secured, a downed suspect cuffed for half a detain, a suspect who moves every second seen
+  by the officers only at the last reported points, End case, liveCrimeEnded, the run rows (points, no cash, one
+  live catch) and the staff timeline; a volunteer from `/crimsonheat` to the pop-up, the yes, in position, engaged,
+  the knock, the cuff that completes Warrant Service's first step, volunteerEnded, the staff timeline and Stop.
+  tests/realsuspects_docs_spec.lua keeps the README section, its config key paths, the checklist and the SOP in step.
+
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 
 Each character's own tablet choices (My options), saved sparse in `cp_officers.options` (JSON of only the keys that

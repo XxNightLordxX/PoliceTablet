@@ -5348,6 +5348,18 @@ Crimson-Police is a downtime activity. Real calls and real players always come f
 
 - Disputes use Dispute on a flagged, voided or failed run in Profile & History within 48 hours. Disputes about flagged or voided runs go to your department's supervisors, and disputes about failed runs (for example a bug) go to admins. Nobody reviews their own runs, and their decision is final.
 
+Cases with real suspects (live crimes and volunteer suspects, both off by default; the README section "Rules for cases with real suspects" gives the same rules to paste into a server's rules):
+
+- Least force. Tase, tackle and cuff; shooting a suspect who never had a gun or running one over on foot is a penalty (rs_unarmed_shot, rs_ran_over) and a flag. A suspect cuffed while down counts only Config.RealSuspects.neutralisedShare of a detain, one cuffed while AFK nothing: no points come from hurting a player.
+
+- No live tracking. Officers work from the reported place and the "last reported" points; asking anyone outside the case where a suspect is, is a violation.
+
+- No case against yourself or a friend. Never take a case against your own characters or someone you play with; the server refuses most of these and flags the rest for review.
+
+- Suspects play it out. Crew members and volunteers may run, hide, talk and give up; logging off, switching character or entering an instance to escape counts as leaving and is shown to staff. Volunteers say yes only when they can play now, reach the waypoint in time and stay in the area they are given; a no costs nothing, a no-show or walking away is a strike, and Stop or Cancel this case on the volunteer command is always available.
+
+- Staff decide from the case timeline. Reports about a case are decided from its timeline, damage ledger and flags on the Admin UI Real suspects screen; nobody reads or reviews a case they were a suspect in.
+
 Discipline ladder: verbal warning → run voided (points removed, held cash not paid) → 7-day Crimson-Police suspension → removal from the system and a standard write-up.
 
 ## Performance, testing & acceptance

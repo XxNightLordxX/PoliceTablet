@@ -5853,6 +5853,31 @@ playerInfoCacheMs = 0 gives the old behaviour (every read asks Qbox, the list is
 Real: integrations/qbx.
 ```
 
+## tests/realsuspects_docs_spec.lua
+
+```text
+Step V27: the owner docs for real suspects stay in step with the code. README 9.16 (owner checklist, the rules
+for cases with real suspects, fairness, troubleshooting) is in the contents, /crimsonheat is in the command list,
+the go-live checklist points to it, every Config.LiveCrime / Config.Volunteers / Config.RealSuspects key path the
+section names exists, the in-game checklist has a check for every step V11-V27 and SPEC's SOP has the rules.
+```
+
+## tests/realsuspects_e2e_spec.lua
+
+```text
+End-to-end scenarios for real suspects (step V27) on the REAL server side of Crimson-Police: every server file
+loaded as in game, database off (the saves folder, as shipped), only the other resources and the natives stubbed.
+1. As shipped (Config.LiveCrime.enabled and Config.Volunteers.enabled false): a reported crime, /crimsonheat and
+   the Mission Board change nothing.
+2. A live crime: Crimson-Contracts reports it, a unit claims the LIVE call, secures the scene, cuffs one suspect
+   and books nobody, the other gets away; the points, the case timeline, the end event and the pair rows.
+3. A volunteer suspect: a civilian volunteers with /crimsonheat, a unit accepts Investigation with Real suspect
+   OK, he says yes, travels, officers reach him and cuff him at Warrant Service's door; the end event.
+The fairness rules the README's "Rules for cases with real suspects" promise are checked on the way: officers never
+get a suspect's live position, a suspect cuffed while down counts only Config.RealSuspects.neutralisedShare, the
+volunteer is asked first and can say no, and staff read each case's timeline.
+```
+
 ## tests/run.lua
 
 ```text

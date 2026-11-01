@@ -73,6 +73,11 @@ say the same things in short and point back here.
      - [9.15.3 Live runs, units and anti-farm](#9153-live-runs-units-and-anti-farm)
      - [9.15.4 Payments, item rewards and department money](#9154-payments-item-rewards-and-department-money)
      - [9.15.5 System, departments and settings](#9155-system-departments-and-settings)
+   - [9.16 Real suspects: live crimes and volunteers](#916-real-suspects-live-crimes-and-volunteers)
+     - [9.16.1 Owner checklist](#9161-owner-checklist)
+     - [9.16.2 Rules for cases with real suspects](#9162-rules-for-cases-with-real-suspects)
+     - [9.16.3 What is built in for fairness](#9163-what-is-built-in-for-fairness)
+     - [9.16.4 When something does not happen](#9164-when-something-does-not-happen)
 10. [Before go-live, updating and backups](#10-before-go-live-updating-and-backups)
     - [10.1 Before go-live checklist](#101-before-go-live-checklist)
     - [10.2 Updating](#102-updating)
@@ -1444,6 +1449,7 @@ In the server console, type every command **without** the slash.
 | `CrimsonPoliceAdmin settings reset <path>` | Console only | Puts one setting back to its config.lua value. Example: `settings reset Cash.source` |
 | `CrimsonPoliceAdmin settings reset all` | Console only | Puts every setting changed in game back to config.lua |
 | `/CrimsonPoliceAdmin missioncall <type> [area]` | Admins, console | Posts a mission call now. Type = `patrol`, `investigation` or `tactical`. Area = `south_ls`, `downtown`, `west_ls`, `vinewood`, `east_ls`, `port`, `senora`, `north`, `west_county` or `county` (the default). Not while a Cross-Department Mission runs; 2 minutes between calls from the same person (the console counts as one) |
+| `/crimsonheat` | Players who are **not** on police duty, only with `Config.Volunteers.enabled = true` | Volunteers to play a mission's suspect for `Config.Volunteers.windowMinutes` (60): agree to the rules, tick the suspects to play. Typed again it opens the menu (time left, Renew, Change the suspects you play, Stop, and Cancel this case while you play one). The name is `Config.Volunteers.command` (restart to change it). See [9.16](#916-real-suspects-live-crimes-and-volunteers) |
 
 "Admins, console" means an admin in game **and** the server console. "Console only" commands are the three ways
 back in for when the Admin UI can't open ([4.7](#47-the-server-console)). Mission ids (for `payout mission` and `test`)
@@ -2218,6 +2224,138 @@ checks the tablet makes), **Give tablet item** (one, when they carry none), **Sh
 - `set cp_settings_safe 1` in server.cfg starts Crimson-Police once without the settings changed in game (nothing is
   deleted; remove the line and restart to use them again).
 
+### 9.16 Real suspects: live crimes and volunteers
+
+Two optional ways to put real players opposite your officers. Both ship **off**, and while they are off nothing
+here changes anything:
+
+- **Live crimes** (`Config.LiveCrime`): when a crime script (Crimson-Contracts) reports a crime with a crew, it
+  shows on the Dispatch screen as a red **LIVE** call. The unit that claims it works a live case at the reported
+  place: **Respond to the reported scene**, **Secure the scene**, then **Detain and book the suspects**. The suspects
+  are the real crew members.
+- **Volunteer suspects** (`Config.Volunteers`): a player who is not on police duty types `/crimsonheat` and
+  volunteers for an hour. When officers take a mission whose suspect a player can play (Warrant Service's wanted
+  person, Street Race Bust's driver, Manhunt's fugitive), he gets a yes/no pop-up; on a yes he plays that suspect
+  instead of the NPC.
+
+The rules both share are in `Config.RealSuspects` (contact range, cuffs, bookings, the anti-farm caps). Every key
+is in Admin UI → **Settings** with its description. Staff follow each case on Admin UI → **Real suspects** (under
+**More**; admins with the `antiFarmOverride` key).
+
+#### 9.16.1 Owner checklist
+
+Try each step on a test server first, with a second account as the suspect.
+
+Live crimes:
+
+- ☐ Crimson-Contracts sends its lifecycle events: `ContractsConfig.LifecycleEvents = true` in its own config.
+  Crimson-Police never needs it; without it there are simply no LIVE calls.
+- ☐ `Config.LiveCrime.sources` lists the scripts allowed to report a crime (shipped: `crimson-contracts`). Any
+  other script's report is ignored with one console warning a minute.
+- ☐ `Config.LiveCrime.types` says which crimes become LIVE calls and whose mission type points they use (`false` =
+  never). Admin test contracts are never LIVE calls.
+- ☐ `Config.LiveCrime.maxLiveRuns` (2) fits how many officers you have; `caseTime` (1800 s) is the longest case.
+- ☐ Points only: a live case pays no cash and rolls no item rewards (`Config.LiveCrime.cash` and `items` stay
+  `false` unless you decide otherwise; Settings asks for the typed word ENABLE).
+- ☐ Turn it on: `Config.LiveCrime.enabled = true` (config.lua, or Settings: no restart needed).
+
+Volunteers:
+
+- ☐ Pick who may never be a suspect: admins are left out (`Config.RealSuspects.excludeAdmins = true`), and so is
+  anyone with the ace in `Config.RealSuspects.excludeAce` (`add_ace identifier.license:xxx
+  crimsonpolice.realsuspect.exclude allow` in server.cfg).
+- ☐ Turn it on: `Config.Volunteers.enabled = true` (config.lua, or Settings: `/crimsonheat` appears without a
+  restart).
+- ☐ Pick the mission types or missions a volunteer may play: `Config.Volunteers.modes` (per type) or
+  `Config.Volunteers.missionModes` (per mission id). `'players_when_available'` is the safe start: the unit leader
+  ticks **Real suspect OK**, a volunteer who fits is asked, else the NPC plays as before. `'players_only'` offers the
+  type only while a volunteer is free. While every mode is `'npc'`, nothing changes.
+- ☐ Admin UI → **Permissions** → **Config health** shows no warning about a mode.
+- ☐ Points only: `Config.Volunteers.payCash` and `payRewards` stay `false` unless you decide otherwise. Crimson-
+  Police gives volunteers nothing; another script can reward them from the `volunteerEnded` event
+  ([8.3](#83-exports-for-other-scripts)).
+
+Both:
+
+- ☐ Share the rules in [9.16.2](#9162-rules-for-cases-with-real-suspects) with your officers and your players
+  (Discord, the server rules page) before you turn anything on.
+- ☐ Tell your staff where the case timeline is (Admin UI → **Real suspects**) and what the three tools do: **Block
+  pair**, **Exclude** and **Suspend** (each needs a number of days and a reason, and is in the audit log).
+- ☐ Play one case of each kind on the test server with the in-game checklist (`docs/IN_GAME_CHECKLIST.md`, section
+  Real suspects) and watch resmon: idle must stay at 0.02 ms or less.
+
+Undo: set `Config.LiveCrime.enabled` and `Config.Volunteers.enabled` back to `false`. A case that is running ends
+by its own rules; nothing new starts.
+
+#### 9.16.2 Rules for cases with real suspects
+
+Paste these into your server rules next to [9.14](#914-rules-to-tell-your-officers). Your own server rules on
+force, combat logging and staging still apply: these cases are real RP with real players.
+
+For officers:
+
+- A live case is a real crime: drive, talk and use force as you would on any real call. Code 3 and pursuit policy
+  apply.
+- Use the least force that works. Tase, tackle and cuff. Shooting a suspect who never had a gun, or running him
+  over on foot, costs points and flags your run for review.
+- The map shows where a suspect was **last reported**, never where he is. Search, ask, use the radio. Do not ask
+  friends outside the case where he is.
+- Never take a case against yourself, your other characters or a friend you play with. The server refuses most of
+  these and flags the rest for review.
+- Cuff, wait for the cuffs to hold, then book at a station or the prison. A booking far from a station does not
+  count.
+- Let a suspect who gives up give up. Hitting someone who is down or cuffed is never part of the job.
+- The unit leader ends a case with **End case** in the radial menu once nobody is left to work.
+
+For suspects (crew members of a live crime and volunteers):
+
+- You chose this. Play it like a real criminal: run, hide, talk, give up. Do not log off, switch character or
+  go into an instance to get away; it counts as leaving and is shown to staff.
+- Volunteers: say yes only when you can play now. Get to the waypoint in time and stay in the area you are told
+  to stay in. A no or no answer costs nothing; a yes followed by a no-show or walking away is a strike (3 strikes
+  in a day block volunteering for a day).
+- Do not stand still to be caught (AFK): an AFK catch counts for nobody and is a strike for a volunteer.
+- No combat logging, no exploiting, no friends feeding you police positions from the tablet or the radio.
+- You can stop at any time: `/crimsonheat` → **Stop** (or **Cancel this case**). It is free within
+  `Config.Volunteers.cancelGraceSeconds` (60 s) of your yes and before officers reached you, a strike after that.
+
+For staff:
+
+- Check the case timeline on Admin UI → **Real suspects** before you decide a report. It lists the claim, the
+  scene, every contact, cuff, detain, booking and leave, with the damage ledger and the flags.
+- Use **Block pair** for an officer and a suspect who keep meeting, **Exclude** for a player who must never be a
+  suspect, and **Suspend** for an officer who must not take these cases. Nobody reads or reviews a case he was a
+  suspect in.
+
+#### 9.16.3 What is built in for fairness
+
+- **No points for hurting players.** Points come from securing the scene, detaining and booking. A suspect cuffed
+  while down counts only `Config.RealSuspects.neutralisedShare` (half) of a detain, one cuffed while AFK counts
+  nothing, and shooting an unarmed suspect or running one over is a penalty (`rs_unarmed_shot`, `rs_ran_over`).
+- **No live position.** Officers see the reported place and, every `Config.LiveCrime.lastReportedEvery` seconds
+  (60), each free suspect's **last reported** point. A volunteer driver's point moves every
+  `Config.Volunteers.driverReportEvery` seconds (30); a volunteer at the door or in a search area is never on the
+  map. The case card says how old the points are.
+- **Consent and opt-out.** A crew member is a suspect only of the crime he chose to commit; a volunteer is asked
+  first, every time, and can stop or cancel from his `/crimsonheat` menu. Players in a hospital, the arena or
+  another instance, on police duty or AFK are never picked.
+- **Caps against farming.** A suspect is worth points `Config.RealSuspects.maxCatchesPerSuspectDay` (2) times a
+  day, the same officer and suspect meet again for points only after `pairCooldownHours` (24), and accounts that
+  share a connection or PC are flagged.
+- **Staff see everything.** Every case keeps a timeline, the damage ledger and the flags on the Real suspects
+  screen (the last `Config.RealSuspects.casesKept`, 16, closed ones; a restart clears them).
+
+#### 9.16.4 When something does not happen
+
+| Issue | Solution |
+|---|---|
+| A crime gives no LIVE call | `Config.LiveCrime.enabled` is `false`, the crime's key is `false` or missing in `Config.LiveCrime.types`, Crimson-Contracts does not send its events (`ContractsConfig.LifecycleEvents`), or `maxLiveRuns` calls are up. The audit log says **Live crime ignored** with the reason |
+| A crime has no suspects | Every crew member was offline, more than `Config.LiveCrime.suspectRadius` (300 m) from the crime, AFK, on police duty, in a no-start zone or excluded |
+| `/crimsonheat` says it is off | `Config.Volunteers.enabled` is `false`. A player who is refused for another reason is told why (on duty, AFK, excluded, too many strikes) |
+| Nobody is ever asked to play a suspect | Every mode is `'npc'`, the unit did not tick **Real suspect OK**, or no volunteer fits (listed for that suspect, not AFK, not down, no recent case with one of the officers) |
+| A cuff did not count | The officer must be on the case and within `Config.RealSuspects.cuffRange` (3.5 m), and the cuffs must hold `custodyHoldSeconds` (30 s). The timeline shows each cuff and why it did not count |
+| The Real suspects screen is missing | Both features are off, the admin has no `antiFarmOverride` key, or `Config.RealSuspects.adminScreen = false` |
+
 ---
 
 ## 10. Before go-live, updating and backups
@@ -2243,6 +2381,8 @@ checks the tablet makes), **Give tablet item** (one, when they carry none), **Sh
 - ☐ Share the rules in [9.14](#914-rules-to-tell-your-officers) with your officers, and the Detach tip in
   [7](#7-settings-to-check-in-your-other-resources) with your dispatchers.
 - ☐ Your anti-cheat allows Bomb Disposal's harmless explosion ([7](#7-settings-to-check-in-your-other-resources)).
+- ☐ Real suspects stay off (`Config.LiveCrime.enabled` and `Config.Volunteers.enabled` ship `false`) until you
+  went through the owner checklist and shared the rules in [9.16](#916-real-suspects-live-crimes-and-volunteers).
 - ☐ Make one backup and try one restore on a test server: Admin UI → **System** → **Backups**
   ([10.3](#103-backups)). A restore ends with "Restart Crimson-Police now"; do that from txAdmin.
 - ☐ The money tools that ship off (`Config.Cash.allow*`, `Cash.restoreForfeited`, `Rewards.allowTakeBack`): leave
@@ -3019,6 +3159,12 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   dropped out, and whether officers reached him. A new **Volunteers** tab lists who is on the volunteer list now:
   the suspects each plays, since and until when, his strikes, and whether a mission is asking him or he plays one
   (read-only, memory only).
+  Docs and checks (step V27): README 9.16 gathers what an owner and his players need in one place: the owner
+  checklist for turning each feature on, the rules to paste into the server rules (officers, suspects and staff),
+  what the server does for fairness (no points for hurting players, no live position, consent and opt-out, the
+  staff timeline) and a table of what to check when something does not happen. `/crimsonheat` is in 8.1, the
+  in-game checklist has a check for every step V11-V27, and SPEC's SOP has the rules for cases with real suspects.
+  No behaviour changes.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route
