@@ -571,6 +571,30 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     fastBonus.id (ctx.award, e.g. devices_found_fast)
 ```
 
+## Crimson-Police/blocks/live_response/client.lua
+
+```text
+Objective block "live_response" (client half, step V12): the live_crime engine mission's objective. The server half
+decides everything from server facts (CP.Opponents); this half only offers the unit leader "End case" in the ox_lib
+radial menu while the objective runs, with a confirm. The map pointer (the scene, then the last-reported points)
+is CP.Markers' own, from the server's marker.
+```
+
+## Crimson-Police/blocks/live_response/server.lua
+
+```text
+Objective block "live_response" (server half, step V12): the engine-only objective of a live crime (the live_crime
+engine mission, docs/ARCHITECTURE.md §5.46 and §7.3). The suspects are real players kept by CP.Opponents (§5.45);
+this block never touches them. Three phases: Respond (an officer reaches the reported scene or makes contact),
+Secure the scene (officers hold it for Config.LiveCrime.secureSeconds), and one open "Detain and book the suspects"
+that never closes and never reacts to one suspect's state: the HUD and the checklist only show the phase. Detains
+and bookings are the server-only opp_detained / opp_booked events of CP.Opponents' proof, recorded as the shared
+lines live_detain and live_book weighted by the suspect's share. The case ends with End case (the unit leader), the
+time limit (completed with what was earned) or Config.LiveCrime.deadCaseSeconds after no suspect is left to work.
+The map never follows a suspect: it shows where each free suspect was at the last report, every
+Config.LiveCrime.lastReportedEvery seconds (0 = never).
+```
+
 ## Crimson-Police/blocks/protect_rescue/client.lua
 
 ```text
@@ -5512,6 +5536,16 @@ The no-repeat rule, the hourly cap and the daily cap as Mission controls (step P
 dailyCap, server-wide (owner decision: a cooldown change counts for every department). CP.DeptControls is a stub
 here (its rows, bounds and self rule are covered by mission_controls_spec and cooldown_controls_spec): this spec
 checks what CP.Draw registers and that the draw, the accept checks and the board read the values.
+```
+
+## tests/live_response_spec.lua
+
+```text
+The live_response block (step V12): the engine-only objective of a live crime. Its three phases (Respond, Secure
+the scene, one open Detain and book), a HUD and checklist that never change with one suspect's state, the
+weighted detain and booking lines (CP.Runs.award opts.weight, read to two decimals by scoring), End case, the time
+limit, the dead-case end, presence and the last-reported points; the mission loader and the Mission Builder refuse
+the block. Plain Lua with a stubbed CP.Opponents: no database.
 ```
 
 ## tests/memsql_spec.lua

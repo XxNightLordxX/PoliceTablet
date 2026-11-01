@@ -3887,6 +3887,13 @@ local function Record(run, id, opts, kind)
     opts = type(opts) == 'table' and opts or {}
     local count = math.floor(Num(opts.count, 1))
     if count <= 0 then return false end
+    -- opts.weight (0-1, default 1): a part of one occurrence (live_response's detain and booking lines carry the
+    -- suspect's share, CP.Opponents); scoring reads the count to two decimals
+    if opts.weight ~= nil then
+        local w = CP.U.clamp(Num(opts.weight, 1), 0, 1)
+        if w <= 0 then return false end
+        count = count * w
+    end
     local src = ToSrc(opts.src)
     if src then
         local p = run.participants[src]
@@ -3901,7 +3908,7 @@ local function Record(run, id, opts, kind)
         run.score.values[id] = v
     end
     run.score.kinds[id] = kind
-    CP.log(TAG, 'run %s: %s %s x%d%s', run.id, kind, id, count, src and (' for ' .. src) or '')
+    CP.log(TAG, 'run %s: %s %s x%s%s', run.id, kind, id, tostring(count), src and (' for ' .. src) or '')
     return true
 end
 

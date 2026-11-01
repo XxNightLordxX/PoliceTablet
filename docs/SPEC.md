@@ -3809,6 +3809,14 @@ Config.LiveCrime = {
     suspectRadius = 300.0,           -- crew members further than this from the crime at the alert are not suspects
     offerTime = 300,                 -- seconds a LIVE call stays open before it lapses (the crime's end lapses it too)
     maxLiveRuns = 2,                 -- LIVE calls and live cases at once; a crime past this gets no LIVE call
+    -- The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and book the
+    -- suspects. Metres around the reported place that count as being at the scene
+    sceneRadius = 75.0,
+    secureSeconds = 60,              -- seconds officers must hold the scene to secure it (0 = reaching it is enough)
+    -- Seconds between the "last reported" map points of suspects still free (never a live position; 0 = no points)
+    lastReportedEvery = 60,
+    -- Seconds a case stays open once no suspect is left to work (all booked, lost, left or void) before it ends
+    deadCaseSeconds = 30,
 }
 
 -- ============================================================================
@@ -4149,6 +4157,9 @@ Config.Bonuses = {
     rapid_response = { kind = 'pct', value = 0.10, engineOnly = true },                 -- claimed server-posted mission calls
     rs_unarmed_shot = { kind = 'pct', value = -0.25, each = true, engineOnly = true },  -- penalty: shot a real suspect who was never armed
     rs_ran_over = { kind = 'pct', value = -0.25, each = true, engineOnly = true },      -- penalty: ran a real suspect over on foot
+    live_scene = { kind = 'pct', value = 0.25, engineOnly = true },                     -- live case: secured the scene
+    live_detain = { kind = 'pct', value = 0.50, each = true, engineOnly = true },       -- live case: per suspect detained (x his share)
+    live_book = { kind = 'pct', value = 0.25, each = true, engineOnly = true },         -- live case: per suspect booked (x his share)
 }
 
 -- Cosmetic badges only; never the Qbox rank. Each name is a band of numbered levels starting at level;

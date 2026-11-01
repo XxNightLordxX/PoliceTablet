@@ -288,5 +288,6 @@
   "admin.missions.drawer.tests_open": "Open Testing",
   "admin.missions.drawer.tests_none": "No test locations are listed for this mission.",
   "admin.missions.drawer.expert": "Expert actions",
-  "admin.missions.drawer.expert_text": "Versions, compare with the shipped file, copy as Lua, owner and reset. Each one asks before it changes anything."
+  "admin.missions.drawer.expert_text": "Versions, compare with the shipped file, copy as Lua, owner and reset. Each one asks before it changes anything.",
+  "missions.reason.engine_block": "Objective {n} uses the block \"{block}\", which only the server's own live cases use."
 }

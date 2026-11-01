@@ -2847,6 +2847,16 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   and live cases run at once (a crime past that is audited **Live crime ignored**). Until step V14 a claim answers
   "LIVE calls can't be claimed yet". A LIVE call never counts against `Config.MissionCalls.maxOpen` and a Cross-Department
   lock does not withdraw it.
+  The live case (step V12, used once claims open in step V14): officers see three steps on the HUD: **Respond to the
+  reported scene**, **Secure the scene** (hold it for `Config.LiveCrime.secureSeconds`, 60 s, within
+  `Config.LiveCrime.sceneRadius`, 75 m) and **Detain and book the suspects**, which stays open and never shows how many
+  suspects are left. The map shows the reported scene and, after that, a **last reported** point per suspect still
+  free, moved only every `Config.LiveCrime.lastReportedEvery` seconds (60; 0 = none), never a live position. Each
+  detain and each booking adds a line for the whole unit (`live_detain`, `live_book` in Config.Bonuses; a suspect
+  cuffed while down counts `Config.RealSuspects.neutralisedShare`, an AFK one nothing), and securing the scene adds
+  `live_scene`. The unit leader ends it with **End case** in the radial menu; the time limit ends it as completed,
+  and it ends by itself `Config.LiveCrime.deadCaseSeconds` (30 s) after no suspect is left to work. The block
+  (`live_response`) can't be used in a mission file or the Mission Builder.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

@@ -481,7 +481,11 @@ end
 local function CountOf(run, p, id)
     local shared = run.score and run.score.shared and Num(run.score.shared[id], 0) or 0
     local personal = p.score and Num(p.score[id], 0) or 0
-    return math.max(0, math.floor(shared + personal))
+    -- whole occurrences, or a weighted part (CP.Runs.award opts.weight) to two decimals
+    local hundredths = math.floor((shared + personal) * 100 + 0.5)
+    if hundredths <= 0 then return 0 end
+    if hundredths % 100 == 0 then return hundredths // 100 end
+    return hundredths / 100
 end
 
 local function Label(kind, id, count, each, vars)

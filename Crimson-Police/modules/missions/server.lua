@@ -520,6 +520,10 @@ function Missions.normalize(def, meta)
         if type(blockId) ~= 'string' then return nil, ('objective %d has no block'):format(i) end
         local impl = CP.Blocks.get(blockId)
         if not impl then return nil, ('objective %d uses unknown block "%s"'):format(i, blockId) end
+        -- an engine-only block (live_response, §7.3) is built by the engine itself (meta.engine), never by a file
+        if impl.engineOnly == true and meta.engine ~= true then
+            return nil, ('objective %d uses engine-only block "%s"'):format(i, blockId)
+        end
         if type(impl.defaults) == 'function' then
             local ok, res = pcall(impl.defaults, obj)
             if not ok then return nil, ('objective %d (%s): defaults failed: %s'):format(i, blockId, tostring(res)) end
@@ -1230,6 +1234,7 @@ local PLAIN_REASONS = {
     { '^location (%d+)', 'missions.reason.location', { 'n' } },
     { '^objectives must be a non%-empty list', 'missions.reason.no_objectives' },
     { '^objective (%d+) uses unknown block "(.-)"', 'missions.reason.unknown_block', { 'n', 'block' } },
+    { '^objective (%d+) uses engine%-only block "(.-)"', 'missions.reason.engine_block', { 'n', 'block' } },
     { '^objective (%d+) has no block', 'missions.reason.no_block', { 'n' } },
     {
         '^objective (%d+) %(([%w_]+)%), location (%d+) %(.-%): (.+)$',

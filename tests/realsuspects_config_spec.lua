@@ -355,6 +355,14 @@ do
         -- V11: the LIVE call
         offerTime = 'seconds a LIVE call stays open before it lapses (the crime\'s end lapses it too)',
         maxLiveRuns = 'LIVE calls and live cases at once; a crime past this gets no LIVE call',
+        -- V12: the live case (the live_response block)
+        sceneRadius = 'The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and '
+            .. 'book the suspects. Metres around the reported place that count as being at the scene',
+        secureSeconds = 'seconds officers must hold the scene to secure it (0 = reaching it is enough)',
+        lastReportedEvery = 'Seconds between the "last reported" map points of suspects still free (never a live '
+            .. 'position; 0 = no points)',
+        deadCaseSeconds = 'Seconds a case stays open once no suspect is left to work (all booked, lost, left or void) '
+            .. 'before it ends',
     }) do
         local e = S.entry('LiveCrime.' .. path) or {}
         H.eq(e.desc, desc, 'LiveCrime.' .. path .. ': its own comment')
@@ -373,6 +381,21 @@ do
     H.eq((S.check('LiveCrime.offerTime', 10)), false, 'offerTime stays within 30-3600 s')
     H.eq((S.check('LiveCrime.maxLiveRuns', 0)), false, 'maxLiveRuns stays within 1-20')
     H.ok((S.check('LiveCrime.maxLiveRuns', 5)), 'maxLiveRuns 5 is allowed')
+    H.eq((S.check('LiveCrime.sceneRadius', 5)), false, 'sceneRadius stays within 10-500 m')
+    H.eq((S.check('LiveCrime.secureSeconds', 1000)), false, 'secureSeconds stays within 0-900 s')
+    H.ok((S.check('LiveCrime.lastReportedEvery', 0)), 'lastReportedEvery 0 (no points) is allowed')
+    H.eq((S.check('LiveCrime.deadCaseSeconds', 1)), false, 'deadCaseSeconds stays within 5-600 s')
+    for id, desc in pairs({
+        live_scene = 'live case: secured the scene',
+        live_detain = 'live case: per suspect detained (x his share)',
+        live_book = 'live case: per suspect booked (x his share)',
+    }) do
+        local group = nil
+        for _, sec in ipairs(S._schema().sections) do
+            for _, g in ipairs(sec.groups) do if g.path == 'Bonuses.' .. id then group = g end end
+        end
+        H.eq(group and group.desc, desc, 'Bonuses.' .. id .. ': its comment is the description in Settings')
+    end
 end
 
 -- ============================================================================

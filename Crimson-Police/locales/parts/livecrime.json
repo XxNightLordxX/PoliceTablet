@@ -27,5 +27,19 @@
   "livecrime.why.max_live": "too many LIVE calls and live cases at once (Config.LiveCrime.maxLiveRuns)",
   "livecrime.why.calls_off": "mission calls are off (Config.MissionCalls.enabled)",
   "livecrime.why.off": "live crimes are off",
-  "livecrime.why.invalid": "the crime record was incomplete"
+  "livecrime.why.invalid": "the crime record was incomplete",
+  "block.live_response.hud_respond": "Respond to the reported scene",
+  "block.live_response.hud_secure": "Secure the scene",
+  "block.live_response.hud_detain": "Detain and book the suspects",
+  "block.live_response.check_respond": "Respond",
+  "block.live_response.check_secure": "Secure the scene",
+  "block.live_response.check_detain": "Detain and book the suspects",
+  "block.live_response.blip_scene": "Reported scene",
+  "block.live_response.blip_last": "Suspect {label}: last reported",
+  "block.live_response.end_radial": "End case",
+  "block.live_response.end_title": "End case",
+  "block.live_response.end_confirm": "End this live case now? Your unit keeps what it has earned so far.",
+  "bonus.live_scene": "Secured the scene of a live crime",
+  "bonus.live_detain": "Detained a suspect",
+  "bonus.live_book": "Booked a suspect"
 }

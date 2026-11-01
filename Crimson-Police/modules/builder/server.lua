@@ -1929,7 +1929,8 @@ function B.validate(def, opts)
             local impl = type(blockId) == 'string' and CP.Blocks.get(blockId) or nil
             local bcfg = type(blockId) == 'string' and blockId ~= 'details' and Config.Blocks and Config.Blocks[blockId]
                 or nil
-            if not impl or type(bcfg) ~= 'table' then
+            -- an engine-only block (live_response) is never offered and is refused in a draft
+            if not impl or type(bcfg) ~= 'table' or impl.engineOnly == true then
                 AddError(errors, path .. '.block', 'builder.error.unknown_block', { n = i })
             else
                 blockIds[blockId] = true

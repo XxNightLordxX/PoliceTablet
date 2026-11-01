@@ -1101,7 +1101,9 @@ Full admin control (P3, §5.39):
 - Row fields owned by the engine at insert: `season_id = CP.Challenge.currentSeason() and .id`, `department` = the participant's department at the end, `departments_n`, `participants` (active at the end, plus themselves), `tier` = pay tier name, `modifier`, `mission_version`, `location_label`, `duration_s`, `breakdown` = RunResult JSON (9.6)
 - `entityDied(run, netId, killerSrc)` — the single death path: marks the entity dead (for corpse cleanup and caps), updates stats, calls the owning block's `onEntityDead`. CP.Npc calls it for peds (with killer attribution); CP.Runs itself detects wrecked vehicles (`GetVehicleEngineHealth <= -3999` / not driveable / `GetEntityHealth <= 0`) and calls it with killerSrc nil
 - `failRun(run, reasonKey)` → `endRun(run, 'failed', 'mission_failed')`
-- `award(run, id, opts)`, `penalize(run, id, opts)` — `opts = { src = nil (shared) | src (personal), count = 1 }`
+- `award(run, id, opts)`, `penalize(run, id, opts)` — `opts = { src = nil (shared) | src (personal), count = 1 }`, weight
+  = 0-1 (V12, default 1: a part of each occurrence, count x weight; weight 0 records nothing; CP.Scoring reads a
+  line's count to two decimals, so live_response's detain at a suspect's share 0.5 is half a line)
 - `adjustTimer(run, seconds)` (negative = time off), `pauseTimer(run, paused)`, `remaining(run)`
 - `spawnPed(run, opts) -> entity, netId` · `opts = { obj = i, model, coords = vec4, role, armed = false, weapon, accuracy, armour, health, cfg = {}, tag, alt }`
 - `spawnVehicle(run, opts) -> entity, netId` · `opts = { obj, model, coords = vec4, role, tag, plate, alt }`
@@ -3913,6 +3915,34 @@ mission, location) -> { role, meet = vec3, ... } | nil` is an optional server-ha
 `CP.Blocks.register`: flee_arrest (the runner at the door), pursuit (the getaway or race driver) and search_area (the
 fugitive) offer one, and CP.Volunteers (§5.47) uses it to find the objective a volunteer can play. Built in steps
 V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
+
+**The block (V12, blocks/live_response).** `engineOnly = true` in its `CP.Blocks.register` table:
+`Missions.normalize` refuses it unless `meta.engine == true` ("objective N uses engine-only block", plain reason
+`missions.reason.engine_block`), and the Mission Builder answers `builder.error.unknown_block` for it (it has no
+Config.Blocks entry, so builder:config never lists it). Its settings are Config.LiveCrime keys. Server half:
+- Scene: `Opp.view(run).scene` (the crime's coords), else `obj.scene`, else the location's start.
+- Respond: an active participant within `sceneRadius` (75 m) of the scene, or any suspect with contact -> phase
+  `secure` (timeline `responded`). Secure: the 1 s tick adds dt while an officer is within `sceneRadius`; at
+  `secureSeconds` (60; 0 = at once) -> phase `detain`, the shared line `live_scene` once and the timeline line
+  `scene_secured`. Detain and book stays open to the end.
+- HUD: `{ detail = block.live_response.hud_<phase> }` (the secure phase adds `value`/`max` seconds), sent only when
+  the phase or the secure second changes. Checklist: Respond, Secure the scene (seconds), Detain and book the suspects
+  (never done, never counted). Neither reads one suspect's state.
+- Lines: CP.Opponents' server-only `opp_detained` -> `ctx.award('live_detain', { weight = ev.share })`, `opp_booked`
+  -> `live_book`, once per suspect each, shared (every active participant); share defaults to 1, 0 (an AFK catch)
+  records no line. Config.Bonuses `live_scene` (pct 0.25), `live_detain` (pct 0.50, each), `live_book` (pct 0.25,
+  each) are engine-only. Other opp_* events are accepted and ignored.
+- End: client evidence `{ type = 'end_case' }` from the run host completes the objective (timeline `end_case`;
+  others: `not_host`); `onTimeout` answers `'completed'` (a real case ends with what was earned); the dead case: no
+  suspect free, cuffed or detained (or no case) for `deadCaseSeconds` (30) -> `ctx.complete({ reason = 'dead_case' })`
+  (timeline `dead_case` once). Any other client evidence is refused.
+- Presence: metres outside the scene radius, or to the nearest suspect's last server position (never sent).
+- Marker: while responding the scene as a point (GPS on); then `kind = 'targets'`, `route = false`: the scene and one
+  coordinate target per suspect who was free, online and outside an instance at the last report (`rec.lastCoords`,
+  key `last:<label>`, look `searchArea`, "Suspect A: last reported"), refreshed every `lastReportedEvery` s (60; 0 =
+  none), never in between, so a suspect is never followed live.
+- Client half: only "End case" in the ox_lib radial menu (`lib.addRadialItem`, id `crimson-police:live_end_case`) for
+  the run host while the objective runs, with an alert dialog; removed at stop, on a host change and at resource stop.
 
 ---
 
