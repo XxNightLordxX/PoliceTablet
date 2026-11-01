@@ -199,12 +199,25 @@ local function Officers(case)
     return out
 end
 
+-- A volunteer case's role, mode, phase, dropout and whether an officer reached him (CP.Volunteers.staffView, V26),
+-- or nil for a live case.
+local function VolunteerOf(case)
+    local V = CP.Volunteers
+    if case.kind ~= 'volunteer' or not (V and V.staffView) then return nil end
+    local ok, v = pcall(V.staffView, case.runId, case)
+    if not ok then
+        CP.err(TAG, 'CP.Volunteers.staffView failed: %s', tostring(v))
+        return nil
+    end
+    return type(v) == 'table' and v or nil
+end
+
 -- ============================================================================
 --                                 STAFF VIEWS
 -- ============================================================================
 
 -- One line per case: { runId, kind, open, openedAt, closedAt, missionId, suspects, detained, booked, flags, notes,
--- officers = { { citizenid, name } } }.
+-- officers = { { citizenid, name } }, volunteer = { role, mode, phase, why, engaged } (a volunteer case, V26) }.
 function Opp.staffCases()
     local out = {}
     for _, c in ipairs(Opp.cases and Opp.cases() or {}) do
@@ -217,6 +230,7 @@ function Opp.staffCases()
         line.closedAt = case.closedAt
         line.missionId = type(case.run) == 'table' and case.run.missionId or nil
         line.officers = Officers(case)
+        line.volunteer = VolunteerOf(case)
         out[#out + 1] = line
     end
     return out
@@ -288,6 +302,7 @@ function Opp.staffCase(runId)
     out.missionId = type(case.run) == 'table' and case.run.missionId or nil
     out.crimeEnded = case.crimeEndedAt ~= nil
     out.officers = Officers(case)
+    out.volunteer = VolunteerOf(case)
     out.suspects = suspects
     out.lines = lines
     out.flagLines = flags
@@ -319,11 +334,14 @@ if CP.AdminKit and CP.AdminKit.action then
     Kit.callback('admin:getRsCases', 'antiFarmOverride', function(ctx)
         local list = Opp.staffCases()
         for _, c in ipairs(list) do c.own = Kit.selfRun(ctx.src, c.runId) == true end
+        local volunteersOn = type(Config.Volunteers) == 'table' and Config.Volunteers.enabled == true
         return {
             enabled = FeatureOn(),
             liveCrime = type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true,
-            volunteers = type(Config.Volunteers) == 'table' and Config.Volunteers.enabled == true,
+            volunteers = volunteersOn,
             cases = list,
+            -- the volunteers on the list now (V26; empty while volunteers are off)
+            listed = volunteersOn and CP.Volunteers and CP.Volunteers.staffList and CP.Volunteers.staffList() or {},
             serverTime = os.time(),
         }
     end)

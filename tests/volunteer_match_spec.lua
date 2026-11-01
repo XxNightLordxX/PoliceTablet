@@ -38,11 +38,12 @@ CP.Opponents = {
     sampleCrew = function() return true end,
     unsampleCrew = function() return true end,
     open = function(run, spec)
-        opened[#opened + 1] = { run = run, spec = spec }
+        local case = { runId = run.id, kind = spec.kind }
+        opened[#opened + 1] = { run = run, spec = spec, case = case }
         for _, cid in ipairs(spec.members) do
             recs[cid] = { cid = cid, src = srcOfCid[cid], label = 'A', state = 'free' }
         end
-        return { runId = run.id }
+        return case
     end,
     byCid = function(cid)
         local r = recs[cid]
@@ -668,6 +669,109 @@ do
     H.eq(LastNote(20), 'volunteer.case.out_of_bounds', 'he is told')
     H.eq(V.outOfBounds(run), false, 'only once')
     Finish(run, 'completed', 'completed')
+end
+
+-- ============================================================================
+--                     RESULTS FOR OTHER SCRIPTS AND STAFF
+-- ============================================================================
+-- V26, volunteerEnded.
+
+do
+    local EVENT = CP.e('server:volunteerEnded')
+    local function Sent()
+        local out = {}
+        for _, e in ipairs(H.events) do
+            if e.kind == 'local' and e.name == EVENT then out[#out + 1] = e.args[1] end
+        end
+        return out
+    end
+    H.eq(Config.Volunteers.endEvent, true, 'endEvent ships true (behind enabled = false)')
+    for _, v in ipairs(V.list()) do V.stop(v.src) end
+    Civilian(30, 'VMR00030')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(30, RUNNER), 'a fresh volunteer joins')
+    local list = V.staffList()
+    H.eq(#list, 1, 'staff see the volunteers on the list')
+    H.eq(list[1] and list[1].citizenid, 'VMR00030', '...by citizenid')
+    H.eq(list[1] and list[1].strikes, 0, '...with their strikes')
+    H.eq(list[1] and list[1].src, nil, '...and never a server id')
+    H.eq(list[1] and list[1].playing, nil, 'he plays nothing yet')
+
+    -- nobody said yes: no event
+    Reset()
+    local run = NewRun()
+    H.eq(V.staffList()[1].playing, 'asking', 'staff see he is being asked')
+    Answer(30, LastAsk(30), false)
+    H.step(0)
+    Finish(run, 'completed', 'completed')
+    H.eq(#Sent(), 0, 'a run nobody said yes to sends no volunteerEnded')
+
+    -- a yes, engaged, detained: one event with his outcome
+    Reset()
+    run = NewRun()
+    run.missionId, run.missionType = 'warrant_m', 'investigation'
+    run.participants = { [1] = { citizenid = 'OFR00001' }, [2] = { citizenid = 'OFR00002' } }
+    Answer(30, LastAsk(30), true)
+    H.step(0)
+    local case = opened[1] and opened[1].case
+    H.eq(case and case.volunteer and case.volunteer.role, 'runner', 'the case keeps the role he plays')
+    local view = V.staffView(run.id, case)
+    H.eq(view and view.phase, 'travel', 'staff see the live phase while he plays')
+    H.eq(view and view.mode, 'players_when_available', '...and the mode')
+    recs.VMR00030.contactAt = H.clockMs
+    H.advance(1000, 1000)
+    H.step(0)
+    H.eq(V.staffView(run.id, case).engaged, true, 'staff see officers reached him')
+    closeOut = {
+        { VMR00030 = 'detained' },
+        { kind = 'volunteer', order = { 'VMR00030' }, suspects = { VMR00030 = { contactAt = 1, share = 1 } } },
+    }
+    Finish(run, 'completed', 'completed')
+    local sent = Sent()
+    H.eq(#sent, 1, 'a run a volunteer said yes to sends volunteerEnded once')
+    local p = sent[1] or {}
+    H.eq(p.citizenid, 'VMR00030', '...naming the volunteer')
+    H.eq(p.missionId, 'warrant_m', '...the mission')
+    H.eq(p.missionType, 'investigation', '...its type')
+    H.eq(p.role, 'runner', '...the suspect he played')
+    H.eq(p.outcome, 'detained', '...his outcome')
+    H.eq(p.engaged, true, '...that officers reached him')
+    H.eq(p.dropout, nil, '...no dropout')
+    H.eq(p.result, 'completed', '...how the run ended')
+    H.eq(p.officers, 2, '...and the officers on it')
+    H.eq(p.src, nil, 'no server id')
+    H.eq(p.coords, nil, 'no position')
+    view = V.staffView(run.id, case)
+    H.eq(view and view.phase, 'engaged', 'after the end staff read the last phase from the case')
+    H.eq(view and view.engaged, true, '...and that he was reached')
+    CP.Hooks.fire('run:ended', run, 'completed', 'completed')
+    H.eq(#Sent(), 1, 'never twice for one run')
+
+    -- a no-show: the event says why he dropped out; endEvent = false sends nothing
+    Reset()
+    run = NewRun()
+    Answer(30, LastAsk(30), true)
+    H.step(0)
+    case = opened[1] and opened[1].case
+    H.advance(301000, 1000)
+    H.step(0)
+    closeOut = { { VMR00030 = 'void' }, { kind = 'volunteer', order = { 'VMR00030' }, suspects = { VMR00030 = {} } } }
+    Finish(run, 'completed', 'completed')
+    p = Sent()[1] or {}
+    H.eq(p.outcome, 'void', 'a no-show: his outcome is void')
+    H.eq(p.dropout, 'no_show', '...and why')
+    H.eq(V.staffView(run.id, case).why, 'no_show', 'staff see the dropout too')
+
+    Config.Volunteers.endEvent = false
+    Reset()
+    run = NewRun()
+    Answer(30, LastAsk(30), true)
+    H.step(0)
+    Finish(run, 'completed', 'completed')
+    H.eq(#Sent(), 0, 'endEvent = false: no event')
+    Config.Volunteers.endEvent = true
+    closeOut = nil
+    H.eq(V.staffView('nope', nil), nil, 'no case: nothing for staff')
 end
 
 -- ============================================================================

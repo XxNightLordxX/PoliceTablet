@@ -3569,6 +3569,28 @@ run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc
   `payRewards` are Settings money switches (ENABLE). Specs: tests/volunteer_match_spec.lua,
   tests/live_scoring_spec.lua, tests/boards_metrics_spec.lua.
 
+**Results for other scripts and staff (V26, modules/volunteers/match/server.lua + CP.Opponents staff).** The design
+is silent past "the volunteerEnded event and volunteer cases in the staff callbacks"; the simplest safe one, the
+twin of V19:
+- `V.sendEnded(m, run, state, reason)` from the `run:ended` hook (after the pair rows), once per run that had a yes
+  (`m.endSent`), never for a test run, while `Config.Volunteers.endEvent ~= false` (shipped true; volunteer cases
+  exist only while `enabled`): `TriggerEvent('crimson-police:server:volunteerEnded', V.endPayload(...))` inside
+  pcall. Payload `{ citizenid, missionId, missionType, role, mode, outcome, dropout, engaged, result = state, reason,
+  officers, endedAt }`: outcome from `Opp.close` (an unknown one reads `got_away`), `dropout` = `m.why` when it is a
+  strike reason (no_show, cancelled, left, afk, out_of_bounds), `engaged` = an officer reached him. No server id, no
+  position. Crimson-Contracts is frozen and does not listen.
+- Staff: at the yes the case gets `case.volunteer = { role, mode }`; at `run:ended` it also keeps the last `phase`,
+  `why` and `engaged`. `V.staffView(runId, case)` answers `{ role, mode, phase, why, engaged }` (live from the match
+  while the run runs, else from `case.volunteer`); `Opp.staffCases` / `Opp.staffCase` add it as `volunteer` on a
+  volunteer case (pcall; nil for a live case). `V.staffList()`: the volunteers on the list (`citizenid, name, roles,
+  since, untilAt, strikes, playing` = the phase of the run asking him or that he plays; no server id).
+  `admin:getRsCases` carries it as `listed` (empty while `Config.Volunteers.enabled` is off).
+- Admin UI (RealSuspects.tsx): Cases filters `live` / `volunteer` (`filterCases`); a volunteer line's Kind names the
+  role; the drawer shows role, mode, phase (with why) and reached in place of "The crime"; a Volunteers tab
+  (`sortListed`: playing or asked first, then oldest) reads `listed` from the same request. Read-only: no new tool.
+  Specs: tests/volunteer_match_spec.lua, tests/opponents_staff_spec.lua, tests/realsuspects_config_spec.lua,
+  web/src/admin/components/realSuspects.walk.ts.
+
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 
 Each character's own tablet choices (My options), saved sparse in `cp_officers.options` (JSON of only the keys that

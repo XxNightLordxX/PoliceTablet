@@ -460,6 +460,16 @@ do
     H.eq((S.entry('LiveCrime.availablePolice') or {}).kind, 'enum', 'LiveCrime.availablePolice is a choice (V19)')
     H.eq((S.check('LiveCrime.availablePolice', 'all')), false, 'availablePolice takes only idle or duty')
     H.eq((S.entry('LiveCrime.endEvent') or {}).kind, 'boolean', 'LiveCrime.endEvent is an on/off setting (V19)')
+    local vEnd = S.entry('Volunteers.endEvent') or {}
+    H.eq(vEnd.kind, 'boolean', 'Volunteers.endEvent is an on/off setting (V26)')
+    H.eq(
+        vEnd.desc,
+        'Results for other scripts: true = when a mission a volunteer said yes to ends, Crimson-Police '
+            .. 'sends the server-only event crimson-police:server:volunteerEnded (the mission, the suspect he played, how '
+            .. 'it ended and his outcome, by his citizenid; another script can reward him); false = no event',
+        'Volunteers.endEvent: its own comment'
+    )
+    H.ok(not vEnd.restart and not vEnd.money, 'Volunteers.endEvent needs no restart and is not a money switch')
     for _, k in ipairs({ 'readyCheck', 'typeCooldown', 'duringOperation' }) do
         H.eq((S.entry('LiveCrime.' .. k) or {}).kind, 'boolean', 'LiveCrime.' .. k .. ' is an on/off setting')
     end

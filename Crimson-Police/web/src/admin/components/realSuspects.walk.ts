@@ -7,7 +7,7 @@ import { ADMIN_SCREENS } from '../../layouts/screens';
 import { action, request } from '../../shared/nui';
 import type { Session } from '../../shared/types';
 import type { RsCaseData, RsCasesData, RsPairsData } from '../../types/admin_rs';
-import { filterCases, ledgerSuspect, personText, rowsFor, sinceOpen, toolRequest } from './realSuspects';
+import { filterCases, ledgerSuspect, personText, rowsFor, sinceOpen, sortListed, toolRequest } from './realSuspects';
 
 const failures: string[] = [];
 let passed = 0;
@@ -43,7 +43,7 @@ async function steps(): Promise<void> {
 
     // the cases list and one case
     const list = await request<RsCasesData>('admin:getRsCases', {});
-    ok(list.ok && list.data && list.data.cases.length === 3, 'admin:getRsCases answers the cases');
+    ok(list.ok && list.data && list.data.cases.length === 4, 'admin:getRsCases answers the cases');
     const cases = list.data?.cases ?? [];
     ok(filterCases(cases, 'open').length === 1, 'the Open filter keeps the running case');
     ok(
@@ -51,6 +51,20 @@ async function steps(): Promise<void> {
         'With flags keeps cases with flags or notes',
     );
     ok(filterCases(cases, 'all').length === cases.length, 'All keeps every case');
+    // volunteer cases (V26): their own filter, the part he played, and the volunteer list
+    const vols = filterCases(cases, 'volunteer');
+    ok(vols.length === 2 && vols.every(c => c.kind === 'volunteer'), 'the Volunteers filter keeps volunteer cases');
+    ok(
+        filterCases(cases, 'live').every(c => c.kind === 'live'),
+        'the Live crimes filter keeps live cases',
+    );
+    const vLine = vols.find(c => !c.own);
+    ok(vLine?.volunteer?.role === 'runner' && vLine.volunteer.why === 'no_show', 'a volunteer line names his part');
+    const vCase = await request<RsCaseData>('admin:getRsCase', { runUuid: vLine?.runId });
+    ok(vCase.ok && vCase.data?.volunteer?.phase === 'npc', 'a volunteer case opens with its match phase');
+    const listed = sortListed(list.data?.listed ?? []);
+    ok(listed.length === 2 && listed[0].playing === 'travel', 'the volunteer list: whoever plays first');
+    ok(!JSON.stringify(listed).includes('src'), 'and never a server id');
     const own = cases.find(c => c.own);
     ok(own !== undefined, "the admin's own case is marked");
     ok((await refused(request('admin:getRsCase', { runUuid: own?.runId }))) === 'err.own_run', 'and refused');

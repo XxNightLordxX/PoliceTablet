@@ -230,6 +230,48 @@ do
 end
 
 -- ============================================================================
+--                     3b. VOLUNTEER CASES FOR STAFF (V26)
+-- ============================================================================
+
+do
+    local R3 = NewRun('run-0003', { { src = 1, cid = 'OFF00001', name = 'Ada Test' } })
+    local case = Opp.open(R3, { kind = 'volunteer', members = { 'CRIM0001' } })
+    H.ok(case ~= nil and case.kind == 'volunteer', 'a volunteer case opened')
+    local asked = {}
+    CP.Volunteers = {
+        staffView = function(runId, c)
+            asked[#asked + 1] = runId
+            return { role = 'runner', mode = 'players_only', phase = 'travel', engaged = false, case = c }
+        end,
+        staffList = function() return { { citizenid = 'VOL00001', roles = { 'runner' }, strikes = 1 } } end,
+    }
+    local line = nil
+    for _, l in ipairs(Opp.staffCases()) do
+        if l.runId == 'run-0003' then line = l end
+    end
+    H.eq(line and line.volunteer and line.volunteer.role, 'runner', 'a volunteer case line carries the role played')
+    H.eq(line and line.volunteer and line.volunteer.phase, 'travel', '...and the phase')
+    local view = Opp.staffCase('run-0003')
+    H.eq(view and view.volunteer and view.volunteer.mode, 'players_only', 'the case view carries the mode')
+    H.eq(asked[1], 'run-0003', 'asked by run id')
+    for _, l in ipairs(Opp.staffCases()) do
+        if l.kind == 'live' then H.eq(l.volunteer, nil, 'a live case has no volunteer part') end
+    end
+    local list = cbs['admin:getRsCases'].fn({ src = 9, args = {} })
+    H.eq(#list.listed, 0, 'volunteers off (as shipped): no list of volunteers')
+    Config.Volunteers.enabled = true
+    list = cbs['admin:getRsCases'].fn({ src = 9, args = {} })
+    H.eq(list.listed[1] and list.listed[1].citizenid, 'VOL00001', 'volunteers on: staff see who is on the list')
+    H.eq(list.listed[1] and list.listed[1].strikes, 1, '...with his strikes')
+    Config.Volunteers.enabled = false
+    CP.Volunteers.staffView = function() error('boom') end
+    view = Opp.staffCase('run-0003')
+    H.ok(view ~= nil and view.volunteer == nil, 'a failing volunteer view leaves the case readable')
+    CP.Volunteers = nil
+    Opp.close(R3)
+end
+
+-- ============================================================================
 --                 4. THE SELF RULE OVER SUSPECTS (P.tookPart)
 -- ============================================================================
 

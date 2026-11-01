@@ -36,6 +36,7 @@ import type {
     RsCasesData,
     RsLedgerLine,
     RsLine,
+    RsListedVolunteer,
     RsPairLine,
     RsPairsData,
     RsSuspect,
@@ -50,6 +51,7 @@ import {
     personText,
     rowsFor,
     sinceOpen,
+    sortListed,
     toolRequest,
     validCid,
     type RsCaseFilter,
@@ -57,7 +59,7 @@ import {
 } from '../components/realSuspects';
 import './RealSuspects.css';
 
-type Tab = 'cases' | 'pairs';
+type Tab = 'cases' | 'pairs' | 'volunteers';
 
 const STATE_TONE: Record<string, BadgeTone> = {
     free: 'warning',
@@ -72,6 +74,11 @@ const STATE_TONE: Record<string, BadgeTone> = {
 const stateText = (s: string | null | undefined) => (s ? (hasKey(`opp.state.${s}`) ? t(`opp.state.${s}`) : s) : '-');
 const kindText = (k: string) => (hasKey(`rs.ui.kind.${k}`) ? t(`rs.ui.kind.${k}`) : k);
 const when = (ts: number | null | undefined) => (ts ? formatDateTime(ts) : '-');
+// a volunteer case's words (V26): the suspect he plays, the mode, the match phase and why he dropped out
+const keyText = (prefix: string, v: string | null | undefined) =>
+    v ? (hasKey(`${prefix}.${v}`) ? t(`${prefix}.${v}`) : v) : '-';
+const roleText = (r: string | null | undefined) => keyText('rs.ui.role', r);
+const phaseText = (p: string | null | undefined) => keyText('rs.ui.phase', p);
 
 // ============================================================================
 //                                  THE TOOLS
@@ -361,9 +368,25 @@ function CaseDrawer({
                         <KeyValue label={t('rs.ui.col.closed')}>
                             {data.open ? t('rs.ui.still_open') : when(data.closedAt)}
                         </KeyValue>
-                        <KeyValue label={t('rs.ui.crime')}>
-                            {data.crimeEnded ? t('rs.ui.crime_ended') : t('rs.ui.crime_running')}
-                        </KeyValue>
+                        {data.volunteer ? (
+                            <>
+                                <KeyValue label={t('rs.ui.vol.role')}>{roleText(data.volunteer.role)}</KeyValue>
+                                <KeyValue label={t('rs.ui.vol.mode')}>
+                                    {keyText('rs.ui.mode', data.volunteer.mode)}
+                                </KeyValue>
+                                <KeyValue label={t('rs.ui.vol.phase')}>
+                                    {phaseText(data.volunteer.phase)}
+                                    {data.volunteer.why ? ` · ${keyText('rs.ui.why', data.volunteer.why)}` : ''}
+                                </KeyValue>
+                                <KeyValue label={t('rs.ui.vol.reached')}>
+                                    {data.volunteer.engaged ? t('rs.ui.vol.reached_yes') : t('rs.ui.vol.reached_no')}
+                                </KeyValue>
+                            </>
+                        ) : (
+                            <KeyValue label={t('rs.ui.crime')}>
+                                {data.crimeEnded ? t('rs.ui.crime_ended') : t('rs.ui.crime_running')}
+                            </KeyValue>
+                        )}
                     </div>
                     <Card title={t('rs.ui.suspects')} icon="users" padding="none">
                         <SuspectsTable suspects={suspects} onTool={onTool} />
@@ -434,7 +457,11 @@ function CasesTab({
     const rows = filterCases(asArray(data?.cases), filter);
     const columns: TableColumn<RsCaseLine>[] = [
         { key: 'opened', header: t('rs.ui.col.opened'), render: c => when(c.openedAt) },
-        { key: 'kind', header: t('rs.ui.col.kind'), render: c => kindText(c.kind) },
+        {
+            key: 'kind',
+            header: t('rs.ui.col.kind'),
+            render: c => (c.volunteer ? `${kindText(c.kind)} · ${roleText(c.volunteer.role)}` : kindText(c.kind)),
+        },
         {
             key: 'state',
             header: t('rs.ui.col.state'),
@@ -495,6 +522,8 @@ function CasesTab({
                             { key: 'all', label: t('rs.ui.filter.all') },
                             { key: 'open', label: t('rs.ui.filter.open') },
                             { key: 'flagged', label: t('rs.ui.filter.flagged') },
+                            { key: 'live', label: t('rs.ui.filter.live') },
+                            { key: 'volunteer', label: t('rs.ui.filter.volunteer') },
                         ]}
                         value={filter}
                         onChange={setFilter}
@@ -645,6 +674,63 @@ function PairsTab({ onTool, version }: { onTool: (f: Partial<RsToolForm>) => voi
     );
 }
 
+// The volunteers on the list now (V26): who, the suspects they play, since and until when, their strikes and
+// whether a mission is asking them or they play one. Read-only: the tools stay on the other tabs.
+function VolunteersTab({ req: { data, loading, error, refetch } }: { req: UseRequestResult<RsCasesData> }) {
+    const rows = sortListed(asArray(data?.listed));
+    const columns: TableColumn<RsListedVolunteer>[] = [
+        { key: 'who', header: t('rs.ui.col.volunteer'), render: v => personText(v) },
+        { key: 'roles', header: t('rs.ui.col.roles'), render: v => asArray(v.roles).map(roleText).join(', ') || '-' },
+        { key: 'since', header: t('rs.ui.col.since'), render: v => when(v.since) },
+        { key: 'until', header: t('rs.ui.col.until'), render: v => when(v.untilAt) },
+        { key: 'strikes', header: t('rs.ui.col.strikes'), numeric: true, render: v => v.strikes ?? 0 },
+        {
+            key: 'playing',
+            header: t('rs.ui.col.playing'),
+            render: v =>
+                v.playing ? (
+                    <Badge size="sm" tone={v.playing === 'asking' ? 'warning' : 'danger'} dot>
+                        {phaseText(v.playing)}
+                    </Badge>
+                ) : (
+                    '-'
+                ),
+        },
+    ];
+    return (
+        <Card
+            title={t('rs.ui.volunteers')}
+            subtitle={t('rs.ui.volunteers_sub')}
+            icon="user"
+            padding="none"
+            actions={
+                <IconButton
+                    icon="refresh"
+                    size="sm"
+                    variant="secondary"
+                    label={t('rs.ui.refresh')}
+                    loading={loading && !!data}
+                    onClick={() => void refetch()}
+                />
+            }
+        >
+            {loading && !data ? (
+                <LoadingBlock />
+            ) : error && !data ? (
+                <ErrorState error={error} onRetry={() => void refetch()} />
+            ) : (
+                <Table
+                    dense
+                    columns={columns}
+                    rows={rows}
+                    rowKey={v => v.citizenid}
+                    empty={data?.volunteers ? t('rs.ui.volunteers_none') : t('rs.ui.volunteers_off')}
+                />
+            )}
+        </Card>
+    );
+}
+
 export default function RealSuspects() {
     const [tab, setTab] = useState<Tab>('cases');
     const [openRun, setOpenRun] = useState<string | null>(null);
@@ -665,12 +751,15 @@ export default function RealSuspects() {
                 items={[
                     { key: 'cases', label: t('rs.ui.cases'), icon: 'activity' },
                     { key: 'pairs', label: t('rs.ui.pairs_tab'), icon: 'users' },
+                    { key: 'volunteers', label: t('rs.ui.volunteers'), icon: 'user' },
                 ]}
                 value={tab}
                 onChange={setTab}
             />
             {tab === 'cases' ? (
                 <CasesTab req={cases} onOpen={setOpenRun} />
+            ) : tab === 'volunteers' ? (
+                <VolunteersTab req={cases} />
             ) : (
                 <PairsTab onTool={setTool} version={version} />
             )}

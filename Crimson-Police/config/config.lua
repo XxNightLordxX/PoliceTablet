@@ -1157,6 +1157,10 @@ Config.Volunteers = {
     -- Seconds a volunteer fugitive may stay outside the search circle (the red circle on his own map; it shrinks
     -- towards where the server last saw him at each clue) before his part is void (a strike); 0 = no circle rule
     fugitiveOutSeconds = 30,
+    -- Results for other scripts: true = when a mission a volunteer said yes to ends, Crimson-Police sends the
+    -- server-only event crimson-police:server:volunteerEnded (the mission, the suspect he played, how it ended and
+    -- his outcome, by his citizenid; another script can reward him); false = no event
+    endEvent = true,
     -- What a mission played against a volunteer (once he said yes) takes part in; true = like any other mission
     typeOfTheDay = false,            -- true = today's Type of the Day points multiplier applies to it too
     goals = false,                   -- true = it counts for the officers' daily and weekly goals

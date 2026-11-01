@@ -1493,6 +1493,14 @@ is how the run ended (`completed`, `failed`, `abandoned`), each outcome is `deta
 `void` or `stopped`, `caught` counts the detained and booked suspects and `officers` the case's officers. Listen with
 `AddEventHandler` only (never `RegisterNetEvent`, so no client can send it). It carries no server id and no position.
 
+Server-only event for other scripts: `crimson-police:server:volunteerEnded` (`Config.Volunteers.endEvent = true`)
+when a mission a volunteer said yes to ends (Crimson-Police gives volunteers nothing; another script can reward
+them), with `{ citizenid, missionId, missionType, role, mode, outcome, dropout, engaged, result, reason, officers,
+endedAt }`: `citizenid` is the volunteer, `role` the suspect he played (`runner`, `driver`, `fugitive`), `mode` the
+mission's mode, `outcome` his outcome as above, `dropout` why his part was voided (`no_show`, `cancelled`, `left`,
+`afk`, `out_of_bounds`) or `nil`, `engaged` whether officers reached him, `result` and `reason` how the run ended and
+`officers` how many officers were on it. Same rules: `AddEventHandler` only, no server id, no position.
+
 The tablet item uses the client export `useTablet` (`export = 'Crimson-Police.useTablet'` in the item).
 
 ---
@@ -3003,6 +3011,14 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   rule) voids his part (a strike, and the mission goes on as `onVoid` / `voidRun` say). Detaining or booking him
   completes the search (an AFK catch is voided as above); if he gets away the search fails. Both keys are in
   Settings.
+  Results for other scripts and staff (step V26): when a mission a volunteer said yes to ends, other scripts get the
+  server-only event `crimson-police:server:volunteerEnded` (see Exports; `Config.Volunteers.endEvent`, shipped
+  `true`, in Settings; `false` = no event). On **Admin UI -> Real suspects**, **Cases** has two more filters (Live
+  crimes, Volunteers), a volunteer case's Kind names the suspect he played, and its drawer shows the suspect played,
+  the mode, where the match got to (on his way, in position, officers reached him, the NPC took over) with why he
+  dropped out, and whether officers reached him. A new **Volunteers** tab lists who is on the volunteer list now:
+  the suspects each plays, since and until when, his strikes, and whether a mission is asking him or he plays one
+  (read-only, memory only).
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

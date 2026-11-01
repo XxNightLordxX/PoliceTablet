@@ -28,7 +28,7 @@ local counter = 0
 
 -- match = { run, runId, mode, role, obj, meet, radius, phase = 'asking'|'travel'|'in_position'|'engaged'|'npc'|
 --   'void'|'over', cid, src, token, deadline (ms), asked = { [cid] = true }, tries, yesAt (ms), travelUntil (ms),
---   engagedAt (ms), why }
+--   engagedAt (ms), why, case (his CP.Opponents case, from the yes on) }
 
 -- ============================================================================
 --                                   HELPERS
@@ -285,6 +285,8 @@ local function Accept(m)
         return AskNext(m)
     end
     local now = GetGameTimer()
+    m.case = case
+    case.volunteer = { role = m.role, mode = m.mode }  -- what staff read once the match is gone (V26)
     m.phase, m.token, m.yesAt = 'travel', nil, now
     m.travelUntil = now + math.floor(Num(Cfg().travelSeconds, 300, 60, 1800)) * 1000
     m.run.realSuspect = 'volunteer'
@@ -600,6 +602,90 @@ function V.outOfBounds(run)
     return true
 end
 
+-- ============================================================================
+--                     RESULTS FOR OTHER SCRIPTS AND STAFF
+-- ============================================================================
+-- V26, ARCHITECTURE 5.47.
+-- The server-only event crimson-police:server:volunteerEnded when a run a volunteer said yes to ends
+-- (Config.Volunteers.endEvent, shipped true; volunteer cases exist only while enabled), and what the staff callbacks
+-- read of a volunteer case. Neither requires another resource, and nothing another script sends back is read.
+
+V.END_EVENT = 'server:volunteerEnded'
+local OUTCOMES = { detained = true, booked = true, got_away = true, left = true, void = true, stopped = true }
+
+-- A volunteer case for staff (CP.Opponents staff): { role, mode, phase, why, engaged } while the run is matched,
+-- else what the run's end left on the case (case.volunteer), else nil. Never a server id or a position.
+function V.staffView(runId, case)
+    local m = type(runId) == 'string' and matches[runId] or nil
+    if m and m.yesAt then
+        return { role = m.role, mode = m.mode, phase = m.phase, why = m.why, engaged = m.engagedAt ~= nil }
+    end
+    local v = type(case) == 'table' and type(case.volunteer) == 'table' and case.volunteer or nil
+    if not v then return nil end
+    return { role = v.role, mode = v.mode, phase = v.phase, why = v.why, engaged = v.engaged == true }
+end
+
+-- The volunteers on the list for staff, oldest first: { citizenid, name, roles, since, untilAt, strikes, playing
+-- (the phase of the run he is asked for or plays, or nil) }. No server id, no position.
+function V.staffList()
+    local out = {}
+    for _, v in ipairs(V.list and V.list() or {}) do
+        local mo = V.matchOf(v.cid)
+        out[#out + 1] = {
+            citizenid = v.cid,
+            name = v.name,
+            roles = v.roles,
+            since = v.since,
+            untilAt = v.untilAt,
+            strikes = V.strikes and V.strikes(v.cid) or 0,
+            playing = mo and mo.phase or nil,
+        }
+    end
+    return out
+end
+
+-- The end event's payload: the mission, the suspect he played, how the run ended, his outcome and why he dropped
+-- out (if he did). The volunteer's citizenid is the only player data; no server id, no position.
+function V.endPayload(m, run, state, reason)
+    if type(m) ~= 'table' or type(m.cid) ~= 'string' or type(run) ~= 'table' then return nil end
+    local outcomes, case = Opp('close', run)
+    local o = type(outcomes) == 'table' and outcomes[m.cid] or nil
+    if o == nil and type(case) == 'table' and type(case.suspects) == 'table' and case.suspects[m.cid] then
+        o = case.suspects[m.cid].outcome
+    end
+    local officers = 0
+    for _, p in pairs(run.participants or {}) do
+        if type(p) == 'table' and type(p.citizenid) == 'string' then officers = officers + 1 end
+    end
+    local def = type(run.mission) == 'table' and run.mission or {}
+    return {
+        missionId = run.missionId or def.id,
+        missionType = run.missionType or def.type,
+        role = m.role,
+        mode = m.mode,
+        citizenid = m.cid,
+        outcome = OUTCOMES[o] and o or 'got_away',
+        dropout = STRIKE_WHY[m.why] and m.why or nil,
+        engaged = m.engagedAt ~= nil,
+        result = type(state) == 'string' and state or 'ended',
+        reason = type(reason) == 'string' and reason or nil,
+        officers = officers,
+        endedAt = os.time(),
+    }
+end
+
+-- Sends the end event once for a run a volunteer said yes to (never for a test run). -> true when it was sent.
+function V.sendEnded(m, run, state, reason)
+    if Cfg().endEvent == false or type(m) ~= 'table' or not m.yesAt or m.endSent then return false end
+    if type(run) ~= 'table' or run.test then return false end
+    local payload = V.endPayload(m, run, state, reason)
+    if not payload then return false end
+    m.endSent = true
+    local ok, err = pcall(TriggerEvent, CP.e(V.END_EVENT), payload)
+    if not ok then CP.err(TAG, 'the volunteerEnded event of run %s failed: %s', tostring(m.runId), tostring(err)) end
+    return ok
+end
+
 V.matchActions = {
     answer = function(src, data)
         local ok, why = V.answer(src, data)
@@ -631,14 +717,19 @@ CP.Hooks.on('participant:joined', function(run, src)
 end)
 
 -- The release: a pop-up still open closes, a volunteer who played the suspect is told he is free to go; a case
--- that opened (a yes came) writes its pair rows.
-CP.Hooks.on('run:ended', function(run, state)
+-- that opened (a yes came) writes its pair rows, keeps its last phase for staff and sends volunteerEnded (V26).
+CP.Hooks.on('run:ended', function(run, state, reason)
     local m = type(run) == 'table' and matches[run.id] or nil
     if not m then return end
     matches[run.id] = nil
     if m.yesAt then
         local ok, err = pcall(RecordPairs, m, run, state)
         if not ok then CP.err(TAG, 'the pair rows of run %s failed: %s', m.runId, tostring(err)) end
+        if type(m.case) == 'table' and type(m.case.volunteer) == 'table' then
+            local v = m.case.volunteer
+            v.phase, v.why, v.engaged = m.phase, m.why, m.engagedAt ~= nil
+        end
+        V.sendEnded(m, run, state, reason)
     end
     if m.phase == 'asking' and m.token then
         TriggerClientEvent(CP.e('client:volunteerAskClose'), m.src, m.token)

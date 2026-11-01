@@ -1,6 +1,14 @@
 // Admin UI · Real suspects (step V18): the screen's plain helpers (no React), walked by realSuspects.walk.ts.
 
-import type { RsAdminRow, RsCaseLine, RsLedgerLine, RsPerson, RsSuspect, RsTool } from '../../types/admin_rs';
+import type {
+    RsAdminRow,
+    RsCaseLine,
+    RsLedgerLine,
+    RsListedVolunteer,
+    RsPerson,
+    RsSuspect,
+    RsTool,
+} from '../../types/admin_rs';
 
 export const RS_DAYS_MAX = 3650;
 export const RS_REASON_MAX = 255;
@@ -12,16 +20,18 @@ export const RS_TOOL_ACTION: Record<RsTool, string> = {
     suspend: 'server:admin:rsSuspend',
 };
 
-export type RsCaseFilter = 'all' | 'open' | 'flagged';
+export type RsCaseFilter = 'all' | 'open' | 'flagged' | 'live' | 'volunteer';
 
 // A citizenid the server accepts (modules/opponents/staff: letters, digits, _ and -, at most 50).
 export function validCid(v: unknown): v is string {
     return typeof v === 'string' && v.length > 0 && v.length <= 50 && /^[\w-]+$/.test(v);
 }
 
-// The cases a filter shows: 'open' = still running, 'flagged' = with a conduct flag or a suspect note.
+// The cases a filter shows: 'open' = still running, 'flagged' = with a conduct flag or a suspect note, 'live' /
+// 'volunteer' = that kind of case (V26).
 export function filterCases(cases: RsCaseLine[], filter: RsCaseFilter): RsCaseLine[] {
     if (filter === 'open') return cases.filter(c => c.open);
+    if (filter === 'live' || filter === 'volunteer') return cases.filter(c => c.kind === filter);
     if (filter === 'flagged') return cases.filter(c => (c.flags || 0) + (c.notes || 0) > 0);
     return cases;
 }
@@ -81,4 +91,14 @@ export function toolRequest(
     const payload: Record<string, unknown> =
         form.tool === 'block' ? { officer, suspect, days, reason } : { citizenid: cid, days, reason };
     return { ok: true, action: RS_TOOL_ACTION[form.tool], payload };
+}
+
+// The volunteers on the list, the ones playing or being asked first, then by who joined first (V26).
+export function sortListed(list: RsListedVolunteer[]): RsListedVolunteer[] {
+    return [...list].sort((a, b) => {
+        const pa = a.playing ? 0 : 1;
+        const pb = b.playing ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return (a.since || 0) - (b.since || 0);
+    });
 }

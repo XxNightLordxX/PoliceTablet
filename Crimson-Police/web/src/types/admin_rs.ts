@@ -13,6 +13,28 @@ export interface RsOfficer extends RsPerson {
     status?: string | null;
 }
 
+// A volunteer case's part (V26, CP.Volunteers.staffView): the suspect he plays, the mode, the match phase, why he
+// dropped out (a void) and whether an officer reached him. Never a server id or a position.
+export interface RsVolunteerInfo {
+    role: string;
+    mode?: string | null;
+    phase?: string | null;
+    why?: string | null;
+    engaged?: boolean;
+}
+
+// One volunteer on the list now (V26, CP.Volunteers.staffList); playing = the phase of the run he is asked for or
+// plays.
+export interface RsListedVolunteer {
+    citizenid: string;
+    name?: string | null;
+    roles: string[];
+    since: number;
+    untilAt: number;
+    strikes: number;
+    playing?: string | null;
+}
+
 // One line of admin:getRsCases (the open cases newest first, then the kept closed ones).
 export interface RsCaseLine {
     runId: string;
@@ -27,6 +49,8 @@ export interface RsCaseLine {
     flags: number;
     notes: number;
     officers: RsOfficer[];
+    // a volunteer case (V26): what he plays and how far the match got
+    volunteer?: RsVolunteerInfo | null;
     // a case of one of the admin's own characters or accounts: it can't be opened (err.own_run)
     own?: boolean;
 }
@@ -36,6 +60,8 @@ export interface RsCasesData {
     liveCrime: boolean;
     volunteers: boolean;
     cases: RsCaseLine[];
+    // the volunteers on the list now (V26; empty while volunteers are off)
+    listed?: RsListedVolunteer[];
     serverTime: number;
 }
 

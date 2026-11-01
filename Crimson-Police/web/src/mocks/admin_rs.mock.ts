@@ -2,7 +2,15 @@
 // browser answers as with Config.LiveCrime.enabled and Config.Volunteers.enabled both false.
 
 import { registerMock } from '../shared/nui';
-import type { RsAdminRow, RsCaseData, RsCaseLine, RsCasesData, RsPairLine, RsPairsData } from '../types/admin_rs';
+import type {
+    RsAdminRow,
+    RsCaseData,
+    RsCaseLine,
+    RsCasesData,
+    RsListedVolunteer,
+    RsPairLine,
+    RsPairsData,
+} from '../types/admin_rs';
 
 const nowS = () => Math.floor(Date.now() / 1000);
 const rsOff = () => typeof window !== 'undefined' && /[?&]rsOff\b/.test(window.location.search);
@@ -11,6 +19,7 @@ const CID = /^[\w-]{1,50}$/;
 const OPEN_RUN = '9b2e4c10-0000-4000-8000-0000000000a1';
 const CLOSED_RUN = '9b2e4c10-0000-4000-8000-0000000000a2';
 const OWN_RUN = '9b2e4c10-0000-4000-8000-0000000000a3';
+const VOL_RUN = '9b2e4c10-0000-4000-8000-0000000000a4';
 
 const officers = [
     { citizenid: 'SAST0031', name: 'Tom Reed', callsign: '2L-33', status: 'active' },
@@ -58,6 +67,42 @@ const cases: RsCaseLine[] = [
         flags: 0,
         notes: 0,
         officers: [{ citizenid: 'ADM00001', name: 'Alex Admin', callsign: null, status: 'left' }],
+    },
+    {
+        runId: VOL_RUN,
+        kind: 'volunteer',
+        open: false,
+        openedAt: nowS() - 3600,
+        closedAt: nowS() - 3000,
+        missionId: 'warrant_service',
+        suspects: 1,
+        detained: 0,
+        booked: 0,
+        flags: 0,
+        notes: 1,
+        officers: [officers[0]],
+        volunteer: { role: 'runner', mode: 'players_when_available', phase: 'npc', why: 'no_show', engaged: false },
+    },
+];
+
+// the volunteer list (V26, CP.Volunteers.staffList)
+const listed: RsListedVolunteer[] = [
+    {
+        citizenid: 'VOL00001',
+        name: 'Jay Park',
+        roles: ['runner', 'driver'],
+        since: nowS() - 1500,
+        untilAt: nowS() + 2100,
+        strikes: 1,
+    },
+    {
+        citizenid: 'VOL00002',
+        name: 'Kim Vale',
+        roles: ['fugitive'],
+        since: nowS() - 600,
+        untilAt: nowS() + 3000,
+        strikes: 0,
+        playing: 'travel',
     },
 ];
 
@@ -239,8 +284,9 @@ function put(row: RsAdminRow) {
 registerMock('request', 'admin:getRsCases', (): RsCasesData => ({
     enabled: !rsOff(),
     liveCrime: !rsOff(),
-    volunteers: false,
+    volunteers: !rsOff(),
     cases: rsOff() ? [] : cases.map(c => ({ ...c, own: c.runId === OWN_RUN })),
+    listed: rsOff() ? [] : listed,
     serverTime: nowS(),
 }));
 

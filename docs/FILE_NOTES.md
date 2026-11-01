@@ -3859,6 +3859,8 @@ says yes, or a volunteer who drops out, gives the NPC back (players_when_availab
 (Config.Volunteers.onVoid / voidRun; 'players_only' always ends). Blocks read it with ctx.volunteer().
 A block may also tell the volunteer who plays (V25): V.caseNote (a notification), V.caseArea (his own map circle,
 client:volunteerArea) and V.outOfBounds (he broke its play-area rule: a void and a strike).
+Results (V26): the server-only event crimson-police:server:volunteerEnded when a run he said yes to ends
+(Config.Volunteers.endEvent), and V.staffView / V.staffList for the Real suspects screen.
 Memory only; nothing runs while Config.Volunteers.enabled is off or every mode is 'npc'.
 ```
 
@@ -6239,5 +6241,6 @@ economy_spec, teams_spec and the engine_b client fixture.
 Volunteer matching (step V22): the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
 on a yes (run.realSuspect = 'volunteer'), travel and in position, engagement (the officers' protection drop), a
 no-show, Cancel this case, the release, the NPC fallback and the endings (Config.Volunteers.onVoid / voidRun,
-'players_only'), and ctx.volunteer()'s view. Plain Lua with stubs.
+'players_only'), ctx.volunteer()'s view, and (V26) the volunteerEnded event and the staff view. Plain Lua with
+stubs.
 ```
