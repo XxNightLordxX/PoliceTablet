@@ -3355,6 +3355,39 @@ function Cd.liveOpts(v)
     }
 end
 
+-- A participant record for officer o (CP.Access.getOfficer's shape) joining run at now (the accept, or a late join of
+-- a live case, V15). first: Scoring.isFirstRunSinceDuty's answer.
+function Runs._newParticipant(run, o, now, first)
+    return {
+        src = ToSrc(o.src),
+        citizenid = o.citizenid,
+        name = U.clip(o.name, 64),
+        callsign = o.callsign and U.clip(o.callsign, 32) or nil,
+        rank = o.rank,
+        department = o.department,
+        departmentShort = o.departmentShort,
+        job = o.job,
+        isOfficer = o.department ~= nil and o.job ~= nil,
+        status = 'active',
+        joinedAt = now,
+        arrived = false,
+        arrivedAt = nil,
+        endReason = nil,
+        result = nil,
+        rowId = nil,
+        score = {},
+        vehicle = { lastNetId = nil, engine = 1000.0, body = 1000.0, seen = false },
+        presence = { inRange = 0, total = 0 },
+        lastEvent = nil,
+        flagged = nil,
+        firstRunSinceDuty = first == true,
+        items = {},
+        deadline = now + run.startTimeout,
+        telemetry = { lights = false, weapon = false, pedHits = 0, vehicleAt = nil },
+        stats = {},
+    }
+end
+
 function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     if type(opts) ~= 'table' or type(opts.mission) ~= 'table' then return nil, 'err.invalid_mission' end
     local mission = opts.mission
@@ -3499,34 +3532,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     for _, o in ipairs(officers) do
         local src = ToSrc(o.src)
         local okF, first = Call('Scoring', 'isFirstRunSinceDuty', src)
-        run.participants[src] = {
-            src = src,
-            citizenid = o.citizenid,
-            name = U.clip(o.name, 64),
-            callsign = o.callsign and U.clip(o.callsign, 32) or nil,
-            rank = o.rank,
-            department = o.department,
-            departmentShort = o.departmentShort,
-            job = o.job,
-            isOfficer = o.department ~= nil and o.job ~= nil,
-            status = 'active',
-            joinedAt = now,
-            arrived = false,
-            arrivedAt = nil,
-            endReason = nil,
-            result = nil,
-            rowId = nil,
-            score = {},
-            vehicle = { lastNetId = nil, engine = 1000.0, body = 1000.0, seen = false },
-            presence = { inRange = 0, total = 0 },
-            lastEvent = nil,
-            flagged = nil,
-            firstRunSinceDuty = okF and first == true or false,
-            items = {},
-            deadline = now + run.startTimeout,
-            telemetry = { lights = false, weapon = false, pedHits = 0, vehicleAt = nil },
-            stats = {},
-        }
+        run.participants[src] = Runs._newParticipant(run, o, now, okF and first == true)
         run.order[#run.order + 1] = src
     end
     RefreshDepartments(run)
@@ -3639,6 +3645,8 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         timeLimit = run.timeLimit,
     }
     if not run.npcCombat then data.npcCombat = false end
+    -- a live case keeps what its clients got at the start: a late joiner gets the same (Runs.addParticipant, V15)
+    if run.live then run.clientStart = data end
     -- a chosen twist the drawn mission has no use for (no armed NPCs, no time limit) was dropped without its reward
     local droppedText = nil
     if #dropped > 0 then
@@ -3680,6 +3688,114 @@ function Runs.create(opts)
         })
     end
     return run, errKey
+end
+
+-- ============================================================================
+--                       A LATE JOIN OF A LIVE CASE (V15)
+-- ============================================================================
+
+-- Backup joins a live case (run.live) that already runs: the officer who said yes to CP.LiveCrime's join pop-up.
+-- Every check is the server's: the run is a live case that has not ended, he is on duty (getOfficer: no suspension,
+-- retirement or dispatch suspension), on no run, not in the arena, under no mission ban, on no real call but the
+-- case's own (CP.Calls.exemptFor), never on this run before (a leave is final), and CP.LiveCrime.joinCheck (backup
+-- on, maxOfficers, the officer rules of a claim) passes before and after the lookups. His client gets the start,
+-- the In progress state and the active objective; the case's lines recorded before he joined are not his
+-- (p.sharedBefore, CP.Scoring). -> participant | nil, errKey.
+function Runs.addParticipant(run, src, opts)
+    src = ToSrc(src)
+    opts = type(opts) == 'table' and opts or {}
+    local function Open()
+        return type(run) == 'table' and runs[run.id] == run and run.state ~= 'ended' and not run.ending
+    end
+    local function LiveOk()
+        local okL, allowed, why = Call('LiveCrime', 'joinCheck', run, src)
+        if not okL then return false, 'err.live_case_off' end
+        if allowed ~= true then return false, why or 'err.live_case_gone' end
+        return true
+    end
+    if not src or not Open() then return nil, 'err.run_not_active' end
+    if type(run.live) ~= 'table' or run.test or run.operationId then return nil, 'err.live_join_not_live' end
+    if run.participants[src] then
+        return nil, run.participants[src].status == 'active' and 'err.live_join_already' or 'err.live_join_left'
+    end
+    if Runs.isOnMission(src) then return nil, 'err.already_on_run' end
+    if InArena(src) then return nil, 'err.in_arena' end
+    local ok, errKey = LiveOk()
+    if not ok then return nil, errKey end
+    -- the lookups below may yield (database)
+    local okO, o, oErr = Call('Access', 'getOfficer', src)
+    if not (okO and type(o) == 'table' and type(o.citizenid) == 'string') then return nil, oErr or 'err.not_police' end
+    if CP.MissionBan and CP.MissionBan.first then
+        local okB, bo, ban = pcall(CP.MissionBan.first, { o }, os.time())
+        if okB and type(bo) == 'table' and type(ban) == 'table' then return nil, 'err.mission_banned' end
+    end
+    local okE, set = Call('Calls', 'exemptFor', run)
+    local okC, onCall = Call('Calls', 'isOnCall', src, okE and type(set) == 'table' and { except = set } or nil)
+    if okC and onCall == true then return nil, 'err.on_call' end
+    local okF, first = Call('Scoring', 'isFirstRunSinceDuty', src)
+    -- no yield from here until he is in the run: what the lookups may have changed is checked again
+    if not Open() then return nil, 'err.run_not_active' end
+    if run.participants[src] then return nil, 'err.live_join_already' end
+    if Runs.isOnMission(src) then return nil, 'err.already_on_run' end
+    if not PlayerOnline(src) then return nil, 'err.member_unavailable' end
+    local cid = CitizenOf(src)
+    if cid and cid ~= o.citizenid then return nil, 'err.member_unavailable' end
+    ok, errKey = LiveOk()
+    if not ok then return nil, errKey end
+
+    local p = Runs._newParticipant(run, o, os.time(), okF and first == true)
+    p.joinedLate = true
+    p.joinedVia = type(opts.via) == 'string' and opts.via or nil
+    p.sharedBefore = U.copy(run.score and run.score.shared or {})
+    run.participants[src] = p
+    run.order[#run.order + 1] = src
+    bySrc[src] = run.id
+    cids.note(src, o.citizenid)
+    RefreshDepartments(run)
+    GiveItems(run, p)
+
+    local data = U.copy(run.clientStart or {})
+    data.participants = ParticipantsList(run)
+    data.host = run.host
+    TriggerClientEvent(CP.e('client:start'), src, run.id, data)
+    Call('NpcCombat', 'runStarted', run, src, data.npcCombat ~= false)
+    Call('Route', 'begin', run, src)
+    if run.state == 'in_progress' then
+        local left = Runs.remaining(run)
+        TriggerClientEvent(CP.e('client:inProgress'), src, run.id, {
+            tier = TierName(run.tier),
+            payTier = TierName(run.payTier),
+            objectives = run.scaled,
+            timeLimit = run.timeLimit,
+            remaining = math.max(0, math.ceil(left or run.timeLimit or 0)),
+        })
+        for i = 1, #run.mission.objectives do
+            local ob = run.objectives[i]
+            if ob and ob.prepared then
+                TriggerClientEvent(CP.e('client:objective'), src, run.id, i, { action = 'prepare' })
+            end
+            if ob and ob.status == 'active' then
+                local okA, area = pcall(Runs.anchor, run)
+                local okM, marker = pcall(Runs.startMarker, run, i)
+                TriggerClientEvent(CP.e('client:objective'), src, run.id, i,
+                    { action = 'start', area = okA and area or nil, marker = okM and marker or nil })
+            end
+        end
+    end
+    local label = run.mission and run.mission.label or run.missionId
+    Notify(src, 'success', 'livecrime.join.joined', { mission = label })
+    for _, s in ipairs(Runs.activeSrcs(run)) do
+        if s ~= src then
+            Notify(s, 'info', 'livecrime.join.partner', { name = p.callsign or p.name or ('#' .. src) })
+        end
+    end
+    CP.log(TAG, 'run %s: %d joined the live case late (%s), %d participant(s)', run.id, src, tostring(p.joinedVia),
+        #Runs.activeSrcs(run))
+    Fire('participant:joined', run, src)
+    BroadcastParticipants(run)
+    RefreshHud(run, true)
+    PushRun(run)
+    return p
 end
 
 -- ============================================================================

@@ -197,36 +197,63 @@ end
 --                           THE CUFF PAIR (METADATA)
 -- ============================================================================
 
--- ishandcuffed false -> true: cuffed when an officer of the case cuffed him within cuffPairWindow. The share is 0
+-- Cuffed by officerSrc (why 'cuff_pair', or 'outside_assist' for an officer outside the case, V15). The share is 0
 -- when he was AFK by his samples (and a note: critic 2 #15), neutralisedShare when he was down (whoever downed him:
 -- C28) or after a hospital respawn with officers in contact (C26), else 1.
+local function Cuffed(case, rec, officerSrc, why)
+    rec.outsideCuff = nil
+    rec.caughtBy = { officerSrc }
+    rec.near, rec.freedAt, rec.uncuff, rec.outsideUncuff, rec.pin, rec.cuffBreak = {}, nil, nil, nil, nil, nil
+    if rec.afk then
+        rec.share = 0
+    elseif rec.down or rec.hospitalCatch then
+        rec.share = Share()
+    else
+        rec.share = 1
+    end
+    rec.hospitalCatch = nil
+    held[rec.cid] = true
+    Opp.setState(case.run, rec.cid, 'cuffed', { why = why, by = officerSrc })
+    if rec.afk then
+        Opp.note(case.run, 'rs_afk_catch', CP.L('opp.detail.afk_catch', { label = rec.label }), rec.cid)
+    end
+end
+
+-- An on-duty officer outside the case cuffed him (critic C11, V15; Config.RealSuspects.outsideCuff): 'assist'
+-- (shipped) = the case's cuff while an active participant is within contactRange of the suspect, else stopped;
+-- 'stopped' = always stopped (state void, counts for nobody, the note rs_outside_cuff), like an outside jail. In a
+-- live case the outsider is then asked to join it (CP.LiveCrime.offer, Config.LiveCrime.backup).
+local function OutsideCuffed(case, rec, o, now)
+    o.pairedAt = now
+    rec.outsideCuffed = true
+    Line(case, rec, 'cuffed_by_outsider', { by = o.src })
+    if Cfg().outsideCuff ~= 'stopped' and ParticipantNear(case, rec) then
+        Cuffed(case, rec, o.src, 'outside_assist')
+    else
+        rec.outsideCuff = nil
+        rec.outcome, rec.stoppedBy = 'stopped', o.src
+        held[rec.cid] = nil
+        Opp.setState(case.run, rec.cid, 'void', { why = 'stopped', by = o.src })
+        Opp.note(case.run, 'rs_outside_cuff', CP.L('opp.detail.outside_cuff', { label = rec.label }), rec.cid)
+    end
+    local LC = CP.LiveCrime
+    if case.kind == 'live' and LC and type(LC.offer) == 'function' then
+        local ok, err = pcall(LC.offer, case.run, o.src, 'cuff')
+        if not ok then LogError('offer', 'CP.LiveCrime.offer failed: %s', tostring(err)) end
+    end
+end
+
+-- ishandcuffed false -> true: cuffed when an officer of the case cuffed him within cuffPairWindow; an officer
+-- outside the case within the window: OutsideCuffed.
 local function CuffsOn(case, rec, now)
     if rec.state ~= 'free' then return end
     local window = Ms('cuffPairWindow', 10)
     local c, o = rec.cuff, rec.outsideCuff
     rec.cuff = nil
     if c and now - c.at <= window then
-        rec.outsideCuff = nil
-        rec.caughtBy = { c.officerSrc }
-        rec.near, rec.freedAt, rec.uncuff, rec.outsideUncuff, rec.pin, rec.cuffBreak = {}, nil, nil, nil, nil, nil
-        if rec.afk then
-            rec.share = 0
-        elseif rec.down or rec.hospitalCatch then
-            rec.share = Share()
-        else
-            rec.share = 1
-        end
-        rec.hospitalCatch = nil
-        held[rec.cid] = true
-        Opp.setState(case.run, rec.cid, 'cuffed', { why = 'cuff_pair', by = c.officerSrc })
-        if rec.afk then
-            Opp.note(case.run, 'rs_afk_catch', CP.L('opp.detail.afk_catch', { label = rec.label }), rec.cid)
-        end
+        Cuffed(case, rec, c.officerSrc, 'cuff_pair')
     elseif o and now - o.at <= window then
-        -- an on-duty officer outside the case cuffed him: V15 decides assist or stopped
-        o.pairedAt = now
-        rec.outsideCuffed = true
-        Line(case, rec, 'cuffed_by_outsider', { by = o.src })
+        OutsideCuffed(case, rec, o, now)
     else
         Line(case, rec, 'cuffed_unproven')
     end

@@ -59,5 +59,7 @@
   "reason.downed_case": "Went down on a live case",
   "reason.downed_kept": "Went down (no cooldown)",
   "sup.end.downed_case": "Downed (live case)",
-  "sup.end.downed_kept": "Downed (volunteer case)"
+  "sup.end.downed_kept": "Downed (volunteer case)",
+  "opp.detail.outside_cuff": "Suspect {label}: cuffed by an officer outside the case with no officer of the case near him, so nobody scores him",
+  "flag.rs_outside_cuff": "An officer outside the case cuffed a suspect (no officer of the case was near, or Config.RealSuspects.outsideCuff is 'stopped'). Nobody scores his detain or booking."
 }

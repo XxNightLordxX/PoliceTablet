@@ -948,6 +948,10 @@ Config.RealSuspects = {
     cuffPairWindow = 10,             -- seconds between the officer's sc-police cuff and the suspect's cuffed state
     cuffRange = 3.5,                 -- metres between them at the cuff (sc-police allows 2.5; the rest is lag)
     custodyHoldSeconds = 30,         -- seconds the cuffs must hold before a detain counts
+    -- An on-duty officer outside the case who cuffs a suspect: 'assist' = it counts as the case's cuff while an
+    -- officer of the case is within contactRange of the suspect (else the suspect counts for nobody); 'stopped' = the
+    -- suspect always counts for nobody, like a jail by someone outside the case
+    outsideCuff = 'assist',
     -- Seconds: free this soon after the cuff = he won sc-police's cuff-break game (fair, once per case and not in
     -- the first 2 s); later, with no officer uncuff and no bobby pin, it is a self-uncuff: it counts as detained and
     -- staff get a note
@@ -1034,6 +1038,12 @@ Config.LiveCrime = {
     -- true = LIVE calls can still be claimed while a Cross-Department Mission runs (its lock stops missions only);
     -- false = the Cross-Department lock stops live cases too
     duringOperation = true,
+    -- Backup: true = an on-duty officer on no mission who marks himself responding to the crime's own SC-Dispatch
+    -- call, reaches the scene or cuffs a suspect gets a pop-up to join the live case; false = only the unit that
+    -- claimed the LIVE call works the case
+    backup = true,
+    maxOfficers = 6,                 -- officers on one live case at most (the unit that claimed it counts)
+    joinOfferSeconds = 30,           -- seconds the join pop-up waits for an answer
     -- The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and book the
     -- suspects. Metres around the reported place that count as being at the scene
     sceneRadius = 75.0,

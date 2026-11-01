@@ -1267,7 +1267,7 @@ Real calls, SC-Dispatch and dispatcher mode
 - The Dispatch screen shows a read-only strip: "SC-Dispatch: 3 active real calls (1 Priority 1) — real calls come first". It is counted from mdt_dispatch (NPC calls excluded), refreshed every 15 seconds, lists no calls and gates nothing. If the lookup fails, the strip is hidden.
 
 - SC-Dispatch's dispatcher mode (AssignedOnlyAlerts) has no effect on mission calls, and human dispatchers never see them: mission calls never involve real players; a LIVE call mirrors a real SC-Dispatch call that dispatchers already see. A dispatcher assigning an officer on a mission to a real call ends that officer's run as today.
-- LIVE calls (Config.LiveCrime, off by default): claiming one opens the crime's live case at once at its reported place, with no draw, no twists and no rapid response. Every accept rule applies except the server run caps (Config.LiveCrime.maxLiveRuns caps live cases) and three switches: readyCheck (false: no ready check), typeCooldown (false: type cooldowns are ignored and a live case starts none) and duringOperation (true: claimable while a Cross-Department Mission runs). The claim is refused when the crime is over or its suspects are all in another case, when every suspect already scored Config.RealSuspects.maxCatchesPerSuspectDay times today, and when an officer of the unit is in the crew, is one of the suspects on another character or account, is suspended from these cases by an admin, was a suspect within jobHopMinutes, or has an admin block or a recent case with a suspect (pairCooldownHours, suspectCooldownMinutes). Sharing only a connection or PC with a suspect is allowed and flags that officer for review. A case lasts at most Config.LiveCrime.caseTime; its call closes with it and is never re-dispatched.
+- LIVE calls (Config.LiveCrime, off by default): claiming one opens the crime's live case at once at its reported place, with no draw, no twists and no rapid response. Every accept rule applies except the server run caps (Config.LiveCrime.maxLiveRuns caps live cases) and three switches: readyCheck (false: no ready check), typeCooldown (false: type cooldowns are ignored and a live case starts none) and duringOperation (true: claimable while a Cross-Department Mission runs). The claim is refused when the crime is over or its suspects are all in another case, when every suspect already scored Config.RealSuspects.maxCatchesPerSuspectDay times today, and when an officer of the unit is in the crew, is one of the suspects on another character or account, is suspended from these cases by an admin, was a suspect within jobHopMinutes, or has an admin block or a recent case with a suspect (pairCooldownHours, suspectCooldownMinutes). Sharing only a connection or PC with a suspect is allowed and flags that officer for review. A case lasts at most Config.LiveCrime.caseTime; its call closes with it and is never re-dispatched. Backup (Config.LiveCrime.backup, on as shipped behind enabled): an on-duty officer on no mission who marks himself responding to the crime's own SC-Dispatch call, reaches the scene or cuffs a suspect gets a yes/no pop-up (Config.LiveCrime.joinOfferSeconds) to join the running case; a yes is checked again like a claim for that officer (and maxOfficers, the claiming unit counted), he gets the case's route and steps, scores only the lines recorded after he joined, and a leave is final. An officer outside the case who cuffs a suspect counts as the case's cuff while an officer of the case is within contactRange (Config.RealSuspects.outsideCuff = 'assist'), else that suspect counts for nobody ('stopped' always); staff see every offer, answer and join on the case timeline.
 
 Supervisor and admin controls (Config.Permissions.supervisor.missionCalls)
 
@@ -3739,6 +3739,10 @@ Config.RealSuspects = {
     cuffPairWindow = 10,             -- seconds between the officer's sc-police cuff and the suspect's cuffed state
     cuffRange = 3.5,                 -- metres between them at the cuff (sc-police allows 2.5; the rest is lag)
     custodyHoldSeconds = 30,         -- seconds the cuffs must hold before a detain counts
+    -- An on-duty officer outside the case who cuffs a suspect: 'assist' = it counts as the case's cuff while an
+    -- officer of the case is within contactRange of the suspect (else the suspect counts for nobody); 'stopped' = the
+    -- suspect always counts for nobody, like a jail by someone outside the case
+    outsideCuff = 'assist',
     -- Seconds: free this soon after the cuff = he won sc-police's cuff-break game (fair, once per case and not in
     -- the first 2 s); later, with no officer uncuff and no bobby pin, it is a self-uncuff: it counts as detained and
     -- staff get a note
@@ -3825,6 +3829,12 @@ Config.LiveCrime = {
     -- true = LIVE calls can still be claimed while a Cross-Department Mission runs (its lock stops missions only);
     -- false = the Cross-Department lock stops live cases too
     duringOperation = true,
+    -- Backup: true = an on-duty officer on no mission who marks himself responding to the crime's own SC-Dispatch
+    -- call, reaches the scene or cuffs a suspect gets a pop-up to join the live case; false = only the unit that
+    -- claimed the LIVE call works the case
+    backup = true,
+    maxOfficers = 6,                 -- officers on one live case at most (the unit that claimed it counts)
+    joinOfferSeconds = 30,           -- seconds the join pop-up waits for an answer
     -- The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and book the
     -- suspects. Metres around the reported place that count as being at the scene
     sceneRadius = 75.0,

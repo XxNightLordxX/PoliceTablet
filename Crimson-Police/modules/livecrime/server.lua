@@ -511,6 +511,27 @@ function LC.missionFor(crime)
     return d, 1
 end
 
+-- The officer rules of a claim and of a late join (V15) for o = { src, citizenid }: not in the crew, not suspended from
+-- these cases, not a suspect within jobHopMinutes, not one of the suspects on another character or account, no admin
+-- pair block and no pair cooldown with any suspect. -> true | false, err.
+local function OfficerOk(crime, o)
+    local cid = type(o) == 'table' and o.citizenid or nil
+    if type(cid) ~= 'string' then return false, 'err.member_unavailable' end
+    if crime.members[cid] then return false, 'err.live_case_own_suspect' end
+    if Opp('suspended', cid) == true then return false, 'err.live_case_suspended' end
+    local was = tonumber(Opp('lastSuspectAt', cid))
+    if was and os.time() - was < Num(RS().jobHopMinutes, 30) * 60 then return false, 'err.live_case_recent_suspect' end
+    if Opp('selfBlock', o.src, crime.suspects) == true then return false, 'err.live_case_own_suspect' end
+    for _, sCid in ipairs(Sorted(crime.suspects)) do
+        local ok, why = Opp('pairOk', cid, sCid)
+        if ok == false and why == 'blocked' then return false, 'err.live_case_pair_blocked' end
+        if ok == false and (why == 'pair_cooldown' or why == 'suspect_cooldown') then
+            return false, 'err.live_case_pair_cooldown'
+        end
+    end
+    return true
+end
+
 -- Whether these officers may take this crime's case -> true | false, err (checked at the claim and again at the
 -- accept; memory only: CP.Opponents' caps never query the database). officers = { { src, citizenid } }.
 function LC.claimCheck(crime, officers)
@@ -530,23 +551,9 @@ function LC.claimCheck(crime, officers)
     end
     if open == 0 then return false, 'err.live_case_gone' end
     if worth == 0 then return false, 'err.live_case_suspect_used' end
-    local hopS = Num(RS().jobHopMinutes, 30) * 60
-    local now = os.time()
     for _, o in ipairs(type(officers) == 'table' and officers or {}) do
-        local cid = type(o) == 'table' and o.citizenid or nil
-        if type(cid) ~= 'string' then return false, 'err.member_unavailable' end
-        if crime.members[cid] then return false, 'err.live_case_own_suspect' end
-        if Opp('suspended', cid) == true then return false, 'err.live_case_suspended' end
-        local was = tonumber(Opp('lastSuspectAt', cid))
-        if was and now - was < hopS then return false, 'err.live_case_recent_suspect' end
-        if Opp('selfBlock', o.src, crime.suspects) == true then return false, 'err.live_case_own_suspect' end
-        for _, sCid in ipairs(suspects) do
-            local ok, why = Opp('pairOk', cid, sCid)
-            if ok == false and why == 'blocked' then return false, 'err.live_case_pair_blocked' end
-            if ok == false and (why == 'pair_cooldown' or why == 'suspect_cooldown') then
-                return false, 'err.live_case_pair_cooldown'
-            end
-        end
+        local ok, err = OfficerOk(crime, o)
+        if not ok then return false, err end
     end
     return true
 end
@@ -560,6 +567,19 @@ function LC.liveOf(crime)
         street = crime.street,
         suspects = CP.U.count(crime.suspects),
     }
+end
+
+-- An officer who shares only a connection or PC with a suspect (CP.Opponents.selfBlock's flags) gets the
+-- officer-conduct flag rs_linked_accounts (his own points only): at the open, and at a late join (V15).
+local function FlagLinked(run, case, crime, src)
+    local blocked, _, flags, match = Opp('selfBlock', src, crime.suspects)
+    if blocked == true or type(flags) ~= 'table' then return end
+    for _, reason in ipairs(flags) do
+        local kinds = type(match) == 'table' and type(match.kinds) == 'table' and match.kinds or {}
+        local rec = type(match) == 'table' and case.suspects[match.cid] or nil
+        local detail = ('suspect %s, shared %s'):format(rec and rec.label or '?', table.concat(kinds, ', '))
+        if CP.AntiCheat and CP.AntiCheat.flag then pcall(CP.AntiCheat.flag, run, src, reason, detail) end
+    end
 end
 
 -- run:created of a live run: the crime remembers it, the case opens for its suspects (the crime's coords are the
@@ -587,15 +607,7 @@ local function Opened(run)
         if case.suspects and case.suspects[cid] then Opp('noteArmed', cid) end
     end
     for src, p in pairs(run.participants or {}) do
-        local blocked, _, flags, match = Opp('selfBlock', src, crime.suspects)
-        if blocked ~= true and type(flags) == 'table' then
-            for _, reason in ipairs(flags) do
-                local kinds = type(match) == 'table' and type(match.kinds) == 'table' and match.kinds or {}
-                local rec = type(match) == 'table' and case.suspects[match.cid] or nil
-                local detail = ('suspect %s, shared %s'):format(rec and rec.label or '?', table.concat(kinds, ', '))
-                if CP.AntiCheat and CP.AntiCheat.flag then pcall(CP.AntiCheat.flag, run, src, reason, detail) end
-            end
-        end
+        FlagLinked(run, case, crime, src)
         if p.citizenid then Opp('timeline', run, { what = 'officer', label = p.callsign or p.name }) end
     end
     CP.log(TAG, 'crime %s: case opened on run %s', crime.crimeKey, run.id)
@@ -631,12 +643,194 @@ local function Closed(run, state)
     Opp('checkPairFlags', run)
 end
 
+-- ============================================================================
+--                BACKUP JOINS THE CASE (V15, ARCHITECTURE 5.46)
+-- ============================================================================
+-- An on-duty officer on no mission who marks himself responding to the crime's own SC-Dispatch call, reaches the
+-- scene (sceneRadius, a scan every SCAN_MS on CP.Opponents' watch pass) or cuffs a suspect from outside the case
+-- (CP.Opponents' proof) gets a yes/no pop-up; a yes goes through CP.Runs.addParticipant, which checks everything
+-- again. Config.LiveCrime.backup (shipped true), maxOfficers, joinOfferSeconds; all behind enabled.
+
+local SCAN_MS = 5000              -- the scene scan of a running case, at most this often
+local RESPOND_WAIT_MS = 3000      -- a responding officer still on a mission: the offer waits for CP.Calls to end it
+local offers = {}                 -- [runId] = { [src] = { token, untilMs, why, answered } }
+local scanAt = {}                 -- [runId] = GetGameTimer() of the next scene scan
+
+local function BackupOn() return Cfg().enabled == true and Cfg().backup ~= false end
+local function MaxOfficers() return math.floor(CP.U.clamp(Num(Cfg().maxOfficers, 6), 1, 16)) end
+local function OfferMs() return math.floor(CP.U.clamp(Num(Cfg().joinOfferSeconds, 30), 10, 120)) * 1000 end
+
+local function ActiveCount(run)
+    local n = 0
+    for _, p in pairs(type(run) == 'table' and run.participants or {}) do
+        if p.status == 'active' then n = n + 1 end
+    end
+    return n
+end
+
+-- On duty in a turned-on department job, from the cached player data only (never yields; getOfficer comes later).
+local function OnDuty(src)
+    local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(src) or nil
+    local job = info and info.job
+    if type(job) ~= 'table' or job.onduty ~= true then return false end
+    return CP.Access ~= nil and CP.Access.departmentForJob ~= nil and CP.Access.departmentForJob(job.name) ~= nil
+end
+
+-- Whether src may join this live run now (memory only, never yields) -> true | false, err. CP.Runs.addParticipant
+-- asks it before and after its own lookups.
+function LC.joinCheck(run, src)
+    if not BackupOn() then return false, 'err.live_join_off' end
+    if type(run) ~= 'table' or run.state == 'ended' or run.ending or type(run.live) ~= 'table' then
+        return false, 'err.live_case_gone'
+    end
+    local crime = LC.crimeOf(run)
+    if not crime or crime.test or crime.runId ~= run.id or type(crime.suspects) ~= 'table' then
+        return false, 'err.live_case_gone'
+    end
+    local R = CP.Runs
+    if R and R.isParticipant and R.isParticipant(run, src) then return false, 'err.live_join_already' end
+    if R and R.isOnMission and R.isOnMission(src) then return false, 'err.already_on_run' end
+    if ActiveCount(run) >= MaxOfficers() then return false, 'err.live_join_full' end
+    local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(src) or nil
+    if type(info) ~= 'table' or type(info.citizenid) ~= 'string' then return false, 'err.member_unavailable' end
+    return OfficerOk(crime, { src = src, citizenid = info.citizenid })
+end
+
+-- The join pop-up for src (why 'responding', 'scene' or 'cuff'). One offer at a time per officer and case; the scene
+-- scan offers once per case, a response or a cuff (his own act) again once the last offer ran out. -> true | false,
+-- why.
+function LC.offer(run, src, why)
+    src = math.tointeger(tonumber(src))
+    if not src or src <= 0 or type(run) ~= 'table' then return false, 'invalid' end
+    local ok, err = LC.joinCheck(run, src)
+    if not ok then return false, err end
+    if not OnDuty(src) then return false, 'err.not_on_duty' end
+    local byRun = offers[run.id] or {}
+    offers[run.id] = byRun
+    local now = GetGameTimer()
+    local last = byRun[src]
+    if last and (now < last.untilMs or why == 'scene') then return false, 'offered' end
+    local ms = OfferMs()
+    local token = CP.U.uuid()
+    byRun[src] = { token = token, untilMs = now + ms, why = why }
+    TriggerClientEvent(CP.e('client:liveJoinOffer'), src, {
+        runId = run.id,
+        token = token,
+        title = run.live.title or '',
+        street = run.live.street or '-',
+        seconds = ms // 1000,
+    })
+    Opp('timeline', run, { what = 'join_offered', src = src, why = why })
+    return true
+end
+
+-- The answer to a pop-up (server:liveJoin): a matching token of an offer that has not run out, then
+-- CP.Runs.addParticipant. -> true | false, err.
+function LC.answer(src, runId, token, yes)
+    local o = offers[runId] and offers[runId][src]
+    if not o or o.token ~= token or o.answered then return false, 'unknown' end
+    o.answered = true
+    local run = CP.Runs and CP.Runs.get and CP.Runs.get(runId) or nil
+    if yes ~= true then
+        if run then Opp('timeline', run, { what = 'join_declined', src = src }) end
+        return false, 'declined'
+    end
+    if GetGameTimer() > o.untilMs then return false, 'livecrime.join.expired' end
+    if not (run and CP.Runs.addParticipant) then return false, 'err.live_case_gone' end
+    local p, err = CP.Runs.addParticipant(run, src, { via = o.why })
+    if not p then return false, err or 'err.live_case_gone' end
+    return true
+end
+
+-- A scene scan of a running live case: on-duty officers on no mission within sceneRadius of the reported place.
+local function ScanScene(case)
+    if not BackupOn() or type(case) ~= 'table' or case.kind ~= 'live' then return end
+    local run = case.run
+    if type(run) ~= 'table' or type(run.live) ~= 'table' then return end
+    if run.state == 'ended' or not case.scene then return end
+    local now = GetGameTimer()
+    if now < (scanAt[run.id] or 0) then return end
+    scanAt[run.id] = now + SCAN_MS
+    if ActiveCount(run) >= MaxOfficers() then return end
+    local radius, byRun = SceneRadius(), offers[run.id] or {}
+    local A, Q = CP.Access, CP.Qbx
+    for _, src in ipairs(Q and Q.getOnlinePlayers and Q.getOnlinePlayers() or {}) do
+        if not byRun[src] and not (CP.Runs and CP.Runs.isOnMission and CP.Runs.isOnMission(src))
+            and (not (A and A.maybeOfficer) or A.maybeOfficer(src)) then
+            local at = ServerCoords(src)
+            if at and CP.U.dist(at, case.scene) <= radius then LC.offer(run, src, 'scene') end
+        end
+    end
+end
+
+-- SC-Dispatch's responding toggle (read-only, CP.Dispatch.onResponding): a mark on the crime's own call.
+local function OnResponding(src, callId, isResponding)
+    if isResponding ~= true or not BackupOn() then return end
+    local D = CP.Dispatch
+    local function Key(id)
+        if D and D.normalizeCallId then
+            local ok, key = pcall(D.normalizeCallId, id)
+            if ok and type(key) == 'string' then return key end
+        end
+        return tostring(id)
+    end
+    local key = Key(callId)
+    for _, crime in pairs(crimes) do
+        if crime.dispatchId and (crime.dispatchId == key or Key(crime.dispatchId) == key) then
+            -- an officer on a mission leaves it for this real call (CP.Calls, Hard rule 15): his offer follows
+            if CP.Runs and CP.Runs.isOnMission and CP.Runs.isOnMission(src) then Wait(RESPOND_WAIT_MS) end
+            local run = RunOf(crime)
+            if run then LC.offer(run, src, 'responding') end
+            return
+        end
+    end
+end
+
+-- participant:joined of a live run (CP.Runs.addParticipant): the timeline line and the linked-accounts flag.
+local function Joined(run, src)
+    local crime = LC.crimeOf(run)
+    local case = Opp('caseOf', run)
+    local p = run.participants and run.participants[src]
+    if crime and type(case) == 'table' then FlagLinked(run, case, crime, src) end
+    if p then
+        Opp('timeline', run, { what = 'officer_joined', label = p.callsign or p.name, src = src, why = p.joinedVia })
+    end
+end
+
+RegisterNetEvent(CP.e('server:liveJoin'), function(runId, token, yes)
+    local src = math.tointeger(tonumber(source))
+    if not src or src <= 0 then return end
+    if CP.Net and CP.Net.rateOk and not CP.Net.rateOk(src, 'livecrime:join', 3, 1000) then return end
+    if type(runId) ~= 'string' or #runId > 64 or type(token) ~= 'string' or #token > 64 then return end
+    local ok, err = LC.answer(src, runId, token, yes == true)
+    if not ok and err ~= 'unknown' and err ~= 'declined' and CP.Tablet and CP.Tablet.notify then
+        pcall(CP.Tablet.notify, src, 'error', err)
+    end
+end)
+
+CreateThread(function()
+    Wait(0)
+    if CP.Dispatch and CP.Dispatch.onResponding then CP.Dispatch.onResponding(OnResponding) end
+    if CP.Opponents and CP.Opponents.onTick then CP.Opponents.onTick(ScanScene) end
+end)
+
+AddEventHandler('playerDropped', function()
+    local src = math.tointeger(tonumber(source))
+    if not src then return end
+    for _, byRun in pairs(offers) do byRun[src] = nil end
+end)
+
 if CP.Hooks and CP.Hooks.on then
     CP.Hooks.on('run:created', function(run)
         if type(run) == 'table' and type(run.live) == 'table' then Opened(run) end
     end)
     CP.Hooks.on('run:ended', function(run, state)
-        if type(run) == 'table' and type(run.live) == 'table' then Closed(run, state) end
+        if type(run) ~= 'table' then return end
+        offers[run.id], scanAt[run.id] = nil, nil
+        if type(run.live) == 'table' then Closed(run, state) end
+    end)
+    CP.Hooks.on('participant:joined', function(run, src)
+        if type(run) == 'table' and type(run.live) == 'table' then Joined(run, src) end
     end)
 end
 

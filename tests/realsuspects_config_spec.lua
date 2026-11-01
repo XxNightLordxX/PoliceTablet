@@ -309,6 +309,7 @@ do
         officerAlerts = { 'normal', 'normal,silenced' },
         routeEnds = { 'first_contact', 'first_contact,start' },
         downed = { 'keep_earned', 'keep_earned,failed' },
+        outsideCuff = { 'assist', 'assist,stopped' },     -- V15 (critic C11)
     }) do
         local e = S.entry('RealSuspects.' .. path) or {}
         H.eq(e.kind, 'enum', 'RealSuspects.' .. path .. ' is a pick')
@@ -325,6 +326,9 @@ do
             .. 'route check stops; \'start\' = the NPC-mission rule (only the mission start counts)',
         downed = '\'keep_earned\' = a downed officer leaves with what he earned so far and no type cooldown; '
             .. '\'failed\' = the NPC-mission rule (his run is Failed)',
+        outsideCuff = 'An on-duty officer outside the case who cuffs a suspect: \'assist\' = it counts as the case\'s '
+            .. 'cuff while an officer of the case is within contactRange of the suspect (else the suspect counts for '
+            .. 'nobody); \'stopped\' = the suspect always counts for nobody, like a jail by someone outside the case',
         downedPickupDelay = 'Seconds down, with no EMS on duty, before the pick-up (keep equal to sc-ambulance\'s '
             .. 'Config.DeathTime; NPC missions use Config.Downed.pickupDelay)',
         npcCombat = 'false = no NPC-combat headshot protection or damage cut for officers once a real suspect is in '
@@ -381,6 +385,12 @@ do
             .. 'type cooldowns',
         duringOperation = 'true = LIVE calls can still be claimed while a Cross-Department Mission runs (its lock stops '
             .. 'missions only); false = the Cross-Department lock stops live cases too',
+        -- V15: backup joins the case
+        backup = 'Backup: true = an on-duty officer on no mission who marks himself responding to the crime\'s own '
+            .. 'SC-Dispatch call, reaches the scene or cuffs a suspect gets a pop-up to join the live case; false = '
+            .. 'only the unit that claimed the LIVE call works the case',
+        maxOfficers = 'officers on one live case at most (the unit that claimed it counts)',
+        joinOfferSeconds = 'seconds the join pop-up waits for an answer',
     }) do
         local e = S.entry('LiveCrime.' .. path) or {}
         H.eq(e.desc, desc, 'LiveCrime.' .. path .. ': its own comment')
@@ -405,6 +415,11 @@ do
     H.eq((S.check('LiveCrime.deadCaseSeconds', 1)), false, 'deadCaseSeconds stays within 5-600 s')
     H.eq((S.check('LiveCrime.caseTime', 30)), false, 'caseTime stays within 60-3600 s')
     H.ok((S.check('LiveCrime.caseTime', 3600)), 'caseTime 3600 is allowed')
+    H.eq((S.check('LiveCrime.maxOfficers', 0)), false, 'maxOfficers stays within 1-16')
+    H.eq((S.check('LiveCrime.maxOfficers', 17)), false, 'maxOfficers stays within 1-16 (17)')
+    H.eq((S.check('LiveCrime.joinOfferSeconds', 5)), false, 'joinOfferSeconds stays within 10-120 s')
+    H.ok((S.check('LiveCrime.joinOfferSeconds', 60)), 'joinOfferSeconds 60 is allowed')
+    H.eq((S.entry('LiveCrime.backup') or {}).kind, 'boolean', 'LiveCrime.backup is an on/off setting')
     for _, k in ipairs({ 'readyCheck', 'typeCooldown', 'duringOperation' }) do
         H.eq((S.entry('LiveCrime.' .. k) or {}).kind, 'boolean', 'LiveCrime.' .. k .. ' is an on/off setting')
     end

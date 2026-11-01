@@ -56,5 +56,15 @@
   "err.live_case_suspended": "You, or someone in your unit, is suspended from live cases by an admin.",
   "err.live_case_recent_suspect": "You, or someone in your unit, was a suspect too recently to take a live case.",
   "err.live_case_pair_blocked": "An admin has blocked you, or someone in your unit, from cases against one of these suspects.",
-  "err.live_case_pair_cooldown": "You, or someone in your unit, had a case against one of these suspects too recently."
+  "err.live_case_pair_cooldown": "You, or someone in your unit, had a case against one of these suspects too recently.",
+  "livecrime.join.title": "Join the live case?",
+  "livecrime.join.content": "Officers are working a live case nearby: {title} on {street}. Join them? Points only for what happens after you join; your next real call still comes first.",
+  "livecrime.join.joined": "You joined the live case: {mission}.",
+  "livecrime.join.partner": "{name} joined the live case.",
+  "livecrime.join.expired": "The offer to join that live case has run out.",
+  "err.live_join_off": "Backup for live cases is switched off.",
+  "err.live_join_full": "This live case has as many officers as it may have.",
+  "err.live_join_already": "You are already on this live case.",
+  "err.live_join_left": "You left this live case and can't join it again.",
+  "err.live_join_not_live": "Only a live case takes officers after it has started."
 }

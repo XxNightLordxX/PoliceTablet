@@ -1073,6 +1073,8 @@ Server:
 - `completionsLastHour(citizenid) -> int`
 - `markArrived(run, src)` *(hook, from CP.Route)*
 - `removeParticipant(run, src, endReason, opts) -> rowId|nil` — `opts.keepFlag` (downed), `opts.silent`
+- `addParticipant(run, src, opts) -> participant|nil, errKey` (V15) — a late join of a live case (`run.live`) only;
+  §5.46 "Backup joins the case". `_newParticipant(run, o, now, first)` builds the record for `create` and it.
 - `reclassify(citizenid, runId, newEndReason)` *(hook, from CP.Calls: real_call → real_call_cancelled)* — updates the row, applies the type cooldown, drops the pay tier if the run is still running
 
 Full admin control (P3, §5.39):
@@ -3022,8 +3024,12 @@ suspect's own acts are `Opp.note`s.
   SetHandcuffStatus twice) within `cuffPairWindow` of `rec.cuff` -> `cuffed` (`cuffedAt`, `caughtBy = { officer }`)
   with `share` 0 and the note `rs_afk_catch` when `rec.afk` (critic 2 #15), `neutralisedShare` when `rec.down`
   (whoever downed him, C28) or after a C26 respawn, else 1; within the window of `rec.outsideCuff` ->
-  `rec.outsideCuffed = true` and the line `cuffed_by_outsider` (V15 decides assist or stopped); no pair -> the line
-  `cuffed_unproven` only.
+  `rec.outsideCuffed = true`, the line `cuffed_by_outsider` and the outside-cuff rule (V15, critic C11,
+  `Config.RealSuspects.outsideCuff`): `'assist'` (shipped) = `cuffed` for the case (`why outside_assist`, `caughtBy = {
+  outsider }`, the same share rules) while an active participant is within `contactRange` of the suspect, else
+  stopped; `'stopped'` = always stopped: `rec.outcome = 'stopped'`, `stoppedBy`, state `void` (why `stopped`) and the
+  note `rs_outside_cuff`. In a live case the outsider then gets `CP.LiveCrime.offer(run, src, 'cuff')`. No pair ->
+  the line `cuffed_unproven` only.
 - Hold. On the watch pass a `cuffed` suspect whose mirror still says cuffed after `custodyHoldSeconds` -> `detained`
   (`custody_hold`, by the cuffing officer), once per suspect per case (detained and booked never go back). Every
   detain is refused while `rec.protectUntil` lasts: the line `spawn_protected` and back to free. An 'escort' by an
@@ -3290,6 +3296,30 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
     then `Opp.checkPairFlags(run)`. CP.MissionCalls closes a claimed LIVE call with its run and never re-dispatches it.
 - Config.LiveCrime keys of V14: `caseTime = 1800` (60-3600 s), `readyCheck = false`, `typeCooldown = false`,
   `duringOperation = true`.
+- **Backup joins the case (V15).** While `enabled` and `Config.LiveCrime.backup` (shipped true) are on, an on-duty
+  officer on no mission is asked (`LC.offer(run, src, why)`, the event `client:liveJoinOffer`, an ox_lib alert dialog
+  that closes after `joinOfferSeconds`, 30, 10-120) when he (a) marks himself responding to the crime's own call
+  (`CP.Dispatch.onResponding`, the id normalized and compared with `crime.dispatchId`; an officer still on a mission
+  is asked 3 s later, after CP.Calls ended it for the real call), (b) stands within `sceneRadius` of the reported
+  place (a scan of `CP.Qbx.getOnlinePlayers()` and server coords on CP.Opponents' watch pass, at most every 5 s per
+  case, `CP.Access.maybeOfficer` first) or (c) cuffs a suspect from outside the case (the proof's outside-cuff rule).
+  One offer at a time per officer and case (a token, `untilMs`); the scene asks once per case, a response or a cuff
+  again once the last offer ran out. `LC.joinCheck(run, src)` (memory only): `err.live_join_off`,
+  `err.live_case_gone` (not a live run, ended, test crime or `crime.runId` not this run), `err.live_join_already`,
+  `err.already_on_run`, `err.live_join_full` (`maxOfficers`, 6, 1-16, the claiming unit counts), then the officer
+  rules of a claim (`OfficerOk`: crew member, suspended, recent suspect, self rule, pair block or cooldown). A yes
+  (`server:liveJoin`, `LC.answer`) with the right token before `untilMs` calls `CP.Runs.addParticipant(run, src, {
+  via })`: refuses a run it does not hold or that ends, a run that is not live (or a test or operation),
+  `err.live_join_left` (a leave is final), on a run, in the arena, `getOfficer` (duty, suspensions, retired), a
+  mission ban, `isOnCall` with `exemptFor(run)` (his response to the crime's call is part of the case), then
+  `joinCheck` again with no yield until he is in `run.participants` / `order` / `bySrc` (`joinedLate`, `joinedVia`,
+  `sharedBefore` = a copy of `run.score.shared`: CP.Scoring's count of a shared line subtracts it, so lines recorded
+  before he joined are not his). His client gets `client:start` (the run's `clientStart`, kept for live runs, with the
+  participants and host of now), CP.NpcCombat's `runStarted`, `CP.Route.begin` (the run's locked route rule), and
+  while In progress `client:inProgress` (remaining time) and `prepare` / `start` of the active objective; the case's
+  officers are told, `participant:joined` fires (CP.LiveCrime: the timeline line `officer_joined`, the
+  `rs_linked_accounts` flag as at the open) and the run view is pushed. The timeline also keeps `join_offered` and
+  `join_declined`. Pair rows at the end include him (he is in `run.participants`).
 - **Scoring (V13).** A run is live when it carries `run.live` (V14) or `run.realSuspect = 'live'`; the rules read
   the run, never `enabled`, so a case that runs when the owner turns live crimes off ends by the rules it started
   with. CP.LiveCrime answers, and CP.Scoring, CP.Cash, CP.Rewards, CP.Goals and CP.Challenge ask:
@@ -4054,6 +4084,7 @@ Config.Blocks entry, so builder:config never lists it). Its settings are Config.
 | `client:builder:teleport` | `{ missionId, location, key, index, coords }`: the answer to the caller's own `server:builder:teleport` (the stored point's coordinates; the client ignores one it did not ask for) | builder |
 | `client:objective` (new action) | runId, index, `{ action = 'adopt', op = 'adopt', netId, obj, from }`: the host moves the AI of netId to objective obj's client half | runs |
 | `client:missionCall` | `{ id, code, typeLabel, priority, areaLabel, paged?, live?, title?, street? }` (live: a LIVE call, V11) (toast and tone; the client drops it when muted, on a run or in the arena) | missioncalls |
+| `client:liveJoinOffer` | `{ runId, token, title, street, seconds }` (V15: the yes/no pop-up to join a live case; one at a time, closed after `seconds`) | livecrime |
 | `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName, twists = { { key, label } } }` or nil to clear | units |
 | `client:contactAct` | `{ runId, netId, behaviour, args, seconds }` to the run host only, when the behaviour starts | custody |
 | `client:contactConfirm` | `{ netId, choice, factKey }`: open the tablet with the case-fail confirm | custody |
@@ -4081,6 +4112,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:recalcRoute` | runId | route |
 | `server:objective` | runId, index, evidence (three args, no reqId; the server-only types of §5.10, CP.Opponents' opp_* types among them, are refused and flag the sender) | runs |
 | `server:telemetry` | runId, kind, data (three args, no reqId) | runs |
+| `server:liveJoin` | runId, token, yes (three args, no reqId; 3 a second; only the token of a live offer that has not run out joins, through `CP.Runs.addParticipant`) | livecrime |
 | `server:abandon` | runId | runs |
 | `server:dispute` | `{ rowId, reason }` | disputes |
 | `server:setHideName` | boolean | leaderboard |

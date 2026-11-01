@@ -2858,6 +2858,16 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   `jobHopMinutes`, or has an admin block or a recent case (`pairCooldownHours`, `suspectCooldownMinutes`) with a
   suspect. An officer who shares only a connection or PC with a suspect may take it and is flagged for review. A case
   lasts at most `Config.LiveCrime.caseTime` (1800 s) and its call closes with it (never re-dispatched).
+  Backup joins a live case (step V15): with `Config.LiveCrime.backup = true` (shipped, behind `enabled`) an on-duty
+  officer on no mission who marks himself responding to the crime's own SC-Dispatch call, reaches the scene
+  (`sceneRadius`) or cuffs one of its suspects gets a **Join the live case?** pop-up for
+  `Config.LiveCrime.joinOfferSeconds` (30 s). A yes is checked again like a claim for him (duty, mission ban, real
+  calls, the crew and pair rules) and against `Config.LiveCrime.maxOfficers` (6, the claiming unit counted); he gets
+  the case's steps and map points, scores only the lines recorded after he joined, and can't join again after he
+  leaves. An officer outside the case who cuffs a suspect: with `Config.RealSuspects.outsideCuff = 'assist'`
+  (shipped) the cuff counts for the case while one of its officers is within `contactRange` of the suspect,
+  otherwise (and always with `'stopped'`) that suspect counts for nobody and staff get the note. Every offer,
+  answer and join is on the case timeline.
   The live case (step V12): officers see three steps on the HUD: **Respond to the
   reported scene**, **Secure the scene** (hold it for `Config.LiveCrime.secureSeconds`, 60 s, within
   `Config.LiveCrime.sceneRadius`, 75 m) and **Detain and book the suspects**, which stays open and never shows how many

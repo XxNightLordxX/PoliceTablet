@@ -491,6 +491,8 @@ end
 
 local function CountOf(run, p, id)
     local shared = run.score and run.score.shared and Num(run.score.shared[id], 0) or 0
+    -- a late joiner of a live case (V15): the shared lines recorded before he joined are not his
+    if type(p.sharedBefore) == 'table' then shared = math.max(0, shared - Num(p.sharedBefore[id], 0)) end
     local personal = p.score and Num(p.score[id], 0) or 0
     -- whole occurrences, or a weighted part (CP.Runs.award opts.weight) to two decimals
     local hundredths = math.floor((shared + personal) * 100 + 0.5)

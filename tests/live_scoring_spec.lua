@@ -134,6 +134,13 @@ do
     H.eq(b.tod, false, 'Type of the Day off for live cases')
     H.eq(b.final, 100, 'a crew of 1: x1.0')
 
+    -- a late joiner (V15, CP.Runs.addParticipant): the shared lines recorded before he joined are not his
+    p.sharedBefore = { live_scene = 1, live_detain = 0.5 }
+    b = CP.Scoring.compute(run, p, 'completed', { durationS = 60, departments = 1 })
+    H.eq(b.subtotal, 50, 'a late joiner: only the detain line after he joined (0.5 x 100 x 1.0)')
+    H.ok(not Has(b.bonuses, 'live_scene'), 'a late joiner: no scene line secured before he came')
+    p.sharedBefore = nil
+
     view = { order = { 'A', 'B', 'C' } }
     b = CP.Scoring.compute(run, p, 'completed', { durationS = 60, departments = 1 })
     H.eq(b.mTeam, 1.15, 'a crew of 3: the heavy tier\'s points')

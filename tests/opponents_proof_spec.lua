@@ -373,6 +373,70 @@ do
 end
 
 -- ============================================================================
+--               (b0) AN OFFICER OUTSIDE THE CASE CUFFS A SUSPECT
+-- ============================================================================
+-- V15, critic C11.
+-- Config.RealSuspects.outsideCuff: 'assist' (shipped) = the case's cuff while an officer of the case is within
+-- contactRange of the suspect, else stopped; 'stopped' = always stopped. A live case asks the outsider to join.
+
+do
+    H.eq(RS.outsideCuff, 'assist', '(b0) outsideCuff ships assist')
+    local offered = {}
+    CP.LiveCrime.offer = function(run, src, why) offered[#offered + 1] = { run = run, src = src, why = why } end
+
+    -- assist: officers 1 and 2 of the case stand next to the suspect, 3 (on duty, outside the case) cuffs him
+    local run, case, rec, src = Scene('OUTC0001')
+    Cuff(3, src)
+    SetMeta(src, 'ishandcuffed', true)
+    H.eq(#Lines(case, 'cuffed_by_outsider'), 1, '(b0) the timeline says cuffed_by_outsider')
+    H.eq(#Sent(run, 'opp_cuff_attempt'), 0, '(b0) no cuff attempt event for an outsider')
+    H.eq(rec.state, 'cuffed', '(b0) assist with an officer of the case near: cuffed for the case')
+    H.eq(rec.caughtBy and rec.caughtBy[1], 3, '(b0) caught by the outsider')
+    H.eq(rec.share, 1, '(b0) a full share')
+    Tick(RS.custodyHoldSeconds + 2)
+    H.eq(rec.state, 'detained', '(b0) the hold holds: detained for the case')
+    H.eq(#offered, 1, '(b0) the outsider is asked to join the live case')
+    H.eq(offered[1] and offered[1].src, 3, '(b0) ...officer 3')
+    H.eq(offered[1] and offered[1].why, 'cuff', '(b0) ...because of the cuff')
+    Opp.close(run)
+
+    -- assist, but no officer of the case within contactRange: stopped
+    run, case, rec, src = Scene('OUTC0002')
+    Move(1, vec3(500.0, 0.0, 30.0))
+    Move(2, vec3(500.0, 2.0, 30.0))
+    Cuff(3, src)
+    SetMeta(src, 'ishandcuffed', true)
+    H.eq(rec.state, 'void', '(b0) no officer of the case near: the suspect counts for nobody')
+    H.eq(rec.outcome, 'stopped', '(b0) ...stopped')
+    H.eq(rec.stoppedBy, 3, '(b0) ...by the outsider')
+    H.eq(#NotesOf(case, 'rs_outside_cuff'), 1, '(b0) the rs_outside_cuff note')
+    H.ok(Noted(run, 'rs_outside_cuff'), '(b0) audited as a note')
+    Tick(RS.custodyHoldSeconds + 2)
+    H.eq(rec.state, 'void', '(b0) never detained')
+    Opp.close(run)
+
+    -- 'stopped': always stopped, even with the case's officers next to him
+    RS.outsideCuff = 'stopped'
+    run, case, rec, src = Scene('OUTC0003')
+    Cuff(3, src)
+    SetMeta(src, 'ishandcuffed', true)
+    H.eq(rec.state, 'void', '(b0) outsideCuff = stopped: void with officers of the case near')
+    H.eq(rec.outcome, 'stopped', '(b0) ...stopped')
+    RS.outsideCuff = 'assist'
+    Opp.close(run)
+
+    -- a cuff by a participant never asks anybody to join
+    offered = {}
+    run, case, rec, src = Scene('OUTC0004')
+    Cuff(1, src)
+    SetMeta(src, 'ishandcuffed', true)
+    H.eq(rec.state, 'cuffed', '(b0) a participant\'s cuff')
+    H.eq(#offered, 0, '(b0) no join offer')
+    Opp.close(run)
+    CP.LiveCrime.offer = nil
+end
+
+-- ============================================================================
 --                    (b) CUFFS THAT DO NOT PAIR: NOT CUFFED
 -- ============================================================================
 
@@ -390,12 +454,8 @@ do
         Opp.close(run)
         return run, case
     end
-    local run, case = NotCuffed('a cuff by an on-duty officer outside the case', function() end, 3,
-        'cuffed_by_outsider')
-    H.eq(#Sent(run, 'opp_cuff_attempt'), 0, '(b) no cuff attempt event for an outsider')
-    H.eq(case.suspects[case.order[1]].outsideCuffed, true, '(b) the outside cuff is kept for V15')
     -- 4 is a participant who is off duty
-    run = NewRun({ 1, 4 })
+    local run, case = NewRun({ 1, 4 }), nil
     do
         nextSrc = nextSrc + 1
         local src = nextSrc

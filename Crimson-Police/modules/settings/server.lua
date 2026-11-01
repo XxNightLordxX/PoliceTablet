@@ -375,6 +375,8 @@ local RANGES = {
     ['LiveCrime.secureSeconds'] = { 0, 900 },
     ['LiveCrime.lastReportedEvery'] = { 0, 600 },
     ['LiveCrime.deadCaseSeconds'] = { 5, 600 },
+    ['LiveCrime.maxOfficers'] = { 1, 16 },
+    ['LiveCrime.joinOfferSeconds'] = { 10, 120 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -1124,6 +1126,7 @@ local KNOWN = {
     ['RealSuspects.officerAlerts'] = { tpl = Enum({ 'normal', 'silenced' }), kind = 'enum' },
     ['RealSuspects.routeEnds'] = { tpl = Enum({ 'first_contact', 'start' }), kind = 'enum' },
     ['RealSuspects.downed'] = { tpl = Enum({ 'keep_earned', 'failed' }), kind = 'enum' },
+    ['RealSuspects.outsideCuff'] = { tpl = Enum({ 'assist', 'stopped' }), kind = 'enum' },
     -- live crimes (V10): the scripts that may report a crime (resource names), and each crime's mission type or false
     ['LiveCrime.sources'] = {
         tpl = ListOf(Text('^[%w_%-%.]+$', 64), { unique = true }),
