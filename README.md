@@ -2983,6 +2983,15 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   (`Config.Volunteers.afkCatchVoids`, shipped `true`: a strike, and the mission ends as `voidRun` says; `false` = the
   catch counts). Warrant Service's armed associates stay away while a volunteer plays (`doorAssociates`, shipped
   `false`; the NPCs would shoot him too). Both are in Settings.
+  Street Race Bust's driver (step V24): a volunteer who ticked the driver role can be the race driver in his own
+  car (`pursuit`'s stop mode; Stolen Vehicle Takedown hands its stop to a field contact and Traffic Enforcement
+  observes a violator, so neither offers one). With the patrol mode set to `'players_when_available'` or
+  `'players_only'`, the volunteer who says yes is sent to the race's first grid slot. While the volunteers are asked
+  no racer appears ("Stand by"); while he drives no NPC racer appears (`Config.Volunteers.driverNpcCars`, shipped
+  `false`; `true` = the other racers still come, he takes one car's place). The map shows the grid slot, then once
+  he is in position his "last reported" point every `driverReportEvery` seconds (shipped `30`; `0` = none, the map
+  keeps the grid slot), never his live position. He counts as a detained racer (the racer bonus) once he is detained
+  or booked; an AFK catch is voided as above; if he gets away the race fails. Both keys are in Settings.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

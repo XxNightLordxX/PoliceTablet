@@ -3940,6 +3940,12 @@ Config.Volunteers = {
     -- Warrant Service's armed associates while a volunteer plays the wanted person at the door: false = they stay
     -- away (the NPCs would shoot him too); true = they come out at the knock as usual
     doorAssociates = false,
+    -- Street Race Bust's other NPC racers (and the other suspect cars of a stop pursuit) while a volunteer drives one
+    -- in his own car: false = his car is the only suspect car; true = the others still come (he takes one car's place)
+    driverNpcCars = false,
+    -- Seconds between the map's "last reported" points of a volunteer driver once he is in position (where the server
+    -- last saw him, never a live position); 0 = no points, the map keeps the starting point
+    driverReportEvery = 30,
     -- What a mission played against a volunteer (once he said yes) takes part in; true = like any other mission
     typeOfTheDay = false,            -- true = today's Type of the Day points multiplier applies to it too
     goals = false,                   -- true = it counts for the officers' daily and weekly goals

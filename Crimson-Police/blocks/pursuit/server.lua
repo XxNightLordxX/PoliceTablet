@@ -767,7 +767,15 @@ local function StateOf(ctx)
     return st
 end
 
-local function VehTarget(ctx) return Int(ctx.obj.vehicles) end
+-- A volunteer driver in his own car (V24, §7.3): no NPC car while volunteers are asked or the run ends for want of
+-- one; while he plays, the mission's other cars only with Config.Volunteers.driverNpcCars (he takes one car's place).
+local function VehTarget(ctx)
+    local n = Int(ctx.obj.vehicles)
+    local vol = type(ctx.state) == 'table' and ctx.state.vol or nil
+    if vol == nil then return n end
+    if vol == 'real' and (Config.Volunteers or {}).driverNpcCars == true then return math.max(0, n - 1) end
+    return 0
+end
 local function OccTarget(ctx) return math.min(MAX_SEATS, math.max(1, Int(ctx.obj.suspectsPerVehicle))) end
 
 local function StartPoint(ctx)
@@ -1590,7 +1598,9 @@ local function Totals(ctx, st)
     end
     local want = VehTarget(ctx) * OccTarget(ctx)
     for _, key in ipairs(st.vorder) do want = want - OccTarget(ctx) + st.vehicles[key].want end
-    return done, math.max(total, want)
+    -- a volunteer driver (V24) is one more suspect, done once caught
+    local extra = st.vol == 'real' and 1 or 0
+    return done + (st.volDone and 1 or 0), math.max(total, want) + extra
 end
 
 local function StoppedCount(st)
@@ -1657,6 +1667,120 @@ local function HandOff(ctx, st)
     st.adopted = ids
 end
 
+-- ============================================================================
+--                       THE VOLUNTEER DRIVER (V24, §7.3)
+-- ============================================================================
+-- One table (this file is near Lua's 200 locals). The getaway or race driver of stop mode is the run's volunteer slot:
+-- a volunteer in his own car. Follow mode, a contact hand-off, an observe violator and a team objective offer none.
+
+local Vol = {}
+do
+    local function VCfg() return type(Config.Volunteers) == 'table' and Config.Volunteers or {} end
+
+    -- volunteerSlot(obj, mission, location): { role = 'driver', meet = the first car's point } or nil.
+    function Vol.slot(obj, mission, location)
+        if type(obj) ~= 'table' or type(location) ~= 'table' then return nil end
+        local c = Cfg()
+        if (obj.mode or c.mode.default) ~= 'stop' then return nil end
+        if (obj.handoff or c.handoff.default) == 'contact' then return nil end
+        if type(obj.observe) == 'table' or obj.team ~= nil then return nil end
+        local p = PointList(location, obj.spawns)[1] or PointList(location, obj.spawn)[1]
+            or (location.start and location.start.coords)
+        if not p then return nil end
+        local x, y, z = U.xyz(p)
+        return { role = 'driver', meet = { x = x, y = y, z = z } }
+    end
+
+    -- Who drives now (ctx.volunteer()): 'wait' while volunteers are asked, 'real' while one who said yes drives, 'void'
+    -- while the run ends for want of one, nil = the NPCs (no match, the NPC took over).
+    local function Mode(ctx)
+        if ctx.obj.mode ~= 'stop' or type(ctx.volunteer) ~= 'function' then return nil end
+        local v = ctx.volunteer()
+        if type(v) ~= 'table' then return nil end
+        if v.phase == 'asking' then return 'wait' end
+        if v.phase == 'void' then return 'void' end
+        if v.real == true then return 'real', v.phase end
+        return nil
+    end
+
+    -- His CP.Opponents record (server only: never sent to a client), for the last-reported point and presence.
+    function Vol.rec(ctx)
+        local case = CP.Opponents and CP.Opponents.caseOf and CP.Opponents.caseOf(ctx.run) or nil
+        if type(case) ~= 'table' or (case.index and ctx.index and case.index ~= ctx.index) then return nil end
+        local cid = case.order and case.order[1]
+        return cid and case.suspects and case.suspects[cid] or nil
+    end
+
+    -- Done once CP.Opponents has him detained with a share above 0 or booked (an AFK catch, share 0, never counts while
+    -- Config.Volunteers.afkCatchVoids is on: CP.Volunteers voids it); lost = he got away. Done is kept: it counts as
+    -- one more detained driver (the mission's detain bonus, once), as a cuffed NPC racer.
+    local function Facts(ctx, st)
+        st.volLost = false
+        if st.vol ~= 'real' or st.volDone or not (CP.Opponents and CP.Opponents.view) then return end
+        local view = CP.Opponents.view(ctx.run)
+        if type(view) ~= 'table' or (view.index and ctx.index and view.index ~= ctx.index) then return end
+        local afkVoids = VCfg().afkCatchVoids ~= false
+        for _, cid in ipairs(view.order or {}) do
+            local r = view.suspects[cid]
+            if r and (r.state == 'detained' or r.state == 'booked') then
+                if not (afkVoids and tonumber(r.share) == 0) then st.volDone = true end
+            elseif r and r.state == 'lost' then
+                st.volLost = true
+            end
+        end
+        if st.volDone then
+            st.volLost = false
+            st.detained = st.detained + 1
+            st.volReport = nil
+            st.dirty = true
+            if ctx.obj.detainBonus then ctx.award(ctx.obj.detainBonus, { count = 1 }) end
+        end
+    end
+
+    -- The last-reported point (Config.Volunteers.driverReportEvery seconds; 0 = none): where the server last saw him
+    -- free and online, taken once he is in position or engaged and never in between, so he is never followed live.
+    local function Report(ctx, st, phase)
+        local every = tonumber(VCfg().driverReportEvery) or 0
+        if st.vol ~= 'real' or st.volDone or every <= 0 or phase == 'travel' then
+            if st.volReport then st.dirty = true end
+            st.volReport, st.volReportAt = nil, nil
+            return
+        end
+        local t = Now()
+        if st.volReportAt and t - st.volReportAt < every * 1000 then return end
+        st.volReportAt = t
+        local rec = Vol.rec(ctx)
+        local c = rec and rec.state == 'free' and rec.src and not rec.inInstance and rec.lastCoords or nil
+        st.volReport = c and { x = c.x, y = c.y, z = c.z } or nil
+        st.dirty = true
+    end
+
+    -- Read on start, every tick and on every opp_* event.
+    function Vol.update(ctx, st)
+        local vol, phase = Mode(ctx)
+        if vol ~= st.vol then
+            st.vol = vol
+            st.dirty = true
+        end
+        Facts(ctx, st)
+        Report(ctx, st, phase)
+    end
+
+    -- Whether the objective may complete yet: never while asking or voided, and not before he is caught.
+    function Vol.blocks(st)
+        return st.vol == 'wait' or st.vol == 'void' or (st.vol == 'real' and not st.volDone)
+    end
+
+    -- His car on the counts: one more car (stopped once he is caught) and one more suspect.
+    function Vol.extra(st) return st.vol == 'real' and 1 or 0 end
+    function Vol.done(st) return st.volDone and 1 or 0 end
+
+    -- The start trigger waits while nobody drives yet, and never fires for no NPC car.
+    function Vol.holdTrigger(st)
+        return st.vol == 'wait' or st.vol == 'void' or (st.vol ~= nil and st.counts.vehicles == 0)
+    end
+end
+
 local function TryComplete(ctx, st)
     if st.completed or st.failed or st.halted then return end
     if st.mode == 'follow' then
@@ -1673,9 +1797,9 @@ local function TryComplete(ctx, st)
         if ctx.complete({ average = U.round(st.average), medal = st.medal }) ~= false then st.completed = true end
         return
     end
-    if not SpawnedAll(ctx, st) then return end
+    if Vol.blocks(st) or not SpawnedAll(ctx, st) then return end
     local contact = ctx.obj.handoff == 'contact'
-    local total = 0
+    local total = Vol.extra(st)
     for _, p in pairs(st.peds) do
         total = total + 1
         if not (contact and Settled(p) or Neutralised(p)) then return end
@@ -2192,9 +2316,12 @@ local function Snapshot(ctx, st)
         detained = st.detained,
         neutralised = done,
         total = total,
-        stopped = StoppedCount(st),
-        vtotal = math.max(VehTarget(ctx), st.counts.vehicles),
+        stopped = StoppedCount(st) + Vol.done(st),
+        vtotal = math.max(VehTarget(ctx), st.counts.vehicles) + Vol.extra(st),
         escaping = st.escaping,
+        -- V24: 'wait' while volunteers are asked, 'real' while one drives (the HUD's lines; never where he is)
+        volunteer = st.vol,
+        volunteerDone = st.volDone == true or nil,
     }
     if st.mode == 'follow' then
         local f = st.follow
@@ -2297,7 +2424,16 @@ do
                 label = CP.Lt('block.pursuit.blip_suspect'),
             }
         end
-        if #targets > 0 or st.fled then return { kind = 'targets', targets = targets } end
+        -- a volunteer driver (V24): his last-reported point, never where he is now
+        if st.volReport then
+            targets[#targets + 1] = {
+                key = 'last:driver',
+                coords = st.volReport,
+                look = 'searchArea',
+                label = CP.Lt('block.pursuit.blip_last_reported'),
+            }
+        end
+        if #targets > 0 or (st.fled and not st.vol) then return { kind = 'targets', targets = targets } end
         local at = WaitPoint(ctx, st)
         if not at then return { kind = 'targets', targets = targets } end
         return { kind = 'point', look = 'objective', coords = at, label = ObjectiveLabel(ctx) }
@@ -2383,7 +2519,16 @@ local function OnEvent(ctx, src, ev)
     if st.failed or st.halted then return false, 'ended' end
     local t = ev.type
     local ok, why
-    if t == 'ram' then
+    if type(t) == 'string' and t:sub(1, 4) == 'opp_' then
+        -- CP.Opponents' server-only facts about the volunteer driver (server:objective refuses them from a client)
+        if st.mode ~= 'stop' then return false, 'wrong_mode' end
+        Vol.update(ctx, st)
+        if st.volLost then
+            Fail(ctx, st, 'block.pursuit.fail_escaped')
+            return true
+        end
+        ok = true
+    elseif t == 'ram' then
         ok, why = RamEvent(ctx, st, src, ev)
     elseif t == 'lights_near' then
         ok, why = LightsEvent(ctx, st, src, ev)
@@ -2467,8 +2612,9 @@ local function Start(ctx)
         return
     end
     Prepare(ctx)
+    Vol.update(ctx, st)
     SpawnMissing(ctx, st)
-    if not st.failed then CheckTrigger(ctx, st, Party(ctx)) end
+    if not st.failed and not Vol.holdTrigger(st) then CheckTrigger(ctx, st, Party(ctx)) end
     st.dirty = true
     Flush(ctx, st)
 end
@@ -2482,11 +2628,13 @@ local function Tick(ctx, dt)
     end
     dt = tonumber(dt) or 1
     if not st.startedAt then st.startedAt = Now() end
+    Vol.update(ctx, st)
+    if st.volLost then return Fail(ctx, st, 'block.pursuit.fail_escaped') end
     SpawnMissing(ctx, st)
     if st.failed then return end
     local list = Party(ctx)
     SampleSpeeds(ctx, st)
-    CheckTrigger(ctx, st, list)
+    if not Vol.holdTrigger(st) then CheckTrigger(ctx, st, list) end
     WatchVehicles(ctx, st, dt, list)
     WatchScope(ctx, st, dt, list)
     WatchOutsiders(ctx, st, dt)
@@ -2551,6 +2699,11 @@ local function Presence(ctx, src, coords)
             if c then best = math.min(best, U.dist(coords, c)) end
         end
     end
+    if best == math.huge and st.vol == 'real' and not st.volDone then
+        -- a volunteer driver (V24): his last server position (server only, never sent)
+        local rec = Vol.rec(ctx)
+        if rec and rec.lastCoords then best = U.dist(coords, rec.lastCoords) end
+    end
     if best == math.huge then
         local s = StartPoint(ctx)
         best = s and U.dist(coords, s) or 0
@@ -2572,8 +2725,8 @@ local function Checklist(ctx)
             },
         }
     end
-    local vtotal = math.max(VehTarget(ctx), st.counts.vehicles)
-    local stopped = StoppedCount(st)
+    local vtotal = math.max(VehTarget(ctx), st.counts.vehicles) + Vol.extra(st)
+    local stopped = StoppedCount(st) + Vol.done(st)
     local _, total = Totals(ctx, st)
     return {
         {
@@ -2653,4 +2806,5 @@ CP.Blocks.register(BLOCK, {
         st.halted = true
         ReleaseScope(st)
     end,
+    volunteerSlot = Vol.slot,
 })

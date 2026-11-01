@@ -549,6 +549,11 @@ local function HudText(S, myPos)
         })
     end
     if d.escaping then return CP.L('block.pursuit.hud_escaping', { seconds = d.escaping }) end
+    -- a volunteer drives the suspect car (V24): nothing to find until he is out, then his last-reported point
+    if d.volunteer == 'wait' then return CP.L('block.pursuit.hud_volunteer_wait') end
+    if d.volunteer == 'real' and not d.volunteerDone and (d.stopped or 0) >= (d.vtotal or 0) - 1 then
+        return CP.L('block.pursuit.hud_volunteer')
+    end
     if not d.fled and type(obj.observe) == 'table' then
         -- the violator's own violation and window (rolled per violator on the server)
         local kind, watch = obj.observe.kind, nil

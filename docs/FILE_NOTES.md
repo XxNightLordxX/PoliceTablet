@@ -808,6 +808,15 @@ Config.LiveCrime.lastReportedEvery seconds (0 = never).
     'lights_near', checked with server coords), when any participant gets within FLEE_CLOSE, or when
     the car is hit. Rams of a suspect vehicle above ramSpeed km/h (0 = any contact) are penalised.
     Killing an unarmed, surrendered or cuffed suspect (a participant kill) fails the run.
+    Volunteer slot (V24, ARCHITECTURE 7.3; one local table Vol, the file is near Lua's 200 locals): stop mode with
+    no contact hand-off, no observe and no team offers volunteerSlot { role = 'driver', meet = the first car's point }
+    (Street Race Bust). ctx.volunteer() decides st.vol: 'wait' (asking: no car, no trigger), 'real' (he drives his
+    own car: no NPC car unless Config.Volunteers.driverNpcCars, then one fewer; he is one more car and suspect,
+    done when CP.Opponents.view has him detained with a share or booked, a detained racer with the detain bonus;
+    lost fails block.pursuit.fail_escaped), 'void' (nothing spawns), nil (the NPCs as before). The pointer is the
+    first car's point, then his last-reported point (key last:driver, the server's rec.lastCoords every
+    Config.Volunteers.driverReportEvery s once he is in position or engaged), never a live position; presence
+    reads rec.lastCoords on the server. The snapshot carries volunteer / volunteerDone for the HUD only.
 
   Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.pursuit)
     minSeconds [30] · presenceRange [presenceRange[3] = 400] · label

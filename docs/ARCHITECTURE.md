@@ -3539,6 +3539,8 @@ run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc
   'keep_earned'). Specs: tests/volunteer_match_spec.lua, tests/volunteers_client_spec.lua.
 - Config.Volunteers keys of V23: `afkCatchVoids` (true: an AFK catch is a void, `Voided(m, 'afk')`, a strike) and
   `doorAssociates` (false: flee_arrest's door spawns no associate while a volunteer may play, §7.3).
+- Config.Volunteers keys of V24: `driverNpcCars` (false: a volunteer driver's pursuit spawns no NPC car; true: one
+  fewer) and `driverReportEvery` (30 s, Settings 0-300; 0 = no last-reported point), §7.3.
 
 **Gates (V22b, modules/volunteers/match/server.lua; critic 2 #9, #11, #12).** Before any built-in block offers a slot:
 - Caps: `V.capsOk(run, cid) -> true | false, why`, part of every ask check (`Fits`): `suspect_used` (his
@@ -4224,7 +4226,7 @@ mission, location) -> { role, meet = vec3, ... } | nil` is an optional server-ha
 fugitive) offer one, and CP.Volunteers (§5.47) uses it to find the objective a volunteer can play. The registry
 (V21, shared/init.lua): `CP.Blocks.register` drops a `volunteerSlot` that is no function (with a warning) and
 `CP.Blocks.withSlot()` lists the block ids that offer one; the answer must carry a §5.47 role (runner, driver,
-fugitive) or it is no slot. flee_arrest offers one from V23 (below); pursuit and search_area later. Built in steps
+fugitive) or it is no slot. flee_arrest offers one from V23, pursuit from V24 (below); search_area later. Built in steps
 V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
 
 **flee_arrest's runner slot (V23, blocks/flee_arrest).** Door mode only (Warrant Service): `volunteerSlot` answers
@@ -4248,6 +4250,33 @@ The block reads `ctx.volunteer()` on start, every tick and on every `opp_*` even
   share 0 -> `Voided(m, 'afk', strike)` (a strike, timeline `volunteer_afk`, his note `volunteer.case.afk`; the proof
   already wrote `rs_afk_catch`), counted as engaged, so the run ends as `voidRun` says. Specs:
   tests/flee_arrest_volunteer_spec.lua, tests/volunteer_match_spec.lua.
+
+**pursuit's driver slot (V24, blocks/pursuit).** Stop mode only, with no contact hand-off (Stolen Vehicle Takedown
+hands its stopped car to field_contact, which works NPC occupants), no `observe` (Traffic Enforcement) and no `team`:
+`volunteerSlot` answers `{ role = 'driver', meet = <the first car's point: spawns[1], else spawn, else the start> }`,
+so of the built-in missions only Street Race Bust offers one; a custom stop pursuit may too. The volunteer drives his
+own car (no car is made for him). The block reads `ctx.volunteer()` on start, every tick and on every `opp_*` event
+(`st.vol`; all its code sits in one local table `Vol`, the file is near Lua's 200 locals):
+- nil (no match, `enabled` off, a mode 'npc', or phase `npc`): everything as before (the NPC cars).
+- `'wait'` (phase `asking`): no car is made and the start trigger is held (a race does not start); the HUD says
+  `block.pursuit.hud_volunteer_wait`; the objective cannot complete. Phase `npc` later makes the cars as usual and
+  the trigger runs.
+- `'real'` (travel, in_position, engaged): `VehTarget` is 0, or one fewer than the objective's cars with
+  `Config.Volunteers.driverNpcCars` true (the other racers still come; the trigger runs once one exists). He is one
+  more car and one more suspect on the counts, the checklist and the snapshot (`vtotal`, `total`); he is done once
+  CP.Opponents' view (this objective's index) has him `detained` with a share above 0 or `booked` (the AFK rule of
+  V23, `afkCatchVoids`); done is kept, adds one to `st.detained` and awards the objective's `detainBonus` once (a
+  detained racer: `all_or_timeout_any` and `onTimeout` count him). `lost` fails the objective
+  `block.pursuit.fail_escaped`. HUD (client half, from the snapshot's `volunteer` / `volunteerDone` only):
+  `block.pursuit.hud_volunteer` while every NPC car is stopped and he is not caught, else the usual lines.
+- Pointer: the NPC cars and people as before, plus his last-reported point (`key = 'last:driver'`, look
+  `searchArea`, "Suspect vehicle: last reported"): CP.Opponents' server-side `rec.lastCoords` while he is free,
+  online and outside an instance, taken every `Config.Volunteers.driverReportEvery` s (30; 0 = none) once his phase
+  is `in_position` or `engaged`, never in between and dropped once he is caught; with nothing else to show, the
+  first car's point (the meet point). Presence: the NPCs as before, else his server-side last coordinates (never
+  sent), else the start.
+- `'void'`: nothing spawns. Voids (no-show, cancel, leave, AFK catch) stay with CP.Volunteers' `onVoid` / `voidRun`.
+  Spec: tests/pursuit_volunteer_spec.lua.
 
 **The block (V12, blocks/live_response).** `engineOnly = true` in its `CP.Blocks.register` table:
 `Missions.normalize` refuses it unless `meta.engine == true` ("objective N uses engine-only block", plain reason
