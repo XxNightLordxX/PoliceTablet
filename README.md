@@ -2895,6 +2895,14 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   `goals`, `challenge`, `cash` or `items` (all `false`; `cash` and `items` are money switches: Settings asks for the
   typed word ENABLE). Each suspect detained is a **live catch** for every officer on the case (stored per run row,
   migration 014); add `'live_catches'` to `Config.Leaderboard.metrics` to show a **Live catches** Rank by tab.
+  Staff data (step V17, server side; the Admin UI screen comes in V18): admins with the `antiFarmOverride` key can
+  read each open case and the last `Config.RealSuspects.casesKept` closed ones (16; kept in memory, so a restart
+  clears the list): the suspects and officers by name, the case timeline in plain lines, the flag lines (officer
+  conduct flags and the suspects' own notes) and the damage ledger, plus pair statistics and the running blocks. Three
+  tools need a reason and are audited: **block a pair** (an officer can't take a case against that suspect), **exclude
+  a player** (never a suspect) and **suspend an officer** (no real-suspect cases), each for 1 to 3650 days. They are
+  refused while both features are off and on the admin's own characters. Nobody reviews or reads a case he was a
+  suspect in (the same own-run rule as officers).
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

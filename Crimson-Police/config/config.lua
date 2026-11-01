@@ -944,6 +944,9 @@ Config.RealSuspects = {
         max = 360,                   -- points kept per suspect
     },
     timelineMax = 300,               -- timeline entries kept per case
+    -- Closed cases staff can still open in the Admin UI (their timeline, damage ledger and flags), the newest
+    -- ones; open cases are always there. Kept in memory: a restart starts the list again
+    casesKept = 16,
     -- Proof the server checks before anything scores:
     cuffPairWindow = 10,             -- seconds between the officer's sc-police cuff and the suspect's cuffed state
     cuffRange = 3.5,                 -- metres between them at the cuff (sc-police allows 2.5; the rest is lag)

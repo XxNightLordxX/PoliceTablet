@@ -345,6 +345,7 @@ local RANGES = {
     ['RealSuspects.trail.every'] = { 1, 60 },
     ['RealSuspects.trail.max'] = { 1, 5000 },
     ['RealSuspects.timelineMax'] = { 10, 5000 },
+    ['RealSuspects.casesKept'] = { 1, 200 },
     ['RealSuspects.cuffPairWindow'] = { 1, 60 },
     ['RealSuspects.cuffRange'] = { 1, 20 },
     ['RealSuspects.custodyHoldSeconds'] = { 5, 600 },

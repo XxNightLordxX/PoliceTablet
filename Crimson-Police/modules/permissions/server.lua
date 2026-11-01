@@ -81,9 +81,18 @@ function P.gradeGrant(officer, grant)
     return false
 end
 
--- A row of that run for that citizenid, live or archived.
-function P.tookPart(citizenid, runUuid)
+-- A row of that run for that citizenid, live or archived. asSuspect (the self rule over suspects, V17): a real
+-- suspect of that run's case counts too (CP.Opponents.suspectOfRun: memory, then cp_pvp_pairs).
+function P.tookPart(citizenid, runUuid, asSuspect)
     if type(citizenid) ~= 'string' or citizenid == '' or not ValidRunUuid(runUuid) then return false end
+    if asSuspect and CP.Opponents and CP.Opponents.suspectOfRun then
+        local ok, was = pcall(CP.Opponents.suspectOfRun, citizenid, runUuid)
+        -- Fail closed: a suspect lookup that cannot answer counts as taking part.
+        if not ok or was ~= false then
+            if not ok then CP.err(TAG, 'tookPart suspect lookup failed: %s', tostring(was)) end
+            return true
+        end
+    end
     CP.Migrations.ready()
     for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
         local ok, res = pcall(MySQL.scalar.await,
@@ -130,7 +139,9 @@ function P.canReviewRun(src, runUuid)
     if CP.AdminKit and CP.AdminKit.selfRun and CP.AdminKit.selfRun(n, runUuid) then return false, 'err.own_run' end
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n)
     if not info then return true end
-    if InLiveRun(info.citizenid, runUuid) or P.tookPart(info.citizenid, runUuid) then return false, 'err.own_run' end
+    if InLiveRun(info.citizenid, runUuid) or P.tookPart(info.citizenid, runUuid, true) then
+        return false, 'err.own_run'
+    end
     return true
 end
 

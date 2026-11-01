@@ -720,7 +720,7 @@ function Profile.commend(src, role, payload)
         if Int(today) >= math.max(0, Int(cfg.perSupervisorPerDay or 3)) then return false, 'err.commend_limit' end
     end
     if runUuid then
-        if Has('Permissions', 'tookPart') and CP.Permissions.tookPart(issuer, runUuid) then
+        if Has('Permissions', 'tookPart') and CP.Permissions.tookPart(issuer, runUuid, true) then
             return false, 'err.commend_own_run'
         end
         if not (Has('Permissions', 'tookPart') and CP.Permissions.tookPart(cid, runUuid)) then

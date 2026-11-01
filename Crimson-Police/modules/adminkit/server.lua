@@ -203,7 +203,8 @@ function Kit.isSelf(src, citizenid, strict)
     return false
 end
 
--- true when any of src's characters took part in runUuid (live or archived rows) or is on it now.
+-- true when any of src's characters took part in runUuid (live or archived rows), is on it now, or was a real
+-- suspect of its case (V17: CP.Permissions.tookPart's asSuspect).
 function Kit.selfRun(src, runUuid)
     local n = ToSrc(src) or 0
     if n == 0 or type(runUuid) ~= 'string' or runUuid == '' then return false end
@@ -212,7 +213,7 @@ function Kit.selfRun(src, runUuid)
     local ok, run = Call('Runs', 'get', runUuid)
     for _, cid in ipairs(cids) do
         if type(cid) == 'string' then
-            if Has('Permissions', 'tookPart') and CP.Permissions.tookPart(cid, runUuid) then return true end
+            if Has('Permissions', 'tookPart') and CP.Permissions.tookPart(cid, runUuid, true) then return true end
             if ok and type(run) == 'table' and type(run.participants) == 'table' then
                 for _, p in pairs(run.participants) do
                     if type(p) == 'table' and p.citizenid == cid then return true end

@@ -2753,6 +2753,16 @@ nothing here runs while no case is open. A suspect's own acts are staff notes (O
 run.flagged or p.flagged.
 ```
 
+## Crimson-Police/modules/opponents/staff/server.lua
+
+```text
+CP.Opponents staff (server, step V17): what admins read about real-suspect cases and the three admin tools. The
+case data here (names, citizenids, the timeline, the damage ledger, the flags and notes) is server-only: it goes
+to an admin's Admin UI through these callbacks and never to an officer's tablet (Opp.view has no names). Reads
+are memory only (open cases and the last Config.RealSuspects.casesKept closed ones; the pair ledger's window).
+Nothing here runs while nobody asks; the actions are refused while both features are off.
+```
+
 ## Crimson-Police/modules/options/client.lua
 
 ```text
@@ -5698,6 +5708,15 @@ bobby-pin rescue, cuff-break, self-uncuff), downs and the neutralised share, an 
 either order with booking zones, and the hospital rules. Real: modules/integrations/qbx, access, anticheat,
 integrations/sc_police and sc_ambulance (the V3 handlers, fired as net events), opponents and opponents/proof;
 qbx_core's exports and its onSetMetaData event are mocked like FXServer sends them.
+```
+
+## tests/opponents_staff_spec.lua
+
+```text
+CP.Opponents staff (step V17): the server-only case data admins read (names fixed when a line is written, the
+timeline as lines, the flag lines, the ledger), Config.RealSuspects.casesKept, the admin callbacks and the three
+tools (block a pair, exclude a player, suspend an officer), and the self rule over suspects (P.tookPart). Plain
+Lua with stubs: qbx_core's exports, CP.AdminKit and the pair writers are mocked; nothing reads the database.
 ```
 
 ## tests/oversight_spec.lua

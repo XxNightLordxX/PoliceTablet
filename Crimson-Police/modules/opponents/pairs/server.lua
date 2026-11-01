@@ -723,6 +723,104 @@ function Opp.suspend(officerCid, days)
 end
 
 -- ============================================================================
+--                              STAFF READS (V17)
+-- ============================================================================
+
+local STATS_MAX = 200             -- pair statistics lines answered at most
+
+-- Whether this citizenid was a suspect of that run (the self rule over suspects: Kit.selfRun, P.tookPart): an open
+-- or kept closed case, the ledger in memory, else the case rows in the database (kept pairLedgerDays). -> true |
+-- false | nil (the database could not answer: the caller fails closed).
+function Opp.suspectOfRun(cid, runUuid)
+    if not ValidCid(cid) or type(runUuid) ~= 'string' or runUuid == '' or #runUuid > 36 then return false end
+    if Opp.wasSuspect and Opp.wasSuspect(cid, runUuid) then return true end
+    for _, r in ipairs(ledger.byRun[runUuid] or {}) do
+        if r.suspect == cid then return true end
+    end
+    if not DbReady() then return nil end
+    local ok, res = pcall(MySQL.scalar.await, [[SELECT 1 AS was_suspect FROM cp_pvp_pairs
+        WHERE run_uuid = ? AND suspect_citizenid = ? AND kind IN ('live', 'volunteer') LIMIT 1]], { runUuid, cid })
+    if not ok then
+        LogError('suspectOfRun', 'reading the pair ledger failed: %s', tostring(res))
+        return nil
+    end
+    return res ~= nil
+end
+
+-- Pair statistics from the ledger in memory (the window every cap reads): one line per officer and suspect with
+-- their cases, scored cases, the last case and its outcome, the most cases first. cid (optional) keeps the lines
+-- with that citizenid on either side. -> { { officer, suspect, cases, scored, lastAt, lastOutcome, kinds } }, from.
+function Opp.pairStats(cid)
+    if cid ~= nil and not ValidCid(cid) then return {}, ledger.from end
+    local byPair, out = {}, {}
+    for _, r in ipairs(ledger.rows) do
+        if cid == nil or r.officer == cid or r.suspect == cid then
+            local key = r.officer .. '|' .. r.suspect
+            local line = byPair[key]
+            if not line then
+                line = {
+                    officer = r.officer,
+                    suspect = r.suspect,
+                    cases = 0,
+                    scored = 0,
+                    lastAt = 0,
+                    runs = {},
+                    kinds = {},
+                }
+                byPair[key] = line
+                out[#out + 1] = line
+            end
+            local run = r.run or r
+            if not line.runs[run] then
+                line.runs[run] = true
+                line.cases = line.cases + 1
+                if r.scored then line.scored = line.scored + 1 end
+            end
+            line.kinds[r.kind] = true
+            if r.at >= line.lastAt then line.lastAt, line.lastOutcome = r.at, r.outcome end
+        end
+    end
+    table.sort(out, function(a, b)
+        if a.cases ~= b.cases then return a.cases > b.cases end
+        if a.lastAt ~= b.lastAt then return a.lastAt > b.lastAt end
+        return a.officer .. a.suspect < b.officer .. b.suspect
+    end)
+    local list = {}
+    for i = 1, math.min(#out, STATS_MAX) do
+        local line = out[i]
+        local kinds = {}
+        for k in pairs(line.kinds) do kinds[#kinds + 1] = k end
+        table.sort(kinds)
+        line.runs, line.kinds = nil, kinds
+        list[i] = line
+    end
+    return list, ledger.from
+end
+
+-- Every admin block, exclusion and suspension still running, the latest end first: { { kind, officer?, suspect?,
+-- untilAt } } (os.time()).
+function Opp.adminRows()
+    local now, out = os.time(), {}
+    for key, t in pairs(blocks) do
+        local officer, suspect = key:match('^([^|]+)|([^|]+)$')
+        if t > now and officer then
+            out[#out + 1] = { kind = 'block', officer = officer, suspect = suspect, untilAt = t }
+        end
+    end
+    for cid, t in pairs(excludes) do
+        if t > now then out[#out + 1] = { kind = 'exclude', suspect = cid, untilAt = t } end
+    end
+    for cid, t in pairs(suspends) do
+        if t > now then out[#out + 1] = { kind = 'suspend', officer = cid, untilAt = t } end
+    end
+    table.sort(out, function(a, b)
+        if a.untilAt ~= b.untilAt then return a.untilAt > b.untilAt end
+        return (a.kind .. (a.officer or '') .. (a.suspect or '')) < (b.kind .. (b.officer or '') .. (b.suspect or ''))
+    end)
+    return out
+end
+
+-- ============================================================================
 --                             THE PAIR-REPEAT FLAG
 -- ============================================================================
 

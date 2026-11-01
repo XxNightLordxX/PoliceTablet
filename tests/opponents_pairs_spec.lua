@@ -530,6 +530,17 @@ do
     H.ok(bad == false and err == 'invalid_days', '0 days is refused')
     bad, err = Opp.suspend('bad cid', 1)
     H.ok(bad == false and err == 'invalid_citizenid', 'a bad citizenid is refused')
+    -- V17: what the staff screen reads
+    local admin = {}
+    for _, r in ipairs(Opp.adminRows()) do
+        admin[#admin + 1] = r.kind .. ':' .. (r.officer or '') .. '/' .. (r.suspect or '')
+    end
+    H.eq(table.concat(admin, ','), 'suspend:' .. D .. '/,exclude:/' .. C .. ',block:' .. A .. '/' .. C,
+        'V17 adminRows: every running block, exclusion and suspension, the latest end first')
+    local stats = Opp.pairStats(A)
+    H.ok(#stats >= 1 and stats[1].officer == A and stats[1].cases >= 1, 'V17 pairStats: the pairs of an officer')
+    for _, l in ipairs(stats) do H.ok(l.officer == A or l.suspect == A, 'V17 pairStats: only his pairs') end
+    H.eq(#Opp.pairStats('bad cid'), 0, 'V17 pairStats: a bad citizenid answers nothing')
 
     Opp = Restart(false)
     H.eq((Opp.pairOk(A, C)), false, 'the block holds after a restart')
@@ -587,6 +598,9 @@ do
     end
     H.eq(table.concat(left, ','), 'live:new-run,block',
         'the daily pass deletes case and duty_off rows older than 30 days and the expired exclusion, keeps the block')
+    -- V17, the self rule over suspects: a case row the memory window no longer holds is read from the database
+    H.eq(Opp.suspectOfRun(B, 'new-run'), true, 'V17: a suspect of a 29-day-old case (its database row)')
+    H.eq(Opp.suspectOfRun(A, 'new-run'), false, 'V17: the officer of that case was not its suspect')
 end
 
 -- ============================================================================

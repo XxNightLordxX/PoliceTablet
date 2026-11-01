@@ -10,7 +10,8 @@ local TICK_MS = 1000              -- the watch's pass
 local STILL_METRES = 1.0          -- an AFK sample that moved less than this...
 local STILL_DEGREES = 2.0         -- ...and turned the camera less than this is "still"
 local TELEPORT_GAP_MS = 30000     -- at most one rs_teleport note per suspect this often
-local CLOSED_KEPT = 16            -- closed cases whose outcomes close() still answers (a second run:ended listener)
+local CLOSED_KEPT = 16            -- closed cases kept by default (Config.RealSuspects.casesKept: staff and close())
+local CLOSED_MAX = 200            -- casesKept is clamped to this
 local ARENA_BAG = 'crimsonArena'
 local LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -42,7 +43,7 @@ local crewOf = {}                 -- [crewKey] = { [citizenid] = true }: AFK sam
 local srcOf = {}                  -- [citizenid] = server id, tracked citizenids only (load, unload and drop keep it)
 local cidOf = {}                  -- [server id] = citizenid, the same pairs: cleared at the drop (C9)
 local afkOf = {}                  -- [citizenid] = { coords, cam, stillSince, nextAt, afk } (GetGameTimer ms)
-local closed = {}                 -- { runId, outcomes, case }, the last CLOSED_KEPT
+local closed = {}                 -- { runId, outcomes, case }, the last casesKept (oldest first)
 local tickHooks = {}
 local watch = { on = false, token = 0 }
 local errorAt = {}
@@ -222,8 +223,28 @@ end
 --                           TIMELINE, NOTES, EVENTS
 -- ============================================================================
 
+-- Who a server id was when a line was written (a server id is given to someone else after a drop): a participant of
+-- the case's run, a suspect, else Qbox's character. -> { cid, name } | nil. Staff only (V17).
+local function WhoOf(case, src)
+    local n = ToSrc(src)
+    if not n then return nil end
+    local parts = type(case.run) == 'table' and type(case.run.participants) == 'table' and case.run.participants or {}
+    local p = parts[n]
+    if type(p) == 'table' and ValidCid(p.citizenid) then
+        return { cid = p.citizenid, name = type(p.name) == 'string' and p.name or nil }
+    end
+    local cid = cidOf[n]
+    local rec = cid and case.suspects[cid]
+    if rec then return { cid = cid, name = rec.name } end
+    local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
+    if type(info) == 'table' and ValidCid(info.citizenid) then return { cid = info.citizenid, name = info.name } end
+    return nil
+end
+
 local function Timeline(case, entry)
     entry.t = os.time()
+    if entry.src ~= nil and entry.who == nil then entry.who = WhoOf(case, entry.src) end
+    if entry.by ~= nil and entry.byWho == nil then entry.byWho = WhoOf(case, entry.by) end
     local list = case.timeline
     list[#list + 1] = entry
     local max = math.max(1, math.floor(Num(Cfg().timelineMax, 300)))
@@ -672,6 +693,7 @@ function Opp.open(run, spec)
         if info and info.citizenid == cid then
             Bind(cid, src)
             rec.license = info.license
+            rec.name = info.name
             rec.md = Mirror(info.metadata)
             rec.afk = afkOf[cid] ~= nil and afkOf[cid].afk == true
             Timeline(case, { what = 'suspect', label = rec.label, src = src })
@@ -743,9 +765,39 @@ function Opp.close(run)
     case.closedAt = os.time()
     Timeline(case, { what = 'closed' })
     closed[#closed + 1] = { runId = runId, outcomes = outcomes, case = case }
-    while #closed > CLOSED_KEPT do table.remove(closed, 1) end
+    local kept = math.min(CLOSED_MAX, math.max(1, math.floor(Num(Cfg().casesKept, CLOSED_KEPT))))
+    while #closed > kept do table.remove(closed, 1) end
     CP.log(TAG, 'run %s: case closed', runId)
     return copy(outcomes), case
+end
+
+-- Every case staff can read (V17): the open ones (newest first), then the kept closed ones (newest first).
+-- -> { { case, open = bool } }. Memory only: a restart starts the list again.
+function Opp.cases()
+    local out = {}
+    for _, case in pairs(cases) do out[#out + 1] = { case = case, open = true } end
+    table.sort(out, function(a, b)
+        if a.case.openedAt ~= b.case.openedAt then return a.case.openedAt > b.case.openedAt end
+        return a.case.runId > b.case.runId
+    end)
+    for i = #closed, 1, -1 do out[#out + 1] = { case = closed[i].case, open = false } end
+    return out
+end
+
+-- An open or kept closed case by its run id -> case, open | nil.
+function Opp.findCase(runId)
+    if type(runId) ~= 'string' then return nil end
+    if cases[runId] then return cases[runId], true end
+    for _, c in ipairs(closed) do
+        if c.runId == runId then return c.case, false end
+    end
+    return nil
+end
+
+-- Whether this citizenid is (or was) a suspect of that run's case, in memory (an open or kept closed case).
+function Opp.wasSuspect(cid, runId)
+    local case = ValidCid(cid) and Opp.findCase(runId) or nil
+    return case ~= nil and case.suspects[cid] ~= nil
 end
 
 -- true while at least one case is open (CP.ScPolice / CP.Ambulance pass facts only then).
@@ -986,6 +1038,7 @@ local function OnLoaded(src)
     if not hit then return end
     local case, rec = hit.case, hit.rec
     rec.license = info.license or rec.license
+    rec.name = info.name or rec.name
     rec.md = Mirror(info.metadata)
     rec.lastCoords, rec.inInstance = nil, nil
     if DONE[rec.state] then return end

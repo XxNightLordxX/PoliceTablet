@@ -154,6 +154,7 @@ do
         reconnectNoticeMinutes = 30,
         evadeWindow = 120,
         timelineMax = 300,
+        casesKept = 16,
     }) do
         local e = S.entry('RealSuspects.' .. path) or {}
         H.eq(e.default, value, 'RealSuspects.' .. path .. ' ships ' .. tostring(value))
@@ -180,6 +181,8 @@ do
         ['trail.every'] = 'seconds between points',
         ['trail.max'] = 'points kept per suspect',
         timelineMax = 'timeline entries kept per case',
+        casesKept = 'Closed cases staff can still open in the Admin UI (their timeline, damage ledger and flags), the '
+            .. 'newest ones; open cases are always there. Kept in memory: a restart starts the list again',
         -- V5: the proof
         cuffPairWindow = 'Proof the server checks before anything scores: seconds between the officer\'s sc-police '
             .. 'cuff and the suspect\'s cuffed state',

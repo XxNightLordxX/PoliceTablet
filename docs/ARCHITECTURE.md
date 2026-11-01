@@ -789,8 +789,10 @@ Full admin control, System (P5):
 ### 5.3 CP.Permissions — modules/permissions (S)
 - `can(src, action, ctx) -> boolean, errKey` — admin: always true for admin and supervisor actions. Supervisor: `CP.Access.isSupervisor(src)` and `Config.Permissions.supervisor[action] == true`. Admin-only actions (never allowed for supervisors whatever the config): `setMissionPayout`, `clearPayout`, `manualAward`, `handleFailedDispute`, `voidAnyRun`, `seasons`, `bountyOverride`, `suspend`, `reloadMissions`, `testRun`, `openAdmin`. Also `viewMissionList` (supervisors and admins). errKey `err.no_permission`.
 - `actionsFor(src) -> { actionName, ... }` (for the session)
-- `tookPart(citizenid, runUuid) -> boolean` (any cp_mission_runs or cp_mission_runs_archive row of that run for that
-  citizenid; a failed lookup counts as taking part)
+- `tookPart(citizenid, runUuid, asSuspect) -> boolean` (any cp_mission_runs or cp_mission_runs_archive row of that run
+  for that citizenid; a failed lookup counts as taking part). With `asSuspect` (V17, the self rule over suspects) a real
+  suspect of that run's case counts too (`CP.Opponents.suspectOfRun`); `CP.AdminKit.selfRun`, `canReviewRun` and the
+  commendation issuer check pass it, a commendation's recipient check does not (a suspect is no officer of the run)
 - Full admin control: 18 more admin-only keys, none of which a `Config.Permissions.supervisor` switch can give a
   supervisor: `officerRecords`, `pointsAdjust`, `bulkVoid`, `restoreRun`, `progression`, `antiFarmOverride`, `liveRuns`,
   `editBuiltins`, `missionAdmin`, `boardsAdmin`, `payments`, `rewardsAdmin`, `deptFunds`, `departmentsAdmin`,
@@ -2378,7 +2380,7 @@ Also: `Kit.run(name, src, payload)` (a registered action called directly: the co
 permKey, fn(ctx) -> data | nil, errKey, opts)` (admin-only reads; `ctx.preview(kind, ids, effect)`), `Kit.reason(v,
 optional)`, `Kit.confirmOk(given, word)`, `Kit.isSelf(src, citizenid, strict) -> bool | nil, err` (the character's
 license is one of `CP.Access.licensesOfSrc(src)`), `Kit.selfRun(src,
-runUuid)`, `Kit.claimRequest / finishRequest / releaseRequest`, `Kit.validRequestId`, `Kit.uuid()`, `Kit.auditSync(src,
+runUuid)` (an officer of the run, or since V17 a real suspect of its case), `Kit.claimRequest / finishRequest / releaseRequest`, `Kit.validRequestId`, `Kit.uuid()`, `Kit.auditSync(src,
 category, action, target, old, new, reason, opts)`, `Kit.changed`, `Kit.notify`.
 
 **Day counts from saved rows** (a restart never resets a limit): `Kit.dayStart(ts)`, `Kit.weekStart(ts)` (CP.Schedule's),
@@ -2945,7 +2947,8 @@ the open).
   open) is made final first, as below (the onLeave rule or cuffed -> detained, and the `rs_combat_log` note), with no
   objective event, so a suspect who logs off just before End case, the time limit or the last officer leaving is
   never 'got_away' by the leave. The `run:ended` hook closes the case; a second call for the same run (another
-  `run:ended` listener) answers the same outcomes (the last 16 closed cases are kept).
+  `run:ended` listener) answers the same outcomes (the last `Config.RealSuspects.casesKept` closed cases are kept, 16
+  shipped, 1-200; staff read them too, V17).
 - `active()` (true while a case is open; the V3 facts only pass then), `caseOf(run)`, `bySrc(src) -> case, rec`,
   `byCid(cid) -> case, rec`, `view(run)` (a copy for blocks with no server ids: label, state, online, contact, down,
   afk, share, byLeave, everArmed, outcome, md), `nearAny(run, coords, range) -> true, cid, metres` (a free or cuffed
@@ -3173,6 +3176,35 @@ start, and every write goes to the database in a thread.
 - Retention (critic 2 #23, LOOP_RULES 11): once at start and on every `CP.Schedule.onDaily`, in a thread: `DELETE`
   the `live`, `volunteer` and `duty_off` rows older than pairLedgerDays (one statement per kind) and the admin rows
   whose until_at has passed; never in a tick.
+
+Staff (V17, modules/opponents/staff/server.lua). What admins read about a case, server-only (never on an officer's
+tablet: `Opp.view` has no names), and the three admin tools. Nothing runs until an admin asks.
+- Names fixed at the line: every timeline entry with a `src` gets `who = { cid, name }` and one with a numeric `by`
+  gets `byWho`, resolved when the line is written (a participant of the run, a suspect, else `CP.Qbx.getInfo`), so a
+  server id another player gets after a drop never renames an old line. `rec.name` is read at the open and a rejoin.
+- `Opp.cases()` (open cases newest first, then the kept closed ones), `Opp.findCase(runId) -> case, open`,
+  `Opp.wasSuspect(cid, runId)` (memory). Pairs: `Opp.suspectOfRun(cid, runUuid) -> true|false|nil` (memory, then
+  `SELECT 1 FROM cp_pvp_pairs WHERE run_uuid = ? AND suspect_citizenid = ? AND kind IN ('live', 'volunteer')`; nil =
+  the database did not answer), `Opp.pairStats(cid?) -> lines, from` (per officer and suspect from the ledger in
+  memory: cases, scored, lastAt, lastOutcome, kinds; the most cases first, at most 200), `Opp.adminRows()` (running
+  blocks, exclusions and suspensions, the latest end first).
+- `Opp.staffCases()` (one line per case: runId, kind, open, openedAt, closedAt, missionId, suspects, detained,
+  booked, flags, notes, officers) and `Opp.staffCase(runId)` (the same plus suspects with citizenid, name, label,
+  state, outcome, share, everArmed, afk, down, byLeave, seconds from the open to contact / cuff / detain / booking;
+  `lines` = the timeline as text, `opp.line.<what>` or the flag text; `flagLines` = the officer-conduct flags
+  (rs_excessive_force, rs_unarmed_shot, rs_vdm, rs_bad_seize, rs_linked_accounts, pair_repeat) and the suspect notes,
+  each with `flag` or `note`, its kind, its text and detail; `ledger` with the officer by name). No trail point is
+  answered. Memory only: a restart starts the list again (the pair rows stay in cp_pvp_pairs).
+- The self rule over suspects: `Kit.selfRun` and `P.canReviewRun` count a suspect of the run's case as taking part,
+  so a staff member never reviews, voids or reads the case he was a suspect in (fails closed).
+- Admin callbacks and actions (CP.AdminKit, key `antiFarmOverride`; §8.4.1): `admin:getRsCases`, `admin:getRsCase`
+  (`{ runUuid }`, `err.own_run` for his own case, `err.rs_no_case` when it is no longer kept; latent),
+  `admin:getRsPairs` (`{ citizenid? }`: pairStats, adminRows, and that citizenid's exclusion and suspension), and
+  `server:admin:rsBlockPair` (`{ officer, suspect, days, reason }`), `server:admin:rsExclude` / `rsSuspend`
+  (`{ citizenid, days, reason }`): 0 < days <= 3650, a reason, refused for the admin's own characters
+  (`err.self_target`) and while both features are off (`err.rs_off`), one per target per 10 s, audited
+  (`rsBlockPair`, `rsExclude`, `rsSuspend`). They call `Opp.block` / `exclude` / `suspend` (a longer one wins; there
+  is no lift yet: a row runs to its until_at). The Admin UI screen is V18.
 
 ### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S)
 
@@ -4287,6 +4319,8 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `server:admin:refreshOfficer` | action | officerRecords | `{ citizenid }` | online; 1 per 10 s per officer |
 | `admin:previewRecordMove` / `server:admin:moveRecord` / `undoRecordMove` | callback / actions | recordMove | `{ from, to, reason, confirm, previewToken, requestId }` / `{ jobId, reason }` | `AdminControl.recordMove`; T = the new citizenid or `UNVERIFIED <cid>` |
 | `server:admin:postNotice` / `removeNotice` | action | officerRecords | `{ text, departments?, expiresAt, reason }` / `{ id, reason }` | 1 per 60 s per admin; ≤ 5 running |
+| `admin:getRsCases`, `admin:getRsCase`, `admin:getRsPairs` | callbacks | antiFarmOverride | `{}` / `{ runUuid }` / `{ citizenid? }` | modules/opponents/staff (V17); server-only case data, refused for the admin's own case |
+| `server:admin:rsBlockPair`, `rsExclude`, `rsSuspend` | actions | antiFarmOverride | `{ officer, suspect, days, reason }` / `{ citizenid, days, reason }` | V17; 0 < days <= 3650, never his own characters, `err.rs_off` while both features are off |
 | `admin:getOfficerLook`, `server:admin:resetLook`, `clearProfileCooldown` | callback / actions | officerRecords | `{ citizenid, reason }` | modules/profile; cooldown clear 1 per 60 s per officer |
 | `admin:getBannedWords`, `admin:testBannedWords`, `server:admin:setBannedWords` | callbacks / action | officerRecords | `{ add, remove, reason }` | ≤ 5000 words, ≤ 64 characters; old file kept as `.bak`; live reload |
 | `server:admin:unrevokeCommendation`, `editCitation` | action | officerRecords | `{ id, reason, citation? }` | K on the old value |
