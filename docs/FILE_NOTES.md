@@ -3823,6 +3823,19 @@ Safety net: a unit locked for more than LOCK_GRACE seconds while none of its mem
 run is unlocked by the 2 s sweep (covers an engine that never called unlock).
 ```
 
+## Crimson-Police/modules/volunteers/match/server.lua
+
+```text
+CP.Volunteers matching (server, step V22): a run whose suspect a volunteer may play (run.volunteer from V21) asks
+the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'),
+makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
+The server then follows him: in position, engaged (an officer within Config.RealSuspects.contactRange: the officers
+lose the NPC-combat protection), a no-show, his own Cancel this case, and the release when the run ends. Nobody who
+says yes, or a volunteer who drops out, gives the NPC back (players_when_available) or ends the run
+(Config.Volunteers.onVoid / voidRun; 'players_only' always ends). Blocks read it with ctx.volunteer().
+Memory only; nothing runs while Config.Volunteers.enabled is off or every mode is 'npc'.
+```
+
 ## Crimson-Police/modules/volunteers/server.lua
 
 ```text
@@ -6192,4 +6205,13 @@ Twists the officers choose at accept (PLAN M8b): CP.Twists (shared: the run's li
 and CP.Events (which twists fit a mission, the offer per type, the check of a chosen list, the random roll that
 ships off). The engine, the board, the claim and the screens are covered in int_engine_spec, missioncalls_spec,
 economy_spec, teams_spec and the engine_b client fixture.
+```
+
+## tests/volunteer_match_spec.lua
+
+```text
+Volunteer matching (step V22): the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
+on a yes (run.realSuspect = 'volunteer'), travel and in position, engagement (the officers' protection drop), a
+no-show, Cancel this case, the release, the NPC fallback and the endings (Config.Volunteers.onVoid / voidRun,
+'players_only'), and ctx.volunteer()'s view. Plain Lua with stubs.
 ```

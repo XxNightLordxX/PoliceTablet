@@ -2654,7 +2654,7 @@ Feature folders
 | modules/admin/ | server | Supervisor and admin actions, /CrimsonPoliceAdmin, audit log, webhooks |
 | modules/anticheat/ | server | Objective validation, presence and idle checks, flagged runs |
 | modules/opponents/ | server | Real-player suspects of live crimes and volunteer cases (off by default): cases keyed by citizenid, the watch, leaving and instances, staff notes; proof/: the cuff pair and custody hold, release, rescue, cuff-break and self-uncuff, downs, bookings and the hospital rules; conduct/: the armed definition, the damage ledger, excessive force, the unarmed-shot and ran-over penalties, the cash-seizure audit |
-| modules/volunteers/ | server, client | Volunteer suspects (off by default): the volunteer command, its ox_lib consent, roles and menu, the window, ends and strikes; the modes per mission type and mission, the volunteer slots, who is free and the hold for a 'players_only' run, the start-up check |
+| modules/volunteers/ | server, client | Volunteer suspects (off by default): the volunteer command, its ox_lib consent, roles and menu, the window, ends and strikes; the modes per mission type and mission, the volunteer slots, who is free and the hold for a 'players_only' run, the start-up check; match/: the yes/no pop-up, travel, in position, engagement, no-show, Cancel this case, the release and the endings |
 | modules/integrations/qbx/ | server, client | Every qbx_core call |
 | modules/integrations/sc_dispatch/ | server | Responding listener, mdt_dispatch lookup, shots-fired and person-down listeners, ClearNotification, suspension check |
 | modules/integrations/sc_ambulance/ | server, client | EMS on duty, the revive event, the EMS request, and the listen-only hospital-respawn fact for real suspects (CP.Ambulance.on) |
@@ -3917,6 +3917,23 @@ Config.Volunteers = {
     -- The same choice for single missions, by mission id (beats its type's mode), e.g. { warrant_service =
     -- 'players_only' }. Empty = every mission follows its type
     missionModes = {},
+    -- Asking: the volunteers who fit get a yes/no pop-up one at a time (the one a 'players_only' accept held first).
+    -- A no or no answer is never a strike
+    askSeconds = 30,                 -- seconds the pop-up waits for an answer before the next volunteer is asked
+    askTries = 3,                    -- volunteers asked per mission before the NPC plays the suspect
+    -- After a yes he has this many seconds to reach the suspect's starting point (it is set as his map waypoint); not
+    -- there in time = a no-show (a strike) unless officers already reached him
+    travelSeconds = 300,
+    meetRadius = 25.0,               -- metres from the starting point that count as being in position
+    -- Seconds after his yes in which his own Cancel this case is no strike (once officers reached him it always is)
+    cancelGraceSeconds = 60,
+    -- When the volunteer who said yes drops out before officers reach him (no-show, Cancel this case, logs off):
+    -- 'npc' = the NPC plays the suspect as if nobody had said yes; 'end' = the mission ends (see voidRun). A
+    -- 'players_only' mission, and any mission once officers reached him, always ends
+    onVoid = 'npc',
+    -- How such a mission ends: 'cancelled' = Abandoned with no cooldown, penalty or pay; 'keep_earned' = Completed
+    -- with what the officers earned so far
+    voidRun = 'cancelled',
 }
 
 -- ============================================================================

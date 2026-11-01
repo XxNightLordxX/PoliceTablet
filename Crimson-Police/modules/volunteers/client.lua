@@ -5,6 +5,8 @@
 local MENU_ID = 'crimson_police_volunteer'
 local registered = nil   -- the command name once registered (RegisterCommand cannot be undone: restart to change)
 local busy = false       -- a dialog is open
+local ask = nil          -- the server's open question (V22): { token, closed }
+local waypoint = false   -- this script set the meet point as the map waypoint
 
 local function Send(action, data) TriggerServerEvent(CP.e('server:volunteer'), action, data) end
 
@@ -45,47 +47,62 @@ local function Start(state)
     if roles then Send('join', { roles = roles }) end
 end
 
+-- V22: Cancel this case, first in the menu while he plays a suspect (a strike after the grace).
+local function CancelOption(case)
+    return {
+        title = CP.L('volunteer.menu.cancel'),
+        description = CP.L('volunteer.menu.cancel_detail', { role = RoleLabel(case.role) }),
+        onSelect = function()
+            local answer = lib.alertDialog({
+                header = CP.L('volunteer.menu.cancel'),
+                content = CP.L('volunteer.cancel.content'),
+                centered = true,
+                cancel = true,
+            })
+            if answer == 'confirm' then Send('cancel') end
+        end,
+    }
+end
+
 local function Menu(state)
     local names = {}
     for _, role in ipairs(type(state.roles) == 'table' and state.roles or {}) do names[#names + 1] = RoleLabel(role) end
-    lib.registerContext({
-        id = MENU_ID,
-        title = CP.L('volunteer.title'),
-        options = {
-            {
-                title = CP.L('volunteer.menu.status', { minutes = tonumber(state.minutesLeft) or 0 }),
-                description = CP.L('volunteer.menu.status_detail', {
-                    roles = table.concat(names, ', '),
-                    strikes = tonumber(state.strikes) or 0,
-                    max = tonumber(state.maxStrikes) or 0,
-                }),
-                readOnly = true,
-            },
-            {
-                title = CP.L('volunteer.menu.renew'),
-                onSelect = function() Send('renew') end,
-            },
-            {
-                title = CP.L('volunteer.menu.roles'),
-                onSelect = function()
-                    local roles = PickRoles(CP.Volunteers.allRoles, state.roles)
-                    if roles then Send('roles', { roles = roles }) end
-                end,
-            },
-            {
-                title = CP.L('volunteer.menu.stop'),
-                onSelect = function()
-                    local answer = lib.alertDialog({
-                        header = CP.L('volunteer.menu.stop'),
-                        content = CP.L('volunteer.stop.content'),
-                        centered = true,
-                        cancel = true,
-                    })
-                    if answer == 'confirm' then Send('stop') end
-                end,
-            },
+    local options = {
+        {
+            title = CP.L('volunteer.menu.status', { minutes = tonumber(state.minutesLeft) or 0 }),
+            description = CP.L('volunteer.menu.status_detail', {
+                roles = table.concat(names, ', '),
+                strikes = tonumber(state.strikes) or 0,
+                max = tonumber(state.maxStrikes) or 0,
+            }),
+            readOnly = true,
         },
-    })
+        {
+            title = CP.L('volunteer.menu.renew'),
+            onSelect = function() Send('renew') end,
+        },
+        {
+            title = CP.L('volunteer.menu.roles'),
+            onSelect = function()
+                local roles = PickRoles(CP.Volunteers.allRoles, state.roles)
+                if roles then Send('roles', { roles = roles }) end
+            end,
+        },
+        {
+            title = CP.L('volunteer.menu.stop'),
+            onSelect = function()
+                local answer = lib.alertDialog({
+                    header = CP.L('volunteer.menu.stop'),
+                    content = CP.L('volunteer.stop.content'),
+                    centered = true,
+                    cancel = true,
+                })
+                if answer == 'confirm' then Send('stop') end
+            end,
+        },
+    }
+    if type(state.case) == 'table' then table.insert(options, 2, CancelOption(state.case)) end
+    lib.registerContext({ id = MENU_ID, title = CP.L('volunteer.title'), options = options })
     lib.showContext(MENU_ID)
 end
 
@@ -112,6 +129,80 @@ RegisterNetEvent(CP.e('client:volunteerNote'), function(kind, key, vars)
     })
 end)
 
+-- ============================================================================
+--                       THE QUESTION AND THE CASE (V22)
+-- ============================================================================
+
+-- The yes/no pop-up: closed by the server (another answer came, the run ended) or after its seconds. Only a click
+-- answers; the server checks the token and the time again.
+RegisterNetEvent(CP.e('client:volunteerAsk'), function(token, info)
+    if type(token) ~= 'string' or type(info) ~= 'table' then return end
+    if busy then
+        pcall(lib.closeAlertDialog)
+        pcall(lib.closeInputDialog)
+    end
+    pcall(lib.hideContext, false)
+    local mine = { token = token }
+    ask = mine
+    local seconds = math.floor(tonumber(info.seconds) or 30)
+    SetTimeout(seconds * 1000, function()
+        if ask == mine and not mine.closed then
+            mine.closed = true
+            pcall(lib.closeAlertDialog)
+        end
+    end)
+    CreateThread(function()
+        busy = true
+        local ok, answer = pcall(lib.alertDialog, {
+            header = CP.L('volunteer.ask.title'),
+            content = CP.L(tonumber(info.km) and 'volunteer.ask.content' or 'volunteer.ask.content_near', {
+                role = RoleLabel(info.role),
+                km = tonumber(info.km) or 0,
+                minutes = tonumber(info.travelMinutes) or 5,
+                seconds = seconds,
+            }),
+            centered = true,
+            cancel = true,
+            labels = { confirm = CP.L('volunteer.ask.yes'), cancel = CP.L('volunteer.ask.no') },
+        })
+        busy = false
+        if ask ~= mine then return end
+        ask = nil
+        if mine.closed then return end
+        mine.closed = true
+        Send('answer', { token = token, yes = ok and answer == 'confirm' })
+    end)
+end)
+
+RegisterNetEvent(CP.e('client:volunteerAskClose'), function(token)
+    if not ask or ask.token ~= token then return end
+    ask.closed = true
+    pcall(lib.closeAlertDialog)
+end)
+
+-- His own case: the meet point as his map waypoint while he travels, removed when it is over.
+RegisterNetEvent(CP.e('client:volunteerCase'), function(state)
+    if type(state) ~= 'table' then return end
+    if state.phase == 'travel' and type(state.meet) == 'table' then
+        local x, y = tonumber(state.meet.x), tonumber(state.meet.y)
+        if x and y then
+            SetNewWaypoint(x + 0.0, y + 0.0)
+            waypoint = true
+        end
+        lib.notify({
+            title = CP.L('volunteer.title'),
+            description = CP.L('volunteer.case.travel', {
+                minutes = math.max(1, math.ceil((tonumber(state.seconds) or 300) / 60)),
+            }),
+            type = 'inform',
+            duration = 10000,
+        })
+    elseif (state.phase == 'in_position' or state.phase == 'engaged' or state.phase == 'over') and waypoint then
+        waypoint = false
+        SetWaypointOff()
+    end
+end)
+
 -- The command exists only once Config.Volunteers.enabled is on (at the start, or when an admin turns it on).
 local function Register()
     local cfg = Config.Volunteers
@@ -126,7 +217,9 @@ Register()
 CP.Hooks.on('settings:changed', Register)
 
 AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() or not busy then return end
+    if res ~= GetCurrentResourceName() then return end
+    if waypoint then SetWaypointOff() end
+    if not busy then return end
     pcall(lib.closeAlertDialog)
     pcall(lib.closeInputDialog)
 end)

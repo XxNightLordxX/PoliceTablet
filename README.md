@@ -2933,7 +2933,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   duty, logging out, the window running out or the owner turning `enabled` off ends it, and he is told why. A yes
   followed by a no-show or walking away from the case is a strike (from the matching steps): `strikes` (3) within
   `strikeHours` (24) block that player, on every character, for `blockHours` (24); strikes are kept in memory, so a
-  restart clears them. Nobody is matched to a mission yet: the list only fills.
+  restart clears them.
   Modes and the Mission Board (step V21, `Config.Volunteers.modes` per mission type and `missionModes` per mission
   id, which beats its type; Settings edits both): `'npc'` (shipped for every type) plays the NPC as today;
   `'players_when_available'` lets the unit leader tick **Real suspect OK** in the accept dialog (a red "Real suspect"
@@ -2947,6 +2947,23 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   the built-in ones get theirs in the next steps, so until then every mode plays the NPC. Admin UI -> Permissions ->
   Config health (and the console at start) warns about a mode on an unknown type or mission, a value that is no mode,
   and a mode on missions none of which a volunteer can play.
+  Matching (step V22, more `Config.Volunteers` keys, every one in Settings): once a unit accepts such a mission, the
+  volunteers who play that suspect get a yes/no pop-up one at a time (the one a `'players_only'` accept held first;
+  nobody who is down, cuffed, jailed, in a no-start zone or one of the officers' own players), each waiting
+  `askSeconds` (30), at most `askTries` (3) per mission. It names the suspect, how far the starting point is and the
+  time to get there; a no or no answer costs nothing. A yes makes the mission a case with a real suspect (the
+  officers get a toast "A volunteer plays this mission's suspect") and sets the starting point as his map waypoint:
+  he has `travelSeconds` (300) to get within `meetRadius` (25 m) of it, or it is a no-show. When an officer gets
+  within `Config.RealSuspects.contactRange` of him the case is engaged: the officers lose the NPC-combat headshot
+  protection unless `Config.RealSuspects.npcCombat` is true. His command menu then offers **Cancel this case** (free
+  within `cancelGraceSeconds`, 60, of his yes and before officers reached him; a strike otherwise); a no-show and
+  logging off are strikes too. When nobody says yes, `'players_when_available'` plays the NPC and `'players_only'`
+  ends. When the volunteer drops out before officers reached him, `onVoid` decides: `'npc'` (shipped) plays the NPC,
+  `'end'` ends the mission; a `'players_only'` mission, or any mission once officers reached him, always ends. Such an
+  end follows `voidRun`: `'cancelled'` (shipped: Abandoned with no cooldown, penalty or pay) or `'keep_earned'`
+  (Completed with what was earned). When the mission ends he is told he is free to go. Staff see the yes, in
+  position, engaged, no-show and cancel lines on the case timeline (Real suspects screen). The built-in missions get
+  their volunteer suspects in the next steps, so until then nobody is asked.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

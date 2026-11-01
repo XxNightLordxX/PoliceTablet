@@ -625,6 +625,14 @@ local function GetCtx(run, i)
             return Runs.choosePoints(run, candidates, n, o2)
         end
         ctx.whenNear = function(point, range) return Runs.whenNear(run, point, range) end
+        -- V22: this objective's volunteer suspect (CP.Volunteers.matchView): nil unless it is the run's volunteer
+        -- slot, else { role, mode, phase, meet, label, real, engaged } (never who he is or where he is now)
+        ctx.volunteer = function()
+            local V = CP.Volunteers
+            if not (V and V.matchView) then return nil end
+            local ok, view = pcall(V.matchView, run, i)
+            return ok and view or nil
+        end
         cache[i] = ctx
     end
     ctx.obj = (o and o.obj) or ctx.base
@@ -3495,7 +3503,8 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         run.realSuspect = 'live'
     end
     -- V21: a mission whose suspect a volunteer may play (CP.Draw, Config.Volunteers modes, "Real suspect OK"):
-    -- { mode, role, obj } only; who plays him is CP.Volunteers' (memory, never on the run). V22 matches on it.
+    -- { mode, role, obj } only; who plays him is CP.Volunteers' (memory, never on the run). V22 matches on it
+    -- (modules/volunteers/match) and sets run.realSuspect = 'volunteer' once a volunteer says yes.
     local vol = type(opts.volunteer) == 'table' and opts.volunteer or nil
     if vol and not live and not test and type(vol.mode) == 'string' and type(vol.role) == 'string' then
         run.volunteer = { mode = vol.mode, role = vol.role, obj = math.tointeger(tonumber(vol.obj)) }

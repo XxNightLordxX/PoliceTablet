@@ -1122,6 +1122,23 @@ Config.Volunteers = {
     -- The same choice for single missions, by mission id (beats its type's mode), e.g. { warrant_service =
     -- 'players_only' }. Empty = every mission follows its type
     missionModes = {},
+    -- Asking: the volunteers who fit get a yes/no pop-up one at a time (the one a 'players_only' accept held first).
+    -- A no or no answer is never a strike
+    askSeconds = 30,                 -- seconds the pop-up waits for an answer before the next volunteer is asked
+    askTries = 3,                    -- volunteers asked per mission before the NPC plays the suspect
+    -- After a yes he has this many seconds to reach the suspect's starting point (it is set as his map waypoint); not
+    -- there in time = a no-show (a strike) unless officers already reached him
+    travelSeconds = 300,
+    meetRadius = 25.0,               -- metres from the starting point that count as being in position
+    -- Seconds after his yes in which his own Cancel this case is no strike (once officers reached him it always is)
+    cancelGraceSeconds = 60,
+    -- When the volunteer who said yes drops out before officers reach him (no-show, Cancel this case, logs off):
+    -- 'npc' = the NPC plays the suspect as if nobody had said yes; 'end' = the mission ends (see voidRun). A
+    -- 'players_only' mission, and any mission once officers reached him, always ends
+    onVoid = 'npc',
+    -- How such a mission ends: 'cancelled' = Abandoned with no cooldown, penalty or pay; 'keep_earned' = Completed
+    -- with what the officers earned so far
+    voidRun = 'cancelled',
 }
 
 -- ============================================================================

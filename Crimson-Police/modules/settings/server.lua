@@ -386,6 +386,12 @@ local RANGES = {
     ['Volunteers.strikes'] = { 1, 10 },
     ['Volunteers.strikeHours'] = { 1, 168 },
     ['Volunteers.blockHours'] = { 1, 168 },
+    -- the matching (V22)
+    ['Volunteers.askSeconds'] = { 10, 120 },
+    ['Volunteers.askTries'] = { 1, 10 },
+    ['Volunteers.travelSeconds'] = { 60, 1800 },
+    ['Volunteers.meetRadius'] = { 5, 200 },
+    ['Volunteers.cancelGraceSeconds'] = { 0, 600 },
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -1149,6 +1155,9 @@ local KNOWN = {
     ['Volunteers.missionModes'] = {
         tpl = MapOf(Enum({ 'npc', 'players_when_available', 'players_only' }), '^[%w_%-]+$'),
     },
+    -- V22: a volunteer who drops out, and how such a run ends
+    ['Volunteers.onVoid'] = { tpl = Enum({ 'npc', 'end' }), kind = 'enum' },
+    ['Volunteers.voidRun'] = { tpl = Enum({ 'cancelled', 'keep_earned' }), kind = 'enum' },
     -- V13: which team sets a live case's tier
     ['LiveCrime.tier'] = { tpl = Enum({ 'crew', 'officers' }), kind = 'enum' },
     -- V19: who the export GetAvailablePolice counts

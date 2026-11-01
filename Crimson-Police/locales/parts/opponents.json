@@ -206,5 +206,11 @@
   "rs.ui.tool.days_hint": "1 to 3650",
   "rs.ui.tool.reason": "Reason",
   "rs.ui.tool.need_reason": "Give a reason.",
-  "rs.ui.tool.no_lift": "A longer block, exclusion or suspension replaces a shorter one; none can be lifted early. Every one is in the audit log."
+  "rs.ui.tool.no_lift": "A longer block, exclusion or suspension replaces a shorter one; none can be lifted early. Every one is in the audit log.",
+  "opp.line.volunteer_yes": "Suspect {label} is a volunteer who said yes (asked: {count})",
+  "opp.line.in_position": "Suspect {label} reached the starting point",
+  "opp.line.engaged": "Officers reached suspect {label}: the case is engaged",
+  "opp.line.no_show": "Suspect {label} did not reach the starting point in time (no-show)",
+  "opp.line.volunteer_cancel": "Suspect {label} cancelled the case",
+  "opp.line.volunteer_npc": "Suspect {label} dropped out: the NPC plays the suspect"
 }

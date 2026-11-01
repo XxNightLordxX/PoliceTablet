@@ -3433,7 +3433,7 @@ pop-up instead of the NPC; 'players_only' is offered only while a volunteer who 
 'npc', so nothing changes even with `enabled = true`. Built in steps V4-V26
 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
 
-**The opt-in (V20, modules/volunteers).** Memory only; nothing is matched yet (V22). Server:
+**The opt-in (V20, modules/volunteers).** Memory only (matching: V22 below). Server:
 - `check(src) -> ok, reason, info, untilAt`: `enabled`, a loaded character, `CP.Opponents.eligible(src)` (no intake
   test: where he stands counts only at a match), an admin's Exclude (`Opp.excluded`), and the strikes block of his
   player key (the license, else `cid:<citizenid>`, so another character of the same player is blocked too).
@@ -3457,7 +3457,7 @@ pop-up instead of the NPC; 'players_only' is offered only while a volunteer who 
   left with roles and strikes, Renew, Change the suspects you play, Stop with a confirm). Notes are `lib.notify`.
   Specs: tests/volunteers_spec.lua, tests/volunteers_client_spec.lua.
 
-**Modes, slots and who is free (V21, modules/volunteers + CP.Draw).** Memory only; nobody is asked yet (V22).
+**Modes, slots and who is free (V21, modules/volunteers + CP.Draw).** Memory only; the asking is V22 below.
 - Config: `modes` (by mission type, shipped `'npc'` for each of the four) and `missionModes` (by mission id, beats its
   type; shipped `{}`), Settings `Volunteers.modes` / `Volunteers.missionModes` (open maps of the three modes; a
   `modes` key must be a Config.MissionTypes key, `err.setting_volunteer_type`).
@@ -3490,6 +3490,53 @@ pop-up instead of the NPC; 'players_only' is offered only while a volunteer who 
   off -> one ok line; on -> warn for a key that is no type or mission, a value that is no mode, and a non-npc mode
   none of whose missions has a slot (`no_slot`: plays the NPC; `no_slot_only`: never offered); the ok line counts the
   missions that may play a volunteer. Spec: tests/volunteer_modes_spec.lua.
+
+**Matching, consent, travel and engagement (V22, modules/volunteers/match/server.lua).** Memory only; runs only for a
+run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc'`), never for live, boss or test runs.
+- Start: the `run:created` hook, one frame later (`SetTimeout(0)`: FinishAccept moves a `'players_only'` hold to the
+  run id after the create) -> `V.match(run)`: the slot of the run's location (`V.slotOf`: role, `meet`, else the
+  location's start), `meetRadius`. One 1 s thread (exit token) runs only while a match is asking or has a volunteer.
+- Asking: the candidates are the run's held volunteer first, then `V.available({ [role] = true })` (oldest first),
+  each asked at most once, at most `askTries` (3) per run. A candidate must pass `V.check`, `CP.Opponents.eligible(src,
+  { intake = true })` (not down, cuffed, jailed or in a no-start zone) and `Opp.selfBlock(officer, { cid })` for every
+  active participant (none is his player). He is held for the run (`V.hold(runId, cid)`) and gets
+  `client:volunteerAsk` (token, `{ role, seconds = askSeconds, km (server coords to the meet point), travelMinutes }`):
+  an ox_lib alert (Yes, I play it / No) that closes itself after `seconds`; the server closes it with
+  `client:volunteerAskClose` (token) when it times out or the run ends. A no, no answer (the tick after
+  `askSeconds` + 2 s) or a listing that ended asks the next one; neither is ever a strike.
+- Answer checks (`server:volunteer` action `answer`, `{ token, yes }`, same rate limit): the token of his own open
+  question, from the server id that was asked, at most 2 s after the deadline (else `volunteer.ask.too_late`); a yes
+  runs every ask check again in a thread (selfBlock may read the database) and otherwise asks the next one
+  (`volunteer.ask.not_now`).
+- Yes: `Opp.open(run, { kind = 'volunteer', index = obj, members = { cid }, meet })`, `run.realSuspect =
+  'volunteer'` (from then on CP.Calls, CP.Alerts, CP.Downed and CP.Route treat the run as a case with a real suspect)
+  and `CP.Alerts.releaseRun(run)`; timeline `volunteer_yes` (count = how many were asked); the officers' toast
+  `volunteer.officer.yes`; `client:volunteerCase` `{ phase = 'travel', role, meet, seconds = travelSeconds, radius }`
+  (his own map waypoint, removed in position or at the end). His listing does not expire while he plays (the sweep).
+- Travel: within `meetRadius` of the meet point (server coords) -> `in_position` (timeline, `volunteer.case.
+  in_position`); not there after `travelSeconds` -> no-show. First contact (`rec.contactAt`, an active participant
+  within contactRange) in any phase -> `engaged`: `CP.NpcCombat.dropFor(run, src, 'volunteer')` for every active
+  participant and every later joiner (`participant:joined`), unless `Config.RealSuspects.npcCombat` is true; timeline
+  `engaged`.
+- Dropping out (`Voided`): a no-show, his own **Cancel this case** (action `cancel`, also run by Stop volunteering
+  while he plays one; the volunteer menu sends `case = { phase, role }` while he plays), or his suspect `left` / `void`
+  in the case. His suspect is set `void` (why `volunteer_<why>`), timeline `no_show` / `volunteer_cancel`, the note
+  `volunteer.case.<why>`. Strikes (`V.strike`): a no-show, a leave, and a cancel later than `cancelGraceSeconds` (60)
+  after his yes or after the engagement.
+- Endings: nobody said yes -> `'players_when_available'` plays the NPC (phase `npc`, toast `volunteer.officer.npc`),
+  `'players_only'` ends. A volunteer who dropped out before the engagement -> the NPC while `onVoid = 'npc'` (shipped)
+  and the mode is not `'players_only'` (timeline `volunteer_npc`), else the run ends; after the engagement it always
+  ends. The end (toast `volunteer.officer.void_end`): `voidRun = 'cancelled'` (shipped) `CP.Runs.cancelRun(run,
+  'cancelled')` (Abandoned, no cooldown, penalty or pay); `'keep_earned'` `CP.Runs.endRun(run, 'completed',
+  'completed')`. `run.realSuspect` stays once a yes came.
+- Release (`run:ended`): an open question closes; a volunteer who played gets `volunteer.case.released` and
+  `client:volunteerCase { phase = 'over' }`; the hold goes.
+- Blocks: `ctx.volunteer()` (CP.Runs' ctx, `V.matchView(run, index)`): nil unless the objective is the run's volunteer
+  slot, else `{ role, mode, phase = 'asking'|'travel'|'in_position'|'engaged'|'npc'|'void', meet, label, real,
+  engaged }`: never a citizenid, server id or live position. No built-in block reads it before V23.
+- Config.Volunteers keys of V22: `askSeconds` (30, 10-120), `askTries` (3, 1-10), `travelSeconds` (300, 60-1800),
+  `meetRadius` (25, 5-200 m), `cancelGraceSeconds` (60, 0-600), `onVoid` ('npc' | 'end'), `voidRun` ('cancelled' |
+  'keep_earned'). Specs: tests/volunteer_match_spec.lua, tests/volunteers_client_spec.lua.
 
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 

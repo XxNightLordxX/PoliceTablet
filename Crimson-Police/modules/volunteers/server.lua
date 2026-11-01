@@ -122,8 +122,8 @@ local function Sweep()
     for cid, v in pairs(listed) do
         if not On() then
             End(cid, 'disabled')
-        elseif now >= v.untilAt then
-            End(cid, 'expired')
+        elseif now >= v.untilAt and not (V.matchOf and V.matchOf(cid)) then
+            End(cid, 'expired')  -- never while he plays a suspect (V22): the window ends after the case
         elseif CP.Opponents and CP.Opponents.excluded and CP.Opponents.excluded(cid) then
             End(cid, 'excluded')
         elseif BlockedAt(v.who, now) then
@@ -265,6 +265,12 @@ function V.strike(cid, why)
 end
 
 function V.isListed(cid) return listed[cid] ~= nil end
+
+-- The citizenid of the listed volunteer at server id src, or nil (V22's answer and cancel).
+function V.cidBySrc(src)
+    local n = ToSrc(src)
+    return n and cidOf[n] or nil
+end
 
 -- Every volunteer on the list, as copies: { cid, src, name, roles = { role, ... }, since, untilAt }.
 function V.list()
@@ -436,6 +442,13 @@ function V.reserve(holder, def, index)
     return nil
 end
 
+-- Holds this volunteer for holder (V22: the run that asks him), so nobody else asks or counts on him meanwhile.
+function V.hold(holder, cid)
+    if holder == nil or not listed[cid] then return false end
+    reserved[holder] = cid
+    return true
+end
+
 -- The hold moves from a pending accept's token to its run id.
 function V.rekey(old, new)
     if old == nil or new == nil or reserved[old] == nil then return false end
@@ -528,12 +541,15 @@ local function MenuOf(src, info)
     local v = cid and listed[cid]
     local strikes = V.strikes(cid or info.citizenid)
     if v then
+        local m = V.matchOf and V.matchOf(cid) or nil
         return {
             active = true,
             minutesLeft = math.max(1, math.ceil((v.untilAt - os.time()) / 60)),
             roles = RoleList(v.roles),
             strikes = strikes,
             maxStrikes = MaxStrikes(),
+            -- V22: the suspect he plays now (Cancel this case), never the run or where it is
+            case = m and m.phase ~= 'asking' and { phase = m.phase, role = m.role } or nil,
         }
     end
     return {
@@ -560,6 +576,7 @@ local REFUSAL = {
     already = true,
     no_role = true,
     not_listed = true,
+    no_case = true,
 }
 
 local function Refused(src, why, untilAt)
@@ -595,6 +612,9 @@ local ACTIONS = {
         Note(src, 'success', 'volunteer.roles_saved')
     end,
     stop = function(src)
+        if V.cancelCase then
+            V.cancelCase(src)
+        end -- stopping while he plays a suspect cancels that case first (V22)
         local ok, res = V.stop(src)
         if not ok then return Refused(src, res) end
     end,
@@ -604,7 +624,7 @@ RegisterNetEvent(CP.e('server:volunteer'), function(action, data)
     local src = ToSrc(source)
     if not src then return end
     if CP.Net and CP.Net.rateOk and not CP.Net.rateOk(src, 'volunteer', 4, 2000) then return end
-    local fn = type(action) == 'string' and ACTIONS[action] or nil
+    local fn = type(action) == 'string' and (ACTIONS[action] or (V.matchActions or {})[action]) or nil
     if not fn then return end
     local ok, err = pcall(fn, src, data)
     if not ok then CP.err(TAG, ('volunteer action %s failed: %s'):format(action, tostring(err))) end

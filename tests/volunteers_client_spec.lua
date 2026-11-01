@@ -17,8 +17,13 @@ end
 lib.registerContext = function(ctx) shown.contexts[#shown.contexts + 1] = ctx end
 lib.showContext = function() end
 lib.notify = function(n) shown.notes[#shown.notes + 1] = n end
-lib.closeAlertDialog = function() end
+local closed = { alert = 0 }
+lib.closeAlertDialog = function() closed.alert = closed.alert + 1 end
 lib.closeInputDialog = function() end
+lib.hideContext = function() end
+local waypoints = {}
+_G.SetNewWaypoint = function(x, y) waypoints[#waypoints + 1] = { x = x, y = y } end
+_G.SetWaypointOff = function() waypoints[#waypoints + 1] = 'off' end
 
 H.load('modules/volunteers/client.lua')
 H.step(0)
@@ -84,6 +89,68 @@ do
     answers.alert = { 'confirm' }
     ctx.options[4].onSelect()
     H.eq(#Sent('stop'), 1, 'stop after the confirm')
+end
+
+do
+    -- V22: while he plays a suspect the menu offers Cancel this case (second, with a confirm)
+    Menu({
+        active = true,
+        minutesLeft = 30,
+        roles = { 'runner' },
+        strikes = 0,
+        maxStrikes = 3,
+        case = { phase = 'travel', role = 'runner' },
+    })
+    local ctx = shown.contexts[#shown.contexts]
+    H.eq(#ctx.options, 5, 'status, cancel this case, renew, roles and stop')
+    H.eq(ctx.options[2].title, 'Cancel this case', 'Cancel this case comes second')
+    answers.alert = { 'cancel' }
+    ctx.options[2].onSelect()
+    H.eq(#Sent('cancel'), 0, 'not without the confirm')
+    answers.alert = { 'confirm' }
+    ctx.options[2].onSelect()
+    H.eq(#Sent('cancel'), 1, 'cancel sent after the confirm')
+end
+
+do
+    -- V22: the yes/no question; only a click answers, with the server's token
+    answers.alert = { 'confirm' }
+    H.fire(CP.e('client:volunteerAsk'), nil, 'va1_000001',
+        { role = 'runner', seconds = 30, km = 1.5, travelMinutes = 5 })
+    H.step(0)
+    local alert = shown.alerts[#shown.alerts]
+    H.eq(alert.header, 'Play a suspect now?', 'the question')
+    H.ok(alert.content:find('1.5 km', 1, true) ~= nil, 'it says how far')
+    H.ok(alert.content:find('Saying no costs nothing', 1, true) ~= nil, 'and that no costs nothing')
+    local a = Sent('answer')[1]
+    H.eq(a and a.args[2].token, 'va1_000001', 'the answer carries the token')
+    H.eq(a and a.args[2].yes, true, 'yes')
+    answers.alert = { 'cancel' }
+    H.fire(CP.e('client:volunteerAsk'), nil, 'va2_000002', { role = 'runner', seconds = 30, travelMinutes = 5 })
+    H.step(0)
+    a = Sent('answer')[2]
+    H.eq(a and a.args[2].yes, false, 'no')
+
+    -- no click in time: the pop-up closes itself and nothing is sent
+    local real = lib.alertDialog
+    lib.alertDialog = function()
+        Wait(31000)
+        return nil
+    end
+    H.fire(CP.e('client:volunteerAsk'), nil, 'va3_000003', { role = 'runner', seconds = 30, travelMinutes = 5 })
+    H.advance(32000, 1000)
+    H.eq(closed.alert > 0, true, 'the pop-up closes after its seconds')
+    H.eq(#Sent('answer'), 2, 'no answer is sent')
+    lib.alertDialog = real
+
+    -- his case: the meet point becomes his waypoint, removed in position
+    H.fire(CP.e('client:volunteerCase'), nil,
+        { phase = 'travel', meet = { x = 10.0, y = 20.0, z = 30.0 }, seconds = 300 })
+    H.eq(waypoints[1] and waypoints[1].x, 10.0, 'the meet point is his map waypoint')
+    H.fire(CP.e('client:volunteerCase'), nil, { phase = 'in_position' })
+    H.eq(waypoints[2], 'off', 'removed once in position')
+    H.fire(CP.e('client:volunteerCase'), nil, { phase = 'over' })
+    H.eq(#waypoints, 2, 'never twice')
 end
 
 do

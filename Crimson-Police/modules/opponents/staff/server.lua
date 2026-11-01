@@ -55,6 +55,13 @@ local LINE_KEYS = {
     booking_too_short = true,
     booked_outside_station = true,
     pair_repeat = true,
+    -- a volunteer suspect (V22)
+    volunteer_yes = true,
+    in_position = true,
+    engaged = true,
+    no_show = true,
+    volunteer_cancel = true,
+    volunteer_npc = true,
 }
 
 local STATE_KEY = {
