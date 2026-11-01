@@ -269,7 +269,7 @@ Officer UI — eight screens on a left sidebar, with the officer's current run p
 | Screen | Contents | Key actions |
 |---|---|---|
 | Home | Officer card (avatar, callsign, rank, department tag, level badge, streak and grace day, season points, cash earned this week), today's goal and this week's goal, Type of the Day, mission calls open, "Missions today n/max" when a daily cap is set, new commendations, the Rewards locker when item rewards are on | Open the Mission Board or Dispatch, claim a locker item |
-| Mission Board | One card per mission type (Patrol, Training, Investigation, Tactical): cash per officer, points, how many missions are in the pool, solo or unit, cooldown if locked, "Server busy" when the run cap is reached, "On a call" while the officer is responding to a real call. A Weekly Boss card appears Friday–Sunday. While a Cross-Department Mission is active, the board shows only that mission's card. Also "n mission calls open" (a link to Dispatch) and "Daily limit reached" locks | Accept a type (the accept step lists the type's twists with their bonus and the total of the ones picked, e.g. "+45% points, x1.50 cash"), join a Cross-Department Mission |
+| Mission Board | One card per mission type (Patrol, Training, Investigation, Tactical): cash per officer, points, how many missions are in the pool, solo or unit, cooldown if locked, "Server busy" when the run cap is reached, "On a call" while the officer is responding to a real call. A Weekly Boss card appears Friday–Sunday. While a Cross-Department Mission is active, the board shows only that mission's card. Also "n mission calls open" (a link to Dispatch) and "Daily limit reached" locks | Accept a type (the accept step lists the type's twists with their bonus and the total of the ones picked, e.g. "+45% points, x1.50 cash"; for a type with a mission a volunteer suspect may play, Config.Volunteers, a "Real suspect" badge and a "Real suspect OK" tick the leader must give himself), join a Cross-Department Mission |
 | Dispatch | Open mission calls (code, radio-style title, type, priority, area, distance, offer countdown, crew, pay, status), the last 5 calls with who took them and how they ended, the read-only SC-Dispatch real-call strip, notices (on a run, on a call, Cross-Department Mission active) | Claim a call (leader or solo), filter, mute call alerts |
 | Unit | Members with avatar, level, rank and callsign; invites waiting for you; the ready check | Invite, withdraw an invite, accept or decline, leave; leader: kick, make leader, disband (before a type is accepted); answer the ready check |
 | Active Mission | Name of the drawn mission, tier (expected until the run moves to In progress), start-route status (on route, or the off-route countdown; "Joining your partners" for one still driving when the run started, see Late partners), objective checklist, timer, partners, expected cash and points; the Contact panel while a mission has contacts (see Police actions & decisions), a raid's intel line, and a claimed call's response target | Set GPS, recalculate the route (up to 2 times per run), Objective GPS (In progress, once the officer is at the action: a map waypoint on the objective, Config.Markers.objectiveGps), abandon (confirm dialog) |
@@ -2654,7 +2654,7 @@ Feature folders
 | modules/admin/ | server | Supervisor and admin actions, /CrimsonPoliceAdmin, audit log, webhooks |
 | modules/anticheat/ | server | Objective validation, presence and idle checks, flagged runs |
 | modules/opponents/ | server | Real-player suspects of live crimes and volunteer cases (off by default): cases keyed by citizenid, the watch, leaving and instances, staff notes; proof/: the cuff pair and custody hold, release, rescue, cuff-break and self-uncuff, downs, bookings and the hospital rules; conduct/: the armed definition, the damage ledger, excessive force, the unarmed-shot and ran-over penalties, the cash-seizure audit |
-| modules/volunteers/ | server, client | Volunteer suspects (off by default): the volunteer command, its ox_lib consent, roles and menu, the window, ends and strikes |
+| modules/volunteers/ | server, client | Volunteer suspects (off by default): the volunteer command, its ox_lib consent, roles and menu, the window, ends and strikes; the modes per mission type and mission, the volunteer slots, who is free and the hold for a 'players_only' run, the start-up check |
 | modules/integrations/qbx/ | server, client | Every qbx_core call |
 | modules/integrations/sc_dispatch/ | server | Responding listener, mdt_dispatch lookup, shots-fired and person-down listeners, ClearNotification, suspension check |
 | modules/integrations/sc_ambulance/ | server, client | EMS on duty, the revive event, the EMS request, and the listen-only hospital-respawn fact for real suspects (CP.Ambulance.on) |
@@ -3903,6 +3903,20 @@ Config.Volunteers = {
     strikes = 3,
     strikeHours = 24,                -- hours a strike counts towards the block
     blockHours = 24,                 -- hours a player who reached the strikes can't volunteer
+    -- Who plays the suspect of a mission a volunteer can play, per mission type: 'npc' = always the NPC (as today);
+    -- 'players_when_available' = when the unit ticks "Real suspect OK" on the Mission Board and a volunteer who
+    -- fits is online, he is asked to play the suspect, else the NPC plays him; 'players_only' = the type's missions
+    -- are offered only while a volunteer who fits is free, to a unit that ticks "Real suspect OK", and its draw
+    -- takes only missions a volunteer can play. A mission named in missionModes below follows its own mode instead
+    modes = {
+        patrol = 'npc',
+        training = 'npc',
+        investigation = 'npc',
+        tactical = 'npc',
+    },
+    -- The same choice for single missions, by mission id (beats its type's mode), e.g. { warrant_service =
+    -- 'players_only' }. Empty = every mission follows its type
+    missionModes = {},
 }
 
 -- ============================================================================

@@ -174,5 +174,11 @@
   "board.card.featured": "Recommended by command",
   "board.card.featured_hint": "Your department's command recommends this mission type. Points are the same.",
   "board.notice.ban_title": "Mission ban until {time} (by {by})",
-  "board.notice.ban_member_title": "{name} has a mission ban until {time} (by {by})"
+  "board.notice.ban_member_title": "{name} has a mission ban until {time} (by {by})",
+  "board.real_suspect.title": "Real suspect OK",
+  "board.real_suspect.hint": "A player who volunteered may play the suspect instead of an NPC. He is a real player: treat him like any suspect on the street.",
+  "board.real_suspect.required": "These missions are played only against a volunteer suspect: tick Real suspect OK to accept.",
+  "board.real_suspect.available": "Volunteer suspects free now: {n}",
+  "board.card.real_suspect": "Real suspect",
+  "board.card.real_suspect_hint": "A player who volunteered may play this type's suspect (Real suspect OK on accept)."
 }

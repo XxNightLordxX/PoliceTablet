@@ -14,6 +14,8 @@ local whoOf = {}        -- [citizenid] = the player key strikes are kept under (
 local strikesOf = {}    -- [who] = { os.time(), ... } strikes within strikeHours
 local blockedUntil = {} -- [who] = os.time() the strikes block ends
 local sweep = { on = false, token = 0 }
+local reserved = {} -- [holder: a run id or a pending accept's token] = citizenid of the volunteer it counts on (V21)
+local slotCache = setmetatable({}, { __mode = 'k' }) -- [mission definition] = { [location index] = slot | false }
 
 -- ============================================================================
 --                                   HELPERS
@@ -106,6 +108,9 @@ local function End(cid, why)
     if not v then return false end
     listed[cid] = nil
     if v.src and cidOf[v.src] == cid then cidOf[v.src] = nil end
+    for holder, held in pairs(reserved) do
+        if held == cid then reserved[holder] = nil end
+    end
     if CP.Opponents and CP.Opponents.unsampleCrew then pcall(CP.Opponents.unsampleCrew, AFK_KEY, { cid }) end
     if why ~= 'left' then Note(v.src, why == 'stopped' and 'inform' or 'warning', 'volunteer.ended.' .. why) end
     CP.log(TAG, '%s stopped volunteering (%s)', cid, why)
@@ -288,6 +293,232 @@ V.endListing = End
 V._sweep = Sweep
 
 -- ============================================================================
+--                   MODES, SLOTS AND AVAILABILITY (step V21)
+-- ============================================================================
+-- Who plays a mission's suspect a volunteer can play: Config.Volunteers.missionModes (by mission id), else modes (by
+-- mission type), else 'npc'. A mission can take a volunteer when one of its objectives' blocks offers a slot
+-- (volunteerSlot, §7.3) at that location. Matching and the pop-up are V22; here CP.Draw only asks who is free.
+
+local MODES = { npc = true, players_when_available = true, players_only = true }
+V.modes = { 'npc', 'players_when_available', 'players_only' }
+
+local function ModeValue(v) return type(v) == 'string' and MODES[v] and v or nil end
+
+-- The mode of a mission definition: 'npc' while enabled is off and for the Weekly Boss; a value that is no mode
+-- counts as 'npc' (the start-up check names it).
+function V.modeOf(def)
+    if not On() or type(def) ~= 'table' or def.isBoss then return 'npc' end
+    local c = Cfg()
+    local byMission = type(c.missionModes) == 'table' and c.missionModes or {}
+    if byMission[def.id] ~= nil then return ModeValue(byMission[def.id]) or 'npc' end
+    local byType = type(c.modes) == 'table' and c.modes or {}
+    return ModeValue(byType[def.type]) or 'npc'
+end
+
+local function RoleOk(role)
+    for _, r in ipairs(ROLES) do
+        if r == role then return true end
+    end
+    return false
+end
+
+-- The slot of location #index: the first objective whose block's volunteerSlot(obj, mission, location) answers a
+-- table with a role a volunteer can pick -> a copy with obj = the objective's number, or nil. Cached per definition.
+local function SlotAt(def, index)
+    local locs = type(def) == 'table' and type(def.locations) == 'table' and def.locations or {}
+    local location = locs[index]
+    if type(location) ~= 'table' or type(def.objectives) ~= 'table' then return nil end
+    local byIndex = slotCache[def]
+    if not byIndex then
+        byIndex = {}
+        slotCache[def] = byIndex
+    end
+    if byIndex[index] ~= nil then return byIndex[index] or nil end
+    local found = false
+    for i, obj in ipairs(def.objectives) do
+        local impl = type(obj) == 'table' and CP.Blocks and CP.Blocks.get and CP.Blocks.get(obj.block) or nil
+        if impl and type(impl.volunteerSlot) == 'function' then
+            local ok, slot = pcall(impl.volunteerSlot, obj, def, location)
+            if not ok then
+                CP.err(TAG, '%s volunteerSlot failed for %s: %s', tostring(obj.block), tostring(def.id), tostring(slot))
+            elseif type(slot) == 'table' and RoleOk(slot.role) then
+                found = CP.U.copy(slot)
+                found.obj = i
+                break
+            end
+        end
+    end
+    byIndex[index] = found
+    return found or nil
+end
+
+-- The slot of location #index (a copy), or nil when nobody but the NPC can play that location's suspect.
+function V.slotOf(def, index)
+    local slot = SlotAt(def, math.tointeger(tonumber(index) or 0) or 0)
+    return slot and CP.U.copy(slot) or nil
+end
+
+-- The roles the mission's locations offer -> { [role] = true }, and the set of location indices with no slot.
+function V.slotRoles(def)
+    local roles, none = {}, {}
+    local locs = type(def) == 'table' and type(def.locations) == 'table' and def.locations or {}
+    for i = 1, #locs do
+        local slot = SlotAt(def, i)
+        if slot then roles[slot.role] = true else none[i] = true end
+    end
+    return roles, none
+end
+
+-- Whether any location of the mission has a slot.
+function V.canTake(def) return next((V.slotRoles(def))) ~= nil end
+
+-- Volunteers on the list who play one of roles (a set; nil = any) and are not held by an accept, oldest first ->
+-- { citizenid, ... }. Empty while enabled is off.
+function V.available(roles)
+    local out = {}
+    if not On() then return out end
+    local held = {}
+    for _, cid in pairs(reserved) do held[cid] = true end
+    for _, v in ipairs(V.list()) do
+        local fits = roles == nil
+        for _, role in ipairs(v.roles) do
+            if roles and roles[role] then fits = true end
+        end
+        if fits and not held[v.cid] then out[#out + 1] = v.cid end
+    end
+    return out
+end
+
+-- The draw's gate for one mission: true, or false and why ('real_suspect': a 'players_only' mission for a unit that
+-- did not tick "Real suspect OK"; 'no_slot': nobody but the NPC can play it; 'no_volunteer': nobody who fits is free).
+-- realOk: the unit ticked "Real suspect OK". Only 'players_only' ever closes a mission.
+function V.drawGate(def, realOk)
+    if V.modeOf(def) ~= 'players_only' then return true end
+    if realOk ~= true then return false, 'real_suspect' end
+    local roles = V.slotRoles(def)
+    if next(roles) == nil then return false, 'no_slot' end
+    if #V.available(roles) == 0 then return false, 'no_volunteer' end
+    return true
+end
+
+-- What a Mission Board card says about real suspects, from the card's pool (drawn with "Real suspect OK" ticked):
+-- nil when no mission of it plays a volunteer, else { required = every mission needs the tick, available = how
+-- many volunteers who fit are free }.
+function V.cardInfo(list)
+    local roles, any, required = {}, false, true
+    for _, def in ipairs(type(list) == 'table' and list or {}) do
+        local mode = V.modeOf(def)
+        local own = V.slotRoles(def)
+        if mode ~= 'npc' and next(own) ~= nil then
+            any = true
+            for r in pairs(own) do roles[r] = true end
+        end
+        if mode ~= 'players_only' then required = false end
+    end
+    if not any then return nil end
+    return { required = required, available = #V.available(roles) }
+end
+
+-- Holds a volunteer who fits location #index's slot for holder (a 'players_only' accept), so another unit cannot
+-- count on him too -> citizenid | nil. He must still pass check (on duty, AFK, in a case ...).
+function V.reserve(holder, def, index)
+    if holder == nil or not On() then return nil end
+    local slot = SlotAt(def, math.tointeger(tonumber(index) or 0) or 0)
+    if not slot then return nil end
+    for _, cid in ipairs(V.available({ [slot.role] = true })) do
+        local v = listed[cid]
+        if v and V.check(v.src) then
+            reserved[holder] = cid
+            CP.log(TAG, '%s held for %s (%s)', cid, tostring(holder), slot.role)
+            return cid
+        end
+    end
+    return nil
+end
+
+-- The hold moves from a pending accept's token to its run id.
+function V.rekey(old, new)
+    if old == nil or new == nil or reserved[old] == nil then return false end
+    reserved[new], reserved[old] = reserved[old], nil
+    return true
+end
+
+function V.release(holder)
+    if holder == nil or reserved[holder] == nil then return false end
+    reserved[holder] = nil
+    return true
+end
+
+-- The citizenid held for holder (a run id), or nil.
+function V.reservedFor(holder) return holder ~= nil and reserved[holder] or nil end
+
+-- A run that ends lets its volunteer go.
+CP.Hooks.on('run:ended', function(run)
+    if type(run) == 'table' then V.release(run.id) end
+end)
+
+-- The start-up check (Admin UI -> Permissions -> Config health, and the console once): modes that name no mission
+-- type or mission, values that are no mode, and a mode other than 'npc' on missions none of whose blocks offers a
+-- slot (they keep playing the NPC; a 'players_only' one is never offered).
+local function ModesHealth()
+    local out = {}
+    local function Line(level, key, vars, fix)
+        out[#out + 1] = { level = level, text = CP.L(key, vars), fix = fix }
+    end
+    if not On() then
+        Line('ok', 'health.volunteers.off')
+        return out
+    end
+    local c = Cfg()
+    local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
+    local all = CP.Missions and CP.Missions.list and CP.Missions.list() or {}
+    local function Check(map, fix, known, missionsOf)
+        local keys = {}
+        for k in pairs(type(map) == 'table' and map or {}) do keys[#keys + 1] = tostring(k) end
+        table.sort(keys)
+        for _, k in ipairs(keys) do
+            local mode = map[k]
+            if not known(k) then
+                Line('warn', 'health.volunteers.unknown', { key = k }, fix)
+            elseif not ModeValue(mode) then
+                Line('warn', 'health.volunteers.bad_mode', { key = k, mode = tostring(mode) }, fix)
+            elseif mode ~= 'npc' then
+                local any = false
+                for _, def in ipairs(missionsOf(k)) do
+                    if V.modeOf(def) == mode and V.canTake(def) then any = true end
+                end
+                if not any then
+                    local which = mode == 'players_only' and 'health.volunteers.no_slot_only'
+                        or 'health.volunteers.no_slot'
+                    Line('warn', which, { key = k }, fix)
+                end
+            end
+        end
+    end
+    Check(c.modes, 'Volunteers.modes', function(k) return type(types[k]) == 'table' end, function(k)
+        local list = {}
+        for _, def in ipairs(all) do
+            if type(def) == 'table' and def.type == k and not def.isBoss then list[#list + 1] = def end
+        end
+        return list
+    end)
+    Check(c.missionModes, 'Volunteers.missionModes', function(k)
+        return CP.Missions and CP.Missions.get and CP.Missions.get(k) ~= nil
+    end, function(k) return { CP.Missions.get(k) } end)
+    local n = 0
+    for _, def in ipairs(all) do
+        if type(def) == 'table' and V.modeOf(def) ~= 'npc' and V.canTake(def) then n = n + 1 end
+    end
+    table.insert(out, 1, { level = 'ok', text = CP.L('health.volunteers.ok', { n = n }) })
+    return out
+end
+V._modesHealth = ModesHealth
+
+CreateThread(function()
+    if CP.ConfigHealth and CP.ConfigHealth.register then CP.ConfigHealth.register('volunteers', ModesHealth) end
+end)
+
+-- ============================================================================
 --                             THE COMMAND'S EVENT
 -- ============================================================================
 
@@ -398,7 +629,7 @@ end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
-    listed, cidOf = {}, {}
+    listed, cidOf, reserved = {}, {}, {}
     sweep.token = sweep.token + 1
     sweep.on = false
 end)

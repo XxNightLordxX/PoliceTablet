@@ -21,6 +21,9 @@ export type TypeCard = BoardCard & {
     featured?: boolean;
     // step P10: switched off for a department of the unit by command (the types Mission control); locked says so
     offByCommand?: boolean;
+    // step V21: a mission of the pool may be played against a volunteer suspect (Config.Volunteers modes): the
+    // accept dialog offers "Real suspect OK"; required = every mission needs it; available = volunteers free now
+    realSuspect?: { required?: boolean; available?: number } | null;
 };
 
 // The Weekly Boss event card (BoardCard + available). Accepted with the key 'weekly_boss'.
@@ -54,7 +57,8 @@ export interface MissionBoardData extends Omit<BoardData, 'operation'> {
     missionBan?: { until: number; by: string; reason?: string | null; name?: string | null } | null;
 }
 
-// Reply of server:acceptType (payload: the type key, or { missionType, twists }).
+// Reply of server:acceptType (payload: the type key, or { missionType, twists, realSuspect }; realSuspect = true when
+// the leader ticked "Real suspect OK", step V21).
 export interface AcceptTypeResult {
     runId: string;
     // the twists the run got (the chosen ones that fit the drawn mission)

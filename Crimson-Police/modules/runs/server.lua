@@ -3494,6 +3494,12 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         run.live = live
         run.realSuspect = 'live'
     end
+    -- V21: a mission whose suspect a volunteer may play (CP.Draw, Config.Volunteers modes, "Real suspect OK"):
+    -- { mode, role, obj } only; who plays him is CP.Volunteers' (memory, never on the run). V22 matches on it.
+    local vol = type(opts.volunteer) == 'table' and opts.volunteer or nil
+    if vol and not live and not test and type(vol.mode) == 'string' and type(vol.role) == 'string' then
+        run.volunteer = { mode = vol.mode, role = vol.role, obj = math.tointeger(tonumber(vol.obj)) }
+    end
     -- Hard rule 17's switch, locked at accept: whether leaving the start route ends the run. CP.Route.requiredFor
     -- decides (a test run follows its own Start route switch, test.useStartRoute: on = with the route rules; a live
     -- crime Config.LiveCrime.requireRoute; every other run Config.Route.required); V14 sets run.live above this line.

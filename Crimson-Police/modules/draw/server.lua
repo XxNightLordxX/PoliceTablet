@@ -545,13 +545,41 @@ local function HasLocationIn(def, area)
     return false
 end
 
--- opts.area: only missions with a location in that area (a mission call that named its area).
+-- The volunteer gate of one mission (CP.Volunteers.drawGate, step V21): true, or false and why. Only a mission in
+-- mode 'players_only' is ever closed (no "Real suspect OK", no slot, nobody who fits is free).
+local function VolunteerGate(def, realOk)
+    local V = CP.Volunteers
+    if not (V and V.drawGate) then return true end
+    local ok, open, why = Safe(V.drawGate, def, realOk)
+    if not ok then return true end
+    return open ~= false, why
+end
+
+local function VolunteerMode(def)
+    local V = CP.Volunteers
+    if not (V and V.modeOf) then return 'npc' end
+    local ok, mode = Safe(V.modeOf, def)
+    return ok and type(mode) == 'string' and mode or 'npc'
+end
+
+-- CP.Volunteers.cardInfo of a card's pool, or nil.
+local function VolunteerCard(list)
+    local V = CP.Volunteers
+    if not (V and V.cardInfo) then return nil end
+    local ok, info = Safe(V.cardInfo, list)
+    return ok and type(info) == 'table' and info or nil
+end
+
+-- opts.area: only missions with a location in that area (a mission call that named its area). opts.realSuspect: the
+-- unit ticked "Real suspect OK" (V21): without it a 'players_only' mission (Config.Volunteers) is left out, with it
+-- one is left out only while no volunteer who fits is free.
 function Draw.pool(missionType, members, opts)
     local area = type(opts) == 'table' and opts.area or nil
+    local realOk = type(opts) == 'table' and opts.realSuspect == true
     local officers = ToOfficers(members)
     local size = math.max(#(members or {}), #officers)
     if size < 1 then size = 1 end
-    local list, cooldownUntil = {}, nil
+    local list, cooldownUntil, volunteerWhy = {}, nil, nil
     local byType = (CP.Missions and CP.Missions.byType and CP.Missions.byType(missionType)) or {}
     local now = os.time()
     local off = OffOf(officers)
@@ -559,6 +587,14 @@ function Draw.pool(missionType, members, opts)
         local ok, why, untilTs = Eligibility(def, officers, size, now, off)
         if ok and area and not HasLocationIn(def, area) then
             ok, why = false, 'area'
+        end
+        if ok then
+            local open, vWhy = VolunteerGate(def, realOk)
+            if not open then
+                ok, why = false, 'volunteer'
+                -- the most useful reason: a free volunteer missing beats the missing tick
+                if volunteerWhy ~= 'no_volunteer' then volunteerWhy = vWhy end
+            end
         end
         if ok then
             list[#list + 1] = def
@@ -570,6 +606,8 @@ function Draw.pool(missionType, members, opts)
         local reason
         if cooldownUntil then
             reason = 'board.locked_mission_cooldown'
+        elseif volunteerWhy then
+            reason = volunteerWhy == 'real_suspect' and 'board.locked_real_suspect' or 'board.locked_no_volunteer'
         else
             reason = size > 1 and 'board.locked_empty' or 'board.locked_empty_solo'
         end
@@ -1081,9 +1119,14 @@ end
 function Draw.draw(missionType, members, opts)
     opts = opts or {}
     local officers = ToOfficers(members)
-    local list, reason = Draw.pool(missionType, members, { area = opts.area })
+    local list, reason = Draw.pool(missionType, members, { area = opts.area, realSuspect = opts.realSuspect })
     if #list == 0 then
-        return nil, reason == 'board.locked_mission_cooldown' and 'err.pool_cooldown' or 'err.pool_empty'
+        local errs = {
+            ['board.locked_mission_cooldown'] = 'err.pool_cooldown',
+            ['board.locked_real_suspect'] = 'err.real_suspect_needed',
+            ['board.locked_no_volunteer'] = 'err.volunteer_none',
+        }
+        return nil, errs[reason] or 'err.pool_empty'
     end
 
     local candidates = list
@@ -1102,8 +1145,16 @@ function Draw.draw(missionType, members, opts)
     for _, def in ipairs(r:shuffle(candidates)) do
         local avoid = LastLocations(cids, def.id, lastN)
         for i in pairs(type(opts.avoid) == 'table' and opts.avoid or {}) do avoid[i] = true end
+        local exclude = opts.exclude
+        if VolunteerMode(def) == 'players_only' then
+            -- only a location whose suspect a volunteer can play (V21)
+            local _, none = CP.Volunteers.slotRoles(def)
+            exclude = {}
+            for i in pairs(type(opts.exclude) == 'table' and opts.exclude or {}) do exclude[i] = true end
+            for i in pairs(none) do exclude[i] = true end
+        end
         local index = Draw.pickLocation(def, participants, r, {
-            exclude = opts.exclude,
+            exclude = exclude,
             area = opts.area,
             avoid = avoid,
             nearCoords = opts.nearCoords,
@@ -1134,6 +1185,8 @@ function Draw.checkMission(missionId, typeKey, members, area)
         return nil, why == 'disabled' and 'err.unknown_mission' or 'err.mc_push_not_eligible'
     end
     if area and not HasLocationIn(def, area) then return nil, 'err.mc_push_area' end
+    -- a pushed mission has no "Real suspect OK" step: one that plays only against a volunteer is never pushed (V21)
+    if VolunteerMode(def) == 'players_only' then return nil, 'err.mc_push_volunteer' end
     return def
 end
 
@@ -1316,7 +1369,8 @@ function Draw.boardCards(src)
 
     for _, key in ipairs(TypeKeysByPoints()) do
         local label = TypeLabel(key)
-        local list, reasonKey, info = Draw.pool(key, missing and srcs or officers)
+        -- the card's pool as with "Real suspect OK" ticked: a 'players_only' mission counts while a volunteer is free
+        local list, reasonKey, info = Draw.pool(key, missing and srcs or officers, { realSuspect = true })
         local card = {
             key = key,
             label = label,
@@ -1332,6 +1386,8 @@ function Draw.boardCards(src)
             twists = Draw.twistOffer(key, list, leaderDept),
             -- the type command recommends to the viewer's department (featuredType, step P10)
             featured = featured == key or nil,
+            -- V21: { required, available } when a mission of the pool may play a volunteer (the accept's tick)
+            realSuspect = VolunteerCard(list),
         }
         local cdUntil, cdWho = TypeCooldown(officers, key, now)
         local offWho = OffBy(officers, off, key)
@@ -1530,10 +1586,10 @@ end
 -- The twists sent with an accept of typeKey by these officers, checked (CP.Events.checkTwists against the type's
 -- pool for them and, with dept, the leader's department's twists Mission control, step P15): a clean list, or nil
 -- and the error key. No twists: {} (and no pool lookup).
-function Draw.checkTwists(typeKey, officers, raw, dept)
+function Draw.checkTwists(typeKey, officers, raw, dept, realOk)
     if raw == nil or (type(raw) == 'table' and next(raw) == nil) then return {} end
     if not (CP.Events and CP.Events.checkTwists) then return nil, 'err.twist_unavailable' end
-    local list = typeKey == BOSS_KEY and {} or Draw.pool(typeKey, officers)
+    local list = typeKey == BOSS_KEY and {} or Draw.pool(typeKey, officers, { realSuspect = realOk == true })
     local ok, clean, errKey = Safe(CP.Events.checkTwists, raw, typeKey, list, dept)
     if not ok then return nil, 'err.internal' end
     return clean, errKey
@@ -1605,7 +1661,7 @@ local function FinishAccept(src, typeKey, ctx, opts)
         else
             local second
             def, second = Draw.draw(ctx.missionType, officers,
-                { participants = srcs, area = opts.area, nearCoords = near })
+                { participants = srcs, area = opts.area, nearCoords = near, realSuspect = opts.realSuspect == true })
             if not def then return fail(second or 'err.pool_empty') end
             index = second
         end
@@ -1627,6 +1683,17 @@ local function FinishAccept(src, typeKey, ctx, opts)
     end
     -- Provisional reservation so a concurrent accept can't take the spot before CP.Runs reserves it.
     local token = ('%s%d:%d'):format(PENDING_PREFIX, src, GetGameTimer())
+    -- V21: the volunteer side of the run. 'players_only' holds a volunteer who fits (no draw without one);
+    -- 'players_when_available' with "Real suspect OK" only marks the slot (V22 asks a volunteer, else the NPC)
+    local volunteer, V = nil, CP.Volunteers
+    local mode = (ctx.live or ctx.isBoss) and 'npc' or VolunteerMode(def)
+    if mode ~= 'npc' and opts.realSuspect == true and V and V.slotOf then
+        local slot = V.slotOf(def, index)
+        if slot then volunteer = { mode = mode, role = slot.role, obj = slot.obj } end
+    end
+    if mode == 'players_only' then
+        if not (volunteer and V.reserve(token, def, index)) then return fail('err.volunteer_none') end
+    end
     Reserve(token, def.id, index, LocationStart(def, index))
     local okCall, run, createErr = pcall(CP.Runs.create, {
         mission = def,
@@ -1642,13 +1709,19 @@ local function FinishAccept(src, typeKey, ctx, opts)
         noteRefusal = false,              -- Accept keeps the refusal, with the type the leader picked
         live = ctx.liveData,
         npcCombat = ctx.liveData == nil,  -- false for a live case: no NPC-combat protection (§5.42)
+        volunteer = volunteer,
     })
     Draw.release(token)
     if not okCall then
         CP.err(TAG, 'CP.Runs.create failed: %s', tostring(run))
+        if V and V.release then V.release(token) end
         return fail('err.run_create_failed')
     end
-    if type(run) ~= 'table' then return fail(createErr or 'err.run_create_failed') end
+    if type(run) ~= 'table' then
+        if V and V.release then V.release(token) end
+        return fail(createErr or 'err.run_create_failed')
+    end
+    if V and V.rekey then V.rekey(token, run.id) end
     if run.id and not byHolder[run.id] then Draw.reserve(run.id, def.id, index) end
     if not ctx.live then
         for _, o in ipairs(officers) do Draw.recordLocation(o.citizenid, def.id, index) end
@@ -1687,7 +1760,7 @@ local function AcceptStart(src, typeKey, opts, note)
     -- the twists the leader chose (PLAN M8b): each must be one the type offers these officers now; a live case has none
     local twists, twistErr = {}, nil
     if not ctx.live then
-        twists, twistErr = Draw.checkTwists(typeKey, ctx.officers, opts.twists, ctx.leader.department)
+        twists, twistErr = Draw.checkTwists(typeKey, ctx.officers, opts.twists, ctx.leader.department, opts.realSuspect)
     end
     if not twists then return false, twistErr end
     ctx.twists = twists
@@ -1828,7 +1901,9 @@ CP.Net.action('server:acceptType', function(src, payload)
         if inFlight[m] then return false, 'err.busy' end
     end
     for _, m in ipairs(srcs) do inFlight[m] = true end
-    local okCall, ok, data = pcall(Accept, src, typeKey, { twists = twists })
+    -- V21: the leader ticked "Real suspect OK" (Config.Volunteers modes); anything but true is no
+    local realSuspect = type(payload) == 'table' and payload.realSuspect == true or nil
+    local okCall, ok, data = pcall(Accept, src, typeKey, { twists = twists, realSuspect = realSuspect })
     for _, m in ipairs(srcs) do inFlight[m] = nil end
     if not okCall then
         CP.err(TAG, 'server:acceptType failed: %s', tostring(ok))

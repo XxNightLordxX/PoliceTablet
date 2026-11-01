@@ -588,6 +588,18 @@
     color: var(--cp-muted);
 }
 
+/* step V21: "Real suspect OK" in the accept dialog of a type that may play a volunteer suspect */
+.run_ui-confirm__real {
+    padding: 8px 10px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid rgba(var(--cp-danger-rgb), 0.35);
+}
+
+.run_ui-confirm__real .run_ui-confirm__warn {
+    display: block;
+    margin: 4px 0;
+}
+
 .run_ui-footnote {
     display: flex;
     align-items: center;

@@ -238,6 +238,12 @@ function CP.Blocks.register(id, impl)
         CP.warn('blocks', 'block %s registered twice; the last one wins', id)
     end
     impl.id = id
+    -- volunteerSlot(obj, mission, location) -> { role, ... } | nil (§7.3, server half only): anything but a function
+    -- is dropped, so CP.Volunteers never calls it
+    if impl.volunteerSlot ~= nil and type(impl.volunteerSlot) ~= 'function' then
+        CP.warn('blocks', 'block %s: volunteerSlot is not a function; ignored', id)
+        impl.volunteerSlot = nil
+    end
     CP.Blocks._list[id] = impl
 end
 
@@ -247,6 +253,16 @@ end
 
 function CP.Blocks.all()
     return CP.Blocks._list
+end
+
+-- The ids of the blocks that offer a volunteer slot (volunteerSlot, §7.3), sorted.
+function CP.Blocks.withSlot()
+    local out = {}
+    for id, impl in pairs(CP.Blocks._list) do
+        if type(impl.volunteerSlot) == 'function' then out[#out + 1] = id end
+    end
+    table.sort(out)
+    return out
 end
 
 -- ============================================================================

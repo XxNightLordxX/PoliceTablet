@@ -3457,6 +3457,40 @@ pop-up instead of the NPC; 'players_only' is offered only while a volunteer who 
   left with roles and strikes, Renew, Change the suspects you play, Stop with a confirm). Notes are `lib.notify`.
   Specs: tests/volunteers_spec.lua, tests/volunteers_client_spec.lua.
 
+**Modes, slots and who is free (V21, modules/volunteers + CP.Draw).** Memory only; nobody is asked yet (V22).
+- Config: `modes` (by mission type, shipped `'npc'` for each of the four) and `missionModes` (by mission id, beats its
+  type; shipped `{}`), Settings `Volunteers.modes` / `Volunteers.missionModes` (open maps of the three modes; a
+  `modes` key must be a Config.MissionTypes key, `err.setting_volunteer_type`).
+- `modeOf(def)`: `'npc'` while `enabled` is off, for the Weekly Boss and for a value that is no mode. `slotOf(def,
+  index)`: the first objective whose block's `volunteerSlot(obj, def, location)` answers `{ role, ... }` with a §5.47
+  role -> a copy with `obj` (the objective's number), cached per definition (weak keys) and location; an error is
+  logged and counts as no slot. `slotRoles(def) -> roles set, set of indices with no slot`; `canTake(def)`.
+- `available(roles) -> { cid... }`: listed volunteers who play one of `roles` (nil = any) and are not held, oldest
+  first. `reserve(holder, def, index) -> cid|nil` holds the first one who fits that location's slot and still passes
+  `check`; `rekey(old, new)`, `release(holder)`, `reservedFor(holder)`. A hold ends with `run:ended` (the run id), when
+  that volunteer's listing ends (any `why`), and at resource stop. A held volunteer is never offered to anyone else.
+- `drawGate(def, realOk) -> true | false, why`: only `'players_only'` closes a mission: `real_suspect` (the unit did not
+  tick "Real suspect OK"), `no_slot`, `no_volunteer`. `cardInfo(list) -> nil | { required, available }` for a card's
+  pool: nil unless a mission of it has a mode other than `'npc'` and a slot; required = every mission is
+  `'players_only'`; available = free volunteers who fit any of those slots.
+- CP.Draw: `Draw.pool(type, members, { realSuspect })` drops a mission `drawGate` closes; with none left and no
+  cooldown the reason is `board.locked_real_suspect` or `board.locked_no_volunteer` (Draw.draw: `err.real_suspect_needed`
+  / `err.volunteer_none`). Draw.draw picks a `'players_only'` mission only at a location with a slot (the indices with
+  none join `exclude`). The board card's pool is read with `realSuspect = true` and carries `realSuspect =
+  cardInfo(list)`; `server:acceptType` takes `payload.realSuspect == true` (anything else is no) into the accept and
+  the twists' check. A mission call claim and a pushed mission carry no tick: the claim's draw leaves
+  `'players_only'` missions out and `Draw.checkMission` refuses one (`err.mc_push_volunteer`). FinishAccept, after the
+  draw: with the tick and a mode other than `'npc'` at a location with a slot, `CP.Runs.create` gets `volunteer = {
+  mode, role, obj }` (`run.volunteer`, never a citizenid; not for live, boss or test runs); `'players_only'` also
+  holds a volunteer under the pending token (none: `err.volunteer_none`), moved to the run id after the create, or let
+  go when the create fails. `'players_when_available'` holds nobody (V22 asks whoever is free, else the NPC).
+- Officer tablet (MissionBoard.tsx): a red "Real suspect" badge on such a card; its accept dialog (always opened, even
+  with Accept in one click) has a "Real suspect OK" toggle that starts off, with "required" and the free count.
+- Start-up check: `CP.ConfigHealth.register('volunteers')` (Permissions -> Config health; the console on the first run):
+  off -> one ok line; on -> warn for a key that is no type or mission, a value that is no mode, and a non-npc mode
+  none of whose missions has a slot (`no_slot`: plays the NPC; `no_slot_only`: never offered); the ok line counts the
+  missions that may play a volunteer. Spec: tests/volunteer_modes_spec.lua.
+
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 
 Each character's own tablet choices (My options), saved sparse in `cp_officers.options` (JSON of only the keys that
@@ -4115,7 +4149,10 @@ scene, Detain and book the suspects), never changes its HUD or checklist because
 CP.Opponents' server-only facts, and shows "last reported" points instead of live positions. `volunteerSlot(obj,
 mission, location) -> { role, meet = vec3, ... } | nil` is an optional server-half function a block may add to
 `CP.Blocks.register`: flee_arrest (the runner at the door), pursuit (the getaway or race driver) and search_area (the
-fugitive) offer one, and CP.Volunteers (§5.47) uses it to find the objective a volunteer can play. Built in steps
+fugitive) offer one, and CP.Volunteers (§5.47) uses it to find the objective a volunteer can play. The registry
+(V21, shared/init.lua): `CP.Blocks.register` drops a `volunteerSlot` that is no function (with a warning) and
+`CP.Blocks.withSlot()` lists the block ids that offer one; the answer must carry a §5.47 role (runner, driver,
+fugitive) or it is no slot. No built-in block offers one before V23. Built in steps
 V4-V26 (/tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/pvp/DESIGN_FINAL.md).
 
 **The block (V12, blocks/live_response).** `engineOnly = true` in its `CP.Blocks.register` table:

@@ -224,6 +224,8 @@ local OPEN = {
     'Rewards.levels',
     'Rewards.season',
     'LiveCrime.types',              -- the crime keys are Crimson-Contracts' contract keys
+    'Volunteers.modes',             -- mission type keys (V21)
+    'Volunteers.missionModes',      -- mission ids (V21)
     'Permissions.builderTeleport',  -- department keys
     'MissionControls.grants',       -- department keys
     'MissionControls.controls',     -- control keys
@@ -1142,6 +1144,11 @@ local KNOWN = {
         item = 'string',
     },
     ['LiveCrime.types'] = { tpl = MapOf(Alts(FALSE, ID), '^[%w_%-]+$') },
+    -- V21: who plays a volunteer slot's suspect, per mission type and per mission
+    ['Volunteers.modes'] = { tpl = MapOf(Enum({ 'npc', 'players_when_available', 'players_only' }), '^[%w_%-]+$') },
+    ['Volunteers.missionModes'] = {
+        tpl = MapOf(Enum({ 'npc', 'players_when_available', 'players_only' }), '^[%w_%-]+$'),
+    },
     -- V13: which team sets a live case's tier
     ['LiveCrime.tier'] = { tpl = Enum({ 'crew', 'officers' }), kind = 'enum' },
     -- V19: who the export GetAvailablePolice counts
@@ -1727,6 +1734,15 @@ local function LiveTypes(map)
     return nil
 end
 KNOWN['LiveCrime.types'].check = LiveTypes
+
+-- Config.Volunteers.modes (V21): every key is a mission type of Config.MissionTypes.
+KNOWN['Volunteers.modes'].check = function(map)
+    local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
+    for k in pairs(map) do
+        if type(types[k]) ~= 'table' then return 'err.setting_volunteer_type' end
+    end
+    return nil
+end
 
 -- Config.Permissions.builderTeleport (Admin UI -> Permissions -> Builder teleport): by department key of
 -- Config.Departments, either { minGrade = N } (that grade and up) or { grades = { ... } } (only those), never both.

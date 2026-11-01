@@ -198,7 +198,7 @@ Has(board, 't(\'board.hidden.title\', { n: order.folded.length })', '...Hidden t
 Has(board, '<div className="run_ui-types">{order.folded.map(typeCard)}</div>', '...shown on demand')
 Hasnt(board, 'cards.map(card =>', 'no card is drawn outside the order')
 Has(board, 'const oneClick = useOption(\'skipAcceptConfirm\') === true;', 'accept in one click is the officer option')
-Has(board, 'if (oneClick) void acceptKey(card.key, []);', 'one click: server:acceptType at once')
+Has(board, 'if (oneClick && !card.realSuspect) void acceptKey(card.key, []);', 'one click: server:acceptType at once')
 Has(board, 'else setPending({ kind: \'type\', card });', 'otherwise the confirm, as before')
 Has(board, 'onAccept={card => setPending({ kind: \'boss\', card })}', 'the Weekly Boss still asks first')
 Has(board, '{oneClick && cards.length ? (', 'one click: the confirm lines become a footnote')

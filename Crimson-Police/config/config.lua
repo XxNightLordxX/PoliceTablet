@@ -1108,6 +1108,20 @@ Config.Volunteers = {
     strikes = 3,
     strikeHours = 24,                -- hours a strike counts towards the block
     blockHours = 24,                 -- hours a player who reached the strikes can't volunteer
+    -- Who plays the suspect of a mission a volunteer can play, per mission type: 'npc' = always the NPC (as today);
+    -- 'players_when_available' = when the unit ticks "Real suspect OK" on the Mission Board and a volunteer who
+    -- fits is online, he is asked to play the suspect, else the NPC plays him; 'players_only' = the type's missions
+    -- are offered only while a volunteer who fits is free, to a unit that ticks "Real suspect OK", and its draw
+    -- takes only missions a volunteer can play. A mission named in missionModes below follows its own mode instead
+    modes = {
+        patrol = 'npc',
+        training = 'npc',
+        investigation = 'npc',
+        tactical = 'npc',
+    },
+    -- The same choice for single missions, by mission id (beats its type's mode), e.g. { warrant_service =
+    -- 'players_only' }. Empty = every mission follows its type
+    missionModes = {},
 }
 
 -- ============================================================================

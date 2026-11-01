@@ -37,5 +37,17 @@
   "volunteer.refused.already": "You already volunteer.",
   "volunteer.refused.no_role": "Pick at least one suspect to play.",
   "volunteer.refused.not_listed": "You are not volunteering right now.",
-  "volunteer.refused.other": "You can't volunteer right now."
+  "volunteer.refused.other": "You can't volunteer right now.",
+  "board.locked_real_suspect": "{type}: these missions are played against a real player. Tick Real suspect OK to take them.",
+  "board.locked_no_volunteer": "No volunteer suspect is free for {type} right now",
+  "err.real_suspect_needed": "These missions are played against a real player: tick Real suspect OK to take them.",
+  "err.volunteer_none": "No volunteer suspect who fits is free right now.",
+  "err.mc_push_volunteer": "That mission is played only against a volunteer suspect, so it can't be pushed.",
+  "err.setting_volunteer_type": "Each key must be a mission type in Config.MissionTypes (such as patrol or tactical).",
+  "health.volunteers.off": "Volunteer suspects are off (Config.Volunteers.enabled)",
+  "health.volunteers.ok": "Volunteer suspects: {n} missions may be played against a volunteer",
+  "health.volunteers.unknown": "Config.Volunteers names {key}, which is no mission type or mission: ignored",
+  "health.volunteers.bad_mode": "Config.Volunteers sets {key} to '{mode}', which is not npc, players_when_available or players_only: it plays the NPC",
+  "health.volunteers.no_slot": "{key} is set to players_when_available, but none of its missions has a suspect a volunteer can play: it keeps playing the NPC",
+  "health.volunteers.no_slot_only": "{key} is set to players_only, but none of its missions has a suspect a volunteer can play: it is never offered"
 }

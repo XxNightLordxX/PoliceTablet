@@ -2934,6 +2934,19 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   followed by a no-show or walking away from the case is a strike (from the matching steps): `strikes` (3) within
   `strikeHours` (24) block that player, on every character, for `blockHours` (24); strikes are kept in memory, so a
   restart clears them. Nobody is matched to a mission yet: the list only fills.
+  Modes and the Mission Board (step V21, `Config.Volunteers.modes` per mission type and `missionModes` per mission
+  id, which beats its type; Settings edits both): `'npc'` (shipped for every type) plays the NPC as today;
+  `'players_when_available'` lets the unit leader tick **Real suspect OK** in the accept dialog (a red "Real suspect"
+  badge on the card; never ticked for him, and a one-click accept still opens the dialog), and then a volunteer who
+  fits may play the suspect (the asking is the next step), else the NPC; `'players_only'` offers those missions only
+  while a volunteer who plays that suspect is free and only to a unit that ticks Real suspect OK: the draw takes only
+  missions and locations a volunteer can play, a mission with no such suspect is never offered, the accept holds one
+  free volunteer for the run (another unit cannot count on him) until the run ends, and the card is locked "No
+  volunteer suspect is free" otherwise. Such a mission is never pushed by a supervisor, and a mission call never
+  draws it (a call has no tick). A mission can take a volunteer when one of its blocks offers a suspect slot;
+  the built-in ones get theirs in the next steps, so until then every mode plays the NPC. Admin UI -> Permissions ->
+  Config health (and the console at start) warns about a mode on an unknown type or mission, a value that is no mode,
+  and a mode on missions none of which a volunteer can play.
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

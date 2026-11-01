@@ -15,6 +15,7 @@ import {
     Points,
     ProgressBar,
     Screen,
+    Toggle,
 } from '../../shared/components';
 import type { IconName } from '../../shared/components';
 import { cx } from '../../shared/cx';
@@ -333,6 +334,11 @@ function TypeCardView({
                                 title={t('board.card.tod_hint', { multiplier: todX })}
                             >
                                 {t('board.card.tod')}
+                            </Badge>
+                        ) : null}
+                        {card.realSuspect ? (
+                            <Badge size="sm" tone="danger" icon="user" title={t('board.card.real_suspect_hint')}>
+                                {t('board.card.real_suspect')}
                             </Badge>
                         ) : null}
                         {card.busy ? (
@@ -684,6 +690,9 @@ export default function MissionBoard() {
             setTwists(pending && pending.kind === 'type' ? tickedTwists(pending.card.twists, usualTwists.current) : []),
         [pending],
     );
+    // step V21: "Real suspect OK" in the accept dialog of a card that may play a volunteer (never ticked by itself)
+    const [realOk, setRealOk] = useState(false);
+    useEffect(() => setRealOk(false), [pending]);
     const [joining, setJoining] = useState(false);
     // My options -> Mission Board (step O8): favourite types first, hidden types folded, accept in one click
     const favouriteTypes = typeKeys(useOption('favouriteTypes'));
@@ -746,8 +755,11 @@ export default function MissionBoard() {
     const refresh = () => void refetch();
     const refreshSoon = () => schedule(300);
 
-    const acceptKey = async (key: string, picked: string[]) => {
-        const payload = key !== BOSS_KEY && picked.length ? { missionType: key, twists: picked } : key;
+    const acceptKey = async (key: string, picked: string[], real = false) => {
+        const payload =
+            key !== BOSS_KEY && (picked.length || real)
+                ? { missionType: key, twists: picked.length ? picked : undefined, realSuspect: real || undefined }
+                : key;
         const res = await run<AcceptTypeResult & { pending?: boolean }>('server:acceptType', payload);
         setPending(null);
         // a unit of 2+ answers the ready check first: the run starts when everyone accepted
@@ -757,11 +769,13 @@ export default function MissionBoard() {
     };
     const accept = async () => {
         if (!pending) return;
-        await acceptKey(pending.kind === 'boss' ? BOSS_KEY : pending.card.key, pending.kind === 'type' ? twists : []);
+        if (pending.kind === 'boss') await acceptKey(BOSS_KEY, []);
+        else await acceptKey(pending.card.key, twists, !!pending.card.realSuspect && realOk);
     };
     // Accept on a type card: at once with skipAcceptConfirm (no twists; the warnings are the footnote), else the dialog
     const acceptType = (card: TypeCard) => {
-        if (oneClick) void acceptKey(card.key, []);
+        // a card that may play a volunteer always asks: "Real suspect OK" is never given in one click
+        if (oneClick && !card.realSuspect) void acceptKey(card.key, []);
         else setPending({ kind: 'type', card });
     };
     const typeCard = (card: TypeCard) => (
@@ -833,6 +847,29 @@ export default function MissionBoard() {
                     unit={size > 1}
                     disabled={busy}
                 />
+            ) : null}
+            {pending.kind === 'type' && pending.card.realSuspect ? (
+                <div className="run_ui-confirm__real">
+                    <Toggle
+                        checked={realOk}
+                        disabled={busy}
+                        onChange={setRealOk}
+                        label={t('board.real_suspect.title')}
+                        description={
+                            <>
+                                <span>{t('board.real_suspect.hint')}</span>
+                                {pending.card.realSuspect.required ? (
+                                    <span className="run_ui-confirm__warn">{t('board.real_suspect.required')}</span>
+                                ) : null}
+                                <span>
+                                    {t('board.real_suspect.available', {
+                                        n: formatNumber(Number(pending.card.realSuspect.available) || 0),
+                                    })}
+                                </span>
+                            </>
+                        }
+                    />
+                </div>
             ) : null}
             {size > 1 ? <p className="run_ui-confirm__note">{t('board.confirm.unit', { size })}</p> : null}
             <p className="run_ui-confirm__note">

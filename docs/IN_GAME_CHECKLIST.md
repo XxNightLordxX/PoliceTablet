@@ -167,6 +167,7 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V10, K7-K23, Q8-
 - [ ] Config.RealSuspects (officerAlerts, routeEnds, downed, downedPickupDelay) and Config.LiveCrime.requireRoute show in Settings; nothing changes until a live case exists. (V9, V10)
 - [ ] As shipped, the Admin UI has no Real suspects screen. With Config.LiveCrime.enabled = true (reopen the Admin UI), More -> Real suspects lists the cases; a case opens its timeline and damage ledger; your own case is greyed; Block pair, Exclude and Suspend need days and a reason, then show under Pairs and blocks and in the audit log. (V18)
 - [ ] As shipped, /crimsonheat does nothing. With Config.Volunteers.enabled = true (restart, or turn it on in Settings), a civilian types /crimsonheat: the rules alert, then the suspects to play; he gets "You volunteer as a suspect for 60 minutes". /crimsonheat again shows the menu (time left, Renew, Change, Stop). An on-duty officer is refused; going on police duty, logging out or Stop ends it. (V20)
+- [ ] As shipped (every Config.Volunteers mode 'npc') the Mission Board has no "Real suspect" badge and accepting works as before. With enabled = true and Config.Volunteers.modes.investigation = 'players_only', Admin UI -> Permissions -> Config health warns that no Investigation mission has a suspect a volunteer can play (until the slot steps) and the Investigation card is locked "No volunteer suspect is free". (V21)
 
 ## Restarts and logout
 
