@@ -160,6 +160,8 @@ const CONFIG: Session['config'] = {
                 ? []
                 : ['Balance change', 'Event', 'Correction'],
     },
+    // ?rsOff: no Real suspects screen (Config.LiveCrime.enabled and Config.Volunteers.enabled both false)
+    realSuspects: { screen: !(typeof window !== 'undefined' && /[?&]rsOff\b/.test(window.location.search)) },
 };
 
 // getSession({ ui }) in browser mode. The officer is a supervisor (roles.supervisor = true).

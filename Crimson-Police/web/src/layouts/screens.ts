@@ -39,6 +39,7 @@ import AdminTesting from '../admin/screens/Testing';
 import AdminLive from '../admin/screens/Live';
 import AdminPayments from '../admin/screens/Payments';
 import AdminSystem from '../admin/screens/System';
+import AdminRealSuspects from '../admin/screens/RealSuspects';
 
 export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     key: K;
@@ -199,6 +200,15 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         icon: 'sliders',
         component: AdminSettings,
         group: 'main',
+    },
+    {
+        // Real suspects (step V18): while live crimes or volunteers are on (Config.RealSuspects.adminScreen)
+        key: 'admin_rs',
+        titleKey: 'ui.screen.admin_rs',
+        icon: 'shield',
+        component: AdminRealSuspects,
+        visible: s => has(s, 'antiFarmOverride') && s.config?.realSuspects?.screen === true,
+        group: 'more',
     },
     { key: 'admin_system', titleKey: 'ui.screen.admin_system', icon: 'server', component: AdminSystem, group: 'more' },
     { key: 'admin_audit', titleKey: 'ui.screen.admin_audit', icon: 'fileText', component: AdminAudit, group: 'more' },

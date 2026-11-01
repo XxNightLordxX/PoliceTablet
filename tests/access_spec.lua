@@ -149,6 +149,20 @@ do
     adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
     H.eq(#adm.data.config.adminUi.reasonChips, 0, 'reasonChips unset: no buttons')
     Config.AdminUi.reasonChips = { 'Balance change', 'Event', 'Correction' }
+    -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
+    H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
+    Config.LiveCrime.enabled = true
+    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.eq(adm.data.config.realSuspects.screen, true, 'live crimes on: the Admin UI shows Real suspects')
+    Config.RealSuspects.adminScreen = false
+    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.eq(adm.data.config.realSuspects.screen, false, 'adminScreen = false: no screen')
+    Config.RealSuspects.adminScreen = true
+    Config.LiveCrime.enabled = false
+    Config.Volunteers.enabled = true
+    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
+    H.eq(adm.data.config.realSuspects.screen, true, 'volunteers on: the screen too')
+    Config.Volunteers.enabled = false
     Config.Tablet.access = { command = true, keybind = true, item = true, desk = true, requireItem = false }
     Config.Tablet.item = false
 end

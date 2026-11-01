@@ -155,6 +155,7 @@ do
         evadeWindow = 120,
         timelineMax = 300,
         casesKept = 16,
+        adminScreen = true,
     }) do
         local e = S.entry('RealSuspects.' .. path) or {}
         H.eq(e.default, value, 'RealSuspects.' .. path .. ' ships ' .. tostring(value))

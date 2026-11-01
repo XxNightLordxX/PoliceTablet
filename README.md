@@ -2895,14 +2895,22 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   `goals`, `challenge`, `cash` or `items` (all `false`; `cash` and `items` are money switches: Settings asks for the
   typed word ENABLE). Each suspect detained is a **live catch** for every officer on the case (stored per run row,
   migration 014); add `'live_catches'` to `Config.Leaderboard.metrics` to show a **Live catches** Rank by tab.
-  Staff data (step V17, server side; the Admin UI screen comes in V18): admins with the `antiFarmOverride` key can
+  Staff data (steps V17 and V18): admins with the `antiFarmOverride` key can
   read each open case and the last `Config.RealSuspects.casesKept` closed ones (16; kept in memory, so a restart
   clears the list): the suspects and officers by name, the case timeline in plain lines, the flag lines (officer
   conduct flags and the suspects' own notes) and the damage ledger, plus pair statistics and the running blocks. Three
   tools need a reason and are audited: **block a pair** (an officer can't take a case against that suspect), **exclude
   a player** (never a suspect) and **suspend an officer** (no real-suspect cases), each for 1 to 3650 days. They are
   refused while both features are off and on the admin's own characters. Nobody reviews or reads a case he was a
-  suspect in (the same own-run rule as officers).
+  suspect in (the same own-run rule as officers). In game it is the **Admin UI -> Real suspects** screen (under More;
+  only while `Config.LiveCrime.enabled` or `Config.Volunteers.enabled` is on, and only for admins with the
+  `antiFarmOverride` key; `Config.RealSuspects.adminScreen = false` hides it). **Cases** lists the cases (All, Open,
+  With flags or notes); a click opens one: its suspects (state, contact / cuff / detain / booking times from the open,
+  armed, AFK, down, left), its officers, the flags and notes, the timeline and the damage ledger, with **Exclude**,
+  **Suspend** and **Block pair** buttons that fill the tool form. A case of your own characters is greyed and can't be
+  opened. **Pairs and blocks** shows the pair statistics (type a citizen ID to see only that player, with his
+  exclusion and suspension) and the running blocks, exclusions and suspensions; **Block, exclude or suspend** opens
+  the form (citizen IDs, days, a reason; a longer one replaces a shorter one and none can be lifted early).
 - Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
   route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
   `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route

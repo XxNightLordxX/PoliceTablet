@@ -4134,6 +4134,17 @@ Permissions.builderTeleport through server:admin:setSetting, audited).
 Data: callback admin:getPermissions (modules/admin).
 ```
 
+## Crimson-Police/web/src/admin/screens/RealSuspects.tsx
+
+```text
+Admin UI · Real suspects (screen key 'admin_rs', step V18): the live-crime and volunteer cases for staff. Shown
+while Config.LiveCrime.enabled or Config.Volunteers.enabled is on (Config.RealSuspects.adminScreen), to admins with
+the antiFarmOverride key. Cases: every open case and the last Config.RealSuspects.casesKept closed ones; a case
+opens its suspects, flag lines, timeline and damage ledger (admin:getRsCase; never a position, and never a case of
+the admin's own characters). Pairs and blocks: pair statistics and the running admin rows (admin:getRsPairs), and
+the three tools (block a pair, exclude a suspect, suspend an officer), each with days and a reason, audited.
+```
+
 ## Crimson-Police/web/src/admin/screens/Seasons.tsx
 
 ```text
@@ -4959,6 +4970,15 @@ their other characters may, but every action on them is refused (err.own_run).
 Approve, void or reject, always with a reason; every decision is final and audited.
 Data: callback sup:getReviewQueue · actions server:sup:reviewFlagged { rowId, decision, reason } and
 server:sup:handleDispute { disputeId, decision, reason } (modules/admin, modules/disputes).
+```
+
+## Crimson-Police/web/src/types/admin_rs.ts
+
+```text
+Admin UI · Real suspects (screen key 'admin_rs', step V18): what modules/opponents/staff/server.lua (V17) answers.
+Callbacks (antiFarmOverride key): admin:getRsCases, admin:getRsCase { runUuid }, admin:getRsPairs { citizenid? }.
+Actions (a reason, 1-3650 days): server:admin:rsBlockPair { officer, suspect, days, reason },
+server:admin:rsExclude / server:admin:rsSuspend { citizenid, days, reason }.
 ```
 
 ## Crimson-Police/web/src/types/boards.ts

@@ -165,6 +165,7 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V10, K7-K23, Q8-
 - [ ] Optional: with Config.NpcCombat.playerHitDropsProtection = true, an officer on an NPC mission shot by a player takes normal headshot damage until the run ends; shipped false, no change. (V8)
 - [ ] Crimson-Contracts guards keep their own damage while an officer is on a run nearby (the crimsonPoliceRun bag). (V8)
 - [ ] Config.RealSuspects (officerAlerts, routeEnds, downed, downedPickupDelay) and Config.LiveCrime.requireRoute show in Settings; nothing changes until a live case exists. (V9, V10)
+- [ ] As shipped, the Admin UI has no Real suspects screen. With Config.LiveCrime.enabled = true (reopen the Admin UI), More -> Real suspects lists the cases; a case opens its timeline and damage ledger; your own case is greyed; Block pair, Exclude and Suspend need days and a reason, then show under Pairs and blocks and in the audit log. (V18)
 
 ## Restarts and logout
 

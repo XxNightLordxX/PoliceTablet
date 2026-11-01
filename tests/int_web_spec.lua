@@ -340,7 +340,11 @@ do
     H.eq(table.concat(groups.main, ','),
         'admin_home,admin_payouts,admin_missions,admin_live,admin_officers,admin_settings',
         'the everyday admin screens stay in the sidebar')
-    H.eq(#groups.more, 8, 'the other eight fold under More (' .. table.concat(groups.more, ',') .. ')')
+    H.eq(#groups.more, 9, 'the other nine fold under More (' .. table.concat(groups.more, ',') .. ')')
+    local rs = admin:match('key: \'admin_rs\',(.-)}') or ''
+    H.ok(rs:find('s.config?.realSuspects?.screen === true', 1, true) ~= nil,
+        'Real suspects (V18) shows only while the server says live crimes or volunteers are on')
+    H.ok(rs:find('has(s, \'antiFarmOverride\')', 1, true) ~= nil, 'and only to admins with antiFarmOverride')
     local bar = Read(WEB .. 'layouts/Sidebar.tsx')
     Has(bar, 'const folded = more ? items.filter(it => it.group === \'more\') : [];', 'no More label: one flat list')
     Has(bar, 'if (activeFolded) setOpen(true);', 'opening a folded screen by a link unfolds More')

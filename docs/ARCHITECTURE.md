@@ -3205,6 +3205,15 @@ tablet: `Opp.view` has no names), and the three admin tools. Nothing runs until 
   (`err.self_target`) and while both features are off (`err.rs_off`), one per target per 10 s, audited
   (`rsBlockPair`, `rsExclude`, `rsSuspend`). They call `Opp.block` / `exclude` / `suspend` (a longer one wins; there
   is no lift yet: a row runs to its until_at). The Admin UI screen is V18.
+- Admin UI screen (V18, web/src/admin/screens/RealSuspects.tsx, screen key `admin_rs`, under More): shown when the
+  session has `antiFarmOverride` and `Session.config.realSuspects.screen` (modules/tablet: true while
+  Config.LiveCrime.enabled or Config.Volunteers.enabled is on and Config.RealSuspects.adminScreen is not false; read
+  when the UI opens). Tab Cases: admin:getRsCases (filters All / Open / With flags or notes; `own` rows greyed and not
+  opened); a row opens a right drawer with admin:getRsCase (suspects, officers, flag lines, timeline, damage ledger;
+  the ledger names a suspect by his label in the case). Tab Pairs and blocks: admin:getRsPairs (with `citizenid` when
+  a valid one is typed: his exclusion, suspension and admin rows). One tool dialog for the three actions
+  (admin/components/realSuspects.ts `toolRequest` checks the citizenids, 1-3650 days and the reason first; the server
+  checks them all again); a done tool refetches the pairs. No new server code: the screen only reads V17's answers.
 
 ### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S)
 

@@ -301,6 +301,15 @@ local function ReasonChips(list)
     return out
 end
 
+-- Config.RealSuspects.adminScreen: the Admin UI shows the Real suspects screen (V18) only while live crimes or
+-- volunteers are on (the screen still checks the antiFarmOverride key; the server answers its data to admins only).
+local function RealSuspectsScreen()
+    local rs = type(Config.RealSuspects) == 'table' and Config.RealSuspects or {}
+    if rs.adminScreen == false then return false end
+    return (type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true)
+        or (type(Config.Volunteers) == 'table' and Config.Volunteers.enabled == true)
+end
+
 -- The parity-plus parts of Session.config (web/src/shared/types.ts). English is the only language shipped.
 local function ExtraConfig(deptKey)
     local mc = Config.MissionCalls or {}
@@ -346,6 +355,7 @@ local function ExtraConfig(deptKey)
             homeForms = aui.homeForms ~= false,
             reasonChips = ReasonChips(aui.reasonChips),
         },
+        realSuspects = { screen = RealSuspectsScreen() },
     }
 end
 

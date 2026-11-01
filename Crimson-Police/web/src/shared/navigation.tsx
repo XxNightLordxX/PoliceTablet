@@ -27,7 +27,8 @@ export type AdminScreenKey =
     | 'admin_testing'
     | 'admin_live'
     | 'admin_payments'
-    | 'admin_system';
+    | 'admin_system'
+    | 'admin_rs';
 export type ScreenKey = OfficerScreenKey | SupervisorScreenKey | AdminScreenKey;
 
 export type ScreenParams = Record<string, unknown>;

@@ -947,6 +947,10 @@ Config.RealSuspects = {
     -- Closed cases staff can still open in the Admin UI (their timeline, damage ledger and flags), the newest
     -- ones; open cases are always there. Kept in memory: a restart starts the list again
     casesKept = 16,
+    -- true = admins (the antiFarmOverride key) get a Real suspects screen in the Admin UI while live crimes or
+    -- volunteers are on: the cases, each case's timeline and damage ledger, pair statistics and the block, exclude
+    -- and suspend tools; false = no screen (the cases are still kept)
+    adminScreen = true,
     -- Proof the server checks before anything scores:
     cuffPairWindow = 10,             -- seconds between the officer's sc-police cuff and the suspect's cuffed state
     cuffRange = 3.5,                 -- metres between them at the cuff (sc-police allows 2.5; the rest is lag)

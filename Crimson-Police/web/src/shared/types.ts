@@ -107,6 +107,9 @@ export interface Session {
             homeForms?: boolean;
             reasonChips?: string[];
         };
+        // Config.RealSuspects.adminScreen (step V18): screen = the Admin UI shows Real suspects (true only while
+        // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)
+        realSuspects?: { screen: boolean };
         // true while this player may change at least one Mission control (CP.DeptControls.available)
         missionControls?: boolean;
         // Config.OfficerOptions resolved for the officer's department (CP.OptionDefs.resolve)
