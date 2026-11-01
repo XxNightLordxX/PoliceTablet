@@ -46,5 +46,11 @@
   "fto.no_trainers": "No trainer of this department is online.",
   "admin.action.ftoPair": "Field training: trainer paired",
   "admin.action.ftoUnpair": "Field training: ended",
-  "admin.action.ftoSignOff": "Field training: task signed off"
+  "admin.action.ftoSignOff": "Field training: task signed off",
+  "err.fto_trainer_needed": "You are in field training: this mission type needs your trainer in your unit.",
+  "err.member_fto_trainer_needed": "A rookie in your unit needs his trainer in the unit for this mission type.",
+  "fto.toast.bonus": "+{points} points for signing off a task of {name}.",
+  "fto.bonus_reason": "Field training: signed off {task} for {name}",
+  "fto.needs_trainer": "With your trainer in the unit only: {types}",
+  "fto.bonus_hint": "You get {points} points for each task you sign off."
 }

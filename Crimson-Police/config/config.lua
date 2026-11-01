@@ -1808,6 +1808,10 @@ Config.FieldTraining = {
     tasks = { patrol = 3, investigation = 2, tactical = 1 },
     rookiesPerTrainer = 2,           -- rookies one trainer may train at the same time
     badge = 'field_training',        -- the badge a rookie gets when every task is signed off (Profile -> Badges)
+    -- Ride-along rule: mission type keys (e.g. { 'tactical' }) a rookie in training may only accept (or claim) with his
+    -- trainer in the same unit. Empty = a rookie runs every type with anyone
+    requireTrainerFor = {},
+    trainerBonus = 0,                -- points the trainer gets for each task he signs off (0 = none)
 }
 
 -- ============================================================================

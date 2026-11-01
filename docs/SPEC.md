@@ -1776,11 +1776,13 @@ Commendations
 
 - Optional (Config.Profile.showMdtCommendations, off by default): SC-Dispatch MDT commendations are shown read-only, tagged "MDT".
 
-Field training (step T1, Config.FieldTraining, off as shipped)
+Field training (steps T1 and T2, Config.FieldTraining, off as shipped)
 
 - A supervisor (Department Report → Field training → Pair trainer) or an admin pairs a rookie of the department with an online trainer of the same department whose Qbox grade is at least Config.FieldTraining.trainerGrades.<department> (else the department's supervisorGrade). Never his own character as the rookie; a rookie has one trainer; a trainer takes at most rookiesPerTrainer rookies and is not in training himself. End training (two clicks) removes the pairing.
 - A completed, unflagged run counts for the rookie when his trainer finished the same run too: one run towards the task of its mission type (Config.FieldTraining.tasks, a count per type), up to the task's count. Test runs never count.
 - Once a task's count is reached the trainer is told and signs it off on his tablet (Profile → Field training), with an optional note (up to 255 characters). Only the rookie's own trainer signs off, once per task. When every task is signed off the training is done and the rookie gets the badge Config.FieldTraining.badge (Profile → Badges).
+- Ride-along rule (step T2, Config.FieldTraining.requireTrainerFor, shipped empty): a rookie in active training may accept (Mission Board) or claim (a mission call) a listed mission type only with his trainer in the same unit; else the accept is refused (err.fto_trainer_needed for the rookie himself, err.member_fto_trainer_needed for the leader of his unit). The rookie's Profile card lists those types.
+- Trainer bonus (step T2, Config.FieldTraining.trainerBonus, shipped 0, at most 1000): each sign-off gives the trainer that many points, a manual award row with mission id fto_bonus ("Field training sign-off") and the rookie and task as its reason; the trainer is told. His Profile card says the bonus.
 - Pairing, ending and every sign-off are in the audit log (ftoPair, ftoUnpair, ftoSignOff); the record is cp_officers.field_training (015), so the database and the saves folder keep it alike. Supervisors see every rookie's progress per task in Department Report.
 
 Moderation: Supervisor UI → Review Queue → Profiles (their department) and Admin UI → Officers: approve or reject a pending picture or bio (reason required), clear a bio or a picture (reason required), and handle reports. Every action is audited.
@@ -4617,6 +4619,10 @@ Config.FieldTraining = {
     tasks = { patrol = 3, investigation = 2, tactical = 1 },
     rookiesPerTrainer = 2,           -- rookies one trainer may train at the same time
     badge = 'field_training',        -- the badge a rookie gets when every task is signed off (Profile -> Badges)
+    -- Ride-along rule: mission type keys (e.g. { 'tactical' }) a rookie in training may only accept (or claim) with his
+    -- trainer in the same unit. Empty = a rookie runs every type with anyone
+    requireTrainerFor = {},
+    trainerBonus = 0,                -- points the trainer gets for each task he signs off (0 = none)
 }
 
 -- ============================================================================

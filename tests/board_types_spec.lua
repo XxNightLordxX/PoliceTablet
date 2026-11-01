@@ -233,4 +233,30 @@ do
     CP.MissionBan = nil
 end
 
+-- ============================================================================
+--                     4. FIELD TRAINING'S RIDE-ALONG RULE
+-- ============================================================================
+-- (STEP T2): THE ACCEPT ASKS IT.
+
+do
+    local asked
+    CP.FieldTraining = {
+        unitCheck = function(officers, missionType)
+            asked = missionType
+            for _, o in ipairs(officers) do
+                if o.citizenid == 'BT00003' then return false, 'err.fto_trainer_needed', 'BT00003' end
+            end
+            return true
+        end,
+    }
+    local ok, err = D.check(3, 'patrol')
+    H.ok(ok == false and err == 'err.fto_trainer_needed' and asked == 'patrol', 'a rookie without his trainer')
+    units[1] = { leader = 1, members = { 1, 3 } }
+    ok, err = D.check(1, 'patrol')
+    H.ok(ok == false and err == 'err.member_fto_trainer_needed', 'the leader of a unit with that rookie')
+    units[1] = nil
+    H.eq(D.check(1, 'patrol'), true, 'everyone else accepts')
+    CP.FieldTraining = nil
+end
+
 return H

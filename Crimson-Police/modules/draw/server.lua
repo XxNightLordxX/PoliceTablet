@@ -1551,6 +1551,14 @@ local function CheckAccept(src, typeKey, counts, live)
         end
     end
 
+    -- field training's ride-along rule (step T2, Config.FieldTraining.requireTrainerFor): a rookie needs his trainer
+    if CP.FieldTraining and CP.FieldTraining.unitCheck then
+        local okF, allowed, ftErr, rookie = Safe(CP.FieldTraining.unitCheck, officers, missionType)
+        if okF and allowed == false then
+            return false, rookie == leader.citizenid and ftErr or 'err.member_fto_trainer_needed'
+        end
+    end
+
     -- a live case is capped by Config.LiveCrime.maxLiveRuns (its LIVE call), never by the NPC missions' run caps
     if not live and not CapsOk(missionType) then return false, 'err.server_busy' end
     if live then

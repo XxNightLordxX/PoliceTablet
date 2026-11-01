@@ -1367,7 +1367,7 @@ const mockFto: FtoView = {
         { type: 'tactical', label: 'Tactical', need: 1, runs: 0, ready: false },
     ],
 };
-reg('request', 'fto:getMine', () => ({ training: null, rookies: [mockFto] }));
+reg('request', 'fto:getMine', () => ({ training: null, rookies: [mockFto], trainerBonus: 25 }));
 reg('request', 'sup:getFieldTraining', () => ({
     department: 'sast',
     departmentLabel: 'SAST',

@@ -240,6 +240,7 @@
   "admin.actor.console": "Server console",
   "admin.mission.manual_award": "Manual award",
   "admin.mission.goal": "Goal bonus",
+  "admin.mission.fto_bonus": "Field training sign-off",
   "admin.dispute.kind.flagged": "Flagged run",
   "admin.dispute.kind.voided": "Voided run",
   "admin.dispute.kind.failed": "Failed run",

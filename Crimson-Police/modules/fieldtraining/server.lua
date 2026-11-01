@@ -1,6 +1,6 @@
--- CP.FieldTraining (server): field training, part 1 (step T1, Config.FieldTraining). A supervisor (or an admin) pairs a
--- trainer with a rookie of the department; completed runs the two finish together count towards the sign-off tasks
--- (per mission type); the trainer signs a task off once its count is reached; every task signed off gives the badge.
+-- CP.FieldTraining (server): field training (steps T1 and T2, Config.FieldTraining). Pairing, runs that count, the
+-- trainer's sign-offs (and his trainerBonus points), the badge, and the ride-along rule (requireTrainerFor) that
+-- CP.Draw's accept asks. Full notes in docs/FILE_NOTES.md.
 
 CP.FieldTraining = CP.FieldTraining or {}
 local FT = CP.FieldTraining
@@ -86,10 +86,31 @@ local function TaskLabel(missionType)
     for _, t in ipairs(FT.tasks()) do
         if t.type == missionType then return t.label end
     end
-    return missionType
+    local mt = type(Config.MissionTypes) == 'table' and Config.MissionTypes[missionType] or nil
+    return type(mt) == 'table' and mt.label or missionType
 end
 
 local function RookiesMax() return math.max(1, Int(Cfg().rookiesPerTrainer) or 2) end
+
+local BONUS_MAX = 1000
+
+-- Points the trainer gets per signed task (Config.FieldTraining.trainerBonus, 0 to 1000; 0 = none).
+function FT.trainerBonus() return math.max(0, math.min(BONUS_MAX, Int(Cfg().trainerBonus) or 0)) end
+
+-- The mission types of the ride-along rule (Config.FieldTraining.requireTrainerFor): { [type] = true }. A list of
+-- type keys; a { tactical = true } map is read the same way.
+function FT.requiredTypes()
+    local out = {}
+    local list = Cfg().requireTrainerFor
+    for k, v in pairs(type(list) == 'table' and list or {}) do
+        if type(v) == 'string' and v ~= '' then
+            out[v] = true
+        elseif type(k) == 'string' and v == true then
+            out[k] = true
+        end
+    end
+    return out
+end
 
 -- The badge id: letters, digits and _ only, at most 40 characters (cp_badges.badge_id).
 function FT.badge()
@@ -277,6 +298,29 @@ if CP.Hooks and CP.Hooks.on then
 end
 
 -- ============================================================================
+--                        THE RIDE-ALONG RULE (STEP T2)
+-- ============================================================================
+
+-- CP.Draw's accept (the Mission Board and a mission call claim): a rookie in training may take a mission type of
+-- requireTrainerFor only with his trainer in the same unit. officers = { { citizenid } } (the whole unit).
+-- -> true | false, 'err.fto_trainer_needed', the rookie's citizenid. Reads nothing while the rule is empty.
+function FT.unitCheck(officers, missionType)
+    if not FT.enabled() or type(officers) ~= 'table' or type(missionType) ~= 'string' then return true end
+    if not FT.requiredTypes()[missionType] then return true end
+    local inUnit = {}
+    for _, o in ipairs(officers) do
+        if type(o) == 'table' and type(o.citizenid) == 'string' then inUnit[o.citizenid] = true end
+    end
+    for _, o in ipairs(officers) do
+        local cid = type(o) == 'table' and Cid(o.citizenid) or nil
+        local r = cid and ReadRow(cid) or nil
+        local rec = r and r.record
+        if Active(rec) and not inUnit[rec.trainer] then return false, 'err.fto_trainer_needed', cid end
+    end
+    return true
+end
+
+-- ============================================================================
 --                         SUPERVISORS: PAIR AND UNPAIR
 -- ============================================================================
 
@@ -386,6 +430,21 @@ local function Finish(cid, record, name)
     return true
 end
 
+-- trainerBonus (T2): a points row for the trainer (a manual_award row, mission id fto_bonus, shown in his history).
+local function Bonus(trainerCid, rookieName, task)
+    local n = FT.trainerBonus()
+    if n <= 0 then return nil end
+    local reason = CP.L('fto.bonus_reason', { task = TaskLabel(task), name = rookieName })
+    local ok, rowId = Call('Scoring', '_insertBonusRow', trainerCid, 'manual_award', 'fto_bonus', n,
+        CP.L('admin.mission.fto_bonus'), { reason = reason, by = 'field_training' })
+    if not ok or not rowId then
+        CP.warn(TAG, 'the trainer bonus of %s could not be saved', trainerCid)
+        return nil
+    end
+    Kit.notify(trainerCid, 'success', 'fto.toast.bonus', { points = n, name = rookieName })
+    return rowId
+end
+
 -- { rookie, task, note? }: only the rookie's own trainer, only a task whose count is reached and not signed yet.
 function FT.signOff(src, payload)
     if not FT.enabled() then return false, 'err.fto_off' end
@@ -414,6 +473,7 @@ function FT.signOff(src, payload)
         Finish(rookie, rec, r.name)
         if not WriteRecord(rookie, rec) then return false, 'err.internal' end
         Kit.notify(rookie, 'success', 'fto.toast.signed', { task = TaskLabel(task), name = st.signedName })
+        Bonus(officer.citizenid, r.name or rookie, task)
         return true, FT.view(rookie, r.name, rec)
     end)
 end
@@ -432,11 +492,18 @@ function FT.mine(src)
     if not officer then return nil end
     local out = { rookies = {} }
     local r = ReadRow(officer.citizenid)
-    if r and r.record then out.training = FT.view(officer.citizenid, r.name or officer.name, r.record) end
+    if r and r.record then
+        out.training = FT.view(officer.citizenid, r.name or officer.name, r.record)
+        local need = {}
+        for t in pairs(Active(r.record) and FT.requiredTypes() or {}) do need[#need + 1] = TaskLabel(t) end
+        table.sort(need)
+        out.training.needsTrainer = need
+    end
     for _, x in ipairs(RookiesOf(officer.citizenid) or {}) do
         out.rookies[#out.rookies + 1] = FT.view(x.citizenid, x.name, x.record)
     end
     if not out.training and #out.rookies == 0 then return nil end
+    out.trainerBonus = FT.trainerBonus()
     return out
 end
 

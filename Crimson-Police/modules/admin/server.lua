@@ -297,6 +297,7 @@ function Admin.missionLabel(missionId)
     if missionId == 'manual_adjust' then return CP.L('admin.mission.manual_adjust') end
     if missionId == 'manual_cash' then return CP.L('admin.mission.manual_cash') end
     if missionId == 'goal' then return CP.L('admin.mission.goal') end
+    if missionId == 'fto_bonus' then return CP.L('admin.mission.fto_bonus') end
     local def = Has('Missions', 'get') and CP.Missions.get(missionId) or nil
     if type(def) == 'table' and def.label then return def.label end
     return tostring(missionId or '')

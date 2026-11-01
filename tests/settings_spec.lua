@@ -1630,6 +1630,10 @@ do
     H.ok(E('FieldTraining.rookiesPerTrainer').default == 2 and E('FieldTraining.rookiesPerTrainer').max == 20,
         'two rookies a trainer, at most 20')
     H.eq(E('FieldTraining.badge').default, 'field_training', 'the badge id')
+    H.ok(E('FieldTraining.trainerBonus').default == 0 and E('FieldTraining.trainerBonus').max == 1000,
+        'T2: no trainer bonus as shipped, at most 1000')
+    local ride = groups['FieldTraining.requireTrainerFor'] or E('FieldTraining.requireTrainerFor')
+    H.ok((ride.desc or ''):find('Ride-along rule', 1, true) ~= nil, 'T2: requireTrainerFor, its comment')
 end
 
 -- ============================================================================

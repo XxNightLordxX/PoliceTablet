@@ -284,4 +284,54 @@ H.ok(trainerListed, 'and the online trainers')
 H.eq(select(2, FT.deptView(2, 'fib')), 'err.other_department', 'never another department')
 H.eq(select(2, FT.deptView(3, 'sast')), 'err.no_permission', 'never an officer')
 
+-- ============================================================================
+--                  STEP T2: THE RIDE-ALONG RULE AND THE BONUS
+-- ============================================================================
+
+H.ok(type(FTC.requireTrainerFor) == 'table' and next(FTC.requireTrainerFor) == nil and FTC.trainerBonus == 0,
+    'T2 ships with no ride-along rule and no trainer bonus')
+local rookie7, trainer3, other5 = { citizenid = 'FT_ROO07' }, { citizenid = 'FT_TRN03' }, { citizenid = 'FT_LOW05' }
+H.eq(FT.unitCheck({ rookie7 }, 'tactical'), true, 'an empty rule: a rookie takes any type alone')
+FTC.requireTrainerFor = { 'tactical' }
+local okU, errU, who = FT.unitCheck({ rookie7, other5 }, 'tactical')
+H.ok(okU == false and errU == 'err.fto_trainer_needed' and who == 'FT_ROO07', 'a listed type without the trainer')
+H.eq(FT.unitCheck({ other5, rookie7, trainer3 }, 'tactical'), true, 'with his trainer in the unit')
+H.eq(FT.unitCheck({ rookie7 }, 'patrol'), true, 'a type not listed')
+H.eq(FT.unitCheck({ { citizenid = 'FT_ROO04' } }, 'tactical'), true, 'a finished training is free')
+FTC.requireTrainerFor = { tactical = true }
+H.eq(FT.unitCheck({ rookie7 }, 'tactical'), false, 'a { type = true } map works too')
+local m7 = FT.mine(7)
+H.ok(m7 and m7.training and m7.training.needsTrainer[1] == Config.MissionTypes.tactical.label,
+    'the rookie\'s card lists the ride-along types')
+FTC.enabled = false
+H.eq(FT.unitCheck({ rookie7 }, 'tactical'), true, 'off: no rule')
+FTC.enabled = true
+FTC.requireTrainerFor = {}
+
+local bonusRows = {}
+CP.Scoring = {
+    _insertBonusRow = function(cid, kind, missionId, points, label, extra)
+        bonusRows[#bonusRows + 1] = { cid = cid, kind = kind, missionId = missionId, points = points, extra = extra }
+        return #bonusRows
+    end,
+}
+FTC.tasks = { patrol = 2, tactical = 1 }
+ok = FT.signOff(3, { rookie = 'FT_ROO07', task = 'tactical' })
+H.ok(ok == true and #bonusRows == 0, 'trainerBonus 0: no points row')
+H.eq(FT.mine(3).trainerBonus, 0, 'and the card shows no bonus')
+FTC.trainerBonus = 25
+H.eq(Run(7, 'patrol'), true, 'a patrol run')
+H.eq(Run(7, 'patrol'), true, 'and another')
+ok = FT.signOff(3, { rookie = 'FT_ROO07', task = 'patrol' })
+local b = bonusRows[1]
+H.ok(
+    ok == true and b and b.cid == 'FT_TRN03' and b.points == 25 and b.kind == 'manual_award'
+        and b.missionId == 'fto_bonus',
+    'trainerBonus: 25 points to the trainer per signed task'
+)
+H.ok(Toasts('fto.toast.bonus') == 1, 'the trainer is told')
+FTC.trainerBonus = 99999
+H.eq(FT.trainerBonus(), 1000, 'the bonus is capped at 1000')
+FTC.trainerBonus = 0
+
 return H

@@ -234,14 +234,15 @@ local OPEN = {
     'Rewards.goals',
     'Rewards.levels',
     'Rewards.season',
-    'LiveCrime.types',              -- the crime keys are Crimson-Contracts' contract keys
-    'Volunteers.modes',             -- mission type keys (V21)
-    'Volunteers.missionModes',      -- mission ids (V21)
-    'Permissions.builderTeleport',  -- department keys
-    'MissionControls.grants',       -- department keys
-    'MissionControls.controls',     -- control keys
-    'FieldTraining.trainerGrades',  -- department keys (T1)
-    'FieldTraining.tasks',          -- mission type keys (T1)
+    'LiveCrime.types',                  -- the crime keys are Crimson-Contracts' contract keys
+    'Volunteers.modes',                 -- mission type keys (V21)
+    'Volunteers.missionModes',          -- mission ids (V21)
+    'Permissions.builderTeleport',      -- department keys
+    'MissionControls.grants',           -- department keys
+    'MissionControls.controls',         -- control keys
+    'FieldTraining.trainerGrades',      -- department keys (T1)
+    'FieldTraining.tasks',              -- mission type keys (T1)
+    'FieldTraining.requireTrainerFor',  -- a list of mission type keys (T2)
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
@@ -453,6 +454,7 @@ local RANGES = {
     ['MissionControls.pushMissionPerDay'] = { 0, 50 },
     ['MissionControls.awardPointsPerDay'] = { 0, 10000 },
     ['FieldTraining.rookiesPerTrainer'] = { 1, 20 },
+    ['FieldTraining.trainerBonus'] = { 0, 1000 },
     ['MissionControls.callLaneMaxOpen'] = { 1, 10 },
     ['Cash.addFundsMax'] = { 0, 10000000 },
     ['Cash.manualDailyLimit'] = { 0, 10000000 },

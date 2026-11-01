@@ -1987,9 +1987,10 @@ Contract interpretations (details in docs/notes/engine_a.md)
 ## Crimson-Police/modules/fieldtraining/server.lua
 
 ```text
-CP.FieldTraining (server): field training, part 1 (step T1, Config.FieldTraining). A supervisor (or an admin) pairs a
+CP.FieldTraining (server): field training (steps T1 and T2, Config.FieldTraining). A supervisor (or an admin) pairs a
 trainer with a rookie of the department; completed runs the two finish together count towards the sign-off tasks
-(per mission type); the trainer signs a task off once its count is reached; every task signed off gives the badge.
+(per mission type); the trainer signs a task off once its count is reached (trainerBonus points to him, T2); every
+task signed off gives the badge. T2: the ride-along rule (requireTrainerFor, checked by CP.Draw's accept).
 The record lives on the rookie's officer row (cp_officers.field_training, migration 015), so the database and the
 saves folder keep it alike. Shipped off: no hook does anything and every action is refused.
 ```
@@ -4676,6 +4677,15 @@ URL shortcuts (with ?ui=admin&screen=admin_testing for the screen, ?hud=test for
   testlua=1     Lua-shaped replies: empty lists sent as {} objects, false for missing values
 Check spawn points (PLAN S8): client actions spawnCheck / spawnCheckStop / teleport { target: 'point' } and a short
 fake run of 'spawnCheck' pushes (four missions with "All missions", a few bad points, Pursuit Sim #2 refused).
+```
+
+## Crimson-Police/web/src/officer/components/FieldTrainingCard.tsx
+
+```text
+Profile · Field training (steps T1 and T2, Config.FieldTraining): the officer's own training as a rookie (tasks,
+progress, trainer, sign-off notes and the ride-along types) and, as a trainer, his rookies with a Sign off button on
+every task whose count is reached (and the trainer bonus, when there is one). The server checks every rule again (only
+the rookie's own trainer, only a task that is ready and not signed yet). Nothing shows while the feature is off.
 ```
 
 ## Crimson-Police/web/src/officer/screens/ActiveMission.tsx

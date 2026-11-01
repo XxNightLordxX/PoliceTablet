@@ -1389,12 +1389,18 @@ Admin UI → Settings → Police → Field training).
    with his trainer (`{ patrol = 3, investigation = 2, tactical = 1 }` shipped).
 3. `rookiesPerTrainer` (2) caps the rookies one trainer has at once; `badge` (`field_training`) is the badge a rookie
    gets at the end.
+4. Optional ride-along rule: `requireTrainerFor`, a list of mission type keys (for example `{ 'tactical' }`) a rookie
+   may only accept (or claim as a mission call) with his trainer in the same unit. Shipped empty: a rookie takes every
+   type with anyone.
+5. Optional trainer bonus: `trainerBonus`, points the trainer gets for each task he signs off (shipped 0 = none; at
+   most 1000). The points show in his history as "Field training sign-off".
 
 How it plays: a supervisor opens **Supervisor UI → Department Report → Field training → Pair trainer**, picks a rookie
 of his department and an online trainer, and confirms (an admin can do it for any department). Missions the rookie
 completes in a unit with his trainer, both finishing the same run, count towards the task of that mission type. When a
 task's count is reached the trainer gets a toast and signs it off in **Profile → Field training**, with an optional
-note; the rookie sees his progress on the same card. When every task is signed off the rookie gets the **Field
+note; the rookie sees his progress, his trainer, the sign-off notes and the mission types he may only take with his
+trainer on the same card, and the trainer sees his trainees there with a **Sign off** button. When every task is signed off the rookie gets the **Field
 Training** badge. **End training** (click twice) removes a pairing. Pairing, ending and every sign-off are in the audit
 log. Nothing is lost on a restart: the training is saved with the officer (database or saves folder).
 

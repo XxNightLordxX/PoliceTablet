@@ -1,6 +1,5 @@
-// Profile · Field training (step T1, Config.FieldTraining): the officer's own training as a rookie and, as a trainer,
-// his rookies with a Sign off button on every task whose count is reached. The server checks every rule again (only
-// the rookie's own trainer, only a task that is ready and not signed yet). Nothing shows while the feature is off.
+// Profile · Field training (steps T1 and T2, Config.FieldTraining): the rookie's own training (tasks, progress,
+// trainer, notes, ride-along types) and the trainer's rookies with Sign off. Full notes in docs/FILE_NOTES.md.
 
 import { useState } from 'react';
 import { Badge, Button, Card, Dialog, Field, ProgressBar, Textarea } from '../../shared/components';
@@ -70,6 +69,7 @@ export function FieldTrainingCard() {
     const [note, setNote] = useState('');
     if (!data) return null;
     const rookies = asList(data.rookies);
+    const bonus = data.trainerBonus ?? 0;
 
     const submit = async () => {
         if (!signing) return;
@@ -98,10 +98,18 @@ export function FieldTrainingCard() {
                         <strong>{t('fto.my_training', { name: data.training.trainer.name })}</strong>
                         <FtoProgress view={data.training} />
                     </p>
+                    {asList(data.training.needsTrainer).length ? (
+                        <p className="profile-commend__by">
+                            {t('fto.needs_trainer', { types: asList(data.training.needsTrainer).join(', ') })}
+                        </p>
+                    ) : null}
                     <FtoTaskList view={data.training} />
                 </>
             ) : null}
             {rookies.length ? <p className="profile-commend__head">{t('fto.my_rookies')}</p> : null}
+            {rookies.length && bonus > 0 ? (
+                <p className="profile-commend__by">{t('fto.bonus_hint', { points: bonus })}</p>
+            ) : null}
             {rookies.map(v => (
                 <div key={v.rookie.citizenid}>
                     <p className="profile-commend__head">
@@ -122,7 +130,9 @@ export function FieldTrainingCard() {
                 onClose={() => setSigning(null)}
                 size="sm"
                 title={signing ? t('fto.sign_title', { task: signing.task.label, name: signing.view.rookie.name }) : ''}
-                description={t('fto.sign_text')}
+                description={
+                    bonus > 0 ? `${t('fto.sign_text')} ${t('fto.bonus_hint', { points: bonus })}` : t('fto.sign_text')
+                }
                 footer={
                     <>
                         <Button variant="ghost" onClick={() => setSigning(null)}>

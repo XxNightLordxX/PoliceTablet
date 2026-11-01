@@ -4066,7 +4066,7 @@ pattern, so a missing module reads as config).
   one control) is sent as `session.config.missionControls`, so the screen shows with the master switch off while a
   control outside it (the cooldown controls, as shipped) is on.
 
-### 5.50 CP.FieldTraining — modules/fieldtraining (S; field training, step T1)
+### 5.50 CP.FieldTraining — modules/fieldtraining (S; field training, steps T1 and T2)
 Config.FieldTraining (ships `enabled = false`: the hook counts nothing, every action answers `err.fto_off`, both reads
 answer `false`). The record is the rookie's `cp_officers.field_training` JSON (migration 015): `{ trainer, trainerName,
 dept, by, byName, at, tasks = { [missionType] = { runs, signedBy, signedName, signedAt, note } }, doneAt }`; NULL = not
@@ -4087,7 +4087,14 @@ in training. Every read-change-write of one record runs under a per-rookie lock 
   config whose count is reached and not signed yet; the note through `Kit.reason(v, true)`; audited `ftoSignOff`
   (role supervisor: cp_audit has no officer role); the last task sets `doneAt` and inserts the badge into `cp_badges`
   (`INSERT IGNORE`), both toasted.
-- Reads: `fto:getMine` (Profile → Field training: `{ training?, rookies }`, `false` when off or nothing to show) and
+- T2: `FT.unitCheck(officers, missionType) -> true | false, 'err.fto_trainer_needed', rookieCid` (the ride-along
+  rule, `FT.requiredTypes()` from `requireTrainerFor`, a list or a `{ type = true }` map; reads nothing while it is
+  empty). CP.Draw's `CheckAccept` (board accept and mission call claim) asks it after the per-officer checks and turns
+  a rookie other than the leader into `err.member_fto_trainer_needed`. `FT.trainerBonus()` (0 to 1000): after a
+  sign-off, `CP.Scoring._insertBonusRow(trainer, 'manual_award', 'fto_bonus', n, ...)` (breakdown.by
+  `field_training`, so supervisors' daily award limits never count it), toast `fto.toast.bonus`.
+- Reads: `fto:getMine` (Profile → Field training: `{ training?, rookies, trainerBonus }`, `training.needsTrainer` the
+  ride-along type labels; `false` when off or nothing to show) and
   `sup:getFieldTraining { department? }` (Department Report: `FtoDept`, the department's pairings, up to 300 officers
   as rookie candidates and the online trainers; a supervisor only his own department, admins any).
 - Web: web/src/officer/components/FieldTrainingCard.tsx (FtoTaskList, FtoProgress, the Profile card with Sign off) and
