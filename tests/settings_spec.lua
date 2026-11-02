@@ -365,6 +365,11 @@ do
     H.eq(E('AdminUi.oneRequest').default, false, 'the screens ship with two requests as before')
     H.ok((E('AdminUi.oneRequest').desc or ''):find('one request to the server', 1, true) ~= nil,
         'oneRequest: its config.lua comment is its description')
+    -- step OP3: windowed lists, shipped off (every row at once)
+    H.eq(E('AdminUi.windowRows').default, false, 'the Admin UI lists ship drawing every row at once')
+    H.eq(E('AdminUi.windowRows').kind, 'boolean', 'windowRows is a switch')
+    H.ok((E('AdminUi.windowRows').desc or ''):find('draw only the rows in view', 1, true) ~= nil,
+        'windowRows: its config.lua comment is its description')
     H.ok((E('AdminUi.plainLayout').desc or ''):find('each screen\'s title uses the same plain name', 1, true) ~= nil,
         'plainLayout: the description says the titles inside the screens follow')
     H.ok(E('FeatureRewards.suspect.byType') ~= nil, 'byType is one setting edited as a whole')

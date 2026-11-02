@@ -76,7 +76,7 @@ local DB_STORAGE = {
 }
 
 local FILES = H.migrationFiles()
-H.eq(#FILES, 16, 'FILES lists 001-016')
+H.eq(#FILES, 17, 'FILES lists 001-017')
 H.eq(FILES[3], '003_run_stats.sql', '003 after 002')
 H.eq(FILES[6], '006_item_rewards.sql', '006 after 005')
 H.eq(FILES[7], '007_settings.sql', '007 (the settings changed in game) after 006')
@@ -88,9 +88,10 @@ H.eq(FILES[12], '012_mission_ban.sql', '012 (the mission ban) after 011')
 H.eq(FILES[13], '013_call_department.sql', '013 (department call lanes) after 012')
 H.eq(FILES[14], '014_live_catches.sql', '014 (live catches per row) after 013')
 H.eq(FILES[15], '015_field_training.sql', '015 (field training) after 014')
-H.eq(FILES[16], '016_saved_cases.sql', '016 (saved real-suspect cases) last')
-H.eq(H.migrationVersion(), 16, 'the harness reads the version from FILES')
-H.eq(CP.Migrations.version(), 16, 'the harness\' CP.Migrations.version() is the real version')
+H.eq(FILES[16], '016_saved_cases.sql', '016 (saved real-suspect cases) after 015')
+H.eq(FILES[17], '017_lookup_indexes.sql', '017 (lookup indexes, step OP3) last')
+H.eq(H.migrationVersion(), 17, 'the harness reads the version from FILES')
+H.eq(CP.Migrations.version(), 17, 'the harness\' CP.Migrations.version() is the real version')
 local NEW_FILES = {
     '003_run_stats.sql',
     '004_profile.sql',
@@ -106,6 +107,7 @@ local NEW_FILES = {
     '014_live_catches.sql',
     '015_field_training.sql',
     '016_saved_cases.sql',
+    '017_lookup_indexes.sql',
 }
 local function SameList(a, b)
     if #a ~= #b then return false end
@@ -133,8 +135,8 @@ do
     local r = Runner(shim)
     H.ok(r.cp.Migrations.isReady(), 'a fresh saves folder: the runner finishes')
     H.eq(#r.errs, 0, 'no migration error')
-    H.eq(r.cp.Migrations.version(), 16, 'at version 16')
-    H.ok(SameList(r.applied, FILES), 'a fresh saves folder gets 001-016 once, in order')
+    H.eq(r.cp.Migrations.version(), 17, 'at version 17')
+    H.ok(SameList(r.applied, FILES), 'a fresh saves folder gets 001-017 once, in order')
     for _, t in ipairs({
         'cp_commendations',
         'cp_profile_reports',
@@ -178,15 +180,40 @@ do
             and db.tables.cp_officers.colIndex.license ~= nil,
         '008 adds its columns to the archive and the officers too'
     )
+    -- 017 (step OP3): the audit log and the disputes are looked up by key, not read whole
+    for i = 1, 200 do
+        shim.update.await('INSERT INTO cp_audit (actor, role, category, action, target) VALUES (?, ?, ?, ?, ?)', {
+            'A1',
+            'admin',
+            i % 2 == 0 and 'flags' or 'audit',
+            i % 2 == 0 and 'runFlagged' or 'autoSuspend',
+            'T' .. (i % 50),
+        })
+    end
+    local meter = {}
+    M.scanMeter = meter
+    local last = shim.scalar.await(
+        'SELECT UNIX_TIMESTAMP(MAX(created_at)) AS ts FROM cp_audit WHERE action = \'autoSuspend\' AND target = ?',
+        { 'T1' })
+    local flags = shim.query.await(
+        'SELECT action, target FROM cp_audit WHERE target IN (?, ?) AND category = \'flags\''
+            .. ' AND action IN (\'runFlagged\', \'runNoted\') ORDER BY id',
+        { 'T2', 'T4' }
+    )
+    shim.query.await('SELECT id, status FROM cp_disputes WHERE run_id = ? ORDER BY id DESC LIMIT 1', { 7 })
+    M.scanMeter = nil
+    H.ok(last ~= nil and #flags == 8, '017: the audit lookups still answer')
+    H.eq(meter.cp_audit, nil, ('017: no audit lookup reads the whole log (%s rows)'):format(tostring(meter.cp_audit)))
+    H.eq(meter.cp_disputes, nil, '017: a dispute is found by its run')
     -- a restart: the folder read back, nothing applied again
     local db2 = M.new({ store = M.folderStore(dir) }):load()
     local r2 = Runner(M.shim(db2, { resource = 'Crimson-Police' }))
     H.eq(#r2.applied, 0, 'a second start applies nothing')
-    H.eq(r2.cp.Migrations.version(), 16, 'and reports version 16')
+    H.eq(r2.cp.Migrations.version(), 17, 'and reports version 17')
     -- CP.Migrations.status(): every file, applied and when (Admin UI → System → Storage)
     local st = r2.cp.Migrations.status()
-    H.ok(st.readable and #st.files == 16 and st.pending == 0 and st.version == 16,
-        'status: 001-016 applied, none pending')
+    H.ok(st.readable and #st.files == 17 and st.pending == 0 and st.version == 17,
+        'status: 001-017 applied, none pending')
     H.ok(st.files[16].name == '016_saved_cases.sql' and st.files[16].applied and st.files[16].appliedAt > 0,
         'with the time each one ran')
 end
@@ -200,7 +227,7 @@ do
     H.ok(st.pending == 0 and #st.files == 2, 'status of that runner: its two files, both applied')
     local db2 = M.new({ store = M.folderStore(dir) }):load()
     local r2 = Runner(M.shim(db2, { resource = 'Crimson-Police' }))
-    H.ok(SameList(r2.applied, NEW_FILES), 'its next start applies exactly 003-016')
+    H.ok(SameList(r2.applied, NEW_FILES), 'its next start applies exactly 003-017')
     H.eq(#r2.errs, 0, 'without errors')
 end
 
@@ -215,7 +242,7 @@ do
     local r = Runner(shim)
     H.ok(r.cp.Migrations.isReady(), 'a re-run after a partial apply finishes')
     H.eq(#r.errs, 0, 'the columns and tables already there count as applied')
-    H.ok(SameList(r.applied, NEW_FILES), 'and 003-016 are recorded')
+    H.ok(SameList(r.applied, NEW_FILES), 'and 003-017 are recorded')
     H.ok(db.tables.cp_mission_runs_archive.colIndex.mission_call_id ~= nil, 'the rest of 003 was applied')
 end
 
@@ -365,7 +392,13 @@ if not H.skipIn('files', mariaOnly) and not H.skipIn('shadow', mariaOnly) then
     local r = Runner(impl, nil, DB_STORAGE)
     H.eq(#r.errs, 0, 'MariaDB: a fresh database migrates')
     H.eq(#r.warns, 0, 'MariaDB: the server check passes with no warning')
-    H.ok(SameList(r.applied, FILES), 'MariaDB: 001-016 applied once')
+    H.ok(SameList(r.applied, FILES), 'MariaDB: 001-017 applied once')
+    local idx = {}
+    On(function()
+        for _, row in ipairs(H.sql('SHOW INDEX FROM cp_audit') or {}) do idx[row.Key_name] = true end
+        for _, row in ipairs(H.sql('SHOW INDEX FROM cp_disputes') or {}) do idx[row.Key_name] = true end
+    end)()
+    H.ok(idx.idx_audit_target and idx.idx_audit_action and idx.idx_dispute_run, 'MariaDB: 017 adds its three indexes')
     local r2 = Runner(impl, nil, DB_STORAGE)
     H.eq(#r2.applied, 0, 'MariaDB: a second start applies nothing')
 
@@ -488,7 +521,7 @@ if not H.skipIn('files', mariaOnly) and not H.skipIn('shadow', mariaOnly) then
     for i = 1, 5 do On(function() H.sql(stmts[i]) end)() end
     local r3 = Runner(impl)
     H.eq(#r3.errs, 0, 'MariaDB: a re-run after a partial apply of 003 succeeds')
-    H.ok(SameList(r3.applied, NEW_FILES), 'MariaDB: a database from before this build gets exactly 003-016')
+    H.ok(SameList(r3.applied, NEW_FILES), 'MariaDB: a database from before this build gets exactly 003-017')
     -- the retention job's copy: INSERT ... SELECT * with the new columns on both tables
     On(function()
         H.sql([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid, department, participants,

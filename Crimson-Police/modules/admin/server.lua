@@ -2461,8 +2461,10 @@ local function FlagEvents(uuids)
             marks[#marks + 1] = '?'
         end
         i = i + 100
+        -- target IN first (step OP3): the saves folder engine looks rows up by the first indexed IN list it meets
+        -- (idx_audit_target, migration 017), not every flag row of the log
         local rows = Query(
-            ('SELECT action, target, old_value, new_value, reason FROM cp_audit WHERE category = \'flags\' AND action IN (\'runFlagged\', \'runNoted\') AND target IN (%s) ORDER BY id'):format(
+            ('SELECT action, target, old_value, new_value, reason FROM cp_audit WHERE target IN (%s) AND category = \'flags\' AND action IN (\'runFlagged\', \'runNoted\') ORDER BY id'):format(
                 table.concat(marks, ', ')
             ), chunk) or {}
         for _, r in ipairs(rows) do

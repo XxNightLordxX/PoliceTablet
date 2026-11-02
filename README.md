@@ -1101,6 +1101,15 @@ screens start loading the moment it opens; the styles still load with the page, 
 new switches, both off as shipped: `Config.Performance.pushGapMs` (try `250`) merges a burst of tablet updates into
 one per kind and player, and `Config.Performance.latentAboveBytes` (try `65536`) sends big answers in the background.
 
+Step OP3 was a second pass over the whole resource (numbers in `docs/LOOPS.md` under **Second pass**): the ox_target
+options on people and cars during a run check the run, your own state and each entity once per frame instead of once
+per option (about a tenth of the natives), a mission desk asks Qbox for your job at most once a second instead of on
+every look, an admin or supervisor action checks the admin permission once, and a new database index (migration
+017, added by itself on the next start) lets the audit log and dispute lookups find their rows without reading the
+whole table. Settings no longer redraws every row while you type in its search box. One new switch, off as shipped:
+`Config.AdminUi.windowRows` draws only the rows in view of a long scrolling list (try it if the Leaderboards board or
+a Settings search feels slow on a big server).
+
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.
 
@@ -1877,6 +1886,7 @@ so saved links and notifications still open the right screen), and a group with 
 | `Config.AdminUi.moneyScreen` | `false` | **Mission pay** (Payouts) and **Payments made** (Payments) become one **Money** screen with two tabs. A Home tile, a Needs attention line, the Leaderboards stuck payments link or a landing of `'payouts'` opens the right tab. |
 | `Config.AdminUi.pageSize` | `0` | Rows per page (10-200, for example 50) on the Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases. The server sends one page at a time. `0` keeps each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case at once). The case filters on Player suspects work on the page shown. |
 | `Config.AdminUi.oneRequest` | `false` | Payments made gets its totals and Leaderboards gets its flagged runs in the same request as the list, so each screen opens with one request instead of two. The screens show the same data. |
+| `Config.AdminUi.windowRows` | `false` | A scrolling table of more than 100 rows (such as the Leaderboards board) draws only the rows in view and the next ones as you scroll, and the Settings search results start with 60 rows and add more as you reach the end. The rows and their order are the same; `false` draws every row at once. |
 
 ### 9.4 The missions
 

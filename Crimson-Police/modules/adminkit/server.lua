@@ -718,7 +718,8 @@ local GuardRest
 
 -- Kit.supAction's permission: opts.permission(src, payload) when given, else CP.Permissions.can(src, permKey, {
 -- department }) with the department opts.department(payload) names (nil: no department check).
-local function SupPermission(entry, n, p)
+-- admin: what CP.Access.isAdmin answered for n in this request (Guard asks once and hands it to Permissions.can).
+local function SupPermission(entry, n, p, admin)
     if not (CP.Access and CP.Access.isAdmin and CP.Permissions and CP.Permissions.can) then
         return false, 'err.no_permission'
     end
@@ -736,7 +737,7 @@ local function SupPermission(entry, n, p)
         local okD, d = pcall(opts.department, p)
         if okD and type(d) == 'string' then dept = d end
     end
-    return CP.Permissions.can(n, entry.permKey, dept and { department = dept } or nil)
+    return CP.Permissions.can(n, entry.permKey, dept and { department = dept } or nil, { admin = admin })
 end
 
 local function Refuse(ctx, err)
@@ -753,10 +754,12 @@ local function Guard(entry, src, payload)
     -- M
     if not opts.maintenance and Maint.active() then return false, 'err.maintenance' end
     -- P (Kit.supAction): admins, and supervisors with the key for the department the action is about
+    -- the ace checks once per request (step OP3): the answer goes on to CP.Permissions.can
     if entry.supervisor then
-        local okP, errP = SupPermission(entry, n, p)
+        local admin = (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n)) and true or false
+        local okP, errP = SupPermission(entry, n, p, admin)
         if not okP then return false, errP or 'err.no_permission' end
-        if n ~= 0 and not CP.Access.isAdmin(n) then ctx.role = 'supervisor' end
+        if n ~= 0 and not admin then ctx.role = 'supervisor' end
         return GuardRest(entry, n, p, ctx)
     end
     -- P: an admin key (supervisors never pass) and the admin rule itself; a player who is not an admin is logged
@@ -767,7 +770,7 @@ local function Guard(entry, src, payload)
         return false, 'err.no_permission'
     end
     if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    local okP, errP = CP.Permissions.can(n, permKey)
+    local okP, errP = CP.Permissions.can(n, permKey, nil, { admin = true })
     if not okP then return false, errP or 'err.no_permission' end
     return GuardRest(entry, n, p, ctx)
 end
@@ -938,7 +941,7 @@ function Kit.callback(name, permKey, fn, opts)
             if CP.Permissions and CP.Permissions.probe then CP.Permissions.probe(n, name) end
             return nil, 'err.no_permission'
         end
-        local okP, errP = CP.Permissions.can(n, permKey)
+        local okP, errP = CP.Permissions.can(n, permKey, nil, { admin = true })
         if not okP then return nil, errP or 'err.no_permission' end
         local ctx = { src = n, args = type(args) == 'table' and args or {}, name = name, actor = ActorId(n) }
         ctx.preview = function(kind, ids, effect) return Kit.preview(n, kind, ids, effect) end

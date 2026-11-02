@@ -1,4 +1,4 @@
-# Loops and timers (steps LP1, LP2, OP1, OP2)
+# Loops and timers (steps LP1, LP2, OP1, OP2, OP3)
 
 Every repeating loop of Crimson-Police: where it is, what it does, when it runs, its interval and why that interval.
 "before -> after" shows the step LP2 change (owner, after LP1: "Try to fix the loops make it occur less often"); a
@@ -94,6 +94,42 @@ cleared on `playerDropped` or pruned by its sweep (`alerts` `wasInArena`, `npcco
 keeps the open tablet from re-rendering on HUD, toast and overlay updates (its layout element depends on the UI
 kind only), and every screen poll stops when the tablet closes.
 
+## Second pass (step OP3)
+
+Owner: "redo the optimization of the entire script redo the entire optimization of all loops". LP1/LP2 (when loops
+run), OP1 (client frame cost) and OP2 (idle SQL, pushes, the NUI bundle) were kept; OP3 looked for what they missed:
+work repeated inside one request, one ox_target pass or one draw, and lookups that read a whole table. Numbers are
+from the harness, before -> after:
+
+| What | Measure | Before -> after |
+| --- | --- | --- |
+| one ox_target pass over a contacted person and a stopped car with three seats (every contact, custody, seat and cuff option of `modules/npc/client.lua`) | entity checks (`DoesEntityExist`, `NetworkGetEntityIsNetworked`) | 96 -> 10 (once per entity per frame, with the bag) |
+| the same | run lookups (`CP.Runs.current`, a pcall each) | 82 -> 1 |
+| the same | `IsPedInAnyVehicle` / `PlayerPedId` | 34 / 35 -> 1 / 2 |
+| the same | Lua memory | 1.47 KB -> 0.80 KB (no new bag table a frame, no closure per bag read; the rest is the harness' own `Entity()` stand-in) |
+| a mission desk's canInteract, 50 asks within a second | Qbox `GetPlayerData` export calls | 50 -> 1 (the department is kept up to 1 s, forgotten at once on a job, duty, login, logout or settings change; the arena state bag is read last) |
+| one admin action (`CP.AdminKit.action`) | `IsPlayerAceAllowed` calls | 2 -> 1 (the guard hands its isAdmin answer to `CP.Permissions.can`) |
+| one admin read (`CP.AdminKit.callback`) | `IsPlayerAceAllowed` calls | 2 -> 1 |
+| one supervisor action (`CP.AdminKit.supAction`) | `IsPlayerAceAllowed` calls | 6 -> 4 |
+| the auto-suspension check, the flagged-run notes of a run list, the Type of the Day and mission control overrides, the publisher lookup, the reward take-back check, the per-day caps (`cp_audit`) | rows read per lookup | the whole audit log -> the rows of that target or action (migration 017: `idx_audit_target`, `idx_audit_action`) |
+| a dispute looked up by its run (`cp_disputes`) | rows read | the whole table -> that run's rows (`idx_dispute_run`) |
+| Settings: typing in the search box or saving one setting | rows drawn again | every row on the screen -> only rows whose data changed (`SettingRow` is memoized, `save` and `reset` keep their identity) |
+| `Config.AdminUi.windowRows = true`, an 800-row table in a scroll box (Leaderboards) | table rows drawn | 801 -> under 50 (the rows in view, 12 above and below, two spacers); shipped `false` = every row as before |
+| `Config.AdminUi.windowRows = true`, Settings search with hundreds of matches | rows drawn at first | every match -> 60, then 60 more each time the end is within 600 px |
+
+How it was found: `CP.Storage.MemSQL.scanMeter` (nil in the game) counts the rows each whole-table read of the saves
+folder engine hands over; run over the idle server (`tests/server_cost_spec.lua` world, 120 s) it found none, and over
+`tests/e2e_spec.lua` it found the `cp_audit` and `cp_disputes` lookups above. The other whole-table reads it lists are
+lists that are paged or summed on purpose (an Admin list ordered by date, a board build that is cached).
+
+Checked and kept: `shared/net.lua` does one rate bucket, one start check and one maintenance check per request;
+`CP.Access.getOfficer` reads Qbox through the 1 s player info cache and the suspension and retirement through their
+15 s cache (OP2); the block ox_target options (flee_arrest, search_area, skill_check, interact_points,
+protect_rescue, process_scene) read only their own Lua tables; the Activity log, Payments made, Officers and an
+officer's runs are paged on the server (`Config.AdminUi.pageSize`); the Mission Builder list is filtered in a
+`useMemo` and holds tens of rows. Specs: tests/fixtures/npc/target_check.lua (g), tests/access_spec.lua (desk),
+tests/server_cost_spec.lua (ace checks), tests/foundation_spec.lua (017), web/src/shared/rowWindow.walk.ts.
+
 ## Client loops
 
 | File | What it does | When it runs | Interval | Why |
@@ -163,5 +199,6 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | shared/hooks.ts `useRequest` | screen polls (`pollMs`) | the screen is mounted in the open tablet | 10 -> 20 s shortest (`POLL_MIN_MS`: a smaller `pollMs` polls every 20 s), up to 60 s per screen; pushes refresh at once |
 | layouts/navBadges.ts | sidebar counts re-ask | tablet open | 5 min (the `nav` push does the rest) |
 | shared/hooks.ts `useCountdown` | HUD countdowns | a countdown shows | 200 ms, ends at 0 |
+| shared/rowWindow.ts `useRowWindow` | the rows a windowed table draws | `Config.AdminUi.windowRows` on, a scrolling table of more than 100 rows | on scroll, one update per animation frame (no timer) |
 | builder/useDraftEditor.ts | autosave | an editable draft is open | `autosaveSeconds` |
 | admin/screens/Testing.tsx | clock tick | the screen is open | 30 s |

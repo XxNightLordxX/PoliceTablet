@@ -1335,15 +1335,20 @@ W.bags[P13].cp.run = 'run-2'
 H.eq(def.canInteract(P13, 2.0), false, 'another run')
 W.bags[P13].cp.run = 'run-1'
 local saved = W.run
+-- the run and the player's own state are read once per frame (step OP3): a changed condition is a new ox_target pass
 W.run = nil
+H.nextFrame()
 H.eq(def.canInteract(P13, 2.0), false, 'non-participants never see it')
 W.run = saved
+H.nextFrame()
 W.bags[P13].cp.cuff = nil
 H.eq(def.canInteract(P13, 2.0), false, 'not cuffable')
 W.bags[P13].cp.cuff = { label = CP.L('npc.cuff'), duration = 5000, maxDistance = 3.0 }
 W.ents[100].vehicle = 6001
+H.nextFrame()
 H.eq(def.canInteract(P13, 2.0), false, 'not from a vehicle')
 W.ents[100].vehicle = nil
+H.nextFrame()
 LocalPlayer.state.crimsonArena = { active = true, matchId = 'm1' }
 H.eq(def.canInteract(P13, 2.0), false, 'not while in Crimson-Arena')
 LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-police' }

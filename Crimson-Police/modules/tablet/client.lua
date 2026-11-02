@@ -946,12 +946,34 @@ end
 -- SPEC Tablet access: ox_target boxes from Config.Tablet.desks. canInteract only decides what is shown; the
 -- server checks the box (server coordinates), the department and the arena again when the session is asked for.
 
-local function DeskDepartment()
+local function ReadDeskDepartment()
     local pd = CP.Qbx and CP.Qbx.getPlayerData and CP.Qbx.getPlayerData() or {}
     local job = type(pd.job) == 'table' and pd.job or nil
     if not job or job.onduty == false then return nil end
     return DepartmentOfJob(job.name)
 end
+
+-- The desk's canInteract asks while the eye rests on a desk (every ox_target pass): the player's department is read
+-- from Qbox (an export call) at most once a second, and again at once after a job, duty, login or logout event or a
+-- settings change (step OP3). The server checks again on every open.
+local DESK_DEPT_MS = 1000
+local deskDept = { at = nil, key = nil }
+
+local function DeskDepartment()
+    local now = GetGameTimer()
+    if deskDept.at == nil or now - deskDept.at >= DESK_DEPT_MS or now < deskDept.at then
+        deskDept.key, deskDept.at = ReadDeskDepartment(), now
+    end
+    return deskDept.key
+end
+
+local function ForgetDeskDepartment() deskDept.at = nil end
+if CP.Qbx then
+    for _, on in ipairs({ CP.Qbx.onJobUpdate, CP.Qbx.onDutyChange, CP.Qbx.onUnload, CP.Qbx.onLoaded }) do
+        if type(on) == 'function' then on(ForgetDeskDepartment) end
+    end
+end
+CP.Hooks.on('settings:changed', ForgetDeskDepartment)
 
 local function DeskAllows(desk, deptKey)
     if not deptKey then return false end
@@ -1011,7 +1033,8 @@ CreateDeskZones = function()
                             icon = 'fa-solid fa-laptop',
                             distance = DESK_TARGET_DISTANCE,
                             canInteract = function()
-                                return not state.open and not InForeignArena() and DeskAllows(desk, DeskDepartment())
+                                -- cheap checks first: the arena flag is a state bag read
+                                return not state.open and DeskAllows(desk, DeskDepartment()) and not InForeignArena()
                             end,
                             onSelect = function() RequestOpen('desk', index) end,
                         },

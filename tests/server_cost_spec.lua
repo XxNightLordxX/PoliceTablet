@@ -176,6 +176,56 @@ do
     Config.Performance.latentAboveBytes = 0
 end
 
+-- ============================================================================
+--            ONE ADMIN OR SUPERVISOR REQUEST: ACE CHECKS (step OP3)
+-- ============================================================================
+-- CP.AdminKit's guards asked CP.Access.isAdmin and then CP.Permissions.can asked it again (each is one or two
+-- IsPlayerAceAllowed calls: Config.AdminAce, then the Qbox admin ace while Config.QboxAdmins is on). The guard now
+-- hands its answer on. Before -> after: an admin action 2 -> 1 ace check, an admin read 2 -> 1, a supervisor action
+-- 6 -> 4 (the officer lookup asks once for its own isAdmin field).
+
+do
+    local admin, sup
+    for _, s in ipairs(GetPlayers()) do
+        local n = tonumber(s)
+        if not admin and CP.Access.isAdmin(n) then admin = n end
+        if not sup and not CP.Access.isAdmin(n) and CP.Access.isSupervisor(n) then sup = n end
+    end
+    H.ok(admin ~= nil and sup ~= nil,
+        ('an admin (%s) and a supervisor (%s) online'):format(tostring(admin), tostring(sup)))
+    local Kit = CP.AdminKit
+    local ran = 0
+    Kit.action('test:op3Admin', 'viewMissionList', function() ran = ran + 1; return true end)
+    Kit.supAction('test:op3Sup', 'viewMissionList', function() ran = ran + 1; return true end)
+    Kit.callback('test:op3Read', 'viewMissionList', function() return { ok = 1 } end)
+    local real, aces = _G.IsPlayerAceAllowed, 0
+    _G.IsPlayerAceAllowed = function(...)
+        aces = aces + 1
+        return real(...)
+    end
+    local function Aces(fn)
+        aces = 0
+        fn()
+        return aces
+    end
+    local a1 = Aces(function() H.ok(Kit.run('test:op3Admin', admin, {}), 'the admin action runs') end)
+    local a2 = Aces(function()
+        Adv(1100, 1100)
+        local res = H.callback('crimson-police:test:op3Read', admin, {})
+        H.ok(res and res.ok, 'the admin read answers')
+    end)
+    local a3 = Aces(function() H.ok(Kit.run('test:op3Sup', sup, {}), 'the supervisor action runs') end)
+    local a4 = Aces(function()
+        H.ok(not Kit.run('test:op3Admin', sup, {}), 'a supervisor cannot run an admin action')
+    end)
+    _G.IsPlayerAceAllowed = real
+    H.eq(ran, 2, 'each allowed action ran once')
+    H.eq(a1, 1, ('an admin action: one ace check (%d; 2 before OP3)'):format(a1))
+    H.eq(a2, 1, ('an admin read: one ace check (%d; 2 before OP3)'):format(a2))
+    H.ok(a3 <= 4, ('a supervisor action: at most 4 ace checks (%d; 6 before OP3)'):format(a3))
+    H.ok(a4 <= 2, ('a refused admin action: the ace checks once (%d)'):format(a4))
+end
+
 if not os.getenv('E2E_KEEP_DB') then os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db)) end
 _G.print = World.print
 return H

@@ -5057,6 +5057,15 @@ Unit while the unit's ready check waits for the officer's answer, Active Mission
 last screen. Only the Officer UI: the Supervisor and Admin UIs keep their screens.
 ```
 
+## Crimson-Police/web/src/shared/rowWindow.ts
+
+```text
+Windowed lists (step OP3, Config.AdminUi.windowRows, shipped false): rowWindow() works out the rows of a scroll
+position (more than 100 rows, 12 above and below the view, spacers for the rest); useRowWindow() is the Table's scroll
+handler (one update per animation frame) and measures the first drawn row; useGrowingLimit() lets the Settings search
+results start with 60 rows and add 60 each time an IntersectionObserver sees the end within 600 px.
+```
+
 ## Crimson-Police/web/src/shared/options.ts
 
 ```text
@@ -6350,6 +6359,8 @@ Server cost (step OP2, docs/LOOPS.md "Server cost and NUI"): the REAL server sid
 online and no run, as tests/e2e_spec.lua sets it up (its world is loaded from that file, up to its HELPERS
 section, on a database of its own). Counted: the SQL the idle server sends in two minutes, the tablet pushes with
 Config.Performance.pushGapMs, and which callback answers go latent with Config.Performance.latentAboveBytes.
+Step OP3: the IsPlayerAceAllowed calls of one admin action, one admin read and one supervisor action through
+CP.AdminKit (the guard asks isAdmin once and hands it to CP.Permissions.can).
 ```
 
 ## tests/shadow/fuzz_agg.lua

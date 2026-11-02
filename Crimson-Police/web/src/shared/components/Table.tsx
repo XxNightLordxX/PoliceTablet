@@ -1,6 +1,7 @@
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { cx } from '../cx';
 import { t } from '../i18n';
+import { useRowWindow, useWindowRows } from '../rowWindow';
 import { EmptyState, Spinner } from './Feedback';
 
 export interface TableColumn<R> {
@@ -35,6 +36,9 @@ export interface TableProps<R> {
     dense?: boolean;
     // Extra row(s) pinned under the body, e.g. "your row" on a leaderboard.
     footer?: ReactNode;
+    // Draw only the rows in view (Config.AdminUi.windowRows, step OP3); only with maxHeight and more than 100 rows.
+    // Left out: the open UI's setting.
+    windowRows?: boolean;
     className?: string;
     'aria-label'?: string;
 }
@@ -59,10 +63,21 @@ export function Table<R>({
     dense,
     footer,
     className,
+    windowRows,
     ...aria
 }: TableProps<R>) {
     // Lua encodes an empty table as {} (not []), so anything that is not an array counts as no rows.
     const list: R[] = Array.isArray(rows) ? rows : [];
+    const uiWindow = useWindowRows();
+    const viewGuess = typeof maxHeight === 'number' ? maxHeight : 480;
+    const { win, onScroll, rowRef } = useRowWindow(
+        list.length,
+        maxHeight !== undefined && (windowRows ?? uiWindow),
+        viewGuess,
+        dense ? 32 : 44,
+    );
+    const shownRows = win.start === 0 && win.end === list.length ? list : list.slice(win.start, win.end);
+    const span = columns.length || 1;
     const wrapStyle: CSSProperties | undefined = maxHeight !== undefined ? { maxHeight, overflow: 'auto' } : undefined;
     const keyOf = (row: R, i: number) => (rowKey ? rowKey(row, i) : ((row as { id?: string | number }).id ?? i));
     const onKey = (row: R, i: number) => (e: KeyboardEvent<HTMLTableRowElement>) => {
@@ -81,6 +96,7 @@ export function Table<R>({
                 className,
             )}
             style={wrapStyle}
+            onScroll={maxHeight !== undefined ? onScroll : undefined}
         >
             <table
                 className={cx('cp-table', dense && 'cp-table--dense', onRowClick && 'cp-table--clickable')}
@@ -102,25 +118,39 @@ export function Table<R>({
                     </tr>
                 </thead>
                 <tbody>
-                    {list.map((row, i) => (
-                        <tr
-                            key={keyOf(row, i)}
-                            className={cx(highlightRow?.(row, i) && 'is-highlight', rowClassName?.(row, i))}
-                            onClick={onRowClick ? () => onRowClick(row, i) : undefined}
-                            onKeyDown={onRowClick ? onKey(row, i) : undefined}
-                            tabIndex={onRowClick ? 0 : undefined}
-                        >
-                            {columns.map(c => (
-                                <td
-                                    key={c.key}
-                                    style={{ textAlign: c.align ?? (c.numeric ? 'right' : 'left') }}
-                                    className={cx(c.numeric && 'cp-num', c.className)}
-                                >
-                                    {c.render ? c.render(row, i) : cellValue(row, c.key)}
-                                </td>
-                            ))}
+                    {win.padTop > 0 ? (
+                        <tr aria-hidden className="cp-table__spacer">
+                            <td colSpan={span} style={{ height: win.padTop, padding: 0, border: 0 }} />
                         </tr>
-                    ))}
+                    ) : null}
+                    {shownRows.map((row, k) => {
+                        const i = win.start + k;
+                        return (
+                            <tr
+                                key={keyOf(row, i)}
+                                ref={k === 0 ? rowRef : undefined}
+                                className={cx(highlightRow?.(row, i) && 'is-highlight', rowClassName?.(row, i))}
+                                onClick={onRowClick ? () => onRowClick(row, i) : undefined}
+                                onKeyDown={onRowClick ? onKey(row, i) : undefined}
+                                tabIndex={onRowClick ? 0 : undefined}
+                            >
+                                {columns.map(c => (
+                                    <td
+                                        key={c.key}
+                                        style={{ textAlign: c.align ?? (c.numeric ? 'right' : 'left') }}
+                                        className={cx(c.numeric && 'cp-num', c.className)}
+                                    >
+                                        {c.render ? c.render(row, i) : cellValue(row, c.key)}
+                                    </td>
+                                ))}
+                            </tr>
+                        );
+                    })}
+                    {win.padBottom > 0 ? (
+                        <tr aria-hidden className="cp-table__spacer">
+                            <td colSpan={span} style={{ height: win.padBottom, padding: 0, border: 0 }} />
+                        </tr>
+                    ) : null}
                 </tbody>
                 {footer ? <tfoot>{footer}</tfoot> : null}
             </table>

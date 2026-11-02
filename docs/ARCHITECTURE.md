@@ -154,7 +154,7 @@ PoliceTablet/                      (git repo)
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
                    009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql,
                    012_mission_ban.sql, 013_call_department.sql, 014_live_catches.sql,
-                   015_field_training.sql, 016_saved_cases.sql
+                   015_field_training.sql, 016_saved_cases.sql, 017_lookup_indexes.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua

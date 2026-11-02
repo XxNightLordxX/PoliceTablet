@@ -1,7 +1,7 @@
 // Admin UI · Settings (screen key 'admin_settings'): every setting of config/config.lua and config/blocks.lua,
 // changed in game. The server checks every value again; this screen only helps to enter a valid one.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
     Badge,
     Button,
@@ -29,6 +29,7 @@ import { asArray } from '../../shared/data';
 import { request } from '../../shared/nui';
 import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
+import { useGrowingLimit, useWindowRows } from '../../shared/rowWindow';
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigate, useNavigation } from '../../shared/navigation';
 import { toast } from '../../shared/toast';
@@ -619,7 +620,9 @@ function PerMissionNote() {
     );
 }
 
-export function SettingRow({
+// memo (step OP3): typing in the search box or a save elsewhere does not draw every row again; save and reset from
+// useSettingSave keep their identity across renders.
+export const SettingRow = memo(function SettingRow({
     s,
     disabled,
     save,
@@ -741,7 +744,7 @@ export function SettingRow({
             </div>
         </div>
     );
-}
+});
 
 // ============================================================================
 //                                CONFIG HEALTH
@@ -1124,12 +1127,12 @@ export function useSettingSave(onReply: (reply: SettingsReply | undefined) => vo
         if (s.points) return new Promise<boolean>(done => setPoints({ s, p, done }));
         return send(s, p);
     };
-    const save = async (s: SettingView, p: SavePayload): Promise<boolean> => {
+    const saveNow = async (s: SettingView, p: SavePayload): Promise<boolean> => {
         const look = await preflight(s, p);
         if (!look) return proceed(s, p);
         return new Promise<boolean>(done => setPre({ ...look, s, p, done }));
     };
-    const reset = async (s: SettingView) => {
+    const resetNow = async (s: SettingView) => {
         const res = await run<SettingsReply>(
             'server:admin:resetSetting',
             { path: s.path },
@@ -1137,6 +1140,11 @@ export function useSettingSave(onReply: (reply: SettingsReply | undefined) => vo
         );
         if (res.ok) onReply(res.data);
     };
+    // the same two functions on every render (step OP3: SettingRow is memoized), always calling the newest code
+    const latest = useRef({ saveNow, resetNow });
+    latest.current = { saveNow, resetNow };
+    const save = useCallback((s: SettingView, p: SavePayload) => latest.current.saveNow(s, p), []);
+    const reset = useCallback((s: SettingView) => latest.current.resetNow(s), []);
     const dialogs = (
         <>
             <ConfirmDialog
@@ -1241,6 +1249,18 @@ export default function AdminSettings() {
     );
     const q = query.trim().toLowerCase();
     const searching = q !== '' || filter !== 'all';
+    // Config.AdminUi.windowRows (step OP3): the search results start with the first rows and add more as the end
+    // comes into view; off = every match at once, as before. The matches are worked out once per search, not per draw.
+    const windowRows = useWindowRows();
+    const hits = useMemo(
+        () => (searching ? all.filter(s => matches(s, q) && passes(s, filter)) : []),
+        [all, searching, q, filter],
+    );
+    const grow = useGrowingLimit(hits.length, windowRows, `${q}|${filter}`);
+    const allowed = useMemo(
+        () => (grow.limit >= hits.length ? null : new Set(hits.slice(0, grow.limit).map(s => s.path))),
+        [hits, grow.limit],
+    );
     const current = sections.find(s => s.key === sectionKey) ?? sections[0];
     // Picking a section in the list brings that section's top into view (the page may be scrolled far down).
     const mainRef = useRef<HTMLDivElement>(null);
@@ -1346,7 +1366,15 @@ export default function AdminSettings() {
     else if (panel === 'transfer') body = <TransferPanel onImported={() => void refetch()} />;
     else {
         const found = searching
-            ? sections.map(sec => renderSection(sec, s => matches(s, q) && passes(s, filter), true)).filter(Boolean)
+            ? sections
+                  .map(sec =>
+                      renderSection(
+                          sec,
+                          s => matches(s, q) && passes(s, filter) && (!allowed || allowed.has(s.path)),
+                          true,
+                      ),
+                  )
+                  .filter(Boolean)
             : [];
         const plain = simple ? simpleGroups(sections, asArray(data?.groups), asArray(data?.common)) : [];
         const shown = plain.reduce((n, g) => n + g.settings.length, 0);
@@ -1475,7 +1503,10 @@ export default function AdminSettings() {
                 </div>
                 {searching ? (
                     found.length ? (
-                        <div className="settings-results">{found}</div>
+                        <div className="settings-results">
+                            {found}
+                            {grow.more ? <div ref={grow.sentinel} style={{ height: 1 }} aria-hidden /> : null}
+                        </div>
                     ) : (
                         <EmptyState icon="search" title={t('settings.no_match')} />
                     )

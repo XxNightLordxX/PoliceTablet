@@ -458,7 +458,7 @@ do
     Has(forms, '<SettingRow', 'Quick settings uses the Settings screen\'s rows')
     Has(forms, 'useSettingSave(', 'and its saves (preflight, money word, point confirm)')
     local settings = Read(WEB .. 'admin/screens/Settings.tsx') or ''
-    Has(settings, 'export function SettingRow(', 'SettingRow is exported')
+    Has(settings, 'export const SettingRow = memo(function SettingRow(', 'SettingRow is exported (memoized, step OP3)')
     Has(settings, 'export function Editor(', 'Editor is exported')
     Has(settings, 'export function useSettingSave(', 'the save flow is shared')
     Has(settings, 'const { save, reset, busy: saving, dialogs } = useSettingSave(', 'Settings saves through it too')

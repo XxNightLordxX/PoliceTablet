@@ -458,6 +458,94 @@ H.ok(done ~= nil and done.action ~= 'handover',
 for k, v in pairs(plain) do _G[k] = v end
 CP.Runs.current, CP.Custody.perform = plainCurrent, plainPerform
 _G.Entity, _G.LocalPlayer = plainEntity, plainLocal
+
+-- ============================================================================
+--                           (g) ONE PASS OF THE EYE
+-- ============================================================================
+-- NATIVES AND RUN LOOKUPS (step OP3, docs/LOOPS.md).
+-- ox_target asks every option of a pass in one frame. The run, the player's own state (dead, in a vehicle) and each
+-- entity's exists / networked check are read once per frame, like the bag. Before OP3, one pass over a contacted
+-- person (every ped option) and a stopped car with three seats (every vehicle option) made 96 entity checks, 82 run
+-- lookups, 34 vehicle checks and 35 PlayerPedId calls, and allocated 1.47 KB (a new bag table each frame, a closure
+-- per bag read); the fixture's own Entity() stand-in still allocates a little per read.
+do
+    local meter = {}
+    local names = {
+        'DoesEntityExist',
+        'NetworkGetEntityIsNetworked',
+        'IsPedInAnyVehicle',
+        'IsEntityDead',
+        'PlayerPedId',
+    }
+    local saved = {}
+    for _, k in ipairs(names) do
+        saved[k] = _G[k]
+        local real = saved[k]
+        _G[k] = function(...)
+            meter[k] = (meter[k] or 0) + 1
+            return real(...)
+        end
+    end
+    local asks = 0
+    CP.Runs.current = function()
+        asks = asks + 1
+        return R.current
+    end
+    local talker = AddEnt(6201, Person('contacted'))
+    local car = AddEnt(8201, Car('stopped'))
+    W.seats[car] = { [-1] = DRIVER, [1] = REAR, [2] = STRANGER }
+    local function Pass()
+        H.nextFrame()
+        meter, asks = {}, 0
+        local shown = 0
+        for _, o in ipairs(T.peds) do if o.canInteract(talker, 1.0) == true then shown = shown + 1 end end
+        for _, o in ipairs(T.vehicles) do if o.canInteract(car, 1.0) == true then shown = shown + 1 end end
+        return shown
+    end
+    Pass()
+    collectgarbage('collect')
+    collectgarbage('stop')
+    local kb = collectgarbage('count')
+    local shown = Pass()
+    local used = collectgarbage('count') - kb
+    collectgarbage('restart')
+    local checks = (meter.DoesEntityExist or 0) + (meter.NetworkGetEntityIsNetworked or 0)
+    H.ok(shown > 0, ('the pass shows options (%d)'):format(shown))
+    H.ok(checks <= 10, ('one pass: entity checks once per entity (%d; 96 before OP3)'):format(checks))
+    H.eq(asks, 1, ('one pass: one run lookup (%d; 82 before OP3)'):format(asks))
+    H.eq(meter.IsPedInAnyVehicle or 0, 1, 'one pass: one in-a-vehicle check (34 before OP3)')
+    H.ok((meter.IsEntityDead or 0) <= 2,
+        ('one pass: the dead check at most twice (%d)'):format(meter.IsEntityDead or 0))
+    H.ok(used < 1.0,
+        ('one pass allocates no new bag table and no closure per read (%.2f KB; 1.47 before)'):format(used))
+    H.ok((meter.PlayerPedId or 0) <= 2,
+        ('one pass: PlayerPedId at most twice (%d; 35 before)'):format(meter.PlayerPedId or 0))
+    print(('OP3 meter: entity checks %d, run lookups %d, vehicle checks %d, dead %d, PlayerPedId %d, %.2f KB'):format(
+        checks, asks, meter.IsPedInAnyVehicle or 0, meter.IsEntityDead or 0, meter.PlayerPedId or 0, used))
+    -- the same answers as asked one option per frame
+    local perFrameBits, oneFrameBits = {}, {}
+    for _, o in ipairs(T.peds) do
+        H.nextFrame()
+        perFrameBits[#perFrameBits + 1] = o.canInteract(talker, 1.0) == true and '1' or '0'
+    end
+    H.nextFrame()
+    for _, o in ipairs(T.peds) do
+        oneFrameBits[#oneFrameBits + 1] = o.canInteract(talker, 1.0) == true and '1' or '0'
+    end
+    H.eq(table.concat(oneFrameBits), table.concat(perFrameBits), 'one pass answers as one option per frame')
+    -- a condition that changes between passes is seen on the next pass
+    W.inCar = true
+    H.eq(Pass(), 0, 'next pass, in a vehicle: nothing shows')
+    W.inCar = false
+    W.ents[talker] = nil
+    H.nextFrame()
+    local any = false
+    for _, o in ipairs(T.peds) do if o.canInteract(talker, 1.0) == true then any = true end end
+    H.ok(not any, 'next pass, the person is gone: nothing shows')
+    for _, k in ipairs(names) do _G[k] = saved[k] end
+    W.bags[talker], W.ents[car], W.bags[car], W.seats[car] = nil, nil, nil, nil
+end
+CP.Runs.current = plainCurrent
 for _, e in ipairs(pool) do W.ents[e], W.bags[e] = nil, nil end
 W.ents[TALKER], W.bags[TALKER], W.ents[ESCORTED], W.bags[ESCORTED] = nil, nil, nil, nil
 R.current = savedRun

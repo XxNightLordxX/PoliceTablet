@@ -117,6 +117,8 @@ export interface Session {
             // step H6: one Money screen (Config.AdminUi.moneyScreen) and one request per screen open (oneRequest)
             moneyScreen?: boolean;
             oneRequest?: boolean;
+            // step OP3: long lists draw only the rows in view (Config.AdminUi.windowRows; false = every row)
+            windowRows?: boolean;
         };
         // Config.RealSuspects.adminScreen (step V18): screen = the Admin UI shows Real suspects (true only while
         // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)

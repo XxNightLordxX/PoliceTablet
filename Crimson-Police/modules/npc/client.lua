@@ -228,8 +228,14 @@ local function PointsOf(list)
     return out
 end
 
+-- The per-frame reads of the ox_target options (described below, where its functions are).
+local perFrame = { frame = -1, bags = {}, act = nil, had = {}, run = nil, dead = false, car = false }
+
+-- one reader for every bag read (no new closure per read)
+function perFrame.readCp(e) return Entity(e).state.cp end
+
 local function BagOf(e)
-    local ok, v = pcall(function() return Entity(e).state.cp end)
+    local ok, v = pcall(perFrame.readCp, e)
     if ok and type(v) == 'table' then return v end
     return nil
 end
@@ -238,22 +244,53 @@ end
 -- yielding, and each bag read is a msgpack decode, so the options of one pass share each entity's bag (bags[e],
 -- false for none) and the CanAct answer (act). Everything else (the contact key, the cuff flow, the stun handler,
 -- the host AI and the governor) reads the bag itself. A table, not locals: this file is at Lua's 200 locals.
-local perFrame = { frame = -1, bags = {}, act = nil }
+-- Step OP3: the run, the player's own state (dead, in a vehicle) and each entity's exists / networked check are read
+-- once per frame too, and the bag table is emptied in place instead of a new one each frame. had[k] = true once k was
+-- read this frame (run, dead, car: their answer may be nil or false).
 
 function perFrame.fresh()
     local f = GetFrameCount()
-    if f ~= perFrame.frame then perFrame.frame, perFrame.bags, perFrame.act = f, {}, nil end
+    if f == perFrame.frame then return end
+    perFrame.frame, perFrame.act = f, nil
+    local bags, had = perFrame.bags, perFrame.had
+    for e in pairs(bags) do bags[e] = nil end
+    had.run, had.dead, had.car = nil, nil, nil
 end
 
--- The entity's cp bag, read once per frame.
+-- The entity's cp bag, read once per frame; nil for no entity, one that is gone or one that is not networked (the
+-- checks ContactBag and CuffableBag make before they read a bag).
 function perFrame.bag(e)
     perFrame.fresh()
     local v = perFrame.bags[e]
     if v == nil then
-        v = BagOf(e) or false
+        if not e or e == 0 or not DoesEntityExist(e) or not NetworkGetEntityIsNetworked(e) then
+            v = false
+        else
+            v = BagOf(e) or false
+        end
         perFrame.bags[e] = v
     end
     return v or nil
+end
+
+-- CurrentRun(), asked once per frame.
+function perFrame.currentRun()
+    perFrame.fresh()
+    if not perFrame.had.run then perFrame.had.run, perFrame.run = true, CurrentRun() end
+    return perFrame.run
+end
+
+-- The local player is dead / in any vehicle, asked once per frame.
+function perFrame.isDead()
+    perFrame.fresh()
+    if not perFrame.had.dead then perFrame.had.dead, perFrame.dead = true, IsEntityDead(PlayerPedId()) end
+    return perFrame.dead
+end
+
+function perFrame.inCar()
+    perFrame.fresh()
+    if not perFrame.had.car then perFrame.had.car, perFrame.car = true, IsPedInAnyVehicle(PlayerPedId(), false) end
+    return perFrame.car
 end
 
 local function FleeCfg()
@@ -1866,9 +1903,13 @@ end
 
 -- read: how the bag is read (BagOf when not given; the ox_target options pass perFrame.bag).
 local function ContactBag(entity, read)
-    local run = CurrentRun()
+    local framed = read == perFrame.bag
+    local run
+    if framed then run = perFrame.currentRun() else run = CurrentRun() end
     if not run or run.state ~= 'in_progress' then return nil end
-    if not entity or entity == 0 or not DoesEntityExist(entity) or not NetworkGetEntityIsNetworked(entity) then
+    -- perFrame.bag makes the entity checks itself, once per frame
+    if not framed
+        and (not entity or entity == 0 or not DoesEntityExist(entity) or not NetworkGetEntityIsNetworked(entity)) then
         return nil
     end
     local bag = (read or BagOf)(entity)
@@ -1908,9 +1949,9 @@ local function PersonOption(action, prefix)
         label = ActionLabel(action),
         distance = ReachOf('person', action),
         canInteract = function(entity, distance)
-            local run = CurrentRun()
+            local run = perFrame.currentRun()
             if not run or run.state ~= 'in_progress' then return false end
-            if not perFrame.canAct() or IsPedInAnyVehicle(PlayerPedId(), false) then return false end
+            if not perFrame.canAct() or perFrame.inCar() then return false end
             local bag = ContactBag(entity, perFrame.bag)
             if not bag or bag.contact.kind ~= 'person' or not Offers(bag, action) then return false end
             local states = PERSON_STATES[action]
@@ -1932,9 +1973,9 @@ local function VehicleOption(action)
         label = ActionLabel(action),
         distance = ReachOf('vehicle', action),
         canInteract = function(entity, distance)
-            local run = CurrentRun()
+            local run = perFrame.currentRun()
             if not run or run.state ~= 'in_progress' then return false end
-            if not perFrame.canAct() or IsPedInAnyVehicle(PlayerPedId(), false) then return false end
+            if not perFrame.canAct() or perFrame.inCar() then return false end
             local bag = ContactBag(entity, perFrame.bag)
             if not bag or bag.contact.kind ~= 'vehicle' or not Offers(bag, action) or VEHICLE_GONE[bag.state] then
                 return false
@@ -1958,9 +1999,9 @@ local function SeatOption(action, door)
         bones = { door },
         distance = ReachOf('vehicle', action),
         canInteract = function(entity, distance)
-            local run = CurrentRun()
+            local run = perFrame.currentRun()
             if not run or run.state ~= 'in_progress' then return false end
-            if not perFrame.canAct() or IsPedInAnyVehicle(PlayerPedId(), false) then return false end
+            if not perFrame.canAct() or perFrame.inCar() then return false end
             local vbag = ContactBag(entity, perFrame.bag)
             if not vbag or vbag.contact.kind ~= 'vehicle' then return false end
             local ped = GetPedInVehicleSeat(entity, seat)
@@ -2206,7 +2247,8 @@ end
 
 -- read: how the bag is read (BagOf when not given; the cuff options pass perFrame.bag).
 local function CuffableBag(entity, run, read)
-    if not entity or entity == 0 or not DoesEntityExist(entity) or not NetworkGetEntityIsNetworked(entity) then
+    if read ~= perFrame.bag
+        and (not entity or entity == 0 or not DoesEntityExist(entity) or not NetworkGetEntityIsNetworked(entity)) then
         return nil
     end
     local bag = (read or BagOf)(entity)
@@ -2216,13 +2258,12 @@ end
 
 local function CanCuff(entity, distance, label)
     if cuffing then return false end
-    local run = CurrentRun()
+    local run = perFrame.currentRun()
     if not run then return false end
     local bag = CuffableBag(entity, run, perFrame.bag)
     if not bag or OptionLabelOf(bag) ~= label then return false end
     if (tonumber(distance) or math.huge) > RangeOf(bag) then return false end
-    local me = PlayerPedId()
-    if IsEntityDead(me) or IsPedInAnyVehicle(me, false) then return false end
+    if perFrame.isDead() or perFrame.inCar() then return false end
     return not InForeignArena()
 end
 

@@ -392,6 +392,8 @@ local function ExtraConfig(deptKey)
             -- step H6: one Money screen for Mission pay and Payments made, and one request per screen open
             moneyScreen = aui.moneyScreen == true,
             oneRequest = aui.oneRequest == true,
+            -- step OP3: long lists draw only the rows in view (shared/components/Table, Settings search), shipped false
+            windowRows = aui.windowRows == true,
         },
         realSuspects = { screen = RealSuspectsScreen() },
         officerNav = OfficerNav(),

@@ -1139,9 +1139,31 @@ do
     -- canInteract only shows; the server decides
     H.eq(DeskOption(1).canInteract(), true, 'desk A shows for sast')
     H.eq(DeskOption(2).canInteract(), false, 'desk B is for fib only')
+    -- the department is read from Qbox at most once a second, and at once after a duty or job event (step OP3)
+    local pdReads = 0
+    local plainGet = H.exportsMock.qbx_core.GetPlayerData
+    H.exportsMock.qbx_core.GetPlayerData = function(...)
+        pdReads = pdReads + 1
+        return plainGet(...)
+    end
+    H.clockMs = H.clockMs + 1000
+    for _ = 1, 50 do DeskOption(1).canInteract() end
+    H.eq(pdReads, 1, ('50 canInteract calls within a second: one Qbox read (%d; 50 before OP3)'):format(pdReads))
     clientPD.job.onduty = false
-    H.eq(DeskOption(1).canInteract(), false, 'off duty: hidden')
+    H.fire('QBCore:Client:SetDuty', false)
+    H.advance(50, 50)
+    H.eq(DeskOption(1).canInteract(), false, 'off duty (the duty event): hidden at once')
     clientPD.job.onduty = true
+    H.fire('QBCore:Client:SetDuty', true)
+    H.advance(50, 50)
+    H.eq(DeskOption(1).canInteract(), true, 'back on duty: shows at once')
+    clientPD.job.onduty = false
+    H.clockMs = H.clockMs + 1000
+    H.eq(DeskOption(1).canInteract(), false, 'a change with no event: seen within a second')
+    clientPD.job.onduty = true
+    H.clockMs = H.clockMs + 1000
+    H.exportsMock.qbx_core.GetPlayerData = plainGet
+    H.advance(2000, 100) -- the theme refresh each duty event schedules (1.5 s) is over before the desk opens below
     LocalPlayer.state.crimsonArena = { active = true, matchId = 'm1' }
     H.eq(DeskOption(1).canInteract(), false, 'in Crimson-Arena: hidden')
     LocalPlayer.state.crimsonArena = nil

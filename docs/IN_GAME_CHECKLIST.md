@@ -337,6 +337,22 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   (a big one may take a moment longer); the rest of the tablet keeps answering meanwhile. Back to `0`.
 - [ ] Server resmon of Crimson-Police with officers on duty and no run: at or below what it showed before the update.
 
+## Second optimization pass (OP3)
+
+- [ ] On a run, look at a contacted person and at a stopped car with people inside: the same Talk, Detain, Arrest,
+  Frisk, Escort, seat and cuff options show as before; get into a car: they hide; get out: they show again. Client
+  resmon while the eye rests on them: lower than before the update.
+- [ ] Stand at a mission desk on duty: Open Crimson-Police shows; go off duty: it hides at once (at most a second);
+  back on duty: it shows. In Crimson-Arena: hidden.
+- [ ] Restart once: the server log shows "applied migration 017_lookup_indexes.sql" (database or saves folder), then
+  Crimson-Police at version 17.
+- [ ] Admin UI → Runs and Leaderboards flagged runs, a supervisor's per-day capped action (Mission ban), an
+  auto-suspension after voided runs: all behave as before.
+- [ ] Settings: type in the search box with a few hundred settings showing: the text follows your typing without lag;
+  saving one setting still updates its row.
+- [ ] Settings → Admin UI → windowRows On, reopen the Admin UI: Leaderboards with a long board scrolls smoothly and
+  shows every officer in order; a Settings search for one letter adds rows as you scroll down. Back to Off.
+
 ## Known leftovers fixed (R1)
 
 - [ ] `Config.AdminUi.needsAttention` On: Home's Something wrong? shows Last mission load, Config health and stuck

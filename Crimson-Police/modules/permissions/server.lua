@@ -256,13 +256,18 @@ function P.probe(src, name)
         name)
 end
 
-function P.can(src, action, ctx)
+-- known (internal, step OP3): { admin = boolean } when the caller has just asked CP.Access.isAdmin for this player
+-- (CP.AdminKit's guards), so the ace checks are not made twice for one request.
+function P.can(src, action, ctx, known)
     if type(action) ~= 'string' or action == '' then return false, 'err.no_permission' end
     local n = tonumber(src)
     if not n or n < 0 or not CP.Access then return false, 'err.no_permission' end
     if type(ctx) ~= 'table' then ctx = nil end
+    local admin = nil
+    if type(known) == 'table' then admin = known.admin end
+    if type(admin) ~= 'boolean' then admin = CP.Access.isAdmin(n) and true or false end
 
-    if not CP.Access.isAdmin(n) then
+    if not admin then
         if ADMIN_ONLY[action] then
             P.probe(n, action)
             return false, 'err.no_permission'

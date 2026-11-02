@@ -197,6 +197,10 @@ Config.AdminUi = {
     -- true = Payments made and Leaderboards each open with one request to the server (the totals and the flagged
     -- runs come with the list) instead of two; false = two requests as before. The screens show the same
     oneRequest = false,
+    -- true = the long Admin UI lists (a scrolling table of more than 100 rows, such as the Leaderboards board, and
+    -- the Settings search results) draw only the rows in view and add the next ones as you scroll, so a big list
+    -- opens and scrolls faster; false = every row is drawn at once as before. The rows and their order are the same
+    windowRows = false,
 }
 
 -- ============================================================================
