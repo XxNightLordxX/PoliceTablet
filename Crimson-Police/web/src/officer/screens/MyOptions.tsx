@@ -7,10 +7,8 @@ import {
     Card,
     Checkbox,
     EmptyState,
-    ErrorState,
     Field,
     Icon,
-    LoadingBlock,
     NumberInput,
     Screen,
     Select,
@@ -27,11 +25,15 @@ import type { ProfileData } from '../../types/boards';
 import type { KeyLabel, OptionDef, OptionsView } from '../../types/options';
 import type { ProfileEdit, ProfileSetPayload } from '../../types/profile';
 import '../components/ProfileCards.css';
+import { ScreenStatus } from '../components/ScreenStatus';
+import { OFFICER_HEADS, screenStateOf } from './screenHead';
 import './MyOptions.css';
 import { makeDebouncer, type Debouncer } from './debouncedSave';
 
 const SAVE_DELAY_MS = 500;
 const SAVED_SHOW_MS = 2500;
+// the keys card loads once with no retry of its own (the client answers or the list is empty)
+const noop = () => {};
 
 // The text of each Crimson-Police key mapping: the same words GTA Settings > Key Bindings > FiveM shows.
 const KEY_TEXT: Record<string, string> = {
@@ -291,11 +293,12 @@ function LookCard() {
     const shownScale = scale ?? prefs?.uiScale ?? 1;
     return (
         <Card title={t('options.look.title')} icon="eye" padding="md" className="my-options__card">
-            {!prefs && edit.loading ? (
-                <LoadingBlock />
-            ) : !prefs ? (
-                <ErrorState error={edit.error ?? 'err.internal'} onRetry={() => void edit.refetch()} />
-            ) : (
+            <ScreenStatus
+                state={screenStateOf(!!prefs, edit.loading, edit.error ?? (prefs ? null : 'err.internal'))}
+                error={edit.error ?? 'err.internal'}
+                onRetry={() => void edit.refetch()}
+            />
+            {!prefs ? null : (
                 <div className="my-options__rows">
                     <Field
                         label={
@@ -439,7 +442,7 @@ function KeysCard() {
             className="my-options__card"
         >
             {keys === null ? (
-                <LoadingBlock />
+                <ScreenStatus state="loading" onRetry={noop} />
             ) : (
                 <div className="my-options__rows">
                     {keys.map(k => (
@@ -536,12 +539,13 @@ export default function MyOptions() {
     }
 
     return (
-        <Screen title={t('ui.screen.options')} subtitle={t('options.subtitle')} className="my-options">
-            {!data && loading ? (
-                <LoadingBlock />
-            ) : !data ? (
-                <ErrorState error={error ?? 'err.internal'} onRetry={() => void refetch()} />
-            ) : data.enabled === false ? (
+        <Screen title={t(OFFICER_HEADS.options.title)} subtitle={t(OFFICER_HEADS.options.help)} className="my-options">
+            <ScreenStatus
+                state={screenStateOf(!!data, loading, error ?? (data || loading ? null : 'err.internal'))}
+                error={error ?? 'err.internal'}
+                onRetry={() => void refetch()}
+            />
+            {!data ? null : data.enabled === false ? (
                 <EmptyState icon="lock" title={t('options.locked_title')} text={t('options.locked_text')} />
             ) : (
                 <div className="my-options__column">

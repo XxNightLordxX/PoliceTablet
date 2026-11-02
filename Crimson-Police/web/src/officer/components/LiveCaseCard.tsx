@@ -1,6 +1,6 @@
 // Active Mission · the live case card (step V16, Config.LiveCrime.caseCard): the reported crime, the suspect count,
 // the three steps (the same for every suspect, like the HUD) and when the "last reported" map points were taken.
-// It never shows one suspect's state or a live position.
+// It never shows one suspect's state or a live position. Step H3: "Step n of 3" in the title, the current step marked.
 
 import { Badge, Icon } from '../../shared/components';
 import { cx } from '../../shared/cx';
@@ -11,7 +11,7 @@ import './LiveCaseCard.css';
 
 const STEPS = ['respond', 'secure', 'detain'] as const;
 
-function stepIndex(phase: LiveCaseView['phase']): number {
+export function stepIndex(phase: LiveCaseView['phase']): number {
     const i = STEPS.indexOf(phase);
     return i < 0 ? 0 : i;
 }
@@ -43,6 +43,9 @@ export function LiveCaseCard({ live }: { live: LiveCaseView }) {
                         {t('run.live.badge')}
                     </Badge>
                     <span>{where || t('run.live.title')}</span>
+                    <Badge size="sm" tone="neutral">
+                        {t('run.live.step_of', { n: current + 1, total: STEPS.length })}
+                    </Badge>
                 </span>
                 <span className="run_ui-notice__sub">{t('run.live.suspects', { n: Math.max(1, live.suspects) })}</span>
                 <ol className="live-case__steps">
@@ -50,6 +53,7 @@ export function LiveCaseCard({ live }: { live: LiveCaseView }) {
                         <li
                             key={step}
                             className={cx('live-case__step', i < current && 'is-done', i === current && 'is-current')}
+                            aria-current={i === current ? 'step' : undefined}
                         >
                             <Icon name={i < current ? 'check' : 'dot'} size={12} />
                             <span>{t(`block.live_response.check_${step}`)}</span>

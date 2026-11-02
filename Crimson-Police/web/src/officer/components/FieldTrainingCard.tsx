@@ -1,5 +1,5 @@
 // Profile · Field training (steps T1 and T2, Config.FieldTraining): the rookie's own training (tasks, progress,
-// trainer, notes, ride-along types) and the trainer's rookies with Sign off. Full notes in docs/FILE_NOTES.md.
+// trainer, notes, ride-along types) and the trainer's rookies with Sign off (step H3: a count of the tasks ready). Full notes in docs/FILE_NOTES.md.
 
 import { useState } from 'react';
 import { Badge, Button, Card, Dialog, Field, ProgressBar, Textarea } from '../../shared/components';
@@ -62,6 +62,13 @@ export function FtoProgress({ view }: { view: FtoView }) {
     );
 }
 
+// How many tasks of the trainer's rookies are ready for Sign off (step H3: shown next to "My rookies").
+export function readyToSign(rookies: FtoView[]): number {
+    let n = 0;
+    for (const v of rookies) for (const task of asList(v.tasks)) if (task.ready && !task.signed) n += 1;
+    return n;
+}
+
 export function FieldTrainingCard() {
     const { data, refetch } = useRequest<FtoMine | false>('fto:getMine', {});
     const { run, busy } = useAction();
@@ -70,6 +77,7 @@ export function FieldTrainingCard() {
     if (!data) return null;
     const rookies = asList(data.rookies);
     const bonus = data.trainerBonus ?? 0;
+    const ready = readyToSign(rookies);
 
     const submit = async () => {
         if (!signing) return;
@@ -106,7 +114,16 @@ export function FieldTrainingCard() {
                     <FtoTaskList view={data.training} />
                 </>
             ) : null}
-            {rookies.length ? <p className="profile-commend__head">{t('fto.my_rookies')}</p> : null}
+            {rookies.length ? (
+                <p className="profile-commend__head">
+                    <strong>{t('fto.my_rookies')}</strong>
+                    {ready > 0 ? (
+                        <Badge tone="warning" size="sm" icon="check">
+                            {t('fto.ready_count', { n: ready })}
+                        </Badge>
+                    ) : null}
+                </p>
+            ) : null}
             {rookies.length && bonus > 0 ? (
                 <p className="profile-commend__by">{t('fto.bonus_hint', { points: bonus })}</p>
             ) : null}

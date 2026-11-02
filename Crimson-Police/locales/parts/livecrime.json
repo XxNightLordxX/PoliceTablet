@@ -72,6 +72,7 @@
   "unit.ui.ready_live": "LIVE case, real players: {title}, {street}. Suspects: {n}",
   "run.live.title": "Live case",
   "run.live.badge": "LIVE",
+  "run.live.step_of": "Step {n} of {total}",
   "run.live.suspects": "Suspects: {n} (real players)",
   "run.live.secure_progress": "{s} of {need} s at the scene",
   "run.live.reported": "Last reported {ago} ago: {labels}",

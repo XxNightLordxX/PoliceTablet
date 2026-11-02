@@ -10,11 +10,9 @@ import {
     ConfirmDialog,
     Dialog,
     EmptyState,
-    ErrorState,
     Field,
     Grid,
     Icon,
-    LoadingBlock,
     Money,
     ProgressBar,
     Row,
@@ -51,6 +49,8 @@ import { FieldTrainingCard } from '../components/FieldTrainingCard';
 import { LookCard } from '../components/LookCard';
 import { ProfileEditDialog } from '../components/ProfileEditDialog';
 import { ServiceRecordCard } from '../components/ServiceRecordCard';
+import { ScreenStatus } from '../components/ScreenStatus';
+import { OFFICER_HEADS, screenStateOf } from './screenHead';
 import './Profile.css';
 
 const REPORT_REASONS = ['picture', 'bio', 'other'];
@@ -401,17 +401,11 @@ export default function Profile() {
         });
     }
 
-    if (!profile && loading) {
-        return (
-            <Screen title={t('ui.screen.profile')}>
-                <LoadingBlock text={t('profile.loading')} />
-            </Screen>
-        );
-    }
     if (!profile) {
         return (
             <Screen
-                title={t('ui.screen.profile')}
+                title={t(OFFICER_HEADS.profile.title)}
+                help={t(OFFICER_HEADS.profile.help)}
                 actions={
                     target ? (
                         <Button variant="ghost" icon="chevronLeft" onClick={() => navigate('leaderboard')}>
@@ -420,7 +414,12 @@ export default function Profile() {
                     ) : undefined
                 }
             >
-                <ErrorState error={error ?? 'err.internal'} onRetry={() => void refetch()} />
+                <ScreenStatus
+                    state={screenStateOf(false, loading, error ?? (data ? 'err.internal' : null))}
+                    error={error ?? 'err.internal'}
+                    loadingText={t('profile.loading')}
+                    onRetry={() => void refetch()}
+                />
             </Screen>
         );
     }
@@ -445,8 +444,9 @@ export default function Profile() {
 
     return (
         <Screen
-            title={own ? t('ui.screen.profile') : t('profile.public_title', { name: profile.name })}
+            title={own ? t(OFFICER_HEADS.profile.title) : t('profile.public_title', { name: profile.name })}
             subtitle={own ? t('profile.subtitle_own') : t('profile.subtitle_public')}
+            help={t(OFFICER_HEADS.profile.help)}
             actions={
                 !own ? (
                     <>
@@ -465,6 +465,7 @@ export default function Profile() {
             }
             className="boards-profile-screen"
         >
+            <ScreenStatus state={screenStateOf(true, loading, error)} error={error} onRetry={() => void refetch()} />
             <Grid cols="minmax(0, 3fr) minmax(0, 2fr)" gap={4} align="stretch">
                 <Card padding="lg" className="boards-idcard">
                     <div className="boards-id">

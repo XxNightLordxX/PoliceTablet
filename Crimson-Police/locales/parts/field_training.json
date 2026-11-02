@@ -20,6 +20,7 @@
   "fto.toast.done_trainer": "{name} has finished field training.",
   "fto.title": "Field training",
   "fto.subtitle": "Missions a rookie finishes with his trainer count towards each task.",
+  "fto.ready_count": "{n} ready to sign off",
   "fto.my_training": "My training · trainer {name}",
   "fto.my_rookies": "My rookies",
   "fto.done": "Done",

@@ -5,10 +5,8 @@ import {
     Avatar,
     Badge,
     EmptyState,
-    ErrorState,
     Icon,
     IconButton,
-    LoadingBlock,
     Row,
     Screen,
     SegmentedControl,
@@ -27,6 +25,8 @@ import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import type { Session } from '../../shared/types';
 import { asList, type BoardPeriod, type BoardRowView, type BoardView } from '../../types/boards';
+import { ScreenStatus } from '../components/ScreenStatus';
+import { OFFICER_HEADS, screenStateOf } from './screenHead';
 import './Leaderboard.css';
 
 export const BOARD_PERIODS: BoardPeriod[] = ['weekly', 'monthly', 'season', 'alltime'];
@@ -307,11 +307,13 @@ export default function Leaderboard() {
     ) : null;
 
     const noSeason = period === 'season' && board && !board.season;
+    const boardState = screenStateOf(!!board, loading, error);
 
     return (
         <Screen
-            title={t('ui.screen.leaderboard')}
+            title={t(OFFICER_HEADS.leaderboard.title)}
             subtitle={windowText(board, period) || t('leaderboard.subtitle')}
+            help={t(OFFICER_HEADS.leaderboard.help)}
             actions={
                 <>
                     {board ? (
@@ -374,11 +376,13 @@ export default function Leaderboard() {
                 </Row>
             </div>
 
-            {!board && loading ? (
-                <LoadingBlock text={t('leaderboard.loading')} />
-            ) : !board && error ? (
-                <ErrorState error={error} onRetry={() => void refetch()} />
-            ) : noSeason ? (
+            <ScreenStatus
+                state={boardState}
+                error={error}
+                loadingText={t('leaderboard.loading')}
+                onRetry={() => void refetch()}
+            />
+            {!board ? null : noSeason ? (
                 <EmptyState
                     icon="calendar"
                     title={t('leaderboard.no_season_title')}

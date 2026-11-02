@@ -1713,6 +1713,9 @@ Home, Mission Board, Active Mission and Dispatch share one header: the screen na
 screen is for (Home also greets the officer). While a screen loads it shows a spinner; if the first load fails, the
 error with Retry; if the server sends nothing, "Nothing to show yet" with Retry; if a later refresh fails, a small
 "Could not refresh" line with Retry over what was loaded last. Display only: nothing an officer can do changes.
+Unit, Profile, Leaderboard and My options use the same header and load states. Profile's field training card shows
+how many of your rookies' tasks are ready to sign off, and the live case card on Active Mission says which of its
+three steps the case is on ("Step 2 of 3").
 
 **How a mission goes.** The officer (or unit leader) picks a type. The server draws a random mission of that type
 (no list, no reroll). Everyone gets a GPS route to the start and must follow it: 30 seconds off the route ends

@@ -4950,6 +4950,10 @@ Officer screens tidy, part 1 (step H2): OFFICER_HEADS gives Home, Mission Board,
 title and one line of help (locale keys); screenStateOf(hasData, loading, error) gives the load state (loading,
 error, empty, stale, ready) that officer/components/ScreenStatus.tsx draws the same way on every screen. Display
 only: no request, action or rule changes. Walk: screenHead.walk.ts.
+Part 2 (step H3): Unit, Profile, Leaderboard and My options join OFFICER_HEADS (ui.help.unit, ui.help.profile,
+ui.help.leaderboard; My options keeps options.subtitle); ScreenStatus takes a loadingText for the line under the
+spinner; FieldTrainingCard.readyToSign counts the rookies' tasks ready to sign; LiveCaseCard shows "Step n of 3" and
+marks the current step (aria-current). Walk: screenHead2.walk.ts.
 ```
 
 ## Crimson-Police/web/src/shared/components/MaintenanceBanner.tsx

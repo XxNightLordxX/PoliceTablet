@@ -9,10 +9,8 @@ import {
     ConfirmDialog,
     Countdown,
     EmptyState,
-    ErrorState,
     Grid,
     Icon,
-    LoadingBlock,
     Screen,
     SearchInput,
     Stack,
@@ -35,6 +33,8 @@ import type {
 } from '../../types/teams';
 import { asList, type TestInvite } from '../../types/testing';
 import { ReadyCheckBanner } from '../components/ReadyCheckBanner';
+import { ScreenStatus } from '../components/ScreenStatus';
+import { OFFICER_HEADS, screenStateOf } from './screenHead';
 import './Unit.css';
 
 // A leader control waiting for its confirm dialog.
@@ -807,8 +807,9 @@ export default function Unit() {
 
     return (
         <Screen
-            title={t('ui.screen.unit')}
+            title={t(OFFICER_HEADS.unit.title)}
             subtitle={t('unit.ui.subtitle', { max })}
+            help={t(OFFICER_HEADS.unit.help)}
             actions={
                 unit ? (
                     <Button variant="danger" icon="logout" onClick={() => setConfirmLeave(true)} disabled={!!busyKey}>
@@ -817,11 +818,8 @@ export default function Unit() {
                 ) : null
             }
         >
-            {!data && loading ? (
-                <LoadingBlock />
-            ) : !data ? (
-                <ErrorState error={error} onRetry={() => void refetch()} />
-            ) : (
+            <ScreenStatus state={screenStateOf(!!data, loading, error)} error={error} onRetry={() => void refetch()} />
+            {!data ? null : (
                 <>
                     <ReadyCheckBanner check={unit?.readyCheck ?? null} onAnswered={() => void refetch()} />
                     {(unit?.locked && !unit?.readyCheck) || data.onRun ? (

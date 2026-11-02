@@ -9,12 +9,15 @@ export function ScreenStatus({
     state,
     error,
     onRetry,
+    loadingText,
 }: {
     state: ScreenState;
     error?: string | null;
     onRetry: () => void;
+    // the line under the spinner (Profile, Leaderboard); none = the spinner alone
+    loadingText?: string;
 }) {
-    if (state === 'loading') return <LoadingBlock />;
+    if (state === 'loading') return <LoadingBlock text={loadingText} />;
     if (state === 'error') return <ErrorState error={error} onRetry={onRetry} />;
     if (state === 'empty') {
         return (

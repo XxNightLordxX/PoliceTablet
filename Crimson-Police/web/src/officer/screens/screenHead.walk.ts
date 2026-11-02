@@ -7,6 +7,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import foundation from '../../../../locales/parts/foundation.json';
 import missioncalls from '../../../../locales/parts/missioncalls.json';
+import options from '../../../../locales/parts/options.json';
 import runUi from '../../../../locales/parts/run_ui.json';
 import ui from '../../../../locales/parts/ui.json';
 import { Screen } from '../../shared/components';
@@ -25,7 +26,7 @@ function ok(cond: unknown, what: string): void {
 }
 
 const noop = () => {};
-const locale = { ...foundation, ...missioncalls, ...runUi, ...ui } as Record<string, string>;
+const locale = { ...foundation, ...missioncalls, ...options, ...runUi, ...ui } as Record<string, string>;
 
 export async function walk(): Promise<{ passed: number; failures: string[] }> {
     try {
