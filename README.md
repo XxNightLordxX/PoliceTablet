@@ -1667,6 +1667,16 @@ The tablet uses the officer's department colours and logo. Eight screens on the 
 Also: badges on the sidebar, a notification bell with the last 20 messages, the mission HUD on screen, and a
 result card after each mission.
 
+**The Officer UI sidebar** is set in `Config.Tablet` (also in Admin UI -> Settings). Shipped, it looks as before:
+
+| Setting | What it does |
+|---|---|
+| `sidebarOrder` | `'classic'` (as before) or `'mostUsed'`: Home, Mission Board, Active Mission, Dispatch, Unit, Profile, Leaderboard, Challenge, My options. Only the order changes |
+| `activeFirst` | `true` = while the officer is on a run, Active Mission sits right under Home (off a run it keeps its place) |
+| `compactSidebar` | `true` = a narrow strip of icons, each name on hover, so the screens get more room (handy with large text) |
+
+The same screens show in every order; one an owner switched off (Dispatch, My options) stays hidden.
+
 **How a mission goes.** The officer (or unit leader) picks a type. The server draws a random mission of that type
 (no list, no reroll). Everyone gets a GPS route to the start and must follow it: 30 seconds off the route ends
 their run as Abandoned (with `Config.Route.required = false` the route is only a guide and leaving it ends

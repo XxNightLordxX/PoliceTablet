@@ -163,6 +163,13 @@ const CONFIG: Session['config'] = {
     },
     // ?rsOff: no Real suspects screen (Config.LiveCrime.enabled and Config.Volunteers.enabled both false)
     realSuspects: { screen: !(typeof window !== 'undefined' && /[?&]rsOff\b/.test(window.location.search)) },
+    // ?mostUsed, ?activeFirst, ?compactSidebar: the Officer UI sidebar as Config.Tablet.sidebarOrder = 'mostUsed',
+    // activeFirst = true and compactSidebar = true show it
+    officerNav: {
+        order: typeof window !== 'undefined' && /[?&]mostUsed\b/.test(window.location.search) ? 'mostUsed' : 'classic',
+        activeFirst: typeof window !== 'undefined' && /[?&]activeFirst\b/.test(window.location.search),
+        compact: typeof window !== 'undefined' && /[?&]compactSidebar\b/.test(window.location.search),
+    },
 };
 
 // getSession({ ui }) in browser mode. The officer is a supervisor (roles.supervisor = true).

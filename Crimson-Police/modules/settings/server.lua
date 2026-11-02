@@ -1606,6 +1606,7 @@ local KNOWN = {
     },
     ['Cash.account'] = { tpl = Enum({ 'bank', 'cash' }), kind = 'enum' },
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
+    ['Tablet.sidebarOrder'] = { tpl = Enum({ 'classic', 'mostUsed' }), kind = 'enum' },
     ['AdminUi.landing'] = { tpl = Enum({ 'home', 'payouts', 'missions' }), kind = 'enum' },
     ['AdminUi.settingsView'] = { tpl = Enum({ 'simple', 'all' }), kind = 'enum' },
     ['AdminUi.reasonChips'] = {

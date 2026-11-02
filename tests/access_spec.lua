@@ -149,6 +149,18 @@ do
     adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
     H.eq(#adm.data.config.adminUi.reasonChips, 0, 'reasonChips unset: no buttons')
     Config.AdminUi.reasonChips = { 'Balance change', 'Event', 'Correction' }
+    -- Config.Tablet.sidebarOrder / activeFirst / compactSidebar (G4): the Officer UI sidebar, shipped as before
+    local nav = Cb('getSession', 1, { via = 'export' }).data.config.officerNav
+    H.eq(nav.order, 'classic', 'Config.Tablet.sidebarOrder ships classic: the sidebar order as before')
+    H.eq(nav.activeFirst, false, 'activeFirst ships off: Active Mission keeps its place')
+    H.eq(nav.compact, false, 'compactSidebar ships off: icons and names')
+    Config.Tablet.sidebarOrder, Config.Tablet.activeFirst, Config.Tablet.compactSidebar = 'mostUsed', true, true
+    nav = Cb('getSession', 1, { via = 'export' }).data.config.officerNav
+    H.ok(nav.order == 'mostUsed' and nav.activeFirst and nav.compact, 'all three on: the session asks for them')
+    Config.Tablet.sidebarOrder = 'bogus'
+    nav = Cb('getSession', 1, { via = 'export' }).data.config.officerNav
+    H.eq(nav.order, 'classic', 'an unknown sidebarOrder counts as classic')
+    Config.Tablet.sidebarOrder, Config.Tablet.activeFirst, Config.Tablet.compactSidebar = 'classic', false, false
     -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
     H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
     Config.LiveCrime.enabled = true

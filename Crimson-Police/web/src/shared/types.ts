@@ -112,6 +112,8 @@ export interface Session {
         // Config.RealSuspects.adminScreen (step V18): screen = the Admin UI shows Real suspects (true only while
         // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)
         realSuspects?: { screen: boolean };
+        // Config.Tablet.sidebarOrder / activeFirst / compactSidebar (step G4): the Officer UI sidebar (layouts/officerNav)
+        officerNav?: { order: 'classic' | 'mostUsed'; activeFirst: boolean; compact: boolean };
         // true while this player may change at least one Mission control (CP.DeptControls.available)
         missionControls?: boolean;
         // Config.OfficerOptions resolved for the officer's department (CP.OptionDefs.resolve)

@@ -77,12 +77,24 @@ export function inSections<T extends { play?: string }>(
     });
 }
 
-function NavButton({ it, on, onClick }: { it: SidebarItem; on: boolean; onClick: () => void }) {
+function NavButton({
+    it,
+    on,
+    onClick,
+    iconsOnly,
+}: {
+    it: SidebarItem;
+    on: boolean;
+    onClick: () => void;
+    iconsOnly?: boolean;
+}) {
     return (
         <button
             type="button"
             className={cx('cp-nav-item', on && 'is-active')}
             aria-current={on ? 'page' : undefined}
+            title={iconsOnly ? it.label : undefined}
+            aria-label={iconsOnly ? it.label : undefined}
             onClick={onClick}
         >
             <Icon name={it.icon} size={18} className="cp-nav-item__icon" />
@@ -104,6 +116,7 @@ export function Sidebar({
     className,
     more,
     sections,
+    iconsOnly,
 }: {
     items: SidebarItem[];
     active: string;
@@ -115,6 +128,8 @@ export function Sidebar({
     more?: string;
     // the sections the items are listed under (left out = no headings)
     sections?: SidebarSection[];
+    // the icons only, each name on hover (Config.Tablet.compactSidebar, Officer UI)
+    iconsOnly?: boolean;
 }) {
     const folded = more ? items.filter(it => it.group === 'more') : [];
     const shown = folded.length > 0 ? items.filter(it => it.group !== 'more') : items;
@@ -134,13 +149,21 @@ export function Sidebar({
     };
 
     return (
-        <nav className={cx('cp-sidebar', className)} aria-label={typeof heading === 'string' ? heading : undefined}>
+        <nav
+            className={cx('cp-sidebar', iconsOnly && 'cp-sidebar--compact', className)}
+            aria-label={typeof heading === 'string' ? heading : undefined}
+        >
             {heading ? <div className="cp-sidebar__heading">{heading}</div> : null}
             <ul className="cp-sidebar__list">
                 {inSections(shown, sections).map(({ item: it, heading: h }) => (
                     <li key={it.key}>
                         {h ? <div className="cp-sidebar__section">{h}</div> : null}
-                        <NavButton it={it} on={it.key === active} onClick={() => onSelect(it.key)} />
+                        <NavButton
+                            it={it}
+                            on={it.key === active}
+                            onClick={() => onSelect(it.key)}
+                            iconsOnly={iconsOnly}
+                        />
                     </li>
                 ))}
                 {folded.length > 0 ? (
@@ -162,7 +185,12 @@ export function Sidebar({
                     ? inSections(folded, sections).map(({ item: it, heading: h }) => (
                           <li key={it.key} className="cp-sidebar__more-item">
                               {h ? <div className="cp-sidebar__section">{h}</div> : null}
-                              <NavButton it={it} on={it.key === active} onClick={() => onSelect(it.key)} />
+                              <NavButton
+                                  it={it}
+                                  on={it.key === active}
+                                  onClick={() => onSelect(it.key)}
+                                  iconsOnly={iconsOnly}
+                              />
                           </li>
                       ))
                     : null}

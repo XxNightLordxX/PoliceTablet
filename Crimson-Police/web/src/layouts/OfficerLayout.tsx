@@ -1,5 +1,6 @@
-// Officer UI: tablet frame in the department theme and the officer's look, header, the 8-screen sidebar with its
-// badges, watermark, the pinned current-run bar, the unit ready check and the Supervisor switch (session.roles).
+// Officer UI: tablet frame in the department theme and the officer's look, header, the 9-screen sidebar with its
+// badges (its order and width from Config.Tablet, layouts/officerNav), watermark, the pinned current-run bar, the unit
+// ready check and the Supervisor switch (session.roles).
 
 import { ReadyCheckBanner } from '../officer/components/ReadyCheckBanner';
 import { Button, MaintenanceBanner, Watermark } from '../shared/components';
@@ -10,6 +11,7 @@ import { useNavigation, type ScreenKey } from '../shared/navigation';
 import { useSession, useTablet } from '../shared/session';
 import { Header } from './Header';
 import { navBadge, useNavCounts } from './navBadges';
+import { officerNavOf, orderOfficerScreens } from './officerNav';
 import { RunBar } from './RunBar';
 import { ScreenHost } from './ScreenHost';
 import { screensFor } from './screens';
@@ -22,6 +24,9 @@ export function OfficerLayout() {
     const { screen, navigate } = useNavigation();
     const screens = screensFor('officer', session);
     const counts = useNavCounts();
+    // Config.Tablet.sidebarOrder / activeFirst / compactSidebar: only the sidebar's order and width change
+    const nav = officerNavOf(session);
+    const ordered = orderOfficerScreens(screens, nav, counts.onRun === true);
     setMoneyFormat(session.config.format);
     // the own profile changed (look, picture approved): the session carries the new look
     usePush('profile', () => void refreshSession());
@@ -32,7 +37,8 @@ export function OfficerLayout() {
             <div className="cp-tablet__body">
                 <Sidebar
                     heading={t('ui.nav.officer')}
-                    items={screens.map(s => ({
+                    iconsOnly={nav.compact}
+                    items={ordered.map(s => ({
                         key: s.key,
                         label: t(s.titleKey),
                         icon: s.icon,
@@ -46,10 +52,12 @@ export function OfficerLayout() {
                                 variant="secondary"
                                 block
                                 icon="swap"
+                                title={nav.compact ? t('ui.switch.supervisor') : undefined}
+                                aria-label={nav.compact ? t('ui.switch.supervisor') : undefined}
                                 loading={switching}
                                 onClick={() => void switchUi('supervisor')}
                             >
-                                {t('ui.switch.supervisor')}
+                                {nav.compact ? null : t('ui.switch.supervisor')}
                             </Button>
                         ) : null
                     }

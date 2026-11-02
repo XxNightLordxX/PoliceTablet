@@ -278,6 +278,13 @@ do
     H.eq(cjson.encode(E('AdminUi.reasonChips').default), '["Balance change","Event","Correction"]',
         'the reason buttons ship with three ready-made reasons')
     H.eq(E('AdminUi.reasonChips').kind, 'list', 'reasonChips is a list of texts')
+    H.eq(E('Tablet.sidebarOrder').default, 'classic', 'the Officer UI sidebar ships in its classic order')
+    H.eq(E('Tablet.sidebarOrder').kind, 'enum', 'sidebarOrder is a choice')
+    H.ok((E('Tablet.sidebarOrder').desc or ''):find('Only the order changes', 1, true) ~= nil,
+        'sidebarOrder: its config.lua comment is its description')
+    H.eq(E('Tablet.activeFirst').default, false, 'Active Mission ships in its place')
+    H.eq(E('Tablet.compactSidebar').default, false, 'the Officer UI sidebar ships with names')
+    H.eq(E('Tablet.compactSidebar').kind, 'boolean', 'compactSidebar is a switch')
     H.ok((E('AdminUi.reasonChips').desc or ''):find('a click fills the box', 1, true) ~= nil,
         'reasonChips: its config.lua comment is its description')
     H.eq(E('MissionTypes.patrol.dailyLimit').nullable, true, 'dailyLimit = nil is a setting that may stay unset')

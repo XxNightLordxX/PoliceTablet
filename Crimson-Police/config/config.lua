@@ -73,6 +73,16 @@ Config.Tablet = {
     -- Milliseconds (0-1000) the GTA pause key is blocked after Escape or the close button closes the tablet, so the
     -- same Escape press does not also open the pause menu (0 = off)
     pauseGuardMs = 300,
+    -- The Officer UI sidebar order: 'classic' = Home, Mission Board, Dispatch, Unit, Active Mission, Leaderboard,
+    -- Challenge, Profile, My options (as before); 'mostUsed' = Home, Mission Board, Active Mission, Dispatch, Unit,
+    -- Profile, Leaderboard, Challenge, My options. Only the order changes
+    sidebarOrder = 'classic',
+    -- true = while the officer is on a run, Active Mission moves to the top of the sidebar, right under Home; false =
+    -- it keeps its place (as before)
+    activeFirst = false,
+    -- true = the Officer UI sidebar shows only the icons (the name shows on hover), leaving the screens more room;
+    -- false = icons and names (as before)
+    compactSidebar = false,
     -- Mission desks: ox_target boxes that open the Officer UI. The coordinates are placeholders near the
     -- base-game stations, 2 m or more from sc-police's duty points: check them on your MLO.
     -- departments = nil lets every department use a desk; prop = a laptop only that player sees, or false.

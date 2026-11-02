@@ -4602,6 +4602,7 @@ Left navigation: one button per visible screen (active item in --cp-primary with
 optional count badge or live dot (the 'nav' counts), plus a footer slot for the role switch. With a `more` label,
 items of group 'more' fold under one More button that carries the sum of their badges (Config.AdminUi.groupSidebar).
 With `sections` (Config.AdminUi.groupByPlay) each list is ordered by section, with a small heading over each one.
+With iconsOnly the sidebar is a narrow strip of icons, each name on hover (Config.Tablet.compactSidebar).
 ```
 
 ## Crimson-Police/web/src/layouts/TabletFrame.tsx

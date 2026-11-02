@@ -382,6 +382,8 @@ Personal accent and appearance
 
 - The Admin UI always uses Config.AdminTheme.
 
+- The Officer UI sidebar (step G4) reads the session's config.officerNav = { order, activeFirst, compact } from Config.Tablet.sidebarOrder ('classic' or 'mostUsed'; anything else counts as 'classic'), activeFirst and compactSidebar (both default false: today's sidebar). layouts/officerNav.ts orderOfficerScreens: 'classic' keeps the registry order; 'mostUsed' lists home, board, active, dispatch, unit, profile, leaderboard, challenge, options (a key it does not name keeps its place after them); activeFirst moves 'active' right under 'home' while NavCounts.onRun is true. compact renders the Sidebar with iconsOnly (68 px, labels hidden, each name as the button title, badges on the icon; the Supervisor switch shows only its icon). Screen keys, visibility and links never change.
+
 - The Admin UI sidebar (Config.AdminUi.groupSidebar, on by default) shows the everyday screens (Home, Payouts, Missions, Live, Officers, Settings) and a More button that unfolds the other eight (nine while the Real suspects screen shows). Folded, More carries the sum of their badges; opening one of them any other way unfolds it; whether More is open is kept per viewer in the browser. Screen keys and links are the same either way; groupSidebar = false shows one flat list.
 
 - Config.AdminUi.groupByPlay (default true; only the layout changes) reaches the Admin UI session as config.adminUi.groupByPlay. The sidebar (Sidebar sections, layouts/screens.ts ScreenDef.play, PLAY_SECTIONS) orders the screens by section with a heading over each: npc (admin_missions, admin_live), pvp (admin_rs), team (admin_officers, admin_departments, admin_leaderboards, admin_seasons, admin_permissions), economy (admin_payouts, admin_payments), system (admin_settings, admin_system, admin_audit, admin_testing); admin_home has none and stays on top; the More folding applies inside each list. Settings (modules/settings Play.groups) then sends SettingsView.groups = play_npc, play_pvp, play_team, play_tablet, play_economy, play_system with byPlay = true and each section's group from that set; Simple shows every play group (one with no everyday setting points to All settings) and the All settings section list has the play headings. false = the 8 plain groups and the sidebar order as before. Settings -> Features (admin/components/FeaturesPanel.tsx) lists SettingsView.features ({ key, play, path, risky }, modules/settings Play.features; name settings.feature.<key>) by section, each with On or Off, a switch that saves server:admin:setSetting on the same path (risky: a confirm first; a money switch: the typed ENABLE) and a Settings link to the path in All settings. Every listed path is a boolean setting read when used (no restart).
@@ -2898,6 +2900,16 @@ Config.Tablet = {
     -- Milliseconds (0-1000) the GTA pause key is blocked after Escape or the close button closes the tablet, so the
     -- same Escape press does not also open the pause menu (0 = off)
     pauseGuardMs = 300,
+    -- The Officer UI sidebar order: 'classic' = Home, Mission Board, Dispatch, Unit, Active Mission, Leaderboard,
+    -- Challenge, Profile, My options (as before); 'mostUsed' = Home, Mission Board, Active Mission, Dispatch, Unit,
+    -- Profile, Leaderboard, Challenge, My options. Only the order changes
+    sidebarOrder = 'classic',
+    -- true = while the officer is on a run, Active Mission moves to the top of the sidebar, right under Home; false =
+    -- it keeps its place (as before)
+    activeFirst = false,
+    -- true = the Officer UI sidebar shows only the icons (the name shows on hover), leaving the screens more room;
+    -- false = icons and names (as before)
+    compactSidebar = false,
     -- Mission desks: ox_target boxes that open the Officer UI. The coordinates are placeholders near the
     -- base-game stations, 2 m or more from sc-police's duty points: check them on your MLO.
     -- departments = nil lets every department use a desk; prop = a laptop only that player sees, or false.

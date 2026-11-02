@@ -288,6 +288,18 @@ local function AdminLanding(v)
     return LANDINGS[v] and v or 'home'
 end
 
+-- Config.Tablet.sidebarOrder, activeFirst, compactSidebar (step G4): the Officer UI sidebar (anything unknown =
+-- 'classic', the order as before)
+local ORDERS = { classic = true, mostUsed = true }
+local function OfficerNav()
+    local tab = type(Config.Tablet) == 'table' and Config.Tablet or {}
+    return {
+        order = ORDERS[tab.sidebarOrder] and tab.sidebarOrder or 'classic',
+        activeFirst = tab.activeFirst == true,
+        compact = tab.compactSidebar == true,
+    }
+end
+
 -- Config.AdminUi.reasonChips: the ready-made reasons (texts only, trimmed, at most 8 of up to 60 characters; nil = {})
 local function ReasonChips(list)
     local out, seen = {}, {}
@@ -357,6 +369,7 @@ local function ExtraConfig(deptKey)
             reasonChips = ReasonChips(aui.reasonChips),
         },
         realSuspects = { screen = RealSuspectsScreen() },
+        officerNav = OfficerNav(),
     }
 end
 

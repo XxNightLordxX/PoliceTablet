@@ -559,3 +559,36 @@
 .cp-sidebar__more-item .cp-sidebar__section {
     padding-left: 22px;
 }
+
+/* Config.Tablet.compactSidebar (Officer UI): a narrow strip of icons, each name on hover; a count sits on the icon */
+.cp-sidebar--compact {
+    width: 68px;
+    padding: 16px 8px 14px;
+}
+
+.cp-sidebar--compact .cp-sidebar__heading,
+.cp-sidebar--compact .cp-nav-item__label {
+    display: none;
+}
+
+.cp-sidebar--compact .cp-nav-item {
+    justify-content: center;
+    padding: 9px 0;
+}
+
+.cp-sidebar--compact .cp-nav-item__badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    line-height: 18px;
+}
+
+.cp-sidebar--compact .nav-live-dot {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    margin-left: 0;
+}
