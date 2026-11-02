@@ -1,4 +1,4 @@
-// The Department Report's 'Your controls today' card (step H4, Config.Tablet.supervisorControlsCard): one row per
+// The Department Report's 'Your controls today' card (Config.Tablet.supervisorControlsCard): one row per
 // Mission control the supervisor may use now, with its current value, the admin's limits and today's use. Pure
 // functions, checked by myControls.walk.ts; the server (sup:getMyControls) decides which controls are listed.
 

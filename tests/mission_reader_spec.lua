@@ -1,5 +1,12 @@
 -- The mission file reader (CP.U.parseMissionFile, shared/utils.lua): mission files are data, read and never run.
 
+-- FXServer has no debug.sethook (its Lua is built with LUA_SANDBOX), so a mission file that ran could not be stopped,
+-- and until S2 no mission file loaded on a real server at all. This spec boots the whole server with FXServer's debug
+-- table (tests/harness.lua) and checks: every built-in loads at start; every shipped file and every layout the Mission
+-- Builder writes reads exactly as Lua itself reads that text; text that would run code, CfxLua's extra syntax and
+-- oversized text are refused at once with the file and the line; the reader never touches the string metatable, the
+-- GC or the globals.
+
 local H = dofile('tests/harness.lua')
 local X = dofile('tests/fixtures/admin_missions/boot.lua')(H, 'mission_reader')
 local U = CP.U

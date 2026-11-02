@@ -1,5 +1,20 @@
 // Browser mocks of the run_ui slice (Mission Board + Active Mission): getMissionTypes, getRun (overrides
 
+// core.mock.ts's fallback), server:acceptType, server:joinOperation, server:abandon and the client actions
+// setGps, recalcRoute and logResult. Lua side effects are faked the way the game does them: 'board' /
+// 'operation' / 'run' pushes, the route toasts from modules/route, the run.accepted toast and the result card.
+//
+// URL variants (screenshots and manual checks):
+//   ?board=normal (default) | unit | member | locked | busy | oncall | boss | bossused
+//          | operation | opjoined | oprunning | opwaiting | opclosed | empty | error | edge
+//   ?runv=none | accepted | offroute | progress | test | log | silence | boss | untracked | edge | live
+//          (default: none, or progress while the dev panel's "run" toggle / ?run=1 is on)
+//   &oncall=1 puts the viewer (or, in a unit, someone in it) on a real call with any board variant.
+// 'edge' answers the way Lua's JSON encoding really arrives: empty lists as {} objects, nil fields
+// missing (undefined, not null), no optional extras, very long names and labels, missing callsigns.
+// A type accepted in browser mode starts a simulated run: accepted → In progress after ~10 s → the
+// objectives advance every few seconds → completed (result card). Abandon puts the type on cooldown.
+
 import { emitDebug, registerMock } from '../shared/nui';
 import type { RunResult } from '../shared/types';
 import type {

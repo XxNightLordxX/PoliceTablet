@@ -1,4 +1,13 @@
--- Armored Truck Escort through the spawn director (Config.Spawning, PLAN S14) on the real engine, the real block and
+-- Armored Truck Escort through the spawn director (Config.Spawning) on the real engine, the real block and
+
+-- Armored Truck Escort through the spawn director (Config.Spawning) on the real engine, the real block and
+-- the placement module: the truck is never made inside a parked car or on an officer (it waits, then takes a free
+-- spot further along the route), the truck and the ambush cars sit vehicleLift over the road (each car at the
+-- route's height where it stands), and an ambush car never appears next to an officer (a lead car included), on
+-- another vehicle, next to the truck or behind it (ambushAheadOnly): its slot slides further along the route, on
+-- 15 m marks (a waiting car's skipped slots are each named once in the console while the truck drives on). A wave
+-- short of slots at the arrival, or held back by Config.Limits.maxArmedAlive until after it, is left out with one
+-- warning and the escort completes.
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

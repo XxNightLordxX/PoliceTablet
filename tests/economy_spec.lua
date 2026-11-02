@@ -1,5 +1,11 @@
 -- Modules/scoring, goals, cash, payouts (slice economy).
 
+-- Other modules are stubbed (CP.Qbx, CP.Access, CP.Missions, CP.Draw, CP.Banking, CP.Tablet, CP.Admin,
+-- CP.Events, CP.AntiCheat, CP.Challenge); modules/permissions, scaling and schedule are the real ones.
+-- Every SQL statement of the slice runs against MariaDB. The spec uses its own database
+-- (<run database>_economy, rebuilt from sql/migrations like cp_test) so other specs that reset cp_test in
+-- parallel cannot interfere. The fake clock is aligned with the database clock (NOW()).
+
 local REAL_NOW = os.time()
 local H = dofile('tests/harness.lua')
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_economy'   -- per run: parallel runs never share it

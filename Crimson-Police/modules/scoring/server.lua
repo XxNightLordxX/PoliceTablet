@@ -1,5 +1,49 @@
 -- CP.Scoring (server): points, streaks, XP, XP levels, badges, manual awards and the officer Home screen.
 
+-- Owns
+--   * P and the points formula of a run row (SPEC "Scoring, points & XP levels"):
+--       Points = max(0, min(scoreCap x P, (P + Bonuses - Penalties) x M_team x M_cross x M_streak)), rounded
+--       down, then x Config.Events.todMultiplier when the run's mission type is the Type of the Day (after the
+--       cap). Failed = floor(failedCredit x P x objectives done / total) (no bonuses, multipliers or ToD);
+--       Abandoned = 0; a participant under the presence share (runs with 2+ participants) gets 0.
+--     Bonus/penalty lines: the mission card's entries (shared counts in run.score.shared plus personal ones in
+--     p.score; value = the entry's points / pctOfPoints, else Config.Bonuses; each = x count), ids recorded
+--     with a per-occurrence value (run.score.values), the end-evaluated no_participant_downed /
+--     no_weapons_fired (when the card lists them) and the common ones of Config.Scoring.common: fast_finish
+--     (not when run.flags.medals), modifier (Config.Events.modifierPoints), first_run, no_vehicle_damage,
+--     heavy_damage (not when mission.vehiclePenalties == false), pedestrian_hit, lights_siren (Beat Patrol and
+--     Business Check), shot_surrendered. Labels: CP.L('bonus.<id>') / CP.L('penalty.<id>').
+--     Custom missions (mission.source == 'custom'): mission-file value hints never raise points. A card
+--     entry is valued only when its id is in Config.Bonuses (points / pctOfPoints by the id's kind, else the
+--     config value, clamped to Config.Builder.bonusCap; each from Config.Bonuses only); the points /
+--     pctOfPoints / each of any other id are ignored. Recorded ids that are in Config.Bonuses but not on the
+--     card are ignored. Per-occurrence hints passed by block code (ctx.award opts.points: medal values,
+--     kingpin_alive, hostage_hit) still count; a positive one is capped at Config.Builder.bonusCap.points.
+--   * streaks (cp_officers.streak_days, last_complete, grace_week, grace_used): consecutive reset-adjusted
+--     days with a completed run; up to Config.Scoring.streakGraceDays missed days per week (counted from the
+--     weekly reset) are forgiven and add nothing; M_streak = 1 + min(streakMax, streakStep x days)
+--   * XP (cp_officers.xp = lifetime points, never below 0) with an idempotency marker in the row's breakdown
+--     ('$.xpCounted'), XP levels (Config.XPLevels, cosmetic), the five achievement badges (Config.Badges,
+--     counted from cp_mission_runs + cp_mission_runs_archive, revoked when a void drops a count below its
+--     threshold), manual_award rows, "first completed run since going on duty" (CP.Qbx duty/load events)
+--   * callback getHome -> HomeData (ARCHITECTURE §9.4)
+--
+-- Public API (docs/ARCHITECTURE.md §5.18)
+--   CP.Scoring.P(mission) -> number                     whole points (halves up)
+--   CP.Scoring.compute(run, p, result, opts) -> RunResult.points (§9.6)
+--       result 'completed'|'failed'|'abandoned'; opts (all optional) = { objectivesDone, objectivesTotal,
+--       failedShare, durationS, participants, departments, endReason } as modules/runs passes them.
+--   CP.Scoring.isFirstRunSinceDuty(src) -> boolean
+--   CP.Scoring.streak(citizenid) -> { days, multiplier, graceLeft }
+--   CP.Scoring.onRowCounted(citizenid, row)   (hook) row = the inserted cp_mission_runs columns + id
+--   CP.Scoring.onRowApproved(rowId)            (hook) a flagged row was approved (flagged already 0)
+--   CP.Scoring.onRowVoided(rowId)              (hook) a row was voided (XP taken back when it had counted)
+--   CP.Scoring.manualAward(actorSrc, citizenid, points, reason) -> ok, errKey|rowId   (admin only, audited)
+--   CP.Scoring.xpLevel(xp) -> { label, badge, xp, next }       xp = the level's threshold, next = the next one or nil
+--   CP.Scoring.badges(citizenid) -> { { id, label, earnedAt, earnedTs } ... }   every badge in cp_badges
+-- Net: callback 'getHome' -> HomeData (officers only; CP.Access.getOfficer error keys otherwise)
+-- compute, streak, the hooks, manualAward and badges query the database: call them from a thread.
+
 CP.Scoring = CP.Scoring or {}
 local Scoring = CP.Scoring
 local TAG = 'scoring'

@@ -1,5 +1,10 @@
 -- Modules/missions, draw, scaling, schedule, events (slice engine_a).
 
+-- Mission files are served from memory through a LoadResourceFile override, other modules are
+-- stubbed, and every SQL statement of the slice runs against MariaDB. The spec uses its own
+-- database (<run database>_engine_a, rebuilt from sql/migrations) so parallel runs of other specs that
+-- reset cp_test cannot interfere.
+
 local H = dofile('tests/harness.lua')
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_engine_a'   -- per run: parallel runs never share it
 H.resetDatabase()

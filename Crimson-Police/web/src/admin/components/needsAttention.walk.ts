@@ -1,4 +1,4 @@
-// Admin UI -> Home's Needs attention panel (step H5) against the browser mocks (node walk.mjs, a gate step): the
+// Admin UI -> Home's Needs attention panel against the browser mocks (node walk.mjs, a gate step): the
 // one batched admin:getNeedsAttention answer, its lines and the screen each one opens, and the plain screen titles.
 
 import '../../mocks/admin_system.mock';

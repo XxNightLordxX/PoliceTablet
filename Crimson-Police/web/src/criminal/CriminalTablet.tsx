@@ -1,4 +1,9 @@
-// The criminal tablet (step G2): a burner-phone style tablet for players who play real suspects, nothing like the
+// The criminal tablet: a burner-phone style tablet for players who play real suspects, nothing like the
+
+// The criminal tablet: a burner-phone style tablet for players who play real suspects, nothing like the
+// police tablet. Home (volunteer on or off), Jobs (the question he has open), Active (the suspect he plays), History
+// (past cases and strikes) and Rules. Every button goes through server:crimtab:act; the server checks everything and
+// answers the fresh view.
 
 import { useState } from 'react';
 import { Icon, type IconName } from '../shared/components/Icon';

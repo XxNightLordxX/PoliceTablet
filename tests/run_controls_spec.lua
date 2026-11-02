@@ -1,4 +1,9 @@
--- In a run (step P8): four per-department Mission controls of scope 'run' read for the leader at the accept and
+-- In a run: four per-department Mission controls of scope 'run' read for the leader at the accept and
+
+-- In a run: four per-department Mission controls of scope 'run' read for the leader at the accept and
+-- locked in run.controls: startTimeout, readyCheck, timeLimit (x the mission's limit, the fast-finish bonus keeps
+-- the unscaled one) and idleCheck (stricter only). Real runs, deptcontrols and anticheat
+-- (tests/fixtures/admin_live_world.lua).
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

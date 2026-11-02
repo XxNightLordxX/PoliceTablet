@@ -1,5 +1,10 @@
 // Browser mocks of the teams slice: getUnit + unit actions, sup:getOperation + operation actions.
 
+// URL variants for screenshots and checks:
+//   ?teams=leader (default) | member | solo | invites | locked | lockedoff | long | full   the Unit screen
+//   ?op=joining (default) | running | waiting | none | cooldown | empty | fresh   the Cross-Department panel
+//   &lua=1   answer like Lua does: empty lists arrive as {} objects and nil fields are missing keys
+
 import { emitDebug, registerMock } from '../shared/nui';
 import type {
     EligibleMission,

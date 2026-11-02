@@ -1,5 +1,10 @@
 -- CP.Options (client): the officer options as this PC sees them. A 'local' option (CP.OptionDefs store = 'local':
 
+-- a look or a sound) is kept on this PC in the resource KVP crimsonpolice:options (one JSON object, only the keys
+-- that differ from the default) and applies at once, even before the tablet opens; a 'server' option is the value
+-- the session (and the push 'options') carries. The rules are the session's resolved Config.OfficerOptions.
+-- Client modules listen to CP.Hooks 'options:changed' (key); the NUI gets { type = 'localOptions', options }.
+
 CP.Options = CP.Options or {}
 local O = CP.Options
 local Defs = CP.OptionDefs

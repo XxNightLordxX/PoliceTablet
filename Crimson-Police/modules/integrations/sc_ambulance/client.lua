@@ -1,5 +1,16 @@
 -- CP.Ambulance (client): sc-ambulance's standard EMS request for a downed participant.
 
+-- Public API (docs/ARCHITECTURE.md §5.1)
+--   CP.Ambulance.sendEMSRequest() -> boolean
+--       TriggerServerEvent('hospital:server:EMSDownAlert', streetName) from the downed player's OWN
+--       client (sc-ambulance uses 'source' as the patient), with the street name computed exactly as
+--       sc-ambulance does. Send it only after the server has cleared the crimsonArena flag (modules/downed
+--       does that before client:requestEMS): sc-ambulance ignores flagged players and players who are
+--       not down. Guarded against duplicates (at most one request per 5 s); false when sc-ambulance is
+--       not started, the request was a duplicate, or the player carries Crimson-Arena's crimsonArena value
+--       (sc-ambulance drops the request then; Crimson-Arena handles its own players). This is the one
+--       dispatch call Crimson-Police may cause.
+
 CP.Ambulance = CP.Ambulance or {}
 local A = CP.Ambulance
 local TAG = 'sc_ambulance'

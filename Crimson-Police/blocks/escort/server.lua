@@ -1,5 +1,74 @@
 -- Objective block "escort" (server half)
 
+-- What it does
+--   An escorted vehicle (Armored Truck Escort: a stockade) with an NPC driver (networked, ctx.spawnVehicle /
+--   ctx.spawnPed) leaves the start of a recorded road route when the objective starts (the first
+--   participant's arrival) and is driven by the run host's client from waypoint to waypoint with a
+--   lane-following style at `speed`. The server follows its progress with its own coordinates: a waypoint
+--   is passed within WP_REACH; at a route stop (`route.stops = { { at, wait } }`) the truck waits `wait`
+--   seconds, which never counts toward stoppedFail. Vehicle toughness is applied by the host
+--   (SetEntityMaxHealth / SetVehicleEngineHealth / SetVehicleBodyHealth ... = 1000 × toughness) and
+--   confirmed with the 'toughened' report, which sets the health baseline.
+--   Ambush waves (ambush.waves, scales) of ambush.carsPerWave cars (scales) with ambush.perCar armed
+--   attackers each are planned at start at random ambush points (ctx.rng, distinct, in route order) and
+--   trigger when the truck is within AMBUSH_TRIGGER of the point (or has passed it). Attackers are
+--   hostile only to participants (CP.Npc 'hostile'). Spawns wait for the run caps (ctx.canSpawn) and are
+--   never cut; rescale drops planned waves not yet triggered and lowers counts still missing.
+--   Where the truck and the ambush cars appear (Config.Spawning): the truck on route[1] lifted
+--   Config.Spawning.vehicleLift, only while no vehicle the server knows (GetAllVehicles) and no participant is
+--   within TRUCK_CLEAR (6 m) of it; meanwhile it waits (block.escort.msg_clear_start once, one console line), and
+--   after waveDelayMax it takes the first free one of TRUCK_SPOTS spots TRUCK_STEP apart along the route (one
+--   warning), never a taken one. An ambush car's z is the route's height where it stands (within ROUTE_Z_NEAR) plus
+--   vehicleLift; its slots (CarSlots: its own, then with ambushAheadOnly every SLIDE_STEP along the route up to
+--   SLIDE_MAX, none within SLOT_CLEAR of a vehicle, none on, within minDistance of or past the truck, starting on
+--   the first SLIDE_STEP mark SLIDE_AHEAD or more ahead of it once it is on or past them, so a slot keeps its console
+--   name) go through ctx.choosePoints (ordered); none passes: the car waits (the other waves still spawn). A wave
+--   still short of slots when the truck arrives (CutShortWaves), or held back by the spawn caps until then and
+--   finding no slot after it (ChooseSlot), keeps the cars it has (none: dropped), with one warning (CutWave).
+--   Config.Spawning.enabled = false: as before.
+--   Done when the truck, on the final stretch (its next waypoint is the last one), is within `arrival` metres
+--   (2D, like the waypoints) of the destination (the last waypoint) with no living
+--   attacker within clearRadius of it, every triggered wave spawned and every triggered wave neutralised
+--   (each attacker killed or cuffed, wherever it is: "neutralise each ambush wave"). Fails when the truck is
+--   destroyed (entity health 0 only once a positive health was seen: a server-created truck reads 0 until a
+--   client synced it; not once the objective is done), stopped for stoppedFail seconds in a row outside a stop
+--   while the run host, whose client drives it, is within HOST_RANGE (after it first moved, or START_GRACE_MS
+--   after the host first came that close), or (engine) at the time limit.
+--
+-- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.escort)
+--   minSeconds [60] · presenceRange [presenceRange[3] = 300] · label
+--   route        location key { points, stops = { { at, wait [stopWait[3] = 20] } } }  ['route']
+--   vehicle      [Config.Blocks.escort.vehicle = 'stockade'] · driver (added) ped model ['s_m_m_armoured_01']
+--                (custom missions: that default or one of Config.Builder.allowed.peds)
+--   speed        [speed[3] = 60] km/h · style 'careful' | 'normal' | 'fast' [style.default = 'normal']
+--   toughness    [toughness[3] = 1.5] · stoppedFail [stoppedFail[3] = 60] s · arrival [arrival[3] = 20.0]
+--   ambushPoints location key: list of vec3/vec4                         ['ambushPoints']
+--   ambush       { waves [ambushWaves[3] = 2], carsPerWave [carsPerWave[3] = 2], perCar [perCar[3] = 2],
+--                  models [4-seat Config.Builder.allowed.vehicles], peds [Config.Blocks.hostile_waves.peds],
+--                  weapons [hostile_waves.weapons], accuracy [hostile_waves.accuracy[3] = 25],
+--                  armour [hostile_waves.armour[3] = 0], health [hostile_waves.health[3] = 200] }
+--                  (accuracy / armour + tier and Armored Hostiles via ctx.combat)
+--   clearRadius  [100.0]
+--
+-- Evidence accepted (onEvent)
+--   { type = 'toughened', netId }   the run host applied the toughness to the truck (once)
+--   { type = 'cuffed', netId }      CP.Npc after a validated cuff of an attacker (the cp bag says cuffed)
+--   { type = 'shot', netId, src }   CP.Npc: a surrendered/cuffed ped was shot (penalty recorded there)
+--
+-- Bonus / penalty ids recorded (shared)
+--   truck_healthy   ctx.award once (recorded before ctx.complete) when the truck's health at the moment
+--                   it arrived was above HEALTHY_SHARE (50 %)
+-- Fail reason keys: block.escort.fail_destroyed · block.escort.fail_stopped · block.escort.fail_setup ·
+--   run.fail_killed_unarmed (a participant killed the unarmed driver)
+--
+-- ctx.state
+--   block, rng, points, stops = { [waypoint] = wait }, truck = { netId, entity, driver = { netId, entity,
+--   dead }, wp, served, stop = { at, left } | nil, stoppedFor, moved, nearAt, arrived, arrivalHealth,
+--   toughened, baseline, health, gen, waitMs, waitSaid }, waves = { { k, point, index, wp, s, triggered, dropped,
+--   want, slide, noSlot, waitMs, cars = { carKey } } }, cum (metres of road to each waypoint),
+--   cars = { [key] = { netId, entity, wave, want, crew = { pedKey } } } (every car doors-locked), peds = { [key] = { netId,
+--   entity, wave, state } }, dirty, sentAt, completed, failed, halted
+
 local BLOCK = 'escort'
 local U = CP.U
 

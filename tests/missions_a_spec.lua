@@ -1,5 +1,11 @@
 -- The missions_a built-in mission files and missions/builtin/index.lua.
 
+--   lua5.4 tests/run.lua missions_a
+-- Each file is loaded exactly as modules/missions loads it (LoadResourceFile + the mission file reader,
+-- CP.U.readMissionCalls: data only, never run) and checked against the spec's catalog, its mission card, ARCHITECTURE 3.3 and
+-- the Mission Builder guardrails. When the objective blocks it uses exist, the definition also goes
+-- through CP.Missions.normalize (block defaults + validate) with no warnings.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 

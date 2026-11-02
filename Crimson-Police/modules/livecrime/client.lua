@@ -1,4 +1,9 @@
--- CP.LiveCrime (client, step V15): the pop-up that asks an officer to join a live case as backup. The server decides
+-- CP.LiveCrime (client): the pop-up that asks an officer to join a live case as backup. The server decides
+
+-- CP.LiveCrime (client): the pop-up that asks an officer to join a live case as backup. The server decides
+-- who is asked (a response to the crime's call, the scene, a cuff on a suspect) and checks the answer again; this
+-- side only shows the question and sends yes or no with the offer's token. The same for a suspect's
+-- surrender question (his own command, or an officer's Talk them down).
 
 local open = nil   -- the offer whose pop-up is showing: { runId, token }
 

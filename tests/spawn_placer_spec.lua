@@ -1,6 +1,21 @@
--- The placer (modules/spawn/client.lua; PLAN S9): a participant's game puts a new mission entity on the ground when
+-- The placer (modules/spawn/client.lua): a participant's game puts a new mission entity on the ground when
 -- the server asks through its cp bag, or leaves a bad point frozen, and tells the server, against the typed natives
 -- of H.placerNatives over the ground map of H.groundNatives.
+
+-- The placer (modules/spawn/client.lua) on H.placerNatives (players, network ids, control that comes after a
+-- request or never or is taken over, freeze and coordinates kept only on an entity this game controls) over the ground
+-- map of H.groundNatives, both checking argument types: a person 1 m over the ground put on it at the server's x, y
+-- (frozen first, moved, let go, tasks kept, collision kept loaded, the probe around him ignoring him), told once per
+-- token; 0.52 m under put on it; 5 m under, in water, an interior never loaded and a wall: bad, frozen, not moved; a van
+-- at the road's height lifted by its model and set on its wheels (its heading in this game); an object put on the
+-- ground and kept frozen, its kind from the entity type. Who places: not a participant, another run, no run: nothing;
+-- the partner's game controls it: nothing; a bystander's or nobody's and this player nearest: control asked, placed;
+-- the partner nearer: nothing; a participant not streamed here does not count; control never given: nothing, the next
+-- bag write tries again; an entity not here yet: placed when its bag comes again. Seated and attached: not moved;
+-- cuffed: placed, kept frozen; taken over during the check: nothing; a new token or a withdrawn ask: placed again; bad
+-- bags; a wave of six: four at a time, all told; a wave a bystander's game controls: control asked for four at a time,
+-- four placed at once; one 12 m from its point (placed and let go before): told 'moved', not frozen, not moved back;
+-- 2 m from it: placed as usual; the run's end stops it, another run's end does not.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client' })

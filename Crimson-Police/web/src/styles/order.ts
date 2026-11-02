@@ -1,4 +1,10 @@
-// Every stylesheet of the NUI, in one fixed order, loaded with the page (step OP2). The Admin UI screens, the
+// Every stylesheet of the NUI, in one fixed order, loaded with the page. The Admin UI screens, the
+
+// Every stylesheet of the NUI, in one fixed order, loaded with the page. The Admin UI screens, the
+// Supervisor Mission Builder and the criminal tablet load their code on first use (layouts/screens.ts), but their
+// styles stay here: one CSS file in this order, so a rule wins over another exactly as it did before they were split
+// off (and a screen never shows for a moment without its styles). A new stylesheet goes into this list too
+// (tests/nui_bundle_spec.lua checks every src/**/*.css is listed), at the place its first import gave it.
 
 import '../shared/components/Avatar.css';
 import '../shared/components/MaintenanceBanner.css';

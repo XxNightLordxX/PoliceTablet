@@ -1,5 +1,82 @@
 -- Objective block "search_area" (server half)
 
+-- What it does
+--   A search circle of startRadius metres around location[center] (Manhunt: the run starts when the first
+--   participant enters it). clueCount clue spots are picked at random (ctx.rng) from location[clues];
+--   each gets a clue from clueProps: a prop (ctx.spawnObject, frozen) or, for 'witness', a witness NPC
+--   (ctx.spawnPed). Participants check a clue with ox_target (clueProgress.duration; 'clue_start' then
+--   'clue', both within CLUE_RANGE of the spot by server coordinates, the second at least TIMED_SHARE of
+--   the duration later). Every checked clue shrinks the circle to the next shrinkTo radius; the server
+--   picks the new centre with ctx.rng within 0.7 × the new radius of a fugitive still at large (nested in
+--   the old circle when possible), so the circle always contains a fugitive.
+--   `fugitives` (scales) unarmed fugitives hide at random hiding spots (distinct first; Slot(i)).
+--   When they appear (Config.Spawning; ARCHITECTURE §3.3 "search_area through the director"):
+--   nothing when the search starts; a fugitive on his spot once an officer is within activateRange of it
+--   (ctx.whenNear) and every officer minDistance or more from it (ctx.choosePoints, never closer; after
+--   waveDelayMax of an officer standing closer, another free hiding spot in the circle an officer is
+--   near), a clue once an officer is within activateRange of it, minDistance away or closer out of every
+--   officer's sight (opts.unseen; hardMin after waveDelayMax). A fugitive not there yet counts as
+--   hidden on his spot for the circle. Config.Spawning.enabled = false: all at the start, as before. A
+--   hidden fugitive runs when a participant gets within runDistance (server distance, every tick). Fugitives
+--   give up when stunned (client 'stunned', a participant within STUN_RANGE), when a participant stays
+--   within givesUp.close.distance for givesUp.close.seconds, or at once when CP.Npc.wornOut calls a
+--   running fugitive worn out (Config.Flee: his flee clock 'spent', a participant within giveUpRange;
+--   with the task it returns); then "Cuff suspect" (CP.Npc.enableCuff).
+--   A fugitive who ran and is more than escape.distance from every participant for escape.seconds
+--   escapes: the run fails. Killing a fugitive or the witness (a participant kill) fails the run.
+--   Done when every fugitive is neutralised (cuffed, or dead without a participant kill).
+--   clues_first is awarded once when every clue was checked before the first arrest.
+--   Volunteer slot (ARCHITECTURE 7.3; one local table Vol): volunteerSlot { role = 'fugitive', meet = the
+--   location's first hiding spot } (Manhunt). ctx.volunteer() decides st.vol: 'wait' (asking: no fugitive, no
+--   completion), 'real' (a real player hides: no NPC fugitive unless Config.Volunteers.fugitiveNpcs, then one fewer;
+--   he is one more fugitive, done when CP.Opponents.view has him detained with a share or booked, one arrest; lost
+--   fails block.search_area.fail_escaped), 'void' (nothing spawns), nil (the NPCs as before). The circle shrinks
+--   towards his server-side rec.lastCoords once he was seen inside it (else his meet point); his own map gets the
+--   circle (CP.Volunteers.caseArea) at the start and after each shrink, removed once he is caught. Circle rule from
+--   in_position on, once he was inside: outside it (2D, server coords) one warning (caseNote volunteer.case.out_warn),
+--   then after Config.Volunteers.fugitiveOutSeconds CP.Volunteers.outOfBounds (a void and a strike); 0 = no rule.
+--   The pointer never shows him (the circle and the clues only); the snapshot carries volunteer / volunteerDone.
+--
+-- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.search_area)
+--   minSeconds [60] · presenceRange [presenceRange[3] = 100] (margin outside the current circle) · label
+--   center       vec3 location key                               ['center'; falls back to location.start]
+--   startRadius  [startRadius[3] = 600] · shrinkTo [Config.Blocks.search_area.shrinkTo = { 300, 150, 50 }]
+--   clues        list location key (6+)                          ['clues']
+--   clueCount    [clues[3] = 3]
+--   clueProps    prop models or 'witness'                        [{ 'prop_cs_heist_bag_02', 'prop_npc_phone_02', 'witness' }]
+--                (custom missions: only these; witnessModel and peds from Config.Builder.allowed.peds;
+--                givesUp.close off or exactly flee_arrest closeDistance / closeSeconds; clueProgress and
+--                cuff durations 1000-30000 ms; cuff.maxDistance at most CUFF_RANGE)
+--   witnessModel (added) ped model of the witness                [the first of Config.Blocks.protect_rescue.peds]
+--   clueProgress { label [locale block.search_area.clue_progress], duration [4000] ms }
+--   hiding       vec4 list location key (6+)                     ['hiding']
+--   fugitives    (scales)                                        [fugitives[3] = 1]
+--   peds (added) fugitive models                                 [Config.Blocks.hostile_waves.peds]
+--   runDistance  [runDistance[3] = 30.0]
+--   givesUp      { stun [true], close { distance [closeDistance = 3.0], seconds [closeSeconds = 3] } | false }
+--   escape       { distance [300], seconds [30] }
+--   cuff         { label [locale block.search_area.cuff], duration [5000], maxDistance }
+--
+-- Evidence accepted (onEvent)
+--   { type = 'clue_start', clue }   a participant started checking clue n (1-based, the list the server sends)
+--   { type = 'clue', clue }         ...and finished it
+--   { type = 'stunned', netId }     a fugitive seen stunned; a participant within STUN_RANGE and the
+--                                   reporter within STUN_REPORT (server coords), and CP.Npc.stunCheck
+--   { type = 'cuffed', netId }      CP.Npc after a validated cuff (the cp bag says cuffed)
+--   { type = 'shot', netId, src }   CP.Npc: a surrendered/cuffed fugitive was shot (penalty recorded there)
+--
+-- Bonus / penalty ids recorded (shared)
+--   clues_first   ctx.award once: every clue checked (by participants) before the first arrest
+-- Fail reason keys: block.search_area.fail_escaped · block.search_area.fail_setup · run.fail_killed_unarmed
+--
+-- ctx.state
+--   block, rng, circle = { center, radius, n }, clues = { { i, coords, name, kind = 'prop'|'witness',
+--   model, netId, entity, status = 'pending'|'done'|'lost', starts = { [src] = ms }, waitMs } },
+--   fugitives = { [key] = { netId, entity, spot, spotIndex, index, state =
+--   'idle'|'fleeing'|'surrendered'|'cuffed'|'dead', ran, far, close } }, slots = { [i] = true }, fugWait =
+--   { [i] = ms }, order, count, spawning, entered, arrests, checked, cluesFirst, escaping, dirty, completed,
+--   failed, halted
+
 local BLOCK = 'search_area'
 local U = CP.U
 

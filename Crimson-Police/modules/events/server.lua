@@ -1,5 +1,48 @@
 -- CP.Events: Type of the Day, run twists (mission modifiers) and the Weekly Boss.
 
+-- modules/events/server.lua · CP.Events: Type of the Day, run modifiers and the Weekly Boss.
+--
+-- Owns
+--   * Type of the Day: one Config.MissionTypes key per reset-adjusted day, picked with a seed made
+--     from the day key (CP.U.hash), so a restart keeps the same type. Points only (CP.Scoring doubles).
+--   * Modifiers: the roll at accept (Config.Events.modifierChance, the run's seed): Armored Hostiles
+--     (Tactical only), Time Crunch, Radio Silence. Never for Cross-Department Missions, the Weekly Boss
+--     or test runs. The effects are applied by the engine (CP.Runs / CP.Scaling / blocks).
+--   * The twists Mission control (Events.registerTwistControl): which enabled twists a
+--     department's leaders are offered at the accept step and which start ticked (Events.deptTwists;
+--     twistOffer and checkTwists take the leader's department).
+--   * The twistCash Mission control (Events.registerTwistCashControl): x each twist's cash
+--     for the leader's department inside the admin's bounds (Events.deptTwistCash; twistOffer shows it).
+--   * The typeOfTheDay Mission control (Events.registerDeptTodControl): a department's pick
+--     for the next day; Events.typeOfTheDay(dayKey, department, who) gives today's pick (read once a day
+--     from yesterday's last cp_audit change, Events.deptTypeOfTheDay) unless its setter is among who,
+--     else the server type (admin override, then the roll).
+--   * Weekly Boss availability: enabled, the reset-adjusted weekday is in Config.Events.weeklyBoss.days,
+--     hidden while a Cross-Department Mission is active, once per officer per week (any
+--     weekly_boss_kingpin row since the reset of the week's first boss day, except end_reason
+--     real_call / force_recall / cancelled), and the Weekly Boss card of the Mission Board
+--     (BoardCard & { available }; locked by the hourly cap too, which the boss counts toward).
+--
+-- Public API (server)
+--   CP.Events.typeOfTheDay(dayKey?) -> typeKey|nil
+--   CP.Events.rollModifier(run) -> 'armored_hostiles'|'time_crunch'|'radio_silence'|nil
+--   CP.Events.modifiers() -> { [key] = { label = 'modifier.<key>', tacticalOnly = bool } }
+--   CP.Events.bossAvailable(src, officer?) -> ok, reasonKey
+--       reasonKeys: err.boss_disabled, err.boss_unavailable, err.boss_not_today, err.operation_locked,
+--       err.boss_used, or CP.Access.getOfficer's key when officer is not given and src is no officer
+--   CP.Events.bossCard(src) -> card|nil   (nil while hidden: disabled, not a boss day, operation active,
+--       mission missing or disabled)
+-- The boss is mission id 'weekly_boss_kingpin', accepted with the key 'weekly_boss' (runs store 'tactical').
+--
+-- Contract interpretations (details in docs/ARCHITECTURE.md §13.12)
+--   * voided boss rows still use the week's attempt; bossAvailable also refuses during an operation
+--   * the attempt window starts at the reset of the week's first boss day (Friday by default), not at
+--     the week start: rows are written when a run ends, so a boss run accepted on Sunday night that ends
+--     after Monday's reset belongs to last week and must not use up this week's attempt
+--   * bossCard.available = the unit may take this week's attempt (busy/onCall are separate flags);
+--     typeOfTheDay is true when the Type of the Day is tactical
+--   * rollModifier uses CP.U.rng(CP.U.hash(run.seed .. ':modifier'))
+
 CP.Events = CP.Events or {}
 local Events = CP.Events
 

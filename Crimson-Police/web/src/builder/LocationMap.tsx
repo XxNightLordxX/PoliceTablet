@@ -1,5 +1,10 @@
 // A schematic map (SVG, north up, metres) of one location: the start and its radius,
 
+// the spawn keep-out circle (Config.Builder.minSpawnFromStart, or the `keepOut` prop: the start circle plus
+// Config.Builder.spawnMargin when the mission has armed spawns), every placed point per key, recorded routes with
+// stop points, waypoints a test drive did not reach, waypoints with no road path and rejected "off road" samples,
+// and the no-build zones nearby. No map tiles: the NUI must work offline.
+
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Button, IconButton } from '../shared/components';
 import { cx } from '../shared/cx';

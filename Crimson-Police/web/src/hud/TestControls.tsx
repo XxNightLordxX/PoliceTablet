@@ -1,5 +1,20 @@
 // HUD test controls (Admin test mode, SPEC "Test controls").
 
+// Props: { hud: HudState } — rendered by <Hud/> under the objectives only when hud.testControls is true
+// (the admin who started the test). The HUD has no NUI focus by default: the Lua testing client
+// (modules/testing/client.lua) gives focus with the +crimsonpolice_testpanel key (default F7) and tells
+// this panel through push 'test' { focused, key, debugOn } (TestPush), kept at module level so a panel that
+// mounts again shows the last values at once. While focused, that key or Escape
+// releases the cursor (client action testPanel { open: false }) on its key-up (useKeyRelease, shared/hooks.ts),
+// so the release of the press that gave the focus does nothing. key = false (the bound key has no text label,
+// a mouse or pad button): only Escape releases and the panel names no key (test.ui.*_nokey).
+// The same push carries Config.Testing's allowTeleport / debugOverlay: those buttons are disabled when off.
+// Buttons call client actions of the Lua testing client:
+//   testControl { control: 'skip' | 'restart' | 'pause' | 'resume' | 'complete' | 'fail' | 'end' }
+//   teleport { target: 'start' | 'objective' } · toggleDebug { enabled }
+// (the client forwards them to server:test:control). Force complete / Force fail / End test ask first.
+// Text keys: locales/parts/testing.json (test.*).
+
 import { useCallback, useState } from 'react';
 import { Icon, Spinner } from '../shared/components';
 import type { IconName } from '../shared/components';

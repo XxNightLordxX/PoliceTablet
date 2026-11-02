@@ -1,5 +1,40 @@
 -- CP.Cash (server): the cash formula and every payment Crimson-Police makes.
 
+-- Owns
+--   * cash per participant = round(B x M_tier x M_mod) (SPEC "Cash payouts"): B = run.cashBase, locked at
+--     accept by CP.Payouts.baseFor; M_tier = the run's points and cash tier (Config.Scaling cash); M_mod =
+--     Config.Events.modifierCash when the run rolled a modifier. Only Completed results pay; a participant
+--     who failed the presence share (runs with 2+ participants) gets $0. x M_bonus, the happy hour
+--     cash bonus fixed at the accept (Cash.bonusOf; never test, Cross-Department or boss runs), and M_mod uses
+--     the department's twistCash scale (CP.Twists.scaleOf); breakdown.cash.mBonus when it is not 1.
+--   * the claim-then-pay flow of one cp_mission_runs row (cash_status none/held/pending -> paying -> paid |
+--     capped | unfunded; offline -> pending), the daily cap per reset-day (Config.Cash.dailyCap), the society
+--     source (Config.Cash.source = 'society': the department's Renewed-Banking account through CP.Banking),
+--     the Qbox deposit (CP.Qbx.addMoney, Config.Cash.account), the Renewed-Banking history entries with the
+--     transaction id CP-<run_uuid>-<citizenid>, pending payments on login, releases after an approval,
+--     forfeits of voided runs and the forfeiture job (every 10 min).
+--   A row is only ever paid when it is completed, not flagged and not voided, and the claim
+--   UPDATE ... SET cash_status = 'paying' WHERE ... IN ('none','held','pending') changed it: paid, capped,
+--   unfunded and forfeited are final. A row left in 'paying' (crash, or a failed deposit after a society
+--   withdrawal that could not be refunded) is never retried automatically: see stuckPayments().
+--
+-- Public API (docs/ARCHITECTURE.md §5.20)
+--   CP.Cash.compute(run, p) -> amount, breakdown       breakdown = RunResult.cash { B, mTier, mMod, amount, status }
+--       status: 'held' for a completed, flagged, non-test row, else 'none'. Reads p.result (set by the engine).
+--   CP.Cash.pay(rowId) -> status|nil                   'paid'|'capped'|'unfunded'|'pending'|'paying'|nil (nothing done)
+--   CP.Cash.payPending(src) -> n                       pays the player's pending rows, and completed mission rows left
+--                                                      'none' with cash (never claimed); run 5 s after login and once
+--                                                      for every online player 15 s after the resource starts
+--   CP.Cash.release(rowId) -> status|nil               after an approved flag (flagged already 0): pay now or pending
+--   CP.Cash.forfeit(rowId) -> boolean                  a voided row's held/pending cash -> forfeited
+--   CP.Cash.range(missionType, members) -> min, max    board card range per officer: missionType is a type key or
+--       'weekly_boss'; members = officer tables or srcs (the unit). Covers every mission of the pool (admin
+--       payouts, stars) at the unit's tier; the top also covers a modifier (never for the boss).
+--   CP.Cash.stuckPayments() -> { StuckPayment... }     rows still 'paying' (not being paid right now)
+--       StuckPayment = { id, runUuid, citizenid, name, missionId, missionLabel, department, amount, createdAt, transId }
+--   CP.Cash.earnedThisWeek(citizenid) -> number        cash_paid of paid/capped rows since the week start
+-- All functions except compute and range query the database: call them from a thread.
+
 CP.Cash = CP.Cash or {}
 local Cash = CP.Cash
 local TAG = 'cash'

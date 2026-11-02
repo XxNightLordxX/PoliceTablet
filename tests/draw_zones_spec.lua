@@ -1,4 +1,4 @@
--- Modules/draw (WP4): areas, footprints, zone clearance, location memory and freshness, the county-wide
+-- Modules/draw: areas, footprints, zone clearance, location memory and freshness, the county-wide
 -- weighting, the daily cap and its board lock, the ready-check call site and admin:getLocationStats.
 
 local H = dofile('tests/harness.lua')

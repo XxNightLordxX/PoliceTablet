@@ -1,4 +1,4 @@
-// Browser mocks of the criminal tablet (step G2): crimtab:get and server:crimtab:act over one volunteer, with a job
+// Browser mocks of the criminal tablet: crimtab:get and server:crimtab:act over one volunteer, with a job
 // to answer. ?ui=crimtab opens it on load.
 
 import { emitDebug, registerMock } from '../shared/nui';

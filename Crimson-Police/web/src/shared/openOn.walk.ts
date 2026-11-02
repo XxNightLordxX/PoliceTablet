@@ -1,4 +1,4 @@
-// My options -> Dispatch and Opening the tablet (step O9) against the browser mocks (node walk.mjs, a gate step): the
+// My options -> Dispatch and Opening the tablet against the browser mocks (node walk.mjs, a gate step): the
 // screen an open lands on (openOn), the remembered filters' list and a claim sent without the dialog.
 
 import '../mocks/core.mock';

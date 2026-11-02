@@ -1,4 +1,9 @@
--- CP.Opponents identity and pairs (step V7): the self rule (characters, licenses, linked accounts), the duty maps,
+-- CP.Opponents identity and pairs: the self rule (characters, licenses, linked accounts), the duty maps,
+
+-- CP.Opponents identity and pairs: the self rule (characters, licenses, linked accounts), the duty maps,
+-- the pair ledger cp_pvp_pairs (caps, restart, retention) and the pair-repeat flag, against the real qbx, access,
+-- schedule, anticheat and opponents modules (qbx_core's exports and events mocked, Qbox's players and users tables as
+-- qbx_core 1.24.0 stores them).
 
 local H = dofile('tests/harness.lua')
 

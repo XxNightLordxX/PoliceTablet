@@ -1,4 +1,9 @@
--- CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/spawn/client.lua; PLAN S12):
+-- CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/spawn/client.lua):
+
+-- CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/spawn/client.lua):
+-- where a returning driver or a thief appears for the car this officer deals with: a footpath point the game's navmesh
+-- gives (GetSafeCoordForPed, never a building's inside or water) contactRing metres from the car, 25 m or more from
+-- him, in front of him (where his camera looks), the ones he cannot see first, at a standing person's height.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client' })

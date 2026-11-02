@@ -1,5 +1,38 @@
 -- CP.Schedule: server-time calendar, reset boundaries and the retention job.
 
+-- Owns
+--   * the reset-adjusted calendar: every "day" starts at Config.Time.resetHour (server local time),
+--     every week at that hour on Config.Leaderboard.weekStartsOn, every month at that hour on the 1st
+--   * the boundary listeners (daily, weekly, monthly) other modules subscribe to; checked every 60 s
+--     and fired once when a boundary passes, never just because the resource started
+--   * the retention job (Config.Retention) run at each daily reset (plus one catch-up run shortly after
+--     start, see docs/ARCHITECTURE.md §13.12): cp_mission_runs rows older than runArchiveMonths are copied
+--     into cp_mission_runs_archive and then deleted, cp_audit rows older than auditDays are deleted
+--
+-- Public API (server)
+--   CP.Schedule.now() -> ts                          os.time()
+--   CP.Schedule.dayKey(ts?) -> 'YYYY-MM-DD'          the reset-adjusted day
+--   CP.Schedule.dayStart(ts?) -> ts                  resetHour on that day
+--   CP.Schedule.weekStart(ts?) -> ts                 resetHour on Config.Leaderboard.weekStartsOn
+--   CP.Schedule.weekKey(ts?) -> 'YYYY-MM-DD'         date of the week start
+--   CP.Schedule.monthStart(ts?) -> ts                the 1st of the (reset-adjusted) month at resetHour
+--   CP.Schedule.weekday(ts?) -> 'monday'..'sunday'   of the reset-adjusted day
+--   CP.Schedule.sqlTime(ts) -> 'YYYY-MM-DD HH:MM:SS' (server local time, for DATETIME columns)
+--   CP.Schedule.onDaily(fn(dayKey))
+--   CP.Schedule.onWeekly(fn(weekKey, prevWeekStartTs))
+--   CP.Schedule.onMonthly(fn(monthStartTs))
+--   CP.Schedule.onDailyJob(fn(dayKey))               a long daily job (the daily backup), on the retention thread
+--
+-- Test hooks (internal): CP.Schedule._check(ts?) runs one boundary check (the 30 s loop calls it);
+-- CP.Schedule._runRetention(ts?) -> { archived = n, auditDeleted = n } runs the retention job now.
+--
+-- Contract interpretations: the retention job also runs once 120 s after start (idempotent catch-up);
+-- at the daily reset it runs in its own thread after the daily listeners, so a slow archive never
+-- delays them; the daily jobs (onDailyJob) run first in that thread, one after another, so the daily
+-- backup never races the retention job for the busy lock and the weekly and monthly listeners never
+-- wait for it; a reset that comes while that thread still runs starts no second one; a clock that
+-- moves back to an earlier day fires nothing.
+
 CP.Schedule = CP.Schedule or {}
 local Schedule = CP.Schedule
 

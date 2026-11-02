@@ -1,4 +1,4 @@
-// The loading, error, empty and stale lines of an officer screen (step H2), one look on every screen.
+// The loading, error, empty and stale lines of an officer screen, one look on every screen.
 
 import { Button, EmptyState, ErrorState, Icon, LoadingBlock } from '../../shared/components';
 import { t } from '../../shared/i18n';

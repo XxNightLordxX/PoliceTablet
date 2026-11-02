@@ -1,4 +1,10 @@
--- Manhunt through the spawn director (Config.Spawning, PLAN S16) on the real engine, the real search_area block and the
+-- Manhunt through the spawn director (Config.Spawning) on the real engine, the real search_area block and the
+
+-- Manhunt through the spawn director (Config.Spawning) on the real engine, the real search_area block and the
+-- built-in mission file: nothing appears when the search starts; each clue appears once an officer is within
+-- activateRange (150 m) of it, 40 m or more from every officer or out of every officer's sight; each fugitive appears on
+-- his hiding spot once an officer is within 150 m of it, never within minDistance (40 m) of one (after waveDelayMax on
+-- another free hiding spot instead). enabled = false keeps the old timing: everything when the search starts.
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

@@ -1,6 +1,31 @@
 -- CP.Storage.MemSQL (modules/storage/memsql.lua): the saves folder engine behind database-off mode
 -- (Config.Database.enabled = false) and CP.Storage (modules/storage/server.lua).
 
+--   1. constructs: every SQL construct family of the inventory, run in order through the MySQL drop-in. The
+--      expected values were produced by running the very same statements, in the same order, on MariaDB 10.11
+--      through mysql2 3.22 with oxmysql's options, typeCast and parseResponse (the clock pinned with
+--      SET timestamp to the value os.time() has here), and are hard-coded below. Cases marked tz depend on the
+--      time zone and only run when the server zone is UTC, as it was when they were recorded.
+--   2. persistence: a new engine on the same saves folder has identical tables; AUTO_INCREMENT continues
+--   3. the saves folder layout: one document per table, one row per line, JSON embedded, _tables.json
+--   4. split documents (id ranges and hash buckets); a save rewrites only the documents it changed
+--   5. crash safety: a crash at every file operation of a save (POSIX and Windows rename rules)
+--   6. atomicity: a failing statement (or a failing disk) changes nothing
+--   7. the MySQL drop-in: return shapes, errors, callbacks, ready, other resources' tables
+--   8. CP.Storage and the migrations runner in files mode
+--   9. details a review found: MariaDB's collation table, PAD SPACE order, integer overflow, DATE across time zones,
+--      exact BIGINT / DECIMAL, additive ALTER TABLE, AUTO_INCREMENT after UPDATE, FXServer's inverted os.rename,
+--      a refused file operation at every point of a save, hand-edited, reformatted and missing documents, an ADD INDEX
+--      undone completely when a later part of its ALTER fails or its save is refused; a 6-officer run end on a slow
+--      disk (5 ms a file) gives the server its turn after saveTurnMs of saving, with each change on disk first and
+--      the tables and saves folder byte for byte as with saveTurnMs = 0 (no turn), never in the main chunk, never
+--      for a SELECT, counted again after the thread was away, a callback answered on the next tick; a DELETE of
+--      more than 64 rows sweeps each index bucket once (no removal per row), an UPDATE that keeps an index key
+--      swaps the row in its bucket, with the buckets, a failed DELETE's undo and the saves folder as with one
+--      removal per row
+-- Needs no database (9.1 compares with the local MariaDB when it runs); every saves folder lives in a temporary
+-- folder removed at the end.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 if not (CP.Storage and CP.Storage.MemSQL and CP.Storage.MemSQL.new) then H.load('modules/storage/memsql.lua') end

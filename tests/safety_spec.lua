@@ -1,5 +1,12 @@
 -- Modules/route, calls, alerts, downed (slice safety: Hard rules 15-18).
 
+-- CP.Runs, CP.Dispatch, CP.Ambulance, CP.Qbx, CP.Tablet and CP.Admin are stubbed; the four server
+-- modules run together with their real 1 s / 2 s loops on the harness clock (H.step / H.advance).
+-- The state bag is simulated: every write goes through bagSet, which fires the registered
+-- AddStateBagChangeHandler handlers before the value changes (as FiveM does). At the end the two client
+-- files are loaded in their own environment (a separate CP table) with stubbed natives.
+-- No database is used.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 

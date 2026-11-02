@@ -1,4 +1,11 @@
-// Admin UI · Real suspects (screen key 'admin_rs', step V18): the live-crime and volunteer cases for staff. Shown
+// Admin UI · Real suspects (screen key 'admin_rs'): the live-crime and volunteer cases for staff. Shown
+
+// Admin UI · Real suspects (screen key 'admin_rs'): the live-crime and volunteer cases for staff. Shown
+// while Config.LiveCrime.enabled or Config.Volunteers.enabled is on (Config.RealSuspects.adminScreen), to admins with
+// the antiFarmOverride key. Cases: every open case and the last Config.RealSuspects.casesKept closed ones; a case
+// opens its suspects, flag lines, timeline and damage ledger (admin:getRsCase; never a position, and never a case of
+// the admin's own characters). Pairs and blocks: pair statistics and the running admin rows (admin:getRsPairs), and
+// the three tools (block a pair, exclude a suspect, suspend an officer), each with days and a reason, audited.
 
 import { useState } from 'react';
 import {

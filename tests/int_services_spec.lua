@@ -2,6 +2,14 @@
 -- disputes and anticheat running together (plus the real permissions, scaling and schedule), on stubs of CP.Qbx,
 -- CP.Access, CP.Tablet, CP.Banking, CP.Missions and CP.Runs.
 
+-- It checks the cross-module paths the slice notes asked for (docs/ARCHITECTURE.md §13.11, §13.5, §13.20,
+-- testing.md): approve/void ordering against the real XP / cash / board hooks, disputes forfeiting and restoring,
+-- goal and manual_award rows (season, department, board refresh), admin:getStuckPayments, reasons counted in
+-- characters across admin -> scoring and in payouts, the Profile's canDispute = CP.Disputes.eligible, badge labels
+-- of leaderboard badges in CP.Scoring.badges, and /CrimsonPoliceAdmin test for archived custom missions.
+-- Own database (<run database>_intsvc, rebuilt from sql/migrations and dropped at the end); the fake clock is
+-- aligned with the database clock (rows are written with FROM_UNIXTIME(os.time())).
+
 local REAL_NOW = os.time()
 local H = dofile('tests/harness.lua')
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_intsvc'

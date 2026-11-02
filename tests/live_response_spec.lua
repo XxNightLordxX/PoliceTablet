@@ -1,4 +1,10 @@
--- The live_response block (step V12): the engine-only objective of a live crime. Its three phases (Respond, Secure
+-- The live_response block: the engine-only objective of a live crime. Its three phases (Respond, Secure
+
+-- The live_response block: the engine-only objective of a live crime. Its three phases (Respond, Secure
+-- the scene, one open Detain and book), a HUD and checklist that never change with one suspect's state, the
+-- weighted detain and booking lines (CP.Runs.award opts.weight, read to two decimals by scoring), End case, the time
+-- limit, the dead-case end, presence and the last-reported points; the mission loader and the Mission Builder refuse
+-- the block. Plain Lua with a stubbed CP.Opponents: no database.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

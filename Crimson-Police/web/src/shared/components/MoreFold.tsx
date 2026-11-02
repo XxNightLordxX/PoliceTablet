@@ -1,5 +1,9 @@
 // The More fold (Config.AdminUi.foldAdvanced): the rarely changed options of a settings-heavy dialog or screen sit
 
+// under a More button. Off, the children show open as before. Each screen remembers, per viewer in the browser,
+// whether More was left open (a blocked storage just starts folded). forceOpen keeps it open (an option that is set
+// or has an error never hides).
+
 import { useState, type ReactNode } from 'react';
 import { t } from '../i18n';
 import { useOptionalSession } from '../session';

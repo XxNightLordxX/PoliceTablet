@@ -1,5 +1,16 @@
 -- Applies sql/migrations/NNN_*.sql in order on start.
 
+-- Every other module calls CP.Migrations.ready() before its first query: it blocks the
+-- calling thread until the database is at the latest version. If a migration fails (or
+-- anything else in the runner raises) the resource prints the file, the error, the fix and
+-- "ensure <resource>", and stays started in a failed state: FXServer refuses a resource's
+-- StopResource on itself. CP.Migrations.failed() then names what failed, ready() raises
+-- err.not_started (so nothing runs on a half-upgraded database), started() answers false
+-- for start-up threads, and CP.Net refuses every request with err.not_started.
+-- After the settings load and before any waiting caller goes on, the runner calls
+-- CP.Sysadmin.startLocks() (the start-up maintenance locks: a store left behind, a restore
+-- that did not finish).
+
 CP.Migrations = {}
 
 local TAG = 'migrations'

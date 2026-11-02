@@ -1,5 +1,56 @@
 -- CP.Draw: mission pools, the random draw, locations and the Mission Board.
 
+-- Owns
+--   * the pool of a mission type for an officer or unit: published, enabled, of that type, open to
+--     every member's department, supporting the unit's size, off per-mission cooldown for every member
+--   * the random draw with the no-repeat rules (cp_mission_runs history: the last completed or
+--     abandoned missions of that type per citizenid, union over the unit; Config.Draw.avoidLast, and
+--     avoidLastLarge with largePool+ missions in the pool; a pool of one may repeat)
+--   * location picking (reserved spots skipped; spots with a non-participant player within
+--     Config.Draw.playerClearance skipped while another spot is free; server-side ped coords; players
+--     in Crimson-Arena are ignored, docs/INTEGRATIONS.md, Crimson-Arena rule 7) and the
+--     location reservations (several holders per spot are allowed so a test run can still reserve)
+--   * the Mission Board data (BoardData, ARCHITECTURE §9.4) and the accept of a mission type
+--
+-- Public API (server)
+--   CP.Draw.pool(missionType, members) -> { def, ... }, reasonKey|nil, info   members = officers (§3.1) or srcs
+--       reasonKey: 'board.locked_empty' | 'board.locked_empty_solo' | 'board.locked_mission_cooldown'
+--       info = { cooldownUntil = ts|nil } (earliest per-mission cooldown end when that emptied the pool)
+--   CP.Draw.draw(missionType, members, opts) -> def, locationIndex | nil, errKey
+--       opts = { rng = CP.U.rng(...), participants = { src... } }; errKeys err.pool_empty,
+--       err.pool_cooldown, err.no_location
+--   CP.Draw.pickLocation(def, participantSrcs, rng, opts) -> index|nil     opts = { exclude = { [index] = true } }
+--   CP.Draw.checkMission(missionId, typeKey, members, area) -> def | nil, errKey   (a mission
+--       staff pushed to a unit; the pool's rules for that one mission, never the boss; Draw.accept's
+--       opts.missionId uses it instead of the draw, the location still picked at random)
+--   CP.Draw.reserve(runId, missionId, index) -> wasFree
+--   CP.Draw.release(runId) -> boolean
+--   CP.Draw.isReserved(missionId, index) -> boolean
+--   CP.Draw.recordLast(citizenid, missionType, missionId)   (CP.Runs: a completed or abandoned row was written)
+--   CP.Draw.boardCards(src) -> BoardData | nil, errKey
+-- Net
+--   callback 'getMissionTypes' -> BoardData
+--   action 'server:acceptType' (payload = a Config.MissionTypes key, or 'weekly_boss') -> { runId }
+--       leader only; every member must be an officer (CP.Access.getOfficer), not be in Crimson-Arena
+--       (CP.Alerts.inArena: foreign crimsonArena flag or routing bucket <> 0, docs/INTEGRATIONS.md, Crimson-Arena rule 5;
+--       err.in_arena), have no active run, not be on a real call, be under the hourly
+--       cap and off the type cooldown; server caps (CP.Runs.capsOk); refused while a Cross-Department
+--       Mission is active; the Weekly Boss also needs CP.Events.bossAvailable for every member.
+--       Then CP.Units.lock(unit), the draw, CP.Runs.create (the unit is unlocked again on failure).
+-- Internal (same slice): CP.Draw._eligibility(def, officers, size?, now?) -> ok, why, untilTs, officer
+--
+-- Contract interpretations (details in docs/ARCHITECTURE.md §13.12)
+--   * history = distinct missions of the type with state completed/abandoned (failed rows and the Weekly
+--     Boss never count); a unit whose histories cover the whole pool relaxes to avoidLast, then to "not the
+--     unit's most recent mission", then the whole pool; no fallback to avoided missions for locations
+--   * board: points = best CP.Scoring.P in the pool, cash = CP.Cash.range(key, officers) (fallback from
+--     payouts x tier); locked priority member unavailable > type cooldown > hourly cap > empty pool
+--   * the Weekly Boss is not blocked by the Tactical type cooldown (it has no type), everything else applies
+--   * capsOk failures are reported as err.server_busy; CP.Access / CP.Runs.create error keys pass through
+--   * after CP.Units.lock the unit must still hold exactly the members that were checked (an invite accepted
+--     while the checks yielded): otherwise err.busy, unlocked, and the leader accepts again
+--   * BoardData extras: serverTime (os.time) and todMultiplier (Config.Events.todMultiplier)
+
 CP.Draw = CP.Draw or {}
 local Draw = CP.Draw
 

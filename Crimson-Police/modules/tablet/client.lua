@@ -1,5 +1,83 @@
 -- CP.Tablet (client): the NUI. The only file that calls SendNUIMessage.
 
+-- Owns: /CrimsonPolice (Config.Tablet.command), the key mapping crimsonpolice_tablet (default key
+-- Config.Tablet.keybind; '' = unbound, players can bind it in GTA settings), the optional ox_inventory
+-- tablet item, the client export OpenTablet, opening/closing the Officer, Supervisor and Admin UIs with
+-- NUI focus, the tablet prop and animation (Officer/Supervisor UI only), toasts, the mission HUD state,
+-- the result screen, overlays, live pushes, the department theme sent at login, and every NUI callback.
+-- Every open goes through the server callback getSession, so the server decides who may open what.
+--
+-- Public API (docs/ARCHITECTURE.md §5.4)
+--   CP.Tablet.open(ui) -> ok, errKey        ui 'officer'|'supervisor'|'admin'; asks getSession, shows the
+--                                           UI and takes focus; on refusal shows the error as a toast.
+--                                           Yields (call it from a thread).
+--   CP.Tablet.close() -> boolean            hides the UI (the HUD stays), releases focus, removes the prop
+--   CP.Tablet.isOpen() -> boolean
+--   CP.Tablet.send(msg)                     SendNUIMessage (vectors serialised)
+--   CP.Tablet.notify(kind, text, opts)      a toast with already translated text; opts = { title, duration }
+--   CP.Tablet.hud(patch)                    shallow-merges patch into the HUD state (§9.3) and sends
+--                                           { type = 'hud', hud = state }; hud(nil) hides it. A nullable
+--                                           field (modifier, timer, route, message, detail) set to false
+--                                           is cleared (Lua tables cannot hold nil).
+--   CP.Tablet.result(result)                { type = 'result', result } (RunResult §9.6; nil hides it)
+--   CP.Tablet.overlay(o)                    { type = 'overlay', overlay = o } (nil hides it)
+--   CP.Tablet.push(topic, data)             { type = 'push', topic, data } for local live updates
+--   CP.Tablet.registerClientAction(name, fn(payload) -> ok, data|errKey)
+--                                           handlers for the NUI 'client' endpoint (built in: logoFailed,
+--                                           forwarded to the server action server:logoFailed)
+--   CP.Tablet.panelFocus(owner, on) -> boolean
+--                                           NUI focus for a Crimson-Police HUD panel that is not the tablet
+--                                           (modules/testing: the test-control panel and the test invitation
+--                                           prompt, owner 'testing'). on = true: SetNuiFocus(true, true) unless
+--                                           a tablet UI is open or opening, another owner holds the panel
+--                                           focus, or the local crimsonArena value is foreign (false then).
+--                                           on = false: released only by the owner that holds it, and
+--                                           SetNuiFocus(false, false) is only called when no tablet UI is open.
+--                                           A tablet UI that opens takes the focus over (the owner loses it);
+--                                           a foreign crimsonArena value, a character unload and the resource
+--                                           stop release it.
+--   CP.Tablet.panelFocusOwner() -> owner|nil  who holds the panel focus (nil also after a tablet takeover)
+--   CP.Tablet.playerDown() -> boolean       dead or in last stand (qbx metadata, or a dead ped): the rule every
+--                                           CP screen with the NUI focus follows (the test panel lets go of it)
+--   CP.Tablet.cpProgressActive() -> boolean  a progress bar started by Crimson-Police runs (lib.progressBar
+--                                           and lib.progressCircle of this resource's ox_lib are wrapped
+--                                           once, at load and at runtime wiring, to count them)
+-- Events handled: crimson-police:client:notify ({ kind, key, vars, title, duration }, translated with
+-- CP.L), client:push (topic, data), client:openAdmin (session). This file registers NO handler for
+-- client:hud or client:runEnded: the run engine's client (modules/runs/client.lua) is the one path that
+-- forwards them, to CP.Tablet.hud (patches, the ended HUD, hud(nil) when it hides) and CP.Tablet.result.
+-- Text: the NUI's one copy of the locale comes from the reply to ready ({ type = 'theme', theme, locale =
+-- CP.Locale.all() }, the client's own locales/<Config.Locale>.json with Config.Labels from client:settings
+-- over it) and from { type = 'locale' } when a settings:changed hook sees Config.Labels change. Sessions
+-- carry no locale, and the theme message of login, duty, job and unload (RefreshTheme) carries the theme
+-- only, so an open, a switch or a theme refresh never copies and encodes the 340 KB locale.
+-- NUI callbacks (§9.1): ready, close, request { name, args } -> CP.Net.request, action { name, payload }
+-- -> CP.Net.action (names must start with 'server:'), client { name, payload } -> registered client
+-- actions, switchUi { ui } -> getSession for that UI; replies { ok = true, data = Session } and re-opens.
+-- close that closed an open UI (Escape's key-up, the close button) blocks the GTA pause key (control 200,
+-- DisableControlAction every frame) for Config.Tablet.pauseGuardMs (300; 0 = off): FiveM hands a key still
+-- down when the focus goes back to the game over as a new press. One thread; a second close extends it.
+-- The UI closes on duty loss, on a switch away from the job it was opened with (or out of every
+-- department) and on character unload (the Admin UI only on unload).
+-- Crimson-Arena (docs/INTEGRATIONS.md, Crimson-Arena rule 8): while the local player carries a foreign crimsonArena
+-- value (Crimson-Arena's, not { source = 'crimson-police' }) the command, key mapping, tablet item,
+-- OpenTablet, switchUi and client:openAdmin refuse with the toast err.in_arena; when such a value
+-- arrives, every Crimson-Police UI closes (prop deleted, animation stopped), the HUD and overlays are
+-- hidden and a progress bar started by Crimson-Police itself is cancelled (CP.Tablet.cpProgressActive();
+-- another resource's bar is left alone). While the value stays foreign, HUD patches and overlays (e.g. the run engine's ended HUD after the arena removal) are kept but not shown;
+-- they are shown again once the value is no longer foreign. NUI focus is only released when a
+-- Crimson-Police UI (the tablet, or a panel holding CP.Tablet.panelFocus) was open, never
+-- unconditionally. The tablet prop is a local (non-networked) object.
+-- Exports: OpenTablet() (the same checks as /CrimsonPolice), useTablet(data, slot) for ox_inventory.
+--
+-- ox_inventory item (optional): set Config.Tablet.item = 'crimson_police_tablet' and add to
+-- ox_inventory/data/items.lua:
+--     ['crimson_police_tablet'] = {
+--         label = 'Police Tablet', weight = 500, stack = false, close = true,
+--         client = { export = 'Crimson-Police.useTablet' },
+--     },
+-- Using the item opens the Officer UI with the same server checks as the command.
+
 CP.Tablet = CP.Tablet or {}
 local T = CP.Tablet
 local TAG = 'tablet'

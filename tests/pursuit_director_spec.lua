@@ -1,4 +1,9 @@
--- Pursuit cars through the spawn director (Config.Spawning, PLAN S13) on the real engine, the real block and the
+-- Pursuit cars through the spawn director (Config.Spawning) on the real engine, the real block and the
+
+-- pursuit cars through the spawn director (Config.Spawning) on the real engine, the real block and the
+-- placement module: road clearance (vehicleLift), the second violator up the road from the officers
+-- (secondViolatorUpstream), every car's point through the director (minDistance, after waveDelayMax hardMin), the
+-- placer's other slots, and never a car on a player's position.
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

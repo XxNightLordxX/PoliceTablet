@@ -1,5 +1,45 @@
 -- A tiny FiveM/Qbox stand-in for unit tests (not shipped with the resource).
 
+--   local H = dofile('tests/harness.lua')
+--   H.boot({ side = 'server' })            -- Config, CP shared layer, native stubs, MySQL -> MariaDB
+--   H.load('modules/scaling/server.lua')   -- any resource file, path relative to Crimson-Police/
+--   H.eq(CP.Scaling.tierFor(3).tier, 'heavy')
+--
+-- MySQL.* runs real queries against the local MariaDB database `cp_test` through the mysql CLI
+-- (schema from sql/migrations). Use H.sql('DELETE FROM cp_mission_runs') to reset tables. The server is the one
+-- `mysql -uroot` reaches: the local socket, or MYSQL_HOST / MYSQL_TCP_PORT / MYSQL_PWD (docs/TESTING.md). One
+-- mysql client stays open per spec (CP_TEST_MYSQL=spawn: one per call), and every statement runs with
+-- SET timestamp = os.time(), so NOW() is the spec's clock (H.time after H.boot) in every storage mode.
+-- CP_TEST_NOW=<unix time> moves the default H.time, CP_TEST_CLOCK=<unix time> the wall clock (os.time() and NOW()).
+-- CP_SQL_LOG=<file> (or <dir>/) logs every MySQL call as JSON lines (see "optional SQL log" below).
+-- Storage modes (CP_TEST_STORAGE, H.storage; tests/run.lua --storage=... sets it for every spec):
+--   database (default)  as above: MySQL and H.sql go to MariaDB.
+--   files               database-off mode: H.boot sets Config.Database.enabled = false and loads the real
+--                       modules/storage files, so every module query goes through CP.Storage.MemSQL and a temporary
+--                       saves folder (H.savesDir(), built by the real migrations runner on the engine in
+--                       H.resetDatabase / H.resetSaves). H.sql goes to the same engine; statements that name only
+--                       other resources' tables (mdt_dispatch) go to MariaDB, as the real oxmysql would serve them.
+--   shadow              the specs run exactly as in database mode (they get the MariaDB answers), and every
+--                       MySQL call and H.sql statement also runs, in lockstep, on a MariaDB twin database read
+--                       through mysql2 the way oxmysql reads it (tests/shadow/twin.cjs) and on the saves folder
+--                       engine through its MySQL drop-in. Both start from the migrated empty schema (the real
+--                       migrations runner). Every difference in result, error, affected rows, insert id or
+--                       value type is appended to CP_SHADOW_REPORT (see "shadow mode" below).
+-- H.bit(v) reads a TINYINT(1) value in any mode. H.skipIn(mode, reason) skips a MariaDB-only check.
+-- Threads: CreateThread runs the function as a coroutine immediately; Wait(ms) advances the fake
+-- clock and yields; H.step() resumes sleeping threads. Citizen.Await works on resolved promises.
+-- Frames: booted as the client, GetFrameCount() answers H.frame, one more per H.step() and per H.nextFrame() (a new
+-- frame that runs no thread); FXServer has no such native.
+-- Yes/no natives: while H.side is 'server' (H.boot's side), every global named in H.SERVER_BOOL_NATIVES (the `_r`
+-- natives of FXServer's natives_server.lua) answers 1 for yes and false for no, nil or 0, whatever the spec's mock
+-- returns, as FXServer does (H.serverBool(v) is that conversion); booted as the client they answer as written (the
+-- manifest's OAL booleans). The harness owns the metatable of _G for that, so setmetatable(_G, ...) raises an error:
+-- H.strictGlobals(true) makes reading an undefined global an error, H.onUndefinedGlobal(fn) answers such a read.
+-- The debug table: the resource code under test sees FXServer's own, getinfo, getmetatable, setmetatable, getupvalue
+-- and traceback only (H.FX_DEBUG; FXServer's Lua is built with LUA_SANDBOX, so no sethook or gethook), also through
+-- require('debug'). H.debug is the full library for the specs' own tools (tests/freeze_spec.lua's spin check copies
+-- H.debug.sethook into a local).
+
 local H = {}
 -- FXServer builds its Lua with LUA_SANDBOX (code/vendor/lua.lua), so the debug table a resource sees has only these
 -- five functions: no sethook, no gethook, no getlocal (ldblib.c of citizenfx/lua luaglm-548; the real

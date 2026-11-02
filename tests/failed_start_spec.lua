@@ -1,4 +1,15 @@
--- A start that fails (FIXPLAN S5: F43-F47, F18, F20, F21). FXServer refuses StopResource on the calling resource
+-- A start that fails. FXServer refuses StopResource on the calling resource
+
+-- A start that fails. FXServer refuses StopResource on the calling resource
+-- (citizen-server-impl ServerResources.cpp STOP_RESOURCE: name == the current resource -> false, Resource::Stop()
+-- never called; the same in build 35245's binary), so Crimson-Police stays started after a failed start. It must
+-- then be in an explicit failed state: every request answered err.not_started at once (nothing parks, nothing reads or
+-- writes the store), the console's check and storage mode reset still working and printing, the start-up threads
+-- ending quietly, one console line naming the fix and "ensure".
+-- Part 1 runs the real migrations runner in its own environment with the real scheduler's Await (a thread parks
+-- until the promise is resolved, and resolve() resumes the waiting threads in order: scheduler.lua:85-100 and
+-- deferred.lua of build 35245). Part 2 runs the whole resource (tests/fixtures/admin_missions/boot.lua) on a
+-- database user without the CREATE right.
 
 local H = require('harness')
 

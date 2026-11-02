@@ -1,5 +1,16 @@
 // Department theming (SPEC "Departments & tablet theming").
 
+// applyTheme(el, theme) writes these CSS variables on `el` (everything inside inherits them):
+//   --cp-primary --cp-accent --cp-bg --cp-surface --cp-text          the five theme colours
+//   --cp-surface-2 --cp-surface-3                                     raised / hovered surfaces
+//   --cp-border --cp-border-strong                                    hairlines and outlines
+//   --cp-muted --cp-subtle                                            secondary and faint text
+//   --cp-primary-contrast --cp-accent-contrast                        text drawn ON primary / accent
+//   --cp-primary-hover --cp-primary-text --cp-accent-text             hover fill; primary/accent legible on bg
+//   --cp-primary-rgb --cp-accent-rgb --cp-bg-rgb --cp-surface-rgb --cp-text-rgb   "r, g, b" for rgba()
+// Colours must be 6-digit hex (#1f4e8c); anything else falls back per key to the Crimson-Police
+// default (text falls back to the best contrast for the background, as CP.U.contrastText does).
+
 import type { Theme } from './types';
 
 export const DEFAULT_THEME: Theme = {

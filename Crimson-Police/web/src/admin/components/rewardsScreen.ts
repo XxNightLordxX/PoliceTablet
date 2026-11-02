@@ -1,6 +1,9 @@
-// Admin UI -> Rewards (step H1, Config.AdminUi.rewardsScreen): every feature that pays, as rows built from the
+// Admin UI -> Rewards (Config.AdminUi.rewardsScreen): every feature that pays, as rows built from the
 // settings data (admin:getSettings), each with its switch, money, how the money is paid and its items. Pure helpers;
 // admin/screens/Rewards.tsx draws them and saves through the Settings save flow (server:admin:setSetting, audited).
+
+// The Rewards screen's rows built from the settings data (rewardRows, missionTypes, itemSwitch) and the volunteer
+// suspect's money by mission type (typeAmount, withTypeAmount). Pure helpers; walk: rewardsScreen.walk.ts.
 
 import type { SettingsData, SettingView } from '../../types/settings';
 import { settingsByPath } from './features';

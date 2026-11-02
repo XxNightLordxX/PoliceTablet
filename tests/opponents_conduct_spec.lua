@@ -1,4 +1,10 @@
--- CP.Opponents conduct (step V6): the armed definition (C6), the damage ledger between a case's officers and its
+-- CP.Opponents conduct: the armed definition, the damage ledger between a case's officers and its
+
+-- CP.Opponents conduct: the armed definition, the damage ledger between a case's officers and its
+-- suspects, excessive force on a suspect in CP's proven custody who is still restrained, or down after downGrace (C7:
+-- a flag on the officer who fired, never an automatic fail; a suspect free of his cuffs again holds nobody), the
+-- unarmed-shot and ran-over penalties, and the cash-seizure audit (only an on-duty 'leo' is a seizure). Every flag here
+-- holds only the officer who fired, drove or seized.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

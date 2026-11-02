@@ -1,6 +1,56 @@
 -- CP.Downed (server): Hard rule 18, downed participants (docs/ARCHITECTURE.md §5.15, SPEC "Downed participants",
 -- Crimson-Arena rules 1 and 3).
 
+-- Owns: the downed poll, the Failed result for a participant who goes down (end_reason 'downed'), the free
+-- NPC pick-up when no EMS is on duty, the EMS request when EMS is on duty, the server -> client events
+-- client:pickup (runId, dropOff vector3), client:pickupCancel (runId) (a pick-up already sent was cancelled
+-- on the server: in the arena, recovered, unload) and client:requestEMS (runId), and the plain net event
+-- server:pickupDone (runId, ok) the client sends when the pick-up has finished (ok = false: it gave up).
+--
+-- Public API
+--   CP.Downed.isPending(src) -> boolean     a pick-up or EMS request for src is still to come (CP.Alerts keeps
+--                                           the flag of such a participant)
+--   CP.Downed.cancel(src, reason) -> boolean   stops a pending pick-up / EMS request and removes our flag
+--                                           (CP.Alerts.clear leaves a foreign value alone). The run result
+--                                           stays 'downed'. Used for in-arena, disconnect and unload.
+--   CP.Downed.handle(run, src) -> boolean   CP.Runs.endRun: src is down (the caller checked CP.Qbx.isDowned)
+--                                           and still active in a run that is ending. Holds the flag and
+--                                           calls CP.Runs.removeParticipant(run, src, 'downed',
+--                                           { keepFlag = true }) at once, before anything here yields (the
+--                                           engine gives only the others the run's end state), then starts
+--                                           the pick-up / EMS flow below in its own thread. A down the poll
+--                                           or the metadata listener already recorded for this run, whose
+--                                           thread has not run yet (CreateThread starts on the next tick),
+--                                           only leaves now; that thread then does the follow-up alone.
+--                                           false (nothing done): not an active participant, in the arena,
+--                                           the run ended, or that down's follow-up is already past the leave
+--                                           - the engine then removes them itself.
+--
+-- Flow (every Config.Downed.checkEvery s, active participants of every run that has not ended; in-arena
+-- srcs are skipped; also at once when qbx_core sets metadata isdead / inlaststand to true, through
+-- CP.Qbx.onMetaDataChange, and from CP.Downed.handle when a run ends):
+--   CP.Qbx.isDowned(src) (metadata isdead / inlaststand; sc-ambulance resurrects the ped, so ped death is not
+--   used) -> once per participant per run: CP.Alerts.hold(src) (the flag stays), CP.Runs.removeParticipant
+--   (run, src, 'downed', { keepFlag = true }), run.stats.downs + 1 (only when the engine did not already
+--   count it inside removeParticipant), then:
+--   * no EMS (CP.Ambulance.doctorCount() == 0): toast downed.pickup_soon; after Config.Downed.pickupDelay s
+--     re-check (still downed, not in the arena, still no EMS) -> client:pickup (runId, the nearest
+--     Config.Downed.dropOffs point to the server-side ped) -> ~1.5 s for the fade -> re-check -> CP.Ambulance
+--     .revive(src) -> server:pickupDone from the client (or 30 s) -> CP.Alerts.clear(src). No pick-up bill
+--     (hospital:client:Revive never bills). A revive CP.Ambulance refuses or cannot send (false: in the
+--     arena, disconnected, sc-ambulance stopped) cancels the pick-up at once (client:pickupCancel).
+--   * EMS on duty: CP.Alerts.clear(src) at once, then wait until 11 s after the last arena exit
+--     (CP.Alerts.foreignClearedAt[src]; sc-ambulance drops EMS requests for 10 s after one), re-check, then
+--     client:requestEMS (runId) exactly once. The only exception: our flag was off when they went down AND
+--     they were in last stand (CP.Qbx.getInfo(src).inLastStand) - sc-ambulance's client has then sent its
+--     own automatic EMSDownAlert on entering last stand, so no second request is sent. A participant who
+--     went straight to 'dead' unflagged gets our request (sc-ambulance sends no death alert).
+--   A failed re-check cancels the pick-up / request and clears our flag. Each downed participant has one
+--   entry per run, so nothing fires twice (also when the 2 s poll still sees metadata "down" right after the
+--   revive). A disconnect (playerDropped) or character unload (CP.Qbx.onPlayerUnload) cancels it.
+-- Every participant downed: CP.Runs ends a run that has no active participant left; when a down removed the
+-- last one and the run is still open 5 s later, this module ends it as failed (see docs/ARCHITECTURE.md §13.24).
+
 CP.Downed = CP.Downed or {}
 local D = CP.Downed
 local TAG = 'downed'

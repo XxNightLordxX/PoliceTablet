@@ -1,6 +1,6 @@
-// My usual twists (step O15) against the browser mocks (node walk.mjs, a gate step): the accept step starts with the
+// My usual twists against the browser mocks (node walk.mjs, a gate step): the accept step starts with the
 // officer's usual twists that the card offers, so a usual twist the type does not offer is never sent; with none
-// picked the department's pre-ticked twists (step P15) stay the start, as before.
+// picked the department's pre-ticked twists stay the start, as before.
 
 import '../../mocks/options.mock';
 import '../../mocks/run_ui.mock';

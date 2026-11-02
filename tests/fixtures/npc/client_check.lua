@@ -1,6 +1,9 @@
 -- The client half of modules/npc in its own Lua state (H.boot side = 'client'). Run by tests/npc_spec.lua as a child
 -- process; prints "RESULT <passed> <failed>".
 
+-- Natives the checks do not model are recorded by a fallback (every capitalised global that is not
+-- defined becomes a recorder), so the checks can assert on the calls the module makes.
+
 package.path = package.path .. ';tests/?.lua'
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client' })

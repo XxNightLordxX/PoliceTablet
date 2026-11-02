@@ -1,4 +1,11 @@
--- CP.Opponents staff (server, step V17): what admins read about real-suspect cases and the three admin tools. The
+-- CP.Opponents staff (server): what admins read about real-suspect cases and the three admin tools. The
+
+-- CP.Opponents staff (server): what admins read about real-suspect cases and the three admin tools. The
+-- case data here (names, citizenids, the timeline, the damage ledger, the flags and notes) is server-only: it goes
+-- to an admin's Admin UI through these callbacks and never to an officer's tablet (Opp.view has no names). Reads
+-- read memory (open cases and the last Config.RealSuspects.casesKept closed ones, which modules/opponents/saved
+-- keeps over a restart; the pair ledger's window).
+-- Nothing here runs while nobody asks; the actions are refused while both features are off.
 
 CP.Opponents = CP.Opponents or {}
 local Opp = CP.Opponents

@@ -1,5 +1,59 @@
 -- CP.Units (server): units of 2-4 officers from any department, leader controls and the ready check.
 
+-- modules/units/server.lua · CP.Units (server): units of 2-4 officers from any department.
+--
+-- Owns: unit membership (in memory only; nothing is stored), invites and their expiry, the unit
+-- leader and leader succession, the invite lock while the unit's run is active, the Unit screen data
+-- (callback getUnit, UnitView §9.4) and the live 'unit' push topic. SPEC "Mission types, draw & teams"
+-- → Units: build the unit first, any department, up to Config.Limits.maxUnitSize, invitees accept on
+-- their own tablet, whoever sends the first invite leads, the longest-standing member takes over when
+-- the leader leaves, a unit left with one member dissolves, invites close when the leader accepts a type
+-- (CP.Draw calls lock), and leaving the unit mid-run abandons that run (end reason quit).
+--
+-- Invites stay open for INVITE_TTL = 120 seconds (below), then expire on their own.
+--
+-- Public API (docs/ARCHITECTURE.md §5.16)
+--   CP.Units.unitOf(src) -> unit|nil
+--       unit = { id, leader, members = { src... } (join order: longest-standing first),
+--                invites = { [targetSrc] = expiresAtTs }, locked = bool,
+--                info = { [src] = { name, callsign, rank, departmentShort, department } },
+--                inviteFrom = { [targetSrc] = { src, name, callsign, departmentShort } }, lockedAt, createdAt }
+--       Treat it as read-only. A unit that only has its leader and pending invites is "forming".
+--   CP.Units.members(src) -> { src... }        the unit's members, or { src } for a solo officer
+--   CP.Units.isLeader(src) -> boolean          true for the leader, and for a solo officer (leads themselves)
+--   CP.Units.lock(unit|unitId)                 (hook, CP.Draw at accept) closes invites: pending invites are
+--                                              withdrawn; a forming unit (one member) dissolves
+--   CP.Units.unlock(unit|unitId)               (hook, CP.Runs when the run ends / CP.Draw when the accept
+--                                              fails) reopens invites. Ignored while a member is still an
+--                                              active participant of a normal (not operation, not test) run.
+--   CP.Units.remove(src, opts) -> boolean      takes src out of its unit and cancels every invite sent to src;
+--                                              never touches runs. opts = { reason = 'left'|'disconnected'|'lost'|'moved', silent }
+--   CP.Units.view(src) -> UnitView (§9.4) plus the slice fields documented below
+-- Net (CP.Net)
+--   action   server:unitInvite (targetSrc | { targetSrc })          -> { unitId, expiresIn }
+--            an in-arena inviter gets err.in_arena, an in-arena target err.unit_target_unavailable
+--   action   server:unitRespond ({ accepted, unitId } | boolean)    -> { unitId|nil, accepted }
+--            a bare boolean answers the newest invite; accepting refuses in-arena players (err.in_arena)
+--   action   server:unitLeave ()                                     -> { left = true, abandoned = bool }
+--   callback getUnit -> UnitView
+-- Pushes: topic 'unit' ({ unitId|false, invited? }; invited = true only on the push that delivers a new
+-- invite) to every member and every invitee on each change,
+-- topic 'board' to members (the board depends on the unit size). Toasts via CP.Tablet.notify.
+-- Listeners: playerDropped, CP.Qbx.onPlayerUnload (character switch) and CP.Access.onLost (off duty,
+-- job change, suspended) take the player out of their unit and cancel invites to them; the run itself is
+-- handled by CP.Runs (disconnected / off_duty / job_change / suspended).
+--
+-- UnitView extras (this slice, see docs/ARCHITECTURE.md §13.25):
+--   me (the viewer's src), maxSize, inviteTtl (seconds), canInvite, inviteBlocked (locale key|nil), onRun,
+--   unit.size, unit.pending = { { src, name, callsign, departmentShort, expiresIn } },
+--   members[].available (false when that member is no longer an on-duty officer),
+--   invites[].size (members in that unit), invitable[].inUnit (already in another, non-full unit).
+-- The invite list walks CP.Qbx.getOnlinePlayers() and calls getOfficer only for players CP.Access.maybeOfficer
+-- keeps (no Qbox lookup for a civilian); the operation pushes and supervisor toasts filter the same way.
+--
+-- Safety net: a unit locked for more than LOCK_GRACE seconds while none of its members is on a normal
+-- run is unlocked by the 2 s sweep (covers an engine that never called unlock).
+
 CP.Units = CP.Units or {}
 local Units = CP.Units
 local TAG = 'units'

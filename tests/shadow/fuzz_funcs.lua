@@ -1,5 +1,12 @@
 -- Random expressions, compared in shadow mode (lua5.4 tests/run.lua --fuzz): arithmetic on
 
+-- INT / DECIMAL / DOUBLE / text, comparisons across types, CASE / IF / COALESCE / NULLIF / GREATEST / ROUND, the JSON
+-- functions on a breakdown-like document, date functions (DATE_FORMAT, DATE, UNIX_TIMESTAMP, FROM_UNIXTIME,
+-- TIMESTAMPDIFF, INTERVAL), text functions, DISTINCT, derived tables with UNION ALL, correlated subqueries, and
+-- stores into typed columns (strict mode and IGNORE: too long, out of range, wrong type, NULL into NOT NULL, ENUM, bad
+-- JSON, warnings and notes).
+-- FUZZ_SEED picks the data and statements, FUZZ_N how many.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local SEED = tonumber(os.getenv('FUZZ_SEED')) or 1

@@ -1,4 +1,4 @@
--- CP.Custody (WP2): truths and cues, grading, knowing errors, police actions (begin/finish), facts, probable
+-- CP.Custody: truths and cues, grading, knowing errors, police actions (begin/finish), facts, probable
 -- cause, the custody chain, service vehicles, impound, the sc-police listener, excessive force and stats.
 
 local W = dofile('tests/fixtures/custody/world.lua')

@@ -1,4 +1,4 @@
-// Admin UI -> Permissions -> Mission controls (step P4) against the browser mocks (node walk.mjs, a gate step): the
+// Admin UI -> Permissions -> Mission controls against the browser mocks (node walk.mjs, a gate step): the
 // card's body rendered off (nothing switched on, nothing changed) and on with changed values, and a Reset.
 
 import '../../mocks/oversight.mock';

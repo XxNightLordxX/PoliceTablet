@@ -1,5 +1,9 @@
 // Supervisor UI · Department Report (screen key 'sup_report', callbacks sup:getDeptReport and
 
+// sup:getOfficerActivity). The department's challenge standing, this week's bounty, and every officer
+// of the department who played this week (runs, completed, points, cash, last run); tapping an officer
+// opens their runs of this week. Supervisors only see their own department (the server enforces it).
+
 import { useState } from 'react';
 import {
     Badge,

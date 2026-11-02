@@ -1,5 +1,63 @@
 -- Objective block "protect_rescue" (server half)
 
+-- What it does
+--   Spawns the NPCs to protect (hostages) when this objective starts, through the spawn director
+--   (Config.Spawning.hostagesAt 'objective': an officer near, every officer minDistanceIndoor away, after
+--   hostagesWaitMax on their spots anyway; 'runStart' or the director off: in prepare, when the run moves
+--   to In progress, as before), kneeling with their hands tied (state 'restrained', relationship group
+--   CRIMSONPOLICE_NEUTRAL through the cp bag cfg; they are not invincible and can die). When this
+--   objective becomes current (in Hostage Rescue: after the hostiles of objective 1 are neutralised)
+--   participants free each hostage with ox_target "Cut restraints" (freeTime progress): the client
+--   reports 'free_start' then 'freed'
+--   and the server checks the distance (server-side coordinates) and the elapsed time. A freed
+--   hostage walks to the safe marker (host AI, CP.Npc task follow) and becomes 'safe' once the
+--   server sees it within safeRadius of it. Completed when every hostage is safe.
+--   With restrained = false the hostages start cowering ('idle') and walk to safety when the
+--   objective starts. Hostages are watched for the whole run once they exist, also while an earlier
+--   objective is current ('runStart'): damage by an active participant costs hitPenalty (penalty hostage_hit, shared; someone
+--   who left shoots as an outsider), any damage loses the no_hostage_hurt bonus, a death fails the
+--   run (failIfDies), and a hostage killed by a participant, also one who left, always fails it
+--   (run.fail_killed_unarmed).
+--
+-- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.protect_rescue)
+--   minSeconds [15] · presenceRange [presenceRange[3] = 150] · label
+--   npcs        location key: list of vec4 (hostage spots; reused with an offset when fewer than count) ['hostages']
+--   count       hostages                                         [npcs[3] = 3]
+--   peds        ped models                                       [Config.Blocks.protect_rescue.peds]
+--   restrained  hands tied until freed                           [restrained.default = true]
+--   freeTime    ms of "Cut restraints" progress                  [freeTime[3] * 1000 = 6000]
+--   target      { label [locale block.protect_rescue.cut_restraints], icon ['fas fa-scissors'], distance [2.0] }
+--   safe        location key: vec3 (the safe marker)             ['safe']
+--   safeRadius  metres                                           [6.0]
+--   hitPenalty  points per hit by participant fire (0 = off)     [hitPenalty[3] = 50]
+--   failIfDies  a hostage death fails the run                    [failIfDies.default = true]
+--
+-- Evidence accepted (onEvent)
+--   { type = 'free_start', netId }   a participant started cutting (within target.distance + slack)
+--   { type = 'freed', netId }        cutting finished: same participant, in range, at least
+--                                    FREE_SHARE × freeTime after its free_start (one pending cut
+--                                    per participant: a new free_start replaces the previous one)
+--   { type = 'shot', netId, src }    CP.Npc (CP.Runs.dispatch): a participant shot a restrained hostage
+--   { type = 'damaged', netId, attacker }  CP.Npc (CP.Runs.dispatch): a hostage took damage
+--   CP.Npc.onDamaged(run, netId, attackerSrc) is the damage channel: it is server-only and fires for
+--   every hit on a hostage. While it is listened to, 'shot' / 'damaged' are acknowledged without
+--   effect. server:objective refuses both from a client and flags the sender; this stays as
+--   defence in depth, so a client can never cost the team hostage_hit. Without onDamaged they count.
+--   One hit per hostage and attacker is counted per HIT_WINDOW_MS (one bullet, one penalty).
+--   no_hostage_hurt is recorded only once minSeconds has passed since the start (a completion
+--   refused as too fast must not keep a bonus a later hit would have cost).
+--
+-- Bonus / penalty ids recorded (shared)
+--   hostage_hit      ctx.penalize, count 1 per counted hit by participant fire (points hint -hitPenalty)
+--   no_hostage_hurt  ctx.award once at completion when no hostage was ever damaged
+-- Fail reason keys: block.protect_rescue.fail_died · run.fail_killed_unarmed
+--
+-- ctx.state
+--   block, rng, peds = { [tostring(netId)] = { netId, entity, index, state, hurt } }, spawned, order,
+--   slots = { [i] = true } (spots used), waitMs, saidNoPoints, saidLate,
+--   freeing = { [netIdKey] = { [srcKey] = ms } }, lastHit = { ['netId:src'] = ms }, hurt, hits,
+--   bonusGiven, current, startedAt, dirty, hudText, completed, failed, stopped
+
 local BLOCK = 'protect_rescue'
 local U = CP.U
 

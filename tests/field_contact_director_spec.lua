@@ -1,4 +1,12 @@
--- field_contact through the spawn director (Config.Spawning, PLAN S12) on the real engine, the real block and the
+-- field_contact through the spawn director (Config.Spawning) on the real engine, the real block and the
+
+-- field_contact through the spawn director (Config.Spawning) on the real engine, the real block and the
+-- real placement module: a scene and each parked car appear once an officer is near them (activateRange) and not on
+-- top of them (approach + sceneOutside); the returning driver and the thief appear contactRing (25-40 m) from the car on
+-- the footpath point the game of the officer at the car picks, or round the car and never near an officer when that
+-- game gives none in time, and walk up to the car once an officer's game has put them on the ground. Before (a1 4.1
+-- items 5-6) the scene popped in 4-17 m from the officer crossing the start circle and the driver / thief appeared
+-- 14 m / 30 m from the car at a random angle, behind the officer as often as not.
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

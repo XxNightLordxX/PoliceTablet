@@ -894,7 +894,7 @@ TriggerClientEvent('QBCore:Notify', source, message, type)
 - qbx_core:server:onSetMetaData has argument order (key, oldValue, newValue, source), with source LAST (player.lua:1212). The client version is (key, oldValue, newValue). It could replace or augment the 2 s downed poll.
 - No files were modified. git status in /home/user/PoliceTablet shows only pre-existing untracked Crimson-Police/, docs/ and tests/.
 
-### qbx_core player_vehicles: the mission plate check (read-only, parity-plus)
+### qbx_core player_vehicles: the mission plate check (read-only)
 
 - **Spec claim:** Every mission vehicle gets a plate in the reserved pattern (Config.Custody.plates) that no player owns, checked read-only against player_vehicles
 - **Evidence:** src/sc-police/sc-police/server/vehicle.lua:5-8 (`IsVehicleOwned`: `SELECT plate FROM player_vehicles WHERE plate = ?`), :313-329 (the impound handler updates player_vehicles by plate alone)
@@ -904,7 +904,7 @@ TriggerClientEvent('QBCore:Notify', source, message, type)
 local ok, found = pcall(db.scalar.await, 'SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1', { plate })
 ```
 
-### ox_inventory calls of the parity-plus build (standard API)
+### ox_inventory calls of the tablet item, handcuffs, evidence and item rewards (standard API)
 
 - **Spec claim:** requireItem, the handcuffs check, the evidence item and the optional item rewards use ox_inventory's standard exports
 - **Evidence:** the argument order of the entry above (AddItem / RemoveItem / Search); ox_inventory is not in the uploads, so these are its documented exports
@@ -1440,7 +1440,7 @@ RegisterNetEvent('sc-dispatch:client:AssignedToCall', function(info)
 - INFO: sc-dispatch server code uses `exports['qb-core']:GetCoreObject()` (Qbox qb-core compat) and aliases `local StateBagPlayer = Player` because handlers shadow `Player`. In Crimson-Police, never name a local `Player` in a scope that also calls Player(src).state.
 - INFO: in the F10 panel the respond toggle key is WaypointKey = 'G' (config.lua:55). Pressing it again un-marks responding and sends ToggleResponding(callId, false), which is the path the 60-second dodge rule must catch.
 
-### mdt_dispatch real-call count for the Dispatch screen (read-only, parity-plus)
+### mdt_dispatch real-call count for the Dispatch screen (read-only)
 
 - **Spec claim:** The Dispatch screen shows a read-only strip "SC-Dispatch: n active real calls (m Priority 1)", NPC calls excluded, refreshed every 20 s, hidden on error
 - **Evidence:** sql/schema-qbox.sql:171-184 (`priority INT DEFAULT 2`, `active TINYINT(1)`); server/main.lua:416-421 (unique_id added at runtime); the NPC call id format in the sc-npcpolice section
@@ -1451,7 +1451,7 @@ SELECT priority, COUNT(*) AS n FROM mdt_dispatch
 WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority   -- { 'npccall-%' }
 ```
 
-### employee_incidents: MDT commendations on the profile (read-only, optional, parity-plus)
+### employee_incidents: MDT commendations on the profile (read-only, optional)
 
 - **Spec claim:** With Config.Profile.showMdtCommendations (off by default) SC-Dispatch MDT commendations are shown read-only, tagged "MDT"
 - **Evidence:** sql/schema-qbox.sql:298-310 (`employee_incidents`: citizenid, job, type ENUM('reprimand','warning','commendation','note'), title, issued_by, created_at); server/main.lua:4305 (sc-dispatch's own read), :4317 (manual entries), :4522-4526 (a promotion writes a 'commendation' row titled "Promoted to ...")
@@ -2522,7 +2522,7 @@ RegisterNetEvent('QBCore:Client:SetDuty', function(duty)
 - Station keys in Config.Stations are 'MRPD', 'BCSO' and 'SASP' (config.lua:938, 986, 1020); FIB is separate in Config.FIBStation. There is no Paleto, Vespucci or Davis station, so the spec's four duty locations are the full set.
 - Unverified outside this source (qbx_core not provided): qbx_core's QBCore:ToggleDuty handler and Player.Functions.SetJobDuty fire TriggerEvent('QBCore:Server:SetDuty', src, onduty) and TriggerClientEvent('QBCore:Client:SetDuty', src, onduty), and the default metadata.callsign is 'NO CALLSIGN'. Check these against the server's qbx_core copy.
 
-### police:server:Impound: no job or distance check, owned plates written, the car deleted everywhere (parity-plus)
+### police:server:Impound: no job or distance check, owned plates written, the car deleted everywhere
 
 - **Spec claim:** A second, read-only handler for police:server:Impound closes the /imp exploit on mission vehicles
 - **Evidence:** server/vehicle.lua:313-329 (the handler: `IsVehicleOwned(plate)` then `UPDATE player_vehicles SET state = ...` by plate, then `TriggerClientEvent('police:client:DeleteVehicle', -1, netId)`); server/commands.lua:496-515 (`/depot` and `/imp` check job type leo and duty, then `police:client:ImpoundVehicle`); client/interactions.lua:92-110 (the target is `QBCore.Functions.GetClosestVehicle(coords)`, no distance limit), :130 and :146 (the 5 s progress bar, then `TriggerServerEvent('police:server:Impound', plate, fullImpound, price or 0, body, engine, fuel, netId)`)
@@ -3032,7 +3032,7 @@ Definitions: a value is **foreign** when `type(v) == 'table' and v.active == tru
     ox_target `crimson_arena_lobby`, tables/stashes `crimson_arena_*`. Crimson-Police uses `crimson-police:*`,
     `/CrimsonPolice`, `/CrimsonPoliceAdmin`, `crimsonpolice_*` key mappings, `crimson-police:*` target names,
     `cp_*` tables. If Crimson-Police ever listens to `crimson_arena:dispatch:enter/exit`, use AddEventHandler only.
-15. **Parity-plus features.** Every new way in gates on `CP.Alerts.inArena(src)` the same way:
+15. **Mission calls, custody, profile and the other features.** Every way in gates on `CP.Alerts.inArena(src)` the same way:
     - Police actions (`server:custody`, `server:contactDecide`) and process_scene steps are refused for an
       in-arena participant; a person being escorted by an officer who enters the arena stops and waits where they are.
       The service-vehicle driver (transport van, tow truck, coroner van) is never an in-arena src; the AI moves on.

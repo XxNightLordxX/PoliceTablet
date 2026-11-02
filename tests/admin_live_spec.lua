@@ -1,4 +1,4 @@
--- Full admin control, live runs and units (P3): the Live screen's runs (incl. tests and operations), End run, End test,
+-- Full admin control, live runs and units: the Live screen's runs (incl. tests and operations), End run, End test,
 -- Recall, + minutes, the units list with Remove and Disband, Type of the Day, the modifier switches and the maintenance
 -- refusal at accept. Real runs, events, units, livectl, adminkit, admin, access and permissions.
 

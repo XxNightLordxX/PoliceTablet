@@ -1,4 +1,9 @@
--- A department's Type of the Day (step P18): a supervisor picks one mission type for tomorrow; that day his
+-- A department's Type of the Day: a supervisor picks one mission type for tomorrow; that day his
+
+-- A department's Type of the Day: a supervisor picks one mission type for tomorrow; that day his
+-- department's officers earn the Type of the Day points on it instead of the server's type, other departments keep
+-- the server's, and the setter (or a unit he is in) keeps the server's too. Plain stubs: CP.DeptControls answers the
+-- switch and the self rule, MySQL.single.await answers the cp_audit row of yesterday's pick. No database.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

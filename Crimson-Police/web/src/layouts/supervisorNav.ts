@@ -1,6 +1,12 @@
-// The Supervisor UI sidebar and landing (step G5): Config.Tablet.supervisorByTask (the screens grouped by task under
+// The Supervisor UI sidebar and landing: Config.Tablet.supervisorByTask (the screens grouped by task under
 // People, Missions, Rewards and Review), supervisorCompact (icons only) and supervisorLanding (the screen it opens on).
 // Only the layout changes: the same screens show, a hidden one stays hidden, keys and links stay the same.
+
+// The Supervisor UI sidebar and landing: supervisorNavOf reads the session's config.supervisorNav
+// (Config.Tablet.supervisorByTask, supervisorCompact, supervisorLanding; anything unknown = as before),
+// supervisorTaskOf gives a screen its task heading (People, Missions, Rewards, Review) while grouped, and
+// supervisorLanding picks the screen it opens on (the first one when the landing is not shown).
+// Walk: supervisorNav.walk.ts.
 
 import type { ScreenKey } from '../shared/navigation';
 import type { Session } from '../shared/types';

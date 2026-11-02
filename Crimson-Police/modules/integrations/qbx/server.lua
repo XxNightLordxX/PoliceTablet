@@ -1,5 +1,64 @@
 -- CP.Qbx (server): the only server code that talks to qbx_core.
 
+-- Owns every exports.qbx_core call on the server and the qbx_core server events Crimson-Police
+-- listens to. Those events are fired by qbx_core with TriggerEvent (server-local), so they are
+-- registered with AddEventHandler ONLY: a net handler would let any client spoof a duty or job
+-- change (docs/INTEGRATIONS.md, qbx_core-usage). The Qbox player object itself is never kept (getPlayer
+-- always calls GetPlayer, so money Functions act on a fresh object). getInfo's answer is reused for
+-- Config.Limits.playerInfoCacheMs (1000 ms; 0 = ask Qbox every time) and every Qbox change event clears
+-- it at once: SetDuty, PlayerLoaded, OnJobUpdate, OnPlayerUnload, onGroupUpdate, onSetMetaData,
+-- QBCore:Player:SetPlayerData (qbx_core's UpdatePlayerData, sent after every change), playerDropped and
+-- a qbx_core stop or start. Each caller gets its own copy of the top level and the job table.
+--
+-- Public API (docs/ARCHITECTURE.md §5.1)
+--   CP.Qbx.getPlayer(src) -> player|nil
+--       Raw Qbox player object (fields under player.PlayerData).
+--   CP.Qbx.getInfo(src) -> info|nil
+--       info = { src, citizenid, name, firstname, lastname,
+--                job = { name, label, type, onduty, gradeLevel, gradeName },
+--                callsign, metadata, isDead, inLastStand }
+--       name = charinfo first + last name; callsign = metadata.callsign trimmed, nil when empty or
+--       qbx_core's default 'NO CALLSIGN'; gradeName falls back to the job definition's grade name.
+--   CP.Qbx.getByCitizenId(citizenid) -> src|nil      online players only, exact (case-sensitive) match
+--   CP.Qbx.getOnlinePlayers() -> { src, ... }        loaded characters, ascending. Read from GetQBPlayers at
+--       start, when qbx_core starts and every 60 s; PlayerLoaded adds and OnPlayerUnload / playerDropped
+--       remove a player in between, with no copy (playerInfoCacheMs = 0: read every 1 s and after each
+--       of those events, as before).
+--   CP.Qbx.knownJob(src) -> jobName|nil             the primary job qbx_core last reported (nil = not known).
+--       Kept by events and lookups only, never polled: PlayerLoaded, OnJobUpdate, QBCore:Player:SetPlayerData
+--       (qbx_core's UpdatePlayerData; SetPlayerData('job', ...) fires nothing else), every getInfo, and the
+--       GetQBPlayers copy of getOnlinePlayers (seeded at start and when qbx_core starts). Cleared on
+--       OnPlayerUnload, playerDropped and a qbx_core stop.
+--   CP.Qbx.getJobs() -> table                        qbx job definitions ({} when unavailable)
+--   CP.Qbx.addMoney(src, account, amount, reason) -> boolean, why|nil
+--       player.Functions.AddMoney(account, amount, reason); amount rounded half up (CP.U.round); 0 returns
+--       true without calling qbx_core (nothing to move); negative or invalid amounts return false.
+--       why = 'error' when AddMoney raised: the balance may already have changed, so the caller must not
+--       retry or refund (CP.Cash leaves the row 'paying'). A plain false (refused, offline) has no why.
+--   CP.Qbx.isDowned(src) -> boolean                  metadata.isdead == true or metadata.inlaststand == true
+--       Two GetMetadata exports (src as a number; a citizenid string returns false), no Player copy. If
+--       GetMetadata raises (a Qbox without it), GetPlayer is read from then on, until qbx_core starts again.
+--   Listeners (any number; each runs in its own thread, errors are caught and logged):
+--   CP.Qbx.onDutyChange(fn(src, onDuty))    QBCore:Server:SetDuty. false is passed on as is; a true is
+--                                           re-read from PlayerData (SetDuty can arrive stale or out of
+--                                           order when sc-police / sc-ambulance force a suspended officer
+--                                           off duty inside their own handler). Listeners must still
+--                                           re-read getInfo(src).job.onduty before acting on "on duty".
+--   CP.Qbx.onPlayerLoaded(fn(src))          QBCore:Server:PlayerLoaded (player object argument).
+--   CP.Qbx.onJobChange(fn(src, job))        QBCore:Server:OnJobUpdate; job has the getInfo job shape
+--                                           (read live: PlayerData is already updated when it fires).
+--   CP.Qbx.onPlayerUnload(fn(src))          QBCore:Server:OnPlayerUnload (character logout / switch).
+--   CP.Qbx.onGroupUpdate(fn(src))           qbx_core:server:onGroupUpdate (job or gang added/removed;
+--                                           removing the active job makes it 'unemployed' without an
+--                                           OnJobUpdate, so listeners re-read the job).
+--   CP.Qbx.onMetaDataChange(fn(src, key, old, new), keys?)
+--                                           qbx_core:server:onSetMetaData (key, oldValue, value, source),
+--                                           fired by qbx_core's SetMetaData after the value is set. keys
+--                                           (optional list of metadata keys) filters before any thread is
+--                                           started: metadata changes constantly (hunger, thirst, stress).
+--
+-- All functions may be called from any thread; none of them yields.
+
 CP.Qbx = CP.Qbx or {}
 local Q = CP.Qbx
 local TAG = 'qbx'

@@ -1,5 +1,41 @@
 -- Objective block "skill_check" (server half)
 
+-- What it does
+--   Every target (a device from run.shared.devices, or a point of a location key) must be worked with
+--   a sequence of ox_lib skill checks. The client reports each round as it happens; the server keeps
+--   the progress per target: a success moves to the next round, a miss repeats the round, takes
+--   missPenalty seconds off the run timer (CP.Runs.adjustTimer) and counts toward failAfter misses in
+--   a row on that target, which sets it off: an explosion effect only (played by the client of the
+--   participant who missed; damage scale 0) and the run fails for everyone. Done when every target is
+--   defused; no_missed_checks when nobody missed a round. One participant works a target at a time
+--   (the lock frees itself after 15 s without a round). Powers Bomb Disposal's defusing.
+--   Device props: the search objective spawned them, and the engine may delete an objective's entities
+--   when that objective ends (ARCHITECTURE §7.1 stop). While this objective runs, an armed device whose
+--   prop no longer exists is spawned again here (same model, coords and heading from run.shared.devices,
+--   role 'device', frozen; it waits for ctx.canSpawn like any spawn). Distances always fall back to the
+--   device's recorded coords, so defusing never depends on the prop.
+--
+-- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.skill_check)
+--   targets      'shared:devices' (devices found by an earlier interact_points hidden search) or a
+--                location key (vec3/vec4 or list of them)          ['shared:devices']
+--   checks       difficulty per round                               [difficulty.default = easy, medium, medium, hard]
+--   missPenalty  seconds off the run timer per miss                 [missPenalty[3] = 30]
+--   failAfter    misses in a row on one target that set it off      [failAfter[3] = 2]
+--   target       { label, icon }                                    [label: locale default, icon default]
+--   explosion    play the explosion effect when a target goes off   [true]
+--   minSeconds [10] · presenceRange [presenceRange[3] = 150] · label
+--
+-- Evidence accepted (ctx.report from the client half)
+--   { type = 'check', target, index, success }   one round: index must be the target's next round,
+--                                                the reporter within 5 m of the target (server coords)
+--
+-- Evidence may also carry seq (the client's report counter); it is not used here.
+-- Messages sent (ctx.send): { kind = 'state', targets, checks } after every change;
+--   { kind = 'explode', target, coords, by, effect } when a target goes off (by = reporting src, or the
+--   run host when the timer runs out)
+-- Bonuses / penalties recorded (shared): no_missed_checks (ctx.award)
+-- Fail reason keys: block.skill_check.fail_exploded
+
 local BLOCK = 'skill_check'
 
 local SHARED = 'shared:devices'

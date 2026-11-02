@@ -1,5 +1,5 @@
 -- The unit ready check on a member's game (modules/units/client.lua): the toast names the twists the leader chose
--- (PLAN M8b), and stays the plain one without twists.
+-- , and stays the plain one without twists.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client', realLocale = true })

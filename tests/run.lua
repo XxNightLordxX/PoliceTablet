@@ -1,5 +1,38 @@
 -- Runs every tests/*_spec.lua in a fresh Lua state and prints a summary.
 
+--   lua5.4 tests/run.lua                    (all specs)
+--   lua5.4 tests/run.lua boards             (only specs whose file name contains "boards")
+--   lua5.4 tests/run.lua --storage=files    (database off: every spec on the saves folder engine; = CP_TEST_STORAGE=files)
+--   lua5.4 tests/run.lua --storage=shadow   (MariaDB answers; every statement is also compared on an oxmysql twin and
+--                                            the engine, 0 differences expected; = CP_TEST_STORAGE=shadow)
+--   lua5.4 tests/run.lua --fuzz[=N]         (shadow mode on tests/shadow/fuzz_*.lua, random SQL, seeds 1..N, default 3)
+--   lua5.4 tests/run.lua --jobs=N           (N specs at a time, each on a copy of the run database; = CP_TEST_JOBS=N;
+--                                            default 2; --jobs=1: one after another on the run database itself)
+-- The filter and --storage combine (lua5.4 tests/run.lua --storage=files storage). New or changed SQL must pass in all
+-- three modes (docs/ARCHITECTURE.md §5.29, §11). A filter that matches no spec is an error (exit 2).
+-- Before the first spec the run checks lua5.4, lua-cjson, the mysql CLI and (shadow) node + mysql2 and stops with
+-- exit 2 when one is missing; tools/setup_test_env.sh checks the whole environment (docs/TESTING.md).
+-- Each spec file is a plain script: local H = dofile('tests/harness.lua'); H.boot{...}; ... H.eq(...)
+-- and must end with `return H`. Every run gets its own MariaDB database, rebuilt from sql/migrations first.
+-- Storage modes (tests/harness.lua has the details):
+--   database  (default) MySQL and H.sql go to MariaDB.
+--   files     Config.Database.enabled = false: everything goes to the saves folder engine (CP.Storage.MemSQL); the
+--             run's saves folders live in one temporary folder that is removed at the end (in database mode each
+--             spec gets its own subfolder of it).
+--   shadow    the specs run as in database mode, and every statement also runs in lockstep on a MariaDB twin
+--             (read the way oxmysql reads it, tests/shadow/twin.cjs) and on the saves folder engine; every
+--             difference is appended to CP_SHADOW_REPORT (default /tmp/cp_shadow_<run database>.jsonl),
+--             summarised at the end (the file is kept only when it holds a difference). Needs node and
+--             tests/shadow/node_modules (cd tests/shadow && npm install).
+-- A check skipped in a mode (H.skipIn) prints a SKIP line; every skip is listed at the end. A spec's REPORT lines
+-- (timings and sizes of tests/storage_spec.lua and tests/storage_copy_spec.lua) are shown under its result.
+-- Results print in file order whatever --jobs is, and the counts do not depend on it.
+-- For hunting order, clock and time zone effects (docs/TESTING.md):
+--   CP_TEST_ORDER=reverse | shuffle[:seed]  another spec order (with --jobs=1 also the order they run in)
+--   CP_TEST_NOW=<unix time>                 the harness' default fake clock H.time (1790000000 otherwise)
+--   CP_TEST_CLOCK=<unix time>               the wall clock itself: os.time() and MariaDB NOW() start there
+--   CP_TEST_TZ=<zone>                       the specs' TZ (UTC otherwise; shadow mode always runs UTC)
+
 local base = (debug.getinfo(1, 'S').source:match('^@(.*)/run%.lua$') or 'tests')
 
 local filter, storage, child, fuzz = nil, os.getenv('CP_TEST_STORAGE'), nil, nil

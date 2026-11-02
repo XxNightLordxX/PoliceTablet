@@ -1,4 +1,4 @@
-// Admin UI -> Permissions -> Extra grants (step G1): give one power to people who are not supervisors, by department
+// Admin UI -> Permissions -> Extra grants: give one power to people who are not supervisors, by department
 // from a grade, Qbox gang from a grade, or single citizenid. Every change saves the setting Permissions.grants
 // (server:admin:setSetting), checked and audited like any other setting; the server reads it at every check.
 

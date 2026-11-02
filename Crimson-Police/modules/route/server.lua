@@ -2,6 +2,61 @@
 -- start", Crimson-Arena rules 5 and 6). Config.Route.required (the owner's switch, locked at accept) decides whether
 -- leaving the route ends a run; without it the route is still shown, reported and recalculated, and arrival counts.
 
+-- modules/route/server.lua · CP.Route (server): Hard rule 17, the route to the mission start
+-- (docs/ARCHITECTURE.md §5.12, SPEC "Route to the start", Crimson-Arena rules 5 and 6).
+--
+-- Owns: the per-participant route state, the plain net events server:routeStatus (runId, metres, coords)
+-- and server:recalcRoute (runId), the 1 s arrival / off-route / drift checks, and the server -> client
+-- events client:routeWarning (runId, secondsLeft|nil), client:routeRecalc (runId, ok, recalcsLeft) and
+-- client:routeStatus (runId, RouteStatus) (sent when the server marks the arrival).
+--
+-- Public API
+--   CP.Route.begin(run, src) -> boolean
+--       Starts the checks for one participant (CP.Runs calls it for each participant at create; the 1 s
+--       tick also begins any active, not yet arrived participant it finds without a state, unless stop was
+--       called for them). Idempotent. Test runs with test.useStartRoute == false get the arrival check only.
+--       Config.Route.required (the owner's switch, locked at accept as run.routeRequired; a test run: true)
+--       false: the route is still reported and recalculated and arrival counts, but no warning, countdown,
+--       drift check or off_route end.
+--   CP.Route.stop(run|runId, src?) -> nil      ends the checks for src (every participant when src is nil)
+--   CP.Route.status(run, src) -> RouteStatus
+--       RouteStatus = { status = 'on'|'off'|'arrived'|'disabled'|'action', secondsLeft = number|nil (only while the
+--       off-route warning is shown), recalcsLeft = number, distance = metres (straight line to the start,
+--       2D, rounded)|nil, required = boolean (false: the route is a guide) }  (HudState.route plus
+--       recalcsLeft for the Active Mission view)
+--
+-- Per participant: { lastReport, offSince, warned, recalcs, closest, distance, arrived, mode }.
+-- Every 1 s, with the SERVER-SIDE ped position:
+--   * arrival: within location.start.radius (2D) of location.start.coords -> CP.Runs.markArrived(run, src),
+--     then the flag (CP.Alerts.set, idempotent if CP.Runs already set it) and client:routeStatus 'arrived';
+--     the checks stop for that participant. For Manhunt the start is the search circle: when the first
+--     objective is a search_area, its starting circle (location[obj.center], obj.startRadius) is used if it
+--     is larger than location.start, so the route leads to the centre until the officer is inside it.
+--   * off route: the last reported metres > Config.Route.maxDeviation, or no accepted report for
+--     Config.Route.reportTimeout s (off from the moment the timeout passed). After Config.Route.warnAfter s
+--     off route: client:routeWarning (runId, secondsLeft) every second; after Config.Route.abandonAfter s off
+--     route in one stretch: CP.Runs.removeParticipant(run, src, 'off_route'). A report within maxDeviation
+--     ends the stretch (client:routeWarning (runId, nil) when a warning was shown). When the warning appears
+--     or goes (and after a granted recalculation) the run view is pushed to the tablet (push topic 'run').
+--   * drift: the straight-line distance to the start grows more than Config.Route.maxDrift past the closest
+--     it has been -> 'off_route', whatever the client reports.
+--   * late partners (Config.Route.lateArriveRange, 0 = off): once run.state == 'in_progress', a
+--     participant who has not arrived switches once to mode 'action' (client:routeStatus 'action' + a 'run'
+--     push): no warning, report, drift or off_route check any more (with Config.Route.required on or off),
+--     reports and Recalculate are refused, status = { status = 'action', distance = metres to the action,
+--     secondsLeft = seconds until his start deadline }.
+--     He arrives (markArrived, as at the start) inside the start circle or within lateArriveRange of
+--     CP.Runs.actionPoints(run) (the objective's anchor, its pointer's point or targets, anywhere inside its
+--     circle). On the switch CP.Runs.extendStart gives him Config.Route.followActionSeconds (300; 0 = none)
+--     from then on to arrive, never less than the start deadline he had.
+--   * in-arena participants (CP.Alerts.inArena) are not route-checked and cannot arrive (CP.Alerts removes
+--     them from the run); their reports are ignored.
+-- Reports: at most one per 0.9 s per player; ignored unless the runId is the sender's active run, metres is
+-- a finite number >= 0 and the reported coords lie within Config.Route.maxDeviation (at least 150 m) of the
+-- server-side ped position (a report that fails is treated as missing). Recalculate: Config.Route.maxRecalcs per
+-- participant per run; a granted recalculation ends the current off-route stretch (the new line starts
+-- where the officer is).
+
 CP.Route = CP.Route or {}
 local R = CP.Route
 local TAG = 'route'

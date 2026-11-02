@@ -1,4 +1,9 @@
--- Cash bonuses inside admin bounds (step P16): happyHourCash (x the cash of a run a department leads that was
+-- Cash bonuses inside admin bounds: happyHourCash (x the cash of a run a department leads that was
+
+-- Cash bonuses inside admin bounds: happyHourCash (x the cash of a run a department leads that was
+-- accepted while a happy hour ran, fixed at the accept) and twistCash (x each twist's cash for the leader's
+-- department, still under Config.Events.twistMaxCash). Paid only on a completed run, never on test runs,
+-- Cross-Department runs or the Weekly Boss. Plain Lua: stubbed controls, no database.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

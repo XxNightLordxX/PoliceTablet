@@ -1,6 +1,21 @@
 -- Database off (Config.Database.enabled = false) from end to end: the saves folder holds every feature's data,
 -- survives a restart, and stays fast and small at 50,000 runs.
 
+--   1. files mode on the REAL server side (every modules/**/server.lua and blocks/**/server.lua, as in e2e_spec):
+--      an admin starts a season, overrides the weekly bounty, sets a type payout and creates a custom mission; an
+--      officer runs a solo Beat Patrol from the Mission Board to a paid row, and the weekly board ranks them.
+--   2. a server restart: every handler, thread and module table is dropped, a new engine loads the same saves
+--      folder and the modules start again. Every cp_ table reads back identical, and the officer, the run and its
+--      points, the paid cash (still paid once), the season, the bounty, the payout, the custom mission, the audit
+--      rows and the mission cooldown all come back through the modules; AUTO_INCREMENT ids continue.
+--   3. load: 50,000 runs in the active season (500 officers). The leaderboard, challenge and admin stats queries
+--      each finish under 250 ms, the write statements of one finished run (with the documents they rewrite) take
+--      about 20 ms or less (and with an fsync per document written, as FXServer flushes, measured on this disk),
+--      loading the saves folder at start-up takes under 3 s; the size of the saves folder and its bytes per run row.
+--      Every timing and size is printed (CPU time, os.clock; the fsync writes in wall time).
+-- The spec always runs in files mode (H.useFiles), whatever CP_TEST_STORAGE says. sc-dispatch's mdt_dispatch is
+-- another resource's table: it stays on MariaDB and is read through the real oxmysql, as on a server.
+
 local H = dofile('tests/harness.lua')
 H.useFiles()
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_storage'

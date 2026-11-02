@@ -1,6 +1,39 @@
 -- CP.Tablet (server): sessions for the three UIs, toasts, live pushes, the Admin UI opener and the department logo
 -- checks.
 
+-- Owns the callback getSession, the action server:logoFailed and the server side of the client events
+-- crimson-police:client:notify / client:push / client:openAdmin (docs/ARCHITECTURE.md §8.1).
+--
+-- Public API (docs/ARCHITECTURE.md §5.4)
+--   callback getSession(args) -> Session (§9.2)
+--       args = { ui = 'officer'|'supervisor'|'admin' (default 'officer'), silent = bool }
+--       officer:    an officer (CP.Access.getOfficer) -> its errKey otherwise (err.not_police,
+--                   err.not_on_duty, err.suspended, err.suspended_dispatch)
+--       supervisor: an officer whose grade is at or above supervisorGrade, or an officer who is also
+--                   an admin -> err.not_supervisor otherwise
+--       admin:      the ace Config.AdminAce, on duty or not, police or not -> err.not_admin otherwise
+--       roles = { officer, supervisor (= officer and (isSupervisor or admin)), admin }; officer is set
+--       whenever the player qualifies as an officer (also in the Admin UI); theme = the department's
+--       theme (Config.AdminTheme, validated, for the Admin UI); logo = the department logo, or nil for
+--       the Admin UI, a department without a logo, or a logo file missing from logos/.
+--       config = { missionTypes (key,label,points; by points), departments (key,label,short,primary),
+--                  tiers (name, label = CP.Scaling.label(name), else CP.L('tier.<name>')), maxRecalcs, disputeWindowHours,
+--                  periods, filters }, serverTime = os.time(). No locale: the client sends the NUI its own
+--       copy once, with 'ready' (modules/tablet/client.lua), so a reply is a few KB instead of about 345 KB.
+--       Opening the Officer/Supervisor UI refreshes the stored rank/callsign (CP.Access.refreshOfficerRow);
+--       silent = true (the theme fetch at login) skips that. nil fields arrive in the NUI as missing keys.
+--   CP.Tablet.notify(src, kind, key, vars, opts) -> boolean
+--       kind 'info'|'success'|'warning'|'error'; key/vars a locale key and its variables (translated on
+--       the client); opts = { title = localeKey, duration = ms }
+--   CP.Tablet.notifyMany(srcs, kind, key, vars)       the same toast for a list of players (deduplicated)
+--   CP.Tablet.push(src, topic, data) -> boolean       NUI { type = 'push', topic, data } (vectors serialised)
+--   CP.Tablet.openAdmin(src) -> ok, errKey            builds the admin session and opens the Admin UI
+--       (client:openAdmin); err.not_admin, err.not_in_game (console). Called by modules/admin.
+--   action server:logoFailed (deptKey | { department, url })   the NUI could not load a department logo:
+--       one console warning per department (err.unknown_department for an unknown one).
+-- At start every file-based department logo is checked with LoadResourceFile: one warning per missing
+-- file, and that department's session carries no logo (no broken image in the NUI).
+
 CP.Tablet = CP.Tablet or {}
 local T = CP.Tablet
 local TAG = 'tablet'

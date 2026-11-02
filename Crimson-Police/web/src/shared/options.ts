@@ -1,5 +1,9 @@
 // The officer options (CP.OptionDefs) as the open UI and the HUD see them. A 'local' option (a look or a sound) comes
 
+// from this PC: the Lua client sends { type: 'localOptions', options } on 'ready' and after every change. A 'server'
+// option comes from the session (session.options), refreshed by the push 'options'; else the department default
+// (session.config.officerOptions.defaults). OptionsProvider sits next to the session context in App.tsx.
+
 import {
     createContext,
     createElement,

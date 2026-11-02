@@ -1,4 +1,4 @@
--- CP.Markers (modules/markers/client.lua; PLAN M1, BLIPS_FINAL R1-R10): the objective pointer on an officer's map,
+-- CP.Markers (modules/markers/client.lua): the objective pointer on an officer's map,
 -- one GPS line at most, cleared at every stop; and its hooks in modules/runs/client.lua.
 
 local H = dofile('tests/harness.lua')

@@ -1,4 +1,9 @@
-// Admin UI · Permissions · Mission controls (step P4): one row per registered control (CP.DeptControls): the admin
+// Admin UI · Permissions · Mission controls: one row per registered control (CP.DeptControls): the admin
+
+// Admin UI · Permissions · Mission controls: one row per registered control (CP.DeptControls): the admin
+// switch and the min / max a supervisor may pick (Config.MissionControls.controls), what applies now with who set it
+// and a Reset, each department's own limits (Config.Departments.<key>.missionControls, not for a server-wide control)
+// and who may use them (Config.MissionControls.grants). The master switch stays the 'missionControls' table row.
 
 import { useEffect, useRef, useState } from 'react';
 import {

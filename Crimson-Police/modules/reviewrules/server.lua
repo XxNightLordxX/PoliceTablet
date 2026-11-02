@@ -1,4 +1,10 @@
--- CP.ReviewRules (server): a department's stricter review rules for flagged runs (step P14, the Mission control
+-- CP.ReviewRules (server): a department's stricter review rules for flagged runs (the Mission control
+
+-- CP.ReviewRules (server): a department's stricter review rules for flagged runs (the Mission control
+-- reviewRules). { secondVoid = true }: a supervisor's Void of a flagged row of that department only marks it pending;
+-- a second supervisor of that department confirms it. { adminOnlyKinds = { kind, ... } }: flags of those kinds leave
+-- the supervisors' Review queue and only admins approve or void them. It never relaxes a rule (Config.AntiCheat's
+-- flag triggers are not offered) and admins are never bound by it.
 
 CP.ReviewRules = CP.ReviewRules or {}
 local RR = CP.ReviewRules

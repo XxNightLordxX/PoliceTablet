@@ -1,5 +1,10 @@
 // Officer UI · Department Challenge (screen key 'challenge', callbacks getChallenge + getDeptContributors).
 
+// One score bar per department in its own theme colour, the season and weeks left, this week's bounty with
+// the department currently leading it, and the viewer's department's top 5 contributors. Tapping a
+// department opens its full contributor list. DeptBars and BountyCard are reused by the Admin Seasons
+// screen and the Supervisor Department Report.
+
 import { useState, type ReactNode } from 'react';
 import {
     Avatar,

@@ -1,6 +1,10 @@
--- Mission Board controls (step P10): types switches mission types or single missions off for a department (its
+-- Mission Board controls: types switches mission types or single missions off for a department (its
 -- officers see the type locked, other departments still take it; a unit with a member of that department is refused),
 -- featuredType recommends one type to a department's officers. Plain stubs: CP.DeptControls answers saved values.
+
+-- Mission Board controls: types switches mission types or single missions off for a department, featuredType
+-- recommends one type to its officers. CP.DeptControls is a stub (rows, bounds and the choice kind are covered by
+-- mission_controls_spec): this spec checks what CP.Draw registers, the accept check, the draw pool and the board cards.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

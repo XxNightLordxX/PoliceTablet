@@ -1,4 +1,4 @@
-// Admin UI · Real suspects (step V18) walked against the browser mocks (node walk.mjs, a gate step): the screen shows
+// Admin UI · Real suspects walked against the browser mocks (node walk.mjs, a gate step): the screen shows
 // only for admins while live crimes or volunteers are on, a case opens its timeline and damage ledger (never the
 // admin's own case), and the tool form sends what modules/opponents/staff expects (or says what is wrong first).
 

@@ -1,4 +1,9 @@
-// Supervisor UI · Department Report · Field training (step T1, Config.FieldTraining): every pairing of the department
+// Supervisor UI · Department Report · Field training (Config.FieldTraining): every pairing of the department
+
+// Supervisor UI · Department Report · Field training (Config.FieldTraining): every pairing of the department
+// with its progress, Pair trainer (a rookie of the department and an online trainer at or above the trainer grade) and
+// End training (two clicks). The server checks every rule again. Nothing shows while the feature is off. a
+// Pairings heading with the count, and the stale line when a refresh fails.
 
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Dialog, EmptyState, Field, Select } from '../../shared/components';

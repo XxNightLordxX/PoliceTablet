@@ -1,5 +1,10 @@
 // Browser dev mode only (App lazy-loads this file when isEnvBrowser(); it never runs in FiveM).
 
+// Fakes the Lua side: opens the three UIs, sends HUD states, results, toasts and overlays.
+// URL params for quick checks: ?ui=officer|supervisor|admin &dept=sast|fib|bcso &screen=<key>
+//   &hud=progress|offroute|test &result=completed|failed|test|flagged &run=1 &toast=info &bg=night|day|none &dev=0
+// Dev tool text is English on purpose: it is never shown to players.
+
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useNavigation, type ScreenKey } from '../shared/navigation';
 import { emitDebug, request } from '../shared/nui';

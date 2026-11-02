@@ -1,4 +1,4 @@
--- Volunteer opt-in (step V20), the client: the command exists only once Config.Volunteers.enabled is on, and the
+-- Volunteer opt-in, the client: the command exists only once Config.Volunteers.enabled is on, and the
 -- server's menu becomes ox_lib's consent alert, the roles input, the context menu and notifications. Plain Lua stubs.
 
 local H = dofile('tests/harness.lua')

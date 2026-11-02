@@ -1,4 +1,4 @@
--- Full admin control, economy (P4): the payments ledger, resolving stuck payments, pay now and retries, the money
+-- Full admin control, economy: the payments ledger, resolving stuck payments, pay now and retries, the money
 -- tools that ship off, payout unlock and Adjust all, the archive and forfeiture jobs under the busy lock,
 -- maintenance, the clean-up and the cash health lines.
 

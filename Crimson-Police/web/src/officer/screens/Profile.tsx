@@ -1,5 +1,11 @@
 // Officer UI · Profile & History (screen key 'profile', callback getProfile, actions server:setHideName and
 
+// server:dispute). Own profile by default; navigate('profile', { citizenid }) opens someone's public
+// profile (no cash, no cash breakdown, no toggle, no disputes). Shows the XP level badge and bar, badges,
+// the hide-name toggle, and the last 20 runs with how each ended; a row opens the points/cash breakdown in
+// the same presentation as the HUD result card; flagged, voided or failed runs from the dispute window can
+// be disputed (reason required).
+
 import { useState } from 'react';
 import { DecisionsBlock, PeopleBlock } from '../../hud/Debrief';
 import {

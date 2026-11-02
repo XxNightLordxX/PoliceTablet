@@ -1,6 +1,11 @@
--- Points bonuses inside admin bounds (step P20): happyHourPoints (x the final points of a completed run a department
+-- Points bonuses inside admin bounds: happyHourPoints (x the final points of a completed run a department
 -- leads that was accepted while a happy hour ran, fixed at the accept) and twistPoints (x each twist's points share,
 -- still under Config.Events.twistMaxPoints). Plain Lua with stubbed Mission controls: no database.
+
+-- Points bonuses inside admin bounds: happyHourPoints (x the final points of a completed run a department
+-- leads that was accepted while a happy hour ran, fixed at the accept, never for its starter) and twistPoints (x each
+-- twist's points share, still under Config.Events.twistMaxPoints). Never on failed runs, test runs, Cross-Department
+-- runs or the Weekly Boss; the accept step shows the raised share. Plain Lua: stubbed controls, no database.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

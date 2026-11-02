@@ -2,6 +2,9 @@
 // chance 0–1, rolls 0–10, count 1–100, weight above 0, value 0 or more) with the server's verdict and the expected
 // items and value per run at each tier. The server checks every value again (the raw editor gets the same answers).
 
+// also the items list of a feature reward (FeatureRewards.<feature>.items: item, count, chance per payment,
+// value), and one key of Rewards.byType (prop only) for the Admin UI Rewards screen.
+
 import { useEffect, useMemo, useState } from 'react';
 import {
     Button,

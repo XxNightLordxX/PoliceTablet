@@ -1,4 +1,4 @@
--- Full admin control, officers (P1): signed point adjustments, the bulk void and restore engine, restore run, void
+-- Full admin control, officers: signed point adjustments, the bulk void and restore engine, restore run, void
 -- kinds, flag by hand, retire, XP check, record move, badge overrides, profile tools, streaks, first-run bonus,
 -- goals and staff notices. Every action is admin-only, audited and goes through CP.AdminKit.
 

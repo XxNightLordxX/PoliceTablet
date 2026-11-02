@@ -1,5 +1,9 @@
 -- The Dispatch and opening officer options (My options -> Dispatch and Opening the tablet): claim in one click
 
+-- (skipClaimConfirm), the tablet key opens Dispatch just after a call (dispatchKeyAfterCall), which call pop-ups show
+-- (callAlerts), the screen the tablet opens on (openOn), all saved with the character; and remember my filters
+-- (rememberFilters, kept on this PC) with the filters themselves (filters: not a row of My options).
+
 local Defs = CP.OptionDefs
 
 local DISPATCH_FILTERS = { 'all', 'claimable', 'near' }

@@ -1,6 +1,11 @@
 // Admin UI · Audit Log (screen key 'admin_audit'): filters (also by target, role, the acting player's every character
 // and reason text), export in parts of 5000 rows, and Save to server (saves/exports).
 
+// Admin UI · Audit Log (screen key 'admin_audit').
+// Every supervisor and admin action (cp_audit), newest first, filterable by category, action, actor and
+// date range, 50 per page. Export shows the filtered rows as CSV in a dialog with a copy button.
+// Data: callbacks admin:getAudit { category, action, actor, from, to, page } and admin:exportAudit (modules/admin).
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Badge,

@@ -1,4 +1,4 @@
--- Parity-plus foundation (WP1): migrations 003-007, CP.Hooks, CP.Lt tokens, the engine contracts other packages build
+-- The foundation: migrations 003-007, CP.Hooks, CP.Lt tokens, the engine contracts other modules build
 -- on (stats, decisions, adoption, hidden spawns, plates, held bodies, removals), levels, tweaks, the Session.
 
 local H = dofile('tests/harness.lua')

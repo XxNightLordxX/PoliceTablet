@@ -1,4 +1,10 @@
--- CP.Opponents proof (step V5): the sc-police cuff pair and custody hold, getting free during the hold (release,
+-- CP.Opponents proof: the sc-police cuff pair and custody hold, getting free during the hold (release,
+
+-- CP.Opponents proof: the sc-police cuff pair and custody hold, getting free during the hold (release,
+-- bobby-pin rescue, cuff-break, self-uncuff), downs and the neutralised share, an AFK catch scoring 0, bookings in
+-- either order with booking zones, and the hospital rules. Real: modules/integrations/qbx, access, anticheat,
+-- integrations/sc_police and sc_ambulance (the V3 handlers, fired as net events), opponents and opponents/proof;
+-- qbx_core's exports and its onSetMetaData event are mocked like FXServer sends them.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

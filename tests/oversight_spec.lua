@@ -1,6 +1,9 @@
 -- The oversight slice: modules/admin (audit, webhooks, /CrimsonPoliceAdmin, review and void, force recall,
 -- supervisor/admin callbacks), modules/disputes and modules/anticheat.
 
+-- The real CP.Access and CP.Permissions modules run on a CP.Qbx stub; every other module is a stub that
+-- records its calls. Every SQL statement of the three modules runs here against MariaDB cp_test.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 Config.Debug = true   -- run every CP.log format string too

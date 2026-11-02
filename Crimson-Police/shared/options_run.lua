@@ -2,6 +2,11 @@
 -- recalculate the route in one click (both saved with the character) and distances in miles (kept on this PC).
 -- The NUI only: server:abandon still costs the type cooldown, recalcRoute still counts Config.Route.maxRecalcs.
 
+-- During a mission's officer options (My options -> During a mission): abandon without the dialog (abandonConfirm off:
+-- the button needs a second press within 3 s), recalculate the route in one click (skipRecalcConfirm), both saved with
+-- the character, and distances in feet and miles (distanceUnits, kept on this PC). The NUI only: the abandon cooldown
+-- and Config.Route.maxRecalcs are unchanged.
+
 local Defs = CP.OptionDefs
 
 Defs.add('abandonConfirm', { kind = 'bool', default = true, group = 'run', order = 10 })

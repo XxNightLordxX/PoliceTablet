@@ -1,4 +1,4 @@
--- CP.Volunteers (client, step V20): the volunteer command (Config.Volunteers.command, default /crimsonheat).
+-- CP.Volunteers (client): the volunteer command (Config.Volunteers.command, default /crimsonheat).
 -- Volunteers have no tablet: ox_lib's alert and input dialogs, a context menu and notifications only. The server
 -- decides everything; this side asks it what to show and sends the player's choices.
 

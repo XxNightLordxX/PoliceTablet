@@ -1,5 +1,10 @@
 // The Mission Builder's knowledge of the nine objective blocks: defaults of a new
 
+// objective in builder units (from builder:config = config/blocks.lua), the location keys each objective needs
+// and how they are placed (mirrors every block's requiredPoints and strict location checks), the armed NPC
+// count (mirrors every block's armedCount), the counts that can scale, and ranges read from the config.
+// Field names follow ARCHITECTURE §3.3 and the "Objective fields read" headers of blocks/<id>/server.lua.
+
 import { asArray } from '../shared/data';
 import type { IconName } from '../shared/components';
 import type { BuilderConfig, BuilderDefinition, BuilderObjective } from '../types/builder_server';

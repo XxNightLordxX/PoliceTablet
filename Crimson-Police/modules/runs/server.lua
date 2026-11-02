@@ -1,5 +1,142 @@
 -- CP.Runs (server): the run engine.
 
+-- Owns
+--   The run lifecycle (accepted -> in_progress -> ended), per-participant end reasons and results
+--   (ARCHITECTURE §4.3), the start timeout, abandon, cooldowns (in memory, rebuilt from cp_mission_runs
+--   after a restart), the server run caps, the run host and host succession, rescaling when the team
+--   shrinks, the mission timer, objective sequencing through the blocks (§7.1), every networked entity a
+--   run spawns (OneSync server natives, the `cp` state bag, caps, corpse cleanup), mission items
+--   (ox_inventory, tagged { cpRun, cpItem }, orphan sweeps that also look for Config.Custody.evidenceItem;
+--   kept back only while the player is in a routing bucket other than 0 (a Crimson-Arena match, or any other
+--   instance such as an apartment); the crimsonArena flag on its own, in bucket 0, does not keep them), the
+--   cp_mission_runs row of every participant (points and cash breakdown JSON), telemetry (vehicle damage,
+--   pedestrian hits, lights and siren, weapons fired), the Active Mission view and the live-run summary. Test
+--   runs write nothing and start no cooldown. A resource stop deletes every entity and writes nothing.
+--
+-- Public API (server, ARCHITECTURE §5.10)
+--   CP.Runs.create(opts) -> run|nil, errKey
+--       opts = { mission, locationIndex, missionType, members = { officer|src }, leaderSrc, operationId,
+--                test = { adminSrc, useStartRoute, forcedTier, draft }|nil, isBoss }
+--   CP.Runs.get(runId) -> run|nil          CP.Runs.getBySrc(src) -> run, participant (active only)
+--   CP.Runs.all() -> { run, ... }          CP.Runs.isOnMission(src) -> boolean  (+ export IsOnMission)
+--   CP.Runs.capsOk(missionType) -> ok, errKey
+--   CP.Runs.cooldowns(citizenid) -> { types = { [type] = untilTs }, missions = { [id] = untilTs } }
+--   CP.Runs.onCooldown(citizenid, missionType, missionId) -> boolean, untilTs
+--   CP.Runs.completionsLastHour(citizenid) -> integer
+--   CP.Runs.markArrived(run, src)                              (hook from CP.Route)
+--   CP.Runs.removeParticipant(run, src, endReason, opts) -> rowId|nil   opts = { keepFlag, silent, notify }
+--   CP.Runs.reclassify(citizenid, runId, newEndReason) -> boolean      (hook from CP.Calls)
+--   CP.Runs.endRun(run, state, endReason)                      state 'completed'|'failed'
+--   CP.Runs.failRun(run, reasonKey)
+--   CP.Runs.objectiveComplete(run, index, data) -> boolean
+--   CP.Runs.dispatch(run, index, src, ev) -> ok, reason
+--   CP.Runs.entityDied(run, netId, killerSrc)
+--   CP.Runs.award(run, id, opts) / CP.Runs.penalize(run, id, opts)   opts = { src, count = 1, points }
+--   CP.Runs.adjustTimer(run, seconds) / pauseTimer(run, paused) / remaining(run) -> seconds|nil
+--   CP.Runs.spawnPed(run, opts) / spawnVehicle(run, opts) / spawnObject(run, opts) -> entity, netId
+--   CP.Runs.deleteEntity(run, netId) / entitiesFor(run, filter) -> list / canSpawn(run, n, armed) -> boolean
+--   CP.Runs.choosePoints(run, candidates, n, opts) -> points, indexes   the spawn director (Config.Spawning)
+--       opts = { wave, since, indoor, centre, from, placed, name, obj }; ctx.choosePoints fills in obj;
+--       a candidate { coords, label } is named by its label in the console lines
+--   CP.Runs.whenNear(run, point, range) -> boolean, nearestMetres|nil   (ctx.whenNear; range = activateRange)
+--   block hook stage(ctx, dt) -> staged   objective i + 1's, once a tick while objective i is current
+--       (Config.Spawning.stageAhead); true sets run.objectives[i + 1].staged and ctx.staged (its start too);
+--       it may yield (a spawn waits): objective i + 1's start waits for it (at most 30 s)
+--   CP.Runs.send(run, eventName, ...) / objectiveEvent(run, index, data) / hud(run, patch) / hudFor(run, src, patch)
+--   CP.Runs.view(run, src) -> ActiveMissionView (§9.4) / summary(run) -> LiveRun (§9.5)
+--   CP.Runs.isParticipant(run, src) / activeSrcs(run) -> { src... } / host(run) -> src
+--   CP.Runs.testSkip(run) / testRestart(run) / anchor(run) -> vec3    (test runs only)
+--   CP.Runs.ctx(run, index) -> ctx|nil     the engine's ctx of objective index (e.g. CP.AntiCheat presence)
+--   CP.Runs.noteWeaponFired(run, src) -> boolean   server-side proof of gunfire by an active participant
+--                                          (CP.Npc: weapon hits / kills on mission NPCs); once per participant
+--   Internal (same slice, used by tests): CP.Runs._tick() one 1 s tick, CP.Runs._jobRecheck() one recheck pass
+-- Net
+--   callback 'getRun' -> ActiveMissionView|nil for the caller's run
+--   action   'server:abandon' (runId) -> removeParticipant(run, src, 'quit')
+--   event    'crimson-police:server:objective' (runId, index, evidence) -> CP.AntiCheat.checkEvent -> block onEvent
+--            (SERVER_ONLY types cuffed | decide | action | removed | handed_over | impounded | shot | damaged:
+--            refused, the sender flagged unexpected_event; only Runs.dispatch / Runs.entityEvent send them)
+--   event    'crimson-police:server:telemetry' (runId, kind, data)  kinds vehicle | ped_hit | lights_siren | weapon_fired
+--            | area ({ index = 0 (start) | the current objective, text = 'street · zone' }, the sender's own view)
+--   client events sent: client:start, client:inProgress, client:objective, client:hud, client:tierChanged,
+--   client:hostChanged, client:participants, client:runEnded; push topic 'run' (view, or nil when it ended)
+-- Loops
+--   1 s: timers, the current objective's block tick, time limit, the next objective's stage hook (stage ahead),
+--   start timeouts, arena re-check, entity bookkeeping (vanished entities, wrecked vehicles, corpse cleanup after
+--   Config.Limits.corpseCleanup), host liveness, HUD refresh. Config.AntiCheat.jobRecheck s: CP.Access.recheck. 60 s: orphan item sweeps
+--   and cache pruning.
+--
+-- Contract interpretations (details in docs/ARCHITECTURE.md §13.13)
+--   * ctx.award/penalize accept opts.points, a per-occurrence value hint kept in run.score.values[id]
+--     (blocks pass it for ids whose value comes from block settings, e.g. hostage_hit).
+--   * ctx.hud({ detail, value, max }) belongs to that objective's HUD entry; other keys (message, ...)
+--     are top-level HUD fields. The full objectives list is resent whenever it changes.
+--   * Objective entities are never deleted when their objective completes, only at run end.
+--   * An early ctx.complete() is refused and flags the run too_fast once per objective (not on tests).
+--   * Flagged rows keep their computed points and cash (held) so an approval can release them.
+--   * penalty_points stores the positive sum of the penalties; bonus_points the sum of the bonuses.
+--   * Engine-recorded personal ids: pedestrian_hit and lights_siren (penalize), weapons fired go to
+--     run.stats.weaponsFired / p.firedWeapon, vehicle damage to p.vehicle.
+--   * create re-checks "already on a run", the server caps and the Cross-Department lock
+--     (CP.Operations.isLocked, normal runs and the boss) with no yield right before the run is registered
+--     (its lookups may yield, so two racing accepts can never both pass); CP.Calls.isOnCall (may yield) is
+--     re-checked for every member just before that block (err.on_call / err.member_on_call).
+--   * endRun first removes every active participant who is down (CP.Qbx.isDowned) with end_reason
+--     'downed' through CP.Downed.handle(run, src) (pick-up / EMS flow) or, without it, directly; only the
+--     others get the run's end state (Hard rule 18). A re-entrant endRun during those leaves is ignored.
+--   * An in-arena participant who leaves never has the crimsonArena bag touched (Crimson-Arena rule 1):
+--     CP.Alerts.forget(src) (when present) drops the intent instead of CP.Alerts.clear.
+--   * Mission items (metadata.cpItem) cannot leave their holder's inventory: an ox_inventory swapItems hook
+--     refuses give / drop / stash / vehicle moves. ox_inventory restarted while Crimson-Police runs: its old hook
+--     is gone (itemHookId cleared on onResourceStart) and the hook is registered again 1 s later. While
+--     ox_inventory is stopped, a run's items are not given (one console warning) and items to take back are kept
+--     as orphans; the once-a-minute maintenance sweeps them from an online officer who is not on a run once
+--     ox_inventory is back. Every other ox_inventory call (tablet item count, rewards, custody evidence) checks
+--     GetResourceState first, so nothing has to be re-registered for them.
+--   * Vehicle damage (p.vehicle) is sampled by the server every VEHICLE_SAMPLE_MS from the vehicle each
+--     active participant drives; client 'vehicle' telemetry only adds samples.
+--   * The `cp` state bag is written, never read back on the server (a client can write the bag of an
+--     entity it owns): run.entities[netId].bag is the server's copy (CP.Npc seeds its record from it and
+--     keeps it current), the armed-alive cap counts through CP.Npc.getState, and "is this a run entity"
+--     (vehicle and pedestrian telemetry) is answered from the engine's registry only.
+--   * Server-side health is sync data (0 until a client synced a server-created entity): health 0 only
+--     counts as a death/wreck after a positive value was seen; engine health <= -3999 always counts.
+--   * Spawns waiting for their entity count toward the caps; an entity that appears after the spawn wait
+--     is deleted when it does (model-checked), so nothing is left behind.
+--   * reclassify(..., 'real_call_cancelled') only replaces a real_call end reason.
+--   * Presence flags go through CP.AntiCheat.flag (audited like every flag); an off-duty CP.Access.onLost
+--     signal is re-verified with CP.Access.recheck (stale duty events are ignored).
+--   * Every run ticks in its own thread; a run whose previous tick is still busy is skipped that second.
+--   * ActiveMissionView extras (web/src/types/run_ui.ts): me, isBoss, operationId, startIn, area (street ·
+--     zone of the start / current objective as the viewer's own client resolved it: client:objective 'start'
+--     carries the objective's reference point, the client answers with telemetry 'area' { index, text }).
+--   * A new or closed tablet log point (view.log) pushes the 'run' topic at once; the HUD and the view
+--     also refresh right after every accepted objective event, not only on the next tick.
+--   * The unit is kept (and unlocked at the end) only for normal runs: test and operation runs never lock
+--     one, so they never unlock one either.
+--   * CP.Runs.ctx(run, index) returns the engine's own ctx of an objective (the one every hook gets).
+--   * The spawn director (Config.Spawning) measures on the map (2D) from every active participant's server-side ped: a
+--     point is skipped closer than minDistance (minDistanceIndoor indoors), behind a participant within activateRange
+--     (more than behindAngle off his own line to the area centre, whichever side he came in from; within 5 m of the
+--     centre, off start -> centre), or outside the one maxSpread sector, seen from the participants near the area, that
+--     keeps the wave's placed points and the most of the rest. It returns fewer points rather than a bad one; a named
+--     wave's clock relaxes the distance to hardMin (never lower, never higher than the distance itself) after
+--     waveDelayMax seconds and is dropped when a call gets every point it asked for. Its memory is
+--     run.spawning[objective] (clocks, the console lines already said), so it goes with the run; testRestart clears the
+--     objective's. It lives in a do-block: the file is at Lua's 200 locals.
+--   * Stage ahead (Config.Spawning.stageAhead, under Config.Spawning.enabled; a missing key counts as on): TickRun,
+--     after the current objective's tick and the time limit, calls stage(ctx, dt) of objective i + 1 when its block
+--     has one, once a tick, only while objective i is still current and i + 1 still pending (not in the tick i
+--     completes, never after i + 1 started, never i + 2). Its ctx is i + 1's own, so what it spawns is i + 1's entity
+--     (deleted at the end like every run entity; its deaths and CP.Npc events reach i + 1's block while pending).
+--     true -> objectives[i + 1].staged (ctx.staged, set by GetCtx, so start sees it) and one CP.log line; an error ->
+--     stageOff (never called again) and one CP.warn. testRestart clears staged. Inline in TickRun (200 locals).
+--     The hook may yield (every spawn waits for its entity): objectives[i + 1].staging = the tick's thread while it
+--     runs, and StartObjective(i + 1) called meanwhile (objective i completed by an officer's event) waits for it
+--     (Wait(0), at most TICK_STUCK_MS; not from inside the hook, not where it cannot yield), then starts it only if the
+--     run is still in progress, so start sees ctx.staged and everything stage placed. The staged line says "objective
+--     i done" then; a stage that returns into an objective that already started is not marked staged (one CP.warn).
+
 CP.Runs = CP.Runs or {}
 local Runs = CP.Runs
 local U = CP.U

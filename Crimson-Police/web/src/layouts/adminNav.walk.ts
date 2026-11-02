@@ -1,4 +1,4 @@
-// Admin UI plain layout (step G6) against the browser mocks (node walk.mjs, a gate step): Config.AdminUi.plainLayout
+// Admin UI plain layout against the browser mocks (node walk.mjs, a gate step): Config.AdminUi.plainLayout
 // reaches the Admin UI as the session's config.adminUi.plainLayout, and the layout changes only when it is set.
 
 import '../mocks/core.mock';

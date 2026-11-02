@@ -1,4 +1,4 @@
--- Backup joins a live case (step V15): CP.LiveCrime.joinCheck / offer / answer, the join pop-up for an officer who
+-- Backup joins a live case: CP.LiveCrime.joinCheck / offer / answer, the join pop-up for an officer who
 -- responds to the crime's own SC-Dispatch call or reaches the scene, and CP.Runs.addParticipant for a live run that
 -- already runs. Plain Lua with stubs.
 

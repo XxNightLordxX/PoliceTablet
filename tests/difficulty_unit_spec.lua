@@ -1,4 +1,8 @@
--- Difficulty and unit size (step P9): two per-department Mission controls. difficulty picks one of the presets the
+-- Difficulty and unit size: two per-department Mission controls. difficulty picks one of the presets the
+-- admin lists (Config.NpcDifficulty) for runs the department leads, read at the accept; unitSize caps the units its
+-- leaders may lead, never above Config.Limits.maxUnitSize.
+
+-- Difficulty and unit size: two per-department Mission controls. difficulty picks one of the presets the
 -- admin lists (Config.NpcDifficulty) for runs the department leads, read at the accept; unitSize caps the units its
 -- leaders may lead, never above Config.Limits.maxUnitSize.
 

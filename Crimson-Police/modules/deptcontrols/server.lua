@@ -1,5 +1,11 @@
 -- CP.DeptControls (server): Mission controls. Rules a department's supervisors may change for their own department,
 
+-- only while an admin switched them on (Config.Permissions.supervisor.missionControls, the master switch, and the
+-- control's on in Config.MissionControls.controls or Config.Departments.<key>.missionControls) and only inside the
+-- bounds an admin set there. A changed value is one row of cp_dept_controls per department and control; no row, an
+-- expired row or a switched-off control = the config value. Other modules register the controls (DC.register) and
+-- read them with DC.get (callers use the Call('DeptControls', ...) pattern, so a missing module reads as config).
+
 CP.DeptControls = CP.DeptControls or {}
 local DC = CP.DeptControls
 local U = CP.U

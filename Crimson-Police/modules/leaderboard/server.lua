@@ -1,6 +1,66 @@
 -- CP.Leaderboard (server): the four time-boxed boards ranked by a metric, their cache, the weekly/monthly recognition,
 -- public and own profiles with the service record, the hide-name toggle and the admin board view.
 
+-- modules/leaderboard/server.lua · CP.Leaderboard (server): the four time-boxed boards, their cache,
+-- the weekly/monthly recognition, public and own profiles, the hide-name privacy toggle and the admin
+-- board view (cash paid per officer, payments stuck in paying).
+--
+-- Owns
+--   * callbacks getBoard, getProfile, admin:getBoards and the action server:setHideName
+--   * the in-memory board cache (Config.Leaderboard.cacheSeconds) per (period, filter, department, window)
+--   * the weekly reset job: top 3 of the week that just ended -> board webhook (cp_webhook_board) and the
+--     "Officer of the Week" badge officer_of_week_<weekKey> (idempotent; also run as a catch-up after start)
+--   * Home announcements: top 3 of the previous week and of the previous month
+--
+-- Board rules (SPEC "Leaderboards")
+--   points  = SUM(final_points) of counted rows (voided = 0 AND flagged = 0) in the window and filter
+--   runs    = completed runs (mission_type not 'manual_award'/'goal'), failed = failed runs (counted rows)
+--   windows = weekly: CP.Schedule.weekStart .. now; monthly: CP.Schedule.monthStart .. now;
+--             season: rows with season_id of the active season (or the last ended one until a new starts);
+--             alltime: cp_officers.xp (Overall filter only; runs/failed from cp_mission_runs + archive)
+--   filters = overall | <Config.MissionTypes key> | unit (participants >= 2) | cross (departments_n >= 2)
+--             | department (row department = args.department). manual_award and goal rows only count
+--             toward overall and department.
+--   ranking = points desc, fewer failed, then who reached the total first (latest counted row that
+--             changed the total, ascending), then citizenid. Minimum Config.Leaderboard.minRunsToRank
+--             completed runs in the board's own window and filter. Top Config.Leaderboard.topN rows.
+--   privacy = hide_name officers show their callsign (or leaderboard.hidden_name) instead of their name;
+--             cash is never on public boards.
+--
+-- Public API (docs/ARCHITECTURE.md §5.22)
+--   callback getBoard({ period, filter, department? }) -> Board (§9.4) plus
+--       { department?, minRuns, topN, ranked, window = { from, to|nil, fromDate, toDate|nil }, season = { id, name }|nil }
+--       fromDate/toDate = 'YYYY-MM-DD' in server time; the tablet shows these, never from/to in the player's time zone
+--       me = the viewer's row; rank 0 when they do not have minRuns completed runs yet (never nil for
+--       an officer). errKeys: the CP.Access.getOfficer keys, err.invalid_period, err.invalid_filter,
+--       err.unknown_department, err.invalid_payload
+--   callback getProfile(citizenid | { citizenid } | nil) -> Profile (§9.4) plus
+--       { departmentLabel, seasonPoints, disputeWindowHours, badges[i].kind }
+--       own = nil or the viewer's citizenid: cash, cash status and the breakdown's cash block are only in
+--       the own profile. runs = the last 20 rows (manual awards and goal rewards included, labelled).
+--       canDispute = CP.Disputes.eligible(row, viewer, now) (own row, flagged or voided or failed, not an award
+--       row, created within Config.Disputes.windowHours; the same rule server:dispute applies) and no cp_disputes
+--       row at all for it (one dispute per row, ever). errKeys: err.unknown_officer, err.invalid_payload
+--   action server:setHideName (boolean | { hideName = boolean }) -> { hideName }
+--   callback admin:getBoards({ period, filter, department?, citizenid? })   (CP.Permissions 'openAdmin')
+--       -> { period, filter, department?, rows = ranked rows + { cash, realName, hidden },
+--            unranked = the same for officers below minRuns, stuck = payments still in 'paying'
+--            (CP.Cash.stuckPayments(), normalised to { rowId, runUuid, citizenid, name, callsign,
+--            missionLabel, amount, createdAt, transId }), minRuns, updatedAt, window, season,
+--            runs = that officer's rows in the window/filter when citizenid is given }
+--   CP.Leaderboard.invalidate()                      (hook: void/approve/new rows) drops every cache
+--                                                    and calls CP.Challenge.invalidate()
+--   CP.Leaderboard.seasonPoints(citizenid) -> number counted points in the active season
+--   CP.Leaderboard.announcements() -> { { kind = 'weekly_top3'|'monthly_top3', text, entries }, ... }
+--   CP.Leaderboard.ranking(opts) -> ranked, byCitizen   (slice helper, used by CP.Challenge at season end)
+--       opts = { period = 'weekly'|'monthly'|'season'|'alltime'|'range', filter, department,
+--                from, to (range), seasonId (season), fresh }
+--   CP.Leaderboard.missionLabel(missionType, missionId, breakdown) -> text   (slice helper)
+--   CP.Leaderboard.publicName(entry) -> text        (slice helper: privacy-aware display name)
+--   CP.Leaderboard.badgeLabel(badgeId) -> label|nil, kind   label of this module's badge ids (officer_of_week_<week>,
+--       season_<id>_champion, season_<id>_top10); nil (kind 'achievement') for any other id
+-- Test hooks: CP.Leaderboard._weeklyJob(prevStartTs, curStartTs), CP.Leaderboard._boot()
+
 CP.Leaderboard = CP.Leaderboard or {}
 local LB = CP.Leaderboard
 local U = CP.U

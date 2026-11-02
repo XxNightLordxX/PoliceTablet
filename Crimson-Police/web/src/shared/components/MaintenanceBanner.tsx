@@ -1,5 +1,10 @@
 // The maintenance banner: shown on every UI while CP.Maintenance holds the lock (a storage copy or switch, a backup
 
+// restore, a store left behind). New runs, claims, tests and payments wait until the owner restarts Crimson-Police
+// (it never restarts itself); after a restore that stopped part way, until a restore works (admins see which
+// automatic backup to restore; officers and supervisors read ui.maintenance.officer_restore_failed, never "until the
+// server owner restarts").
+
 import { t } from '../i18n';
 import { useMaintenance } from '../session';
 import { Icon } from './Icon';

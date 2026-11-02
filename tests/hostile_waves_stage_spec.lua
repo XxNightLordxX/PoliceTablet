@@ -1,4 +1,10 @@
--- The raids' crew staged ahead (hostile_waves stage = true, PLAN S4) on the real engine, the real blocks and the real
+-- The raids' crew staged ahead (hostile_waves stage = true) on the real engine, the real blocks and the real
+
+-- The raids' crew staged ahead (hostile_waves stage = true) on the real engine, the real blocks and the real
+-- built-in mission files: while the officers stack up and breach (objective 1), the crew of the fight (objective 2) is
+-- already in place, calm and unarmed, placed by the spawn director away from the officers; they wake (armed, hostile)
+-- when the fight starts, or earlier when one of them is hurt or killed, or an officer walks up to one of them away from
+-- the breach entries. No SQL (test runs write no rows).
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

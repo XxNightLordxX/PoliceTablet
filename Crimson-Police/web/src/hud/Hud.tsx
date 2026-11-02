@@ -1,6 +1,11 @@
 // The mission HUD (ARCHITECTURE §9.3): shown at the screen edge while hud is set, without NUI focus. hudCompact (My
 // options, this PC) shows the current objective only, with the done count and the timer.
 
+// The mission HUD (ARCHITECTURE §9.3): shown at the right edge while hud is set, without NUI focus.
+// The timer and the off-route countdown count down locally; they restart only when Lua sends a new
+// value (Lua sends the full merged state on every patch, so an unchanged value keeps counting), and
+// count from the time that value arrived (normalizeHud), so a remount does not replay elapsed time.
+
 import { useMemo } from 'react';
 import { Badge, Icon, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';

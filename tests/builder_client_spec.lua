@@ -1,5 +1,14 @@
 -- The builder_client slice: modules/builder/client.lua (CP.Builder, client side).
 
+-- Pure logic: the route recorder (snapping cadence is the runner's; waypoints at turns and every maxGap, duplicates,
+-- undo, stop points), the placement spot checks, the client-action payload parsers, driving styles, thinning and
+-- headings. Runtime against stubbed natives: the async start / result protocol of builder_protocol.md §6, the
+-- refusals (Crimson-Arena rule 13, busy, dead, on a run, disabled), a placement run, a route recording run
+-- (off-road rejection, road-surface acceptance, undo and return, stop points, unreachable waypoints), a test drive
+-- (local entities, stop waits, a waypoint marked failed after testDriveTimeout, cleanup), cancellation, the builder
+-- events, character unload and resource stop.
+-- The builder_client slice writes no SQL, so this spec runs no queries.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client' })
 

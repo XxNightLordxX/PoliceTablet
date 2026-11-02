@@ -1,4 +1,9 @@
--- Mission cooldowns as Mission controls (step P2): cooldownScale (x every mission's cooldown, per mission type) and
+-- Mission cooldowns as Mission controls: cooldownScale (x every mission's cooldown, per mission type) and
+
+-- Mission cooldowns as Mission controls: cooldownScale (x every mission's cooldown, per mission type) and
+-- abandonCooldown (the abandon type cooldown), both server-wide and outside the master switch. Runs.cooldowns works
+-- the end out when it is read from { at, secs, type } entries, so a change, a reset or the admin switch counts at once,
+-- the self rule holds for the setter and any unit he is in, and a restart (rebuild from the rows) gives the same.
 
 local H = dofile('tests/harness.lua')
 

@@ -1,5 +1,15 @@
 -- CP.Operations (client): the Cross-Department Mission toast.
 
+-- The server (modules/operations/server.lua) sends crimson-police:client:operation to every on-duty
+-- officer of every department when an operation is launched (or relaunched), when its run starts, when
+-- it ends Completed and when it is cancelled. This half turns that into a Crimson-Police toast
+-- (CP.Tablet.notify with translated text; the Mission Board refreshes itself from the 'board' push).
+-- Nothing is created in the game world, so there is nothing to clean up on resource stop.
+--
+-- Public API (client)
+--   CP.Operations.last() -> { state, missionLabel, id, at } | nil   the last operation event received
+-- Events handled: crimson-police:client:operation (state, missionLabel, extra = { id, relaunched })
+
 CP.Operations = CP.Operations or {}
 local Ops = CP.Operations
 

@@ -2,6 +2,10 @@
 // options show open as before; on, they sit under More, closed at first, open as the viewer last left them (a
 // blocked storage starts folded), and an option that is set never hides.
 
+// Step FX2 against the browser mocks (node walk.mjs, a gate step): the More fold off (open, no button), on (closed,
+// the count), forceOpen, the open state remembered per screen and a blocked storage; which Mission controls fold and
+// that a set one never does.
+
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { mockLocale } from '../mocks/samples';

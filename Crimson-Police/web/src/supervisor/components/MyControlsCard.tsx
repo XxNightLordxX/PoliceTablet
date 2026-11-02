@@ -1,6 +1,12 @@
-// Supervisor UI · Department Report · Your controls today (step H4, Config.Tablet.supervisorControlsCard): each
+// Supervisor UI · Department Report · Your controls today (Config.Tablet.supervisorControlsCard): each
 // Mission control this supervisor may use now, its current value, the admin's limits and today's use against the
 // per-day count. Read only (sup:getMyControls); the controls are changed on Mission controls or their own dialogs.
+
+// Supervisor UI · Department Report · Your controls today (Config.Tablet.supervisorControlsCard, session
+// config.supervisorNav.controlsCard): sup:getMyControls (CP.DeptControls.mine, live on push 'missionControls') lists
+// each control this player may use now with the value in use, the admin's min and max and today's use against the
+// per-day count (a control's usedToday function). Read only. Rows: myControls.ts (myControlRow, myControlRows: the
+// most used up first). Walk: supervisor/screens/supHead.walk.ts.
 
 import { Badge, Card, EmptyState, Table, type TableColumn } from '../../shared/components';
 import { useRequest } from '../../shared/hooks';

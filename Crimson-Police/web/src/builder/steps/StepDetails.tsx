@@ -1,5 +1,9 @@
 // "Details": name, description, mission type (required), difficulty stars,
 
+// min/max officers, time limit, start timeout, cooldown, "Available to" departments (none = every department),
+// the vehicle-damage penalties toggle with its suggestion, optional items and the standard bonuses and
+// penalties (Config.Bonuses) with their caps. There is no payout field.
+
 import {
     Badge,
     Button,

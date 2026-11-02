@@ -1,4 +1,13 @@
--- Service vehicles never appear on top of the officers (Config.Custody.serviceClearance, PLAN S17) on the real engine,
+-- Service vehicles never appear on top of the officers (Config.Custody.serviceClearance) on the real engine,
+
+-- Service vehicles never appear on top of the officers (Config.Custody.serviceClearance) on the real engine,
+-- CP.Custody and the real placement module (tests/fixtures/custody/world.lua + modules/spawn/server.lua): after
+-- serviceTimeout a prisoner van or coroner van whose parking point an officer stands on comes to a road point beside
+-- the scene (asked of the driving client, checked by the server) or waits until the officer steps away; a late van is
+-- put on its parking point only once nobody is on it, and then waits frozen for an officer's game to put it on the
+-- ground (CP.Spawn.again); a tow truck that never got a road point fades the car out instead of being made inside it.
+-- Before (a1 4.1 item 13, 5.4) the 60 s fallback put the van on its parking point or the scene with no player check,
+-- with a raw server SetEntityCoords at the file's height.
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

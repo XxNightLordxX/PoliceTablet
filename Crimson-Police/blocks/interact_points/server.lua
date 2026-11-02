@@ -1,5 +1,53 @@
 -- Objective block "interact_points" (server half)
 
+-- What it does
+--   One or more points, each worked with an ox_target option and a progress bar. Variants, all from
+--   the objective fields:
+--     · plain points (Secure the scene, Search the property, Seize the shipment): done after the action;
+--     · rolled points (Business Check): the server rolls an outcome per point with ctx.rng when the
+--       objective is prepared (secure 75% / open 25%); an outcome with followUp adds a second action
+--       ("Secure door"); with logResult the officer then logs the result on the tablet
+--       (correct_log +5 / wrong_log -5 each);
+--     · hidden devices (Bomb Disposal search): N of the points (hidden.count, scales) hide a device;
+--       searching one reveals it: the device prop is spawned (ctx.spawnObject, OneSync) and added to
+--       run.shared.devices = { { netId, coords, point, model, heading } } for the next objective
+--       (skill_check). Done when every device is found and spawned. Spawn caps are respected (a found
+--       device waits for ctx.canSpawn).
+--   Every action is validated with server-side coordinates and a server-side dwell time (the participant
+--   was sampled at the point, in that point's state, for the progress or follow-up duration), and each
+--   point is accepted once, in its state.
+--
+-- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.interact_points)
+--   points     location key: vec3/vec4, list of them, or list of { coords, heading, label }
+--              (an inline value in the objective also works)
+--   use        'all' | 'random'                     [use.default = 'all']; with 'random' a point inside
+--              location.start is always used first ("Start: the first business")
+--   count      points used when use = 'random'
+--   target     { label, icon, radius }              [label: locale default; icon default; radius 1.5]
+--   progress   { label, duration (ms), anim }       [label = Config.Blocks.interact_points.label,
+--              duration = progress[3] s * 1000, anim = Config.Blocks.interact_points.animation]
+--   roll       { outcomes = { { id, chance, label?, followUp = { label, duration } } } }
+--   logResult  { choices = { 'secure', 'found_open' } (ids or { id, label }), correct = { outcomeId = choiceId } }
+--              without roll the server rolls one of the choices per point (equal chances; correct = it)
+--   hidden     { count [1], prop ['prop_ld_bomb'], label }
+--   fastBonus  { seconds, id }                      id recorded when all the work is done within seconds
+--                                                   of this objective's start (devices: all found)
+--   Custom missions (validate): progress.anim only a Config.Builder.allowed.animations name (no raw
+--   { scenario } / { dict, clip }), hidden.prop one of DEVICE_PROPS, fastBonus.id a Config.Bonuses id.
+--   minSeconds [5] · presenceRange [presenceRange[3] = 150] · label
+--
+-- Evidence accepted (ctx.report from the client half; 'log' from the tablet's Active Mission screen)
+--   { type = 'interact', point }           main action finished at that point (check, search, secure)
+--   { type = 'followup', point }           follow-up action finished (e.g. "Secure door")
+--   { type = 'log', point, choice }        the logged result for a point waiting in state.log
+--
+-- ctx.state.log (read by CP.Runs.view for the Active Mission screen's "log" field):
+--   nil, or { point = <point number>, choices = { { id = 'secure', label = 'Secure' }, ... } }
+--   (labels are already translated; the oldest point waiting for its log is shown first)
+--
+-- Bonuses / penalties recorded (shared): correct_log (ctx.award), wrong_log (ctx.penalize),
+--   fastBonus.id (ctx.award, e.g. devices_found_fast)
+
 local BLOCK = 'interact_points'
 
 local REACH_SLACK = 3.0                                      -- metres beyond the target radius (server coordinates lag)

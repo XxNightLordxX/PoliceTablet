@@ -1,4 +1,4 @@
--- Plain-language admin labels (A9): the Payouts dialog, the Mission Builder and Settings read in plain words, with no
+-- Plain-language admin labels: the Payouts dialog, the Mission Builder and Settings read in plain words, with no
 -- file names or game jargon in what an admin or supervisor sees.
 
 local H = dofile('tests/harness.lua')

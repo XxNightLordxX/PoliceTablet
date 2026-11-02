@@ -1,4 +1,11 @@
--- The server's side of the placer (Config.Spawning.place, PLAN S10; modules/spawn/server.lua) on the real engine
+-- The server's side of the placer (Config.Spawning.place; modules/spawn/server.lua) on the real engine
+
+-- The server's side of the placer (Config.Spawning.place; modules/spawn/server.lua) on the real engine
+-- (tests/fixtures/custody/world.lua: runs, npc, scaling, scoring): every new mission entity is frozen, its cp bag asks
+-- for a placement, the answer of an officer's game is taken or refused, a bad point moves it to another point, no
+-- answer in time lets it go (or removes it). FREEZE_ENTITY_POSITION is the server RPC FXServer sends to the game that
+-- simulates the entity (ServerRPC.cpp: kept for the first game that takes an entity nobody simulates yet), and
+-- NETWORK_GET_ENTITY_OWNER answers that player's server id or -1. No SQL (test runs write no rows).
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

@@ -1,5 +1,9 @@
 // "Test": a private test run of the stored draft at any tier and location, in
 
+// the same test mode admins use (server:builder:test → CP.Testing.startDraft; nothing is saved or paid). The
+// tier defaults to the one maxOfficers reaches, which publishing needs a pass at (draft_tested). When the run
+// ends, the tester records Passed or Failed here (server:test:record → CP.Builder.onDraftTested).
+
 import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Field, Grid, Icon, Select, Textarea, TierBadge, Toggle } from '../../shared/components';
 import { asArray } from '../../shared/data';

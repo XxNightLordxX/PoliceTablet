@@ -1,5 +1,10 @@
 // "Locations": at least Config.Builder.minLocations locations, each with
 
+// its start and every point its objectives need. "Place in world" starts the placement tool (client action
+// builderPlace: the tablet closes, the points come back when Enter is pressed); road routes are recorded by
+// driving (builderRecord) and checked with a test drive (builderTestDrive), which marks waypoints it could not
+// reach for re-recording. The map shows everything placed; the route checks mirror the server's guardrails.
+
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
     Badge,

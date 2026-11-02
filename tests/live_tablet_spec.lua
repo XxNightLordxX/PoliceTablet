@@ -1,4 +1,9 @@
--- The officers' tablet for a live case (step V16): the LIVE line of the ready check (CP.LiveCrime.readyLine), the
+-- The officers' tablet for a live case: the LIVE line of the ready check (CP.LiveCrime.readyLine), the
+
+-- The officers' tablet for a live case: the LIVE line of the ready check (CP.LiveCrime.readyLine), the
+-- Active Mission case card (CP.LiveCrime.caseView through CP.Runs.view, the live_response block's caseView) and the
+-- outcomes on the result card (CP.LiveCrime.resultView in the RunResult). Labels and counts only: never a citizenid,
+-- a server id, a position or one suspect's state while the case runs. Plain Lua with stubs.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

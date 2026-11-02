@@ -1,5 +1,10 @@
-// Supervisor UI · Department Report · Clear cooldown (step P7, Config.MissionControls.controls.clearCooldown): the
+// Supervisor UI · Department Report · Clear cooldown (Config.MissionControls.controls.clearCooldown): the
 // officer's current type and mission cooldowns (sup:getOfficerCooldowns), each with Clear; a reason is required.
+
+// Supervisor UI · Department Report · Clear cooldown (Config.MissionControls.controls.clearCooldown): the
+// officer's current type and mission cooldowns (sup:getOfficerCooldowns), each with Clear; a reason is required.
+// The server refuses the supervisor's own character, an officer on a run, the officer's daily clears (all staff) and
+// the supervisor's own clears a day.
 
 import { useEffect, useState } from 'react';
 import {

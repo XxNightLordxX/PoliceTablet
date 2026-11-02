@@ -1,4 +1,4 @@
-// The Officer UI sidebar order (step G4): Config.Tablet.sidebarOrder ('classic' = the registry order, as before;
+// The Officer UI sidebar order: Config.Tablet.sidebarOrder ('classic' = the registry order, as before;
 // 'mostUsed' = the screens an officer opens most first) and Config.Tablet.activeFirst (Active Mission right under Home
 // while on a run). Only the order changes: the same screens show, a hidden one stays hidden.
 

@@ -1,5 +1,10 @@
 -- The boards slice: CP.Leaderboard (modules/leaderboard) and CP.Challenge
 
+-- (modules/challenge). Pure ranking/calendar logic plus every SQL statement of both modules, run against
+-- MariaDB cp_test through the harness (boards, profiles, hide-name, admin boards, stuck payments, the
+-- weekly job and announcements; seasons, bounties, standings in all three scoring modes, week closing,
+-- overrides, season end, champion banner, supervisor report and officer activity).
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 Config.Debug = true   -- run every CP.log format string too

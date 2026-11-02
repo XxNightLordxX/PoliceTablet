@@ -1,4 +1,4 @@
--- Full admin control, System (P5): departments added, turned off and deleted in game (the same answers from the raw
+-- Full admin control, System: departments added, turned off and deleted in game (the same answers from the raw
 -- Settings editor), logo links and uploads, desks, positions, storage status and the storage switch, webhook states,
 -- problems, integrations, Settings history with Revert, Export and Import, the console way back in, Support.
 

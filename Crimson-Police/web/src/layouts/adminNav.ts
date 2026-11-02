@@ -1,6 +1,11 @@
-// The Admin UI plain layout (step G6, Config.AdminUi.plainLayout): plain screen names, the sidebar under seven groups
+// The Admin UI plain layout (Config.AdminUi.plainLayout): plain screen names, the sidebar under seven groups
 // (NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy, System) each with a one-line
 // description, the rarely used tools under More, a search box over the screens (and the settings), and a breadcrumb.
+
+// The Admin UI plain layout (Config.AdminUi.plainLayout): plain screen names, the sidebar under seven groups
+// (NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy, System) each with a one-line
+// description, the rarely used tools under More, a search box over the screens (and the settings), and a breadcrumb.
+// Only the layout changes: the same screens show, a hidden one stays hidden, screen keys and links stay the same.
 
 import type { ScreenKey } from '../shared/navigation';
 import type { Session } from '../shared/types';

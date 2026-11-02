@@ -1,4 +1,4 @@
--- Full admin control, end to end (P6): the packages together on the real server side. Retire and unretire with the
+-- Full admin control, end to end: the packages together on the real server side. Retire and unretire with the
 -- money that waits; an untested built-in override played under the same id and reset; a department added in game,
 -- used and turned off with its pay still paid; a backup, a payment and a restore that pays nothing twice.
 

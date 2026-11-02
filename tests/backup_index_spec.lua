@@ -1,4 +1,4 @@
--- Backups (Z3): saves/_backups/index.json and each <name>.manifest.json are written through the storage engine's
+-- Backups: saves/_backups/index.json and each <name>.manifest.json are written through the storage engine's
 -- atomic writer (.tmp, then a rename), so a full disk keeps the old index; a missing or unreadable index.json is
 -- rebuilt from the manifests in the backup folder instead of listing no backups.
 

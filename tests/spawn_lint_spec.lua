@@ -1,6 +1,17 @@
--- Spawn lint (PLAN S22): the built-in missions' spawn points stay 1.5 m apart, every list has a point per person
+-- Spawn lint: the built-in missions' spawn points stay 1.5 m apart, every list has a point per person
 -- the largest team brings, and armed spawns keep the start circle plus Config.Builder.spawnMargin unless the spawn
 -- director places them; known cases are in tests/spawn_lint_baseline.txt, which may only shrink.
+
+-- Spawn lint for the built-in missions on the definitions the real loader makes from the shipped files, with
+-- the real blocks (pointKinds, defaults), CP.Scaling and CP.Builder.armedTooClose (no built-in point trusted): no two
+-- spawn points of one location within 1.5 m (flat); every list has a point per person, car or item the largest team
+-- brings (highest scaled count over minOfficers-maxOfficers, scaling max applied; spawnSets: the use smallest sets);
+-- armed spawns outside the start circle plus Config.Builder.spawnMargin unless the objective is a wave, a scatter or
+-- staged. tests/spawn_lint_baseline.txt (26 lines, BASELINE_MAX) lists the cases found when it was written: new
+-- cases, a listed armed key closer than listed (0.05 m slack) and stale lines fail. The lint itself on probe missions:
+-- pairs at 1.0 / 1.6 m, an escort route by its first point, a wave of 4 scaled to 6, short associates, spawnSets,
+-- a close car and close associates found while close wave points are not, spawnMargin read live, the baseline
+-- matcher. No SQL.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })

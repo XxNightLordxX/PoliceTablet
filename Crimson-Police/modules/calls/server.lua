@@ -1,6 +1,41 @@
 -- CP.Calls (server): Hard rule 15, real calls first (docs/ARCHITECTURE.md §5.13, SPEC "Real calls end missions; NPC
 -- calls never do", INTEGRATIONS sc-dispatch and sc-npcpolice).
 
+-- Owns: the responding map (who is responding to which real call), the free abandon on a real call, the
+-- 60-second dodge rule and the "On a call" answer the Mission Board and accept checks use. Everything comes
+-- through CP.Dispatch listeners (onResponding / onCallCleared / onDispatchRestart); this file never talks to
+-- sc-dispatch itself and never creates, clears or blocks a dispatch call.
+--
+-- Public API
+--   CP.Calls.isOnCall(src) -> boolean
+--       A live real-call responding entry: updated less than Config.Calls.respondingExpiry s ago and still
+--       active in mdt_dispatch (entries are re-checked with CP.Dispatch.lookupActiveCall at most every 10 s
+--       and dropped when inactive: sc-dispatch's 5-minute auto-clear fires no event). May yield (database).
+--
+-- Classification of a ToggleResponding (src, callId, isResponding), in this order:
+--   1. The id is normalised with CP.Dispatch.normalizeCallId. An id starting with Config.Calls.npcCallPrefix
+--      (plain find at position 1, never a pattern) is an SC-NPCPolice call: nothing happens at all (no run
+--      end, no entry, no free abandon, no dodge rule).
+--   2. Marking: only a hit from CP.Dispatch.lookupActiveCall counts (an unknown, inactive or faked id does
+--      nothing); the canonical id it returns is checked against the NPC prefix again.
+--   3. If the sender is on a run, an id that is one of Config.Calls.ownRunCallPrefixes followed by the server
+--      id of ANY participant of that same run (partners who already left included) and '_' (plain find at
+--      position 1) is a call about their own run and does not count for them.
+--   4. Otherwise it is a real call: responding[src][id] = { since, lastUpdate }. An active participant is
+--      removed with CP.Runs.removeParticipant(run, src, 'real_call') (the rest of the unit carries on; no
+--      penalty, no cooldown), gets the toast calls.run_ended, and the free abandon is remembered
+--      { runId, citizenid, at } and written to the audit log (category 'flags', action 'free_abandon').
+--   Un-marking: the entry goes; within Config.Calls.dodgeWindow s of that free abandon, an un-mark of the
+--   same call (or of an id the sender never marked, so a different id form cannot slip through) turns it into
+--   a normal abandon: CP.Runs.reclassify(citizenid, runId, 'real_call_cancelled') (audited, toast
+--   calls.reclassified). Listeners run in their own threads and the mark yields twice (the mdt_dispatch
+--   lookup, then the row write in removeParticipant): an un-mark that arrives during either wait is kept and
+--   applied once the free abandon is written, so a quick on/off toggle cannot keep it free.
+-- callClearedByOfficer removes that call for everyone; playerDropped removes the player's entries; a character
+-- unload (CP.Qbx.onPlayerUnload: a character switch keeps the server id) removes the responding entries and
+-- drops a mark still being looked up, but keeps the dodge-rule data (seen, free abandons), which expires on its
+-- own; an sc-dispatch restart wipes every entry (sc-dispatch deactivates every call when it starts or stops).
+
 CP.Calls = CP.Calls or {}
 local C = CP.Calls
 local TAG = 'calls'

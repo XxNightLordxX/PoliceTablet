@@ -1,6 +1,73 @@
 -- CP.Alerts (server): Hard rule 16 (no mission alerts) and the only writer of the crimsonArena state bag
 -- (docs/ARCHITECTURE.md §5.14, Crimson-Arena rules 1, 2, 3, 9, 11).
 
+-- modules/alerts/server.lua · CP.Alerts (server): Hard rule 16 (no mission alerts) and the only writer
+-- of the crimsonArena state bag (docs/ARCHITECTURE.md §5.14, docs/INTEGRATIONS.md, Crimson-Arena rules 1, 2, 3, 9, 11).
+--
+-- Owns: the replicated player state bag key 'crimsonArena' (the name is fixed by sc-dispatch,
+-- sc-ambulance and Crimson-Arena), the intent table 'wanted', the re-assert of our flag after another
+-- resource wiped it, the in-arena detection for active participants (they leave the run as 'quit'),
+-- foreignClearedAt, the start/stop cleanup, and the dispatch backstop that clears shots-fired,
+-- person-down and person-dead calls that slipped through while a participant carries the flag.
+--
+-- Our value is always { active = true, source = 'crimson-police' }. A value is FOREIGN when it is a table
+-- with active == true whose source is not 'crimson-police' (Crimson-Arena writes { active, matchId }).
+-- A foreign value is never overwritten and never cleared; any other value that is not ours ('other') is
+-- never overwritten either. The state bag change handler only queues work (SetTimeout 0): it never yields
+-- and never writes the bag. Nothing here calls CancelEvent, and emsdown_ calls (the permitted EMS request)
+-- are never cleared.
+--
+-- Public API
+--   CP.Alerts.set(src, run|runId?) -> boolean
+--       Records wanted[src] = { runId, setAt } and writes our value (replicated). Refuses (false, nothing
+--       recorded) while the value is foreign or not ours, or while the player is in a routing bucket ~= 0.
+--       runId defaults to CP.Runs.getBySrc(src). Idempotent.
+--   CP.Alerts.clear(src, opts?) -> boolean
+--       Forgets wanted[src] and removes the value only when its source is 'crimson-police' (true when a
+--       value was removed). While CP.Downed holds the flag of a downed participant (hold), a clear without
+--       opts.force is ignored (returns false): the flag stays until the pick-up is done or just before the
+--       EMS request. opts.force also drops the hold.
+--   CP.Alerts.has(src) -> boolean              wanted[src] ~= nil (the intent, not the live bag)
+--   CP.Alerts.foreignFlag(src) -> boolean      the live value is foreign (Crimson-Arena's)
+--   CP.Alerts.inArena(src) -> boolean          foreignFlag(src) or GetPlayerRoutingBucket(src) ~= 0
+--   CP.Alerts.foreignClearedAt[src] -> ts|nil  table (read only): os.time() when a foreign value last changed
+--                                              to nil (Crimson-Arena let the player go)
+--   CP.Alerts.hold(src, on)                    CP.Downed: keep the flag of a downed participant (keepFlag)
+--   CP.Alerts.forget(src) -> boolean           drops our intent (wanted, hold, orphan timer, queued re-assert)
+--                                              WITHOUT touching the bag (Crimson-Arena rule 1: CP.Runs uses it
+--                                              for an in-arena participant, whose bag may still hold our value
+--                                              while only the routing bucket has moved). true when an intent
+--                                              or a hold was dropped.
+--   CP.Alerts.onInArena(fn(src, run))          listeners, called once per run when an active participant
+--                                              becomes in-arena (after this module removed them)
+--   CP.Alerts.wanted                           the intent table (read only): wanted[src] = { runId, setAt }
+--
+-- In-arena participants (Crimson-Arena rule 1): the 1 s reconcile checks every active participant of every
+-- run (accepted or in progress, tests and operations included) and the change handler reacts to a foreign
+-- value at once. This module itself drops the intent (without touching the bag), stops the route check,
+-- cancels a pending downed pick-up/EMS request and calls CP.Runs.removeParticipant(run, src, 'quit',
+-- { notify = 'run.left_for_arena' }) (the engine sends the toast only when it really removed them, so the
+-- engine's own 1 s arena re-check never doubles it); onInArena listeners are informed afterwards.
+--
+-- Backstop (CP.Dispatch listeners, receivedAt = os.time() captured at receipt by the integration):
+--   shots fired   from a src whose intent is on, or an arrived active participant of an In-progress run,
+--                 within Config.Alerts.backstopRadius (server-side ped coords) of the location start or the
+--                 current objective anchor (CP.Runs.anchor) -> after Config.Alerts.backstopDelay s clear
+--                 shots_<src>_<t> for t-1, t, t+1 with { 'police' }
+--   person down / dead  from a src in wanted -> clear playerdown_/playerdead_<src>_<t> for t-1, t, t+1
+--                 with { 'police', 'ambulance' }
+--   Srcs with a foreign value are skipped (Crimson-Arena handles them).
+--
+-- arena:exited (CP.Hooks): the 1 s reconcile fires it once when a player's inArena turns false (foreign
+-- value cleared, or the routing bucket back to 0). It reads no state bag: the foreign part comes from the
+-- kind the change handler keeps (WriteOurs, RemoveOurs and the start-up seed keep it too), the rest from
+-- GetPlayerRoutingBucket. Only without a change handler does it read every player's bag.
+-- Bag reads call GetStateBagValue('player:<src>', 'crimsonArena') directly (what Player(src).state ends in).
+--
+-- Start: every leftover value whose source is 'crimson-police' is removed from every online player; every
+-- other value found is remembered as that player's kind (a player already in a Crimson-Arena match).
+-- Stop: every value we set is removed.
+
 CP.Alerts = CP.Alerts or {}
 local A = CP.Alerts
 local TAG = 'alerts'

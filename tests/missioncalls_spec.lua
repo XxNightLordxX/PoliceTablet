@@ -1,4 +1,4 @@
--- Modules/missioncalls (WP4): posting, areas, claims and the claim window, the priority window, staff calls,
+-- Modules/missioncalls: posting, areas, claims and the claim window, the priority window, staff calls,
 -- statuses, re-dispatch, lapses, mute, the eligibility cache and its cost, never SC-Dispatch, realCallSummary.
 
 local H = dofile('tests/harness.lua')

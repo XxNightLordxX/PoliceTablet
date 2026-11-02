@@ -1,4 +1,9 @@
--- The criminal tablet (step G2): CP.CrimTab on the server over CP.Volunteers. Shipped off; who may use it (never on
+-- The criminal tablet: CP.CrimTab on the server over CP.Volunteers. Shipped off; who may use it (never on
+
+-- The criminal tablet: CP.CrimTab on the server over CP.Volunteers. Shipped off; who may use it (never on
+-- police duty, access 'everyone' or 'granted' through the criminalTablet extra grant); opting in and out; the job
+-- he is asked (no run, officer or position); Accept into Active; giving up; History and strikes; the volunteer
+-- command opening it (replaceCommand); closing on duty. Plain Lua with stubs.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

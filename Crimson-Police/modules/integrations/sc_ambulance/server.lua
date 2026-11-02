@@ -2,6 +2,29 @@
 -- (hospital:server:RespawnAtHospital) passes the respawn to listeners (A.on) while a case with a real suspect is open
 -- (CP.Opponents.active), and does nothing at all otherwise; it never triggers, cancels or answers a hospital:* event.
 
+-- modules/integrations/sc_ambulance/server.lua · CP.Ambulance (server): the only server code that
+-- talks to sc-ambulance.
+--
+-- Owns exports['sc-ambulance']:GetDoctorCount() and the revive event. The ONLY revive used is
+-- TriggerClientEvent('hospital:client:Revive', src): it resurrects in place, never bills, never touches
+-- the inventory. Crimson-Police never triggers sc-ambulance's player-revive server event, its
+-- revive-player / help-person / target-revive client events (each makes the officer's client send the
+-- server revive, which bans non-EMS senders), and none of its billing or respawn events.
+--
+-- Public API (docs/ARCHITECTURE.md §5.1)
+--   CP.Ambulance.doctorCount() -> integer
+--       On-duty EMS. exports['sc-ambulance']:GetDoctorCount() in pcall; 0 when sc-ambulance is not
+--       started (one error log until it starts again). The export is a counter clients update
+--       themselves (it can be inflated or stale), so it is cross-checked against a live count of
+--       on-duty 'ambulance' players from CP.Qbx.getOnlinePlayers(): the result is the lower of the
+--       two (0 means "no EMS", so a downed participant is picked up).
+--   CP.Ambulance.revive(src) -> boolean
+--       TriggerClientEvent('hospital:client:Revive', src) for one numeric, connected server id
+--       (never -1, never nil). false when refused or when sc-ambulance is not started (no handler).
+--       Refused and logged for an in-arena player (CP.Alerts.inArena: a foreign crimsonArena value or a
+--       routing bucket other than 0): Crimson-Arena revives and moves its own players
+--       (docs/INTEGRATIONS.md, Crimson-Arena rule 3).
+
 CP.Ambulance = CP.Ambulance or {}
 local A = CP.Ambulance
 local TAG = 'sc_ambulance'

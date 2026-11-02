@@ -1,5 +1,76 @@
 -- CP.Testing (server): Admin test mode.
 
+-- Owns
+--   Test runs (SPEC "Admin test mode"): any mission (built-in, custom published or archived, turned off in
+--   Config.DisabledMissions, or a Mission Builder draft), a chosen location (index or random, skipping
+--   reserved spots) and tier (Standard..Critical whatever the number of testers), the start route off by
+--   default (Config.Testing.useStartRoute). A test goes through CP.Runs.create({ test = {...} }), so scaling,
+--   NPCs, objectives, alert suppression, real calls, downed handling and cleanup are those of a real run;
+--   CP.Runs writes no row, pays nothing and starts no cooldown for it, and cooldowns, the hourly cap, the
+--   server caps and the Cross-Department lock are never checked here. The location is still reserved.
+--   Tester invitations (up to Config.Testing.maxTesters - 1 on-duty officers or admins, who accept on their
+--   own screen), the test controls of the admin who started the test (skip, restart, pause/resume, force
+--   complete/fail, end, teleport, debug stream), the test log (cp_mission_tests with def_hash, migration
+--   002) and the catalog view with "Changed since test". Every test start is audited.
+--
+-- Flow: invite first, then Start. The admin invites testers for a mission (server:test:invite); each
+-- invitee gets client:testInvite and accepts on their own screen (server:testRespond); the admin's Testing
+-- screen shows who accepted and starts the test with the accepted testers (server:admin:startTest). CP.Runs
+-- cannot add participants to a run after create, so nobody joins a test once it has started.
+--
+-- Public API (server, docs/ARCHITECTURE.md §5.27)
+--   CP.Testing.start(adminSrc, opts) -> ok, data|errKey
+--       opts = { missionId, location = index|'random'|nil, tier = name|'auto'|nil, useStartRoute = bool|nil,
+--                testers = { src, ... } }   testers must have accepted an invitation of this admin for this
+--       mission. data = { runId, missionId, locationIndex, tier, testers }
+--   CP.Testing.startDraft(src, def, opts) -> ok, data|errKey, reason
+--       Mission Builder test of a draft (test.draft = true). def = the draft in mission-file units (what
+--       CP.Missions.normalize accepts; normalised here). opts = { tier, location, useStartRoute, testers }.
+--       The recorded result goes to CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash).
+--   CP.Testing.command(src, args) -> ok, data|errKey
+--       /CrimsonPoliceAdmin test <missionId> [tier] [location] (args = the words after 'test'; tier and
+--       location in either order); testers = the accepted invitations for that mission.
+--   CP.Testing.resolveMission(missionId) -> def|nil, errKey
+--       the definition a test of missionId would use: CP.Missions.get (built-in, custom, turned off), else the
+--       archived custom mission (CP.Builder.getArchived, or the archived file). Used by /CrimsonPoliceAdmin test.
+--   CP.Testing.invite(adminSrc, targets, opts) -> ok, { lobby, skipped = { { src, error } } }|errKey
+--       opts = { missionId, missionLabel? (drafts), draft? }
+--   CP.Testing.cancelInvites(adminSrc) -> ok, lobby
+--   CP.Testing.respond(src, { inviteId, accepted }) -> ok, data|errKey
+--   CP.Testing.control(src, payload) -> ok, data|errKey     payload = { control, runId?, target?, enabled? }
+--       control skip | restart | pause | resume | complete | fail | end | teleport | debug
+--   CP.Testing.record(src, { missionId, location, tier?, result, note? }) -> ok, data|errKey
+--   CP.Testing.list() -> TestsView                             (callback admin:getTests; config.spawnCheck =
+--                                                              { enabled, teleport, routes } for the screen)
+--   CP.Testing.candidates(src) -> { TestCandidate, ... }
+--   CP.Testing.state(src) -> TestState
+--   CP.Testing.pendingInvites(src) -> { TestInvite, ... }
+--   CP.Testing.onRunEnded(run, state, endReason)               (hook from CP.Runs, test runs only)
+--   CP.Testing.spawnPoints(src, { missionId?, location?, point? }) -> data|nil, errKey
+--       Check spawn points: the missions and their locations, or one location's points with what is
+--       there (each block's pointKinds), how far over the ground each should be and the distance notes; built
+--       from GeometryOf (the debug overlay's geometry without a run). ARCHITECTURE 5.27. With point (
+--       "Teleport here", Config.Testing.spawnCheck.teleport): only that point { missionId, location, point },
+--       audited (testControl 'teleport <id>') and logged.
+--   CP.Testing.spawnCheckReport(src, { missionId, location, results }) -> ok, data|errKey
+--       what the admin's game found: one CP.warn (tag spawncheck, also in System -> Problems) per point that is
+--       not right, the last report of each location kept in memory
+--   CP.Testing.spawnReports() -> { SpawnReport, ... }          (copies, by mission then location)
+-- Net
+--   callbacks admin:getTests (testRun) · test:state (testRun or builderEdit: own data only) · test:candidates (testRun) ·
+--             test:pendingInvites (anyone: their own invitations) · server:test:spawnPoints (testRun)
+--   actions   server:admin:startTest { missionId, location, tier, useStartRoute, testers } (testRun)
+--             server:admin:recordTest { missionId, location, tier, result, note } (testRun; builderEdit for a
+--             draft test) and its alias server:test:record (for the Supervisor UI builder)
+--             server:test:control { control, ... } (only the admin who started the test)
+--             server:test:invite { missionId, targets } · server:test:cancelInvites {} (testRun)
+--             server:testRespond { inviteId, accepted } (the invitee; accept gated by CP.Alerts.inArena)
+--             server:test:spawnCheckReport { missionId, location, results } (testRun)
+--   events sent  client:testInvite { inviteId, missionLabel, from, expiresIn } ·
+--                client:test { controls, runId, debug = false|DebugData }
+--   pushes   'test' { state = true } (the admin's test state changed) · 'invites' { test = true }
+-- Response shapes: docs/ARCHITECTURE.md §13.26 and web/src/types/testing.ts.
+
 CP.Testing = CP.Testing or {}
 local Testing = CP.Testing
 local U = CP.U

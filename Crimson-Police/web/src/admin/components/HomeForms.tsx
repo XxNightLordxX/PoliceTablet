@@ -1,5 +1,11 @@
 // Admin UI · Home quick forms (Config.AdminUi.homeForms): the common jobs done on the Home tile itself. Each form
 
+// sends the same action as its full screen (the server checks everything again):
+//   MissionSwitchForm  server:admin:setMissionEnabled / setLocationEnabled (Missions -> mission list)
+//   PayForm            server:admin:setTypePayout / setMissionPayout (Payouts)
+//   PointsForm         server:admin:adjustPoints (Officers; the citizen ID is typed at or above the confirm size)
+//   QuickSettingsForm  the everyday settings (SettingsData.common) with the Settings screen's own rows and saves
+
 import { useMemo, useState } from 'react';
 import { Badge, Button, Field, NumberInput, SearchInput, TextInput, Toggle } from '../../shared/components';
 import { asArray } from '../../shared/data';

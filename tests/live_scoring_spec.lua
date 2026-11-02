@@ -1,4 +1,9 @@
--- Live scoring (step V13): a live case scores only its weighted live_* lines (Config.LiveCrime.linesOnly), its tier
+-- Live scoring: a live case scores only its weighted live_* lines (Config.LiveCrime.linesOnly), its tier
+
+-- Live scoring: a live case scores only its weighted live_* lines (Config.LiveCrime.linesOnly), its tier
+-- comes from the crew (Config.LiveCrime.tier), and the Type of the Day, goals, challenge, cash and item switches keep
+-- it out of each of those until the owner turns them on. Every live-case detain is a live catch on the row and a
+-- Rank by tab. Plain Lua with stubs (no SQL); the 014 column is checked by foundation_spec.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

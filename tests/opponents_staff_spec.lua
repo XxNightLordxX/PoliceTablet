@@ -1,4 +1,9 @@
--- CP.Opponents staff (step V17): the server-only case data admins read (names fixed when a line is written, the
+-- CP.Opponents staff: the server-only case data admins read (names fixed when a line is written, the
+
+-- CP.Opponents staff: the server-only case data admins read (names fixed when a line is written, the
+-- timeline as lines, the flag lines, the ledger), Config.RealSuspects.casesKept, the admin callbacks and the three
+-- tools (block a pair, exclude a player, suspend an officer), and the self rule over suspects (P.tookPart). Plain
+-- Lua with stubs: qbx_core's exports, CP.AdminKit and the pair writers are mocked; nothing reads the database.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

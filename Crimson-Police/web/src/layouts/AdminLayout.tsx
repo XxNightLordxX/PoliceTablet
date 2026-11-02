@@ -1,5 +1,9 @@
 // Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
 
+// Config.AdminTheme), no watermark, sidebar with the admin-only badges (everyday screens, the rest under
+// More), the maintenance banner. Config.AdminUi.plainLayout: plain names, seven described groups, the rare
+// tools under More, a search box over the screens and the settings, and a breadcrumb over the screen.
+
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Icon, IconButton, LayerRootContext, MaintenanceBanner, SearchInput } from '../shared/components';
 import { useViewport } from '../shared/hooks';

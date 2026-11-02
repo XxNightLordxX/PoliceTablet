@@ -1,5 +1,11 @@
 -- Modules/builder/server.lua (slice builder_server).
 
+-- Covers the guardrails, unit conversion, the Lua export (golden text of the spec's custom example and a
+-- round trip through the mission file reader), versions, edit locks and every SQL statement of the
+-- module on MariaDB, archive/restore/rollback files and the reload (hand edit) conflict logic.
+-- Mission files are written to a temporary folder missions/custom/test_builder_<n>/ that is removed at
+-- the end, whatever happens. The spec uses its own database (<run database>_builder_server).
+
 local H = dofile('tests/harness.lua')
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_builder_server'   -- per run: parallel runs never share it
 H.resetDatabase()

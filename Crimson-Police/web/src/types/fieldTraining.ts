@@ -1,4 +1,4 @@
-// Shapes of field training (modules/fieldtraining, step T1, Config.FieldTraining).
+// Shapes of field training (modules/fieldtraining, Config.FieldTraining).
 
 export interface FtoTask {
     type: string;

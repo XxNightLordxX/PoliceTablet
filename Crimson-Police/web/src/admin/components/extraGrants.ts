@@ -1,4 +1,4 @@
-// Admin UI -> Permissions -> Extra grants (step G1): Config.Permissions.grants edited one power at a time. Pure
+// Admin UI -> Permissions -> Extra grants: Config.Permissions.grants edited one power at a time. Pure
 // helpers; ExtraGrantsCard.tsx draws them and saves the whole map as the setting Permissions.grants.
 
 import type { PowerGrant, TeleportGrant } from '../../types/oversight';

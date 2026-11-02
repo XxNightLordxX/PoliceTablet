@@ -1,5 +1,104 @@
 -- Objective block "flee_arrest" (server half)
 
+-- What it does
+--   Suspects who must be taken into custody ("Cuff suspect", CP.Npc.enableCuff) after they give up.
+--   Two modes:
+--   - door (Warrant Service): the suspect waits inside at `suspect`, armed associates (count scales)
+--     come out at the knock on `associates.spawns` through the spawn director (Config.Spawning
+--     .associatesAtKnock, ARCHITECTURE 3.3). Participants use ox_target "Knock and announce" at the
+--     `door` (knock.duration progress; 'knock_start' then 'knock', both checked with server-side
+--     distance and the elapsed time). The suspect's response is rolled with the objective rng when
+--     the objective starts and revealed at the knock (or when a door-mode NPC dies first):
+--     surrender (placed DOOR_STEP in front of the door, facing out: out = the door's vec4 heading,
+--     turned round when the location start is clearly behind it; whether he waited inside or on the
+--     step beside the door), flee (runs out the back along `fleeTo`)
+--     or fight (spawned armed, the pistol from `weapons` given in hand only at the reveal so it does
+--     not give the response away). Associates always fight. Done when the
+--     suspect is cuffed (or was killed while armed and fighting) and every associate is
+--     neutralised (killed, or gave up and cuffed).
+--   - scatter (Prison Break): `suspects` inmates (scale) in prison clothes spawn at `spawns`
+--     (already outside the fence; spawn points inside a Config.Builder.noBuildZones zone are never
+--     used) and flee along the `routes`; round(suspects × armedShare) of them carry a pistol and turn
+--     to fight while a participant is within fireWithin. Done when every inmate is neutralised.
+--   Both modes check the run caps (ctx.canSpawn; for an inmate with st.nextArmed, decided first) before the
+--   director: while the run is full nobody is asked where to stand, no officer's game is asked what it sees, and
+--   the objective's short clock (st.short) starts again once there is room.
+--   Unarmed suspects give up when a participant aims at them within givesUp.aim metres (client
+--   'aim' report, server distance check), when stunned (client 'stunned' report, a participant must
+--   be within STUN_RANGE) or when a participant stays within givesUp.close.distance for
+--   givesUp.close.seconds (server-side distance sampling every tick). Armed suspects give up only
+--   when stunned (armedGivesUp.stun) or below armedGivesUp.belowHealth health (server polls health).
+--   Worn out (Config.Flee): any ped in 'fleeing', armed or not, gives up at once when CP.Npc.wornOut
+--   (its flee clock 'spent', a participant within giveUpRange by the block's own distance) says so,
+--   with the task it returns ('handsUp', or none: he kneels), checked before an armed inmate's fire
+--   range could turn him hostile; a surrendered suspect's feint clock does not run while wornOut is true.
+--   A suspect or inmate more than escape.distance from every participant for escape.seconds
+--   escapes: the run fails. Killing an unarmed, surrendered or cuffed suspect/inmate (a participant
+--   kill) fails the run for everyone.
+--   Every NPC spawns in the neutral relationship group (cfg.group = 'neutral'), armed or not; only
+--   the 'hostile' state (fight response, associates after the knock, an armed inmate within
+--   fireWithin) puts it in CRIMSONPOLICE_HOSTILE through CP.Npc's combat task, so nobody opens fire
+--   before the knock or from beyond fireWithin.
+--   Volunteer slot (ARCHITECTURE 7.3): door mode offers volunteerSlot { role = 'runner', meet = the
+--   suspect point }. ctx.volunteer() decides st.vol: 'wait' (asking: nobody at the door), 'real' (a volunteer
+--   plays him: no NPC suspect, done when CP.Opponents.view has him detained with a share or booked, lost fails),
+--   'void' (nothing spawns), nil (the NPC as before). No associate while st.vol is set unless
+--   Config.Volunteers.doorAssociates; the pointer stays the door. Voids are CP.Volunteers' (onVoid).
+--   validate: spawn points, the door marker and every fleeTo / route waypoint must lie outside
+--   Config.Builder.noBuildZones for every mission; custom missions also get the allowed lists, the
+--   associate spawn-point count and the minimum distance of spawn points from the start, and:
+--   aliveBonus.id must be a Config.Bonuses id with no points / pctOfPoints of its own (the file value
+--   is never passed as a hint either: only built-in files value their own id), givesUp.close is either
+--   off or exactly Config.Blocks.flee_arrest closeDistance / closeSeconds, knock.duration and
+--   cuff.duration are 1000-30000 ms, and cuff.maxDistance (when set) is at most CUFF_RANGE.
+--
+-- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.flee_arrest)
+--   minSeconds [30] · presenceRange [presenceRange[3] = 250] · label
+--   mode          'door' | 'scatter'                                    ['door']
+--   door mode     door ['door'] vec4 key · suspect ['suspect'] vec4 key · fleeTo ['fleeTo'] list key
+--                 knock { label [locale block.flee_arrest.knock], duration [3000] ms }
+--                 responses { surrender [0.5], flee [0.3], fight [0.2] } (Config responses / 100)
+--                 associates { count [1], spawns ['associates'], weapons [= weapons],
+--                   accuracy [hostile_waves.accuracy[3] = 25], armour [hostile_waves.armour[3] = 0] }
+--   scatter mode  spawns ['spawns'] list key · routes ['routes'] list of lists of vec3 (or { points })
+--                 suspects [5] · armedShare [0.4]
+--   common        models [door: Config.Blocks.hostile_waves.peds; scatter: { 's_m_y_prisoner_01' }]
+--                 weapons [Config.Blocks.flee_arrest.weapons] · accuracy / armour (armed suspects)
+--                   [hostile_waves defaults, + tier via ctx.combat] · fireWithin [15.0]
+--                 escape { distance [escapeDistance[3] = 400], seconds [escapeSeconds[3] = 20] }
+--                 givesUp { aim [aimDistance[3] = 10.0] | false, stun [true],
+--                   close { distance [closeDistance = 3.0], seconds [closeSeconds = 3] } | false }
+--                   (the builder's list form { 'aim', 'stun', 'close' } is accepted)
+--                 armedGivesUp { stun [true], belowHealth [0.5] | false }
+--                 cuff { label [locale block.flee_arrest.cuff], duration [5000], maxDistance }
+--                 aliveBonus { id ['suspect_alive'], points (built-in files only: hint for ids outside Config.Bonuses), each }
+--
+-- Evidence accepted (onEvent)
+--   { type = 'knock_start' } / { type = 'knock' }  door mode, within KNOCK_RANGE + slack of the door;
+--                                    'knock' at least TIMED_SHARE × knock.duration after 'knock_start'
+--   { type = 'aim', netId }          an unarmed fleeing suspect aimed at within givesUp.aim (+ slack)
+--   { type = 'stunned', netId }      IsPedBeingStunned seen by a client; the reporter within
+--                                    STUN_REPORT_RANGE and a participant within STUN_RANGE, and
+--                                    CP.Npc.stunCheck (Config.AntiCheat.stunNeedsProof)
+--   { type = 'low_health', netId }   an armed suspect: re-checked with server-side health
+--   { type = 'cuffed', netId }       CP.Npc (CP.Runs.dispatch) after a validated cuff (cp bag says cuffed)
+--   { type = 'shot', netId, src }    CP.Npc: a surrendered/cuffed suspect was shot (penalty recorded there)
+--   { type = 'damaged', netId }      CP.Npc (CP.Runs.dispatch): an armed suspect's health is re-checked
+--                                    against armedGivesUp.belowHealth at once; always accepted
+--
+-- Bonus / penalty ids recorded (shared)
+--   aliveBonus.id ['suspect_alive'; Prison Break: 'inmate_alive'] ctx.award count 1 for every suspect or
+--   inmate cuffed alive (associates earn nothing)
+-- Fail reason keys: block.flee_arrest.fail_escaped · block.flee_arrest.fail_setup (no usable spawn point
+--   outside the no-build zones) · run.fail_killed_unarmed
+-- Spawning is guarded: the re-entry flag is cleared even when a spawn throws (retried next tick).
+--
+-- ctx.state
+--   block, mode, rng, response, knocked, knockStart = { [src] = ms }, peds = { [tostring(netId)] =
+--   { netId, entity, role = 'suspect'|'associate'|'inmate', armed, state, route, far, close,
+--   surrenderedAt } }, counts = { suspect, associate, inmate, armedInmates }, pointOrder,
+--   assocOrder, routeOrder, nextArmed, escaping, dirty, hudText, completed, failed, stopped
+
 local BLOCK = 'flee_arrest'
 local U = CP.U
 

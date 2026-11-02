@@ -1,6 +1,14 @@
--- CP.FieldTraining (server): field training (steps T1 and T2, Config.FieldTraining). Pairing, runs that count, the
--- trainer's sign-offs (and his trainerBonus points), the badge, and the ride-along rule (requireTrainerFor) that
--- CP.Draw's accept asks. Full notes in docs/FILE_NOTES.md.
+-- CP.FieldTraining (server): field training (Config.FieldTraining). Pairing, runs that count, the trainer's
+-- sign-offs (and his trainerBonus points), the badge, and the ride-along rule (requireTrainerFor) that CP.Draw's
+-- accept asks.
+
+-- CP.FieldTraining (server): field training (Config.FieldTraining). A supervisor (or an admin) pairs a
+-- trainer with a rookie of the department; completed runs the two finish together count towards the sign-off tasks
+-- (per mission type); the trainer signs a task off once its count is reached (trainerBonus points to him); every
+-- task signed off gives the badge. The ride-along rule (requireTrainerFor, checked by CP.Draw's accept). FT.joinCheck,
+-- the same rule for a live case backup (CP.Runs.addParticipant).
+-- The record lives on the rookie's officer row (cp_officers.field_training, migration 015), so the database and the
+-- saves folder keep it alike. Shipped off: no hook does anything and every action is refused.
 
 CP.FieldTraining = CP.FieldTraining or {}
 local FT = CP.FieldTraining

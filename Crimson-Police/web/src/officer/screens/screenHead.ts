@@ -1,4 +1,9 @@
-// Officer UI screen heads and load states (steps H2 and H3, R1): every officer screen (part 1: Home, Mission Board,
+// Officer UI screen heads and load states: every officer screen (part 1: Home, Mission Board,
+
+// Officer UI screen heads and load states: every officer screen (part 1: Home, Mission Board,
+// Active Mission, Dispatch; part 2: Unit, Profile, Leaderboard, My options, Challenge) shows the same header (title,
+// then one line of help) and the same loading, error, empty and stale lines. Pure functions, checked by
+// screenHead.walk.ts.
 
 export type OfficerHeadKey =
     'home' | 'board' | 'active' | 'dispatch' | 'unit' | 'profile' | 'leaderboard' | 'options' | 'challenge';

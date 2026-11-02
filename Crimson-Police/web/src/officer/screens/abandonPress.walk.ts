@@ -1,4 +1,4 @@
-// My options -> During a mission (step O10) against the browser mocks (node walk.mjs, a gate step): Abandon without
+// My options -> During a mission against the browser mocks (node walk.mjs, a gate step): Abandon without
 // the dialog still takes two presses, and distances read in feet and miles on the HUD fixture.
 
 import '../../mocks/options.mock';

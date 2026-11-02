@@ -1,5 +1,34 @@
 -- Objective block "search_area" (client half)
 
+-- What it does (while the objective is current on this participant's client)
+--   - the search circle as a radius blip with a centre blip, redrawn whenever the server shrinks it;
+--     blips for clues not yet checked and for fugitives on the run (Radio Silence 'area': the circle
+--     alone);
+--   - an ox_target sphere zone on every clue not yet checked (option crimson-police:check_clue, label by
+--     clue kind; offered only once the clue is there, its netId in the update: clues appear when an
+--     officer is near, Config.Spawning); selecting it reports 'clue_start', runs
+--     lib.progressBar(clueProgress) and reports 'clue'; a marker over each clue not yet checked (DrawMarker
+--     only within MARKER_RANGE, otherwise Wait(750));
+--   - 'stunned' reports for fugitives seen stunned (IsPedBeingStunned); the server re-checks distances;
+--   - a HUD line (ctx.hudDetail): enter the area, clues checked and circle size while a clue is still
+--     pending (a lost one is handled), then fugitives in custody, escape countdown, and "stay close" while
+--     this player is within givesUp.close.distance of a fugitive on the run;
+--   - on the run host only: control of each fugitive and the witness before anything is done to it
+--     (re-applied and re-tasked when control comes back from another client; one ctx.control(ent, 0)
+--     request and no wait for a ped another client owns, which is skipped that pass, and the next pass
+--     comes after FAST_MS), CP.Npc.apply, then
+--     the task for its cp state: idle (hiding) -> 'cower', fleeing -> 'flee', and on first sight (new
+--     host) surrendered -> 'kneel', cuffed -> 'cuffed'; the witness stands at its spot
+--     (TaskStartScenarioInPlace, only when it is not already on its phone: IsPedUsingScenario). A
+--     witness set up and on its phone that another client owns is left with it, not asked for. The
+--     "Cuff suspect" target is CP.Npc's (enableCuff).
+--
+-- Objective fields read: clueProgress.label / duration, givesUp.close, runDistance (ctx.obj).
+-- Evidence sent: { type = 'clue_start', clue }, { type = 'clue', clue }, { type = 'stunned', netId }
+-- Server data (update): { kind = 'state', circle = { x, y, z, r, n }, clues = { { i, x, y, z, kind, model,
+--   netId, status } }, fugitives = { { netId, state } }, checked, clueTotal, arrests, neutralised, total,
+--   entered, escaping }
+
 local BLOCK = 'search_area'
 local U = CP.U
 

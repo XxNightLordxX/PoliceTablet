@@ -1,4 +1,4 @@
-// The criminal tablet (step G2) against the browser mocks (node walk.mjs, a gate step): the view normalised, the
+// The criminal tablet against the browser mocks (node walk.mjs, a gate step): the view normalised, the
 // landing screen and badges, joining, a job accepted into Active, giving up, and the refusals as error keys.
 
 import '../mocks/criminal.mock';

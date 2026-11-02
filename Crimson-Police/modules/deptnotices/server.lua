@@ -1,4 +1,10 @@
--- CP.DeptNotices (server): a supervisor's department notices (step P13, the Mission control notices). A supervisor
+-- CP.DeptNotices (server): a supervisor's department notices (the Mission control notices). A supervisor
+
+-- CP.DeptNotices (server): a supervisor's department notices (the Mission control notices). A supervisor
+-- posts a short notice for his own department only; it shows on that department's Officer Home Announcements card
+-- next to the staff notices (cp_staff_notices, shared with CP.Corrections). Limits: Config.MissionControls
+-- noticeMaxLength characters, noticesPerDay a supervisor a day (admins any), at most CP.Corrections.NOTICES_ACTIVE
+-- running per department; the banned-word check of the profile applies. Every post and end is audited.
 
 CP.DeptNotices = CP.DeptNotices or {}
 local DN = CP.DeptNotices

@@ -1,6 +1,18 @@
 -- The spawn director (Config.Spawning; modules/runs/server.lua Runs.choosePoints, Runs.whenNear, ctx.choosePoints,
 -- ctx.whenNear) on a real test run of the engine, officers placed through the harness's ped coords.
 
+-- The spawn director (Config.Spawning) on a real test run of the engine: three officers placed through the
+-- harness's ped coords, a recording block that keeps its ctx. ctx.choosePoints / Runs.choosePoints: the 40 m rule (30 m
+-- skipped, 40 and 45 m kept, height not counted, the ped moving), the indoor 15 m (opts.indoor and a point's own indoor
+-- flag), "behind" seen from each officer's own line to the scene (one who came round the far side keeps the point in front
+-- of him and skips the one at his back, a lone officer from the far side, a Terminal-shaped yard entered from the south,
+-- an officer in the middle faces the way in and opts.from turns it, an officer beyond activateRange never counts,
+-- behindAngle 180 is off, the default centre), one sector per wave (no ring: east and west never together; opts.placed
+-- keeps the wave in its slice; maxSpread 360 is off), 9 asked from 4 good returns 4, a named wave after waveDelayMax (25 m
+-- allowed, 15 m never, one warning, the clock per objective, dropped once full, opts.since, cleared by testRestart), an
+-- officer who left, enabled = false (the first n as they are) and log = false. ctx.whenNear / Runs.whenNear: activateRange
+-- read live, its own range, 2D, a vector4, no point. The console lines are checked once per point and reason. No SQL.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 

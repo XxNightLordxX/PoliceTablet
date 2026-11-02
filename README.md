@@ -469,13 +469,14 @@ Grades start at 0.
   warns when the number is higher than every grade (nobody is a supervisor) or the lowest grade (everybody is).
 - A department with several jobs (`jobs = { 'sast', 'sasp' }`) uses one `supervisorGrade` for all of them.
 
-**The Supervisor UI layout** is set in `Config.Tablet` (also in Admin UI -> Settings). Shipped, it looks as before:
+**The Supervisor UI layout** is set in `Config.Tablet` (also in Admin UI -> Settings). Shipped, every switch is
+`false` and `supervisorLanding` is `'first'`:
 
 | Setting | What it does |
 |---|---|
 | `supervisorByTask` | `true` = the sidebar is grouped by task under four headings: **People** (Department Report: officers, give points, mission bans, field training), **Missions** (Mission List, Live Missions, Cross-dept, Mission controls, Builder), **Rewards** (Payouts) and **Review** (Review Queue) |
 | `supervisorCompact` | `true` = a narrow strip of icons, each name on hover (the Review Queue count shows on its icon) |
-| `supervisorLanding` | The screen the Supervisor UI opens on: `'first'` (as before), `'report'`, `'review'` or `'live'`. A screen the supervisor may not see falls back to the first one. Once a screen is picked, the Supervisor UI keeps it until the player reconnects |
+| `supervisorLanding` | The screen the Supervisor UI opens on: `'first'` (shipped), `'report'`, `'review'` or `'live'`. A screen the supervisor may not see falls back to the first one. Once a screen is picked, the Supervisor UI keeps it until the player reconnects |
 | `supervisorControlsCard` | `true` = Department Report shows a **Your controls today** card: each Mission control the supervisor may use now, the value in use (config or changed), the admin's limits (min to max) and today's use against the per-day count (for example Give points 40 of 100 used, Mission ban 3 of 3 used). Read only; shipped `false` (no card) |
 | `supervisorRemember` | `true` = the supervisor dialogs **Give points**, **Mission ban** and **Clear cooldown** open with the points, hours and reason last used on that tablet (kept until Crimson-Police restarts or the player reconnects; a number outside the admin's current limits falls back to the minimum), so a second award or ban in a row needs no typing. The server checks every value again; shipped `false` (they open empty) |
 | `supervisorReviewLive` | `true` = when a supervisor or an admin approves or voids a flagged run or decides a dispute, every other supervisor of that department who has the **Review Queue** open sees the updated queue at once (the decided row is gone, so two supervisors never work on the same row). Shipped `false` (the others see it at their next refresh, within 30 seconds) |
@@ -520,7 +521,7 @@ other screens hide when their switch is `false`: **Cross-Department Mission** (`
 `handleDisputes` are both `false`).
 
 Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%), `Config.Payouts.supervisorCooldown`
-(`1800` seconds), `Config.Commendations.crossDepartment` (`true` lets supervisors commend other departments),
+(`1800` seconds), `Config.Commendations.crossDepartment` (`false`; `true` lets supervisors commend other departments),
 `Config.Commendations.perSupervisorPerDay` (`3`).
 
 **Mission controls** let a department's supervisors change a few mission rules for their own department, inside
@@ -536,7 +537,7 @@ Supervisor UI → **Mission controls** (below).
     `Config.Limits.abandonCooldown`, `300`), for quits, going down, leaving duty and the like.
   - Both apply at once to cooldowns already running, also after a restart, and go back to config.lua when reset or
     when you switch the control off (`on = false`). The supervisor who shortened a cooldown keeps the config.lua one
-    himself (and so does any unit he is in). An admin's Quick edit of a mission's cooldown now applies at once too.
+    himself (and so does any unit he is in). An admin's Quick edit of a mission's cooldown also applies at once.
   - The supervisor Mission list shows a changed cooldown as `20 min → 10 min`; Admin UI → Officers → Today & cooldowns
     shows `(cooldown x0.5)` next to the mission.
   - `noRepeat = { on = true }`: `false` switches the no-repeat rule (`Config.Draw.avoidLast`) off, so an officer
@@ -623,7 +624,7 @@ Supervisor UI → **Mission controls** (below).
     and a weight 0-10 per mission type of `Config.MissionCalls.types`. Only his department's officers get the pop-up,
     see the call on Dispatch (tagged "SAST call") and may claim it; a unit with an officer of another department
     cannot, and neither can the unit of the supervisor who set the lane. Lane calls count against
-    `Config.MissionCalls.maxOpen`; the server's own calls go on exactly as before. The staff mission calls panel lists
+    `Config.MissionCalls.maxOpen`; the server's own calls are not changed. The staff mission calls panel lists
     the lane.
   - `staffCallWait = { on = false, min = 60, max = 120 }` (**Wait between staff calls**): seconds his department's
     supervisors wait between two mission calls they create, instead of `Config.MissionCalls.staffCooldown`. The one
@@ -1817,13 +1818,13 @@ The tablet uses the officer's department colours and logo. Eight screens on the 
 Also: badges on the sidebar, a notification bell with the last 20 messages, the mission HUD on screen, and a
 result card after each mission.
 
-**The Officer UI sidebar** is set in `Config.Tablet` (also in Admin UI -> Settings). Shipped, it looks as before:
+**The Officer UI sidebar** is set in `Config.Tablet` (also in Admin UI -> Settings). Shipped: the `'classic'` order, nothing moved, the full sidebar:
 
 | Setting | What it does |
 |---|---|
-| `sidebarOrder` | `'classic'` (as before) or `'mostUsed'`: Home, Mission Board, Active Mission, Dispatch, Unit, Profile, Leaderboard, Challenge, My options. Only the order changes |
-| `activeFirst` | `true` = while the officer is on a run, Active Mission sits right under Home (off a run it keeps its place) |
-| `compactSidebar` | `true` = a narrow strip of icons, each name on hover, so the screens get more room (handy with large text) |
+| `sidebarOrder` | `'classic'` (shipped: Home, Mission Board, Dispatch, Unit, Active Mission, Leaderboard, Challenge, Profile, My options) or `'mostUsed'`: Home, Mission Board, Active Mission, Dispatch, Unit, Profile, Leaderboard, Challenge, My options. Only the order changes |
+| `activeFirst` | `true` (shipped `false`) = while the officer is on a run, Active Mission sits right under Home (off a run it keeps its place) |
+| `compactSidebar` | `true` (shipped `false`) = a narrow strip of icons, each name on hover, so the screens get more room (handy with large text) |
 
 The same screens show in every order; one an owner switched off (Dispatch, My options) stays hidden.
 
@@ -1925,7 +1926,7 @@ The sidebar is also split into three plain sections, so NPC work, player work an
 - **Police teamwork**: Officers, Departments, Leaderboards, Seasons and Permissions (supervisor Mission controls).
 - Then **Pay and rewards** (Payouts, Payments) and **Server** (Settings, System, Audit, Testing). Home stays on top.
 
-Each section has a small heading; the More folding works as before inside it, and every screen keeps its links. The
+Each section has a small heading; the More folding works the same inside it, and every screen keeps its links. The
 Settings screen uses the same split (see [5.7](#57-change-any-setting-in-game-the-settings-screen)). To get the old
 order and the eight Settings groups back, set `Config.AdminUi.groupByPlay = false` (Admin UI → **Settings**).
 
@@ -1949,7 +1950,7 @@ to go back. The title inside each screen uses the same plain name (Running now, 
 what, ...). Only the layout changes: every screen keeps its permission and its links (the screen keys stay the same,
 so saved links and notifications still open the right screen), and a group with nothing you may see is not shown.
 
-**Money screen, long lists and faster screens** (each in Admin UI → **Settings**, each shipped as before):
+**Money screen, long lists and faster screens** (each in Admin UI → **Settings**, each shipped off):
 
 | Setting | Shipped | What it does |
 | --- | --- | --- |
@@ -2116,7 +2117,7 @@ and Home's **Make a new mission** tile. With the wizard off they open the New mi
    enemies' aim, armour and health inside the ranges of `config/blocks.lua`), and **More settings** holds each
    wave's own count, the next-wave timing, ped models, aim, armour, health, behaviour, the boss and traffic, plus
    "Flag runs finished faster than" and "Officers must stay within". A setting with an error opens it.
-   `Config.Builder.foldAdvanced = false` shows every setting open, as before.
+   `Config.Builder.foldAdvanced = false` shows every setting open.
 3. Place spots in the world and record road routes by driving them. **Set start here** and **Add here** (or
    **Set here**) on the Locations step put the point where you stand, or where your vehicle is, with your heading:
    the tablet stays open and the spot is checked like an aimed one (no-build zone, water, ground, room for the ped
@@ -2277,7 +2278,7 @@ On an officer's record:
   everyone on it, its dispute, the bank transaction ID of its payment and the goal rewards it completed, and to
   **Void** it (as a correction or as a strike, for everyone on it, with its goal rewards), **Restore** it, change the
   kind of a void, or **Flag for review**.
-- **Suspend** now also takes an exact date and time, and the record shows the reason. An SC-Dispatch suspension is
+- **Suspend** also takes an exact date and time, and the record shows the reason. An SC-Dispatch suspension is
   shown but is changed in SC-Dispatch only.
 
 Voids and restores:
@@ -2333,7 +2334,8 @@ everything about it: the mission's on/off switch and each location's switch (wit
 for a built-in, its test status per location (**Open Testing** for the full screen), and every action as a button with
 its name: **Edit in Builder**, **Duplicate**, **Launch**, **Publish**, and under **Expert actions** **Compare**,
 **Versions**, **Copy as Lua**, **Fold**, **Reset to original**, **Change owner**, **Archive** and the rest. The
-catalog rows no longer have icon-only buttons. No new setting: the drawer uses the same server actions as before.
+catalog rows have no icon-only buttons. The drawer has no setting of its own and uses the same server actions as
+the catalog.
 
 **Edit any built-in mission.** Every built-in mission has **Edit in Builder**. It opens the mission in the Mission
 Builder with everything in it: objectives, locations, spawns, routes, NPCs, cars, weapons, timings, bonuses and
@@ -2628,7 +2630,7 @@ Volunteers:
   restart).
 - ☐ Pick the mission types or missions a volunteer may play: `Config.Volunteers.modes` (per type) or
   `Config.Volunteers.missionModes` (per mission id). `'players_when_available'` is the safe start: the unit leader
-  ticks **Real suspect OK**, a volunteer who fits is asked, else the NPC plays as before. `'players_only'` offers the
+  ticks **Real suspect OK**, a volunteer who fits is asked, else the NPC plays. `'players_only'` offers the
   type only while a volunteer is free. While every mode is `'npc'`, nothing changes.
 - ☐ Admin UI → **Permissions** → **Config health** shows no warning about a mode.
 - ☐ Points only: `Config.Volunteers.payCash` and `payRewards` stay `false` unless you decide otherwise. Volunteers
@@ -3084,7 +3086,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 | `docs/LOOPS.md` | Every loop and timer: when it runs, its interval and why, and the loop census |
 | `docs/WORKFLOWS.md` | Every workflow by group (Officer, Supervisor, Field training, Criminal, Admin, System) and the end-to-end spec that drives it |
 | `docs/STYLE.md` | The code style. `python3 tools/restyle.py` formats the tree, `--check` lists what isn't |
-| `docs/FILE_NOTES.md` | The long file headers, one section per file (kept by `tools/restyle.py`) |
+| `docs/FILE_NOTES.md` | One line per source file saying what it is for (written by `tools/restyle.py` from the file headers) |
 | `tests/` | Lua unit, SQL and end-to-end tests (`lua5.4 tests/run.lua`; needs a local MariaDB) |
 | `tools/check_all.sh` | Every check in one command |
 | `tools/check_contracts.py` | Cross-checks of module calls, events, NUI names and locale keys |

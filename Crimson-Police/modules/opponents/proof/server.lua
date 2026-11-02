@@ -1,6 +1,13 @@
--- CP.Opponents proof (server, step V5): the server facts that decide every detain and booking of a real suspect. The
+-- CP.Opponents proof (server): the server facts that decide every detain and booking of a real suspect. The
 -- sc-police cuff pair and the custody hold, getting free during the hold (an officer's uncuff, a friend's bobby pin,
 -- sc-police's cuff-break game, or a self-uncuff), downs, bookings matched in either order, and the hospital rules.
+
+-- CP.Opponents proof (server): the server facts that decide every detain and booking of a real suspect. The
+-- sc-police cuff pair and the custody hold, getting free during the hold (an officer's uncuff, a friend's bobby pin,
+-- sc-police's cuff-break game, or a self-uncuff), downs, bookings matched in either order, and the hospital rules.
+-- The facts come from the CP.ScPolice / CP.Ambulance listeners and the metadata mirror (V4's Opp.onMeta), so
+-- nothing here runs while no case is open. A suspect's own acts are staff notes (Opp.note): nothing here sets
+-- run.flagged or p.flagged.
 
 CP.Opponents = CP.Opponents or {}
 local Opp = CP.Opponents

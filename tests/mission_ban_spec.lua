@@ -1,4 +1,9 @@
--- Mission ban (step P11): a supervisor bars one officer of his department (a lower grade, never himself) from taking
+-- Mission ban: a supervisor bars one officer of his department (a lower grade, never himself) from taking
+
+-- Mission ban: a supervisor bars one officer of his department (a lower grade, never himself) from taking
+-- missions for some hours, with a reason; the one who set it and admins lift it. Real missionban, livectl,
+-- deptcontrols, adminkit, admin, access and permissions (tests/fixtures/admin_live_world.lua). The accept, call
+-- claim and Cross-Department join checks are in board_types_spec, missioncalls_spec and teams_spec.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

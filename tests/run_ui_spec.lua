@@ -1,5 +1,25 @@
 -- run_ui slice (Officer Mission Board + Active Mission screens, UI only).
 
+-- The slice has no Lua and writes no SQL; this spec checks what the UI relies on from the Lua side and
+-- the slice's own files:
+--   * locales/parts/run_ui.json: flat object of non-empty strings, only board.* / run.* keys, no key
+--     redefined from ui.json, identical text for keys other parts share, well-formed {var} placeholders,
+--     loads through shared/locale.lua (CP.L interpolation) like locales/en.json in game;
+--   * every literal t('…') / tOr('…') key in the two screens exists (own part or ui.json), and every key
+--     of the part is used by a screen (no dead text);
+--   * every err.* key the browser mocks answer with, and every key they translate, exists in some part;
+--   * the screens use exactly the contract names (ARCHITECTURE §8/§9.4) for requests, actions, client
+--     actions and push topics, keep a default export with no props, and never list individual missions;
+--   * the Lua producers really send what the screens read: CP.Runs.view (every ActiveMissionView field of
+--     web/src/shared/types.ts plus the extras), participants/objectives/expected/modifier/route shapes,
+--     CP.Route.status statuses, the setGps/recalcRoute/logResult client actions and their payloads, the
+--     interact_points log state, CP.Draw.boardCards / CP.Events.bossCard (every BoardCard / BoardData
+--     field), CP.Operations.boardCard (the §9.4 fields and extras, every active status handled), the
+--     callbacks/actions registered by their owners and the 'board' pushes the board listens to;
+--   * the slice CSS uses only --cp-* variables (no hex colours, no color-mix/:has), and every rule is
+--     scoped by a run_ui- class;
+--   * no SQL / MySQL anywhere in the slice files (nothing to run on MariaDB).
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local cjson = require('cjson')

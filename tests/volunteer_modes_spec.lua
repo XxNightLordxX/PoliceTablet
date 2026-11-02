@@ -1,4 +1,4 @@
--- Volunteer modes (step V21): Config.Volunteers.modes / missionModes, the volunteerSlot registry, who is free (a
+-- Volunteer modes: Config.Volunteers.modes / missionModes, the volunteerSlot registry, who is free (a
 -- 'players_only' accept holds one), the Mission Board card and "Real suspect OK", the draw filter, the pushed-mission
 -- refusal, run.volunteer, the release at the run's end and the start-up check. Plain Lua with stubs.
 

@@ -1,4 +1,4 @@
--- Loops timed right (step LP1, docs/LOOPS.md): every client script of fxmanifest.lua loaded as FXServer runs it, then
+-- Loops timed right (docs/LOOPS.md): every client script of fxmanifest.lua loaded as FXServer runs it, then
 -- the game left idle (no run, tablet closed, every feature switch off). After the start-up waits have ended nothing
 -- wakes; a feature's loop runs only while that feature is on and ends with it, one thread per purpose.
 

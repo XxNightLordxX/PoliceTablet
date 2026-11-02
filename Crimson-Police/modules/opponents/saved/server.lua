@@ -1,4 +1,9 @@
--- CP.Opponents saved cases (server, step F1): each closed real-suspect case is saved in cp_pvp_cases while
+-- CP.Opponents saved cases (server): each closed real-suspect case is saved in cp_pvp_cases while
+
+-- CP.Opponents saved cases (server): each closed real-suspect case is saved in cp_pvp_cases while
+-- Config.RealSuspects.saveCases is on and live crimes or volunteers are on, and the newest casesKept are read back at
+-- the start, so the Admin UI Real suspects screen keeps them over a restart. Only what staff read is saved (names,
+-- the timeline, the damage ledger, the volunteer's part): never a position. Written once per close, never per tick.
 
 CP.Opponents = CP.Opponents or {}
 local Opp = CP.Opponents

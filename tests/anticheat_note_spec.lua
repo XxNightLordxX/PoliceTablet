@@ -1,4 +1,4 @@
--- Staff notes (step V2, critic 2 #12 and #13): CP.AntiCheat.note records a fact for staff (audited as runNoted, shown
+-- Staff notes (critic 2 #12 and #13): CP.AntiCheat.note records a fact for staff (audited as runNoted, shown
 -- in the Review run detail) and never holds anyone's points or items; a flag (runFlagged) still does. Real:
 -- modules/admin (cp_audit, the Review Queue), modules/anticheat, modules/cash (Cash.compute) and modules/rewards.
 

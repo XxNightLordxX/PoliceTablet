@@ -1,6 +1,19 @@
--- CP.Volunteers matching (server, step V22): a run whose suspect a volunteer may play (run.volunteer from V21) asks
+-- CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer from V21) asks
 -- the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'),
 -- makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
+
+-- CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer from V21) asks
+-- the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'),
+-- makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
+-- The server then follows him: in position, engaged (an officer within Config.RealSuspects.contactRange: the officers
+-- lose the NPC-combat protection), a no-show, his own Cancel this case, and the release when the run ends. Nobody who
+-- says yes, or a volunteer who drops out, gives the NPC back (players_when_available) or ends the run
+-- (Config.Volunteers.onVoid / voidRun; 'players_only' always ends). Blocks read it with ctx.volunteer().
+-- A block may also tell the volunteer who plays: V.caseNote (a notification), V.caseArea (his own map circle,
+-- client:volunteerArea) and V.outOfBounds (he broke its play-area rule: a void and a strike).
+-- Results: the server-only event crimson-police:server:volunteerEnded when a run he said yes to ends
+-- (Config.Volunteers.endEvent), and V.staffView / V.staffList for the Real suspects screen.
+-- Memory only; nothing runs while Config.Volunteers.enabled is off or every mode is 'npc'.
 
 CP.Volunteers = CP.Volunteers or {}
 local V = CP.Volunteers

@@ -1,5 +1,59 @@
 -- CP.Testing (client): the test-control panel, the debug overlay drawing and the test invitation prompt.
 
+-- Owns
+--   * the key mapping +crimsonpolice_testpanel (default Config.Testing.panelKey = F7, registered after
+--     CP.Settings.ready so a saved in-game value counts; rebindable in GTA settings; F9 is sc-multijob's).
+--     For the admin who started the active test it gives NUI focus to the HUD test-control panel
+--     (hud/TestControls.tsx); with no controls it opens the test invitation prompt (hud/DebugOverlay.tsx) when invitations are waiting,
+--     and with nothing to open it does nothing (no server call, no toast).
+--     NUI focus is taken only while the panel/prompt is open and only when no Crimson-Police UI is open, and
+--     it is released on close, Escape/the key (the NUI calls the client action testPanel), when the test ends,
+--     on a foreign crimsonArena value, within 250 ms of the player going down (CP.Tablet.playerDown: the key
+--     and the HUD button take no focus while down, toast test.downed), on CrimsonPoliceState unstick
+--     (CP.Testing.releaseFocus) and on resource stop. It is never released unconditionally here.
+--     A key press within Config.Testing.panelKeyGuardMs (300 ms; 0 = off) of letting go is ignored: FiveM
+--     hands a key still down when the focus goes back to the game over as a new press.
+--   * CP.Testing.releaseFocus()  lets go of the panel's or the prompt's focus (CP.Diag.unstick)
+--     CP.Testing.focusKind() -> 'controls'|'invites'|nil  while the panel or the prompt holds the focus
+--     (CP.Diag.state().testFocus: CrimsonPoliceState and Admin UI -> Officers -> Support show it as ours)
+--   * the HUD flag testControls (CP.Tablet.hud({ testControls = true })) re-asserted for the admin's run
+--     (CP.Runs client sets it at client:start; this module only patches a HUD that belongs to that run)
+--   * the in-world debug overlay while it is on: DrawMarker for the start radius, spawn points, zones and
+--     route waypoints (with lines between waypoints), drawn every frame only within DRAW_RANGE of the player
+--     and only while the player is near the test area; otherwise the loop sleeps 500 ms
+--   * live counts pushed to the NUI (key = the bound key's text label, false for a mouse or pad button:
+--     Escape only, toast test.invite_toast_nokey): CP.Tablet.push('test', { controls, focused, key, debugOn, runId,
+--     allowTeleport, debugOverlay (Config.Testing), debug = DebugData|false, prompt = { invites }|false })
+--     (App passes `debug` to DebugOverlay; the geometry stays in Lua)
+--   * the invitation toast (client:testInvite)
+--
+-- Client actions (CP.Tablet.registerClientAction, NUI 'client' endpoint)
+--   testControl { control, target?, enabled? } -> forwards to server:test:control (teleport and debug are
+--                                                handled locally as below)
+--   teleport    { target = 'start'|'objective' } -> server returns coords; re-checks crimsonArena, then
+--                                                SetEntityCoords (the vehicle when driving) with ground z
+--               { target = 'point', missionId, location, point } -> "Teleport here" of a spawn check result
+--                                                (no test run needed, refused while a check runs, on a
+--                                                run and in the arena): server:test:spawnPoints { ..., point }
+--                                                gives the point's own coordinates, then the same move
+--   toggleDebug { enabled? }                  -> server:test:control { control = 'debug' }
+--   testPanel   { open = bool }               -> take / release the panel focus
+--   spawnCheck  { missionId?, location? }     -> Check spawn points (Config.Testing.spawnCheck): in a
+--                                                thread his own ped, frozen, unseen and unhurt, visits each
+--                                                location's start (map loaded with NewLoadSceneStartSphere),
+--                                                notes what it sees from there (CP.Spawn.visible), probes every
+--                                                point (CP.Spawn.probe; moved over points further than
+--                                                moveWithin; route points only with routes = true), pushes
+--                                                'spawnCheck' progress and results, reports each location
+--                                                (server:test:spawnCheckReport), then puts him back as he was
+--                                                (Crimson-Arena rule 13 re-checked before every move)
+--   spawnCheckStop {}                         -> ends the check after the point being probed
+-- (Admin UI -> Testing -> Check spawn points calls spawnCheck, spawnCheckStop and teleport { target = 'point' };
+-- web/src/admin/components/spawnCheckStore.ts keeps what the 'spawnCheck' pushes say.)
+-- Events handled: client:test { controls, runId, debug }, client:testInvite { inviteId, missionLabel, from,
+--   expiresIn }, client:inProgress / client:runEnded (HUD flag, focus), crimsonArena state bag (local player; it
+--   also stops a running spawn point check).
+
 CP.Testing = CP.Testing or {}
 local Testing = CP.Testing
 local TAG = 'testing'

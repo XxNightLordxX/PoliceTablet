@@ -1,5 +1,102 @@
 -- CP.Npc (server): the authoritative state machine of mission NPCs.
 
+-- What this module owns (docs/ARCHITECTURE.md §5.11, §6.1, §6.2)
+--   - The state, cuff, task and seq fields of every mission ped's replicated cp entity state
+--     bag (Entity(e).state.cp = { run, obj, role, state, armed, cfg, tag, ... }). The engine
+--     (CP.Runs.spawnPed) writes the bag first and keeps a server copy in run.entities[netId].bag;
+--     afterwards only this module changes state.
+--   - Bag trust: a client can write the state bag of an entity it owns, so the server NEVER reads the
+--     bag back. The server record per net id (rec.bag, seeded from the engine's run.entities[netId].bag,
+--     mirrored back into it after every write) is the only source of truth for state, cuff, obj, role
+--     and seq; the replicated bag is written from it and only read by clients. A client that rewrites
+--     the bag (state 'cuffed', a cuff table, another run) changes nothing on the server.
+--   - "Cuff suspect": blocks call enableCuff; participants' clients (modules/npc/client.lua) show one
+--     global ox_target option and report the finished progress bar with the plain net event
+--     crimson-police:server:npcCuff (runId, netId). The server validates it (active, arrived
+--     participant of that run, on duty, not in the arena, the ped belongs to the run and is
+--     surrendered and cuffable, server-side distance <= maxDistance + 0.5 m, and the officer has been
+--     within reach for most of the cuff duration), sets cuffed and delivers
+--     { type = 'cuffed', netId } to the owning objective (CP.Runs.dispatch with cp.obj).
+--   - The death watcher: every 1 s over every live mission ped of every run. Health <= 0 (once a positive
+--     health was seen, or while the server has health data for the ped: GetEntityMaxHealth > 0 or a cause
+--     of death; a server-made ped reads 0 before any client synced it), or an entity that no longer exists
+--     (a ped the engine deleted on purpose is no longer in run.entities), is a death. (The engine leaves ped health deaths to this module because CP.Npc.onDeath exists.) The killer is GetPedSourceOfDeath resolved to a
+--     player (the player's own ped, or the driver of the killing vehicle); when the engine names nobody,
+--     the last weapon hit by a player in the last 5 s. Then, exactly once per ped:
+--     CP.AntiCheat.onNpcKilled(run, killerSrc) for a killer who is not an active participant (first:
+--     the death can end the run inside entityDied, and an ended run takes no flag),
+--     CP.Runs.entityDied(run, netId, killerSrc), the bag state 'dead', and the onDeath listeners.
+--     Whether a death fails the mission (a surrendered, cuffed, restrained or unarmed ped killed by a
+--     participant, run.fail_killed_unarmed) is decided by the owning block's onEntityDead, which keeps
+--     its own "shot already in flight" grace.
+--   - The weaponDamageEvent listener (returns at once when WasEventCanceled(); never cancels):
+--     a gun hit (not melee, not a vehicle) by an active participant on a mission ped ->
+--     CP.Runs.noteWeaponFired(run, src) (server-side proof for no_weapons_fired; so is a weapon kill:
+--     GetPedCauseOfDeath is a gun, before entityDied);
+--     a participant shooting a surrendered (after SURRENDER_GRACE_MS), cuffed or restrained ped ->
+--     CP.Runs.penalize(run, 'shot_surrendered', { src }) and { type = 'shot', netId, src } to the owning
+--     block; any damage to a ped whose role is 'hostage' -> the onDamaged listeners, plus
+--     { type = 'damaged', netId, attacker } to the owning block when the attacker is a participant.
+--     The attacker is the sender, except that a parentGlobalId naming an NPC the sender owns (a
+--     hostile on the host shooting a hostage) is nobody. A parent naming another player (a forged
+--     packet) is still the sender: nobody can be blamed for someone else's packet.
+--   - A 1 s health poll for the case weaponDamageEvent never covers: a client damaging a ped it owns
+--     itself (the run host usually owns every mission ped). A health+armour drop with no weapon event
+--     in the last 2 s is attributed with GetPedSourceOfDamage: an NPC, a vehicle's driver, or a player
+--     only when that player owns the ped (any other player's hit came as a weaponDamageEvent, and the
+--     source it left behind names nobody for later damage). Never "no source".
+--   - The flee clock (Config.Flee): the same 1 s watcher adds every second a ped spends in 'fleeing' on foot to
+--     rec.fleeSpent (kept across flee/hostile flips, a surrender and a feint; a ped in a vehicle, a field
+--     contact's driver who bolts, is not counted and its gait is sprint) and turns it into a gait: sprint,
+--     jog, walk, then spent, by the Config.Flee durations x (1 +/- jitter, one roll per ped from the run seed and
+--     its net id) x CP.Scaling.feel().fleeMult. No active participant within recoverRange for recoverSeconds puts
+--     the clock back to 0. A change of gait while fleeing is written as the bag key gait (same state, so the task
+--     is kept: no re-task); a ped that starts fleeing again gets its clock's gait in that write. Off
+--     (enabled = false), or an armed ped with armedTire = false: no clock, no gait written (an old one goes back to
+--     sprint). The game that owns the runner slows him down to that gait (modules/npc/client.lua, the pacer).
+--   - A worn-out runner gives up (Config.Flee.exhausted, giveUpRange): CP.Npc.wornOut is the rule the blocks
+--     that own runners (flee_arrest, pursuit, search_area, field_contact) call next to their close rule; each
+--     surrenders him its own way, with the task wornOut returns (none = kneel, or the hands-up task).
+--
+-- Public API
+--   CP.Npc.setState(run, netId, state, extra) -> boolean
+--       state: 'idle'|'hostile'|'fleeing'|'surrendered'|'cuffed'|'dead'|'restrained'|'freed'|'safe'|
+--              'driving'|'stopped'. extra (optional table) is merged into the bag: cfg merges into
+--              bag.cfg, task = { action, args } is a one-off client task for the run host
+--              (CP.Npc.task) identified by bag.taskSeq (the seq it was written with), any other key
+--              is copied (run, obj, state, seq and taskSeq are protected). A state change drops the
+--              previous task. Setting the same state with no extra is a no-op.
+--   CP.Npc.getState(netId) -> state|nil                    the server record (never the replicated bag);
+--                                                          nil for a net id no live run has
+--   CP.Npc.isNeutralised(netId) -> boolean                 dead or cuffed
+--   CP.Npc.rollSurrender(run, netId, chance) -> boolean    one roll per ped with the run's NPC rng
+--                                                          (CP.U.rng(run.seed ~ salt)); repeated calls
+--                                                          for the same ped return the first result;
+--                                                          chance is a fraction (a value > 1 is read as
+--                                                          a percentage)
+--   CP.Npc.enableCuff(run, netId, opts) -> boolean         opts = { label, duration = 5000, maxDistance = 3.0 }
+--                                                          writes bag.cuff = { label, duration, maxDistance }
+--   CP.Npc.onDeath(fn(run, netId, killerSrc|nil, killerIsParticipant))
+--   CP.Npc.onDamaged(fn(run, netId, attackerSrc|nil))     damage to peds whose role is 'hostage'
+--                                                          (attackerSrc nil = an NPC)
+--   CP.Npc.gaitOf(netId) -> 'sprint'|'jog'|'walk'|'spent'|nil   the flee clock's gait ('sprint' with Config.Flee
+--                                                          off, a ped that does not tire or one in a vehicle;
+--                                                          nil: not a living ped of a live run)
+--   CP.Npc.fleeClock(netId) -> { gait, spent, sprint, jog, walk, inVehicle }|nil   read only: seconds run on
+--                                                          foot, the seconds of running at which each gait ends
+--                                                          for this ped, and whether it sits in a vehicle
+--   CP.Npc.wornOut(netId, near) -> boolean, task|nil       true when gaitOf is 'spent', Config.Flee.exhausted is
+--                                                          not 'walk' and near (metres, the block's own) is
+--                                                          within giveUpRange (5-100); task = nil ('surrender':
+--                                                          he kneels) or { action = 'handsUp', args = {} }
+--
+-- Events and handlers
+--   RegisterNetEvent crimson-police:server:npcCuff (runId, netId)      rate limited 3 per 2 s
+--   AddEventHandler weaponDamageEvent (sender, data)
+--   AddEventHandler playerDropped
+-- Player-facing text (toasts through CP.Tablet.notify): npc.shot_surrendered, err.npc_* (npc.json).
+-- No database queries.
+
 CP.Npc = CP.Npc or {}
 local Npc = CP.Npc
 local U = CP.U

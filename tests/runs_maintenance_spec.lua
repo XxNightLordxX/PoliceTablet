@@ -1,6 +1,15 @@
 -- The run engine's once-a-minute maintenance (Runs._maintenance): who is online comes from the map that the Qbox load,
 -- unload and drop events keep, so no GetPlayerByCitizenId export runs per cached citizen. Cooldowns stay as before.
 
+-- The run engine's 60 s maintenance (Runs._maintenance) over a CP.Qbx stand-in that counts getByCitizenId (the
+-- GetPlayerByCitizenId export) and, as qbx_core, has removed the Player before an unload or drop listener runs.
+-- Proves: 200 players through the onPlayerLoaded listener cost 0 exports per maintenance (one each before); 50 drops
+-- remove their empty entries at once and keep the other 150; a leaver's or switched character's live cooldown is
+-- kept until spent, then goes with no export; Runs.cooldowns answers the same tables as before, also after a relog
+-- or a reconnect; an unload without a drop (character switch) clears the map; the startup sweep maps players online
+-- before the start; a never-loaded empty entry goes; a citizen the map never saw is checked once with the export.
+-- Real: runs/server.lua, the cp_mission_runs rows (database, files, shadow).
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', stopped = { ox_inventory = true } })   -- no inventory: the login sweep returns at once
 

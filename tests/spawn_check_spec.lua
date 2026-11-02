@@ -1,4 +1,11 @@
--- Check spawn points (PLAN S7; modules/testing server and client, each block's pointKinds): the server lists every
+-- Check spawn points (modules/testing server and client, each block's pointKinds): the server lists every
+
+-- Check spawn points (modules/testing server and client, each block's pointKinds): the server lists every
+-- point of a mission's location with what appears there, from the REAL blocks on the REAL built-in mission files; the
+-- admin's own game visits the points, judges each with CP.Spawn.probe and reports back; bad points get one console
+-- line each (and a line in Admin UI -> System -> Problems). "Teleport here" (spawnPoints with a point id:
+-- the file's coordinates, audited, Config.Testing.spawnCheck.teleport; the client action teleport { target = 'point' }
+-- without a test run, its refusals and the Crimson-Arena re-check) and a skipped location's push with the mission name.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })

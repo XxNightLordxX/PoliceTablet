@@ -1,4 +1,4 @@
--- Tablet access and the UI shell (WP8): the ways and their switches, mission desks, requireItem, the sidebar badge
+-- Tablet access and the UI shell: the ways and their switches, mission desks, requireItem, the sidebar badge
 -- counts and their 'nav' push, Config health, and the client's desk zones, desk pose and item and distance watchers.
 
 local H = dofile('tests/harness.lua')

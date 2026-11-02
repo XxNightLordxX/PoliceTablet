@@ -1,6 +1,51 @@
 -- CP.Disputes (server): officers' disputes about their flagged, voided or failed runs (cp_disputes) and how
 -- supervisors and admins answer them.
 
+-- Owns
+--   * filing: an officer may dispute one of their OWN rows that is flagged, voided or failed, within
+--     Config.Disputes.windowHours of the run (read at call time). One dispute per row, ever: an open one
+--     blocks a second (err.dispute_open) and a decided one is final (err.dispute_final). Manual awards and
+--     goal rows cannot be disputed. goes_to = 'supervisor' for flagged or voided rows (the department's
+--     supervisors), 'admin' for failed rows. The insert is atomic (INSERT ... SELECT ... WHERE NOT EXISTS).
+--     Filing toasts the online staff who can answer it (tellStaff, never participants of the run): admins
+--     for 'admin' disputes or while Config.Permissions.supervisor.handleDisputes is off, else the on-duty
+--     supervisors of the run's departments, or the admins when none of them may answer it (every online
+--     supervisor of those departments took part in the run, or none is online).
+--   * answering (decision final, reason required, never by a participant of that run):
+--       approve  flagged row -> CP.Admin.approveFlagged (flag cleared, held cash released, XP)
+--                voided row  -> voided = 0 (and flagged = 0), CP.Scoring.onRowApproved (XP back),
+--                               CP.Cash.release when its cash is still held, CP.Leaderboard.invalidate
+--                failed row  -> CP.Scoring.manualAward(src, citizenid, awardPoints, reason)
+--       reject   keeps the row as it is; a voided row whose cash is still held (or pending) is forfeited (CP.Cash.forfeit)
+--     "Took part" also covers a participant still on the live run (no row of theirs yet): refused and
+--     left out of their lists.
+--     The dispute is claimed first (UPDATE ... WHERE status = 'open'), so two reviewers can never both
+--     answer it; a failed manual award re-opens it. Every answer is audited (category flags) and posted
+--     to the flags webhook; filing posts to the flags webhook. The officer gets a toast when online.
+--
+-- Public API (docs/ARCHITECTURE.md §5.24)
+--   CP.Disputes.eligible(row, citizenid, nowTs) -> ok, errKey|nil, kind    pure; kind 'voided'|'flagged'|'failed'
+--       row = { citizenid, mission_type, state, flagged, voided, created_ts }
+--   CP.Disputes.kindOf(row) -> 'voided'|'flagged'|'failed'|nil      CP.Disputes.goesTo(kind) -> 'supervisor'|'admin'
+--   CP.Disputes.forSupervisor(src) -> { DisputeView }   open supervisor disputes about runs involving their
+--       department (every department for an admin without a department), never runs they took part in
+--   CP.Disputes.forAdmin(excludeCitizenid?) -> { DisputeView }   every open dispute (both kinds)
+--   CP.Disputes.forOfficer(citizenid, goesTo?, viewerSrc?) -> { DisputeView }   that officer's disputes (any status)
+--   CP.Disputes.supervisorCanAnswer(runUuid) -> boolean   switch on and an online supervisor of the run's
+--       departments who did not take part (on or off duty); false = only an admin can answer it now
+--   CP.Disputes.handle(src, disputeId, decision, reason, awardPoints, opts) -> ok, data|errKey
+--       decision 'approve'|'reject'; awardPoints 1..10000 for an approved failed-run dispute;
+--       opts.adminOnly = true refuses non-admins (the admin endpoint)
+--   DisputeView = { id, rowId, runUuid, citizenid, name, callsign, department, departmentShort, missionId,
+--     missionLabel, missionType, missionTypeLabel, kind, state, endReason, tier, participants, points, cash,
+--     cashStatus, flagged, voided, flagReason, reason, goesTo, status, handledBy, createdAt, handledAt,
+--     runAt, canHandle }
+-- Net
+--   action   server:dispute               { rowId, reason }                 officer (CP.Access.getOfficer)
+--   action   server:sup:handleDispute     { disputeId, decision, reason }   handleDisputes (flagged/voided)
+--   action   server:admin:handleDispute   { disputeId, decision, reason, awardPoints }  admin (any kind)
+--   callback admin:getDisputes            -> { disputes = CP.Disputes.forAdmin(own citizenid) }
+
 CP.Disputes = CP.Disputes or {}
 local D = CP.Disputes
 local U = CP.U

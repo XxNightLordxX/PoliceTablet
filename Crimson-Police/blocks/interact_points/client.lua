@@ -1,5 +1,28 @@
 -- Objective block "interact_points" (client half)
 
+-- What it does
+--   For every open point of the server's snapshot it registers an ox_target sphere zone (option names
+--   "crimson-police:interact_points:<runId>:<objective>:<point>:<main|follow>") that runs
+--   lib.progressBar (cancellable, movement/car/combat disabled, animation from progress.anim) and
+--   reports the result. Shows the rolled outcome ("Door is secure" / "Door found open") and the
+--   follow-up hint, the tablet-log hint, and hidden-device search results on the HUD line
+--   (ctx.hudDetail). Small markers within 40 m; blips per point (hidden search: one area blip);
+--   under Radio Silence 'area' only the hidden search's area blip (CP.Markers shows the nearest point),
+--   none under 'none'. Only participants' clients register targets. No networked entities
+--   are created here and there are no NPCs (hostChanged only records the flag).
+--   The block's client state is kept per run and objective in this file (stateOf), so it also works
+--   when the engine hands every hook a fresh ctx.state table.
+--
+-- Objective fields read
+--   target { label, icon, radius [1.5] } · progress { label, duration (ms), anim } · hidden { label }
+--   · label (blip text fallback). Outcomes, follow-ups and the log come from the server snapshot.
+-- Evidence sent (ctx.report)
+--   { type = 'interact', point, seq }   the main action's progress bar finished at that point
+--   { type = 'followup', point, seq }   the follow-up action's progress bar finished
+--       (seq counts this client's reports, so a retry after a rejected report is never an exact duplicate)
+--   ('log' is sent by the tablet's Active Mission screen, not by this file)
+-- Bonuses / penalties: none on the client (the server records correct_log, wrong_log, fastBonus.id).
+
 local BLOCK = 'interact_points'
 
 -- An objective cue, unless the officer turned the cues off on this PC (My options -> Sounds).

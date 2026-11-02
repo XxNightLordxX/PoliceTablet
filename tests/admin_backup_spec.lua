@@ -1,4 +1,4 @@
--- Full admin control, System → Backups (P5): a backup holds every table and the resource files, keep N never prunes the
+-- Full admin control, System → Backups: a backup holds every table and the resource files, keep N never prunes the
 -- newest or the latest automatic one, and a restore moves money forward only (paid stays paid, given stays given,
 -- money rows made after the backup are kept), keeps the audit log and the money switches, and raises no id twice.
 

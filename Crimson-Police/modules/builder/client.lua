@@ -2,6 +2,104 @@
 -- actions, results, overlays); shapes of the overlays and of the fields this client adds:
 -- web/src/types/builder_client.ts; notes: docs/ARCHITECTURE.md §13.6.
 
+-- Owns
+--   * the placement tool. The tablet closes (CP.Tablet.close) into placement mode: a LOCAL, non-networked
+--     ghost (ped or vehicle at alpha 160, collision off, frozen) or a marker follows the point the gameplay
+--     camera aims at (StartExpensiveSynchronousShapeTestLosProbe from GetGameplayCamCoord). Scroll rotates
+--     (areas and starts: scroll changes the radius; Shift = fine steps), E places, Backspace undoes, Enter
+--     returns to the tablet with the points, X cancels (the result carries the given points unchanged). Delete
+--     (or Backspace) aimed within B.AIM_PICK_RANGE (1.5 m) of a placed point removes that point (B.aimedPoint). A spot that fails a check is drawn red and cannot be placed:
+--     not on the ground (GetGroundZFor_3dCoord, surfaces steeper than ~45°), in water (TestProbeAgainstWater /
+--     GetWaterHeight), inside a wall, object or vehicle (StartShapeTestCapsule around the ped / vehicle volume),
+--     inside a Config.Builder.noBuildZones circle (2D), an armed spawn point (payload.armed) closer than the start
+--     circle (payload.startRadius) plus Config.Builder.spawnMargin (2D), a spawn point closer than
+--     Config.Builder.minSpawnFromStart
+--     to the location's start (3D, as the server checks), a start closer than Config.Builder.minLocationGap to
+--     another location's start (2D), closer than payload.minGap to another point of the same key, too far away,
+--     or every `max` point already placed. Placed starts/areas and the start's keep-out circle are drawn as
+--     ox_lib sphere zones (lib.zones.sphere with debug) for visualisation; no-build zones as red cylinders.
+--     Stored heights: peds at standing height (ground + 1.0 m, what GetEntityCoords of a standing ped reads),
+--     vehicles at their root height above the ground (GetModelDimensions), markers on the surface aimed at,
+--     starts and areas on the ground. Vectors are rounded to 2 decimals (the server stores them so).
+--   * route recording (overlay 'recording'). Drive the route as the driver of any vehicle. Every
+--     Config.Builder.route.snapEvery m the position is snapped to the nearest road node
+--     (GetClosestVehicleNodeWithHeading, any dry path). A sample further than maxOffRoad from that node is
+--     rejected with the "Off road" warning, unless the vehicle is on a road surface (IsPointOnRoad) and the node
+--     is within 4 × maxOffRoad (long straight roads have sparse nodes). Waypoints: one at every turn (heading
+--     change over turnAngle against the heading leaving the previous waypoint), at least every maxGap m of road
+--     (the sample before the gap is kept), consecutive duplicates removed (samples closer than 1 m). E adds a
+--     stop point (escort only: payload.stops; at most Config.Blocks.escort.stops[2], wait = stopWait[3] s,
+--     interior waypoints only), Backspace undoes the last undoMetres, P pauses and resumes, X finishes. After an
+--     undo, a resume (in a vehicle or on foot) away from the end, or getting back into a driver seat away from
+--     it, sampling waits until the driver is back within snapEvery of the end of the recording (a marker shows
+--     it). The result has the waypoints, stops, loop flag, the length (sum of the waypoint distances, as the
+--     server measures it), the rejected samples (count and at most 50 positions) and `unreachable` (waypoint
+--     indexes with no road path to the next one, CalculateTravelDistanceBetweenPoints; each segment is checked
+--     while it is driven, where the game has its path nodes loaded, the last one after X).
+--   * test drive (overlay 'testdrive'). When the player is more than 200 m from the route start a GPS waypoint
+--     leads there first. A LOCAL vehicle (the block's vehicle) with a local driver drives the route waypoint by
+--     waypoint with TaskVehicleDriveToCoordLongrange at the block's speed and a lane-following driving style
+--     (drivingStyle below). A waypoint not reached within Config.Builder.route.testDriveTimeout s is marked for
+--     re-recording (`failed`) and the drive goes on to the next one; escort stop points are waited out; a stuck
+--     vehicle is re-tasked; X stops the drive. Vehicle, driver and blip are deleted at the end.
+--   * the async start / result protocol: each tool is started by a client action that answers at once
+--     ({ started = true }); the tablet closes and the tool runs; its BuilderClientResult (plus `seq`) is kept until
+--     the NUI reads it (builderResult), pushed to the NUI (topic 'builder', event 'clientResult') and the tablet
+--     reopens on the UI the tool was started from (payload.ui, default 'supervisor').
+--   * refusals (docs/INTEGRATIONS.md, Crimson-Arena rules 8 and 13): every tool refuses with err.in_arena while the local player
+--     carries Crimson-Arena's crimsonArena value, and a running tool stops (no reopen) when such a value arrives;
+--     also err.builder_busy (a tool runs), err.builder_dead, err.builder_on_run (the player is on a mission run;
+--     a running tool stops, no reopen, when the player is put on one) and err.builder_disabled. The builder never moves the player: no SetEntityCoords on the player's ped or
+--     vehicle anywhere; builderWaypoint only sets a GPS waypoint. The routing-bucket half of CP.Alerts.inArena is
+--     server-side only (no client native); see the notes.
+--   * cleanup: ghosts, test-drive vehicle and driver, blips, zones, the GPS waypoint it set and the overlay are
+--     removed when a tool ends for any reason, on character unload and on resource stop.
+--
+-- Public API (client)
+--   CP.Builder.active() -> 'placement'|'recording'|'testdrive'|nil
+--   CP.Builder.cancel(reason) -> boolean                 stops the running tool; its result has cancelled = true
+--   Pure helpers (also used by tests/builder_client_spec.lua):
+--   CP.Builder.newRecorder(opts) -> recorder             opts = { turnAngle = 30, maxGap = 150, dupDist = 1 }
+--       recorder:add(p) -> boolean       a snapped sample; false for a duplicate
+--       recorder:undo(metres) -> metres  removes the last metres of samples (keeps the first)
+--       recorder:addStop(wait, max) -> ok, reasonKey      a stop point at the current end
+--       recorder:endPoint() -> p|nil · recorder:count() -> samples · recorder:length() -> metres
+--       recorder:waypoints() -> { p, ... } (with the current end) · recorder:finish() -> points, stops, dropped
+--   CP.Builder.checkSpot(spot, ctx) -> ok, reasonKey|nil, vars|nil
+--       spot = { hit, x, y, z, groundZ, normalZ, water, blocked = true|false|nil (not probed yet), distance,
+--                stored = { x, y, z } (the point as stored; the zone and distance checks use it, as the server) }
+--       ctx  = { kind, points, multiple, max, zones, spawn, start, minFromStart, otherStarts, minLocationGap,
+--                minGap, maxDistance }
+--   CP.Builder.parsePlace(payload) / CP.Builder.parseRecord(payload) / CP.Builder.parseTestDrive(payload)
+--       -> opts|nil, errKey                             validated, normalised client-action payloads
+--   CP.Builder.drivingStyle(name) -> flags               careful|cautious 786603, normal 786475, fast 786492,
+--                                                        reckless 786492 (the lane-keeping variant: a test drive
+--                                                        always keeps to its lanes)
+--   CP.Builder.thin(points, max) -> points               evenly thinned copy keeping the first and last point
+--   CP.Builder.routeLength(points) -> metres
+--   CP.Builder.headingOf(a, b) -> degrees                GTA heading (0 = north, counter-clockwise)
+--
+-- Client actions (CP.Tablet.registerClientAction; NUI 'client' endpoint)
+--   builderPlace     { missionId, location, key, kind = 'ped'|'vehicle'|'marker'|'area'|'start', model?, heading,
+--                      multiple, min?, max?, radius?, radiusMin?, radiusMax?, points, start, spawn, otherStarts,
+--                      minGap?, label?, ui? }        aliases from the task text: count -> max, existing -> points
+--   builderRecord    { missionId, location, key, stops, loop, label?, ui? }   alias: block = 'escort' -> stops
+--   builderTestDrive { missionId, location, key, route = { points, stops? }, vehicle, speed (km/h), style, label?, ui? }
+--   builderResult    {} -> the pending result or nil (and clears it)
+--   builderCancel    {} -> { cancelled = boolean }
+--   builderWaypoint  { coords } -> { ok = true }   (GPS waypoint; refuses in the arena)
+--   builderShowMap   { points = { { kind = start|spawn|checkpoint, coords } } (1-300) } -> { shown = n }
+--                    (B17: closes the tablet, temporary blips, opens the pause map; cleared on the next tablet open,
+--                    a new show, unload, arena and resource stop; refuses in the arena)
+--   Immediate replies of the three tools: { started = true } or err.invalid_payload, err.in_arena,
+--   err.builder_busy, err.builder_dead, err.builder_on_run, err.builder_disabled, err.builder_bad_vehicle.
+-- Events handled: crimson-police:client:builder { event = 'lockBroken'|'reloaded'|'deleted', id } (stops a tool of
+--   that mission; 'deleted' also drops its pending result), the local player's crimsonArena state bag, character
+--   unload (CP.Qbx.onUnload), onResourceStop.
+-- NUI: CP.Tablet.overlay({ kind = 'placement'|'recording'|'testdrive', ... }) / overlay(nil),
+--      CP.Tablet.push('builder', { event = 'clientResult', id = missionId, result }).
+-- Text: builder.place.*, builder.rec.*, builder.drive.*, builder.tool_failed, err.builder_* (locales/parts/builder_client.json).
+
 CP.Builder = CP.Builder or {}
 local B = CP.Builder
 local U = CP.U

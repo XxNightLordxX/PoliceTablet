@@ -1,5 +1,75 @@
 -- CP.Operations (server): Cross-Department Missions, with leave before the start and the waitlist.
 
+-- modules/operations/server.lua · CP.Operations (server): Cross-Department Missions.
+--
+-- Owns: the one active Cross-Department Mission ("operation"), the board lock for every department
+-- while it is active, its join window, the start of its run through CP.Runs.create, fail → relaunch /
+-- cancel, the idle auto-cancel, the server-wide launch cooldown, the cp_operations rows, the
+-- operation notifications (client:operation to every on-duty officer, CP.Tablet.notify to the people
+-- concerned, pushes 'operation' and 'board') and the operations audit / webhook entries.
+-- SPEC "Cross-Department Missions", "Supervisor & admin actions" (launch row), "Data model" cp_operations.
+--
+-- Life cycle (cp_operations.status):
+--   joining  launched (or relaunched): officers of every department join, up to Config.CrossDept.maxParticipants;
+--            joining closes when the launcher taps Start now or after Config.CrossDept.joinWindow seconds.
+--            At window end the run starts by itself with enough participants, otherwise → waiting.
+--   running  the run exists (accepted → in progress). Operation runs ignore cooldowns, the no-repeat rule,
+--            the hourly cap and the server cap and roll no modifier (CP.Runs / CP.Events decide that from
+--            run.operationId). Nobody can join any more.
+--   waiting  the run failed, every participant left, or the window closed without enough participants /
+--            without a free location: still active (the board stays locked); any supervisor may relaunch
+--            (a new join window) or cancel. Config.CrossDept.idleCancel seconds with no run (counted from the
+--            launch or the end of the last run; a relaunch does not reset it) → auto-cancel once no join
+--            window is open.
+--   completed  the run was Completed: the lock lifts.            (final, ended_at set)
+--   cancelled  cancelled by a supervisor/admin, by the idle rule, or by a restart.   (final, ended_at set)
+-- The board lock (isLocked) holds for joining, running and waiting. Cancelling a running operation ends
+-- every participant still on the run with end reason 'cancelled' (no cooldown, no penalty).
+-- A launch starts the server-wide cooldown Config.CrossDept.cooldown, counted from cp_operations.created_at
+-- of the last launch (persisted, so a restart keeps it); a relaunch is not a new launch.
+-- Restart safety: rows left joining/running/waiting by a previous server start are marked cancelled.
+--
+-- Public API (docs/ARCHITECTURE.md §5.17)
+--   CP.Operations.active() -> op|nil       the live operation table (read only):
+--       op = { id, missionId, missionLabel, missionType, status, launchedBy (citizenid), launcher (name),
+--              createdAt, joinEndsAt|nil, participants = { { src, citizenid, name, callsign, department,
+--              departmentShort, rank, joinedAt } }, runId|nil, idleSince, waitingReason|nil, attempt }
+--   CP.Operations.isLocked() -> boolean     an operation is joining, running or waiting
+--   CP.Operations.boardCard(src) -> card|nil   BoardData.operation (§9.4) + missionType, missionTypeLabel,
+--       description, min, runState, joinBlocked (the err.* key a Join would return while canJoin is false)
+--   CP.Operations.launch(src, missionId) -> ok, data|errKey      (permission launchCrossDept)
+--   CP.Operations.startNow(src) -> ok, data|errKey               (the one who opened the join window, an admin,
+--                                                                 or anyone allowed when that person is offline)
+--   CP.Operations.relaunch(src) -> ok, data|errKey
+--   CP.Operations.cancel(src, reason) -> ok, data|errKey         src 0 = the server (no permission check)
+--   CP.Operations.join(src, opId) -> ok, data|errKey             officers of any department (server:joinOperation)
+--   CP.Operations.onRunEnded(run, state)                         (hook, CP.Runs) state 'completed' | other
+--   CP.Operations.view(src) -> OperationView (callback sup:getOperation, shape below)
+--   CP.Operations.cooldownLeft() -> seconds until the next launch is allowed (0 = now)
+--   CP.Operations.eligible(def) -> ok, errKey   launchable: published and enabled, departments empty
+--       (open to every department), maxOfficers >= 2, never the Weekly Boss
+-- Net (CP.Net; every sup/admin action checks CP.Permissions.can(src, 'launchCrossDept') first, the admin
+-- ones also require an admin)
+--   actions server:sup:opLaunch / server:admin:opLaunch   { missionId }  -> { id }
+--           server:sup:opStart / server:admin:opStart     -              -> { runId, participants }
+--           server:sup:opRelaunch / server:admin:opRelaunch -            -> { id }
+--           server:sup:opCancel / server:admin:opCancel   { reason }     -> { id }   (reason 1-200 characters)
+--           server:joinOperation                          operationId | { operationId } -> { id, joined, max }
+--                   (the operation state is checked again after the checks that may yield, so a join never
+--                   passes the cap or lands after Start now copied the list)
+--   callback sup:getOperation -> OperationView
+--       { operation = null | { id, missionId, missionLabel, missionType, missionTypeLabel, difficulty,
+--           launcher, launcherCallsign, launcherDepartment, launchedAt, status, runState, runId,
+--           participants = { { src, name, callsign, departmentShort, department, status, arrived } },
+--           departments = { { short, count } }, joined, max, min, joinEndsIn, idleCancelIn, tier,
+--           tierExpected, remaining, waitingReason, attempt, canStart, startBlocked, canRelaunch, canCancel },
+--         cooldownLeft, cooldown, joinWindow, idleCancel, maxParticipants, crossBonus (Config.CrossDepartmentPoints),
+--         enabled, canLaunch, launchBlocked, serverTime,
+--         eligibleMissions = { { id, label, type, typeLabel, difficulty, minOfficers, maxOfficers } } (no operation only) }
+-- Client event: crimson-police:client:operation (state 'launched'|'started'|'ended'|'cancelled', missionLabel,
+-- extra = { id, relaunched }) to every on-duty officer. Pushes: 'operation' and 'board' ({ id|false, status|false })
+-- to every department member online (and 'operation' to online admins).
+
 CP.Operations = CP.Operations or {}
 local Ops = CP.Operations
 local TAG = 'operations'

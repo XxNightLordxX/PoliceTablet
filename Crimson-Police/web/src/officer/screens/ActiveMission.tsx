@@ -1,5 +1,20 @@
 // Officer UI · Active Mission (screen key 'active', title key 'ui.screen.active') · run_ui slice.
 
+// The officer's current run: mission label and description (revealed only now, after the accept), state
+// (Accepted / In progress), tier (marked "expected" until In progress) and the pay tier when it is lower,
+// the modifier, the start-route status (on route, off route with its countdown, arrived, or off for test
+// runs) with Set GPS and Recalculate route (limited per run, remaining shown), the objective checklist
+// with progress and details, the run timer counting down locally (paused state), partners with department
+// tag, callsign and status, the expected cash and points, the TEST RUN banner, the Radio Silence note, the
+// Business Check log panel (view.log) and Abandon behind a confirm dialog. Empty state when no run.
+//
+// Data:    request 'getRun' → ActiveMissionView | null (ARCHITECTURE §9.4; optional extras in
+//          src/types/run_ui.ts), live via push topic 'run' (the view is applied as it is; nil — the run
+//          ended — arrives as a missing field and triggers a getRun), plus a 15 s safety poll.
+// Actions: 'server:abandon' (payload = runId) · client actions 'setGps', 'recalcRoute' and
+//          'logResult' { point, choice } (the route and log toasts come from Lua; errors are toasted here).
+// Text:    locales/parts/run_ui.json (run.*), plus the foundation's hud.* / common.* / tier.* keys.
+
 import { useEffect, useState, type ReactNode } from 'react';
 import {
     Badge,

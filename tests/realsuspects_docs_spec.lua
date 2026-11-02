@@ -1,4 +1,9 @@
--- Step V27: the owner docs for real suspects stay in step with the code. README 9.16 (owner checklist, the rules
+-- The owner docs for real suspects stay in step with the code. README 9.16 (owner checklist, the rules
+
+-- the owner docs for real suspects stay in step with the code. README 9.16 (owner checklist, the rules
+-- for cases with real suspects, fairness, troubleshooting) is in the contents, /crimsonheat is in the command list,
+-- the go-live checklist points to it, every Config.LiveCrime / Config.Volunteers / Config.RealSuspects key path the
+-- section names exists, the in-game checklist has a check for every and SPEC's SOP has the rules.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })

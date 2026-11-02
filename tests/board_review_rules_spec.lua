@@ -1,4 +1,9 @@
--- Department leaderboard visibility and stricter review rules (step P14): the boards Mission control (names or
+-- Department leaderboard visibility and stricter review rules: the boards Mission control (names or
+
+-- Department leaderboard visibility and stricter review rules: the boards Mission control (names or
+-- callsigns for other departments, the Rank by tabs a department's officers see) and reviewRules (a Void needs a
+-- second supervisor of the department; flags of the picked kinds go to admins only). Plain Lua with stubs: a stub
+-- CP.DeptControls holds the values, CP.Admin.getRow and the permission checks are stubbed, no database is read.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })

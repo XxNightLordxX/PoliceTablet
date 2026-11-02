@@ -1,5 +1,10 @@
 // "Publish": enabled when the draft passes every guardrail (a test is optional unless the server asks for one)
 
+// src/builder/steps/StepPublish.tsx · "Publish": enabled only when the draft passes every guardrail
+// (server:builder:validate with the publish checks), has a passed test at the required tier (draft_tested),
+// the editor holds the lock and may publish. Publishing writes missions/custom/<id>.lua (the previous file is
+// kept as a .bak) and the mission joins its type's pool at once. Discarding a draft is offered here too.
+
 import { useEffect, useState } from 'react';
 import { Badge, Button, Card, ConfirmDialog, Icon, KeyValue, TierBadge } from '../../shared/components';
 import { asArray } from '../../shared/data';

@@ -1,5 +1,35 @@
 -- Objective block "hostile_waves" (client half)
 
+-- What it does
+--   While the objective is current on this participant's client:
+--   - blocks NPC traffic within obj.blockTraffic metres of location.start.coords, area-limited only
+--     (AddRoadNodeSpeedZone + SetRoadsInArea for that box + one ClearAreaOfVehicles in the radius)
+--     (ARCHITECTURE §0.14). It is restored (RemoveRoadNodeSpeedZone, SetRoadsBackToOriginal) when the
+--     objective stops only if no later objective of the run follows; otherwise the block is held for the
+--     rest of the run (every objective of a run shares its location: Gang Shootout / Kingpin "Secure the
+--     scene", "NPC traffic is blocked within 120 m while the run is active") and restored as soon as
+--     CP.Runs.current() is no longer that run (run end, silent removal) or on resource stop. A later
+--     hostile_waves objective with the same area takes the held block over instead of adding a second;
+--   - red entity blips on hostiles that are not neutralised (none with Radio Silence 'area' or 'none');
+--   - a HUD line (ctx.hudDetail) when a surrendered hostile is close enough to cuff;
+--   - on the run host only: CP.Npc.apply + the task for the current cp state once the host has control
+--     of each hostile (again after hostChanged; retried until CP.Npc took both), and one 'low_health'
+--     report per hostile whose health drops under surrender.belowHealth (boss: boss.surrender.belowHealth;
+--     the server also polls health itself, the report only makes the roll come sooner).
+--   The "Cuff suspect" target itself is CP.Npc's (enableCuff). No networked entity is created here.
+--   A staged crew (stage = true) is left alone while its objective is pending and calm (no task,
+--   no blip, no control asked: CP.Npc keeps them calm and unarmed). When the server's update says
+--   awake = true (the crew woke before the breach) the loop runs for it already (Live: current or awake):
+--   the host's CP.Npc.apply + combat task, the blips; the HUD line and the low_health reports stay the
+--   current objective's (only once this objective is current). start then takes it over (no second task),
+--   and blocks the traffic as always.
+--
+-- Objective fields read: blockTraffic, behaviour, surrender.belowHealth / .chance,
+--   boss.label / boss.surrender (ctx.obj, scaled copy); location.start.coords.
+-- Evidence sent: { type = 'low_health', netId } (host only, once per hostile, only while current)
+-- Server data (update): { peds = { { netId, role, state, wave } }, wave, waves, awake = true|nil (a staged crew
+--   that woke before its objective started) }
+
 local BLOCK = 'hostile_waves'
 local U = CP.U
 

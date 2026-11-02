@@ -1,5 +1,12 @@
 // Module-level memory of the Mission Builder.
 
+// A placement, route recording or test drive closes the tablet (modules/builder/client.lua), which unmounts
+// every screen. What the editor needs afterwards lives here, outside React: the open mission and step per
+// UI scope, the unsaved local draft, the running tool, route meta (length, rejected samples, marked
+// waypoints), the last draft test, and tool results. Results are captured from the NUI push topic 'builder'
+// (event 'clientResult') by a window listener installed when this module loads, even while the tablet is
+// closed; the editor also pulls the Lua copy with the client action builderResult (both deduplicated by seq).
+
 import type { BuilderDefinition } from '../types/builder_server';
 import type {
     BuilderClientResultEx,

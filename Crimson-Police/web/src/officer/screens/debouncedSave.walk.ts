@@ -1,4 +1,4 @@
-// My options (step X11): a group's Reset clicked within the save delay of a change is not undone by that change's
+// My options: a group's Reset clicked within the save delay of a change is not undone by that change's
 // pending save (node walk.mjs, a gate step).
 
 import { makeDebouncer } from './debouncedSave';

@@ -1,6 +1,10 @@
--- The twists a department offers and pre-ticks (step P15): the twists Mission control narrows the accept step's
+-- The twists a department offers and pre-ticks: the twists Mission control narrows the accept step's
 -- offer (Mission Board, mission call claims) to the twists the leader's department offers, marks the ones it
 -- pre-ticks and refuses a chosen twist the department does not offer. Plain Lua: stubbed controls, no database.
+
+-- The twists a department offers and pre-ticks: the twists Mission control narrows the accept step's offer
+-- to the leader's department's twists, marks the pre-ticked ones and refuses another (err.twist_department). Plain Lua
+-- with a stub CP.DeptControls; no database is read.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

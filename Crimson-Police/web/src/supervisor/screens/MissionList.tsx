@@ -1,5 +1,10 @@
 // Supervisor UI · Mission List (screen key 'sup_missions').
 
+// Every mission by name, built-in and custom: type, difficulty, officers supported, current base payout
+// (and where it comes from), cooldown and who is running it now. Missions open to every department that
+// support 2+ officers (never the Weekly Boss) can be launched as a Cross-Department Mission.
+// Data: callback getMissionList (modules/admin) · action server:sup:opLaunch { missionId } (modules/operations).
+
 import { useMemo, useState } from 'react';
 import {
     Badge,

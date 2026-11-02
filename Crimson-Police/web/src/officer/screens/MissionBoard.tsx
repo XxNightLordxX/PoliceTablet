@@ -1,5 +1,19 @@
 // Officer UI · Mission Board (screen key 'board', title key 'ui.screen.board') · run_ui slice.
 
+// One card per mission type (label, points, cash per officer as a range "$1,040–$1,300", missions in the
+// pool, Solo/Unit, Type of the Day tag, locked reason with the cooldown countdown, "Server busy", "On a
+// call"), the Weekly Boss card when the server sends it, and — while a Cross-Department Mission is active —
+// only that operation's card (Join / joined state / join countdown). A unit summary line tells who picks
+// the type. Officers only ever pick a TYPE: the board never lists or previews individual missions (the
+// Weekly Boss and the operation are the spec's exceptions), and there is no reroll.
+//
+// Data:    request 'getMissionTypes' → BoardData (ARCHITECTURE §9.4; extras in src/types/run_ui.ts),
+//          refetched (one coalesced call per burst) on push topics 'board' and 'operation', on 'run' when the
+//          active run starts or ends, every 30 s, and when a cooldown or the join window ends.
+// Actions: 'server:acceptType' (payload = the type key, or 'weekly_boss' for the boss card) after a
+//          confirm dialog, then navigate('active'); 'server:joinOperation' (payload = operation id).
+// Text:    locales/parts/run_ui.json (board.*); locked reasons arrive translated from the server.
+
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
     Badge,

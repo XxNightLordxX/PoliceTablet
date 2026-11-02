@@ -1,5 +1,15 @@
 // Data hooks for screens.
 
+// const { data, loading, error, refetch } = useRequest<Board>('getBoard', { period, filter }, { pushTopic: 'board' });
+// const { run, busy } = useAction();  await run('server:acceptType', 'patrol');
+// const left = useCountdown(view?.remaining ?? null, { paused: view?.paused });
+// usePush('unit', () => refetch());
+// useKeyRelease(active, e => e.key === 'Escape', () => close());
+//   a key that gives the game its input back acts on its key-up, and only for a key-down this page saw itself
+//   (FiveM hands a key still down when the NUI focus goes back over as a new press). FiveM's CEF sets no
+//   repeat flag, so a second key-down within 150 ms of the arming one marks a press made before the page
+//   listened: its key-up does nothing. Used by App (Escape), TestControls and DebugOverlay.
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { action, request, useNuiEvent } from './nui';
 import { t, type Vars } from './i18n';

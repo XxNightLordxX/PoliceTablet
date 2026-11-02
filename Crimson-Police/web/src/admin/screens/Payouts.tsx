@@ -1,5 +1,12 @@
 // Admin UI · Payouts (screen key 'admin_payouts', title key 'ui.screen.admin_payouts').
 
+// Tabs Types / Missions: every mission type and every mission with its base payout and where it comes
+// from; admin payouts are marked "Set by an admin". Set (NumberInput within Config.Cash limits + reason,
+// with a review of old → new) or clear (confirm dialog with a reason) a type or mission payout.
+// Data: callback 'admin:getPayouts' (AdminPayoutsView, src/types/economy.ts), push topic 'payouts';
+// writes: 'server:admin:setTypePayout' { type, amount|null, reason, clear } and
+// 'server:admin:setMissionPayout' { missionId, amount|null, reason, clear }.
+
 import { useEffect, useMemo, useState } from 'react';
 import {
     Badge,

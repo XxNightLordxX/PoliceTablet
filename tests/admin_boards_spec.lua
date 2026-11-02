@@ -1,4 +1,4 @@
--- Full admin control, boards (P1): keeping an officer off the boards, past windows, ranking by any metric,
+-- Full admin control, boards: keeping an officer off the boards, past windows, ranking by any metric,
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })

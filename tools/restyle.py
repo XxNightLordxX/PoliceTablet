@@ -14,7 +14,7 @@ a formatter cannot:
 
   Lua  - file-level local functions in PascalCase (scope-aware, only when provably safe, see rename_plan);
          closures inside a function keep their name
-       - file headers cut to a short summary; the long text moves to docs/FILE_NOTES.md
+       - file headers cut to a short summary; the rest stays under it, docs/FILE_NOTES.md gets one line per file
        - section banners in the owner's 3-line '=' format, sub-banners as '-- ---- TITLE ----'
        - table.insert(t, v) -> t[#t + 1] = v, console print prefixes and colour codes
        - after the last StyLua run: ifs, loops and functions written on one line go back on one line, long
@@ -1415,26 +1415,49 @@ def is_banner_line(ln):
     return bool(RULE_RE.match(ln) or LUA_THIN_RE.match(ln) or LUA_INLINE_DOUBLE_RE.match(ln) or SUB_RE.match(ln))
 
 
+def purpose_line(keep):
+    """The FILE_NOTES line of a file: the first sentence of its header."""
+    text = ' '.join(s.strip() for s in keep).strip()
+    m = re.search(r'(?<=[.!?])\s+(?=[A-Z(`"])', text)
+    return text[:m.start()] if m else text
+
+
 def header_pass(path, lines, lang, notes):
+    """Cuts a long file header to its summary (at most HEADER_LINES lines). The rest of the header stays in the
+    file as a comment block under the summary; docs/FILE_NOTES.md gets the file's purpose line."""
     h = split_header(lines, lang)
     if not h:
+        notes.pop(rel(path), None)
         return lines
     start, end, text, kind = h
     lead = '--' if lang == 'lua' else '//'
     keep = summary_lines(text)
+    if keep:
+        notes[rel(path)] = purpose_line(keep)
+    else:
+        notes.pop(rel(path), None)
     new = [f'{lead} {s}' for s in keep]
-    if end < len(lines) and lines[end].strip():
-        new.append('')          # one blank line between the header and the code
-    if new == lines[start:end]:
+    if new == lines[start:end] and (end >= len(lines) or not lines[end].strip()):
         return lines
-    rest = [t for t in text]
+    rest = [t.rstrip() for t in text if not (t.strip() and DECORATION_RE.match(t.strip().strip('║│').strip()))]
+    while rest and not rest[0].strip():
+        rest.pop(0)
+    k = 0
+    while k < len(rest) and rest[k].strip():
+        k += 1
+    if k <= HEADER_LINES:
+        rest = rest[k:]         # the first paragraph is the summary itself
+    while rest and not rest[0].strip():
+        rest.pop(0)
     while rest and not rest[-1].strip():
         rest.pop()
-    if len(rest) > len(keep) or kind == 'long':
-        notes[rel(path)] = rest
+    body = lines[end:]
+    while body and not body[0].strip():
+        body.pop(0)
+    detail = [f'{lead} {t}' if t.strip() else lead for t in rest]
+    out = new + ([''] + detail if detail else []) + ([''] if body else [])
     bump(f'{lang}: file headers shortened')
-    bump(f'{lang}: header lines removed', max(0, (end - start) - len(keep)))
-    return new + lines[end:]
+    return out + body
 
 
 LUA_THIN_RE = re.compile(r'^(\s*)(--|//)\s*[─━]{2,}\s*(\S.*?)\s*[─━]*\s*$')
@@ -1731,39 +1754,31 @@ def css_banner_pass(lines):
 
 NOTES_INTRO = """# File notes
 
-The long headers that used to open each file, kept in full. The owner's style (docs/STYLE.md)
-keeps a file header to a short summary; tools/restyle.py moved the rest here. Section names are file
-paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTURE.md.
+One line per source file: what it is for, the first sentence of its header. tools/restyle.py writes this file;
+the full header, with the details, stays at the top of the file itself (docs/STYLE.md). The module APIs are in
+docs/ARCHITECTURE.md.
 """
+
+NOTE_RE = re.compile(r'^- `([^`]+)`: (.*)$')
 
 
 def load_notes():
     notes = {}
     if not os.path.exists(NOTES):
         return notes
-    cur, inside = None, False
     for ln in read(NOTES).split('\n'):
-        m = re.match(r'^## (\S+)$', ln)
-        if m and not inside:
-            cur = m.group(1)
-            notes[cur] = []
-        elif cur is not None and not inside and ln == '```text':
-            inside = True  # the note is only what sits between its fences
-        elif cur is not None and inside and ln == '```':
-            inside = False
-        elif cur is not None and inside:
-            notes[cur].append(ln)
-    for k in notes:
-        while notes[k] and not notes[k][-1]:
-            notes[k].pop()
+        m = NOTE_RE.match(ln)
+        if m and os.path.exists(os.path.join(ROOT, m.group(1))):
+            notes[m.group(1)] = m.group(2)
     return notes
 
 
+def notes_text(notes):
+    return NOTES_INTRO + '\n' + '\n'.join(f'- `{path}`: {notes[path]}' for path in sorted(notes)) + '\n'
+
+
 def save_notes(notes):
-    parts = [NOTES_INTRO]
-    for path in sorted(notes):
-        parts.append(f'## {path}\n\n```text\n' + '\n'.join(notes[path]) + '\n```\n')
-    write(NOTES, '\n'.join(parts))
+    write(NOTES, notes_text(notes))
 
 
 # ============================================================================
@@ -1907,7 +1922,7 @@ def restyle(paths, fmt=True, check_only=False):
             bump(k, v)
         write(p, src)
     changed = [p for p in lua_files + web_files if read(p) != before[p]]
-    if notes != notes_before:
+    if notes != notes_before or not os.path.exists(NOTES) or read(NOTES) != notes_text(notes):
         save_notes(notes)
     return changed
 

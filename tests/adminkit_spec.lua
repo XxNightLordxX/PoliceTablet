@@ -1,4 +1,4 @@
--- Full admin control, the foundation (P0): CP.AdminKit's guards, request ids, previews, self checks, jobs and the busy
+-- Full admin control, the foundation: CP.AdminKit's guards, request ids, previews, self checks, jobs and the busy
 -- lock, CP.Maintenance and the net gate, the new permission keys, the Access, Admin, Tablet and Cash seams, the
 -- Settings additions (locked paths, ranges, money switches, point values, row templates, names, history, validators).
 

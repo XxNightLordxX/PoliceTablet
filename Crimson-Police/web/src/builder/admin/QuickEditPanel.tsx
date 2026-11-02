@@ -1,6 +1,9 @@
 // Quick edit of a built-in mission (MissionTweaks), shown in the mission's drawer (Admin UI -> Missions): cooldown,
 // time limit and start timeout in minutes, and the NPC models, cars and weapons by their plain names, without JSON.
 
+// Saved through Settings (checked again there, audited as a settings change). Runs already going keep their
+// definition.
+
 import { useEffect, useState } from 'react';
 import {
     Badge,

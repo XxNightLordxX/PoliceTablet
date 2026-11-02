@@ -1,6 +1,6 @@
 -- The documents stay true to the code: the SPEC's config copies are the config files byte for byte, every document
 -- a file names exists, the README's contents, commands, config keys and "What ships off" table match the code, and
--- FILE_NOTES names only files that exist.
+-- FILE_NOTES is one line per file and names only files that exist.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
@@ -124,6 +124,9 @@ for _, rel in ipairs(files) do
             local kind = id:match('^%u+')
             if STEP[kind] and kind ~= 'F' then hits[#hits + 1] = '(' .. id .. ')' end
         end
+        -- the work packages and the build's name are build history too
+        for id in s:gmatch('%f[%w](WP%d+)%f[%W]') do hits[#hits + 1] = id end
+        for word in s:gmatch('[Pp]arity%-plus') do hits[#hits + 1] = word end
         H.eq(table.concat(hits, ', '), '', rel:gsub('^%./', '') .. ': no step or plan ids in its prose')
     end
 end
@@ -244,18 +247,23 @@ H.eq(Cfg.Builder.requireTestToPublish, false, 'testing is never required, as 5.1
 H.ok(Has(ships, '`Config.Builder.requireTestToPublish = false`'), 'README 5.10 says testing is never required')
 
 -- ============================================================================
---                    FILE_NOTES NAMES ONLY FILES THAT EXIST
+--             FILE_NOTES: ONE LINE PER FILE, ONLY FILES THAT EXIST
 -- ============================================================================
 
 local notes = ReadRepo('docs/FILE_NOTES.md') or ''
-local sections = 0
-for path in notes:gmatch('\n## (%S+)\n') do
-    sections = sections + 1
+local entries, long = 0, 0
+for path, purpose in notes:gmatch('\n%- `([^`]+)`: ([^\n]*)') do
+    entries = entries + 1
     local f = io.open(REPO .. path, 'r')
     H.ok(f ~= nil, 'FILE_NOTES: ' .. path .. ' exists')
     if f then f:close() end
+    if #purpose > 400 then long = long + 1 end
 end
-H.ok(sections > 200, ('FILE_NOTES has a section per long-headed file (%d)'):format(sections))
+H.ok(entries > 400, ('FILE_NOTES has a line per source file (%d)'):format(entries))
+H.eq(notes:find('\n## ', 1, true), nil, 'FILE_NOTES has no per-file sections (the details stay in the files)')
+H.eq(notes:find('```', 1, true), nil, 'FILE_NOTES quotes no headers')
+H.eq(long, 0, 'every FILE_NOTES line is one sentence')
+H.ok(#notes < 150000, ('FILE_NOTES stays small (%d bytes)'):format(#notes))
 
 -- step FX1: a disconnect on the Weekly Boss costs its mission cooldown and that week's attempt, never the type cooldown
 -- (modules/draw skips the type cooldown for the boss); every SPEC line about the disconnect cooldown says so

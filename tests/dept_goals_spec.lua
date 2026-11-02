@@ -1,6 +1,11 @@
--- A department's goals (step P21): a supervisor picks which of the admin's daily and weekly goals (Config.Goals) his
+-- A department's goals: a supervisor picks which of the admin's daily and weekly goals (Config.Goals) his
 -- department's officers draw theirs from, counting from the next weekly reset; the points never change, other
 -- departments and the setter keep the admin's whole lists. Plain Lua: stubbed controls, schedule and SQL.
+
+-- A department's goals: a supervisor picks which of the admin's daily and weekly goals his department's
+-- officers draw from, counting from the next weekly reset; a second change in a week waits for the week after; the
+-- points stay the admin's; FIB officers and the setter keep the whole lists. Plain Lua: stubbed controls, schedule
+-- and SQL, no database.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

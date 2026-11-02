@@ -2,6 +2,11 @@
 // (shared/options_hud.lua) set its side (hudSide), its size on top of the screen size (hudScale) and fewer animations
 // (reduceMotion, MotionPref); the officer's textSize (shared/options_look.lua) sets --cp-fs-scale on it.
 
+// The right-edge column that holds the mission HUD and the result card (no NUI focus).
+// Centred vertically and scaled with the viewport (useHudScale), but never taller than the screen:
+// when the HUD and a long result card are shown together (or on 720p) the column scales down to fit,
+// since the player cannot scroll a HUD without focus.
+
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useViewport } from '../shared/hooks';
 import { textScaleOf, useOption } from '../shared/options';

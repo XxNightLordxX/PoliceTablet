@@ -1,4 +1,9 @@
-// Supervisor screens inside (step H4) against the browser mocks (node walk.mjs, a gate step): Mission controls and
+// Supervisor screens inside against the browser mocks (node walk.mjs, a gate step): Mission controls and
+
+// Supervisor screens inside against the browser mocks (node walk.mjs, a gate step): Mission controls and
+// Review Queue use the shared header and load states, each Mission controls group says what it is for, Notices and
+// Field training are split by task with the stale line, the risky actions still ask first, and the Department
+// Report's 'Your controls today' rows (myControls.ts) show value, limits and today's use.
 
 import '../../mocks/core.mock';
 import fieldTraining from '../../../../locales/parts/field_training.json';

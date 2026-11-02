@@ -1,4 +1,9 @@
-// Admin UI · Rewards (screen key 'admin_rewards', step H1, Config.AdminUi.rewardsScreen): every feature that pays.
+// Admin UI · Rewards (screen key 'admin_rewards', Config.AdminUi.rewardsScreen): every feature that pays.
+
+// Admin UI · Rewards (screen key 'admin_rewards', Config.AdminUi.rewardsScreen): every feature that pays on
+// one page. Each row shows its switch, its money and how it is paid, and its items (the RewardPoolEditor item picker,
+// checked against ox_inventory by the server); the Item rewards switch sits on top with a one-click turn on. Every
+// change saves through the Settings save flow (server:admin:setSetting: checked, audited, pushed as 'settings').
 
 import { useEffect, useMemo, useState } from 'react';
 import {

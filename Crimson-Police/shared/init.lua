@@ -1,6 +1,10 @@
 -- The CP namespace, logging, the block registry, the config load check and RegisterMission(). Loaded on both sides
 -- before every module. Only definitions live here: nothing in this file calls another module.
 
+-- shared/init.lua · the CP namespace, logging, the block registry and RegisterMission().
+-- Loaded on both sides before every module. Only definitions live here: nothing in this
+-- file calls another module.
+
 CP = CP or {}
 
 CP.resource = GetCurrentResourceName()

@@ -1,5 +1,16 @@
 -- Slice missions_b: the built-in mission files warrant_service, manhunt,
 
+-- gang_shootout, hostage_rescue, bomb_disposal, armored_truck_escort, prison_break and
+-- weekly_boss_kingpin. Each file is read by the mission loader's reader (data, never run) and checked against the
+-- mission catalog, its mission card, ARCHITECTURE §3.3 (objective fields, location keys) and the
+-- built-in guardrails (location count and spacing, map bounds, no-build zones for points and route
+-- segments, 30 m from the start, points of a location kept together, heights, headings facing the
+-- approach, spawn counts, contiguous road / escape / flee routes, the armed-NPC budget, bonus ids, no
+-- payout field). The objectives are then run through
+-- the real blocks' defaults/validate (for the blocks that exist) and through CP.Missions.normalize.
+-- Run it on its own to see the report lines (sizes, route lengths, nearest distances):
+--   cd /home/user/PoliceTablet && lua5.4 tests/run.lua missions_b
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local U = CP.U

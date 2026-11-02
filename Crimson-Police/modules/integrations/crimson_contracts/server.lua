@@ -1,6 +1,6 @@
--- CP.CrimsonContracts (server): the adapter for Crimson-Contracts' server-only contract events (its step VC3, sent only
+-- CP.CrimsonContracts (server): the adapter for Crimson-Contracts' server-only contract events (sent only
 -- with ContractsConfig.LifecycleEvents = true). The only Crimson-Police file that knows their names and payloads: it
--- checks each one and hands a clean copy to CP.LiveCrime. Every server id in a payload is ignored (C9).
+-- checks each one and hands a clean copy to CP.LiveCrime. Every server id in a payload is ignored.
 
 CP.CrimsonContracts = CP.CrimsonContracts or {}
 local CC = CP.CrimsonContracts

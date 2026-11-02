@@ -1,4 +1,4 @@
-// Happy hour (step P6): "Happy hour: no mission cooldowns for 18:00, set by Sgt Doe" on the officer Home and the
+// Happy hour: "Happy hour: no mission cooldowns for 18:00, set by Sgt Doe" on the officer Home and the
 // Mission Board. Starts from the session (or the board's data) and follows push 'happyHour' (false = it ended).
 
 import { useEffect, useState } from 'react';

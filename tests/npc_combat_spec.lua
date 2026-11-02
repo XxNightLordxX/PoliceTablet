@@ -1,5 +1,12 @@
 -- Config.NpcCombat: no automatic weapons, the accuracy caps, and an officer's run-scoped damage settings.
 
+-- Config.NpcCombat (the owner's request of 2026-10-19: no automatic weapons, lower accuracy, slower fire, less damage to
+-- officers, no headshot one-shots): the weapon helper (shared/npccombat.lua), the accuracy caps of modules/scaling,
+-- and, in their own Lua state, the run-scoped damage settings of an officer's game (tests/fixtures/npccombat). The
+-- client caps, the drive-by and the server's willKill cancel are in npc_spec, blocks_c_spec and the npc client checks;
+-- the Builder check with Config.NpcCombat off (the allowed list alone), flee_arrest's swapped door weapon and the
+-- escort attackers' healthMult are in blocks_b_spec and blocks_c_spec.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local NC = CP.NpcCombat

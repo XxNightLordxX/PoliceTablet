@@ -1,5 +1,27 @@
 -- CP.Goals (server): personal daily and weekly goals.
 
+-- Owns
+--   * picking each officer's goals: one of Config.Goals.daily per reset-adjusted day and one of
+--     Config.Goals.weekly per week (from the weekly reset on Config.Leaderboard.weekStartsOn), with a seed
+--     made from the date (or the week's start) and the citizenid, so a restart keeps the same goals and
+--     nothing is stored
+--   * progress: the officer's counted runs since the period started (completed, not flagged, not voided,
+--     never manual_award or goal rows) that match the goal (type = a mission type key, unit = 2+
+--     participants, crossDepartment = 2+ departments, mission = one mission id; count = how many)
+--   * the reward: once per period a 'goal' row (mission_type 'goal', mission_id = the goal id, state and
+--     end_reason 'completed', final_points = Config.Goals.dailyPoints / weeklyPoints) counted through
+--     CP.Scoring (XP; Overall and Department boards only)
+--
+-- Public API (docs/ARCHITECTURE.md §5.19)
+--   CP.Goals.forOfficer(citizenid) -> { daily = Goal|nil, weekly = Goal|nil }
+--       Goal = { id, label, count, progress, done, points }   (progress is capped at count)
+--   CP.Goals.onRunCompleted(citizenid)   (hook: a completed row was counted) -> inserts the goal rows earned
+-- Both query the database: call them from a thread.
+--
+-- the goals Mission control (Goals.registerControl). A supervisor picks which of the admin's daily and
+-- weekly goals his department's officers draw from, counting from the next weekly reset (the saved value carries
+-- from and prev); forOfficer(citizenid, department) and Pick take the department; the setter keeps the whole lists.
+
 CP.Goals = CP.Goals or {}
 local Goals = CP.Goals
 local TAG = 'goals'

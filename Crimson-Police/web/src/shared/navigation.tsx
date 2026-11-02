@@ -1,5 +1,9 @@
 // The state-based screen switch (no router).
 
+//   const navigate = useNavigate();  navigate('board');
+//   navigate('profile', { citizenid: row.citizenid });   const { params } = useNavigation();
+// Keys outside the open UI (or hidden by permissions) are ignored with a console warning.
+
 import { createContext, useContext } from 'react';
 
 export type OfficerScreenKey =

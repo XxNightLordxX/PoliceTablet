@@ -1,4 +1,15 @@
-// Check spawn points (PLAN S8): the admin's check kept in module memory, fed by the Lua testing client's pushes.
+// Check spawn points: the admin's check kept in module memory, fed by the Lua testing client's pushes.
+
+// Module memory of the admin's spawn point check: a window 'message' listener at module level takes
+// every push of topic 'spawnCheck' (started, location, point, done, stopped, failed; modules/testing/client.lua
+// PushCheck), so the results stay while the tablet or the dialog is closed. useSpawnCheck() (useSyncExternalStore)
+// -> SpawnCheckView { status idle|running|done|stopped|failed, scope, planned, progress, current, reached, rows
+// (each point's result with its mission and location), skipped, totals, error, stopping }. startSpawnCheck(scope)
+// and stopSpawnCheck() call the client actions (the 'started' push and the action's answer come on two channels:
+// whichever is first starts the memory); a push of a check this memory missed the start of is followed from there.
+// reportLine / spawnCheckReport: one line per point to look at in the server's console format (the same status
+// words as modules/testing/server.lua CHECK_STATUS), the locations not checked, and how it ended. A toast when the
+// check ends.
 
 import { useSyncExternalStore } from 'react';
 import { t } from '../../shared/i18n';

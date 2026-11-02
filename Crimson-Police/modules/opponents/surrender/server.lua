@@ -1,4 +1,12 @@
--- CP.Opponents surrender (server, step RP1): a real suspect of a live case gives himself up, by his own command or
+-- CP.Opponents surrender (server): a real suspect of a live case gives himself up, by his own command or
+
+-- CP.Opponents surrender (server): a real suspect of a live case gives himself up, by his own command or
+-- when an officer of the case close to him uses Talk them down (the suspect always chooses). Config.RealSuspects
+-- .surrender, behind Config.LiveCrime.enabled. The server decides everything from its own positions and the case's
+-- states; the clients only show the question and send the answer with its token. A surrender is a mark on the
+-- suspect (rec.surrender), never a state: the cuff, the detain and the booking stay the proof's. A surrendered
+-- suspect detained with no officer hit on him since he gave up is a peaceful arrest (Opp.peaceful, read by the
+-- live_response block for the peaceful_arrest line), and the case timeline keeps who talked him down.
 
 CP.Opponents = CP.Opponents or {}
 local Opp = CP.Opponents

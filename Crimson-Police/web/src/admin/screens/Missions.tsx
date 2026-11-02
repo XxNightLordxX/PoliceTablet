@@ -1,5 +1,19 @@
 // Admin UI · Missions (screen key 'admin_missions', title key 'ui.screen.admin_missions').
 
+// Tabs
+//   Catalog           every built-in and custom mission: version, Lua file path, "edited in code", edit lock and
+//                     status. Built-in missions are read-only and can only be turned off in config
+//                     (Config.DisabledMissions, shown read-only); custom ones can be built, have tested drafts
+//                     published, be archived, restored or rolled back, and have an edit lock broken. Built-ins can
+//                     be duplicated into the builder. Launch (Cross-Department) per eligible mission.
+//   Builder           the Mission Builder (src/builder, scope 'admin': admins can do every builder action)
+//   Cross-Department  <OperationPanel scope="admin" /> (launch, start now, relaunch, cancel) and the eligible
+//                     missions with their Launch buttons
+// Data: callbacks admin:getMissions (every loaded mission: `enabled`, `crossDeptEligible`, filePath, editedInCode,
+// disabledInConfig) and builder:list (custom rows incl. drafts and archived, file path, edited in code, lock, can.*). Actions: server:builder:publish / archive /
+// restore / rollback / breakLock / duplicate, server:admin:reloadMissions (summary dialog), server:admin:opLaunch
+// { missionId }. Pushes 'builder' and 'operation' refresh the lists.
+
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
 import {
     Badge,

@@ -1,6 +1,10 @@
 // Admin UI · Seasons & Challenge (screen key 'admin_seasons', callback admin:getSeasons, actions
 // server:admin:startSeason { name }, server:admin:endSeason, server:admin:overrideBounty { objective }).
 
+// Current season card, department standings, this week's bounty with the override select, bounty history
+// and the list of seasons with their champions. Starting a season ends the running one first; ending and
+// overriding ask for confirmation.
+
 import { useEffect, useState } from 'react';
 import {
     Badge,

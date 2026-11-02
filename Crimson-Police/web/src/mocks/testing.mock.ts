@@ -1,5 +1,14 @@
 // Browser mocks for Admin test mode (admin/screens/Testing.tsx, hud/TestControls.tsx, hud/DebugOverlay.tsx).
 
+// URL shortcuts (with ?ui=admin&screen=admin_testing for the screen, ?hud=test for the HUD):
+//   testactive=1  a running test of mine        testdebug=1  debug overlay data (push 'test')
+//   testfocus=1   the HUD panel has NUI focus   testprompt=1 the invitation prompt
+//   testinvite=0  no invitation banner for me    testempty=1  an empty test log (everything "Not tested")
+//   testlong=1    edge cases: very long mission/location/player names and notes, a mission without locations
+//   testlua=1     Lua-shaped replies: empty lists sent as {} objects, false for missing values
+// Check spawn points: client actions spawnCheck / spawnCheckStop / teleport { target: 'point' } and a short
+// fake run of 'spawnCheck' pushes (four missions with "All missions", a few bad points, Pursuit Sim #2 refused).
+
 import { emitDebug, registerMock } from '../shared/nui';
 import { MOCK_DEPARTMENTS, mockLocale } from './samples';
 import type {

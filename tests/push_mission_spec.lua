@@ -1,6 +1,14 @@
--- A mission a supervisor pushes to a unit (step P19, the pushMission Mission control): the paged call names that
+-- A mission a supervisor pushes to a unit (the pushMission Mission control): the paged call names that
 -- mission, only the paged unit sees its name and may accept or decline it; the accept runs every rule but skips the
 -- random draw. Plain stubs (no database): MySQL answers the call rows, CP.AdminKit counts today's pushes.
+
+-- A mission a supervisor pushes to a unit (the pushMission Mission control): shipped off nothing moves; on,
+-- the push is refused for his own unit, another department, another type, the wrong unit size, a mission with no start
+-- in the area and a member's mission cooldown; a push names the mission in the audit, only the paged unit gets the
+-- toast and sees the call (with the mission's name), even after the page time, and its accept starts that mission
+-- (staff call, no rapid response); a decline ends it and tells the supervisor; pushMissionPerDay a supervisor a day,
+-- admins any. Plain stubs (MySQL, CP.AdminKit.dailyCount from the stubbed audit rows); the real deptcontrols, draw
+-- and missioncalls modules. No database.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

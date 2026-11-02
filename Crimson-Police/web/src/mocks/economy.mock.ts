@@ -1,6 +1,11 @@
 // Browser-mode mocks for the economy slice: getHome, sup:getPayouts, admin:getPayouts and the three
 // payout actions. State is kept in memory so a change on one screen shows on the others.
 
+// URL switch for screenshots: ?economy=empty (no goals / no Type of the Day / no announcements, a fresh
+// officer), ?economy=lua (the same empties the way Lua encodes them: {} / [] for empty tables, keys of nil
+// values missing, no callsign), ?economy=edge (long names and labels, huge numbers, top XP level, a
+// config multiplier of 1.5) or ?economy=error (every economy request fails with err.internal).
+
 import { registerMock } from '../shared/nui';
 import type { HomeData } from '../shared/types';
 import type {

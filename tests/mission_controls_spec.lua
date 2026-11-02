@@ -1,4 +1,4 @@
--- Mission controls core (step P1): CP.DeptControls (register, bounds, get, snapshot, set, reset, view), the six
+-- Mission controls core: CP.DeptControls (register, bounds, get, snapshot, set, reset, view), the six
 -- callbacks and actions, the master switch, the grants, the change wait, the self rule and the audit. One test control
 -- per department and one server-wide control outside the master switch. Runs in both storage modes.
 

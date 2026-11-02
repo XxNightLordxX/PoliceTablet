@@ -1,5 +1,10 @@
-// Profile · Field training (steps T1 and T2, Config.FieldTraining): the rookie's own training (tasks, progress,
-// trainer, notes, ride-along types) and the trainer's rookies with Sign off (step H3: a count of the tasks ready). Full notes in docs/FILE_NOTES.md.
+// Profile · Field training (Config.FieldTraining): the rookie's own training (tasks, progress, trainer, notes,
+// ride-along types) and the trainer's rookies with Sign off (and a count of the tasks ready).
+
+// Profile · Field training (Config.FieldTraining): the officer's own training as a rookie (tasks,
+// progress, trainer, sign-off notes and the ride-along types) and, as a trainer, his rookies with a Sign off button on
+// every task whose count is reached (and the trainer bonus, when there is one). The server checks every rule again (only
+// the rookie's own trainer, only a task that is ready and not signed yet). Nothing shows while the feature is off.
 
 import { useState } from 'react';
 import { Badge, Button, Card, Dialog, Field, ProgressBar, Textarea } from '../../shared/components';

@@ -1,6 +1,6 @@
 # Crimson-Police – Tablet Missions & Leaderboard Spec
 
-Sep 30, 2026 · @John Wood · parity-plus build (English only)
+Sep 30, 2026 · @John Wood · English only
 
 Crimson-Police is a Qbox police tablet (/CrimsonPolice) with its own custom UI. It gives on-duty SAST and FIB officers random NPC missions by mission type, pays cash through Renewed-Banking and ranks officers on leaderboards. Read Hard rules first: they override every other section, and the files in config/ override any number in this document.
 
@@ -70,7 +70,7 @@ Everything below was considered and removed. Do not add it back, even as an opti
 
 - Framework: no QBCore core object, no QBCore.Functions, no qb-core dependency, and no QBCore or ESX bridges.
 
-- Languages: this build ships English only (locales/en.json). No other language files, no per-player language picker and no language switching beyond what exists.
+- Languages: Crimson-Police ships English only (locales/en.json). No other language files, no per-player language picker and no language switching beyond what exists.
 
 - Integrations: no other dispatch, inventory, target, banking, medical or tablet resources; no edits to sc-police, sc-dispatch, sc-ambulance, sc-multijob, sc-npcpolice or Renewed-Banking; missions never create SC-Dispatch calls (apart from the EMS request for a downed participant); never trigger SC-Ambulance's hospital:server:RevivePlayer (it bans any sender who is not EMS).
 
@@ -465,7 +465,7 @@ Random draw rules
 
 - Zone lint (tests/zone_lint_spec.lua): it fails the suite only for the new missions. Every start and non-route point of a new mission's locations must be at least Config.Draw.zoneClearance (250 m for Drug Lab Raid) from every point of every other mission's locations, new or existing. A route (recorded road route, Traffic Enforcement corridor) is measured by its start and end only, because routes cross each other by nature.
 
-- Existing pairs are only reported: every pair of existing built-in locations that the same measurement finds under the clearance (102 cross-mission pairs under 200 m at this build, routes counted by their start and end; for example armored_truck_escort #1 and business_check #2 at 38 m) are listed in tests/zone_lint_baseline.txt. The spec prints them as warnings and fails if a pair not on the list appears or the list grows. No built-in location moves in this build (moving one would reset its test status to "Changed since test"); the loader prints the same warnings, and the owner checklist offers the list for a later clean-up.
+- Existing pairs are only reported: every pair of existing built-in locations that the same measurement finds under the clearance (102 cross-mission pairs under 200 m, routes counted by their start and end; for example armored_truck_escort #1 and business_check #2 at 38 m) are listed in tests/zone_lint_baseline.txt. The spec prints them as warnings and fails if a pair not on the list appears or the list grows. No built-in location moves in this build (moving one would reset its test status to "Changed since test"); the loader prints the same warnings, and the owner checklist offers the list for a later clean-up.
 
 - Spawn lint (tests/spawn_lint_spec.lua, owner request of 2026-10-19: "The coordinates are very critical"): every built-in mission's locations are checked on the real loaded definitions, so a later edit of a mission file cannot quietly bring back people spawning inside each other or around the officers. Three rules, measured flat (2D): (1) no two spawn points of one run (every location key where a block makes people, vehicles or objects, from each block's pointKinds as Check spawn points reads them; the escort truck at its route's first point) closer than 1.5 m; (2) every list has a point for each person, car or item the largest team the mission takes brings at once (the real CP.Scaling counts over minOfficers-maxOfficers, each scaling entry's max applied; hostile_waves: the largest wave, on the `use` smallest spawn sets; escort: one point per ambush wave), so nobody is put on a ring copy of a point already used; (3) every armed spawn point (the Mission Builder's armed keys) keeps the start circle plus Config.Builder.spawnMargin (CP.Builder.armedKeepOut, the custom-mission rule) unless its objective is placed by the spawn director from many points as the officers come near (hostile_waves, flee_arrest scatter) or staged (stage = true). Rule 2 has no exceptions. The cases found when the lint was written are listed in tests/spawn_lint_baseline.txt (26 lines: Hostage Rescue's hostages[3] 1.48-1.49 m from spawns[7] at all six banks, Bomb Disposal's hiding spots 3 and 4 1.496-1.498 m apart at four stores, Pursuit Sim's car 47 m from its 25 m start, Stolen Vehicle Takedown's car inside its 85 m circle by design, Warrant Service's associates 32-46 m from a 50 m start, which appear at the knock through the director). The spec fails on any case not listed, on a listed armed key whose nearest point comes closer than listed, on a line that no longer matches (it must be removed) and when the list grows past the 26 lines it was written with, so it only shrinks.
 
@@ -1775,7 +1775,7 @@ Profile & History gets an Edit profile dialog and three new cards (Service recor
 | Bio | Up to 280 characters and 3 lines, plain text (links are not clickable), trimmed, control characters removed. Words on Config.Profile.bannedWords and in the shipped list config/banned_words.txt (a short default list the owner can extend or empty) are refused. With Config.Profile.bioRequiresApproval (off by default) a new bio is Pending like a picture. The edit dialog labels it "Visible to other officers". One profile change every 5 minutes |
 | Callsign | Read live from Qbox (set with SC-Police's /callsign), never edited here. When it is missing the profile says "Set it with /callsign" |
 | Commendations | See below |
-| Look | Appearance, personal accent (from the department's personalAccents) and tablet size (85–125%); they apply to the officer's own tablet only. English is the only language in this build, so there is no language choice |
+| Look | Appearance, personal accent (from the department's personalAccents) and tablet size (85–125%); they apply to the officer's own tablet only. English is the only language, so there is no language choice |
 | Service record | See XP levels & service record |
 
 Commendations
@@ -2824,7 +2824,7 @@ At the owner's request ("admins get full control over everything in the admin ta
 - Maintenance lock: from the start of a storage copy, a storage switch or a backup restore until the owner restarts Crimson-Police, no new run, mission call claim, test run or operation starts, payments and scheduled jobs wait, and every action but the status reads is refused; a banner says so on every tablet. When the work is done the Admin UI and one console line say "Restart Crimson-Police now from txAdmin or the server console": Crimson-Police never restarts itself. A store another one took over from (after a storage switch) stays locked and pays nothing until an admin uses it again. A backup restore that stops part way (or a server that stops during one) puts the money state back and keeps the lock, also after a restart (Config.Backups.holdAfterFailedRestore), until a restore works: the banner names the automatic backup to restore, and that restore is the one action the lock allows.
 - Backup restore: every part of the backup is read before anything changes (a missing or damaged part, or rows without a column this version needs and has no default for, refuse the restore and change nothing); a backup made before a migration that added a column with a default gets that default. Keep N never removes the backup being restored. Money and voids only move forward: a payment made after the backup stays paid, a given reward stays given, and the officer (after a record move), the void and the flag of every row that is or can still be paid are the live ones.
 
-The owner decisions of this build (each with its undo in the Admin UI, listed in the root README under Waiting for the owner's OK):
+The owner decisions (each with its undo in the Admin UI, listed in the root README under Waiting for the owner's OK):
 
 | # | Decision | Ships | Undo |
 |---|---|---|---|
@@ -5975,7 +5975,7 @@ Acceptance checks
 
 - ☐ Missions with vehiclePenalties = false (Stolen Vehicle Takedown, Street Race Bust and the others listed in Scoring) never apply the heavy-damage penalty, while their ramming penalties still apply
 
-Parity-plus checks
+Mission calls, custody, newer missions, boards, profile and rewards checks
 
 - ☐ A mission call can be claimed only by a leader who passes every accept check; with two units claiming within 1.5 seconds the nearer one wins; the mission is drawn only after the claim and starts in the call's area; a claimed run abandoned before arrival re-dispatches once and excludes the old claimants
 
@@ -6037,7 +6037,7 @@ Parity-plus checks
 
 - ☐ Two active runs of different missions never have locations within 200 m of each other while another location is free
 
-- ☐ Every player-facing text of this build comes from locales/en.json (English only); tools/check_contracts.py reports no missing key
+- ☐ Every player-facing text comes from locales/en.json (English only); tools/check_contracts.py reports no missing key
 
 - ☐ With Config.Database.enabled = false every check above passes the same way: calls, commendations, profiles, stats, boards and item rewards are kept in the saves folder, survive a restart, and move with /CrimsonPoliceAdmin storage copy
 
@@ -6091,7 +6091,7 @@ Phase 4 · Mission Builder
 
 Go live after Phase 2, when units, the full catalog and the Supervisor and Admin UIs (needed to review flagged runs) are in. Steps 6–8 enforce Hard rules 15–18, so they are never skipped or postponed. Phases 3 and 4 ship once the live server has run for 2 weeks with fewer than 2 disputes a week, their checks pass and command staff sign off.
 
-Phase 5 · Parity-plus (English only; docs/ARCHITECTURE.md §13 has how each part reads the contracts)
+Phase 5 · Mission calls, custody and the newer features (English only; docs/ARCHITECTURE.md §13 has how each part reads the contracts)
 
 | Step | Folders and files | Done when |
 |---|---|---|
@@ -6135,7 +6135,7 @@ These are settings and choices only the server owner can make. The AI builds the
 
 - ☐ When updating, keep your config/, logos/ and missions/custom/ folders.
 
-- ☐ The amendments of this build are in the Hard rules, Do not build, Interfaces and Mission catalog above (mission calls, the three new patrol and investigation missions, the eighth Officer screen, bodies kept for Process the scene): confirm them before go-live.
+- ☐ The amendments are in the Hard rules, Do not build, Interfaces and Mission catalog above (mission calls, the three new patrol and investigation missions, the eighth Officer screen, bodies kept for Process the scene): confirm them before go-live.
 
 - ☐ Test every new location at Heavy tier in Admin UI → Testing before go-live.
 

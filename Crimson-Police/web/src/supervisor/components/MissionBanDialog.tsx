@@ -1,6 +1,10 @@
-// Supervisor UI · Department Report · Mission ban (step P11, Config.MissionControls.controls.missionBan): bar one
+// Supervisor UI · Department Report · Mission ban (Config.MissionControls.controls.missionBan): bar one
 // officer from taking missions for a number of hours (the admin's min to max), with a reason; or lift the ban the
 // viewer set. The server checks every rule again (own department, a lower grade, never himself, the daily count).
+
+// Supervisor UI · Department Report · Mission ban: hours (the admin's min to max) and a reason, or Lift for
+// the ban the viewer set. The server checks every rule again (own department, a lower grade, never himself, the
+// officer online, the supervisor's bans a day).
 
 import { useEffect, useState } from 'react';
 import { Button, Dialog, Field, NumberInput, Textarea } from '../../shared/components';

@@ -1,4 +1,4 @@
--- Results for other scripts (step V19): the server-only event crimson-police:server:liveCrimeEnded when a live case
+-- Results for other scripts: the server-only event crimson-police:server:liveCrimeEnded when a live case
 -- ends (Config.LiveCrime.endEvent) and the read-only export GetAvailablePolice (CP.LiveCrime.availablePolice,
 -- Config.LiveCrime.availablePolice). Plain Lua with stubs.
 

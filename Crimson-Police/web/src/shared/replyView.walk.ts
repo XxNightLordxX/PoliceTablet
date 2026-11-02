@@ -1,5 +1,10 @@
-// Smoother workflows (steps WF2 and WF3) against the browser mocks (node walk.mjs, a gate step): replies that carry the
+// Smoother workflows against the browser mocks (node walk.mjs, a gate step): replies that carry the
 // fresh view (Review Queue, Dispatch, Admin Backups) and the remembered supervisor dialog values.
+
+// Smoother workflows against the browser mocks (node walk.mjs, a gate step): Approve / Void on the Review
+// Queue and Decline on Dispatch answer with the screen's fresh view, so the screen needs no second request; a reply
+// without it asks again. The supervisor dialogs open with the values last used only while
+// Config.Tablet.supervisorRemember is on.
 
 import '../mocks/oversight.mock';
 import '../mocks/missioncalls.mock';

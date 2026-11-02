@@ -1,4 +1,4 @@
--- Department notices (step P13, the notices Mission control): a supervisor posts a short notice for his own
+-- Department notices (the notices Mission control): a supervisor posts a short notice for his own
 -- department only (cp_staff_notices, shared with the admin's staff notices); it shows on that department's Home
 -- Announcements card, never another's. Length, banned words, per day and the running limit per department.
 

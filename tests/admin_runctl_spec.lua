@@ -1,4 +1,4 @@
--- Full admin control, an officer's run state and the anti-farm overrides (P3): Today & cooldowns (cooldowns, counts,
+-- Full admin control, an officer's run state and the anti-farm overrides: Today & cooldowns (cooldowns, counts,
 -- cash today, free abandons, the board as the officer sees it), Clear cooldowns, Allow more today, Another boss
 -- attempt and Treat as a normal abandon, with the limits counted from saved rows and the caches they clear.
 

@@ -1,4 +1,4 @@
-// Full admin control, officers and boards (P1): the shapes of modules/corrections, the officers tools in
+// Full admin control, officers and boards: the shapes of modules/corrections, the officers tools in
 // modules/profile, scoring, goals, and the recognition and season tools in modules/leaderboard and challenge
 // (docs/ARCHITECTURE.md §5.38 and §9.5).
 

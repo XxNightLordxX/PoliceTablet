@@ -1,4 +1,4 @@
-// The Money screen and one request per screen open (step H6) against the browser mocks (node walk.mjs, a gate step):
+// The Money screen and one request per screen open against the browser mocks (node walk.mjs, a gate step):
 // Config.AdminUi.moneyScreen merges Mission pay and Payments made into one screen whose old keys stay aliases, and
 // Config.AdminUi.oneRequest brings Payments made's totals with its list.
 

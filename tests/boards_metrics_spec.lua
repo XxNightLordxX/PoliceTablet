@@ -1,4 +1,4 @@
--- Leaderboard metrics, levels and avatars on rows, the service record, stat goals and the new bounties (WP6).
+-- Leaderboard metrics, levels and avatars on rows, the service record, stat goals and the new bounties.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })

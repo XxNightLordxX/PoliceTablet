@@ -1,5 +1,11 @@
 -- Integration of the core group (integrations, access, permissions, tablet) with
 
+-- the modules that call it: CP.Banking.depositSociety (CP.Cash's society refund), the live-run own-run check
+-- of CP.Permissions.canReviewRun, the session tier labels from CP.Scaling.label, and on the client the one
+-- NUI path of the mission HUD / result screen (modules/runs/client.lua -> CP.Tablet -> SendNUIMessage),
+-- the HUD kept off screen while Crimson-Arena owns the player (Crimson-Arena rule 8) and the panel focus
+-- helper CP.Tablet.panelFocus that modules/testing's test-control panel needs.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 

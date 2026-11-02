@@ -1,5 +1,47 @@
 -- Objective block "pursuit" (client half)
 
+-- What it does (while the objective is current on this participant's client)
+--   - every participant: reports rams of suspect vehicles by the car they drive (IsEntityTouchingEntity
+--     rising edge, polled every RAM_POLL_MS only while a suspect vehicle is within RAM_WATCH; speed =
+--     the pre-impact speed) when ramSpeed is 0 or the speed is above it; 'lights_near' when their lights
+--     or siren are on within trigger.distance of a waiting car; 'aim' after aiming at an unarmed
+--     suspect on foot for AIM_HOLD_MS (AIM_STOPPED by the car, flee_arrest.aimDistance when running);
+--     'stunned' when IsPedBeingStunned; follow mode: 'undriveable' when the car they drive is no
+--     longer driveable. The server re-checks every report with its own coordinates.
+--   - blips for suspect vehicles ("Racer" on a race loop) and suspects on foot (none with Radio Silence
+--     'area' or 'none')
+--     and a HUD line (ctx.hudDetail): follow progress / lost countdown, escape countdown, lights hint,
+--     stop progress with the distance to the nearest live car this client streams, detain progress
+--     (also before every car is stopped, while a surrendered suspect is within WATCH_RANGE), aim hint.
+--     Blips and the host AI only reach cars this client's game streams (OneSync: within the culling
+--     radius the server half sets, 424 m by default).
+--   - on the run host only: control of every suspect and car before anything is done to them (re-apply
+--     and re-task when control comes back from another client; one ctx.control(ent, 0) request and no
+--     wait for an entity another client owns, which is skipped that pass, and the next pass comes after
+--     FAST_MS), CP.Npc.apply once per entity handle,
+--     seats them, locks the car, then drives: CP.Npc.task(driver, 'driveRoute', { vehicle, points,
+--     loop, speed (m/s), style, stopRange, force }) from the next waypoint of the route (a loop is
+--     re-tasked lap by lap, an open route ends in a free flee that stays a free flee after a regain or a
+--     new host: the server's routeDone), or CP.Npc.task(driver, 'flee', {
+--     vehicle, speed, style, force }) for a free flee; a stuck car is re-tasked every RETASK_MS (force:
+--     CP.Npc ignores identical repeats). CP.Npc maps the style name ('cautious' | 'reckless') to the
+--     driving flags. After a stop the occupants leave the car (TaskLeaveVehicle, repeated every
+--     EXIT_RETRY_MS, warping them out from the EXIT_WARP_TRY-th attempt: the server keeps them
+--     'stopped' until they are out); fleeing -> CP.Npc 'flee', hostile -> 'combat', and on first sight
+--     (new host) surrendered -> 'kneel', cuffed -> 'cuffed'. The arrest target ("Detain driver" /
+--     "Cuff suspect") is CP.Npc's (enableCuff). Everything is re-applied after hostChanged. The host
+--     sets SetEntityLoadCollisionFlag on each car and person it applies (far from the player they
+--     would sit dormant without a physics grid); Config.Debug prints in F8, once per change, whether
+--     the host's game streams and controls each car.
+--
+-- Objective fields read: mode, route, speed, style, trigger, surrenderOnAim, ramSpeed, failIfUndriveable,
+--   neverShoots (ctx.obj); location[route].
+-- Evidence sent: { type = 'ram', netId, speed }, { type = 'lights_near', netId }, { type = 'aim', netId },
+--   { type = 'stunned', netId }, { type = 'undriveable', netId }
+-- Server data (update): { kind = 'state', mode, fled, trigger, lights, vehicles = { { netId, index, state,
+--   occupants, routeDone } }, suspects = { { netId, vehicle, seat, state, armed } }, detained, neutralised, total,
+--   stopped, vtotal, escaping, follow = { inRange, duration, hold, lost, average } }
+
 local BLOCK = 'pursuit'
 local U = CP.U
 

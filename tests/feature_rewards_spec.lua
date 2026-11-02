@@ -1,4 +1,9 @@
--- Feature rewards (step G3, Config.FeatureRewards): money and items for the volunteer suspect, the officer who talks a
+-- Feature rewards (Config.FeatureRewards): money and items for the volunteer suspect, the officer who talks a
+
+-- Feature rewards (Config.FeatureRewards): money and items for the volunteer suspect, the officer who talks a
+-- suspect down, field training sign-offs and completion, and supervisor point awards. Every feature ships off with
+-- a money amount ready; a payment is one ledger row paid once per case (CP.Cash), its items are run rewards of that
+-- row (CP.Rewards), and a suspect is paid only for a case the server saw end fairly.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

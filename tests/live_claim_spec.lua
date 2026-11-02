@@ -1,4 +1,4 @@
--- The live claim and the case (step V14): the live_crime engine mission in its own registry
+-- The live claim and the case: the live_crime engine mission in its own registry
 -- (CP.Missions.registerEngine), CP.LiveCrime.missionFor / claimCheck, the run:created hook that opens the
 -- CP.Opponents case, the run:ended hook that writes the pair rows, and CP.Runs.create opts.live. Plain Lua with stubs.
 

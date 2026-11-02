@@ -1,5 +1,19 @@
 -- /CrimsonPoliceAdmin storage and storage copy (modules/admin) with MariaDB and a temporary saves folder together.
 
+--   1. files mode (Config.Database.enabled = false; the live engine is the saves folder, MariaDB is reached through
+--      CP.Storage.realMySQL): the status lines; the refusals (usage, not an admin, a run or an operation active,
+--      oxmysql stopped, a target with rows); database-to-files into the live engine (every table and value, ids and
+--      AUTO_INCREMENT counters, split documents, a reload of the folder, the audit entry); force; a copy that fails
+--      half way leaves the target empty and the source as it was; files-to-database into an empty MariaDB database
+--      (the migrations create the tables there first) and back into a database with rows (force).
+--   2. database mode (Config.Database.enabled = true, an absolute saves folder): the status lines; files-to-database
+--      from an empty folder is refused; database-to-files into a new folder (built by the migrations); files-to-
+--      database back into MariaDB (refused without force, then replaced).
+-- The spec picks its storage modes itself, whatever CP_TEST_STORAGE says. Values are compared as the modules read
+-- them (DATETIME through UNIX_TIMESTAMP, DATE through DATE_FORMAT, TINYINT(1) as 0/1, DECIMAL and numeric text as
+-- numbers: the harness' mysql CLI types every number-like text as a number). CP_COPY_RUNS sets the number of runs
+-- (default 1203; e.g. 50000 for a timing at scale, printed as REPORT lines).
+
 local H = dofile('tests/harness.lua')
 local WALL = os.time                                                     -- the real clock (H.boot fakes os.time)
 local RUNS = math.max(701, tonumber(os.getenv('CP_COPY_RUNS')) or 1203)  -- CP_COPY_RUNS=50000 for a timing at scale

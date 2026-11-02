@@ -1,6 +1,12 @@
 // Admin UI · Permissions (screen key 'admin_permissions'): supervisor powers, extra grants to people who are not
 // supervisors, admin-only actions and Config health.
 
+// Admin UI · Permissions (screen key 'admin_permissions').
+// Config.Permissions: which supervisor actions are switched on, the actions supervisors always have, the actions that
+// are always admin-only, and the Builder teleport card (per department Off / From grade / These grades, saved as
+// Permissions.builderTeleport through server:admin:setSetting, audited).
+// Data: callback admin:getPermissions (modules/admin).
+
 import {
     Badge,
     Button,

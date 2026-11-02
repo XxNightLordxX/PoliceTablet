@@ -1,6 +1,6 @@
--- Full admin control, Missions and Mission Builder (P2): editing a built-in mission in the Mission Builder (an
--- override under the same id), the admin-only override rows (S4), the shipped file as a baseline by value (S30),
--- Keep mine / Take the new original / Reset to original, Fold tweaks in, testing optional (O2) and the switches (O3).
+-- Full admin control, Missions and Mission Builder: editing a built-in mission in the Mission Builder (an
+-- override under the same id), the admin-only override rows, the shipped file as a baseline by value,
+-- Keep mine / Take the new original / Reset to original, Fold tweaks in, testing optional and the switches.
 
 local H = dofile('tests/harness.lua')
 local X = dofile('tests/fixtures/admin_missions/boot.lua')(H, 'builtin_override')

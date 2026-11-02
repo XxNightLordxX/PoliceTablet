@@ -1,5 +1,11 @@
 // Supervisor UI · Payouts (screen key 'sup_payouts', title key 'ui.screen.sup_payouts').
 
+// Per mission type: current payout, config default, the supervisor's allowed range, "Set by admin"
+// (read-only), the cooldown before it can change again, and a change dialog (NumberInput clamped to the
+// range + a required reason). Single-mission payouts are never shown here.
+// Data: callback 'sup:getPayouts' (SupPayoutsView, src/types/economy.ts), push topic 'payouts';
+// write: action 'server:sup:setTypePayout' { type, amount, reason }.
+
 import { useEffect, useMemo, useState } from 'react';
 import {
     Badge,

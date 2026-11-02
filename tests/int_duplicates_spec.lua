@@ -1,6 +1,20 @@
 -- Every built-in mission can be duplicated into a custom mission that passes the Mission Builder guardrails and can be
 -- published after its test.
 
+-- The REAL loader (CP.Missions.loadAll at start: missions/builtin/index.lua and every built-in file), the REAL
+-- blocks and the REAL builder (modules/builder/server.lua) on MariaDB; stubs only for access, qbx, admin audit,
+-- tablet pushes and CP.Testing.startDraft (the test run itself is modules/testing's job). For each of the 14
+-- built-ins:
+--   * server:builder:duplicate (B.sanitize, the standard-bonus filter and B.customBonusFields) gives a draft
+--     whose record has no guardrail errors;
+--   * B.validate(draft, { publish = true }) (every builder guardrail, the blocks' validate() as a custom mission
+--     and CP.Missions.normalize) finds nothing; server:builder:save and server:builder:validate agree;
+--   * server:builder:test at the required tier, a passed result (B.onDraftTested) and server:builder:publish
+--     write missions/custom/<id>.lua, which CP.Missions registers as a custom mission.
+-- Also: a search_area mission's start radius follows the search circle (Config.Blocks.search_area.startRadius)
+-- instead of the 20-150 m start-marker limit, and a mission without one keeps that limit.
+-- Mission files are written to a temporary folder missions/custom/test_dup_<n>/ that is removed at the end.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 

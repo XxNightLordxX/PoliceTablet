@@ -1,4 +1,11 @@
--- CP.FeatureRewards (server, step G3): the money and items of the features outside a mission's own pay
+-- CP.FeatureRewards (server): the money and items of the features outside a mission's own pay
+
+-- CP.FeatureRewards (server): the money and items of the features outside a mission's own pay
+-- (Config.FeatureRewards): the volunteer suspect, the officer who talked a suspect down, field training sign-offs and
+-- completion, and supervisor point awards. Each payment is one row of the payments ledger (cp_mission_runs, mission
+-- type manual_award, mission id reward_<feature>) paid by CP.Cash (audited, pending until login, the daily cap), and
+-- its items are run rewards of that row (CP.Rewards, under Config.Rewards.enabled and its daily caps). The row's
+-- run_uuid is made from the feature and the case key, so one case pays once whatever calls it twice.
 
 CP.FeatureRewards = CP.FeatureRewards or {}
 local FR = CP.FeatureRewards

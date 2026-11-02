@@ -1,5 +1,5 @@
--- Live crimes, step V10: the Crimson-Contracts adapter and the intake (CP.LiveCrime). Crimson-Contracts' five
--- server-only events (as built in its step VC3) are fired with TriggerEvent and GetInvokingResource() answering the
+-- Live crimes: the Crimson-Contracts adapter and the intake (CP.LiveCrime). Crimson-Contracts' five
+-- server-only events (as built in its) are fired with TriggerEvent and GetInvokingResource() answering the
 -- sender, against the real qbx, access, opponents and anticheat modules (qbx_core's exports and events mocked).
 
 local H = dofile('tests/harness.lua')

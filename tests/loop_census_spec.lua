@@ -1,4 +1,10 @@
--- Loop census (step LP4, docs/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
+-- Loop census (docs/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
+
+-- Loop census (docs/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
+-- (CreateThread) or runs a `while true do`, and every web/src file that sets a timer (setTimeout, setInterval) or asks
+-- for an animation frame, has a census row in docs/LOOPS.md with the same counts. A new loop, or a removed one, fails
+-- here until its row is written (and its five questions answered in the tables above the census).
+-- CP_LOOP_CENSUS_PRINT=1 prints the rows the code needs.
 
 local H = dofile('tests/harness.lua')
 

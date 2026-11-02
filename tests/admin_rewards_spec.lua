@@ -1,4 +1,4 @@
--- Full admin control, item rewards (P4): resolve a stuck reward, deliver now, cancel, take back (ships off),
+-- Full admin control, item rewards: resolve a stuck reward, deliver now, cancel, take back (ships off),
 -- rewards back on row:forfeitUndone, the admin filters, the pool check of every Rewards.* change, forbidden items
 -- refused live, and delivery waiting under the maintenance lock.
 

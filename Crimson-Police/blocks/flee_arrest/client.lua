@@ -1,5 +1,29 @@
 -- Objective block "flee_arrest" (client half)
 
+-- What it does (while the objective is current on this participant's client)
+--   - door mode: ox_target sphere zone "Knock and announce" on the door (option crimson-police:knock),
+--     selecting it reports 'knock_start', runs lib.progressBar(knock.duration) and reports 'knock';
+--     a marker over the door (DrawMarker only within MARKER_RANGE, otherwise Wait(750)) and a door
+--     blip until the knock (Radio Silence 'none': no blip); all three come back when a test restart
+--     sends knocked = false again (restart sends no stop or start);
+--   - every participant checks the suspects near them: 'aim' when IsPlayerFreeAimingAtEntity (or
+--     lock-on IsPlayerTargettingEntity) on an unarmed fleeing suspect within givesUp.aim, 'stunned'
+--     when IsPedBeingStunned (throttled per
+--     suspect); the server re-checks both with server-side distances;
+--   - suspect blips (after the knock in door mode; none with Radio Silence 'area' or 'none');
+--   - HUD lines (ctx.hudDetail): the escape countdown from the server, or "stay close" while this
+--     player is within givesUp.close.distance of an unarmed fleeing suspect;
+--   - on the run host only: CP.Npc.apply once it has control of each suspect, then the task for its
+--     cp state: fleeing -> flee along the route (scatter: location[obj.routes][route]; door:
+--     location[obj.fleeTo]), hostile -> combat, and (on first sight / after hostChanged)
+--     surrendered -> kneel, cuffed -> cuffed. Control is requested before every task and a refused
+--     task is retried on the next loop. The "Cuff suspect" target is CP.Npc's (enableCuff).
+--
+-- Objective fields read: mode, door, knock.label / duration, fleeTo, routes, givesUp.aim / stun /
+--   close (ctx.obj); location points.
+-- Evidence sent: { type = 'knock_start' }, { type = 'knock' }, { type = 'aim', netId }, { type = 'stunned', netId }
+-- Server data (update): { peds = { { netId, role, state, armed, route } }, mode, knocked, escaping, response }
+
 local BLOCK = 'flee_arrest'
 local U = CP.U
 

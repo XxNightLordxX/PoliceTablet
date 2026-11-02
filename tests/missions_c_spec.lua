@@ -1,4 +1,4 @@
--- The parity-plus built-in missions (parking_patrol, traffic_enforcement, suspicious_activity, drug_lab_raid,
+-- The five newer built-in missions (parking_patrol, traffic_enforcement, suspicious_activity, drug_lab_raid,
 -- gang_hideout_raid) and the changed cards: files, guardrails, and end-to-end runs at every tier they support.
 
 local W = dofile('tests/fixtures/custody/world.lua')

@@ -1,4 +1,9 @@
-// Admin UI · Real suspects (screen key 'admin_rs', step V18): what modules/opponents/staff/server.lua (V17) answers.
+// Admin UI · Real suspects (screen key 'admin_rs'): what modules/opponents/staff/server.lua answers.
+
+// Admin UI · Real suspects (screen key 'admin_rs'): what modules/opponents/staff/server.lua answers.
+// Callbacks (antiFarmOverride key): admin:getRsCases, admin:getRsCase { runUuid }, admin:getRsPairs { citizenid? }.
+// Actions (a reason, 1-3650 days): server:admin:rsBlockPair { officer, suspect, days, reason },
+// server:admin:rsExclude / server:admin:rsSuspend { citizenid, days, reason }.
 
 export type RsKind = 'live' | 'volunteer';
 export type RsState = 'free' | 'cuffed' | 'detained' | 'booked' | 'lost' | 'left' | 'void';

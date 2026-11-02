@@ -1,5 +1,11 @@
 // Admin UI · Home (screen key 'admin_home', Config.AdminUi.landing = 'home'): the landing screen. Six tiles open the
 
+// screens of the common jobs (navigate with params where the screen takes them) and a Live now strip shows the runs
+// of the Live screen. Every number comes from a request another screen already makes. With Config.AdminUi.homeForms
+// on, four tiles hold a quick form (admin/components/HomeForms) that does the job right there; Open still opens the
+// full screen. With Config.AdminUi.needsAttention on, a Needs attention panel on top reads
+// admin:getNeedsAttention (modules/adminhome) once a minute; its lines come from admin/components/needsAttention.ts.
+
 import { useState, type ReactNode } from 'react';
 import { Badge, Button, Card, Icon, Screen, SearchInput, TextInput, type IconName } from '../../shared/components';
 import { asArray } from '../../shared/data';

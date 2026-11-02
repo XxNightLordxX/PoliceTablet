@@ -1,4 +1,9 @@
--- Step F1: real-suspect data survives a restart. A closed case (its suspects, officers, timeline and damage ledger)
+-- Real-suspect data survives a restart. A closed case (its suspects, officers, timeline and damage ledger)
+
+-- real-suspect data survives a restart. A closed case (its suspects, officers, timeline and damage ledger)
+-- is saved in cp_pvp_cases and read back for the Admin UI after a restart; volunteer strikes and strike blocks are
+-- cp_pvp_pairs rows read back too. Config.RealSuspects.saveCases / Config.Volunteers.saveStrikes = false keep
+-- them in memory only.
 
 local H = dofile('tests/harness.lua')
 

@@ -1,5 +1,9 @@
 -- Loads locales/<Config.Locale>.json (falls back to en.json).
 
+-- All player-facing text lives in locales/en.json as a flat map of dotted keys, e.g.
+--   "board.server_busy": "Server busy"
+-- Placeholders use {name}: CP.L('run.ended_real_call') / CP.L('cash.paid', { amount = 250 })
+
 CP = CP or {}
 CP.Locale = CP.Locale or {}
 

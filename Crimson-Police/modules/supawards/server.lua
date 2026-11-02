@@ -1,4 +1,10 @@
--- CP.SupAwards (server): a supervisor gives points to an officer of his own department (step P22, the Mission
+-- CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
+
+-- CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
+-- control Config.MissionControls.controls.awardPoints, owner decision 2026-10-19). Only through the admin's
+-- point-adjust path (CP.Corrections.adjust, Config.AdminControl), inside the admin's min and max per award and
+-- Config.MissionControls.awardPointsPerDay a day, never to one of his own characters, always with a reason and audited
+-- as 'supervisor'. The row is a manual award like an admin's, so the officer's history shows it the same way.
 
 CP.SupAwards = CP.SupAwards or {}
 local SA = CP.SupAwards

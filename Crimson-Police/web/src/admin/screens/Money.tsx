@@ -1,5 +1,9 @@
-// Admin UI → Money (step H6, Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs of one screen.
+// Admin UI → Money (Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs of one screen.
 // Each tab is the old screen itself, with the same params (a Leaderboards link to stuck payments still filters).
+
+// Admin UI · Money (screen key 'admin_money', Config.AdminUi.moneyScreen): Mission pay (admin/screens/Payouts)
+// and Payments made (admin/screens/Payments) as two tabs of one screen, each the old screen itself with the same params.
+// params.moneyTab ('pay' | 'payments') picks the tab; layouts/adminMoney.ts maps the old keys onto it.
 
 import { useEffect, useState } from 'react';
 import { Tabs } from '../../shared/components';

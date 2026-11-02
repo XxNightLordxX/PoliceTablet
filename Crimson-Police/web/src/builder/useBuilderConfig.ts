@@ -1,6 +1,9 @@
 // builder:config (Config.Blocks ranges, allowed lists, limits and the caller's builder permissions), fetched once per
 // open UI and shared by every builder component.
 
+// Lua sends an empty list as {} (and drops nil fields), so every list of the config is normalised to an array
+// here once; the components can then use the lists directly.
+
 import { useEffect, useState } from 'react';
 import { asArray } from '../shared/data';
 import { request } from '../shared/nui';

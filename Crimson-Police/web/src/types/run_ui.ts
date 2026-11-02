@@ -1,5 +1,9 @@
 // Response shapes of the run_ui slice (Mission Board and Active Mission screens,
 
+// documented in docs/ARCHITECTURE.md §13.23). BoardData and ActiveMissionView are contract shapes
+// (src/shared/types.ts, ARCHITECTURE §9.4); the types below only add the optional fields the server
+// sends (or may send) on top of them. Every extra field is optional: the screens work without them.
+
 import type {
     ActiveMissionView,
     BoardCard,

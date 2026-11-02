@@ -1,5 +1,10 @@
 -- Modules/units and modules/operations (slice teams).
 
+-- Other modules are stubbed (Access, Qbx, Tablet, Runs, Alerts, Calls, Permissions, Missions, Draw,
+-- Admin); CP.Scaling is the real module. Every SQL statement of the slice runs against MariaDB. The
+-- spec uses its own database (<run database>_teams, rebuilt from sql/migrations and dropped at the end)
+-- so neither other specs nor a parallel run of this spec can interfere.
+
 local H = dofile('tests/harness.lua')
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_teams'
 H.resetDatabase()

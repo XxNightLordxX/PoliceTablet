@@ -1,4 +1,4 @@
-// Remember my filters (step O9): with the officer option rememberFilters on (this PC), a screen's filter starts from
+// Remember my filters: with the officer option rememberFilters on (this PC), a screen's filter starts from
 // the 'local' option filters (entries 'screen.part:value', e.g. 'dispatch.filter:near'; not a row of My options) and
 // each change is saved there. Off (as before): every screen starts from its own default.
 

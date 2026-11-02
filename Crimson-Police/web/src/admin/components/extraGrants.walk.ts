@@ -1,4 +1,4 @@
-// Admin UI -> Permissions -> Extra grants (step G1) against the browser mocks (node walk.mjs, a gate step): the
+// Admin UI -> Permissions -> Extra grants against the browser mocks (node walk.mjs, a gate step): the
 // grantable powers and the saved grants from admin:getPermissions, and the helpers that build the setting
 // Permissions.grants one change at a time.
 

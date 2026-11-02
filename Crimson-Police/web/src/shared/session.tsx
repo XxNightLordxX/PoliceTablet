@@ -1,5 +1,9 @@
 // The open UI's session (ARCHITECTURE §9.2) and tablet controls.
 
+// const session = useSession();            // Session (inside Officer/Supervisor/Admin UIs)
+// const can = useCan(); can('forceRecall') // session.actions contains it
+// const { close, switchUi } = useTablet();
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { MaintenanceView } from '../types/admin_control';
 import { usePush } from './hooks';

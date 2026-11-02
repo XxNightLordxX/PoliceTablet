@@ -1,6 +1,20 @@
--- CP.HappyHour (server): the happy hour Mission control (step P6). A supervisor (or an admin) starts it for N minutes
+-- CP.HappyHour (server): the happy hour Mission control. A supervisor (or an admin) starts it for N minutes
 -- (inside the admin's min and max, Config.MissionControls.controls.happyHour): while it runs no mission has a
 -- cooldown for anyone on the server (cooldownScale 0 for every type) and, when ticked, the no-repeat rule is off.
+
+-- CP.HappyHour (server): the happy hour Mission control. A supervisor (or an admin) starts it for N minutes
+-- (inside the admin's min and max, Config.MissionControls.controls.happyHour): while it runs no mission has a
+-- cooldown for anyone on the server (cooldownScale 0 for every type) and, when ticked, the no-repeat rule is off.
+-- The abandon type cooldown, the hourly and daily caps and the cash cap stay. Server-wide (owner decision: anything
+-- that changes cooldowns is), outside the master switch, Config.MissionControls.happyHourPerDay a day for
+-- supervisors, never for the supervisor who started it or a unit he is in (the self rule). It is one timed row of
+-- cp_dept_controls (expires_at), so a restart keeps the window; when it ends every cooldown is read against its real
+-- end time again (read-time cooldowns).
+-- the happyHourCash control (per department, under the master switch, shipped off with min = max = 1.0):
+-- HH.cashBonusFor gives a run accepted during a happy hour its department's cash multiplier (run.controls.cashBonus),
+-- never for the one who started the hour or a unit he is in.
+-- happyHourPoints, the same for points: HH.pointsBonusFor fixes run.controls.pointsBonus at the accept
+-- (CP.Scoring.compute multiplies the final points by it).
 
 CP.HappyHour = CP.HappyHour or {}
 local HH = CP.HappyHour

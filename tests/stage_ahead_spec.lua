@@ -1,6 +1,23 @@
--- Stage ahead (Config.Spawning.stageAhead, PLAN S3) on the real engine (tests/fixtures/custody/world.lua: runs, npc,
+-- Stage ahead (Config.Spawning.stageAhead) on the real engine (tests/fixtures/custody/world.lua: runs, npc,
 -- scaling, scoring): while an objective runs, the block of the NEXT objective may place that objective's people in its
 -- own stage(ctx, dt) hook; its start then sees ctx.staged. No SQL (test runs write no rows).
+
+-- Stage ahead (Config.Spawning.stageAhead) on the real engine (tests/fixtures/custody/world.lua: runs, npc,
+-- scaling, scoring) with probe blocks that record every hook call: the shipped value; objective 2's stage hook called
+-- once a tick while objective 1 runs (dt, ctx.staged false then true, never objective 3), its ped owned by objective 2
+-- (ownerOf, entitiesFor, the caps), one console line; its start gets ctx.staged and the same ctx.state, the ped still
+-- there; never staged again once started, then objective 3 stages while 2 runs; the last objective stages nothing. An
+-- objective that completes in its own tick stages nothing more that tick. A failure during objective 1, the end and the
+-- last officer leaving delete the staged ped (stop reaches the prepared objectives); a stage that fails the run.
+-- stageAhead = false and enabled = false never call it (ctx.staged false); read live both ways (placed people stay);
+-- a missing key is on. A staged person's death reaches objective 2's block while pending. A stage that places nobody,
+-- one that places later, one that raises an error (called once, one error, one warning, the run goes on, the next
+-- objective still stages). A stage that waits like on a real server (its second ped appears 2.5 s after CreatePed, so
+-- the engine's spawn wait yields) while the officer's breach event completes objective 1: objective 2's start waits
+-- until the stage returned, gets ctx.staged and both staged people, places no second wave, one "objective 1 done"
+-- line; the last officer leaving during that wait (objective 2 never starts, nothing left); a stage that waits 40 s
+-- (objective 2 starts unstaged after 30 s, not marked staged, one warning). Nothing stages before the run is in
+-- progress; Restart objective starts a staged objective again unstaged. A block without stage is unchanged. No SQL.
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

@@ -1,4 +1,4 @@
-// Admin UI · Real suspects (step V18): the screen's plain helpers (no React), walked by realSuspects.walk.ts.
+// Admin UI · Real suspects: the screen's plain helpers (no React), walked by realSuspects.walk.ts.
 
 import type {
     RsAdminRow,

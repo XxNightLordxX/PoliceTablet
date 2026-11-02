@@ -1,4 +1,10 @@
--- Admin full control, step G1 (the owner: "ensure the admin menu can have full control over every feature limit stuff
+-- Admin full control, (the owner: "ensure the admin menu can have full control over every feature limit stuff
+
+-- Admin full control (the owner: "ensure the admin menu can have full control over every feature limit stuff
+-- give broader permission"): every limit, cap, cooldown and per-day count has a sane range in Admin UI -> Settings and
+-- the Features tab links each feature to its limits; Config.Permissions.grants (Admin UI -> Permissions -> Extra
+-- grants) gives one power to a department from a grade, a Qbox gang from a grade or one citizenid, read live by
+-- CP.Permissions.granted at every check. Shipped (grants = {}): today's rules exactly.
 
 local H = dofile('tests/harness.lua')
 

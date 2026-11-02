@@ -1,6 +1,15 @@
--- Hidden points first (Config.Spawning.preferHidden, losTimeoutMs; PLAN S5): the spawn director asks the officers'
+-- Hidden points first (Config.Spawning.preferHidden, losTimeoutMs): the spawn director asks the officers'
 -- games which of the points that pass its rules they can see (ox_lib callback crimson-police:client:spawn:visible)
 -- and uses the hidden ones first, on a real test run of the engine.
+
+-- Hidden points first (Config.Spawning.preferHidden, losTimeoutMs) on a real test run of the engine with three
+-- officers and a fake lib.callback.await per officer's game (an answer and a delay each). Hidden from both asked games
+-- first, then the block's order; who is asked (within activateRange of the scene, else the nearest; Cara 5 km away is
+-- not); the args (points as { x, y, z }, ms = losTimeoutMs - 250); only exactly false hides; no ask when every good
+-- point is used, outside a thread, with preferHidden or enabled off; a game that answers late (losTimeoutMs waited, no
+-- longer, read live), raises or still owes an answer: the block's order, a console line, no second ask meanwhile; the
+-- rules run again after the wait, answered or not (an officer who walked up during the ask); the side with more hidden
+-- points wins; a first = true point (the boss's own spot) stays ahead. No SQL.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })

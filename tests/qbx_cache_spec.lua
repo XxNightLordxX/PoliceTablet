@@ -2,6 +2,16 @@
 -- times Qbox's exports are called, and that every change event makes the next answer fresh. Also the downed poll's
 -- CP.Qbx.isDowned, which reads two metadata keys (GetMetadata) instead of a copy of the whole Player.
 
+-- CP.Qbx's player info cache (Config.Limits.playerInfoCacheMs) and the online list kept by qbx_core's events, over an
+-- exports.qbx_core stand-in that counts GetPlayer and GetQBPlayers and copies every answer (as FXServer does).
+-- Proves: 10 getInfo reads of one player within a second make one GetPlayer; every change event (OnJobUpdate,
+-- QBCore:Player:SetPlayerData, onSetMetaData with no listener, SetDuty, onGroupUpdate, OnPlayerUnload, PlayerLoaded,
+-- playerDropped, a qbx_core stop/start) makes the next read fresh; the entry runs out after the setting; a caller's
+-- change to its copy never reaches the next answer; PlayerLoaded / OnPlayerUnload / playerDropped change
+-- getOnlinePlayers with no GetQBPlayers copy, which is read again only after 60 s or when qbx_core starts;
+-- playerInfoCacheMs = 0 gives the old behaviour (every read asks Qbox, the list is read every second).
+-- Real: integrations/qbx.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 

@@ -1,4 +1,10 @@
--- Client resmon (step OP1, docs/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
+-- Client resmon (docs/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
+
+-- Client resmon (docs/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
+-- each native counted when a Crimson-Police file calls it. The idle game calls none; the busiest frame loop of a run
+-- (the checkpoint course: two markers, the inside and contact checks) calls few per frame and builds no string; the
+-- HUD sends one NUI message per change; a 'local' officer option decodes this PC's KVP only when it changed. The tired
+-- runner pacer's count is in tests/fixtures/npc/client_check.lua.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client' })

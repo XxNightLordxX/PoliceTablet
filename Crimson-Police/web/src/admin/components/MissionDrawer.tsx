@@ -1,5 +1,9 @@
 // Admin UI · Missions: one drawer per mission (opened by clicking a catalog row). Everything about the mission in one
 
+// place: on/off and its locations, its payout, Quick edit, its tests, and every action as a labelled button. The
+// drawer only calls the server actions the rest of the Admin UI already uses (setMissionEnabled, setLocationEnabled,
+// resetMissionSwitches, setMissionPayout, setMissionTweak); the actions it lists are passed in by the Missions screen.
+
 import { useEffect, useState } from 'react';
 import {
     Badge,

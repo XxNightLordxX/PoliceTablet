@@ -1,5 +1,54 @@
 -- CP.Builder (server): the Mission Builder's drafts, edit locks, versions,
 
+-- guardrails, test runs of drafts, publishing (Lua export), archive/restore, rollback and the loading and
+-- reloading of custom mission files. The full protocol (definition shape, payloads, results, client
+-- placement/recording results) is docs/ARCHITECTURE.md §13.7; TS shapes web/src/types/builder_server.ts.
+--
+-- Owns
+--   * cp_custom_missions rows: drafts (draft_definition, builder units), published copies
+--     (published_definition + the reserved _file key), versions, edit locks, draft_tested, edited_in_code
+--   * missions/custom/<id>.lua (written with SaveResourceFile in exactly the shape of the spec's custom
+--     example), <id>.v<version>.lua.bak backups, <id>.draft.lua.bak conflict copies and
+--     missions/custom/archived/<id>.lua
+--   * the builder guardrails (SPEC "Guardrails" + "Route recording"; block validate() per block)
+--
+-- Public API (server)
+--   CP.Builder.loadPublished() -> { def, ... }          (hook: CP.Missions.loadAll) published custom missions
+--                                                         with loader fields; runs the file sync first
+--   CP.Builder.onReload() -> summary                    (hook: CP.Missions.reload) hand edits of published files
+--       summary = { checked, unchanged, edited = { { id, version } }, rejected = { { id, error } },
+--                   conflicts = { id }, rewritten = { id } }
+--   CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash) -> boolean   (hook: CP.Testing)
+--   Pure helpers (also used by the tests):
+--   CP.Builder.sanitize(input, id) -> def|nil, errKey, info    a stored-safe builder definition
+--   CP.Builder.validate(def, opts) -> errors, info             guardrails; opts = { publish = bool, raw = input }
+--                                                              info = { armed, requiredTier }
+--   CP.Builder.toFileUnits(def) -> table / CP.Builder.fromFileUnits(fileDef) -> def   unit conversion
+--   CP.Builder.toRuntime(fileDef) -> def                       vector tables -> vec3/vec4
+--   CP.Builder.exportLua(def, meta) -> text                    meta = { version, publisher, at, edited }
+--   CP.Builder.parse(luaSource, chunkName) -> def|nil, err     CP.U.parseMissionFile: read as data, never run
+--   CP.Builder.shippedOf(id) -> { path, content, raw, hash }|nil   a built-in's shipped file, read fresh (actions)
+--   CP.Builder.shippedHash(id) -> hash|nil                     the same file's hash for the list views: the file
+--                                                              is read each call, parsed only when its text changed
+--   CP.Builder.slug(label) -> string
+-- Net (docs/ARCHITECTURE.md §13.7.3/§13.7.4)
+--   callbacks  builder:list · builder:get { id } · builder:config
+--   actions    server:builder:create { type, label? } or { template, label? } · duplicate { id } · lock { id } · unlock { id } ·
+--              save { id, definition } · autosave { id, definition } · validate { id, definition? } ·
+--              test { id, tier?, location?, useStartRoute? } · publish { id } · archive { id } ·
+--              restore { id } · rollback { id } · breakLock { id } · discardDraft { id }
+--   events     crimson-police:client:builder { event, id } to an editor who lost the lock or the draft;
+--              NUI push topic 'builder' { event, id, by } to everyone who opened the builder recently
+--
+-- builder:list (polled every 30 s per open list) keeps, per mission, only the label, type and maxOfficers of each
+-- definition next to the column text it came from, and decodes a column again only when its text changed; every
+-- other read (builder:get, actions, file sync) decodes the full row.
+--
+-- Permissions (CP.Permissions.can; admins always): builderEdit (own), builderEditAny (someone else's),
+-- builderPublish, builderArchive (archive + restore), builderRollback, breakEditLock.
+-- Every save, test, publish, archive, restore, rollback, lock break, discard and code edit is audited with
+-- CP.Admin.audit(..., 'builder', ...), which also posts to the builder webhook.
+
 CP.Builder = CP.Builder or {}
 local B = CP.Builder
 local U = CP.U

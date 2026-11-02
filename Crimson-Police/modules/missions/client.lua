@@ -1,5 +1,15 @@
 -- CP.Missions (client): the mission definitions sent by the server.
 
+-- Owns the client copy of every mission definition. The server sends the full list with
+-- crimson-police:client:missions after each load, reload, publish or archive; a client that joins
+-- later asks for it once with the getMissionDefs callback (retried while the server is still loading).
+-- Vectors arrive as { x, y, z[, w] } tables and are turned back into vector3 / vector4 values here,
+-- recursively, so block client halves can use them directly.
+--
+-- Public API (client)
+--   CP.Missions.get(id) -> def|nil
+-- Events: crimson-police:client:missions (list)
+
 CP.Missions = CP.Missions or {}
 local Missions = CP.Missions
 

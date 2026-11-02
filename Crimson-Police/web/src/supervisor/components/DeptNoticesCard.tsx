@@ -1,4 +1,9 @@
-// Supervisor UI · Mission controls · Department notices (step P13, the notices Mission control): post a short notice
+// Supervisor UI · Mission controls · Department notices (the notices Mission control): post a short notice
+
+// Supervisor UI · Mission controls · Department notices (the notices Mission control): post a short notice
+// for the supervisor's own department (it shows on that department's Officer Home Announcements card only) and end
+// one that is still running. Server: sup:getDeptNotices, server:sup:postNotice, server:sup:endNotice. the
+// card is split by task (Post a notice, Running now), shows the stale line when a refresh fails; End takes two clicks.
 
 import { useState } from 'react';
 import { Button, Card, EmptyState, Field, NumberInput, Textarea } from '../../shared/components';

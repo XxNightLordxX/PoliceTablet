@@ -1,6 +1,12 @@
--- A supervisor gives points (step P22, the awardPoints Mission control, owner decision 2026-10-19): only through the
+-- A supervisor gives points (the awardPoints Mission control, owner decision 2026-10-19): only through the
 -- admin's point-adjust path (CP.Corrections.adjust), inside the admin's min and max and awardPointsPerDay, to an
 -- officer of his own department, never to a character of his own license, with a reason, audited as 'supervisor'.
+
+-- A supervisor gives points (the awardPoints Mission control, owner decision 2026-10-19): only through the
+-- admin's point-adjust path (CP.Corrections.adjust), inside the admin's min and max and awardPointsPerDay, to an
+-- officer of his own department, never to a character of his own license, with a reason, audited as 'supervisor'.
+-- Plain stubs (no database): the real AdminKit, DeptControls, Corrections and SupAwards; MySQL, Scoring and the
+-- audit are tables in this file.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

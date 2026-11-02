@@ -1,5 +1,11 @@
 -- Random row queries and writes, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
 
+-- SELECT with WHERE, ORDER BY (with the id as the last key: rows tied on every key come back in an order MariaDB
+-- does not define), LIMIT / OFFSET, LEFT JOIN, IN / EXISTS subqueries and expressions; UPDATE, DELETE,
+-- INSERT IGNORE ... SELECT (ordered), INSERT ... ON DUPLICATE KEY UPDATE, UNIQUE conflicts and AUTO_INCREMENT.
+-- FUZZ_SEED picks the data and statements, FUZZ_N how many. An UPDATE that fails on a UNIQUE key reports the first
+-- conflicting row in the order MariaDB's plan reads the rows (index or table order): that error text can differ.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local SEED = tonumber(os.getenv('FUZZ_SEED')) or 1

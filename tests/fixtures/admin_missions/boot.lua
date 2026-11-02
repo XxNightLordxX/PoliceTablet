@@ -2,6 +2,9 @@
 -- (tests/builtin_override_spec.lua, tests/admin_missions_spec.lua): every module and block loaded in fxmanifest
 -- order, the outside resources stubbed the way tests/e2e_spec.lua stubs them. Returns a table of helpers.
 
+-- opts (optional): { beforeLoad = function(X) end } runs right before the resource's files load (e.g. a database
+-- that refuses the migrations, tests/failed_start_spec.lua).
+
 return function(H, name, opts)
     opts = opts or {}
     H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_' .. name

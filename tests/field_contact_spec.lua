@@ -1,4 +1,4 @@
--- Blocks/field_contact (WP2): the three modes (parked, scene, stop), approach reactions and tells, runners and
+-- Blocks/field_contact: the three modes (parked, scene, stop), approach reactions and tells, runners and
 -- escapes, the returning driver and the thief, the leak spec, and a stop-mode fixture completing at every tier.
 
 local W = dofile('tests/fixtures/custody/world.lua')

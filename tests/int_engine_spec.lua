@@ -2,6 +2,22 @@
 -- REAL block, on the REAL built-in mission files, with stubs only for the modules outside the group (access, qbx,
 -- alerts, route, payouts, scoring, cash, anticheat, tablet ...).
 
+-- It checks the cross-module paths the slice notes and the integration list asked for:
+--   * the real loader (CP.Missions.loadAll at start, LoadResourceFile of every missions/builtin file) loads all 14
+--     built-in missions: the loader sets def.source before the blocks' validate, so a built-in file is exempt from
+--     the Mission Builder's model lists (Prison Break's inmates and the Kingpin's boss model are in those lists
+--     now, so copies of them can be published; a model outside the lists passes only in a built-in file)
+--   * CP.Runs.create reserves the location through the real CP.Draw (test runs too, CP.Runs.get returns them),
+--     rolls the modifier through the real CP.Events after the seed / type / boss / test / operation are set,
+--     and releases the reservation when the run ends
+--   * server:acceptType -> draw -> create -> server:abandon: the cooldowns() shape the board and the accept read
+--   * Bomb Disposal: the device prop found by interact_points (objective 1) is kept by the engine when that
+--     objective completes and defused by skill_check (objective 2) without being re-created; every hook of an
+--     objective gets the same ctx.state; everything goes at the run end
+--   * Warrant Service, every location: the suspect waiting on the door step surrenders 1 m in front of the door
+--     (never behind the facade), through the real engine, CP.Npc and flee_arrest; a kill goes CP.Npc ->
+--     CP.Runs.entityDied -> the block, once
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local U = CP.U

@@ -1,5 +1,13 @@
 // Mission Builder protocol shapes (docs/ARCHITECTURE.md §13.7).
 
+// Server: modules/builder/server.lua (CP.Builder). Callbacks builder:list / builder:get / builder:config,
+// actions server:builder:*, NUI push topic 'builder', client actions builderPlace / builderRecord /
+// builderTestDrive / builderResult / builderCancel / builderWaypoint (modules/builder/client.lua).
+//
+// Units in a BuilderDefinition: seconds, metres, km/h; chances are WHOLE PERCENT (0–100) and progress
+// times are SECONDS (see BuilderConfig.percentFields / secondsFields). The server converts them to
+// fractions and milliseconds only when it writes the Lua file.
+
 import type { TierName } from '../shared/types';
 import type { OverrideView } from './admin_missions';
 

@@ -1,5 +1,29 @@
 -- CP.Scaling: tiers by participant count and scaled mission counts.
 
+-- Owns the reading of Config.Scaling (the tier table), the scaled copy of a mission's objectives
+-- (mission.scaling paths) and NPC combat values (base + tier, + Armored Hostiles on Tactical runs).
+--
+-- Public API (server)
+--   CP.Scaling.tierFor(n) -> row            first Config.Scaling row with maxParticipants >= n, else the last
+--   CP.Scaling.tierByName(name) -> row|nil  (a row passed in is returned as-is)
+--   CP.Scaling.lower(a, b) -> row           the lower of two tiers (rows or names; nil-safe)
+--   CP.Scaling.label(name) -> text          locale 'tier.<name>'
+--   CP.Scaling.scaleCount(base, tier) -> int   CP.U.round(base * tier.count), halves up
+--   CP.Scaling.apply(mission, tier) -> objectivesCopy
+--       deep copy of mission.objectives with every mission.scaling entry scaled. Entries are a path
+--       string ('objectives.1.waves') or { path = '...', max = n }. A path points at a number or a list
+--       of numbers; max clamps each scaled value. Paths are relative to the mission (the leading
+--       'objectives.' is optional).
+--   CP.Scaling.combat(baseAccuracy, baseArmour, tier, run) -> accuracy, armour
+--       + tier.accuracy / tier.armour; + Config.Events.armoredArmour when run.modifier is
+--       'armored_hostiles' and the run is Tactical. Accuracy is clamped to 0..100, armour to >= 0.
+-- Rows are the Config.Scaling tables themselves: { maxParticipants, tier, count, accuracy, armour, points, cash }.
+-- Internal (same slice, used by modules/missions): CP.Scaling._entryPath(entry) -> relPath, max;
+-- CP.Scaling._isScalable(value) -> boolean.
+--
+-- Contract interpretations: combat() clamps accuracy to 0..100 (SetPedAccuracy range) but does not cap
+-- armour above 100 (NPC armour may exceed it at Critical + Armored Hostiles); unknown tiers = Standard.
+
 CP.Scaling = CP.Scaling or {}
 local Scaling = CP.Scaling
 

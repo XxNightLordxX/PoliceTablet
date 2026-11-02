@@ -1,6 +1,10 @@
-// Step FX1 (open issues) against the browser mocks (node walk.mjs, a gate step): the supervisor and admin actions whose
-// replies now carry the screen's fresh view (Mission calls, Live Missions, Clear cooldown, the activity dialog, Reset
-// all, Admin System -> Storage), so the screen needs no second request.
+// Replies that carry the fresh view, against the browser mocks (node walk.mjs, a gate step): the supervisor and admin
+// actions whose replies carry the screen's fresh view (Mission calls, Live Missions, Clear cooldown, the activity
+// dialog, Reset all, Admin System -> Storage), so the screen needs no second request.
+
+// Step FX1 against the browser mocks (node walk.mjs, a gate step): Admin System -> Storage, the supervisor's Mission
+// calls (post, withdraw), Live Missions ("+ minutes"), Clear cooldown, Give points from the activity dialog (with
+// activityOf only) and Settings -> Reset all each answer with their screen's fresh view.
 
 import '../mocks/admin_system.mock';
 import '../mocks/missioncalls.mock';

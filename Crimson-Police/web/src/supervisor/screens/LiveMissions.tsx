@@ -1,5 +1,9 @@
 // Supervisor UI · Live Missions (screen key 'sup_live').
 
+// Runs involving the supervisor's department: participants, mission type, drawn mission, tier and time
+// left (counting down locally). Force recall ends one officer's run as Abandoned with no cooldown.
+// Data: callback sup:getLiveRuns (modules/admin, polled every 10 s) · action server:sup:forceRecall { runId, src, reason }.
+
 import { useEffect, useState } from 'react';
 import {
     Badge,

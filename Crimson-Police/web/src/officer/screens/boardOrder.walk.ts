@@ -1,4 +1,4 @@
-// My options -> Mission Board (step O8) against the browser mocks (node walk.mjs, a gate step): the type cards of the
+// My options -> Mission Board against the browser mocks (node walk.mjs, a gate step): the type cards of the
 // mock board in the officer's order (favourites first, hidden folded, never the last card) and the options' schema.
 
 import '../../mocks/options.mock';

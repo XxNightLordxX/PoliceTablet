@@ -1,6 +1,16 @@
 -- Backup restore: money and voids only move forward, the oldest backup of a full list restores, a damaged backup
 -- changes nothing, and a restore that stops part way keeps payments held, also after a restart, until a restore works
--- (details: docs/FILE_NOTES.md).
+-- (details below).
+
+-- Backup restore: money and voids only move forward (a void or Restore run made since the backup stays, a record moved
+-- since stays with the new character), the oldest backup of a full list can be restored, a damaged backup is refused
+-- before anything changes, an older backup gets the defaults of columns added since, and a restore that stops part way
+-- puts the money state back and keeps payments held, also after a restart, until a restore works; when putting the
+-- money state back fails too, the admin gets err.restore_failed_money (never "every payment kept its state").
+-- With Config.Backups.daily = true the daily backup runs on the daily job thread (CP.Schedule.onDailyJob): the weekly
+-- reset does not wait for a slow backup, and the clean-up starts only once it has returned.
+-- Real runtime: the restore lock is a Lua variable (H.restart drops it), the store is kept (the database or the saves
+-- folder), MariaDB's strict mode refuses NULL in a NOT NULL column (the files engine too).
 
 local H = dofile('tests/harness.lua')
 

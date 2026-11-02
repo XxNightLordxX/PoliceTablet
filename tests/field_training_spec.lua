@@ -1,4 +1,4 @@
--- Field training, part 1 (step T1, Config.FieldTraining): a supervisor pairs a trainer with a rookie of his own
+-- Field training, part 1 (Config.FieldTraining): a supervisor pairs a trainer with a rookie of his own
 -- department, completed runs the two finish together count per mission type, the trainer signs a ready task off,
 -- and every task signed off gives the badge. Plain Lua: stubbed MySQL (the officer rows), the real adminkit.
 

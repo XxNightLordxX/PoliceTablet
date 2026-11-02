@@ -1,4 +1,9 @@
--- CP.CrimTab (server, step G2): the criminal tablet for players who play real suspects (Config.CriminalTablet). It is
+-- CP.CrimTab (server): the criminal tablet for players who play real suspects (Config.CriminalTablet). It is
+
+-- CP.CrimTab (server): the criminal tablet for players who play real suspects (Config.CriminalTablet). It is
+-- a front end of CP.Volunteers: opting in and out, the question he has open (Jobs), the suspect he plays (Active),
+-- his past cases and strikes (History) and the rules. The server decides everything; the tablet never learns a run,
+-- an officer or anyone's live position.
 
 CP.CrimTab = CP.CrimTab or {}
 local C = CP.CrimTab

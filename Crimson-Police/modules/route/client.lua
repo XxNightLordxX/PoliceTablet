@@ -1,6 +1,42 @@
 -- CP.Route (client): the GPS route to the mission start and the reports the server checks (docs/ARCHITECTURE.md §5.12,
 -- SPEC "Route to the start").
 
+-- Owns: the start waypoint, the named "Mission start" pin (Config.Markers.kinds.start; kept from begin until
+-- arrival or stop with Config.Markers.startBlip; its blip route is read to sample GTA's GPS route and is
+-- on afterwards only while our waypoint is gone, so the start keeps one line), the fixed polyline sampled
+-- from it, the reports to server:routeStatus, the route part of the HUD (HudState.route) and the client
+-- actions setGps and recalcRoute (NUI 'client' endpoint, registered with CP.Tablet.registerClientAction).
+--
+-- Public API
+--   CP.Route.begin(runId, startCoords, opts?) -> boolean
+--       Sets the waypoint (SetNewWaypoint) and a GPS route to the start, waits for the route to exist,
+--       samples it every Config.Route.sampleEvery m with GetPosAlongGpsTypeRoute over GetGpsBlipRouteLength
+--       into a fixed polyline (never recalculated automatically; when sampling fails the straight line from
+--       the player to the start is used and logged), then reports every Config.Route.reportEvery s the 2D
+--       distance from the player to that polyline (CP.U.distToPolyline) and the player's coords.
+--       opts = { startRoute = false (test run without the route: waypoint only, no reports, HUD 'disabled'),
+--       radius }. Idempotent for the same runId. CP.Runs calls it on client:start; this file also reacts to
+--       client:start itself, so a missed call cannot skip the route.
+--   CP.Route.recalculate() -> ok, data|errKey     asks the server (server:recalcRoute); on ok resamples the
+--       route from where the player is. data = { recalcsLeft }. errKeys: err.route_inactive,
+--       err.route_arrived, err.route_disabled, err.route_no_recalcs, err.busy, err.timeout. Yields.
+--   CP.Route.stop()                               clears the waypoint (when it is still ours), the blip and
+--                                                 the reports; that run is never begun again on this client
+--                                                 (CP.Runs calls it on arrival and at the end). Never touches
+--                                                 the HUD (the run engine owns it).
+--   CP.Route.current() -> { runId, arrived, routeOn, action } | nil
+--   CP.Route.follow(runId, dropStart) -> boolean  the run went In progress before this officer
+--       arrived (CP.Runs calls it on client:routeStatus 'action'): the sampling, the reports and a waiting
+--       Recalculate stop (new token), HUD route 'action', a toast. dropStart (CP.Markers.leads): the start
+--       pin and our start waypoint go first, then current().action lets CP.Markers route to the objective;
+--       without it the pin loses its line and our waypoint stays (put back when he has none). Once only.
+-- Client actions: setGps (re-sets the waypoint to the start; the polyline stays the same), recalcRoute;
+-- both answer err.route_action once he follows the action.
+-- Events handled: client:routeWarning (runId, secondsLeft|nil) -> HUD { route = { status, secondsLeft,
+-- distance } } and one toast when a warning first appears; client:routeRecalc (runId, ok, recalcsLeft);
+-- client:routeStatus (runId, RouteStatus) and client:participants (runId, list) -> 'arrived';
+-- client:start (fallback begin) and client:runEnded (fallback stop).
+
 CP.Route = CP.Route or {}
 local R = CP.Route
 local TAG = 'route'

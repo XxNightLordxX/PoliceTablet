@@ -1,4 +1,9 @@
--- Happy hour (step P6): a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
+-- Happy hour: a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
+
+-- Happy hour: a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
+-- for anyone on the server (server-wide, owner decision), the no-repeat rule off when ticked; the abandon type cooldown
+-- stays; the setter and a unit with him in it keep their cooldowns; once a day for supervisors; an admin ends it;
+-- a restart keeps the window; when it ends every cooldown is read against its real end time again.
 
 local H = dofile('tests/harness.lua')
 

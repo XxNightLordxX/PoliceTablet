@@ -2,6 +2,110 @@
 -- fxmanifest loads it before every other server module; it only defines functions. modules/storage/server.lua decides
 -- whether it is used.
 
+-- What it is
+--   * CP.Storage.MemSQL.new({ store = store }) -> db: an in-memory SQL engine for exactly the MariaDB 10.11
+--     dialect Crimson-Police's modules send (the inventory's construct list, see "Supported SQL" below),
+--     with MariaDB semantics: utf8mb4_general_ci text comparison with MariaDB's own weight table (case and
+--     accents ignored, PAD SPACE; JSON text is binary), NULL three-valued logic, strict mode, NULL first in
+--     ascending order, integer / DECIMAL / DOUBLE arithmetic (a BIGINT result out of range is MariaDB's error
+--     1690), one NOW() per statement. db:exec(sql, params) runs one statement atomically: a failing statement
+--     leaves nothing changed. With db.slice (CP.Storage sets it on a server) a SELECT run from a thread gives
+--     the server its turn every few milliseconds; every other statement waits for it.
+--   * Through the shim, a thread that has spent db.slice.saveMs milliseconds saving (Config.Database.saveTurnMs,
+--     4; 0 = never) gives the server its turn (wait(0)) right after the statement that used them up, as
+--     oxmysql's await yields: never inside a statement (the change is on disk first), never while a sliced
+--     SELECT holds the engine, never in a thread that cannot yield. A run end of 6 officers (42 statements, each
+--     a document rewrite and an fsync) no longer holds the server thread in one stretch.
+--   * CP.Storage.MemSQL.shim(db, opts) -> a table shaped like oxmysql's MySQL global (query, single, scalar,
+--     insert, update: callable with a callback and with .await; ready). Results are typed like oxmysql:
+--     TINYINT(1) columns as booleans, DECIMAL and SUM() as strings, DATETIME/DATE as milliseconds, text
+--     always as strings, UPDATE counts matched rows. A statement that names only tables of other
+--     resources (not cp_*) is sent read-only to the real oxmysql (opts.realMySQL).
+--   * CP.Storage.MemSQL.folderStore(dir) -> the saves folder, written through after every write statement.
+--   The engine runs inside FiveM and under plain lua5.4 (tests); it uses io, os, utf8 and the global json.
+--
+-- The saves folder (Crimson-Police/saves by default; Config.Database.folder)
+--   _tables.json       every table layout as a CREATE TABLE statement (built by the migrations), how each
+--                      table is split into documents, the next AUTO_INCREMENT id where the rows cannot
+--                      tell it, and the applied migrations (the rows of cp_schema_migrations).
+--   <table>.json       one document per table, named after the table without the cp_ prefix
+--                      (officers.json, seasons.json, custom_missions.json, mission_runs.json ...):
+--                        {"table":"cp_officers","columns":["citizenid","callsign",...],"rows":[
+--                        ["ABC12345","101",null,...],
+--                        ["XYZ98765",null,"Sergeant",...]
+--                        ]}
+--                      The column names are written once, then one row per line as an array of values in
+--                      column order: DATETIME as unix seconds (a moment), DATE as "YYYY-MM-DD" (a calendar
+--                      day: a folder moved to a server in another time zone keeps its days), TINYINT(1) and
+--                      other integers as numbers, DECIMAL as a number with its decimals, text as a string, and
+--                      a JSON column embedded as JSON when it is a one-line object or array (it is read back
+--                      byte for byte), otherwise as a string. Nothing else is stored: no journal, no copies.
+--   <table>_<n>.json   a table that grows past 500 rows is split so no document holds (and no save
+--                      rewrites) more than about 500 rows: integer ids by range (mission_runs_1.json holds
+--                      ids 1-500, mission_runs_2.json 501-1000 ...), other keys by a stable hash bucket of the
+--                      key (linear hashing: one bucket splits at a time). An emptied range document is removed
+--                      unless it is the newest; hash buckets and the one document of a table always stay, so a
+--                      missing document is noticed.
+--   Write-through: at the end of every write statement the documents it changed, and _tables.json if it
+--   changed, are saved before the statement returns. First every one of them is written as <name>.tmp (a
+--   failure there, a full disk, changes no document); then each .tmp is renamed over its document (where a
+--   rename cannot replace a file, as on Windows: old -> <name>.bak, tmp -> name, .bak removed), in an order
+--   where a crash in between never loses a saved row: new documents, documents that receive rows (a row whose
+--   key moves is saved in its new document before it leaves its old one), the others, _tables.json, removals.
+--   A save that fails part way is undone: memory is rolled back and the documents already changed are
+--   written back from it (Store:restore); what cannot be written back then is written at the next save.
+--   FXServer's Linux build answers os.rename the wrong way round; each saves folder finds out how this
+--   runtime answers (Store:_probeRename). Loading removes leftover .tmp files, restores a .bak whose document
+--   is missing, loads every document it finds and raises each AUTO_INCREMENT counter to at least max(id) + 1
+--   (and past the ids of a missing newest document), so an interrupted save never loses saved rows or reuses
+--   an id. A document with a byte order mark or reformatted by an editor is read; a missing document is
+--   reported; a document with a value too many or too few, a key twice or NULL in a NOT NULL column stops the
+--   start with its name and line.
+--
+-- Supported SQL (anything else raises "the saves folder engine (files mode) does not support ...")
+--   SELECT [DISTINCT] items [AS alias] | * FROM table [alias] | (subquery) alias | DUAL
+--     [INNER] JOIN / LEFT [OUTER] JOIN ... ON, WHERE, GROUP BY (columns, expressions, select aliases),
+--     ORDER BY [ASC|DESC] (select aliases win), LIMIT n|? [OFFSET n|?], UNION ALL (in derived tables).
+--   INSERT [IGNORE] INTO t [(cols)] VALUES (...)[, (...)] | SELECT ... [ON DUPLICATE KEY UPDATE c = expr,
+--     VALUES(c)]; UPDATE [IGNORE] t [alias] SET [a.]c = expr ... [WHERE]; DELETE FROM t [WHERE];
+--     DELETE a FROM t a [INNER|LEFT] JOIN ... [WHERE].
+--   CREATE TABLE [IF NOT EXISTS] t (columns, PRIMARY KEY, UNIQUE KEY, KEY/INDEX) | LIKE other;
+--     ALTER TABLE t ADD [COLUMN] [IF NOT EXISTS] col [FIRST | AFTER c] | ADD [UNIQUE] {INDEX|KEY} [IF NOT EXISTS]
+--     [name] (cols), several separated by commas; CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON t (cols) (the
+--     additive changes of the SPEC's database upgrades); types INT, TINYINT, SMALLINT, MEDIUMINT, BIGINT, VARCHAR(n),
+--     DECIMAL(p,s), DATETIME, DATE, ENUM(...), JSON; NOT NULL, NULL, DEFAULT, AUTO_INCREMENT,
+--     CURRENT_TIMESTAMP defaults and ON UPDATE CURRENT_TIMESTAMP.
+--   Expressions: literals, ?, columns, + - *, = <> != < <= > >=, AND OR NOT, IS [NOT] NULL, [NOT] IN (list |
+--     subquery), [NOT] EXISTS, scalar subqueries, [NOT] LIKE, CASE, date +/- INTERVAL n SECOND|MINUTE|HOUR,
+--     COUNT SUM MAX MIN GROUP_CONCAT(... ORDER BY ... SEPARATOR ...), COALESCE IFNULL NULLIF IF GREATEST LEAST ROUND
+--     DATE DATE_FORMAT UNIX_TIMESTAMP FROM_UNIXTIME NOW CURRENT_TIMESTAMP TIMESTAMPDIFF SUBSTRING_INDEX
+--     CHAR_LENGTH LOWER UUID JSON_SET JSON_REMOVE JSON_EXTRACT JSON_UNQUOTE JSON_VALUE JSON_VALID
+--     JSON_CONTAINS JSON_TYPE.
+--
+-- Proof: tests/run.lua --storage=shadow runs every spec's statements on MariaDB (read like oxmysql) and here, and
+-- --fuzz random SQL (tests/shadow/fuzz_*.lua); both compare every answer. MariaDB details copied on purpose:
+-- GROUP_CONCAT(... ORDER BY k) sorts a NULL k as 0 / '' / the zero date and puts the newer row first on a full tie;
+-- AUTO_INCREMENT ids come in the server's and InnoDB's intervals (section 8, compileInsert), and an UPDATE (or ON
+-- DUPLICATE KEY UPDATE) that sets the AUTO_INCREMENT column at or past the counter moves it on; an UPDATE whose WHERE
+-- MariaDB proves impossible answers without "Rows matched"; storing follows Field::store in strict mode, with its
+-- errors, IGNORE's warnings and the notes (section 7), dates are read in all of MariaDB's spellings (strTime), a
+-- failing CHECK (JSON_VALID) skips the row with IGNORE except in a one-row INSERT ... VALUES; an ENUM is its member
+-- number in number contexts and ORDER BY / GROUP BY; GREATEST / LEAST compare text with numbers as DOUBLE; a
+-- comparison or TRUE is a boolean (JSON_SET stores true); a DOUBLE is written like MariaDB (0.00001, 1e15) and
+-- reaches Lua as an integer when whole and below 2^53 (FiveM's msgpack); a BIGINT beyond 2^53 as text (mysql2). Left
+-- as they are, because MariaDB decides them by its query plan, not by the SQL: the order of rows tied on every ORDER
+-- BY key, which rows a LIMIT without ORDER BY returns, the text shown for a GROUP BY on a text column whose rows
+-- differ only in case or accents, and which row an UPDATE that breaks a UNIQUE key reports first (here: table
+-- order). Not copied (Crimson-Police never does these): zero dates and dates with a zero month or day (refused as
+-- unsupported, also where IGNORE or ALTER TABLE ... ADD a NOT NULL DATETIME without a default would store one); a
+-- comparison of two parameters or literals (NULLIF(?, '')) uses utf8mb4_general_ci, the connection collation with
+-- charset=utf8mb4 in mysql_connection_string (without it mysql2 connects as utf8mb4_unicode_ci, where for example
+-- 'ß' = 'ss' and a text of zero-width characters equals ''); warnings raised while evaluating an expression (a text read as a
+-- number, "Truncated incorrect DOUBLE value"), which MariaDB counts as often as its plan evaluates it; the text of
+-- COALESCE / IF / CASE / GREATEST of decimals with different scales where text is needed (MariaDB shows the chosen
+-- argument's own digits: '1', not '1.00'); DECIMAL values of more than 18 digits (MariaDB: 65; refused as
+-- unsupported); integer literals beyond BIGINT (read as DOUBLE here); subnormal doubles stored in short VARCHARs.
+
 CP = CP or {}
 CP.Storage = CP.Storage or {}   -- the storage module's one global table (modules/storage/server.lua fills in the rest)
 CP.Storage.MemSQL = {}

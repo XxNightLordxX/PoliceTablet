@@ -1,4 +1,10 @@
--- CP.Opponents conduct (server, step V6): how officers treat a real suspect, from server facts only. The armed
+-- CP.Opponents conduct (server): how officers treat a real suspect, from server facts only. The armed
+
+-- CP.Opponents conduct (server): how officers treat a real suspect, from server facts only. The armed
+-- definition, the damage ledger between a case's officers and its suspects, excessive force on a suspect in
+-- custody or down (C7: a flag that holds the officer's points, never an automatic fail), the unarmed-shot and
+-- ran-over penalties, and the cash-seizure audit. Every flag here is an officer-conduct flag on the officer who fired,
+-- drove or seized (critic 2 #12): only his points are held, never his partner's.
 
 CP.Opponents = CP.Opponents or {}
 local Opp = CP.Opponents

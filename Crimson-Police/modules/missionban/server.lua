@@ -1,4 +1,9 @@
--- CP.MissionBan (server): a supervisor's temporary mission ban of one officer (step P11, the Mission control
+-- CP.MissionBan (server): a supervisor's temporary mission ban of one officer (the Mission control
+
+-- CP.MissionBan (server): a supervisor's temporary mission ban of one officer (the Mission control
+-- missionBan, kind 'action'). A banned officer keeps the tablet (it is not a suspension) but cannot accept from the
+-- Mission Board, claim a mission call or join a Cross-Department Mission until it ends; a run already going on is
+-- never ended. Saved in cp_officers.mission_ban (migration 012) and kept in memory for the accept checks.
 
 CP.MissionBan = CP.MissionBan or {}
 local MB = CP.MissionBan

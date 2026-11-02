@@ -1,6 +1,12 @@
 // Admin UI · Departments (screen key 'admin_departments'): themes, members, mission desks, personal accents and a
 // preview of each officer look; add, edit, turn off and delete departments, upload logos, and edit the desks.
 
+// Admin UI · Departments (screen key 'admin_departments').
+// Each department in Config.Departments: name, tag, jobs, colours, logo thumbnail (hidden when it fails to
+// load), member count, officers on duty and the society balance (only when Config.Cash.source = 'society').
+// "Preview theme" renders a read-only mini tablet in that department's colours.
+// Data: callback admin:getDepartments (modules/admin).
+
 import { useState, type CSSProperties } from 'react';
 import {
     Badge,

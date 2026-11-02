@@ -1,5 +1,11 @@
 -- Slice npc: modules/npc/server.lua driven through a fake entity world, stubbed
 
+-- CP.Runs / CP.AntiCheat / CP.Tablet / CP.Alerts / CP.Access, the harness clock (the 1 s watcher runs
+-- as a harness thread) and simulated net events. The client half is checked in a separate Lua state
+-- (tests/fixtures/npc/client_check.lua and tests/fixtures/npc/target_check.lua, side = 'client'); their results are
+-- added here.
+-- The npc slice writes no SQL, so this spec runs no queries.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local U = CP.U

@@ -1,4 +1,4 @@
-// Officer screens tidy, part 2 (step H3) against the browser mocks (node walk.mjs, a gate step): Unit, Profile,
+// Officer screens tidy, part 2 against the browser mocks (node walk.mjs, a gate step): Unit, Profile,
 // Leaderboard and My options share the part 1 header (title, one line of help) and load states; the field training
 // card counts the tasks ready to sign; the live case card says which step of three the case is on.
 

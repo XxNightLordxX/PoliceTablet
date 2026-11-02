@@ -1,4 +1,10 @@
--- Volunteer matching (step V22): the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
+-- Volunteer matching: the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
+
+-- Volunteer matching: the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
+-- on a yes (run.realSuspect = 'volunteer'), travel and in position, engagement (the officers' protection drop), a
+-- no-show, Cancel this case, the release, the NPC fallback and the endings (Config.Volunteers.onVoid / voidRun,
+-- 'players_only'), ctx.volunteer()'s view, and the volunteerEnded event and the staff view. Plain Lua with
+-- stubs.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

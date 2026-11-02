@@ -1,6 +1,20 @@
 // Test-mode overlay layer: the debug overlay (live NPC/entity counts against the caps) and the test
 // invitation prompt.
 
+// Props: { debug, hud }
+//   debug — the `debug` field of the last `push` message with topic 'test' (the data of
+//           crimson-police:client:test { controls, debug }), passed through untouched; null/false = hidden.
+//           Shape: TestDebugData (src/types/testing.ts). A `hud.debug` field is read as a fallback.
+//   hud   — the current HudState or null.
+// Rendered by App at all times (outside the tablet, no NUI focus); returns null when there is nothing to show.
+// The in-world markers (spawn points, zones, route waypoints, start radius) are drawn by the Lua testing
+// client; this panel shows the numbers.
+// Invitation prompt: when the Lua testing client opens it (the panel key with invitations waiting) it gives NUI focus
+// and pushes 'test' { prompt: { invites } }; Accept/Decline call action server:testRespond { inviteId, accepted },
+// Escape / Close release the focus (client action testPanel { open: false }). Escape also releases a focus
+// the Lua client holds for the HUD panel while no panel is on screen (safety net). Both Escapes act on the
+// key-up (useKeyRelease).
+
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Countdown, Icon } from '../shared/components';
 import { cx } from '../shared/cx';

@@ -1,6 +1,19 @@
--- CP.Spawn.probe (modules/spawn/client.lua; PLAN S6): whether the ground at a mission point is fit to put a person,
+-- CP.Spawn.probe (modules/spawn/client.lua): whether the ground at a mission point is fit to put a person,
 -- a vehicle or an object on, against a small game map whose natives check their argument types (H.groundNatives):
 -- the collision and the inside of a building load first, then the ground, water and wall probes run.
+
+-- CP.Spawn.probe (modules/spawn/client.lua) on the small map of H.groundNatives, whose natives check their
+-- argument types: a person 1 m over the ground ok (whole-number coordinates sent as decimals, the collision asked for
+-- around his ped, his capsule); 0.52 m under put on it; 2 m under the ground under the ground or put on it as
+-- snapWithin says; 5 m under found from 50 m up; floating and put down; ranges read live (a bad range: the default); a
+-- bridge over the point; under a low roof inside a trailer ok on the floor (the roof reported), 1.8 m over the floor
+-- under a roof put down, 0.5 m under the floor above put on it; the slope; no ground after collisionTimeoutMs; water
+-- over the ground, a pier over the sea; walls (hit as 1 or true, on the ground of a snapped point, a slow probe, one
+-- that never finishes or does not start: not known), the car and opts.entity / opts.ignore; a collision that loads
+-- late or never (500 ms at least); an interior pinned until ready and let go, one already loaded, one never ready; a
+-- car sized by its model (loaded for it and let go), 1.5 m under the road put on it, under a garage deck ok on its
+-- level, 3 m under, an unknown model, a car in a wall; objects (snap, ok, floating, kinds); opts.wall = false (no
+-- capsule, the ground still judged); bad input.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client' })

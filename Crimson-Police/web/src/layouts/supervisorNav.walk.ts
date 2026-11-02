@@ -1,4 +1,4 @@
-// Supervisor UI sidebar and landing (step G5) against the browser mocks (node walk.mjs, a gate step): Config.Tablet's
+// Supervisor UI sidebar and landing against the browser mocks (node walk.mjs, a gate step): Config.Tablet's
 // supervisorByTask, supervisorCompact and supervisorLanding reach the Supervisor UI as the session's
 // config.supervisorNav, and the layout changes only when they are set.
 

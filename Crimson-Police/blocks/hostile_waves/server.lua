@@ -1,5 +1,103 @@
 -- Objective block "hostile_waves" (server half)
 
+-- What it does
+--   Spawns armed hostiles in waves at the location's spawn points (networked, OneSync, through
+--   ctx.spawnPed) and completes when every hostile, and the optional boss, is neutralised: killed, or
+--   surrendered and cuffed ("Cuff suspect", CP.Npc.enableCuff). The next wave spawns when
+--   nextWave.aliveAtMost or fewer hostiles of the current wave are not yet neutralised, or
+--   nextWave.afterSeconds after the wave began. The boss (if any) arrives after the last wave by the
+--   same rule; it never scales. A hostile under surrender.belowHealth health gets exactly one
+--   surrender roll (CP.Npc.rollSurrender with surrender.chance) when the host reports it and the
+--   server confirms the health; the server also polls the health of every hostile each tick, so a
+--   report that arrived before the damage synced (or never arrived) cannot cost the roll. Spawn
+--   points come from the engine's spawn director (ctx.choosePoints, Config.Spawning): wave 1
+--   waits until an officer is within activateRange of the middle of the fight's points (ctx.whenNear);
+--   each call offers the fight's points (the rolled spawn sets, else spawns), shuffled with the
+--   objective rng, never one a living hostile (cuffed included, not a body) stands on (OCCUPIED_RADIUS),
+--   plus ring copies (REUSE_OFFSET per lap) only when a wave is larger than the whole list; the director
+--   keeps minDistance (minDistanceIndoor with indoor = true) from every officer, never behind one, the
+--   wave in one sector (opts.placed = the wave's points so far). A wave short of points spawns what it
+--   got and asks again every tick; ws.waitMs (GetGameTimer) is its clock, handed to the director as
+--   opts.since (hardMin after waveDelayMax). A wave or the boss still short leaveOutAfter seconds after
+--   its first short call, with nobody of the fight standing and at least one of its hostiles already out (st.peds), leaves
+--   the rest out (the officers stand on or in front of every point, or a cuffed suspect still stands on it; the warning
+--   says both) (ws.left / st.bossLeft, one CP.warn; WaveGoal = scaled count - left; the boss line drops
+--   off the checklist). No point at all: left out at once, never at the start point. ws.elapsed (for
+--   nextWave.afterSeconds) only counts once the wave has a hostile out. The boss is offered his own spot first, then the fight's
+--   points. Every point the console names is '<location key>[<file index>]'. Spawning respects the run
+--   caps (ctx.canSpawn, checked before the director: a wave that does not fit waits and is re-checked every
+--   tick without asking the director or the officers' games, its ws.waitMs clock starting again once there is
+--   room; counts are never cut for the caps) and rescale (only the NPCs still missing for the new ctx.obj counts are spawned).
+--   The client half blocks NPC traffic within blockTraffic metres of the start while the objective runs.
+--   Staged ahead (stage = true, Config.Spawning.stageAhead): the engine calls stage(ctx) once a
+--   tick while the objective before runs; wave 1 is placed then (once ctx.whenNear, through the director
+--   with the objective's indoor flag, never relaxed: a probe clock { points = ws.points }, so the wave's own
+--   ws.waitMs starts with the fight), calm: ctx.spawnPed hidden = true (no weapon, armour or fight settings
+--   in the bag or the ped; the engine counts him armed, armedTruth), CP.Npc state 'idle', p.staged. Wake:
+--   CP.Runs.arm (weapon, armour, the cfg into the bag) then CP.Npc.setState 'hostile' for every staged one
+--   at once, one CP.log line 'run <id>: objective 2: <n> staged hostile(s) woke: <why>'. Why: the fight
+--   started (start), one of them was hurt (the server's GetEntityHealth below what stage read before, or a
+--   'damaged' event) or killed (onEntityDead), or an officer within Config.Spawning.stageWakeRange (2D) of
+--   one who is not nearer to a point of the objective before (its points / targets / door / checkpoints
+--   key: the breach entries) than to him. Awake before the start, stage only does Refresh and PollHealth
+--   (surrender rolls) and places nobody more; the rest of wave 1 comes at start through the director.
+--   st.pending (staged, not started): no HUD line, no completion; Flush sends awake = true to the clients.
+--   Used by Gang Shootout (3 waves 7/7/6), Hostage Rescue (1 wave of 4 inside, indoor), Drug Lab Raid
+--   and Gang Hideout Raid (objective 2, indoor, stage) and Weekly Boss: Kingpin (4 waves 8/8/7/7 then the
+--   Kingpin).
+--
+-- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.hostile_waves)
+--   minSeconds [60] · presenceRange [presenceRange[3] = 150] · label
+--   spawns        location key: list of vec4                               ['spawns']
+--   waves         base hostiles per wave (scaled by the engine)             [{ 7, 7, 6 }]
+--   nextWave      { aliveAtMost [nextWaveAlive[3] = 2], afterSeconds [nextWaveAfter[3] = 90] }
+--   weapons       weapon names, one picked per hostile                      [Config.Blocks.hostile_waves.weapons]
+--   peds          ped models, one picked per hostile                        [Config.Blocks.hostile_waves.peds]
+--   accuracy      [accuracy[3] = 25] · armour [armour[3] = 0]   (+ tier and Armored Hostiles via ctx.combat)
+--   health        [health[3] = 200]
+--   behaviour     'hold' | 'balanced' | 'push'                              [behaviour.default = 'balanced']
+--   surrender     { belowHealth [0.25], chance [surrender[3] / 100 = 0.30] }  (false = never)
+--   boss          false [boss.default] or { model [first of peds], label [locale block.hostile_waves.boss_label],
+--                 health [health[2] = 400], armour [armour[2] = 100], weapon ['WEAPON_ASSAULTRIFLE'],
+--                 accuracy [accuracy], behaviour [behaviour], spawn (location key; nil = a spawn point),
+--                 surrender [= surrender], aliveBonus { id ['kingpin_alive'], points [50] } }
+--                 The boss does not scale: its accuracy and armour are used as written.
+--                 aliveBonus.points is a hint only on built-in files; elsewhere kingpin_alive always
+--                 carries BOSS_BONUS.points and any other id no hint. Custom missions (validate) may only
+--                 use kingpin_alive (points absent or 50) or a Config.Bonuses id without points.
+--   cuff          optional { label, duration, maxDistance } passed to CP.Npc.enableCuff (custom missions:
+--                 duration 1000-30000 ms, maxDistance at most CUFF_RANGE)
+--   blockTraffic  metres around location.start.coords (client half)     [blockTraffic[3] = 120.0]
+--   indoor        true = the fight is inside a building: the director keeps Config.Spawning.minDistanceIndoor
+--                 (validate: a boolean or absent)                           [absent = false]
+--   stage         true = wave 1 is placed ahead of time, calm, while the objective before runs, and wakes
+--                 when the fight starts (validate: a boolean or absent)     [absent = false]
+--
+-- Evidence accepted (onEvent)
+--   { type = 'low_health', netId }   host client: a hostile looks under belowHealth. The server re-checks
+--                                    GetEntityHealth against the configured / GetEntityMaxHealth max
+--                                    (health above the 100-point death threshold), then rolls once.
+--                                    tick runs the same server-side check for every hostile.
+--   { type = 'cuffed', netId }       CP.Npc (via CP.Runs.dispatch) after a validated "Cuff suspect"; the
+--                                    cp bag must say cuffed. A cuff the event missed is picked up by tick.
+--   { type = 'shot', netId, src }    CP.Npc: a participant shot a surrendered/cuffed hostile
+--                                    (shot_surrendered is recorded by CP.Npc); accepted, nothing else.
+--   { type = 'damaged', netId }      CP.Npc (CP.Runs.dispatch): the same server-side health check as
+--                                    low_health (still one roll per hostile); always accepted. On a calm
+--                                    staged hostile it wakes the whole staged crew first.
+--
+-- Bonus / penalty ids recorded (shared)
+--   hostile_arrested   ctx.award, count 1 for every hostile cuffed
+--   kingpin_alive      ctx.award (boss.aliveBonus.id, points hint boss.aliveBonus.points) when the boss is cuffed
+-- Fail reason keys
+--   run.fail_killed_unarmed  a participant killed a surrendered or cuffed hostile (a kill within
+--                            SURRENDER_GRACE_MS of the surrender is a shot already in flight: not a fail)
+--
+-- ctx.state
+--   block, rng, peds = { [tostring(netId)] = { netId, entity, role = 'hostile'|'boss', wave, state,
+--   rolled, maxHealth, surrenderedAt, staged, calmHp } }, waves = { [w] = { spawned, elapsed, points } }, wave,
+--   boss = { netId } | nil, arrested, dirty, hudText, completed, failed, stopped, started, pending, awake
+
 local BLOCK = 'hostile_waves'
 local U = CP.U
 

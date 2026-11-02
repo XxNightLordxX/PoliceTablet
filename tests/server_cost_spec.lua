@@ -1,4 +1,11 @@
--- Server cost (step OP2, docs/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
+-- Server cost (docs/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
+
+-- Server cost (docs/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
+-- online and no run, as tests/e2e_spec.lua sets it up (its world is loaded from that file, up to its HELPERS
+-- section, on a database of its own). Counted: the SQL the idle server sends in two minutes, the tablet pushes with
+-- Config.Performance.pushGapMs, and which callback answers go latent with Config.Performance.latentAboveBytes.
+-- the IsPlayerAceAllowed calls of one admin action, one admin read and one supervisor action through
+-- CP.AdminKit (the guard asks isAdmin once and hands it to CP.Permissions.can).
 
 local World
 do

@@ -1,5 +1,10 @@
 // Writes dist/build-stamp.json after `vite build`: a sha256 over every input of the NUI bundle
 
+// (web/src/**, web/index.html, the build config and locales/parts/*.json: ui.json is the fallback text and
+// src/mocks/samples.ts bundles every part). tools/check_contracts.py recomputes the same hash and fails when
+// web/dist was not rebuilt after a source change (the shipped UI must be the reviewed source). Keep both
+// algorithms identical: files sorted by their path relative to Crimson-Police/ (posix), hashed as path \0 bytes \0.
+
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';

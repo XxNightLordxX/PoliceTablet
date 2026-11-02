@@ -1,4 +1,4 @@
--- Loops run less often (step LP2, docs/LOOPS.md): CP.Perf scales the idle and far waits by
+-- Loops run less often (docs/LOOPS.md): CP.Perf scales the idle and far waits by
 -- Config.Performance.loopScale (1-4) and never a per-frame wait; the slower shipped intervals; the NUI's shortest
 -- screen poll.
 

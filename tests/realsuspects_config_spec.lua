@@ -1,4 +1,4 @@
--- Police vs real criminal players, step V1 (the owner's decision of 2026-10-26, "Build all 3 but options in the
+-- Police vs real criminal players, (the owner's decision of 2026-10-26, "Build all 3 but options in the
 -- config.lua"): the two master switches ship off and show in Admin UI → Settings, and the docs record the decision
 -- without rewording RT1's start-route text.
 

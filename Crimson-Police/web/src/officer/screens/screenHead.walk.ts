@@ -1,4 +1,4 @@
-// Officer screens tidy, part 1 (step H2) against the browser mocks (node walk.mjs, a gate step): Home, Mission Board,
+// Officer screens tidy, part 1 against the browser mocks (node walk.mjs, a gate step): Home, Mission Board,
 // Active Mission and Dispatch share one header (title, one line of help) and one set of loading, error, empty and
 // stale lines.
 

@@ -1,5 +1,33 @@
 -- CP.Storage: where Crimson-Police keeps its data (Config.Database).
 
+--   Config.Database.enabled = true   MySQL/MariaDB through oxmysql, exactly as before (nothing here runs).
+--   Config.Database.enabled = false  database off: this file replaces the MySQL global of this resource with
+--                                    CP.Storage.MemSQL.shim before any other module can query, and every cp_ table
+--                                    lives as documents in the saves folder (modules/storage/memsql.lua).
+--                                    The modules keep their SQL; the migrations build the same tables.
+--
+-- Public API (server)
+--   CP.Storage.mode() -> 'database' | 'files'
+--   CP.Storage.name() -> 'database' | 'saves folder' (for console text: "the %s")
+--   CP.Storage.folder() -> the saves folder's full path (files mode) or nil
+--   CP.Storage.describe() -> one line for the start-up log
+--   CP.Storage.loadError() -> why the saves folder could not be used, or nil
+--   CP.Storage.hasSavedData() -> true when Config.Database.folder holds saves (a _tables.json), in either mode
+--   CP.Storage.realMySQL   oxmysql's MySQL table (files mode): the one read-only lookup of another
+--                          resource's table (sc-dispatch's mdt_dispatch, Hard rule 15) still goes there
+--   CP.Storage.db          the CP.Storage.MemSQL engine (files mode); its db.slice = { wait = Citizen.Wait, ms = 4,
+--                          saveMs = CP.Storage.saveTurnMs } on a server
+--   CP.Storage.saveTurnMs() -> Config.Database.saveTurnMs read now (4 when unset; 0 = saves never pause)
+--   CP.Storage.jsonCacheEntries() -> Config.Database.jsonCacheEntries read now (100000 when unset; 0 = keep none);
+--                          CP.Storage.MemSQL.jmemo.cap on a server (files mode)
+--   CP.Storage.MemSQL      the engine's code (modules/storage/memsql.lua); this module's one global table holds both
+--
+-- fxmanifest loads memsql.lua and this file right after @oxmysql/lib/MySQL.lua and before every other server
+-- module. The modules/**/server.lua glob matches this file a second time; that load returns at once.
+-- FiveM resource KVP is not used anywhere. On FXServer a resource may only write inside resource folders (its
+-- Lua file sandbox): the saves folder is a folder inside Crimson-Police, 'saves' unless Config.Database.folder
+-- names another one.
+
 if CP.Storage and CP.Storage._installed then return end
 CP.Storage = CP.Storage or {}
 local S = CP.Storage

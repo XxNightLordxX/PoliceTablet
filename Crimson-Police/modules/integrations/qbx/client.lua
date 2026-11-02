@@ -1,5 +1,23 @@
 -- CP.Qbx (client): the only client code that talks to qbx_core.
 
+-- Owns exports.qbx_core:GetPlayerData() and the qbx_core client events the tablet reacts to. These
+-- client events are for the UI only; every decision about runs, roles and access stays on the server.
+--
+-- Public API (docs/ARCHITECTURE.md §5.1)
+--   CP.Qbx.getPlayerData() -> PlayerData
+--       A fresh copy from qbx_core every call ({} before a character is loaded or after logout, so
+--       test 'pd.job', never just 'pd'). Display only: the server re-checks everything.
+--   CP.Qbx.onJobUpdate(fn(job))
+--       QBCore:Client:OnJobUpdate (job switch, grade change; PlayerData is already fresh), and
+--       qbx_core:client:onGroupUpdate (a job or gang was added or removed: removing the active job
+--       makes it 'unemployed' without an OnJobUpdate), which fires with the re-read PlayerData.job.
+--   CP.Qbx.onDutyChange(fn(onDuty))
+--       QBCore:Client:SetDuty. The boolean argument is passed on: PlayerData.job.onduty is still
+--       stale inside that event (qbx_core sends SetDuty before the PlayerData update).
+--   CP.Qbx.onUnload(fn())    QBCore:Client:OnPlayerUnload (character logout or switch; not on disconnect)
+--   CP.Qbx.onLoaded(fn())    QBCore:Client:OnPlayerLoaded
+-- Listeners run in their own thread; errors are caught and logged.
+
 CP.Qbx = CP.Qbx or {}
 local Q = CP.Qbx
 local TAG = 'qbx'

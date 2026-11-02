@@ -1,6 +1,6 @@
-// Active Mission · the live case card (step V16, Config.LiveCrime.caseCard): the reported crime, the suspect count,
+// Active Mission · the live case card (Config.LiveCrime.caseCard): the reported crime, the suspect count,
 // the three steps (the same for every suspect, like the HUD) and when the "last reported" map points were taken.
-// It never shows one suspect's state or a live position. Step H3: "Step n of 3" in the title, the current step marked.
+// It never shows one suspect's state or a live position. "Step n of 3" in the title, the current step marked.
 
 import { Badge, Icon } from '../../shared/components';
 import { cx } from '../../shared/cx';

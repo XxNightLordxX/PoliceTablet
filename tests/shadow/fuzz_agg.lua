@@ -1,5 +1,11 @@
 -- Random aggregate queries, compared in shadow mode (lua5.4 tests/run.lua --fuzz): SUM /
 
+-- COUNT / MAX / MIN over CASE, AND / OR / NOT, IN lists, IS NULL, column and parameter comparisons (integer, DECIMAL,
+-- DATETIME and case / accent / trailing-space variants of text), GROUP BY one to three columns (NULLs included), and
+-- SUBSTRING_INDEX(GROUP_CONCAT(... ORDER BY ...), ',', 1) with NULL and tied keys. FUZZ_SEED picks the data and queries,
+-- FUZZ_N how many. GROUP BY uses a text column without case variants: grouping by a text whose rows differ in case
+-- shows an arbitrary member on MariaDB (it depends on the plan), which nothing can match.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local SEED = tonumber(os.getenv('FUZZ_SEED')) or 1

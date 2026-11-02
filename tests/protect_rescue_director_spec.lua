@@ -1,6 +1,11 @@
--- Hostage Rescue's hostages through the spawn director (Config.Spawning.hostagesAt, PLAN S15) on the real engine, the
+-- Hostage Rescue's hostages through the spawn director (Config.Spawning.hostagesAt) on the real engine, the
 -- real blocks and the built-in mission file: they appear when their own objective starts (after the fight), not at
 -- run start, never within minDistanceIndoor (15 m) of an officer, and after hostagesWaitMax on their spots anyway.
+
+-- Hostage Rescue's hostages through the spawn director (Config.Spawning.hostagesAt) on the real engine, the
+-- real blocks and the built-in mission file: they appear when their own objective starts (after the fight), not at
+-- run start, never within minDistanceIndoor (15 m) of an officer, and after hostagesWaitMax on their spots anyway.
+-- 'runStart' keeps the old timing. The engine warns once about a block that makes entities in prepare.
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

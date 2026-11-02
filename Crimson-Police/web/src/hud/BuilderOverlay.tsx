@@ -1,5 +1,17 @@
 // Mission Builder in-world overlays: the placement tool, route recording and test drive HUDs.
 
+// Props: { overlay } — the `overlay` message payload whose kind is 'placement' | 'recording' | 'testdrive',
+// sent by modules/builder/client.lua every ~150 ms while a tool runs (shapes: src/types/builder_client.ts).
+// Rendered full-screen by App while such an overlay is set; the tablet is closed at that time, there is no NUI
+// focus (the keys are game controls read by the Lua tool), so this panel is display-only.
+//   placement  what is being placed, count placed / needed / max, valid or invalid spot with the reason,
+//              heading or radius, the start keep-out (keepOut, armed), key hints E / Scroll / Backspace /
+//              Delete / X / Enter
+//   recording  REC or PAUSED, length, waypoints, samples, rejected samples, off-road / no-build zone /
+//              too-long warnings, stop points, loop closure, waiting states, key hints E / Backspace / P / X
+//   testdrive  waypoint progress, time left to the current waypoint, stop countdown, waypoints marked for
+//              re-recording, approach / spawn states, key hint X
+
 import type { ReactNode } from 'react';
 import { Icon, ProgressBar, type IconName } from '../shared/components';
 import { cx } from '../shared/cx';

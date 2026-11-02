@@ -1,5 +1,11 @@
 -- The world of tests/admin_live_spec.lua, tests/admin_runctl_spec.lua and tests/sup_actions_spec.lua: the real
 
+-- The world of tests/admin_live_spec.lua, tests/admin_runctl_spec.lua, tests/sup_actions_spec.lua,
+-- tests/run_controls_spec.lua and tests/difficulty_unit_spec.lua: the real
+-- permissions, access, admin, adminkit, deptcontrols, tablet, schedule, scaling, events, units, runs and livectl
+-- modules, stand-ins for the rest (Qbox, the Mission Board, scoring, cash, operations, the downed follow-up) and a
+-- one-objective mission whose block spawns one object.
+
 return function(H)
     local W = { log = {} }
     local function Rec(k, v)

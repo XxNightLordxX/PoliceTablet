@@ -1,4 +1,9 @@
-// Admin UI split by play (step AP1) walked against the browser mocks (node walk.mjs, a gate step): the sidebar lists
+// Admin UI split by play walked against the browser mocks (node walk.mjs, a gate step): the sidebar lists
+
+// Admin UI split by play walked against the browser mocks (node walk.mjs, a gate step): the sidebar lists
+// the admin screens under NPC missions, Player vs police, Police teamwork, then money and the server, and Settings ->
+// Features lists each feature switch by section with the setting it writes (a risky one asks first, a money one
+// keeps its typed ENABLE).
 
 import '../../mocks/settings.mock';
 import { ADMIN_SCREENS, PLAY_SECTIONS } from '../../layouts/screens';

@@ -1,4 +1,4 @@
-// Officer UI sidebar order (step G4) against the browser mocks (node walk.mjs, a gate step): Config.Tablet's
+// Officer UI sidebar order against the browser mocks (node walk.mjs, a gate step): Config.Tablet's
 // sidebarOrder, activeFirst and compactSidebar reach the sidebar as the session's config.officerNav, and the order
 // changes only when they are set.
 

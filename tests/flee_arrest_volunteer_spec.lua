@@ -1,4 +1,4 @@
--- flee_arrest's volunteer slot (V23, docs/ARCHITECTURE.md §7.3): Warrant Service's wanted person at the door played
+-- flee_arrest's volunteer slot (docs/ARCHITECTURE.md §7.3): Warrant Service's wanted person at the door played
 -- by a volunteer runner. The real engine and block; CP.Volunteers.matchView (ctx.volunteer()) and CP.Opponents.view
 -- are stubs the spec sets, so only the block's own rules are under test here.
 

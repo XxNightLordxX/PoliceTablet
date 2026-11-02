@@ -1,4 +1,10 @@
--- CP.Volunteers (server, step V20): the volunteer list behind Config.Volunteers.command (default /crimsonheat). A
+-- CP.Volunteers (server): the volunteer list behind Config.Volunteers.command (default /crimsonheat). A
+
+-- CP.Volunteers (server): the volunteer list behind Config.Volunteers.command (default /crimsonheat). A
+-- player who is not on police duty agrees to the rules, picks the suspects he will play and stays on the list for
+-- Config.Volunteers.windowMinutes; he renews, changes his picks or stops from the same command. The server decides
+-- everything: who may volunteer (CP.Opponents.eligible, an admin's exclusion, strikes), when the window ends and why.
+-- No matching here: later steps read CP.Volunteers.list() and give strikes with CP.Volunteers.strike().
 
 CP.Volunteers = CP.Volunteers or {}
 local V = CP.Volunteers

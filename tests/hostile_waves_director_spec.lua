@@ -1,5 +1,20 @@
--- hostile_waves through the spawn director (Config.Spawning, PLAN S2) on the real engine, the real block and the
+-- hostile_waves through the spawn director (Config.Spawning) on the real engine, the real block and the
 -- built-in mission files: wave 1 once an officer is near, every wave away from the officers, the rest waits.
+
+-- hostile_waves through the spawn director (Config.Spawning) on the real engine (tests/fixtures/custody/world.lua:
+-- runs, npc, scaling, scoring), the real blocks and the real loader's built-in missions, every ped the engine creates
+-- recorded with the nearest officer at that moment. Gang Shootout's Terminal yard: in from the far side 2 m from
+-- spawns[7] only the 3 points 40 m in front appear, 2 more 20 m away after waveDelayMax (one warning), spawns[14] behind
+-- him never; from the start marker all 20 appear over the fight, none within 40 m; a push into the yard gets wave 2 from
+-- in front of him, the rest once he walks back. activateRange holds wave 1 back. No spawn points: nobody, never at the
+-- start, the fight completes. Hostage Rescue (indoor: 15 m, all 4 at once; outdoors 40 m none) and the raids' fights at
+-- the breach entries (indoor). leaveOutAfter: a yard whose every point he stands within 12 m of leaves wave 2 out at 45 s,
+-- not while a hostile stands, never with 0; standing on the points before the fight only makes it wait (afterSeconds
+-- then counts from wave 1's first hostile). The Kingpin on his own spot, on another point when his is 39.7 m away, left
+-- out (no checklist line) when nothing is far enough after his wave fell; with hidden points first (a run started
+-- in a thread) the wave's hostile on the point the officer's game cannot see and the Kingpin still on his own spot,
+-- although it is seen. Ring copies of a wave larger than the list are checked like points;
+-- enabled = false spawns as before; indoor is validated. No SQL.
 
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H

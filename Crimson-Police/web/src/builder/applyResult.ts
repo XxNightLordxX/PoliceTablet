@@ -1,5 +1,10 @@
 // Writes a builder client result (docs/ARCHITECTURE.md §13.7.6) into the
 
+// draft: placed points into definition.locations[location - 1][key] (a single vector for single-point keys,
+// a list otherwise, one more list for flee paths, { coords, radius } for the start), a recorded road route
+// { points, stops?, loop? }, and the route meta (length, rejected samples, unreachable / failed waypoints)
+// that the Locations step shows but the definition never stores.
+
 import type { BuilderConfig, BuilderDefinition, BuilderRoute, Vec, Vec3 } from '../types/builder_server';
 import type { BuilderClientResultEx, PointSpec, RouteMeta } from '../types/builder_client';
 import { clone, isVec, listsOf, pointsOf, round2, spaceOut, thin } from './defUtils';

@@ -1,5 +1,14 @@
 // The NUI bridge (docs/ARCHITECTURE.md §9.1).
 
+//   Lua → NUI: window 'message' events whose data.type is one of
+//              open | close | session | notify | hud | result | push | overlay | theme
+//   NUI → Lua: POST https://<resource>/<endpoint> with a JSON body, endpoints
+//              ready | close | request | action | client | switchUi
+//
+// In a normal browser (isEnvBrowser()) nothing is POSTed: request/action/client calls are answered
+// by mocks registered with registerMock() (see src/mocks/*.mock.ts), and emitDebug() fakes Lua
+// messages. Every call resolves (never rejects) to { ok, data?, error? } where error is an err.* key.
+
 import { useEffect, useRef } from 'react';
 import type { ApiResult, NuiEndpoint, NuiMessageMap, NuiMessageType } from './types';
 

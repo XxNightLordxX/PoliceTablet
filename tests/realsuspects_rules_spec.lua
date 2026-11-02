@@ -1,4 +1,4 @@
--- Police vs real criminal players, step V9: the NPC-mission Hard rules 15-18 bent for cases with a real suspect
+-- Police vs real criminal players: the NPC-mission Hard rules 15-18 bent for cases with a real suspect
 -- (run.realSuspect), each a Config.RealSuspects choice, and Config.LiveCrime.requireRoute for live crimes. Nothing
 -- sets run.realSuspect or run.live yet (V14, V22), so every run here is a fake run.
 

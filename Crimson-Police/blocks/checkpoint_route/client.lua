@@ -1,5 +1,29 @@
 -- Objective block "checkpoint_route" (client half)
 
+-- What it does
+--   Shows the current checkpoint (marker within 150 m, blip with GPS route; the next one dimmer),
+--   runs the local stop timer ("Hold still: 6 s") and reports the checkpoint when it counts; during a
+--   course it watches the driven vehicle for wall/vehicle contacts and for becoming undriveable.
+--   Everything the server decides arrives as a full snapshot through update(); the HUD line is
+--   composed here with ctx.hudDetail (the running course clock in whole seconds, so the line changes
+--   at most once a second; "the timer starts at checkpoint 1" while the server holds the run timer).
+--   Radio Silence: blips by Config.Markers.radioSilence ('area': the current checkpoint alone, no line),
+--   and the HUD names the next street.
+--   No networked entities are created here; this block has no NPCs (hostChanged only records the flag).
+--   The block's client state is kept per run and objective in this file (stateOf), so it also works
+--   when the engine hands every hook a fresh ctx.state table.
+--
+-- Objective fields read: radius [10], stopFor [10], vehicleRequired [true], contactPenalty [2]
+--   (the server sends the checkpoint list, course state and which checks to run)
+-- Evidence sent (ctx.report)
+--   { type = 'checkpoint', index, netId?, try }   inside the current checkpoint
+--       (driving a vehicle when required; stopped for stopFor seconds, or at once for drive-through).
+--       The check here only drives the HUD hint: the server decides "driving a vehicle" itself (in a
+--       vehicle, in its driver seat; any vehicle counts) and trusts nothing else in the report.
+--   { type = 'contact', netId }       collision flag with a speed drop, a hard speed drop, or body damage
+--   { type = 'undriveable', netId }   the vehicle used on the course is no longer driveable
+-- Bonuses / penalties: none recorded on the client (the server records medal_* and no_contact).
+
 local BLOCK = 'checkpoint_route'
 
 -- An objective cue, unless the officer turned the cues off on this PC (My options -> Sounds).

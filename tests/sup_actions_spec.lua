@@ -1,4 +1,4 @@
--- Supervisor officer actions (step P7): Clear cooldown (one officer's mission or type cooldown, from Department
+-- Supervisor officer actions: Clear cooldown (one officer's mission or type cooldown, from Department
 -- Report) and "+ minutes" on a live run (Live Missions), both Mission controls of kind 'action'. Real runs, livectl,
 -- deptcontrols, adminkit, admin, access and permissions (tests/fixtures/admin_live_world.lua).
 

@@ -1,4 +1,9 @@
--- Objective block "live_response" (client half, step V12): the live_crime engine mission's objective. The server half
+-- Objective block "live_response" (client half): the live_crime engine mission's objective. The server half
+
+-- Objective block "live_response" (client half): the live_crime engine mission's objective. The server half
+-- decides everything from server facts (CP.Opponents); this half only offers the unit leader "End case" in the ox_lib
+-- radial menu while the objective runs, with a confirm. The map pointer (the scene, then the last-reported points)
+-- is CP.Markers' own, from the server's marker.
 
 local BLOCK = 'live_response'
 local RADIAL_ID = 'crimson-police:live_end_case'

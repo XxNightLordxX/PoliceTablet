@@ -1,6 +1,11 @@
-// The Money screen (step H6, Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs of one screen.
+// The Money screen (Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs of one screen.
 // The old screen keys stay as aliases: navigating to admin_payouts or admin_payments opens admin_money on that tab,
 // so saved links, Home tiles, Needs attention lines and a landing of 'payouts' keep working.
+
+// The Money screen's keys (Config.AdminUi.moneyScreen): moneyScreenOn(session), resolveAdminKey (with the
+// switch on, admin_payouts and admin_payments open admin_money on their tab, params kept; used by App's navigate, the
+// 'open' message and the Admin landing) and moneyTabOf(params). adminMoney.walk.ts checks it against the mocks, with
+// oneRequest's totals on admin:getPayments.
 
 import type { ScreenKey, ScreenParams } from '../shared/navigation';
 import type { Session } from '../shared/types';

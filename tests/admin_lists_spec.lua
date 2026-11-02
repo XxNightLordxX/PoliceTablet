@@ -1,6 +1,11 @@
--- The long Admin UI lists (step H6): Config.AdminUi.pageSize (rows per page, 0 = each list as before) and
+-- The long Admin UI lists: Config.AdminUi.pageSize (rows per page, 0 = each list as before) and
 -- Config.AdminUi.oneRequest (a screen opens with one request) read through CP.AdminKit, and the Player suspects
 -- cases a page at a time.
+
+-- The long Admin UI lists: CP.AdminKit.pageSize (Config.AdminUi.pageSize, 0 = nil, 10-200), pageOf (one page
+-- of a list in memory) and oneRequest, and admin:getRsCases a page at a time. The SQL lists (audit, payments, an
+-- officer's runs, flagged runs with the board) have one case each in adminkit_spec, admin_economy_spec and
+-- admin_boards_spec.
 
 local H = dofile('tests/harness.lua')
 

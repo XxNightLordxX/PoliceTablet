@@ -1,5 +1,5 @@
 -- CP.Twists (shared): the twists of a run (Armored Hostiles, Time Crunch, Radio Silence) that the officers choose when
--- they take a mission (PLAN M8b). Which twists a run carries, and what a set of them adds together
+-- they take a mission. Which twists a run carries, and what a set of them adds together
 -- (Config.Events.twists, capped by Config.Events.twistMaxPoints and twistMaxCash). Pure Lua: no natives.
 
 CP.Twists = CP.Twists or {}

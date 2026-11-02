@@ -1,4 +1,4 @@
--- Pursuit's volunteer slot (V24, docs/ARCHITECTURE.md §7.3): Street Race Bust's driver (stop mode, no contact
+-- Pursuit's volunteer slot (docs/ARCHITECTURE.md §7.3): Street Race Bust's driver (stop mode, no contact
 -- hand-off) played by a volunteer in his own car. The real engine and block; CP.Volunteers.matchView (ctx.volunteer())
 -- and CP.Opponents.view / caseOf are stubs the spec sets, so only the block's own rules are under test here.
 

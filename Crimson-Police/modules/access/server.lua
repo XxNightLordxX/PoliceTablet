@@ -1,5 +1,63 @@
 -- CP.Access (server): departments, roles, duty, active job, rank and callsign, suspension checks.
 
+-- Owns: the sanitised copy of Config.Departments (theme and logo validation with ONE console warning
+-- per bad key), who counts as an officer / supervisor / admin, the Crimson-Police suspension
+-- (cp_officers.suspended_until), the stored copy of rank, callsign and name (cp_officers), the
+-- immediate "no longer qualifies" signal (onLost) and the server export GetDepartment.
+-- All framework data comes through CP.Qbx; SC-Dispatch suspensions through CP.Dispatch.
+--
+-- Public API (docs/ARCHITECTURE.md §5.2)
+--   CP.Access.departmentForJob(jobName) -> deptKey|nil
+--   CP.Access.department(key) -> dept|nil       (a copy)
+--       dept = { key, label, short, jobs = { jobName... }, supervisorGrade, societyAccount,
+--                theme = { primary, accent, background, surface, text },
+--                logo = { url|nil, file|nil, watermark, opacity, size, grayscale } }
+--       Colours must be 6-digit hex: a missing or invalid one falls back to the Crimson-Police default
+--       (one warning per department and key); a missing text colour is picked with CP.U.contrastText
+--       for the background (an invalid one too, with a warning). logo.url is the configured https://
+--       url, else https://cfx-nui-Crimson-Police/logos/<file> (file names only: no folders);
+--       opacity is clamped to 0-0.25 (default 0.08), size to 0.05-1 (default 0.6), watermark defaults
+--       to true, grayscale to false.
+--   CP.Access.departments() -> { dept, ... }     sorted by key (copies)
+--   CP.Access.getOfficer(src) -> officer|nil, errKey
+--       officer = { src, citizenid, name, department, departmentLabel, departmentShort, job, rank,
+--                   gradeLevel, callsign|nil, onduty = true, isSupervisor, isAdmin }   (§3.1)
+--       Only the ACTIVE Qbox job counts (a department job held as a second sc-multijob job gives no
+--       access). errKeys, in check order: err.not_police (no character, or the active job is in no
+--       department), err.not_on_duty, err.suspended (Crimson-Police), err.suspended_dispatch
+--       (SC-Dispatch, checked for the active job). Suspension lookups are cached for 15 s.
+--   CP.Access.maybeOfficer(src) -> boolean       false only when CP.Qbx.knownJob(src) is in no turned-on
+--       department (getOfficer would refuse); true = maybe, an unknown job included. No Qbox lookup: loops
+--       over every online player filter with it and call getOfficer only for the rest. It reads the primary
+--       job like getOfficer; the job map never feeds onLost (SetPlayerData comes before OnJobUpdate).
+--   CP.Access.isAdmin(src) -> boolean            IsPlayerAceAllowed(src, Config.AdminAce); 0 = console = true
+--   CP.Access.isSupervisor(src) -> boolean       a qualifying officer whose grade >= supervisorGrade
+--   CP.Access.role(src) -> 'admin'|'supervisor'|'officer'|nil   (the highest)
+--   CP.Access.recheck(src, jobName) -> ok, endReason
+--       For a run participant who accepted with jobName: 'job_change' (active job differs from jobName,
+--       or is in no department), 'off_duty', 'suspended' (either suspension). A player without a loaded
+--       character returns true: the drop/unload paths end the run as disconnected.
+--   CP.Access.isSuspended(citizenid) -> boolean, untilTs|nil
+--   CP.Access.suspend(citizenid, days, actorSrc, reason) -> ok, errKey
+--       0 days lifts it. days: a whole number 0-3650 (err.invalid_days); citizenid as stored by Qbox
+--       (err.invalid_citizenid). When actorSrc is a player it must pass CP.Permissions.can(actorSrc,
+--       'suspend') (err.no_permission). An online officer is told on their tablet and a new suspension
+--       fires onLost(src, 'suspended'). Not audited here: the caller (modules/admin, modules/anticheat)
+--       writes the audit entry.
+--   CP.Access.refreshOfficerRow(src) -> boolean
+--       Upsert cp_officers callsign (32), rank_label (40), display_name (64) and department for a
+--       player whose active job is in a department (on duty or not). Runs on character load, on a
+--       job/grade change and when the tablet opens. Every text value (here and in the officer table) is
+--       cut to that many bytes without splitting a UTF-8 character (strict mode rejects half a character).
+--   CP.Access.onLost(fn(src, endReason))
+--       Fired right after a qbx duty/job/group event for a player whose last known active job (seeded at
+--       start, on load and by the first getOfficer/recheck) was a department job and who no longer qualifies: 'job_change' (the active job changed, including to
+--       'unemployed'), 'off_duty', 'suspended'. Listeners check whether the player is on a run.
+--   Server export GetDepartment(src) -> deptKey|nil   the department of the player's active job
+--                                                      (whether or not they are on duty)
+-- getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficerRow may yield
+-- (database): call them from a handler or thread.
+
 CP.Access = CP.Access or {}
 local A = CP.Access
 local TAG = 'access'

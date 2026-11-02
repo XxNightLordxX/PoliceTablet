@@ -1,4 +1,9 @@
--- Twists the officers choose at accept (PLAN M8b): CP.Twists and CP.Events' fit, offer, check and roll.
+-- Twists the officers choose at accept: CP.Twists and CP.Events' fit, offer, check and roll.
+
+-- Twists the officers choose at accept: CP.Twists (shared: the run's list, the stacked bonus and its caps)
+-- and CP.Events (which twists fit a mission, the offer per type, the check of a chosen list, the random roll that
+-- ships off). The engine, the board, the claim and the screens are covered in int_engine_spec, missioncalls_spec,
+-- economy_spec, teams_spec and the engine_b client fixture.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

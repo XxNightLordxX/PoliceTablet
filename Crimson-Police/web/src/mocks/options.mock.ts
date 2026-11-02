@@ -1,6 +1,12 @@
 // Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions,
 // setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
 
+// ?hudSide=left&hudCompact=1&hudScale=1.2&reduceMotion=1 start the HUD options of this PC (with ?hud=progress);
+// ?hudLook=1&textSize=large (with ?look=colourblind and ?hud=progress) the Easier to read options of the character.
+// Pop-ups: ?toastTime=short|long, ?resultTime=10 (with ?result=parity: the card closes after 10 s).
+// Board: ?fav=tactical&hide=training&oneClick=1.
+// Dispatch: ?oneClickClaim=1 (Claim takes a call at once), ?rememberFilters=1. Open on: ?openOn= (core.mock.ts).
+
 import { emitDebug, registerMock } from '../shared/nui';
 import type { OfficerOptionValue } from '../shared/types';
 import type { KeyLabel, OptionDef, OptionsView } from '../types/options';

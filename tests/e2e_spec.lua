@@ -1,5 +1,32 @@
 -- End-to-end scenarios on the REAL server side of Crimson-Police.
 
+-- Every modules/**/server.lua and blocks/**/server.lua is loaded (in the fxmanifest's glob order) together with
+-- the real mission files (CP.Missions.loadAll through LoadResourceFile). Only these are stubbed:
+--   * FiveM / OneSync natives (entities, peds, vehicles, state bags; players are simulated through H.players),
+--   * the exports of qbx_core, sc-dispatch, sc-ambulance, Renewed-Banking and ox_inventory.
+-- Runs are driven by firing the real net events and callbacks the clients / NUI would send.
+-- Scenarios:
+--   1. solo Beat Patrol: acceptType -> route arrival -> checkpoint evidence -> completed row, points = formula,
+--      cash paid once through the claim flow with a Renewed-Banking record, leaderboard row after invalidate
+--   2. SAST + FIB unit Gang Shootout at Reinforced: a partner leaving by quit (pay tier drops) and by
+--      real_call (pay tier kept, no cooldown)
+--   3. real calls: an npccall- id does nothing, a real id ends only that participant, an un-mark within 60 s
+--      -> real_call_cancelled + type cooldown
+--   4. downed with no EMS -> failed row, NPC pick-up, flag cleared, never hospital:server:RevivePlayer
+--   5. Cross-Department Mission: launch locks every board and refuses other accepts, join, start, complete lifts
+--   6. admin test run: no row, no cooldown
+--   7. flagged run (outside help) holds cash, supervisor approve pays, own-run review refused
+--   8. supervisor payout limits and the admin lock
+--   9. resource stop: entities deleted, nothing written (plus the dispatch backstop, outside help and executor
+--      events on that run first)
+-- Extra paths on the same stack: 2c presence share, 3b real call before the start / after 60 s / solo run already
+--   over, 4b downed in a unit with EMS on duty, 5b idle joiner + cancel of a running operation, 5c operation
+--   waiting -> relaunch -> idle auto-cancel, 7b approval while offline (pending, paid at login), 7c void ->
+--   dispute -> restored, 10 off duty / disconnect / off route.
+-- Threads created while the files load are deferred until every file has loaded (FiveM's CreateThread runs a new
+-- thread on the next scheduler tick; the harness would run it at once).
+-- Own database (<run database>_e2e, rebuilt from sql/migrations; mdt_dispatch from tests/fixtures/core).
+
 local H = dofile('tests/harness.lua')
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_e2e'
 

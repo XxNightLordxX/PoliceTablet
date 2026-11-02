@@ -1,5 +1,26 @@
 -- Objective block "protect_rescue" (client half)
 
+-- What it does
+--   From prepare (the hostages appear later, with each update: Config.Spawning.hostagesAt) on the run
+--   host only: CP.Npc.apply once it has control of
+--   each hostage, then the task for its cp state (restrained -> kneel, idle/safe -> cower,
+--   freed -> follow to the safe marker, re-issued every RETASK_MS while walking); again after
+--   hostChanged. Control is requested before every task (the officer next to a hostage often owns
+--   it; one ctx.control(ent, 0) request and no wait, the next pass after CONTROL_MS) and a task that
+--   CP.Npc.task refused is retried on the next loop.
+--   While the objective is current on this participant's client:
+--   - ox_target "Cut restraints" (exports.ox_target:addLocalEntity, option crimson-police:cut_restraints)
+--     on every restrained hostage, re-attached when the entity handle changes, removed in stop;
+--     selecting it reports 'free_start', runs lib.progressBar(freeTime) and reports 'freed';
+--   - the safe marker (DrawMarker only within MARKER_RANGE, otherwise Wait(750)) and blips for the
+--     hostages and the safe point (Radio Silence 'area': the safe point alone);
+--   - a HUD line (ctx.hudDetail) while freed hostages are walking to the safe point.
+--
+-- Objective fields read: freeTime, target.label / icon / distance, safe, safeRadius (ctx.obj);
+--   location[obj.safe].
+-- Evidence sent: { type = 'free_start', netId }, { type = 'freed', netId }
+-- Server data (update): { peds = { { netId, state, index } } }
+
 local BLOCK = 'protect_rescue'
 local U = CP.U
 

@@ -1,5 +1,136 @@
 -- Objective block "pursuit" (server half)
 
+-- What it does
+--   Suspect vehicles (networked, ctx.spawnVehicle) with their occupants (ctx.spawnPed, seated with the
+--   server SetPedIntoVehicle and again by the run host) drive away from the participants. The run
+--   host's client drives them: along a recorded road route waypoint by waypoint (route = location key
+--   { points, loop }; a loop is raced lap after lap, an open flee route ends in a free flee, marked
+--   routeDone in the snapshot once the car is within ROUTE_END of its last waypoint) or in a
+--   free flee (route = nil). Two modes:
+--   - stop (Street Race Bust, Stolen Vehicle Takedown): stop every vehicle. A vehicle is stopped when
+--     the server sees it below stopped.speed km/h (GetEntitySpeed) for stopped.seconds in a row, once
+--     it has been moving (or NEVER_MOVED_MS after it fled), or when it is wrecked. Its occupants get
+--     out; each one rolls footFlee (ctx.rng) to run on foot. The others wait by the car and surrender
+--     when a participant aims at them (surrenderOnAim) or at once (surrenderOnAim = false: racers).
+--     Suspects give up when aimed at (AIM_STOPPED by the car, Config.Blocks.flee_arrest.aimDistance
+--     when running), when stunned, or when a participant stays within flee_arrest.closeDistance for
+--     closeSeconds; a suspect in 'fleeing' whom CP.Npc.wornOut calls worn out (Config.Flee: his flee
+--     clock 'spent' and a participant within giveUpRange) gives up at once, armed or not, with the task
+--     it returns. Surrendered suspects are arrested with CP.Npc.enableCuff (arrest.label /
+--     arrest.duration: "Detain driver" 3 s on Street Race Bust). Done when every suspect is
+--     neutralised (cuffed, or dead without a participant kill). complete = 'all_or_timeout_any'
+--     (Street Race Bust) also needs at least one suspect detained before it completes early, and
+--     completes at the time limit when at least one was detained (onTimeout); none detained fails.
+--     A suspect more than escape.distance from every participant for escape.seconds escapes: fail.
+--     Occupants only switch from 'stopped' to fleeing / hostile / surrendered once they are out of
+--     the car (the host client retries the exit and finally warps them out).
+--   - follow (Pursuit Sim): stay within hold metres of the suspect vehicle (or its driver on foot
+--     after a wreck; with several suspects, the one nearest the party) for a total of duration seconds. More than lost.distance from every participant
+--     for lost.seconds straight fails, and so does the officer's vehicle becoming undriveable
+--     (failIfUndriveable). The average distance sets the medal, awarded only when the full duration
+--     was held; run.flags.medals = true. A target that died without a participant kill ends the
+--     objective without a medal.
+--   OneSync scope: a server-made entity is handed to a player's game (simulated, tasked, blipped) only
+--   within its culling radius, 424 m by default; out of every player's range it stands still. On a race
+--   (stop mode on a loop) whose widest span (start, spawn points, route points) plus SCOPE_MARGIN is above
+--   that, every car and occupant gets SetEntityDistanceCullingRadius(span + SCOPE_MARGIN, at most SCOPE_MAX) and
+--   SetEntityIgnoreRequestControlFilter (the first game to stream it may be a bystander's; the host
+--   must still win control). The filter is off only while the objective runs: its stop puts it back
+--   on for every car and person still there (ReleaseScope). With it off any game in the routing
+--   bucket may ask for control, so each tick a car or person kept by the game of a player who is not
+--   on the run counts up, and after Config.Blocks.pursuit.outsiderWarn seconds (0 = never) the
+--   console names that player once per player (WatchOutsiders); the host's game asks for control on
+--   every pass and takes it back. Each tick NetworkGetEntityOwner is read for every live car: a car no
+--   player's game has had for SCOPE_WARN_S is warned about once (always printed); Config.Debug logs
+--   each car's position, waypoint, speed, owner and nearest participant every TRACE_MS, and every
+--   spawn with its distance and culling radius. A race (stop mode on a loop) starting on arrival
+--   shows block.pursuit.msg_race_start.
+--   Where the cars appear (Config.Spawning): PlaceFor gives slot i (spawnOffset > spawns > spawn >
+--   ahead of the start > on the route > near the start; a slot past the objective's cars is a further slot of the
+--   same kind). A point of the road route itself (spawnOffset, a loop's waypoint, an open route's first point) is
+--   lifted Config.Spawning.vehicleLift over the road; the file's car points are used as written. A spawnOffset < 0
+--   objective that follows an earlier spawnOffset pursuit on the same route (Traffic Enforcement's second violator)
+--   is placed secondViolatorUpstream metres up the road from the participant furthest up it (within ON_ROAD of the
+--   road), and counts as passed (its blip) once past where he stood (st.watchFrom). No start: one warning, never a
+--   player's position. Each car goes through ctx.choosePoints (ordered = true: its slot, then two further slots, never
+--   one a car of the objective stands on); none passes: it waits (SpawnMissing tries again each tick); the slots that
+--   passed go to the placer as alt. Config.Spawning.enabled = false: slot i at once on the road's height, as before.
+--   Vehicles start when the objective starts (trigger 'arrive' or { ahead }) or, with trigger
+--   { distance, lights }, when a participant with lights on is within distance (client evidence
+--   'lights_near', checked with server coords), when any participant gets within FLEE_CLOSE, or when
+--   the car is hit. Rams of a suspect vehicle above ramSpeed km/h (0 = any contact) are penalised.
+--   Killing an unarmed, surrendered or cuffed suspect (a participant kill) fails the run.
+--   Volunteer slot (ARCHITECTURE 7.3; one local table Vol, the file is near Lua's 200 locals): stop mode with
+--   no contact hand-off, no observe and no team offers volunteerSlot { role = 'driver', meet = the first car's point }
+--   (Street Race Bust). ctx.volunteer() decides st.vol: 'wait' (asking: no car, no trigger), 'real' (he drives his
+--   own car: no NPC car unless Config.Volunteers.driverNpcCars, then one fewer; he is one more car and suspect,
+--   done when CP.Opponents.view has him detained with a share or booked, a detained racer with the detain bonus;
+--   lost fails block.pursuit.fail_escaped), 'void' (nothing spawns), nil (the NPCs as before). The pointer is the
+--   first car's point, then his last-reported point (key last:driver, the server's rec.lastCoords every
+--   Config.Volunteers.driverReportEvery s once he is in position or engaged), never a live position; presence
+--   reads rec.lastCoords on the server. The snapshot carries volunteer / volunteerDone for the HUD only.
+--
+-- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.pursuit)
+--   minSeconds [30] · presenceRange [presenceRange[3] = 400] · label
+--   mode               'stop' | 'follow'                                   [mode.default = 'stop']
+--   vehicles           suspect vehicles (scales)                           [vehicles[3] = 1]
+--   models             vehicle models                                      [Config.Builder.allowed.vehicles]
+--   peds               suspect ped models (added field)                    [Config.Blocks.hostile_waves.peds]
+--   suspectsPerVehicle occupants per vehicle, driver included, max 4        [suspects[3] = 1]
+--   spawn / spawns     vec4 key / list key; else placed on the route (loop: ROUTE_BACK waypoints
+--                      before the intercept start), else ahead of the start
+--   route              location key of a road route { points, loop }       [nil = free flee]
+--   speed [speed[3] = 120] km/h · style 'cautious' | 'reckless'            [style.default = 'reckless']
+--   trigger            'arrive' | { distance = 60.0, lights = true } | { ahead = 50.0 }   ['arrive']
+--   stopped            { speed [5.0] km/h, seconds [5] }
+--   footFlee [footFlee[3] / 100 = 0.2] · surrenderOnAim [true]
+--   arrest             { label [locale block.pursuit.arrest], duration [5000] ms }
+--   follow mode        hold [holdDistance[3] = 150] · lost { distance [250], seconds [10] }
+--                      duration [180] s · medals { gold [40], silver [80], bronze [150] } | false
+--                      failIfUndriveable (added) [true in follow mode, false in stop mode]
+--   escape             { distance, seconds } | false   [stop + 'all_detained': flee_arrest escape
+--                      defaults 400 m / 20 s; otherwise false]
+--   complete           'all_detained' | 'all_or_timeout_any'              ['all_detained']
+--   ramSpeed [100] km/h (0 = any contact) · ramPenaltyId ['hard_ram'] · neverShoots [true]
+--   weapons (added, only with neverShoots = false)                        [Config.Blocks.flee_arrest.weapons]
+--   detainBonus (added)      id per detained suspect   ['racer_detained' with 'all_or_timeout_any', else false]
+--   allDetainedBonus (added) id when all detained      ['all_racers_detained' with 'all_or_timeout_any', else false]
+--   fastStop (added)         { id, seconds } | false   [stop + 'all_detained': { 'vehicle_stopped_fast', 120 }]
+--
+-- Evidence accepted (onEvent)
+--   { type = 'ram', netId, speed }      the reporter's vehicle touched suspect vehicle netId at speed km/h;
+--                                       reporter in a vehicle within RAM_RANGE (server coords), speed
+--                                       plausible against the server's samples, once per RAM_COOLDOWN_MS
+--   { type = 'lights_near', netId }     lights/siren on within trigger.distance of a waiting car
+--   { type = 'aim', netId }             an unarmed suspect on foot aimed at (server distance + weapon check)
+--   { type = 'stunned', netId }         a suspect seen stunned; a participant within STUN_RANGE and the
+--                                       reporter within STUN_REPORT (server coords), and CP.Npc.stunCheck
+--   { type = 'low_health', netId }      an armed suspect (neverShoots = false) re-checked below 50 % health
+--   { type = 'undriveable', netId }     follow mode: the reporter's vehicle, confirmed by server engine/tank health
+--   { type = 'cuffed', netId }          CP.Npc after a validated cuff (the cp bag says cuffed)
+--   { type = 'shot', netId, src }       CP.Npc: a surrendered/cuffed suspect was shot (penalty recorded there)
+--
+-- Bonus / penalty ids recorded (shared)
+--   ramPenaltyId ['hard_ram'; Pursuit Sim 'ram'] ctx.penalize count 1 per counted ram
+--   detainBonus ['racer_detained'] ctx.award count 1 per detained suspect
+--   allDetainedBonus ['all_racers_detained'] once when every suspect was detained
+--   fastStop.id ['vehicle_stopped_fast'] once when every vehicle stopped within fastStop.seconds of the start
+--   medal_gold | medal_silver | medal_bronze   follow mode, by average distance (medals); points hint
+--                                       MEDAL_POINTS (card values 50 / 25 / 10, capped on custom missions)
+-- Custom missions (validate): detainBonus / allDetainedBonus / fastStop.id / ramPenaltyId are false, a
+--   Config.Bonuses id or the block default (ID_DEFAULTS); fastStop.seconds at most 120; arrest.duration
+--   1000-30000 ms
+-- Fail reason keys: block.pursuit.fail_escaped · block.pursuit.fail_lost · block.pursuit.fail_undriveable ·
+--   block.pursuit.fail_setup · run.fail_killed_unarmed
+--
+-- ctx.state
+--   block, mode, rng, vehicles = { [tostring(netId)] = { key, netId, entity, index, state = 'waiting'|
+--   'fleeing'|'stopped'|'wrecked', occupants = { pedKey }, want, slowFor, moved, fleeAt, body } }, vorder,
+--   peds = { [tostring(netId)] = { netId, entity, vehicle, seat, armed, state = 'driving'|'stopped'|
+--   'fleeing'|'hostile'|'surrendered'|'cuffed'|'dead', fleeRoll, stoppedAt, far, close } }, counts,
+--   fled, startedAt, detained, rams, speeds, officerVeh, follow = { inRange, lostFor, sum, samples },
+--   medal, escaping, dirty, completed, failed, halted
+
 local BLOCK = 'pursuit'
 local U = CP.U
 

@@ -1,4 +1,11 @@
-// Supervisor UI · Mission controls (screen key 'sup_controls', title key 'ui.screen.sup_controls', step P5): the
+// Supervisor UI · Mission controls (screen key 'sup_controls', title key 'ui.screen.sup_controls'): the
+
+// Supervisor UI · Mission controls (screen key 'sup_controls', title key 'ui.screen.sup_controls'): the
+// controls an admin switched on (sup:getMissionControls), grouped, each with the config value, the value in use, an
+// editor by kind, Back to config, who changed it and when, and the change-wait countdown. Every save asks for a
+// reason (server:sup:setMissionControl / server:sup:resetMissionControl). Live: push 'missionControls'.
+// header and load states from supHead.ts (SUP_HEADS) and officer ScreenStatus; each group card has a help
+// line (SUP_GROUP_HELP, sup.controls.group_help.<group>). Review Queue uses the same. Walk: supHead.walk.ts.
 
 import { useEffect, useState } from 'react';
 import {

@@ -1,5 +1,24 @@
 -- Integration checks for the web group (web/src outside the Mission Builder).
 
+-- Static cross-checks between the screens and the Lua that feeds them, for what the integration pass
+-- changed or relies on:
+--   * Mission Board: BoardData.operation.joinBlocked (CP.Operations.boardCard) is typed, read by the
+--     screen, and every key the Lua can send has a text in some locale part;
+--   * Unit screen: test invitations (SPEC Admin test mode, "accept on their own screen") use the names
+--     modules/testing registers (callback test:pendingInvites, action server:testRespond { inviteId,
+--     accepted }, push 'invites') and the TestInvite fields the Lua returns; every literal key exists;
+--   * a nil push ('run' with no data) arrives as a missing field: the RunBar, Home, Mission Board and
+--     Active Mission treat undefined like null;
+--   * Home styles both announcement kinds modules/leaderboard sends (weekly_top3, monthly_top3);
+--   * lists from Lua ({} for an empty table): the touched screens wrap them (asArray / asList);
+--   * theme: primary/accent text colours reach WCAG AA (4.5:1) on the surface, checked with a Lua port of
+--     web/src/shared/theme.ts on the configured department themes (FIB's navy primary was 3.2:1);
+--   * Check spawn points: the push topic spawnCheck and every state modules/testing/client.lua pushes
+--     are handled by admin/components/spawnCheckStore.ts at module level, with the fields the Lua sends; the
+--     client actions spawnCheck, spawnCheckStop and teleport { target: 'point' } are the ones the Lua registers;
+--     the button, the location item and Teleport here follow admin:getTests config.spawnCheck; the report uses
+--     the server's console status words; every text the dialog and store show exists.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local cjson = require('cjson')

@@ -1,4 +1,4 @@
--- Volunteer opt-in (step V20): CP.Volunteers on the server, the command's event (open, join, renew, roles, stop),
+-- Volunteer opt-in: CP.Volunteers on the server, the command's event (open, join, renew, roles, stop),
 -- the window, the ends (expired, on duty, excluded, disabled, left) and strikes. Plain Lua with stubs.
 
 local H = dofile('tests/harness.lua')

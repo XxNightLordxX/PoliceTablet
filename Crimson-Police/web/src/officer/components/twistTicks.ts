@@ -1,4 +1,4 @@
-// The twists the accept step (Mission Board, mission call claim; PLAN M8b) starts with ticked. Pure: no React, so the
+// The twists the accept step (Mission Board, mission call claim) starts with ticked. Pure: no React, so the
 // browser walk can check it against the mocks.
 
 import { asArray } from '../../shared/data';

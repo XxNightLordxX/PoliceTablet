@@ -1,4 +1,4 @@
--- CP.Weapons (shared, step F2): the names of the common GTA weapons by hash, so the Real suspects damage ledger
+-- CP.Weapons (shared): the names of the common GTA weapons by hash, so the Real suspects damage ledger
 -- reads "Combat Pistol" and not 1593441988. Built once at load (joaat of each weapon name); a hash not in the table
 -- reads as the hash itself.
 

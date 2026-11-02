@@ -1,4 +1,4 @@
--- Built-in location labels name the right place (step L4): renamed locations keep their old label in `aliases`,
+-- Built-in location labels name the right place: renamed locations keep their old label in `aliases`,
 -- so a Config.DisabledLocations or MissionTweaks entry written by the old label still matches; Traffic
 -- Enforcement's two city corridors are posted at 60 km/h.
 

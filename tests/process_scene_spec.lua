@@ -1,4 +1,4 @@
--- Blocks/process_scene (WP2): kept bodies (at most the limit, oldest out), nobody died (+15 at once), Photograph
+-- Blocks/process_scene: kept bodies (at most the limit, oldest out), nobody died (+15 at once), Photograph
 -- & tag and Bag body with reach and dwell, Release at the coroner van or the scene marker, cleanup, the clocks.
 
 local W = dofile('tests/fixtures/custody/world.lua')

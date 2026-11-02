@@ -1,4 +1,4 @@
-// The twists a leader may add at the accept step (Mission Board, mission call claim; PLAN M8b): one switch per twist
+// The twists a leader may add at the accept step (Mission Board, mission call claim): one switch per twist
 // with its own bonus, and the total bonus of the ones picked ("+45% points, x1.50 cash"), capped as the server caps it.
 
 import { Badge, Icon, Toggle } from '../../shared/components';

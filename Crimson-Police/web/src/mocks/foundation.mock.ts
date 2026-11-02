@@ -1,4 +1,4 @@
-// Browser mocks of the foundation slice: a result with every parity-plus section (?result=parity shows it).
+// Browser mocks of the foundation slice: a result with every optional section (?result=parity shows it).
 
 import { emitDebug } from '../shared/nui';
 import type { RunResult } from '../shared/types';

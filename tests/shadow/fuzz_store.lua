@@ -1,5 +1,15 @@
 -- Storing values into typed columns, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
 
+-- every column type Crimson-Police uses (INT, TINYINT, TINYINT(1), SMALLINT, DECIMAL, VARCHAR, ENUM, DATETIME, DATE,
+-- JSON, NOT NULL with and without a default) gets numbers, decimals, doubles, texts with and without a number in
+-- them, dates in MariaDB's many spellings, JSON, booleans and NULL, through INSERT and UPDATE, in strict mode and
+-- with IGNORE: the stored value, the error, and the warnings and notes (warningStatus, "Rows matched ... Warnings")
+-- are compared. Then rows of several values at once: CHECK (JSON_VALID) failures with IGNORE, NULL into NOT NULL,
+-- columns left out without a default, ON DUPLICATE KEY UPDATE conversions.
+-- FUZZ_SEED 1 runs the whole grid; other seeds a random part of it and random multi-row statements.
+-- Left out (the engine refuses them as unsupported): values MariaDB stores as a zero date or a date with a zero
+-- month or day ('0000-00-00', 0, 300, '2026-00-01', and any bad date with IGNORE).
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local SEED = tonumber(os.getenv('FUZZ_SEED')) or 1

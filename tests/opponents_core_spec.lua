@@ -1,4 +1,4 @@
--- CP.Opponents core (step V4): cases keyed by citizenid, the 1 s watch, leaving, instances, rejoins, AFK samples and
+-- CP.Opponents core: cases keyed by citizenid, the 1 s watch, leaving, instances, rejoins, AFK samples and
 -- staff notes, against the real qbx, access, anticheat and cash modules (qbx_core's exports and events mocked).
 
 local H = dofile('tests/harness.lua')

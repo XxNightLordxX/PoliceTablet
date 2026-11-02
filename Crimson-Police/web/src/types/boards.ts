@@ -1,5 +1,9 @@
 // Shapes of the boards slice (modules/leaderboard, modules/challenge).
 
+// The §9.4 contract types live in shared/types.ts; the interfaces here extend them with the optional
+// fields the Lua modules add (documented in their header comments and docs/ARCHITECTURE.md §13.5), plus the
+// supervisor/admin shapes the contract leaves to the module owner (§9.5).
+
 import type { Avatar, Board, BoardRow, ChallengeView, LevelInfo, Profile, ProfileRun } from '../shared/types';
 import type { FlaggedRow } from './oversight';
 import type { Commendation } from './profile';

@@ -1,6 +1,54 @@
 -- CP.AntiCheat (server): objective-event checks, run flags, outside help, presence sampling, the idle check and the
 -- voids -> suspension rule.
 
+-- Owns
+--   * checkEvent: every client objective event (after CP.Runs' own run/participant checks) must come from
+--     an active participant of an in-progress run, for the CURRENT objective (an event for a later
+--     objective flags the run 'unexpected_event'; an earlier/finished one is dropped silently as lag),
+--     within a per-src rate limit (10/s), and must not be an exact duplicate of the same src's last
+--     events (same objective, same evidence fields apart from coords/time) within 1 s. Between two
+--     events of one participant the server-side ped coordinates must not move faster than
+--     Config.AntiCheat.maxSpeed (distance / max(1 s, elapsed)); faster flags the whole run 'speed'.
+--     In-arena srcs (CP.Alerts.inArena) are refused with err.in_arena and never flagged or sampled
+--     (Crimson-Arena rule 6); a position pair across a routing-bucket change is discarded.
+--   * flags: run-level (src nil -> run.flagged) or participant-level (p.flagged) { reason, detail };
+--     the rows CP.Runs writes afterwards are flagged with that reason. The first reason is kept; every
+--     distinct (reason, participant) is recorded once in cp_audit (category flags, action runFlagged,
+--     target = run id, old_value = citizenid for a participant flag, new_value = reason,
+--     reason = detail) and posted to the flags webhook. The Review Queue reads the detail (e.g. who
+--     helped) from there. Test runs are never flagged. Only an officer's own conduct is flagged.
+--   * notes (AC.note): a staff note about a participant or the case (something a suspect did himself,
+--     or a fact to check, such as stun_unproven) is recorded the same way with action runNoted, once
+--     per (reason, participant) in its own list; it never sets p.flagged or run.flagged, so no row is
+--     held for it. The Review run detail lists the notes of a held run. Test runs only log them.
+--   * stunMode / stunReport: Config.AntiCheat.stunNeedsProof ('flag' shipped, 'hold', 'strict', 'off';
+--     an old true reads as 'strict', false as 'off') applied to a 'stunned' report the server did not
+--     see: a note, a flag on that officer, a refusal, or nothing.
+--   * onNpcKilled: kills of mission NPCs by players who are not active participants; at
+--     Config.AntiCheat.outsideKillsToFlag the run is flagged 'outside_help' naming the killer(s).
+--   * presence sampling every 5 s for in-progress runs that have had 2+ participants: each active
+--     participant's distance from the current objective (its block's presence(ctx, src, coords) with the
+--     engine's ctx from CP.Runs.ctx when available, else the location start) against the objective's
+--     presenceRange (fallback Config.AntiCheat.presenceRadius);
+--     p.presence = { inRange, total } in seconds.
+--   * the idle check: Config.AntiCheat.idleCheck s after the run moved to In progress, active participants
+--     who have not reached the start are removed with end reason 'idle'.
+--   * onVoided: Config.AntiCheat.voidsToSuspend voided mission rows created within voidWindowDays (and
+--     after the officer's last automatic suspension) suspend the officer for suspendDays
+--     (CP.Access.suspend(citizenid, days, 0, 'auto') + audit 'autoSuspend').
+--
+-- Public API (docs/ARCHITECTURE.md §5.26)
+--   CP.AntiCheat.checkEvent(run, src, index, evidence) -> ok, reasonKey
+--   CP.AntiCheat.flag(run, src|nil, reason, detail) -> boolean (true when newly recorded)
+--   CP.AntiCheat.onNpcKilled(run, killerSrc)
+--   CP.AntiCheat.presenceOk(run, p) -> boolean      share >= Config.AntiCheat.presenceShare (true for solo
+--                                                   runs and when nothing was sampled); a failing participant is
+--                                                   flagged 'presence' with the share as detail (once)
+--   CP.AntiCheat.presenceShare(p) -> number|nil     inRange / total
+--   CP.AntiCheat.onVoided(citizenid) -> suspended (boolean)
+--   CP.AntiCheat.evidenceSignature(evidence) -> string   (pure; coords/time excluded, keys sorted)
+--   CP.AntiCheat._sample(), _idleCheck(), _trackBuckets()  loop bodies (tests)
+
 CP.AntiCheat = CP.AntiCheat or {}
 local AC = CP.AntiCheat
 local U = CP.U

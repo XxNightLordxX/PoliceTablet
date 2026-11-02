@@ -1,5 +1,11 @@
 // Officer UI · Home (screen key 'home', title key 'ui.screen.home').
 
+// Officer card (callsign, rank, department tag, XP level badge and XP bar, streak with this week's grace
+// day, season points, cash earned this week), today's and this week's goal, the Type of the Day in the
+// accent colour, announcements and the season champions banner. Data: callback 'getHome' (HomeData,
+// ARCHITECTURE §9.4, typeOfTheDay extras in src/types/economy.ts), refreshed when the run ends (push 'run'
+// with no data) and every minute.
+
 import {
     Avatar,
     Badge,

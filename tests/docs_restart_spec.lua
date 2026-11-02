@@ -1,6 +1,9 @@
--- Step C14: the docs say what an ox_inventory restart does while Crimson-Police runs, and match the code: the
--- swapItems hook is dropped and registered again 1 s after ox_inventory starts. The README's option rows give the
--- unit of each number.
+-- The docs say what an ox_inventory restart does while Crimson-Police runs, and match the code: the swapItems hook
+-- is dropped and registered again 1 s after ox_inventory starts. The README's option rows give the unit of each number.
+
+-- README 11.9 and the run engine's own header say what an ox_inventory restart does (the swapItems hook dropped and
+-- registered again 1 s later, as runs/server.lua's onResourceStart handler does), and FILE_NOTES has the engine's
+-- line. Reads files only; no stubs, no database.
 
 local H = dofile('tests/harness.lua')
 
@@ -37,9 +40,10 @@ H.ok(Has(readme, 'The lock on mission items is registered again about 1 s after 
 H.ok(Has(readme, 'You do not need to restart Crimson-Police after `restart ox_inventory`.'),
     'it says no Crimson-Police restart is needed')
 
--- FILE_NOTES: the run engine's entry says the same.
-H.ok(Has(notes, 'the hook is registered again 1 s later'), 'FILE_NOTES: the hook comes back 1 s later')
-H.ok(Has(notes, 'items to take back are kept'), 'FILE_NOTES: what happens while ox_inventory is stopped')
+-- The run engine's header says the same, and FILE_NOTES has its one line.
+H.ok(Has(runs, 'the hook is registered again 1 s later'), 'the engine header: the hook comes back 1 s later')
+H.ok(Has(runs, 'items to take back are kept'), 'the engine header: what happens while ox_inventory is stopped')
+H.ok(Has(notes, '\n- `Crimson-Police/modules/runs/server.lua`: '), 'FILE_NOTES has the run engine\'s line')
 
 -- Units on the README option rows.
 for _, needle in ipairs({

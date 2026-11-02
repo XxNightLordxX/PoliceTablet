@@ -1,4 +1,4 @@
--- Full admin control, Missions and Mission Builder (P2): the Builder for admins while it is off, Change owner,
+-- Full admin control, Missions and Mission Builder: the Builder for admins while it is off, Change owner,
 
 local H = dofile('tests/harness.lua')
 local X = dofile('tests/fixtures/admin_missions/boot.lua')(H, 'admin_missions')

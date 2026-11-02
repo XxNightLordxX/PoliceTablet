@@ -1,5 +1,66 @@
 -- Objective block "checkpoint_route" (server half)
 
+-- What it does
+--   Drive to a list of checkpoints in order. Each checkpoint counts when a participant is inside its
+--   radius (driving a vehicle when vehicleRequired is on) and, with stopFor > 0, has stayed stopped
+--   there for stopFor seconds; with stopFor = 0 it is a drive-through gate. Only the current
+--   checkpoint counts, so a missed one must be driven through before the next one counts.
+--   "Driving" is decided on the server only: the participant's ped is in a vehicle
+--   (GetVehiclePedIsIn(ped, false) ~= 0) and in its driver seat (GetPedInVehicleSeat(veh, -1) == ped).
+--   Any vehicle counts: FiveM has no server-side vehicle class, so the old "police vehicle" rule had to
+--   trust the client and was replaced by "driving a vehicle" at the owner's request.
+--   Powers Beat Patrol (use = 'random', count = 5, stop 10 s) and EVOC Course (use = 'all',
+--   drive-through, medal times, contact seconds, fails when the course vehicle is undriveable).
+--   The server tracks every participant's position each tick (server-side coordinates) to verify the
+--   stop time, and the course vehicle's engine/body health (undriveable fail, no_contact check).
+--
+-- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.checkpoint_route)
+--   checkpoints        location key: list of vec3/vec4, or a road route { points = { vec3, ... } }
+--                      (an inline list or route table in the objective also works)
+--   use                'all' | 'random'                   [Config.Blocks.checkpoint_route.use.default = 'all']
+--   count              checkpoints used when use = 'random' (required for random)
+--   radius             metres                             [radius[3] = 10]
+--   stopFor            seconds stopped inside; 0 = drive through   [stopFor[3] = 10]
+--   vehicleRequired    checkpoint only counts while driving a vehicle (any vehicle)   [vehicleRequired.default = true]
+--                      (policeVehicle, the old name that published mission files may still use, is read as an
+--                      alias of vehicleRequired by defaults())
+--   medals             false | true | { gold, silver, bronze } seconds; location.medals (a table) overrides
+--                      [medals.default = false]. With medals the course time decides one medal bonus and
+--                      run.flags.medals = true is set in prepare (the common fast bonus is skipped).
+--   contactPenalty     seconds per wall/vehicle contact   [contactPenalty[3] = 2]; added to the course time
+--                      and taken off the run timer (CP.Runs.adjustTimer)
+--   timerStart         'first' (course clock starts at checkpoint 1) | 'start' (when the objective starts)  ['first']
+--                      On a medal course that is the mission's first objective, 'first' also holds the run
+--                      timer (CP.Runs.pauseTimer) from the objective start until checkpoint 1 counts, at most
+--                      PRESTART_GRACE s ("the timer starts at the first checkpoint", EVOC Course).
+--   failIfUndriveable  fail the run when the course vehicle becomes undriveable   [true]
+--   minSeconds [20] · presenceRange [presenceRange[3] = 300] · label
+--   With use = 'random' a pool point inside location.start (the start marker) is always used first and
+--   the others follow in the pool's circular order from it ("Start: the first checkpoint").
+--   Stop checkpoints (stopFor > 0): the server's own 1 s samples must see the participant inside the
+--   marker, stopped (server GetEntitySpeed <= SERVER_STOP_SPEED) and driving a vehicle when one is
+--   required, for stopFor - DWELL_SLACK seconds.
+--
+-- Evidence accepted (client -> server through ctx.report; the engine adds coords and time)
+--   { type = 'checkpoint', index, netId?, try? }   index = the current checkpoint; nothing else in it is
+--       trusted (the vehicle, the driver seat, the position and the stop time are the server's own)
+--   { type = 'contact', netId? }        course running, reporter in a vehicle, at most 1 per 1.2 s, 60 counted
+--   { type = 'undriveable', netId }     the reporter's course vehicle; verified with its engine health
+--
+-- Bonuses / penalties recorded (shared, via ctx.award)
+--   medal_gold | medal_silver | medal_bronze   one of them, from course time + contact seconds (medal courses)
+--   no_contact                                 medal courses: no counted contact and no server-side body damage
+--   Each carries the card value as its points hint (CARD_POINTS: 50 / 25 / 10, no_contact 10; capped by
+--   Config.Builder.bonusCap.points on custom missions).
+-- Fail reason keys: block.checkpoint_route.fail_undriveable
+--
+-- ctx.state
+--   points = { vec3 }, current = index | nil (finished), done = n, finished, completed, failed,
+--   medals = { gold, silver, bronze } | nil, trackContacts, contacts, penalty (s), courseStartMs,
+--   startMs, courseTime, medal, near = { [src] = { cp, since } }, vehicles = { [src] = netId },
+--   body = { [netId] = { start, min } }, healthy = { [netId] = true }, lastContact = { [src] = ms }, timedOut,
+--   timerHeld (this objective holds the run timer until checkpoint 1)
+
 local BLOCK = 'checkpoint_route'
 
 local STOP_SLACK = 4.0         -- metres of position lag allowed around a stop checkpoint

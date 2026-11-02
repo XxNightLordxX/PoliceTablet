@@ -1,4 +1,4 @@
--- Police vs real criminal players, step V3: second, read-only handlers for sc-police's and sc-ambulance's net events
+-- Police vs real criminal players: second, read-only handlers for sc-police's and sc-ambulance's net events
 -- pass facts to CP.ScPolice.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
 -- Real: modules/integrations/sc_police, modules/integrations/sc_ambulance, shared/net.lua (CP.Net.rateOk).
 

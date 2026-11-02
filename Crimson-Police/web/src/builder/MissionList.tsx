@@ -1,6 +1,10 @@
 // The Mission Builder's mission list: drafts, tested drafts, published and archived custom missions (builder:list)
 // with status, version, owner and edit lock, plus the built-ins to duplicate.
 
+// Actions (server:builder:*): create, duplicate, archive, restore, rollback, breakLock, discardDraft — each gated
+// by session.actions (builderEdit / builderArchive / builderRollback / breakEditLock) AND the entry's `can` flags
+// from the server; destructive ones ask for confirmation.
+
 import { useMemo, useState } from 'react';
 import {
     Badge,

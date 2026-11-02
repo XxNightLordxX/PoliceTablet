@@ -1,5 +1,9 @@
 // The tablet device: a 1280×800 screen in a rounded bezel, centred and scaled to fit the viewport (never larger than
 
+// the space, grows on screens above 1080p), times the officer's tablet size. Themed with the department theme and
+// the officer's look; dialogs render inside it (LayerRootContext) so they scale and theme with the tablet. The
+// officer option textSize sets --cp-fs-scale on it: large text in the whole tablet.
+
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { LayerRootContext } from '../shared/components';
 import { useViewport } from '../shared/hooks';

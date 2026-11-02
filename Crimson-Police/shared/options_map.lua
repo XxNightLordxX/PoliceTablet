@@ -1,4 +1,9 @@
--- The map officer options (My options -> Map, step O14): how Objective GPS leads to each objective (saved with the
+-- The map officer options (My options -> Map): how Objective GPS leads to each objective (saved with the
+
+-- The map officer options (My options -> Map): how Objective GPS leads to each objective (saved with the
+-- character: the GPS line as before, a map waypoint, or nothing), the HUD's objective direction line and colour-blind
+-- map colours (both kept on this PC). modules/markers/client.lua reads them; they only hide or recolour, never show
+-- more than the run allows (Radio Silence still wins).
 
 local Defs = CP.OptionDefs
 

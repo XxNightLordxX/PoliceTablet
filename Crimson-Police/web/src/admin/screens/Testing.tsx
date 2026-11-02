@@ -1,5 +1,18 @@
 // Admin UI · Testing (screen key 'admin_testing'). SPEC "Admin test mode".
 
+// Data: request 'admin:getTests' (TestsView: every mission × location with its last result),
+//       request 'test:state' (TestState: my invitation lobby, my running test, ended tests waiting for a
+//       result, invitations waiting for me), request 'test:candidates' (on-duty officers and admins).
+// Actions: server:test:invite { missionId, targets } · server:test:cancelInvites · server:testRespond
+//       { inviteId, accepted } · server:admin:startTest { missionId, location, tier, useStartRoute, testers }
+//       · server:admin:recordTest { missionId, location, tier, result, note }.
+// Client actions (Lua testing client): testControl { control } · teleport { target } · toggleDebug { enabled }.
+// Pushes: 'test' { state: true } and 'invites' refetch the state (debug pushes from the Lua client are ignored).
+// Check spawn points (shown while config.spawnCheck.enabled): the header button and a per-location item
+//       in each mission group open SpawnCheckDialog (admin/components); a check keeps running while the dialog or
+//       the tablet is closed (the header button then reads "Checking spawn points…").
+// Flow: invite first, then Start — the start dialog invites testers, shows who accepted, and starts with them.
+
 import { useEffect, useMemo, useState } from 'react';
 import {
     Badge,

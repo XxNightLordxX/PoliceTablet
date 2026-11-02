@@ -1,5 +1,54 @@
 -- CP.Missions: the mission registry (loader, normaliser, validator).
 
+-- Owns
+--   * loading missions/builtin/index.lua (a Lua file that returns a list of ids) and every
+--     missions/builtin/<id>.lua with LoadResourceFile, each read as data by the mission file reader
+--     (CP.U.parseMissionFile, shared/utils.lua; never run): plain values and vec3/vec4 of numbers only;
+--     exactly one RegisterMission({ ... }) call per file
+--   * custom missions from CP.Builder.loadPublished() (the builder owns their files and DB rows)
+--   * normalising every definition (defaults from the block's defaults(), minSeconds per block,
+--     presenceRange = Config.Blocks[block].presenceRange[3]) and validating it (generic checks + the
+--     block's validate(obj, mission, location) for every location); invalid missions are rejected
+--     with a console warning, the rest load. Payout fields in a file are ignored with a warning.
+--   * loader fields: source, version (custom), filePath, defHash (CP.U.hashHex of the file content),
+--     editedInCode, isBoss (weekly_boss_kingpin), status
+--   * sending the definitions to clients: crimson-police:client:missions (full list, vectors as
+--     { x, y, z[, w] }) after every load/change, and the getMissionDefs callback for joining players
+--
+-- Public API (server)
+--   CP.Missions.loadAll() -> summary          summary = { loaded, builtin, custom, failed = { { id, file, error } }, warnings }
+--   CP.Missions.reload() -> summary           CP.Builder.onReload() (hand edits) first, then loadAll(); summary.builder
+--   CP.Missions.get(id) -> def|nil
+--   CP.Missions.all() -> { [id] = def }       (a copy of the map; the defs are shared, do not mutate them)
+--   CP.Missions.list() -> { def, ... }        sorted by id
+--   CP.Missions.byType(missionType) -> list   sorted by id, never the Weekly Boss
+--   CP.Missions.isEnabled(id) -> boolean      loaded, status 'published', not in Config.DisabledMissions
+--   CP.Missions.normalize(def, meta) -> def|nil, err   pure; meta = { source, version, filePath, defHash, editedInCode, status }
+--   CP.Missions.parse(luaSource, chunkName) -> def|nil, err   one file's source read as the loader reads it (raw def)
+--   CP.Missions.serializeForClient(def) -> table
+--   CP.Missions.register(def) -> def|nil, err  publish/restore without a reload (loader fields read from def;
+--                                              always source = 'custom')
+--   CP.Missions.unregister(id) -> boolean      archive without a reload (custom missions only)
+-- Net
+--   callback 'getMissionDefs' -> list of serialized definitions (err.not_ready before the first load)
+--   action 'server:admin:reloadMissions' (permission reloadMissions) -> summary
+--   event 'crimson-police:client:missions' (list) to every client after each load / register / unregister
+--       (sent with TriggerLatentClientEvent: the list is tens of kB)
+--
+-- Contract interpretations (details in docs/ARCHITECTURE.md §13.12)
+--   * CP.Builder.loadPublished() entries: a definition with loader fields, { def, meta }, or meta only
+--     ({ id, filePath, version }) whose file is read here; if the hook throws, loaded custom missions stay
+--   * reload(): CP.Builder.onReload() first, then loadAll()
+--   * design rules the builder enforces for custom missions (location count and gap, armed budget,
+--     maxBlocks) are warnings here; playability rules reject the mission
+--   * validation reasons are English developer-facing text (console, builder), not locale keys
+--   * the loader fields (source, isBoss, status, version, filePath) are set BEFORE the blocks' validate()
+--     runs, because the blocks exempt built-in missions (mission.source == 'builtin') from the builder's
+--     allowed model/weapon lists
+--   * docs/INTEGRATIONS.md, Crimson-Arena: a mission is rejected when an item is named armour, bandage, ammo-* or
+--     weapon_* (rule 4), or when any point of a location lies inside a Config.Builder.noBuildZones zone
+--     (rule 7; 2D distance, as the blocks and the builder measure it)
+
 CP.Missions = CP.Missions or {}
 local Missions = CP.Missions
 

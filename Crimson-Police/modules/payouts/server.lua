@@ -1,6 +1,44 @@
 -- CP.Payouts (server): editable base cash payouts per mission type and per mission, the supervisor limits and the
 -- Payouts screens of the Supervisor UI and the Admin UI.
 
+-- Owns
+--   * cp_type_payouts (one row per type an admin or a supervisor has changed; admin_locked = 1 when an
+--     admin set it: permanent and read-only for supervisors) and cp_mission_payouts (admin only,
+--     permanent until an admin clears it), both cached in memory and reloaded after every write
+--   * the base payout B of a mission (SPEC "Cash payouts"): the admin mission payout if set; the Weekly
+--     Boss's Config.Events.weeklyBoss.payout otherwise; else the type payout x Config.Difficulty.cashByStars
+--   * who may change what: supervisors change a type (never one an admin set) only within
+--     Config.Payouts.supervisorRange of its Config.MissionTypes payout, at most once per
+--     Config.Payouts.supervisorCooldown seconds per type (any supervisor, timed by updated_at), with a
+--     reason; admins set any type or mission payout within Config.Cash.minPayout..maxPayout and are the
+--     only ones who clear. Every change is audited (CP.Admin.audit, category 'audit', which also posts the
+--     audit webhook) and pushed to open screens (topics 'payouts' and 'board').
+--
+-- Public API (docs/ARCHITECTURE.md §5.21)
+--   CP.Payouts.typePayout(type) -> amount, adminLocked      stored amount, or the Config.MissionTypes payout
+--   CP.Payouts.missionPayout(missionId) -> amount|nil        the admin mission payout
+--   CP.Payouts.baseFor(mission) -> B                         whole dollars (halves up)
+--   CP.Payouts.sourceFor(mission) -> 'admin'|'type'|'event'  where B comes from
+--   CP.Payouts.setType(src, type, amount|nil, reason, role) -> ok, errKey|entry
+--       role 'supervisor' | 'admin' (default: admin when src is an admin, else supervisor). amount nil =
+--       clear (admin only). src 0 = the server console (admin). On success the second value is the
+--       updated type entry of list().types.
+--   CP.Payouts.setMission(src, missionId, amount|nil, reason) -> ok, errKey|entry   (admin only; nil = clear)
+--   CP.Payouts.list() -> { types = { TypeEntry... }, missions = { MissionEntry... } }
+--       TypeEntry    = { key, label, points, amount, default, adminLocked, stored, updatedBy, updatedByName,
+--                        updatedAt (unix s)|nil, supMin, supMax, cooldownLeft (s), missions (count) }
+--       MissionEntry = { id, label, type, typeLabel, difficulty, source ('builtin'|'custom'), isBoss,
+--                        enabled, base, payoutSource ('admin'|'type'|'event'), missionPayout|nil,
+--                        fallback (B without the mission payout), setBy|nil, setByName|nil,
+--                        updatedAt|nil, missing (a stored payout whose mission is not loaded) }
+-- Net (docs/ARCHITECTURE.md §13.11 has the response shapes)
+--   callback 'sup:getPayouts'   (permission setTypePayout)  -> SupPayoutsView
+--   callback 'admin:getPayouts' (admin)                     -> AdminPayoutsView
+--   action 'server:sup:setTypePayout'     { type, amount, reason }                 -> SupPayoutType
+--   action 'server:admin:setTypePayout'   { type, amount (nil/clear = clear), reason } -> TypeEntry
+--   action 'server:admin:setMissionPayout' { missionId, amount (nil/clear = clear), reason } -> MissionEntry
+-- Every function that reads the tables may yield on the first call (cache load): call from a thread.
+
 CP.Payouts = CP.Payouts or {}
 local Payouts = CP.Payouts
 local TAG = 'payouts'

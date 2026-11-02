@@ -1,5 +1,46 @@
 -- CP.Runs (client): this player's side of the run engine.
 
+-- Owns
+--   The local copy of the player's run (from client:start / client:inProgress), the client halves of the
+--   objective blocks (ARCHITECTURE §7.2: prepare, start, update, stop, hostChanged) with a persistent ctx
+--   per objective, objective evidence (report, which adds coords and time), telemetry while on a run
+--   (vehicle netId every 5 s while driving, pedestrian hits by the player's vehicle, lights and siren on
+--   Beat Patrol / Business Check, weapon fired; each once where the spec says once), the mission HUD
+--   state through CP.Tablet.hud (phase route/objectives/ended, tier, timer, objectives, TEST RUN banner,
+--   test controls for the admin who started the test, end messages) and the result screen through
+--   CP.Tablet.result. Everything is removed when the run ends and on resource stop.
+--
+-- Public API (client, ARCHITECTURE §5.10)
+--   CP.Runs.current() -> clientRun|nil
+--       { id, mission, location, locationIndex, seed, isHost, test, state, tier, payTier, modifier,
+--         objectiveIndex, host, participants, objectives, startRoute, startTimeout, isBoss }
+--   CP.Runs.report(index, evidence) -> boolean     server:objective (runId, index, evidence + coords + time)
+--   CP.Runs.telemetry(kind, data) -> boolean       server:telemetry (runId, kind, data)
+--   CP.Runs.getEntity(netId, timeoutMs) -> entity|nil
+--   CP.Runs.control(entity, timeoutMs) -> boolean  network control loop (run host only)
+--   CP.Runs.hudDetail(text|nil)                    the client-side HUD line for the current objective
+-- Client action (NUI 'client' endpoint): logResult { point, choice } -> report(current objective,
+--   { type = 'log', point, choice }) (Business Check tablet log)
+-- Events handled: client:start, client:inProgress, client:objective, client:hud, client:tierChanged,
+--   client:hostChanged, client:participants, client:runEnded (docs/ARCHITECTURE.md §8.1), and
+--   client:routeStatus 'action' (a late partner): CP.Markers.leads({ radioSilence }) decides
+--   whether the start goes (the start circle here, then CP.Route.follow(runId, true)) or stays as his guide
+--   (CP.Route.follow(runId, false)); CP.Markers routes once CP.Route says he follows the action.
+--
+-- Contract interpretations (docs/ARCHITECTURE.md §13.13)
+--   * client:start begins the start route with CP.Route.begin(runId, startCoords, { startRoute, radius })
+--     (a test run with the route off gets a waypoint only); CP.Route.stop() runs when this player arrives
+--     and at the end.
+--   * client:tierChanged may carry the rescaled objectives as a 4th argument (ctx.obj is updated).
+--   * client:runEnded's breakdown may carry failReason (a locale key) for mission_failed; a nil breakdown
+--     (silent removal) cleans up without the result screen.
+--   * The street · zone names of the start (client:start) and of each objective's reference point
+--     (client:objective 'start' carries `area`) are resolved here once each and sent as telemetry 'area'
+--     { index = 0 | objective, text }: the server shows them in this player's own Active Mission view.
+--   * A start whose radius is at least 200 m is a search circle (Manhunt: "the 600 m search circle, shown on
+--     the map when the type is accepted"): a local radius blip from client:start until this officer is
+--     inside it or the first objective starts (the block then draws its own circle), removed at cleanup.
+
 CP.Runs = CP.Runs or {}
 local Runs = CP.Runs
 local TAG = 'runs'

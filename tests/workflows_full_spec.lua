@@ -1,4 +1,10 @@
--- Full workflow testing, step WF1 (the owner: "do a full workflow testing of everything"): every workflow the other
+-- Full workflow testing, (the owner: "do a full workflow testing of everything"): every workflow the other
+
+-- Full workflow testing (the owner: "do a full workflow testing of everything"): every workflow the other
+-- end-to-end specs leave out, driven start to finish on the REAL server side of Crimson-Police (every server file
+-- loaded as in game, database off: the saves folder, as shipped), every switch on through the Admin UI's own Settings,
+-- and a `restart Crimson-Police` and a player drop and reconnect in the middle. docs/WORKFLOWS.md lists every workflow
+-- with the spec that drives it. Only the other resources and the natives are stubs.
 
 local H = dofile('tests/harness.lua')
 H.useFiles()

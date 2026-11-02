@@ -1,5 +1,14 @@
 // Admin UI · Leaderboards (screen key 'admin_leaderboards', callback admin:getBoards).
 
+// Every board and period with the full ranked list (real names, hidden-name marker, cash paid per officer),
+// officers still below the minimum, and the payments left in 'paying' after a crash (with the
+// Renewed-Banking transaction id to check). Row actions: open the officer's runs in this board and void
+// one (server:admin:voidRun { rowId, reason }), award points (server:admin:awardPoints
+// { citizenid, points, reason }); both are implemented by modules/admin.
+// Flagged runs panel (SPEC Supervisor & admin actions, "Approve or void a flagged run ... Admin UI →
+// Leaderboards"): callback admin:getFlagged (the admin's own runs are left out), each row Approve / Void with
+// a required reason -> server:admin:reviewFlagged { rowId, decision: 'approve'|'void', reason }.
+
 import { useEffect, useMemo, useState } from 'react';
 import {
     Badge,

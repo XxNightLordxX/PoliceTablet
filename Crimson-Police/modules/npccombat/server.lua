@@ -1,5 +1,12 @@
--- CP.NpcCombat (server, step V8): the crimsonPoliceRun player bag of every officer whose game runs the run's NPC
+-- CP.NpcCombat (server): the crimsonPoliceRun player bag of every officer whose game runs the run's NPC
 -- damage settings, and the message that drops an officer's headshot and defense protection for the rest of his run.
+
+-- CP.NpcCombat (server): the crimsonPoliceRun player bag (replicated, exactly true) of every officer whose
+-- client:start starts the run's NPC damage settings, cleared when he leaves, when the run ends and at resource stop,
+-- written only on a change; Crimson-Contracts' guard damage scaling leaves the shared AI damage value alone while it is
+-- true. dropFor(run, src) sends client:npcCombatDrop once per run and officer. A read-only weaponDamageEvent handler,
+-- returning at once unless Config.NpcCombat.playerHitDropsProtection (shipped false), drops the protection of an officer
+-- of an NPC run whom a player who is not on that run hits. No loop, no database.
 
 CP.NpcCombat = CP.NpcCombat or {}
 local NpcCombat = CP.NpcCombat

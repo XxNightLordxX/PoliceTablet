@@ -1,5 +1,10 @@
 -- CP.NpcCombat (shared): which weapon a mission NPC may carry, and its accuracy and firing caps (Config.NpcCombat).
 
+-- CP.NpcCombat (shared): how hard armed mission NPCs fight back (Config.NpcCombat). The weapon an NPC may carry (never
+-- an automatic one), the accuracy cap and the firing settings. Config is read at every call, so a change made in
+-- Settings applies to the next NPC. The run-scoped damage settings of each officer's game are in
+-- modules/npccombat/client.lua; the combat caps are applied by modules/npc/client.lua.
+
 CP.NpcCombat = CP.NpcCombat or {}
 local NpcCombat = CP.NpcCombat
 

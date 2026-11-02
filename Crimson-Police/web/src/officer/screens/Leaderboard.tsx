@@ -1,5 +1,10 @@
 // Officer UI · Leaderboard (screen key 'leaderboard', callback getBoard).
 
+// Tabs Weekly · Monthly · Season · All-time, filter chips (Overall, the mission types, Unit, Cross-Department,
+// Department + department select), the top 25 with medals for 1–3 and the viewer's own row pinned at the
+// bottom (highlighted when it is also in the list). Tapping an officer opens their public profile.
+// Cash is never shown here. All-time ranks lifetime XP with the Overall filter only.
+
 import { useEffect, useMemo } from 'react';
 import {
     Avatar,

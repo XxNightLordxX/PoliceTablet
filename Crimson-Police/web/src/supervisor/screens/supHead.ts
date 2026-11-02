@@ -1,4 +1,4 @@
-// Supervisor screens inside (step H4): Mission controls and Review Queue use the Officer UI's header (title, then one
+// Supervisor screens inside: Mission controls and Review Queue use the Officer UI's header (title, then one
 // line of help) and load states (officer/screens/screenHead, ScreenStatus); each Mission controls group card says what
 // its task is. Display only. Checked by supHead.walk.ts.
 

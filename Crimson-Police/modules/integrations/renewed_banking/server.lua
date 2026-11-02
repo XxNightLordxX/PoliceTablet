@@ -1,5 +1,32 @@
 -- CP.Banking: the only code that talks to Renewed-Banking.
 
+-- Owns exports['Renewed-Banking']:handleTransaction, removeAccountMoney, getAccountMoney and
+-- addAccountMoney (verified signatures in docs/INTEGRATIONS.md; addAccountMoney is not in the spec's
+-- Appendix, INTEGRATIONS.md "addAccountMoney" names it as the only refund path for a society withdrawal).
+-- Personal money itself moves through Qbox (CP.Qbx.addMoney); Renewed-Banking only keeps the history, so
+-- a payout needs both calls.
+--
+-- Public API (docs/ARCHITECTURE.md §5.1). Every function returns false/nil instead of raising when
+-- Renewed-Banking is stopped or rejects the call. Amounts are rounded half up to whole dollars;
+-- an amount of 0 is never sent (a $0 history entry) and returns true.
+--   CP.Banking.recordDeposit(citizenid, amount, message, issuer, receiver, transId) -> boolean
+--       handleTransaction(citizenid, Config.Tablet.title, amount, message, issuer, receiver, 'deposit', transId).
+--       true = Renewed-Banking accepted the arguments. It still drops the entry silently when the
+--       player's history is not loaded yet (right after QBCore:Server:PlayerLoaded), so pending payouts
+--       should wait a few seconds after the player loads.
+--   CP.Banking.withdrawSociety(account, amount) -> boolean
+--       removeAccountMoney(account, amount): false when the account is unknown or cannot cover it.
+--   CP.Banking.recordSocietyWithdraw(account, amount, message, issuer, receiver, transId) -> boolean
+--       handleTransaction(account, Config.Tablet.title, amount, message, issuer, receiver, 'withdraw', transId).
+--   CP.Banking.societyBalance(account) -> number|nil   getAccountMoney(account); nil for an unknown account.
+--   CP.Banking.depositSociety(account, amount) -> boolean
+--       addAccountMoney(account, amount): puts money back into a society account (CP.Cash's refund when a
+--       society-funded payout's AddMoney failed after withdrawSociety). Society/shared accounts only:
+--       Renewed-Banking returns false for a citizenid or an unknown account (and while its account cache
+--       loads after a restart). It records no history entry.
+-- message: apostrophes and backslashes are removed (Renewed-Banking doubles them in the stored text).
+-- issuer/receiver: never nil (nil becomes ''). transId: e.g. ('CP-%s-%s'):format(runUuid, citizenid).
+
 CP.Banking = CP.Banking or {}
 local B = CP.Banking
 local TAG = 'renewed_banking'

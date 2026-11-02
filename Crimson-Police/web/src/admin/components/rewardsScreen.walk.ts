@@ -1,4 +1,4 @@
-// Admin UI -> Rewards (step H1, Config.AdminUi.rewardsScreen) walked against the browser mocks (node walk.mjs, a gate
+// Admin UI -> Rewards (Config.AdminUi.rewardsScreen) walked against the browser mocks (node walk.mjs, a gate
 // step): the screen shows only when asked, lists every feature that pays with its money, account and items, saves
 // through server:admin:setSetting, and the item editors build the values the server checks.
 

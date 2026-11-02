@@ -1,5 +1,75 @@
 -- CP.Challenge (server): seasons, the department challenge, the weekly bounty and the supervisor Department Report.
 
+-- Owns
+--   * cp_seasons (start / end, the cached current season every run row is tagged with)
+--   * cp_dept_bounties: one row per (season_id, week) with week = 1, 2 ... counted in weekly resets since
+--     the season started (week 1 runs from the season start to the first weekly reset). The objective is
+--     picked with CP.U.rng(CP.U.hash('<seasonId>:<week>')) from Config.Challenge.bounties, so a restart
+--     picks the same one; an admin may override the current week's objective while it is open.
+--     winner: NULL = week still open, '' = closed without a winner, else the winning department key.
+--     week = 0 (objective 'season_champion') stores the season's champion department at season end.
+--   * the season end: champion by Config.Challenge.scoring and the tie-break, "Season X Champions" banner
+--     data, trophy badges season_<id>_champion (champion members with minRunsActive completed runs),
+--     season_<id>_top10 badges (top 10 of the season board), the board webhook with the results
+--   * callbacks getChallenge, getDeptContributors, admin:getSeasons, sup:getDeptReport,
+--     sup:getOfficerActivity and the actions server:admin:startSeason, server:admin:endSeason,
+--     server:admin:overrideBounty
+--
+-- Challenge rules (SPEC "Department challenge")
+--   Season rows = cp_mission_runs with season_id = the season, voided = 0 AND flagged = 0, grouped by the
+--   row's department (the department at the end of the run, so transfers keep old points; joint runs
+--   count for each participant's own department). Active officer = minRunsActive completed runs
+--   (manual_award / goal rows never count as runs) in that department this season.
+--   Weekly bounty bonus = floor(bountyBonus x the winning department's season points that week), added
+--   to that department's points pool once its week is closed:
+--     average: (points of active officers + bonuses) / active officers
+--     total:   all points + bonuses
+--     top10:   the 10 best officers' points + bonuses
+--   Ranking and tie-break: score, then completed runs, then unit runs (2+ participants).
+--   Bounty winner: highest count per active officer (season-to-date active officers) for the objective
+--   (most_tactical: completed Tactical runs, most_cross: completed runs with 2+ departments, most_unit:
+--   completed runs with 2+ participants, most_completed: completed runs), tie-break completed runs then
+--   unit runs that week; no winner when every count is 0 or the tie cannot be broken. Weeks close at the
+--   weekly reset, as a catch-up after start (a server that was down across the reset) and at season end.
+--   A department added to Config.Departments mid-season simply starts at 0.
+--
+-- Public API (docs/ARCHITECTURE.md §5.23)
+--   CP.Challenge.currentSeason(reload?) -> { id, name, startsAt, endsAt|nil, active = true } | nil   (cached)
+--   CP.Challenge.latestSeason() -> the active season, else the last ended one (the Season board)
+--   CP.Challenge.seasonById(id) -> season | nil
+--   CP.Challenge.startSeason(src, name) -> ok, seasonView | errKey   (ends the running season first)
+--   CP.Challenge.endSeason(src, reason?) -> ok, { season, standings, champion, top10 } | errKey
+--   CP.Challenge.standings(seasonId?) -> { seasonId, mode, departments = { { key, label, short, colour,
+--       score, activeOfficers, officers, points, completed, unitRuns, bonus, rank } } }
+--   CP.Challenge.bounty(weekKey?) -> { seasonId, week, id, label, winner|nil, closed, startsAt, endsAt,
+--       overridden } | nil        (weekKey = 'YYYY-MM-DD' of a week start; default the current week)
+--   CP.Challenge.overrideBounty(src, objective) -> ok, bountyView | errKey
+--   CP.Challenge.championBanner(dept?) -> { season, department (label), departmentKey, short } | nil
+--       the last ended season's champion; nil when dept is given and is not the champion
+--   CP.Challenge.invalidate()  (hook, called by CP.Leaderboard.invalidate) drops the challenge caches
+--   callback getChallenge -> ChallengeView (§9.4) plus { enabled, mode, minRunsActive, myDepartment,
+--       season.week, season.startsAt, departments[i].rank/points/bonus, bounty.leaderKey/week/endsIn/
+--       overridden/rates = { { key, short, colour, count, activeOfficers, rate } }, topContributors[i].citizenid }
+--   callback getDeptContributors({ department }) -> { department = { key, label, short, colour }, season,
+--       minRunsActive, contributors = { { rank, citizenid, name, callsign, points, runs, active } } }
+--   callback admin:getSeasons ('seasons') -> { current, latest, standings, bounty, bountyHistory = { {
+--       seasonId, seasonName, week, objective, label, winner, winnerShort, bonus, closed, current,
+--       startsAt, endsAt, startDate, endDate } }, seasons = { { id, name, startsAt, endsAt, active, champion, championShort } },
+--       bounties = { { id, label } }, enabled, weeklyBounty, mode, seasonWeeks, minRunsActive }
+--   action server:admin:startSeason { name }    ('seasons', audited 'season_start')
+--   action server:admin:endSeason               ('seasons', audited 'season_end')
+--   action server:admin:overrideBounty { objective }   ('bountyOverride', audited 'bounty_override')
+--   callback sup:getDeptReport({ department? })  (supervisors and admins: CP.Permissions 'viewMissionList';
+--       department only for admins) -> { department, season, standing, standings, bounty, week = { key,
+--       startsAt }, officers = { { citizenid, name, callsign, rank, runs, completed, failed, abandoned,
+--       flagged, points, cash, lastRunAt, lastRunTs } } }
+--   callback sup:getOfficerActivity({ citizenid, department? }) -> { officer = { citizenid, name, callsign,
+--       rank, departmentShort }, week, runs = { { id, missionLabel, missionType, state, endReason, points,
+--       cash, cashStatus, flagged, flagReason, voided, participants, departments, tier, durationS,
+--       createdAt, createdTs } } }   only officers of the supervisor's department (err.other_department)
+-- Test hooks: CP.Challenge._boot(), _weekIndex(season, ts), _weekWindow(season, n), _pickBounty(seasonId, week),
+--   _closeDueWeeks(season, nowTs, includeCurrent), _collect(seasonId, fresh), _standingsFrom(data)
+
 CP.Challenge = CP.Challenge or {}
 local C = CP.Challenge
 local U = CP.U

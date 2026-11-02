@@ -1,4 +1,9 @@
--- Admin UI -> Home's Needs attention panel (step H5): admin:getNeedsAttention answers the Problems lines, today's
+-- Admin UI -> Home's Needs attention panel: admin:getNeedsAttention answers the Problems lines, today's
+
+-- Admin UI -> Home's Needs attention panel: admin:getNeedsAttention answers the Problems lines, today's
+-- refused starts, the open disputes, the flagged runs waiting for a review (one per run, the admin's own left out)
+-- and the open player suspect cases (only with the Player suspects screen), in one request; refused while
+-- Config.AdminUi.needsAttention is off (shipped) and for anyone but an admin.
 
 local H = dofile('tests/harness.lua')
 

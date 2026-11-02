@@ -1,6 +1,95 @@
 -- CP.Admin (server): supervisor and admin actions, /CrimsonPoliceAdmin, the audit log (cp_audit) and the Discord
 -- webhooks.
 
+-- Owns
+--   * the /CrimsonPoliceAdmin command (Config.Tablet.adminCommand, registered at runtime) with every
+--     subcommand of the spec, usable from the server console (src 0) and in game (ace Config.AdminAce):
+--       (no args)                                        open the Admin UI (in game)
+--       help                                             list the subcommands
+--       payout type <type> <amount|clear> <reason...>    CP.Payouts.setType
+--       payout mission <missionId> <amount|clear> <reason...>  CP.Payouts.setMission
+--       award <citizenid> <points> <reason...>           CP.Scoring.manualAward
+--       season start <name...> | season end              CP.Challenge.startSeason / endSeason
+--       suspend <citizenid> <days> [reason...]           CP.Access.suspend (0 days lifts it), audited here
+--       reload                                           CP.Missions.reload, audited here
+--       test <missionId> [tier] [location|random]        CP.Testing.command -> CP.Testing.start (in game only;
+--                                                        archived custom missions through CP.Testing.resolveMission)
+--       storage                                          where the data is kept (CP.Storage.mode(): the database or
+--                                                        the saves folder), rows per cp_ table, the saves folder size
+--       storage copy database-to-files|files-to-database [force]
+--                                                        copies every cp_ table (not cp_schema_migrations) between
+--                                                        MariaDB (the real oxmysql) and the saves folder engine, ids and
+--                                                        AUTO_INCREMENT counters kept; refused while a run or
+--                                                        operation is active, and into a target with rows unless
+--                                                        force; a failure empties the target again; audited as
+--                                                        storageCopy (also in the target's cp_audit when the target is
+--                                                        not the storage in use). Details: the "storage" section
+--                                                        of this file and docs/ARCHITECTURE.md §5.29.
+--     Replies: print() on the console, CP.Tablet.notify in game.
+--   * cp_audit rows (values clipped to the column sizes) and the category webhooks read at call time
+--     from the convars cp_webhook_audit / cp_webhook_flags / cp_webhook_builder / cp_webhook_operations /
+--     cp_webhook_board (missing or empty = off; only https:// urls), posted with PerformHttpRequest as
+--     Discord embeds through a rate-limited queue (one post per url every 2.1 s, 429 retry_after honoured,
+--     5xx/network errors retried, at most 100 queued).
+--   * flagged-run review (approve / void), voiding any run, force recall, manual award and suspension
+--     actions, and the supervisor/admin read callbacks listed below.
+--
+-- Public API (docs/ARCHITECTURE.md §5.25)
+--   CP.Admin.audit(actor, role, category, action, target, old, new, reason) -> auditId|nil
+--       actor: src (number; 0 = console), citizenid (string) or 'console'. role: 'supervisor'|'admin'|
+--       'console'; anything else (e.g. 'officer', 'system') is stored as 'console' = an automatic entry
+--       (the cp_audit enum has no other value). category: 'audit'|'flags'|'builder'|'operations'; 'board'
+--       is stored as 'audit' and posted to the board webhook. action <= 40 chars, target/old/new <= 64,
+--       reason <= 255 (clipped). Posts the category webhook. Called outside a coroutine it writes from a
+--       new thread and returns nil.
+--   CP.Admin.webhook(category, title, description, fields) -> queued (boolean)
+--       category: audit|flags|builder|operations|board. fields: { { name, value, inline }, ... } (or
+--       { name, value } pairs); texts are already translated. false when that webhook is off.
+--   CP.Admin.approveFlagged(src, rowId, reason, opts) -> ok, data|errKey
+--   CP.Admin.voidFlagged(src, rowId, reason) -> ok, data|errKey
+--   CP.Admin.voidRun(src, rowIdOrRunUuid, reason) -> ok, data|errKey      (permission voidAnyRun)
+--       approve: flagged = 0 (flag_reason kept), CP.Cash.release when cash is held,
+--       CP.Scoring.onRowApproved, CP.Leaderboard.invalidate. void: voided = 1 (voidFlagged only while still
+--       flagged, else err.conflict), CP.Scoring.onRowVoided,
+--       cash untouched (held cash is forfeited by CP.Cash after the dispute window; a paid run is not
+--       clawed back), CP.AntiCheat.onVoided for mission rows, invalidate. Reason required. Reviewers who
+--       took part, or any character of their licenses, are refused (CP.Permissions.canReviewRun, plus a
+--       participant still on the live run who has no row yet: err.own_run); supervisors only for runs
+--       involving their department (err.other_department). Texts are clipped by characters, never inside a UTF-8 sequence.
+--       opts (approveFlagged, used by CP.Disputes): { skipPermission = true, noAudit = true, quiet = true (no toast) }
+--   CP.Admin.forceRecall(src, runId, targetSrc, reason) -> ok, data|errKey
+--       never on a run the caller is or was on (err.recall_own_run; test runs excepted); a target who left
+--       while the permission check waited: err.not_participant, nothing audited
+--   CP.Admin.getRow(rowId) -> row|nil, errKey        one cp_mission_runs row (flagged/voided as booleans)
+--   CP.Admin.runDepartments(runUuid) -> { deptKey, ... }   departments of every row (and live participant)
+--   CP.Admin.resolveCitizenId(input) -> citizenid|nil  the stored form (cp_officers, else an online player)
+--   CP.Admin.missionLabel(missionId) -> text
+--   CP.Admin.command(src, args) -> the /CrimsonPoliceAdmin handler (also used by tests)
+--
+-- Net (docs/ARCHITECTURE.md §8.3)
+--   actions
+--     server:sup:forceRecall     { runId, src, reason? }                forceRecall (runs involving their dept)
+--     server:sup:reviewFlagged   { rowId, decision = 'approve'|'void', reason }   reviewFlagged
+--     server:admin:reviewFlagged { rowId, decision, reason }            admin
+--     server:admin:voidRun       { rowId } | { runUuid }, reason         voidAnyRun
+--     server:admin:awardPoints   { citizenid, points, reason }           manualAward -> CP.Scoring.manualAward
+--     server:admin:suspend       { citizenid, days, reason }             suspend -> CP.Access.suspend (audited)
+--   callbacks (shapes in docs/ARCHITECTURE.md §13.20 and web/src/types/oversight.ts)
+--     getMissionList             viewMissionList -> MissionListData
+--     admin:getMissions          admin -> MissionListData, each mission + { filePath, editedInCode, defHash, status,
+--                                disabledInConfig }
+--     sup:getLiveRuns            viewMissionList -> { runs = { LiveRun + extras }, serverTime, canRecall }
+--     sup:getReviewQueue         reviewFlagged|handleDisputes -> { flagged, disputes, canReview, canHandle }
+--     admin:getFlagged           admin -> { flagged }
+--     admin:searchOfficers       { query } -> { officers }
+--     admin:getOfficer           { citizenid } -> OfficerDetail (incl. suspensions = the last 10 suspend/unsuspend/autoSuspend entries)
+--     admin:getDepartments       -> { departments, cashSource, showSociety }
+--     admin:getPermissions       -> { supervisor = { { action, enabled } }, adminOnly, always, teleport }
+--     admin:getAudit             { category, action, actor, from, to, page } -> AuditPage
+--     admin:exportAudit          same filters -> { csv, rows, truncated }
+--     admin:getStuckPayments     admin -> { payments = CP.Cash.stuckPayments() (StuckPayment list, docs/ARCHITECTURE.md §13.11),
+--                                serverTime }   rows left 'paying' for a manual Renewed-Banking check
+
 CP.Admin = CP.Admin or {}
 local Admin = CP.Admin
 local U = CP.U

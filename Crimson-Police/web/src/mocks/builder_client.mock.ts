@@ -1,5 +1,20 @@
 // Browser mocks for the builder client slice (modules/builder/client.lua and the builder screens).
 
+// Client actions builderPlace / builderRecord / builderTestDrive play the whole in-game flow: the reply is
+// { started: true }, then the tablet closes (message 'close'), the tool HUD overlay animates for a few seconds,
+// the result is kept for builderResult and pushed (topic 'builder', event 'clientResult'), the overlay hides and
+// the tablet reopens on the UI the tool was started from (payload.ui). builderCancel / builderWaypoint answer
+// like the Lua client. Also: server:test:record (recording a draft test result), server:admin:reloadMissions
+// (summary), and fallbacks for builder:list / builder:get / builder:config, every server:builder:* action,
+// getMissionList, admin:getMissions (built from getMissionList) and server:admin:opLaunch — builder_server.mock.ts, oversight.mock.ts and teams.mock.ts register
+// the full versions, which win over these fallbacks.
+//
+// URL shortcuts (dev only):
+//   &bopen=<missionId>&bstep=blocks|details|settings|locations|scaling|test|publish&bloc=<n>&bobj=<n>
+//        open that mission in the builder (Supervisor: scope sup; Admin: Missions → Builder tab)
+//   &bov=placement|placement_bad|recording|recording_wait|testdrive   show a static tool overlay
+//   &blua=1   tool results in Lua shape (empty lists as {}), as builder_server.mock.ts does for the server
+
 import { emitDebug, registerMock, request } from '../shared/nui';
 import type { Session } from '../shared/types';
 import type {

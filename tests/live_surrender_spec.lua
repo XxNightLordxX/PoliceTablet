@@ -1,4 +1,9 @@
--- Surrender and Talk them down in a live case (step RP1, modules/opponents/surrender): the suspect's own command, an
+-- Surrender and Talk them down in a live case (modules/opponents/surrender): the suspect's own command, an
+
+-- Surrender and Talk them down in a live case (modules/opponents/surrender): the suspect's own command, an
+-- officer's Talk them down within talkRange, the suspect's yes or no, the server's distance, case and state checks,
+-- the lapse rules, the officers' prompt, Opp.peaceful and the staff timeline lines. All off while
+-- Config.LiveCrime.enabled is false.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })

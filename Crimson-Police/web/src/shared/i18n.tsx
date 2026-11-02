@@ -1,5 +1,15 @@
 // UI text (docs/ARCHITECTURE.md §10).
 
+// Text comes from the locale Lua sends with the reply to 'ready' (the 'theme' message) and again as a
+// 'locale' message after a Settings → Names rename (CP.Locale.all(), i.e. locales/en.json with
+// Config.Labels over it); App keeps it as bootLocale. A session carries no locale (normalizeSession leaves
+// it undefined, so App falls back to bootLocale; {} would show raw keys). Keys are flat and dotted;
+// placeholders use {var}:   t('hud.objective_progress', { value: 12, max: 20 })
+// An unknown key renders the key itself, so a missing string is visible instead of blank.
+//
+// The foundation's own part (locales/parts/ui.json) is bundled as a last-resort fallback so the HUD,
+// result card and toasts stay readable even before the first session arrives. Session text always wins.
+
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import uiFallback from '../../../locales/parts/ui.json';
 

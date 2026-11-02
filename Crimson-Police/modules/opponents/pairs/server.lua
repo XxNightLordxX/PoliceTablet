@@ -1,4 +1,9 @@
--- CP.Opponents identity and pairs (server, step V7; critic C27, critic 2 #21-#23, #30): the self rule (nobody takes a
+-- CP.Opponents identity and pairs (server; critic C27, critic 2 #21-#23, #30): the self rule (nobody takes a
+
+-- CP.Opponents identity and pairs (server; critic C27, critic 2 #21-#23, #30): the self rule (nobody takes a
+-- case against one of his own characters or accounts), the duty maps (job hops), and the pair ledger cp_pvp_pairs
+-- with its caps and the pair-repeat flag. Every cap is a memory lookup: the ledger is read at start and kept in
+-- memory, and writes go to the database in a thread. Identifiers are compared live and never stored, logged or sent.
 
 CP.Opponents = CP.Opponents or {}
 local Opp = CP.Opponents

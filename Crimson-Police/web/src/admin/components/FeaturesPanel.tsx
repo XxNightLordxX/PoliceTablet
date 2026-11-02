@@ -1,5 +1,9 @@
 // Admin UI -> Settings -> Features: one card per section of play (NPC missions, Player vs police, Police teamwork,
 
+// pay, server) listing each feature, whether it is on, a switch that saves the same setting as the list (audited; a
+// risky one asks first, a money one still needs the typed ENABLE), a link to the setting in All settings and one
+// button per limit of the feature (its caps, cooldowns and per-day counts) that opens that setting.
+
 import { useState } from 'react';
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Icon, Toggle } from '../../shared/components';
 import { t } from '../../shared/i18n';

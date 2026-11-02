@@ -1,5 +1,15 @@
 // One open mission in the Mission Builder (docs/ARCHITECTURE.md §13.7.2–§13.7.6).
 
+//   builder:get { id }            → the record; an editable custom mission is locked with server:builder:lock
+//   server:builder:autosave       → every Config.Builder.autosaveSeconds while the lock is mine and the draft
+//                                   changed (also before a tool closes the tablet and after a tool result)
+//   server:builder:save           → explicit save (errors, previousId after a rename of a never-published draft)
+//   server:builder:validate       → live guardrails (debounced, publish checks included)
+//   server:builder:unlock         → when the editor is closed
+//   client actions builderPlace / builderRecord / builderTestDrive (+ builderResult on mount)
+//   push 'builder'                → lockBroken / tested / published / … for this mission refetch or go read-only
+// The unsaved draft is kept in the module store (store.ts), so closing the tablet for a tool loses nothing.
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePush } from '../shared/hooks';
 import { t } from '../shared/i18n';

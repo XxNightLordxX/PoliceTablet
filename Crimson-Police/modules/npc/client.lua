@@ -1,5 +1,111 @@
 -- CP.Npc (client): host-side NPC AI helpers, "Cuff suspect" and the police action options (contacts, custody).
 
+-- modules/npc/client.lua · CP.Npc (client): host-side NPC AI helpers and "Cuff suspect".
+--
+--  What this module owns (docs/ARCHITECTURE.md §5.11, §6.1, §6.2, §0.14)
+--    - The relationship groups CRIMSONPOLICE_HOSTILE and CRIMSONPOLICE_NEUTRAL, created once on every
+--      client. Only the relations FROM these two groups are set: HOSTILE hates PLAYER (5), is a companion
+--      of itself and neutral (3) to NEUTRAL and every other common group; NEUTRAL is neutral to all.
+--      The PLAYER group's own relations are never touched. Both groups are removed on resource stop.
+--    - apply / task / nearestParticipant for the block client halves (run host only: the caller has
+--      control of the ped, see CP.Runs.control).
+--    - A light host AI loop (500 ms, only while it manages a ped) that keeps combat on the nearest active
+--      participant (with no participant in reach a hostile stands still: it never guards, since a
+--      guarding ped attacks every player, bystanders included), walks flee routes point by point,
+--      drives recorded routes waypoint by waypoint, recovers stuck peds and re-plays the kneel /
+--      cuffed poses if something interrupted them.
+--    - The combat governor on EVERY participant's client (host or not, 1 s while on a run): the Config.NpcCombat
+--      caps (accuracy at most accuracyMax, shoot rate, firing pattern, ability at most abilityMax, attributes 27
+--      and 24 off, 49 on, no charging) on each armed mission ped of the run this client owns, once per entity
+--      handle and bag seq, and again after it owns the ped again. The caps are settings only, never a task (its
+--      only task is the flee of a stuck tired runner no AI loop of that game runs, below). apply sets the same
+--      caps (and swaps an older bag's automatic weapon, CP.NpcCombat.ammo rounds); the firing pattern goes on
+--      again after each TaskCombatPed.
+--    - Tired runners (Config.Flee): the host gives every flee leg on foot at the move blend ratio of the bag's
+--      gait (sprint 3.0, jog 2.0, walk and spent 1.0) and gives the current leg again when the gait changes; with
+--      no route left a tired runner runs 40 m navmesh legs straight away from the nearest participant
+--      (GetSafeCoordForPed, ENAV_NO_STOPPING) instead of TaskSmartFleePed, which has no speed. The pacer on
+--      EVERY participant's client holds each tired runner of the run it owns to his gait every frame
+--      (SetPedMaxMoveBlendRatio 2.0 / 1.0, SetPedMoveRateOverride jogRate / walkRate, the move_m@JOG@ or
+--      move_injured_generic clip set with windedClipset) and lets go in the same frame (cap 3.0, rate 1.0,
+--      ResetPedMovementClipset) once he is no longer tired, in a vehicle, dead, owned by another game, or the
+--      run or the resource stops.
+--    - Animation sets: LoadDict records each pose and tell dictionary it loaded; ReleaseAssets (after LetGoAll
+--      on client:runEnded of the current run and on onResourceStop) calls RemoveAnimDict for each of them and
+--      RemoveClipSet for every clip set the pacer asked for, then starts both lists again. A clip set that did
+--      not load is let go too before it is asked for again.
+--    - Drop protection on EVERY client (participant or not) for every ped with a Crimson-Police cp bag:
+--      SetPedDropsWeaponsWhenDead false and SetPedMoney 0 once per entity handle, because the client
+--      that owns a ped when it dies creates the pickups and ownership moves to the nearest player.
+--    - The cp state bag change handler (AddStateBagChangeHandler('cp', nil, ...)): on the host of the
+--      local player's run it applies the bag cfg once control is gained and re-tasks the ped when its
+--      state changes: hostile -> combat, fleeing -> flee (bag.fleePoints / cfg.fleePoints route when
+--      present), surrendered -> hands up then kneel, cuffed -> cuffed pose + frozen, restrained -> kneel,
+--      and a server task = { action, args } for any state (run once per bag.taskSeq). When this client becomes the host
+--      (crimson-police:client:hostChanged) every known ped of the run is re-applied and re-tasked.
+--    - One global ox_target option set (exports.ox_target:addGlobalPed): 'crimson-police:cuff' with the
+--      default label (locale npc.cuff) and 'crimson-police:cuff:<n>' for other labels a block passed to
+--      enableCuff. canInteract only when the ped's cp.run is the local player's current run,
+--      cp.state == 'surrendered', cp.cuff is set and the player is within cp.cuff.maxDistance on foot,
+--      so non-participants never see it. onSelect runs lib.progressBar (cp.cuff.duration, mp_arresting
+--      anim; cancelled if the suspect stops being surrendered, moves out of reach or the local player is
+--      placed in Crimson-Arena) and then TriggerServerEvent('crimson-police:server:npcCuff', runId, netId).
+--      These options, and the contact, custody and seat options, exist only while the local player is on a
+--      run: added one frame after client:start (modules/runs sets current() after this handler), removed one
+--      frame after client:runEnded, but only once ox_target's eye menu is closed (exports.ox_target:isActive,
+--      asked twice a second by one waiting thread), because ox_target selects an option by its index and a
+--      removal shifts the indexes. A player with no run has no global option, so ox_target never calls our
+--      canInteract for him. Each canInteract tests the run first. Removed on resource stop; added again when
+--      ox_target restarts during a run. ox_target asks every option of one pass in one frame, so the options read
+--      each entity's cp bag and the CanAct answer once per frame (perFrame, keyed by GetFrameCount()); the contact
+--      key, the cuff flow, the stun handler, the host AI and the governor read the bag themselves.
+--    - The contact key hands over to the run's transport van within 8 m: only networked vehicles of the pool in
+--      reach have their bag read, with one CurrentRun() per press.
+--
+--  Public API
+--    CP.Npc.apply(entity, cfg) -> boolean
+--        cfg (the bag's cfg): weapon, accuracy, armour, health, behaviour ('hold'|'balanced'|'push'),
+--        group ('hostile'|'neutral'); state and armed are read from the entity's cp bag.
+--        Weapon (GiveWeaponToPed when missing; unarmed peds have every weapon removed), no drops
+--        (SetPedDropsWeaponsWhenDead false, SetPedMoney 0), accuracy, max health (health only while the
+--        ped is untouched), armour (only while untouched), relationship group, combat
+--        attributes / ability / range / movement by behaviour, flee attributes, dies when injured (no
+--        writhing), no ragdoll from player impact, blocking of non-temporary events, keep task.
+--    CP.Npc.task(entity, action, args) -> boolean     (needs control; repeated identical tasks are ignored
+--                                                     unless args.force)
+--        'combat'       { target = ped?, behaviour? }        TaskCombatPed on the nearest active participant
+--                                                            (none: TaskStandStill until one is back)
+--        'flee'         { points = { vec3 }?, startIndex?, from = ped?, vehicle?, speed?, drivingStyle?, style?, stopRange? }
+--                       on foot: TaskFollowNavMeshToCoord along points at the bag's gait, then
+--                       TaskSmartFleePed from the nearest participant (a tired runner: 40 m navmesh legs
+--                       away from him); as a driver: the points as a road route, else
+--                       TaskVehicleMissionPedTarget flee
+--        'handsUp'      { duration? }                         TaskHandsUp facing the nearest participant
+--        'kneel'        { instant? }                          hands up, then kneel (random@arrests,
+--                                                            random@arrests@busted idle loop)
+--        'cuffed'       { instant? }                          (kneeling get-up), mp_arresting idle loop, frozen
+--        'follow'       { coords, speed = 1.0, radius = 1.5, anyMeans? }
+--                       TaskFollowNavMeshToCoord (TaskGoToCoordAnyMeans with anyMeans)
+--        'cower'        {}                                    TaskCower
+--        'wander'       {}                                    TaskWanderStandard
+--        'enterVehicle' { vehicle = netId|entity, seat = -1, speed = 2.0, timeout = 20000 }
+--        'driveTo'      { coords, vehicle?, speed = 16.7 m/s, drivingStyle?, style = 'normal', stopRange = 8.0 }
+--        'driveRoute'   { points = { vec3 }, loop?, startIndex?, vehicle?, speed = 16.7 m/s, drivingStyle?,
+--                         style = 'normal', stopRange?, arrive? }
+--                       TaskVehicleDriveToCoordLongrange waypoint by waypoint, lane-following style; the
+--                       route starts at the nearest point ahead (first local minimum of the distance)
+--        speed is m/s (kmh = km/h is accepted instead); a numeric drivingStyle wins over the style name.
+--        A managed task (combat retargeting, route stepping, stuck recovery, pose upkeep) ends when the
+--        ped's cp state changes or it leaves the vehicle it was driving: the new state's owner re-tasks.
+--        styles: 'careful'|'cautious' 786603, 'normal' 786475, 'fast' 786492 (all keep to their lanes),
+--                'reckless' 787004 (may use oncoming lanes to overtake)
+--    CP.Npc.nearestParticipant(coords) -> ped|nil, dist   active participants of the local player's run
+--
+--  Events listened to (sent by modules/runs): crimson-police:client:start, client:participants,
+--  client:hostChanged, client:runEnded (participant list and host changes only).
+--  Event sent: crimson-police:server:npcCuff (runId, netId).
+--  Player-facing text: npc.cuff (npc.json).
+
 CP.Npc = CP.Npc or {}
 local Npc = CP.Npc
 local U = CP.U

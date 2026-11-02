@@ -1,5 +1,13 @@
 // Officer UI · Unit (screen key 'unit', title key 'ui.screen.unit').
 
+// The officer's unit (members with department tag, rank and callsign, the leader marked), invites
+// waiting for them (Accept / Decline), an invite picker of on-duty officers from any department, and
+// Leave unit (confirm; mid-run it abandons the unit's run). Data: callback getUnit (UnitView + slice
+// fields, src/types/teams.ts), live via push topic 'unit'. Actions: server:unitInvite (targetSrc),
+// server:unitRespond ({ accepted, unitId }), server:unitLeave. Test invitations (callback test:pendingInvites,
+// push 'invites') are answered here too with server:testRespond. Invites close (locked) once the leader
+// accepts a mission type and stay closed while the unit's run is active.
+
 import { useMemo, useState } from 'react';
 import {
     Avatar as ProfileAvatar,

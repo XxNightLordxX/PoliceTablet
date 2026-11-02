@@ -1,6 +1,35 @@
 -- CP.Permissions: the one place that decides whether a role may do an action. Every sup:* / admin:* handler (and every
 -- builder/test action) asks can() first.
 
+-- Rules (SPEC "Supervisor & admin actions", Config.Permissions):
+--   * Admins (ace Config.AdminAce, or the server console) may do every action.
+--   * Supervisors may do a supervisor action only when Config.Permissions.supervisor[action] == true
+--     (read at call time) and they currently qualify as a supervisor (CP.Access.isSupervisor).
+--   * Admin-only, whatever the config says: setMissionPayout, clearPayout, manualAward,
+--     handleFailedDispute, voidAnyRun, seasons, bountyOverride, suspend, reloadMissions, testRun, openAdmin.
+--   * viewMissionList: supervisors and admins (no config switch).
+--   * Nobody may approve, void or answer a dispute about a run they took part in: pass ctx.runUuid with
+--     reviewFlagged, handleDisputes, handleFailedDispute or voidAnyRun and the own-run check applies to
+--     admins too.
+--
+-- Public API (docs/ARCHITECTURE.md §5.3)
+--   CP.Permissions.can(src, action, ctx) -> boolean, errKey
+--       ctx (optional table):
+--         runUuid      -> own-run check for the review actions above (err.own_run, err.invalid_run)
+--         department / departments -> a supervisor (not an admin) must belong to that department, or to
+--                         one of the list (err.other_department). Use it for "runs involving their department".
+--       errKey otherwise err.no_permission.
+--   CP.Permissions.actionsFor(src) -> { actionName, ... }   sorted; admins: every admin and supervisor
+--       action; supervisors: the switched-on supervisor actions + viewMissionList; others: {}.
+--   CP.Permissions.tookPart(citizenid, runUuid) -> boolean  any cp_mission_runs row of that run for that citizenid
+--   CP.Permissions.canReviewRun(src, runUuid) -> boolean, errKey   false with err.own_run when the reviewer
+--       took part: a cp_mission_runs row of that run (tookPart), or a participant entry (active or left) of
+--       that run while it is still live in CP.Runs (a partner who is still on the run has no row yet). Any
+--       character of the reviewer's licenses counts too (CP.AdminKit.selfRun: one cp_officers query per
+--       review action). The console can review; a player without a character can review unless selfRun
+--       finds one of their characters on the run.
+-- can, actionsFor, tookPart and canReviewRun may yield (database): call them from a handler or thread.
+
 CP.Permissions = CP.Permissions or {}
 local P = CP.Permissions
 local TAG = 'permissions'

@@ -1,5 +1,45 @@
 -- CP.Dispatch: the only code that talks to sc-dispatch.
 
+-- Owns: the read-only listeners on sc-dispatch's events, the read-only mdt_dispatch lookup,
+-- exports['sc-dispatch']:IsPlayerSuspended and exports['sc-dispatch']:ClearNotification.
+-- Never uses sc-dispatch's call-creating export (missions never create dispatch calls) and never
+-- triggers any sc-dispatch event. sc-dispatch's own handlers always run as well; nothing here blocks them.
+--
+-- Event registration (docs/INTEGRATIONS.md, sc-dispatch):
+--   RegisterNetEvent  sc-dispatch:server:ToggleResponding (callId, isResponding)   client-originated
+--   RegisterNetEvent  sc-dispatch:server:ShotsFired / PlayerDown / PlayerDead (data) client-originated
+--   AddEventHandler   sc-dispatch:server:callClearedByOfficer (callId)   server-local ONLY, so no client
+--                     can fire it to lift their own "On a call" block
+--   AddEventHandler   onResourceStart / onResourceStop of 'sc-dispatch' (a restart deactivates every call)
+-- Every net handler captures 'source' on its first line (and os.time() right after, before anything can
+-- yield) and validates the payload; per-player rate limits go through CP.Net.rateOk.
+--
+-- Public API (docs/ARCHITECTURE.md §5.1)
+--   CP.Dispatch.available() -> boolean                 sc-dispatch is started
+--   CP.Dispatch.isSuspended(citizenid, jobName) -> boolean
+--       exports['sc-dispatch']:IsPlayerSuspended(citizenid, jobName); false when sc-dispatch is not
+--       started or the export fails (sc-dispatch itself fails open). May yield (sc-dispatch awaits MySQL).
+--   CP.Dispatch.lookupActiveCall(callId) -> uniqueId|nil
+--       SELECT id, unique_id FROM mdt_dispatch WHERE (id = ? OR unique_id = ?) AND active = 1 LIMIT 1
+--       with (the integer form or 0, the normalised string), in pcall. Returns the canonical call id:
+--       the row's unique_id, or its row id as a string when unique_id is empty. nil when the call is
+--       unknown or inactive, when sc-dispatch is not started, or on a query error (logged). The result
+--       can be an 'npccall-' id: the caller must still classify it. Yields (database).
+--   CP.Dispatch.clearNotification(uniqueId, jobs) -> boolean
+--       exports['sc-dispatch']:ClearNotification(uniqueId, jobs) in pcall. Only non-numeric string ids
+--       are accepted (a number, or a digit-only string, would also match unrelated ems/fire rows by row
+--       id). jobs defaults to { 'police' }. Call it from a handler or thread (sc-dispatch awaits MySQL).
+--   CP.Dispatch.normalizeCallId(id) -> string          123, '123', 123.0 -> '123'; other strings unchanged;
+--                                                      nil -> ''
+--   Listeners (any number; each runs in its own thread):
+--   CP.Dispatch.onResponding(fn(src, callId, isResponding))  callId as sent (number or string, validated),
+--                                                             isResponding a boolean
+--   CP.Dispatch.onCallCleared(fn(callId))                     number or string, as sc-dispatch sent it
+--   CP.Dispatch.onDispatchRestart(fn())                       sc-dispatch started or stopped
+--   CP.Dispatch.onShotsFired(fn(src, data, receivedAt))       data = { coords = vector3|nil, street, zone, sex }
+--   CP.Dispatch.onPlayerDown(fn(src, data, receivedAt))       (client-supplied: use server-side ped coords
+--   CP.Dispatch.onPlayerDead(fn(src, data, receivedAt))        for any distance check), receivedAt = os.time()
+
 CP.Dispatch = CP.Dispatch or {}
 local D = CP.Dispatch
 local TAG = 'sc_dispatch'

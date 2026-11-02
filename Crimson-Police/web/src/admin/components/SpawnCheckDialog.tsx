@@ -1,4 +1,14 @@
-// Admin UI · Testing: the Check spawn points dialog (PLAN S8). The check itself is modules/testing/client.lua.
+// Admin UI · Testing: the Check spawn points dialog. The check itself is modules/testing/client.lua.
+
+// Admin UI · Testing · Check spawn points. Scope: all missions, one mission or one location (a location
+// row opens it with that location). Start / Stop (client actions spawnCheck, spawnCheckStop: the Lua testing client
+// does the check, ARCHITECTURE 5.27), the progress "Mission 7/19, location 3/6, point 12/40" with a bar over the
+// planned locations, points checked / to look at / locations, and the results: mission and point id, what is there,
+// x y z, ground z with the height over it, the result (each status with its hint), notes (near the start or the
+// objective before, seen from the start), "Teleport here" (client action teleport { target: 'point', missionId,
+// location, point }; hidden while Config.Testing.spawnCheck.teleport is off, disabled while the check runs).
+// "Problems only" by default; at most 300 rows drawn. "Copy report" copies spawnCheckReport(). The locations the
+// server refused are listed under "Locations not checked". Start is disabled while the admin's own test runs.
 
 import { useEffect, useMemo, useState } from 'react';
 import {

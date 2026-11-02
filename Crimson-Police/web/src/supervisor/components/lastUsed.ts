@@ -1,4 +1,9 @@
-// Supervisor dialogs open with the values last used (step WF2, Config.Tablet.supervisorRemember): Give points (the
+// Supervisor dialogs open with the values last used (Config.Tablet.supervisorRemember): Give points (the
+
+// Config.Tablet.supervisorRemember (session config.supervisorNav.remember, shipped false): the values of the
+// last successful Give points (points, reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason),
+// kept in the page's memory only; the dialogs open with them while the switch is on. startNumber() keeps a number
+// inside the control's current min..max, else the minimum. The server checks every value again.
 
 import type { Session } from '../../shared/types';
 

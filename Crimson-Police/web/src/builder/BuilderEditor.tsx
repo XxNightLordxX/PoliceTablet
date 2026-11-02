@@ -1,5 +1,9 @@
 // The Mission Builder editor for one mission: header (name, lifecycle, version,
 
+// autosave state, running armed-NPC total vs Config.Builder.maxHostiles, Save / Close), the edit lock banner
+// (who holds it and until when; Break lock when allowed), the step bar New mission → Details → Block settings →
+// Locations → Scaling → Test → Publish with error counts per step, and the step content.
+
 import { useEffect, useState, type ReactNode } from 'react';
 import {
     Badge,

@@ -1,4 +1,4 @@
--- The placer (modules/spawn/client.lua) and CP.Npc (modules/npc/client.lua) on one game (PLAN S9): CP.Npc tasks a
+-- The placer (modules/spawn/client.lua) and CP.Npc (modules/npc/client.lua) on one game: CP.Npc tasks a
 -- new person while the placer still checks his ground, and never lets him go before he is on it.
 
 local H = dofile('tests/harness.lua')

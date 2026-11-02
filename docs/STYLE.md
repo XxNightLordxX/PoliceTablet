@@ -78,7 +78,8 @@ not, the tool leaves that function's name alone rather than break the spec.
 These are the jobs it does around the formatters:
 
 - It renames file-level local functions to PascalCase, and only when that is safe (see Naming).
-- It cuts file headers to a short summary. The full text moves to `docs/FILE_NOTES.md`.
+- It cuts file headers to a short summary of at most 3 lines. The rest of the header stays in the file, as a comment
+  block under the summary, and `docs/FILE_NOTES.md` gets one line per file: the summary's first sentence.
 - It writes section banners in the owner's format.
 - It rewrites `table.insert(t, v)` as `t[#t + 1] = v`, and fixes console prefixes and colour codes.
 - After the last StyLua run, it gives back the layout StyLua takes away (see Layout): an `if`, loop or
@@ -168,8 +169,9 @@ These are the jobs it does around the formatters:
 
 ### Comments, headers and banners
 
-- **A file header is a short plain summary of at most 3 lines.** Do not open a file with an essay,
-  an author line, a version or a licence. Describe the API in `docs/ARCHITECTURE.md`.
+- **A file header is a short plain summary of at most 3 lines.** Do not open a file with an author line, a
+  version or a licence. Details a reader of the file needs (what it owns, the fields it reads, the events it sends)
+  go in a comment block under the summary, after a blank line; the API is in `docs/ARCHITECTURE.md`.
   > NP cl_main.lua: `-- Tracks active calls client-side; the first on-duty cop to get close claims` /
   > `-- the spawn from the server and becomes the scene "host" (runs the NPC AI).`
 - **Section banner: a rule of 76 `=`, the title in CAPS centered under it, and the rule again.** This

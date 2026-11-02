@@ -2,6 +2,17 @@
 // creates the draft from a template card or from scratch; steps 2 to 4 (QuickMission) run inside BuilderEditor on the
 // same draft and the same server actions as the full editor, which "Open the full editor" opens at any step.
 
+// The New mission wizard (Config.Builder.quickWizard): What (template cards from builder:config templates, or Start
+// from scratch with a type), Where (Use my position for the start, named "<template> - <street at the start>" from
+// the builderHere answer; Fill the points for me = builderAutoPoints for every fillable key, kept at once; the points
+// still missing with Add here / Place / Record; Add another location here), Check (server:builder:validate in plain
+// words, Fix opens the full editor there, Test it now = StepTest) and Publish (StepPublish, its confirm). Steps 2-4 run
+// inside BuilderEditor on the same draft and lock; Open the full editor leaves the wizard at that step. The logic
+// without React is quickMission.ts; quickMission.walk.ts walks it against the browser mocks (node walk.mjs).
+// Every New mission opens it in one press: MissionList's button (onNew), the Admin Missions header and Home's tile
+// (navigate with NEW_MISSION_PARAMS, wizard: 'new') bump BuilderWorkspace's newRequest; newMissionOpens(config) picks
+// the wizard or, with quickWizard false, the New mission dialog.
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button, Field, Icon, TextInput, type IconName } from '../shared/components';
 import { cx } from '../shared/cx';

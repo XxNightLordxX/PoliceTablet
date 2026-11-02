@@ -1,5 +1,15 @@
 -- CP.NpcCombat (client): softer NPC hits and no headshot multiplier on this officer while a run is live.
 
+-- CP.NpcCombat (client): this officer's own game while a run is live (Config.NpcCombat). NPC bullets and melee hit
+-- softer (SetAiWeaponDamageModifier and SetAiMeleeWeaponDamageModifier: every AI hit this game works out, its own
+-- NPCs' included), the officer takes no extra headshot damage (SetPedSuffersCriticalHits, again after a respawn), and,
+-- when officerDefense is not 1.0, less damage from every weapon (SetPlayerWeaponDefenseModifier). modules/runs starts
+-- it at client:start and stops it at every run end; everything goes back to what it was before the run. While the run
+-- lasts, its 2 s watcher sets the AI damage values again every pass (reassertAiDamage, read on every pass): another
+-- script, such as Crimson-Contracts' guard scaling, may reset the one value the whole game shares. Start data with
+-- npcCombat = false (V14's live runs) starts nothing. client:npcCombatDrop (the server's dropFor) turns the headshot
+-- flag and the defense modifier back to their pre-run values for the rest of that run; the AI damage values stay.
+
 CP.NpcCombat = CP.NpcCombat or {}
 local NpcCombat = CP.NpcCombat
 local TAG = 'npccombat'

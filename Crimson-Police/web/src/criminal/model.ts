@@ -1,4 +1,4 @@
-// The criminal tablet's logic without React (step G2): normalising the server's view, the sidebar with its badges
+// The criminal tablet's logic without React: normalising the server's view, the sidebar with its badges
 // and the texts that depend on the view. criminal.walk.ts checks it against the mocks.
 
 import type { CrimActive, CrimHistoryRow, CrimRole, CrimScreen, CrimView } from '../types/criminal';

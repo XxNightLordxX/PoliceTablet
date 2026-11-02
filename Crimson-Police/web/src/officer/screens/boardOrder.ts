@@ -1,4 +1,4 @@
-// The Mission Board's type cards in the officer's order (My options -> Mission Board, step O8): favourites first, then
+// The Mission Board's type cards in the officer's order (My options -> Mission Board): favourites first, then
 // the server's order; hidden types fold away, but never a favourite and never the last card to accept.
 
 import type { OfficerOptionValue } from '../../shared/types';

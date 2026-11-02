@@ -1,4 +1,9 @@
--- Admin UI split by play, step AP1 (the owner: "ensure the admin panel separates npc stuff and player player stuff
+-- Admin UI split by play, (the owner: "ensure the admin panel separates npc stuff and player player stuff
+
+-- Admin UI split by play (the owner: "ensure the admin panel separates npc stuff and player player stuff
+-- and cop cop stuff and every feature is able to be turned on and off etc edited"): Config.AdminUi.groupByPlay folds
+-- the Settings sections into NPC missions, Player vs police and Police teamwork, and Settings -> Features lists every
+-- feature switch with its section and the setting it writes.
 
 local H = dofile('tests/harness.lua')
 

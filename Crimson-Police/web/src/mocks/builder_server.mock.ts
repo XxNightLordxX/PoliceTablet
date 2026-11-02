@@ -1,5 +1,14 @@
 // Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/ARCHITECTURE.md §13.7):
 
+// callbacks builder:list / builder:get / builder:config and every server:builder:* action, with an
+// in-memory store so create → save → test → publish → archive → restore → rollback can be clicked
+// through. The builder client's client actions (builderPlace, builderRecord, builderTestDrive,
+// builderResult, builderCancel, builderWaypoint) are registered as fallbacks: the builder client's own
+// mock file overrides them. Use ?ui=admin to get admin permissions (rollback, break lock, edit any).
+// Review switches: &blua=1 answers like Lua does (empty lists as {}, nil fields left out), &bedge=1 adds
+// edge-case missions (very long names, unknown names, an empty new draft) and no no-build zones, &bempty=1
+// starts with no custom missions at all.
+
 import { emitDebug, registerMock } from '../shared/nui';
 import { mockLocale } from './samples';
 import type {

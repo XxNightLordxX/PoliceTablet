@@ -1,5 +1,31 @@
 -- Objective block "escort" (client half)
 
+-- What it does (while the objective is current on this participant's client)
+--   - blips for the escorted truck, the destination and living attackers (Radio Silence 'area': the
+--     destination alone);
+--     the arrival marker at the destination (DrawMarker only within MARKER_RANGE, otherwise Wait(750));
+--   - a HUD line (ctx.hudDetail): truck health, stop wait, stopped countdown, attackers alive, and at the
+--     destination how many attackers are still within clearRadius (or, with none that close, how many are
+--     left to neutralise anywhere); nothing once a stop cleaned up while the host AI waited for control;
+--   - on the run host only: control of the truck, its driver and the attackers before anything is done
+--     to them (re-applied and re-tasked when control comes back from another client), CP.Npc.apply on
+--     the driver, the driver seated and kept in the truck, doors locked, the toughness (cp bag
+--     cfg.toughness, else ctx.obj.toughness) applied once
+--     (SetEntityMaxHealth / SetEntityHealth / SetVehicleEngineHealth / SetVehicleBodyHealth /
+--     SetVehiclePetrolTankHealth = 1000 × toughness, SetVehicleStrong) and reported ('toughened');
+--     then the route, segment by segment: CP.Npc.task(driver, 'driveRoute', { vehicle, points = the
+--     waypoints from the server's next one to the next stop (or the destination), loop = false,
+--     speed (m/s), style (CP.Npc's lane-following flags), stopRange, force }). At a stop, and at the
+--     destination, the truck brakes (TaskVehicleTempAction); the next segment is tasked when the server
+--     ends the stop (truck.gen changes), after a host change, or when the truck is stuck for RETASK_MS.
+--     Attackers are CP.Npc's (state 'hostile' -> combat); the host applies them once it has control.
+--
+-- Objective fields read: route, speed, style, toughness, arrival, clearRadius (ctx.obj); location[route].
+-- Evidence sent: { type = 'toughened', netId }
+-- Server data (update): { kind = 'state', truck = { netId, driver, wp, gen, stop = { at, left } | nil,
+--   arrived, toughened, health, stoppedFor, stoppedFail }, waves = { { k, triggered, done, alive } },
+--   attackers = { netId }, completed }
+
 local BLOCK = 'escort'
 local U = CP.U
 

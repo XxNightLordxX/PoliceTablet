@@ -1,6 +1,23 @@
 -- CP.Downed (client): the NPC pick-up of a downed participant and the EMS request from their own client
 -- (docs/ARCHITECTURE.md §5.15, Crimson-Arena rules 3 and 13).
 
+-- Owns the handlers of client:pickup (runId, dropOff), client:pickupCancel (runId) and client:requestEMS
+-- (runId) and sends the plain net event server:pickupDone (runId, ok).
+--
+-- Public API
+--   CP.Downed.busy() -> boolean      a pick-up is running on this client
+--
+-- client:pickup: screen fade-out, overlay { kind = 'fade', text = CP.L('downed.picked_up') } ("Picked up by
+-- an NPC unit"), wait for the server's revive (ped not dead AND metadata isdead / inlaststand false; 20 s
+-- timeout), detach from any entity or vehicle, SetEntityCoords to the drop-off, wait for collision, fade in,
+-- clear the overlay, server:pickupDone (runId, true). The Crimson-Arena value (LocalPlayer.state.crimsonArena
+-- with a source other than 'crimson-police') is re-checked before the fade, while waiting for the revive and
+-- right before SetEntityCoords, and so is a server cancel (client:pickupCancel); every abort path fades back
+-- in, clears the overlay and sends server:pickupDone (runId, false). Nothing here revives anyone: the server sends sc-ambulance's own
+-- hospital:client:Revive (through CP.Ambulance).
+-- client:requestEMS: CP.Ambulance.sendEMSRequest() (sc-ambulance's standard EMS request, sent only after
+-- the server removed our flag) and a toast.
+
 CP.Downed = CP.Downed or {}
 local D = CP.Downed
 local TAG = 'downed'

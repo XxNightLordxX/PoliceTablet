@@ -1,5 +1,12 @@
 -- The pop-up officer options (My options -> Pop-ups, kept on this PC): how long notifications stay (toastTime), how
 
+-- long the result card stays (resultTime, seconds) and fewer pop-ups during a mission (quietRun: unit invites,
+-- commendations, rewards and profile news go only to the bell while a run is on; route, custody, run messages,
+-- warnings and errors always show). The NUI applies the first two (web/src/shared/toast.ts, hud/ResultScreen.tsx);
+-- CP.Tablet.notify (client) applies quietRun. Key hints (keyHints, on by default) name the bound key on the
+-- ready check banner, a new mission call and the contact HUD line (CP.Options.keyHint, web/src/shared/keyHints.ts).
+-- Config.OfficerOptions holds the allow, defaults and bounds.
+
 local Defs = CP.OptionDefs
 
 Defs.add('toastTime', {

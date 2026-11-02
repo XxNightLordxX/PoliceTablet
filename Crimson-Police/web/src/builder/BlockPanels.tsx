@@ -1,5 +1,15 @@
 // One settings panel per objective block (SPEC "Mission Builder → Block settings"),
 
+// generated from the builder:config ranges (config/blocks.lua): every number shows its min, max and default and
+// refuses values outside them; selects offer only the allowed lists (Config.Builder.allowed); chances are whole
+// percent and progress times seconds (builder units, protocol §1.1). Field paths follow ARCHITECTURE §3.3.
+// With Config.Builder.foldAdvanced (builder:config foldAdvanced) a panel is drawn in two passes through FoldCtx: the
+// basics (the objective name and the groups without `advanced`, plus `summary` groups such as the shootout's Waves,
+// Enemies per wave, Weapons and Difficulty) and, inside a closed "More settings" <details>, the checks (minimum time,
+// presence range) and every `advanced` group; an error on the objective opens it. Folding off draws every group open
+// as before. The logic without React (foldsAdvanced, Easy/Normal/Hard inside the hostile_waves ranges) is
+// blockBasics.ts; blockPanels.walk.ts renders the panels and Details against the browser mocks (node walk.mjs).
+
 import { createContext, useContext, type ComponentType, type ReactNode } from 'react';
 import {
     Checkbox,

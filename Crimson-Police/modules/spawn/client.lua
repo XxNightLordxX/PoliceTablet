@@ -2,6 +2,38 @@
 -- director's hidden points, Config.Spawning.preferHidden), where a person who walks up to a car appears (contactRing),
 -- whether the ground at a point is fit to put a person, a vehicle or an object on (Config.Spawning.ground), the placer.
 
+-- CP.Spawn (client): the line-of-sight half of the spawn director's "hidden points first"
+-- (Config.Spawning.preferHidden). The server's ask (ox_lib callback crimson-police:client:spawn:visible, { points, ms })
+-- is answered with one boolean per point (at most 32): false when every line from the officer's head bone and from the
+-- rendered camera to 1.0 m and 1.7 m above the point hits the map, a vehicle or an object (StartShapeTestLosProbe flags
+-- 1 + 2 + 16, options 7, his car or ped ignored), true otherwise or when it cannot tell (a probe that did not start, an
+-- invalid or unfinished result within ms, an entry that is no point). At most 16 probes run at once; the ones still
+-- running at the end are read for 60 more frames so their handles are freed.
+-- CP.Spawn.probe(kind, x, y, z, h, model, opts) (Config.Spawning.ground; the spawn point check of
+-- modules/testing/client.lua calls it; opts.wall = false skips the wall probe): loads the
+-- collision at the point (collisionTimeoutMs) and a building's inside there (pinned until ready, interiorTimeoutMs;
+-- never ready = interior_not_loaded), finds the ground from 2 m and from 50 m over the point (and from just over it
+-- under a low roof or the floor above: the one under it when that is the smaller move), then answers ok, snap
+-- (put on the ground: a person 1 m over it, a vehicle by its model's size, an object on it, when that moves it at most
+-- snapWithin), underground, floating, no_ground, in_water or in_wall (the Builder's capsule for a person or a vehicle).
+-- The placer (Config.Spawning.place; the server's ask is S10): its own handler of the cp bag. A bag with
+-- place = { x, y, z, h, kind, token } of this player's run, a token not taken yet: the game that controls the entity
+-- (or, when that is a bystander's or nobody's, the participant nearest to the point) takes control, freezes it, keeps
+-- its collision loaded, probes the server's point (ignoring the entity), and on ok or snap moves it straight up or down
+-- onto the ground (SetEntityCoordsNoOffset at ground + lift, SetVehicleOnGroundProperly, PlaceObjectOnGroundProperly)
+-- and lets people and vehicles go (objects and a cuffed person stay frozen); a bad point stays frozen; a seated person
+-- or an attached entity is not moved; one more than 3 m from the point was placed and let go already: left where it
+-- is ('moved'). Told once per token with server:spawnPlaced (runId, { netId, token, result, reason, groundZ, dz, z });
+-- at most 4 placements at once (counted before control is asked for); lost control or the run's end: nothing told.
+-- CP.Spawn.holds(entity): true while its bag asks for a placement this game has not done; CP.Npc then never lets the
+-- person go (modules/npc/client.lua LetGo). ARCHITECTURE 5.43 lists every step and field.
+-- CP.Spawn.walkIn(car, ring, budgetMs) (Config.Spawning.contactRing; the server's ask is the ox_lib callback
+-- crimson-police:client:spawn:walkIn, { car, ring, ms }, from blocks/field_contact/server.lua): where a returning driver
+-- or a thief appears for the car this officer deals with. Navmesh points (GetSafeCoordForPed, flags 4 + 8: not a
+-- building's inside, not water) round the car in the direction his camera looks and 25 / 50 / 75 degrees either side, at
+-- ring[1], halfway and ring[2]; kept when within the ring from the car, ring[1] or more from him, at most 90 degrees off
+-- his view and 2 m from the others; z = navmesh + 1.0; hidden ones first (CP.Spawn.visible), at most 8.
+
 CP.Spawn = CP.Spawn or {}
 local Spawn = CP.Spawn
 local TAG = 'spawn'

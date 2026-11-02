@@ -1,4 +1,4 @@
--- CP.AdminHome (server, step H5): Admin UI -> Home's "Needs attention" panel in one batched callback
+-- CP.AdminHome (server): Admin UI -> Home's "Needs attention" panel in one batched callback
 -- (admin:getNeedsAttention): the Problems lines, today's refused mission starts, the open disputes, the flagged runs
 -- waiting for a review and the open real-suspect cases. Config.AdminUi.needsAttention (shipped false = no panel).
 

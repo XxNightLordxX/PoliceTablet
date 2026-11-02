@@ -1,5 +1,16 @@
 // Supervisor/Admin UI · OperationPanel: the active Cross-Department Mission and its controls.
 
+//   import OperationPanel from '../../supervisor/components/OperationPanel';
+//   <OperationPanel scope="admin" />      // Admin UI → Missions
+//   <OperationPanel scope="sup" />        // Supervisor UI → Cross-Department Mission
+//
+// Props (stable): { scope: 'sup' | 'admin' } picks the action family server:<scope>:opLaunch / opStart /
+// opRelaunch / opCancel. Data: callback sup:getOperation (OperationView, src/types/teams.ts), refreshed by
+// the push topic 'operation' and every 10 s. Shows the mission, launcher, status, tier, join / run / idle
+// timers, participants by department, and Start now / Relaunch (after a fail) / Cancel (reason required).
+// With no operation active it offers a launch form (missions open to every department that support 2+
+// officers; never the Weekly Boss) with the server-wide launch cooldown.
+
 import { useEffect, useMemo, useState } from 'react';
 import {
     Badge,

@@ -1,4 +1,9 @@
--- CP.CrimTab (client, step G2): opens and closes the criminal tablet (Config.CriminalTablet) and keeps it fresh. The
+-- CP.CrimTab (client): opens and closes the criminal tablet (Config.CriminalTablet) and keeps it fresh. The
+
+-- CP.CrimTab (client): opens and closes the criminal tablet (Config.CriminalTablet) and keeps it fresh. The
+-- NUI asks the server for everything through the tablet's request and action endpoints (crimtab:get,
+-- server:crimtab:act); this side only takes the NUI focus (CP.Tablet.panelFocus, owner 'crimtab'), sends the view
+-- and refreshes it when the volunteer events say something changed. Nothing runs while it is closed.
 
 CP.CrimTab = CP.CrimTab or {}
 local C = CP.CrimTab

@@ -1,6 +1,10 @@
-// Supervisor UI · Department Report · Give points (step P22, Config.MissionControls.controls.awardPoints): a logged
+// Supervisor UI · Department Report · Give points (Config.MissionControls.controls.awardPoints): a logged
 // manual award of the admin's min to max points to an officer of the viewer's own department, with a reason. The
 // server checks every rule again (own department, never himself, the daily total, Config.AdminControl's limits).
+
+// Supervisor UI · Department Report · Give points: points (the admin's min to max), a reason and, at or
+// above AdminControl.adjustConfirmAbove, the officer's citizenid typed. The server checks every rule again (own
+// department, never himself, the supervisor's points a day, Config.AdminControl).
 
 import { useEffect, useState } from 'react';
 import { Button, Dialog, Field, NumberInput, TextInput, Textarea } from '../../shared/components';

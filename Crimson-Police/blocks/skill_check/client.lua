@@ -1,5 +1,25 @@
 -- Objective block "skill_check" (client half)
 
+-- What it does
+--   Registers an ox_target sphere zone on every armed target of the server's snapshot (option names
+--   "crimson-police:skill_check:<runId>:<objective>:<target>"). Selecting it plays a kneeling animation
+--   and runs the target's remaining lib.skillCheck rounds one at a time, reporting each round at once;
+--   a miss stops the sequence (select the target again to retry the same round). When the server
+--   says a target went off, the client of the participant it names plays the explosion effect
+--   (AddExplosion with damage scale 0: effect only, hurts nobody). Blips per armed target (none under
+--   Radio Silence 'area' or 'none': CP.Markers shows the nearest under 'area'), a small marker within 30 m,
+--   and the HUD line via ctx.hudDetail. No networked
+--   entities are created here and there are no NPCs (hostChanged only records the flag).
+--   The block's client state is kept per run and objective in this file (stateOf), so it also works
+--   when the engine hands every hook a fresh ctx.state table.
+--
+-- Objective fields read: checks [easy, medium, medium, hard], missPenalty [30], target { label, icon },
+--   explosion [true]
+-- Evidence sent (ctx.report)
+--   { type = 'check', target, index, success, seq }   one skill-check round (seq counts this client's
+--       reports: two misses in a row on the same round are never identical reports)
+-- Bonuses / penalties: none on the client (the server records no_missed_checks).
+
 local BLOCK = 'skill_check'
 
 -- An objective cue, unless the officer turned the cues off on this PC (My options -> Sounds).

@@ -1,6 +1,20 @@
 -- The ox_target options of modules/npc in their own client Lua state (H.boot side = 'client'): they exist only while
 -- the local player is on a run, so a player with no run pays nothing while the eye rests on a person or a car. Run by
--- tests/npc_spec.lua as a child process; prints "RESULT <passed> <failed>" (more in docs/FILE_NOTES.md).
+-- tests/npc_spec.lua as a child process; prints "RESULT <passed> <failed>" (more below).
+
+-- The ox_target options of modules/npc in their own client Lua state (H.boot side = 'client'): they exist only while
+-- the local player is on a run, so a player with no run pays nothing while the eye rests on a person or a car. Run by
+-- tests/npc_spec.lua as a child process; prints "RESULT <passed> <failed>".
+-- Checks: no option with no run; the same names in the same order once per run start (a second client:start adds
+-- nothing); every name removed at run end, but only after ox_target's eye menu closes (one wait, twice a second; a run
+-- that starts meanwhile keeps its options); an ox_target restart adds them only during a run; resource stop.
+-- CP_TARGET_SNAPSHOT=<file> writes every canInteract answer of the snapshot (fixed people, cars and seats under five
+-- player conditions, four run conditions and three distances; one frame per condition) to that file instead of
+-- comparing it. One pass over every ped option reads the cp bag and crimsonArena once each, with the same answers as
+-- one option per frame, and the next frame reads them again. The contact key among 200 vehicles reads only the bags
+-- within 8 m, asks for the run once for the van and hands over to the run's van at 6 m, not at 8.5 m.
+-- tests/fixtures/npc/target_answers.txt was written so while the options stayed registered for the whole session: the
+-- answers must stay the same now that they come and go with the run.
 
 package.path = package.path .. ';tests/?.lua'
 local H = dofile('tests/harness.lua')

@@ -9,22 +9,21 @@ What to update with each change is at the end, in "Working on the code".
 
 `tools/check_all.sh` runs these steps in this order and ends with a PASS/FAIL summary and the total time.
 
-| Step | What it runs | Time (4 cores) |
+| Step | What it runs | Time (4 cores, 2026-11-02) |
 |---|---|---:|
-| `syntax` | `luac5.4 -p` on every `.lua` file in `Crimson-Police/`, `tests/` and `tools/` | 0.5 s |
-| `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 0.8 s |
-| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX12 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have; FX12, a server yes/no answer compared with `true`), known hits in `tools/lint_baseline.txt` | 5 s |
-| `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/STYLE.md) | 45–48 s |
-| `suite-db` | `lua5.4 tests/run.lua`: every `tests/*_spec.lua` on MariaDB | 40–45 s |
-| `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 35–38 s |
-| `suite-shadow` | `lua5.4 tests/run.lua --storage=shadow`: MariaDB, the oxmysql twin and the engine compared, 0 differences | 70–76 s |
-| `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 10 s |
-| `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish | 2 s |
-| `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 14–15 s |
+| `syntax` | `luac5.4 -p` on every `.lua` file in `Crimson-Police/`, `tests/` and `tools/` | 0.9 s |
+| `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 1.5 s |
+| `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX12 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have; FX12, a server yes/no answer compared with `true`), known hits in `tools/lint_baseline.txt` | 7 s |
+| `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/STYLE.md) | 75 s |
+| `suite-db` | `lua5.4 tests/run.lua`: every `tests/*_spec.lua` on MariaDB | 112 s |
+| `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 94 s |
+| `suite-shadow` | `lua5.4 tests/run.lua --storage=shadow`: MariaDB, the oxmysql twin and the engine compared, 0 differences | 172 s |
+| `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 14 s |
+| `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish | 15 s |
+| `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 20 s |
 
-A whole run takes several minutes (every spec, full admin control included; the times above are from an older,
-smaller suite). Every `tools/lint_<name>.py` and `tools/check_<name>.py` (other than
-`check_contracts.py`) is a `lint-<name>` step, run right after `contracts`: a new lint joins by checking the
+A whole run takes about 8.5 minutes (the times above are from one run of every step on the full suite). Every
+`tools/lint_<name>.py` and `tools/check_<name>.py` (other than `check_contracts.py`) is a `lint-<name>` step, run right after `contracts`: a new lint joins by checking the
 repository with no arguments and exiting non-zero on a problem.
 
 The suites run two specs at a time (`--jobs`, below). Measured on the same machine, the three suites took
@@ -169,26 +168,27 @@ tools/check_all.sh -v                # stream each step's output as it runs
 CP_TEST_JOBS=1 tools/check_all.sh    # the suites one spec at a time
 ```
 
-Each step prints one line while the run goes on, and a summary at the end (an example from an older run; the
-counts grow with the specs):
+Each step prints one line while the run goes on, and a summary at the end (a real run of 2026-11-02; the counts
+grow with the specs):
 
 ```
 SUMMARY
-  PASS  syntax            0.6s  183 Lua files
-  PASS  contracts         0.8s  0 problems
-  PASS  lint-fivem        5.2s  lint_fivem PASS: 0 new hits, 2 known (baseline), 0 stale baseline lines
-  PASS  style            48.3s  style: every file is formatted
-  PASS  suite-db         44.6s  56 specs, 39211 passed, 0 failed, 0 crashed
-  PASS  suite-files      37.8s  56 specs, 39204 passed, 0 failed, 0 crashed
-  PASS  suite-shadow     76.0s  56 specs, 39194 passed, 0 failed, 0 crashed, 0 differences
-  PASS  tsc              10.5s  tsc: no errors
-  PASS  build            14.8s  web/dist is up to date
-PASS: 9 passed, 0 failed in 3m 59s (logs: /tmp/cp_check.Xy12ab)
+  PASS  syntax            0.9s  335 Lua files
+  PASS  contracts         1.5s  0 problems
+  PASS  lint-fivem        6.8s  lint_fivem PASS: 0 new hits, 3 known (baseline), 0 stale baseline lines
+  PASS  style            74.7s  style: every file is formatted
+  PASS  suite-db        111.6s  159 specs, 66354 passed, 0 failed, 0 crashed
+  PASS  suite-files      93.8s  159 specs, 66336 passed, 0 failed, 0 crashed
+  PASS  suite-shadow    171.8s  159 specs, 66329 passed, 0 failed, 0 crashed, 0 differences
+  PASS  tsc              14.2s  tsc: no errors
+  PASS  walk             15.2s  26 walks, 0 failed
+  PASS  build            20.2s  web/dist is up to date
+PASS: 10 passed, 0 failed in 8m 31s (logs: /tmp/cp_check.Xy12ab)
 ```
 
 The full output of every step is in the logs folder (`CHECK_LOGS=<dir>` picks it). Exit status: 0 all
-passed, 1 a step failed, 2 a usage error. The assertion counts are the same in every run and in every
-storage mode (30955 today): a total that moves between two runs of the same tree is a finding.
+passed, 1 a step failed, 2 a usage error. The assertion counts of one storage mode are the same
+in every run (the modes differ a little, as above): a total that moves between two runs of the same tree is a finding.
 
 ## Run one spec
 
