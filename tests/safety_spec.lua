@@ -115,7 +115,7 @@ CP.Runs = {
         if runsCfg.setFlagOnArrive then CP.Alerts.set(src, r) end
     end,
     -- A deliberately careless engine: it clears the flag even when keepFlag is passed (the hold must win).
-    -- An in-arena src only loses the intent, as the real ReleaseFlag does (CRIMSON_ARENA rule 1).
+    -- An in-arena src only loses the intent, as the real ReleaseFlag does (Crimson-Arena rule 1).
     removeParticipant = function(r, src, reason, opts)
         rlog.removed[#rlog.removed + 1] = {
             run = r.id,

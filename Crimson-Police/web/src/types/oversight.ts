@@ -1,5 +1,5 @@
 // Shapes of the oversight slice's callbacks (modules/admin, modules/disputes). The server side is documented in the
-// header comments of those modules and in docs/notes/oversight.md.
+// header comments of those modules and in docs/ARCHITECTURE.md §13.20.
 
 import type { LiveRun, Logo, Theme } from '../shared/types';
 import type { DebriefPerson, DecisionEntry } from './run_ui';

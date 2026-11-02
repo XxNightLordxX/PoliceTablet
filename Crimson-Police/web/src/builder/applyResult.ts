@@ -1,4 +1,4 @@
-// Writes a builder client result (docs/notes/builder_protocol.md §6) into the
+// Writes a builder client result (docs/ARCHITECTURE.md §13.7.6) into the
 
 import type { BuilderConfig, BuilderDefinition, BuilderRoute, Vec, Vec3 } from '../types/builder_server';
 import type { BuilderClientResultEx, PointSpec, RouteMeta } from '../types/builder_client';

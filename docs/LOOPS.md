@@ -1,8 +1,8 @@
-# Loops and timers (steps LP1, LP2, OP1, OP2, OP3, LP3, LP4)
+# Loops and timers
 
 Every repeating loop of Crimson-Police: where it is, what it does, when it runs, its interval and why that interval.
-"before -> after" shows the step LP2 change (owner, after LP1: "Try to fix the loops make it occur less often"); a
-single value was checked and kept. A value marked *scaled* is multiplied by `Config.Performance.loopScale`.
+"before -> after" shows an interval the owner asked to be slower ("make it occur less often"); a single value was
+checked and kept. A value marked *scaled* is multiplied by `Config.Performance.loopScale`.
 
 ## The rules
 
@@ -24,7 +24,7 @@ single value was checked and kept. A value marked *scaled* is multiplied by `Con
 - **Census**: every file with a thread, a `while true do` or a web timer has a row in "Loop census" below
   (tests/loop_census_spec.lua).
 
-## The loop scale (step LP2)
+## The loop scale
 
 `Config.Performance.loopScale` (1-4, shipped `1.0`, Admin UI → Settings) multiplies the idle and far waits through
 one helper, `CP.Perf.ms(ms)` (shared/init.lua). It never touches a per-frame wait (`Wait(0)`), a near or "control
@@ -35,7 +35,7 @@ User-visible intervals stay config options with their unit (for example `Config.
 `Config.Downed.checkEvery`, `Config.MissionCalls.checkEvery`, `Config.AntiCheat.jobRecheck`,
 `Config.Tablet.pauseGuardMs`). Step LP2 changed none of them.
 
-## Resmon (step OP1)
+## Resmon
 
 Owner: "Optimize everything and debug everything then help make resmon better also help with making loops more
 efficient". LP1 and LP2 set when each loop runs; OP1 trimmed what a pass does. `tests/resmon_spec.lua` loads every
@@ -61,7 +61,7 @@ fires; ox_target zones and options of a block are added on its start and removed
 event is sent per frame (telemetry: a vehicle sample every 5 s while driving, lights and siren and the first shot
 once); `ctx.hudDetail` lines are sent only when the text changes.
 
-## Server cost and NUI (step OP2)
+## Server cost and NUI
 
 Same owner request as OP1, for the server, the network and the tablet page. `tests/server_cost_spec.lua` loads the
 real server side (the world of `tests/e2e_spec.lua`: 11 officers on duty, no run) and counts every MySQL call of two
@@ -97,7 +97,7 @@ cleared on `playerDropped` or pruned by its sweep (`alerts` `wasInArena`, `npcco
 keeps the open tablet from re-rendering on HUD, toast and overlay updates (its layout element depends on the UI
 kind only), and every screen poll stops when the tablet closes.
 
-## Second pass (step OP3)
+## Second pass
 
 Owner: "redo the optimization of the entire script redo the entire optimization of all loops". LP1/LP2 (when loops
 run), OP1 (client frame cost) and OP2 (idle SQL, pushes, the NUI bundle) were kept; OP3 looked for what they missed:
@@ -133,7 +133,7 @@ officer's runs are paged on the server (`Config.AdminUi.pageSize`); the Mission 
 `useMemo` and holds tens of rows. Specs: tests/fixtures/npc/target_check.lua (g), tests/access_spec.lua (desk),
 tests/server_cost_spec.lua (ace checks), tests/foundation_spec.lua (017), web/src/shared/rowWindow.walk.ts.
 
-## Every loop, second pass (step LP3)
+## Every loop, second pass
 
 Owner: "redo the optimization of the entire script redo the entire optimization of all loops". LP1/LP2 (when loops
 run), OP1-OP3 (what a pass costs) were kept; LP3 went through every row below and every `CreateThread`,
@@ -164,7 +164,7 @@ Checked and kept:
 - Start-up waits (the client actions of custody, runs and testing waiting for `CP.Tablet.registerClientAction`, the
   settings list, the mission definitions) find what they wait for on their first pass in a normal start and end.
 
-## Final loop proof (step LP4)
+## Final loop proof
 
 Owner: "Ensure all loops are efficient optimized and is used to the best of its capabilities and can't be further
 improved". LP4 asked five questions of every loop, timer and poll (the census at the end lists every file that has

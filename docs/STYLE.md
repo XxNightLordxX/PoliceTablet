@@ -14,7 +14,7 @@ Style is only about how code looks. These always win over it:
 
 - The spec's Hard rules (`docs/SPEC.md`): Qbox only (no QBCore object), no ox_lib menus, dialogs or
   notifications, never edit a dependency resource.
-- The contracts in `docs/ARCHITECTURE.md` and `docs/CRIMSON_ARENA.md`, and Lua 5.4 standard syntax.
+- The contracts in `docs/ARCHITECTURE.md` and the Crimson-Arena rules in `docs/INTEGRATIONS.md`, and Lua 5.4 standard syntax.
 - **Names other code or saved data depend on are never renamed for style.** That covers event and
   callback names, NUI messages and callbacks, exports, commands, key mappings, the `CP` namespace and
   every `CP.X.fn`, `Config` keys, locale keys, database tables and columns, state bag keys, and the

@@ -7,7 +7,7 @@ local DEBOUNCE_MS = 5000
 
 local lastSentAt = -1
 
--- A crimsonArena value that is not Crimson-Police's own (docs/CRIMSON_ARENA.md).
+-- A crimsonArena value that is not Crimson-Police's own (docs/INTEGRATIONS.md, Crimson-Arena).
 local function InForeignArena()
     local st = LocalPlayer and LocalPlayer.state
     local v = st and st.crimsonArena

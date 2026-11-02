@@ -1,5 +1,5 @@
 -- CP.Downed (client): the NPC pick-up of a downed participant and the EMS request from their own client
--- (docs/ARCHITECTURE.md §5.15, CRIMSON_ARENA rules 3 and 13).
+-- (docs/ARCHITECTURE.md §5.15, Crimson-Arena rules 3 and 13).
 
 CP.Downed = CP.Downed or {}
 local D = CP.Downed

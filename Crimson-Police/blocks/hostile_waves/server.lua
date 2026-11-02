@@ -286,7 +286,7 @@ local function CheckLocation(o, loc, li, strict)
         return Bad('block.hostile_waves.invalid.spawns_missing', { key = tostring(o.spawns), location = li })
     end
     local start = loc.start and loc.start.coords
-    -- no-build zones for every mission (docs/CRIMSON_ARENA.md rule 7: the loader only sees location
+    -- no-build zones for every mission (Crimson-Arena rule 7: the loader only sees location
     -- keys, not points written into the objective); the distance from the start for custom missions. This check
     -- also runs when a published file loads, so it stays at minSpawnFromStart (a file published before still loads);
     -- the Mission Builder keeps a new or edited fight outside the start circle plus Config.Builder.spawnMargin

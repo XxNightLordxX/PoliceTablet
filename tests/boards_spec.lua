@@ -868,7 +868,7 @@ local SID = C.currentSeason().id
 H.sql('UPDATE cp_dept_bounties SET objective = ? WHERE season_id = ? AND week = 1', { 'most_tactical', SID })
 H.sql('INSERT INTO cp_dept_bounties (season_id, week, objective) VALUES (?, 2, ?)', { SID, 'most_completed' })
 
--- season rows (see the numbers in docs/notes/boards.md "test scenario")
+-- season rows (see the numbers in docs/ARCHITECTURE.md §13.5 "test scenario")
 local function Srow(t) t.season = SID; return Row(t) end
 -- week 1
 Srow({ cid = 'S1', type = 'tactical', pts = 200, at = Ts(2026, 9, 11, 10) })

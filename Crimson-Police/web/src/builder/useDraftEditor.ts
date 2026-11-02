@@ -1,4 +1,4 @@
-// One open mission in the Mission Builder (docs/notes/builder_protocol.md §2–§6).
+// One open mission in the Mission Builder (docs/ARCHITECTURE.md §13.7.2–§13.7.6).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePush } from '../shared/hooks';

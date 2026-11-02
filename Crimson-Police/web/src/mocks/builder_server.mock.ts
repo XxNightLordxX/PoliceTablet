@@ -1,4 +1,4 @@
-// Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/notes/builder_protocol.md):
+// Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/ARCHITECTURE.md §13.7):
 
 import { emitDebug, registerMock } from '../shared/nui';
 import { mockLocale } from './samples';

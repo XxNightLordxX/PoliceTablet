@@ -114,7 +114,7 @@ for _, step in ipairs({
     local tagged = realPart:find('%(' .. step .. '[,%)]') or realPart:find(', ' .. step .. '[,%)]')
     H.ok(tagged ~= nil, 'the in-game checklist has a check for ' .. step)
 end
-H.ok(Has(checklist, 'V1-V27'), 'the checklist header covers V1-V27')
+H.ok(Has(checklist, '\n## Real suspects (ships off)\n'), 'the checklist has one Real suspects section')
 
 local sop = spec:match('\n## SOP: rules of use for officers(.-)\n## ') or ''
 H.ok(Has(sop, 'Cases with real suspects'), 'SPEC SOP has the rules for cases with real suspects')

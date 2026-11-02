@@ -412,7 +412,7 @@ do
     Tick(12500)
 end
 
--- CRIMSON_ARENA rule 8: the run engine's later HUD patches stay off screen while the value is foreign
+-- Crimson-Arena rule 8: the run engine's later HUD patches stay off screen while the value is foreign
 do
     StartRun('run-c')
     T.overlay({ kind = 'fade', text = 'x' })
@@ -464,7 +464,7 @@ do
     H.eq(after, 0, 'a HUD that was hidden meanwhile is not resurrected')
 end
 
--- CRIMSON_ARENA rule 8: no result card over the arena, neither one sent while foreign nor one already shown
+-- Crimson-Arena rule 8: no result card over the arena, neither one sent while foreign nor one already shown
 do
     local function Cards(from)
         local n = 0

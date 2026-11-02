@@ -1320,7 +1320,7 @@ H.eq(HeldBy(3, L2.id), 0, 'sweep removes items of a live run the player has left
 H.ok(HeldBy(2, L2.id) > 0, 'active partner keeps the item')
 Runs.endRun(L2, 'failed', 'quit')
 
--- CRIMSON_ARENA rule 4 against a flag the player wrote himself (SKILL_CHECK V5): a client can set its own bag with
+-- Crimson-Arena rule 4 against a flag the player wrote himself (SKILL_CHECK V5): a client can set its own bag with
 -- LocalPlayer.state:set('crimsonArena', { active = true }, true). He still leaves the run (rule 1), but only a player
 -- in Crimson-Arena's bucket (inventory stashed) keeps his mission items; in bucket 0 the run takes them back.
 do
@@ -1698,7 +1698,7 @@ Runs.removeParticipant(Q, 2, 'cancelled')
 -- ============================================================================
 --                                 INTEGRATION
 -- ============================================================================
--- A unit is kept and unlocked only for normal runs (docs/notes/teams.md).
+-- A unit is kept and unlocked only for normal runs (docs/ARCHITECTURE.md §13.25).
 
 H.reset()
 local unlocksBefore = Count('units.unlock')

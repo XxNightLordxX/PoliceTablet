@@ -285,7 +285,7 @@ local function NormalizeEntries(list, field, warn)
     return out
 end
 
--- docs/CRIMSON_ARENA.md rule 4: Crimson-Arena takes items with these names from players it believes
+-- Crimson-Arena rule 4: Crimson-Arena takes items with these names from players it believes
 -- owe them, so a mission may never hand them out (and weapons are never mission items).
 local function ForbiddenItem(name)
     local lower = name:lower()
@@ -487,7 +487,7 @@ function Missions.normalize(def, meta)
         if not ok then return nil, err end
         if loc.label == nil then loc.label = CP.L('run.location_default', { n = i }) end
         if type(loc.label) ~= 'string' then return nil, ('location %d: label must be text'):format(i) end
-        -- docs/CRIMSON_ARENA.md rule 7: no point of a mission inside a Config.Builder.noBuildZones zone
+        -- Crimson-Arena rule 7: no point of a mission inside a Config.Builder.noBuildZones zone
         -- (police stations, hospitals, the prison interior and Crimson-Arena's match area and lobby).
         local zone, where = PointInNoBuildZone(loc, 'location')
         if zone then

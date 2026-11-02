@@ -939,7 +939,7 @@ do
     H.eq(Lethal({ hitGlobalIds = { gunman } }), false, 'a hit on a mission ped is never cancelled')
     H.eq(Lethal({ hitGlobalIds = { 'x' } }), false, 'a malformed hit list: left alone')
     R.arena[1], R.bucket[1] = true, 4210
-    H.eq(Lethal(), false, 'an officer in an arena match is never touched (docs/CRIMSON_ARENA.md rule 11)')
+    H.eq(Lethal(), false, 'an officer in an arena match is never touched (Crimson-Arena rule 11)')
     R.arena[1], R.bucket[1] = nil, nil
     R.bucket[1] = 7
     H.eq(Lethal(), false, 'nor one in another routing bucket')

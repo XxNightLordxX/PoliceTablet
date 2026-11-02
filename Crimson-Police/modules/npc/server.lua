@@ -895,7 +895,7 @@ end)
 -- is an armed mission ped of a live run and every victim is an active participant of that run in routing bucket 0
 -- who still has at least Config.NpcCombat.lethalCancelAbove of his health (the server reads it from the synced ped):
 -- a one-shot kill from healthy is dropped, the shot that downs a hurt officer is not. Nothing else is ever cancelled
--- (docs/CRIMSON_ARENA.md rule 11): no other resource's NPC, no player's shot, no hit on a mission ped, no arena player.
+-- (Crimson-Arena rule 11): no other resource's NPC, no player's shot, no hit on a mission ped, no arena player.
 
 -- The live run whose armed mission ped is entity pe (net id parent), or nil.
 local function RunOfArmedPed(parent, pe)

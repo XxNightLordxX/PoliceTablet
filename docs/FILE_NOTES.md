@@ -1250,7 +1250,7 @@ getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficer
       server:admin:voidRun       { rowId } | { runUuid }, reason         voidAnyRun
       server:admin:awardPoints   { citizenid, points, reason }           manualAward -> CP.Scoring.manualAward
       server:admin:suspend       { citizenid, days, reason }             suspend -> CP.Access.suspend (audited)
-    callbacks (shapes in docs/notes/oversight.md and web/src/types/oversight.ts)
+    callbacks (shapes in docs/ARCHITECTURE.md §13.20 and web/src/types/oversight.ts)
       getMissionList             viewMissionList -> MissionListData
       admin:getMissions          admin -> MissionListData, each mission + { filePath, editedInCode, defHash, status,
                                  disabledInConfig }
@@ -1263,7 +1263,7 @@ getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficer
       admin:getPermissions       -> { supervisor = { { action, enabled } }, adminOnly, always, teleport }
       admin:getAudit             { category, action, actor, from, to, page } -> AuditPage
       admin:exportAudit          same filters -> { csv, rows, truncated }
-      admin:getStuckPayments     admin -> { payments = CP.Cash.stuckPayments() (StuckPayment list, docs/notes/economy.md),
+      admin:getStuckPayments     admin -> { payments = CP.Cash.stuckPayments() (StuckPayment list, docs/ARCHITECTURE.md §13.11),
                                  serverTime }   rows left 'paying' for a manual Renewed-Banking check
 ```
 
@@ -1272,7 +1272,7 @@ getOfficer, isSupervisor, role, recheck, isSuspended, suspend and refreshOfficer
 ```text
 
 modules/alerts/server.lua · CP.Alerts (server): Hard rule 16 (no mission alerts) and the only writer
-of the crimsonArena state bag (docs/ARCHITECTURE.md §5.14, docs/CRIMSON_ARENA.md rules 1, 2, 3, 9, 11).
+of the crimsonArena state bag (docs/ARCHITECTURE.md §5.14, docs/INTEGRATIONS.md, Crimson-Arena rules 1, 2, 3, 9, 11).
 
 Owns: the replicated player state bag key 'crimsonArena' (the name is fixed by sc-dispatch,
 sc-ambulance and Crimson-Arena), the intent table 'wanted', the re-assert of our flag after another
@@ -1304,7 +1304,7 @@ Public API
                                              to nil (Crimson-Arena let the player go)
   CP.Alerts.hold(src, on)                    CP.Downed: keep the flag of a downed participant (keepFlag)
   CP.Alerts.forget(src) -> boolean           drops our intent (wanted, hold, orphan timer, queued re-assert)
-                                             WITHOUT touching the bag (CRIMSON_ARENA rule 1: CP.Runs uses it
+                                             WITHOUT touching the bag (Crimson-Arena rule 1: CP.Runs uses it
                                              for an in-arena participant, whose bag may still hold our value
                                              while only the routing bucket has moved). true when an intent
                                              or a hold was dropped.
@@ -1312,7 +1312,7 @@ Public API
                                              becomes in-arena (after this module removed them)
   CP.Alerts.wanted                           the intent table (read only): wanted[src] = { runId, setAt }
 
-In-arena participants (CRIMSON_ARENA rule 1): the 1 s reconcile checks every active participant of every
+In-arena participants (Crimson-Arena rule 1): the 1 s reconcile checks every active participant of every
 run (accepted or in progress, tests and operations included) and the change handler reacts to a foreign
 value at once. This module itself drops the intent (without touching the bag), stops the route check,
 cancels a pending downed pick-up/EMS request and calls CP.Runs.removeParticipant(run, src, 'quit',
@@ -1355,7 +1355,7 @@ Stop: every value we set is removed.
       events of one participant the server-side ped coordinates must not move faster than
       Config.AntiCheat.maxSpeed (distance / max(1 s, elapsed)); faster flags the whole run 'speed'.
       In-arena srcs (CP.Alerts.inArena) are refused with err.in_arena and never flagged or sampled
-      (CRIMSON_ARENA rule 6); a position pair across a routing-bucket change is discarded.
+      (Crimson-Arena rule 6); a position pair across a routing-bucket change is discarded.
     * flags: run-level (src nil -> run.flagged) or participant-level (p.flagged) { reason, detail };
       the rows CP.Runs writes afterwards are flagged with that reason. The first reason is kept; every
       distinct (reason, participant) is recorded once in cp_audit (category flags, action runFlagged,
@@ -1400,8 +1400,8 @@ Stop: every value we set is removed.
 ```text
 
  modules/builder/client.lua · CP.Builder (client): the Mission Builder's in-world tools.
-  Protocol: docs/notes/builder_protocol.md §6 (client actions, results, overlays); shapes of the overlays and
-  of the fields this client adds: web/src/types/builder_client.ts; notes: docs/notes/builder_client.md.
+  Protocol: docs/ARCHITECTURE.md §13.7.6 (client actions, results, overlays); shapes of the overlays and
+  of the fields this client adds: web/src/types/builder_client.ts; notes: docs/ARCHITECTURE.md §13.6.
 
   Owns
     * the placement tool. The tablet closes (CP.Tablet.close) into placement mode: a LOCAL, non-networked
@@ -1447,7 +1447,7 @@ Stop: every value we set is removed.
       ({ started = true }); the tablet closes and the tool runs; its BuilderClientResult (plus `seq`) is kept until
       the NUI reads it (builderResult), pushed to the NUI (topic 'builder', event 'clientResult') and the tablet
       reopens on the UI the tool was started from (payload.ui, default 'supervisor').
-    * refusals (docs/CRIMSON_ARENA.md rules 8 and 13): every tool refuses with err.in_arena while the local player
+    * refusals (docs/INTEGRATIONS.md, Crimson-Arena rules 8 and 13): every tool refuses with err.in_arena while the local player
       carries Crimson-Arena's crimsonArena value, and a running tool stops (no reopen) when such a value arrives;
       also err.builder_busy (a tool runs), err.builder_dead, err.builder_on_run (the player is on a mission run;
       a running tool stops, no reopen, when the player is put on one) and err.builder_disabled. The builder never moves the player: no SetEntityCoords on the player's ped or
@@ -1509,7 +1509,7 @@ Stop: every value we set is removed.
  modules/builder/server.lua · CP.Builder (server): the Mission Builder's drafts, edit locks, versions,
   guardrails, test runs of drafts, publishing (Lua export), archive/restore, rollback and the loading and
   reloading of custom mission files. The full protocol (definition shape, payloads, results, client
-  placement/recording results) is docs/notes/builder_protocol.md; TS shapes web/src/types/builder_server.ts.
+  placement/recording results) is docs/ARCHITECTURE.md §13.7; TS shapes web/src/types/builder_server.ts.
 
   Owns
     * cp_custom_missions rows: drafts (draft_definition, builder units), published copies
@@ -1538,7 +1538,7 @@ Stop: every value we set is removed.
     CP.Builder.shippedHash(id) -> hash|nil                     the same file's hash for the list views: the file
                                                                is read each call, parsed only when its text changed
     CP.Builder.slug(label) -> string
-  Net (docs/notes/builder_protocol.md §3/§4)
+  Net (docs/ARCHITECTURE.md §13.7.3/§13.7.4)
     callbacks  builder:list · builder:get { id } · builder:config
     actions    server:builder:create { type, label? } or { template, label? } · duplicate { id } · lock { id } · unlock { id } ·
                save { id, definition } · autosave { id, definition } · validate { id, definition? } ·
@@ -1818,7 +1818,7 @@ running per department; the banned-word check of the profile applies. Every post
 ```text
 
 modules/downed/client.lua · CP.Downed (client): the NPC pick-up of a downed participant and the EMS
-request from their own client (docs/ARCHITECTURE.md §5.15, CRIMSON_ARENA rules 3 and 13).
+request from their own client (docs/ARCHITECTURE.md §5.15, Crimson-Arena rules 3 and 13).
 
 Owns the handlers of client:pickup (runId, dropOff), client:pickupCancel (runId) and client:requestEMS
 (runId) and sends the plain net event server:pickupDone (runId, ok).
@@ -1843,7 +1843,7 @@ the server removed our flag) and a toast.
 ```text
 
 modules/downed/server.lua · CP.Downed (server): Hard rule 18, downed participants
-(docs/ARCHITECTURE.md §5.15, SPEC "Downed participants", CRIMSON_ARENA rules 1 and 3).
+(docs/ARCHITECTURE.md §5.15, SPEC "Downed participants", Crimson-Arena rules 1 and 3).
 
 Owns: the downed poll, the Failed result for a participant who goes down (end_reason 'downed'), the free
 NPC pick-up when no EMS is on duty, the EMS request when EMS is on duty, the server -> client events
@@ -1893,7 +1893,7 @@ CP.Qbx.onMetaDataChange, and from CP.Downed.handle when a run ends):
   entry per run, so nothing fires twice (also when the 2 s poll still sees metadata "down" right after the
   revive). A disconnect (playerDropped) or character unload (CP.Qbx.onPlayerUnload) cancels it.
 Every participant downed: CP.Runs ends a run that has no active participant left; when a down removed the
-last one and the run is still open 5 s later, this module ends it as failed (see docs/notes/safety.md).
+last one and the run is still open 5 s later, this module ends it as failed (see docs/ARCHITECTURE.md §13.24).
 ```
 
 ## Crimson-Police/modules/draw/server.lua
@@ -1910,7 +1910,7 @@ Owns
     avoidLastLarge with largePool+ missions in the pool; a pool of one may repeat)
   * location picking (reserved spots skipped; spots with a non-participant player within
     Config.Draw.playerClearance skipped while another spot is free; server-side ped coords; players
-    in Crimson-Arena are ignored, docs/CRIMSON_ARENA.md rule 7) and the
+    in Crimson-Arena are ignored, docs/INTEGRATIONS.md, Crimson-Arena rule 7) and the
     location reservations (several holders per spot are allowed so a test run can still reserve)
   * the Mission Board data (BoardData, ARCHITECTURE §9.4) and the accept of a mission type
 
@@ -1934,14 +1934,14 @@ Net
   callback 'getMissionTypes' -> BoardData
   action 'server:acceptType' (payload = a Config.MissionTypes key, or 'weekly_boss') -> { runId }
       leader only; every member must be an officer (CP.Access.getOfficer), not be in Crimson-Arena
-      (CP.Alerts.inArena: foreign crimsonArena flag or routing bucket <> 0, docs/CRIMSON_ARENA.md rule 5;
+      (CP.Alerts.inArena: foreign crimsonArena flag or routing bucket <> 0, docs/INTEGRATIONS.md, Crimson-Arena rule 5;
       err.in_arena), have no active run, not be on a real call, be under the hourly
       cap and off the type cooldown; server caps (CP.Runs.capsOk); refused while a Cross-Department
       Mission is active; the Weekly Boss also needs CP.Events.bossAvailable for every member.
       Then CP.Units.lock(unit), the draw, CP.Runs.create (the unit is unlocked again on failure).
 Internal (same slice): CP.Draw._eligibility(def, officers, size?, now?) -> ok, why, untilTs, officer
 
-Contract interpretations (details in docs/notes/engine_a.md)
+Contract interpretations (details in docs/ARCHITECTURE.md §13.12)
   * history = distinct missions of the type with state completed/abandoned (failed rows and the Weekly
     Boss never count); a unit whose histories cover the whole pool relaxes to avoidLast, then to "not the
     unit's most recent mission", then the whole pool; no fallback to avoided missions for locations
@@ -1992,7 +1992,7 @@ Public API (server)
       mission missing or disabled)
 The boss is mission id 'weekly_boss_kingpin', accepted with the key 'weekly_boss' (runs store 'tactical').
 
-Contract interpretations (details in docs/notes/engine_a.md)
+Contract interpretations (details in docs/ARCHITECTURE.md §13.12)
   * voided boss rows still use the week's attempt; bossAvailable also refuses during an operation
   * the attempt window starts at the reset of the week's first boss day (Friday by default), not at
     the week start: rows are written when a run ends, so a boss run accepted on Sunday night that ends
@@ -2241,7 +2241,7 @@ Public API (docs/ARCHITECTURE.md §5.1)
       (never -1, never nil). false when refused or when sc-ambulance is not started (no handler).
       Refused and logged for an in-arena player (CP.Alerts.inArena: a foreign crimsonArena value or a
       routing bucket other than 0): Crimson-Arena revives and moves its own players
-      (docs/CRIMSON_ARENA.md rule 3).
+      (docs/INTEGRATIONS.md, Crimson-Arena rule 3).
 ```
 
 ## Crimson-Police/modules/integrations/sc_dispatch/server.lua
@@ -2450,7 +2450,7 @@ Net
   event 'crimson-police:client:missions' (list) to every client after each load / register / unregister
       (sent with TriggerLatentClientEvent: the list is tens of kB)
 
-Contract interpretations (details in docs/notes/engine_a.md)
+Contract interpretations (details in docs/ARCHITECTURE.md §13.12)
   * CP.Builder.loadPublished() entries: a definition with loader fields, { def, meta }, or meta only
     ({ id, filePath, version }) whose file is read here; if the hook throws, loaded custom missions stay
   * reload(): CP.Builder.onReload() first, then loadAll()
@@ -2460,7 +2460,7 @@ Contract interpretations (details in docs/notes/engine_a.md)
   * the loader fields (source, isBoss, status, version, filePath) are set BEFORE the blocks' validate()
     runs, because the blocks exempt built-in missions (mission.source == 'builtin') from the builder's
     allowed model/weapon lists
-  * docs/CRIMSON_ARENA.md: a mission is rejected when an item is named armour, bandage, ammo-* or
+  * docs/INTEGRATIONS.md, Crimson-Arena: a mission is rejected when an item is named armour, bandage, ammo-* or
     weapon_* (rule 4), or when any point of a location lies inside a Config.Builder.noBuildZones zone
     (rule 7; 2D distance, as the blocks and the builder measure it)
 ```
@@ -2906,7 +2906,7 @@ Public API (docs/ARCHITECTURE.md §5.21)
                        enabled, base, payoutSource ('admin'|'type'|'event'), missionPayout|nil,
                        fallback (B without the mission payout), setBy|nil, setByName|nil,
                        updatedAt|nil, missing (a stored payout whose mission is not loaded) }
-Net (docs/notes/economy.md has the response shapes)
+Net (docs/ARCHITECTURE.md §13.11 has the response shapes)
   callback 'sup:getPayouts'   (permission setTypePayout)  -> SupPayoutsView
   callback 'admin:getPayouts' (admin)                     -> AdminPayoutsView
   action 'server:sup:setTypePayout'     { type, amount, reason }                 -> SupPayoutType
@@ -3011,7 +3011,7 @@ client:start (fallback begin) and client:runEnded (fallback stop).
 ```text
 
 modules/route/server.lua · CP.Route (server): Hard rule 17, the route to the mission start
-(docs/ARCHITECTURE.md §5.12, SPEC "Route to the start", CRIMSON_ARENA rules 5 and 6).
+(docs/ARCHITECTURE.md §5.12, SPEC "Route to the start", Crimson-Arena rules 5 and 6).
 
 Owns: the per-participant route state, the plain net events server:routeStatus (runId, metres, coords)
 and server:recalcRoute (runId), the 1 s arrival / off-route / drift checks, and the server -> client
@@ -3099,7 +3099,7 @@ where the officer is).
     whether the start goes (the start circle here, then CP.Route.follow(runId, true)) or stays as his guide
     (CP.Route.follow(runId, false)); CP.Markers routes once CP.Route says he follows the action.
 
-  Contract interpretations (docs/notes/engine_b.md)
+  Contract interpretations (docs/ARCHITECTURE.md §13.13)
     * client:start begins the start route with CP.Route.begin(runId, startCoords, { startRoute, radius })
       (a test run with the route off gets a waypoint only); CP.Route.stop() runs when this player arrives
       and at the end.
@@ -3186,7 +3186,7 @@ where the officer is).
     Config.Limits.corpseCleanup), host liveness, HUD refresh. Config.AntiCheat.jobRecheck s: CP.Access.recheck. 60 s: orphan item sweeps
     and cache pruning.
 
-  Contract interpretations (details in docs/notes/engine_b.md)
+  Contract interpretations (details in docs/ARCHITECTURE.md §13.13)
     * ctx.award/penalize accept opts.points, a per-occurrence value hint kept in run.score.values[id]
       (blocks pass it for ids whose value comes from block settings, e.g. hostage_hit).
     * ctx.hud({ detail, value, max }) belongs to that objective's HUD entry; other keys (message, ...)
@@ -3204,7 +3204,7 @@ where the officer is).
     * endRun first removes every active participant who is down (CP.Qbx.isDowned) with end_reason
       'downed' through CP.Downed.handle(run, src) (pick-up / EMS flow) or, without it, directly; only the
       others get the run's end state (Hard rule 18). A re-entrant endRun during those leaves is ignored.
-    * An in-arena participant who leaves never has the crimsonArena bag touched (CRIMSON_ARENA rule 1):
+    * An in-arena participant who leaves never has the crimsonArena bag touched (Crimson-Arena rule 1):
       CP.Alerts.forget(src) (when present) drops the intent instead of CP.Alerts.clear.
     * Mission items (metadata.cpItem) cannot leave their holder's inventory: an ox_inventory swapItems hook
       refuses give / drop / stash / vehicle moves. ox_inventory restarted while Crimson-Police runs: its old hook
@@ -3301,7 +3301,7 @@ Owns
   * the boundary listeners (daily, weekly, monthly) other modules subscribe to; checked every 60 s
     and fired once when a boundary passes, never just because the resource started
   * the retention job (Config.Retention) run at each daily reset (plus one catch-up run shortly after
-    start, see docs/notes/engine_a.md): cp_mission_runs rows older than runArchiveMonths are copied
+    start, see docs/ARCHITECTURE.md §13.12): cp_mission_runs rows older than runArchiveMonths are copied
     into cp_mission_runs_archive and then deleted, cp_audit rows older than auditDays are deleted
 
 Public API (server)
@@ -3640,7 +3640,7 @@ DisableControlAction every frame) for Config.Tablet.pauseGuardMs (300; 0 = off):
 down when the focus goes back to the game over as a new press. One thread; a second close extends it (K5).
 The UI closes on duty loss, on a switch away from the job it was opened with (or out of every
 department) and on character unload (the Admin UI only on unload).
-Crimson-Arena (docs/CRIMSON_ARENA.md rule 8): while the local player carries a foreign crimsonArena
+Crimson-Arena (docs/INTEGRATIONS.md, Crimson-Arena rule 8): while the local player carries a foreign crimsonArena
 value (Crimson-Arena's, not { source = 'crimson-police' }) the command, key mapping, tablet item,
 OpenTablet, switchUi and client:openAdmin refuse with the toast err.in_arena; when such a value
 arrives, every Crimson-Police UI closes (prop deleted, animation stopped), the HUD and overlays are
@@ -3838,7 +3838,7 @@ file, and that department's session carries no logo (no broken image in the NUI)
     events sent  client:testInvite { inviteId, missionLabel, from, expiresIn } ·
                  client:test { controls, runId, debug = false|DebugData }
     pushes   'test' { state = true } (the admin's test state changed) · 'invites' { test = true }
-  Response shapes: docs/notes/testing.md and web/src/types/testing.ts.
+  Response shapes: docs/ARCHITECTURE.md §13.26 and web/src/types/testing.ts.
 ```
 
 ## Crimson-Police/modules/units/client.lua
@@ -3907,7 +3907,7 @@ Listeners: playerDropped, CP.Qbx.onPlayerUnload (character switch) and CP.Access
 job change, suspended) take the player out of their unit and cancel invites to them; the run itself is
 handled by CP.Runs (disconnected / off_duty / job_change / suspended).
 
-UnitView extras (this slice, see docs/notes/teams.md):
+UnitView extras (this slice, see docs/ARCHITECTURE.md §13.25):
   me (the viewer's src), maxSize, inviteTtl (seconds), canInvite, inviteBlocked (locale key|nil), onRun,
   unit.size, unit.pending = { { src, name, callsign, departmentShort, expiresIn } },
   members[].available (false when that member is no longer an on-duty officer),
@@ -4428,7 +4428,7 @@ definition.
 
 ```text
 
-src/builder/applyResult.ts · writes a builder client result (docs/notes/builder_protocol.md §6) into the
+src/builder/applyResult.ts · writes a builder client result (docs/ARCHITECTURE.md §13.7.6) into the
 draft: placed points into definition.locations[location - 1][key] (a single vector for single-point keys,
 a list otherwise, one more list for flee paths, { coords, radius } for the start), a recorded road route
 { points, stops?, loop? }, and the route meta (length, rejected samples, unreachable / failed waypoints)
@@ -4443,7 +4443,7 @@ src/builder · the Mission Builder component library (Supervisor UI → Mission 
   BuilderWorkspace  mission list + editor (the whole builder)
   MissionList       drafts, tested, published and archived custom missions with status, version and lock
   BuilderEditor     the step editor of one mission
-Protocol: docs/notes/builder_protocol.md · notes: docs/notes/builder_client.md.
+Protocol: docs/ARCHITECTURE.md §13.7 · notes: docs/ARCHITECTURE.md §13.6.
 ```
 
 ## Crimson-Police/web/src/builder/schema.ts
@@ -4526,7 +4526,7 @@ here once; the components can then use the lists directly.
 
 ```text
 
-src/builder/useDraftEditor.ts · one open mission in the Mission Builder (docs/notes/builder_protocol.md §2–§6).
+src/builder/useDraftEditor.ts · one open mission in the Mission Builder (docs/ARCHITECTURE.md §13.7.2–§13.7.6).
 
   builder:get { id }            → the record; an editable custom mission is locked with server:builder:lock
   server:builder:autosave       → every Config.Builder.autosaveSeconds while the lock is mine and the draft
@@ -4738,7 +4738,7 @@ URL shortcuts (dev only):
 
 ```text
 
-Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/notes/builder_protocol.md):
+Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/ARCHITECTURE.md §13.7):
 callbacks builder:list / builder:get / builder:config and every server:builder:* action, with an
 in-memory store so create → save → test → publish → archive → restore → rollback can be clicked
 through. The builder client's client actions (builderPlace, builderRecord, builderTestDrive,
@@ -5221,7 +5221,7 @@ Supervisor UI · Mission Builder (screen key 'sup_builder', title key 'ui.screen
 The supervisor's drafts plus the published and archived custom missions (builder:list), and the step editor
 (src/builder). Actions follow session.actions: builderEdit (build, record routes, test their own missions),
 builderPublish, builderArchive, builderEditAny (other people's missions), builderRollback, breakEditLock —
-the server re-checks every one (docs/notes/builder_protocol.md §2). Placement, route recording and test
+the server re-checks every one (docs/ARCHITECTURE.md §13.7.2). Placement, route recording and test
 drives close the tablet (modules/builder/client.lua) and reopen it here when they end.
 ```
 
@@ -5327,7 +5327,7 @@ server:admin:rsExclude / server:admin:rsSuspend { citizenid, days, reason }.
 
 src/types/boards.ts · shapes of the boards slice (modules/leaderboard, modules/challenge).
 The §9.4 contract types live in shared/types.ts; the interfaces here extend them with the optional
-fields the Lua modules add (documented in their header comments and docs/notes/boards.md), plus the
+fields the Lua modules add (documented in their header comments and docs/ARCHITECTURE.md §13.5), plus the
 supervisor/admin shapes the contract leaves to the module owner (§9.5).
 ```
 
@@ -5337,7 +5337,7 @@ supervisor/admin shapes the contract leaves to the module owner (§9.5).
 
 src/types/builder_client.ts · shapes of the builder client slice: the in-world tool overlays sent by
 modules/builder/client.lua (CP.Tablet.overlay kinds 'placement' | 'recording' | 'testdrive'), the fields the
-builder client and screens add to the client protocol of docs/notes/builder_protocol.md §6, and the editor's
+builder client and screens add to the client protocol of docs/ARCHITECTURE.md §13.7.6, and the editor's
 UI-side helper types (steps, point specs). The server shapes are in ./builder_server.ts.
 ```
 
@@ -5345,7 +5345,7 @@ UI-side helper types (steps, point specs). The server shapes are in ./builder_se
 
 ```text
 
-src/types/builder_server.ts · Mission Builder protocol shapes (docs/notes/builder_protocol.md).
+src/types/builder_server.ts · Mission Builder protocol shapes (docs/ARCHITECTURE.md §13.7).
 Server: modules/builder/server.lua (CP.Builder). Callbacks builder:list / builder:get / builder:config,
 actions server:builder:*, NUI push topic 'builder', client actions builderPlace / builderRecord /
 builderTestDrive / builderResult / builderCancel / builderWaypoint (modules/builder/client.lua).
@@ -5360,7 +5360,7 @@ fractions and milliseconds only when it writes the Lua file.
 ```text
 
 src/types/economy.ts · response shapes of the economy slice's supervisor/admin callbacks and actions
-(modules/payouts/server.lua; documented in docs/notes/economy.md). HomeData and Goal are contract
+(modules/payouts/server.lua; documented in docs/ARCHITECTURE.md §13.11). HomeData and Goal are contract
 shapes and live in src/shared/types.ts.
 ```
 
@@ -5369,7 +5369,7 @@ shapes and live in src/shared/types.ts.
 ```text
 
 src/types/run_ui.ts · response shapes of the run_ui slice (Mission Board and Active Mission screens,
-documented in docs/notes/run_ui.md). BoardData and ActiveMissionView are contract shapes
+documented in docs/ARCHITECTURE.md §13.23). BoardData and ActiveMissionView are contract shapes
 (src/shared/types.ts, ARCHITECTURE §9.4); the types below only add the optional fields the server
 sends (or may send) on top of them. Every extra field is optional: the screens work without them.
 ```
@@ -5378,7 +5378,7 @@ sends (or may send) on top of them. Every extra field is optional: the screens w
 
 ```text
 
-src/types/testing.ts · Admin test mode shapes (modules/testing/server.lua, docs/notes/testing.md).
+src/types/testing.ts · Admin test mode shapes (modules/testing/server.lua, docs/ARCHITECTURE.md §13.26).
 Lua sends `false` for "no value" (a Lua table cannot hold nil) and may encode an empty list as {}:
 read every list through asList(). Check spawn points (PLAN S7, S8): SpawnCheckPoint, SpawnCheckResult,
 SpawnCheckProgress, SpawnCheckTotals, SpawnCheckPush (push 'spawnCheck'), SpawnCheckScope, and
@@ -5862,7 +5862,7 @@ tests/int_core_spec.lua · integration of the core group (integrations, access, 
 the modules that call it: CP.Banking.depositSociety (CP.Cash's society refund), the live-run own-run check
 of CP.Permissions.canReviewRun, the session tier labels from CP.Scaling.label, and on the client the one
 NUI path of the mission HUD / result screen (modules/runs/client.lua -> CP.Tablet -> SendNUIMessage),
-the HUD kept off screen while Crimson-Arena owns the player (CRIMSON_ARENA rule 8) and the panel focus
+the HUD kept off screen while Crimson-Arena owns the player (Crimson-Arena rule 8) and the panel focus
 helper CP.Tablet.panelFocus that modules/testing's test-control panel needs.
 ```
 
@@ -5919,7 +5919,7 @@ It checks the cross-module paths the slice notes and the integration list asked 
 tests/int_services_spec.lua · integration of the services group: the REAL modules scoring, goals, cash, payouts,
 leaderboard, challenge, admin, disputes and anticheat running together (plus the real permissions, scaling and
 schedule), on stubs of CP.Qbx, CP.Access, CP.Tablet, CP.Banking, CP.Missions and CP.Runs.
-It checks the cross-module paths the slice notes asked for (docs/notes/economy.md, boards.md, oversight.md,
+It checks the cross-module paths the slice notes asked for (docs/ARCHITECTURE.md §13.11, §13.5, §13.20,
 testing.md): approve/void ordering against the real XP / cash / board hooks, disputes forfeiting and restoring,
 goal and manual_award rows (season, department, board refresh), admin:getStuckPayments, reasons counted in
 characters across admin -> scoring and in payouts, the Profile's canDispute = CP.Disputes.eligible, badge labels

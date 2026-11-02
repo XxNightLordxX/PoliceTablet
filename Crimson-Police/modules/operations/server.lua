@@ -1050,7 +1050,7 @@ function Ops.boardCard(src)
         end
     end
     local open = cur.status == 'joining' and not cur.joinClosed and cur.joinEndsAt ~= nil and cur.joinEndsAt > now
-    -- joinBlocked (extra, docs/notes/run_ui.md): why this viewer cannot join, the error key Join would return.
+    -- joinBlocked (extra, docs/ARCHITECTURE.md §13.23): why this viewer cannot join, the error key Join would return.
     local joinBlocked = nil
     -- step P13: his department opted out or its places are taken (the card still shows: the lock applies to all)
     local deptErr = nil

@@ -36,6 +36,7 @@ say the same things in short and point back here.
    - [5.7 Change any setting in game: the Settings screen](#57-change-any-setting-in-game-the-settings-screen)
    - [5.8 Turn missions and locations on or off](#58-turn-missions-and-locations-on-or-off)
    - [5.9 How hard NPCs fight back](#59-how-hard-npcs-fight-back)
+   - [5.10 What ships off and how to turn it on](#510-what-ships-off-and-how-to-turn-it-on)
 6. [Optional extras](#6-optional-extras)
    - [6.1 The tablet item](#61-the-tablet-item)
    - [6.2 Mission desks](#62-mission-desks)
@@ -96,7 +97,6 @@ say the same things in short and point back here.
     - [11.8 The screen froze or the controls stopped](#118-the-screen-froze-or-the-controls-stopped)
     - [11.9 Restarting ox_inventory while Crimson-Police runs](#119-restarting-ox_inventory-while-crimson-police-runs)
 12. [For developers](#12-for-developers)
-    - [Spec revisions](#spec-revisions)
 
 ---
 
@@ -570,7 +570,7 @@ Supervisor UI → **Mission controls** (below).
   additions counted, never above `Config.AdminControl.runTimeAddMax`; `Config.MissionControls.addRunTimePerDay` (`10`):
   additions one supervisor may make a day.
 
-- **In a run** (step P8, per department, off when you install, under the master switch). A supervisor sets them for
+- **In a run** (per department, off when you install, under the master switch). A supervisor sets them for
   his own department; each is read for the leader (and his unit) when the run is accepted and kept for that run, so a
   change never moves a run already going:
   - `startTimeout = { on = false, min = 300, max = 900 }` (**Time to reach the start**, seconds): replaces
@@ -584,16 +584,16 @@ Supervisor UI → **Mission controls** (below).
   - `idleCheck = { on = false, min = 60, max = 180 }` (**Idle check**, seconds): officers who never reached the start
     are removed this long after the run starts (`Config.AntiCheat.idleCheck`). Stricter only: never above the config
     value, so it can never become a free way out of a run.
-  - `difficulty = { on = false, presets = { 'easy', 'normal' } }` (**NPC difficulty**, step P9): he picks one of the
+  - `difficulty = { on = false, presets = { 'easy', 'normal' } }` (**NPC difficulty**): he picks one of the
     listed `Config.NpcDifficulty` presets (easy, normal, hard, custom; Admin UI → Permissions → Mission controls has a
     box per preset) for runs his department leads: NPC health, aim, surrender and how long runners keep running. The
     `Config.NpcCombat` limits still apply on top, and points and cash never change. A supervisor who picks an easier
     preset keeps the config one himself (the self rule).
-  - `unitSize = { on = false, min = 2, max = 4 }` (**Largest unit**, step P9): the most officers a unit led by his
+  - `unitSize = { on = false, min = 2, max = 4 }` (**Largest unit**): the most officers a unit led by his
     department may have; invites past it, joining a full unit and accepting a mission with a larger unit are refused.
     Never above `Config.Limits.maxUnitSize`.
 
-- **Mission Board** (step P10, per department, off when you install, under the master switch). A supervisor sets them
+- **Mission Board** (per department, off when you install, under the master switch). A supervisor sets them
   for his own department in Supervisor UI → Mission controls → Mission Board:
   - `types = { on = false }` (**Mission types on the board**): a switch per mission type and, folded under it, per
     mission. A type switched off shows locked on his officers' boards ("Off for SAST by command"); they cannot accept
@@ -603,7 +603,7 @@ Supervisor UI → **Mission controls** (below).
   - `featuredType = { on = false }` (**Recommended type**): one mission type his officers see as **Recommended by
     command**, right after their own favourite types. Points and pay never change. Reset to recommend none.
 
-- **Mission ban** (`missionBan = { on = false, min = 1, max = 24 }`, step P11, off when you install, under the
+- **Mission ban** (`missionBan = { on = false, min = 1, max = 24 }`, off when you install, under the
   master switch): in Supervisor UI → **Department Report** a supervisor opens an officer of his own department and
   presses **Mission ban**: hours (here 1 to 24) and a reason. Only an officer who is online, of a lower grade than
   his, never himself. Until it ends the officer cannot accept from the Mission Board (nor can a unit he is in),
@@ -614,7 +614,7 @@ Supervisor UI → **Mission controls** (below).
   lift are in the audit log under flags (posted to `cp_webhook_flags`), and a restart keeps the ban.
   `Config.MissionControls.missionBanPerDay` (`3`): bans one supervisor may set a day.
 
-- **Calls** (step P12, per department, off when you install, under the master switch). A supervisor sets them for
+- **Calls** (per department, off when you install, under the master switch). A supervisor sets them for
   his own department in Supervisor UI → Mission controls → Calls:
   - `callLane = { on = false, min = 120, max = 600 }` (**Department call lane**): his department's own mission calls
     next to the server's. He picks the gap between two lane calls (a range inside `min` to `max` seconds), how many
@@ -628,7 +628,7 @@ Supervisor UI → **Mission controls** (below).
     supervisors wait between two mission calls they create, instead of `Config.MissionCalls.staffCooldown`. The one
     who shortens it keeps the config wait for himself.
 
-- **Department** (step P13, per department, off when you install, under the master switch):
+- **Department** (per department, off when you install, under the master switch):
   - `notices = { on = false }` (**Department notices**): in Supervisor UI → Mission controls a supervisor posts a
     short notice for his own department only (1 to 30 days). Its officers see it on Home → **Announcements**; other
     departments never do. Up to `Config.MissionControls.noticeMaxLength` (`280`) characters, the banned-word list
@@ -641,7 +641,7 @@ Supervisor UI → **Mission controls** (below).
     take in one (0 = no cap, at most `Config.CrossDept.maxParticipants`). It applies to him too. Every department's
     board still shows only the running operation (the lock), and the wait between launches stays server-wide.
 
-- **Leaderboard and review** (step P14, per department, off when you install, under the master switch):
+- **Leaderboard and review** (per department, off when you install, under the master switch):
   - `boards = { on = false }` (**Leaderboard visibility**): a supervisor picks whether officers of other departments
     see his department's officers by name or by callsign only (on the Leaderboard, on their profiles and in Home's
     top 3; the picture is hidden too), and which **Rank by** tabs his own officers see (from
@@ -655,7 +655,7 @@ Supervisor UI → **Mission controls** (below).
     approve or void them (Admin UI → Leaderboards → Flagged). Admins always void at once. The anti-cheat flag
     triggers (`Config.AntiCheat`) are never relaxed.
 
-- **Twists** (step P15, per department, off when you install, under the master switch):
+- **Twists** (per department, off when you install, under the master switch):
   - `twists = { on = false }` (**Twists offered**): a supervisor picks which of the twists you enabled in
     `Config.Events.twists` his department's leaders are offered on the accept step (Mission Board and mission call
     claims), and which of them start ticked. The accept step follows the department of the unit's leader; a twist
@@ -663,7 +663,7 @@ Supervisor UI → **Mission controls** (below).
     every twist. Each twist's bonus stays as `Config.Events.twists` sets it. Read when the run is accepted, so a
     change never moves a run already going.
 
-- **Cash bonuses** (step P16, per department, off when you install, under the master switch). A supervisor moves cash
+- **Cash bonuses** (per department, off when you install, under the master switch). A supervisor moves cash
   only inside the min and max you set; with the shipped `min = 1.0, max = 1.0` nothing moves even when switched on, so
   open the max first (for example `max = 1.25`). Points never change. Both are paid only on a completed run, never on
   test runs, Cross-Department runs or the Weekly Boss, and `Config.Cash.dailyCap` still applies (it ships at 0, no cap).
@@ -674,7 +674,7 @@ Supervisor UI → **Mission controls** (below).
   - `twistCash = { on = false, min = 1.0, max = 1.0 }` (**Twist cash**): x each twist's cash (`Config.Events.twists`)
     on runs his department leads, read at the accept; the accept step shows the raised bonus. All chosen twists
     together still stop at `Config.Events.twistMaxCash`.
-- **Points bonuses** (step P20, per department, off when you install, under the master switch). Like the cash
+- **Points bonuses** (per department, off when you install, under the master switch). Like the cash
   bonuses, a supervisor moves points only inside the min and max you set; the shipped `min = 1.0, max = 1.0` moves
   nothing even when switched on, so open the max first (for example `max = 1.25`). Only completed runs get them, never
   test runs, Cross-Department runs or the Weekly Boss. Runs with them count normally on the boards and in the contest.
@@ -685,7 +685,7 @@ Supervisor UI → **Mission controls** (below).
   - `twistPoints = { on = false, min = 1.0, max = 1.0 }` (**Twist points**): x each twist's points share
     (`Config.Events.twists[k].points`) on runs his department leads, read at the accept; the accept step shows the
     raised share. All chosen twists together still stop at `Config.Events.twistMaxPoints`.
-- **Type of the Day** (step P18, per department, off when you install, under the master switch):
+- **Type of the Day** (per department, off when you install, under the master switch):
   `typeOfTheDay = { on = false }`. A supervisor picks one mission type **for tomorrow** (never today, so nobody times
   it to a run), at most once a day for his department (admins may correct it). Tomorrow his department's officers earn
   the Type of the Day points on that type instead of the server's type; other departments keep the server's type. The
@@ -693,7 +693,7 @@ Supervisor UI → **Mission controls** (below).
   setter's own runs or a unit he is in (they keep the server's type). Switching the control off drops the pick at once;
   a restart keeps it (it is read back from the audit log). The Mission Board, Home, Dispatch, the run screen and the
   scoring all use the officer's department's type.
-- **Department goals** (step P21, per department, off when you install, under the master switch):
+- **Department goals** (per department, off when you install, under the master switch):
   `goals = { on = false, min = 1, max = 5 }`. A supervisor picks which of your daily and weekly goals
   (`Config.Goals.daily`, `Config.Goals.weekly`) his department's officers draw theirs from: `min` to `max` of each
   list, or none (every goal). The pick counts **from the next weekly reset**, so no goal an officer is working on
@@ -701,7 +701,7 @@ Supervisor UI → **Mission controls** (below).
   (`Config.Goals.dailyPoints`, `weeklyPoints`); other departments and the supervisor himself keep your whole lists.
   A goal you remove or switch off later is left out of the pick (none left = every goal). Switching the control off
   or **Back to config** goes back to every goal at once; a goal already rewarded this period never pays twice.
-- **Push a chosen mission** (step P19, per department, off when you install, under the master switch):
+- **Push a chosen mission** (per department, off when you install, under the master switch):
   `pushMission = { on = false }`. In **Page a unit** (Live Missions) the supervisor may pick one mission of the call's
   type instead of **Any (drawn at random)**, for a unit of his own department (never his own unit). Only that unit gets
   the call, for its whole offer, and only that unit sees the mission's name ("Mission: ..." on Dispatch); its leader
@@ -710,7 +710,7 @@ Supervisor UI → **Mission controls** (below).
   or a failed ready check ends the call (the supervisor is told), an abandoned run is never re-dispatched, and a push
   never earns rapid response. `Config.MissionControls.pushMissionPerDay` (`5`): pushes one supervisor may make a day
   (admins any). Every push is in the audit log (**Mission pushed to a unit**) with the mission.
-- **Give points** (step P22, per department, off when you install, under the master switch):
+- **Give points** (per department, off when you install, under the master switch):
   `awardPoints = { on = false, min = 1, max = 50 }`. In **Department Report** the officer's dialog gets a **Give
   points** button: the supervisor gives `min` to `max` points at a time to an officer of his own department (also one
   who is offline), never to himself or another character on his license (license: and license2:), always with a
@@ -823,7 +823,7 @@ These are always admin only. Setting one of them to `true` in `Config.Permission
 - Open the Admin UI.
 - Change settings in game (Admin UI → **Settings**), and turn missions and locations on or off.
 - Set or clear the payout of **one** mission, and clear any admin-set payout.
-- Give points by hand (manual award), apart from the **Give points** Mission control (step P22) you may switch on
+- Give points by hand (manual award), apart from the **Give points** Mission control you may switch on
   for supervisors.
 - Answer disputes about **failed** runs.
 - Void any run.
@@ -1068,7 +1068,7 @@ Everything else works as shipped. These are the ones owners change most:
 |---|---|
 | `Config.Limits` | `maxCompletionsHour = 8` and `maxCompletionsDay = 0` (0 = no cap) finished missions per officer; `maxConcurrentRuns = 12` and `maxConcurrentTactical = 4` missions at once, server-wide; `playerInfoCacheMs = 1000` how long a player's Qbox data (job, duty, name, callsign) is reused before Qbox is asked again (every Qbox change clears it at once; 0 = ask every time); `netRateResponse = 'block'` what a player who keeps sending one tablet request past its limit gets: `'block'` refused quietly, `'log'` also one console warning a minute, `'kick'` dropped from the server (from 3 times a request's limit, at least 20 times, in a minute; admins are never warned about or dropped); `exportBps = 200000` bytes a second for the big Admin UI downloads (Audit and Payments → Export, up to 5000 rows), sent in the background so the rest of the tablet keeps answering (below 100000 counts as 100000; 0 = in one go, as before) |
 | `Config.Time.resetHour` | The hour (0–23, server time) of the daily reset |
-| `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days. `stunNeedsProof` (`'flag'`): a stun counts as before, and one the server did not see (the suspect did not fall) adds a note for staff in the Review run detail, so nobody's points are held. `'hold'` = the same, but that officer's points wait for review; `'strict'` = a fleeing person only gives up to a stun the server saw (a cheat menu cannot fake one); `'off'` = no check (the old way). A saved `true` from an earlier version reads as `'strict'`, `false` as `'off'`. `stunRecheck` (2 s, step R7): in `'flag'` and `'hold'` the note or flag waits this long and is dropped when the server saw the suspect fall by then (a real taser report often reaches the server before its copy of the suspect falls); 0 = decide at once. `adminProbeLines` (5): a player who is not an admin and sends a request only admins may send (the money, void and other Admin UI tools; no officer or supervisor screen sends one, so it is almost always a cheat menu) is refused as always, and a console line, kept in **System → Problems**, names him and the request (`player 7 (Name) sent admin-only server:admin:adjustPoints while not an admin`): once a minute per player and request, at most this many lines a minute per player (0 = no line) |
+| `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days. `stunNeedsProof` (`'flag'`): a stun counts as before, and one the server did not see (the suspect did not fall) adds a note for staff in the Review run detail, so nobody's points are held. `'hold'` = the same, but that officer's points wait for review; `'strict'` = a fleeing person only gives up to a stun the server saw (a cheat menu cannot fake one); `'off'` = no check (the old way). A saved `true` from an earlier version reads as `'strict'`, `false` as `'off'`. `stunRecheck` (2 s): in `'flag'` and `'hold'` the note or flag waits this long and is dropped when the server saw the suspect fall by then (a real taser report often reaches the server before its copy of the suspect falls); 0 = decide at once. `adminProbeLines` (5): a player who is not an admin and sends a request only admins may send (the money, void and other Admin UI tools; no officer or supervisor screen sends one, so it is almost always a cheat menu) is refused as always, and a console line, kept in **System → Problems**, names him and the request (`player 7 (Name) sent admin-only server:admin:adjustPoints while not an admin`): once a minute per player and request, at most this many lines a minute per player (0 = no line) |
 | `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, `panelKey` (`'F7'`: the default test controls key, see [8.2](#82-keys)), `panelKeyGuardMs` (300 ms: the test controls key is ignored this long after the panel lets go, so the same press does not take it back; 0 = off), and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Performance.loopScale` | How often the background loops wake while idle or far away (`1.0`: the shipped pace in `docs/LOOPS.md`; `2` = half as often, up to `4`). Markers near you still draw every frame and run timers keep their own pace. See **Performance** below |
@@ -1078,52 +1078,27 @@ Everything else works as shipped. These are the ones owners change most:
 
 **Performance**
 
-Crimson-Police's loops wake as seldom as their feature allows (every loop is listed in `docs/LOOPS.md`). Since step
-LP2 they wake about half as often as before: the objective pointer and the run's vehicle check every 2 s, mission
-markers far away every 1.5 s (every frame once you are in range), the NPCs' AI every 1 s, the tablet's walk-away and
-downed checks every 1 s, the server's background checks every 2 s (unit invites 5 s, the daily boundary 60 s,
-the happy hour end 30 s), and the tablet's screens poll at most every 20 s (a server push still refreshes them at
-once). The run engine's 1 s tick (run deadlines and HUD timers) is unchanged. If resmon still shows Crimson-Police
-higher than you want while idle, raise `Config.Performance.loopScale` (Admin UI → Settings, section Performance):
-`2` halves every idle and far-away wake again, `4` is the slowest. A higher value makes far markers, the map pointer
-and the walk-away close react later (at `4`, up to 6-8 s), never the per-frame drawing near you.
+Crimson-Police's loops wake as seldom as their feature allows (every loop, its interval and why are in
+`docs/LOOPS.md`): the objective pointer and the run's vehicle check every 2 s, mission markers far away every 1.5 s
+(every frame once you are in range), the NPCs' AI every 1 s, the open tablet's walk-away, item and downed checks every
+1 s (one shared loop), the server's background checks every 2 s (unit invites 5 s, the daily boundary 60 s, the happy
+hour end 30 s while one runs), and the tablet's screens poll at most every 20 s (a server push still refreshes them at
+once). The run engine's 1 s tick (run deadlines and HUD timers) runs only while a run, test or unit exists: with no
+run the server's per-run ticks sleep, and with no run and the tablet closed the client calls no game native at all.
+Every player's tablet page loads only the officer screens at start; the Admin UI, the Supervisor Mission Builder and
+the criminal tablet load when first opened.
 
-Step OP1 trimmed what runs inside those loops (measured in `tests/resmon_spec.lua`, numbers in `docs/LOOPS.md`
-under **Resmon**): with no run and the tablet closed Crimson-Police calls no game native at all; in a run the busiest
-frame loop (a checkpoint course) calls about a quarter fewer natives a frame and builds no text or table per frame, a
-tired runner is held to his pace with about 40 % fewer natives, and the HUD sends one NUI message per change instead
-of one per server update. Nothing you see changes and there is nothing to configure.
+If resmon still shows Crimson-Police higher than you want, these settings help (Admin UI → Settings, section
+Performance; all as shipped change nothing):
 
-Step OP2 did the same for the server and the tablet page (numbers in `docs/LOOPS.md` under **Server cost and NUI**):
-an idle server with officers on duty sends about half the database queries it did (an officer's suspension and
-retirement are one read, a mission call's pop-up check reads the officer's row once), a logo upload of an admin who
-leaves is forgotten at once, and every player's tablet page loads less than half the script it did at start: the
-Admin UI screens, the Supervisor Mission Builder and the criminal tablet load when first opened (all of an Admin UI's
-screens start loading the moment it opens; the styles still load with the page, so nothing looks different). Two
-new switches, both off as shipped: `Config.Performance.pushGapMs` (try `250`) merges a burst of tablet updates into
-one per kind and player, and `Config.Performance.latentAboveBytes` (try `65536`) sends big answers in the background.
-
-Step OP3 was a second pass over the whole resource (numbers in `docs/LOOPS.md` under **Second pass**): the ox_target
-options on people and cars during a run check the run, your own state and each entity once per frame instead of once
-per option (about a tenth of the natives), a mission desk asks Qbox for your job at most once a second instead of on
-every look, an admin or supervisor action checks the admin permission once, and a new database index (migration
-017, added by itself on the next start) lets the audit log and dispute lookups find their rows without reading the
-whole table. Settings no longer redraws every row while you type in its search box. One new switch, off as shipped:
-`Config.AdminUi.windowRows` draws only the rows in view of a long scrolling list (try it if the Leaderboards board or
-a Settings search feels slow on a big server).
-
-Step LP3 was a second pass over every loop (numbers in `docs/LOOPS.md` under **Every loop, second pass**): the open
-tablet's walk-away, item and downed checks share one loop instead of three (same timing), and the server's happy hour
-end check sleeps while no happy hour runs instead of waking every 30 s all day (it still checks every 30 s while one
-runs). One new switch, off as shipped: `Config.Performance.markerRange` caps how far away the per-frame objective
-markers draw (try `60` if resmon is high while you drive towards an objective).
-
-Step LP4 was the final loop proof (every loop answers five questions in `docs/LOOPS.md` under **Final loop proof**):
-with no run the server's per-run ticks sleep instead of waking every 1-5 s all day (the run engine, whose job recheck
-is now on the same thread, custody, the NPC watcher, the drive-to-start and downed checks, the Testing upkeep and the
-unit sweep), and wake again with the next run, test or unit; the mission calls screen push is one timer after a change
-instead of a 1 s loop; a HUD countdown wakes once a second instead of five times. Nothing to configure, and players
-see no change: while a run is on every tick keeps its old pace.
+- `Config.Performance.loopScale`: `2` halves every idle and far-away wake again, `4` is the slowest. A higher value
+  makes far markers, the map pointer and the walk-away close react later (at `4`, up to 6-8 s), never the per-frame
+  drawing near you.
+- `Config.Performance.markerRange` (try `60`): caps how far away the per-frame objective markers draw.
+- `Config.Performance.pushGapMs` (try `250`): merges a burst of tablet updates into one per kind and player.
+- `Config.Performance.latentAboveBytes` (try `65536`): sends big answers in the background.
+- `Config.AdminUi.windowRows`: draws only the rows in view of a long scrolling list (try it if the Leaderboards board
+  or a Settings search feels slow on a big server).
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.
@@ -1273,6 +1248,85 @@ Good to know:
   you put the weapon back in that list. Switching `enabled` in Settings reloads the missions at once.
 - To feel the difference, run Gang Shootout alone in Admin UI → **Testing**, then change `aiDamage` or
   `accuracyMax` in Settings and run it again.
+
+### 5.10 What ships off and how to turn it on
+
+Crimson-Police ships so that a new server runs plain NPC missions with points and cash, and nothing that
+involves real players as suspects, extra money or item rewards. Every switch below is one setting: turn it on
+in game in Admin UI → **Settings** → **Features** (it works at once, is audited, and **Reset** puts the
+`config.lua` value back), or set it to `true` in `config/config.lua` and restart Crimson-Police.
+
+The two switches at the top ([5.5](#55-the-two-switches-at-the-top-debug-and-storage)) ship for testing:
+`Config.Debug = true` (extra console lines; set `false` before go-live) and `Config.Database.enabled = false`
+(data in the `saves/` folder). Testing a mission is never required: `Config.Builder.requireTestToPublish = false`.
+
+**Ships off** (the Features tab shows them as Off):
+
+| Feature (name in the Features tab) | Section | Switch | More |
+|---|---|---|---|
+| Live crimes (real players) | Player vs police | `Config.LiveCrime.enabled` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
+| Volunteer suspects | Player vs police | `Config.Volunteers.enabled` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
+| Criminal tablet for volunteer suspects | Player vs police | `Config.CriminalTablet.enabled` | [9.16.5](#9165-the-criminal-tablet) |
+| Cash for live cases | Player vs police | `Config.LiveCrime.cash` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
+| Item rewards for live cases | Player vs police | `Config.LiveCrime.items` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
+| Cash for volunteer cases | Player vs police | `Config.Volunteers.payCash` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
+| Item rewards for volunteer cases | Player vs police | `Config.Volunteers.payRewards` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
+| Supervisor mission controls | Police teamwork | `Config.Permissions.supervisor.missionControls` | [4.4](#44-what-supervisors-may-do) |
+| Field training (FTO) | Police teamwork | `Config.FieldTraining.enabled` | [6.11](#611-field-training-fto) |
+| Avatar image links | Police teamwork | `Config.Profile.avatarUrls.enabled` | [6.4](#64-profile-pictures) |
+| Item rewards | Economy and rewards | `Config.Rewards.enabled` | [6.3](#63-item-rewards) |
+| Pay volunteer suspects | Economy and rewards | `Config.FeatureRewards.suspect.enabled` | [6.12](#612-feature-rewards-money-and-items-for-every-feature) |
+| Pay talk-downs | Economy and rewards | `Config.FeatureRewards.surrender.enabled` | [6.12](#612-feature-rewards-money-and-items-for-every-feature) |
+| Pay field training sign-offs | Economy and rewards | `Config.FeatureRewards.ftoSignOff.enabled` | [6.12](#612-feature-rewards-money-and-items-for-every-feature) |
+| Pay finished field training | Economy and rewards | `Config.FeatureRewards.ftoComplete.enabled` | [6.12](#612-feature-rewards-money-and-items-for-every-feature) |
+| Pay supervisor point awards | Economy and rewards | `Config.FeatureRewards.supAward.enabled` | [6.12](#612-feature-rewards-money-and-items-for-every-feature) |
+| Daily backup | System | `Config.Backups.daily` | [10.3](#103-backups) |
+
+**Admin money tools** ship off too. They are not in the Features tab: turn one on in Admin UI → **Settings**
+(All settings), where turning it on needs the typed word **ENABLE** (see
+[9.15.4](#9154-payments-item-rewards-and-department-money)):
+
+- `Config.Cash.allowUnfundedRetry`
+- `Config.Cash.allowCapTopUp`
+- `Config.Cash.allowPayAgain`
+- `Config.Cash.restoreForfeited`
+- `Config.Cash.allowAddFunds`
+- `Config.Cash.allowClawback`
+- `Config.Cash.allowManualCash`
+- `Config.Rewards.allowTakeBack`
+
+**Ships on** (the Features tab shows them as On; turn one off the same way):
+
+| Feature (name in the Features tab) | Section | Switch |
+|---|---|---|
+| Safe spawning (people appear out of sight) | NPC missions | `Config.Spawning.enabled` |
+| NPC combat rules | NPC missions | `Config.NpcCombat.enabled` |
+| Runners tire (sprint, jog, walk) | NPC missions | `Config.Flee.enabled` |
+| Tell hints on the HUD | NPC missions | `Config.Npc.tellHints` |
+| Rescale when officers leave | NPC missions | `Config.Rescale.enabled` |
+| Map markers and objective pointer | NPC missions | `Config.Markers.enabled` |
+| Follow the GPS route to the start | NPC missions | `Config.Route.required` |
+| Mission calls | NPC missions | `Config.MissionCalls.enabled` |
+| Reopen abandoned mission calls | NPC missions | `Config.MissionCalls.reopen.enabled` |
+| Type of the Day | NPC missions | `Config.Events.typeOfTheDay` |
+| Weekly boss mission | NPC missions | `Config.Events.weeklyBoss.enabled` |
+| Twist: Armored Hostiles | NPC missions | `Config.Events.twists.armored_hostiles.enabled` |
+| Twist: Radio Silence | NPC missions | `Config.Events.twists.radio_silence.enabled` |
+| Twist: Time Crunch | NPC missions | `Config.Events.twists.time_crunch.enabled` |
+| Tow truck for impounds | NPC missions | `Config.Custody.tow.enabled` |
+| Decision debrief on the result screen | NPC missions | `Config.Decisions.debrief` |
+| Mission Builder for supervisors | NPC missions | `Config.Builder.enabled` |
+| Surrender and talk-down | Player vs police | `Config.RealSuspects.surrender.enabled` |
+| Real suspects admin screen | Player vs police | `Config.RealSuspects.adminScreen` |
+| Cross-department operations | Police teamwork | `Config.CrossDept.enabled` |
+| Unit ready check | Police teamwork | `Config.Units.readyCheck` |
+| Commendations | Police teamwork | `Config.Commendations.enabled` |
+| Department challenge | Police teamwork | `Config.Challenge.enabled` |
+| Weekly top 3 announcement | Police teamwork | `Config.Leaderboard.announceWeekly` |
+| Monthly top 3 announcement | Police teamwork | `Config.Leaderboard.announceMonthly` |
+| Officers set their own options | Police teamwork | `Config.OfficerOptions.enabled` |
+| Admin test mode | System | `Config.Testing.enabled` |
+| Spawn check in test mode | System | `Config.Testing.spawnCheck.enabled` |
 
 ---
 
@@ -1673,7 +1727,7 @@ In the server console, type every command **without** the slash.
 | `/CrimsonPoliceAdmin storage` | Admins, console | Shows the storage in use, the rows of every table and the saves folder size |
 | `/CrimsonPoliceAdmin storage copy database-to-files [force]` | Admins, console | Copies everything from the database to the saves folder ([6.5](#65-database-off-the-saves-folder)) |
 | `/CrimsonPoliceAdmin storage copy files-to-database [force]` | Admins, console | Copies everything from the saves folder to the database |
-| `CrimsonPoliceAdmin storage mode reset` | Console only | Forgets a storage switch made in Admin UI → **System**: the next start uses `Config.Database` from config.lua. `storagemode reset` does the same |
+| `CrimsonPoliceAdmin storage mode reset` | Console only | Forgets a storage switch made in Admin UI → **System**: the next start uses `Config.Database` from config.lua. `CrimsonPoliceAdmin storagemode reset` does the same |
 | `CrimsonPoliceAdmin settings` | Console only | Lists every setting changed in game (Admin UI → **Settings**) |
 | `CrimsonPoliceAdmin settings reset <path>` | Console only | Puts one setting back to its config.lua value. Example: `settings reset Cash.source` |
 | `CrimsonPoliceAdmin settings reset all` | Console only | Puts every setting changed in game back to config.lua |
@@ -1894,7 +1948,7 @@ to go back. The title inside each screen uses the same plain name (Running now, 
 what, ...). Only the layout changes: every screen keeps its permission and its links (the screen keys stay the same,
 so saved links and notifications still open the right screen), and a group with nothing you may see is not shown.
 
-**Money screen, long lists and faster screens** (step H6, each in Admin UI → **Settings**, each shipped as before):
+**Money screen, long lists and faster screens** (each in Admin UI → **Settings**, each shipped as before):
 
 | Setting | Shipped | What it does |
 | --- | --- | --- |
@@ -2678,7 +2732,7 @@ For staff:
 
 #### 9.16.5 The criminal tablet
 
-A tablet of its own for volunteer suspects (step G2, `Config.CriminalTablet`), with a dark street look nothing like
+A tablet of its own for volunteer suspects (`Config.CriminalTablet`), with a dark street look nothing like
 the police tablet. It ships **off** (`enabled = false`): until you turn it on, nothing changes and `/crimsonheat`
 keeps its pop-up menu. It runs on volunteers, so `Config.Volunteers.enabled` must be on too.
 
@@ -3002,7 +3056,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   npm run dev       # the UI in a browser at http://localhost:5173, with sample data
   ```
   The full UI developer guide (source layout, adding a screen, the NUI bridge, hooks, theme variables and
-  components) is `docs/WEB_UI.md`.
+  components) is §12 of `docs/ARCHITECTURE.md`.
 - **Every check in one command**: `bash tools/check_all.sh` (syntax, contracts, lint, style, the test suites in all
   three storage modes, tsc and the web build). `tools/setup_test_env.sh` checks and installs what it needs.
   `.github/workflows/ci.yml` runs the same on GitHub.
@@ -3017,592 +3071,20 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 
 | Path | What it is |
 |---|---|
-| `README.md` | This document |
+| `README.md` | This document: the owner's guide |
 | `Crimson-Police/` | The FiveM resource. Its `README.md` is a short install note |
 | `Crimson-Police/items/README.md`, `logos/README.md`, `saves/README.md`, `web/README.md` | Short notes for each folder, pointing here |
-| `docs/SPEC.md` | The product spec: every rule and feature (its Hard rules win over everything) |
-| `docs/ARCHITECTURE.md` | Module APIs, the run model, the block interface, events and the NUI protocol |
-| `docs/INTEGRATIONS.md` | Checked facts about the other resources (qbx_core, sc-*, Renewed-Banking ...) |
-| `docs/CRIMSON_ARENA.md` | Rules for running alongside Crimson-Arena |
-| `docs/WEB_UI.md` | The web UI developer guide |
+| `docs/SPEC.md` | The product spec: every rule and feature (its Hard rules win over everything), with a copy of `config/config.lua` |
+| `docs/ARCHITECTURE.md` | Code structure: module APIs, the run model, the block interface, events, storage, the NUI protocol, the web UI developer guide (§12) and the notes of each part of the code (§13) |
+| `docs/INTEGRATIONS.md` | Checked facts about the other resources (qbx_core, sc-*, Renewed-Banking ...) and the rules for running alongside Crimson-Arena |
+| `docs/TESTING.md` | How to set up a machine, run the checks and read a failure, CI, and what to update with each change |
+| `docs/IN_GAME_CHECKLIST.md` | What to check in game, one section per feature |
+| `docs/LOOPS.md` | Every loop and timer: when it runs, its interval and why, and the loop census |
+| `docs/WORKFLOWS.md` | Every workflow by group (Officer, Supervisor, Field training, Criminal, Admin, System) and the end-to-end spec that drives it |
 | `docs/STYLE.md` | The code style. `python3 tools/restyle.py` formats the tree, `--check` lists what isn't |
-| `docs/TESTING.md` | How to set up a machine, run the checks and read a failure |
-| `docs/LOOPS.md` | Every loop and timer: when it runs, its interval and why (step LP1), the five questions and the loop census (step LP4) |
-| `docs/WORKFLOWS.md` | Every workflow by group (Officer, Supervisor, Field training, Criminal, Admin, System): how it works in plain English, the end-to-end spec that drives it, its result (step WF1) and what steps WF2 and WF3 made smoother |
-| `docs/IN_GAME_CHECKLIST.md` | What to check in game after an update, one line per change |
-| `docs/PROCESS.md` | How work gets done (branches, the gate, reviews) |
-| `docs/FILE_NOTES.md` | The long file headers |
-| `docs/notes/` | What each part of the build added (history) |
+| `docs/FILE_NOTES.md` | The long file headers, one section per file (kept by `tools/restyle.py`) |
 | `tests/` | Lua unit, SQL and end-to-end tests (`lua5.4 tests/run.lua`; needs a local MariaDB) |
+| `tools/check_all.sh` | Every check in one command |
 | `tools/check_contracts.py` | Cross-checks of module calls, events, NUI names and locale keys |
 | `tools/lint_fivem.py` | FiveM pitfall rules; known hits in `tools/lint_baseline.txt` |
 | `tools/lua_flow.py` | The Lua parser and loop flow behind rule FX10 (`python3 tools/lua_flow.py --all <files>`) |
-
-### Spec revisions
-
-`docs/SPEC.md` was revised to match these owner-approved changes:
-
-- Driving a vehicle instead of a police vehicle: Beat Patrol, EVOC Course and checkpoint routes with **Vehicle
-  required** on count a checkpoint while the officer drives any vehicle (checked on the server).
-- Extra builder peds: `Config.Builder.allowed.peds` includes the inmate, Kingpin and escort-driver models.
-- Search-mission start radius: with a search area objective, every start radius equals its search circle (200–1000 m).
-- Crimson-Arena no-build zones: the Trailer Park and the lobby are in `Config.Builder.noBuildZones`.
-- Parity-plus: mission calls may be claimed on the Dispatch screen (the mission is still drawn at random after the
-  claim); Traffic Enforcement, Illegal Parking Patrol and Suspicious Activity are allowed; the Officer UI has eight
-  screens; bodies may be kept for a Process the scene objective. English only; item rewards ship off.
-- Config defaults, at the owner's request: `Config.Debug = true` and `Config.Database.enabled = false`.
-- Settings in game, at the owner's request ("admins get full control over everything in the admin tablet"): an admin
-  can change every setting of `config.lua` and `blocks.lua` in Admin UI → **Settings**, and switch missions and
-  locations on or off. This includes point settings, so the Points Hard rule now reads: officers and supervisors
-  can never change points in game; an admin can, through the Settings screen (audited) or a manual award.
-- Testing is optional, at the owner's request: publishing a Mission Builder draft needs no test
-  (`Config.Builder.requireTestToPublish = false`); with it on, supervisors need a passed test and admins never do.
-- Full admin control, at the owner's request ("admins get full control over everything in the admin tablet"):
-  `docs/SPEC.md` has a **Full admin control** section. Admins may change point values (logged, resettable) and make
-  a logged manual award **or deduction** (the Points Hard rule says so); admins may edit any built-in mission in the
-  Mission Builder, saved as an override under the same mission id with **Reset to original** (the Mission Builder
-  Hard rule says so); the money tools outside the normal pay flow are built and **ship off**, each turned on in
-  Settings with the typed word `ENABLE`. Who is an admin, restarts and Discord webhook links stay out of the tablet.
-- Stuck payments, at the owner's request (full admin control): the Cash payouts rule now says a payment left in
-  "paying" is resolved in Admin UI → **Payments**: **Mark paid** (no money moves), or **Pay again** with its own
-  `-r2` transaction id, behind `Config.Cash.allowPayAgain`, a switch that ships off.
-- Mission types off per department (step P10, owner's list: "which mission types / missions appear on their
-  department's board"): the Mission controls `types` and `featuredType` let a department's supervisors switch mission
-  types or single missions off for their department and recommend one type. This is a catalog switch that stays until
-  changed, like `Config.DisabledMissions`; it is not a mission pause (the **Do not build** list still has no mission
-  pause), and other departments keep the type.
-- Cash bonuses inside admin bounds (step P16): the Cash payouts rule now says a supervisor may raise a cash bonus only
-  inside admin-set bounds: the Mission controls `happyHourCash` (a run accepted during a happy hour) and `twistCash`
-  (each twist's cash, still under `Config.Events.twistMaxCash`), per department, shipped off with bounds that move
-  nothing; never on test runs, Cross-Department runs or the Weekly Boss, and always under `Config.Cash.dailyCap`.
-- A mission staff push to one unit (step P19, owner decision of 2026-10-19: "a paged call the unit can accept or
-  decline"): the Mission choice Hard rule now lists a fifth exception, the `pushMission` Mission control (shipped off):
-  a paged call that names one mission, only for that unit (never the issuer's own), which may accept or decline it;
-  only that unit sees the mission's name, every accept rule stays, no rapid response, a supervisor only for units of
-  his own department and at most `Config.MissionControls.pushMissionPerDay` a day, and the audit names the mission.
-- Supervisors give points through Type of the Day (step P18, owner decision of 2026-10-19: "supervisors may give
-  points"): the Points Hard rule now says a supervisor may pick his department's Type of the Day for the next day (the
-  `typeOfTheDay` Mission control, shipped off); the multiplier stays the admin's `Config.Events.todMultiplier`, and
-  the pick never doubles the setter's own runs. Officers still never change points.
-- Points bonuses inside admin bounds (step P20, owner decision of 2026-10-19: "supervisors may give points"): the
-  Points Hard rule now also names the Mission controls `happyHourPoints` (x the final points of a run accepted during a
-  happy hour, never for its starter) and `twistPoints` (each twist's points share, still under
-  `Config.Events.twistMaxPoints`), per department, shipped off with bounds that move nothing; completed runs only,
-  never on test runs, Cross-Department runs or the Weekly Boss.
-- Department goals from the admin's list (step P21, owner decision of 2026-10-19: "supervisors may give points"): the
-  Points Hard rule now names the `goals` Mission control (shipped off): a supervisor picks which of the admin's
-  `Config.Goals` goals his department's officers draw from, from the next weekly reset, with the admin's points,
-  never for the setter.
-- Supervisors give points to officers (step P22, owner decision of 2026-10-19: "supervisors may give points"): the
-  Points Hard rule now names the `awardPoints` Mission control (shipped off): a logged manual award through the admin's
-  own point-adjust path, inside the admin's min and max per award and `awardPointsPerDay`, to officers of the
-  supervisor's own department only, never to a character on his own license, always with a reason and audited.
-
-- NPC combat, at the owner's request of 2026-10-19 ("make them also not do head shots at all also reduce the damage
-  they shoot as they kill really quickly", no automatic weapons, lower accuracy): `Config.NpcCombat` ([5.9](#59-how-hard-npcs-fight-back)). Mission NPCs never carry an
-  automatic weapon (the built-in missions, the Builder's allowed list and the block defaults name pistols and pump
-  shotguns); NPC accuracy is at most 18, single shots, average skill, no charging, bursts from cars; NPC hits do half
-  damage and officers on a run take no headshot multiplier; the server drops a one-shot kill by a mission NPC on a
-  healthy officer of its run (at least `lethalCancelAbove`, three quarters, of his health) (the one `CancelEvent` Crimson-Police makes, `docs/CRIMSON_ARENA.md` rule 11). `MissionTweaks`
-  `weapons` now also replaces the ambush, associate and boss weapons.
-- Flee stamina, at the owner's request of 2026-10-19 ("I want the peds to run out of stamina when they run away"):
-  `Config.Flee`. The server times every mission NPC that runs on foot (sprint 10 s, jog 12 s, walk 8 s, then worn
-  out, each suspect up to 25 % longer or shorter, `fleeMult` of `Config.NpcDifficulty` now used; time in a car does
-  not count), keeps the time across a fight or a surrender, and gives a runner his breath back after 20 s with no
-  officer within 60 m. The game that owns a runner (any officer's, not only the host's) slows him down to match: a
-  jog after 10 s, a walk after 22 s, held every frame, at `jogRate` / `walkRate` of the normal speed, with a jog and
-  then a winded walk (`windedClipset`); a tired runner with no route left walks or jogs straight away from the
-  nearest officer on the navmesh instead of GTA's flee task, which cannot be slowed, or along a shore, a pier's end
-  or a dead end when there is no way on (with no way at all, GTA's flee task held to his pace). Whichever officer's
-  game owns him keeps him moving when a leg ends. He sprints again when he gets
-  his breath back, and is let go at once when he surrenders, fights or gets into a car. A worn-out runner gives up
-  as soon as an officer is within `giveUpRange` (30 m), with no wait: he kneels (`exhausted = 'surrender'`), or stands
-  with his hands up (`'handsUp'`), and can be cuffed; `'walk'` keeps the old rules only. This covers Warrant Service,
-  Prison Break and the raids' runners, pursuit suspects who run from a stopped car, Manhunt fugitives and field
-  contacts who run; armed runners too (before they could turn to fight) unless `armedTire = false`. The escape rules
-  are unchanged.
-- Spawn director, at the owner's request of 2026-10-19 ("make sure they dont spawn around the player make it be
-  progressive", "i do not want them spawning in the ground or surronding the officers"): `Config.Spawning`. The
-  server picks a mission's spawn points away from every officer (40 m, 15 m inside a building), never behind them,
-  one wave from one side only (no ring, no pincer), and lets an objective's people appear only once an officer is
-  within 150 m; a wave short of such points waits 20 s and may then come to 20 m, never closer.
-- Shootouts use the spawn director (same request): every hostile_waves fight (Gang Shootout, Hostage Rescue, Drug Lab
-  Raid, Gang Hideout Raid, the Weekly Boss) starts its first wave only once an officer is within 150 m of it and puts
-  every hostile at least 40 m from the officers (15 m for the fights marked `indoor`: inside the Fleeca bank and in
-  and around the raided lab or house), never behind them, one wave from one side, never two on one point; a short wave
-  spawns the rest as points free up. A wave or boss still short 45 s after it began waiting while nobody of the fight
-  is left standing is left out (`leaveOutAfter`, a warning in System → Problems), the one case where a scaled count
-  shrinks (never before one of the fight's hostiles has appeared, so standing on the points first never skips a
-  fight); a wave's 90 s to the next wave counts from its first hostile out; a location with no spawn points spawns
-  nobody instead of using the start point.
-- Staging ahead (same request): `Config.Spawning.stageAhead` (on) lets the engine place the next objective's people
-  while the officers are still busy with the one before it, so they can already be in place (away from the officers)
-  when it starts instead of appearing around them the moment it does. Only a mission step built for it stages (the
-  raids, next item). What it placed goes with the run like everything else (a failure, the end or the last officer
-  leaving removes it).
-- Raids: the defenders are already inside before the breach (same request; before, the crew appeared the moment the
-  breach completed, 2.6-10.5 m from the breach team): Drug Lab Raid and Gang Hideout Raid mark their fight `stage =
-  true`, so wave 1 is placed while the officers drive in and stack up, through the spawn director (15 m or more from
-  every officer at that moment, never behind them), calm and unarmed. They wake, armed and hostile, when the breach
-  completes, or earlier when one of them is hurt or killed or an officer comes within `Config.Spawning.stageWakeRange`
-  (12 m) of one of them. Officers nearer to a breach entry than to him do not wake him: the plan's 12 m alone would
-  have woken the crew at the doors at nearly every raid location (most "inside" points are 2.6-12 m from the entries),
-  so the fight would start before the breach. The rest of wave 1 (points too close when it was staged) comes when the
-  fight starts, through the director as before; the scaled count and every other rule are unchanged.
-- Hidden points first (same request): `Config.Spawning.preferHidden` (on) and `losTimeoutMs` (1500 ms), so
-  hostiles appear behind buildings, containers or cars rather than in the open in front of you. When more points pass the director's
-  rules than a wave needs, the server asks the games of the officers near the scene (up to 4, nearest first; with
-  none within `activateRange`, the nearest one) which of those points they can see: each game probes a line of
-  sight from the officer's head and from his camera to 1.0 m and 1.7 m above each point (the map, vehicles and
-  objects block it; glass and people do not). A point is hidden only when every asked game answered and none of its
-  lines is clear; hidden points are used first, and of two sides that hold as many points the one with more hidden
-  points wins. The boss keeps his own spot first (the block marks it `first = true`). The server waits at most
-  `losTimeoutMs`; a game that does not answer, answers nonsense or still owes an earlier answer makes every point
-  count as seen (the order is then the mission's own, as before). After the wait the distance and "behind" rules
-  run again from where the officers stand by then, so an officer who drove closer meanwhile never gets a point
-  inside the distance. A call that cannot wait (outside a thread) does not ask.
-- Ground probe (same request): `Config.Spawning.ground` (`pedAbove` -0.3 to 1.6 m, `vehicleAbove` -0.2 to 1.5 m,
-  `propAbove` -0.1 to 0.5 m, `snapWithin` 3 m), `collisionTimeoutMs` (6000 ms) and `interiorTimeoutMs` (5000 ms):
-  how a game judges one point against the ground: ok, put on the ground, under the ground, floating, no ground, in
-  water, in a wall or inside not loaded. The ground is the highest surface under the point (looked for from 2 m and
-  from 50 m over it), except that a person, a vehicle or an object under a low roof or the floor above (a trailer, a
-  house room, a garage deck) stands on the floor under him when that is the smaller move, and the surface over him
-  is reported as the roof. Used by the spawn point check and the placer; `enabled = false` does not switch it off for
-  the spawn point check.
-- The placer (same request; the spawn audit found Street Race Bust cars 1-2 m under the road, Gang Shootout points
-  half a metre under the yard, and a far officer's game, with no ground loaded, simulating the new people):
-  `Config.Spawning.place` (on). When the server asks (below), the game of an officer of the run puts a new mission
-  person, vehicle or object on the ground at the server's point: the game that simulates it when that is an officer's of the run, else the officer of the run
-  nearest to it. It keeps the entity frozen and the ground around it loaded, judges the point with the ground probe,
-  then moves it straight up or down onto the ground there (it never picks another spot) and lets people and vehicles
-  go (objects, and a person held cuffed, stay frozen), or leaves a bad point frozen; either way it tells the server
-  once. A person seated in a car and anything attached go with what they are in or on.
-- Every new mission entity waits frozen until an officer's game has placed it (same request; PLAN S10):
-  `Config.Spawning.placeTimeoutMs` (8000 ms), `retries` (2), `onTimeout` (`'unfreeze'`). The server freezes every new
-  person, vehicle and object of a mission as it makes it and asks for its placement; an officer's answer is taken only
-  for that entity's current ask and only when the height is near its point. A bad point moves the same entity to
-  another point the mission may use there (Gang Shootout, the raids, Hostage Rescue and the Weekly Boss: the spawn
-  director's other good points of that wave, never one someone stands on, still away from the officers), at most
-  `retries` times, then it is let go where it is (as before), with one console warning per bad point. When a game that
-  is not an officer's near it takes a waiting entity over, the server freezes it there again. No answer within
-  `placeTimeoutMs` while an officer is near: let go where it stands (or removed with `'delete'`), one warning. The
-  director now also hands a block its spare points (ARCHITECTURE 5.10), and CP.Npc keeps or drops the ask with the
-  bag (`CP.Npc.setPlace`).
-- Warrant doors and scattering suspects (same request; PLAN S11; the spawn audit found Warrant Service's associates
-  7-17 m beside the door from the start, on the knocking officer's flank, and the raids' 2-3 cooks or runners on one
-  point, 1.25 m apart, the hideout's on the lieutenant's own spot): `Config.Spawning.associatesAtKnock` (on). The
-  associates appear at the knock, through the spawn director: 15 m or more from every officer, never behind the one
-  at the door, out of sight first, hostile at once. Every associate and scattering suspect gets a point of his own
-  that no person, body or car of the run stands on; a scatter's suspects appear once an officer is within 150 m of
-  their point, 40 m or more away. A list with fewer points than suspects says so once (System → Problems) and the
-  others come out there once the one before has run off; after 20 s with no usable point the ring round the points
-  (as before) and the escape routes' first points are tried too; still short 45 s later, once everyone who appeared
-  is caught, the rest are left out so the objective ends. A door with no suspect point no longer puts him on the start
-  marker. The suspect who surrenders is stood at the door step and put on the ground there by an officer's game
-  (`CP.Spawn.again`). Grove Street's four associate points all lie on the flank of an officer at the door, so there
-  the associate comes out once the officers step away from the door (to be checked in game with Check spawn points).
-- Field contacts (same request; PLAN S12; the spawn audit found Suspicious Activity's people 4-17 m from the officer
-  crossing the start circle, Parking Patrol's first car 5-7 m past it, and the returning driver / thief 14 m / 30 m
-  from the car at a random angle, behind the officer as often as not): `Config.Spawning.contactRing` (25-40 m),
-  `sceneOutside` (10 m), `sceneWaitMax` (45 s). A scene (Suspicious Activity's car and people, all at once) and each
-  parked car of Parking Patrol (one by one along the street) appear once an officer is within 150 m of it and every
-  officer is more than 35 m (the 25 m approach + 10 m) from it; an officer standing closer keeps it waiting (20 m
-  after 20 s; after 45 s it appears anyway, one warning naming the mission and the place: move its start further
-  out, which S19 does for the built-in scenes). The returning driver and the thief appear 25-40 m from the car on a
-  footpath point the game of the officer at the car picks, in front of him and out of his sight first (ox_lib
-  callback `crimson-police:client:spawn:walkIn`; no answer in 1.5 s: round the car, 25 m or more from every officer),
-  wait for an officer's game to put them on the ground, then walk up to the car; the driver says and does what he
-  does when he gets there. `enabled = false`: as before.
-- Pursuit cars (same request, "i do not want them spawning in the ground or surronding the officers"; PLAN S13; the
-  spawn audit found Traffic Enforcement's violator made on the road surface itself and the second violator at the
-  first one's point, where an officer who chased the first one back up the road may stand):
-  `Config.Spawning.vehicleLift` (0.5 m), `secondViolatorUpstream` (200 m). A car made on a point of the mission's road
-  (Traffic Enforcement's violator, a race loop's waypoint, an open route's first point) is 0.5 m over the road there;
-  the missions' own car points (already 0.5 m over the road) are used as written. The second violator comes 200 m up
-  the road from the officer furthest up it (officers within 100 m of the road count; nobody on the road: from the
-  observation point's spot, as the first), so it drives towards your officers wherever they worked the first stop,
-  and its blip shows once it has passed where they stood. Every pursuit car (Traffic Enforcement, Pursuit Sim,
-  Stolen Vehicle Takedown, Street Race Bust) goes through the spawn director: never within 40 m of an officer (it
-  waits, or takes one of its next two slots further back; after 20 s 20 m is enough, never closer), then the placer,
-  which may move it to those slots. A location without a start no longer puts a spawnOffset car 200 m from a
-  player's position: one warning, and the car takes the objective's other points. `enabled = false`: as before.
-- Armored Truck Escort (same request, "make sure they dont spawn around the player"; PLAN S14; the spawn audit found
-  the truck made on the depot point itself, inside the car of an officer parked there, and the ambush cars 20-50 m from
-  a lead car driving ahead of the truck, or behind the truck once it had passed the ambush point):
-  `Config.Spawning.ambushAheadOnly` (on), and `vehicleLift` / `minDistance` for this mission too. The truck appears on
-  the depot point 0.5 m over the road once no vehicle and no officer is within 6 m of it (the officers are told once to
-  keep the start clear; after 20 s it takes the first free spot of four, 10 m apart, further along the route, never a
-  taken one). Each ambush car is 0.5 m over the road where it stands (not one height for the whole wave), never within
-  40 m of an officer (a lead car included), never on another vehicle, next to the truck or behind it: its slot slides
-  further along the route, 15 m at a time, ahead of the truck. A wave with no slot left when the truck arrives (or held
-  back by the spawn caps until then and finding none after) keeps the cars it has (none: it is left out, one
-  warning), so the escort can end. `enabled = false`: as before.
-- Hostage Rescue's hostages (same request, "make it be progressive"; PLAN S15; the spawn audit found the three
-  hostages made at run start, before the fight even began): `Config.Spawning.hostagesAt` (`'objective'`),
-  `hostagesWaitMax` (10 s). The hostages appear when their own objective starts (after the fight), on their points
-  15 m or more from every officer (`minDistanceIndoor`, through the spawn director); an officer standing closer keeps
-  them waiting, and after 10 s they appear on their points anyway with one warning naming the mission and the place.
-  A location with no hostage points no longer puts them on the start point (one warning). `'runStart'` (or
-  `enabled = false`): at run start, as before. The engine warns once per block whose `prepare` makes entities
-  (ARCHITECTURE 4.4, block field `spawnsInPrepare`).
-- Manhunt's fugitives and clues (same request, "make it be progressive", "make sure they dont spawn around the
-  player"; PLAN S16; the spawn audit found every fugitive and clue made when the search started, 276-560 m from the
-  officers, beyond the 424 m a player's game simulates). No new setting: `Config.Spawning` `activateRange` (150 m),
-  `minDistance` (40 m), `waveDelayMax` (20 s), `hardMin` (20 m) and `preferHidden`. Nothing appears when the search
-  starts. A fugitive appears on his hiding spot once an officer is within 150 m of it and every officer is 40 m or
-  more from it, never closer; after 20 s of an officer standing closer he hides on another free hiding spot in the
-  circle instead (one console line). A clue appears once an officer is within 150 m of it, 40 m or more from every
-  officer, or closer where the officers' games say nobody can see it (20 m in sight after 20 s). What appeared stays;
-  "Check clue" is offered only on a clue that is there. `enabled = false`: all at the search start, as before.
-- Prisoner vans, tow trucks and coroner vans (same request, "make sure they dont spawn around the player"; PLAN S17;
-  the spawn audit found the 60 s fallback putting the van on its parking point or on the scene with no player check,
-  and a late van moved there by the server at the file's height): `Config.Custody.serviceClearance` (30 m, 10-100).
-  A van is put on its parking point (the transport or coroner point, else the scene of the arrest) only while no
-  player is within 30 m of it. A late van whose point an officer stands on drives on and is put there once he steps
-  away; one that got no road point at all comes to a road point beside the scene (30-70 m from its point, picked by
-  the nearest officer's game and checked by the server), or waits. A van put down waits frozen until an officer's game
-  has put it on the ground, like every new mission vehicle. A road point an officer walked onto while the van waited
-  for room is dropped and a new one asked. A tow truck that got no road point is never made inside the car next to
-  you: the car fades out and counts as impounded (it used to sit there and never load it). `Config.Spawning.enabled
-  = false`: the vans are put on their points as before.
-- Mission Builder: armed spawns outside the arrival circle (same request, "surronding the officers"; PLAN S18; the
-  Builder audit published a draft with 11 hostiles 31 m from a 60 m start with no error, and drew a 30 m keep-out ring
-  inside the start circle): `Config.Builder.spawnMargin` (40 m, 0-150). In a new or edited custom mission every armed
-  spawn point (a shootout's spawns, spawn sets and boss, escort ambush points, pursuit cars, warrant associates) must
-  be outside the start circle plus the margin (2D, as officers arrive: 100 m from a 60 m start); the placement tool
-  refuses a closer one as you aim ("Enemies must be at least 100 m from the start"), publishing refuses it with one
-  message per location, and the Locations map and the in-world ring show that distance ("No enemies closer than
-  100 m"). Hostages, suspects and field-contact people keep `minSpawnFromStart` (30 m). The points a built-in mission
-  plays at its own start stay allowed in a duplicate of it (they play as in the built-in, kept away from your
-  officers by the spawn director); a moved or new point follows the rule. A mission with a search area (its start is
-  the search circle, entered anywhere) keeps the 30 m. A custom mission published before still loads, with one
-  warning per location in Admin UI -> Missions -> Load result; publishing it again needs the points moved.
-- Mission Builder: a location's points stay with its start (owner request "the coordinates are very critical"; the
-  a5 audit moved a start 1.1 km with **Move start** and left 11 hostile spawn points behind, and Publish was allowed):
-  `Config.Builder.maxPointFromStart` (300 m, 50-2000). Every point of a location must be within its start circle plus
-  this (2D: 360 m from a 60 m start), or publishing refuses it ("Location 1, Hostile spawn points: 11 of 11 points are
-  up to 1.2 km from the start"). Keys the mission travels along are exempt: road routes, a patrol's checkpoints, an
-  escort's ambush points and flee paths, and a round of stops that begins at the start (Business Check's doors). After
-  **Move start** (or **Set start here**) the Locations step lists the points left behind with **Move them too** (they
-  move by the same distance as the start; check their height on the map), **Place again** and **Keep** (Publish stays
-  blocked until they are moved). Every built-in mission's duplicate passes.
-- Scene missions start further out (same request, "make sure they dont spawn around the player"; PLAN S19; the spawn
-  audit found Suspicious Activity's people 4-17 m from an officer crossing the 40 m start circle, Parking Patrol's
-  first car 5-7 m past it and Stolen Vehicle Takedown's car 18-24 m from him): the start circles of the built-in
-  files are now Suspicious Activity 100 m (the car and every person 42 m or more from an officer at the edge),
-  Illegal Parking Patrol 85 m (the first spot 38 m or more) and Stolen Vehicle Takedown 85 m (the car 43 m or more),
-  so the GPS ends further out and the scene is already there, past the distance the spawn director waits for (the
-  25 m approach plus `Config.Spawning.sceneOutside`, 35 m; for a car `Config.Spawning.minDistance`, 40 m), and
-  Suspicious Activity's people still react only once an officer is within 25 m. Mission data only (the Mission
-  Builder sets a circle of 20-150 m).
-- No two people share one point (same request, "i do not want them spawning ... surronding the officers"; PLAN S21;
-  the spawn audit found Gang Hideout Raid's runners on the lieutenant's own spot, Drug Lab Raid's cooks sharing one
-  point and Prison Break's south-west fence with 6 points for 8 inmates): every Gang Hideout Raid location now has 4
-  runner points on the lanes from the back of the house to its escape routes, every Drug Lab Raid lab 3 cook points
-  (the hiding spot and 2 on the tracks towards the escape routes), and the south-west fence 8 inmate points, all on
-  the road / track network at its height + 1 m, 3 m or more apart and never on the lieutenant or another spawn point,
-  so nobody shares a point: each one appears on his own once the spawn director allows it (40 m or more from every
-  officer, or 20 m after `waveDelayMax`; with your officers still at the lieutenant's body or the lab, the points
-  closer to them wait until they move off). Each flees along the escape route that starts nearest where he appears
-  (`Config.Flee.nearestRoute`, on), so nobody runs back across the site past your officers to a route on its other
-  side. Check the points in game with Admin UI -> Testing -> Check spawn points.
-- Check spawn points (owner request of 2026-10-19: "Double check all coordinates etc for every ped"):
-  `Config.Testing.spawnCheck` (`enabled`, `sceneTimeoutMs` 8000 ms, `moveWithin` 150 m, `routes = false`). An
-  admin's own game visits every point of a mission's locations (frozen, unseen and unhurt, back where he was at the
-  end; nothing is spawned) and judges each by the ground probe; the server writes one console line per bad point,
-  with its own coordinates. Each point is judged by what the mission puts there (a person, a vehicle by its model, an
-  object, a marker or a route point), from each block's new `pointKinds` (ARCHITECTURE 7.1). New in SPEC (Admin test
-  mode). Its screen: Admin UI → Testing → Check spawn points (scope, Start / Stop, progress, results, Teleport here
-  with `Config.Testing.spawnCheck.teleport = true`, audited, and Copy report).
-- Wording only (no behaviour change): the Config listing in SPEC now says what the code already does.
-  `leaveOutAfter` counts from a wave's first wait and also leaves out a warrant's associates and a scatter's suspects;
-  `preferHidden` lets a Manhunt clue appear in sight at `hardMin` after `waveDelayMax`; `onTimeout = 'delete'` treats
-  the entity as killed (a hostage or an escort's truck removed that way fails its objective); `Builder.exportPath` and
-  the Markers kinds fields say what they need and mean. Activation: the maintenance lock ends with a restart, or after
-  a restore that stopped part way with a restore that works.
-- Police vs real criminal players, the owner's decision of 2026-10-26 ("Build all 3 but options in the config.lua";
-  built in steps V1-V27): live crimes (a crime Crimson-Contracts reports becomes a LIVE call), volunteer suspects (a
-  player who volunteers plays a mission's suspect) and a mode per mission type, every choice a config.lua option. The
-  Hard rules now read, for cases with a real suspect only:
-  - Stack: may listen to Crimson-Contracts' server-only lifecycle events and offers the read-only export
-    `GetAvailablePolice`; it never requires Crimson-Contracts.
-  - Names: volunteers use the command in `Config.Volunteers.command` (default `/crimsonheat`).
-  - Access: a mission type or mission set to `'players_only'` is offered only while a volunteer who fits is online.
-  - Mission choice: a fourth exception, a LIVE call (a real crime: no draw); a `'players_only'` type draws only from
-    missions that can take a volunteer, still at random.
-  - Custom interfaces: volunteers have no tablet; they get ox_lib notifications, dialogs and a menu from their command.
-  - NPCs only: except live crimes and volunteer suspects, whose suspects are real players who chose it.
-  - Real calls first: a third exception, the case's own SC-Dispatch call and calls by or about its suspects and
-    participants do not end it.
-  - No mission alerts: `Config.RealSuspects.officerAlerts` decides (shipped: alerts go out like any officer's).
-  - Route to the start: `Config.RealSuspects.routeEnds` decides (shipped: the route ends at the first contact), and
-    on a live crime `Config.LiveCrime.requireRoute` (shipped `false`, free to chase) replaces `Config.Route.required`;
-    volunteer missions follow `Config.Route.required`. The start route switch entry below is unchanged.
-  - Downed participants: `Config.RealSuspects.downed` and `downedPickupDelay` decide (shipped: a downed officer keeps
-    what he earned, no type cooldown, pick-up after 400 s).
-  - Do not build: Activation (a `'players_only'` type is the owner's choice), Payouts and points (another resource
-    may report a crime; every point is still computed by Crimson-Police), UI (the volunteer command's ox_lib
-    dialogs) and Rule switches (the `Config.RealSuspects` keys and `Config.LiveCrime.requireRoute`; rules 15, 16 and
-    18 stay on for NPC missions).
-  - Out of scope, Assumptions, the NPC design rule, the Dispatch wording and the SOP name the two features.
-
-  All three features ship off (`Config.LiveCrime.enabled = false`, `Config.Volunteers.enabled = false`, every mode
-  `'npc'`), so nothing changes until you switch one on. Undo: leave both switches off.
-  LIVE calls on the Dispatch screen (step V11): with `Config.LiveCrime.enabled = true`, a crime with suspects shows as
-  a red **LIVE** card (code `LIVE-001`, priority 1, the alert's title and street, the area, how many suspects, never
-  where they are) and idle officers who have not muted call alerts get a red toast. It lapses after
-  `Config.LiveCrime.offerTime` (300 s) or when the crime ends, and at most `Config.LiveCrime.maxLiveRuns` (2) LIVE calls
-  and live cases run at once (a crime past that is audited **Live crime ignored**). A LIVE call never counts against
-  `Config.MissionCalls.maxOpen` and a Cross-Department lock does not withdraw it.
-  Claiming a LIVE call (step V14): the unit leader claims it like any mission call and the case opens at once at the
-  crime's reported place (no draw, no twists, no rapid response; the crime's own SC-Dispatch call does not count as
-  "on a call"). Every accept rule still applies (on duty, unit size, hourly and daily caps, mission ban, arena), except
-  the server run caps (`Config.LiveCrime.maxLiveRuns` caps live cases) and three switches: `readyCheck` (`false`: no
-  ready check; `true`: a unit of 2+ answers it first), `typeCooldown` (`false`: type cooldowns are ignored and a live
-  case starts none) and `duringOperation` (`true`: LIVE calls can be claimed while a Cross-Department Mission runs).
-  The claim is refused when the crime is over or its suspects are in another case, when every suspect already scored
-  `Config.RealSuspects.maxCatchesPerSuspectDay` times today, and when an officer of the unit is in the crew, plays
-  one of the suspects on another character or account, is suspended from these cases, was a suspect within
-  `jobHopMinutes`, or has an admin block or a recent case (`pairCooldownHours`, `suspectCooldownMinutes`) with a
-  suspect. An officer who shares only a connection or PC with a suspect may take it and is flagged for review. A case
-  lasts at most `Config.LiveCrime.caseTime` (1800 s) and its call closes with it (never re-dispatched).
-  Backup joins a live case (step V15): with `Config.LiveCrime.backup = true` (shipped, behind `enabled`) an on-duty
-  officer on no mission who marks himself responding to the crime's own SC-Dispatch call, reaches the scene
-  (`sceneRadius`) or cuffs one of its suspects gets a **Join the live case?** pop-up for
-  `Config.LiveCrime.joinOfferSeconds` (30 s). A yes is checked again like a claim for him (duty, mission ban, real
-  calls, the crew and pair rules) and against `Config.LiveCrime.maxOfficers` (6, the claiming unit counted); he gets
-  the case's steps and map points, scores only the lines recorded after he joined, and can't join again after he
-  leaves. An officer outside the case who cuffs a suspect: with `Config.RealSuspects.outsideCuff = 'assist'`
-  (shipped) the cuff counts for the case while one of its officers is within `contactRange` of the suspect,
-  otherwise (and always with `'stopped'`) that suspect counts for nobody and staff get the note. Every offer,
-  answer and join is on the case timeline.
-  The live case (step V12): officers see three steps on the HUD: **Respond to the
-  reported scene**, **Secure the scene** (hold it for `Config.LiveCrime.secureSeconds`, 60 s, within
-  `Config.LiveCrime.sceneRadius`, 75 m) and **Detain and book the suspects**, which stays open and never shows how many
-  suspects are left. The map shows the reported scene and, after that, a **last reported** point per suspect still
-  free, moved only every `Config.LiveCrime.lastReportedEvery` seconds (60; 0 = none), never a live position. Each
-  detain and each booking adds a line for the whole unit (`live_detain`, `live_book` in Config.Bonuses; a suspect
-  cuffed while down counts `Config.RealSuspects.neutralisedShare`, an AFK one nothing), and securing the scene adds
-  `live_scene`. The unit leader ends it with **End case** in the radial menu; the time limit ends it as completed,
-  and it ends by itself `Config.LiveCrime.deadCaseSeconds` (30 s) after no suspect is left to work. The block
-  (`live_response`) can't be used in a mission file or the Mission Builder.
-  The officers' tablet (step V16, `Config.LiveCrime.caseCard = true` and `resultOutcomes = true`, shipped behind
-  `enabled`): with `Config.LiveCrime.readyCheck = true` the unit's ready check carries a red **LIVE case, real
-  players** line with the alert, the street and the suspect count. Active Mission shows a red **Live case** card: the
-  three steps (the same for every suspect), the suspect count, when the last-reported map points were taken and by
-  which suspect labels ("Last reported 40s ago: Suspect A"), when the next report comes, and for the leader where
-  **End case** is. It never shows a suspect's state or a live position. The result card lists each suspect's outcome
-  by label once the case is over (Detained, Booked, Got away, Left the city, Did not count, Stopped outside the
-  case); an officer who left early sees that the case was still running.
-  Results for other scripts (step V19): when a live case ends, Crimson-Police sends the server-only event
-  `crimson-police:server:liveCrimeEnded` (`Config.LiveCrime.endEvent = true`, shipped behind `enabled`) and offers the
-  export `GetAvailablePolice` (see 8.3; `Config.LiveCrime.availablePolice = 'idle'` counts on-duty officers on no
-  mission, `'duty'` every on-duty officer). Crimson-Contracts does not read either yet; another script may.
-  Live scoring (step V13): a live case earns only those lines (`Config.LiveCrime.linesOnly = true`; `false` adds the
-  mission type's base points and the end-of-run lines like a mission); the result card says **Live case: the lines
-  below are the points** instead of Base points. Its tier (the points and cash multiplier of `Config.Scaling`) comes
-  from the number of suspects (`Config.LiveCrime.tier = 'crew'`; `'officers'` = the officers, like a mission). It
-  gets no Type of the Day multiplier, counts for no daily or weekly goal and not for the department challenge or the
-  weekly bounty, pays no cash and rolls no item rewards until the owner turns on `Config.LiveCrime.typeOfTheDay`,
-  `goals`, `challenge`, `cash` or `items` (all `false`; since step G3 `cash` and `items` are plain switches: the
-  cash is the mission type's payout). Each suspect detained is a **live catch** for every officer on the case (stored per run row,
-  migration 014); add `'live_catches'` to `Config.Leaderboard.metrics` to show a **Live catches** Rank by tab.
-  Staff data (steps V17 and V18): admins with the `antiFarmOverride` key can
-  read each open case and the last `Config.RealSuspects.casesKept` closed ones (16; saved in the database or the saves
-  folder, so a restart keeps them, none older than `pairLedgerDays`; `saveCases = false` keeps them in memory only):
-  the suspects and officers by name, the case timeline in plain lines, the flag lines (officer
-  conduct flags and the suspects' own notes) and the damage ledger, plus pair statistics and the running blocks. Three
-  tools need a reason and are audited: **block a pair** (an officer can't take a case against that suspect), **exclude
-  a player** (never a suspect) and **suspend an officer** (no real-suspect cases), each for 1 to 3650 days. They are
-  refused while both features are off and on the admin's own characters. Nobody reviews or reads a case he was a
-  suspect in (the same own-run rule as officers). In game it is the **Admin UI -> Real suspects** screen (under More;
-  only while `Config.LiveCrime.enabled` or `Config.Volunteers.enabled` is on, and only for admins with the
-  `antiFarmOverride` key; `Config.RealSuspects.adminScreen = false` hides it). **Cases** lists the cases (All, Open,
-  With flags or notes); a click opens one: its suspects (state, contact / cuff / detain / booking times from the open,
-  armed, AFK, down, left), its officers, the flags and notes, the timeline and the damage ledger, with **Exclude**,
-  **Suspend** and **Block pair** buttons that fill the tool form. A case of your own characters is greyed and can't be
-  opened. **Pairs and blocks** shows the pair statistics (type a citizen ID to see only that player, with his
-  exclusion and suspension) and the running blocks, exclusions and suspensions; **Block, exclude or suspend** opens
-  the form (citizen IDs, days, a reason; a longer one replaces a shorter one). Step F2: **Lift** on a running block,
-  exclusion or suspension ends it now (a reason, in the audit log; a restart does not bring it back;
-  `Config.RealSuspects.staffLift = false` removes the button). Pair statistics, the running rows and the case lists
-  show character names next to citizen IDs (`staffNames`; one lookup per screen load: online players, then Qbox's
-  players table, then the officer names Crimson-Police keeps), and the damage ledger names the weapon (Combat
-  Pistol) instead of its hash (`weaponNames`; a weapon it does not know still shows the hash).
-  Volunteering (step V20, `Config.Volunteers`): with `enabled = true` a player who is not on police duty types
-  **/crimsonheat** (`command`; restart to rename it), agrees to the rules in an ox_lib alert and ticks the suspects he
-  will play (the wanted person who runs, the getaway or race driver in his own car, the fugitive in a search area). He
-  stays on the list for `windowMinutes` (60); the same command then opens a menu with the time left, **Renew** (a fresh
-  window from now), **Change the suspects you play** and **Stop**. It is refused, or ends, for police on duty or off
-  duty less than `Config.RealSuspects.jobHopMinutes` ago, AFK players, players in an instance or the arena, admins
-  (`excludeAdmins`), players an admin excluded on Real suspects, and players with too many strikes. Going on police
-  duty, logging out, the window running out or the owner turning `enabled` off ends it, and he is told why. A yes
-  followed by a no-show or walking away from the case is a strike (from the matching steps): `strikes` (3) within
-  `strikeHours` (24) block that player, on every character, for `blockHours` (24). Strikes and strike blocks are
-  saved, so a restart keeps them (`saveStrikes = false` keeps them in memory only). The list itself is not saved: after
-  a restart a player types `/crimsonheat` again to volunteer.
-  Modes and the Mission Board (step V21, `Config.Volunteers.modes` per mission type and `missionModes` per mission
-  id, which beats its type; Settings edits both): `'npc'` (shipped for every type) plays the NPC as today;
-  `'players_when_available'` lets the unit leader tick **Real suspect OK** in the accept dialog (a red "Real suspect"
-  badge on the card; never ticked for him, and a one-click accept still opens the dialog), and then a volunteer who
-  fits may play the suspect (the asking is the next step), else the NPC; `'players_only'` offers those missions only
-  while a volunteer who plays that suspect is free and only to a unit that ticks Real suspect OK: the draw takes only
-  missions and locations a volunteer can play, a mission with no such suspect is never offered, the accept holds one
-  free volunteer for the run (another unit cannot count on him) until the run ends, and the card is locked "No
-  volunteer suspect is free" otherwise. Such a mission is never pushed by a supervisor, and a mission call never
-  draws it (a call has no tick). A mission can take a volunteer when one of its blocks offers a suspect slot;
-  the built-in ones get theirs in the next steps, so until then every mode plays the NPC. Admin UI -> Permissions ->
-  Config health (and the console at start) warns about a mode on an unknown type or mission, a value that is no mode,
-  and a mode on missions none of which a volunteer can play.
-  Matching (step V22, more `Config.Volunteers` keys, every one in Settings): once a unit accepts such a mission, the
-  volunteers who play that suspect get a yes/no pop-up one at a time (the one a `'players_only'` accept held first;
-  nobody who is down, cuffed, jailed, in a no-start zone or one of the officers' own players), each waiting
-  `askSeconds` (30), at most `askTries` (3) per mission. It names the suspect, how far the starting point is and the
-  time to get there; a no or no answer costs nothing. A yes makes the mission a case with a real suspect (the
-  officers get a toast "A volunteer plays this mission's suspect") and sets the starting point as his map waypoint:
-  he has `travelSeconds` (300) to get within `meetRadius` (25 m) of it, or it is a no-show. When an officer gets
-  within `Config.RealSuspects.contactRange` of him the case is engaged: the officers lose the NPC-combat headshot
-  protection unless `Config.RealSuspects.npcCombat` is true. His command menu then offers **Cancel this case** (free
-  within `cancelGraceSeconds`, 60, of his yes and before officers reached him; a strike otherwise); a no-show and
-  logging off are strikes too. When nobody says yes, `'players_when_available'` plays the NPC and `'players_only'`
-  ends. When the volunteer drops out before officers reached him, `onVoid` decides: `'npc'` (shipped) plays the NPC,
-  `'end'` ends the mission; a `'players_only'` mission, or any mission once officers reached him, always ends. Such an
-  end follows `voidRun`: `'cancelled'` (shipped: Abandoned with no cooldown, penalty or pay) or `'keep_earned'`
-  (Completed with what was earned). When the mission ends he is told he is free to go. Staff see the yes, in
-  position, engaged, no-show and cancel lines on the case timeline (Real suspects screen). The built-in missions get
-  their volunteer suspects from step V23 on (Warrant Service first, below).
-  Gates (step V22b): a volunteer is asked only while the anti-farm caps of `Config.RealSuspects` allow it, the same as
-  a live crime: he scored fewer than `maxCatchesPerSuspectDay` cases today, and no officer of the unit is suspended
-  from these cases, was a suspect within `jobHopMinutes`, has an admin pair block with him or a recent case with him
-  (`pairCooldownHours`, `suspectCooldownMinutes`); otherwise the next one is asked (else the NPC). An officer who
-  shares only a connection or PC with him gets the Linked accounts flag (his points wait for review), and a no-show
-  or a cancel is a staff note on the case. When the mission ends each officer and the volunteer get a pair row
-  (kind `volunteer`), which feeds those caps and the repeated-pairing flag. From his yes on the mission pays points
-  only: `Config.Volunteers.payCash` and `payRewards` (plain switches since step G3; both shipped false) turn on its
-  cash and item rewards (the volunteer's own pay is `Config.FeatureRewards.suspect`, 6.12), and `typeOfTheDay`,
-  `goals` and `challenge` (each shipped false) let it count for the Type of the Day multiplier, the officers' goals
-  and the department challenge and bounty.
-  Warrant Service's wanted person (step V23): the first built-in suspect a volunteer can play (the runner at the
-  door, `flee_arrest`'s door mode). With the investigation mode set to `'players_when_available'` or `'players_only'`,
-  the volunteer who says yes is sent to the suspect's spot beside the front door instead of the NPC. While the
-  volunteers are asked, nobody waits at the door (the HUD says "Stand by"); the knock says "Real suspect: the wanted
-  person is a real player"; he counts once he is detained or booked, and the door stays the map pointer (never his
-  position). If he gets away the warrant fails like an escaped NPC. A volunteer caught while AFK has his part voided
-  (`Config.Volunteers.afkCatchVoids`, shipped `true`: a strike, and the mission ends as `voidRun` says; `false` = the
-  catch counts). Warrant Service's armed associates stay away while a volunteer plays (`doorAssociates`, shipped
-  `false`; the NPCs would shoot him too). Both are in Settings.
-  Street Race Bust's driver (step V24): a volunteer who ticked the driver role can be the race driver in his own
-  car (`pursuit`'s stop mode; Stolen Vehicle Takedown hands its stop to a field contact and Traffic Enforcement
-  observes a violator, so neither offers one). With the patrol mode set to `'players_when_available'` or
-  `'players_only'`, the volunteer who says yes is sent to the race's first grid slot. While the volunteers are asked
-  no racer appears ("Stand by"); while he drives no NPC racer appears (`Config.Volunteers.driverNpcCars`, shipped
-  `false`; `true` = the other racers still come, he takes one car's place). The map shows the grid slot, then once
-  he is in position his "last reported" point every `driverReportEvery` seconds (shipped `30`; `0` = none, the map
-  keeps the grid slot), never his live position. He counts as a detained racer (the racer bonus) once he is detained
-  or booked; an AFK catch is voided as above; if he gets away the race fails. Both keys are in Settings.
-  Manhunt's fugitive (step V25): a volunteer who ticked the fugitive role can be the fugitive hiding in the search
-  area. With the investigation mode set to `'players_when_available'` or `'players_only'`, the volunteer who says yes
-  is sent to one of the location's hiding spots and gets the search circle as a red circle on his own map. While the
-  volunteers are asked no fugitive appears ("Stand by"); while he hides no NPC fugitive appears
-  (`Config.Volunteers.fugitiveNpcs`, shipped `false`; `true` = the other fugitives more officers bring still hide).
-  Officers see only the circle and the clues, never where he is; each clue shrinks the circle towards where the
-  server last saw him, and his own map circle shrinks with it. He must stay inside the circle: once he has been
-  inside, leaving it gives him a warning and staying out for `fugitiveOutSeconds` (shipped `30`; `0` = no circle
-  rule) voids his part (a strike, and the mission goes on as `onVoid` / `voidRun` say). Detaining or booking him
-  completes the search (an AFK catch is voided as above); if he gets away the search fails. Both keys are in
-  Settings.
-  Results for other scripts and staff (step V26): when a mission a volunteer said yes to ends, other scripts get the
-  server-only event `crimson-police:server:volunteerEnded` (see Exports; `Config.Volunteers.endEvent`, shipped
-  `true`, in Settings; `false` = no event). On **Admin UI -> Real suspects**, **Cases** has two more filters (Live
-  crimes, Volunteers), a volunteer case's Kind names the suspect he played, and its drawer shows the suspect played,
-  the mode, where the match got to (on his way, in position, officers reached him, the NPC took over) with why he
-  dropped out, and whether officers reached him. A new **Volunteers** tab lists who is on the volunteer list now:
-  the suspects each plays, since and until when, his strikes, and whether a mission is asking him or he plays one
-  (memory only). Step F2: **Clear strikes** on a row (or by citizen ID, for a player whose strike block took him off
-  the list) clears his strikes and strike block with a reason in the audit log
-  (`Config.Volunteers.staffClearStrikes`).
-  Docs and checks (step V27): README 9.16 gathers what an owner and his players need in one place: the owner
-  checklist for turning each feature on, the rules to paste into the server rules (officers, suspects and staff),
-  what the server does for fairness (no points for hurting players, no live position, consent and opt-out, the
-  staff timeline) and a table of what to check when something does not happen. `/crimsonheat` is in 8.1, the
-  in-game checklist has a check for every step V11-V27, and SPEC's SOP has the rules for cases with real suspects.
-  No behaviour changes.
-  Surrender and talk-down (step RP1, `Config.RealSuspects.surrender`, shipped on but only while
-  `Config.LiveCrime.enabled` is on): a suspect of a live case can give up with `/surrender` (an ox_lib yes/no
-  pop-up; an officer of the case must be within `surrenderRange`, 50 m), and every officer of the case has **Talk
-  them down** in the radial menu, which asks the nearest free suspect within `talkRange` (15 m) to surrender (once
-  per officer and suspect every `talkCooldown`, 30 s; an officer who comes that close is told once). The suspect
-  always chooses. A surrender ends when he moves `breakRange` (10 m), draws a weapon, gets out of the cuffs or nobody
-  cuffs him within `holdSeconds` (120 s). A surrendered suspect who is detained with no officer hit since scores the
-  shared `peaceful_arrest` line (Config.Bonuses, 15% of P x his share); the case timeline keeps talk_down,
-  talk_refused, surrendered, surrender_ended and peaceful_arrest with the officer's name for staff.
-- Start route switch, at the owner's request of 2026-10-26 ("Also option in the config where they have to stay on the
-  route"): Hard rule 17 is now the one switchable Hard rule (15, 16 and 18 stay unswitchable).
-  `Config.Route.required` (`true`, as before) makes officers follow the GPS route to the start; with `false` the route
-  is still set and shown, **Recalculate route** still works and arrival still counts, but leaving the route never
-  ends a run: no off-route warning, no countdown on the HUD or the tablet, no Abandoned (`off_route`) end and no type
-  cooldown from it. The start timeout stays. A run keeps the value it was accepted with, and a test run follows its
-  own **Start route** switch. Undo: `Config.Route.required = true` (Admin UI → **Settings**, or config.lua).
-- Late partners follow the action, the owner's decision of 2026-10-19 (PLAN M11): Hard rule 17's numbers changed,
-  the rule itself stays. Once a run is In progress, an officer who has not reached the start yet no longer drives to
-  an empty start: his GPS leads to the current objective, his start route is no longer checked (so chasing the
-  action never ends his run as Abandoned), and he arrives within `Config.Route.lateArriveRange` (150 m) of the
-  objective, or at the start as before. This works the same with `Config.Route.required` on or off. Under Radio
-  Silence (no objective line) he keeps the start's waypoint as his guide. Undo: `Config.Route.lateArriveRange = 0`
-  (only the start counts, and anyone still driving keeps the route check).
-- Late partners keep their run while they chase (step R6, under the owner's "Also fix any issues you have found" of
-  2026-10-26): a partner who left late could still be removed by the start timeout (`Config.Limits.startTimeout`,
-  600 s from his accept) while he followed the action, with nothing on his screen to warn him. Now, from the moment he
-  follows the action, he has `Config.Route.followActionSeconds` (300 s) to reach it, never less time than he already
-  had, with `Config.Route.required` on or off. The "Joining your partners" line on the HUD and the run bar on the
-  tablet show the seconds left in the last 2 minutes; when they run out he leaves the run as before
-  (`start_timeout`, Abandoned). Undo: `Config.Route.followActionSeconds = 0` (the start deadline from his accept).
-- Map blips of a suspect who gave up are one size near and far (step R6): the size is
-  `Config.Markers.kinds.suspect.surrenderedScale` (0.6, the size the blip had near you), used by Flee & Arrest,
-  Search Area, Pursuit and (step R7) Field Contact for the blip on the person and by the map pointer for one too far
-  away for your game, who showed at the normal suspect size (0.7) before.
-- Twists chosen by the officers, at the owner's request of 2026-10-19 ("Bonus points and the twists they can choose
-  them and get more bonus points or money"; PLAN M8b): the three run modifiers (now called twists) are no longer
-  rolled at random. The unit leader ticks any of Armored Hostiles, Time Crunch and Radio Silence on the accept step of
-  the Mission Board or of a mission call claim (the members see them on the ready check and the Active Mission
-  screen); each one adds its own bonus and they stack (`Config.Events.twists`: +25 % of P and x1.25 cash, Time Crunch
-  +20 % and x1.20; together at most `twistMaxPoints` +70 % and `twistMaxCash` x1.95), paid only for a Completed run.
-  Armored Hostiles is offered only for a type with a mission that spawns armed NPCs and now works on any such mission
-  (before: Tactical only). The mission is still drawn at random after the accept (the Mission choice Hard rule is
-  unchanged): a chosen twist the drawn mission has no use for is dropped without its bonus, and the officers are told.
-  No twist on the Weekly Boss, test runs or Cross-Department Missions. `Config.Events.modifierPoints`, `modifierCash`
-  and `modifiers` are gone (a value saved for them in Settings is ignored with one warning). Undo: switch a twist off
-  with `Config.Events.twists.<key>.enabled = false`; `Config.Events.modifierChance = 0.25` brings the random roll back
-  (on top of the chosen ones).
-
-**Waiting for the owner's OK** (already in `docs/SPEC.md` and the code; each one is undone without a code change):
-
-- Roles: the Roles Hard rule also counts a Qbox admin (the ace `admin`) as an admin while `Config.QboxAdmins` is
-  `true`, which ships on. Undo: `Config.QboxAdmins = false` in config.lua.
-- **D1** Point values are settings, marked "points value" (a confirm, and the flags webhook), and an admin's logged
-  manual award may be **negative** (a deduction, never below 0 XP). Undo: `AdminControl.pointAdjust = false` stops
-  adjustments; any point setting goes back to config.lua with **Reset** (or **Revert** in the history) in Settings.
-- **D2** Corrections as bulk voids: an officer's, an operation's or a board window's runs can be voided as one batch
-  (there is still no wipe). Undo: every batch has **Undo** in Officers → Corrections.
-- **D4** Built-in missions edited in the Mission Builder, saved as an override under the same id in
-  `missions/custom/overrides/`; only admins edit them. Undo: **Reset to original** per mission, or
-  `AdminControl.editBuiltins = false` (every edit stops playing at once and is kept).
-- **D5** Departments added, turned off and (when unused) deleted from the Admin UI; a turned-off department's
-  unfinished pay still pays from its account. Undo: turn the department on again (Departments, or
-  `Config.Departments.<key>.enabled`).
-- **D6** Anti-farm overrides per officer (clear cooldowns, more completions today, another boss attempt, first-run
-  bonus again, forgive streak days, add run time, treat a free abandon as a normal one), each with a daily or weekly
-  limit counted from saved rows. Undo: set its limit in `Config.AdminControl` to 0.
-- **D7** Money outside the normal flow: unlock a type's payout for supervisors (on); retry unfunded, pay the capped
-  rest, pay a stuck payment again, re-pay forfeited cash, add funds, take back cash, manual cash and take back an item
-  reward (all **off**; any admin turns one on in Settings by typing `ENABLE`, audited). Undo: switch it off again
-  (`Config.Cash.allow*`, `Cash.restoreForfeited`, `Rewards.allowTakeBack`).
-- **D9** Testing is optional for every mission and every role, built-in, custom and edited built-in alike. Undo:
-  `Builder.requireTestToPublish = true` (supervisors then need a passed test; admins never do).
-- **D10** Names for offences, commendation kinds, badges, bonuses and penalties (`Config.Labels`, English only).
-  Undo: reset `Labels` in Settings.
-- **D11** Move a re-created character's history to the player's new citizenid (same licence, logged). Undo: **Undo
-  move**, or `Config.AdminControl.recordMove = false`.
-- **D13** The maintenance lock during a storage copy, a storage switch or a backup restore (not a pause and not a
-  switch: it ends with your restart; after a restore that stopped part way, only a restore that works ends it, the
-  automatic backup the banner names). Undo: none needed; it ends with the restart (or that restore).

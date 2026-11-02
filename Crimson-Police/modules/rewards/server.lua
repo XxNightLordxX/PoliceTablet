@@ -17,7 +17,7 @@ local MAX_COUNT = 100                    -- items per reward row
 local IDLE_WAIT_MS = 60000               -- the forfeiture job waits this long at most for an admin's bulk job
 local MEDALS = { [1] = 'gold', [2] = 'silver', [3] = 'bronze' }
 local TIERS = { 'standard', 'reinforced', 'heavy', 'major', 'critical' }
--- docs/CRIMSON_ARENA.md rule 4 (the loader's item-name rules): Crimson-Arena takes these from players it believes
+-- Crimson-Arena rule 4 (the loader's item-name rules): Crimson-Arena takes these from players it believes
 -- owe them, weapons are never handed out, and money items would stand in for a payout.
 local ARENA_ITEMS = { 'armour', 'bandage', 'ammo-*', 'weapon_*', 'money', 'black_money', 'cash' }
 

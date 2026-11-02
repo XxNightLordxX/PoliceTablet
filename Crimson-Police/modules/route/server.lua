@@ -1,5 +1,5 @@
 -- CP.Route (server): Hard rule 17, the route to the mission start (docs/ARCHITECTURE.md §5.12, SPEC "Route to the
--- start", CRIMSON_ARENA rules 5 and 6). Config.Route.required (the owner's switch, locked at accept) decides whether
+-- start", Crimson-Arena rules 5 and 6). Config.Route.required (the owner's switch, locked at accept) decides whether
 -- leaving the route ends a run; without it the route is still shown, reported and recalculated, and arrival counts.
 
 CP.Route = CP.Route or {}
@@ -396,7 +396,7 @@ local function CheckOne(run, src, st, now)
         return
     end
     if InArena(src) then
-        -- Not route-checked (CRIMSON_ARENA rule 6); CP.Alerts removes them from the run.
+        -- Not route-checked (Crimson-Arena rule 6); CP.Alerts removes them from the run.
         st.offSince = nil
         st.offCause = nil
         st.warned = false

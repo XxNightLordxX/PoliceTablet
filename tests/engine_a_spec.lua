@@ -773,7 +773,7 @@ do
     H.ok(M.normalize(sBoss, { source = 'builtin' }) ~= nil, 'the built-in Weekly Boss passes')
     H.eq(seenBoss[#seenBoss], true, 'validate sees the boss flag')
 
-    -- mission items Crimson-Arena takes away are never mission items (docs/CRIMSON_ARENA.md rule 4)
+    -- mission items Crimson-Arena takes away are never mission items (Crimson-Arena rule 4)
     for _, name in ipairs({
         'armour',
         'Bandage',
@@ -824,7 +824,7 @@ do
     H.ok(nb ~= nil and nb.items[1].count == 100, 'an item count above 100 is capped at 100')
     H.eq(nb and #nb.items, 10, 'at most 10 items are kept')
 
-    -- no point of a location inside a no-build zone (docs/CRIMSON_ARENA.md rule 7)
+    -- no point of a location inside a no-build zone (Crimson-Arena rule 7)
     local dz = U.deepcopy(base)
     dz.locations = { { start = { coords = vec3(-282.0, -2030.0, 30.0), radius = 30.0 } } }
     local rz, ez = M.normalize(dz, {})
@@ -1553,7 +1553,7 @@ do
     H.ok(CP.Draw.isReserved(last.mission.id, last.locationIndex), 'draw reserves for the run as a fallback')
     rs.mode = 'ok'
 
-    -- an invite accepted while the checks yield (docs/notes/teams.md): the locked unit would hold an
+    -- an invite accepted while the checks yield (docs/ARCHITECTURE.md §13.25): the locked unit would hold an
     -- officer who was never checked and is not on the run -> refused, unlocked, the leader tries again
     unit.locked = false
     local realHourly = CP.Runs.completionsLastHour

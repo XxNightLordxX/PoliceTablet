@@ -1,6 +1,7 @@
 # In-game checklist
 
-Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23, Q8-Q23, L2-L7, A1-A12, B1-B17, O1-O15, P1-P22, C14, X11). The step id in brackets says which commit a check belongs to.
+What to check in game on a test server, one section per feature. The id in brackets at the end of a line
+names the change it came with.
 
 ## Before you start
 
@@ -45,6 +46,23 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Fill an officer's inventory to the weight limit and accept a custom mission that gives an item: "no room" toast, no item, the run starts; no orphan is logged at the end. (K7)
 - [ ] With Config.Tablet.access.requireItem = true, an officer without the tablet item away from a station desk cannot accept a mission or claim a call; at the desk he opened the tablet at he still can. (K8)
 - [ ] Open and close the tablet during a run: sidebar badges and Dispatch look the same on reopen; the run bar updates at once on each objective change. (Q16, Q17)
+- [ ] My options: tick a Favourite type and press that group's Reset within half a second: the option stays at its default after a few seconds and after reopening the tablet. (X11)
+- [ ] Failed start (for example the database user without CREATE): the console shows the failure lines once and no "happyhour: check failed: err.not_started" every 30 s afterwards. (X11)
+- [ ] Field training with ftoSignOff pay on: trainer A signs Patrol for rookie R and is paid; unpair R, pair him with trainer B (or pair a finished R again), B signs Patrol: B is not paid again for that task. (Z1)
+- [ ] Criminal tablet: say yes to a case and keep Active open: "Giving up now is free" switches to the strike text by itself once cancelGraceSeconds (60 s) have passed. (Z2)
+- [ ] Auto-Ready allowed and on: join a unit, stand at the keys, the leader accepts a type: you are Ready at once. Turn Auto-Ready off in My options: the next ready check asks you; on again: answered after you move. (LP1)
+- [ ] Criminal tablet: close it with Escape twice in a row (open, Escape, open, Escape quickly): the pause menu never opens, and Escape opens it normally a second later. (LP1)
+- [ ] Auto-Ready on: go off duty and back on duty within a second, join a unit, stand at the keys: the first ready
+  check is answered for you. (Z4)
+- [ ] Volunteer search: say yes, let an officer drive up to you within the first minute, then press Cancel this
+  case: it is a strike. Cancel within the first minute with no officer near: no strike, as before. (Z4)
+- [ ] My options -> Sounds -> objective cues off: no cue plays; on again: the next cue plays.
+- [ ] Restart once: the server log shows "applied migration 017_lookup_indexes.sql" (database or saves folder), then
+  Crimson-Police at version 17.
+- [ ] Officer tablet -> Department Challenge: the same header (title, one line of help, a refresh button) and the same
+  loading and error lines as the other officer screens. (R1)
+- [ ] Dispatch open: a call claimed by another unit updates within about a second. A HUD countdown steps once a
+  second and ends on time.
 
 ## Supervisor
 
@@ -71,6 +89,21 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Happy hour points max 1.25, set x1.2: the card shows "Happy hour x1.2" and points are x1.2; none after the hour; twist points together never exceed twistMaxPoints. (P20)
 - [ ] Department goals: pick one daily and two weekly goals with a reason: the line says it counts from next week, Home goals do not change this week; after the weekly reset SAST goals come only from the pick (+50 / +200); FIB and the sergeant still get any goal. (P21)
 - [ ] Give points: Department Report -> a SAST officer -> Give points 30 with a reason: manual award toast, Profile history entry, audit "Manual award (supervisor)"; no button for FIB or his own or alt character; 80 more the same day refused (100 a day). (P22)
+- [ ] Mission controls and Review Queue show their name, subtitle and one help line; each Mission controls group card has its own line under the title. (H4)
+- [ ] Mission controls: Department notices shows Post a notice and Running now (n); End asks for a second click. Department Report: Field training shows Pairings (n). (H4)
+- [ ] `Config.Tablet.supervisorControlsCard = true`: Department Report shows Your controls today; give 10 points to an officer, open Department Report again: the Give points row is up by 10; a control the admin switches off leaves the card. Shipped `false`: no card. (H4)
+- [ ] Mission ban: sergeant A bans a SAST trooper for 24 h; sergeant B (a higher grade than the trooper) tries a 1 h ban on him: refused with "already has a mission ban from another supervisor", and B still has no Lift; A may change his own ban; an admin may replace or lift it. (X11)
+- [ ] Give points: a supervisor at 90 of 100 today double-clicks Give points 50 on two officers at once: one is given, the other says "Please wait a moment" or is refused by the daily limit; never 190 in a day. (X11)
+- [ ] Give points as an admin without a police job: Department Report offers Give points for any officer, and the officer's department switch and min / max apply (switch the control off for FIB only: refused for an FIB officer, given for a SAST one). (X11)
+- [ ] Review rules: set SAST's reviewRules adminOnlyKinds to rs_linked_accounts; a SAST row flagged with it and disputed by its officer does not show in a SAST supervisor's Disputes, and Approve through the dispute answers "The department hands this kind of flag to admins only"; an admin still approves it. (Z2)
+- [ ] A supervisor starts a 1-minute happy hour: about a minute later (within 30 s) the screens show it ended and
+  cooldowns count again. Restart the resource during one: it still ends. (LP3)
+- [ ] Admin UI → Runs and Leaderboards flagged runs, a supervisor's per-day capped action (Mission ban), an
+  auto-suspension after voided runs: all behave as before.
+- [ ] `Config.Tablet.supervisorControlsCard` On: a sergeant gives points or sets a Mission ban; Your controls today
+  shows the new count of today at once, without reopening Department Report. (R1)
+- [ ] A supervisor one below `missionBanPerDay` (or the clear-cooldown or add-run-time cap) clicks twice very fast on
+  two officers: one goes through, the other says Please wait a moment; the day's count never passes the cap. (Z5)
 
 ## Admin UI and Settings
 
@@ -101,6 +134,20 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] System -> Back up now on a big server: no long freeze; the daily backup does not hold up the weekly and monthly resets. (Q15)
 - [ ] Files mode with a year of runs: Run clean-up now gives no multi-second freeze or console hitch, the archived counts match. (Q14)
 - [ ] Missions -> Builder shows the same list; the server profiler no longer shows a ~40 ms builder:list block every 30 s. (Q9)
+- [ ] Shipped config: the Admin UI sidebar still shows Payouts and Payments, every list pages as before. (H6)
+- [ ] `Config.AdminUi.moneyScreen` On in Settings, reopen the Admin UI: one Money screen with Mission pay and Payments made tabs; the Home Change pay tile opens Mission pay; Leaderboards → stuck payments opens Payments made filtered to Paying; the Payments badge sits on Money. (H6)
+- [ ] `Config.AdminUi.pageSize = 10`: Activity log, Payments made and Officers show 10 rows a page; an officer with more than 10 runs on Leaderboards shows a pager under his runs; Player suspects cases page by 10. (H6)
+- [ ] `Config.AdminUi.oneRequest` On: Payments made shows its totals cards and Leaderboards its flagged runs as before; with Config.Debug on, opening each screen logs one request. (H6)
+- [ ] Shipped config: Admin UI Home looks as before (no Needs attention panel); every screen title is as before. (H5)
+- [ ] `Config.AdminUi.plainLayout` On: the title inside Live reads "Running now", Payouts "Mission pay", Permissions "Who can do what"; Off: "Live", "Payouts", "Permissions". (H5)
+- [ ] Suspend an officer from the Admin UI: his tablet refuses him within 15 s, as before; unsuspend: it opens again.
+  Retire and unretire: the same.
+- [ ] An admin leaves mid logo upload (Departments → Upload a logo): whoever joins next with his id can upload at
+  once.
+- [ ] Settings: type in the search box with a few hundred settings showing: the text follows your typing without lag;
+  saving one setting still updates its row.
+- [ ] `Config.AdminUi.needsAttention` On: Home's Something wrong? shows Last mission load, Config health and stuck
+  payments only (Problems and Refused starts are on the Needs attention panel); Off: all five lines as before. (R1)
 
 ## Mission Builder
 
@@ -159,6 +206,29 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Traffic Enforcement #3 (Bay City Incline) and #4: the observed car drives 80-105 km/h, not 140; Admin UI -> Missions shows the new labels; a location switched off by its old label stays off. (L4)
 - [ ] Check spawn points and play Drug Lab Raid "Site office, Davis Quartz" and Gang Hideout Raid "Projects, Rancho" (ground height, walls, start on the road). (L7)
 - [ ] Two simultaneous runs never share a spot (only if you can run two at once on one strip, e.g. Banham Canyon). (L6)
+- [ ] Search Area, Device Check, Interact Points: the markers show near each clue, device and point as before. Testing debug drawing still draws the test area. (LP1)
+- [ ] Search Area or Flee and Arrest: drive more than 400 m away from the suspect (or let every officer leave its
+  area) for a minute, then come back: the suspect is still there and alive, the run goes on (no "vanished; counted
+  as dead" in the server console). A parked contact car stays too. (Z4)
+- [ ] Unit of 2, ready check: let the countdown reach 0 and press Ready right after: "Not every unit member answered
+  the ready check in time" shows, no mission starts, the leader sees the timeout cancel at once. (Z4)
+- [ ] Tablet open at a desk: walk away, it closes within about a second; open it from the item with
+  `requireItem` on, drop the item: it closes within a few seconds; open it and get downed: it closes. (LP3)
+- [ ] EVOC course: put the course car in a garage (or `/dv`) mid-course and take another car: no "vehicle
+  undriveable" fail and no contact from a stranger car. (Z4)
+- [ ] Mute mission calls on your Profile: no call pop-up; pick favourite types in My options → Dispatch: only those
+  pop up.
+- [ ] Stand at a mission desk on duty: Open Crimson-Police shows; go off duty: it hides at once (at most a second);
+  back on duty: it shows. In Crimson-Arena: hidden.
+- [ ] `Config.CriminalTablet.enabled` true and `item = 'no_such_item'`: Permissions -> Config health shows a warning and
+  the console prints one line at start; a real item shows an ok line. (R1)
+- [ ] Defuse a device in a search-then-defuse mission after its prop was removed: the prop comes back at the device's
+  own spot and the device is worked there, never at another object. (R1)
+- [ ] Host and a partner chase a route fleer (or fight a hostile ped); the partner stays closest for over 10 s, then
+  the host gets close again and OneSync gives the ped back: within about 2 s the ped runs his route (or fights)
+  again on the host's game, he never stands idle. (Z6)
+- [ ] Testing: invite an officer, start a test: the debug stream and the invitation expiry work; a unit's invite
+  still expires after 120 s; `jobRecheck`: go off duty during a run, you leave it within `jobRecheck` seconds.
 
 ## Real suspects (ships off)
 
@@ -188,194 +258,29 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] A volunteer mission ends: a script listening to 'crimson-police:server:volunteerEnded' gets his citizenid, the suspect he played and his outcome; Admin UI -> Real suspects -> Cases filter Volunteers shows the case (the suspect played, the mode, where the match got to), and the Volunteers tab lists who volunteers now with their strikes. (V26)
 - [ ] Surrender in a live case (Config.LiveCrime.enabled = true): as the suspect type /surrender with an officer of the case within 50 m: a Surrender pop-up; Yes tells the officers "Suspect A has surrendered: cuff them". Cuff him and hold 30 s: the result has the Peaceful arrest line. Walk 10 m away, draw a weapon or wait 120 s uncuffed: the surrender ends and both sides are told. As an officer within 15 m of a free suspect you get "close enough to talk down" once; radial Talk them down gives the suspect "An officer is talking you down" (No: the officer is told, nothing else changes). Admin UI -> Real suspects timeline shows talk_down, surrendered (with the officer's name), peaceful_arrest. With enabled = false /surrender does nothing and the radial item is missing. Resmon idle stays at 0.02 ms or less. (RP1)
 - [ ] Owner walk-through: follow README 9.16.1 (Owner checklist) on a test server, share README 9.16.2 (Rules for cases with real suspects) with officers and players, then set both switches back to false: nothing new starts and idle resmon stays at 0.02 ms or less. (V27)
-
 - [ ] Criminal tablet: `Config.Volunteers.enabled` and `Config.CriminalTablet.enabled` on; a civilian types `/crimtab`: the dark tablet opens on Home; agree, tick a suspect, Get on the list: the time left shows. An officer on duty types `/crimtab`: refused. (G2)
 - [ ] With the criminal tablet open, officers take a mission a volunteer can play: Jobs shows the suspect, type, area and timer (no pop-up); Accept sets the waypoint and Active shows the meet point and time left; Give up within a minute is free (no strike in History). Close the tablet while a question is open: the pop-up comes up for the seconds left. (G2)
 - [ ] `access = 'granted'`: Admin UI → Permissions → Extra grants → Criminal tablet for one gang from a grade: only its members open `/crimtab`; the grant gives no Supervisor UI button. Resmon of Crimson-Police with the tablet closed stays at 0.02 ms or less. (G2)
-
-## Feature rewards (G3)
-
-- [ ] Shipped: Admin UI → Settings → Features → Money lists Pay volunteer suspects, Pay talk-downs, Pay field training sign-offs, Pay finished field training and Pay supervisor point awards, all Off, each with its money, account and items buttons and the Item rewards switch. Nothing is paid by any of them while Off. (G3)
-- [ ] Live-case cash and volunteer-case cash switch on with one click (no typed ENABLE); Cash.allowManualCash still asks for ENABLE. (G3)
-- [ ] Pay volunteer suspects On, account cash: a volunteer escapes officers who reached him: he gets $1500 cash and Admin UI → Payments shows "Suspect pay (volunteer case)"; a no-show, a cancel, an AFK catch or a test run pays nothing; the same case never pays twice. (G3)
-- [ ] Account item with moneyItem black_money (an item in your ox_inventory): the volunteer gets 1500 black_money instead of cash; a full inventory leaves the payment pending until his next login. (G3)
-- [ ] Settings → FeatureRewards.surrender.items: an unknown item name or a weapon is refused; `{ { item = 'water', count = 1 } }` is saved, and with Item rewards On the officer who talks a suspect down gets the water once per suspect. (G3)
-- [ ] Field training On and Pay field training sign-offs On: each sign-off pays the trainer $250 once; the last one pays the rookie $1000 once. Give points On: 10 points pay the officer $50 (at most $2500). (G3)
-- [ ] Rewards screen (H1): shipped, the Admin UI has no Rewards screen. `Config.AdminUi.rewardsScreen` On in Settings: Admin UI → Rewards lists Patrol, Training, Investigation and Tactical (payout, Paid as, item pool), Live cases and Volunteer cases (officers), Volunteer suspects, Talk-downs, Field training sign-offs, Finished field training and Supervisor point awards. Change a payout: Settings → History and the Activity log show it. (H1)
-- [ ] Rewards screen: with Item rewards Off, the top card says Off and **Turn item rewards on** turns it on in one click; each Items block then loses its "Item rewards are off" badge. (H1)
-- [ ] Rewards screen → Volunteer suspects: the item picker lists only your ox_inventory items; saving `water` x1 works, a weapon is refused. Money by mission type: Investigation Got away $2000 → a volunteer who escapes an Investigation case gets $2000, a Patrol case still pays $1500; the criminal tablet's Jobs card shows $2,000 for an Investigation job. (H1)
-
-## Every workflow end to end (G7)
-
-- [ ] Admin only: an officer who sends a setting change gets refused; the admin turns on Volunteers, Volunteers → modes (Investigation: players when available), the criminal tablet (Features), access Granted and Pay volunteer suspects in Settings, each at once, no restart. (G7)
-- [ ] Permissions → Extra grants → Criminal tablet for Ballas from grade 1: a Ballas grade 1 member opens `/crimtab`; a civilian outside the gang is refused; an officer on duty is refused. (G7)
-- [ ] The Ballas member gets on the list from Home; a unit accepts Investigation with Real suspect OK: Jobs shows the job with its Reward line "$1,500 if you get away, $500 if you are caught" and no position. Accept, travel, the unit reaches him (Active: giving up is no longer free), he runs and the unit gives the mission up: he is paid $1,500 cash once, History shows "got away" and no strike. (G7)
-- [ ] Live control → anti-farm → Clear cooldowns for both officers, and Settings → Real suspects: Job hop minutes and Suspect cooldown 0: the same unit and volunteer play again at once. He accepts, the unit waits at the start, after 60 s he presses Give up: one strike in History, Active empty, nothing paid. (G7)
-
-## Every workflow end to end, part 2: officers and supervisors (H7)
-
-- [ ] Settings: Item rewards On with a Patrol pool, Mission controls On, Give points On, Your controls today On, Give points money On. An officer plays Beat Patrol to the end: the result screen shows $250 and the item; the bank and the inventory get them once. (H7)
-- [ ] A SAST trooper and an FIB agent in one unit play Gang Shootout: each row is Reinforced with two departments, each is paid $920 and gets the item. (H7)
-- [ ] A sergeant creates a Patrol call on Dispatch; a trooper claims it, a second trooper is refused; the run pays as a normal Patrol. (H7)
-- [ ] The sergeant clears a trooper's Beat Patrol cooldown (he can take it again), sets the hourly cap inside the admin's bounds (Your controls today shows it), gives 20 points ($100 and the item once; an FIB sergeant and his own character are refused) and commends him. (H7)
-- [ ] A flagged run keeps its cash and items until a supervisor of its department approves it; a voided run keeps them until the officer's dispute is approved. (H7)
-
-## Every workflow end to end, part 3: live crime, surrender, field training, restarts (H8)
-
-- [ ] Settings: Live crimes On, Live-case cash On, Item rewards On, Pay talk-downs On with water x1, Field training On, Tasks `{ "tactical": 1 }` (saved: leaving the other types out is allowed now), Trainer bonus 10, Pay field training sign-offs and Pay finished field training On. (H8)
-- [ ] A crew of two does a Warehouse Burglary: the LIVE card shows "2 suspects"; a unit claims it, secures the scene; a third officer reaching the scene gets "Join the live case?" and joins. Cuff A 30 s (detained), book him at Mission Row for 10 months (booked). The third officer gets "close enough to talk down", Talk them down, B says Yes, cuff him 30 s: Peaceful arrest, and that officer gets $300 and the water once. End case: three rows, each paid the Investigation pay once. Admin UI → Real suspects lists the case; its timeline has joined, talk down, surrendered, peaceful arrest and end case. (H8)
-- [ ] Claim a second crime, get a suspect to surrender, then `restart Crimson-Police` before anyone cuffs him: no officer is on a case, no row, no pay, no cooldown, no LIVE call; Settings changes are kept; the first case is still on Real suspects with its timeline; `/surrender` says he is not wanted. Form the unit again: the next crime posts a LIVE call and pays as usual. (H8)
-- [ ] Field training: an officer cannot pair; a sergeant pairs a cadet with a trainer. Start Gang Shootout as their unit and restart: the run did not count and the pairing is kept. Play it again to the end: the trainer gets the "ready" toast. Restart again: Profile → Field training still shows the task ready. Another supervisor cannot sign off; the trainer can: the cadet gets the Field Training badge, the trainer $250 and 10 points, the cadet $1000. A further restart pays nothing twice. (H8)
-
-## Supervisor screens inside (H4)
-
-- [ ] Mission controls and Review Queue show their name, subtitle and one help line; each Mission controls group card has its own line under the title. (H4)
-- [ ] Mission controls: Department notices shows Post a notice and Running now (n); End asks for a second click. Department Report: Field training shows Pairings (n). (H4)
-- [ ] `Config.Tablet.supervisorControlsCard = true`: Department Report shows Your controls today; give 10 points to an officer, open Department Report again: the Give points row is up by 10; a control the admin switches off leaves the card. Shipped `false`: no card. (H4)
-
-## Admin screens merged and faster (H6)
-
-- [ ] Shipped config: the Admin UI sidebar still shows Payouts and Payments, every list pages as before. (H6)
-- [ ] `Config.AdminUi.moneyScreen` On in Settings, reopen the Admin UI: one Money screen with Mission pay and Payments made tabs; the Home Change pay tile opens Mission pay; Leaderboards → stuck payments opens Payments made filtered to Paying; the Payments badge sits on Money. (H6)
-- [ ] `Config.AdminUi.pageSize = 10`: Activity log, Payments made and Officers show 10 rows a page; an officer with more than 10 runs on Leaderboards shows a pager under his runs; Player suspects cases page by 10. (H6)
-- [ ] `Config.AdminUi.oneRequest` On: Payments made shows its totals cards and Leaderboards its flagged runs as before; with Config.Debug on, opening each screen logs one request. (H6)
-
-## Admin Home Needs attention and plain titles (H5)
-
-- [ ] Shipped config: Admin UI Home looks as before (no Needs attention panel); every screen title is as before. (H5)
 - [ ] `Config.AdminUi.needsAttention` On in Settings: Home shows Needs attention on top with Problems, Refused starts today, Open disputes, Flagged runs waiting for review and (with live crimes or volunteers on) Open player suspect cases. File a dispute from an officer: Open disputes goes to 1 within a minute; click it: Officers opens on Disputes. Click Problems: Server health opens on Problems. (H5)
-- [ ] `Config.AdminUi.plainLayout` On: the title inside Live reads "Running now", Payouts "Mission pay", Permissions "Who can do what"; Off: "Live", "Payouts", "Permissions". (H5)
-
-## Restarts and logout
-
-- [ ] Start the server: the console shows the database or saves folder at version 11 (10 after O1, 11 after P1). (O1, P1)
-- [ ] After a restart, mission cooldowns, the abandon cooldown, board locks, the hourly and daily caps and mission calls behave exactly as before. (P2, P3)
-- [ ] Nothing to test in game for run ids: runs started before and after a restart simply never share an id. (K11)
-- [ ] Mark responding to a real sc-dispatch call, switch character: the new character is not "On a call" and can accept missions. (K12)
-- [ ] `restart Crimson-Police` from txAdmin during an admin test teleport or the first fade of Check spawn points: the screen comes back and the ped is not frozen. (K14)
-- [ ] /logout during a spawn check ends the check: the new character is not moved to the old spot or unfrozen by it. (K14)
-- [ ] With an officer on a mission that gives items, `restart ox_inventory`; a second later dropping or giving a mission item is refused. (C14)
-- [ ] Relog with My options set: the tablet look and text size apply before the tablet is opened. (O5)
-
-## Final review fixes (X11)
-
-- [ ] Mission ban: sergeant A bans a SAST trooper for 24 h; sergeant B (a higher grade than the trooper) tries a 1 h ban on him: refused with "already has a mission ban from another supervisor", and B still has no Lift; A may change his own ban; an admin may replace or lift it. (X11)
-- [ ] Give points: a supervisor at 90 of 100 today double-clicks Give points 50 on two officers at once: one is given, the other says "Please wait a moment" or is refused by the daily limit; never 190 in a day. (X11)
-- [ ] Give points as an admin without a police job: Department Report offers Give points for any officer, and the officer's department switch and min / max apply (switch the control off for FIB only: refused for an FIB officer, given for a SAST one). (X11)
-- [ ] My options: tick a Favourite type and press that group's Reset within half a second: the option stays at its default after a few seconds and after reopening the tablet. (X11)
-- [ ] Failed start (for example the database user without CREATE): the console shows the failure lines once and no "happyhour: check failed: err.not_started" every 30 s afterwards. (X11)
-
-## Bug sweep fixes (Z1)
-
 - [ ] Feature rewards on (suspect): start an admin backup (maintenance lock) and let a volunteer case end fairly meanwhile: his row shows Pending in Payments made, and he is paid when the backup ends or at his next login (never lost as a duplicate). (Z1)
 - [ ] Live crimes with backup on: an officer joins a live case, quits the game and reconnects while it runs: he gets no join offer and "You left this live case and can't join it again"; Live shows one entry for him. (Z1)
 - [ ] Volunteers on: a volunteer with a police job plays a case, officers reach him, he goes on duty: he is told his part is void with a strike, the staff timeline shows "went on police duty mid-case", the criminal tablet History shows "Went on police duty (strike)". (Z1)
 - [ ] Volunteers on: while a volunteer plays a case, turn Volunteers off in Settings: his criminal tablet still gives the case up with Give up (no "no case"). (Z1)
 - [ ] Volunteers on: many quick runs while volunteers are asked; end one run right as it asks; the same volunteer is still asked by the next run (no restart needed). (Z1)
 - [ ] `Config.Volunteers.endEvent = false`: a volunteer plays a case to the end: his criminal tablet History still shows the case. (Z1)
-- [ ] Field training with ftoSignOff pay on: trainer A signs Patrol for rookie R and is paid; unpair R, pair him with trainer B (or pair a finished R again), B signs Patrol: B is not paid again for that task. (Z1)
-
-## Bug sweep fixes (Z2)
-
-- [ ] Review rules: set SAST's reviewRules adminOnlyKinds to rs_linked_accounts; a SAST row flagged with it and disputed by its officer does not show in a SAST supervisor's Disputes, and Approve through the dispute answers "The department hands this kind of flag to admins only"; an admin still approves it. (Z2)
 - [ ] Feature rewards on (suspect): a volunteer is reached by officers, then the officer quits (or takes a real call, or an admin cancels the run): the volunteer gets no suspect pay and Payments made shows no row for him. (Z2)
 - [ ] Feature rewards on (suspect and surrender): an officer and a volunteer on the same PC or connection (identityMatch.flag): the officer's row is flagged rs_linked_accounts, and neither the volunteer's suspect pay nor a talk-down pay is made for that run. (Z2)
 - [ ] Config.Volunteers.voidRun = 'keep_earned': an engaged volunteer gives up right after contact: the officers' result shows only the lines earned (no base points, no Fast finish, no mission cash). (Z2)
 - [ ] Volunteers on: an engaged volunteer is downed and respawns at a hospital before the death timer: he gets a strike and "You respawned at a hospital before the death timer ran out", the staff timeline shows the early-respawn line, and his criminal tablet History shows "Respawned before the death timer (strike)". (Z2)
-- [ ] Criminal tablet: say yes to a case and keep Active open: "Giving up now is free" switches to the strike text by itself once cancelGraceSeconds (60 s) have passed. (Z2)
 - [ ] Live crime with one officer: detain the suspect, then get downed (RealSuspects.downed = 'keep_earned'): the run ends Completed, and a second live case on the same suspect inside pairCooldownHours does not score again for that pair. (Z2)
-- [ ] FeatureRewards account = 'item': a row left in Paying is paid by Pay again as the money item (not "Qbox refused"); Clawback on such a row answers "This payment was a money item ..." and takes nothing. (Z2)
-- [ ] Auto-Ready allowed and on: join a unit, stand at the keys, the leader accepts a type: you are Ready at once. Turn Auto-Ready off in My options: the next ready check asks you; on again: answered after you move. (LP1)
-- [ ] Criminal tablet: close it with Escape twice in a row (open, Escape, open, Escape quickly): the pause menu never opens, and Escape opens it normally a second later. (LP1)
-- [ ] Search Area, Device Check, Interact Points: the markers show near each clue, device and point as before. Testing debug drawing still draws the test area. (LP1)
-
-## FiveM semantics fixes (Z4)
-
-- [ ] Search Area or Flee and Arrest: drive more than 400 m away from the suspect (or let every officer leave its
-  area) for a minute, then come back: the suspect is still there and alive, the run goes on (no "vanished; counted
-  as dead" in the server console). A parked contact car stays too. (Z4)
-- [ ] Unit of 2, ready check: let the countdown reach 0 and press Ready right after: "Not every unit member answered
-  the ready check in time" shows, no mission starts, the leader sees the timeout cancel at once. (Z4)
-- [ ] Settings → Performance → pushGapMs `500`: start a ready check and decline it: the banner goes away (no stale
-  Yes/No). Two admins in the Mission Builder: break the lock of a mission the other edits: he is told. Back to `0`.
-  (Z4)
 - [ ] Criminal tablet open: an admin opens the Admin UI (`client:openAdmin`), then closes it: the criminal tablet is
   closed, not left on screen without a cursor. Open it, then log out to character select: it closes. Open it, get
   downed: it closes; using the item while down says "You can't use the tablet while you are down." (Z4)
-- [ ] Auto-Ready on: go off duty and back on duty within a second, join a unit, stand at the keys: the first ready
-  check is answered for you. (Z4)
-- [ ] Settings → Performance → loopScale `4`: a checkpoint route without medals (Beat Patrol), drive fast at a
-  checkpoint from far away: it counts on the first pass. On foot far away resmon stays as before. Back to `1`. (Z4)
-- [ ] Tablet open at a desk: walk away, it closes within about a second; open it from the item with
-  `requireItem` on, drop the item: it closes within a few seconds; open it and get downed: it closes. (LP3)
-- [ ] A supervisor starts a 1-minute happy hour: about a minute later (within 30 s) the screens show it ended and
-  cooldowns count again. Restart the resource during one: it still ends. (LP3)
-- [ ] Settings → Performance → markerRange `30`: drive at an escort or flee objective: its marker appears only within
-  30 m; resmon while far away is lower. Back to `0`: markers at their own distance again. (LP3)
-- [ ] EVOC course: put the course car in a garage (or `/dv`) mid-course and take another car: no "vehicle
-  undriveable" fail and no contact from a stranger car. (Z4)
-- [ ] Volunteer search: say yes, let an officer drive up to you within the first minute, then press Cancel this
-  case: it is a strike. Cancel within the first minute with no officer near: no strike, as before. (Z4)
-
-## Resmon (OP1)
-
-- [ ] No run, tablet closed, Config.Debug off: resmon shows Crimson-Police at 0.00-0.01 ms on the client.
-- [ ] EVOC course run: drive through a checkpoint too fast ("Stop inside" shows), stop, hold, cross: the HUD line and
-  the markers behave as before; resmon stays below what it showed before the update.
 - [ ] Foot chase with a tired runner (Config.Flee on): he jogs, then walks, and is let go when he surrenders or gets
   into a car, as before.
-- [ ] My options -> Sounds -> objective cues off: no cue plays; on again: the next cue plays.
-
-## Server cost and NUI (OP2)
-
-- [ ] Open the Admin UI the first time after a restart: Home shows within a moment, the sidebar at once; every other
-  screen opens as before, and every screen looks as it did (colours, spacing, buttons).
 - [ ] Supervisor UI → Mission Builder and `/crimtab` (criminal tablet): open and look as before.
-- [ ] Suspend an officer from the Admin UI: his tablet refuses him within 15 s, as before; unsuspend: it opens again.
-  Retire and unretire: the same.
-- [ ] Mute mission calls on your Profile: no call pop-up; pick favourite types in My options → Dispatch: only those
-  pop up.
-- [ ] An admin leaves mid logo upload (Departments → Upload a logo): whoever joins next with his id can upload at
-  once.
-- [ ] Settings → Performance → pushGapMs `250`: in a unit run the tablet's run bar and Unit screen still follow every
-  change (at most a quarter second later). Back to `0`.
-- [ ] Settings → Performance → latentAboveBytes `65536`: Leaderboard, Mission Board and the Admin lists still load
-  (a big one may take a moment longer); the rest of the tablet keeps answering meanwhile. Back to `0`.
-- [ ] Server resmon of Crimson-Police with officers on duty and no run: at or below what it showed before the update.
-
-## Second optimization pass (OP3)
-
-- [ ] On a run, look at a contacted person and at a stopped car with people inside: the same Talk, Detain, Arrest,
-  Frisk, Escort, seat and cuff options show as before; get into a car: they hide; get out: they show again. Client
-  resmon while the eye rests on them: lower than before the update.
-- [ ] Stand at a mission desk on duty: Open Crimson-Police shows; go off duty: it hides at once (at most a second);
-  back on duty: it shows. In Crimson-Arena: hidden.
-- [ ] Restart once: the server log shows "applied migration 017_lookup_indexes.sql" (database or saves folder), then
-  Crimson-Police at version 17.
-- [ ] Admin UI → Runs and Leaderboards flagged runs, a supervisor's per-day capped action (Mission ban), an
-  auto-suspension after voided runs: all behave as before.
-- [ ] Settings: type in the search box with a few hundred settings showing: the text follows your typing without lag;
-  saving one setting still updates its row.
-- [ ] Settings → Admin UI → windowRows On, reopen the Admin UI: Leaderboards with a long board scrolls smoothly and
-  shows every officer in order; a Settings search for one letter adds rows as you scroll down. Back to Off.
-
-## Known leftovers fixed (R1)
-
-- [ ] `Config.AdminUi.needsAttention` On: Home's Something wrong? shows Last mission load, Config health and stuck
-  payments only (Problems and Refused starts are on the Needs attention panel); Off: all five lines as before. (R1)
-- [ ] `Config.Tablet.supervisorControlsCard` On: a sergeant gives points or sets a Mission ban; Your controls today
-  shows the new count of today at once, without reopening Department Report. (R1)
 - [ ] `Config.AdminUi.pageSize` 10 with more than 10 player suspect cases: Real suspects -> Cases -> Open lists the
   open cases from every page (the pager counts only those). (R1)
-- [ ] `Config.CriminalTablet.enabled` true and `item = 'no_such_item'`: Permissions -> Config health shows a warning and
-  the console prints one line at start; a real item shows an ok line. (R1)
-- [ ] Officer tablet -> Department Challenge: the same header (title, one line of help, a refresh button) and the same
-  loading and error lines as the other officer screens. (R1)
-- [ ] Defuse a device in a search-then-defuse mission after its prop was removed: the prop comes back at the device's
-  own spot and the device is worked there, never at another object. (R1)
-
-## Full debug sweep fixes (Z5)
-
 - [ ] A volunteer is cuffed and detained, the run goes on; he presses Give up or Stop volunteering on the criminal
   tablet: the run stays In progress, the arrest stands, and Stop volunteering only ends his listing. Cuffed (not yet
   detained) and Give up: he counts as detained (left in cuffs) and the case goes on. (Z5)
@@ -386,13 +291,8 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   the case (strike); the officers' case keeps got away (or detained). (Z5)
 - [ ] `voidRun = 'keep_earned'` with a players_only mission: the asked volunteer says No before any yes: the run ends
   Abandoned (no Completed row, no goal progress, no cooldown). (Z5)
-- [ ] A supervisor one below `missionBanPerDay` (or the clear-cooldown or add-run-time cap) clicks twice very fast on
-  two officers: one goes through, the other says Please wait a moment; the day's count never passes the cap. (Z5)
 - [ ] A volunteer says yes and presses Give up within `cancelGraceSeconds`: criminal tablet History shows Called off,
   not Gave up (strike). (Z5)
-- [ ] Host and a partner chase a route fleer (or fight a hostile ped); the partner stays closest for over 10 s, then
-  the host gets close again and OneSync gives the ped back: within about 2 s the ped runs his route (or fights)
-  again on the host's game, he never stands idle. (Z6)
 - [ ] Criminal tablet open, an admin uses Officers -> Support -> unstick (or F8 `CrimsonPoliceState unstick`): the
   tablet disappears with the cursor, and a later volunteer question shows its ox_lib pop-up. (Z6)
 - [ ] (Dev only) A render error reaches the root boundary while the criminal tablet is open: the tablet closes with
@@ -400,17 +300,79 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] A volunteer's window ends; a unit draws a players_only mission a few seconds later (before the sweep): he is not
   asked, and the mission card says nobody is free. (Z6)
 
-## Full workflow testing (WF1)
+## Feature rewards (ships off)
 
+- [ ] Shipped: Admin UI → Settings → Features → Money lists Pay volunteer suspects, Pay talk-downs, Pay field training sign-offs, Pay finished field training and Pay supervisor point awards, all Off, each with its money, account and items buttons and the Item rewards switch. Nothing is paid by any of them while Off. (G3)
+- [ ] Live-case cash and volunteer-case cash switch on with one click (no typed ENABLE); Cash.allowManualCash still asks for ENABLE. (G3)
+- [ ] Pay volunteer suspects On, account cash: a volunteer escapes officers who reached him: he gets $1500 cash and Admin UI → Payments shows "Suspect pay (volunteer case)"; a no-show, a cancel, an AFK catch or a test run pays nothing; the same case never pays twice. (G3)
+- [ ] Account item with moneyItem black_money (an item in your ox_inventory): the volunteer gets 1500 black_money instead of cash; a full inventory leaves the payment pending until his next login. (G3)
+- [ ] Settings → FeatureRewards.surrender.items: an unknown item name or a weapon is refused; `{ { item = 'water', count = 1 } }` is saved, and with Item rewards On the officer who talks a suspect down gets the water once per suspect. (G3)
+- [ ] Field training On and Pay field training sign-offs On: each sign-off pays the trainer $250 once; the last one pays the rookie $1000 once. Give points On: 10 points pay the officer $50 (at most $2500). (G3)
+- [ ] Rewards screen (H1): shipped, the Admin UI has no Rewards screen. `Config.AdminUi.rewardsScreen` On in Settings: Admin UI → Rewards lists Patrol, Training, Investigation and Tactical (payout, Paid as, item pool), Live cases and Volunteer cases (officers), Volunteer suspects, Talk-downs, Field training sign-offs, Finished field training and Supervisor point awards. Change a payout: Settings → History and the Activity log show it. (H1)
+- [ ] Rewards screen: with Item rewards Off, the top card says Off and **Turn item rewards on** turns it on in one click; each Items block then loses its "Item rewards are off" badge. (H1)
+- [ ] Rewards screen → Volunteer suspects: the item picker lists only your ox_inventory items; saving `water` x1 works, a weapon is refused. Money by mission type: Investigation Got away $2000 → a volunteer who escapes an Investigation case gets $2000, a Patrol case still pays $1500; the criminal tablet's Jobs card shows $2,000 for an Investigation job. (H1)
+- [ ] FeatureRewards account = 'item': a row left in Paying is paid by Pay again as the money item (not "Qbox refused"); Clawback on such a row answers "This payment was a money item ..." and takes nothing. (Z2)
+
+## Performance and loops
+
+- [ ] Settings → Performance → pushGapMs `500`: start a ready check and decline it: the banner goes away (no stale
+  Yes/No). Two admins in the Mission Builder: break the lock of a mission the other edits: he is told. Back to `0`.
+  (Z4)
+- [ ] Settings → Performance → loopScale `4`: a checkpoint route without medals (Beat Patrol), drive fast at a
+  checkpoint from far away: it counts on the first pass. On foot far away resmon stays as before. Back to `1`. (Z4)
+- [ ] Settings → Performance → markerRange `30`: drive at an escort or flee objective: its marker appears only within
+  30 m; resmon while far away is lower. Back to `0`: markers at their own distance again. (LP3)
+- [ ] No run, tablet closed, Config.Debug off: resmon shows Crimson-Police at 0.00-0.01 ms on the client.
+- [ ] EVOC course run: drive through a checkpoint too fast ("Stop inside" shows), stop, hold, cross: the HUD line and
+  the markers behave as before; resmon stays below what it showed before the update.
+- [ ] Settings → Performance → pushGapMs `250`: in a unit run the tablet's run bar and Unit screen still follow every
+  change (at most a quarter second later). Back to `0`.
+- [ ] Settings → Performance → latentAboveBytes `65536`: Leaderboard, Mission Board and the Admin lists still load
+  (a big one may take a moment longer); the rest of the tablet keeps answering meanwhile. Back to `0`.
+- [ ] Server resmon of Crimson-Police with officers on duty and no run: at or below what it showed before the update.
+- [ ] On a run, look at a contacted person and at a stopped car with people inside: the same Talk, Detain, Arrest,
+  Frisk, Escort, seat and cuff options show as before; get into a car: they hide; get out: they show again. Client
+  resmon while the eye rests on them: lower than before the update.
+- [ ] Settings → Admin UI → windowRows On, reopen the Admin UI: Leaderboards with a long board scrolls smoothly and
+  shows every officer in order; a Settings search for one letter adds rows as you scroll down. Back to Off.
+- [ ] Idle server (no run, nobody in Testing, no unit): resmon shows Crimson-Police's server side lower than before;
+  start a run: the HUD timers count, the drive-to-start warning comes, custody (cuff, transport, coroner), downed
+  and NPC deaths work as before; end it, start another: all of it works again.
+
+## Restarts and logout
+
+- [ ] Start the server: the console shows the database or saves folder at version 17 (the newest migration, 017_lookup_indexes.sql). (O1, P1, OP3)
+- [ ] After a restart, mission cooldowns, the abandon cooldown, board locks, the hourly and daily caps and mission calls behave exactly as before. (P2, P3)
+- [ ] Nothing to test in game for run ids: runs started before and after a restart simply never share an id. (K11)
+- [ ] Mark responding to a real sc-dispatch call, switch character: the new character is not "On a call" and can accept missions. (K12)
+- [ ] `restart Crimson-Police` from txAdmin during an admin test teleport or the first fade of Check spawn points: the screen comes back and the ped is not frozen. (K14)
+- [ ] /logout during a spawn check ends the check: the new character is not moved to the old spot or unfrozen by it. (K14)
+- [ ] With an officer on a mission that gives items, `restart ox_inventory`; a second later dropping or giving a mission item is refused. (C14)
+- [ ] Relog with My options set: the tablet look and text size apply before the tablet is opened. (O5)
+- [ ] Open the Admin UI the first time after a restart: Home shows within a moment, the sidebar at once; every other
+  screen opens as before, and every screen looks as it did (colours, spacing, buttons).
+
+## Every workflow end to end
+
+- [ ] Admin only: an officer who sends a setting change gets refused; the admin turns on Volunteers, Volunteers → modes (Investigation: players when available), the criminal tablet (Features), access Granted and Pay volunteer suspects in Settings, each at once, no restart. (G7)
+- [ ] Permissions → Extra grants → Criminal tablet for Ballas from grade 1: a Ballas grade 1 member opens `/crimtab`; a civilian outside the gang is refused; an officer on duty is refused. (G7)
+- [ ] The Ballas member gets on the list from Home; a unit accepts Investigation with Real suspect OK: Jobs shows the job with its Reward line "$1,500 if you get away, $500 if you are caught" and no position. Accept, travel, the unit reaches him (Active: giving up is no longer free), he runs and the unit gives the mission up: he is paid $1,500 cash once, History shows "got away" and no strike. (G7)
+- [ ] Live control → anti-farm → Clear cooldowns for both officers, and Settings → Real suspects: Job hop minutes and Suspect cooldown 0: the same unit and volunteer play again at once. He accepts, the unit waits at the start, after 60 s he presses Give up: one strike in History, Active empty, nothing paid. (G7)
+- [ ] Settings: Item rewards On with a Patrol pool, Mission controls On, Give points On, Your controls today On, Give points money On. An officer plays Beat Patrol to the end: the result screen shows $250 and the item; the bank and the inventory get them once. (H7)
+- [ ] A SAST trooper and an FIB agent in one unit play Gang Shootout: each row is Reinforced with two departments, each is paid $920 and gets the item. (H7)
+- [ ] A sergeant creates a Patrol call on Dispatch; a trooper claims it, a second trooper is refused; the run pays as a normal Patrol. (H7)
+- [ ] The sergeant clears a trooper's Beat Patrol cooldown (he can take it again), sets the hourly cap inside the admin's bounds (Your controls today shows it), gives 20 points ($100 and the item once; an FIB sergeant and his own character are refused) and commends him. (H7)
+- [ ] A flagged run keeps its cash and items until a supervisor of its department approves it; a voided run keeps them until the officer's dispute is approved. (H7)
+- [ ] Settings: Live crimes On, Live-case cash On, Item rewards On, Pay talk-downs On with water x1, Field training On, Tasks `{ "tactical": 1 }` (saved: leaving the other types out is allowed now), Trainer bonus 10, Pay field training sign-offs and Pay finished field training On. (H8)
+- [ ] A crew of two does a Warehouse Burglary: the LIVE card shows "2 suspects"; a unit claims it, secures the scene; a third officer reaching the scene gets "Join the live case?" and joins. Cuff A 30 s (detained), book him at Mission Row for 10 months (booked). The third officer gets "close enough to talk down", Talk them down, B says Yes, cuff him 30 s: Peaceful arrest, and that officer gets $300 and the water once. End case: three rows, each paid the Investigation pay once. Admin UI → Real suspects lists the case; its timeline has joined, talk down, surrendered, peaceful arrest and end case. (H8)
+- [ ] Claim a second crime, get a suspect to surrender, then `restart Crimson-Police` before anyone cuffs him: no officer is on a case, no row, no pay, no cooldown, no LIVE call; Settings changes are kept; the first case is still on Real suspects with its timeline; `/surrender` says he is not wanted. Form the unit again: the next crime posts a LIVE call and pays as usual. (H8)
+- [ ] Field training: an officer cannot pair; a sergeant pairs a cadet with a trainer. Start Gang Shootout as their unit and restart: the run did not count and the pairing is kept. Play it again to the end: the trainer gets the "ready" toast. Restart again: Profile → Field training still shows the task ready. Another supervisor cannot sign off; the trainer can: the cadet gets the Field Training badge, the trainer $250 and 10 points, the cadet $1000. A further restart pays nothing twice. (H8)
 - [ ] A supervisor creates a mission call (or the tablet posts one), an officer claims it and drives to the start,
   then `restart Crimson-Police`: after the restart Supervisor UI → Mission calls (today) and the dispatch history show
   the open call as Lapsed and the claimed one as Ended by a restart, never Open or Claimed; new calls post as usual.
   (WF1)
 - [ ] Play through docs/WORKFLOWS.md once on a test server with every switch on, with one `restart Crimson-Police`
   and one player quitting and coming back in the middle; each row's result matches. (WF1)
-
-## Smoother workflows (WF2)
-
 - [ ] Review Queue: Approve or Void a flagged run: the row leaves the list at once, with no reload flicker; the same
   for answering a dispute. (Pure speed-up: the reply carries the new queue.)
 - [ ] Dispatch: Decline a pushed mission: the card leaves at once. Business Check: log a door on Active Mission: the
@@ -420,22 +382,9 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   Crimson-Police: the dialogs open empty. Shipped `false`: they always open empty.
 - [ ] Errors read with a next step: claim a call another unit just took ("Pick another call on Dispatch"), invite
   into a full unit ("Its leader can remove a member to make room"), submit a supervisor dialog with no reason.
-
-## Smoother workflows (WF3)
-
 - [ ] Admin UI -> System -> Backups: Backup now, then Delete an older backup: the list changes at once (one request,
   the reply carries the list). Restore one after typing RESTORE: the list shows the automatic backup at once.
 - [ ] Admin UI -> System -> Storage: Copy all data to the other storage, then at once Copy again or Switch storage:
   the panel shows the new state at once and never says "too many requests" (the reply carries the view).
 - [ ] Errors read with a next step: delete the newest backup ("Delete an older backup instead."), void a run that is
   already voided ("Use Restore on it to undo the void."), import a file that is not a settings export.
-
-## Final loop proof (LP4)
-
-- [ ] Idle server (no run, nobody in Testing, no unit): resmon shows Crimson-Police's server side lower than before;
-  start a run: the HUD timers count, the drive-to-start warning comes, custody (cuff, transport, coroner), downed
-  and NPC deaths work as before; end it, start another: all of it works again.
-- [ ] Testing: invite an officer, start a test: the debug stream and the invitation expiry work; a unit's invite
-  still expires after 120 s; `jobRecheck`: go off duty during a run, you leave it within `jobRecheck` seconds.
-- [ ] Dispatch open: a call claimed by another unit updates within about a second. A HUD countdown steps once a
-  second and ends on time.

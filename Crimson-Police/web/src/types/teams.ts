@@ -1,6 +1,6 @@
-// Response shapes of the teams slice (modules/units, modules/operations; documented in docs/notes/teams.md). UnitView
-// and BoardData.operation are contract shapes (src/shared/types.ts); the types below add the optional fields the
-// server sends on top of them.
+// Response shapes of units and operations (modules/units, modules/operations; docs/ARCHITECTURE.md §13.25).
+// UnitView and BoardData.operation are contract shapes (src/shared/types.ts); the types below add the optional fields
+// the server sends on top of them.
 
 import type { Avatar, UnitView } from '../shared/types';
 

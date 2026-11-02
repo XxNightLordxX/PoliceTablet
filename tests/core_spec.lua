@@ -505,7 +505,7 @@ do
     H.eq(A.revive(99), false, 'not connected')
     H.eq(#H.findEvents('hospital:client:Revive'), 1, 'refused revives send nothing')
 
-    -- CRIMSON_ARENA rule 3: never revive an in-arena player (Crimson-Arena revives its own)
+    -- Crimson-Arena rule 3: never revive an in-arena player (Crimson-Arena revives its own)
     CP.Alerts = {
         inArena = function(src) return src == 1 end,
     }
@@ -1633,7 +1633,7 @@ do
     H.eq(focus[#focus][2], true, 'cursor')
     H.eq(PropCount(), 1, 'tablet prop created')
     H.eq(objects[nextObj].model, joaat('prop_cs_tablet'), 'Config.Tablet.prop')
-    H.eq(objects[nextObj].net, false, 'the prop is a local object (CRIMSON_ARENA rule 8)')
+    H.eq(objects[nextObj].net, false, 'the prop is a local object (Crimson-Arena rule 8)')
     H.eq(attached[#attached].bone, 60309, 'attached to the hand bone')
     H.eq(anims[#anims].dict, 'amb@code_human_in_bus_passenger_idles@female@tablet@base', 'tablet animation')
     H.eq(anims[#anims].flag, 49, 'upper body loop')
@@ -1959,7 +1959,7 @@ do
     clientExports.useTablet({ name = 'crimson_police_tablet' }, 3)
     H.eq(T.isOpen(), true, 'tablet item opens the Officer UI')
 
-    -- Crimson-Arena (CRIMSON_ARENA rule 8)
+    -- Crimson-Arena (Crimson-Arena rule 8)
     H.eq(#bagHandlers, 1, 'one crimsonArena change handler')
     H.eq(bagHandlers[1] and bagHandlers[1].key, 'crimsonArena', 'handler key')
     H.eq(bagHandlers[1] and bagHandlers[1].bag, 'player:7', 'only the local player bag')

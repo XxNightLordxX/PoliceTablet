@@ -173,7 +173,7 @@ local FIELDS = {
         ramSpeed = true,
         ramPenaltyId = true,
         neverShoots = true,
-        -- parity-plus (docs/notes/missions_c.md)
+        -- parity-plus (docs/ARCHITECTURE.md §13.18)
         responses = { yield = true, flee = true, fight = true },
         handoff = true,
         profileSet = true,

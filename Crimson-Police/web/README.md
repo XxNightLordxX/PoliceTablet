@@ -18,4 +18,4 @@ npm run dev       # the UI in a browser at http://localhost:5173, with sample da
 ```
 
 The full developer guide (source layout, adding a screen, the NUI bridge, hooks, theme variables and component
-props) is `docs/WEB_UI.md` in the repository root.
+props) is `docs/ARCHITECTURE.md §12` in the repository root.

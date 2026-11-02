@@ -1,5 +1,5 @@
-// Admin test mode shapes (modules/testing/server.lua, docs/notes/testing.md). Lua sends `false` for "no value" (a Lua
-// table cannot hold nil) and may encode an empty list as {}: read every list through asList().
+// Admin test mode shapes (modules/testing/server.lua, docs/ARCHITECTURE.md §13.26). Lua sends `false` for "no
+// value" (a Lua table cannot hold nil) and may encode an empty list as {}: read every list through asList().
 
 import type { MissionSwitchView } from './settings';
 

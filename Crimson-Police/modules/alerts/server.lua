@@ -1,5 +1,5 @@
 -- CP.Alerts (server): Hard rule 16 (no mission alerts) and the only writer of the crimsonArena state bag
--- (docs/ARCHITECTURE.md §5.14, docs/CRIMSON_ARENA.md rules 1, 2, 3, 9, 11).
+-- (docs/ARCHITECTURE.md §5.14, Crimson-Arena rules 1, 2, 3, 9, 11).
 
 CP.Alerts = CP.Alerts or {}
 local A = CP.Alerts
@@ -288,7 +288,7 @@ function A.releaseRun(run)
 end
 
 -- ============================================================================
---                       RE-ASSERT (CRIMSON_ARENA rule 2)
+--                       RE-ASSERT (Crimson-Arena rule 2)
 -- ============================================================================
 
 local function Reassert(src)
@@ -330,7 +330,7 @@ local function QueueReassert(src)
 end
 
 -- ============================================================================
---           PARTICIPANTS WHO BECOME IN-ARENA (CRIMSON_ARENA rule 1)
+--           PARTICIPANTS WHO BECOME IN-ARENA (Crimson-Arena rule 1)
 -- ============================================================================
 
 local function ForgetIntent(src)
@@ -540,7 +540,7 @@ local function Reconcile()
 end
 
 -- ============================================================================
---                       BACKSTOP (CRIMSON_ARENA rule 9)
+--                       BACKSTOP (Crimson-Arena rule 9)
 -- ============================================================================
 
 local function DelayMs()

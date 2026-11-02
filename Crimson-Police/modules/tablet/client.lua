@@ -105,7 +105,7 @@ function T.playerDown() return PlayerDown() end
 -- ox_lib's `lib` table is private to this resource's Lua state, so every lib.progressBar /
 -- lib.progressCircle call that goes through it is one of ours (blocks, npc cuff). They are wrapped once
 -- to count the bars in flight; lib.progressActive() alone is resource-wide and also true for another
--- resource's bar, which Crimson-Police must never cancel (CRIMSON_ARENA rule 8).
+-- resource's bar, which Crimson-Police must never cancel (Crimson-Arena rule 8).
 local cpProgress = 0
 local wrappedProgress = setmetatable({}, { __mode = 'k' })
 
@@ -206,7 +206,7 @@ function T.hud(patch)
         if v == false and NULLABLE_HUD[k] then hud[k] = nil else hud[k] = v end
     end
     state.hud = hud
-    -- CRIMSON_ARENA rule 8: nothing of Crimson-Police on screen while Crimson-Arena owns the player.
+    -- Crimson-Arena rule 8: nothing of Crimson-Police on screen while Crimson-Arena owns the player.
     if InForeignArena() then
         state.arenaHidden = true
         return
@@ -216,7 +216,7 @@ function T.hud(patch)
 end
 
 function T.result(result)
-    -- CRIMSON_ARENA rule 8: dropped, not kept for later: the card is a 25 s notice, the run stays in the history.
+    -- Crimson-Arena rule 8: dropped, not kept for later: the card is a 25 s notice, the run stays in the history.
     if InForeignArena() then return end
     T.send({ type = 'result', result = type(result) == 'table' and result or nil })
 end
@@ -357,7 +357,7 @@ local function CreateProp(ped)
         return nil
     end
     local c = GetEntityCoords(ped)
-    -- A local object only (docs/CRIMSON_ARENA.md rule 8): nothing networked is created by this client.
+    -- A local object only (Crimson-Arena rule 8): nothing networked is created by this client.
     local obj = CreateObject(model, c.x, c.y, c.z + 0.2, false, false, false)
     SetModelAsNoLongerNeeded(model)
     if not obj or obj == 0 or not DoesEntityExist(obj) then return nil end
@@ -493,7 +493,7 @@ function T.close()
     if wasOpen and state.via == 'desk' then StopDeskPose() end
     state.via, state.desk = nil, nil
     -- Only our own focus: releasing it unconditionally would take it from another resource's UI
-    -- (docs/CRIMSON_ARENA.md rule 8).
+    -- (Crimson-Arena rule 8).
     if wasOpen then SetNuiFocus(false, false) end
     StopProp()
     T.send({ type = 'close' })
@@ -890,7 +890,7 @@ T.registerClientAction('getKeyLabels', function()
 end)
 
 -- Crimson-Arena placed the local player (fighter or spectator): nothing of Crimson-Police stays on
--- screen or holds focus (docs/CRIMSON_ARENA.md rule 8).
+-- screen or holds focus (Crimson-Arena rule 8).
 local RemoveDeskZones, CreateDeskZones
 
 local function OnArenaPlaced()
@@ -1003,7 +1003,7 @@ local function SpawnDeskProp(desk)
         return nil
     end
     local c = desk.coords
-    -- a local object: only this client sees it (docs/CRIMSON_ARENA.md rule 8)
+    -- a local object: only this client sees it (Crimson-Arena rule 8)
     local obj = CreateObject(model, c.x, c.y, c.z, false, false, false)
     SetModelAsNoLongerNeeded(model)
     if not obj or obj == 0 then return nil end

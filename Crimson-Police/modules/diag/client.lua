@@ -98,7 +98,7 @@ end
 -- Only what Crimson-Police holds: the tablet (and its NUI focus), a panel's focus, the test panel's or the test
 -- prompt's focus, a pick-up fade left over. Last, our NUI focus whatever still holds it (a page of ours that broke):
 -- FiveM keeps one focus vote per resource (ResourceUIScripting.cpp SET_NUI_FOCUS), so SetNuiFocus(false, false)
--- here removes only Crimson-Police's own vote and never another resource's focus (docs/CRIMSON_ARENA.md rule 8).
+-- here removes only Crimson-Police's own vote and never another resource's focus (Crimson-Arena rule 8).
 function Diag.unstick()
     -- the criminal tablet closes the whole way (open = false to the NUI, Volunteers told), not only its focus
     if CP.CrimTab and CP.CrimTab.isOpen and CP.CrimTab.isOpen() then pcall(CP.CrimTab.close) end

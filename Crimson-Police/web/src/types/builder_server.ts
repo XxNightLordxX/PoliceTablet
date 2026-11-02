@@ -1,4 +1,4 @@
-// Mission Builder protocol shapes (docs/notes/builder_protocol.md).
+// Mission Builder protocol shapes (docs/ARCHITECTURE.md §13.7).
 
 import type { TierName } from '../shared/types';
 import type { OverrideView } from './admin_missions';

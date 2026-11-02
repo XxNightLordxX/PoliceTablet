@@ -1236,7 +1236,7 @@ local function RefreshHud(run, force)
     local ok, key = pcall(json.encode, list)
     if not ok then key = tostring(GetGameTimer()) end
     -- A new (or closed) tablet log point is pushed at once, not with the throttled progress push, so the
-    -- Active Mission log panel moves on right away (docs/notes/run_ui.md).
+    -- Active Mission log panel moves on right away (docs/ARCHITECTURE.md §13.23).
     local lk = LogKey(run)
     local logChanged = lk ~= (run.logKey or '')
     run.logKey = lk
@@ -2014,7 +2014,7 @@ local function EntityBookkeeping(run)
 end
 
 -- ============================================================================
---              ITEMS (ox_inventory; docs/CRIMSON_ARENA.md rule 4)
+--                  ITEMS (ox_inventory; Crimson-Arena rule 4)
 -- ============================================================================
 
 local function InventoryUp()
@@ -3235,7 +3235,7 @@ local function StopObjectives(run)
 end
 
 -- Only a normal run locked a unit (CP.Draw's accept): test and operation runs never unlock one (an
--- operation's first joiner may be in a unit that is locked for another run; docs/notes/teams.md).
+-- operation's first joiner may be in a unit that is locked for another run; docs/ARCHITECTURE.md §13.25).
 local function UnlockUnit(run)
     if run.test or run.operationId or not run.unit then return end
     Call('Units', 'unlock', run.unit)
@@ -4268,7 +4268,7 @@ end
 -- ============================================================================
 --                              LEAVING AND ENDING
 -- ============================================================================
--- CRIMSON_ARENA rule 1: an in-arena participant's bag is never touched (it may still hold our value while
+-- Crimson-Arena rule 1: an in-arena participant's bag is never touched (it may still hold our value while
 -- only the routing bucket has moved); only CP.Alerts' intent is dropped. Everyone else: CP.Alerts.clear.
 local function ReleaseFlag(src)
     if InArena(src) then

@@ -5330,7 +5330,7 @@ Config.Backups = {
 
 config/blocks.lua holds the range and default of every Mission Builder setting, so a server owner can widen or narrow what builders may pick without touching code. It follows the Mission Builder tables exactly:
 
--- config/blocks.lua · Mission Builder ranges and defaults.
+-- Mission Builder ranges and defaults.
 
 -- What a builder may set for each block (one step of a mission) in the Mission Builder. A { min, max, default }
 -- triple is the range a builder may pick in and the value a new objective starts with; { min, max } has no default.
@@ -6079,7 +6079,7 @@ Phase 4 · Mission Builder
 
 Go live after Phase 2, when units, the full catalog and the Supervisor and Admin UIs (needed to review flagged runs) are in. Steps 6–8 enforce Hard rules 15–18, so they are never skipped or postponed. Phases 3 and 4 ship once the live server has run for 2 weeks with fewer than 2 disputes a week, their checks pass and command staff sign off.
 
-Phase 5 · Parity-plus (English only; see docs/notes/ for what each package built)
+Phase 5 · Parity-plus (English only; docs/ARCHITECTURE.md §13 has how each part reads the contracts)
 
 | Step | Folders and files | Done when |
 |---|---|---|

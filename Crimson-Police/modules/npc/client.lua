@@ -2434,7 +2434,7 @@ AddEventHandler('onClientResourceStop', function(res)
     end
 end)
 
--- Crimson-Arena placed the local player: stop a cuff in progress (docs/CRIMSON_ARENA.md rule 8).
+-- Crimson-Arena placed the local player: stop a cuff in progress (Crimson-Arena rule 8).
 AddStateBagChangeHandler('crimsonArena', ('player:%d'):format(GetPlayerServerId(PlayerId())), function(_, _, value)
     if Foreign(value) and cuffing then
         cuffing.cancelled = true

@@ -678,7 +678,7 @@ function Units.ready(src, accepted, auto)
         CancelCheck(unit, 'err.unit_ready_declined', { src }, 'unit.ready.cancel_declined')
         return true, { accepted = false }
     end
-    -- docs/CRIMSON_ARENA.md rule 5: an in-arena player can't take a mission, so their check is off.
+    -- Crimson-Arena rule 5: an in-arena player can't take a mission, so their check is off.
     if InArena(src) then
         CancelCheck(unit, 'err.unit_ready_cancelled', { src }, 'unit.ready.cancel_arena')
         return false, 'err.in_arena'
@@ -1064,7 +1064,7 @@ local function Invite(src, target)
     local me, errKey = GetOfficer(src)
     if not me then return false, errKey or 'err.not_police' end
     if target == src then return false, 'err.unit_invite_self' end
-    -- ARCHITECTURE §0.14 / CRIMSON_ARENA.md: in-arena players take no part in invites.
+    -- ARCHITECTURE §0.14 / the Crimson-Arena rules: in-arena players take no part in invites.
     if InArena(src) then return false, 'err.in_arena' end
     if OnRun(src) then return false, 'err.unit_on_run' end
 

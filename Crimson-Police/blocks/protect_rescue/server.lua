@@ -152,7 +152,7 @@ local function CheckLocation(o, loc, li, strict)
     if strict and #pts < o.count then
         return Bad('block.protect_rescue.invalid.points_count', { location = li, min = o.count, have = #pts })
     end
-    -- no-build zones for every mission (docs/CRIMSON_ARENA.md rule 7); NPC spots are spawn points, so
+    -- no-build zones for every mission (Crimson-Arena rule 7); NPC spots are spawn points, so
     -- custom missions also keep them Config.Builder.minSpawnFromStart away from the start
     local start = loc.start and loc.start.coords
     for _, p in ipairs(pts) do

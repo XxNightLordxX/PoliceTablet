@@ -121,7 +121,7 @@ function Custody.perform(netId, action, extra)
     return true
 end
 
--- Crimson-Arena placed the player: a bar in progress is cancelled (docs/CRIMSON_ARENA.md rule 8).
+-- Crimson-Arena placed the player: a bar in progress is cancelled (Crimson-Arena rule 8).
 function Custody.cancel()
     if busy and lib and lib.cancelProgress then pcall(lib.cancelProgress) end
 end

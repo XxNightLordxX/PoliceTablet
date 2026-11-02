@@ -532,9 +532,12 @@ end
 
 do
     local readme = ReadRepo('README.md')
-    H.ok(Has(readme, 'Build all 3 but options in the config.lua'), 'README section 12 quotes the owner')
-    H.ok(Has(readme, 'All three features ship off'), 'README says all three ship off')
-    H.ok(Has(readme, '- Start route switch, at the owner\'s request of 2026-10-26'), 'RT1\'s README entry stays')
+    -- README 5.10 (what ships off): live crimes and volunteers are switches that ship off; the route switch ships on
+    local ships = readme and readme:match('### 5%.10 What ships off.-\n## ') or ''
+    local off, on = ships:match('%*%*Ships off%*%*(.-)%*%*Ships on%*%*(.*)')
+    H.ok(Has(off, '`Config.LiveCrime.enabled`') and Has(off, '`Config.Volunteers.enabled`'),
+        'README 5.10 lists live crimes and volunteers as shipping off')
+    H.ok(Has(on, '`Config.Route.required`'), 'README 5.10 lists the start route switch as shipping on')
 
     local spec = ReadRepo('docs/SPEC.md')
     H.ok(spec ~= nil, 'docs/SPEC.md is readable')

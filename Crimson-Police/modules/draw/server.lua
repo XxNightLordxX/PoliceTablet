@@ -135,7 +135,7 @@ local function LockStops(live)
     return OperationLocked()
 end
 
--- docs/CRIMSON_ARENA.md rules 5 and 7: a foreign crimsonArena flag or a routing bucket other than 0.
+-- Crimson-Arena rules 5 and 7: a foreign crimsonArena flag or a routing bucket other than 0.
 -- CP.Alerts.inArena is the gate; the fallbacks only apply while modules/alerts is not loaded.
 local function InArena(src)
     if CP.Alerts and CP.Alerts.inArena then
@@ -811,7 +811,7 @@ function Draw.isReserved(missionId, index)
 end
 
 -- Coordinates of every player who is not a participant (server-side ped coords). Players in
--- Crimson-Arena (foreign flag or another routing bucket) are ignored (docs/CRIMSON_ARENA.md rule 7).
+-- Crimson-Arena (foreign flag or another routing bucket) are ignored (Crimson-Arena rule 7).
 local function OtherPlayerCoords(participants)
     local out = {}
     for _, id in ipairs(GetPlayers() or {}) do
@@ -1776,7 +1776,7 @@ local function AcceptStart(src, typeKey, opts, note)
     -- Invites close now: the draw depends on the unit's size and every member's cooldowns.
     if unit and CP.Units and CP.Units.lock then Safe(CP.Units.lock, unit) end
     -- The checks above may yield (database lookups): an invite accepted meanwhile would put an officer in
-    -- the locked unit who is not on the run and was never checked (docs/notes/teams.md). The unit must still
+    -- the locked unit who is not on the run and was never checked (docs/ARCHITECTURE.md §13.25). The unit must still
     -- be exactly the members that were checked; otherwise the leader tries again.
     if unit then
         local now2 = UnitMembers(src)

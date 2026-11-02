@@ -2333,7 +2333,7 @@ local function CooldownNow(def)
     return math.floor(base * (ok and tonumber(scale) or 1))
 end
 
--- MissionListData (docs/notes/oversight.md). adminExtras adds what the Admin UI Missions screen lists besides
+-- MissionListData (docs/ARCHITECTURE.md §13.20). adminExtras adds what the Admin UI Missions screen lists besides
 -- (SPEC Interfaces: "version, Lua file path, 'edited in code' flag"): filePath, editedInCode, defHash, status,
 -- disabledInConfig (Config.DisabledMissions).
 local function MissionListData(src, adminExtras)

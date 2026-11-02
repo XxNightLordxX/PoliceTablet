@@ -29,7 +29,7 @@ export type TypeCard = BoardCard & {
 // The Weekly Boss event card (BoardCard + available). Accepted with the key 'weekly_boss'.
 export type BossCard = NonNullable<BoardData['boss']>;
 
-// BoardData.operation: the §9.4 fields plus the extras CP.Operations.boardCard sends (docs/notes/teams.md).
+// BoardData.operation: the §9.4 fields plus the extras CP.Operations.boardCard sends (docs/ARCHITECTURE.md §13.25).
 export type BoardOperation = NonNullable<BoardData['operation']> & {
     missionType?: string;
     missionTypeLabel?: string;
@@ -42,7 +42,7 @@ export type BoardOperation = NonNullable<BoardData['operation']> & {
     joinBlocked?: string | null;
 };
 
-// Callback 'getMissionTypes'. Optional extras (requested from modules/draw, docs/notes/run_ui.md):
+// Callback 'getMissionTypes'. Optional extras (requested from modules/draw, docs/ARCHITECTURE.md §13.23):
 // `serverTime` = os.time() when the board was built; `todMultiplier` = Config.Events.todMultiplier (the
 // Type of the Day's points multiplier; the board assumes the default 2 without it).
 export interface MissionBoardData extends Omit<BoardData, 'operation'> {
@@ -81,7 +81,7 @@ export type RunObjective = ActiveMissionView['objectives'][number];
 export type RunRoute = NonNullable<ActiveMissionView['route']>;
 export type RunLog = NonNullable<ActiveMissionView['log']>;
 
-// ActiveMissionView plus optional extras (requested from modules/runs, see docs/notes/run_ui.md).
+// ActiveMissionView plus optional extras (requested from modules/runs, see docs/ARCHITECTURE.md §13.23).
 export interface ActiveMissionData extends ActiveMissionView {
     // The viewer's server id (marks "You" in the partners list).
     me?: number;

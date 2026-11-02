@@ -1,6 +1,6 @@
 // Src/shared/components · the shared UI toolkit. Import from here:
 // import { Button, Card, Table, Money, TierBadge } from '../../shared/components';
-// Props are documented on each component and in docs/WEB_UI.md.
+// Props are documented on each component and in docs/ARCHITECTURE.md §12.
 
 export { Icon, ICON_NAMES } from './Icon';
 export type { IconName, IconProps } from './Icon';

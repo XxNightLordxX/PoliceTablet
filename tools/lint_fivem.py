@@ -15,7 +15,7 @@ Rules (a hit prints `file:line: RULE message`):
   FX03 client-os        os.* / io.* in a client or shared script without an `os and` / `io and` guard on the
                         line: the client Lua runtime has neither library.
   FX04 focus-release    SetNuiFocus(false, ...) outside an if: release the focus only while a CP UI holds it
-                        (docs/CRIMSON_ARENA.md rule 8).
+                        (Crimson-Arena rule 8).
   FX05 await-raise      lib.callback.await( outside pcall: ox_lib raises on its timeout (300 s) and on an
                         unknown callback. While CP.Net.request itself raises, its direct calls are hits too.
   FX06 orphan-mode      a server script creates networked entities but never calls SetEntityOrphanMode: by
@@ -27,7 +27,7 @@ Rules (a hit prints `file:line: RULE message`):
                         check: on Linux it makes the folder and then crashes the whole server (signal 11, pcall
                         cannot catch it). Ship the folder and use CP.U.ensureFolder.
   FX09 arena-natives    SetPlayerTeam, NetworkSetFriendlyFireOption, SetCanAttackFriendly, a routing bucket
-                        setter or CancelEvent (docs/CRIMSON_ARENA.md rules 9 to 11).
+                        setter or CancelEvent (Crimson-Arena rules 9 to 11).
   FX10 loop-no-yield    a while / repeat loop where one pass can go round with no Wait (no yield, no break, return
                         or error on that path), nothing moves what the condition reads on every pass, and the
                         condition waits on game state: a native (GetGameTimer too: it does not move while the
@@ -428,7 +428,7 @@ def lint(only=None):
                     add(path, ln, 'FX08', 'os.createdir with no U.isWindows() check: it crashes a Linux FXServer')
             # FX09
             for m in ARENA.finditer(code):
-                add(path, ln, 'FX09', f'{m.group(1)} is forbidden (docs/CRIMSON_ARENA.md rules 9 to 11)')
+                add(path, ln, 'FX09', f'{m.group(1)} is forbidden (Crimson-Arena rules 9 to 11)')
             # FX11
             for m in DEBUG_USE.finditer(code):
                 if m.group(1) not in FX_DEBUG:

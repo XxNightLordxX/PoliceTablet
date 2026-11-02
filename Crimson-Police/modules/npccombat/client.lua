@@ -161,7 +161,7 @@ CP.Hooks.on('settings:changed', function()
     if not ok then CP.warn(TAG, 'combat settings failed: %s', tostring(err)) end
 end)
 
--- Crimson-Arena placed this player (docs/CRIMSON_ARENA.md rules 1 and 8): the server ends the run for them a moment
+-- Crimson-Arena placed this player (Crimson-Arena rules 1 and 8): the server ends the run for them a moment
 -- later; the arena's fights never get the headshot flag or the AI modifiers, not even for that moment.
 AddStateBagChangeHandler('crimsonArena', ('player:%d'):format(GetPlayerServerId(PlayerId())), function(_, _, value)
     if type(value) == 'table' and value.active == true and value.source ~= 'crimson-police' then NpcCombat.stop() end

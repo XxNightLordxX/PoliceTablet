@@ -2,7 +2,8 @@
 
 How to set up a machine for the checks, run all of them or one spec, and read what fails. The same
 checks run on GitHub Actions (`.github/workflows/ci.yml`); a change is done when `tools/check_all.sh`
-passes (docs/ARCHITECTURE.md §11). How work flows around the checks is in docs/PROCESS.md.
+passes (docs/ARCHITECTURE.md §11). What to check in game after a change is `docs/IN_GAME_CHECKLIST.md`.
+What to update with each change is at the end, in "Working on the code".
 
 ## The checks
 
@@ -14,14 +15,15 @@ passes (docs/ARCHITECTURE.md §11). How work flows around the checks is in docs/
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 0.8 s |
 | `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX12 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have; FX12, a server yes/no answer compared with `true`), known hits in `tools/lint_baseline.txt` | 5 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/STYLE.md) | 45–48 s |
-| `suite-db` | `lua5.4 tests/run.lua`: 57 specs on MariaDB | 40–45 s |
+| `suite-db` | `lua5.4 tests/run.lua`: every `tests/*_spec.lua` on MariaDB | 40–45 s |
 | `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 35–38 s |
 | `suite-shadow` | `lua5.4 tests/run.lua --storage=shadow`: MariaDB, the oxmysql twin and the engine compared, 0 differences | 70–76 s |
 | `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 10 s |
 | `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish | 2 s |
 | `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 14–15 s |
 
-A whole run takes about 4 minutes (57 specs, full admin control included). Every `tools/lint_<name>.py` and `tools/check_<name>.py` (other than
+A whole run takes several minutes (every spec, full admin control included; the times above are from an older,
+smaller suite). Every `tools/lint_<name>.py` and `tools/check_<name>.py` (other than
 `check_contracts.py`) is a `lint-<name>` step, run right after `contracts`: a new lint joins by checking the
 repository with no arguments and exiting non-zero on a problem.
 
@@ -167,7 +169,8 @@ tools/check_all.sh -v                # stream each step's output as it runs
 CP_TEST_JOBS=1 tools/check_all.sh    # the suites one spec at a time
 ```
 
-Each step prints one line while the run goes on, and a summary at the end:
+Each step prints one line while the run goes on, and a summary at the end (an example from an older run; the
+counts grow with the specs):
 
 ```
 SUMMARY
@@ -279,7 +282,7 @@ ERROR 1054 (42S22) at line 1: Unknown column 'nope' in 'SELECT'
 - `could not build the run database:` the migrations failed; the `mysql` message is above it. Exit 2.
 - `SKIP <spec> (<mode> mode): <reason>`: a check that means something only on MariaDB; every skip is listed
   at the end. `REPORT` lines under a spec are timings and sizes (`storage`, `storage_copy`), not checks.
-- The last line: `57 specs, N assertions passed, F failed, C crashed (storage: <mode>)`. Exit 0 only with
+- The last line: `S specs, N assertions passed, F failed, C crashed (storage: <mode>)`. Exit 0 only with
   0 failed, 0 crashed and, in shadow mode, 0 differences.
 - A check that fails only when specs run side by side (`tests/storage_spec.lua` holds every query under
   250 ms): rerun with `--jobs=1` before calling it a regression.
@@ -500,3 +503,99 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   hurt officer goes through.
 - **Shadow mode used the socket only**: the twin ignored `MYSQL_HOST`, so with a TCP server the CLI and the
   twin could talk to different servers. The twin now reads the same variables as the CLI.
+
+## Working on the code
+
+Two things always outrank this section: the Hard rules in `docs/SPEC.md`, and the contracts in
+`docs/ARCHITECTURE.md` and the Crimson-Arena rules in `docs/INTEGRATIONS.md`.
+
+### The gate before every commit
+
+Run `tools/check_all.sh` once, right before the commit (its steps are listed at the top of this file).
+
+- **Commit only on PASS.** Paste the gate's SUMMARY lines into the commit body. Do not type test counts
+  by hand. The counts are deterministic (the same in every run and every storage mode), so a count that
+  changes without a spec change is a finding.
+- **While you work, use a filter**: `lua5.4 tests/run.lua <name>`, then again with `--storage=files`. Run
+  the full gate once, before you commit.
+- **Files mode is not optional.** In database mode the harness hands modules the mysql CLI's values: 0/1
+  for TINYINT(1), numbers for SUM and DECIMAL. Only files mode gives modules the types oxmysql gives in
+  production (booleans, and strings for DECIMAL sums). A module that passes database mode alone can still
+  break on a live server.
+- **CI runs the same script on every push** (`.github/workflows/ci.yml`). When CI is red, fixing it comes
+  before any other merge.
+
+### What to run and what to update, by change
+
+| You changed | Run while you work | Update in the same commit |
+| --- | --- | --- |
+| A module or block (Lua) | its spec, in database and files mode | ARCHITECTURE §5 when a `CP.X.fn` is added or changes shape |
+| SQL | its spec in all three modes; shadow must show 0 differences | the construct list in `modules/storage/memsql.lua` for a new SQL construct |
+| An event, callback, action or NUI message | `check_contracts.py`, `lint_fivem.py` | ARCHITECTURE §8 or §9. The §8 list is complete, so every name goes in it. |
+| Natives, net handlers, NUI focus, callbacks, entities or files (`os.*`) | `lint_fivem.py` | `tools/lint_baseline.txt`: delete the line of a bug you fixed (the lint calls it stale); add one only for a deliberate use, with its reason |
+| A locale key | `check_contracts.py --merge` | the key in `locales/parts/<part>.json`; `--merge` rebuilds `locales/en.json` |
+| `web/src` or `locales/parts` | `tsc --noEmit` | `web/dist`: `cd Crimson-Police/web && npm run build` (the `build` step checks it) |
+| Any Lua or web source | `python3 tools/restyle.py <your files>` before the gate | nothing: the `style` step checks it |
+| A Config key | the specs that read it | the SPEC config listing and `config/config.lua` |
+| Behaviour the SPEC describes | - | SPEC (owner-approved changes only) |
+| What an owner does or sees (install, a setting, a command, a console message) | - | the root README.md, and the folder README that covers it |
+| The harness or the runner | the full gate twice, and once with `CP_TEST_JOBS=1`: the per-spec counts must be identical | ARCHITECTURE §11, the runner's header and this file |
+
+### Keeping the docs true
+
+- **Contract docs change in the same commit as the code**: ARCHITECTURE §5, §8, §9 and §10, the Crimson-Arena
+  rules, and the SPEC config listing (byte-identical to `config/config.lua`, checked by `tests/docs_spec.lua`).
+  A protocol name without its §8 or §9 entry is a finding.
+- **What an owner sees or sets** (install, a setting, a command, a console line) goes in the root `README.md`, and
+  the folder README that covers it.
+- **Commit messages** say what changed and why. The only numbers in them come from the gate.
+
+### Keeping the style applied
+
+- The style is `docs/STYLE.md`, and its only sources are the owner's sc-* scripts. Crimson-Arena and
+  Renewed-Banking show what not to write: no CAPS-led `--[[ ]]` header essays, no `---` doc comments, no
+  PascalCase module tables, no heavy commenting.
+- **The tree is formatted, and the gate keeps it so.** The `style` step runs `tools/restyle.py --check` and
+  fails on any file the formatter would change. Run `python3 tools/restyle.py <your files>` before the gate,
+  and commit what it changes. Do not hand-edit the layout it produces, and do not run StyLua or Prettier on
+  their own (docs/STYLE.md, "Keeping the style").
+- **A change to the formatter restyles the whole tree:** `tools/restyle.py`, `stylua.toml`,
+  `web/.prettierrc.json`, or another StyLua or Prettier version. Make it one commit of its own: it touches nearly every file.
+- Style never renames a contract name: events, `CP.X.fn`, NUI names, locale and config keys, and columns.
+
+### What the gate does not catch yet
+
+Until these gaps are closed, look for them in review.
+
+- **Randomness in specs.** Run seeds are still random (`U.uuid`); a spec may only branch on them in its
+  setup, never around a check. `int_engine_spec` did (172 or 173 assertions) and now forces its Time Crunch
+  roll. If a spec fails once and then passes, treat the failure as a real finding. `CP_TEST_ORDER`,
+  `CP_TEST_CLOCK`, `CP_TEST_NOW` and `CP_TEST_TZ` (docs/TESTING.md) help to reproduce it.
+- **FiveM pitfalls the lint cannot see.** `lint-fivem` catches wrong-side natives, `source` read late,
+  `os`/`io` on the client, unguarded focus release, raising callback awaits, entities without an orphan mode,
+  `os.rename` answers, `os.execute` on the server and the Crimson-Arena natives. Review still has to catch
+  `%d` on a value that can be fractional, code acting on a state bag another client can write (an entity's
+  owner writes its bag), and hidden server rolls (seeds) sent to clients. A new `tools/lint_<name>.py` or `tools/check_<name>.py` joins the
+  gate automatically.
+- **Protocol names missing from ARCHITECTURE §8.** `check_contracts.py` compares code with code, not with
+  the doc.
+- **Timing budgets in `storage_spec`.** On a busy machine, or next to other specs, they can fail. Rerun
+  the spec alone (`lua5.4 tests/run.lua storage_spec --jobs=1`) before you call it a regression.
+- **FXServer file behaviour.** The harness runs plain Lua, where `os.rename` answers the right way round; FXServer
+  inverts it on Linux. Like FXServer, the harness refuses `os.execute` for resource code and ends the spec (exit
+  139) when resource code calls `os.createdir`, which crashes a Linux server. `lint-fivem` guards the known uses
+  (FX07, FX08); anything else that touches files needs a test on a real server.
+- **Yes/no natives answer 1 on the server.** FXServer gives Lua the integer 1 for a BOOL native's yes (false for
+  no), never true, so `DoesEntityExist(e) == true` is false for every entity. Read the answer as a condition or
+  accept `true or 1` (ARCHITECTURE §6.1). The harness gives every server mock that answer, whatever the spec's
+  function returns; a spec never sets the metatable of `_G` (`H.strictGlobals`, `H.onUndefinedGlobal`).
+  `lint-fivem` rule FX12 flags `== true` / `~= true` on such an answer (directly or through the local it went in).
+- **A file listed twice in fxmanifest runs twice.** FXServer runs every entry (a file named by itself and matched
+  again by `modules/**/server.lua` loads twice). Such a file starts with its load guard
+  (`if CP.X and CP.X._installed then return end`), as storage and adminkit do; tests/adminkit_spec.lua expands the
+  manifest the way FXServer does (`H.manifestScripts`) and fails on a repeated file without one.
+- **FXServer's debug library is five functions.** getinfo, getmetatable, setmetatable, getupvalue and traceback
+  only: no `debug.sethook`, so text cannot be run under a step or memory budget. Never run text that comes from a
+  file an admin can edit or from the Admin UI; read it as data (mission files: `CP.U.parseMissionFile`). The
+  harness gives the resource the same five functions (a spec that needs more copies it from `H.debug`), and
+  `lint-fivem` rule FX11 flags any other `debug.<name>` in the resource.

@@ -410,7 +410,7 @@ local function CheckLocation(o, loc, li, strict)
         end
         return true
     end
-    -- markers and route waypoints: never inside a no-build zone (docs/CRIMSON_ARENA.md rule 7), for
+    -- markers and route waypoints: never inside a no-build zone (Crimson-Arena rule 7), for
     -- every mission (the loader only sees location keys, not points written into the objective)
     local function pathOk(list)
         for _, p in ipairs(list) do
@@ -1003,7 +1003,7 @@ end
 
 -- Stand the suspect DOOR_STEP in front of the door, facing out. Where he waited does not matter: inside
 -- (the card: "the suspect inside") or on the door step next to the door (the built-in houses have no
--- interior a ped can walk out of, docs/notes/missions_b.md), he always ends up outside, never behind the
+-- interior a ped can walk out of, docs/ARCHITECTURE.md §13.17), he always ends up outside, never behind the
 -- facade.
 local function MoveToDoor(ctx, p)
     local door = PointList(ctx.location, ctx.obj.door)[1]

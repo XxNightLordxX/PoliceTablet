@@ -19,10 +19,10 @@ criminal tablet and the Admin UI (`/CrimsonPoliceAdmin`, its sidebar grouped by 
 has a one-line help under its title that says what to do next, and every error it can show says what went wrong
 and what to do about it (tests/workflow_errors_spec.lua holds the common ones to that).
 
-Each workflow has a short **How it works** paragraph for owners and staff, the spec that drives it, and what steps WF2
-(Officer, Supervisor, Field training, System) and WF3 (Criminal, Admin) changed to make it smoother (before -> after,
-counted in tablet requests to the server, fixed waits and the player's clicks). Anything that changes what players see
-is a Config option shipped as before; a pure speed-up is on for everyone.
+Each workflow has a short **How it works** paragraph for owners and staff, the spec that drives it, its result, and
+how few steps it takes (counted in tablet requests to the server, fixed waits and the player's clicks). Anything that
+changes what players see is a Config option; a pure speed-up is on for everyone. The typed RESTORE, REPLACE, SWITCH,
+USE and ENABLE words and the reason on every correction stay on purpose (risky or audited actions).
 
 ## Officer
 
@@ -36,7 +36,7 @@ his Profile.
 Spec: tests/workflows_e2e_spec.lua (2). Covers: Accept, Active Mission, every checkpoint, result card, $250, XP, item
 reward given, a second pay refused. Result: **Pass**.
 
-Smoother (WF2): no change needed. Accept is one click (one request), the run view arrives by push (no polling while on
+Steps: Accept is one click (one request), the run view arrives by push (no polling while on
 a run), the result card comes on its own.
 
 ### Training mission (EVOC)
@@ -49,8 +49,6 @@ Spec: tests/workflows_full_spec.lua (2). Covers: Accept, take the wheel, two che
 or cooldown, per SPEC), accept again, every checkpoint, result card with $350 and the item, paid row, XP. Result:
 **Pass**.
 
-Smoother (WF2): no change needed (as Patrol).
-
 ### Investigation mission (Suspicious Activity)
 
 How it works: at the scene the officer talks to the contact, picks the police actions offered and makes a decision;
@@ -60,7 +58,7 @@ shows the point and its choices, one click logs it.
 Spec: tests/e2e_spec.lua (13). Covers: Accept, the contact scene, the police actions and decision, the row. Result:
 **Pass**.
 
-Smoother (WF2): the tablet log had a fixed 600 ms wait and a second getRun request after each log; now the server
+Steps: The tablet log had a fixed 600 ms wait and a second getRun request after each log; now the server
 pushes the next point at once and the log is one request with no wait (before: 2 requests + 600 ms per point; after: 1
 request, 0 ms).
 
@@ -73,16 +71,12 @@ officers.
 Spec: tests/e2e_spec.lua (2), tests/workflows_e2e_spec.lua (3). Covers: Accept, every wave, secure, tag and bag,
 release, Reinforced tier, cross-department x1.10, $920, items. Result: **Pass**.
 
-Smoother (WF2): no change needed (as Patrol).
-
 ### Raids, traffic stops, parking patrol, downed officer, flagged run
 
 How it works: each of these is one mission block with its own objective (breach and clear, stop and check, ticket,
 revive, ...); the HUD names what to do next and the row records the result.
 
 Spec: tests/e2e_spec.lua (4, 7, 11, 12, 14). Covers: Each block's objective to the row. Result: **Pass**.
-
-Smoother (WF2): no change needed.
 
 ### Weekly Boss
 
@@ -96,7 +90,7 @@ cooldown, his weekly attempt spent), reconnect (not back on the run or in the un
 scene secured, $2,500 and 500 points at the Standard pay tier; **restart**: both attempts stay spent. Result:
 **Pass**.
 
-Smoother (WF2): no change needed: the ready check is pushed to every member at once and can be answered from the
+Steps: The ready check is pushed to every member at once and can be answered from the
 banner (one click); My options -> Auto-Ready answers it for him.
 
 ### Unit: invite, ready check, promote, kick, leave
@@ -110,7 +104,7 @@ check one member declines (no run, no cooldown), the lead handed over, a kick re
 the new one, **restart** (the unit is gone, per README 11), formed again, leave (a unit of one dissolves). Result:
 **Pass**.
 
-Smoother (WF2): no change needed: every unit change is pushed to all members at once. The unit errors now say what to
+Steps: Every unit change is pushed to all members at once. The unit errors now say what to
 do ("The unit is full. Its leader can remove a member to make room", "You are not in a unit. Form one on the Unit
 screen first").
 
@@ -125,7 +119,7 @@ officer with the extra grant creates a call, Dispatch lists it, **restart** with
 call claimed, **restart** with it claimed (run dropped, no row, call row closed: Ended by a restart), the claim race
 and re-dispatch. Result: **Pass (after fix 1)**.
 
-Smoother (WF2): Decline answered and then Dispatch asked the server again; now the reply carries the new Dispatch view
+Steps: Decline answered and then Dispatch asked the server again; now the reply carries the new Dispatch view
 (before: 2 requests; after: 1). Claim errors now name the next step ("Another unit took this call. Pick another call
 on Dispatch").
 
@@ -137,8 +131,6 @@ challenge of the season (Challenge). Nothing to press: the counts move by themse
 Spec: tests/workflows_full_spec.lua (7). Covers: A completed run counts in the daily and weekly goal; the season's
 challenge gives SAST points from its completed runs. Result: **Pass**.
 
-Smoother (WF2): no change needed (Home refreshes on the run's end push).
-
 ### Live crime, backup join, talk-down, booking
 
 How it works: a LIVE call is a crime in progress. A unit claims it, secures the scene, other officers can join as
@@ -148,7 +140,7 @@ Spec: tests/live_fto_e2e_spec.lua (2, 3), tests/realsuspects_e2e_spec.lua (2, 4)
 secured, a backup joins, detain, book, talk-down with its money and item, End case, the rows; **restart** mid-case
 (case and run end with no row, closed cases kept). Result: **Pass**.
 
-Smoother (WF2): no change needed: the case card is pushed to every officer on it.
+Steps: The case card is pushed to every officer on it.
 
 ### Surrender
 
@@ -157,8 +149,6 @@ them down, the player says yes, the officer cuffs him and the arrest counts as p
 
 Spec: tests/live_fto_e2e_spec.lua (2, 3). Covers: `/surrender` and Talk them down, the yes, the cuff, Peaceful arrest,
 the feature reward; **restart** ends a surrender in progress. Result: **Pass**.
-
-Smoother (WF2): no change needed.
 
 ## Supervisor
 
@@ -173,7 +163,7 @@ launches, a SAST officer joins, **restart** (the operation cancelled, the launch
 the wait with a reason, a joiner **drops** (off the join list) and reconnects, SAST and FIB join, Start now (only the
 launcher), Gang Shootout to the paid rows with the cross-department bonus, the operation completed. Result: **Pass**.
 
-Smoother (WF2): no change needed: joins are pushed to the panel and the board at once.
+Steps: Joins are pushed to the panel and the board at once.
 
 ### Happy hour
 
@@ -184,7 +174,7 @@ Spec: tests/workflows_full_spec.lua (7), tests/happy_hour_spec.lua. Covers: EVOC
 supervisor starts 10 minutes, **restart** (still running, per SPEC), EVOC again at once and paid, over after 10
 minutes. Result: **Pass**.
 
-Smoother (WF2): no change needed. Its error now says when to try again ("A happy hour is already running. Start
+Steps: Its error now says when to try again ("A happy hour is already running. Start
 another one after it ends").
 
 ### Type of the Day
@@ -196,8 +186,6 @@ Spec: tests/workflows_full_spec.lua (7), tests/dept_tod_spec.lua. Covers: The ad
 supervisor picks Training for tomorrow, **restart** (today's type unchanged), the next day SAST has Training (the
 setter keeps the server's), the EVOC row carries the multiplier. Result: **Pass**.
 
-Smoother (WF2): no change needed.
-
 ### Mission controls
 
 How it works: Supervisor UI -> Mission controls lists the controls an admin switched on, in groups (delays, the run,
@@ -207,8 +195,6 @@ the admin's limits or resets it to config.lua; a cooldown clear needs a reason.
 Spec: tests/workflows_full_spec.lua (8), tests/workflows_e2e_spec.lua (5). Covers: Every control switched on by the
 admin, every number and choice control of SAST set inside its bounds, **restart** (each kept), each reset to
 config.lua; the hourly cap and its bounds; a cooldown clear. Result: **Pass**.
-
-Smoother (WF2): no change needed (each group already says its task in one line).
 
 ### Supervisor actions and awards (Department Report)
 
@@ -220,7 +206,7 @@ Spec: tests/workflows_full_spec.lua (8), tests/workflows_e2e_spec.lua (5). Cover
 **restart** keeps it, lifted), abandon with the type cooldown, a department notice; Give points with its money and
 item, a commendation. Result: **Pass**.
 
-Smoother (WF2): with `Config.Tablet.supervisorRemember = true` the Give points, Mission ban and Clear cooldown dialogs
+Steps: With `Config.Tablet.supervisorRemember = true` the Give points, Mission ban and Clear cooldown dialogs
 open with the points, hours and reason last used on that tablet, so a second award or ban in a row is open + submit
 (before: open, type 2 fields, submit; after: open, submit). Shipped `false`: they open empty, as before. An empty
 reason now reads "Enter a reason in the Reason box first".
@@ -234,7 +220,7 @@ approved or rejected the same way. A department can ask for a second supervisor'
 Spec: tests/workflows_e2e_spec.lua (6). Covers: A flagged run held, approved (cash and items released once), voided,
 disputed and restored. Result: **Pass**.
 
-Smoother (WF2): a decision was answered and then the queue was asked for again; now the reply carries the fresh queue
+Steps: A decision was answered and then the queue was asked for again; now the reply carries the fresh queue
 and the row leaves at once (before: 2 requests; after: 1).
 
 ### Mission Builder
@@ -248,8 +234,6 @@ A supervisor creates a mission from EVOC, edits and saves it, **restart** (the d
 (pays nothing), publish, **restart** (still plays), an officer draws it and is paid the Training payout. Result:
 **Pass**.
 
-Smoother (WF2): no change needed.
-
 ## Field training
 
 ### Field training (FTO)
@@ -260,8 +244,6 @@ restart.
 
 Spec: tests/live_fto_e2e_spec.lua (4). Covers: Pair, a counted run, sign-off, badge, trainer bonus, both payments;
 **restart**: the training record stays. Result: **Pass**.
-
-Smoother (WF2): no change needed.
 
 ## Criminal
 
@@ -274,7 +256,7 @@ his time. Backing out after the free seconds is a strike.
 Spec: tests/realsuspects_e2e_spec.lua (3, 5, 6). Covers: `/crimsonheat` and the criminal tablet, the pop-up, the yes,
 engaged, the knock, the cuff, volunteerEnded, a strike after the free seconds. Result: **Pass**.
 
-Smoother (WF3): no change needed. Every criminal tablet action (save roles, renew, stop, the pop-up answer) already
+Steps: Every criminal tablet action (save roles, renew, stop, the pop-up answer) already
 answers with the fresh view in one request, and the free Give up runs out on its own on the page (no polling). Stop
 keeps its second click (it ends the volunteer time); the other buttons are one click.
 
@@ -290,7 +272,7 @@ Spec: tests/workflows_full_spec.lua (1). Covers: Settings opened, the Features t
 refused, item rewards toggled on, the Rewards pools edited, an extra grant (mission calls for one officer), the hourly
 cap, a season started; **restart**: every change kept. Result: **Pass**.
 
-Smoother (WF3): no change needed in the steps: a Setting's save reply carries the changed setting and the screen
+Steps: A Setting's save reply carries the changed setting and the screen
 applies it (no second fetch); the typed ENABLE stays on the money tools (risky). The common Settings errors now say what to do next (for example "That is
 not valid JSON. Check the brackets, quotes and commas.", "This is not a Crimson-Police settings export. Paste a file
 made by Export in Settings.").
@@ -303,7 +285,7 @@ retires or unretires an officer; each needs a reason and is audited.
 Spec: tests/workflows_full_spec.lua (9), tests/admin_control_e2e_spec.lua (1). Covers: Give points, void a run (XP
 down), **restart** (still voided), restore (XP back, cash never taken back); retire and unretire. Result: **Pass**.
 
-Smoother (WF3): no change needed in the steps: each correction needs its reason and is audited, so the dialog stays
+Steps: Each correction needs its reason and is audited, so the dialog stays
 (its rules require it). Its errors now say what to do next (for example "That run is already voided. Use Restore on it
 to undo the void.", "That is over your daily adjustment limit. Give fewer points, or try again tomorrow.").
 
@@ -316,7 +298,7 @@ Spec: tests/workflows_full_spec.lua (10), tests/admin_control_e2e_spec.lua (4), 
 Backup, a payment after it, preview, RESTORE, no new run until the restart, **restart**: the payment stays paid,
 nothing paid twice, runs start again. Result: **Pass**.
 
-Smoother (WF3): Backup now, Restore and Delete answered and then the Backups list was asked for again; now each reply
+Steps: Backup now, Restore and Delete answered and then the Backups list was asked for again; now each reply
 carries the fresh list (2 tablet requests -> 1, a pure speed-up). RESTORE and the typed backup name stay (risky). The
 backup errors say what to do next ("Delete an older backup instead.", "Refresh the backups list and pick another
 one.").
@@ -330,7 +312,7 @@ Spec: tests/workflows_full_spec.lua (12), tests/storage_copy_spec.lua. Covers: T
 (every run row, the XP, the Builder missions), the folder in use unchanged, runs start at once; the switch, force and
 both directions in storage_copy_spec. Result: **Pass**.
 
-Smoother (WF3): Copy, Switch storage and Use again answered and then the Storage panel was asked for again, and
+Steps: Copy, Switch storage and Use again answered and then the Storage panel was asked for again, and
 admin:getStorage allows one read in 5 seconds, so that second read could be refused and leave the panel stale; now each
 reply carries the fresh Storage view (2 requests -> 1, never refused, a pure speed-up). The typed REPLACE, SWITCH and
 USE stay (risky).
@@ -344,42 +326,3 @@ with no row, pay, audit or cooldown.
 
 Spec: tests/e2e_spec.lua (9). Covers: Every mission entity and alert flag removed, no row, pay, audit or cooldown.
 Result: **Pass**.
-
-Smoother (WF2): no change needed.
-## What WF2 changed (before -> after)
-
-| Workflow | Before | After | Kind |
-|---|---|---|---|
-| Review Queue: Approve, Void, answer a dispute | 2 tablet requests (the action, then sup:getReviewQueue) | 1 (the reply carries the queue) | speed-up, for everyone |
-| Dispatch: Decline a pushed mission | 2 requests (the action, then getMissionCalls) | 1 (the reply carries the view) | speed-up, for everyone |
-| Active Mission: log a point (Business Check) | 1 request + a fixed 600 ms wait + 1 getRun | 1 request, no wait (the server pushes the next point) | speed-up, for everyone |
-| Give points, Mission ban, Clear cooldown in a row | open, type points or hours and a reason, submit | open, submit (values kept) | `Config.Tablet.supervisorRemember`, shipped `false` |
-| Common officer and supervisor errors | 38 texts said only what went wrong | each also says what to do next | text, for everyone |
-
-Already in place before WF2 and kept: one-click claim (My options -> Dispatch), Abandon without the dialog (My
-options -> During a mission), Auto-Ready, the tablet opening on Active Mission while on a run (My options -> Opening
-the tablet), the last screen of each tablet kept while the resource runs, remembered Dispatch filters, the run, unit,
-calls and operation views pushed to every member at once, and the Supervisor UI grouped by task
-(`Config.Tablet.supervisorByTask`).
-
-## What WF3 changed (before -> after)
-
-| Workflow | Before | After | Kind |
-|---|---|---|---|
-| Backups: Backup now, Restore, Delete | 2 tablet requests (the action, then admin:getBackups) | 1 (the reply carries the list) | speed-up, for everyone |
-| Storage copy: Copy, Switch storage, Use again | 2 requests (the action, then admin:getStorage, which allows one read in 5 s and could refuse it) | 1 (the reply carries the view) | speed-up, for everyone |
-| Common Admin errors (Backups, Storage, Corrections, Settings) | 24 texts said only what went wrong | each also says what to do next | text, for everyone |
-| Volunteer by the criminal tablet | one request per action, the reply carries the view | unchanged | already smooth |
-
-Kept on purpose: the typed RESTORE, REPLACE, SWITCH, USE and ENABLE words and the reason on every correction (risky or
-audited actions).
-
-## Defects found and fixed
-
-1. Mission call rows left open for ever by a restart (`modules/missioncalls/server.lua`). Calls live in memory, so
-   after `restart Crimson-Police` a call that was open stayed `open` in `cp_mission_calls`, and a claimed call whose
-   run the restart dropped stayed `claimed`: the Supervisor UI's calls of today and the dispatch history showed them
-   open or claimed for ever. `CP.MissionCalls.closeLeftover()` now runs once at start: open rows become `lapsed`,
-   claimed rows become `closed` with the outcome `restart` ("Ended by a restart"). Failing check without the fix:
-   `tests/workflows_full_spec.lua` "restart: ...and its row is lapsed, not open for ever" (got open) and
-   "restart: its row is closed, not claimed for ever" (got claimed).

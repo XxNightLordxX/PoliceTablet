@@ -1,5 +1,5 @@
 -- CP.Downed (server): Hard rule 18, downed participants (docs/ARCHITECTURE.md §5.15, SPEC "Downed participants",
--- CRIMSON_ARENA rules 1 and 3).
+-- Crimson-Arena rules 1 and 3).
 
 CP.Downed = CP.Downed or {}
 local D = CP.Downed
@@ -175,7 +175,7 @@ local function CancelEntry(src, e, reason)
     return true
 end
 
--- CRIMSON_ARENA rule 3: right before every step, still downed and not in the arena.
+-- Crimson-Arena rule 3: right before every step, still downed and not in the arena.
 local function Recheck(src, e)
     if InArena(src) then
         CancelEntry(src, e, 'in_arena')

@@ -1288,7 +1288,7 @@ local function ItemsAllowed(actor)
     return CfgB().supervisorItems == true
 end
 
--- The item rules (CRIMSON_ARENA rule 4); B.validate and every test run check them. actor: who saves, tests or
+-- The item rules (Crimson-Arena rule 4); B.validate and every test run check them. actor: who saves, tests or
 -- publishes (nil = no builder: only the file rules).
 local function ItemErrors(items, errors, actor)
     if type(items) ~= 'table' or not IsList(items) then
@@ -2204,7 +2204,7 @@ function B.validate(def, opts)
         end
     end
 
-    -- items (CRIMSON_ARENA rule 4; admins only unless Config.Builder.supervisorItems)
+    -- items (Crimson-Arena rule 4; admins only unless Config.Builder.supervisorItems)
     ItemErrors(def.items, errors, opts.actor)
 
     -- scaling paths
