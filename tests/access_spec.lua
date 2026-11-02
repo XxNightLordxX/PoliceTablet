@@ -161,6 +161,19 @@ do
     nav = Cb('getSession', 1, { via = 'export' }).data.config.officerNav
     H.eq(nav.order, 'classic', 'an unknown sidebarOrder counts as classic')
     Config.Tablet.sidebarOrder, Config.Tablet.activeFirst, Config.Tablet.compactSidebar = 'classic', false, false
+    -- Config.Tablet.supervisorByTask / supervisorCompact / supervisorLanding (G5): the Supervisor UI, shipped as before
+    local sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
+    H.ok(sup.byTask == false and sup.compact == false, 'supervisorByTask and supervisorCompact ship off: one list')
+    H.eq(sup.landing, 'first', 'supervisorLanding ships first: the Supervisor UI opens as before')
+    Config.Tablet.supervisorByTask, Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding =
+        true, true, 'review'
+    sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
+    H.ok(sup.byTask and sup.compact and sup.landing == 'review', 'all three set: the session asks for them')
+    Config.Tablet.supervisorLanding = 'payouts'
+    sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
+    H.eq(sup.landing, 'first', 'an unknown supervisorLanding counts as first')
+    Config.Tablet.supervisorByTask, Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding =
+        false, false, 'first'
     -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
     H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
     Config.LiveCrime.enabled = true

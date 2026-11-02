@@ -83,6 +83,16 @@ Config.Tablet = {
     -- true = the Officer UI sidebar shows only the icons (the name shows on hover), leaving the screens more room;
     -- false = icons and names (as before)
     compactSidebar = false,
+    -- true = the Supervisor UI sidebar is grouped by task under four headings: People (Department Report: officers,
+    -- give points, mission bans, field training), Missions (list, live, cross-department, controls, builder),
+    -- Rewards (payouts) and Review (the review queue); false = one list (as before). Only the layout changes
+    supervisorByTask = false,
+    -- true = the Supervisor UI sidebar shows only the icons (the name shows on hover); false = icons and names
+    -- (as before)
+    supervisorCompact = false,
+    -- The screen the Supervisor UI opens on: 'first' = the first one it shows (as before), 'report' = Department
+    -- Report, 'review' = Review Queue, 'live' = Live Missions (a screen the supervisor may not see = the first one)
+    supervisorLanding = 'first',
     -- Mission desks: ox_target boxes that open the Officer UI. The coordinates are placeholders near the
     -- base-game stations, 2 m or more from sc-police's duty points: check them on your MLO.
     -- departments = nil lets every department use a desk; prop = a laptop only that player sees, or false.

@@ -285,6 +285,13 @@ do
     H.eq(E('Tablet.activeFirst').default, false, 'Active Mission ships in its place')
     H.eq(E('Tablet.compactSidebar').default, false, 'the Officer UI sidebar ships with names')
     H.eq(E('Tablet.compactSidebar').kind, 'boolean', 'compactSidebar is a switch')
+    H.eq(E('Tablet.supervisorByTask').default, false, 'the Supervisor UI sidebar ships as one list')
+    H.ok((E('Tablet.supervisorByTask').desc or ''):find('Only the layout changes', 1, true) ~= nil,
+        'supervisorByTask: its config.lua comment is its description')
+    H.eq(E('Tablet.supervisorCompact').default, false, 'the Supervisor UI sidebar ships with names')
+    H.eq(E('Tablet.supervisorLanding').default, 'first', 'the Supervisor UI ships opening on its first screen')
+    H.eq(E('Tablet.supervisorLanding').kind, 'enum', 'supervisorLanding is a choice')
+    H.ok(not Check('Tablet.supervisorLanding', 'payouts'), 'another landing is refused')
     H.ok((E('AdminUi.reasonChips').desc or ''):find('a click fills the box', 1, true) ~= nil,
         'reasonChips: its config.lua comment is its description')
     H.eq(E('MissionTypes.patrol.dailyLimit').nullable, true, 'dailyLimit = nil is a setting that may stay unset')

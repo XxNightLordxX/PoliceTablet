@@ -9,7 +9,7 @@ import { SupervisorLayout } from './layouts/SupervisorLayout';
 import { CriminalTablet } from './criminal/CriminalTablet';
 import { landingOf, normalizeCrimView } from './criminal/model';
 import type { CrimScreen, CrimView } from './types/criminal';
-import { defaultScreen, landingScreen, screensFor } from './layouts/screens';
+import { currentScreen, defaultScreen, screensFor } from './layouts/screens';
 import { TABLET_H, TABLET_W, tabletScale } from './layouts/TabletFrame';
 import BuilderOverlay from './hud/BuilderOverlay';
 import DebugOverlay from './hud/DebugOverlay';
@@ -85,7 +85,8 @@ function ToastTimePref(): null {
     return null;
 }
 
-type ScreenState = Record<UiKind, { key: ScreenKey; params: ScreenParams }>;
+// picked = the screen was chosen (a click, a link, Lua); until then the Supervisor UI opens on its landing
+type ScreenState = Record<UiKind, { key: ScreenKey; params: ScreenParams; picked?: boolean }>;
 
 const initialScreens = (): ScreenState => ({
     officer: { key: defaultScreen('officer'), params: {} },
@@ -158,7 +159,7 @@ export default function App() {
         // Lua names a screen (the Dispatch key, a call just now); else the officer option openOn picks one, or none
         const screen = m.screen ?? openScreenFor(target, next);
         if (screen && screensFor(target, next).some(s => s.key === screen)) {
-            setScreens(prev => ({ ...prev, [target]: { key: screen as ScreenKey, params: {} } }));
+            setScreens(prev => ({ ...prev, [target]: { key: screen as ScreenKey, params: {}, picked: true } }));
         }
     });
     useNuiEvent('close', () => {
@@ -263,8 +264,7 @@ export default function App() {
     // ---- NAVIGATION --------------------------------------------------------
     const available = useMemo(() => (ui ? screensFor(ui, session).map(s => s.key) : []), [ui, session]);
     const current = ui ? screens[ui] : null;
-    const screenKey: ScreenKey =
-        current && available.includes(current.key) ? current.key : ui ? landingScreen(ui, session, available) : 'home';
+    const screenKey: ScreenKey = ui ? currentScreen(ui, session, available, current) : 'home';
 
     const navigate = useCallback(
         (key: ScreenKey, params?: ScreenParams) => {
@@ -273,7 +273,7 @@ export default function App() {
                 console.warn(`[crimson-police:ui] navigate('${key}') ignored: not a screen of the ${ui} UI`);
                 return;
             }
-            setScreens(prev => ({ ...prev, [ui]: { key, params: params ?? {} } }));
+            setScreens(prev => ({ ...prev, [ui]: { key, params: params ?? {}, picked: true } }));
         },
         [ui, available],
     );

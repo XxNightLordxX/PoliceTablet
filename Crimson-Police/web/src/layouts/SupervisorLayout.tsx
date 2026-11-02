@@ -1,5 +1,6 @@
-// Supervisor UI: its own sidebar (7 screens, hidden when their action is not in session.actions; Review Queue with
-// its open-items badge), department theme and the officer's look, watermark and the switch back to the Officer UI.
+// Supervisor UI: its own sidebar (8 screens, hidden when their action is not in session.actions; Review Queue with
+// its open-items badge; grouped by task and/or icons only per Config.Tablet, layouts/supervisorNav), department theme
+// and the officer's look, watermark and the switch back to the Officer UI.
 
 import { Button, MaintenanceBanner, Watermark } from '../shared/components';
 import { setMoneyFormat } from '../shared/format';
@@ -11,6 +12,7 @@ import { navBadge, useNavCounts } from './navBadges';
 import { ScreenHost } from './ScreenHost';
 import { screensFor } from './screens';
 import { Sidebar } from './Sidebar';
+import { SUPERVISOR_TASKS, supervisorNavOf, supervisorTaskOf } from './supervisorNav';
 import { TABLET_H, TabletFrame } from './TabletFrame';
 
 export function SupervisorLayout() {
@@ -19,6 +21,8 @@ export function SupervisorLayout() {
     const { screen, navigate } = useNavigation();
     const screens = screensFor('supervisor', session);
     const counts = useNavCounts();
+    // Config.Tablet.supervisorByTask / supervisorCompact: only the sidebar's grouping and width change
+    const nav = supervisorNavOf(session);
     setMoneyFormat(session.config.format);
 
     return (
@@ -27,10 +31,15 @@ export function SupervisorLayout() {
             <div className="cp-tablet__body">
                 <Sidebar
                     heading={t('ui.nav.supervisor')}
+                    iconsOnly={nav.compact}
+                    sections={
+                        nav.byTask ? SUPERVISOR_TASKS.map(k => ({ key: k, label: t(`ui.nav.task.${k}`) })) : undefined
+                    }
                     items={screens.map(s => ({
                         key: s.key,
                         label: t(s.titleKey),
                         icon: s.icon,
+                        play: supervisorTaskOf(s.key, nav),
                         ...navBadge(s.key, counts),
                     }))}
                     active={screen}
@@ -40,10 +49,12 @@ export function SupervisorLayout() {
                             variant="secondary"
                             block
                             icon="swap"
+                            title={nav.compact ? t('ui.switch.officer') : undefined}
+                            aria-label={nav.compact ? t('ui.switch.officer') : undefined}
                             loading={switching}
                             onClick={() => void switchUi('officer')}
                         >
-                            {t('ui.switch.officer')}
+                            {nav.compact ? null : t('ui.switch.officer')}
                         </Button>
                     }
                 />

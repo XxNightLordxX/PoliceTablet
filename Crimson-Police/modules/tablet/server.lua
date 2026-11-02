@@ -300,6 +300,18 @@ local function OfficerNav()
     }
 end
 
+-- Config.Tablet.supervisorByTask, supervisorCompact, supervisorLanding (step G5): the Supervisor UI sidebar and the
+-- screen it opens on (anything unknown = 'first', as before)
+local SUP_LANDINGS = { first = true, report = true, review = true, live = true }
+local function SupervisorNav()
+    local tab = type(Config.Tablet) == 'table' and Config.Tablet or {}
+    return {
+        byTask = tab.supervisorByTask == true,
+        compact = tab.supervisorCompact == true,
+        landing = SUP_LANDINGS[tab.supervisorLanding] and tab.supervisorLanding or 'first',
+    }
+end
+
 -- Config.AdminUi.reasonChips: the ready-made reasons (texts only, trimmed, at most 8 of up to 60 characters; nil = {})
 local function ReasonChips(list)
     local out, seen = {}, {}
@@ -370,6 +382,7 @@ local function ExtraConfig(deptKey)
         },
         realSuspects = { screen = RealSuspectsScreen() },
         officerNav = OfficerNav(),
+        supervisorNav = SupervisorNav(),
     }
 end
 

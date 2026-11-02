@@ -469,6 +469,18 @@ Grades start at 0.
   warns when the number is higher than every grade (nobody is a supervisor) or the lowest grade (everybody is).
 - A department with several jobs (`jobs = { 'sast', 'sasp' }`) uses one `supervisorGrade` for all of them.
 
+**The Supervisor UI layout** is set in `Config.Tablet` (also in Admin UI -> Settings). Shipped, it looks as before:
+
+| Setting | What it does |
+|---|---|
+| `supervisorByTask` | `true` = the sidebar is grouped by task under four headings: **People** (Department Report: officers, give points, mission bans, field training), **Missions** (Mission List, Live Missions, Cross-dept, Mission controls, Builder), **Rewards** (Payouts) and **Review** (Review Queue) |
+| `supervisorCompact` | `true` = a narrow strip of icons, each name on hover (the Review Queue count shows on its icon) |
+| `supervisorLanding` | The screen the Supervisor UI opens on: `'first'` (as before), `'report'`, `'review'` or `'live'`. A screen the supervisor may not see falls back to the first one. Once a screen is picked, the Supervisor UI keeps it until the player reconnects |
+
+Only the layout changes: every screen keeps its permission, and a screen a supervisor may not see stays hidden (a
+heading with nothing under it is not shown). Each control keeps showing its admin limits where it is used (for
+example Give points shows the min to max points and today's use), and risky actions still ask first.
+
 ### 4.4 What supervisors may do
 
 Set in `Config.Permissions.supervisor` in `config/config.lua`, or switch them in game in Admin UI → **Permissions**

@@ -170,6 +170,19 @@ const CONFIG: Session['config'] = {
         activeFirst: typeof window !== 'undefined' && /[?&]activeFirst\b/.test(window.location.search),
         compact: typeof window !== 'undefined' && /[?&]compactSidebar\b/.test(window.location.search),
     },
+    // ?supByTask, ?supCompact, ?supLanding=review: the Supervisor UI as Config.Tablet.supervisorByTask = true,
+    // supervisorCompact = true and supervisorLanding = 'review' show it
+    supervisorNav: {
+        byTask: typeof window !== 'undefined' && /[?&]supByTask\b/.test(window.location.search),
+        compact: typeof window !== 'undefined' && /[?&]supCompact\b/.test(window.location.search),
+        landing: (() => {
+            const m =
+                typeof window !== 'undefined'
+                    ? /[?&]supLanding=(report|review|live)\b/.exec(window.location.search)
+                    : null;
+            return m ? (m[1] as 'report' | 'review' | 'live') : 'first';
+        })(),
+    },
 };
 
 // getSession({ ui }) in browser mode. The officer is a supervisor (roles.supervisor = true).

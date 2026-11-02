@@ -114,6 +114,9 @@ export interface Session {
         realSuspects?: { screen: boolean };
         // Config.Tablet.sidebarOrder / activeFirst / compactSidebar (step G4): the Officer UI sidebar (layouts/officerNav)
         officerNav?: { order: 'classic' | 'mostUsed'; activeFirst: boolean; compact: boolean };
+        // Config.Tablet.supervisorByTask / supervisorCompact / supervisorLanding (step G5): the Supervisor UI sidebar and
+        // the screen it opens on (layouts/supervisorNav)
+        supervisorNav?: { byTask: boolean; compact: boolean; landing: 'first' | 'report' | 'review' | 'live' };
         // true while this player may change at least one Mission control (CP.DeptControls.available)
         missionControls?: boolean;
         // Config.OfficerOptions resolved for the officer's department (CP.OptionDefs.resolve)

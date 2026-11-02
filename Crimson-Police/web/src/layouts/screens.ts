@@ -5,6 +5,7 @@ import type { ComponentType } from 'react';
 import type { IconName } from '../shared/components';
 import type { AdminScreenKey, OfficerScreenKey, ScreenKey, SupervisorScreenKey } from '../shared/navigation';
 import type { Session, UiKind } from '../shared/types';
+import { supervisorLanding, supervisorNavOf } from './supervisorNav';
 
 import Home from '../officer/screens/Home';
 import MissionBoard from '../officer/screens/MissionBoard';
@@ -294,11 +295,25 @@ export function defaultScreen(ui: UiKind): ScreenKey {
 }
 
 // The screen a UI opens on while its remembered screen is not one it shows: the first one, except the Admin UI
-// opens on Config.AdminUi.landing (Home, Payouts or Missions).
+// opens on Config.AdminUi.landing (Home, Payouts or Missions) and the Supervisor UI on Config.Tablet.supervisorLanding.
 export function landingScreen(ui: UiKind, session: Session | null, available: ScreenKey[]): ScreenKey {
     if (ui === 'admin' && session) {
         const want = `admin_${adminLanding(session)}` as ScreenKey;
         if (available.includes(want)) return want;
     }
+    // Config.Tablet.supervisorLanding (step G5): 'first' = as before
+    if (ui === 'supervisor') return supervisorLanding(supervisorNavOf(session), available) ?? 'home';
     return available[0] ?? 'home';
+}
+
+// The screen a UI shows: the remembered one while it is shown, else the landing. The Supervisor UI opens on its landing
+// (Config.Tablet.supervisorLanding, step G5) until a screen is picked; with 'first' that is the same screen as before.
+export function currentScreen(
+    ui: UiKind,
+    session: Session | null,
+    available: ScreenKey[],
+    current: { key: ScreenKey; picked?: boolean } | null | undefined,
+): ScreenKey {
+    const keep = !!current && available.includes(current.key) && (ui !== 'supervisor' || current.picked === true);
+    return keep && current ? current.key : landingScreen(ui, session, available);
 }
