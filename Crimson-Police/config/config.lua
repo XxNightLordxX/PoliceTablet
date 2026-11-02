@@ -147,6 +147,11 @@ Config.AdminUi = {
     -- Ready-made reasons shown as buttons under the reason box when setting pay, giving or taking points and in a
     -- mission's Quick edit: a click fills the box, which can still be typed in; {} = no buttons, only typing
     reasonChips = { 'Balance change', 'Event', 'Correction' },
+    -- true = the Admin UI uses plain names and puts every screen under seven groups, each with a one-line
+    -- description: NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy and System; the
+    -- rarely used tools fold under More, a search box finds any screen or setting, and a breadcrumb shows where you
+    -- are; false = the sidebar as before. Only the layout changes
+    plainLayout = false,
 }
 
 -- ============================================================================

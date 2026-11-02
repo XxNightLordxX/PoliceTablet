@@ -355,7 +355,8 @@ do
     Has(bar, 'window.localStorage.setItem(MORE_KEY', 'the open state is kept per viewer')
     local layout = Read(WEB .. 'layouts/AdminLayout.tsx')
     Has(layout, 'const grouped = session.config?.adminUi?.groupSidebar !== false;', 'the layout follows the config')
-    Has(layout, 'more={grouped ? t(\'ui.nav.more\') : undefined}', 'grouped: the More label is passed')
+    Has(layout, 'more={!searching && (grouped || nav.plain) ? t(\'ui.nav.more\') : undefined}',
+        'grouped: the More label is passed')
     H.ok(keys['ui.nav.more'], 'the More label has a locale key')
 end
 
@@ -373,7 +374,9 @@ do
     Has(admin, 'visible: s => adminLanding(s) === \'home\'', 'Home shows only while landing is home')
     Has(reg, 'const want = `admin_${adminLanding(session)}` as ScreenKey;', 'the Admin UI opens on the landing screen')
     local app = Read(WEB .. 'App.tsx')
-    Has(app, ': ui ? landingScreen(ui, session, available) :', 'a screen not shown falls back to the landing screen')
+    Has(app, 'ui ? currentScreen(ui, session, available, current) :', 'the App shows the current screen')
+    Has(reg, 'return keep && current ? current.key : landingScreen(ui, session, available);',
+        'a screen not shown falls back to the landing screen')
     local home = Read(WEB .. 'admin/screens/Home.tsx') or ''
     -- one tile per title (Config.AdminUi.homeForms picks a form or a link tile for some), plus Something wrong?
     local tiles, titles = 0, {}

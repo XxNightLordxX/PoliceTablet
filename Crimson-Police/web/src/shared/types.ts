@@ -108,6 +108,8 @@ export interface Session {
             landing?: 'home' | 'payouts' | 'missions';
             homeForms?: boolean;
             reasonChips?: string[];
+            // step G6: plain names, seven described groups, search and breadcrumb (layouts/adminNav; false = as before)
+            plainLayout?: boolean;
         };
         // Config.RealSuspects.adminScreen (step V18): screen = the Admin UI shows Real suspects (true only while
         // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)

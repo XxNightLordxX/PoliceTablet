@@ -174,6 +174,16 @@ do
     H.eq(sup.landing, 'first', 'an unknown supervisorLanding counts as first')
     Config.Tablet.supervisorByTask, Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding =
         false, false, 'first'
+    -- Config.AdminUi.plainLayout (G6): the Admin UI plain layout, shipped off
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.plainLayout, false,
+        'plainLayout ships off: the Admin UI sidebar as before')
+    Config.AdminUi.plainLayout = true
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.plainLayout, true,
+        'plainLayout on: the session asks')
+    Config.AdminUi.plainLayout = 'yes'
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.plainLayout, false,
+        'anything but true counts as off')
+    Config.AdminUi.plainLayout = false
     -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
     H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
     Config.LiveCrime.enabled = true

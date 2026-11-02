@@ -1,0 +1,144 @@
+// Admin UI plain layout (step G6) against the browser mocks (node walk.mjs, a gate step): Config.AdminUi.plainLayout
+// reaches the Admin UI as the session's config.adminUi.plainLayout, and the layout changes only when it is set.
+
+import '../mocks/core.mock';
+import { request } from '../shared/nui';
+import { t } from '../shared/i18n';
+import type { Session } from '../shared/types';
+import {
+    ADMIN_GROUPS,
+    ADMIN_GROUP_OF,
+    ADMIN_RARE,
+    CLASSIC_ADMIN_NAV,
+    adminCrumbs,
+    adminFoldOf,
+    adminGroupOf,
+    adminNavOf,
+    adminTitleKey,
+    searchScreens,
+} from './adminNav';
+import { ADMIN_SCREENS } from './screens';
+import { inSections } from './Sidebar';
+
+const failures: string[] = [];
+let passed = 0;
+function ok(cond: unknown, what: string): void {
+    if (cond) passed += 1;
+    else failures.push(what);
+}
+
+const sessionWith = (plain: unknown) => ({ config: { adminUi: { plainLayout: plain } } }) as unknown as Session;
+const PLAIN = { plain: true };
+
+export async function walk(): Promise<{ passed: number; failures: string[] }> {
+    try {
+        await steps();
+    } catch (e) {
+        failures.push(`stopped: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return { passed, failures };
+}
+
+async function steps(): Promise<void> {
+    const res = await request<Session>('getSession', { ui: 'admin' });
+    ok(res.ok, 'getSession answers');
+    ok(!adminNavOf(res.data).plain, 'the mock session ships the Admin UI as before');
+    ok(adminNavOf(null) === CLASSIC_ADMIN_NAV, 'no session: as before');
+    ok(!adminNavOf(sessionWith('yes')).plain, 'anything but true counts as off');
+    ok(adminNavOf(sessionWith(true)).plain, 'plainLayout = true: the plain layout');
+
+    const keys = ADMIN_SCREENS.map(s => s.key);
+    // every screen but Home has a group, every group is one of the seven, and every group holds a screen
+    ok(
+        keys.filter(k => k !== 'admin_home').every(k => ADMIN_GROUPS.includes(ADMIN_GROUP_OF[k])),
+        'every screen but Home sits under a group',
+    );
+    ok(
+        ADMIN_GROUPS.every(g => keys.some(k => ADMIN_GROUP_OF[k] === g)),
+        'no group is empty',
+    );
+    // plain names and descriptions exist for every screen and group (no internal ids shown)
+    ok(
+        keys.every(k => t(adminTitleKey(k, PLAIN)) !== adminTitleKey(k, PLAIN)),
+        'every screen has a plain name',
+    );
+    ok(
+        ADMIN_GROUPS.every(g => t(`ui.nav.admin_hint.${g}`) !== `ui.nav.admin_hint.${g}`),
+        'every group has a one-line description',
+    );
+
+    // off: the registry's own labels, sections and folds (as before)
+    ok(
+        keys.every(k => adminTitleKey(k, CLASSIC_ADMIN_NAV) === `ui.screen.${k}`),
+        'off: the screen titles as before',
+    );
+    ok(
+        keys.every(k => adminGroupOf(k, CLASSIC_ADMIN_NAV) === undefined),
+        'off: no plain group',
+    );
+    ok(
+        ADMIN_SCREENS.every(s => adminFoldOf(s.key, CLASSIC_ADMIN_NAV, s.group) === s.group),
+        'off: the folds as before',
+    );
+    ok(!adminCrumbs('admin_payouts', CLASSIC_ADMIN_NAV).home, 'off: no breadcrumb');
+
+    // on: Home on top, then the seven groups in order, rare tools under More
+    const sections = ADMIN_GROUPS.map(k => ({ key: k, label: k, hint: `hint ${k}` }));
+    const listed = inSections(
+        keys.map(k => ({ key: k, play: adminGroupOf(k, PLAIN) })),
+        sections,
+    );
+    ok(listed[0].item.key === 'admin_home' && !listed[0].heading, 'on: Home first with no heading');
+    ok(
+        listed
+            .filter(x => x.heading)
+            .map(x => x.heading)
+            .join(',') === ADMIN_GROUPS.join(','),
+        'on: NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy, System in order',
+    );
+    ok(
+        listed.filter(x => x.heading).every(x => x.hint === `hint ${x.heading}`),
+        'on: a description under each heading',
+    );
+    ok(
+        listed.filter(x => !x.heading).every(x => x.hint === undefined),
+        'on: no description without a heading',
+    );
+    ok(
+        ADMIN_RARE.every(k => adminFoldOf(k, PLAIN, 'main') === 'more'),
+        'on: the rarely used tools fold under More',
+    );
+    ok(adminFoldOf('admin_payments', PLAIN, 'more') === 'main', 'on: Payments made shows without opening More');
+    ok(
+        !inSections(
+            keys.filter(k => k !== 'admin_rs').map(k => ({ key: k, play: adminGroupOf(k, PLAIN) })),
+            sections,
+        ).some(x => x.heading === 'pvp'),
+        'on: a hidden screen leaves no empty group',
+    );
+
+    // search: by plain name, old name or group, every word must match
+    const items = keys.map(k => ({
+        key: k,
+        words: [t(adminTitleKey(k, PLAIN)), t(`ui.screen.${k}`), t(`ui.nav.admin_group.${ADMIN_GROUP_OF[k]}`)],
+    }));
+    ok(searchScreens(items, '').length === 0, 'search: nothing typed, nothing listed');
+    ok(
+        searchScreens(items, 'audit')
+            .map(i => i.key)
+            .join(',') === 'admin_audit',
+        'search: the old name finds the screen',
+    );
+    ok(
+        searchScreens(items, 'activity LOG')
+            .map(i => i.key)
+            .join(',') === 'admin_audit',
+        'search: the plain name finds it, any case',
+    );
+    ok(searchScreens(items, 'teamwork').length === 4, 'search: a group name finds its screens');
+    ok(searchScreens(items, 'zzz').length === 0, 'search: no match, nothing listed');
+
+    // breadcrumb: Home > group > screen; none on Home itself
+    ok(adminCrumbs('admin_payouts', PLAIN).group === 'rewards', 'breadcrumb: Mission pay sits under Rewards');
+    ok(!adminCrumbs('admin_home', PLAIN).home, 'breadcrumb: none on Home');
+}

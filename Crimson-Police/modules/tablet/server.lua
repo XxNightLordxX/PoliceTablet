@@ -379,6 +379,8 @@ local function ExtraConfig(deptKey)
             landing = AdminLanding(aui.landing),
             homeForms = aui.homeForms ~= false,
             reasonChips = ReasonChips(aui.reasonChips),
+            -- step G6: the plain layout (layouts/adminNav.ts), shipped false = as before
+            plainLayout = aui.plainLayout == true,
         },
         realSuspects = { screen = RealSuspectsScreen() },
         officerNav = OfficerNav(),

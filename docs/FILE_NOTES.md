@@ -4595,6 +4595,15 @@ Buttons call client actions of the Lua testing client:
 Text keys: locales/parts/testing.json (test.*).
 ```
 
+## Crimson-Police/web/src/layouts/AdminLayout.tsx
+
+```text
+Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
+Config.AdminTheme), no watermark, sidebar with the admin-only badges (everyday screens, the rest under
+More), the maintenance banner. Config.AdminUi.plainLayout (step G6): plain names, seven described groups, the rare
+tools under More, a search box over the screens and the settings, and a breadcrumb over the screen.
+```
+
 ## Crimson-Police/web/src/layouts/Sidebar.tsx
 
 ```text
@@ -4604,6 +4613,26 @@ items of group 'more' fold under one More button that carries the sum of their b
 With `sections` (Config.AdminUi.groupByPlay) each list is ordered by section, with a small heading over each one.
 With iconsOnly the sidebar is a narrow strip of icons, each name on hover (Config.Tablet.compactSidebar and
 supervisorCompact). The Supervisor UI passes sections too when Config.Tablet.supervisorByTask is on.
+A section may carry a one-line `hint` shown under its heading, and `search` is a slot under the heading (both used by
+the Admin UI plain layout, Config.AdminUi.plainLayout).
+```
+
+## Crimson-Police/web/src/layouts/TabletFrame.tsx
+
+```text
+The tablet device: a 1280×800 screen in a rounded bezel, centred and scaled to fit the viewport (never larger than
+the space, grows on screens above 1080p), times the officer's tablet size. Themed with the department theme and
+the officer's look; dialogs render inside it (LayerRootContext) so they scale and theme with the tablet. The
+officer option textSize (step O5) sets --cp-fs-scale on it: large text in the whole tablet.
+```
+
+## Crimson-Police/web/src/layouts/adminNav.ts
+
+```text
+The Admin UI plain layout (step G6, Config.AdminUi.plainLayout): plain screen names, the sidebar under seven groups
+(NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy, System) each with a one-line
+description, the rarely used tools under More, a search box over the screens (and the settings), and a breadcrumb.
+Only the layout changes: the same screens show, a hidden one stays hidden, screen keys and links stay the same.
 ```
 
 ## Crimson-Police/web/src/layouts/supervisorNav.ts
@@ -4614,15 +4643,6 @@ The Supervisor UI sidebar and landing (step G5): supervisorNavOf reads the sessi
 supervisorTaskOf gives a screen its task heading (People, Missions, Rewards, Review) while grouped, and
 supervisorLanding picks the screen it opens on (the first one when the landing is not shown).
 Walk: supervisorNav.walk.ts.
-```
-
-## Crimson-Police/web/src/layouts/TabletFrame.tsx
-
-```text
-The tablet device: a 1280×800 screen in a rounded bezel, centred and scaled to fit the viewport (never larger than
-the space, grows on screens above 1080p), times the officer's tablet size. Themed with the department theme and
-the officer's look; dialogs render inside it (LayerRootContext) so they scale and theme with the tablet. The
-officer option textSize (step O5) sets --cp-fs-scale on it: large text in the whole tablet.
 ```
 
 ## Crimson-Police/web/src/mocks/DevPanel.tsx

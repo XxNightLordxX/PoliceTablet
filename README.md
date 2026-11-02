@@ -1774,6 +1774,25 @@ Each section has a small heading; the More folding works as before inside it, an
 Settings screen uses the same split (see [5.7](#57-change-any-setting-in-game-the-settings-screen)). To get the old
 order and the eight Settings groups back, set `Config.AdminUi.groupByPlay = false` (Admin UI → **Settings**).
 
+**The plain layout** (`Config.AdminUi.plainLayout`, Admin UI → **Settings**, shipped `false` = the sidebar above)
+reorganizes the Admin UI for owners who want plain words and fewer places to look:
+
+| Group (with its one-line description) | Screens in it (plain name, old name) |
+|---|---|
+| **NPC missions**: missions against computer suspects and the runs going on now | Missions; Running now (Live) |
+| **Player vs police**: real players as suspects | Player suspects (Real suspects; while live crimes or volunteers are on) |
+| **Police teamwork**: officers, departments and boards | Officers; Departments, Leaderboards, Seasons and challenges (under More) |
+| **Rewards**: what each mission and feature pays | Mission pay (Payouts) |
+| **Permissions**: who may do what | Who can do what (Permissions) |
+| **Economy**: every payment made | Payments made (Payments) |
+| **System**: settings, server health, activity log and tests | Settings; Server health (System); Activity log (Audit Log) and Test tools (Testing) under More |
+
+Home stays on top. A **Find a screen or setting** box over the sidebar lists the screens whose plain name, old name
+or group matches what you type (Enter opens the first), plus **Search settings for "..."**, which opens Settings with
+those words in its search box. A breadcrumb over each screen (Home › group › screen) shows where you are; click Home
+to go back. Only the layout changes: every screen keeps its permission and its links (the screen keys stay the same,
+so saved links and notifications still open the right screen), and a group with nothing you may see is not shown.
+
 ### 9.4 The missions
 
 18 missions plus the Weekly Boss. "Officers" is the unit size the mission accepts.

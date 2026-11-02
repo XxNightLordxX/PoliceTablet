@@ -1212,6 +1212,10 @@ export default function AdminSettings() {
     // Permissions → Config health → Open setting comes here with the path to show
     const { params } = useNavigation();
     const [query, setQuery] = useState(typeof params.q === 'string' ? params.q.toLowerCase() : '');
+    // the sidebar's 'Search settings for ...' (Config.AdminUi.plainLayout) while this screen is already open
+    useEffect(() => {
+        if (typeof params.q === 'string') setQuery(params.q.toLowerCase());
+    }, [params]);
     const [filter, setFilter] = useState<Filter>('all');
     // Simple or All settings: opens in Config.AdminUi.settingsView until the admin picks one
     const [picked, setPicked] = useState<SettingsViewMode | null>(null);

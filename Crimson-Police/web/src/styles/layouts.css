@@ -592,3 +592,43 @@
     right: 8px;
     margin-left: 0;
 }
+
+/* Config.AdminUi.plainLayout (step G6): the one-line description under a sidebar group, the screen search box and
+   the breadcrumb over the screen */
+.cp-sidebar__section-hint {
+    padding: 0 12px 6px;
+    font-size: var(--cp-fs-xs);
+    line-height: 1.35;
+    color: var(--cp-subtle);
+}
+
+.cp-sidebar__more-item .cp-sidebar__section-hint {
+    padding-left: 22px;
+}
+
+.cp-sidebar__search {
+    padding: 0 4px 10px;
+}
+
+.cp-admin__crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 34px 0;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-subtle);
+}
+
+.cp-admin__crumbs button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--cp-accent);
+    font: inherit;
+    cursor: pointer;
+}
+
+.cp-admin__crumbs [aria-current] {
+    color: var(--cp-text);
+}

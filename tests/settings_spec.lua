@@ -292,6 +292,10 @@ do
     H.eq(E('Tablet.supervisorLanding').default, 'first', 'the Supervisor UI ships opening on its first screen')
     H.eq(E('Tablet.supervisorLanding').kind, 'enum', 'supervisorLanding is a choice')
     H.ok(not Check('Tablet.supervisorLanding', 'payouts'), 'another landing is refused')
+    H.eq(E('AdminUi.plainLayout').default, false, 'the Admin UI ships with its sidebar as before')
+    H.eq(E('AdminUi.plainLayout').kind, 'boolean', 'plainLayout is a switch')
+    H.ok((E('AdminUi.plainLayout').desc or ''):find('Only the layout changes', 1, true) ~= nil,
+        'plainLayout: its config.lua comment is its description')
     H.ok((E('AdminUi.reasonChips').desc or ''):find('a click fills the box', 1, true) ~= nil,
         'reasonChips: its config.lua comment is its description')
     H.eq(E('MissionTypes.patrol.dailyLimit').nullable, true, 'dailyLimit = nil is a setting that may stay unset')

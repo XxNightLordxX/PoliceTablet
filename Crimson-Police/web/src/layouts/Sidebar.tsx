@@ -23,6 +23,8 @@ export interface SidebarItem {
 export interface SidebarSection {
     key: string;
     label: string;
+    // a one-line description under the heading (Config.AdminUi.plainLayout)
+    hint?: string;
 }
 
 // Per viewer: whether More was left open (browser storage; a blocked storage just starts folded).
@@ -61,7 +63,7 @@ export function sumBadges(items: SidebarItem[]): string | undefined {
 export function inSections<T extends { play?: string }>(
     items: T[],
     sections?: SidebarSection[],
-): { item: T; heading?: string }[] {
+): { item: T; heading?: string; hint?: string }[] {
     if (!sections || !sections.length) return items.map(item => ({ item }));
     const rank = (it: T) => {
         const i = it.play === undefined ? -1 : sections.findIndex(s => s.key === it.play);
@@ -70,10 +72,10 @@ export function inSections<T extends { play?: string }>(
     const sorted = items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it) - rank(b.it) || a.i - b.i);
     let last: string | undefined;
     return sorted.map(({ it }) => {
-        const label = sections.find(s => s.key === it.play)?.label;
-        const heading = label && it.play !== last ? label : undefined;
+        const sec = sections.find(s => s.key === it.play);
+        const heading = sec?.label && it.play !== last ? sec.label : undefined;
         last = it.play;
-        return { item: it, heading };
+        return { item: it, heading, hint: heading ? sec?.hint : undefined };
     });
 }
 
@@ -117,6 +119,7 @@ export function Sidebar({
     more,
     sections,
     iconsOnly,
+    search,
 }: {
     items: SidebarItem[];
     active: string;
@@ -130,6 +133,8 @@ export function Sidebar({
     sections?: SidebarSection[];
     // the icons only, each name on hover (Config.Tablet.compactSidebar, Officer UI)
     iconsOnly?: boolean;
+    // a slot under the heading (the Admin UI screen search, Config.AdminUi.plainLayout)
+    search?: ReactNode;
 }) {
     const folded = more ? items.filter(it => it.group === 'more') : [];
     const shown = folded.length > 0 ? items.filter(it => it.group !== 'more') : items;
@@ -154,10 +159,12 @@ export function Sidebar({
             aria-label={typeof heading === 'string' ? heading : undefined}
         >
             {heading ? <div className="cp-sidebar__heading">{heading}</div> : null}
+            {search ? <div className="cp-sidebar__search">{search}</div> : null}
             <ul className="cp-sidebar__list">
-                {inSections(shown, sections).map(({ item: it, heading: h }) => (
+                {inSections(shown, sections).map(({ item: it, heading: h, hint }) => (
                     <li key={it.key}>
                         {h ? <div className="cp-sidebar__section">{h}</div> : null}
+                        {hint ? <div className="cp-sidebar__section-hint">{hint}</div> : null}
                         <NavButton
                             it={it}
                             on={it.key === active}
@@ -182,9 +189,10 @@ export function Sidebar({
                     </li>
                 ) : null}
                 {open
-                    ? inSections(folded, sections).map(({ item: it, heading: h }) => (
+                    ? inSections(folded, sections).map(({ item: it, heading: h, hint }) => (
                           <li key={it.key} className="cp-sidebar__more-item">
                               {h ? <div className="cp-sidebar__section">{h}</div> : null}
+                              {hint ? <div className="cp-sidebar__section-hint">{hint}</div> : null}
                               <NavButton
                                   it={it}
                                   on={it.key === active}

@@ -160,6 +160,8 @@ const CONFIG: Session['config'] = {
             typeof window !== 'undefined' && /[?&]noReasonChips\b/.test(window.location.search)
                 ? []
                 : ['Balance change', 'Event', 'Correction'],
+        // ?plainLayout: the Admin UI plain layout (Config.AdminUi.plainLayout = true, step G6)
+        plainLayout: typeof window !== 'undefined' && /[?&]plainLayout\b/.test(window.location.search),
     },
     // ?rsOff: no Real suspects screen (Config.LiveCrime.enabled and Config.Volunteers.enabled both false)
     realSuspects: { screen: !(typeof window !== 'undefined' && /[?&]rsOff\b/.test(window.location.search)) },
