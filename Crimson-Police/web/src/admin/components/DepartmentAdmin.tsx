@@ -13,10 +13,12 @@ import {
     Grid,
     Icon,
     IconButton,
+    MoreFold,
     NumberInput,
     Select,
     TextInput,
     Toggle,
+    useFoldAdvanced,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { hasKey, t } from '../../shared/i18n';
@@ -493,52 +495,55 @@ export function DepartmentDialog({
                         )}
                     </div>
                 </Field>
-                {!isNew ? (
-                    <Grid min={150} gap={3}>
-                        {THEME_KEYS.map(k => (
-                            <Field key={k} label={t(`admin.depts.colour.${k}`)}>
-                                <TextInput
-                                    value={theme[k] ?? ''}
-                                    onChange={v => setTheme(prev => ({ ...prev, [k]: v }))}
-                                    maxLength={7}
-                                    invalid={!!theme[k] && !HEX.test(theme[k] ?? '')}
-                                    placeholder="#rrggbb"
-                                />
-                            </Field>
-                        ))}
+                {/* Config.AdminUi.foldAdvanced: the colours, the logo and the officer options fold under More */}
+                <MoreFold screen="dept_dialog">
+                    {!isNew ? (
+                        <Grid min={150} gap={3}>
+                            {THEME_KEYS.map(k => (
+                                <Field key={k} label={t(`admin.depts.colour.${k}`)}>
+                                    <TextInput
+                                        value={theme[k] ?? ''}
+                                        onChange={v => setTheme(prev => ({ ...prev, [k]: v }))}
+                                        maxLength={7}
+                                        invalid={!!theme[k] && !HEX.test(theme[k] ?? '')}
+                                        placeholder="#rrggbb"
+                                    />
+                                </Field>
+                            ))}
+                        </Grid>
+                    ) : null}
+                    <Grid min={220} gap={3}>
+                        <Field label={t('sysadmin.ui.dept_logo_url')} hint={t('sysadmin.ui.dept_logo_url_hint')}>
+                            <TextInput value={logoUrl} onChange={setLogoUrl} maxLength={512} placeholder="https://" />
+                        </Field>
+                        <Field label={t('sysadmin.ui.dept_logo_file')} hint={t('sysadmin.ui.dept_logo_file_hint')}>
+                            <TextInput value={logoFile} onChange={setLogoFile} maxLength={100} placeholder="bcso.png" />
+                        </Field>
                     </Grid>
-                ) : null}
-                <Grid min={220} gap={3}>
-                    <Field label={t('sysadmin.ui.dept_logo_url')} hint={t('sysadmin.ui.dept_logo_url_hint')}>
-                        <TextInput value={logoUrl} onChange={setLogoUrl} maxLength={512} placeholder="https://" />
-                    </Field>
-                    <Field label={t('sysadmin.ui.dept_logo_file')} hint={t('sysadmin.ui.dept_logo_file_hint')}>
-                        <TextInput value={logoFile} onChange={setLogoFile} maxLength={100} placeholder="bcso.png" />
-                    </Field>
-                </Grid>
-                <Toggle checked={watermark} onChange={setWatermark} label={t('sysadmin.ui.dept_watermark')} />
-                {!isNew ? (
-                    <Field label={t('sysadmin.ui.dept_upload')} hint={t('sysadmin.ui.dept_upload_hint')}>
-                        <input
-                            type="file"
-                            accept="image/png,image/webp"
-                            disabled={busy}
-                            onChange={e => void upload(e.target.files?.[0])}
+                    <Toggle checked={watermark} onChange={setWatermark} label={t('sysadmin.ui.dept_watermark')} />
+                    {!isNew ? (
+                        <Field label={t('sysadmin.ui.dept_upload')} hint={t('sysadmin.ui.dept_upload_hint')}>
+                            <input
+                                type="file"
+                                accept="image/png,image/webp"
+                                disabled={busy}
+                                onChange={e => void upload(e.target.files?.[0])}
+                            />
+                        </Field>
+                    ) : null}
+                    {uploading ? <div className="system-muted">{uploading}</div> : null}
+                    {!isNew && optionDefs.length ? (
+                        <DeptOptionsPanel
+                            defs={optionDefs}
+                            value={options}
+                            enabled={setup.optionsEnabled !== false}
+                            onChange={v => {
+                                setOptions(v);
+                                setOptionsTouched(true);
+                            }}
                         />
-                    </Field>
-                ) : null}
-                {uploading ? <div className="system-muted">{uploading}</div> : null}
-                {!isNew && optionDefs.length ? (
-                    <DeptOptionsPanel
-                        defs={optionDefs}
-                        value={options}
-                        enabled={setup.optionsEnabled !== false}
-                        onChange={v => {
-                            setOptions(v);
-                            setOptionsTouched(true);
-                        }}
-                    />
-                ) : null}
+                    ) : null}
+                </MoreFold>
                 <div className="system-note">
                     <Icon name="info" size={14} />
                     <span>{t(isNew ? 'sysadmin.ui.dept_checklist' : 'sysadmin.ui.dept_edit_note')}</span>
@@ -602,6 +607,24 @@ function DeskDialog({
             : await run('server:admin:addDeskHere', payload, { requestId: false, success: 'sysadmin.ui.desk_added' });
         if (res.ok) onSaved();
     };
+    // Config.AdminUi.foldAdvanced: the departments stay open above More; unfolded, the order is as before
+    const fold = useFoldAdvanced();
+    const departmentsField = (
+        <Field label={t('sysadmin.ui.desk_departments')} hint={t('sysadmin.ui.desk_departments_hint')}>
+            <div className="dept-admin-jobs">
+                {departments.map(d => (
+                    <Checkbox
+                        key={d.key}
+                        checked={f.departments.includes(d.key)}
+                        onChange={on =>
+                            set('departments', on ? [...f.departments, d.key] : f.departments.filter(k => k !== d.key))
+                        }
+                        label={d.label}
+                    />
+                ))}
+            </div>
+        </Field>
+    );
     return (
         <Dialog
             open
@@ -629,53 +652,41 @@ function DeskDialog({
                 <Field label={t('sysadmin.ui.desk_label')} required>
                     <TextInput value={f.label} onChange={v => set('label', v)} maxLength={64} />
                 </Field>
-                <Grid cols={4} gap={2}>
-                    {(['x', 'y', 'z'] as const).map(p => (
-                        <Field key={p} label={t(`sysadmin.ui.desk_size_${p}`)}>
+                {fold ? departmentsField : null}
+                {/* Config.AdminUi.foldAdvanced: the box size, the rotation and the prop fold under More */}
+                <MoreFold screen="desk_dialog">
+                    <Grid cols={4} gap={2}>
+                        {(['x', 'y', 'z'] as const).map(p => (
+                            <Field key={p} label={t(`sysadmin.ui.desk_size_${p}`)}>
+                                <NumberInput
+                                    value={f.size[p]}
+                                    onChange={v => set('size', { ...f.size, [p]: v ?? 1 })}
+                                    min={0.3}
+                                    max={5}
+                                    step={0.1}
+                                />
+                            </Field>
+                        ))}
+                        <Field label={t('sysadmin.ui.desk_rotation')}>
                             <NumberInput
-                                value={f.size[p]}
-                                onChange={v => set('size', { ...f.size, [p]: v ?? 1 })}
-                                min={0.3}
-                                max={5}
-                                step={0.1}
+                                value={f.rotation}
+                                onChange={v => set('rotation', v ?? 0)}
+                                min={0}
+                                max={360}
+                                step={5}
                             />
                         </Field>
-                    ))}
-                    <Field label={t('sysadmin.ui.desk_rotation')}>
-                        <NumberInput
-                            value={f.rotation}
-                            onChange={v => set('rotation', v ?? 0)}
-                            min={0}
-                            max={360}
-                            step={5}
+                    </Grid>
+                    {fold ? null : departmentsField}
+                    <Field label={t('sysadmin.ui.desk_prop')} hint={t('sysadmin.ui.desk_prop_hint')}>
+                        <TextInput
+                            value={f.prop}
+                            onChange={v => set('prop', v)}
+                            maxLength={64}
+                            placeholder="prop_laptop_01a"
                         />
                     </Field>
-                </Grid>
-                <Field label={t('sysadmin.ui.desk_departments')} hint={t('sysadmin.ui.desk_departments_hint')}>
-                    <div className="dept-admin-jobs">
-                        {departments.map(d => (
-                            <Checkbox
-                                key={d.key}
-                                checked={f.departments.includes(d.key)}
-                                onChange={on =>
-                                    set(
-                                        'departments',
-                                        on ? [...f.departments, d.key] : f.departments.filter(k => k !== d.key),
-                                    )
-                                }
-                                label={d.label}
-                            />
-                        ))}
-                    </div>
-                </Field>
-                <Field label={t('sysadmin.ui.desk_prop')} hint={t('sysadmin.ui.desk_prop_hint')}>
-                    <TextInput
-                        value={f.prop}
-                        onChange={v => set('prop', v)}
-                        maxLength={64}
-                        placeholder="prop_laptop_01a"
-                    />
-                </Field>
+                </MoreFold>
                 {desk ? (
                     <Checkbox checked={moveHere} onChange={setMoveHere} label={t('sysadmin.ui.desk_move_here')} />
                 ) : null}

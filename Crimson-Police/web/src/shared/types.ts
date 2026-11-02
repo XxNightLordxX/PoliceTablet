@@ -119,6 +119,8 @@ export interface Session {
             oneRequest?: boolean;
             // step OP3: long lists draw only the rows in view (Config.AdminUi.windowRows; false = every row)
             windowRows?: boolean;
+            // FX2: the More fold of the settings-heavy dialogs and Mission controls (Config.AdminUi.foldAdvanced)
+            foldAdvanced?: boolean;
         };
         // Config.RealSuspects.adminScreen (step V18): screen = the Admin UI shows Real suspects (true only while
         // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)

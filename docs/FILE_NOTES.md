@@ -4980,6 +4980,15 @@ automatic backup to restore; officers and supervisors read ui.maintenance.office
 server owner restarts").
 ```
 
+## Crimson-Police/web/src/shared/components/MoreFold.tsx
+
+```text
+The More fold (Config.AdminUi.foldAdvanced): the rarely changed options of a settings-heavy dialog or screen sit
+under a More button. Off, the children show open as before. Each screen remembers, per viewer in the browser,
+whether More was left open (a blocked storage just starts folded). forceOpen keeps it open (an option that is set
+or has an error never hides).
+```
+
 ## Crimson-Police/web/src/shared/hooks.ts
 
 ```text
@@ -5020,6 +5029,14 @@ result card and toasts stay readable even before the first session arrives. Sess
 useKeyHint(name): the label of the key bound to the ready, contact, tablet or Dispatch key mapping, from
 the client action getKeyHints, or null when the officer turned Key hints off on this PC or the key is not bound
 with a text label. ReadyCheckBanner says "Or press K."; the contact HUD line names the contact key.
+```
+
+## Crimson-Police/web/src/shared/moreFold.walk.ts
+
+```text
+Step FX2 against the browser mocks (node walk.mjs, a gate step): the More fold off (open, no button), on (closed,
+the count), forceOpen, the open state remembered per screen and a blocked storage; which Mission controls fold and
+that a set one never does.
 ```
 
 ## Crimson-Police/web/src/shared/navigation.tsx
@@ -6699,7 +6716,8 @@ stubs.
 Easy to understand (docs/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
 the common workflows (accept, unit, Dispatch, the run, Review Queue, the supervisor dialogs; Backups, Storage copy,
 Corrections, Settings) says what went wrong and what to do next, in the merged locales/en.json and in every
-locales/parts file that carries the key. Plain Lua, no stubs.
+locales/parts file that carries the key. Every err.* text of the merged file is also a full sentence (never an id), and every one the
+player can act on says what to do; NOTHING_TO_DO lists the few where nobody can (a feature switched off). Plain Lua.
 ```
 
 ## tests/workflows_e2e_spec.lua

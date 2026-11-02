@@ -107,4 +107,68 @@ end
 parts:close()
 H.ok(seen >= #KEYS, 'every key is in a locales/parts file')
 
+-- Every err.* text (FX2): a full sentence that says what went wrong, never just an id, and, where the player can act,
+-- what to do. A text says what to do when it starts with an instruction, has a second sentence, or a clause after a
+-- colon, a semicolon or ", so". NOTHING_TO_DO holds the texts where the player has nothing to do (a feature
+-- switched off, nothing waiting).
+local NOTHING_TO_DO = {
+    ['err.bounty_disabled'] = true,
+    ['err.builder_disabled'] = true,
+    ['err.commendations_off'] = true,
+    ['err.controls_card_off'] = true,
+    ['err.crimtab_off'] = true,
+    ['err.dispute_final'] = true,
+    ['err.fto_off'] = true,
+    ['err.live_case_off'] = true,
+    ['err.live_join_off'] = true,
+    ['err.mc_disabled'] = true,
+    ['err.needs_attention_off'] = true,
+    ['err.nothing_pending'] = true,
+    ['err.op_disabled'] = true,
+    ['err.op_none'] = true,
+    ['err.rewards_off'] = true,
+    ['err.unit_ready_none'] = true,
+}
+local VERB_LIST = [[
+Enter Pick Stand Load Detain Reach Open Restore Tick Keep Close Finish Place Drive Wait Try Ask
+Use Add Turn Set Choose Type Remove Move Go Refresh Get Switch Fill Give Make Check Select Save
+Start End Leave Name Write Lower Raise Run Join Put Shorten Upload Test Take Publish Archive
+Clear Contact Read Retry Approve Reload Rename Follow Fix Unretire Look Let Edit Plant Accept
+]]
+local VERBS = {}
+for w in VERB_LIST:gmatch('%a+') do
+    VERBS[w] = true
+end
+
+local function FullSentence(key, text)
+    if type(text) ~= 'string' or text == key or text:find('err.', 1, true) then return false end
+    local words = 0
+    for _ in text:gmatch('%S+') do words = words + 1 end
+    return words >= 3 and text:find('^[%u%d"\'{(]') ~= nil and text:find('[%.!?]$') ~= nil
+end
+
+local function SaysWhatToDo(text)
+    if VERBS[text:match('^(%a+)') or ''] then return true end
+    return text:find('[%.!?] %S') ~= nil or text:find('[:;] %S') ~= nil or text:find(', so ', 1, true) ~= nil
+end
+
+local errKeys = {}
+for k in pairs(en) do
+    if k:find('^err%.') then errKeys[#errKeys + 1] = k end
+end
+table.sort(errKeys)
+H.ok(#errKeys >= 600, 'every err.* text is checked (' .. #errKeys .. ')')
+local notFull, noStep = {}, {}
+for _, k in ipairs(errKeys) do
+    if not FullSentence(k, en[k]) then notFull[#notFull + 1] = k .. ' = ' .. tostring(en[k]) end
+    if not NOTHING_TO_DO[k] and not SaysWhatToDo(en[k] or '') then
+        noStep[#noStep + 1] = k .. ' = ' .. tostring(en[k])
+    end
+end
+H.eq(table.concat(notFull, '\n'), '', 'every err.* text is a full sentence, not just an id')
+H.eq(table.concat(noStep, '\n'), '', 'every err.* text the player can act on says what to do')
+for k in pairs(NOTHING_TO_DO) do
+    H.ok(en[k] ~= nil, k .. ' (nothing to do) still exists')
+end
+
 return H

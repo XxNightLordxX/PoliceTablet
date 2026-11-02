@@ -335,6 +335,12 @@ names the change it came with.
   resmon while the eye rests on them: lower than before the update.
 - [ ] Settings → Admin UI → windowRows On, reopen the Admin UI: Leaderboards with a long board scrolls smoothly and
   shows every officer in order; a Settings search for one letter adds rows as you scroll down. Back to Off.
+- [ ] Settings → Admin UI → foldAdvanced On, reopen the tablet: System → edit a department and a mission desk: the
+  colours, logo and box size sit under More options; Supervisor UI → Mission controls: noRepeat and the twist
+  multipliers sit under More, a control you set stays open; open More, close and reopen the tablet: More is still
+  open. Back to Off: every option open as before.
+- [ ] Read a few errors in the Admin UI, the Mission Builder and the criminal tablet: each says what went wrong and,
+  where you can do something, what to do next.
 - [ ] Idle server (no run, nobody in Testing, no unit): resmon shows Crimson-Police's server side lower than before;
   start a run: the HUD timers count, the drive-to-start warning comes, custody (cuff, transport, coroner), downed
   and NPC deaths work as before; end it, start another: all of it works again.

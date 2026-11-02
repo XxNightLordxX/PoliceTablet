@@ -217,6 +217,16 @@ do
     aui = Cb('getSession', 1, { via = 'export' }).data.config.adminUi
     H.ok(aui.moneyScreen == true and aui.oneRequest == false, 'on: true; anything but true is off')
     Config.AdminUi.moneyScreen, Config.AdminUi.oneRequest = false, false
+    -- Config.AdminUi.foldAdvanced (FX2): the More fold, shipped off; the Supervisor UI gets it too
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.foldAdvanced, false,
+        'foldAdvanced ships off: every option open')
+    Config.AdminUi.foldAdvanced = true
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.foldAdvanced, true,
+        'foldAdvanced on: the session folds')
+    Config.AdminUi.foldAdvanced = 'yes'
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.foldAdvanced, false,
+        'foldAdvanced: anything but true is off')
+    Config.AdminUi.foldAdvanced = false
     -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
     H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
     Config.LiveCrime.enabled = true

@@ -396,6 +396,8 @@ local function ExtraConfig(deptKey)
             oneRequest = aui.oneRequest == true,
             -- step OP3: long lists draw only the rows in view (shared/components/Table, Settings search), shipped false
             windowRows = aui.windowRows == true,
+            -- the More fold of the settings-heavy dialogs and the Mission controls (shared/components/MoreFold)
+            foldAdvanced = aui.foldAdvanced == true,
         },
         realSuspects = { screen = RealSuspectsScreen() },
         officerNav = OfficerNav(),

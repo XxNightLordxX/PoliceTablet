@@ -221,5 +221,8 @@
   "ui.nav.plain.admin_money": "Money",
   "admin.money.tabs": "Money tabs",
   "ui.help.sup_controls": "Pick a group, change a value within its limits and give a reason. Reset puts the config value back.",
-  "ui.help.sup_review": "Open a row to see the details, then Approve or Void with a reason."
+  "ui.help.sup_review": "Open a row to see the details, then Approve or Void with a reason.",
+  "ui.more.show": "More options",
+  "ui.more.show_n": "More options ({n})",
+  "ui.more.hide": "Fewer options"
 }

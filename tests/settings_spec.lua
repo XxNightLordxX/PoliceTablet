@@ -379,6 +379,12 @@ do
     H.eq(E('AdminUi.windowRows').kind, 'boolean', 'windowRows is a switch')
     H.ok((E('AdminUi.windowRows').desc or ''):find('draw only the rows in view', 1, true) ~= nil,
         'windowRows: its config.lua comment is its description')
+    -- FX2: the More fold, shipped off (every option open)
+    H.eq(E('AdminUi.foldAdvanced').default, false, 'the dialogs and Mission controls ship with every option open')
+    H.eq(E('AdminUi.foldAdvanced').kind, 'boolean', 'foldAdvanced is a switch')
+    H.ok(
+        (E('AdminUi.foldAdvanced').desc or ''):find('fold the rarely changed ones under a More button', 1, true) ~= nil,
+        'foldAdvanced: its config.lua comment is its description')
     H.ok((E('AdminUi.plainLayout').desc or ''):find('each screen\'s title uses the same plain name', 1, true) ~= nil,
         'plainLayout: the description says the titles inside the screens follow')
     H.ok(E('FeatureRewards.suspect.byType') ~= nil, 'byType is one setting edited as a whole')

@@ -1,8 +1,8 @@
 {
   "err.invalid_range": "Pick a date range of at most one year, with the first date before the second.",
   "err.tweak_builtin_only": "Quick edit is for built-in missions. Edit a custom mission in the Mission Builder.",
-  "err.tweak_invalid": "The mission loader refuses these values for this mission.",
-  "err.tweak_name_not_allowed": "That model, vehicle or weapon is not in the Mission Builder's allowed lists or in the mission's own file.",
+  "err.tweak_invalid": "The mission loader refuses these values for this mission. Change them to values the mission allows.",
+  "err.tweak_name_not_allowed": "That model, vehicle or weapon is not in the Mission Builder's allowed lists or in the mission's own file. Pick an allowed one.",
   "missions.health.not_loaded": "The missions have not loaded yet.",
   "missions.health.failed": "Mission {id} did not load: {error}",
   "missions.health.override_failed": "The edited version of {id} did not load, so the shipped mission plays: {error}",

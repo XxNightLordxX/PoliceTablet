@@ -3056,6 +3056,12 @@ Config.AdminUi = {
     -- the Settings search results) draw only the rows in view and add the next ones as you scroll, so a big list
     -- opens and scrolls faster; false = every row is drawn at once as before. The rows and their order are the same
     windowRows = false,
+    -- true = the settings-heavy Admin UI dialogs (a department, a mission desk) and the Supervisor UI's Mission
+    -- controls show the options changed every day and fold the rarely changed ones under a More button; each
+    -- screen remembers on that computer whether More was left open (the Mission Builder's "More settings" of a
+    -- block too), and a control that is set never hides; false = every option shown open, as before. Only the
+    -- layout changes
+    foldAdvanced = false,
 }
 
 -- ============================================================================

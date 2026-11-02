@@ -10,10 +10,12 @@ import {
     EmptyState,
     Field,
     Icon,
+    MoreFold,
     Screen,
     SegmentedControl,
     Textarea,
     Toggle,
+    useFoldAdvanced,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { fmtDateTime, formatDuration } from '../../shared/format';
@@ -65,6 +67,29 @@ const CONTROL_GROUP: Record<string, GroupKey> = {
 
 export function groupOf(c: MissionControlState): GroupKey {
     return CONTROL_GROUP[c.key] ?? (c.scope === 'run' ? 'run' : 'department');
+}
+
+// Config.AdminUi.foldAdvanced: the controls a supervisor rarely changes fold under More in their group. A control
+// that is set (it has a saved value) always stays open, so a change in force never hides.
+export const ADVANCED_CONTROLS = new Set([
+    'abandonCooldown',
+    'noRepeat',
+    'startTimeout',
+    'readyCheck',
+    'timeLimit',
+    'idleCheck',
+    'unitSize',
+    'staffCallWait',
+    'boards',
+    'reviewRules',
+    'happyHourCash',
+    'twistCash',
+    'happyHourPoints',
+    'twistPoints',
+]);
+
+export function isFolded(c: MissionControlState): boolean {
+    return ADVANCED_CONTROLS.has(c.key) && (c.saved === undefined || c.saved === null);
 }
 
 // Lua sends an empty table as [] or {}: a map either way.
@@ -923,6 +948,7 @@ export default function MissionControls() {
     const { run, busy } = useAdminAction();
     const [pending, setPending] = useState<Pending | null>(null);
 
+    const fold = useFoldAdvanced();
     const dept = asArray(data?.departments)[0];
     const deptShort = dept?.short ?? session.officer?.departmentShort ?? '';
     // only the controls an admin switched on; an action control (step P7) is used from its own screen
@@ -984,22 +1010,33 @@ export default function MissionControls() {
                     <EmptyState icon="clock" title={t('sup.controls.empty')} text={t('sup.controls.empty_text')} />
                 </Card>
             ) : null}
-            {groups.map(g => (
-                <Card key={g.key} title={t(`sup.controls.group.${g.key}`)} subtitle={t(SUP_GROUP_HELP[g.key])}>
-                    <div className="sup-mc-list">
-                        {g.rows.map(c => (
-                            <ControlRow
-                                key={c.key}
-                                c={c}
-                                dept={deptShort}
-                                busy={busy}
-                                onAsk={setPending}
-                                onWaitDone={() => void refetch()}
-                            />
-                        ))}
-                    </div>
-                </Card>
-            ))}
+            {groups.map(g => {
+                const row = (c: MissionControlState) => (
+                    <ControlRow
+                        key={c.key}
+                        c={c}
+                        dept={deptShort}
+                        busy={busy}
+                        onAsk={setPending}
+                        onWaitDone={() => void refetch()}
+                    />
+                );
+                // folding off: every control in config order, as before
+                const open = fold ? g.rows.filter(c => !isFolded(c)) : g.rows;
+                const more = fold ? g.rows.filter(isFolded) : [];
+                return (
+                    <Card key={g.key} title={t(`sup.controls.group.${g.key}`)} subtitle={t(SUP_GROUP_HELP[g.key])}>
+                        <div className="sup-mc-list">
+                            {open.map(row)}
+                            {more.length > 0 ? (
+                                <MoreFold screen={`sup_controls.${g.key}`} fold count={more.length}>
+                                    {more.map(row)}
+                                </MoreFold>
+                            ) : null}
+                        </div>
+                    </Card>
+                );
+            })}
             {notices ? <DeptNoticesCard /> : null}
             <ReasonDialog
                 pending={pending}

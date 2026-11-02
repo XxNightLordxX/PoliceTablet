@@ -1,8 +1,8 @@
 {
-  "err.access_off": "That way of opening the tablet is switched off on this server.",
+  "err.access_off": "That way of opening the tablet is switched off on this server. Use another way, such as the item or the command.",
   "err.not_at_desk": "Stand at the mission desk to open the tablet there.",
-  "err.desk_department": "This mission desk is not for your department.",
-  "err.no_tablet_item": "You need the police tablet in your inventory.",
+  "err.desk_department": "This mission desk is not for your department. Use your own department's desk.",
+  "err.no_tablet_item": "You need the police tablet in your inventory. Get one and try again.",
   "tablet.desk.open": "Open Crimson-Police",
   "tablet.dispatch_key_label": "Crimson-Police: open Dispatch",
   "health.check_failed": "This check could not run: the server console has the error",

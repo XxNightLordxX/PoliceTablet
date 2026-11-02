@@ -11,6 +11,9 @@ import {
     Select,
     TextInput,
     Toggle,
+    readMoreOpen,
+    useFoldAdvanced,
+    writeMoreOpen,
 } from '../shared/components';
 import { asArray } from '../shared/data';
 import { t } from '../shared/i18n';
@@ -1986,6 +1989,8 @@ const PANELS: Record<string, ComponentType<PanelProps>> = {
     process_scene: ProcessScene,
 };
 
+const MORE_SCREEN = 'builder_block';
+
 // The settings panel of one objective: its name, then the block's own settings. With Config.Builder.foldAdvanced the
 // block's basics stay open and the rest (the checks, the advanced groups) fold under a closed "More settings".
 export function BlockPanel(props: PanelProps) {
@@ -1997,6 +2002,8 @@ export function BlockPanel(props: PanelProps) {
     const minDefault = asArray(cfg.blockList).find(x => x.id === obj.block)?.minSeconds ?? 30;
     const labelMax = cfg.limits?.objectiveLabel ?? 64;
     const fold = foldsAdvanced(cfg);
+    // Config.AdminUi.foldAdvanced: More settings stays as the viewer last left it (browser storage)
+    const remember = useFoldAdvanced();
     const label = (
         <Field label={t('builder.settings.label')} error={messageAt(errors, `${p}.label`)} required>
             <TextInput
@@ -2058,7 +2065,14 @@ export function BlockPanel(props: PanelProps) {
         <div className="builder_client-panel">
             <Group title={t('builder.settings.common')}>{label}</Group>
             <FoldCtx.Provider value="basic">{own}</FoldCtx.Provider>
-            <details key={`${index}:${obj.block}`} className="builder_client-more" open={hidden || undefined}>
+            <details
+                key={`${index}:${obj.block}`}
+                className="builder_client-more"
+                open={hidden || (remember && readMoreOpen(MORE_SCREEN)) || undefined}
+                onToggle={e => {
+                    if (remember && !hidden) writeMoreOpen(MORE_SCREEN, e.currentTarget.open);
+                }}
+            >
                 <summary className="builder_client-more-title">
                     <Icon name="chevronRight" size={14} />
                     <span>{t('builder.settings.more')}</span>

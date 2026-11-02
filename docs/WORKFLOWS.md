@@ -17,7 +17,7 @@ Officer UI (`/CrimsonPolice`), the Supervisor UI (the switch in the Officer UI h
 `Config.Tablet.supervisorByTask = true` its sidebar is grouped under People, Missions, Rewards and Review), the
 criminal tablet and the Admin UI (`/CrimsonPoliceAdmin`, its sidebar grouped by play). Every screen of a workflow
 has a one-line help under its title that says what to do next, and every error it can show says what went wrong
-and what to do about it (tests/workflow_errors_spec.lua holds the common ones to that).
+and what to do about it (tests/workflow_errors_spec.lua holds every err.* text to that).
 
 Each workflow has a short **How it works** paragraph for owners and staff, the spec that drives it, its result, and
 how few steps it takes (counted in tablet requests to the server, fixed waits and the player's clicks). Anything that
