@@ -390,3 +390,12 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   two officers: one goes through, the other says Please wait a moment; the day's count never passes the cap. (Z5)
 - [ ] A volunteer says yes and presses Give up within `cancelGraceSeconds`: criminal tablet History shows Called off,
   not Gave up (strike). (Z5)
+- [ ] Host and a partner chase a route fleer (or fight a hostile ped); the partner stays closest for over 10 s, then
+  the host gets close again and OneSync gives the ped back: within about 2 s the ped runs his route (or fights)
+  again on the host's game, he never stands idle. (Z6)
+- [ ] Criminal tablet open, an admin uses Officers -> Support -> unstick (or F8 `CrimsonPoliceState unstick`): the
+  tablet disappears with the cursor, and a later volunteer question shows its ox_lib pop-up. (Z6)
+- [ ] (Dev only) A render error reaches the root boundary while the criminal tablet is open: the tablet closes with
+  the cursor, Escape and keys work, and the app comes back 2 s later. (Z6)
+- [ ] A volunteer's window ends; a unit draws a players_only mission a few seconds later (before the sweep): he is not
+  asked, and the mission card says nobody is free. (Z6)

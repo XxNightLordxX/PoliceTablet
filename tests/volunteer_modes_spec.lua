@@ -254,6 +254,15 @@ do
     H.eq(V.reservedFor('run-1'), nil, 'the run ended: he is free again')
     H.eq(#V.available(), 1, 'available again')
 
+    -- Z6: his window ends before the next sweep: the draw no longer counts on him
+    local keepTime = H.time
+    local entry = V.list()[1]
+    H.time = entry.untilAt
+    H.eq(#V.available(), 0, 'his window has ended (no sweep yet): not available')
+    H.eq(select(2, V.drawGate(WARRANT, true)), 'no_volunteer', 'and a players_only mission stays closed')
+    H.time = keepTime
+    H.eq(#V.available(), 1, 'inside his window: available')
+
     -- a hold ends when his listing ends
     H.ok(V.reserve('tok', WARRANT, 1) == 'CIV00011', 'held by a pending accept')
     V.stop(11)

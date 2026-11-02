@@ -16,8 +16,8 @@ async function boot() {
     if (isEnvBrowser()) await import('./mocks');
     applyTheme(document.documentElement, DEFAULT_THEME);
     const el = document.getElementById('root');
-    // The last line of defence: whatever still escapes hands the NUI focus back (Lua closes the tablet and the test
-    // panel), and the app mounts again with a fresh state a moment later (Lua sends the HUD, overlay and theme again
+    // The last line of defence: whatever still escapes hands the NUI focus back (Lua closes the tablet, the criminal
+    // tablet and the test panel), and the app mounts again with a fresh state a moment later (Lua sends the HUD, overlay and theme again
     // on 'ready').
     if (el) {
         createRoot(el).render(
@@ -25,6 +25,7 @@ async function boot() {
                 name="app"
                 onError={() => {
                     void fetchNui('close', {});
+                    void fetchNui('crimtabClose', {});
                     void clientAction('testPanel', { open: false });
                 }}
                 retryMs={2000}

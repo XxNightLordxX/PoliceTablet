@@ -552,12 +552,14 @@ function V.available(roles)
     if not On() then return out end
     local held = {}
     for _, cid in pairs(reserved) do held[cid] = true end
+    local now = os.time()
     for _, v in ipairs(V.list()) do
         local fits = roles == nil
         for _, role in ipairs(v.roles) do
             if roles and roles[role] then fits = true end
         end
-        if fits and not held[v.cid] then out[#out + 1] = v.cid end
+        -- a window that has ended counts at once, not only at the next sweep (30 s x loopScale)
+        if fits and not held[v.cid] and now < (v.untilAt or 0) then out[#out + 1] = v.cid end
     end
     return out
 end

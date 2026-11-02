@@ -1187,6 +1187,22 @@ do
         'back on the host\'s game, standing still: the host gives his away legs again')
     H.eq(TaskOf(R12).mbr, 1.0, 'at his walk')
     W.ents[R12].speed = 1.2
+    -- Z6: a runner on a route is lost for good the same way and handed back still on his leg: the host's governor
+    -- tasks him again (his bag never changed, so no bag handler does)
+    local R13 = AddPed(5053, 853, -50, 240, 0)
+    W.ents[R13].speed = 1.2
+    BagChange(R13, 853, Runner(1, { gait = 'walk', cfg = { fleePoints = { { x = -50.0, y = 400.0, z = 0.0 } } } }))
+    H.eq(TaskOf(R13).name, 'nav', 'the host: a route runner on his leg')
+    W.ents[R13].control = false
+    H.advance(12500)
+    W.ents[R13].control = nil
+    Clear()
+    H.advance(2100)
+    H.ok(Called('TaskFollowNavMeshToCoord', function(a) return a[1] == R13 end),
+        'handed back to the host after 10 s: tasked on his route again')
+    local legs = Count('TaskFollowNavMeshToCoord', R13)
+    H.advance(4000)
+    H.ok(Count('TaskFollowNavMeshToCoord', R13) - legs <= 4, 'tasked again once, then run by the AI loop')
 
     -- ---- SETTINGS ----------------------------------------------------------
     -- whole numbers typed in Settings reach the game as floats; a rate below 0.5 is 0.5

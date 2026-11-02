@@ -155,6 +155,15 @@ do
     T.close()
     H.advance(500, 250)
 
+    -- Z6: unstick (Admin UI -> Officers -> Support, or CrimsonPoliceState unstick) closes it, not only its focus
+    nui = {}
+    H.ok(C.open(), 'crimtab: opens before unstick')
+    H.ok(CP.Diag and CP.Diag.unstick, 'crimtab: the diag module is loaded')
+    CP.Diag.unstick()
+    H.ok(not C.isOpen() and Closed(), 'crimtab: unstick closes it (open = false to the NUI)')
+    H.eq(T.panelFocusOwner(), nil, 'crimtab: unstick releases its focus')
+    H.advance(500, 250)
+
     local keepDead = _G.IsEntityDead
     local dead = false
     _G.IsEntityDead = function() return dead end

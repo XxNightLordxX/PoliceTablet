@@ -208,7 +208,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/operations/server.lua | operations | always | 1000 -> 2000 ms active, 5000 -> 10000 ms idle (scaled) | adaptive; the join window is minutes |
 | modules/spawn/server.lua | open spawn asks | while asks are open | 500 -> 1000 ms | placement timeouts are seconds |
 | modules/units/server.lua | invite expiry, lock safety net | always | 2000 -> 5000 ms, scaled | invites last 120 s; accepting checks the expiry itself. A ready check has its own timer at the deadline, and Units.ready refuses an answer after it (Z4) |
-| modules/volunteers/server.lua | volunteer window and duty | while someone volunteers | 15 -> 30 s, scaled | the window is minutes |
+| modules/volunteers/server.lua | volunteer window and duty | while someone volunteers | 15 -> 30 s, scaled | the window is minutes; its end is checked at the draw (`V.available`), so the sweep only tidies |
 | modules/volunteers/match/server.lua | asking, travel, engagement | while a run has a match | 1000 -> 2000 ms | the travel time is minutes |
 | modules/missioncalls/server.lua | call posting and expiry; coalesced push | always | `checkEvery` s; 1000 ms (push only when dirty) | |
 | modules/testing/server.lua | debug stream, invites | always | 1000 -> 2000 ms base, debug 2 s, upkeep 5 s (on the next pass) | |

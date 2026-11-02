@@ -1327,6 +1327,11 @@ EnsureLoop = function()
                     a.lostAt = a.lostAt or t
                     if t - a.lostAt > LOST_CONTROL_MS then
                         ai[ped] = nil
+                        -- forgotten too, so the governor tasks him again once OneSync gives him back
+                        local netId = NetworkGetNetworkIdFromEntity(ped)
+                        if netId and netId ~= 0 and handled[netId] and handled[netId].entity == ped then
+                            handled[netId] = nil
+                        end
                     else
                         NetworkRequestControlOfEntity(ped)
                     end
@@ -1724,6 +1729,8 @@ local function GovernStep(run)
                 end
                 governed[netId] = { entity = ent, seq = bag.seq }
             end
+            -- the host got back a ped its AI loop let go (another game owned him over 10 s): tasked again
+            if run.isHost == true and ai[ent] == nil and handled[netId] == nil then Schedule(netId, bag, true) end
             -- a tired runner OneSync gave this game is held to his gait from now on, and kept moving
             Pace(netId, ent, bag)
             KeepRunning(run, netId, ent, bag)

@@ -100,6 +100,8 @@ end
 -- FiveM keeps one focus vote per resource (ResourceUIScripting.cpp SET_NUI_FOCUS), so SetNuiFocus(false, false)
 -- here removes only Crimson-Police's own vote and never another resource's focus (docs/CRIMSON_ARENA.md rule 8).
 function Diag.unstick()
+    -- the criminal tablet closes the whole way (open = false to the NUI, Volunteers told), not only its focus
+    if CP.CrimTab and CP.CrimTab.isOpen and CP.CrimTab.isOpen() then pcall(CP.CrimTab.close) end
     if CP.Tablet and CP.Tablet.isOpen and CP.Tablet.isOpen() then CP.Tablet.close() end
     local owner = CP.Tablet and CP.Tablet.panelFocusOwner and CP.Tablet.panelFocusOwner()
     if owner then CP.Tablet.panelFocus(owner, false) end

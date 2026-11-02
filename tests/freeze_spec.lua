@@ -755,6 +755,9 @@ do
     H.ok(
         main:find('<QuietBoundary name="app"', 1, true) ~= nil and main:find('fetchNui(\'close\', {})', 1, true) ~= nil,
         'web: the root boundary hands the focus back')
+    -- Z6: the criminal tablet's focus too (its own close: open = false, the 'crimtab' panel focus, Volunteers told)
+    H.ok(main:find('fetchNui(\'crimtabClose\', {})', 1, true) ~= nil,
+        'web: the root boundary closes the criminal tablet too')
     H.ok(qb:find('return this.state.error ? null : this.props.children;', 1, true) ~= nil,
         'web: a quiet boundary renders nothing for the broken part')
 end
