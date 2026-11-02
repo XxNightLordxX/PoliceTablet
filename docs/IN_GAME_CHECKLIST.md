@@ -351,3 +351,20 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   loading and error lines as the other officer screens. (R1)
 - [ ] Defuse a device in a search-then-defuse mission after its prop was removed: the prop comes back at the device's
   own spot and the device is worked there, never at another object. (R1)
+
+## Full debug sweep fixes (Z5)
+
+- [ ] A volunteer is cuffed and detained, the run goes on; he presses Give up or Stop volunteering on the criminal
+  tablet: the run stays In progress, the arrest stands, and Stop volunteering only ends his listing. Cuffed (not yet
+  detained) and Give up: he counts as detained (left in cuffs) and the case goes on. (Z5)
+- [ ] `Config.Volunteers.voidRun = 'keep_earned'`, a Warrant Service whose volunteer drops out after contact: the
+  officers' rows have no No participant downed or No weapons fired bonus. (Z5)
+- [ ] `Config.RealSuspects.onLeave = 'escaped'` (then `'caught'`) with `Config.FeatureRewards.suspect` on: an engaged
+  volunteer logs off past the grace (or enters an apartment): he gets a strike, no suspect pay, and History says Left
+  the case (strike); the officers' case keeps got away (or detained). (Z5)
+- [ ] `voidRun = 'keep_earned'` with a players_only mission: the asked volunteer says No before any yes: the run ends
+  Abandoned (no Completed row, no goal progress, no cooldown). (Z5)
+- [ ] A supervisor one below `missionBanPerDay` (or the clear-cooldown or add-run-time cap) clicks twice very fast on
+  two officers: one goes through, the other says Please wait a moment; the day's count never passes the cap. (Z5)
+- [ ] A volunteer says yes and presses Give up within `cancelGraceSeconds`: criminal tablet History shows Called off,
+  not Gave up (strike). (Z5)

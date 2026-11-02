@@ -443,6 +443,7 @@ do
         Tick(1)
         H.eq(rec.state, t.want, label .. ' -> ' .. t.want)
         H.eq(rec.byLeave == true, t.byLeave == true, label .. ': byLeave')
+        H.eq(rec.leaveRule ~= nil, t.from == 'free', label .. ': Z5 leaveRule only by the rule')
         H.eq(#NotesOf(case, 'rs_evade_instance'), 1, label .. ': the rs_evade_instance note')
         H.ok(Noted(run, 'rs_evade_instance') ~= nil, label .. ': audited')
         H.eq(NotesOf(case, 'rs_evade_instance')[1] and NotesOf(case, 'rs_evade_instance')[1].detail,
@@ -497,6 +498,7 @@ do
             Tick(2)
             H.eq(rec.state, t.want, label .. ' -> ' .. t.want)
             H.eq(rec.byLeave == true, t.mode == 'caught', label .. ': byLeave')
+            H.eq(rec.leaveRule, t.mode == 'void' and 'left' or t.mode, label .. ': Z5 leaveRule (CP.Volunteers)')
             local notes = NotesOf(case, 'rs_combat_log')
             H.eq(#notes, 1, label .. ': the rs_combat_log note')
             H.ok(Noted(run, 'rs_combat_log') ~= nil, label .. ': audited as runNoted')

@@ -3572,7 +3572,7 @@ pop-up instead of the NPC; 'players_only' is offered only while a volunteer who 
 run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc'`), never for live, boss or test runs.
 - Start: the `run:created` hook, one frame later (`SetTimeout(0)`: FinishAccept moves a `'players_only'` hold to the
   run id after the create) -> `V.match(run)`: the slot of the run's location (`V.slotOf`: role, `meet`, else the
-  location's start), `meetRadius`. One 1 s thread (exit token) runs only while a match is asking or has a volunteer.
+  location's start), `meetRadius`. One 2 s thread (exit token) runs only while a match is asking or has a volunteer.
 - Asking: the candidates are the run's held volunteer first, then `V.available({ [role] = true })` (oldest first),
   each asked at most once, at most `askTries` (3) per run. A candidate must pass `V.check`, `CP.Opponents.eligible(src,
   { intake = true })` (not down, cuffed, jailed or in a no-start zone) and `Opp.selfBlock(officer, { cid })` for every

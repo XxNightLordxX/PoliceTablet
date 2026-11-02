@@ -171,6 +171,18 @@ do
     H.ok(b.subtotal < 200, 'Z2: no base points')
     H.ok(not Has(b.bonuses, 'fast_finish'), 'Z2: no fast_finish for a run that ended early')
     H.eq((CP.Cash.compute(m, mp)), 0, 'Z2: no mission cash')
+
+    -- step Z5: the card's end-of-run bonuses (no_participant_downed, no_weapons_fired) never score lines-only
+    local card, cp = Run(false)
+    card.mission.bonuses = { { id = 'no_participant_downed', value = 25 }, { id = 'no_weapons_fired', value = 25 } }
+    card.stats = { downs = 0, weaponsFired = 0 }
+    b = CP.Scoring.compute(card, cp, 'completed', { durationS = 60, departments = 1 })
+    H.ok(Has(b.bonuses, 'no_participant_downed') and Has(b.bonuses, 'no_weapons_fired'),
+        'Z5: a full run scores the end-of-run bonuses its card lists')
+    card.keepEarned = true
+    b = CP.Scoring.compute(card, cp, 'completed', { durationS = 60, departments = 1 })
+    H.ok(not Has(b.bonuses, 'no_participant_downed'), 'Z5: keep_earned: no no_participant_downed')
+    H.ok(not Has(b.bonuses, 'no_weapons_fired'), 'Z5: keep_earned: no no_weapons_fired')
 end
 
 -- ============================================================================

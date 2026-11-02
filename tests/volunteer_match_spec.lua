@@ -472,6 +472,7 @@ do
     run = NewRun()
     Answer(10, LastAsk(10), true)
     H.step(0)
+    run.state = 'in_progress'   -- step Z5: keep_earned only for a run that started
     recs.VMA00001.contactAt = H.clockMs
     H.advance(2000, 1000)       -- one match pass (TICK_MS 2 s since step LP2)
     recs.VMA00001.state = 'left'
@@ -958,6 +959,110 @@ do
     H.eq(#recorded, 1, 'Z1: endEvent = false: History still records the case')
     H.eq(recorded[1] and recorded[1].citizenid, 'VMZ00043', '...his own line')
     Config.Volunteers.endEvent = true
+    CP.CrimTab = nil
+end
+
+-- ============================================================================
+--                    STEP Z5: CATCHES, LEAVES, keep_earned
+-- ============================================================================
+
+do
+    local recorded = {}
+    CP.CrimTab = {
+        record = function(payload) recorded[#recorded + 1] = payload return true end,
+    }
+    local function Fresh(src, cid)
+        Reset()
+        for _, v in ipairs(V.list()) do V.stop(v.src) end
+        Civilian(src, cid)
+        H.clockMs = H.clockMs + 2000
+        H.ok(V.join(src, RUNNER), 'Z5: ' .. cid .. ' joins')
+        local run = NewRun()
+        Answer(src, LastAsk(src), true)
+        H.step(0)
+        run.state = 'in_progress'
+        recs[cid].contactAt = H.clockMs
+        H.advance(2000, 1000)
+        return run
+    end
+
+    -- a detained volunteer cannot void the arrest with Give up / Stop volunteering
+    local run = Fresh(50, 'VMZ00050')
+    recs.VMZ00050.state, recs.VMZ00050.share = 'detained', 1
+    H.advance(2000, 1000)
+    local okC, whyC = V.cancelCase(50)
+    H.step(0)
+    H.eq(okC, false, 'Z5: a detained volunteer has no case to cancel')
+    H.eq(whyC, 'no_case', 'Z5: ...no_case')
+    H.eq(recs.VMZ00050.state, 'detained', 'Z5: the detain stands')
+    H.eq(#ended, 0, 'Z5: the run goes on')
+    H.eq(run.state, 'in_progress', 'Z5: still In progress')
+    H.eq(V.strikes('VMZ00050'), 0, 'Z5: and he gets no strike')
+    Finish(run, 'completed', 'completed')
+
+    -- in cuffs he follows the leave rule: detained (left_in_cuffs), the case goes on
+    run = Fresh(51, 'VMZ00051')
+    recs.VMZ00051.state = 'cuffed'
+    V.cancelCase(51)
+    H.step(0)
+    H.eq(recs.VMZ00051.state, 'detained', 'Z5: a cancel in cuffs is a detain')
+    H.eq(recs.VMZ00051.share, 1, 'Z5: ...with the full share')
+    H.eq(states[#states] and states[#states].why, 'left_in_cuffs', 'Z5: ...left_in_cuffs')
+    H.eq(#ended, 0, 'Z5: the run goes on')
+    Finish(run, 'completed', 'completed')
+
+    -- onLeave 'escaped': a leave is a dropout (strike, History dropout left), the case keeps 'lost'
+    run = Fresh(52, 'VMZ00052')
+    recs.VMZ00052.state, recs.VMZ00052.leaveRule = 'lost', 'escaped'
+    H.advance(2000, 1000)
+    H.eq(V.strikes('VMZ00052'), 1, 'Z5: a leave under onLeave escaped is a strike')
+    H.eq(recs.VMZ00052.state, 'lost', 'Z5: the officers keep the leave rule outcome')
+    H.eq(#ended, 0, 'Z5: the run goes on by its rules')
+    H.advance(4000, 1000)
+    H.eq(V.strikes('VMZ00052'), 1, 'Z5: one strike only')
+    H.eq(V.cancelCase(52), false, 'Z5: nothing left to cancel after the leave')
+    recorded = {}
+    Finish(run, 'completed', 'completed')
+    H.eq(recorded[1] and recorded[1].dropout, 'left', 'Z5: History: left the case')
+    H.eq(V.endPayload({ cid = 'x', why = 'left', struck = true, role = 'runner' }, run, 'completed').dropout, 'left',
+        'Z5: the end payload carries the dropout (no pay)')
+
+    -- onLeave 'caught': the same
+    run = Fresh(53, 'VMZ00053')
+    recs.VMZ00053.state, recs.VMZ00053.share, recs.VMZ00053.leaveRule = 'detained', 1, 'caught'
+    H.advance(2000, 1000)
+    H.eq(V.strikes('VMZ00053'), 1, 'Z5: a leave under onLeave caught is a strike')
+    Finish(run, 'completed', 'completed')
+
+    -- a free cancel in the grace: History never says Gave up (strike)
+    Reset()
+    for _, v in ipairs(V.list()) do V.stop(v.src) end
+    Civilian(54, 'VMZ00054')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(54, RUNNER), 'Z5: VMZ00054 joins')
+    run = NewRun()
+    Answer(54, LastAsk(54), true)
+    H.step(0)
+    H.eq(V.cancelCase(54), true, 'Z5: a cancel in the grace')
+    H.eq(V.strikes('VMZ00054'), 0, 'Z5: ...is free')
+    recorded = {}
+    Finish(run, 'completed', 'completed')
+    H.eq(recorded[1] and recorded[1].dropout, nil, 'Z5: History: no strike dropout for a free cancel')
+
+    -- keep_earned and a no before any yes (players_only): Abandoned, never a Completed row
+    Config.Volunteers.voidRun = 'keep_earned'
+    Reset()
+    for _, v in ipairs(V.list()) do V.stop(v.src) end
+    Civilian(55, 'VMZ00055')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(55, RUNNER), 'Z5: VMZ00055 joins')
+    run = NewRun('players_only')
+    Answer(55, LastAsk(55), false)
+    H.step(0)
+    H.step(0)
+    H.eq(ended[1] and ended[1].state, 'abandoned', 'Z5: keep_earned with no yes: the run is cancelled')
+    H.eq(run.keepEarned, nil, 'Z5: ...and never marked keep_earned')
+    Config.Volunteers.voidRun = 'cancelled'
     CP.CrimTab = nil
 end
 

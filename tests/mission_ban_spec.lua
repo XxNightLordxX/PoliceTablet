@@ -130,8 +130,20 @@ H.eq(err, 'err.no_permission', 'an officer has no admin lift')
 --                               PER DAY, OFFLINE
 -- ============================================================================
 
+-- step Z5: a second ban sent while the first still reads today's count waits (err.busy), so two at once never pass
+-- the cap
+local realCount, inner = CP.AdminKit.dailyCount, nil
+CP.AdminKit.dailyCount = function(...)
+    CP.AdminKit.dailyCount = realCount
+    H.clockMs = H.clockMs + 1000
+    inner = table.pack(Ban(2, 'OFF00007', 1))
+    return realCount(...)
+end
+H.clockMs = H.clockMs + 1000
 ok = Ban(2, 'OFF00009', 1)
+CP.AdminKit.dailyCount = realCount
 H.eq(ok, true, 'the third ban today')
+H.eq(inner and inner[2], 'err.busy', 'Z5: a ban sent at the same time waits (err.busy)')
 ok, err = Ban(2, 'OFF00007', 1)
 H.eq(err, 'err.mission_ban_used', 'the fourth is refused (missionBanPerDay)')
 W.people[12].grade = 5
@@ -156,4 +168,13 @@ H.eq(ok, true, 'an admin lifts it')
 
 MC.controls.missionBan.on = false
 Config.Permissions.supervisor.missionControls = false
+
+-- step Z5: Clear cooldown and Add run time (Config.MissionControls per-day caps) take the same one-at-a-time lock
+do
+    local f = io.open('Crimson-Police/modules/livectl/server.lua', 'r')
+    local src = f and f:read('a') or ''
+    if f then f:close() end
+    local _, n = src:gsub('oneAtATime = true', '')
+    H.eq(n, 2, 'Z5: clearCooldowns and addRunTime run one at a time per supervisor')
+end
 return H

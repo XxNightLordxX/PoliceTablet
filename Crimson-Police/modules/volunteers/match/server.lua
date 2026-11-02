@@ -133,15 +133,18 @@ end
 -- The run ends because nobody plays its suspect: Config.Volunteers.voidRun 'keep_earned' = completed with what was
 -- earned so far (run.keepEarned: CP.Scoring scores the lines only, no base points or end-of-run lines such as
 -- fast_finish, and CP.Cash pays no mission cash, step Z2); 'cancelled' (shipped) = Abandoned with no cooldown, penalty
--- or pay. In a thread: never from inside a run hook.
+-- or pay. keep_earned needs a yes and a run In progress: a run that never started (nobody, or a no before any yes)
+-- is always cancelled, so no Completed row, goal, cooldown or item comes of it (step Z5). In a thread: never from
+-- inside a run hook.
 local function EndRun(m)
     local run = m.run
-    local how = Cfg().voidRun == 'keep_earned' and 'keep_earned' or 'cancelled'
+    local how = (Cfg().voidRun == 'keep_earned' and m.yesAt and run.state == 'in_progress') and 'keep_earned'
+        or 'cancelled'
     TellOfficers(run, 'warning', 'volunteer.officer.void_end')
     CP.log(TAG, 'run %s: no volunteer plays the suspect (%s): the run ends (%s)', m.runId, tostring(m.why), how)
     SetTimeout(0, function()
         if run.state == 'ended' or not CP.Runs then return end
-        if how == 'keep_earned' and CP.Runs.endRun then
+        if how == 'keep_earned' and run.state == 'in_progress' and CP.Runs.endRun then
             run.keepEarned = true
             CP.Runs.endRun(run, 'completed', 'completed')
         elseif CP.Runs.cancelRun then
@@ -174,6 +177,7 @@ end
 local function Voided(m, why, strike)
     if m.phase == 'void' or m.phase == 'npc' or m.phase == 'over' then return end
     m.why = why
+    m.struck = strike == true and STRIKE_WHY[why] == true  -- a free cancel is no strike: History never says so (Z5)
     local _, rec = Opp('byCid', m.cid)
     if rec and rec.state ~= 'void' and rec.state ~= 'left' then
         Opp('setState', m.run, m.cid, 'void', { why = 'volunteer_' .. why })
@@ -372,7 +376,20 @@ local function Watch(m, now)
         local why = rec and rec.state == 'left' and 'left' or 'void'
         return Voided(m, why, why == 'left')
     end
+    if m.leftByRule then return end
     if rec.src then m.src = rec.src end
+    -- step Z5: Config.RealSuspects.onLeave 'caught' or 'escaped' decided a free volunteer's leave (logged off past
+    -- the grace, switched character, entered an instance; CP.Opponents' rec.leaveRule): his case keeps that outcome
+    -- for the officers, but for him it is a dropout with a strike and no pay, as a leave under 'left' is. A leave in
+    -- cuffs (left_in_cuffs) never reaches the rule: it stays a catch.
+    if rec.leaveRule and (rec.state == 'lost' or rec.state == 'detained') then
+        m.leftByRule, m.why, m.struck = true, 'left', true
+        if V.strike then V.strike(m.cid, 'left') end
+        Note(m.src, 'warning', 'volunteer.case.left')
+        TriggerClientEvent(CP.e('client:volunteerCase'), m.src, { phase = 'over' })
+        CP.log(TAG, 'run %s: %s left the case (onLeave %s)', m.runId, m.cid, tostring(rec.leaveRule))
+        return
+    end
     -- an AFK catch (share 0) is a void (Config.Volunteers.afkCatchVoids, shipped true): never a catch that counts
     local caught = rec.state == 'detained' or rec.state == 'booked'
     if caught and tonumber(rec.share) == 0 and Cfg().afkCatchVoids ~= false then
@@ -591,7 +608,7 @@ end
 -- strike), graceSeconds }.
 function V.caseOf(cid)
     local m = cid and byCid[cid] and matches[byCid[cid]] or nil
-    if not m or m.cid ~= cid or not CANCEL_PHASES[m.phase] then return nil end
+    if not m or m.cid ~= cid or not CANCEL_PHASES[m.phase] or m.leftByRule then return nil end
     local now = GetGameTimer()
     local grace = math.floor(Num(Cfg().cancelGraceSeconds, 60, 0, 600))
     local free = not m.engagedAt and now - (m.yesAt or 0) <= grace * 1000
@@ -640,10 +657,20 @@ function V.cancelCase(src)
         cid = type(info) == 'table' and info.citizenid or nil
     end
     local m = cid and byCid[cid] and matches[byCid[cid]] or nil
-    if not m or m.cid ~= cid or m.src ~= src or not CANCEL_PHASES[m.phase] then return false, 'no_case' end
+    if not m or m.cid ~= cid or m.src ~= src or not CANCEL_PHASES[m.phase] or m.leftByRule then
+        return false, 'no_case'
+    end
+    local _, rec = Opp('byCid', m.cid)
+    -- step Z5: a detain or booking is final (as for a leave, C25): nothing left to cancel, the arrest stands. In cuffs
+    -- he follows the leave rule: cuffed -> detained ('left_in_cuffs'), and the case goes on.
+    if type(rec) == 'table' and (rec.state == 'detained' or rec.state == 'booked') then return false, 'no_case' end
+    if type(rec) == 'table' and rec.state == 'cuffed' then
+        if rec.share == nil then rec.share = rec.afk and 0 or 1 end
+        Opp('setState', m.run, m.cid, 'detained', { why = 'left_in_cuffs' })
+        return false, 'no_case'
+    end
     local grace = math.floor(Num(Cfg().cancelGraceSeconds, 60, 0, 600)) * 1000
     -- officers within contactRange count at once (CP.Opponents' contactAt), not only on the next match tick
-    local _, rec = Opp('byCid', m.cid)
     local reached = m.engagedAt or (type(rec) == 'table' and rec.contactAt)
     local free = not reached and GetGameTimer() - (m.yesAt or 0) <= grace
     Voided(m, 'cancelled', not free)
@@ -748,7 +775,7 @@ function V.endPayload(m, run, state, reason)
         mode = m.mode,
         citizenid = m.cid,
         outcome = OUTCOMES[o] and o or 'got_away',
-        dropout = STRIKE_WHY[m.why] and m.why or nil,
+        dropout = (STRIKE_WHY[m.why] and m.struck) and m.why or nil,  -- a free cancel is no dropout (Z5)
         engaged = m.engagedAt ~= nil,
         result = type(state) == 'string' and state or 'ended',
         reason = type(reason) == 'string' and reason or nil,
@@ -848,7 +875,7 @@ CP.Hooks.on('run:ended', function(run, state, reason)
     end
     if m.phase == 'asking' and m.token then
         TriggerClientEvent(CP.e('client:volunteerAskClose'), m.src, m.token)
-    elseif CANCEL_PHASES[m.phase] then
+    elseif CANCEL_PHASES[m.phase] and not m.leftByRule then
         Note(m.src, 'success', 'volunteer.case.released')
         TriggerClientEvent(CP.e('client:volunteerCase'), m.src, { phase = 'over' })
     end

@@ -264,6 +264,7 @@ Kit.supAction('server:sup:missionBan', 'missionControls', function(ctx)
     return true, { citizenid = cid, ['until'] = ban['until'] }
 end, {
     reason = true,
+    oneAtATime = true,            -- the per-day cap is read before a yield (step Z5)
     pushMine = 'missionControls', -- Your controls today shows the new count of today
     self = OfficerTarget,
     targetRate = { 1, 3000 },

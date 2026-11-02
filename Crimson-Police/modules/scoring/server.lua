@@ -592,8 +592,12 @@ local function ScoreLines(run, p, P, opts)
         end
         if per then
             if END_EVALUATED[id] then
-                local earned = (id == 'no_participant_downed' and Num(stats.downs, 0) == 0)
-                    or (id == 'no_weapons_fired' and Num(stats.weaponsFired, 0) == 0)
+                -- an end-of-run line: never for a lines-only run, which never reached its end (step Z5)
+                local earned = not linesOnly
+                    and (
+                        (id == 'no_participant_downed' and Num(stats.downs, 0) == 0)
+                        or (id == 'no_weapons_fired' and Num(stats.weaponsFired, 0) == 0)
+                    )
                 if earned then total = total + AddLine(bonuses, penalties, id, per, 1, false, l.penalty) end
             else
                 local count = CountOf(run, p, id)

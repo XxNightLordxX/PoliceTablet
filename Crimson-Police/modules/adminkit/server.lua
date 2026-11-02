@@ -708,6 +708,8 @@ end
 --   opts.maintenance   true: allowed during a maintenance lock (status reads, ending the lock)
 --   opts.pushMine      a push topic sent to the acting player only after success (once the audit row is written), so
 --                      his own screens that count today's use (Your controls today) read the new count
+--   opts.oneAtATime    true: one call per actor at a time (another while it runs gets err.busy), for a per-day cap
+--                      read before a yield
 -- fn(ctx) -> ok, data | false, errKey. ctx = { src, payload, name, reason, requestId, actor, role, target, old, new,
 -- audit(action, target, old, new, aopts), consume(token, kind, ids), changed(kind, citizenid, missionId),
 -- notify(citizenid, kind, key, vars) }.
@@ -847,6 +849,8 @@ local function MakeCtx(ctx, entry)
     return ctx
 end
 
+local inFlight = {} -- ['<action>|<actor>'] = true while an opts.oneAtATime handler of that actor runs
+
 local function Run(entry, src, payload)
     local okG, ctx = Guard(entry, src, payload)
     if okG == 'stored' then
@@ -854,8 +858,16 @@ local function Run(entry, src, payload)
         return false, ctx.data or 'err.refused'
     end
     if not okG then return false, ctx end
+    -- opts.oneAtATime: one call per actor at a time, so a per-day cap read before a yield (Kit.dailyCount) cannot be
+    -- passed by two requests sent at once (step Z5); the lock covers the handler and its audit row
+    local lockKey = entry.opts.oneAtATime and (entry.name .. '|' .. tostring(ctx.actor)) or nil
+    if lockKey then
+        if inFlight[lockKey] then return Refuse(ctx, 'err.busy') end
+        inFlight[lockKey] = true
+    end
     MakeCtx(ctx, entry)
     local res = table.pack(pcall(entry.fn, ctx))
+    if lockKey then inFlight[lockKey] = nil end
     local ok, data
     if not res[1] then
         CP.err(TAG, '%s failed: %s', entry.name, tostring(res[2]))

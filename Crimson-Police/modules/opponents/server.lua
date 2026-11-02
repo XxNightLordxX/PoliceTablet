@@ -326,6 +326,7 @@ end
 -- onLeave. 'caught' counts as a detain (by leave; an AFK suspect's share is 0, as for a cuff while AFK).
 local function ApplyOnLeave(case, rec, why)
     local mode = Cfg().onLeave
+    rec.leaveRule = mode == 'caught' and 'caught' or mode == 'escaped' and 'escaped' or 'left'  -- CP.Volunteers (Z5)
     if mode == 'caught' then
         rec.byLeave = true
         if rec.share == nil then rec.share = rec.afk and 0 or 1 end

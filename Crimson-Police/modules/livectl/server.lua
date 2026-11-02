@@ -968,6 +968,7 @@ Kit.supAction('server:sup:clearCooldowns', 'missionControls', function(ctx)
     return true, res
 end, {
     reason = true,
+    oneAtATime = true, -- the per-day cap is read before a yield (step Z5)
     self = OfficerTarget,
     targetRate = { 1, 3000 },
     category = 'flags',
@@ -995,6 +996,7 @@ Kit.supAction('server:sup:addRunTime', 'missionControls', function(ctx)
     return true, { runId = run.id, timeAdded = total }
 end, {
     reason = true,
+    oneAtATime = true, -- the per-day cap is read before a yield (step Z5)
     self = RunTargets,
     category = 'operations',
     permission = function(src) return CanUse(src, TIME_KEY) end,
