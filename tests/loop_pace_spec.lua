@@ -142,6 +142,71 @@ Has('modules/runs/client.lua', 'if IsPedArmed(ped, 6) then\n                Wait
 H.ok(Read('modules/runs/server.lua'):find('CP.Perf', 1, true) == nil, 'the run engine keeps its own 1 s tick')
 
 -- ============================================================================
+--                 CHECKPOINT ROUTE: THE FAR WAIT IN A CAR (Z4)
+-- ============================================================================
+-- At loopScale 4 the far wait would be 4 s: a car at 45 m/s covers the 150 m view distance in one sleep and
+-- passes a checkpoint unseen. In a vehicle it stays at the shipped 1 s.
+
+do
+    _G.cache = _G.cache or {}
+    _G.cache.ped = 77
+    local me = vec3(0.0, 0.0, 30.0)
+    local inCar = 5
+    _G.GetEntityCoords = function() return me end
+    _G.GetVehiclePedIsIn = function() return inCar end
+    local keepMarkers = CP.Markers
+    CP.Markers = CP.Markers
+        or {
+            adopt = function() return nil end,
+            canRoute = function() return false end,
+            hidden = function() return false end,
+            release = function() end,
+            routeColour = function() return 5 end,
+            style = function() return {} end,
+        }
+    H.load('blocks/checkpoint_route/client.lua')
+    local CRc = CP.Blocks.get('checkpoint_route')
+    local ctx = {
+        runId = 'run-z4cr',
+        index = 1,
+        obj = { radius = 10.0 },
+        state = {},
+        report = function() end,
+        hudDetail = function() end,
+    }
+    CRc.prepare(ctx)
+    CRc.start(ctx)
+    CRc.update(ctx, {
+        kind = 'state',
+        points = { { x = 0.0, y = 400.0, z = 30.0 }, { x = 0.0, y = 900.0, z = 30.0 } },
+        current = 1,
+        total = 2,
+        finished = false,
+        track = {},
+        course = {},
+    })
+    Config.Performance.loopScale = 4
+    H.advance(5000, 250)
+    waits = {}
+    H.advance(12000, 250)
+    local far = WaitsOf('blocks/checkpoint_route/client.lua')
+    local most = 0
+    for _, ms in ipairs(far) do if ms > most then most = ms end end
+    H.ok(#far > 0 and most <= 1000, ('in a car at loopScale 4: the far wait stays 1 s (longest %d ms)'):format(most))
+    inCar = 0
+    H.advance(5000, 250)
+    waits = {}
+    H.advance(12000, 250)
+    most = 0
+    for _, ms in ipairs(WaitsOf('blocks/checkpoint_route/client.lua')) do if ms > most then most = ms end end
+    H.eq(most, 4000, 'on foot: the far wait still stretches with loopScale')
+    Config.Performance.loopScale = 1.0
+    CRc.stop(ctx)
+    H.advance(5000, 250)
+    CP.Markers = keepMarkers
+end
+
+-- ============================================================================
 --                                 NUI POLLING
 -- ============================================================================
 

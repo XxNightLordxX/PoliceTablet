@@ -75,9 +75,12 @@ idle minutes after the caches are warm; `tests/nui_bundle_spec.lua` reads `web/d
 | `Config.Performance.pushGapMs = 300`, three pushes of one topic to one player at once | client events | 3 -> 2 (the first at once, the others merged and sent when the gap is over); shipped `0` = 3, as before |
 | `Config.Performance.latentAboveBytes = 2000`, a 200-row list answer to the tablet | reliable events | 1 big reliable reply -> a small reply plus a latent event at `Config.Limits.exportBps`; shipped `0` = as before |
 
-How the push gap merges (`modules/tablet/server.lua` `T.push`): per player and topic; the newer data wins, keys
-only the older table had stay (a hint such as `invited = true` is kept), and `run` and `options` (whole views) are
-never merged. A held push is sent by one `SetTimeout`, not a loop, and `playerDropped` forgets it.
+How the push gap merges (`modules/tablet/server.lua` `T.push`): per player and topic; the newer data wins. A view
+topic (`run`, `options`, `unit`, `calls`, `nav`, `missionControls`, ...) is replaced whole, so a field the newer push
+dropped (`readyCheck`, `activeRunId`) stays dropped; `unit` keeps only its `invited = true` hint. Only the hint
+topics (`board`, `rewards`, `invites`, `test`, `profile`, `payouts`) keep the keys the older table had. Event
+topics (`builder`: one `{ event, id }` per push) are never held (Z4). A held push is sent by one `SetTimeout`, not a
+loop, and `playerDropped` forgets it.
 
 Lazy screens (`web/src/layouts/screens.ts` `lazyScreen`): the Admin UI screens and the Supervisor Mission Builder;
 `App.tsx` loads the criminal tablet the same way. Opening (or switching to) a UI starts loading all of its lazy
@@ -139,7 +142,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/opponents/server.lua | live crime watch | while a case or crew is tracked | 1000 ms (kept) | second deadlines: the lost rule, the disconnect grace, AFK and the trail |
 | modules/operations/server.lua | operations | always | 1000 -> 2000 ms active, 5000 -> 10000 ms idle (scaled) | adaptive; the join window is minutes |
 | modules/spawn/server.lua | open spawn asks | while asks are open | 500 -> 1000 ms | placement timeouts are seconds |
-| modules/units/server.lua | invite expiry, lock safety net | always | 2000 -> 5000 ms, scaled | invites last 120 s; accepting checks the expiry itself |
+| modules/units/server.lua | invite expiry, lock safety net | always | 2000 -> 5000 ms, scaled | invites last 120 s; accepting checks the expiry itself. A ready check has its own timer at the deadline, and Units.ready refuses an answer after it (Z4) |
 | modules/volunteers/server.lua | volunteer window and duty | while someone volunteers | 15 -> 30 s, scaled | the window is minutes |
 | modules/volunteers/match/server.lua | asking, travel, engagement | while a run has a match | 1000 -> 2000 ms | the travel time is minutes |
 | modules/missioncalls/server.lua | call posting and expiry; coalesced push | always | `checkEvery` s; 1000 ms (push only when dirty) | |

@@ -289,6 +289,28 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Criminal tablet: close it with Escape twice in a row (open, Escape, open, Escape quickly): the pause menu never opens, and Escape opens it normally a second later. (LP1)
 - [ ] Search Area, Device Check, Interact Points: the markers show near each clue, device and point as before. Testing debug drawing still draws the test area. (LP1)
 
+## FiveM semantics fixes (Z4)
+
+- [ ] Search Area or Flee and Arrest: drive more than 400 m away from the suspect (or let every officer leave its
+  area) for a minute, then come back: the suspect is still there and alive, the run goes on (no "vanished; counted
+  as dead" in the server console). A parked contact car stays too. (Z4)
+- [ ] Unit of 2, ready check: let the countdown reach 0 and press Ready right after: "Not every unit member answered
+  the ready check in time" shows, no mission starts, the leader sees the timeout cancel at once. (Z4)
+- [ ] Settings → Performance → pushGapMs `500`: start a ready check and decline it: the banner goes away (no stale
+  Yes/No). Two admins in the Mission Builder: break the lock of a mission the other edits: he is told. Back to `0`.
+  (Z4)
+- [ ] Criminal tablet open: an admin opens the Admin UI (`client:openAdmin`), then closes it: the criminal tablet is
+  closed, not left on screen without a cursor. Open it, then log out to character select: it closes. Open it, get
+  downed: it closes; using the item while down says "You can't use the tablet while you are down." (Z4)
+- [ ] Auto-Ready on: go off duty and back on duty within a second, join a unit, stand at the keys: the first ready
+  check is answered for you. (Z4)
+- [ ] Settings → Performance → loopScale `4`: a checkpoint route without medals (Beat Patrol), drive fast at a
+  checkpoint from far away: it counts on the first pass. On foot far away resmon stays as before. Back to `1`. (Z4)
+- [ ] EVOC course: put the course car in a garage (or `/dv`) mid-course and take another car: no "vehicle
+  undriveable" fail and no contact from a stranger car. (Z4)
+- [ ] Volunteer search: say yes, let an officer drive up to you within the first minute, then press Cancel this
+  case: it is a strike. Cancel within the first minute with no officer near: no strike, as before. (Z4)
+
 ## Resmon (OP1)
 
 - [ ] No run, tablet closed, Config.Debug off: resmon shows Crimson-Police at 0.00-0.01 ms on the client.

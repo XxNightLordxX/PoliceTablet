@@ -275,8 +275,19 @@ function T.panelFocusOwner()
     return state.panelOwner
 end
 
+-- The criminal tablet holds the panel focus with a UI of its own: it closes (open = false to the NUI, the volunteer
+-- side told) whenever the focus is dropped or taken over, never only loses its focus.
+local function CloseCrimTab()
+    if state.panelOwner ~= 'crimtab' then return false end
+    local ct = CP.CrimTab
+    if not (ct and ct.close) then return false end
+    local ok, closed = pcall(ct.close)
+    return ok and closed == true
+end
+
 -- Drops the panel focus whoever holds it (arena placement, unload, resource stop).
 local function ReleasePanelFocus()
+    CloseCrimTab()
     local owner = state.panelOwner
     if owner == nil then return false end
     return T.panelFocus(owner, false)
@@ -422,6 +433,7 @@ local function ShowUi(ui, session, opts)
     state.openSeq = state.openSeq + 1
     T.send({ type = 'open', ui = ui, session = session, screen = opts.screen, seq = state.openSeq })
     -- The tablet takes the NUI focus over from a panel (CP.Tablet.panelFocus); closing it releases it.
+    CloseCrimTab()
     state.panelOwner = nil
     SetNuiFocus(true, true)
     WatchAck(state.openSeq)

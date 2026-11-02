@@ -1059,6 +1059,22 @@ do
     Runs.endRun(run, 'completed', 'completed')
 end
 
+-- Z4: every run entity is KeepEntity (orphan mode 2), so OneSync never deletes it when no player is near
+do
+    local orphan = {}
+    local was = _G.SetEntityOrphanMode
+    _G.SetEntityOrphanMode = function(h, mode) orphan[h] = mode end
+    local run = StartedRun({ 1 })
+    local ped = Runs.spawnPed(run, { obj = 1, model = 'a_m_y_stbla_01', coords = vec4(101, 101, 30, 0) })
+    local veh = Runs.spawnVehicle(run, { obj = 1, model = 'sultan', coords = vec4(105, 101, 30, 0) })
+    local obj = Runs.spawnObject(run, { obj = 1, model = 'prop_box_wood02a', coords = vec3(103, 101, 30) })
+    H.eq(orphan[ped], 2, 'orphan mode: a run ped is KeepEntity')
+    H.eq(orphan[veh], 2, 'orphan mode: a run vehicle is KeepEntity')
+    H.eq(orphan[obj], 2, 'orphan mode: a run object is KeepEntity')
+    Runs.endRun(run, 'completed', 'completed')
+    _G.SetEntityOrphanMode = was
+end
+
 -- ============================================================================
 --                      7. HIDDEN SPAWNS, ARM AND THE CAPS
 -- ============================================================================

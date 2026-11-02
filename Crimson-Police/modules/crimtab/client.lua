@@ -4,14 +4,19 @@ CP.CrimTab = CP.CrimTab or {}
 local C = CP.CrimTab
 local TAG = 'crimtab'
 local OWNER = 'crimtab'
-local PAUSE_CONTROL = 200 -- INPUT_FRONTEND_PAUSE_ALTERNATE (Escape)
+local PAUSE_CONTROL = 200       -- INPUT_FRONTEND_PAUSE_ALTERNATE (Escape)
+local DOWN_WATCH_MS = 1000      -- how often a downed user is looked for while it is open
 
-local state = { open = false, opening = false, registered = nil, refreshing = false, again = false }
+local state = { open = false, opening = false, registered = nil, refreshing = false, again = false, token = 0 }
 
 local function Send(msg) SendNUIMessage(CP.U.serialize(msg)) end
 
 local function Toast(kind, key)
     if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(kind, CP.L(key)) end
+end
+
+local function PlayerDown()
+    return CP.Tablet ~= nil and CP.Tablet.playerDown ~= nil and CP.Tablet.playerDown() == true
 end
 
 function C.isOpen() return state.open end
@@ -65,6 +70,10 @@ function C.open(screen)
     end
     if state.opening then return false end
     if CP.Tablet and CP.Tablet.isOpen and CP.Tablet.isOpen() then return false end
+    if PlayerDown() then
+        Toast('error', 'err.downed')
+        return false
+    end
     state.opening = true
     local view, err = Fetch()
     state.opening = false
@@ -80,6 +89,21 @@ function C.open(screen)
     if not screen then screen = view.active and 'active' or (view.jobs and view.jobs[1]) and 'jobs' or nil end
     Send({ type = 'crimtab', open = true, view = view, screen = screen })
     CP.log(TAG, 'criminal tablet opened')
+    -- the user went down with it open: it closes, as the officer tablet does (its focus is never left over the
+    -- death or last stand screen)
+    state.token = state.token + 1
+    local token = state.token
+    CreateThread(function()
+        while state.open and state.token == token do
+            Wait(CP.Perf.ms(DOWN_WATCH_MS))
+            if not state.open or state.token ~= token then return end
+            if PlayerDown() then
+                CP.log(TAG, 'the user went down: closing the criminal tablet')
+                C.close()
+                return
+            end
+        end
+    end)
     return true
 end
 

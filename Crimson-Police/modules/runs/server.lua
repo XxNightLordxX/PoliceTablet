@@ -1421,6 +1421,9 @@ local function Track(run, entity, kind, opts, extraCfg)
         DeleteEntity(entity)
         return nil
     end
+    -- KeepEntity: the default deletes it once no player is near, and the bookkeeping would then count a
+    -- healthy suspect as dead or a parked car as removed; run end and corpse cleanup delete it themselves
+    if SetEntityOrphanMode then SetEntityOrphanMode(entity, 2) end
     local netId = NetIdOf(entity)
     if not netId then
         DeleteEntity(entity)

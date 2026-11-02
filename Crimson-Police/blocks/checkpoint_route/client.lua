@@ -361,6 +361,10 @@ local function Loop(ctx, st)
                     sleep = 0
                     DrawMarkers(ctx, st, d, pos)
                     CheckInside(ctx, st, d, pos, veh, t)
+                elseif veh ~= 0 and sleep > IDLE_MS then
+                    -- in a vehicle the far wait never stretches with loopScale: a fast car covers the whole
+                    -- view distance in a 4 s sleep and drives through the checkpoint unseen
+                    sleep = IDLE_MS
                 end
                 if st.courseRunning then
                     if sleep > SAMPLE_MS then sleep = SAMPLE_MS end

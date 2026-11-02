@@ -434,6 +434,23 @@ do
     H.eq(V.matchView(run, 2).phase, 'npc', 'the NPC plays the suspect')
     Finish(run, 'completed', 'completed')
 
+    -- Z4: officers reached him a moment ago, before the match tick saw it: a cancel in the grace is a strike
+    Reset()
+    run = NewRun()
+    Answer(10, LastAsk(10), true)
+    H.step(0)
+    H.advance(10000, 1000)
+    local before = V.strikes('VMA00001')
+    recs.VMA00001.contactAt = H.clockMs
+    H.fire(CP.e('server:volunteer'), 10, 'cancel')
+    H.step(0)
+    H.eq(V.strikes('VMA00001'), before + 1, 'a cancel after officers reached him is a strike, even in the grace')
+    Finish(run, 'completed', 'completed')
+    -- back to the strikes the cases below count from
+    V.clearStrikes('VMA00001')
+    H.step(0)
+    for _ = 1, before do V.strike('VMA00001', 'no_show') end
+
     -- onVoid 'end' + a cancel after the grace: a strike and the run is cancelled
     Reset()
     Config.Volunteers.onVoid = 'end'

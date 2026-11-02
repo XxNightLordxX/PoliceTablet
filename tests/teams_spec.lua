@@ -1635,6 +1635,26 @@ H.eq(LastCancel().who[1], 2, 'member 2')
 H.eq(LastNote(1, 'unit.ready.cancel_timeout').vars.names, 'Maria Lopez', 'the leader told who did not answer')
 H.eq(u.locked, false, 'unlocked after a timeout')
 
+-- Z4: an answer after the deadline never counts, even before the sweep has run (LP2 made it 5 s x loopScale)
+Clear()
+local readyBefore = readyCalls
+StartCheck(u)
+Act('server:unitReady', 3, true)
+H.time = H.time + 20
+ok, data = Act('server:unitReady', 2, true)
+H.eq(data, 'err.unit_ready_timeout', 'late ready: refused after expiresAt')
+H.eq(readyCalls, readyBefore, 'late ready: no mission starts after the deadline')
+H.eq(U.readyCheckOf(u), nil, 'late ready: the check is cancelled at once')
+H.eq(LastCancel().key, 'err.unit_ready_timeout', 'late ready: cancelled as a timeout')
+H.eq(LastCancel().who[1], 2, 'late ready: naming the member who did not answer in time')
+-- and the timer cancels it on the deadline, without waiting for the sweep
+Clear()
+StartCheck(u)
+H.time = H.time + 20
+H.step(20000)
+H.eq(U.readyCheckOf(u), nil, 'timer: the check is cancelled on its deadline, no sweep needed')
+H.eq(LastCancel().key, 'err.unit_ready_timeout', 'timer: as a timeout')
+
 -- A pending check keeps the lock-grace safety net away.
 Config.Units.readyTimeout = 40
 StartCheck(u)

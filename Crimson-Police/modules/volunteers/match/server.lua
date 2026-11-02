@@ -642,7 +642,10 @@ function V.cancelCase(src)
     local m = cid and byCid[cid] and matches[byCid[cid]] or nil
     if not m or m.cid ~= cid or m.src ~= src or not CANCEL_PHASES[m.phase] then return false, 'no_case' end
     local grace = math.floor(Num(Cfg().cancelGraceSeconds, 60, 0, 600)) * 1000
-    local free = not m.engagedAt and GetGameTimer() - (m.yesAt or 0) <= grace
+    -- officers within contactRange count at once (CP.Opponents' contactAt), not only on the next match tick
+    local _, rec = Opp('byCid', m.cid)
+    local reached = m.engagedAt or (type(rec) == 'table' and rec.contactAt)
+    local free = not reached and GetGameTimer() - (m.yesAt or 0) <= grace
     Voided(m, 'cancelled', not free)
     return true
 end

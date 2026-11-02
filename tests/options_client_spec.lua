@@ -25,7 +25,15 @@ Defs.add('test_board', { kind = 'enum', values = { 'list', 'cards' }, default = 
 local changed = {}
 CP.Hooks.on('options:changed', function(key) changed[#changed + 1] = key end)
 
+-- the duty listener of modules/access/client.lua (Z4)
+local dutyListeners = {}
+local hadQbx = CP.Qbx
+CP.Qbx = {
+    onUnload = function() end,
+    onDutyChange = function(fn) dutyListeners[#dutyListeners + 1] = fn end,
+}
 H.load('modules/access/client.lua')
+CP.Qbx = hadQbx
 H.load('modules/options/client.lua')
 local O = CP.Options
 
@@ -419,6 +427,20 @@ do
     Check()
     H.eq(AutoAnswers(), 1, 'the officer\'s own option off: nothing is sent')
     pressed[32] = nil
+    -- Z4: off duty, then on again: the watcher starts with the new session, so the first check sees the keys
+    CP.Access.setSession(Session({ autoReady = true }, nil))
+    H.advance(1000)
+    H.eq(#dutyListeners, 1, 'access listens to duty changes')
+    for _, fn in ipairs(dutyListeners) do fn(false) end
+    H.advance(1000)
+    CP.Access.setSession(Session({ autoReady = true }, nil))
+    pressed[32] = true
+    H.advance(1000)
+    pressed[32] = nil
+    Check()
+    H.eq(AutoAnswers(), 2, 'off and on duty: the first ready check is answered')
+    CP.Access.setSession(Session({ autoReady = false }, nil))
+    H.advance(1000)
     Config.OfficerOptions.allow.autoReady = keepAllow
 end
 

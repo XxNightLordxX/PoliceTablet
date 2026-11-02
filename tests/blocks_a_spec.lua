@@ -63,6 +63,11 @@ _G.DoesEntityExist = function(ent)
     if props[ent] then return true end
     return ent ~= nil and ent ~= 0
 end
+_G.GetEntityType = function(ent)
+    if vehicles[ent] then return vehicles[ent].type or 2 end
+    if props[ent] then return 3 end
+    return 0
+end
 _G.GetVehicleEngineHealth = function(ent) return vehicles[ent] and vehicles[ent].engine or 0.0 end
 _G.GetVehicleBodyHealth = function(ent) return vehicles[ent] and vehicles[ent].body or 0.0 end
 _G.GetVehiclePetrolTankHealth = function(ent) return vehicles[ent] and vehicles[ent].tank or 0.0 end
@@ -767,6 +772,29 @@ do -- undriveable
     H.ok(okE == false and why == 'not_tracked', 'failIfUndriveable = false ignores the report')
     H.eq(#c3.calls.fail, 0, 'no fail when off')
     vehicles[6001].engine = 1000.0
+end
+
+do -- Z4: the course car removed mid-course and its net id given to another entity
+    local ctx, st = Evoc()
+    ctx.obj.failIfUndriveable = true
+    At(1, st.points[1])
+    CR.onEvent(ctx, 1, { type = 'checkpoint', index = 1 })
+    CR.tick(ctx, 1)
+    H.eq(st.vehicles[1], 61, 'recycled id: the course car is stored')
+    H.ok(st.healthy[61], 'recycled id: it was seen healthy')
+    -- the car goes to the garage; OneSync names a wrecked stranger (another car, then a ped) with id 61
+    vehicles[6001].exists = false
+    byNet[61] = nil
+    AddVehicle(9101, 61, { engine = -100.0, body = 100.0 })
+    H.players[1].vehicle = nil
+    CR.tick(ctx, 1)
+    H.eq(#ctx.calls.fail, 0, 'recycled id: a wrecked stranger under the old id never fails the run')
+    H.eq(st.body[61].min, 1000.0, 'recycled id: its body health is not read as a contact')
+    H.eq(st.vehicles[1], nil, 'recycled id: the gone car is forgotten')
+    local okE, why = CR.onEvent(ctx, 1, { type = 'undriveable', netId = 61 })
+    H.ok(okE == false and why == 'not_course_vehicle', 'recycled id: an undriveable report for it is refused')
+    vehicles[9101] = nil
+    byNet[61] = nil
 end
 
 -- ============================================================================

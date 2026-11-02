@@ -109,6 +109,8 @@ CreateThread(function()
         if not onDuty then
             current = nil
             roles.officer, roles.supervisor = false, false
+            -- as A.clear: the options snapshot follows, so the next session's autoReady is a change again
+            OptionsChanged()
         end
     end)
 end)

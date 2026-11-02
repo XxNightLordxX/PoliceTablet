@@ -113,6 +113,31 @@ do
     local run = Pushes(1, 'run')
     H.ok(#run == 2 and run[2].offRoute == nil, 'a run view is never merged: the newest only')
 
+    -- Z4: every view topic is replaced, not merged; event topics are never held
+    H.events = {}
+    T.push(1, 'unit', { unitId = 7, readyCheck = { typeLabel = 'x' } })
+    T.push(1, 'unit', { unitId = 7, readyCheck = { typeLabel = 'x' } })
+    T.push(1, 'unit', { unitId = 7 })
+    Adv(400, 100)
+    unit = Pushes(1, 'unit')
+    H.ok(#unit == 2 and unit[2].readyCheck == nil, 'a finished ready check is not kept by the merge')
+    H.events = {}
+    T.push(1, 'calls', { list = {}, activeRunId = 'r1' })
+    T.push(1, 'calls', { list = {}, activeRunId = 'r1' })
+    T.push(1, 'calls', { list = {} })
+    Adv(400, 100)
+    local calls = Pushes(1, 'calls')
+    H.ok(#calls == 2 and calls[2].activeRunId == nil, 'a calls view that dropped activeRunId stays dropped')
+    H.events = {}
+    T.push(1, 'builder', { event = 'changed', id = 'A' })
+    T.push(1, 'builder', { event = 'lockBroken', id = 'A' })
+    T.push(1, 'builder', { event = 'changed', id = 'B' })
+    local builder = Pushes(1, 'builder')
+    H.eq(#builder, 3, 'builder events are never held: each goes at once')
+    H.ok(builder[2] and builder[2].event == 'lockBroken' and builder[2].id == 'A', 'the lock break reaches the editor')
+    Adv(400, 100)
+    H.eq(#Pushes(1, 'builder'), 3, 'and nothing is sent twice')
+
     H.events = {}
     T.push(1, 'board', { a = 1 })
     T.push(1, 'board', { a = 2 })

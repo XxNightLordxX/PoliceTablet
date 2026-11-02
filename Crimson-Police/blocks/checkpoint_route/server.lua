@@ -178,8 +178,20 @@ local function VehicleRequired(obj)
     return obj.policeVehicle ~= false
 end
 
-local function SampleVehicle(st, netId)
+-- The course vehicle under netId, or 0: only the very entity stored at the checkpoint, and only while it is a
+-- vehicle. A net id OneSync gave to another entity after the car was removed (garage, /dv, impound) is never read
+-- as the officer's car.
+local function CourseVehicle(st, netId)
     local ent = EntityOf(netId)
+    if ent == 0 then return 0 end
+    local want = st.vehEnt and st.vehEnt[netId]
+    if want and ent ~= want then return 0 end
+    if GetEntityType(ent) ~= 2 then return 0 end
+    return ent
+end
+
+local function SampleVehicle(st, netId)
+    local ent = CourseVehicle(st, netId)
     if ent == 0 then return 0, nil end
     local body = tonumber(GetVehicleBodyHealth(ent))
     if body then
@@ -265,6 +277,7 @@ local function Ensure(ctx)
     st.trackContacts = (tonumber(obj.contactPenalty) or 0) > 0 or st.medals ~= nil
     st.contacts, st.penalty = 0, 0
     st.near, st.vehicles, st.lastContact, st.body, st.healthy = {}, {}, {}, {}, {}
+    st.vehEnt = {} -- netId -> the entity stored with it (CourseVehicle)
     return st
 end
 
@@ -364,6 +377,8 @@ local function OnCheckpoint(ctx, st, src, ev)
         local netId = NetworkGetNetworkIdFromEntity(veh)
         if netId and netId ~= 0 then
             st.vehicles[src] = netId
+            st.vehEnt = st.vehEnt or {}
+            st.vehEnt[netId] = veh
             SampleVehicle(st, netId)
         end
     end
@@ -400,7 +415,8 @@ local function OnUndriveable(ctx, st, src, ev)
     local netId = Idx(ev.netId)
     local ent = EntityOf(netId)
     if ent == 0 then return false, 'no_vehicle' end
-    local mine = st.vehicles[src] == netId or VehicleOf(src) == ent or VehicleOf(src, true) == ent
+    local mine = (st.vehicles[src] == netId and CourseVehicle(st, netId) == ent) or VehicleOf(src) == ent
+        or VehicleOf(src, true) == ent
     if not mine then return false, 'not_course_vehicle' end
     local engine = tonumber(GetVehicleEngineHealth(ent))
     local tank = type(GetVehiclePetrolTankHealth) == 'function' and tonumber(GetVehiclePetrolTankHealth(ent)) or nil
@@ -580,8 +596,14 @@ CP.Blocks.register(BLOCK, {
         end
         -- Course vehicles: body health for no_contact, engine health for the undriveable fail.
         if st.courseStartMs then
-            for _, netId in pairs(st.vehicles) do
+            for src, netId in pairs(st.vehicles) do
                 local ent, engine = SampleVehicle(st, netId)
+                if ent == 0 then
+                    -- the car is gone (or its id now names another entity): forget it, never read the stranger
+                    st.vehicles[src] = nil
+                    if st.vehEnt then st.vehEnt[netId] = nil end
+                    st.healthy[netId] = nil
+                end
                 if ctx.obj.failIfUndriveable == true and ent ~= 0 and engine and engine <= 0 and st.healthy[netId] then
                     st.failed = true
                     ctx.fail('block.checkpoint_route.fail_undriveable')
@@ -687,6 +709,7 @@ CP.Blocks.register(BLOCK, {
         st.startMs = Now()
         st.courseStartMs = (ctx.obj.timerStart == 'start') and st.startMs or nil
         st.near, st.vehicles, st.lastContact, st.body, st.healthy = {}, {}, {}, {}, {}
+        st.vehEnt = {} -- netId -> the entity stored with it (CourseVehicle)
         HoldTimer(ctx, st, false)
         if WantsHold(ctx, st) then HoldTimer(ctx, st, true) end
         SendState(ctx, st)

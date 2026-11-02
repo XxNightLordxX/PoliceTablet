@@ -289,6 +289,15 @@ local function CancelCheck(unit, reasonKey, who, toastKey)
     return true
 end
 
+-- The deadline passed: cancel it for the members who have not answered (Units.ready, the timer, the sweep).
+local function TimeoutCheck(unit, check)
+    local who = {}
+    for _, m in ipairs(check.members) do
+        if not check.answers[m] then who[#who + 1] = m end
+    end
+    return CancelCheck(unit, 'err.unit_ready_timeout', who, 'unit.ready.cancel_timeout')
+end
+
 local function FinishCheck(unit, check)
     if check.done then return end
     check.done = true
@@ -594,6 +603,13 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
         end
     end
     PushUnit(unit)
+    -- the deadline on time, not on the next (loopScale-stretched) sweep
+    SetTimeout(timeout * 1000, function()
+        if readyChecks[unit.id] == check and not check.done and units[unit.id] == unit
+            and os.time() >= check.expiresAt then
+            TimeoutCheck(unit, check)
+        end
+    end)
     CP.log(TAG, 'unit %d: ready check for %s (%d s)', unit.id, tostring(typeKey), timeout)
     return true
 end
@@ -645,6 +661,11 @@ function Units.ready(src, accepted, auto)
     local unit = Units.unitOf(src)
     local check = unit and readyChecks[unit.id]
     if not check or check.done or not IndexOf(check.members, src) then return false, 'err.unit_ready_none' end
+    -- an answer after the deadline never counts, even before the sweep or the timer has cancelled it
+    if os.time() >= check.expiresAt then
+        TimeoutCheck(unit, check)
+        return false, 'err.unit_ready_timeout'
+    end
     if auto then
         if not accepted then return false, 'err.invalid_payload' end
         if check.answers[src] then return false, 'err.unit_ready_answered' end
@@ -699,11 +720,7 @@ local function SweepChecks(now)
             readyChecks[id] = nil
         elseif check and not check.done then
             if now >= check.expiresAt then
-                local who = {}
-                for _, m in ipairs(check.members) do
-                    if not check.answers[m] then who[#who + 1] = m end
-                end
-                CancelCheck(unit, 'err.unit_ready_timeout', who, 'unit.ready.cancel_timeout')
+                TimeoutCheck(unit, check)
             else
                 for _, m in ipairs(check.members) do
                     if check.done then break end

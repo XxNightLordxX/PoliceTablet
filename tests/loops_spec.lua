@@ -123,6 +123,53 @@ Config.OfficerOptions.allow.autoReady = keepAllow
 -- ============================================================================
 --                               CRIMINAL TABLET
 -- ============================================================================
+-- Z4: it closes (open = false to the NUI) whenever its focus is dropped or taken, and when its user goes down.
+
+do
+    local C, T = CP.CrimTab, CP.Tablet
+    local nui, keepSend, keepReq = {}, _G.SendNUIMessage, CP.Net.request
+    _G.SendNUIMessage = function(m) nui[#nui + 1] = m end
+    CP.Net.request = function(name)
+        if name == 'crimtab:get' then return { ok = true, data = { jobs = {} } } end
+        return { ok = false, error = 'err.internal' }
+    end
+    local function Closed()
+        for i = #nui, 1, -1 do
+            local m = nui[i]
+            if type(m) == 'table' and m.type == 'crimtab' then return m.open == false end
+        end
+        return false
+    end
+    H.ok(C.open(), 'crimtab: opens')
+    H.eq(T.panelFocusOwner(), 'crimtab', 'crimtab: holds the panel focus')
+    H.fire('QBCore:Client:OnPlayerUnload')
+    H.advance(500, 250)
+    H.ok(not C.isOpen() and Closed(), 'crimtab: unload closes it, not only its focus')
+    H.eq(T.panelFocusOwner(), nil, 'crimtab: the focus is released')
+
+    nui = {}
+    H.ok(C.open(), 'crimtab: opens again')
+    H.fire('crimson-police:client:openAdmin', nil, { ui = 'admin', roles = { admin = true } })
+    H.advance(500, 250)
+    H.ok(not C.isOpen() and Closed(), 'crimtab: the Admin UI taking the focus closes it')
+    T.close()
+    H.advance(500, 250)
+
+    local keepDead = _G.IsEntityDead
+    local dead = false
+    _G.IsEntityDead = function() return dead end
+    nui = {}
+    H.ok(C.open(), 'crimtab: opens while up')
+    dead = true
+    H.advance(2500, 250)
+    H.ok(not C.isOpen() and Closed(), 'crimtab: going down closes it')
+    H.ok(not C.open(), 'crimtab: refused while down')
+    dead = false
+    _G.IsEntityDead = keepDead
+    _G.SendNUIMessage, CP.Net.request = keepSend, keepReq
+    H.advance(1000, 250)
+end
+
 -- One Escape guard thread, extended by a second close.
 
 waits = {}

@@ -759,16 +759,28 @@ local function PushGapMs()
     return math.max(0, math.min(ms, 2000))
 end
 
--- Two pushes of one topic merged into one: the newer data wins; when both are tables, the keys only the older one
--- has stay (a hint such as invited = true is not lost). 'run' and 'options' carry the whole view: the newer one only.
-local WHOLE_VIEW = { run = true, options = true }
+-- Two pushes of one topic merged into one: the newer data wins. Most topics carry the whole view (run, options, unit,
+-- calls, nav, ...), so the newer one replaces the held one and a field it dropped (readyCheck = nil) stays dropped.
+-- Only the hint topics merge: the keys only the older one has stay (board = { unit = true } then { tod = true }).
+-- 'unit' keeps its invited = true hint for the same unit (the units client plays the invite cue on it).
+local HINT_TOPICS = { board = true, rewards = true, invites = true, test = true, profile = true, payouts = true }
 local function MergePush(topic, old, new)
-    if WHOLE_VIEW[topic] or type(old) ~= 'table' or type(new) ~= 'table' then return new end
+    if type(old) ~= 'table' or type(new) ~= 'table' then return new end
+    if topic == 'unit' and old.invited and new.invited == nil and (old.unitId == nil or old.unitId == new.unitId) then
+        local out = {}
+        for k, v in pairs(new) do out[k] = v end
+        out.invited = old.invited
+        return out
+    end
+    if not HINT_TOPICS[topic] then return new end
     local out = {}
     for k, v in pairs(old) do out[k] = v end
     for k, v in pairs(new) do out[k] = v end
     return out
 end
+
+-- Event topics: each push is one event ({ event, id, by }); two merged would lose one, so they are never held.
+local EVENT_TOPICS = { builder = true }
 
 local function SendPush(n, topic, data)
     local sent = pushSentAt[n]
@@ -794,7 +806,9 @@ function T.push(src, topic, data)
     if not n or type(topic) ~= 'string' or topic == '' then return false end
     local gap = PushGapMs()
     local held = pushHeld[n] and pushHeld[n][topic]
-    if held then
+    if EVENT_TOPICS[topic] then
+        SendPush(n, topic, data)
+    elseif held then
         held.data = MergePush(topic, held.data, data)
     elseif gap > 0 and pushSentAt[n] and pushSentAt[n][topic] and GetGameTimer() - pushSentAt[n][topic] < gap then
         pushHeld[n] = pushHeld[n] or {}
