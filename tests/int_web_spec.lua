@@ -433,7 +433,9 @@ end
 do
     local home = Read(WEB .. 'admin/screens/Home.tsx') or ''
     local forms = Read(WEB .. 'admin/components/HomeForms.tsx') or ''
-    Has(home, 'const forms = useSession().config?.adminUi?.homeForms !== false;', 'the forms follow the config')
+    Has(home, 'const forms = adminUi?.homeForms !== false;', 'the forms follow the config')
+    -- H5: the Needs attention panel follows Config.AdminUi.needsAttention (shipped off)
+    Has(home, 'const attention = adminUi?.needsAttention === true;', 'the Needs attention panel follows the config')
     for _, f in ipairs({ 'MissionSwitchForm', 'PayForm', 'PointsForm', 'QuickSettingsForm' }) do
         Has(home, '<' .. f .. ' />', 'Home shows the ' .. f)
         Has(forms, 'export function ' .. f .. '()', f .. ' is in HomeForms')

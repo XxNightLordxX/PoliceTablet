@@ -162,6 +162,8 @@ const CONFIG: Session['config'] = {
                 : ['Balance change', 'Event', 'Correction'],
         // ?plainLayout: the Admin UI plain layout (Config.AdminUi.plainLayout = true, step G6)
         plainLayout: typeof window !== 'undefined' && /[?&]plainLayout\b/.test(window.location.search),
+        // ?needsAttention: Home's Needs attention panel (Config.AdminUi.needsAttention = true, step H5)
+        needsAttention: typeof window !== 'undefined' && /[?&]needsAttention\b/.test(window.location.search),
         // ?rewardsScreen: the Rewards screen (Config.AdminUi.rewardsScreen = true, step H1)
         rewardsScreen: typeof window !== 'undefined' && /[?&]rewardsScreen\b/.test(window.location.search),
     },

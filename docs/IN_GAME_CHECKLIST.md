@@ -218,6 +218,12 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Mission controls: Department notices shows Post a notice and Running now (n); End asks for a second click. Department Report: Field training shows Pairings (n). (H4)
 - [ ] `Config.Tablet.supervisorControlsCard = true`: Department Report shows Your controls today; give 10 points to an officer, open Department Report again: the Give points row is up by 10; a control the admin switches off leaves the card. Shipped `false`: no card. (H4)
 
+## Admin Home Needs attention and plain titles (H5)
+
+- [ ] Shipped config: Admin UI Home looks as before (no Needs attention panel); every screen title is as before. (H5)
+- [ ] `Config.AdminUi.needsAttention` On in Settings: Home shows Needs attention on top with Problems, Refused starts today, Open disputes, Flagged runs waiting for review and (with live crimes or volunteers on) Open player suspect cases. File a dispute from an officer: Open disputes goes to 1 within a minute; click it: Officers opens on Disputes. Click Problems: Server health opens on Problems. (H5)
+- [ ] `Config.AdminUi.plainLayout` On: the title inside Live reads "Running now", Payouts "Mission pay", Permissions "Who can do what"; Off: "Live", "Payouts", "Permissions". (H5)
+
 ## Restarts and logout
 
 - [ ] Start the server: the console shows the database or saves folder at version 11 (10 after O1, 11 after P1). (O1, P1)

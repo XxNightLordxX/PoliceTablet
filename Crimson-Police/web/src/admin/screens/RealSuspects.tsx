@@ -63,6 +63,7 @@ import {
     type RsCaseFilter,
     type RsToolForm,
 } from '../components/realSuspects';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './RealSuspects.css';
 
 type Tab = 'cases' | 'pairs' | 'volunteers';
@@ -898,6 +899,7 @@ function VolunteersTab({ req: { data, loading, error, refetch } }: { req: UseReq
 }
 
 export default function RealSuspects() {
+    const screenTitle = useAdminTitle('admin_rs');
     const [tab, setTab] = useState<Tab>('cases');
     const [openRun, setOpenRun] = useState<string | null>(null);
     const [tool, setTool] = useState<Partial<RsToolForm> | null>(null);
@@ -905,7 +907,7 @@ export default function RealSuspects() {
     const cases = useRequest<RsCasesData>('admin:getRsCases', {});
     const data = cases.data;
     return (
-        <Screen title={t('ui.screen.admin_rs')} subtitle={t('rs.ui.subtitle')}>
+        <Screen title={screenTitle} subtitle={t('rs.ui.subtitle')}>
             {data && !data.enabled ? (
                 <div className="rs-banner" role="status">
                     <Icon name="info" size={16} />

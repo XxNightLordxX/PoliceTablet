@@ -35,6 +35,7 @@ import type { PayoutAdjustPreview, PayoutAdjustRow } from '../../types/admin_eco
 import type { AdminPayoutMission, AdminPayoutType, AdminPayoutsView } from '../../types/economy';
 import { PreviewTable, useAdminAction } from '../components/kit';
 import { ReasonChips } from '../components/ReasonChips';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Payouts.css';
 
 const REASON_MAX = 255;
@@ -409,6 +410,7 @@ function AdjustDialog({ open, onClose, onDone }: { open: boolean; onClose: () =>
 }
 
 export default function AdminPayouts() {
+    const screenTitle = useAdminTitle('admin_payouts');
     const { data, loading, error, refetch } = useRequest<AdminPayoutsView>(
         'admin:getPayouts',
         {},
@@ -681,7 +683,7 @@ export default function AdminPayouts() {
 
     return (
         <Screen
-            title={t('ui.screen.admin_payouts')}
+            title={screenTitle}
             subtitle={t('admin.payouts.subtitle')}
             actions={
                 data ? (

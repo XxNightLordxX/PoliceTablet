@@ -195,6 +195,16 @@ do
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.rewardsScreen, true,
         'rewardsScreen on: the session asks for it')
     Config.AdminUi.rewardsScreen = false
+    -- Config.AdminUi.needsAttention (H5): Home's Needs attention panel, shipped off
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.needsAttention, false,
+        'needsAttention ships off: Home as before')
+    Config.AdminUi.needsAttention = true
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.needsAttention, true,
+        'needsAttention on: the session asks for the panel')
+    Config.AdminUi.needsAttention = 'yes'
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.needsAttention, false,
+        'needsAttention: anything but true is off')
+    Config.AdminUi.needsAttention = false
     -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
     H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
     Config.LiveCrime.enabled = true

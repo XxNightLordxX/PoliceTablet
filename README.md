@@ -1783,7 +1783,15 @@ the same checks as the Settings screen). **Open** on each tile still opens the f
 open their screen, set `Config.AdminUi.homeForms = false` (Admin UI → **Settings**): Quick settings then searches
 Settings for what you type, Give or take points opens that officer when you type a citizen ID. **Something wrong?** lists the last mission load (loaded and
 refused), Config health warnings, System problems, stuck payments and **Refused starts today** (opens Live →
-**Refused**); click a line to open its screen. To open the
+**Refused**); click a line to open its screen.
+
+**Needs attention** (`Config.AdminUi.needsAttention`, Admin UI → **Settings**, shipped `false` = no such panel) puts a
+panel on top of Home with what is waiting for you, each line a count that opens its screen: **Problems** (System →
+Problems), **Refused starts today** (Live → Refused), **Open disputes** (Officers → Disputes), **Flagged runs waiting
+for review** (Leaderboards, one per run, your own left out) and **Open player suspect cases** (Real suspects; only
+while you have that screen). It loads in one request and refreshes every minute; it only reads.
+
+To open the
 panel straight on Payouts or Missions instead (with no Home), set `Config.AdminUi.landing = 'payouts'` or
 `'missions'` (Admin UI → **Settings**).
 
@@ -1825,7 +1833,8 @@ reorganizes the Admin UI for owners who want plain words and fewer places to loo
 Home stays on top. A **Find a screen or setting** box over the sidebar lists the screens whose plain name, old name
 or group matches what you type (Enter opens the first), plus **Search settings for "..."**, which opens Settings with
 those words in its search box. A breadcrumb over each screen (Home › group › screen) shows where you are; click Home
-to go back. Only the layout changes: every screen keeps its permission and its links (the screen keys stay the same,
+to go back. The title inside each screen uses the same plain name (Running now, Mission pay, Who can do
+what, ...). Only the layout changes: every screen keeps its permission and its links (the screen keys stay the same,
 so saved links and notifications still open the right screen), and a group with nothing you may see is not shown.
 
 ### 9.4 The missions

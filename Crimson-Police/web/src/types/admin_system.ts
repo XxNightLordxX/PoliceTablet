@@ -115,6 +115,16 @@ export interface ProblemsData {
     tags: string[];
 }
 
+// admin:getNeedsAttention (step H5, Config.AdminUi.needsAttention): Home's Needs attention panel in one answer.
+export interface NeedsAttentionData {
+    problems: number;
+    refusedToday: number;
+    disputes: number;
+    flagged: number;
+    // null / missing: the admin has no Player suspects screen (no key, or live crimes and volunteers off)
+    rsCases?: number | null;
+}
+
 export interface ResourceView {
     name: string;
     state: string;

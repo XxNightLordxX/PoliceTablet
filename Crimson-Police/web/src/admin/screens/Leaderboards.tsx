@@ -60,6 +60,7 @@ import { RunDialog } from '../components/officers/OfficerRuns';
 import { newRequestId } from '../components/kit';
 import { ReasonChips } from '../components/ReasonChips';
 import type { OfficerPoints } from '../../types/admin_officers';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Leaderboards.css';
 
 const AWARD_MAX = 10000; // modules/corrections: -10,000 to +10,000 points per adjustment (not 0)
@@ -265,6 +266,7 @@ function ViewTabs({ value, onChange }: { value: AdminBoardsView; onChange: (v: A
 }
 
 export default function AdminLeaderboards() {
+    const screenTitle = useAdminTitle('admin_leaderboards');
     const session = useSession();
     const { run, busy } = useAction();
     const departments = asList(session.config?.departments);
@@ -564,7 +566,7 @@ export default function AdminLeaderboards() {
     if (view === 'recognition') {
         return (
             <Screen
-                title={t('ui.screen.admin_leaderboards')}
+                title={screenTitle}
                 subtitle={t('ui.admin_officers.recognition.subtitle')}
                 className="boards-admin-boards"
             >
@@ -576,11 +578,7 @@ export default function AdminLeaderboards() {
 
     if (view === 'rewards') {
         return (
-            <Screen
-                title={t('ui.screen.admin_leaderboards')}
-                subtitle={t('admin.rewards.subtitle')}
-                className="boards-admin-boards"
-            >
+            <Screen title={screenTitle} subtitle={t('admin.rewards.subtitle')} className="boards-admin-boards">
                 <ViewTabs value={view} onChange={setView} />
                 <ItemRewardsPanel />
             </Screen>
@@ -589,7 +587,7 @@ export default function AdminLeaderboards() {
 
     return (
         <Screen
-            title={t('ui.screen.admin_leaderboards')}
+            title={screenTitle}
             subtitle={t('admin.boards.subtitle')}
             actions={
                 <>

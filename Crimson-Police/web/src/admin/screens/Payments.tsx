@@ -46,6 +46,7 @@ import type {
 } from '../../types/admin_economy';
 import { DateRangeField, MoneyEffect, OfficerPicker, Pager, PreviewTable, useAdminAction } from '../components/kit';
 import type { DateRange } from '../components/kit';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Payments.css';
 
 const REASON_MAX = 255;
@@ -427,6 +428,7 @@ function ManualDialog({
 // ============================================================================
 
 export default function AdminPayments() {
+    const screenTitle = useAdminTitle('admin_payments');
     const session = useSession();
     const departments = session.config?.departments ?? [];
     // Leaderboards → stuck payments links here with navigate('admin_payments', { status: 'paying' })
@@ -629,7 +631,7 @@ export default function AdminPayments() {
 
     return (
         <Screen
-            title={t('ui.screen.admin_payments')}
+            title={screenTitle}
             subtitle={t('payments.subtitle')}
             className="payments-admin"
             actions={

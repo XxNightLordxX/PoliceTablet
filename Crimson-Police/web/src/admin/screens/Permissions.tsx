@@ -26,6 +26,7 @@ import { ExtraGrantsCard } from '../components/ExtraGrantsCard';
 import { GradeGrantRow } from '../components/GradeGrantRow';
 import { MissionControlsCard } from '../components/MissionControlsCard';
 import type { PermissionsData, TeleportDepartment, TeleportGrant } from '../../types/oversight';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Permissions.css';
 import '../components/access-admin.css';
 
@@ -156,6 +157,7 @@ function TeleportCard({
 }
 
 export default function AdminPermissions() {
+    const screenTitle = useAdminTitle('admin_permissions');
     const { data, loading, error, refetch } = useRequest<PermissionsData>(
         'admin:getPermissions',
         {},
@@ -317,7 +319,7 @@ export default function AdminPermissions() {
 
     return (
         <Screen
-            title={t('ui.screen.admin_permissions')}
+            title={screenTitle}
             subtitle={t('admin.perms.subtitle')}
             actions={
                 <IconButton

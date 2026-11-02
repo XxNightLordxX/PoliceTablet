@@ -61,6 +61,7 @@ import type { MissionListEntry } from '../../types/oversight';
 import { MissionsToday } from '../components/MissionsToday';
 import type { AdminMissionsData } from '../../types/builder_client';
 import type { MissionSwitchView } from '../../types/settings';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Settings.css';
 import './Missions.css';
 
@@ -115,6 +116,7 @@ type Confirm =
 let handledNewParams: unknown = null;
 
 export default function AdminMissions() {
+    const screenTitle = useAdminTitle('admin_missions');
     const can = useCan();
     const [tab, setTabState] = useState<Tab>(
         () => editorMemory('admin').tab ?? (editorMemory('admin').openId ? 'builder' : 'catalog'),
@@ -756,7 +758,7 @@ export default function AdminMissions() {
 
     return (
         <Screen
-            title={t('ui.screen.admin_missions')}
+            title={screenTitle}
             subtitle={t('admin.missions.subtitle')}
             className="builder_client-screen"
             actions={

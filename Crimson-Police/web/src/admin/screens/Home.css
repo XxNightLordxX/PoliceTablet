@@ -5,6 +5,16 @@
     margin-bottom: 14px;
 }
 
+/* Needs attention (step H5): its lines side by side on a wide screen */
+.admin-home-screen .admin-home-attention {
+    margin-bottom: 14px;
+}
+
+.admin-home-attention__lines {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
 .admin-home-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

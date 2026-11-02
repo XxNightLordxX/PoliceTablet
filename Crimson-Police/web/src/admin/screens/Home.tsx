@@ -14,7 +14,9 @@ import { NEW_MISSION_PARAMS } from '../../builder/quickMission';
 import { MissionSwitchForm, PayForm, PointsForm, QuickSettingsForm } from '../components/HomeForms';
 import type { AdminLiveRunsData, AdminRefusalsData } from '../../types/admin_live';
 import type { MissionLoadSummary } from '../../types/admin_missions';
-import type { ProblemsData } from '../../types/admin_system';
+import type { NeedsAttentionData, ProblemsData } from '../../types/admin_system';
+import { attentionLines, attentionWaiting } from '../components/needsAttention';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Home.css';
 
 // How many runs the Live now strip lists before "and N more".
@@ -234,11 +236,63 @@ function LiveNow() {
     );
 }
 
-export default function AdminHome() {
-    // Config.AdminUi.homeForms: the quick forms on the tiles (false = the tiles only open the screen)
-    const forms = useSession().config?.adminUi?.homeForms !== false;
+// Needs attention (step H5, Config.AdminUi.needsAttention): what is waiting for an admin, from one batched request
+// (admin:getNeedsAttention), each line a count that opens its screen.
+function NeedsAttention() {
+    const navigate = useNavigate();
+    const { data, error, refetch } = useRequest<NeedsAttentionData>('admin:getNeedsAttention', {}, { pollMs: 60000 });
+    const lines = attentionLines(data);
+    const waiting = attentionWaiting(lines);
     return (
-        <Screen title={t('ui.screen.admin_home')} subtitle={t('admin.home.subtitle')} className="admin-home-screen">
+        <Card
+            className="admin-home-attention"
+            title={t('admin.home.attention_title')}
+            subtitle={
+                data
+                    ? waiting > 0
+                        ? t('admin.home.attention_some', { n: formatNumber(waiting) })
+                        : t('admin.home.attention_none')
+                    : t('admin.home.unknown')
+            }
+            icon={waiting > 0 ? 'alert' : 'checkCircle'}
+            highlight={waiting > 0 ? 'warning' : undefined}
+        >
+            {error && !data ? (
+                <button type="button" className="admin-home-check" onClick={() => void refetch()}>
+                    <span className="admin-home-check__label">{t('admin.home.attention_error')}</span>
+                </button>
+            ) : (
+                <ul className="admin-home-checks admin-home-attention__lines">
+                    {lines.map(l => (
+                        <li key={l.key}>
+                            <button
+                                type="button"
+                                className="admin-home-check"
+                                onClick={() => navigate(l.screen, l.params)}
+                            >
+                                <span className="admin-home-check__label">{t(l.label)}</span>
+                                <Badge size="sm" tone={l.n > 0 ? 'warning' : 'success'}>
+                                    {formatNumber(l.n)}
+                                </Badge>
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </Card>
+    );
+}
+
+export default function AdminHome() {
+    const screenTitle = useAdminTitle('admin_home');
+    // Config.AdminUi.homeForms: the quick forms on the tiles (false = the tiles only open the screen)
+    const adminUi = useSession().config?.adminUi;
+    const forms = adminUi?.homeForms !== false;
+    // Config.AdminUi.needsAttention (step H5): the Needs attention panel on top (false = Home as before)
+    const attention = adminUi?.needsAttention === true;
+    return (
+        <Screen title={screenTitle} subtitle={t('admin.home.subtitle')} className="admin-home-screen">
+            {attention ? <NeedsAttention /> : null}
             <LiveNow />
             <div className="admin-home-grid">
                 <Tile

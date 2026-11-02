@@ -46,5 +46,15 @@
   "admin.home.form_points_search": "Find an officer by name, callsign or citizen ID",
   "admin.home.form_points_hint": "Below 0 takes points away",
   "admin.home.form_settings_hint": "{n} everyday settings. Type part of a name",
-  "admin.home.form_settings_none": "No everyday setting matches: Open searches every setting"
+  "admin.home.form_settings_none": "No everyday setting matches: Open searches every setting",
+  "err.needs_attention_off": "The Needs attention panel is switched off on this server.",
+  "admin.home.attention_title": "Needs attention",
+  "admin.home.attention_none": "Nothing is waiting for you",
+  "admin.home.attention_some": "Waiting for you: {n}. Click a line to open its screen",
+  "admin.home.attention_problems": "Problems",
+  "admin.home.attention_refused": "Refused starts today",
+  "admin.home.attention_disputes": "Open disputes",
+  "admin.home.attention_flagged": "Flagged runs waiting for review",
+  "admin.home.attention_rs": "Open player suspect cases",
+  "admin.home.attention_error": "Could not load: click to try again"
 }

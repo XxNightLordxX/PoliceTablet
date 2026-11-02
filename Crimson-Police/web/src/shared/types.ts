@@ -112,6 +112,8 @@ export interface Session {
             plainLayout?: boolean;
             // step H1: the Rewards screen (admin/screens/Rewards.tsx; false = no such screen)
             rewardsScreen?: boolean;
+            // step H5: Home's Needs attention panel (Config.AdminUi.needsAttention)
+            needsAttention?: boolean;
         };
         // Config.RealSuspects.adminScreen (step V18): screen = the Admin UI shows Real suspects (true only while
         // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)

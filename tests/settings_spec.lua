@@ -349,6 +349,12 @@ do
     H.eq(E('AdminUi.rewardsScreen').kind, 'boolean', 'rewardsScreen is a switch')
     H.ok((E('AdminUi.rewardsScreen').desc or ''):find('Nothing is paid differently', 1, true) ~= nil,
         'rewardsScreen: its config.lua comment is its description')
+    H.eq(E('AdminUi.needsAttention').default, false, 'Admin Home ships with no Needs attention panel')
+    H.eq(E('AdminUi.needsAttention').kind, 'boolean', 'needsAttention is a switch')
+    H.ok((E('AdminUi.needsAttention').desc or ''):find('each a count that opens its screen', 1, true) ~= nil,
+        'needsAttention: its config.lua comment is its description')
+    H.ok((E('AdminUi.plainLayout').desc or ''):find('each screen\'s title uses the same plain name', 1, true) ~= nil,
+        'plainLayout: the description says the titles inside the screens follow')
     H.ok(E('FeatureRewards.suspect.byType') ~= nil, 'byType is one setting edited as a whole')
     H.ok((E('FeatureRewards.suspect.byType').desc or ''):find('pays the money above', 1, true) ~= nil,
         'byType: its config.lua comment is its description')

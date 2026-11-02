@@ -56,6 +56,7 @@ import { ServiceRecordCard } from '../../officer/components/ServiceRecordCard';
 import { CommendDialog } from '../../supervisor/components/CommendDialog';
 import { OfficerRunControls } from '../components/OfficerRunControls';
 import { OfficerSupport } from '../components/OfficerSupport';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Officers.css';
 
 const endLabel = (reason: string) => (hasKey(`sup.end.${reason}`) ? t(`sup.end.${reason}`) : reason);
@@ -1122,6 +1123,7 @@ type ScreenTab = 'officers' | 'review' | 'disputes' | 'corrections';
 const FILTER_KEYS = ['online', 'suspended', 'retired', 'excluded', 'review', 'dispute', 'flagged'] as const;
 
 export default function AdminOfficers() {
+    const screenTitle = useAdminTitle('admin_officers');
     const session = useSession();
     const [screenTab, setScreenTab] = useState<ScreenTab>('officers');
     const [query, setQuery] = useState('');
@@ -1157,13 +1159,15 @@ export default function AdminOfficers() {
             setScreenTab('officers');
         }
     }, [linked, params]);
+    // Home's Needs attention opens a tab with navigate('admin_officers', { tab })
+    useEffect(() => {
+        if (params.tab === 'review' || params.tab === 'disputes' || params.tab === 'corrections') {
+            setScreenTab(params.tab);
+        }
+    }, [params]);
 
     return (
-        <Screen
-            title={t('ui.screen.admin_officers')}
-            subtitle={t('admin.officers.subtitle')}
-            className="oversight-screen"
-        >
+        <Screen title={screenTitle} subtitle={t('admin.officers.subtitle')} className="oversight-screen">
             <Tabs
                 items={[
                     { key: 'officers', label: t('ui.admin_officers.tab.officers'), icon: 'users' },

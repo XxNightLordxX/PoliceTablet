@@ -37,6 +37,7 @@ import type {
 } from '../../types/admin_live';
 import { happyHourBy } from '../../officer/components/HappyHourBanner';
 import { useAdminAction } from '../components/kit';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Live.css';
 
 type Tab = 'runs' | 'units' | 'refused';
@@ -397,6 +398,7 @@ function runDialogTexts(d: RunDialog | null, left: number): { title: string; mes
 // ============================================================================
 
 export default function AdminLive() {
+    const screenTitle = useAdminTitle('admin_live');
     const [tab, setTab] = useState<Tab>('runs');
     // Home's "Refused starts today" links here with navigate('admin_live', { tab: 'refused' })
     const { params } = useNavigation();
@@ -569,7 +571,7 @@ export default function AdminLive() {
 
     return (
         <Screen
-            title={t('ui.screen.admin_live')}
+            title={screenTitle}
             subtitle={t('admin.live.subtitle')}
             actions={
                 <Row gap={2}>

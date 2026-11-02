@@ -9,6 +9,7 @@ import type {
     ClientStateView,
     DepartmentSetup,
     IntegrationsData,
+    NeedsAttentionData,
     ProblemsData,
     RestorePreview,
     StorageView,
@@ -121,6 +122,15 @@ registerMock('request', 'admin:getWebhooks', (): { webhooks: WebhookView[] } => 
         discord: i < 2,
         line: `set cp_webhook_${c} "https://discord.com/api/webhooks/<id>/<token>"`,
     })),
+}));
+
+// admin:getNeedsAttention (step H5): Home's Needs attention panel (?needsAttention), two lines waiting
+registerMock('request', 'admin:getNeedsAttention', (): NeedsAttentionData => ({
+    problems: 2,
+    refusedToday: 2,
+    disputes: 0,
+    flagged: 3,
+    rsCases: 0,
 }));
 
 registerMock('request', 'admin:getProblems', (): ProblemsData => ({

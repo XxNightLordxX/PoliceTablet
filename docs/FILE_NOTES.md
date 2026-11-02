@@ -4211,7 +4211,8 @@ Admin UI · Home (screen key 'admin_home', Config.AdminUi.landing = 'home'): the
 screens of the common jobs (navigate with params where the screen takes them) and a Live now strip shows the runs
 of the Live screen. Every number comes from a request another screen already makes. With Config.AdminUi.homeForms
 on, four tiles hold a quick form (admin/components/HomeForms) that does the job right there; Open still opens the
-full screen.
+full screen. With Config.AdminUi.needsAttention on (step H5), a Needs attention panel on top reads
+admin:getNeedsAttention (modules/adminhome) once a minute; its lines come from admin/components/needsAttention.ts.
 ```
 
 ## Crimson-Police/web/src/admin/screens/Leaderboards.tsx
@@ -5330,6 +5331,15 @@ Admin UI split by play, step AP1 (the owner: "ensure the admin panel separates n
 and cop cop stuff and every feature is able to be turned on and off etc edited"): Config.AdminUi.groupByPlay folds
 the Settings sections into NPC missions, Player vs police and Police teamwork, and Settings -> Features lists every
 feature switch with its section and the setting it writes.
+```
+
+## tests/admin_home_spec.lua
+
+```text
+Admin UI -> Home's Needs attention panel (step H5): admin:getNeedsAttention answers the Problems lines, today's
+refused starts, the open disputes, the flagged runs waiting for a review (one per run, the admin's own left out)
+and the open player suspect cases (only with the Player suspects screen), in one request; refused while
+Config.AdminUi.needsAttention is off (shipped) and for anyone but an admin.
 ```
 
 ## tests/admin_permissions_spec.lua

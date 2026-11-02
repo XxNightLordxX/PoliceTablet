@@ -1,7 +1,7 @@
 // Admin UI · System (screen key 'admin_system'): storage (status, copy, switch), backups and restore, webhook states
 // (read only), recent problems and the other resources. Every action is checked again on the server.
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
     Badge,
     Button,
@@ -28,6 +28,7 @@ import { asArray } from '../../shared/data';
 import { formatDateTime, formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import { useNavigation } from '../../shared/navigation';
 import { request } from '../../shared/nui';
 import { toast } from '../../shared/toast';
 import { copyLine } from '../components/copyText';
@@ -44,6 +45,7 @@ import type {
     WebhookView,
 } from '../../types/admin_system';
 import type { CleanupView } from '../../types/admin_economy';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './System.css';
 
 type Panel = 'storage' | 'backups' | 'webhooks' | 'problems' | 'integrations' | 'cleanup';
@@ -819,7 +821,13 @@ function CleanupPanel() {
 }
 
 export default function AdminSystem() {
+    const screenTitle = useAdminTitle('admin_system');
     const [panel, setPanel] = useState<Panel>('storage');
+    // another screen (Home's Needs attention) opens a tab with navigate('admin_system', { tab })
+    const { params } = useNavigation();
+    useEffect(() => {
+        if (PANELS.some(p => p.key === params.tab)) setPanel(params.tab as Panel);
+    }, [params]);
     let body: ReactNode = null;
     if (panel === 'storage') body = <StoragePanel />;
     else if (panel === 'backups') body = <BackupsPanel />;
@@ -828,7 +836,7 @@ export default function AdminSystem() {
     else if (panel === 'cleanup') body = <CleanupPanel />;
     else body = <IntegrationsPanel />;
     return (
-        <Screen title={t('ui.screen.admin_system')} subtitle={t('sysadmin.ui.subtitle')} className="system-screen">
+        <Screen title={screenTitle} subtitle={t('sysadmin.ui.subtitle')} className="system-screen">
             <Tabs<Panel>
                 value={panel}
                 onChange={setPanel}

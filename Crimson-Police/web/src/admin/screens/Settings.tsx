@@ -49,6 +49,7 @@ import type {
     SettingsViewMode,
     SettingView,
 } from '../../types/settings';
+import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Settings.css';
 
 // The panels of this screen, in tab order. A new admin panel about settings is one more entry here.
@@ -1201,6 +1202,7 @@ export function useSettingSave(onReply: (reply: SettingsReply | undefined) => vo
 }
 
 export default function AdminSettings() {
+    const screenTitle = useAdminTitle('admin_settings');
     const { data, loading, error, refetch, setData } = useRequest<SettingsData>(
         'admin:getSettings',
         {},
@@ -1534,7 +1536,7 @@ export default function AdminSettings() {
 
     return (
         <Screen
-            title={t('ui.screen.admin_settings')}
+            title={screenTitle}
             subtitle={t('settings.subtitle', { n: data?.total ?? all.length, changed: counts.changed })}
             actions={
                 <IconButton

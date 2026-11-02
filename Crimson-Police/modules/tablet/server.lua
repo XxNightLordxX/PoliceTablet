@@ -385,6 +385,8 @@ local function ExtraConfig(deptKey)
             plainLayout = aui.plainLayout == true,
             -- step H1: the Rewards screen (admin/screens/Rewards.tsx), shipped false = no such screen
             rewardsScreen = aui.rewardsScreen == true,
+            -- step H5: Home's Needs attention panel (admin:getNeedsAttention), shipped false = no panel
+            needsAttention = aui.needsAttention == true,
         },
         realSuspects = { screen = RealSuspectsScreen() },
         officerNav = OfficerNav(),

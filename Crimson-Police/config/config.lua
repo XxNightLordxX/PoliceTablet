@@ -174,14 +174,19 @@ Config.AdminUi = {
     reasonChips = { 'Balance change', 'Event', 'Correction' },
     -- true = the Admin UI uses plain names and puts every screen under seven groups, each with a one-line
     -- description: NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy and System; the
-    -- rarely used tools fold under More, a search box finds any screen or setting, and a breadcrumb shows where you
-    -- are; false = the sidebar as before. Only the layout changes
+    -- rarely used tools fold under More, a search box finds any screen or setting, a breadcrumb shows where you are
+    -- and each screen's title uses the same plain name; false = the sidebar and titles as before. Only the layout
+    -- changes
     plainLayout = false,
     -- true = the Admin UI gets a Rewards screen: every feature that pays (NPC mission types, live and volunteer
     -- cases for officers, volunteer suspects, talk-downs, field training, supervisor awards) on one page, each with
     -- its money, how it is paid and its items, saved like any setting; false = no such screen (Settings still has
     -- every value). Nothing is paid differently
     rewardsScreen = false,
+    -- true = Admin UI -> Home shows a "Needs attention" panel on top: the Problems lines, today's refused mission
+    -- starts, the open disputes, the flagged runs waiting for a review and the open player suspect cases, each a
+    -- count that opens its screen; false = no such panel (Home as before). It only reads
+    needsAttention = false,
 }
 
 -- ============================================================================
