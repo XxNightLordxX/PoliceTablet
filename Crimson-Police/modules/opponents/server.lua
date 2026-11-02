@@ -60,6 +60,9 @@ local function Num(v, default)
     return v
 end
 
+-- How many closed cases are kept (Config.RealSuspects.casesKept, 1-200).
+local function Kept() return math.min(CLOSED_MAX, math.max(1, math.floor(Num(Cfg().casesKept, CLOSED_KEPT)))) end
+
 local function ToSrc(src)
     local n = tonumber(src)
     n = n and math.tointeger(n)
@@ -765,14 +768,38 @@ function Opp.close(run)
     case.closedAt = os.time()
     Timeline(case, { what = 'closed' })
     closed[#closed + 1] = { runId = runId, outcomes = outcomes, case = case }
-    local kept = math.min(CLOSED_MAX, math.max(1, math.floor(Num(Cfg().casesKept, CLOSED_KEPT))))
-    while #closed > kept do table.remove(closed, 1) end
+    while #closed > Kept() do table.remove(closed, 1) end
     CP.log(TAG, 'run %s: case closed', runId)
+    -- Opp.onClosed (F1, modules/opponents/saved): the closed case is saved so a restart keeps it
+    if type(Opp.onClosed) == 'function' then
+        local ok, err = pcall(Opp.onClosed, case)
+        if not ok then LogError('onClosed', 'CP.Opponents.onClosed failed: %s', tostring(err)) end
+    end
     return copy(outcomes), case
 end
 
+-- Closed cases read back after a restart (F1, modules/opponents/saved), oldest first: each { case, outcomes }. They
+-- go before the cases closed since the start; a run id already kept is skipped, and casesKept still holds.
+function Opp.restoreClosed(list)
+    if type(list) ~= 'table' then return 0 end
+    local have, older = {}, {}
+    for _, c in ipairs(closed) do have[c.runId] = true end
+    for _, e in ipairs(list) do
+        local case = type(e) == 'table' and e.case or nil
+        if type(case) == 'table' and type(case.runId) == 'string' and not have[case.runId]
+            and not cases[case.runId] then
+            have[case.runId] = true
+            older[#older + 1] = { runId = case.runId, outcomes = e.outcomes or {}, case = case }
+        end
+    end
+    for _, c in ipairs(closed) do older[#older + 1] = c end
+    closed = older
+    while #closed > Kept() do table.remove(closed, 1) end
+    return #list
+end
+
 -- Every case staff can read (V17): the open ones (newest first), then the kept closed ones (newest first).
--- -> { { case, open = bool } }. Memory only: a restart starts the list again.
+-- -> { { case, open = bool } }. The closed ones are saved (Config.RealSuspects.saveCases): a restart keeps them.
 function Opp.cases()
     local out = {}
     for _, case in pairs(cases) do out[#out + 1] = { case = case, open = true } end

@@ -2797,13 +2797,23 @@ nothing here runs while no case is open. A suspect's own acts are staff notes (O
 run.flagged or p.flagged.
 ```
 
+## Crimson-Police/modules/opponents/saved/server.lua
+
+```text
+CP.Opponents saved cases (server, step F1): each closed real-suspect case is saved in cp_pvp_cases while
+Config.RealSuspects.saveCases is on and live crimes or volunteers are on, and the newest casesKept are read back at
+the start, so the Admin UI Real suspects screen keeps them over a restart. Only what staff read is saved (names,
+the timeline, the damage ledger, the volunteer's part): never a position. Written once per close, never per tick.
+```
+
 ## Crimson-Police/modules/opponents/staff/server.lua
 
 ```text
 CP.Opponents staff (server, step V17): what admins read about real-suspect cases and the three admin tools. The
 case data here (names, citizenids, the timeline, the damage ledger, the flags and notes) is server-only: it goes
 to an admin's Admin UI through these callbacks and never to an officer's tablet (Opp.view has no names). Reads
-are memory only (open cases and the last Config.RealSuspects.casesKept closed ones; the pair ledger's window).
+read memory (open cases and the last Config.RealSuspects.casesKept closed ones, which modules/opponents/saved
+keeps over a restart; the pair ledger's window).
 Nothing here runs while nobody asks; the actions are refused while both features are off.
 ```
 
@@ -6055,6 +6065,15 @@ The state bag is simulated: every write goes through bagSet, which fires the reg
 AddStateBagChangeHandler handlers before the value changes (as FiveM does). At the end the two client
 files are loaded in their own environment (a separate CP table) with stubbed natives.
 No database is used.
+```
+
+## tests/saved_cases_spec.lua
+
+```text
+Step F1: real-suspect data survives a restart. A closed case (its suspects, officers, timeline and damage ledger)
+is saved in cp_pvp_cases and read back for the Admin UI after a restart; volunteer strikes and strike blocks are
+cp_pvp_pairs rows read back too. Config.RealSuspects.saveCases / Config.Volunteers.saveStrikes = false keep
+them in memory only.
 ```
 
 ## tests/search_area_director_spec.lua

@@ -91,6 +91,100 @@ local function BlockedAt(who, now)
 end
 
 -- ============================================================================
+--                       SAVED STRIKES (F1, cp_pvp_pairs)
+-- ============================================================================
+-- Each strike is a vol_strike row and each strikes block a vol_block row of cp_pvp_pairs (the player key in
+-- suspect_license), written when it happens and read back once at the start, so a restart keeps them. Only while
+-- volunteers are on and Config.Volunteers.saveStrikes is not false. The list itself stays memory only.
+
+local saved = { loaded = false, loading = false }
+
+local function SaveOn() return On() and Cfg().saveStrikes ~= false end
+
+local function DbReady()
+    if not (CP.Migrations and CP.Migrations.ready) then return true end
+    local ok = pcall(CP.Migrations.ready)
+    return ok
+end
+
+local function StrikeSeconds() return math.floor(Num(Cfg().strikeHours, 24, 1, 8760) * 3600) end
+
+local SAVE_ROW = [[INSERT INTO cp_pvp_pairs (kind, officer_citizenid, suspect_citizenid, suspect_license, until_at,
+    created_at) VALUES (?, '', ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?))]]
+
+-- A strike (blockUntil nil) or the block it led to (its strikes are removed), in a thread.
+local function SaveStrike(cid, who, at, blockUntil)
+    if not SaveOn() then return end
+    CreateThread(function()
+        if not DbReady() then return end
+        local ok, err
+        if blockUntil then
+            ok, err = pcall(MySQL.update.await,
+                'DELETE FROM cp_pvp_pairs WHERE kind = \'vol_strike\' AND suspect_license = ?', { who })
+            if ok then ok, err = pcall(MySQL.insert.await, SAVE_ROW, { 'vol_block', cid, who, blockUntil, at }) end
+        else
+            ok, err = pcall(MySQL.insert.await, SAVE_ROW, { 'vol_strike', cid, who, at + StrikeSeconds(), at })
+        end
+        if not ok then CP.err(TAG, 'saving the strike of %s failed: %s', cid, tostring(err)) end
+    end)
+end
+
+-- Strikes past strikeHours and blocks that ran out (the start and once a day).
+local function PruneStrikes(now)
+    if not DbReady() then return end
+    local ok, err = pcall(MySQL.update.await,
+        'DELETE FROM cp_pvp_pairs WHERE kind = \'vol_strike\' AND created_at <= FROM_UNIXTIME(?)',
+        { now - StrikeSeconds() })
+    if ok then
+        ok, err = pcall(MySQL.update.await,
+            'DELETE FROM cp_pvp_pairs WHERE kind = \'vol_block\' AND until_at <= FROM_UNIXTIME(?)', { now })
+    end
+    if not ok then CP.err(TAG, 'the strikes clean-up failed: %s', tostring(err)) end
+end
+
+local function LoadStrikes(now)
+    local ok, rows = pcall(MySQL.query.await, [[SELECT kind, suspect_license, UNIX_TIMESTAMP(created_at) AS created_ts,
+        UNIX_TIMESTAMP(until_at) AS until_ts FROM cp_pvp_pairs WHERE kind IN ('vol_strike', 'vol_block')]])
+    if not ok then
+        CP.err(TAG, 'reading the saved strikes failed: %s', tostring(rows))
+        return false
+    end
+    local n = 0
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local who = r.suspect_license
+        local at, untilAt = math.floor(Num(r.created_ts, 0)), math.floor(Num(r.until_ts, 0))
+        if type(who) == 'string' and who ~= '' then
+            if r.kind == 'vol_strike' and at > now - StrikeSeconds() then
+                local list = strikesOf[who] or {}
+                list[#list + 1] = at
+                table.sort(list)
+                strikesOf[who] = list
+                n = n + 1
+            elseif r.kind == 'vol_block' and untilAt > now and untilAt > (blockedUntil[who] or 0) then
+                blockedUntil[who] = untilAt
+                n = n + 1
+            end
+        end
+    end
+    if n > 0 then CP.log(TAG, '%d saved strike(s) and block(s) read back', n) end
+    return true
+end
+
+-- Once, the first time saving is on (the start, or an admin turning volunteers on in Settings).
+local function StartStrikes()
+    if saved.loaded or saved.loading or not SaveOn() then return end
+    saved.loading = true
+    CreateThread(function()
+        if DbReady() then
+            local now = os.time()
+            PruneStrikes(now)
+            saved.loaded = LoadStrikes(now)
+        end
+        saved.loading = false
+    end)
+end
+
+-- ============================================================================
 --                                   THE LIST
 -- ============================================================================
 
@@ -255,11 +349,13 @@ function V.strike(cid, why)
         strikesOf[who] = nil
         local untilAt = now + math.floor(Num(Cfg().blockHours, 24, 1, 8760) * 3600)
         blockedUntil[who] = untilAt
+        SaveStrike(cid, who, now, untilAt)
         for other, entry in pairs(listed) do
             if entry.who == who then End(other, 'strikes') end
         end
         return count, untilAt
     end
+    SaveStrike(cid, who, now, nil)
     if v then Note(v.src, 'warning', 'volunteer.strike', { count = count, max = MaxStrikes() }) end
     return count, nil
 end
@@ -643,19 +739,26 @@ end
 AddEventHandler('playerDropped', function() Gone(source) end)
 
 CP.Hooks.on('settings:changed', function()
-    if On() then return end
+    if On() then return StartStrikes() end
     for cid in pairs(listed) do End(cid, 'disabled') end
 end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
     listed, cidOf, reserved = {}, {}, {}
+    saved.loaded, saved.loading = false, false
     sweep.token = sweep.token + 1
     sweep.on = false
 end)
 
 CreateThread(function()
     Wait(0)
+    if CP.Schedule and CP.Schedule.onDaily then
+        CP.Schedule.onDaily(function()
+            if SaveOn() then CreateThread(function() PruneStrikes(os.time()) end) end
+        end)
+    end
+    StartStrikes()
     local Q = CP.Qbx
     if not (Q and Q.onPlayerUnload and Q.onDutyChange and Q.onJobChange) then return end
     Q.onPlayerUnload(Gone)

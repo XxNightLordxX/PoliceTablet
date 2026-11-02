@@ -1148,8 +1148,11 @@ Config.RealSuspects = {
     },
     timelineMax = 300,               -- timeline entries kept per case
     -- Closed cases staff can still open in the Admin UI (their timeline, damage ledger and flags), the newest
-    -- ones; open cases are always there. Kept in memory: a restart starts the list again
+    -- ones; open cases are always there
     casesKept = 16,
+    -- true = the kept closed cases are saved (the database or the saves folder), so a restart keeps them (none older
+    -- than pairLedgerDays); false = memory only, a restart starts the list again
+    saveCases = true,
     -- true = admins (the antiFarmOverride key) get a Real suspects screen in the Admin UI while live crimes or
     -- volunteers are on: the cases, each case's timeline and damage ledger, pair statistics and the block, exclude
     -- and suspend tools; false = no screen (the cases are still kept)
@@ -1319,12 +1322,14 @@ Config.Volunteers = {
     -- suspects he will play, and while he volunteers it opens a menu to renew, change them or stop (restart to change)
     command = 'crimsonheat',
     windowMinutes = 60,              -- minutes a volunteer stays on the list; he can renew it from the menu
-    -- A volunteer who says yes and then does not show up or walks away from the case gets a strike (kept in memory:
-    -- a restart clears them). This many strikes within strikeHours stop that player, on every character, from
-    -- volunteering for blockHours
+    -- A volunteer who says yes and then does not show up or walks away from the case gets a strike. This many
+    -- strikes within strikeHours stop that player, on every character, from volunteering for blockHours
     strikes = 3,
     strikeHours = 24,                -- hours a strike counts towards the block
     blockHours = 24,                 -- hours a player who reached the strikes can't volunteer
+    -- true = strikes and strike blocks are saved (the database or the saves folder), so a restart keeps them; false =
+    -- memory only, a restart clears them. The volunteer list is never saved: after a restart a player volunteers again
+    saveStrikes = true,
     -- Who plays the suspect of a mission a volunteer can play, per mission type: 'npc' = always the NPC (as today);
     -- 'players_when_available' = when the unit ticks "Real suspect OK" on the Mission Board and a volunteer who
     -- fits is online, he is asked to play the suspect, else the NPC plays him; 'players_only' = the type's missions

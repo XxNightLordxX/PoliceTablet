@@ -2453,7 +2453,7 @@ For staff:
   day, the same officer and suspect meet again for points only after `pairCooldownHours` (24), and accounts that
   share a connection or PC are flagged.
 - **Staff see everything.** Every case keeps a timeline, the damage ledger and the flags on the Real suspects
-  screen (the last `Config.RealSuspects.casesKept`, 16, closed ones; a restart clears them).
+  screen (the last `Config.RealSuspects.casesKept`, 16, closed ones; saved, so a restart keeps them).
 
 #### 9.16.4 When something does not happen
 
@@ -3167,8 +3167,9 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   typed word ENABLE). Each suspect detained is a **live catch** for every officer on the case (stored per run row,
   migration 014); add `'live_catches'` to `Config.Leaderboard.metrics` to show a **Live catches** Rank by tab.
   Staff data (steps V17 and V18): admins with the `antiFarmOverride` key can
-  read each open case and the last `Config.RealSuspects.casesKept` closed ones (16; kept in memory, so a restart
-  clears the list): the suspects and officers by name, the case timeline in plain lines, the flag lines (officer
+  read each open case and the last `Config.RealSuspects.casesKept` closed ones (16; saved in the database or the saves
+  folder, so a restart keeps them, none older than `pairLedgerDays`; `saveCases = false` keeps them in memory only):
+  the suspects and officers by name, the case timeline in plain lines, the flag lines (officer
   conduct flags and the suspects' own notes) and the damage ledger, plus pair statistics and the running blocks. Three
   tools need a reason and are audited: **block a pair** (an officer can't take a case against that suspect), **exclude
   a player** (never a suspect) and **suspend an officer** (no real-suspect cases), each for 1 to 3650 days. They are
@@ -3191,8 +3192,9 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   (`excludeAdmins`), players an admin excluded on Real suspects, and players with too many strikes. Going on police
   duty, logging out, the window running out or the owner turning `enabled` off ends it, and he is told why. A yes
   followed by a no-show or walking away from the case is a strike (from the matching steps): `strikes` (3) within
-  `strikeHours` (24) block that player, on every character, for `blockHours` (24); strikes are kept in memory, so a
-  restart clears them.
+  `strikeHours` (24) block that player, on every character, for `blockHours` (24). Strikes and strike blocks are
+  saved, so a restart keeps them (`saveStrikes = false` keeps them in memory only). The list itself is not saved: after
+  a restart a player types `/crimsonheat` again to volunteer.
   Modes and the Mission Board (step V21, `Config.Volunteers.modes` per mission type and `missionModes` per mission
   id, which beats its type; Settings edits both): `'npc'` (shipped for every type) plays the NPC as today;
   `'players_when_available'` lets the unit leader tick **Real suspect OK** in the accept dialog (a red "Real suspect"

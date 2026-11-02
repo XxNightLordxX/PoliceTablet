@@ -154,7 +154,7 @@ PoliceTablet/                      (git repo)
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
                    009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql,
                    012_mission_ban.sql, 013_call_department.sql, 014_live_catches.sql,
-                   015_field_training.sql
+                   015_field_training.sql, 016_saved_cases.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -3195,7 +3195,16 @@ tablet: `Opp.view` has no names), and the three admin tools. Nothing runs until 
   `lines` = the timeline as text, `opp.line.<what>` or the flag text; `flagLines` = the officer-conduct flags
   (rs_excessive_force, rs_unarmed_shot, rs_vdm, rs_bad_seize, rs_linked_accounts, pair_repeat) and the suspect notes,
   each with `flag` or `note`, its kind, its text and detail; `ledger` with the officer by name). No trail point is
-  answered. Memory only: a restart starts the list again (the pair rows stay in cp_pvp_pairs).
+  answered. The closed cases are saved (step F1, modules/opponents/saved/server.lua, table `cp_pvp_cases` from
+  migration 016) while `Config.RealSuspects.saveCases` is on (shipped true) and either feature is on: one row per
+  closed case (run_uuid, kind, closed_at, case_json = `Opp.savedForm(case)`: the suspect fields staff read with his
+  notes, the run's participants by server id with citizenid, name, callsign and status, the timeline and the damage
+  ledger with plain values only, the volunteer's part; never a position), written one frame after the close (after
+  every `run:ended` hook) and never per tick. The start (and the first `settings:changed` that turns a feature on)
+  prunes rows older than `pairLedgerDays` and past the newest `casesKept`, then reads those back through
+  `Opp.fromSaved` and `Opp.restoreClosed(list)` (before the cases closed since the start; `casesKept` still holds).
+  Each close trims the rows past `casesKept`, and the daily pass prunes again. A restored case is marked `restored`
+  (its suspects read as offline). Open cases are not saved: a restart ends their runs.
 - The self rule over suspects: `Kit.selfRun` and `P.canReviewRun` count a suspect of the run's case as taking part,
   so a staff member never reviews, voids or reads the case he was a suspect in (fails closed).
 - Admin callbacks and actions (CP.AdminKit, key `antiFarmOverride`; §8.4.1): `admin:getRsCases`, `admin:getRsCase`
@@ -3476,7 +3485,11 @@ pop-up instead of the NPC; 'players_only' is offered only while a volunteer who 
   character unload). A 15 s sweep runs only while the list holds someone (expiry, enabled, exclusion, block, duty).
 - `strike(cid, why) -> count, blockedUntil|nil`: later steps give one for a yes followed by a no-show or walking away;
   `strikes` (3) within `strikeHours` (24) block the player for `blockHours` (24) and end his listing. Strikes and
-  blocks are memory only (a restart clears them).
+  blocks are saved (step F1) while volunteers are on and `Config.Volunteers.saveStrikes` is on (shipped true): each
+  strike is a `cp_pvp_pairs` row of kind `vol_strike` and a block one of kind `vol_block` (citizenid in
+  suspect_citizenid, the player key in suspect_license, until_at; a block removes his `vol_strike` rows), written in a
+  thread when it happens, read back once at the start, and pruned at the start and daily (strikes past `strikeHours`,
+  blocks that ran out). The list itself stays memory only: after a restart a player volunteers again.
 - Net: `server:volunteer` (action, data; rate 4 per 2 s): `open` answers `client:volunteerMenu` (`{ active = false,
   minutes, roles, strikes, maxStrikes }` for the start, `{ active = true, minutesLeft, roles, strikes, maxStrikes }`
   while listed) or a refusal; `join`, `renew`, `roles` (`data.roles`) and `stop`. Every answer is

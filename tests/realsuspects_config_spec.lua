@@ -119,6 +119,7 @@ do
         ['Volunteers.strikes'] = { 3, false },
         ['Volunteers.strikeHours'] = { 24, false },
         ['Volunteers.blockHours'] = { 24, false },
+        ['Volunteers.saveStrikes'] = { true, false },
     }) do
         local e = S.entry(path) or {}
         H.eq(e.default, want[1], path .. ' ships ' .. tostring(want[1]))
@@ -196,6 +197,7 @@ do
         evadeWindow = 120,
         timelineMax = 300,
         casesKept = 16,
+        saveCases = true,
         adminScreen = true,
     }) do
         local e = S.entry('RealSuspects.' .. path) or {}
@@ -224,7 +226,9 @@ do
         ['trail.max'] = 'points kept per suspect',
         timelineMax = 'timeline entries kept per case',
         casesKept = 'Closed cases staff can still open in the Admin UI (their timeline, damage ledger and flags), the '
-            .. 'newest ones; open cases are always there. Kept in memory: a restart starts the list again',
+            .. 'newest ones; open cases are always there',
+        saveCases = 'true = the kept closed cases are saved (the database or the saves folder), so a restart keeps '
+            .. 'them (none older than pairLedgerDays); false = memory only, a restart starts the list again',
         -- V5: the proof
         cuffPairWindow = 'Proof the server checks before anything scores: seconds between the officer\'s sc-police '
             .. 'cuff and the suspect\'s cuffed state',

@@ -163,6 +163,7 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 
 - [ ] With Config.LiveCrime.enabled and Config.Volunteers.enabled off as shipped, nothing changes for officers and idle resmon is unchanged. (V1, V3, V4, V5, V6)
 - [ ] A database server creates the empty table cp_pvp_pairs on start. (V7)
+- [ ] A database server creates the empty table cp_pvp_cases on start. With live crimes or volunteers on, close a case, restart Crimson-Police: Admin UI → Real suspects → Cases still lists it with its timeline and damage ledger. Give a volunteer a strike (say yes, then cancel), restart: his /crimsonheat menu still shows the strike, and he must volunteer again. (F1)
 - [ ] Tase a fleeing Warrant Service suspect: he gives up as before and nothing goes to the Review Queue; tell the developers if run details often show "A stun was reported that the server did not see" for real taser hits. (V2)
 - [ ] Tase a fleeing real suspect in Flee & Arrest or Pursuit: he gives up at once and no stun_unproven note appears in the run detail. (R7)
 - [ ] Optional: with Config.NpcCombat.playerHitDropsProtection = true, an officer on an NPC mission shot by a player takes normal headshot damage until the run ends; shipped false, no change. (V8)
