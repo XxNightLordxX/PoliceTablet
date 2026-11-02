@@ -1,5 +1,6 @@
 -- End-to-end scenarios for real suspects (step V27) on the REAL server side of Crimson-Police: every server file
 -- loaded as in game, database off (the saves folder, as shipped), only the other resources and the natives stubbed.
+-- Sections 4 to 6 (step G7): the admin turns it all on in the Admin UI, a volunteer by the criminal tablet, a strike.
 
 local H = dofile('tests/harness.lua')
 H.useFiles()
@@ -682,6 +683,229 @@ do
     Secs(1)
     H.eq(CP.Volunteers.isListed(CID[11]), false, 'volunteer: Stop takes him off the list')
 
+    def.locations = savedLocations
+    Config.DisabledMissions = {}
+end
+
+-- ============================================================================
+--                           4. THE ADMIN TURNS IT ON
+-- ============================================================================
+-- SETTINGS, A FEATURE SWITCH, A PERMISSION GRANT.
+-- Step G7: every change goes through the Admin UI's own actions (Settings, the Features switches, Permissions ->
+-- Extra grants), as the admin taps them.
+
+AddPlayer(8, 'RSE2EAD8', 'Ann', 'Admin', 'unemployed', 0)    -- a Crimson-Police admin (Config.AdminAce)
+H.players[8].ace[Config.AdminAce] = true
+AddPlayer(12, 'RSE2EG12', 'Gus', 'Ballas', 'unemployed', 0)  -- a Ballas member who plays volunteer suspects
+PD[12].gang = { name = 'ballas', label = 'Ballas', grade = { level = 1, name = 'Runner' } }
+CID[8], CID[12] = PD[8].citizenid, PD[12].citizenid
+H.exportsMock.qbx_core.GetGangs = function()
+    return { ballas = { label = 'Ballas', grades = { [0] = { name = 'Recruit' }, [1] = { name = 'Runner' } } } }
+end
+
+-- Live control -> anti-farm: the admin clears both officers' cooldowns (they just played Investigation).
+local function ClearCooldowns()
+    for _, src in ipairs({ 1, 2 }) do
+        local ok, err = Act('server:admin:clearCooldowns', 8,
+            { citizenid = CID[src], scope = 'all', reason = 'G7 e2e' })
+        H.eq(ok, true, ('admin: cooldowns of officer %d cleared: %s'):format(src, tostring(err)))
+    end
+end
+
+-- One Settings change as the admin taps it -> ok, data | errKey.
+local function Setting(src, path, value)
+    return Act('server:admin:setSetting', src, { path = path, json = cjson.encode(value), reason = 'G7 e2e' })
+end
+
+do
+    -- an officer and a player are never admins: the setting is refused and nothing changes
+    local ok, err = Setting(1, 'CriminalTablet.enabled', true)
+    H.eq(ok, false, 'admin: an officer cannot change a setting')
+    H.ok(err ~= nil, 'admin: ...he is told why: ' .. tostring(err))
+    H.eq(Config.CriminalTablet.enabled, false, 'admin: ...and the tablet stays off')
+    local view, why = Cb('crimtab:get', 12)
+    H.eq(view, nil, 'admin: shipped, the criminal tablet is off')
+    H.eq(why, 'err.crimtab_off', 'admin: ...and says so')
+
+    -- the admin switches on volunteers, the criminal tablet (the Features switch) and the volunteer's pay
+    for _, c in ipairs({
+        { 'Volunteers.enabled', true },
+        {
+            'Volunteers.modes',
+            { patrol = 'npc', training = 'npc', investigation = 'players_when_available', tactical = 'npc' },
+        },
+        { 'CriminalTablet.enabled', true },
+        { 'CriminalTablet.access', 'granted' },
+        { 'FeatureRewards.suspect.enabled', true },
+    }) do
+        ok, err = Setting(8, c[1], c[2])
+        H.eq(ok, true, ('admin: %s saved: %s'):format(c[1], tostring(err)))
+    end
+    H.eq(Config.CriminalTablet.enabled, true, 'admin: the Features switch turns the tablet on at once')
+    H.eq(Config.FeatureRewards.suspect.enabled, true, 'admin: Pay volunteer suspects is on')
+    H.eq(Config.FeatureRewards.suspect.money.got_away, 1500, 'admin: ...with its default money ready')
+
+    -- access 'granted': nobody yet, until Permissions -> Extra grants names the Ballas from grade 1
+    view, why = Cb('crimtab:get', 12)
+    H.eq(why, 'err.crimtab_no_access', 'admin: granted access and no grant: the Ballas member is refused')
+    ok, err = Setting(8, 'Permissions.grants', { criminalTablet = { gangs = { ballas = { minGrade = 1 } } } })
+    H.eq(ok, true, 'admin: the criminalTablet grant for Ballas grade 1+ is saved: ' .. tostring(err))
+    view, why = Cb('crimtab:get', 12)
+    H.ok(view ~= nil, 'admin: the grant counts at once: the tablet opens: ' .. tostring(why))
+    H.eq(view and view.volunteersOn, true, 'admin: ...and volunteers are on')
+    H.eq(view and view.status and view.status.canJoin, true, 'admin: ...he may get on the list')
+    view, why = Cb('crimtab:get', 11)
+    H.eq(why, 'err.crimtab_no_access', 'admin: a player the grant does not name is still refused')
+    view, why = Cb('crimtab:get', 1)
+    H.eq(why, 'err.crimtab_on_duty', 'admin: an officer on duty is refused')
+end
+
+-- ============================================================================
+--                    5. A VOLUNTEER BY THE CRIMINAL TABLET
+-- ============================================================================
+-- LIST, JOB, ACCEPT, ESCAPE, PAID.
+
+local tabRun
+do
+    Config.DisabledMissions = { 'manhunt', 'suspicious_activity' }
+    local def = CP.Missions.get('warrant_service')
+    local savedLocations = def.locations
+    def.locations = { def.locations[1] }
+
+    -- Home: he gets on the list as a runner from the tablet
+    Place(12, vec3(-300.0, 6100.0, 31.0))
+    local ok, view = Act('server:crimtab:act', 12, { what = 'join', roles = { 'runner' } })
+    H.eq(ok, true, 'crimtab: Get on the list: ' .. tostring(view))
+    H.eq(view and view.status and view.status.listed, true, 'crimtab: Home shows him on the list')
+    H.eq(CP.Volunteers.isListed(CID[12]), true, 'crimtab: the volunteer list has him')
+
+    -- the unit accepts Investigation with Real suspect OK: the job reaches his Jobs screen, with its reward
+    ClearCooldowns()
+    Place(1, vec3(-200.0, 6000.0, 31.0))
+    Place(2, vec3(-202.0, 6000.0, 31.0))
+    ok, view = Act('server:acceptType', 1, { missionType = 'investigation', realSuspect = true })
+    H.eq(ok, true, 'crimtab: the unit accepts Investigation with Real suspect OK: ' .. tostring(view))
+    H.fire('crimson-police:server:unitReady', 2, { accepted = true })
+    Secs(3)
+    tabRun = Runs.getBySrc(1)
+    H.eq(tabRun and tabRun.missionId, 'warrant_service', 'crimtab: Warrant Service drawn')
+    view = Cb('crimtab:get', 12) or {}
+    local job = view.jobs and view.jobs[1]
+    H.ok(job ~= nil and type(job.token) == 'string', 'crimtab: Jobs shows the question')
+    H.eq(job and job.role, 'runner', 'crimtab: ...naming the suspect he plays')
+    local reward = job and job.reward or ''
+    H.ok(type(reward) == 'string' and reward:find('1,500', 1, true) ~= nil and reward:find('500', 1, true) ~= nil,
+        'crimtab: ...and the reward Pay volunteer suspects pays: ' .. tostring(reward))
+    H.eq(#Points(job or {}), 0, 'crimtab: the job carries no position')
+
+    -- Accept is his yes: Active shows the meet point; he travels there and officers reach him
+    ok, view = Act('server:crimtab:act', 12, { what = 'answer', token = job and job.token, yes = true })
+    H.eq(ok, true, 'crimtab: Accept: ' .. tostring(view))
+    Secs(2)
+    H.eq(tabRun.realSuspect, 'volunteer', 'crimtab: his yes makes it a real-suspect case')
+    view = Cb('crimtab:get', 12) or {}
+    local meet = view.active and view.active.meet
+    H.ok(meet ~= nil, 'crimtab: Active shows his meet point')
+    H.eq(view.active and view.active.phase, 'travel', 'crimtab: ...while he travels')
+    H.eq(#view.jobs, 0, 'crimtab: Jobs is empty once he accepted')
+    if meet then Place(12, vec3(meet.x + 1.0, meet.y, meet.z)) end
+    Secs(3)
+    local start = tabRun.location.start.coords
+    Place(1, start)
+    Place(2, vec3(start.x + 2.0, start.y, start.z))
+    Secs(3)
+    if meet then
+        Place(1, vec3(meet.x + 3.0, meet.y, meet.z))
+        Place(2, vec3(meet.x + 5.0, meet.y, meet.z))
+    end
+    Secs(3)
+    local m = CP.Volunteers.matchOf(CID[12]) or {}
+    H.eq(m.phase, 'engaged', 'crimtab: officers reached him: engaged')
+    view = Cb('crimtab:get', 12) or {}
+    H.eq(view.active and view.active.freeCancel, false, 'crimtab: once engaged, giving up is no longer free')
+
+    -- he runs and gets away: the unit gives the mission up
+    Place(12, vec3(meet and meet.x + 900.0 or 600.0, meet and meet.y or 6100.0, 31.0))
+    Secs(2)
+    Act('server:abandon', 1, tabRun.id)
+    Act('server:abandon', 2, tabRun.id)
+    Secs(3)
+    H.eq(tabRun.state, 'ended', 'crimtab: the mission ends')
+
+    -- paid once: one feature reward row of $1,500 cash for his escape, never twice
+    local rows = H.sql([[SELECT mission_id, cash_base, run_uuid FROM cp_mission_runs WHERE citizenid = ?
+        AND mission_type = 'manual_award']], { CID[12] })
+    H.eq(#rows, 1, 'crimtab: one payment row for the volunteer')
+    H.eq(rows[1] and rows[1].mission_id, 'reward_suspect', 'crimtab: ...the volunteer suspect reward')
+    H.eq(tonumber(rows[1] and rows[1].cash_base), 1500, 'crimtab: ...$1,500 for getting away')
+    local again = CP.FeatureRewards.pay('suspect', CID[12], { key = tostring(tabRun.id), outcome = 'got_away' })
+    H.eq(again, nil, 'crimtab: the same case never pays twice')
+
+    -- History: the case, its outcome, no strike
+    view = Cb('crimtab:get', 12) or {}
+    local h = view.history and view.history[1]
+    H.eq(h and h.outcome, 'got_away', 'crimtab: History shows the escape')
+    H.eq(h and h.dropout, nil, 'crimtab: ...no dropout')
+    H.eq(#(view.strikes or {}), 0, 'crimtab: no strike')
+    H.eq(view.active, nil, 'crimtab: Active is empty again')
+
+    def.locations = savedLocations
+    Config.DisabledMissions = {}
+end
+
+-- ============================================================================
+--                     6. GIVING UP AFTER THE FREE SECONDS
+-- ============================================================================
+-- A STRIKE, NOTHING PAID.
+
+do
+    Config.DisabledMissions = { 'manhunt', 'suspicious_activity' }
+    local def = CP.Missions.get('warrant_service')
+    local savedLocations = def.locations
+    def.locations = { def.locations[1] }
+    -- the same officers and volunteer again: the admin lifts the repeat limits in Settings (shipped 30 min, 30 min)
+    for _, c in ipairs({ { 'RealSuspects.jobHopMinutes', 0 }, { 'RealSuspects.suspectCooldownMinutes', 0 } }) do
+        local ok, err = Setting(8, c[1], c[2])
+        H.eq(ok, true, ('strike: the admin sets %s to %d: %s'):format(c[1], c[2], tostring(err)))
+    end
+    Place(12, vec3(-300.0, 6100.0, 31.0))
+    Place(1, vec3(-200.0, 6000.0, 31.0))
+    Place(2, vec3(-202.0, 6000.0, 31.0))
+    local view = Cb('crimtab:get', 12) or {}
+    if not (view.status and view.status.listed) then
+        Act('server:crimtab:act', 12, { what = 'join', roles = { 'runner' } })
+    end
+    ClearCooldowns()
+    local ok, data = Act('server:acceptType', 1, { missionType = 'investigation', realSuspect = true })
+    H.eq(ok, true, 'strike: the unit takes another Investigation: ' .. tostring(data))
+    H.fire('crimson-police:server:unitReady', 2, { accepted = true })
+    Secs(3)
+    local run = Runs.getBySrc(1)
+    view = Cb('crimtab:get', 12) or {}
+    local job = view.jobs and view.jobs[1]
+    H.ok(job ~= nil, 'strike: a second job reaches his tablet')
+    Act('server:crimtab:act', 12, { what = 'answer', token = job and job.token, yes = true })
+    -- the officers reach the start (not him): he waits past the free seconds, then gives up
+    local start = run and run.location.start.coords or vec3(0.0, 0.0, 0.0)
+    Place(1, start)
+    Place(2, vec3(start.x + 2.0, start.y, start.z))
+    Secs((Config.Volunteers.cancelGraceSeconds or 60) + 2)
+    view = Cb('crimtab:get', 12) or {}
+    H.eq(view.active and view.active.freeCancel, false, 'strike: past the free seconds, Give up warns of a strike')
+    ok = Act('server:crimtab:act', 12, { what = 'cancel' })
+    H.eq(ok, true, 'strike: Give up')
+    Secs(2)
+    view = Cb('crimtab:get', 12) or {}
+    H.eq(#(view.strikes or {}), 1, 'strike: History shows one strike')
+    H.eq(view.active, nil, 'strike: Active is empty')
+    if run and run.state ~= 'ended' then
+        Act('server:abandon', 1, run.id)
+        Act('server:abandon', 2, run.id)
+        Secs(3)
+    end
+    local rows = H.sql([[SELECT id FROM cp_mission_runs WHERE citizenid = ? AND mission_type = 'manual_award']],
+        { CID[12] })
+    H.eq(#rows, 1, 'strike: giving up pays nothing (still the one escape payment)')
     def.locations = savedLocations
     Config.DisabledMissions = {}
 end

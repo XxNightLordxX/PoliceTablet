@@ -34,6 +34,8 @@
   "crimtab.jobs.minutes": "{minutes} min after your yes",
   "crimtab.jobs.reward": "Reward",
   "crimtab.jobs.no_reward": "None from Crimson-Police",
+  "crimtab.jobs.reward_money": "${away} if you get away, ${caught} if you are caught (a fair case: police reached you and you played it out)",
+  "crimtab.jobs.reward_items": "Items may come with it.",
   "crimtab.jobs.consent": "Accept is your yes: the meet point becomes your map waypoint. Decline costs nothing.",
   "crimtab.jobs.accept": "Accept",
   "crimtab.jobs.decline": "Decline",

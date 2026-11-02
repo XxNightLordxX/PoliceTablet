@@ -23,7 +23,7 @@ export interface CrimJob {
     km?: number | null;
     seconds: number; // left to answer
     travelMinutes: number;
-    reward?: string | null; // G3
+    reward?: string | null; // what Pay volunteer suspects pays (server text), null while it is off
 }
 
 export interface CrimActive {

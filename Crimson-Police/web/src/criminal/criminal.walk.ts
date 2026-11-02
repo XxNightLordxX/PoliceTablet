@@ -64,6 +64,7 @@ async function steps(): Promise<void> {
         'Jobs: the question with its area',
     );
     ok(landingOf(view, null) === 'jobs' && badgeOf(view, 'jobs') === '1', 'a question waits: Jobs, with a badge');
+    ok(view?.jobs[0].reward?.startsWith('$1,500') === true, 'the job shows what Pay volunteer suspects pays (G7)');
     const token = view?.jobs[0].token;
     r = await act({ what: 'answer', token: 'stale', yes: true });
     ok(r.error === 'err.crimtab_job_gone', 'a stale token: the job is gone');

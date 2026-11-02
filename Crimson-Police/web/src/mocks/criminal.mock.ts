@@ -51,7 +51,7 @@ export function mockCrimJob(): void {
             km: 1.4,
             seconds: 30,
             travelMinutes: 5,
-            reward: null,
+            reward: '$1,500 if you get away, $500 if you are caught (a fair case: police reached you and you played it out)',
         },
     ];
 }

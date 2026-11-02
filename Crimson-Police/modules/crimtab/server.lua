@@ -45,6 +45,28 @@ local function TypeLabel(key)
     return type(key) == 'string' and key or nil
 end
 
+-- 1500 -> '1,500'
+local function Dollars(n)
+    local s = tostring(math.floor(Num(n, 0, 0)))
+    local out = s:reverse():gsub('(%d%d%d)', '%1,'):reverse()
+    return (out:gsub('^,', ''))
+end
+
+-- What Pay volunteer suspects (Config.FeatureRewards.suspect, step G3) pays for a fair case, as the Jobs card's
+-- Reward line; nil while it is off (the card says Crimson-Police pays nothing).
+function C.rewardText()
+    local FR = CP.FeatureRewards
+    if not (FR and FR.enabled and FR.enabled('suspect')) then return nil end
+    local away = FR.money('suspect', { outcome = 'got_away' })
+    local caught = FR.money('suspect', { outcome = 'detained' })
+    local cfg = FR.cfg('suspect') or {}
+    local items = type(cfg.items) == 'table' and next(cfg.items) ~= nil and (Config.Rewards or {}).enabled == true
+    if away <= 0 and caught <= 0 and not items then return nil end
+    local text = CP.L('crimtab.jobs.reward_money', { away = Dollars(away), caught = Dollars(caught) })
+    if items then text = text .. ' ' .. CP.L('crimtab.jobs.reward_items') end
+    return text
+end
+
 -- ============================================================================
 --                                   THE API
 -- ============================================================================
@@ -114,7 +136,7 @@ function C.view(src)
     local ask = volOn and V.askOf and V.askOf(cid) or nil
     if ask then
         ask.missionType = TypeLabel(ask.missionType)
-        ask.reward = nil -- G3: the volunteer reward of that mission type and role
+        ask.reward = C.rewardText()
     end
     local case = V.caseOf and V.caseOf(cid) or nil
     return {

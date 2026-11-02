@@ -3201,6 +3201,8 @@
   "crimtab.jobs.near": "close by",
   "crimtab.jobs.no_reward": "None from Crimson-Police",
   "crimtab.jobs.reward": "Reward",
+  "crimtab.jobs.reward_items": "Items may come with it.",
+  "crimtab.jobs.reward_money": "${away} if you get away, ${caught} if you are caught (a fair case: police reached you and you played it out)",
   "crimtab.jobs.travel": "Time to get there",
   "crimtab.jobs.type": "Job",
   "crimtab.outcome.booked": "Caught and booked",

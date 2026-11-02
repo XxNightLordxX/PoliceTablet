@@ -201,6 +201,13 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Settings → FeatureRewards.surrender.items: an unknown item name or a weapon is refused; `{ { item = 'water', count = 1 } }` is saved, and with Item rewards On the officer who talks a suspect down gets the water once per suspect. (G3)
 - [ ] Field training On and Pay field training sign-offs On: each sign-off pays the trainer $250 once; the last one pays the rookie $1000 once. Give points On: 10 points pay the officer $50 (at most $2500). (G3)
 
+## Every workflow end to end (G7)
+
+- [ ] Admin only: an officer who sends a setting change gets refused; the admin turns on Volunteers, Volunteers → modes (Investigation: players when available), the criminal tablet (Features), access Granted and Pay volunteer suspects in Settings, each at once, no restart. (G7)
+- [ ] Permissions → Extra grants → Criminal tablet for Ballas from grade 1: a Ballas grade 1 member opens `/crimtab`; a civilian outside the gang is refused; an officer on duty is refused. (G7)
+- [ ] The Ballas member gets on the list from Home; a unit accepts Investigation with Real suspect OK: Jobs shows the job with its Reward line "$1,500 if you get away, $500 if you are caught" and no position. Accept, travel, the unit reaches him (Active: giving up is no longer free), he runs and the unit gives the mission up: he is paid $1,500 cash once, History shows "got away" and no strike. (G7)
+- [ ] Live control → anti-farm → Clear cooldowns for both officers, and Settings → Real suspects: Job hop minutes and Suspect cooldown 0: the same unit and volunteer play again at once. He accepts, the unit waits at the start, after 60 s he presses Give up: one strike in History, Active empty, nothing paid. (G7)
+
 ## Restarts and logout
 
 - [ ] Start the server: the console shows the database or saves folder at version 11 (10 after O1, 11 after P1). (O1, P1)

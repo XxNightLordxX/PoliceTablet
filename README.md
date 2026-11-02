@@ -2585,7 +2585,9 @@ keeps its pop-up menu. It runs on volunteers, so `Config.Volunteers.enabled` mus
 - **History**: your strikes with when each runs out, a strikes block, and your past cases with how they ended (the
   last `historySize`, 20, since the last restart). **Rules**: the numbers of your server's config.
 - It never shows a run, an officer or anyone's live position, and every button is checked again by the server.
-- Rewards: Crimson-Police still pays volunteers nothing; a job shows "None from Crimson-Police".
+- Rewards: with **Pay volunteer suspects** off (`Config.FeatureRewards.suspect.enabled`, shipped) a job shows "None
+  from Crimson-Police". Turned on, the job's **Reward** line shows what a fair case pays, e.g. "$1,500 if you get away,
+  $500 if you are caught", plus "Items may come with it." when its items list is set and Item rewards are on.
 
 ---
 
