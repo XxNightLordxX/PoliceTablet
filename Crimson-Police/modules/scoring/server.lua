@@ -1097,6 +1097,17 @@ function Scoring.recheckBadges(citizenid)
     return CheckBadges(citizenid, true)
 end
 
+-- The field training badge (Config.FieldTraining.badge, step F3) while field training is on, else nil. Its sign-offs
+-- give it (CP.FieldTraining); an admin may grant or revoke it like an achievement.
+local function FieldTrainingBadge()
+    local FT = CP.FieldTraining
+    if not (FT and FT.enabled and FT.badge) then return nil end
+    local okE, on = pcall(FT.enabled)
+    if not okE or on ~= true then return nil end
+    local okB, id = pcall(FT.badge)
+    return okB and type(id) == 'string' and id ~= '' and id or nil
+end
+
 -- The badges an admin may grant or revoke: the achievements (ids and labels) and the recognition id shapes.
 function Scoring.badgeCatalog()
     local out = {
@@ -1110,6 +1121,8 @@ function Scoring.badgeCatalog()
             need = math.floor(Num(Config.Badges and Config.Badges[b.cfg], 0)),
         }
     end
+    local ft = FieldTrainingBadge()
+    if ft then out.achievements[#out.achievements + 1] = { id = ft, label = CP.L('badge.field_training'), need = 0 } end
     return out
 end
 
@@ -1120,6 +1133,7 @@ function Scoring.validBadgeId(id)
     for _, b in ipairs(BADGES) do
         if b.id == id then return true, 'achievement' end
     end
+    if id == FieldTrainingBadge() then return true, 'achievement' end
     local week = id:match('^officer_of_week_(%d%d%d%d%-%d%d%-%d%d)$')
     local metric, mweek = id:match('^top_(%a+)_(%d%d%d%d%-%d%d%-%d%d)$')
     week = week or mweek

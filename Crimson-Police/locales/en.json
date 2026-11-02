@@ -4699,6 +4699,7 @@
   "opp.line.outside_cuff_attempt": "{by}, outside the case, cuffed suspect {label}",
   "opp.line.outside_jail": "{by}, outside the case, jailed suspect {label} for {months} months",
   "opp.line.pair_repeat": "{who} and suspect {label}: {count} cases in a short time (repeated pairing)",
+  "opp.line.participant_cuff": "{who} put handcuffs on someone (a suspect or not)",
   "opp.line.peaceful_arrest": "Peaceful arrest of suspect {label} (talked down by: {by})",
   "opp.line.rejoined": "Suspect {label} came back after {seconds} s",
   "opp.line.respawn_in_contact": "Suspect {label} respawned with officers still with him: no protection",

@@ -208,6 +208,15 @@ export default function DevPanel() {
                         <button type="button" onClick={() => emitDebug('result', { result: sampleResult('test') })}>
                             Test
                         </button>
+                        <button type="button" onClick={() => emitDebug('result', { result: sampleResult('live') })}>
+                            Live case
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => emitDebug('result', { result: sampleResult('live_open') })}
+                        >
+                            Live (left)
+                        </button>
                         <button type="button" onClick={() => emitDebug('result', { result: null })}>
                             Hide
                         </button>

@@ -303,10 +303,18 @@ H.eq(FT.unitCheck({ rookie7 }, 'tactical'), false, 'a { type = true } map works 
 local m7 = FT.mine(7)
 H.ok(m7 and m7.training and m7.training.needsTrainer[1] == Config.MissionTypes.tactical.label,
     'the rookie\'s card lists the ride-along types')
+-- step F3: the same rule for a rookie who joins a live case as backup (CP.Runs.addParticipant)
+local okJ, errJ = FT.joinCheck('FT_ROO07', { 'FT_LOW05' }, 'tactical')
+H.ok(okJ == false and errJ == 'err.fto_trainer_needed', 'F3: a rookie joins a listed type only with his trainer on it')
+H.eq(FT.joinCheck('FT_ROO07', { 'FT_LOW05', 'FT_TRN03' }, 'tactical'), true, 'F3: his trainer is on the case')
+H.eq(FT.joinCheck('FT_ROO07', {}, 'patrol'), true, 'F3: a type not listed')
+H.eq(FT.joinCheck('FT_LOW05', {}, 'tactical'), true, 'F3: an officer not in training')
 FTC.enabled = false
 H.eq(FT.unitCheck({ rookie7 }, 'tactical'), true, 'off: no rule')
+H.eq(FT.joinCheck('FT_ROO07', {}, 'tactical'), true, 'F3 off: no rule for a backup either')
 FTC.enabled = true
 FTC.requireTrainerFor = {}
+H.eq(FT.joinCheck('FT_ROO07', {}, 'tactical'), true, 'F3: an empty rule')
 
 local bonusRows = {}
 CP.Scoring = {
@@ -333,5 +341,27 @@ H.ok(Toasts('fto.toast.bonus') == 1, 'the trainer is told')
 FTC.trainerBonus = 99999
 H.eq(FT.trainerBonus(), 1000, 'the bonus is capped at 1000')
 FTC.trainerBonus = 0
+
+-- ============================================================================
+--             STEP F3: THE BADGE IN THE ADMIN UI GRANT/REVOKE LIST
+-- ============================================================================
+
+for _, k in ipairs({ 'onDutyChange', 'onJobChange', 'onPlayerLoaded', 'onPlayerUnload' }) do
+    CP.Qbx[k] = CP.Qbx[k] or function() end
+end
+H.load('modules/scoring/server.lua')
+local function Listed()
+    for _, a in ipairs(CP.Scoring.badgeCatalog().achievements) do
+        if a.id == 'field_training' then return a end
+    end
+    return nil
+end
+local a = Listed()
+H.ok(a ~= nil and a.label == 'Field Training', 'F3: the field training badge is in the grant/revoke list')
+H.eq(CP.Scoring.validBadgeId('field_training'), true, 'F3: an admin may grant or revoke it')
+FTC.enabled = false
+H.eq(Listed(), nil, 'F3: field training off: not listed')
+H.eq(CP.Scoring.validBadgeId('field_training'), false, 'F3: off: not a badge an admin may grant')
+FTC.enabled = true
 
 return H

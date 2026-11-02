@@ -2,6 +2,7 @@
 
 import uiLocale from '../../../locales/parts/ui.json';
 import type { ActiveMissionView, HudState, RunResult, Session, Theme, UiKind } from '../shared/types';
+import type { LiveCaseView } from '../types/run_ui';
 import { devState, type DevDept } from './devState';
 import { BROKEN_LOGO, FIB_LOGO, SAST_LOGO } from './logos';
 
@@ -276,9 +277,71 @@ export function sampleHud(kind: SampleHudKind = 'progress'): HudState {
 //                                    RESULT
 // ============================================================================
 
-export type SampleResultKind = 'completed' | 'failed' | 'test' | 'flagged';
+export type SampleResultKind = 'completed' | 'failed' | 'test' | 'flagged' | 'live' | 'live_open';
+
+// A live case's result card (RunResult.live, step V16): every outcome a suspect can have, or (live_open) the note of an
+// officer who left while the case still ran. ?result=live or ?result=live_open, or DevPanel → Result.
+function sampleLiveResult(open: boolean): RunResult {
+    const base = sampleResult('completed');
+    return {
+        ...base,
+        runId: 'run-live-1',
+        missionLabel: 'Live case',
+        endReason: open ? 'quit' : 'completed',
+        result: open ? 'abandoned' : 'completed',
+        participants: 3,
+        departments: 1,
+        points: { ...base.points, linesOnly: true },
+        live: open
+            ? { title: 'Shots at the lab', street: 'Seaview Rd', open: true }
+            : {
+                  title: 'Shots at the lab',
+                  street: 'Seaview Rd',
+                  outcomes: [
+                      { label: 'A', outcome: 'booked' },
+                      { label: 'B', outcome: 'detained' },
+                      { label: 'C', outcome: 'got_away' },
+                      { label: 'D', outcome: 'left' },
+                      { label: 'E', outcome: 'void' },
+                      { label: 'F', outcome: 'stopped' },
+                  ],
+              },
+    };
+}
+
+// The live case card on Active Mission (CP.LiveCrime.caseView, step V16), one per step: responding, securing the
+// scene (with its seconds) and detaining (with the last-reported points). The Gallery and ?runv=live show them.
+export const SAMPLE_LIVE_CASES: LiveCaseView[] = [
+    { title: 'Shots at the lab', street: 'Seaview Rd', suspects: 2, host: true, phase: 'respond', reportsOn: true },
+    {
+        title: 'Shots at the lab',
+        street: 'Seaview Rd',
+        suspects: 2,
+        phase: 'secure',
+        secureS: 24,
+        secureNeed: 60,
+        reported: ['A'],
+        reportedAgoS: 12,
+        nextReportS: 48,
+        reportsOn: true,
+    },
+    {
+        title: 'Store robbery',
+        street: 'Innocence Blvd',
+        suspects: 3,
+        host: true,
+        phase: 'detain',
+        secureS: 60,
+        secureNeed: 60,
+        reported: [],
+        reportedAgoS: 75,
+        nextReportS: null,
+        reportsOn: false,
+    },
+];
 
 export function sampleResult(kind: SampleResultKind = 'completed'): RunResult {
+    if (kind === 'live' || kind === 'live_open') return sampleLiveResult(kind === 'live_open');
     if (kind === 'failed') {
         return {
             runId: 'run-hostage-1',

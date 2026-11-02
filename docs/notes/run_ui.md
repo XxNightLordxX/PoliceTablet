@@ -125,9 +125,12 @@ No Lua API, no events, no callbacks are registered by this slice.
 ## Browser mocks (src/mocks/run_ui.mock.ts)
 - `?board=normal | unit | member | locked | busy | oncall | boss | bossused | operation | opjoined | oprunning |
   opwaiting | opclosed | empty | error | edge` (`&oncall=1` combines "on a call" with any variant) and
-  `?runv=none | accepted | offroute | progress | test | log | silence | boss | untracked | edge`. `edge` answers
+  `?runv=none | accepted | offroute | progress | test | log | silence | boss | untracked | edge | live`. `edge` answers
   the way Lua's JSON encoding arrives (empty lists as `{}`, nil fields missing, no optional extras, very long
   labels/names, missing callsigns, a 3-choice log); `empty` sends `cards: {}`.
+- `live` (step F3): a live case In progress with its case card (`SAMPLE_LIVE_CASES[1]`, the Secure step). The three
+  case cards also show in the Gallery, and `?result=live` / `?result=live_open` (DevPanel → Result → Live case, Live
+  (left)) show the result card's suspect outcomes, every one of them, or the "left while it ran" note.
   (default none, or progress while the dev panel's run toggle / `?run=1` is on). The `getRun` mock is a normal
   registration, so it overrides core.mock.ts's fallback; it follows `devState.runActive`.
 - Accepting a type starts a simulated run (random mission of that type, 25% modifier, route distance shrinking,

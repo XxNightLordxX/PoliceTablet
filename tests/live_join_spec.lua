@@ -289,9 +289,16 @@ do
     run.scaled = run.mission.objectives
     run.objectives[1].prepared = true
     run.objectives[1].status = 'active'
+    run.objectives[1].hud = { detail = 'Secure the scene' }
     Place(8, vec3(0.0, 30.0, 30.0))
     local p = Runs.addParticipant(run, 8, { via = 'scene' })
     H.ok(p ~= nil, 'a run in progress takes a late joiner')
+    local hudText = nil
+    for _, e in ipairs(ClientEvents('client:hud', 8)) do
+        local list = type(e.args[2]) == 'table' and e.args[2].objectives or nil
+        if list and list[1] and list[1].current then hudText = list[1].detail end
+    end
+    H.eq(hudText, 'Secure the scene', 'F3: the late joiner sees the active objective\'s HUD text at once')
     H.eq(#ClientEvents('client:inProgress', 8), 1, 'his client gets the In progress state')
     local starts = 0
     for _, e in ipairs(ClientEvents('client:objective', 8)) do
@@ -310,6 +317,42 @@ do
 
     local npc = { id = 'npc-run', state = 'in_progress', participants = {}, order = {}, score = { shared = {} } }
     H.eq(select(2, Runs.addParticipant(npc, 10)), 'err.run_not_active', 'a run CP.Runs does not hold')
+end
+
+-- ============================================================================
+--                                   STEP F3
+-- ============================================================================
+-- THE RIDE-ALONG RULE FOR A BACKUP, THE CUFF HINT LINE.
+
+do
+    local asked = nil
+    CP.FieldTraining = {
+        joinCheck = function(cid, unit, missionType)
+            asked = { cid = cid, unit = unit, missionType = missionType }
+            if cid == 'OF11' then return false, 'err.fto_trainer_needed' end
+            return true
+        end,
+    }
+    Place(11, vec3(0.0, 50.0, 30.0))
+    H.eq(select(2, Runs.addParticipant(run, 11)), 'err.fto_trainer_needed',
+        'F3: a rookie without his trainer on the case cannot join as backup')
+    H.eq(run.participants[11], nil, '...he is not in the run')
+    H.ok(asked and asked.missionType == 'tactical' and asked.cid == 'OF11', '...asked for the case\'s mission type')
+    local inUnit = {}
+    for _, c in ipairs(asked and asked.unit or {}) do inUnit[c] = true end
+    H.ok(inUnit.OF1 and inUnit.OF3 and not inUnit.OF8, '...with the active officers of the case as his unit')
+    Place(12, vec3(0.0, 60.0, 30.0))
+    H.ok(Runs.addParticipant(run, 12) ~= nil, 'F3: anyone else joins as before')
+    CP.FieldTraining = nil
+
+    local before = #LinesOf('participant_cuff')
+    H.eq(LC.cuffHint(run, 3), true, 'F3: CP.LiveCrime.cuffHint exists for the proof\'s cuff pair')
+    H.eq(#LinesOf('participant_cuff'), before + 1, '...a staff line in the case timeline')
+    H.eq(LinesOf('participant_cuff')[before + 1].src, 3, '...naming the officer')
+    H.eq(LC.cuffHint(run, 3), false, '...at most one per officer every 10 s')
+    H.advance(10001)
+    H.eq(LC.cuffHint(run, 3), true, '...and again after that')
+    H.eq(LC.cuffHint({ id = 'npc', state = 'in_progress' }, 3), false, 'not a live case: no line')
 end
 
 Config.LiveCrime = keep

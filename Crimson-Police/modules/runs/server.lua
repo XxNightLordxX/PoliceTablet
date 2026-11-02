@@ -3752,6 +3752,13 @@ function Runs.addParticipant(run, src, opts)
     local okE, set = Call('Calls', 'exemptFor', run)
     local okC, onCall = Call('Calls', 'isOnCall', src, okE and type(set) == 'table' and { except = set } or nil)
     if okC and onCall == true then return nil, 'err.on_call' end
+    -- field training's ride-along rule (step F3): a rookie joins as backup only where his trainer is on the case
+    local unit = {}
+    for _, q in pairs(run.participants) do
+        if q.status == 'active' and type(q.citizenid) == 'string' then unit[#unit + 1] = q.citizenid end
+    end
+    local okT, trainerOk, ftErr = Call('FieldTraining', 'joinCheck', o.citizenid, unit, run.missionType)
+    if okT and trainerOk == false then return nil, ftErr or 'err.fto_trainer_needed' end
     local okF, first = Call('Scoring', 'isFirstRunSinceDuty', src)
     -- no yield from here until he is in the run: what the lookups may have changed is checked again
     if not Open() then return nil, 'err.run_not_active' end

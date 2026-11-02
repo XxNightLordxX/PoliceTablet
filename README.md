@@ -1446,10 +1446,12 @@ Admin UI → Settings → Police → Field training).
 2. Set the sign-off tasks: `Config.FieldTraining.tasks`, how many completed missions of each type the rookie must run
    with his trainer (`{ patrol = 3, investigation = 2, tactical = 1 }` shipped).
 3. `rookiesPerTrainer` (2) caps the rookies one trainer has at once; `badge` (`field_training`) is the badge a rookie
-   gets at the end.
+   gets at the end. While field training is on, an admin can also grant or revoke it in **Admin UI → Officers →
+   Badges** like the other badges.
 4. Optional ride-along rule: `requireTrainerFor`, a list of mission type keys (for example `{ 'tactical' }`) a rookie
-   may only accept (or claim as a mission call) with his trainer in the same unit. Shipped empty: a rookie takes every
-   type with anyone.
+   may only accept (or claim as a mission call) with his trainer in the same unit. The same rule holds when he joins
+   a live case as backup: only while his trainer is on that case. Shipped empty: a rookie takes every type with
+   anyone.
 5. Optional trainer bonus: `trainerBonus`, points the trainer gets for each task he signs off (shipped 0 = none; at
    most 1000). The points show in his history as "Field training sign-off".
 

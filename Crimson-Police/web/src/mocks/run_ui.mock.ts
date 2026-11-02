@@ -18,7 +18,7 @@ import type {
     TypeCard,
 } from '../types/run_ui';
 import { devState } from './devState';
-import { MOCK_DEPARTMENTS, mockLocale } from './samples';
+import { MOCK_DEPARTMENTS, SAMPLE_LIVE_CASES, mockLocale } from './samples';
 
 const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
 const boardVariant = params.get('board') ?? 'normal';
@@ -553,6 +553,8 @@ interface MockRunState {
     cashBase: number;
     pointsBase: number;
     simulated: boolean;
+    // A live case's card (?runv=live, step V16); absent on any other run.
+    live?: ActiveMissionData['live'];
 }
 
 let mockRun: MockRunState | null = null;
@@ -739,6 +741,25 @@ function variantRun(kind: string): MockRunState | null {
         startRun(r, 900);
         return r;
     }
+    if (kind === 'live') {
+        // A live case (V16): the reported crime's card in its Secure step; the HUD line reads the same.
+        const tp = findType('tactical') as MockType;
+        const r = newRun(tp, missionOf('tactical', 'gang_shootout'), { partners: [me(), { ...MARIA }] });
+        startRun(r, 1500);
+        r.partners = r.partners.map(p => ({ ...p, arrived: true }));
+        r.objectives = [
+            {
+                label: 'Respond to the reported crime',
+                done: false,
+                current: true,
+                value: 24,
+                max: 60,
+                detail: 'Secure the scene: stay near it',
+            },
+        ];
+        r.live = SAMPLE_LIVE_CASES[1];
+        return r;
+    }
     if (kind === 'boss') {
         const r = newRun(null, BOSS, {
             partners: [me(), { ...MARIA }, { ...DANA }],
@@ -849,6 +870,7 @@ function view(r: MockRunState): ActiveMissionData {
                 ? Math.max(0, Math.round((r.startDeadline - Date.now()) / 1000))
                 : null,
         area: r.radioSilence ? r.mission.area : null,
+        live: r.live ?? null,
     };
 }
 

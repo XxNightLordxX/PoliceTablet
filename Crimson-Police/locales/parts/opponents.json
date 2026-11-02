@@ -83,6 +83,7 @@
   "opp.line.officer_joined": "Officer {label} joined the case ({why})",
   "opp.line.join_offered": "{who} was offered to join the case ({why})",
   "opp.line.join_declined": "{who} did not join the case",
+  "opp.line.participant_cuff": "{who} put handcuffs on someone (a suspect or not)",
   "opp.line.armed": "Suspect {label} was armed ({why})",
   "opp.line.down": "Suspect {label} went down",
   "opp.line.up": "Suspect {label} got up",

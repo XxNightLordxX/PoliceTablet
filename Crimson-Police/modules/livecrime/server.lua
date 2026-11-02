@@ -965,6 +965,24 @@ local function Joined(run, src)
     end
 end
 
+-- CP.Opponents' proof (the cuff pair, ARCHITECTURE 5.46, step F3): a participant of a live case put cuffs on someone,
+-- a suspect or not (C5: the line never says which). A staff line in the case timeline, at most one per officer every
+-- CUFF_LINE_MS so that a cuff spam does not push the older lines out.
+local CUFF_LINE_MS = 10000
+local cuffLineAt = {}             -- [runId] = { [src] = GetGameTimer() of his last line }
+
+function LC.cuffHint(run, src)
+    src = math.tointeger(tonumber(src))
+    if not src or not LC.isLive(run) or run.state == 'ended' then return false end
+    local byRun = cuffLineAt[run.id] or {}
+    cuffLineAt[run.id] = byRun
+    local now = GetGameTimer()
+    if byRun[src] and now - byRun[src] < CUFF_LINE_MS then return false end
+    byRun[src] = now
+    Opp('timeline', run, { what = 'participant_cuff', src = src })
+    return true
+end
+
 RegisterNetEvent(CP.e('server:liveJoin'), function(runId, token, yes)
     local src = math.tointeger(tonumber(source))
     if not src or src <= 0 then return end
@@ -994,7 +1012,7 @@ if CP.Hooks and CP.Hooks.on then
     end)
     CP.Hooks.on('run:ended', function(run, state, reason)
         if type(run) ~= 'table' then return end
-        offers[run.id], scanAt[run.id] = nil, nil
+        offers[run.id], scanAt[run.id], cuffLineAt[run.id] = nil, nil, nil
         if type(run.live) == 'table' then Closed(run, state, reason) end
     end)
     CP.Hooks.on('participant:joined', function(run, src)

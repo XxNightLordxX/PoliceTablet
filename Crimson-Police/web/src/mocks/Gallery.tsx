@@ -42,6 +42,8 @@ import { Header } from '../layouts/Header';
 import { TabletFrame } from '../layouts/TabletFrame';
 import { Watermark } from '../shared/components';
 import { closeTopLayer } from '../shared/hooks';
+import { LiveCaseCard } from '../officer/components/LiveCaseCard';
+import { SAMPLE_LIVE_CASES } from './samples';
 
 interface GalleryRow {
     rank: number;
@@ -354,6 +356,18 @@ export default function Gallery({ onClose }: { onClose: () => void }) {
                                     Board cards use muted + highlight for locked states.
                                 </Card>
                             </Grid>
+
+                            <Card
+                                title="Live case card"
+                                subtitle="Active Mission: Respond, Secure (seconds), Detain (reports off)"
+                                icon="shield"
+                            >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {SAMPLE_LIVE_CASES.map(live => (
+                                        <LiveCaseCard key={live.phase} live={live} />
+                                    ))}
+                                </div>
+                            </Card>
                         </Screen>
                     </div>
                 </main>

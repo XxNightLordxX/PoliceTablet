@@ -3014,8 +3014,9 @@ facts that decide every detain and booking. Inputs: the `CP.ScPolice.on` facts (
 metadata mirror through `Opp.onMeta` (ignored while the suspect is in a bucket other than 0, where Crimson-Arena
 rewrites cuffs and downs) and `Opp.onTick`. Times are GetGameTimer() ms. Nothing here calls CP.AntiCheat.flag: a
 suspect's own acts are `Opp.note`s.
-- Cuff pair. A 'cuff' by an active participant of a run with `run.live` calls `CP.LiveCrime.cuffHint(run, src)` (when
-  it exists) for every target, suspect or not (C5), after the attempt below is kept. On a free suspect the attempt is
+- Cuff pair. A 'cuff' by an active participant of a run with `run.live` calls `CP.LiveCrime.cuffHint(run, src)` (F3:
+  the staff timeline line `participant_cuff` naming the officer, never the target, at most one per officer every 10 s)
+  for every target, suspect or not (C5), after the attempt below is kept. On a free suspect the attempt is
   kept only when the officer is on duty in a turned-on department job (`CP.Qbx.getInfo` job and
   `CP.Access.departmentForJob`, never `getOfficer`: a listener must not yield, and getOfficer's suspension and retired
   lookups await the database on a cache miss, so the suspect's cuffed state could arrive first; a participant passed
@@ -3377,15 +3378,17 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
   (`server:liveJoin`, `LC.answer`) with the right token before `untilMs` calls `CP.Runs.addParticipant(run, src, {
   via })`: refuses a run it does not hold or that ends, a run that is not live (or a test or operation),
   `err.live_join_left` (a leave is final), on a run, in the arena, `getOfficer` (duty, suspensions, retired), a
-  mission ban, `isOnCall` with `exemptFor(run)` (his response to the crime's call is part of the case), then
+  mission ban, `isOnCall` with `exemptFor(run)` (his response to the crime's call is part of the case), field
+  training's ride-along rule (F3, `CP.FieldTraining.joinCheck` with the active participants as his unit), then
   `joinCheck` again with no yield until he is in `run.participants` / `order` / `bySrc` (`joinedLate`, `joinedVia`,
   `sharedBefore` = a copy of `run.score.shared`: CP.Scoring's count of a shared line subtracts it, so lines recorded
   before he joined are not his). His client gets `client:start` (the run's `clientStart`, kept for live runs, with the
   participants and host of now), CP.NpcCombat's `runStarted`, `CP.Route.begin` (the run's locked route rule), and
   while In progress `client:inProgress` (remaining time) and `prepare` / `start` of the active objective; the case's
   officers are told, `participant:joined` fires (CP.LiveCrime: the timeline line `officer_joined`, the
-  `rs_linked_accounts` flag as at the open) and the run view is pushed. The timeline also keeps `join_offered` and
-  `join_declined`. Pair rows at the end include him (he is in `run.participants`).
+  `rs_linked_accounts` flag as at the open) and the run view is pushed, with the HUD objectives forced out again
+  (`RefreshHud(run, true)`: the active objective's `o.hud` detail, value and max, so he sees the live_response phase
+  text at once). The timeline also keeps `join_offered` and `join_declined`. Pair rows at the end include him (he is in `run.participants`).
 - **The officers' tablet (V16).** `Config.LiveCrime.caseCard` and `resultOutcomes` (both shipped true, behind
   `enabled`). Labels and counts only: never a citizenid, a server id, a position or, while the case runs, one
   suspect's state (the steps are the same for every suspect, like the HUD).
@@ -4121,6 +4124,11 @@ in training. Every read-change-write of one record runs under a per-rookie lock 
   a rookie other than the leader into `err.member_fto_trainer_needed`. `FT.trainerBonus()` (0 to 1000): after a
   sign-off, `CP.Scoring._insertBonusRow(trainer, 'manual_award', 'fto_bonus', n, ...)` (breakdown.by
   `field_training`, so supervisors' daily award limits never count it), toast `fto.toast.bonus`.
+- F3: `FT.joinCheck(cid, unitCids, missionType) -> true | false, 'err.fto_trainer_needed'`: the same rule for an
+  officer who joins a live case late; `CP.Runs.addParticipant` asks it (among its yielding lookups) with the active
+  participants' citizenids as his unit and `run.missionType`. While enabled, `Scoring.badgeCatalog()` lists
+  `FT.badge()` among the achievements (label `badge.field_training`, need 0) and `Scoring.validBadgeId` accepts it,
+  so the Admin UI grants and revokes it like an achievement (its override never re-runs a count).
 - Reads: `fto:getMine` (Profile → Field training: `{ training?, rookies, trainerBonus }`, `training.needsTrainer` the
   ride-along type labels; `false` when off or nothing to show) and
   `sup:getFieldTraining { department? }` (Department Report: `FtoDept`, the department's pairings, up to 300 officers

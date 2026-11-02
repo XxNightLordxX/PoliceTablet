@@ -320,6 +320,21 @@ function FT.unitCheck(officers, missionType)
     return true
 end
 
+-- A live case's backup (CP.Runs.addParticipant, step F3): the same rule for the officer who joins late, with the
+-- officers already on the case as his unit. unit = { citizenid, ... } (the active participants).
+-- -> true | false, 'err.fto_trainer_needed'. Reads nothing while the rule is empty or does not list missionType.
+function FT.joinCheck(cid, unit, missionType)
+    if not FT.enabled() or type(missionType) ~= 'string' or not FT.requiredTypes()[missionType] then return true end
+    cid = Cid(cid)
+    local r = cid and ReadRow(cid) or nil
+    local rec = r and r.record
+    if not Active(rec) then return true end
+    for _, c in ipairs(type(unit) == 'table' and unit or {}) do
+        if c == rec.trainer then return true end
+    end
+    return false, 'err.fto_trainer_needed'
+end
+
 -- ============================================================================
 --                         SUPERVISORS: PAIR AND UNPAIR
 -- ============================================================================
