@@ -546,8 +546,8 @@ do
     -- RT1's sentences, word for word
     H.ok(Has(
         route,
-        'The owner may switch this rule off (Config.Route.required = false, at the owner\'s request of '
-            .. '2026-10-26): the route is still shown and checked for arrival, but leaving it never ends a run.'
+        'The owner may switch this rule off (Config.Route.required = false): the route is still shown and '
+            .. 'checked for arrival, but leaving it never ends a run.'
     ), 'Route to the start keeps RT1\'s Config.Route.required text')
     H.ok(Has(
         switches,

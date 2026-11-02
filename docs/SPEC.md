@@ -14,11 +14,11 @@ These rules override everything else in this spec. If another section, example o
 
 - Names: the resource folder MUST be Crimson-Police (events, callbacks and tags keep the lowercase prefix crimson-police) and the tablet MUST be titled "Crimson-Police". The officer command MUST be /CrimsonPolice and the admin command MUST be /CrimsonPoliceAdmin. Volunteer suspects use the command in Config.Volunteers.command (default /crimsonheat).
 
-- Access: only on-duty players whose active Qbox job belongs to a department in Config.Departments MAY use the Officer UI. There are no activation requirements: no activity check, no minimum officers online and no quiet timer. Exception (owner decision 2026-10-26): a mission type or mission set to 'players_only' in Config.Volunteers is offered only while a volunteer suspect who fits is online.
+- Access: only on-duty players whose active Qbox job belongs to a department in Config.Departments MAY use the Officer UI. There are no activation requirements: no activity check, no minimum officers online and no quiet timer. Exception (owner decision): a mission type or mission set to 'players_only' in Config.Volunteers is offered only while a volunteer suspect who fits is online.
 
 - Roles: there are exactly three roles: Officer, Supervisor (job grade at or above the department's supervisorGrade) and Admin (ace crimsonpolice.admin, or a Qbox admin, the ace admin that stock Qbox gives group.admin, while Config.QboxAdmins is true). There are no cadet, detective or other roles. Supervisors get the same missions as officers. Ranks and callsigns are read from Qbox, as SC-Police sets them, and are never edited by Crimson-Police.
 
-- Mission choice: officers and supervisors MUST only pick a mission type on the Mission Board or claim a mission call on the Dispatch screen, and the server MUST draw the mission at random. A mission call names a mission type, a priority and an area, never a mission, and the server draws the mission from that type's missions that start in the area only after the claim. A call names an area to a viewer only when that viewer's eligible pool in the area (after unit size, no-repeat, cooldowns and daily limits) holds at least 2 missions; otherwise it shows "County-wide" and draws from the same pool as the Mission Board, so a call is never narrower than the board. A call a supervisor or admin posts or pages is drawn at random like any other and can never be claimed by the issuer's own unit, so it is not an exception. The Officer UI MUST NOT list, preview or let anyone pick a specific mission, and there is no reroll. Only five exceptions exist: the Weekly Boss event card, a supervisor or admin picking one specific mission to launch as a Cross-Department Mission, test runs (Admin test mode, and the Mission Builder's test run of a draft), which are never saved or paid, a LIVE call on the Dispatch screen (a real crime reported by Crimson-Contracts: no draw), and a mission a supervisor or admin pushes to one unit (the pushMission Mission control, owner decision 2026-10-19, shipped off): a paged call that names one mission, offered only to that unit, which may accept or decline it; only that unit sees the mission's name, never the issuer's own unit, every accept rule still applies, it never earns rapid response, a supervisor pushes only to units of his own department and at most Config.MissionControls.pushMissionPerDay a day, and the audit names the mission. A 'players_only' type (Config.Volunteers) draws only from missions that can take a volunteer, still at random.
+- Mission choice: officers and supervisors MUST only pick a mission type on the Mission Board or claim a mission call on Dispatch, and the server MUST draw the mission at random after the claim. A call names a type, a priority and an area, never a mission; it names an area to a viewer only when his eligible pool there (after unit size, no-repeat, cooldowns and daily limits) holds at least 2 missions, else "County-wide" from the board's pool, so a call is never narrower than the board. Staff-posted or paged calls draw at random like any other and never go to the issuer's own unit. The Officer UI MUST NOT list, preview or let anyone pick a specific mission, and there is no reroll. Only five exceptions exist: the Weekly Boss event card; a mission launched as a Cross-Department Mission; test runs (Admin test mode and the builder's draft test), never saved or paid; a LIVE call (a real crime reported by Crimson-Contracts: no draw); and a mission pushed to one unit of the supervisor's own department (the pushMission Mission control, owner decision, shipped off; its rules are under Mission controls). A 'players_only' type (Config.Volunteers) draws only from missions that can take a volunteer, still at random.
 
 - Cross-Department Missions: while one is active, every department's Mission Board MUST show only that mission, and the server MUST refuse every other new mission until it is completed or cancelled. Admin test runs are the only exception.
 
@@ -26,7 +26,7 @@ These rules override everything else in this spec. If another section, example o
 
 - Cash payouts: every mission pays its mission type's payout × its star multiplier (the Weekly Boss pays its own event payout from config) unless an admin has set a payout for that specific mission. Supervisors MAY change a type's payout only if no admin has set it, and only within Config.Payouts.supervisorRange. A supervisor may raise a cash bonus only inside admin-set bounds (the happyHourCash and twistCash Mission controls), never on test runs, Cross-Department runs or the Weekly Boss, and always under Config.Cash.dailyCap. Only admins MAY set a single mission's payout. Any payout an admin sets is permanent until an admin changes or clears it.
 
-- Points: leaderboard points come from Config.MissionTypes and the scoring rules. Officers MUST NOT be able to change points in game. Supervisors MAY give points only through Mission controls an admin switched on (owner decision 2026-10-19): the typeOfTheDay control picks their department's Type of the Day for the next day (never today), at most once a day, with the admin's Config.Events.todMultiplier, never doubling the setter's own runs or a unit he is in; the happyHourPoints and twistPoints controls raise points only inside the admin's min and max (x the final points of a run his department leads that was accepted during a happy hour, never for its starter or a unit he is in; x each twist's points share, still under Config.Events.twistMaxPoints), on completed runs only, never on test runs, Cross-Department runs or the Weekly Boss; the goals control picks which of the admin's Config.Goals goals (with their points unchanged) their department's officers draw from, from the next weekly reset, never for the setter; the awardPoints control gives an officer of their own department a logged manual award of the admin's min to max points (Config.MissionControls.awardPointsPerDay in all a day per supervisor), through the admin's own point-adjust path and its guards (Config.AdminControl), never to any character on the supervisor's own license, always with a reason and audited as 'supervisor'. Only an admin MAY change point values: by changing a point setting in the Admin UI Settings screen (every change is in the audit log) or by a logged manual award or deduction (a new signed row, never an edit of old rows; see Full admin control).
+- Points: leaderboard points come from Config.MissionTypes and the scoring rules. Officers MUST NOT be able to change points in game. Supervisors MAY give points only through Mission controls an admin switched on (owner decision), inside the admin's bounds, never for themselves, their other characters or their unit, never on test, Cross-Department or Weekly Boss runs, audited: typeOfTheDay, happyHourPoints, twistPoints, goals (which of the admin's Config.Goals their department draws from the next weekly reset) and awardPoints (a logged manual award through the admin's point-adjust path and its guards). Only an admin MAY change point values: a point setting in Admin UI → Settings (audited) or a logged manual award or deduction (a new signed row, never an edit; see Full admin control).
 
 - Server authority: the server decides draws, scaling, points and cash. The client MUST NOT send point or cash amounts; it only reports objective events, which the server validates.
 
@@ -40,7 +40,7 @@ These rules override everything else in this spec. If another section, example o
 
 - No mission alerts: from the moment a participant reaches the mission start until their run ends, their mission combat MUST NOT create SC-Dispatch or SC-Ambulance alerts (shots fired, person down), and any such call that still appears in SC-Dispatch MUST be cleared automatically. A downed participant can still get EMS help. In a case with a real suspect, Config.RealSuspects.officerAlerts decides; shipped: alerts go out like any officer's.
 
-- Route to the start: participants MUST follow the route shown to the mission start; staying off it ends their run as Abandoned. The owner may switch this rule off (Config.Route.required = false, at the owner's request of 2026-10-26): the route is still shown and checked for arrival, but leaving it never ends a run. A run keeps the value it was accepted with, and a test run follows its own Start route switch. Late partners (the owner's decision of 2026-10-19): once the run is In progress, a participant still on his way follows the action instead of an empty start: his route is no longer checked, his GPS leads to the current objective, and he arrives within Config.Route.lateArriveRange (150 m) of it or at the start (0 = only the start counts). From then on he has Config.Route.followActionSeconds (300 s) to arrive, never less time than he had (0 = the start deadline from his accept). In a case with a real suspect, Config.RealSuspects.routeEnds decides; shipped: the route ends at the first contact with a suspect. On a live crime Config.LiveCrime.requireRoute (shipped false) replaces Config.Route.required: officers on a live case may leave the GPS route to chase. Volunteer-suspect missions follow Config.Route.required.
+- Route to the start: participants MUST follow the route shown to the mission start; staying off it ends their run as Abandoned. The owner may switch this rule off (Config.Route.required = false): the route is still shown and checked for arrival, but leaving it never ends a run. A run keeps the value it was accepted with, and a test run follows its own Start route switch. Late partners (owner decision): once the run is In progress, a participant still on his way follows the action: his route is no longer checked, his GPS leads to the current objective, and he arrives within Config.Route.lateArriveRange (150 m) of it or at the start (0 = only the start counts), within Config.Route.followActionSeconds (300 s) from then, never less time than he had. In a case with a real suspect, Config.RealSuspects.routeEnds decides; shipped: the route ends at the first contact with a suspect. On a live crime Config.LiveCrime.requireRoute (shipped false) replaces Config.Route.required: officers on a live case may leave the GPS route to chase. Volunteer-suspect missions follow Config.Route.required.
 
 - Downed participants: a participant who goes down has Failed their run. If no EMS is on duty, they MUST be picked up automatically (revived and moved to a drop-off point). In a case with a real suspect, Config.RealSuspects.downed and downedPickupDelay decide; shipped: a downed officer keeps what he earned, no type cooldown, pick-up after 400 s.
 
@@ -58,13 +58,13 @@ Everything below was considered and removed. Do not add it back, even as an opti
 
 - Missions: Traffic Control, DUI Checkpoint, Abandoned Vehicle (a plain tow job), Range Qualification, Evidence Recovery, Rooftop Shooter, Air Support, Harbor Interdiction, and anything using cones. Traffic Enforcement (pacing one moving violator at a time, stopping it and working the contact), Illegal Parking Patrol (a judgement sweep of parked cars) and Suspicious Activity (a scene contact that ends in a decision) are allowed as their mission cards describe them.
 
-- Activation: no server activity state (Quiet / Busy / Active), no priority-traffic command, no minimum officers online (a 'players_only' type needing a volunteer is the owner's choice, see Access), no mission pause and no Expired state (the maintenance lock of a storage copy, a storage switch or a backup restore is not a pause and not a switch: it ends with a restart, or after a restore that stopped part way with a restore that works; see Full admin control). Mission calls lapse when nobody claims them; a lapsed call is not a run state, and nothing pauses the Mission Board except the Cross-Department lock.
+- Activation: no server activity state (Quiet / Busy / Active), no priority-traffic command, no minimum officers online (a 'players_only' type needing a volunteer is the owner's choice, see Access), no mission pause and no Expired state (the maintenance lock of Full admin control is not a pause). Mission calls lapse when nobody claims them; a lapsed call is not a run state, and nothing pauses the Mission Board except the Cross-Department lock.
 
 - Mission choice: no list of individual missions on the officer Mission Board, no picking or previewing a specific mission (apart from the Weekly Boss card, Cross-Department Missions, test runs and a mission staff push to one unit, the pushMission Mission control), no reroll.
 
 - Roles: no cadet, detective, FTO or supervisor-only missions, no grade-restricted mission pools, and no separate builder permission.
 
-- Payouts and points: no in-game editing of points by officers, no point values edited by supervisors (they give points only through the Mission controls the Points Hard rule names, such as their department's Type of the Day, the points bonuses inside the admin's bounds, their department's goals picked from the admin's list and the awardPoints manual award inside the admin's limits; an admin edits points only through the logged Settings screen or a logged manual award or deduction), no point awards from other resources (another resource may report a crime; every point is still computed by Crimson-Police's scoring), no supervisor editing of single-mission payouts, and no payout field in the Mission Builder or in exported Lua files.
+- Payouts and points: no in-game editing of points by officers, no point values edited by supervisors (only through the Mission controls the Points Hard rule names; admins only through logged Settings or manual awards), no point awards from other resources (another resource may report a crime; every point is still computed by Crimson-Police's scoring), no supervisor editing of single-mission payouts, and no payout field in the Mission Builder or in exported Lua files.
 
 - Leaderboards: no manual board reset; boards are time windows, and corrections are made by voiding runs (one by one or as a bulk void of an officer, an operation or a board window, which is always restorable as a batch).
 
@@ -80,87 +80,25 @@ Everything below was considered and removed. Do not add it back, even as an opti
 
 ## Glossary
 
-Each term below means exactly this everywhere in the spec.
+Each term means exactly this everywhere in the spec; terms with their own section (roles, units, tiers, scoring, payouts, mission calls, contacts, events, profile) are defined there.
 
 | Term | Meaning |
 |---|---|
-| Crimson-Police | This resource (Crimson-Police) and the tablet it adds |
-| Department | An entry in Config.Departments (today SAST and FIB): its jobs, name, colours, logo and supervisor grade |
-| Officer | An on-duty player whose active Qbox job belongs to a department |
-| Supervisor | An officer whose job grade is at or above their department's supervisorGrade |
-| Admin | A player with the ace crimsonpolice.admin, or a Qbox admin (ace admin) while Config.QboxAdmins is true; does not need to be police or on duty |
-| Rank | The officer's Qbox job grade name (e.g. "Sergeant"), the same ranks SC-Police and SC-Dispatch use |
-| Callsign | The officer's callsign from Qbox metadata, set with SC-Police's /callsign |
 | Mission type | Patrol, Training, Investigation or Tactical; the only mission choice officers make (the twists they may add change how the drawn mission plays, never which mission is drawn) |
-| Mission | One playable scenario, such as Gang Shootout; belongs to exactly one mission type |
-| Built-in mission | A mission shipped with the resource, one file each in missions/builtin/. An admin's edit of one is an override with the same id in missions/custom/overrides/ |
-| Custom mission | A mission made in the Mission Builder, exported to its own file in missions/custom/ |
 | Pool | The missions of a type that can currently be drawn for an officer or unit |
-| Draw | The server's random pick of one mission from the pool |
 | Run | One attempt at a drawn mission, from accepting the type until it ends |
-| Participants | Everyone on a run: a solo officer, a unit, or everyone who joined a Cross-Department Mission |
-| Unit | 2–4 officers, from any departments, doing one run together; the leader picks the type |
-| Run host | The participant whose client runs the NPC AI for a run: the unit leader, or the next participant if the leader leaves |
-| Start route | The GPS route from where a participant accepted the mission to its start |
-| Cross-Department Mission | A specific mission a supervisor or admin launches for every department; it locks the Mission Board until it is completed or cancelled |
-| Tier | The difficulty level set by the number of participants: Standard, Reinforced, Heavy, Major or Critical; if someone leaves mid-run it follows the team down |
-| Medal | The Gold, Silver or Bronze result on EVOC Course and Pursuit Sim |
 | Objective / block | One step of a mission; blocks are the reusable step types missions are built from |
-| Road route | A route recorded in the Mission Builder by driving it, stored as road waypoints |
-| Module | One feature's code folder under modules/, such as modules/cash/ |
 | Real call | Any SC-Dispatch call not created by SC-NPCPolice |
 | NPC call | A call created by SC-NPCPolice; its call id starts with npccall- |
-| Alert suppression | The crimsonArena state bag Crimson-Police sets on each participant from the moment they reach the mission start so SC-Dispatch and SC-Ambulance skip their combat alerts |
-| Downed | A participant who is dead or in last stand |
-| Pick-up | The automatic revive and move to a drop-off point when a participant goes down with no EMS on duty |
 | Driving a vehicle | In a vehicle and in its driver seat, as the server sees it; any vehicle counts. Where a mission needs it (Beat Patrol, EVOC Course, checkpoint_route with "Vehicle required" on), a checkpoint counts only while the officer is driving a vehicle |
-| Points | Leaderboard score earned by a run |
-| XP | Lifetime points; sets the level and the cosmetic XP level badge (never the rank) |
-| Goal | A personal daily or weekly target, such as "Complete 2 Patrol missions", that awards bonus points |
 | Base payout | The mission's admin payout if one is set; otherwise its type payout × its star multiplier (the Weekly Boss: its event payout from config) |
-| Type payout | The base cash payout for every mission of a type |
-| Mission payout | An admin-set base cash payout for one mission; overrides the type payout |
 | Cash payout | Money each participant receives for a Completed run: base payout × tier multiplier × twist multiplier |
-| Season | An admin-started period (8 weeks suggested) with its own leaderboard and department challenge |
-| Department challenge | The season contest between all departments |
-| Bounty | A weekly department objective worth a bonus of 10% of the challenge points the winning department earned that week |
-| Type of the Day | The mission type that earns double points today |
 | Twist (modifier) | A harder way to play a run (Armored Hostiles, Time Crunch, Radio Silence) that the officers choose when they take the mission; each adds its own points and cash, and they stack |
-| Weekly Boss | The Kingpin mission, available Friday to Sunday on its own card |
-| Flagged run | A run held off the leaderboards, with its cash held, until a supervisor reviews it |
-| Voided run | A run removed from every leaderboard by a supervisor or admin |
-| Dispute | An officer's request, within 48 hours, for one of their flagged, voided or failed runs to be reviewed again |
-| Theme | A department's tablet colours |
-| Watermark | The department logo drawn faintly behind every Officer and Supervisor UI screen |
-| End reason | How one participant's run ended, stored as end_reason (for example quit, off_route, real_call or downed); the full list is in Mission lifecycle |
-| Permissions | Config.Permissions: which supervisor actions are switched on, and extra grants of a power to people who are not supervisors (a department from a grade, a Qbox gang from a grade, or one citizenid). Admins can always do every admin action; admins never come from a grant |
-| Server run cap | The most runs that can be active server-wide at once: 12, of which at most 4 Tactical. Cross-Department Missions don't count |
-| Daily reset | The hour (Config.Time.resetHour, 00:00 server time by default) when Type of the Day, daily goals, streak days and the daily cash cap roll over |
-| Test run | A run started in Admin test mode, or the Mission Builder's test run of a draft: any mission, location and tier, with nothing saved or paid |
-| Streak | Consecutive days with a completed run, worth +5% points each (up to +25%); one missed day a week is forgiven |
-| Mission call | A tablet-only NPC incident on the Dispatch screen: a mission type, a priority and an area. The first unit to claim it gets a random mission of that type that starts in the area |
 | Area | One of Config.MissionCalls.areas; every mission location belongs to the area whose centre is nearest |
-| Claim | Taking a mission call; it runs every check of accepting a type |
 | Contact | A person (subject) or vehicle that a field_contact objective owns, with a hidden truth |
 | Truth | What is really going on with a contact, rolled by the server at the start of the objective and never sent to clients, not even as a weapon, a demeanour or a hint before the behaviour it causes starts |
 | Fact | A part of the truth revealed to the run by a validated police action |
 | Disposition | The decision recorded for a contact: Release, Warn, Cite or Arrest for a person; No action, Cite or Impound for a vehicle |
-| Probable cause | A fact that makes a vehicle search lawful (see Police actions & decisions) |
-| Decision ledger | Every disposition of a run with the facts known at that moment and its grade, shown on the result screen |
-| Custody chain | Search, escort, place in a vehicle and hand over to the prisoner transport after an arrest |
-| Transport | The Crimson-Police NPC prisoner van that collects arrested subjects |
-| Impound | A disposition that sends a run vehicle away on a Crimson-Police tow truck |
-| Process the scene | The coroner step: photograph, tag and bag the bodies of NPCs who died, then release them to the coroner |
-| Demeanour | How a mission person behaves: compliant, nervous, evasive, hostile or runner |
-| Level | The XP level number (Lv 1–50, then prestige stars) worked out from XP; cosmetic. The XP level name (Probationary … Elite) is the band the number falls in, so there is one ladder |
-| Service record | An officer's lifetime and season statistics, counted from their runs |
-| Commendation | A citation a supervisor or admin gives an officer; no points, no cash |
-| Personal accent | An accent colour an officer picks from their department's personalAccents for their own tablet |
-| Appearance | An accessibility preset worked out from the department theme (Midnight, High contrast, Colour-blind friendly) |
-| Mission desk | An ox_target point at a station that opens the Officer UI |
-| Item reward | An optional ox_inventory item given for a Completed run, a goal, a level or an event; admin config only |
-| Rewards locker | The Home card holding item rewards that could not be delivered yet |
-| Ready check | The prompt every unit member must accept before the draw (the type and the twists the leader chose) |
 
 ## Overview & goals
 
@@ -210,27 +148,7 @@ Crimson-Police is built for this server's Qbox stack only. Every resource below 
 
 The Appendix lists the exact exports and events used from each of these resources.
 
-Decisions
-
-| Question | Decision |
-|---|---|
-| Qbox or QBCore? | Qbox only (Hard rule 2) |
-| Resource name? | Crimson-Police for the folder and the tablet title; events, callbacks and tags use the lowercase prefix crimson-police |
-| Which tablet hosts the app? | Crimson-Police has its own standalone tablet, opened with /CrimsonPolice. It is not a tab in the SC-Dispatch MDT |
-| UI? | A custom standalone UI built for Crimson-Police: React 18 + TypeScript, built with Vite |
-| Which job names? | sast and fib, as used by sc-police and sc-dispatch |
-| Ranks and callsigns? | Read live from Qbox: rank = the job grade name, callsign = metadata.callsign (set by SC-Police). "Rank" only ever means this; the cosmetic tiers earned from XP are called XP levels |
-| Cadets or detectives? | Not roles on this server. Every officer in a department gets the same missions |
-| Supervisor missions? | The same missions as officers. Supervisors can also see the full list of missions and launch Cross-Department Missions |
-| Can departments team up? | Yes. Units can mix departments, and runs with 2 or more departments earn extra points |
-| Cash or points? | Both: completed runs pay cash through Renewed-Banking and earn leaderboard points |
-| Where does the cash come from? | New money paid by the server by default; can be switched to the department's Renewed-Banking account |
-| Does pay scale with difficulty? | Yes, through the team's tier: more participants make the mission harder and raise the cash multiplier. Star multipliers exist in Config.Difficulty but are 1.0 by default, so builders can't raise pay by picking 3 stars |
-| NPC calls? | SC-NPCPolice calls never end a mission; real calls end it at once with no penalty |
-| What counts as getting a real call? | Being assigned to it by a dispatcher, or marking yourself responding. Just seeing the alert does not end a mission |
-| Shots fired from missions? | Suppressed through the Crimson-Arena hook that SC-Dispatch and SC-Ambulance already support; anything that slips through is cleared |
-| Leaving the start route in a unit? | Only that officer's run ends (Abandoned, with the type cooldown); the rest of the unit carries on |
-| Officer down? | The run is Failed for that officer, with the type cooldown. No EMS on duty: picked up automatically after 15 seconds, with no hospital bill. EMS on duty: an EMS request is sent for them |
+Decisions not stated elsewhere: Crimson-Police has its own standalone tablet (/CrimsonPolice), never a tab in the SC-Dispatch MDT; the job names are sast and fib as sc-police and sc-dispatch use them; "Rank" only ever means the Qbox grade name (XP tiers are XP levels); cadets and detectives are not roles; cash is new money by default, switchable to the department's Renewed-Banking account; star multipliers exist but are 1.0, so builders can't raise pay with stars; only being assigned or marking responding ends a mission, never seeing an alert; leaving the route in a unit ends only that officer's run.
 
 Assumptions
 
@@ -268,15 +186,15 @@ Officer UI — eight screens on a left sidebar, with the officer's current run p
 
 | Screen | Contents | Key actions |
 |---|---|---|
-| Home | Officer card (avatar, callsign, rank, department tag, level badge, streak and grace day, season points, cash earned this week), today's goal and this week's goal, Type of the Day, mission calls open, "Missions today n/max" when a daily cap is set, new commendations, the Rewards locker when item rewards are on | Open the Mission Board or Dispatch, claim a locker item |
-| Mission Board | One card per mission type (Patrol, Training, Investigation, Tactical): cash per officer, points, how many missions are in the pool, solo or unit, cooldown if locked, "Server busy" when the run cap is reached, "On a call" while the officer is responding to a real call. A Weekly Boss card appears Friday–Sunday. While a Cross-Department Mission is active, the board shows only that mission's card. Also "n mission calls open" (a link to Dispatch) and "Daily limit reached" locks | Accept a type (the accept step lists the type's twists with their bonus and the total of the ones picked, e.g. "+45% points, x1.50 cash"; for a type with a mission a volunteer suspect may play, Config.Volunteers, a "Real suspect" badge and a "Real suspect OK" tick the leader must give himself), join a Cross-Department Mission |
+| Home | Officer card (avatar, callsign, rank, tag, level, streak and grace day, season points, cash this week), daily and weekly goal, Type of the Day, open calls, "Missions today n/max" under a daily cap, new commendations, the Rewards locker | Open the board or Dispatch, claim a locker item |
+| Mission Board | One card per type: cash per officer, points, pool size, solo or unit, cooldown, "Server busy", "On a call", "Daily limit reached"; the Weekly Boss card Friday–Sunday; only the operation's card during a Cross-Department Mission; "n mission calls open" | Accept a type (the accept step lists its twists and their total, e.g. "+45% points, x1.50 cash"; a type a volunteer suspect may play shows "Real suspect" and needs the leader's "Real suspect OK" tick), join an operation |
 | Dispatch | Open mission calls (code, radio-style title, type, priority, area, distance, offer countdown, crew, pay, status), the last 5 calls with who took them and how they ended, the read-only SC-Dispatch real-call strip, notices (on a run, on a call, Cross-Department Mission active) | Claim a call (leader or solo), filter, mute call alerts |
 | Unit | Members with avatar, level, rank and callsign; invites waiting for you; the ready check | Invite, withdraw an invite, accept or decline, leave; leader: kick, make leader, disband (before a type is accepted); answer the ready check |
-| Active Mission | Name of the drawn mission, tier (expected until the run moves to In progress), start-route status (on route, or the off-route countdown; "Joining your partners" for one still driving when the run started, see Late partners), objective checklist, timer, partners, expected cash and points; the Contact panel while a mission has contacts (see Police actions & decisions), a raid's intel line, and a claimed call's response target | Set GPS, recalculate the route (up to 2 times per run), Objective GPS (In progress, once the officer is at the action: a map waypoint on the objective, Config.Markers.objectiveGps), abandon (confirm dialog) |
+| Active Mission | Drawn mission, tier (expected until In progress), route status (on route, countdown, "Joining your partners"), objectives, timer, partners, expected cash and points, the Contact panel, a raid's intel line, a call's response target | Set GPS, Recalculate route (2 per run), Objective GPS (at the action: a waypoint on the objective), abandon |
 | Leaderboard | Tabs Weekly · Monthly · Season · All-time; filters for mission type, unit, cross-department and department; top 25 plus your own row pinned; "Rank by" (Points, Missions, Arrests, Impounds, Citations, Rescues, Mission calls, Judgement) and a level column | Tap an officer to view their public profile |
 | Department Challenge | Score bar per department, weeks left, this week's bounty, your department's top 5 contributors | Tap a department to see its contributors |
 | Profile & History | Avatar, bio, level and XP bar, service record, badges, commendations, last 20 runs with points, cash, decisions and how each ended | Edit profile (picture, bio, look), report a profile, open a breakdown, dispute a flagged, voided or failed run from the last 48 hours |
-| My options | One column of cards: Tablet look and privacy (appearance, accent, tablet size, mute mission call alerts, hide my name), one card per option group (each row says This character or This PC; Back to default per group) and My keys (the key bound to each Crimson-Police key mapping, or not set). Hidden while Config.OfficerOptions.enabled is false | Change an option (saved on its own half a second after the last change, with an inline Saved), put a group back to its defaults |
+| My options | See Officer profile → Officer options | Change an option (saved half a second after the last change, inline Saved), Back to default |
 
 Supervisor UI — its own layout and sidebar. Supervisors play missions from the Officer UI exactly like officers; the Supervisor UI is for oversight.
 
@@ -285,7 +203,7 @@ Supervisor UI — its own layout and sidebar. Supervisors play missions from the
 | Mission List | Every mission by name, built-in and custom: type, difficulty, officers supported, current base payout, cooldowns, who is running it now. Officers never see this list | Launch a Cross-Department Mission (missions open to every department that support 2+ officers; never the Weekly Boss) |
 | Cross-Department Mission | The active operation: mission, launcher, joined participants by department, tier, status | Start now, relaunch after a fail, cancel |
 | Live Missions | Runs involving their department: participants, mission type, drawn mission, tier, time left | Force recall |
-| Review Queue | Flagged runs with the reason (e.g. outside help), and disputes about flagged or voided runs, involving their department; runs they took part in never appear here (runs of their other characters may, but every action on them is refused) | Approve, void or reject (reason required) |
+| Review Queue | Flagged runs with the reason, and disputes about flagged or voided runs, of their department (never their own runs) | Approve, void or reject (reason required) |
 | Payouts | Payout per mission type, with the allowed range; a type an admin has set shows "Set by admin" and is read-only; single-mission payouts are not shown | Change an unlocked type's payout (within range, once per 30 minutes per type) |
 | Mission Builder | Their drafts plus published missions | Build, record routes, test, publish, archive; roll back or break an edit lock (as Config.Permissions allows) |
 | Department Report | Challenge standing, this week's bounty, officer activity this week | Open an officer's activity |
@@ -297,30 +215,21 @@ Admin UI — a separate full-screen panel for server admins, covering every depa
 | Screen | Contents | Key actions |
 |---|---|---|
 | Payouts | Every mission type and every mission with its base payout; admin payouts marked "Set by an admin" | Set or clear a type or mission payout |
-| Missions | All built-in and custom missions, version, Lua file path, "edited in code" flag, edit locks; an on/off switch for every mission and for each of its locations (saved over Config.DisabledMissions and Config.DisabledLocations; runs already going finish) | Build, publish drafts (testing is optional), archive, restore or roll back custom missions; break an edit lock; reload mission files; turn missions and locations on or off, or back to config.lua's switches; launch, start now, relaunch or cancel a Cross-Department Mission |
+| Missions | Every mission with version, file path, "edited in code", edit locks, and on/off switches per mission and location (over Config.DisabledMissions / DisabledLocations; running runs finish) | Build, publish, archive, restore, roll back; break a lock; reload files; switch missions and locations; run Cross-Department Missions |
 | Seasons & Challenge | Current season, department standings, bounty history | Start or end a season, override this week's bounty |
 | Leaderboards | Every board and period, cash paid per officer, and any payment left in paying after a crash | Void runs, award points |
 | Officers | Search any officer: rank, callsign, history, badges, cash earned, suspensions, disputes about failed runs | Suspend, unsuspend, answer a dispute (manual award or dismiss) |
 | Departments | Each department in Config.Departments: name, jobs, colours, logo thumbnail, member count, society balance (only when Config.Cash.source = 'society') | Preview a department's tablet theme (read-only) |
 | Permissions | Config.Permissions: which supervisor actions are switched on; extra grants; Config health | Switch a supervisor action on or off; give a power to departments from a grade, Qbox gangs from a grade or single citizenids (Extra grants). Both are settings saved over config.lua and audited |
-| Settings | Every setting of config/config.lua and config/blocks.lua by section, with its comment from the file, the value in use, the config.lua value, "changed" and "after restart" badges, Config health, and the history of changes made in game | Change any setting (the server checks it), reset one or all (see Settings changed in game) |
+| Settings | Every setting by section with its comment, the value in use and config.lua's, "changed" and "after restart" badges, Config health, the change history | Change, reset one or all (Settings changed in game) |
 | Audit Log | Every supervisor and admin action, filterable | Export |
 | Testing | Every mission and each of its locations with its last test result (Passed, Failed, Not tested or Changed since test), the tier, who tested it and when | Start a test run (mission, location, tier, start route on or off), invite testers, record a result |
 
 Admin UI additions: Officers gets profile moderation (clear bio or picture), commendations (give, revoke) and the service record; Leaderboards gets an Item rewards tab; Departments lists mission desks and previews personal accents and appearances; Testing gets the area coverage matrix (mission type × area); Permissions gets Config health.
 
-Every UI also shows sidebar badges and a notification bell with the last 20 Crimson-Police toasts (NUI only).
+Sidebar badges: Unit (invites), Active Mission (a live dot on a run), Dispatch (claimable calls), Profile (new commendations), Home (rewards waiting), Review Queue (open items), updated from the live push topics. The header bell lists the session's last 20 toasts; the header shows the avatar and level badge next to the callsign (the rank stays the Qbox grade name).
 
-Tablet polish
-
-- Sidebar badges: Unit (invites waiting), Active Mission (a live dot while on a run), Dispatch (calls you can claim), Profile (new commendations), Home (rewards waiting), Review Queue (open items). They update from the live push topics.
-
-- A bell in the header lists the last 20 Crimson-Police toasts of the session.
-
-- Header: the officer's avatar and level badge sit next to the callsign; the rank is still the Qbox grade name.
-
-UI build: a custom standalone UI in React 18 + TypeScript, built with Vite into web/dist. Every screen, the Mission Builder, the mission HUD (objectives, timers, route warnings) and all notifications are Crimson-Police's own NUI; no ox_lib menus, context menus, input dialogs or notifications are used for them. Apart from ox_target's interaction prompts and ox_inventory's own screens, ox_lib's progress bar and skill check are the only outside UI, and only during missions. All text lives in locales/en.json. Opening the Officer UI plays a tablet prop and animation; closing it removes the prop.
-
+UI build: React 18 + TypeScript built with Vite into web/dist (Hard rule Custom interfaces). All text is in locales/en.json. Opening the Officer UI plays a tablet prop and animation; closing removes the prop.
 ## Tablet access
 
 | Way | Config | Server check |
@@ -344,7 +253,7 @@ UI build: a custom standalone UI in React 18 + TypeScript, built with Vite into 
 
 ## Departments & tablet theming
 
-Each entry in Config.Departments sets that department's name on the tablet, its colours and its logo watermark. Today that is SAST and FIB; adding BCSO or any other department is a config change and a restart.
+Each Config.Departments entry sets that department's name on the tablet, its colours and its logo watermark (SAST and FIB ship; adding one is a config change and a restart).
 
 What a department entry controls
 
@@ -374,63 +283,30 @@ Colours are 6-digit hex values such as #1f4e8c. A missing or invalid colour fall
 
 Personal accent and appearance
 
-- The department theme is the identity: the primary colour, header, logo and watermark always come from Config.Departments.
+- The department theme is the identity: primary colour, header, logo and watermark always come from Config.Departments; the Admin UI always uses Config.AdminTheme.
+- An officer may pick a personal accent from his department's theme.personalAccents (some unlock at a level); it replaces the department accent on his own tablet only.
+- Appearances are accessibility presets from the department's colours: Department, Midnight (background and surface 40% darker), High contrast (WCAG AAA text and surfaces) and Colour-blind friendly (success and danger become blue and orange). None changes the primary colour, logo or watermark.
 
-- An officer may pick a personal accent from their department's theme.personalAccents (some unlock at a level). It replaces the department accent on their own tablet only. A department with no personalAccents offers none.
+Layout options (presentation only: screen keys, visibility and links never change; the code is in web/src/layouts/, see docs/ARCHITECTURE.md §12)
 
-- Appearances are accessibility presets worked out from the department's own colours: Department (as configured), Midnight (background and surface 40% darker), High contrast (text and surfaces pushed to WCAG AAA contrast) and Colour-blind friendly (the status colours for success and danger become blue and orange; status colours are app colours, not department colours). No appearance changes the department's primary colour, logo or watermark.
-
-- The Admin UI always uses Config.AdminTheme.
-
-- The Supervisor UI reads the session's config.supervisorNav = { byTask, compact, landing } from Config.Tablet.supervisorByTask, supervisorCompact (both default false) and supervisorLanding ('first', 'report', 'review' or 'live'; anything else counts as 'first'). layouts/supervisorNav.ts: byTask gives each Supervisor screen a task (people: sup_report; missions: sup_missions, sup_crossdept, sup_live, sup_controls, sup_builder; rewards: sup_payouts; review: sup_review) and the Sidebar lists them by section in that order with a heading over each (ui.nav.task.<key>; a section with no visible screen has no heading). compact renders the Sidebar with iconsOnly (the Officer UI switch shows only its icon). landingScreen opens the Supervisor UI on sup_report / sup_review / sup_live when it is among the visible screens, else the first one; App keeps a picked flag per UI (navigate, a Lua-named screen) and layouts/screens.ts currentScreen shows the Supervisor landing until a screen is picked (the other UIs keep their remembered screen as before). Screen keys, visibility and links never change.
-- Your controls today: Config.Tablet.supervisorControlsCard (default false) is sent as config.supervisorNav.controlsCard. When true, Department Report shows a read-only card from sup:getMyControls (CP.DeptControls.mine): each Mission control the player may use now (DC.canChange) with the value in use, whether a change is live, the admin's min and max and, for a supervisor, today's use against the control's per-day count. The server refuses the callback with err.controls_card_off while the switch is off. Mission controls and Review Queue use the shared screen header (help line) and load states; nothing a supervisor can do changes.
-- Remembered dialog values: Config.Tablet.supervisorRemember (default false) is sent as config.supervisorNav.remember. When true, supervisor/components/lastUsed.ts keeps the values of the last successful Give points (points, reason), Mission ban (hours, reason; never for a lift) and Clear cooldown (reason) in the page's memory and the dialog opens with them; a number outside the control's current min..max falls back to the min. Nothing is saved anywhere; the server checks every value again.
-- Live Review Queue: Config.Tablet.supervisorReviewLive (default false). When true, a decision on a flagged run or a dispute (by a supervisor or an admin) pushes 'reviewQueue', each viewer's own Review Queue, to every other supervisor of the decider's department (an admin without a department: every department) who has the Review Queue open (asked for it in the last 75 seconds); false: the others see it at their next refresh (every 30 seconds).
-- Action replies carry the new state (a pure speed-up): server:sup:reviewFlagged and server:sup:handleDispute answer with data.queue (the same view as sup:getReviewQueue, CP.Admin.reviewQueueFor) and server:declineMissionCall with data.view (MC.list, the Dispatch view); the screens apply it and ask again only when it is missing. Active Mission's tablet log has no fixed 600 ms wait and second getRun: the server pushes the next log point at once (topic 'run').
-- Admin replies carry the new state (a pure speed-up): server:admin:backupNow, server:admin:restoreBackup and server:admin:deleteBackup answer with data.view (Sys.backupsView(), the admin:getBackups view); server:admin:storageCopy, server:admin:setStorageMode and server:admin:useStoreAgain with data.view (Sys.storageView(), the admin:getStorage view). The System screen applies it and asks again only when it is missing.
-- More replies carry the new state (a pure speed-up): the supervisor's mission call actions (mcCreate, mcPage, mcWithdraw) answer with data.view (sup:getMissionCalls); server:sup:forceRecall and server:sup:addRunTime with data.view (sup:getLiveRuns); server:sup:clearCooldowns with data.view (sup:getOfficerCooldowns); Give points, Mission ban and lift, commend and revoke, sent with activityOf from the department report's activity dialog, with data.activity (sup:getOfficerActivity); server:admin:voidRun, restoreRun, setVoidKind and flagRow, sent with views, with data.view (admin:getRun), data.runs (admin:getOfficerRuns) and data.officer (admin:getOfficer); server:admin:resetAllSettings with data.view (admin:getSettings). Each screen applies it and asks again only when it is missing.
-
-- The Admin UI plain layout reads the session's config.adminUi.plainLayout from Config.AdminUi.plainLayout (default false; anything but true counts as false). layouts/adminNav.ts: each Admin screen gets a plain name (ui.nav.plain.<key>) and a group: npc (admin_missions, admin_live), pvp (admin_rs), team (admin_officers, admin_departments, admin_seasons, admin_leaderboards), rewards (admin_payouts, admin_rewards), permissions (admin_permissions), economy (admin_payments), system (admin_settings, admin_system, admin_audit, admin_testing); admin_home stays on top. The Sidebar lists them by group with a heading (ui.nav.admin_group.<key>) and a one-line description under it (ui.nav.admin_hint.<key>); admin_seasons, admin_leaderboards, admin_departments, admin_audit and admin_testing fold under More (regardless of groupSidebar) and the rest show. A search box (ui.nav.search_screens) replaces the list, while text is typed, with the screens whose plain name, ui.screen title or group title holds every typed word, then 'Search settings for ...' (while admin_settings shows) that opens admin_settings with params.q (the Settings screen takes a new q even when already open); Enter opens the first. A breadcrumb (Home › group › screen) sits over every screen but Home (its Home link only while admin_home shows). Screen keys, visibility, landing and links never change; false = the sidebar as groupSidebar and groupByPlay make it.
-
-- The Admin UI Rewards screen (admin_rewards, icon gift, play economy, main) shows only while the session's config.adminUi.rewardsScreen is true (Config.AdminUi.rewardsScreen, default false; anything but true counts as false). It reads admin:getSettings and lists, in three cards (NPC missions, Player vs police, Police teamwork), one row per mission type (MissionTypes.<type>.payout, Cash.account and the type's key of Rewards.byType), live cases (LiveCrime.cash, LiveCrime.items) and volunteer cases (Volunteers.payCash, Volunteers.payRewards) for officers, and each Config.FeatureRewards feature (its enabled, money fields, account, moneyItem while account is 'item', items, and suspect.byType as a table of mission types by got_away and caught where an empty box is the per-outcome default). The Rewards.enabled switch heads the page with a one-click turn on. Items use RewardPoolEditor (the admin:rewardItems picker; a FeatureRewards.<feature>.items path edits a flat list of { item, count, chance, value }; prop only edits one key of Rewards.byType and saves the whole map). Every save goes through useSettingSave (server:admin:setSetting). Config.FeatureRewards.suspect.byType (default {}) gives a volunteer suspect dollars by mission type; a type or outcome left out pays money.got_away / money.caught.
-
-- The Officer UI sidebar reads the session's config.officerNav = { order, activeFirst, compact } from Config.Tablet.sidebarOrder ('classic' or 'mostUsed'; anything else counts as 'classic'), activeFirst and compactSidebar (both default false: today's sidebar). layouts/officerNav.ts orderOfficerScreens: 'classic' keeps the registry order; 'mostUsed' lists home, board, active, dispatch, unit, profile, leaderboard, challenge, options (a key it does not name keeps its place after them); activeFirst moves 'active' right under 'home' while NavCounts.onRun is true. compact renders the Sidebar with iconsOnly (68 px, labels hidden, each name as the button title, badges on the icon; the Supervisor switch shows only its icon). Screen keys, visibility and links never change.
-
-- The Admin UI sidebar (Config.AdminUi.groupSidebar, on by default) shows the everyday screens (Home, Payouts, Missions, Live, Officers, Settings) and a More button that unfolds the other eight (nine while the Real suspects screen shows). Folded, More carries the sum of their badges; opening one of them any other way unfolds it; whether More is open is kept per viewer in the browser. Screen keys and links are the same either way; groupSidebar = false shows one flat list.
-
-- Config.AdminUi.groupByPlay (default true; only the layout changes) reaches the Admin UI session as config.adminUi.groupByPlay. The sidebar (Sidebar sections, layouts/screens.ts ScreenDef.play, PLAY_SECTIONS) orders the screens by section with a heading over each: npc (admin_missions, admin_live), pvp (admin_rs), team (admin_officers, admin_departments, admin_leaderboards, admin_seasons, admin_permissions), economy (admin_payouts, admin_payments), system (admin_settings, admin_system, admin_audit, admin_testing); admin_home has none and stays on top; the More folding applies inside each list. Settings (modules/settings Play.groups) then sends SettingsView.groups = play_npc, play_pvp, play_team, play_tablet, play_economy, play_system with byPlay = true and each section's group from that set; Simple shows every play group (one with no everyday setting points to All settings) and the All settings section list has the play headings. false = the 8 plain groups and the sidebar order as before. Settings -> Features (admin/components/FeaturesPanel.tsx) lists SettingsView.features ({ key, play, path, risky }, modules/settings Play.features; name settings.feature.<key>) by section, each with On or Off, a switch that saves server:admin:setSetting on the same path (risky: a confirm first; a money switch: the typed ENABLE) and a Settings link to the path in All settings. Every listed path is a boolean setting read when used (no restart).
-
-- The Admin UI opens on Config.AdminUi.landing (default 'home'). 'home' shows the Home screen (admin_home) first in the sidebar: a Live now strip (admin:getLiveRuns) and six tiles that open admin_missions (tab builder), admin_missions (tab catalog), admin_payouts, admin_officers (citizenid, when typed), admin_settings (q, when typed) and Something wrong? (admin:getMissionLoad loaded/refused, admin:getConfigHealth warnings, admin:getProblems total, the adminPayments count, admin:getRefusals today (Refused starts today, opens admin_live tab refused); each line opens its screen). 'payouts' or 'missions' hide Home and open on that screen; an unknown value counts as 'home'. With Config.AdminUi.homeForms (default true) four tiles hold quick forms (admin/components/HomeForms.tsx) that send the full screens' actions: Turn missions on or off searches admin:getMissions and switches a mission (server:admin:setMissionEnabled) or one of its locations (server:admin:setLocationEnabled); Change pay searches the types and missions of admin:getPayouts and sets an amount with a reason (server:admin:setTypePayout, keeping a type open to supervisors as it was, or server:admin:setMissionPayout); Give or take points picks an officer (OfficerPicker), takes the points (-10,000 to 10,000, not 0) and a reason, and at or above Corrections.adjustConfirmAbove (500) the typed citizen ID (server:admin:adjustPoints with a request id); Quick settings searches the everyday settings (SettingsView.common) and shows them with the Settings screen's own SettingRow and save flow (useSettingSave: the reload preflight, the money word and the point confirm). Open still opens the full screen. homeForms = false: the tiles only deep-link as above.
-
-- Config.AdminUi.reasonChips (default { 'Balance change', 'Event', 'Correction' }) reaches the Admin UI session as config.adminUi.reasonChips (trimmed texts only, no repeats, at most 8 of up to 60 characters; unset = []). admin/components/ReasonChips.tsx shows them as buttons under the reason box of Set payout (Payouts SetDialog, the Home PayForm, the mission drawer's payout), Give or take points (the Home PointsForm, Leaderboards award, Officers adjust) and Quick edit; a click replaces the reason text, which stays editable; [] shows no buttons. Quick edit times are typed in minutes and sent as seconds (Math.round(minutes * 60)).
-
-- Admin UI → Settings opens in Config.AdminUi.settingsView (default 'simple'; anything else counts as 'simple'). Simple shows only the everyday settings (SettingsView.common, in order) under the 8 plain groups (SettingsView.groups), with plain labels and help texts and no Config path or file name; a Simple / All settings switch next to the filter chips and a button under the list open All settings, which lists every setting by config.lua section as before. A search or a filter always looks through every setting. In Simple, MissionTweaks and DisabledLocations show "Change this per mission in Missions" with a button to admin_missions instead of the JSON box. 'all' opens on All settings.
+- Supervisor UI (Config.Tablet, all default false or 'first'): supervisorByTask groups the sidebar by task (people, missions, rewards, review) with a heading over each; supervisorCompact shows icons only; supervisorLanding opens on 'report', 'review' or 'live' when visible (anything else = the first screen) until a screen is picked. supervisorControlsCard shows on Department Report a read-only card of each Mission control he may use now (value in use, whether a change is live, min and max, today's use; the callback is refused with err.controls_card_off while off). supervisorRemember reopens Give points, Mission ban and Clear cooldown with the last successful values (page memory only; out-of-range numbers fall back to the min; the server checks again). supervisorReviewLive pushes a decision on a flagged run or dispute to every other supervisor of the decider's department (an admin without one: every department) with the Review Queue open (asked in the last 75 s); off = at their next 30 s refresh.
+- Officer UI (Config.Tablet.sidebarOrder 'classic' or 'mostUsed', activeFirst, compactSidebar): 'mostUsed' lists home, board, active, dispatch, unit, profile, leaderboard, challenge, options; activeFirst moves Active Mission under Home while on a run; compact shows icons only (68 px, names as button titles, badges on the icon).
+- Admin UI sidebar: groupSidebar (on) shows Home, Payouts, Missions, Live, Officers and Settings and folds the rest under More (which carries their badge sum; kept open per viewer in the browser). groupByPlay (true) orders the screens by section with headings (NPC missions, Player vs police, Police teamwork, Economy, System), Settings follows the same sections, and Settings → Features lists every feature switch by section with On/Off, a save (risky ones confirm first, money ones need the typed ENABLE) and a link to the setting. plainLayout (false) gives each screen a plain name, a group heading with a one-line description, a screen search (with "Search settings for ...", Enter opens the first) and a breadcrumb over every screen but Home.
+- Admin UI pages: rewardsScreen (false) shows the Rewards screen, one place for every payout and item reward of NPC missions, live and volunteer cases and Config.FeatureRewards features, headed by the Rewards.enabled switch, every save a normal setting save. landing ('home'; 'payouts' or 'missions' hide Home) opens on Home: a Live now strip and six tiles (builder, catalog, payouts, officers, settings search, Something wrong? with mission load, config health, problems, payments and today's refusals). homeForms (true) puts quick forms in four tiles (missions and locations on or off, change pay with a reason, give or take points with the typed citizen ID at or above Corrections.adjustConfirmAbove, quick settings) that send the full screens' actions. reasonChips (three texts; at most 8 of up to 60 characters) are buttons under the reason boxes of Set payout, Give or take points and Quick edit that replace the editable reason (Quick edit times are typed in minutes). settingsView ('simple') opens Settings on the everyday settings with plain labels and no Config path; a switch and a button open All settings (by config.lua section); a search or filter looks through every setting; in Simple, MissionTweaks and DisabledLocations point to Missions.
+- Action replies carry the new state (a speed-up only): supervisor and admin actions answer with the screen's new view, which the screen applies and asks again only when it is missing; Active Mission's log gets the next point pushed at once.
 
 Logo and watermark
 
-- Put the logo in the resource's logos/ folder (PNG, WebP or SVG; a square transparent PNG of at least 1024 × 1024 works best) and set logo.file, or set logo.url to a direct https:// image link. No UI rebuild is needed; restart the resource.
-
-- The watermark is the logo drawn once, centred behind every Officer and Supervisor UI screen: below all content, above the background, fixed in place while content scrolls, and it never blocks clicks.
-
-- logo.opacity (0.0–0.25, default 0.08) sets how strong it is, logo.size (share of the tablet height, default 0.6) sets how large, and logo.grayscale = true draws it in greyscale.
-
-- logo.watermark = false hides the watermark but keeps the small logo in the header.
-
-- If the logo fails to load, the tablet shows no watermark and no broken-image icon, and the server console warns once.
+- Put the logo in logos/ (PNG, WebP or SVG; a square transparent PNG of 1024 × 1024 or more works best) and set logo.file, or set logo.url to a direct https:// image; restart the resource (no UI rebuild).
+- The watermark is the logo drawn once, centred behind every Officer and Supervisor screen, fixed while content scrolls, never blocking clicks: logo.opacity (0.0–0.25, 0.08), logo.size (share of the tablet height, 0.6), logo.grayscale; logo.watermark = false keeps only the header logo. A logo that fails to load shows nothing (no broken image) and warns once.
 
 Adding a department (example: BCSO)
 
-- Make sure the job exists in Qbox (e.g. bcso). sc-police and sc-dispatch already list bcso.
-
-- Copy the fib block in Config.Departments, rename the key to bcso, and set label, short, jobs = { 'bcso' }, supervisorGrade, societyAccount, theme and logo.
-
-- Put bcso.png in Crimson-Police/logos/.
-
-- Restart Crimson-Police. BCSO officers now see their own name, colours and watermark, and BCSO appears on the leaderboards, in the department challenge, in unit invites and in the Mission Builder.
+- The Qbox job must exist (bcso; sc-police and sc-dispatch already list it). Copy the fib block in Config.Departments, rename the key to bcso, set label, short, jobs = { 'bcso' }, supervisorGrade, societyAccount, theme and logo, put bcso.png in logos/ and restart. BCSO then has its own name, colours and watermark and appears on the boards, in the department challenge, unit invites and the Mission Builder.
 
 ## Mission types, draw & teams
 
-Officers pick one of four mission types, and the server draws a random mission of that type, scaled to the number of participants.
+Officers pick one of four mission types; the server draws a random mission of that type, scaled to the participants.
 
 | Mission type | Points (config) | Missions |
 |---|---|---|
@@ -439,93 +315,42 @@ Officers pick one of four mission types, and the server draws a random mission o
 | Investigation | 160 | Warrant Service, Manhunt, Suspicious Activity |
 | Tactical | 200 | Gang Shootout, Hostage Rescue, Bomb Disposal, Armored Truck Escort, Prison Break, Drug Lab Raid, Gang Hideout Raid |
 
-Cash per type is in Cash payouts. Custom missions join their type's pool when they are published.
+Cash per type is in Cash payouts. Custom missions join their type's pool when published.
 
-Random draw rules
+Random draw rules (Config.Draw, Config.Limits)
 
-- The pool is every published mission of the chosen type that is open to every participant's department, supports the unit's size, is not turned off (Config.DisabledMissions, or its switch in Admin UI → Missions), has at least one location that is on, and is off cooldown for every participant. A location turned off (Config.DisabledLocations) is never drawn.
+- The pool is every published mission of the type open to every participant's department, supporting the unit's size, not switched off (Config.DisabledMissions or Admin UI → Missions), with at least one location on (Config.DisabledLocations is never drawn) and off cooldown for every participant. One eligible mission can repeat; none locks the card with the reason ("No Patrol missions for a unit of 3").
+- No-repeat: never the mission the officer or unit last completed or abandoned in that type; with 4+ in the pool, not the last two either.
+- Locations: one in use by another run is reserved; while another is free a spot is skipped when a non-participant player is within 75 m, when any of its points is within zoneClearance (200 m) of another active run's footprint (its start and every point, routes sampled every 50 m; also Cross-Department Missions), or when a participant played it in his last 2 runs of the mission (avoidLastLocations); locations used server-wide in the last hour get half weight (locationFreshness). A location within hardClearance (100 m; 0 = off) of another active run is never drawn: the draw tries the type's next mission, else refuses with "no location free".
+- A mission call draws only in its area when it named one to the claimant; a county-wide call draws as the board does, then weights locations by 1 ÷ (1 + distance ÷ 2 km) from the nearest member.
+- At most 12 runs active server-wide, 4 of them Tactical; at the cap the type cards show "Server busy".
+- Tactical variants: hostile_waves may roll behaviour and spawn sets from the seed, and the Active Mission screen shows the intel line.
+- Admin UI → Missions and Testing show each location's play count and last played date. Locations are added to a built-in through a Builder duplicate, and Config.MissionTweaks.disabledLocations switches a built-in spot off (both survive updates).
+- The mission is revealed only after accept. No reroll: abandoning, leaving the start route (while Config.Route.required), or missing the start timeout (10 min default) ends the run Abandoned with the type cooldown.
 
-- The draw never gives an officer or unit the mission they last completed or abandoned in that type. With 4 or more missions in the pool it also skips the last two.
+Location lints (tests)
 
-- If only one mission is eligible it can repeat. If none is, the type card shows as locked with the reason, e.g. "No Patrol missions for a unit of 3".
+- Zone lint (tests/zone_lint_spec.lua): every start and non-route point of a new mission's locations is at least zoneClearance (250 m for Drug Lab Raid) from every point of every other mission; a route counts by its ends. The 102 existing cross-mission pairs under 200 m are listed in tests/zone_lint_baseline.txt (warnings; the spec fails on a new pair or a longer list); no built-in location moves (that would reset its test status), and the owner checklist offers the list for a clean-up.
+- Spawn lint (tests/spawn_lint_spec.lua), on the loaded built-in definitions, flat (2D): (1) no two spawn points of one run closer than 1.5 m (every key a block makes people, vehicles or objects from, as Check spawn points reads them; the escort truck at its route's first point); (2) every list has a point for each person, car or item the largest team brings at once (real CP.Scaling counts, each max applied; hostile_waves: the largest wave on the smallest `use` spawn sets; escort: one per ambush wave), no exceptions; (3) every armed point keeps the start circle plus Config.Builder.spawnMargin (CP.Builder.armedKeepOut) unless the director places it as officers come near (hostile_waves, flee_arrest scatter) or it is staged. Known cases are tests/spawn_lint_baseline.txt (26 lines); the spec fails on an unlisted case, a listed armed key coming closer, a stale line, or a longer list.
 
-- The location is drawn from the mission's list. A location in use by another run is reserved and skipped, and so is any spot with a non-participant player within 75 m while another spot is free.
+Route to the start (Config.Route)
 
-- At most 12 runs can be active server-wide, and at most 4 of them Tactical. When the cap is reached, the affected type cards show "Server busy".
+- At accept each participant's tablet sets a GPS route to the start, the only accepted way there. The client samples it every 50 m (GetPosAlongGpsTypeRoute) and keeps that line; every 2 s it reports the distance from it (server:routeStatus). More than 120 m off for 10 s shows a warning on the HUD and tablet; still off 30 s after leaving ends his run Abandoned (type cooldown); back within 120 m resets it; no report for 10 s counts as off route. Recalculate route (Active Mission) works up to 2 times per run, from where he is. The server also abandons him when his straight-line distance grows more than 1,000 m past his closest. The check stops at the start; the run moves to In progress when its first participant arrives. A real call ends the run anyway, without penalty. A circle start (Manhunt) routes to its centre until he is inside.
+- Late partners (owner decision, lateArriveRange 150 m): once the run is In progress anyone still driving follows the action, with required on or off: within a second his route check stops (warning, countdown, drift and missing-report checks, the off_route end), his game drops the start's waypoint, pin and circle and only then gets the GPS line to the current objective. He arrives (alert suppression starts) inside the start circle or within lateArriveRange of the current objective's anchor or anything its pointer shows. The HUD, run bar and Active Mission say "Joining your partners", Set GPS and Recalculate are gone (Objective GPS works), a toast tells him. With no objective line possible (Radio Silence 'area' or 'none', markers or route off) the start's waypoint stays his guide. He gets followActionSeconds (300 s) from then to arrive, never less than his own start deadline, shown in the last 2 minutes; 0 = the start deadline only. lateArriveRange = 0: everyone keeps the route check and only the start counts.
+- The start is a yellow map pin "Mission start" (Config.Markers.kinds.start, startBlip) from accept until arrival or the run's end. The accept waypoint is its GPS line; while that waypoint is gone (cleared, or his own waypoint, never touched) the pin carries the line (routeColour); Set GPS puts it back. While the route is sampled the pin carries the line as well (the only time both show). A start at least startCircleMin (200 m) wide is also drawn as a circle (areaAlpha). Radio Silence never hides it.
+- Config.Route.required (true) is the owner's switch: false keeps the route set, sampled, reported, shown and recalculable and arrival counted, but drops the warning, countdown, drift check and off_route end (no type cooldown from the route); the screens show "GPS route to the start" instead of "On route" and the accept text leaves the route out. The start timeout stays. Locked at accept (run.routeRequired, sent in client:start). A test run follows its own Start route switch.
 
-- A location is also skipped, while another is free, when any of its points is within 200 m of any point of another active run's location, of any mission (Config.Draw.zoneClearance), so two runs never share a street.
+Units (Config.Units)
 
-- A location within 100 m of any point of another active run's location is never drawn, even when nothing else is free (Config.Draw.hardClearance, 0 = off). The draw then tries the type's next mission; when no mission has such a location left, the start is refused with "no location free".
-
-- The draw skips the last 2 locations any participant played in that mission, while another is free (Config.Draw.avoidLastLocations), and gives half the weight to locations used server-wide in the last hour (Config.Draw.locationFreshness).
-
-- A mission call's draw only uses locations in the call's area when the call named one to the claimant; a county-wide call draws the mission exactly as the board does, then weights its locations towards the unit (weight 1 ÷ (1 + distance ÷ 2 km) from the nearest member), inside every other draw rule.
-
-- Zone clearance uses each active run's footprint: its start and every point of its location (routes sampled every 50 m). It is soft: when every location is blocked, the draw falls back to the reservation rule alone. Cross-Department Missions use it too. This runtime rule is what keeps two live runs off one street, including today's overlapping built-in locations.
-
-- Zone lint (tests/zone_lint_spec.lua): it fails the suite only for the new missions. Every start and non-route point of a new mission's locations must be at least Config.Draw.zoneClearance (250 m for Drug Lab Raid) from every point of every other mission's locations, new or existing. A route (recorded road route, Traffic Enforcement corridor) is measured by its start and end only, because routes cross each other by nature.
-
-- Existing pairs are only reported: every pair of existing built-in locations that the same measurement finds under the clearance (102 cross-mission pairs under 200 m, routes counted by their start and end; for example armored_truck_escort #1 and business_check #2 at 38 m) are listed in tests/zone_lint_baseline.txt. The spec prints them as warnings and fails if a pair not on the list appears or the list grows. No built-in location moves in this build (moving one would reset its test status to "Changed since test"); the loader prints the same warnings, and the owner checklist offers the list for a later clean-up.
-
-- Spawn lint (tests/spawn_lint_spec.lua, owner request of 2026-10-19: "The coordinates are very critical"): every built-in mission's locations are checked on the real loaded definitions, so a later edit of a mission file cannot quietly bring back people spawning inside each other or around the officers. Three rules, measured flat (2D): (1) no two spawn points of one run (every location key where a block makes people, vehicles or objects, from each block's pointKinds as Check spawn points reads them; the escort truck at its route's first point) closer than 1.5 m; (2) every list has a point for each person, car or item the largest team the mission takes brings at once (the real CP.Scaling counts over minOfficers-maxOfficers, each scaling entry's max applied; hostile_waves: the largest wave, on the `use` smallest spawn sets; escort: one point per ambush wave), so nobody is put on a ring copy of a point already used; (3) every armed spawn point (the Mission Builder's armed keys) keeps the start circle plus Config.Builder.spawnMargin (CP.Builder.armedKeepOut, the custom-mission rule) unless its objective is placed by the spawn director from many points as the officers come near (hostile_waves, flee_arrest scatter) or staged (stage = true). Rule 2 has no exceptions. The cases found when the lint was written are listed in tests/spawn_lint_baseline.txt (26 lines: Hostage Rescue's hostages[3] 1.48-1.49 m from spawns[7] at all six banks, Bomb Disposal's hiding spots 3 and 4 1.496-1.498 m apart at four stores, Pursuit Sim's car 47 m from its 25 m start, Stolen Vehicle Takedown's car inside its 85 m circle by design, Warrant Service's associates 32-46 m from a 50 m start, which appear at the knock through the director). The spec fails on any case not listed, on a listed armed key whose nearest point comes closer than listed, on a line that no longer matches (it must be removed) and when the list grows past the 26 lines it was written with, so it only shrinks.
-
-- Tactical variants: hostile_waves may roll its behaviour and spawn sets per run from the run's seed, and the Active Mission screen shows the intel line, so the same hideout plays differently while every participant sees the same thing.
-
-- Admin UI → Missions and Testing show each location's play count and last played date.
-
-- Adding locations to a built-in mission: not through separate location files (that would break one file per mission). Use a Builder duplicate of the built-in mission, and Config.MissionTweaks.disabledLocations to switch a built-in spot off; both survive updates.
-
-- The mission is revealed only after the type is accepted. There is no reroll: abandoning, leaving the start route (while Config.Route.required is on, as shipped), or not reaching the start within the mission's start timeout (10 minutes by default) ends the run as Abandoned and puts the whole type on cooldown.
-
-Route to the start
-
-When a type is accepted, each participant's tablet sets a GPS route from where they are to the mission start. That route is the only accepted way there.
-
-- When the route is set, the client samples it every 50 m (from GTA's GPS route, e.g. GetPosAlongGpsTypeRoute) and keeps that line fixed. It is not recalculated automatically.
-
-- Every 2 seconds the client reports how far the officer is from that line (server:routeStatus).
-
-- More than 120 m off the line for 10 seconds shows a warning on the HUD and the tablet. Still off it 30 seconds after leaving it ends that officer's run as Abandoned (type cooldown applies). Getting back within 120 m resets the timer, and no report for 10 seconds counts as off route.
-
-- Each participant can tap Recalculate route on the Active Mission screen up to 2 times per run, for example when a road is blocked; the new line starts from where they are.
-
-- The server also tracks the straight-line distance to the start. If it grows more than 1,000 m past the closest the officer has been, the run is Abandoned whatever the client reports.
-
-- The check stops when that participant reaches the start. A run moves to In progress when its first participant reaches the start. A real call ends the run anyway, with no penalty.
-
-- Late partners (the owner's decision of 2026-10-19, Config.Route.lateArriveRange = 150 m): from the moment the run is In progress, anyone still driving follows the action, with Config.Route.required on or off. Within a second the server stops his route check (no off-route warning or countdown, no drift or missing-report check, no Abandoned (off_route) end; a countdown already running stops) and his game drops the start's waypoint, pin and circle and stops sampling and reporting, and only then gets the GPS line to the current objective (the objective's pointer, Config.Markers). He arrives, exactly as at the start (the run's alert suppression, Hard rule 16, starts then), inside the start circle or within lateArriveRange of the action: the current objective's anchor or anything its map pointer shows (its point, a target such as a fleeing car, anywhere inside its circle). The HUD, the run bar and the Active Mission screen say "Joining your partners", Set GPS and Recalculate route are gone (Objective GPS works), and a toast tells him. When no objective line can show for him (Radio Silence 'area' or 'none', Config.Markers.enabled or route off) the start's waypoint stays his guide and its pin stays without a second line; the start still counts. The start timeout still applies, with a deadline of its own: when he starts to follow the action he gets Config.Route.followActionSeconds (300 s) from then on to arrive, never less time than the start deadline he had (Config.Limits.startTimeout from his accept), so a partner who left late is not removed (start_timeout) while he chases; the "Joining your partners" line on the HUD and the run bar show the seconds left in the last 2 minutes; 0 = he keeps the start deadline from his accept, as before. lateArriveRange = 0 keeps the rule as before: anyone still driving keeps their route check and only the start counts.
-
-- For a mission whose start is a circle (Manhunt), the route leads to the circle's centre until the officer is inside it.
-
-- The start is a named yellow map pin, "Mission start" (Config.Markers.kinds.start), on the map from accept until the officer arrives or the run ends (Config.Markers.startBlip, shipped true; false = only the waypoint shows the start, as before). The waypoint set at accept is the start's GPS line; while that waypoint is gone (the officer cleared it or set his own, which is never touched) the pin carries the line instead (Config.Markers.routeColour), so the start always keeps a line, and Set GPS puts the waypoint back and takes the pin's line off. While the route is sampled (at accept and after Recalculate route) the pin carries the line as well, because the client reads the route from it first; that is the only time both lines show. A start at least Config.Markers.startCircleMin (200 m) wide is also drawn as a circle in the pin's colour (Config.Markers.areaAlpha). Radio Silence never hides any of it.
-
-- All numbers are in Config.Route.
-
-- Config.Route.required (true, as shipped) is the owner's switch for this rule. With false the route is still set, sampled, reported and shown, Recalculate route still works (up to maxRecalcs) and arrival still counts, but there is no off-route warning, no off-route countdown on the HUD or the tablet, no drift check and no Abandoned (off_route) end, so no type cooldown from the route; the HUD, the run bar and the Active Mission screen show the route as a guide ("GPS route to the start") instead of "On route", and the Mission Board's accept text leaves the route out. The start timeout stays. The value is locked when the type is accepted (CP.Runs stores run.routeRequired and sends it in client:start), so a change in Admin UI → Settings applies to new runs only. A test run follows its own Start route switch: on = with the route rules, off = arrival check only.
-
-Units
-
-- Build the unit first: any officer or supervisor can invite on-duty officers from any department into a unit of up to 4 on the Unit screen, and invitees accept on their own tablet. Whoever sends the first invite is the leader, and a solo officer leads themselves. If the leader leaves before accepting, the longest-standing member takes over, and a unit left with one member dissolves.
-
-- The unit leader picks the type. Invites close at that moment, because the draw depends on the unit's size and every member's cooldowns. Every member gets the same drawn mission.
-
-- The run's tier is set when it moves to In progress, from the members still in the unit. If the team shrinks later, the run rescales (see When someone leaves mid-run); the tier never goes up.
-
-- A member who leaves, goes off duty or switches job mid-run is Abandoned; the run continues for the rest.
-
-- Before the leader accepts a type, the leader can remove a member (Kick; they can't be re-invited for 60 seconds), make another member leader, disband the unit, and withdraw any open invite; the officer who sent an invite can withdraw it too, freeing the slot at once. None of this works once a type is accepted, so nobody can take someone's pay or points mid-run. Kicking costs the member nothing.
-
-- Invite policy (Config.Units.invitePolicy): 'anyone' (every member can invite; the default) or 'leader'.
-
-- Ready check: when the leader of a unit of 2 or more accepts a type or claims a mission call, every member gets "Ready for Tactical?" (the type and the twists the leader chose, never the mission) with a 20-second countdown on the tablet, a toast and the optional key mapping crimsonpolice_ready. The draw happens only when everyone has accepted, after every check runs again. A decline or a timeout cancels the accept: the unit unlocks, the toast names who did not answer, and nobody gets a cooldown.
-
-- The invite list shows the nearest officers first (distance bands, worked out from server-side coordinates) and a "Re-invite last partners" button with the officers from the viewer's last run.
-
-- The Unit screen shows, per type, how many missions the unit could draw at its current size and one bigger, e.g. "Investigation: 1 solo · 3 with a partner" (counts only, never names).
+- Any officer or supervisor invites on-duty officers of any department into a unit of up to 4 on the Unit screen; invitees accept on their own tablet. The first inviter leads (a solo officer leads himself); a leader who leaves before accepting hands over to the longest-standing member; a unit of one dissolves. invitePolicy 'anyone' (default) or 'leader'.
+- The leader picks the type; invites close then (the draw depends on size and cooldowns); every member gets the same mission. A member who leaves, goes off duty or switches job mid-run is Abandoned; the run goes on.
+- Before accept only: Kick (no re-invite for 60 s; costs nothing), make leader, disband, withdraw an invite (the inviter can too, freeing the slot at once).
+- Ready check: when the leader of 2+ accepts a type or claims a call, every member gets "Ready for Tactical?" (type and twists, never the mission) with a 20 s countdown on the tablet, a toast and the optional key crimsonpolice_ready. The draw runs only when all accept, after every check again; a decline or timeout cancels at no cost and names who did not answer.
+- The invite list shows the nearest officers first (distance bands from server coordinates) and "Re-invite last partners". The Unit screen shows per type how many missions the unit could draw at its size and one bigger ("Investigation: 1 solo · 3 with a partner"), counts only.
 
 Scaling by participants
 
-Every run is scaled when it starts, and rescaled if the team shrinks (see When someone leaves mid-run). The tier comes from the number of participants and sets enemy numbers, enemy strength, points and cash.
+The tier comes from the participants when the run moves to In progress and sets enemy numbers, strength, points and cash; it never goes up.
 
 | Participants | Tier | Counts marked "scales" in a mission card | Armed NPC accuracy / armour | Points team multiplier | Cash multiplier |
 |---|---|---|---|---|---|
@@ -535,52 +360,30 @@ Every run is scaled when it starts, and rescaled if the team shrinks (see When s
 | 5–6 | Major | × 2.0 | +15 / +50 | × 1.20 | × 1.50 |
 | 7–8 | Critical | × 2.5 | +20 / +75 | × 1.25 | × 1.75 |
 
-- Scaled counts are rounded to the nearest whole number, halves up.
+- Scaled counts round to the nearest whole number, halves up. Major and Critical exist only in Cross-Department Missions (up to 8); units stop at 4.
+- Caps at any moment: 25 armed NPCs alive and 80 entities per run. Dead NPCs and wrecks are deleted after 30 s, except bodies kept for Process the scene (its body limit, oldest first). The next wave waits for room; counts are never cut to fit the caps, only by a shrinking team or a fight's leaveOutAfter (Suspect behaviour).
+- Cross-department bonus: participants from 2+ departments earn × 1.10 points on top of the team multiplier.
 
-- Major and Critical are only reachable in a Cross-Department Mission (up to 8 participants); normal units stop at 4.
+When someone leaves mid-run (Config.Rescale)
 
-- Caps, counted at any one moment: at most 25 armed NPCs alive and 80 spawned entities per run. Dead NPCs and wrecked vehicles are deleted 30 seconds after they die, except bodies kept for a Process the scene objective (at most that objective's body limit; when the limit is reached the oldest kept body is deleted), which are deleted when the scene is processed or the run ends. The next wave waits until there is room; scaled counts are never cut to fit the caps; they only change when the team shrinks (see When someone leaves mid-run), or when a fight cannot place its hostiles away from the officers (see Where hostiles appear: leaveOutAfter).
-
-- Cross-department bonus: a run whose participants come from 2 or more departments earns × 1.10 points on top of the team multiplier.
-
-When someone leaves mid-run
-
-If a participant leaves a run that is In progress, for any reason, the run rescales for the team that's left:
-
-- Waves, vehicles and NPCs not yet spawned use the tier for the new team size: its counts, accuracy and armour. NPCs already spawned stay as they are.
-
-- A wave that has partly spawned gets the new scaled total, and only the NPCs still missing are spawned (none if it already has that many).
-
-- The points and cash tier drops only when the leave could be used to boost the run:
+- Waves, vehicles and NPCs not yet spawned use the new team's tier (counts, accuracy, armour); spawned NPCs stay; a partly spawned wave gets the new total and spawns only what is missing.
+- The points and cash tier drops only when the leave could boost the run:
 
 | Why they left (end_reason) | NPCs not yet spawned | Points and cash tier |
 |---|---|---|
 | Real call, force recall or went down (real_call, force_recall, downed) | Shrink to the team that's left | Stays as it was; if the leave later becomes real_call_cancelled, it drops then |
 | Quit, off duty, job change, suspended, disconnected, or removed by the idle check (quit, off_duty, job_change, suspended, disconnected, idle) | Shrink to the team that's left | Drops to the team that's left |
 
-- The tier never goes up during a run, and nobody can join after it starts. The HUD shows the new tier, and the result screen shows the tier used for points and cash.
+- Nobody joins after the start. The HUD shows the new tier and the result screen the tier used for points and cash.
 
-- Both behaviours are set in Config.Rescale.
+Cross-Department Missions (Config.CrossDept)
 
-Cross-Department Missions
-
-A supervisor or admin can launch one specific mission for every department at once. Until it is completed or cancelled, it is the only mission anyone can start.
-
-- Launch: Supervisor UI → Mission List (or Admin UI → Missions) → pick a mission that is open to every department (empty departments) and supports 2 or more officers → Launch. The Weekly Boss cannot be launched. Only one Cross-Department Mission can be active server-wide, and a new one can be launched at most every 30 minutes (Config.CrossDept.cooldown).
-
-- Board lock: every on-duty officer in every department gets a tablet notification, and their Mission Board shows only this mission's card. The server refuses every other new mission, including the Weekly Boss. Runs already accepted or in progress finish normally.
-
-- Join: officers and supervisors from any department tap Join, up to 8 participants. Joining closes when the launcher taps Start now, or 5 minutes after launch. At least 2 participants are needed to start.
-
-- Run: participants get a start route (the route rules apply), and the run moves to In progress when the first participant reaches the start; the tier is set then, from everyone still on the run. Points, scaling and cash work like any run, and the cross-department bonus applies when 2 or more departments joined.
-
-- End: the lock lifts when the run is Completed. If it Fails or every participant leaves, the operation stays active: any supervisor can relaunch it (a new join window) or cancel it. It auto-cancels after 30 minutes with no run in progress.
-
-- A participant can leave an operation before it starts (no penalty); a supervisor with launchCrossDept can remove a joiner before the start (reason required, audited).
-
-- When all 8 places are taken, officers can join a waitlist; a place freed before the start goes to the first on it.
-
-- Exempt rules: Cross-Department Missions ignore type and per-mission cooldowns, the no-repeat rule, the hourly cap and the server run cap, and never have a twist.
+- A supervisor or admin launches one mission open to every department and supporting 2+ officers (Supervisor UI → Mission List, Admin UI → Missions); never the Weekly Boss. One active server-wide; a launch at most every 30 minutes (cooldown).
+- Board lock: every on-duty officer is notified and sees only its card; the server refuses every other new mission, the Weekly Boss included; runs already accepted finish normally.
+- Join: any department, up to 8; joining closes at Start now or 5 minutes after launch; 2 needed to start. When full, a waitlist; a freed place goes to its first. A participant may leave before the start at no cost; a supervisor with launchCrossDept may remove a joiner before the start (reason, audited).
+- The route rules apply; the tier is set at In progress; points, scaling and cash as any run, with the cross-department bonus when 2+ departments joined.
+- The lock lifts when the run is Completed. A failed or emptied run leaves the operation active for any supervisor to relaunch or cancel; it auto-cancels after 30 minutes with no run in progress.
+- They ignore type and mission cooldowns, the no-repeat rule, the hourly cap and the run cap, and never have a twist.
 
 ## Mission catalog
 
@@ -634,489 +437,255 @@ Design rules
 
 ## Mission cards
 
-Each card is the full behaviour of one mission. Every card also gets the common bonuses and penalties in Scoring unless it says otherwise, and every count marked "scales" is multiplied by the run's tier.
+Each card is the full behaviour of one mission. Every card also gets the common bonuses and penalties in Scoring unless it says otherwise, every count marked "scales" is multiplied by the run's tier, and the run's end removes everything the card spawned (NPCs, vehicles, props, target zones, blips; NPC traffic restored). The location lists are in each mission's file.
 
-Locations for every new mission come from GTA V vehicle nodes and known base-game places, as the existing built-ins did. Each must pass the loader's guardrails (no-build zones, 100 m between locations of one mission, spawns 30 m from the start, so every start marker sits at least 30 m from the first spawn) and the new cross-mission zone lint for new missions (their start and non-route points 200 m from every point of every other mission's locations, 250 m for Drug Lab Raid; route points are measured by their start and end only; see Random draw rules), and a Builder duplicate of each new mission must validate and publish. Each shows "Not tested" in Admin UI → Testing until an admin passes it at the tier its maxOfficers reaches.
+Locations of a new built-in come from GTA V vehicle nodes and known base-game places and pass the loader's guardrails (no-build zones, 100 m between locations, spawns 30 m from the start) and the cross-mission zone lint (start and non-route points 200 m from every point of every other mission, 250 m for Drug Lab Raid; routes by their ends only; see Random draw rules); a Builder duplicate of each must validate and publish. Each shows "Not tested" in Admin UI → Testing until an admin passes it at the tier its maxOfficers reaches.
+
+Marking terms used below (Config.Markers): anything too far for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance.
+- Checkpoints: the current one is a numbered yellow blip with the block's GPS line (Config.Markers.routeColour) until cleared, the next a smaller numbered yellow blip; an officer still driving to the start or with his own waypoint gets no checkpoint line; under Radio Silence ('area') only the current one shows, without a line, and the HUD names its street.
+- The fight circle: a red circle with a skull, "Hostiles", round the fight's spawn points (15 m past the farthest, the boss's spot included), with the GPS line to its centre until you are inside it; each hostile a red dot.
+- Chase marking: a runner is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest.
+- The scene: a yellow map pin "Scene" with the line, until it is processed.
 
 ### Beat Patrol · beat_patrol
-
 - Basics: Patrol · 1 officer · ★ · time limit 8 min · cooldown 10 min · quiet patrol (quietPatrol = true: lights and siren after arriving cost −10)
-
 - Locations: 6+ districts, each with 8+ checkpoint spots; a run uses one district and 5 random spots
-
 - Start: the first checkpoint
-
 - Spawns: none; markers and blips only
-
-- Marking (Config.Markers): the current checkpoint is a numbered yellow blip with the block's own GPS line (Config.Markers.routeColour) until it is cleared, the next one a smaller numbered yellow blip. An officer still driving to the start, or with a waypoint of his own, gets no checkpoint line: the start's line stays his only one. Under Radio Silence (Config.Markers.radioSilence 'area') the current checkpoint alone shows, without a line, and the HUD names its street
-
-- Objectives: 1) drive to each checkpoint in order; 2) stop inside its 10 m marker for 10 seconds; a checkpoint counts only while the officer is driving a vehicle (any vehicle, in its driver seat, checked by the server)
-
-- Scales: nothing (solo)
+- Marking: checkpoints (see above)
+- Objectives: 1) drive to each checkpoint in order; 2) stop inside its 10 m marker for 10 seconds; a checkpoint counts only from a driver seat (server-checked)
 
 - Fail if: the time limit runs out
 
-- Bonuses and penalties: common only
-
-- Cleanup: markers and blips
 
 ### Business Check · business_check
-
 - Basics: Patrol · 1 officer · ★ · time limit 10 min · cooldown 10 min · quiet patrol (quietPatrol = true: lights and siren after arriving cost −10)
-
 - Locations: 12+ businesses; a run uses 4 random ones
-
 - Start: the first business
-
 - Spawns: none; ox_target zones on the front doors
-
-- Marking (Config.Markers): each door still to check is a numbered yellow blip, orange while it needs securing, with the GPS line to the nearest. A door's blip stays as it is until that door is done (an update redraws nothing), so the line and its first flash are kept
-
-- Objectives: 1) at each business, ox_target "Check door" on the front door (5 s progress); 2) the server has rolled each door as secure (75%) or open (25%) and shows the result; an open door adds "Secure door" (5 s progress); 3) log the result on the tablet: "Secure" or "Found open – secured"
-
-- Scales: nothing (solo)
+- Marking: each door still to check is a numbered yellow blip, orange while it needs securing, with the GPS line to the nearest. A door's blip stays as it is until that door is done (an update redraws nothing), so the line and its first flash are kept
+- Objectives: 1) at each business, ox_target "Check door" on the front door (5 s); 2) the server has rolled each door as secure (75%) or open (25%) and shows the result; an open door adds "Secure door" (5 s); 3) log the result on the tablet: "Secure" or "Found open – secured"
 
 - Fail if: the time limit runs out
-
 - Bonuses: each correctly logged result +5
-
 - Penalties: each wrongly logged result −5
 
-- Cleanup: target zones and blips
-
 ### Street Race Bust · street_race_bust
-
 - Basics: Patrol · 1–2 officers · ★★ · time limit 4 min (the race) · cooldown 15 min
-
 - Locations: 5+ looped race routes of 2–3 km, recorded as road routes (see Route recording)
-
 - Start: an intercept point on the route (waypoint set on accept); the race starts when the first participant arrives
-
 - Spawns: 3 NPC racers in sports cars (scales), racing the route until the time limit ends
-
-- Marking (Config.Markers): each racer's car, and a driver out of it, has a red blip with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance. A driver who runs on foot is orange until he stops, fights or gives up
-
-- Objectives: 1) stop racers before the race ends; a racer is stopped when its car stays below 5 km/h for 5 seconds; 2) detain each stopped driver with ox_target "Detain driver" (3 s progress). The run is Completed when every racer is detained, or when the time limit ends with at least one detained
-
+- Marking: each racer's car, and a driver out of it, has a red blip with the GPS line to the nearest. A driver who runs on foot is orange until he stops, fights or gives up
+- Objectives: 1) stop racers before the race ends; a racer is stopped when its car stays below 5 km/h for 5 seconds; 2) detain each stopped driver with ox_target "Detain driver" (3 s). The run is Completed when every racer is detained, or when the time limit ends with at least one detained
 - Scales: racers (base 3)
-
 - Fail if: the time limit ends with no racer detained
-
 - Bonuses: +30 per racer detained, plus +20 more if every racer is detained
-
-- Penalties: ramming a racer at over 100 km/h −10 each; no heavy-damage penalty, since boxing racers in means contact (vehiclePenalties = false)
-
-- Cleanup: racers, their cars and blips
+- Penalties: ramming a racer at over 100 km/h −10 each; vehiclePenalties = false (boxing racers in means contact)
 
 ### EVOC Course · evoc_course
-
 - Basics: Training · 1 officer · ★★ · time limit 4 min · cooldown 10 min
-
 - Locations: 3+ course layouts in open areas such as airfields; each has 12–20 checkpoints and Gold / Silver / Bronze medal times
-
 - Start: the course start marker; the timer starts at the first checkpoint
-
 - Spawns: checkpoint markers only (no cones or props)
-
-- Marking (Config.Markers): the current checkpoint is a numbered yellow blip with the block's own GPS line (Config.Markers.routeColour) until it is cleared, the next one a smaller numbered yellow blip. An officer still driving to the start, or with a waypoint of his own, gets no checkpoint line: the start's line stays his only one. Under Radio Silence (Config.Markers.radioSilence 'area') the current checkpoint alone shows, without a line, and the HUD names its street
-
-- Objectives: drive through every checkpoint in order; a checkpoint counts only while the officer is driving a vehicle (any vehicle, in its driver seat, checked by the server); a missed checkpoint must be driven through before the next one counts; each wall or vehicle contact adds 2 seconds
-
-- Scales: nothing (solo)
+- Marking: checkpoints (see above)
+- Objectives: drive through every checkpoint in order; a checkpoint counts only from a driver seat (server-checked); a missed checkpoint must be driven through before the next one counts; each wall or vehicle contact adds 2 seconds
 
 - Fail if: the time limit runs out, or the vehicle becomes undriveable
-
 - Bonuses: Gold medal +50, Silver +25, Bronze +10 (replaces the common time bonus); no contact at all +10
 
-- Penalties: common only
-
-- Cleanup: markers
 
 ### Pursuit Sim · pursuit_sim
-
 - Basics: Training · 1 officer · ★★★ · time limit 5 min · cooldown 15 min
-
 - Locations: 5+ start points, each with a flee route
-
 - Start: the start point; the getaway car spawns 50 m ahead and flees when the officer arrives
-
 - Spawns: 1 getaway car with 1 driver, who flees but never shoots
-
-- Marking (Config.Markers): the getaway car, and the driver once out of it, has a red blip with the GPS line to it; one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance. A driver who runs on foot is orange until he stops, fights or gives up
-
+- Marking: the getaway car, and the driver once out of it, has a red blip with the GPS line to it. A driver who runs on foot is orange until he stops, fights or gives up
 - Objectives: stay within 150 m of the car for a total of 3 minutes
 
-- Scales: nothing (solo)
-
 - Fail if: the officer is more than 250 m from the car for 10 seconds straight, the officer's vehicle becomes undriveable, or the time limit runs out
-
 - Bonuses: medal by average distance: Gold under 40 m +50, Silver under 80 m +25, Bronze under 150 m +10 (replaces the common time bonus)
-
 - Penalties: ramming the getaway car −10 each (this is a follow exercise)
 
-- Cleanup: car and driver
-
 ### Stolen Vehicle Takedown · stolen_vehicle_takedown
-
 - Basics: Training · 1–2 officers · ★★★ · time limit 8 min · cooldown 15 min
-
 - Locations: 5+ last-seen areas, each with a flee route
-
-- Start: an 85 m circle round the last-seen point, 35–42 m from the stolen car, so an officer arriving at its edge is 43 m or more from the car, past Config.Spawning.minDistance. When a participant with lights on is within 60 m of the car, it rolls its response: yield (25%), flee (65%) or fight (10%: the passenger is armed and may shoot from the car, drive-by chance 50%)
-
+- Start: an 85 m circle round the last-seen point, 35–42 m from the stolen car (an officer at its edge is 43 m or more from it). When a participant with lights on is within 60 m of the car, it rolls its response: yield (25%), flee (65%) or fight (10%: the passenger is armed and may shoot from the car, drive-by chance 50%)
 - Spawns: 1 stolen car with 2 suspects (scales, max 4); after the stop, each suspect has a 20% chance to flee on foot
-
-- Marking (Config.Markers): the stolen car, and each suspect once out of it, has a red blip with the GPS line to the nearest (orange while he runs on foot); one too far away for an officer's game (OneSync streams 424 m) shows where the server has it, so it stays on every map at any distance. Once it is stopped each suspect and the car not yet decided keep a blip (a suspect orange while he runs, red once he fights or gives up; the car yellow) until worked
-
-- Objectives: 1) stop the car: it pulls over by itself (yield) or is stopped with a PIT or box-in (below 5 km/h for 5 seconds); 2) aim at each suspect until they surrender (hands up, then kneel); the suspects of a car that yielded stay seated until ordered out; 3) cuff each suspect ("Cuff suspect", 5 s progress), catching any who flee first; 4) Impound the stolen car (10 s progress; the tow truck collects it). Steps 2–4 are a field_contact objective in stop mode that adopts the pursuit's car and suspects (revealed = { 'stolen' }).
-
+- Marking: the stolen car, and each suspect once out of it, has a red blip with the GPS line to the nearest (orange while he runs on foot). Once it is stopped each suspect and the car not yet decided keep a blip (a suspect orange while he runs, red once he fights or gives up; the car yellow) until worked
+- Objectives: 1) stop the car: it pulls over by itself (yield) or is stopped with a PIT or box-in (below 5 km/h for 5 seconds); 2) aim at each suspect until they surrender (hands up, then kneel); the suspects of a car that yielded stay seated until ordered out; 3) cuff each suspect (Cuff suspect, 5 s), catching any who flee first; 4) Impound the stolen car (10 s progress; the tow truck collects it). Steps 2–4 are a field_contact objective in stop mode that adopts the pursuit's car and suspects (revealed = { 'stolen' }).
 - Scales: suspects in the car (base 2, max 4)
-
 - Fail if: a suspect escapes (more than 400 m from every participant for 20 seconds), or the time limit runs out
-
 - Bonuses: car stopped within 2 minutes of the start +15; car impounded +10 (vehicle_impounded; the car's stolen plate is given from the start, so its Impound disposition earns no correct_disposition on top). Each suspect counts as one arrest, whether they were cuffed in the chase or at the contact
-
-- Penalties: ramming at over 100 km/h −10 each; no heavy-damage penalty, since PIT stops and box-ins mean contact (vehiclePenalties = false)
-
-- Cleanup: car, suspects and the tow truck
+- Penalties: ramming at over 100 km/h −10 each; vehiclePenalties = false (PIT stops and box-ins mean contact)
 
 ### Warrant Service · warrant_service
-
 - Basics: Investigation · 2–4 officers · ★★★ · time limit 12 min · cooldown 20 min
-
 - Locations: 5+ houses, each with a front door and a yard
-
 - Start: within 50 m of the house
-
 - Spawns: the suspect inside; 1 armed associate (scales) comes out at the knock, away from the officers (Config.Spawning.associatesAtKnock)
-
-- Marking (Config.Markers): before the knock the front door's yellow blip with the GPS line to it; after it the suspect and each associate not yet cuffed, orange while he runs and red once he fights or gives up, with the line to the nearest; one who ran too far away for an officer's game (OneSync streams 424 m) shows where the server has him
-
-- Marking (Config.Markers): objective 5 the yard to search, a numbered yellow blip with the GPS line; objective 6 the scene, a yellow map pin "Scene" with the line, until it is processed
-
-- Objectives: 1) ox_target "Knock and announce" on the front door; 2) the suspect's response is rolled: surrenders at the door (50%), flees out the back on foot (30%) or fights with a pistol (20%); associates always fight; 3) cuff the suspect ("Cuff suspect", 5 s progress) unless the suspect was killed while fighting; 4) neutralise every associate (killed, or surrendered and cuffed); 5) ox_target "Search the property" at the yard marker (8 s progress): the server rolls what is found (60%: narcotics, a weapon, stolen goods or documents), shown on the tablet as virtual evidence; 6) Process the scene (it completes at once when nobody died)
-
+- Marking: before the knock the front door's yellow blip with the GPS line to it; after it the suspect and each associate not yet cuffed, orange while he runs and red once he fights or gives up, with the line to the nearest
+- Marking: objective 5 the yard to search, a numbered yellow blip with the GPS line; objective 6 the scene, a yellow map pin "Scene" with the line, until it is processed
+- Objectives: 1) ox_target "Knock and announce" on the front door; 2) the suspect's response is rolled: surrenders at the door (50%), flees out the back on foot (30%) or fights with a pistol (20%); associates always fight; 3) cuff the suspect (Cuff suspect, 5 s) unless the suspect was killed while fighting; 4) neutralise every associate (killed, or surrendered and cuffed); 5) ox_target "Search the property" at the yard marker (8 s): the server rolls what is found (60%: narcotics, a weapon, stolen goods or documents), shown on the tablet as virtual evidence; 6) Process the scene (it completes at once when nobody died)
 - Scales: armed associates (base 1)
-
 - Fail if: the suspect escapes (more than 400 m from every participant for 20 seconds), every participant is downed, or the time limit runs out
-
-- Bonuses: suspect taken alive +15; no participant downed +10% of type points; nobody killed +15 (all_taken_alive)
-
-- Penalties: common only, except the heavy vehicle-damage penalty, which is off because vehicles take gunfire (vehiclePenalties = false)
-
-- Cleanup: NPCs, target zones and blips
+- Bonuses: suspect taken alive +15; no participant downed +10% of P; nobody killed +15 (all_taken_alive)
+- Penalties: vehiclePenalties = false (vehicles take gunfire)
 
 ### Manhunt · manhunt
-
 - Basics: Investigation · 1–4 officers · ★★ · time limit 12 min · cooldown 20 min
-
 - Locations: 5+ search regions, each with 6+ clue spots and 6+ hiding spots
-
 - Start: entering the 600 m search circle, shown on the map when the type is accepted
-
-- Spawns: 1 fugitive (scales) hidden inside the circle; 3 clue props (a dropped bag, a phone, a witness NPC). Each appears only once an officer is within 150 m of it (Config.Spawning.activateRange): a fugitive on his hiding spot 40 m (minDistance) or more from every officer, a clue 40 m or more away or closer where no officer can see it; the circle shrinks towards a fugitive's hiding spot also before he has appeared (Config.Spawning.enabled = false: all when the search starts, as before)
-
-- Marking (Config.Markers): until an officer is inside it, the search circle (yellow; its centre a yellow pin "Search area (600 m)") with the GPS line to its centre, redrawn smaller with each clue. Inside, each clue still to check is a numbered yellow dot and the line goes to the nearest; a fugitive who runs is an orange blip (red once he gives up) with the line on him, shown where the server has him once he is too far away for an officer's game (OneSync streams 424 m); with every clue checked and nobody running, the line goes to the shrunk circle again. Under Radio Silence the circle alone shows, without a line
-
-- Objectives: 1) check each clue with ox_target (4 s progress); each clue shrinks the circle 600 → 300 → 150 → 50 m, always still containing a fugitive; 2) when a participant gets within 30 m, that fugitive runs on foot; 3) catch and cuff every fugitive ("Cuff suspect", 5 s progress). Fugitives are unarmed and give up when stunned, when a participant stays within 3 m of them for 3 seconds, or once worn out by running when a participant is within 30 m (Suspect behaviour, Runners tire)
-
+- Spawns: 1 fugitive (scales) hidden inside the circle; 3 clue props (a dropped bag, a phone, a witness NPC). They appear as in Suspect behaviour → Manhunt
+- Marking: until an officer is inside it, the search circle (yellow; its centre a yellow pin "Search area (600 m)") with the GPS line to its centre, redrawn smaller with each clue. Inside, each clue still to check is a numbered yellow dot and the line goes to the nearest; a fugitive who runs is an orange blip (red once he gives up) with the line on him; with every clue checked and nobody running, the line goes to the shrunk circle again. Under Radio Silence the circle alone shows, without a line
+- Objectives: 1) check each clue with ox_target (4 s); each clue shrinks the circle 600 → 300 → 150 → 50 m, always still containing a fugitive; 2) when a participant gets within 30 m, that fugitive runs on foot; 3) catch and cuff every fugitive (Cuff suspect, 5 s). Fugitives are unarmed and give up when stunned, when a participant stays within 3 m of them for 3 seconds, or once worn out by running when a participant is within 30 m (Suspect behaviour, Runners tire)
 - Scales: fugitives (base 1)
-
 - Fail if: a fugitive escapes (more than 300 m from every participant for 30 seconds after running), or the time limit runs out
-
 - Bonuses: all 3 clues checked before the first arrest +10; no weapons fired +10
-
 - Penalties: common only (killing an unarmed fugitive fails the mission)
 
-- Cleanup: props, NPCs and search-circle blips
-
 ### Gang Shootout · gang_shootout
-
 - Basics: Tactical · 1–4 officers · ★★★ · time limit 10 min · cooldown 20 min
-
 - Locations: 5+ remote hideouts away from civilian hotspots, each with 12+ hostile spawn points
-
 - Start: within 80 m of the hideout
-
 - Spawns: 20 hostiles (scales) in 3 waves of 7 / 7 / 6, each wave scaled the same way; the next wave spawns when 2 or fewer of the current wave are alive, or after 90 seconds. Pistols and combat pistols; base accuracy 25 and armour 0, plus the tier's increase
-
-- Marking (Config.Markers): during the fight a red circle with a skull at its centre, "Hostiles", round the hostile spawn points (15 m past the farthest), with the GPS line to its centre until you are inside it; each hostile is a red dot
-
-- Marking (Config.Markers): "Secure the scene" a numbered yellow blip with the GPS line; then the scene a yellow map pin "Scene" with the line, until it is processed
-
-- Objectives: 1) neutralise every hostile (killed, or surrendered and cuffed; a hostile under 25% health has a 30% chance to surrender); 2) ox_target "Secure the scene" at the scene marker (8 s progress); 3) Process the scene (at most 4 bodies kept)
-
+- Marking: during the fight the fight circle
+- Marking: "Secure the scene" a numbered yellow blip with the GPS line; then the scene (scene pin)
+- Objectives: 1) neutralise every hostile (killed, or surrendered and cuffed; a hostile under 25% health has a 30% chance to surrender); 2) ox_target "Secure the scene" at the scene marker (8 s); 3) Process the scene (at most 4 bodies kept)
 - Scales: hostiles
-
 - Rules: hostiles use their own relationship group, hostile only to participants; NPC traffic is blocked within 120 m while the run is active
-
 - Fail if: every participant is downed, or the time limit runs out
-
-- Bonuses: no participant downed +10% of type points; each hostile arrested +5; nobody killed +15 (all_taken_alive)
-
-- Penalties: common only, except the heavy vehicle-damage penalty, which is off because vehicles take gunfire (vehiclePenalties = false)
-
-- Cleanup: peds, vehicles, kept bodies and blips; NPC traffic restored
+- Bonuses: no participant downed +10% of P; each hostile arrested +5; nobody killed +15 (all_taken_alive)
+- Penalties: vehiclePenalties = false (vehicles take gunfire)
 
 ### Hostage Rescue · hostage_rescue
-
 - Basics: Tactical · 1–4 officers · ★★★ · time limit 10 min · cooldown 20 min
-
 - Locations: 5+ enterable base-game stores or banks (e.g. 24/7 stores, Fleeca banks)
-
 - Start: within 60 m of the building
-
-- Spawns: 4 armed hostiles (scales) inside; 3 hostages kneeling with their hands tied, who appear when objective 2 starts (after the fight), 15 m or more from every officer (Config.Spawning.hostagesAt; 'runStart' = at run start, as before)
-
-- Marking (Config.Markers): each hostage still tied is a blue person blip with the GPS line to the nearest; once one is freed the green safe point joins them, so the line leads there when it is nearer. Before the hostages appear the objective's pin is at their first spot. During the fight (objective 1) a red circle with a skull at its centre, "Hostiles", round the hostile spots inside (15 m past the farthest), with the GPS line to its centre until you are inside it
-
-- Objectives: 1) neutralise every hostile; 2) free each hostage with ox_target "Cut restraints" (6 s progress); 3) each freed hostage walks to the safe marker outside. Completed when every hostage is there
-
+- Spawns: 4 armed hostiles (scales) inside; 3 hostages kneeling with their hands tied, who appear when objective 2 starts (after the fight), 15 m or more from every officer (Config.Spawning.hostagesAt; 'runStart' = at run start)
+- Marking: each hostage still tied is a blue person blip with the GPS line to the nearest; once one is freed the green safe point joins them, so the line leads there when it is nearer. Before the hostages appear the objective's pin is at their first spot. During the fight (objective 1) the fight circle
+- Objectives: 1) neutralise every hostile; 2) free each hostage with ox_target "Cut restraints" (6 s); 3) each freed hostage walks to the safe marker outside. Completed when every hostage is there
 - Scales: hostiles (hostages stay at 3)
-
 - Fail if: a hostage dies, every participant is downed, or the time limit runs out
-
-- Bonuses: no hostage hurt +15; no participant downed +10% of type points
-
-- Penalties: a hostage hit by participant fire −50 each; no heavy vehicle-damage penalty, because vehicles take gunfire (vehiclePenalties = false)
-
-- Cleanup: peds and blips
+- Bonuses: no hostage hurt +15; no participant downed +10% of P
+- Penalties: a hostage hit by participant fire −50 each; vehiclePenalties = false (vehicles take gunfire)
 
 ### Bomb Disposal · bomb_disposal
-
 - Basics: Tactical · 1–4 officers · ★★ · time limit 6 min (the device timer) · cooldown 20 min
-
 - Locations: 5+ buildings, each with 6+ hiding spots
-
 - Start: within 50 m of the building; the time limit, which is the device timer, starts now
-
-- Marking (Config.Markers): while searching, a yellow circle round the hiding spots with a yellow pin "Search area" at its centre and the GPS line to it (never to a hiding spot); then each device still to defuse is a numbered yellow blip named after the mission's target ("Defuse device") with the line to the nearest
-
+- Marking: while searching, a yellow circle round the hiding spots with a yellow pin "Search area" at its centre and the GPS line to it (never to a hiding spot); then each device still to defuse is a numbered yellow blip named after the mission's target ("Defuse device") with the line to the nearest
 - Spawns: 1 device prop (scales), each at a different random hiding spot
-
-- Objectives: 1) search hiding spots with ox_target "Search" (3 s progress) until every device is found; 2) defuse each device with 4 ox_lib skill checks (easy, medium, medium, hard). All devices share the one timer: a miss takes 30 seconds off it, and 2 misses in a row on one device sets that device off
-
+- Objectives: 1) search hiding spots with ox_target "Search" (3 s) until every device is found; 2) defuse each device with 4 ox_lib skill checks (easy, medium, medium, hard). All devices share the one timer: a miss takes 30 seconds off it, and 2 misses in a row on one device sets that device off
 - Scales: devices (base 1)
-
 - Fail if: the timer reaches 0, or a device goes off. The explosion is an effect only (damage scale 0) and hurts nobody
-
 - Bonuses: no missed skill checks +15; every device found within 2 minutes of the start +10
 
-- Penalties: common only
-
-- Cleanup: device props, target zones and blips
 
 ### Armored Truck Escort · armored_truck_escort
-
 - Basics: Tactical · 2–4 officers · ★★★ · time limit 12 min · cooldown 20 min
-
 - Locations: 3+ road routes recorded by driving them (see Route recording), each with a depot, a destination and 5+ ambush points
-
 - Start: the depot; the truck leaves when the first participant arrives
-
-- Spawns: an armored truck (stockade) with an NPC driver that follows the route's roads at its set speed (default 60 km/h), keeping to its lanes; 2 ambush waves (scales) of 2 cars each (scales), with 2 armed attackers per car, triggered at random ambush points along the route. The truck appears on the depot point 0.5 m over the road (vehicleLift) once no vehicle and no officer is within 6 m of it (Config.Spawning; after 20 s on the first free spot further along the route); the ambush cars appear 0.5 m over the road where they stand, never within 40 m of an officer and, with Config.Spawning.ambushAheadOnly, never on another vehicle, next to the truck or behind it (their slots slide further along the route)
-
-- Marking (Config.Markers): the truck (a blue armoured van blip) and the destination (a yellow flag); each officer's own GPS line goes to the truck while he is more than clearRadius (100 m) from it, else to the destination. A truck too far away for an officer's game shows where the server has it; the attackers are red dots
-
+- Spawns: an armored truck (stockade) with an NPC driver that follows the route's roads at its set speed (default 60 km/h), keeping to its lanes; 2 ambush waves (scales) of 2 cars each (scales), with 2 armed attackers per car, triggered at random ambush points along the route; the truck and ambush cars appear as in Suspect behaviour → Armored Truck Escort
+- Marking: the truck (a blue armoured van blip) and the destination (a yellow flag); each officer's own GPS line goes to the truck while he is more than clearRadius (100 m) from it, else to the destination; the attackers are red dots
 - Objectives: 1) escort the truck to the destination; 2) neutralise each ambush wave; 3) the truck reaches the destination with no attacker within 100 m
-
 - Scales: ambush waves and cars per wave
-
 - Fail if: the truck is destroyed, the truck is stopped for 60 seconds straight, every participant is downed, or the time limit runs out
-
-- Bonuses: truck arrives above 50% health +10% of type points; no participant downed +10% of type points
-
-- Penalties: common only, except the heavy vehicle-damage penalty, which is off because ramming ambush cars is expected (vehiclePenalties = false)
-
-- Cleanup: truck, attackers, their cars and blips
+- Bonuses: truck arrives above 50% health +10% of type points; no participant downed +10% of P
+- Penalties: vehiclePenalties = false (ramming ambush cars is expected)
 
 ### Prison Break · prison_break
-
 - Basics: Tactical · 1–4 officers · ★★★ · time limit 10 min · cooldown 20 min
-
 - Locations: 5+ breakout points on the outer perimeter of Bolingbroke Penitentiary, each with escape routes and an inmate spawn point of its own for every inmate the largest team brings (8 at 4 officers), 3 m or more apart
-
 - Start: within 150 m of the breakout point
-
 - Spawns: 5 inmates (scales) in prison clothes, already outside the fence and scattering on foot along the escape routes; 2 in every 5 carry pistols and fire when a participant is within 15 m
-
-- Marking (Config.Markers): each inmate not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest; one too far away for an officer's game (OneSync streams 424 m) shows where the server has him, so a partner 500 m away still sees him while his escape clock runs
-
-- Objectives: catch every inmate, then cuff them ("Cuff suspect", 5 s progress). An unarmed inmate gives up when a participant aims at them within 10 m, when stunned, or when a participant stays within 3 m for 3 seconds. An armed inmate gives up only when stunned or below 50% health. Any inmate worn out by running gives up when a participant is within 30 m (Suspect behaviour, Runners tire)
-
+- Marking: each inmate not yet cuffed: chase marking, so a partner 500 m away still sees him while his escape clock runs
+- Objectives: catch every inmate, then cuff them (Cuff suspect, 5 s). An unarmed inmate gives up when a participant aims at them within 10 m, when stunned, or when a participant stays within 3 m for 3 seconds. An armed inmate gives up only when stunned or below 50% health. Any inmate worn out by running gives up when a participant is within 30 m (Suspect behaviour, Runners tire)
 - Scales: inmates
-
 - Rules: nothing spawns inside the prison walls, where real players may be jailed
-
 - Fail if: an inmate escapes (more than 600 m from every participant for 30 seconds), or the time limit runs out
-
 - Bonuses: +10 per inmate arrested alive
-
-- Penalties: common only, except the heavy vehicle-damage penalty, which is off because vehicles take gunfire (vehiclePenalties = false)
-
-- Cleanup: inmates and blips
+- Penalties: vehiclePenalties = false (vehicles take gunfire)
 
 ### Illegal Parking Patrol · parking_patrol
-
 - Basics: Patrol · 1 officer · ★ · time limit 10 min · cooldown 10 min · quiet patrol
-
-- Locations: 6+ districts (for example Alta Street downtown, Vespucci Boulevard, Portola Drive in Rockford Hills, Mirror Park Boulevard, Ginger Street in Little Seoul, Prosperity Street in Del Perro, Alhambra Drive in Sandy Shores, Paleto Boulevard), each with 10+ kerb spots; every spot has its posted rule (metered, permit, no parking, hydrant, loading zone or free) and its street name; a run uses 5 random spots of one district
-
-- Start: the district's patrol entry point, 30–60 m before the first spot along the street (radius 85 m, so an officer arriving at its edge is 38 m or more from the first spot, past the 25 m approach plus Config.Spawning.sceneOutside: its car is there before he is on top of it)
-
+- Locations: 6+ districts, each with 10+ kerb spots; every spot has its posted rule (metered, permit, no parking, hydrant, loading zone or free) and its street name; a run uses 5 random spots of one district
+- Start: the district's patrol entry point, 30–60 m before the first spot along the street (radius 85 m: an officer at its edge is 38 m or more from the first spot)
 - Spawns: 5 locked, empty NPC cars, one per spot, parked along the kerb. The server rolls each car: legal (45%), a violation (50%: a ticket-level violation on metered and permit spots, a tow-level one on no-parking, hydrant and loading spots; free spots roll legal or stolen only), or stolen (5%). At most one returning driver and one thief (see objectives)
-
-- Marking (Config.Markers): every car not yet decided is a yellow car blip with the GPS line to the nearest; a car that has not appeared yet (it appears once an officer is near its spot) shows at its kerb spot as "Parked car to check". A returning driver or a thief is a yellow person blip (orange while he runs)
-
-- Objectives: 1) for each car: Inspect (3 s) shows the posted rule, permit, meter and time parked; Run plate (3 s, beside the car, or as a HUD action from the driver seat of a vehicle within 20 m) shows valid, expired or STOLEN; decide on the tablet or with ox_target: No action (1 s), Write citation (6 s at the windscreen) or Impound (10 s; the tow truck collects it); 2) a returning driver, at most once per run: when the officer cites or impounds a car that isn't stolen there is a 25% chance its driver walks up and either takes the ticket (60%), argues until the officer uses "Explain the citation" (30%, 4 s), or gets in and drives off before the tow is hooked (10%; the citation stands, no penalty); 3) a thief: when an officer first inspects a stolen car there is a 50% chance the thief is nearby and runs on foot once an officer is within 15 m; catch and cuff them ("Cuff suspect", 5 s progress), then hand them to transport
-
-- Scales: nothing (solo)
+- Marking: every car not yet decided is a yellow car blip with the GPS line to the nearest; a car that has not appeared yet (it appears once an officer is near its spot) shows at its kerb spot as "Parked car to check". A returning driver or a thief is a yellow person blip (orange while he runs)
+- Objectives: 1) for each car: Inspect (3 s) shows the posted rule, permit, meter and time parked; Run plate (3 s, beside the car, or as a HUD action from the driver seat of a vehicle within 20 m) shows valid, expired or STOLEN; decide on the tablet or with ox_target: No action (1 s), Write citation (6 s at the windscreen) or Impound (10 s; the tow truck collects it); 2) a returning driver, at most once per run: when the officer cites or impounds a car that isn't stolen there is a 25% chance its driver walks up and either takes the ticket (60%), argues until the officer uses "Explain the citation" (30%, 4 s), or gets in and drives off before the tow is hooked (10%; the citation stands, no penalty); 3) a thief: when an officer first inspects a stolen car there is a 50% chance the thief is nearby and runs on foot once an officer is within 15 m; catch and cuff them (Cuff suspect, 5 s), then hand them to transport
 
 - Fail if: the time limit runs out, or a car whose plate came back STOLEN gets No action or a citation instead of Impound
-
 - Bonuses: each Best decision +5 (correct_disposition with points = 5); all 5 cars Best +10 (all_correct); the thief arrested alive +15 (subject_alive; the thief's own Arrest disposition earns no correct_disposition on top)
-
 - Penalties: citing a legal car −5; impounding a legal car or one that only needed a ticket −15; a violation left without a ticket −5; a stolen car missed because its plate was never run −10; the thief escaping (400 m from the officer for 20 seconds) −15 (missed_arrest; this mission never fails on an escape); lights and siren after arriving at the entry point −10 (quietPatrol)
 
-- Cleanup: cars, tow truck, driver, thief, transport van and blips
-
 ### Traffic Enforcement · traffic_enforcement
-
 - Basics: Patrol · 1–2 officers · ★★ · time limit 12 min · cooldown 15 min
-
-- Locations: 6+ patrol corridors recorded as road routes of 2–6 km (for example the Great Ocean Highway north of Chumash, Route 68 through Harmony, the Senora Freeway, the Palomino Freeway, Route 1 at Paleto Bay, and city corridors such as the Bay City Incline and Capital Boulevard posted at 60 km/h), each with its posted speed and an observation point beside the road. A renamed location keeps its old label in `aliases`, so a location switch saved by the old label still matches. Only the observation point and the corridor's two ends are held to the zone lint (routes of other missions may cross a corridor; the draw's runtime zone clearance keeps two live runs apart)
-
+- Locations: 6+ patrol corridors recorded as road routes of 2–6 km, each with its posted speed and an observation point beside the road. A renamed location keeps its old label in `aliases`, so a location switch saved by the old label still matches. Only the observation point and the corridor's two ends are held to the zone lint (routes of other missions may cross a corridor; the draw's runtime zone clearance keeps two live runs apart)
 - Start: the observation point (radius 40 m), at least 30 m from the road spawn point
-
-- Spawns: one violator solo, two with two officers (the second appears once the first stop is closed). Each is 1 car with a driver and passengers (occupants scale: base 1, max 3) that spawns 150–250 m upstream of the observation point and drives past it; the second one spawns Config.Spawning.secondViolatorUpstream (200 m) up the road from the officer furthest up it (officers within 100 m of the road; nobody on the road: upstream of the observation point as the first) and drives towards them, never at the first one's point. Both are 0.5 m over the road (vehicleLift) and go through the spawn director (never within 40 m of an officer). The server rolls the violation (speeding 20–45 km/h over the posted speed 70%, reckless lane changes 30%), each person's truth (Config.Custody.profileSets.traffic), the car (legal 90%, stolen 10%) and the response to lights (yield 75%, flee 20%, fight 5%; fight only when someone in the car is armed)
-
-- Marking: the HUD announces the violator as it approaches ("Vehicle approaching: 128 km/h" or "Vehicle weaving between lanes"), and the violator car alone gets a blip once it passes the observation point (the second one: once it passes where the officers stood on the road when it set off), then stays on the map at any distance (Config.Markers: where the server has it once it is too far away for an officer's game). Until then the objective blip is the observation point. Ambient traffic is never marked. Once stopped each person and the car not yet decided keep a blip (a person yellow, orange while he runs, red once he draws or gives up; the car yellow) until worked
-
+- Spawns: one violator solo, two with two officers (the second appears once the first stop is closed). Each is 1 car with a driver and passengers (occupants scale: base 1, max 3) that spawns 150–250 m upstream of the observation point and drives past it; the second appears up the road from the officers (Suspect behaviour → Pursuit cars). The server rolls the violation (speeding 20–45 km/h over the posted speed 70%, reckless lane changes 30%), each person's truth (Config.Custody.profileSets.traffic), the car (legal 90%, stolen 10%) and the response to lights (yield 75%, flee 20%, fight 5%; fight only when someone in the car is armed)
+- Marking: the HUD announces the violator as it approaches ("Vehicle approaching: 128 km/h" or "Vehicle weaving between lanes"), and the violator car alone gets a blip once it passes the observation point (the second one: once it passes where the officers stood on the road when it set off). Until then the objective blip is the observation point. Ambient traffic is never marked. Once stopped each person and the car not yet decided keep a blip (a person yellow, orange while he runs, red once he draws or gives up; the car yellow) until worked
 - Objectives: 1) observe the violation, then stop the car: pace a speeder by staying within 80 m behind it for 5 seconds (the server compares speeds every second and grades the median of the samples, with a 5 km/h tolerance; the HUD shows "Paced: 128 km/h in an 80 zone"), or follow a reckless driver within 60 m for 8 seconds; then light it up within 60 m. A yielding car pulls over with its hazards on; a fleeing car must be stopped (PIT or box-in: below 5 km/h for 5 seconds) and anyone who runs caught and cuffed; the armed occupants of a fighting car must be neutralised; 2) work the stop: Talk to the driver (licence and registration), Run plate, Order out, Frisk, Look inside, Search vehicle (with probable cause), then decide for every person (Warn, Cite, Arrest or Release) and the car (No action or Impound); arrests go to transport; 3) and 4) with two officers, the same for the second violator
-
 - Scales: violators (1 solo, 2 with two officers); occupants per car (base 1, max 3)
-
 - Rules: an observed violation makes the driver at least a Minor offence for grading, so citing a paced speeder is Best. Lighting a car up before observing its violation is a stop without cause: −15 for the officer whose lights started it (stop_without_cause); everything after it is graded normally, and a citation for a violation nobody observed is graded against the driver's own truth. No cones and no checkpoint. Violators never target bystanders. Violator cars are locked for non-participants
-
 - Fail if: a person is released after their warrant or weapon was known to the decider (a knowing error, after the confirm); a car is released or cited after its stolen plate was known to the decider; a suspect escapes (more than 400 m from every participant for 20 seconds); an unarmed or compliant person is killed; every participant is downed; or the time limit runs out
-
 - Bonuses: each Best decision +10 (correct_disposition); procedure complete +10 per officer; no weapons fired +10
-
 - Penalties: the decision penalties in Police actions & decisions; ramming at over 100 km/h −10 each (hard_ram); the heavy vehicle-damage penalty applies
 
-- Cleanup: violator cars, occupants, tow truck, transport van and blips
-
 ### Suspicious Activity · suspicious_activity
-
 - Basics: Investigation · 1–2 officers · ★★ · time limit 10 min · cooldown 15 min
-
-- Locations: 6+ scenes (for example behind the Little Seoul 24/7, the roof of a Vinewood parking garage, a La Mesa industrial yard, a Mirror Park construction site, the Del Perro Pier car park, a Rancho warehouse row, the Sandy Shores airfield hangars), each with a car spot, 3+ person spots, 2+ escape paths and a transport point
-
-- Start: a marker 40–60 m from the scene and at least 30 m from every person and car spot, with a 100 m circle, so an officer arriving at its edge is 42 m or more from the car and every person, past the 25 m approach plus Config.Spawning.sceneOutside: the scene is there before he is on top of it and nobody reacts until he is within 25 m; the Active Mission screen shows the caller's report, e.g. "A dark sedan has been parked behind the store for an hour"
-
+- Locations: 6+ scenes, each with a car spot, 3+ person spots, 2+ escape paths and a transport point
+- Start: a marker 40–60 m from the scene and at least 30 m from every person and car spot, with a 100 m circle (an officer at its edge is 42 m or more from the scene, so it is there before him and nobody reacts until he is within 25 m); the Active Mission screen shows the caller's report, e.g. "A dark sedan has been parked behind the store for an hour"
 - Spawns: the server rolls the scene: someone sitting in a parked car (50%), people loitering beside a parked car (30%) or someone looking into parked cars (20%); 1 person (scales, max 3). Each person's truth comes from Config.Custody.profileSets.scene (clean 35, minor 15, warrant 15, narcotics 15, burglary tools 12, armed 8); the car is stolen 15% of the time
-
-- Marking (Config.Markers): until the scene appears a yellow pin named after the objective where it will be; then each person (a yellow person blip) and the car (a yellow car blip) not yet decided, with the GPS line to the nearest; a person who runs turns orange, one who draws or gives up red, and one too far away for an officer's game shows where the server has him
-
+- Marking: until the scene appears a yellow pin named after the objective where it will be; then each person (a yellow person blip) and the car (a yellow car blip) not yet decided, with the GPS line to the nearest; a person who runs turns orange, one who draws or gives up red
 - Objectives: 1) when the first participant comes within 25 m, each person reacts by demeanour: stays, walks away, runs, or (armed and hostile) shows a tell and draws; 2) make contact: Talk / Check ID, Frisk, Detain, Look inside, Run plate, Search vehicle (with probable cause); 3) decide for every person (Release, Cite or Arrest) and the car (No action or Impound); arrests go to transport
-
 - Scales: people (base 1, max 3)
-
 - Fail if: a person is released after their warrant or weapon was known to the decider (a knowing error, after the confirm); a stolen car is released after its stolen plate was known to the decider; a person escapes (more than 400 m from every participant for 20 seconds); a person who never drew a weapon is killed; every participant is downed; or the time limit runs out
-
 - Bonuses: each Best decision +10; procedure complete +10 per officer; each person who ran or drew and was arrested alive +15 (subject_alive, instead of correct_disposition for that person); no weapons fired +10
-
 - Penalties: the decision penalties in Police actions & decisions; common penalties
 
-- Cleanup: people, car, tow truck, transport van and blips
-
 ### Drug Lab Raid · drug_lab_raid
-
 - Basics: Tactical · 2–4 officers · ★★★ · time limit 12 min · cooldown 20 min
-
-- Locations: 6+ labs away from civilian hotspots (for example the Sandy Shores lab building, a Grapeseed barn, a Paleto Forest cabin, a Cypress Flats warehouse, an El Burro Heights oil-field shed, a Raton Canyon cabin, a Stab City trailer; not O'Neil Ranch, which the Weekly Boss uses, and nothing in the harbour), each with 2 entry points, 14+ hostile spawn points in two spawn sets (inside, yard), 3 cook points (the cooks' hiding spot and 2 on the tracks towards the escape routes, 3 m or more apart: one point for each cook) and 2+ escape routes, 6+ stash spots, the lab point and a scene marker
-
+- Locations: 6+ labs away from civilian hotspots, each with 2 entry points, 14+ hostile spawn points in two spawn sets (inside, yard), 3 cook points (the cooks' hiding spot and 2 on the tracks towards the escape routes, 3 m or more apart: one point for each cook) and 2+ escape routes, 6+ stash spots, the lab point and a scene marker
 - Start: within 80 m of the lab
-
 - Spawns: 9 hostiles (scales) in 2 waves of 5 / 4, holding cover inside (tactics rolled: hold 50%, balanced 40%, push 10%); pistols, combat pistols and pump shotguns; base accuracy 25 and armour 0 plus the tier's increase; a hostile under 25% health has a 30% chance to surrender. 1 unarmed cook (scales, max 3). 2 stashes (scales, max 4) hidden among the stash spots
-
-- Marking (Config.Markers): during the fight (objective 2) a red circle with a skull at its centre, "Hostiles", round the hostile spawn points of both spawn sets (15 m past the farthest), with the GPS line to its centre until you are inside it; each hostile is a red dot
-
-- Marking (Config.Markers): during the cook chase each cook not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
-
-- Marking (Config.Markers): the two entry points to breach are numbered yellow blips with the GPS line to the nearest; the stash search a yellow circle with a yellow pin at its centre and the line to it (never to a stash); the lab to shut down a numbered yellow blip "Shut down the lab" with the line, orange, flashing and named "Ventilate 1" while it is set back until it is ventilated (Config.Markers.setbackFlash); the scene a yellow map pin "Scene" with the line
-
-- Objectives: 1) breach: ox_target "Stack up and breach" (3 s progress) on both entry points, by 2 different officers within 6 seconds of each other (the count is min(2, participants still in the run): when only one is left, one officer breaches both entries with an 8 s progress each, so the run never soft-locks); 2) neutralise every hostile (killed, or surrendered and cuffed); 3) when the last hostile falls the cooks bolt along an escape route: catch and cuff them (unarmed; they give up when aimed at within 10 m, when stunned, when a participant stays within 3 m for 3 seconds, or once worn out by running when a participant is within 30 m); 4) search the stash spots ("Search", 4 s progress) until every stash is found, then "Seize the product" (6 s progress); 5) "Shut down the lab" at the lab point: 3 ox_lib skill checks (medium, medium, hard); 2 misses in a row start a toxic fire (an effect only, it hurts nobody), a setback and never a fail: any participant must "Ventilate" (10 s progress) at the lab point, the officer who missed loses 15 points (lab_fire, personal), and the shutdown can be tried again 30 seconds later by anyone; 6) Process the scene
-
+- Marking: during the fight (objective 2) the fight circle
+- Marking: during the cook chase each cook not yet cuffed: chase marking
+- Marking: the two entry points to breach are numbered yellow blips with the GPS line to the nearest; the stash search a yellow circle with a yellow pin at its centre and the line to it (never to a stash); the lab to shut down a numbered yellow blip "Shut down the lab" with the line, orange, flashing and named "Ventilate 1" while it is set back until it is ventilated (Config.Markers.setbackFlash); the scene (scene pin)
+- Objectives: 1) breach: ox_target "Stack up and breach" (3 s) on both entry points, by 2 different officers within 6 seconds of each other (the count is min(2, participants still in the run): when only one is left, one officer breaches both entries with an 8 s progress each, so the run never soft-locks); 2) neutralise every hostile (killed, or surrendered and cuffed); 3) when the last hostile falls the cooks bolt along an escape route: catch and cuff them (unarmed; they give up when aimed at within 10 m, when stunned, when a participant stays within 3 m for 3 seconds, or once worn out by running when a participant is within 30 m); 4) search the stash spots ("Search", 4 s progress) until every stash is found, then "Seize the product" (6 s); 5) "Shut down the lab" at the lab point: 3 ox_lib skill checks (medium, medium, hard); 2 misses in a row start a toxic fire (an effect only, it hurts nobody), a setback and never a fail: any participant must "Ventilate" (10 s) at the lab point, the officer who missed loses 15 points (lab_fire, personal), and the shutdown can be tried again 30 seconds later by anyone; 6) Process the scene
 - Scales: hostiles, cooks (max 3), stashes (max 4)
-
 - Rules: hostiles use their own relationship group, hostile only to participants; NPC traffic is blocked within 120 m while the run is active; the seized product is virtual evidence (no items, but it counts as an evidence find for item rewards)
-
 - Fail if: a cook escapes (more than 400 m from every participant for 20 seconds), an unarmed cook is killed, every participant is downed, or the time limit runs out
-
-- Bonuses: no participant downed +10% of type points; each hostile arrested +5; each cook arrested +10 (cook_arrested); every stash found within 3 minutes of the breach +10 (stash_found_fast); nobody killed +15 (all_taken_alive)
-
-- Penalties: a toxic fire −15 for the officer whose checks missed (lab_fire); common penalties, except the heavy vehicle-damage penalty, which is off because vehicles take gunfire (vehiclePenalties = false)
-
-- Cleanup: peds, props, coroner van and blips; NPC traffic restored
+- Bonuses: no participant downed +10% of P; each hostile arrested +5; each cook arrested +10 (cook_arrested); every stash found within 3 minutes of the breach +10 (stash_found_fast); nobody killed +15 (all_taken_alive)
+- Penalties: a toxic fire −15 for the officer whose checks missed (lab_fire); common penalties, except vehiclePenalties = false (vehicles take gunfire)
 
 ### Gang Hideout Raid · gang_hideout_raid
-
 - Basics: Tactical · 2–4 officers · ★★★ · time limit 12 min · cooldown 20 min
-
-- Locations: 6+ urban hideouts (for example a Chamberlain Hills cul-de-sac, the Rancho projects, an East Vinewood house, a Murrieta Heights yard, an El Burro Heights compound, a Davis Avenue duplex), each with 2 entry points, three spawn sets of 6+ spawn points each (front, house, garage or back yard), a lieutenant spot, 4 runner points (on the lanes from the back of the house to the escape routes, 3 m or more apart and never on the lieutenant's spot: one point for each runner), 2+ escape routes, 6+ cache spots and a scene marker
-
+- Locations: 6+ urban hideouts, each with 2 entry points, three spawn sets of 6+ spawn points each (front, house, garage or back yard), a lieutenant spot, 4 runner points (on the lanes from the back of the house to the escape routes, 3 m or more apart and never on the lieutenant's spot: one point for each runner), 2+ escape routes, 6+ cache spots and a scene marker
 - Start: within 100 m of the hideout
-
 - Spawns: 16 hostiles (scales) in 3 waves of 6 / 5 / 5 from 2 of the 3 spawn sets, rolled per run (the Active Mission screen shows the intel line, e.g. "Intel: expect contact in the garage and the house"); tactics rolled (hold 30%, balanced 50%, push 20%); pistols, combat pistols and pump shotguns; base accuracy 28 and armour 10 plus the tier's increase; 30% surrender under 25% health. After the last wave, the lieutenant: health 300, armour 50, a heavy pistol, 50% surrender under 25% health; does not scale. 2 unarmed runners (scales, max 4). 1 weapons cache (scales, max 2) hidden among the cache spots
-
-- Marking (Config.Markers): during the fight (objective 2) a red circle with a skull at its centre, "Hostiles", round the hostile spawn points of the two rolled spawn sets (15 m past the farthest of them and the lieutenant's spot), with the GPS line to its centre until you are inside it; each hostile is a red dot, the lieutenant a bigger one named "The lieutenant"
-
-- Marking (Config.Markers): during the runners' chase each runner not yet cuffed is an orange blip while he runs and red once he fights or gives up, with the GPS line to the nearest, shown where the server has him once he is too far away for an officer's game
-
-- Marking (Config.Markers): the two entry points to breach are numbered yellow blips with the GPS line to the nearest; the cache search a yellow circle with a yellow pin at its centre and the line to it (never to a cache); the scene a yellow map pin "Scene" with the line
-
-- Objectives: 1) breach together on both entry points (as Drug Lab Raid); 2) neutralise every hostile, then the lieutenant; 3) when the lieutenant falls the runners bolt: catch and cuff them; 4) search the cache spots until every cache is found, then "Seize the weapons" (6 s progress); 5) Process the scene
-
+- Marking: during the fight (objective 2) the fight circle, the lieutenant a bigger one named "The lieutenant"
+- Marking: during the runners' chase each runner not yet cuffed: chase marking
+- Marking: the two entry points to breach are numbered yellow blips with the GPS line to the nearest; the cache search a yellow circle with a yellow pin at its centre and the line to it (never to a cache); the scene (scene pin)
+- Objectives: 1) breach together on both entry points (as Drug Lab Raid); 2) neutralise every hostile, then the lieutenant; 3) when the lieutenant falls the runners bolt: catch and cuff them; 4) search the cache spots until every cache is found, then "Seize the weapons" (6 s); 5) Process the scene
 - Scales: hostiles, runners (max 4), caches (max 2)
-
 - Rules: hostiles hostile only to participants; NPC traffic blocked within 120 m; nothing is looted
-
 - Fail if: a runner escapes, an unarmed runner is killed, every participant is downed, or the time limit runs out
-
-- Bonuses: lieutenant arrested alive +25 (lieutenant_alive); each hostile arrested +5; no participant downed +10% of type points; every cache found within 2 minutes of the breach +10 (stash_found_fast); nobody killed +15 (all_taken_alive)
-
+- Bonuses: lieutenant arrested alive +25 (lieutenant_alive); each hostile arrested +5; no participant downed +10% of P; every cache found within 2 minutes of the breach +10 (stash_found_fast); nobody killed +15 (all_taken_alive)
 - Penalties: common only, except the heavy vehicle-damage penalty, which is off (vehiclePenalties = false)
 
-- Cleanup: as Drug Lab Raid
-
 ### Weekly Boss: Kingpin · weekly_boss_kingpin
-
 - Basics: Tactical event card · 1–4 officers · ★★★ · time limit 15 min · once per officer per week, Friday–Sunday (server time); cannot be launched as a Cross-Department Mission
-
 - Locations: 3+ compounds, each with 16+ hostile spawn points
-
 - Start: within 100 m of the compound
-
 - Spawns: 30 hostiles (scales) in 4 waves of 8 / 8 / 7 / 7, each scaled the same way, then the Kingpin after the last wave. Pistols, heavy pistols and shotguns; base accuracy 30 and armour 25, plus the tier's increase. The Kingpin has armour 100, health 400 and a heavy pistol, and does not scale
-
-- Marking (Config.Markers): during the fight a red circle with a skull at its centre, "Hostiles", round the hostile spawn points (15 m past the farthest of them and the Kingpin's spot), with the GPS line to its centre until you are inside it; each hostile is a red dot
-
-- Marking (Config.Markers): "Secure the scene" a numbered yellow blip with the GPS line
-
-- Objectives: 1) neutralise every hostile; 2) neutralise the Kingpin; 3) ox_target "Secure the scene" (8 s progress)
-
+- Marking: during the fight the fight circle
+- Marking: "Secure the scene" a numbered yellow blip with the GPS line
+- Objectives: 1) neutralise every hostile; 2) neutralise the Kingpin; 3) ox_target "Secure the scene" (8 s)
 - Scales: hostiles
-
 - Fail if: every participant is downed, or the time limit runs out
-
 - Points and cash: 500 points (Config.Events.weeklyBoss.points) instead of the type points; base payout Config.Events.weeklyBoss.payout ($2,500) until an admin sets a mission payout; counts as Tactical for the leaderboards, the 4-Tactical run cap and the hourly cap, never has a twist, and is accepted from its card with the key weekly_boss. Its runs are stored with mission_type = 'tactical'. Abandoning it (except for a real call, force recall or cancel) uses up that week's attempt and puts no type on cooldown
-
 - Bonuses: Kingpin arrested alive +50; no participant downed +10% of points
-
-- Penalties: common only, except the heavy vehicle-damage penalty, which is off because vehicles take gunfire (vehiclePenalties = false)
-
-- Cleanup: as Gang Shootout
+- Penalties: vehiclePenalties = false (vehicles take gunfire)
 
 ## Special events
 
@@ -1204,58 +773,41 @@ Downed participants
 
 ## Dispatch (mission calls)
 
-Mission calls are the tablet's own call board. The server posts short NPC incidents that every on-duty officer can see, and the first unit to claim one gets a random mission of that type that starts in the call's area. Mission calls never touch SC-Dispatch, and real calls always come first.
+Mission calls are the tablet's own call board (all numbers in Config.MissionCalls): the server posts short NPC incidents every on-duty officer sees, and the first unit to claim one gets a random mission of that type starting in the call's area. They never touch SC-Dispatch, and real calls always come first.
 
 What a call shows
 
 | Field | Example | Notes |
 |---|---|---|
 | Code | MC-0427 | Numbered per day |
-| Title | "Armed persons reported" | A radio-style line drawn at posting from a pool of 5–8 per type (locale mc.title.<type>.<n>, Config.MissionCalls.titles), each written to fit every mission of that type (Patrol: "Complaint from a resident", "Traffic concern"; Tactical: "Armed persons reported", "Shots heard"); never a mission name. After a claim wins, the card and the Active Mission header show the drawn mission's own caller report |
-| Type | Tactical | The mission type the draw uses; Type of the Day is tagged |
-| Priority | P1 | From the type (Config.MissionCalls.types): Tactical P1, Investigation P2, Patrol P3 |
-| Area | South Los Santos | Per viewer: shown only when the viewer's eligible pool of that type in the area holds at least 2 missions and 3 locations (Config.MissionCalls.minMissionsPerArea, minLocationsPerArea), counted after the viewer's unit size, no-repeat, cooldowns and daily limits. Otherwise the viewer sees "County-wide" and their claim draws as the Mission Board does, with locations weighted towards the unit (see Random draw rules). Counts only; the mission is never shown |
-| Distance | area ~1.4 km | From the viewer to the area's centre, worked out from server-side coordinates; county-wide calls show the distance to the nearest eligible location's area. After a claim wins, the confirm toast gives the real distance to the drawn start and the response target |
-| Offer | 2:40 left | Counts down from Config.MissionCalls.offerTime (180 s) |
-| Crew | Solo or unit / Needs a unit of 2+ | From the viewer's eligible pool for the call |
-| Pay | $250 · 60 pts · +6 rapid response | The same range as that type's Mission Board card for the viewer's unit size, plus the rapid-response bonus (none on paged or staff-created calls) |
-| Status | Ready · Nearest units first 0:12 · Locked (reason) · Confirming: 2L-14's unit (0:14) · Claimed by 2L-14 (SAST) · Re-dispatched · Lapsed | Per viewer. A claimant who lost the claim window sees "Claimed by 2L-14 (SAST), a closer unit"; the winning unit's members get the banner "Your unit took MC-0427: Ready?" (the ready check) |
+| Title | "Armed persons reported" | Drawn at posting from 5–8 radio lines per type (mc.title.<type>.<n>, titles) that fit every mission of the type; never a mission name. After a claim wins, the card and Active Mission header show the drawn mission's caller report |
+| Type | Tactical | The type the draw uses; Type of the Day is tagged |
+| Priority | P1 | From the type: Tactical P1, Investigation P2, Patrol P3 |
+| Area | South Los Santos | Per viewer: shown only when his eligible pool there (after unit size, no-repeat, cooldowns, daily limits) holds at least minMissionsPerArea (2) missions and minLocationsPerArea (3) locations; otherwise "County-wide" and his claim draws as the board does. Never the mission |
+| Distance | area ~1.4 km | From server coordinates to the area's centre (county-wide: the nearest eligible area). After a win the toast gives the real distance and the response target |
+| Offer | 2:40 left | Counts down from offerTime (180 s) |
+| Crew | Solo or unit / Needs a unit of 2+ | From the viewer's eligible pool |
+| Pay | $250 · 60 pts · +6 rapid response | The type's board range for his unit size, plus rapid response (none on paged or staff calls) |
+| Status | Ready · Nearest units first 0:12 · Locked (reason) · Confirming: 2L-14's unit (0:14) · Claimed by 2L-14 (SAST) · Re-dispatched · Lapsed | Per viewer; the winning unit gets "Your unit took MC-0427: Ready?" (the ready check) |
 
 First to claim
 
-- Only a unit leader or a solo officer can claim. The claim runs exactly the checks of accepting a type on the Mission Board: on duty, not suspended, leader, not on a run, not responding to a real call, not in Crimson-Arena, no Cross-Department Mission active, the hourly and daily caps, type and mission cooldowns for every member, and the server run caps. It also needs at least one eligible mission of that type in the call's area for the unit. A claim that fails a check shows its reason, e.g. "Tactical on cooldown for 3:12 (2L-14)".
-
-- The first valid claim wins. So that a slower connection doesn't decide it, every valid claim that reaches the server within 1.5 seconds of the first (Config.MissionCalls.claimWindowMs; 0 = pure first click) is ranked: the unit whose nearest member is closest to the area's centre wins, then the unit that claimed fewer calls in the last hour, then the earliest claim. Every other claimant sees "Claimed by 2L-14 (SAST), a closer unit" (or "…, fewer recent calls" / "…, claimed first", naming the rule that decided).
-
-- For the first 15 seconds of a call, only units within 1,500 m of its area's centre can claim it, if at least one such unit was idle when the call was posted (Config.MissionCalls.priorityWindow and priorityRadius). The card shows "Nearest units first" with the countdown.
-
-- The winning claim goes through the normal accept: the ready check (Units), invites close, the server draws a random mission of that type that starts in the area (every draw rule applies: no-repeat, reserved locations, zone and player clearance), creates the run and sets the start route. The mission is revealed only then, exactly as on the Mission Board.
-
-- If the winning unit's ready check is declined or times out, the call goes back to open for the time it had left, the next-ranked claim from the window (if any) is tried, and the declining unit can't claim that call again. Nobody gets a cooldown.
-
-- A claimed call counts as that unit's accepted type for every rule: cooldowns, the hourly and daily caps, abandoning, the start route and real calls. Nothing about the run itself differs, apart from the rapid-response bonus.
+- Only a unit leader or solo officer claims, with exactly the Mission Board accept checks (duty, suspension, leader, not on a run or a real call, not in Crimson-Arena, no Cross-Department Mission, caps, every member's cooldowns, run caps) plus an eligible mission of the type in the area. A failed check shows its reason ("Tactical on cooldown for 3:12 (2L-14)").
+- Every valid claim within claimWindowMs (1.5 s; 0 = first click) of the first is ranked: nearest member to the area's centre, then fewer claims in the last hour, then earliest. Losers see "Claimed by 2L-14 (SAST), a closer unit" (or ", fewer recent calls" / ", claimed first").
+- For the first priorityWindow (15 s) only units within priorityRadius (1,500 m) can claim, if one was idle at posting ("Nearest units first").
+- The winner goes through the normal accept: ready check, invites close, the draw in the area (every draw rule), the run and start route; the mission is revealed only then. A declined or timed-out ready check reopens the call for its remaining time, tries the next-ranked claim, and bars that unit from the call; no cooldowns.
+- A claimed call counts as that unit's accepted type for every rule (cooldowns, caps, abandoning, the route, real calls); only rapid response differs.
 
 How calls are posted
 
-- The server checks every 10 seconds. It never posts while a Cross-Department Mission is active (open calls are withdrawn when one launches) and never posts a call that no idle unit could claim.
+- Every 10 s; never while a Cross-Department Mission is active (open calls are withdrawn at its launch) and never a call no idle unit could claim. Idle = on duty, not on a run or a real call, not in Crimson-Arena, not suspended.
+- At most one open call per unitsPerCall (2) idle units, at least 1 while anyone is idle, never more than maxOpen (4), one new call every spawnEvery (60–150 s, random). Type by weight (Patrol 5, Investigation 3, Tactical 2); Training and the Weekly Boss never; a type at its run cap is skipped. Area weighted towards idle units, never the same type and area as another open call. Nothing is sent before posting and the mission is chosen only when a claim wins.
+- Cost: each on-duty officer's eligibility is kept in memory (filled from cp_mission_runs on duty, updated on row:settled, cooldown and duty changes); no query per call or viewer. Per-viewer cards (DispatchView) are built only for open tablets; others get the cached claimable count. Budget: under 0.25 ms of server time per tick at 30 officers, both storage modes.
 
-- Idle units: solo officers and units whose members are all on duty, not on a run, not responding to a real call, not in Crimson-Arena and not suspended.
+Scaling and rapid response
 
-- How many: at most one open call per 2 idle units (Config.MissionCalls.unitsPerCall), at least 1 while anyone is idle, never more than 4 open (maxOpen), and at most one new call every 60–150 seconds (spawnEvery, random in the range).
-
-- Type: a weighted pick from Config.MissionCalls.types (Patrol 5, Investigation 3, Tactical 2 by default). Training and the Weekly Boss are never calls. A type at its server run cap is skipped.
-
-- Area: weighted towards where idle units are (server-side coordinates), and never the same type and area as another open call.
-
-- Nothing about a call is sent to anyone before it is posted, and the mission is not chosen until a claim wins.
-
-- Cost: the server keeps each on-duty officer's eligibility in memory (cooldowns, hourly and daily counts, last mission and last locations per type), filled once from cp_mission_runs when they go on duty and updated on row:settled, cooldown changes and duty changes; it never queries the database per call or per viewer. Per-viewer call cards (DispatchView) are built only for officers with the tablet open; everyone else gets the cached claimable count for the nav badge and the toast. Budget: posting, claims and pushes together stay under 0.25 ms of server time per tick at 30 on-duty officers, in both storage modes.
-
-Scaling
-
-- A call has no difficulty of its own. The run scales with its participants like any run (Scaling by participants), and the card shows the cash and points for the viewer's unit size.
-
-- Rapid response (calls the server posted only; never paged or staff-created calls): a participant who reaches the mission start within the call's response target earns +10% of P (points only, personal, inside the 2P cap; cash is never changed). The target is set when the claim wins, from the server-side straight-line distance of the unit's nearest member to the drawn start: distance ÷ 20 m/s + 45 s (Config.MissionCalls.rapidResponse). The Active Mission screen shows the target counting down. A quietPatrol mission's lights and siren penalty only counts after arrival at the start, so hurrying to a claimed patrol call is never penalised.
+- A call has no difficulty of its own: the run scales like any run, and the card shows the viewer's unit size's cash and points.
+- Rapid response (server-posted calls only): a participant reaching the start within the response target earns +10% of P (points only, personal, inside the 2P cap). The target is set at the win: the nearest member's straight-line distance to the drawn start ÷ 20 m/s + 45 s (rapidResponse), counting down on Active Mission. A quietPatrol penalty counts only after arrival, so hurrying is never penalised.
 
 When a call ends
 
@@ -1266,24 +818,11 @@ When a call ends
 | Claimed | A claim won | Closed with the run's outcome (completed, failed or abandoned) when the run ends |
 | Re-dispatched | The claimed run ended before any participant reached the start (quit, off_route, start_timeout, idle, real_call, force_recall) | Reopens once for 120 seconds, tagged "Re-dispatched". Members of the old claim can't claim it again, and their normal abandon rules and cooldowns still apply |
 
-Mission Board and calls
+Mission Board, real calls and live crimes
 
-- The Mission Board is unchanged and always works. Calls are a second way in, never a requirement, and taking a type on the board does not touch open calls.
-
-- The board shows "2 mission calls open" as a link to Dispatch.
-
-- The Weekly Boss and Cross-Department Missions are board-only. While a Cross-Department Mission is active, Dispatch shows the operation banner with a link to the board.
-
-Real calls, SC-Dispatch and dispatcher mode
-
-- Mission calls exist only on the Crimson-Police tablet. They are never sent to SC-Dispatch, never appear in its F10 panel or MDT, never create an sc-dispatch notification and never change a unit status.
-
-- An officer responding to or assigned to a real call can't claim (their cards show "On a call"), gets no mission-call toasts, and a real call still ends any run at once with no penalty or cooldown.
-
-- The Dispatch screen shows a read-only strip: "SC-Dispatch: 3 active real calls (1 Priority 1) — real calls come first". It is counted from mdt_dispatch (NPC calls excluded), refreshed every 20 seconds, lists no calls and gates nothing. If the lookup fails, the strip is hidden.
-
-- SC-Dispatch's dispatcher mode (AssignedOnlyAlerts) has no effect on mission calls, and human dispatchers never see them: mission calls never involve real players; a LIVE call mirrors a real SC-Dispatch call that dispatchers already see. A dispatcher assigning an officer on a mission to a real call ends that officer's run as today.
-- LIVE calls (Config.LiveCrime, off by default): claiming one opens the crime's live case at once at its reported place, with no draw, no twists and no rapid response. Every accept rule applies except the server run caps (Config.LiveCrime.maxLiveRuns caps live cases) and three switches: readyCheck (false: no ready check), typeCooldown (false: type cooldowns are ignored and a live case starts none) and duringOperation (true: claimable while a Cross-Department Mission runs). The claim is refused when the crime is over or its suspects are all in another case, when every suspect already scored Config.RealSuspects.maxCatchesPerSuspectDay times today, and when an officer of the unit is in the crew, is one of the suspects on another character or account, is suspended from these cases by an admin, was a suspect within jobHopMinutes, or has an admin block or a recent case with a suspect (pairCooldownHours, suspectCooldownMinutes). Sharing only a connection or PC with a suspect is allowed and flags that officer for review. A case lasts at most Config.LiveCrime.caseTime; its call closes with it and is never re-dispatched. Backup (Config.LiveCrime.backup, on as shipped behind enabled): an on-duty officer on no mission who marks himself responding to the crime's own SC-Dispatch call, reaches the scene or cuffs a suspect gets a yes/no pop-up (Config.LiveCrime.joinOfferSeconds) to join the running case; a yes is checked again like a claim for that officer (and maxOfficers, the claiming unit counted), he gets the case's route and steps, scores only the lines recorded after he joined, and a leave is final. An officer outside the case who cuffs a suspect counts as the case's cuff while an officer of the case is within contactRange (Config.RealSuspects.outsideCuff = 'assist'), else that suspect counts for nobody ('stopped' always); staff see every offer, answer and join on the case timeline. The officers' tablet (Config.LiveCrime.caseCard and resultOutcomes, both on as shipped behind enabled): a live case's ready check (only with readyCheck) carries a red "LIVE case, real players" line with the alert, the street and the suspect count; Active Mission shows a Live case card with the three steps (the same for every suspect), the suspect count and when the last-reported map points were taken, by suspect label, never a suspect's state or a live position; the result card lists each suspect's outcome by label (Detained, Booked, Got away, Left the city, Did not count, Stopped outside the case) once the case is over, and "the case was still running" for an officer who left early. Staff data (admins, the antiFarmOverride key): every open case and the last Config.RealSuspects.casesKept closed ones (saved, so a restart keeps them; Config.RealSuspects.saveCases) with the suspects and officers by name, the case timeline, the flag lines and the damage ledger, never shown on an officer's tablet; pair statistics; and three audited tools with a reason, each 1-3650 days and refused while both features are off or on the admin's own characters: block an officer and suspect pair, exclude a player from being a suspect, suspend an officer from these cases. A staff member who was a suspect of a case counts as taking part in its run: he never reviews or reads it. The Admin UI shows this as the Real suspects screen (admin_rs, under More) only while Config.LiveCrime.enabled or Config.Volunteers.enabled is on, to admins with the antiFarmOverride key, unless Config.RealSuspects.adminScreen = false: Cases (All, Open, With flags or notes; the admin's own cases greyed and not opened), a case drawer (suspects with their times from the open and signs, officers, flags and notes, the timeline, the damage ledger) with Exclude, Suspend and Block pair buttons, and Pairs and blocks (pair statistics, one citizen ID's exclusion and suspension, the running admin rows) with one form for the three tools (citizen IDs, 1-3650 days, a reason). Volunteer cases: Cases also filters Live crimes and Volunteers; a volunteer case names the suspect he played, and its drawer shows the mode, where the match got to (with why he dropped out) and whether officers reached him; a Volunteers tab lists who is on the volunteer list now with the suspects each plays, since and until when, his strikes and whether a mission is asking him or he plays one (the list is memory only, so after a restart a player volunteers again, while strikes and strike blocks are saved: Config.Volunteers.saveStrikes). Staff tools: Lift ends a running block, exclusion or suspension early (a reason, audited, never on the admin's own characters, and a restart does not bring it back; Config.RealSuspects.staffLift); Clear strikes on the Volunteers tab clears a player's strikes and strike block (a reason, audited; Config.Volunteers.staffClearStrikes); pair statistics, the running rows and the case lists show character names next to citizen IDs from one lookup per screen load (Config.RealSuspects.staffNames); the damage ledger names the weapon instead of its hash, an unknown weapon keeping the hash (Config.RealSuspects.weaponNames).
+- The Mission Board is unchanged and always works; calls are a second way in, and taking a type on the board does not touch open calls. The board links "2 mission calls open" to Dispatch. The Weekly Boss and Cross-Department Missions are board-only; during an operation Dispatch shows its banner.
+- Mission calls never reach SC-Dispatch (F10 panel, MDT, notifications, unit status), and its dispatcher mode (AssignedOnlyAlerts) has no effect on them. An officer on a real call can't claim ("On a call"), gets no toasts, and a real call still ends any run at once with no penalty or cooldown. Dispatch shows a read-only strip "SC-Dispatch: 3 active real calls (1 Priority 1) — real calls come first", counted from mdt_dispatch (NPC calls excluded) every 20 s, hidden when the lookup fails.
+- LIVE calls (Config.LiveCrime, off) mirror a real SC-Dispatch crime with real-player suspects: claiming opens the live case at its reported place, with no draw, twists or rapid response, and is never re-dispatched. Its claim, ready check, cooldown and anti-farm rules (Config.LiveCrime, Config.RealSuspects), backup joining, the officers' Live case card and result outcomes, and the staff Real suspects screen with its tools (block pair, exclude, suspend, lift, clear strikes) are in docs/ARCHITECTURE.md §5.45–5.47 and README 9.16. A staff member who was a suspect of a case counts as taking part in its run: he never reviews or reads it.
 
 Supervisor and admin controls (Config.Permissions.supervisor.missionCalls)
 
@@ -1294,64 +833,43 @@ Supervisor and admin controls (Config.Permissions.supervisor.missionCalls)
 | Page a unit | Supervisor, Admin | Same | Posts a call of a chosen type and area offered only to one unit for 30 seconds (Config.MissionCalls.pageTime), then to everyone; ignoring it costs nothing |
 | Create a call | Supervisor, Admin | Same; /CrimsonPoliceAdmin missioncall <type> [area] | Posts a call of that type and area now; at most one every 2 minutes per supervisor (staffCooldown, or his department's staffCallWait Mission control) |
 
-Staff calls can't be used for oneself:
-
-- Page is refused when the issuer is a member of the target unit (err.mc_page_self).
-
-- A paged or created call can't be claimed by the issuer, or by any unit the issuer belongs to, for its whole offer time (err.mc_own_call). Leaving a unit to claim doesn't help: the issuer's citizenid is checked against every member of the claiming unit.
-
-- Paged and staff-created calls never earn rapid response, and the mission is still drawn at random after the claim.
-
-Every staff action is written to the audit log (category operations) and posted to cp_webhook_operations.
+- Staff calls can't be used for oneself: Page is refused for the issuer's own unit (err.mc_page_self); the issuer's citizenid is checked against every member of a claiming unit for the whole offer (err.mc_own_call); paged and created calls never earn rapid response and the mission is still drawn at random. Every staff action is audited (category operations) and posted to cp_webhook_operations.
 
 Screens and alerts
 
-- Officer UI → Dispatch, after Mission Board: call cards sorted by priority, then age; filters All · Claimable · Near me; the real-call strip; notices for "On a run", "On a call" and "Cross-Department Mission active"; "Recent calls" with the last 5 calls, who took each one and how it ended. Claim opens a confirm dialog: "The mission is drawn at random and revealed after you claim. Abandoning puts Tactical on cooldown.", with the type's twists to pick, as on the Mission Board (Special events).
-
-- A new call plays a short tone and shows a Crimson-Police toast to officers who could claim it (idle, not on a real call, not muted). Mute is a per-player setting on the Dispatch screen, saved on the officer's profile (cp_officers.calls_muted), so it follows them to any PC.
-
-- The sidebar shows the number of calls the viewer can claim. Home shows "Mission calls open: 2". The key mapping crimsonpolice_dispatch (unbound by default; Config.Tablet.dispatchKey) opens the tablet on Dispatch.
-
-- Profile & History shows calls answered and the average response time; the leaderboards can rank by mission calls; goals and bounties can count them.
-
-All numbers are in Config.MissionCalls.
+- Officer UI → Dispatch, after Mission Board: cards by priority, then age; filters All · Claimable · Near me; the real-call strip; notices for "On a run", "On a call" and "Cross-Department Mission active"; "Recent calls" (the last 5, who took each and how it ended). Claim opens a confirm ("The mission is drawn at random and revealed after you claim. Abandoning puts Tactical on cooldown.") with the type's twists, as on the board.
+- A new call plays a tone and shows a toast to officers who could claim it, unless muted (per player on Dispatch, saved in cp_officers.calls_muted). The sidebar counts claimable calls, Home shows "Mission calls open: 2", and crimsonpolice_dispatch (Config.Tablet.dispatchKey, unbound) opens the tablet on Dispatch.
+- Profile & History shows calls answered and the average response time; boards can rank by mission calls; goals and bounties can count them.
 
 ## Police actions & decisions
 
-Some missions put officers face to face with people and cars whose story is hidden: a parked car, a driver at a stop, someone loitering behind a shop. When the objective starts, the server rolls what is really going on (the truth). Officers find it out through police actions, then decide what to do with each person and car (the disposition). The server grades every decision against the truth, fairly: nobody is penalised for something no lawful action could have found, and a Best grade needs the deciding fact to have been found lawfully. Getting it wrong costs points; letting someone go after you learned they are dangerous fails the case, and the tablet warns you before you do it.
+Some missions hide the story of a person or car (a parked car, a driver at a stop, someone behind a shop). When the objective starts the server rolls the truth; officers find it out through police actions, then decide each person's and car's disposition. The server grades every decision against the truth, fairly: nobody is penalised for what no lawful action could have found, and Best needs the deciding fact found lawfully. Wrong choices cost points; releasing someone known to be dangerous fails the case, after a warning on the tablet.
 
 Contacts
 
-- A contact is a person (subject) or car that a field_contact objective owns. Contacts come from parked cars (Illegal Parking Patrol), people at a scene (Suspicious Activity) and the car and occupants of a stop (Traffic Enforcement, Stolen Vehicle Takedown).
-
-- A contact's truth stays on the server (run.entities[netId].truth and armedTruth, never replicated). It is never written to a state bag, a client event, an NUI message or the ped itself. Every contact spawns with armed = false and no weapon, accuracy or combat settings in its cp bag. The run host's client is told only the behaviour it must act out, and only when that behaviour starts (walk_away, flee_on_approach, flee_on_order, tell_then_draw). The server gives the weapon (GiveWeaponToPed) and writes the combat settings only at the moment of the draw, after the tell. The armed caps (maxArmedAlive) and the builder's armed budget count armedTruth, so a hidden gun is counted without being shown.
-
-- A fact is revealed only by a validated action, and only to that run's participants. It is known to the run from that moment. For knowing errors (below), a fact counts as known to one officer from the moment the server sent it to that officer.
-
-- Active Mission screen → Contact panel: each person (A, B, C) and car with its facts, who found them and when, a "Not checked yet" list (ID, plate, frisk, inside, search) built from the actions still open for that contact, "Not detained: free to leave" on a person in a consensual contact, and the disposition buttons. The HUD shows the newest fact.
-
-- When a pursuit hands a stopped car to a contact (handoff = 'contact'), the car and its people become the field_contact objective's entities (CP.Runs.adopt): from then on their deaths, cuffs and custody events go to the contact objective, never to the finished pursuit, and the run host runs their AI through field_contact.
+- A contact is a person or car a field_contact objective owns: parked cars (Illegal Parking Patrol), people at a scene (Suspicious Activity), and the car and occupants of a stop (Traffic Enforcement, Stolen Vehicle Takedown).
+- The truth stays on the server (run.entities[netId].truth and armedTruth): never in a state bag, client event, NUI message or the ped. Every contact spawns unarmed with no combat settings in its cp bag; the run host is told only the behaviour to act out, when it starts (walk_away, flee_on_approach, flee_on_order, tell_then_draw); the weapon and combat settings are given at the draw, after the tell. maxArmedAlive and the builder's armed budget count armedTruth.
+- A fact is revealed only by a validated action, only to that run's participants, and is known to the run from then; for knowing errors it is known to one officer from when the server sent it to him.
+- Active Mission → Contact panel: each person (A, B, C) and car with its facts, who found them and when, a "Not checked yet" list (ID, plate, frisk, inside, search) of the actions still open, "Not detained: free to leave" in a consensual contact, and the disposition buttons. The HUD shows the newest fact.
+- A pursuit with handoff = 'contact' hands the stopped car and its people to the field_contact objective (CP.Runs.adopt): their deaths, cuffs and custody events go to it from then on, and the host runs their AI through field_contact.
 
 Where the actions are
 
 | Target | How officers reach it |
 |---|---|
-| A person on foot | ox_target options on the ped |
-| A person seated in a car | ox_target options on that seat's door of the car (bones door_dside_f, door_pside_f, door_dside_r, door_pside_r). The server finds the person with GetPedInVehicleSeat, so seated people are reachable even though the car hides them from a raycast |
-| A car | ox_target options on the car |
-| Actions without a world target | HUD actions on the key mapping crimsonpolice_contact (Config.Tablet.contactKey, unbound by default) and buttons on the Contact panel: Run plate from a vehicle (the server picks the nearest contact car within 20 m in front of the officer's vehicle), Place in vehicle, Hand over to transport, and Escort on/off (an escorted person is attached to the officer and can't be raycast) |
+| A person on foot | ox_target on the ped |
+| A person seated in a car | ox_target on that seat's door (door_dside_f, door_pside_f, door_dside_r, door_pside_r); the server finds him with GetPedInVehicleSeat |
+| A car | ox_target on the car |
+| No world target | HUD actions on crimsonpolice_contact (Config.Tablet.contactKey, unbound by default) and Contact panel buttons: Run plate from a vehicle (nearest contact car within 20 m in front), Place in vehicle, Hand over to transport, Escort on/off |
 
-The server always resolves the target itself from server-side coordinates; the client only names the action. A disposition that would be a knowing error (below) never runs straight from ox_target: the option opens the Crimson-Police confirm instead.
+The server resolves the target from server-side coordinates; the client only names the action. A disposition that would be a knowing error never runs from ox_target: it opens the Crimson-Police confirm.
 
 Pullover
 
-- At a stop (a pursuit objective with handoff = contact) the officer first observes the violation when the mission asks for it (pace a speeder or follow a reckless driver; Traffic Enforcement), then turns the lights on within 60 m. The car rolls yield, flee or fight (Suspect behaviour).
+- At a stop the officer first observes the violation when the mission asks (pace a speeder or follow a reckless driver), then turns the lights on within 60 m; the car rolls yield, flee or fight (Suspect behaviour). A yielding car's people stay seated until Order out, or react by demeanour. A car stopped by force (PIT, box-in) hands its people over as Evading; anyone who ran must be caught and cuffed first.
+- The Contact panel opens as soon as the car is stopped; the driver's door offers Talk / Check ID and the car Run plate.
 
-- A yielding car pulls to the kerb with its hazards on and its engine off. Its people stay seated until Order out, or react by their demeanour. A car stopped by force (PIT or box-in) hands its remaining people to the contact as Evading; anyone who ran must be caught and cuffed first.
-
-- The Contact panel opens on the tablet and the HUD as soon as the car is stopped; the driver's door offers Talk / Check ID and the car offers Run plate.
-
-Police actions (participants only, each with an ox_lib progress bar that the officer can cancel; cancelling counts for nothing)
+Police actions (participants only; each has an ox_lib progress bar, and cancelling counts for nothing)
 
 | Action | Target | Time | What it reveals or does |
 |---|---|---|---|
@@ -1371,19 +889,15 @@ Police actions (participants only, each with an ox_lib progress bar that the off
 | Impound | A car | 10 s | Disposition Impound; a Crimson-Police tow truck collects it |
 | No action | A car | 1 s | Disposition No action |
 
-How actions are checked: every action has a begin and a finish. The client sends begin when its progress bar starts and finish when it ends. The server records the begin time, checks the officer's reach to the target with server-side coordinates at both ends, and checks the elapsed time against Config.Custody.times (minus 0.5 s slack), for people and cars alike. Actions of 3 s or more are also sampled every second while they run, as Cuff suspect is today. A finish without a matching begin, or one that comes too early, is refused.
-
-Dispositions on the tablet: the Contact panel's disposition buttons (server:contactDecide) run no progress bar. The server checks the same things as for an action's finish (a live run, an active participant who has arrived, on duty, not in Crimson-Arena, the contact's state) and needs the officer within 25 m of the contact, measured with server-side coordinates; a knowing error returns the case-fail confirm instead of deciding. The ox_target options for the same dispositions run the progress bars in the table above.
+Checks: every action has a begin and a finish. The server records the begin, checks the officer's reach with server-side coordinates at both ends and the elapsed time against Config.Custody.times (minus 0.5 s); actions of 3 s or more are sampled every second. A finish without a begin, or too early, is refused. The Contact panel's disposition buttons (server:contactDecide) run no bar: the server checks a live run, an arrived active participant on duty and not in Crimson-Arena, the contact's state, and 25 m reach; a knowing error returns the case-fail confirm. The ox_target options for the same dispositions run the bars above.
 
 Probable cause
 
-- A vehicle search is lawful with any one of: an item seen through the window (Look inside), an odour (Talk), an admission (Talk), a weapon found in a frisk, an occupant arrested, a stolen plate (an impounded car gets an inventory search), or consent (Talk: clean people agree 60% of the time, guilty ones 15%).
+- A vehicle search is lawful with any one of: an item seen through the window, an odour, an admission, a weapon found in a frisk, an occupant arrested, a stolen plate (an impounded car gets an inventory search), or consent (clean people 60%, guilty 15%).
+- Without one: −15 for the searcher (unlawful_search, personal), and what it found is inadmissible: shown struck through, never counted toward a grade (an arrest resting only on it is Acceptable, never Best).
+- A frisk is always lawful but finds weapons only; a full search needs the person detained or arrested.
 
-- A search without any of these is unlawful: −15 for the officer who searched (unlawful_search, personal), and whatever it found is inadmissible. Inadmissible facts are shown struck through and never count toward a grade: an arrest that rests only on them is graded Acceptable, never Best.
-
-- A frisk is always lawful but only finds weapons. Searching a person fully needs them detained or arrested.
-
-How each truth can be found lawfully (the server rolls the cues with the truth, from the run's seed)
+Lawful ways to each truth (cues rolled with the truth, from the seed)
 
 | Truth | Lawful ways to find it |
 |---|---|
@@ -1400,15 +914,11 @@ How each truth can be found lawfully (the server rolls the cues with the truth, 
 
 Grading rules
 
-- Decisions are graded against the truth, with Best only when the fact that decides the grade was revealed lawfully. An Arrest with no lawful fact supporting it grades Acceptable at best, never Best, and is wrongful_arrest (−25) for a clean or minor-offence truth.
-
-- Nobody is penalised for what they could not lawfully find. When no lawful path to a truth was ever open for that contact (the server tracks which cues existed and which actions were available), Release or No action grades Acceptable, not wrong. The debrief says "Not discoverable lawfully".
-
-- An observed violation (pace or follow evidence the server recorded) raises the driver's truth to at least Minor for grading: Cite = Best, Warn = Acceptable, Release = missed_offence. Passengers are unaffected.
-
-- Anyone who runs on foot from a lawful detention or order (a stop, Detain, Order out, a frisk) becomes Evading, in every mode: Arrest = Best, Cite = Acceptable. Walking away from a consensual scene contact is lawful and changes nothing. The debrief shows the resulting truth.
-
-- One act, one reward: a person caught after running earns subject_alive once (the catch), and their Arrest disposition is recorded as Best with 0 points. A disposition decided by a fact the mission gave from the start (`revealed`, e.g. Stolen Vehicle Takedown's stolen car) is graded but earns no correct_disposition.
+- Best only when the deciding fact was revealed lawfully. An Arrest with no lawful supporting fact grades Acceptable at best, and is wrongful_arrest (−25) for a clean or minor truth.
+- When no lawful path to a truth was ever open for that contact (the server tracks which cues and actions existed), Release or No action grades Acceptable; the debrief says "Not discoverable lawfully".
+- An observed violation (pace or follow evidence the server recorded) raises the driver's truth to at least Minor: Cite = Best, Warn = Acceptable, Release = missed_offence. Passengers are unaffected.
+- Running on foot from a lawful detention or order (a stop, Detain, Order out, a frisk) makes the person Evading in every mode (Arrest = Best, Cite = Acceptable); walking away from a consensual contact changes nothing.
+- One act, one reward: a person caught after running earns subject_alive once, and his Arrest is recorded Best with 0 points. A disposition decided by a fact the mission gave from the start (`revealed`, e.g. Stolen Vehicle Takedown's stolen car) is graded but earns no correct_disposition.
 
 Dispositions and grades
 
@@ -1429,129 +939,90 @@ Dispositions and grades
 | Car: holds evidence found lawfully | Impound | — | No action −10 (missed_impound) |
 | Car: left unattended by an arrest | Impound | No action (left legally parked) | — |
 
-- Each Best decision earns +10 (correct_disposition, personal to the officer who decided). Acceptable earns and costs nothing.
+- Each Best decision earns +10 (correct_disposition, personal); Acceptable earns and costs nothing.
+- Knowing errors fail the case; missed procedure costs points. A case fails only when someone releases a person, or a stolen car, after the dangerous fact reached that officer (sent to him before his bar or button press began), and only after he confirmed "Known: active warrant. Releasing will fail the case for the unit." A partner's fact arriving mid-bar makes it an unknowing mistake. Every other wrong decision costs only its officer; a failed case is shared by everyone (Config.Decisions).
+- A contact still undecided when the objective ends counts as missed (−5), never a fail.
+- Procedure: +10 once per officer (procedure_complete) when everyone he arrested was ID-checked and searched before transport; handing an armed person to transport unsearched: −10 (unsearched_transport).
+- Excessive force: a melee or taser hit on a detained, escorted, seated or compliant person costs −10 (excessive_force, personal, at most once per person per 10 s). Detection is best-effort (weaponDamageEvent, the health-drop fallback, and `stun_hit { netId }` telemetry accepted only when it matches a ragdoll or state change seen within 1 s), so it stays a small penalty. Shooting them is shot_surrendered (−20); killing them fails the mission.
+- A mission file may make a decision stricter (e.g. `decisions = { wrongfulArrest = 'fail' }`), within the builder's caps.
 
-- Knowing errors fail the case; missed procedure costs points. A case fails only when someone releases a person, or a stolen car, after the fact that makes them dangerous reached that officer (the server sent it to them before their progress bar or button press began), and only after they confirmed the Crimson-Police prompt "Known: active warrant. Releasing will fail the case for the unit." A partner's fact that arrives while the bar is already running does not make it a knowing error; it is graded as the unknowing mistake. Every other wrong decision costs only the officer who made it, so a partner's mistake never costs you points; a failed case is shared by everyone, as killing an unarmed suspect already is (Config.Decisions).
+Custody chain (custody = 'handover'; custody = 'cuff' ends the arrest at the cuff)
 
-- Every contact needs a disposition before the objective completes. A contact still undecided when the objective ends counts as missed (−5), never as a fail.
-
-- Procedure: +10 once per officer (procedure_complete) when every person they arrested was ID-checked and searched before transport. Handing an armed person to transport without searching them: −10 (unsearched_transport).
-
-- Excessive force: a melee or taser hit on a detained, escorted, seated or compliant person costs −10 (excessive_force, personal, at most once per person per 10 s). Detection is best-effort: the server uses weaponDamageEvent, the health-drop fallback, and client telemetry `stun_hit { netId }` from CEventNetworkEntityDamage that it accepts only when it matches a ragdoll or state change of that ped it saw within 1 s. Some hits can go unseen, so it stays a small penalty and never a fail. Shooting them is shot_surrendered (−20) and killing them fails the mission, as today.
-
-- A mission file may make a decision stricter (for example `decisions = { wrongfulArrest = 'fail' }`), within the builder's caps.
-
-Custody chain (objectives with custody = 'handover')
-
-- After Cuff suspect or Detain → Arrest: Search person → Escort (the person walks beside the officer; toggle with the contact key) → Place in vehicle (the rear seat of a vehicle that officer drove this run, within 5 m; HUD action) → Hand over to transport (HUD action at the van).
-
-- Transport: when the first person of a run is arrested, a Crimson-Police prisoner van with an NPC driver drives in and parks within 60 m of the scene (or at the location's transport point). Hand over (4 s at the van's rear doors) moves every person that officer is escorting or has seated within 20 m into the van. The van stays until the objective that called it ends, then leaves after Config.Custody.transport.leaveAfter; if a later arrest needs it after it left (Traffic Enforcement's second stop), requestTransport sends it again.
-
-- An arrest counts as done when the person is handed over. A person who is escorted, seated or in the van can't escape.
-
-- Objectives with custody = 'cuff' end the arrest at the cuff, as every mission does today.
+- Cuff suspect or Detain → Arrest → Search person → Escort (walks beside the officer; contact key toggles) → Place in vehicle (rear seat of a vehicle that officer drove this run, within 5 m) → Hand over to transport (at the van).
+- At the run's first arrest a prisoner van with an NPC driver drives in and parks within 60 m of the scene (or at the location's transport point). Hand over (4 s at the rear doors) moves everyone that officer escorts or has seated within 20 m into the van. It stays until the calling objective ends, then leaves after Config.Custody.transport.leaveAfter; requestTransport sends it again for a later arrest.
+- An arrest counts when the person is handed over; an escorted, seated or vanned person can't escape.
 
 Service vehicles (transport van, tow truck, coroner van)
 
-- The server picks the driving client: the participant nearest the scene, else the run host. It asks that client for a road point 150–250 m away (GetClosestVehicleNode, GetPointOnRoadSide) and checks the reply with server coordinates: inside spawnDistance, and not within Config.Custody.serviceClearance (30 m) of any player. It then spawns the vehicle (locked, plate in the reserved pattern) and hands its AI to that client, which drives, parks and, for the tow truck, loads the car (it takes control of both the flatbed and the car before attaching).
-
-- If the driving client leaves, dies or goes more than 250 m from the vehicle, the AI moves to the next nearest participant.
-
-- If a van is not parked within Config.Custody.serviceTimeout (60 s), it is placed at the parking point out of every participant's view; if a tow truck has not loaded the car within the timeout, the car fades out and counts as impounded.
-
-- A service vehicle never appears or is put down on top of the officers: a van is placed at its parking point (the transport or coroner point, else the scene) only while no player is within Config.Custody.serviceClearance (30 m) of it. A late van whose point an officer stands on drives on and is placed once he steps away; a van that got no road point at all comes to a road point beside the scene instead (serviceClearance to serviceClearance + 40 m from the parking point, from the driving client, checked by the server like every road point), or waits until a point is clear. A placed van waits frozen until an officer's game has put it on the ground (Config.Spawning.place). A tow truck that got no road point within the timeout is never made (it would stand inside the car): the car fades out and counts as impounded. Config.Spawning.enabled = false: the vans are placed at their parking point as before.
-
-- The transport van and the tow truck show on the map of every officer on the run (Config.Markers.serviceVehicles, kinds.prisonerVan "Prisoner transport" and kinds.towTruck "Tow truck", both blue): from the moment the vehicle appears until it drives off, in every Radio Silence mode, never with a GPS line. The server sends it when the vehicle's status changes (appeared, parked, loading, leaving), never on a timer; an officer's game follows the vehicle once it is near enough to see it, and shows it where the server last placed it until then. A partner who arrives late gets the vehicles already on the map. The coroner van stays unmarked (it serves a scene the officers are already at).
+- The driving client is the participant nearest the scene, else the host. It proposes a road point 150–250 m away; the server checks it is inside spawnDistance and not within Config.Custody.serviceClearance (30 m) of any player, spawns the vehicle (locked, reserved plate) and hands its AI to that client, which drives, parks and, for the tow truck, takes control of flatbed and car and loads it. If that client leaves, dies or goes more than 250 m away, the AI moves to the next nearest participant.
+- A van not parked within Config.Custody.serviceTimeout (60 s) is placed at its parking point (transport or coroner point, else the scene), out of every participant's view and only while no player is within serviceClearance; a late van whose point an officer stands on drives on until he steps away; a van with no road point comes to a road point beside the scene (serviceClearance to +40 m, server-checked) or waits. A placed van waits frozen for the placer (Config.Spawning.place). A tow truck with no road point in time is never made, and a tow that has not loaded in time fades the car out as impounded.
+- The van and tow truck show on every run officer's map (Config.Markers.serviceVehicles: "Prisoner transport", "Tow truck", blue) from appearing to leaving, in every Radio Silence mode, never with a GPS line; sent when their status changes, followed once near enough; late partners get them too. The coroner van is unmarked.
 
 Impound
 
-- Crimson-Police's Impound action is the only lawful impound. It calls a Crimson-Police flatbed tow truck with an NPC driver that loads the car and drives off (with Config.Custody.tow.enabled = false the car fades out instead). The engine counts the car as impounded, never as wrecked or lost.
-
-- sc-police's /imp and /depot must never be used on mission cars, and Crimson-Police never triggers them. If a police:server:Impound arrives for a run vehicle:
-  - sent by a participant: the car counts as removed, never as an Impound disposition. The objective fails ("Mission vehicle removed") and the run is flagged sc_impound with the officer's name, so a supervisor can review it.
-  - sent by anyone else, or the car vanished with nothing recorded: nobody on the team is blamed. The run ends as not counted (end reason vehicle_removed_external: no points, no cash, no cooldown and no abandon penalty for anyone, like a real call), and the sender is written to the audit log and the admin webhook.
-
-- A pursuit never counts a removed car as stopped and never awards vehicle_stopped_fast for it.
-
-- Every mission vehicle's plate uses the reserved pattern (Config.Custody.plates) and is rerolled when player_vehicles already has it, so sc-police's `UPDATE player_vehicles ... WHERE plate = ?` can never reach a player's own car.
+- Crimson-Police's Impound is the only lawful impound: a flatbed tow truck with an NPC driver loads the car (Config.Custody.tow.enabled = false: the car fades out). It counts as impounded, never as wrecked or lost.
+- sc-police's /imp and /depot are never triggered by Crimson-Police and must not be used on mission cars. A police:server:Impound on a run vehicle sent by a participant counts as removed (objective fails "Mission vehicle removed", run flagged sc_impound with his name); sent by anyone else, or a car vanishing unrecorded, ends the run not counted (vehicle_removed_external: no points, cash, cooldown or abandon penalty) and the sender goes to the audit log and admin webhook. A pursuit never counts a removed car as stopped or awards vehicle_stopped_fast for it.
+- Every mission plate uses the reserved pattern (Config.Custody.plates), rerolled when player_vehicles has it, so sc-police's plate UPDATE can never reach a player's car.
 
 Process the scene (coroner)
 
-- A mission with a process_scene objective keeps the bodies of NPCs who die in the run (up to that objective's body limit; the oldest is deleted when the limit is reached) instead of deleting them after 30 seconds.
+- A process_scene mission keeps the bodies of NPCs who die in the run (up to its body limit, oldest deleted first) instead of deleting them after 30 s. Each body: Photograph & tag (5 s), Bag body (6 s; a body-bag prop). Then Release to coroner (8 s) at the coroner van, or at the scene marker when the van is off.
+- No bodies: the objective completes at once and everyone earns +15 (all_taken_alive). Processing earns nothing, so killing never pays more than arresting. The fast clock stops when it starts and the time limit grows by 60 s plus 20 s per body. No SC-Dispatch or SC-Ambulance call.
 
-- For each body: Photograph & tag (5 s), then Bag body (6 s; a body-bag prop replaces it). When every body is bagged: Release to coroner (8 s) at the coroner van, which drives in and parks nearby, or at the scene marker when the van is off.
+Debrief, disputes and items
 
-- With no bodies the objective completes at once and every participant earns +15 (all_taken_alive). Processing bodies earns nothing, so killing is never worth more than arresting.
-
-- It never costs the fast bonus or a timeout: the fast-completion clock stops when process_scene starts, and the time limit is extended by 60 s plus 20 s per body kept.
-
-- Nothing here creates an SC-Dispatch or SC-Ambulance call.
-
-Debrief and disputes
-
-- The result screen and the run's breakdown in Profile & History list every decision: the contact, the choice, the truth, the facts known at that moment, whether the truth was discoverable lawfully, who decided and the grade.
-
-- A case failed by a decision can be disputed within 48 hours like any failed run; the admin sees the whole ledger, including when each fact reached the decider.
-
-Items
-
-- Config.Custody.handcuffsItem = 'handcuffs' makes Detain and Cuff suspect need that item in the officer's inventory (checked on the server with ox_inventory; never used or taken, because using sc-police's handcuffs cuffs the nearest player).
-
-- Evidence and seized items are virtual: shown on the tablet, never given. Config.Custody.evidenceItem (off by default) hands one evidence bag item for the run, tagged and removed at the end like every mission item.
+- The result screen and Profile & History list every decision: contact, choice, truth, facts known then, whether it was discoverable lawfully, who decided, the grade. A case failed by a decision can be disputed within 48 hours; the admin sees when each fact reached the decider.
+- Config.Custody.handcuffsItem = 'handcuffs' makes Detain and Cuff suspect need that item (checked server-side, never used or taken: sc-police's handcuffs cuff the nearest player). Evidence is virtual; Config.Custody.evidenceItem (off) hands one tagged evidence bag for the run, removed at the end.
 
 All numbers are in Config.Custody and Config.Decisions.
 
 ## Suspect behaviour
 
-Every person in a mission gets a demeanour when it spawns, rolled by the server from the run's seed, so every participant sees the same behaviour and tests are repeatable. The demeanour stays on the server with the truth: the run host is only told what to act out when it starts (see Police actions & decisions → Contacts), and the Contact panel's hint only ever names a tell someone has already seen.
+Every person in a mission gets a demeanour at spawn, rolled by the server from the run's seed (every participant sees the same behaviour; tests are repeatable). It stays on the server with the truth: the run host is told only what to act out when it starts (see Police actions & decisions → Contacts), and the Contact panel's hint names only a tell someone has already seen.
 
 | Demeanour | What they do |
 |---|---|
 | Compliant | Stops when approached, answers and follows orders |
-| Nervous | Complies, but fidgets and looks around; 15% run when ordered out of a car or frisked (running from that order makes them Evading) |
-| Evasive | Walks away when an officer comes within the approach distance (lawful while the contact is consensual); stops when aimed at, when an officer stays within 3 m for 3 s, or when stunned |
+| Nervous | Complies but fidgets; 15% run when ordered out of a car or frisked (then Evading) |
+| Evasive | Walks away when an officer comes within the approach distance (lawful while consensual); stops when aimed at, when an officer stays within 3 m for 3 s, or when stunned |
 | Hostile | Armed people only: shows a tell, then draws and fights |
-| Runner | Runs on foot as soon as an officer comes within the approach distance (the flee_arrest give-up and escape rules apply, and he tires: Config.Flee) |
+| Runner | Runs on foot as soon as an officer is within the approach distance (flee_arrest give-up and escape rules; he tires: Config.Flee) |
 
-- The weights come from the person's truth (Config.Custody.demeanour): guilty people run and fight more often than clean ones. Only a person rolled armed can be Hostile.
-
-- Tells: before anyone runs or draws, the server tells the run host to play a 1.5–3 second tell every participant sees (looking around, a hand to the waistband), and participants within 25 m get a HUD hint such as "Watch his hands" (Config.Npc.tellHints). Nobody draws without one, and the weapon is given only when the tell ends.
-
-- Feint: a surrendered unarmed suspect may bolt when no participant is within 6 m and none aims at them for 5 seconds (flee_arrest feint chance, 0 by default), and not while he is worn out by running with a participant within Config.Flee.giveUpRange (he would give up again at once). They stay protected: killing them still fails the mission.
-
-- At a stop, the car rolls yield, flee or fight when the lights trigger fires (pursuit responses). A yielding car pulls to the kerb, puts its hazards on and turns its engine off. A fleeing car drives recklessly, as today. In a fighting car, armed passengers may shoot at participants within 40 m (drive-by chance), and a boxed-in driver may ram the nearest participant vehicle once for 3 seconds (ram chance).
-
-- Hostile NPCs still only target participants; bystanders are never attacked.
-
-- How hard armed NPCs fight back is Config.NpcCombat (owner request of 2026-10-19), and it never changes points or cash:
-  - No automatic weapons: a mission NPC is only ever given a weapon of Config.NpcCombat.weapons (pistol, combat pistol, heavy pistol, pump shotgun). A mission that names another one (an older custom mission, a tweak) gets its Config.NpcCombat.replace weapon, else the fallback; an automatic weapon (the Automatic flag of the game's weapon data: SMGs, rifles, machine guns, the AP pistol) is never given, even when added to the list. The built-in missions, Config.Builder.allowed.weapons and the block defaults name none; a custom file that still names one loads with a console warning. With Config.NpcCombat.enabled = false nothing is swapped and Config.Builder.allowed.weapons is the only check again (switching it reloads the missions).
-  - Accuracy: the tier and Config.NpcDifficulty adds, times accuracyScale (0.7), at most accuracyMax (18), bosses and drive-bys included. NPCs fire single shots (firingPattern), at shootRate 60, with at most average combat skill, never charge, are less accurate when several officers fight them, and fire from cars in bursts, never full auto. Whichever game OneSync gives an NPC applies these, not only the run host.
-  - Damage: while their run is live, each participant's game makes NPC bullets and melee do half damage (aiDamage, aiMeleeDamage) and gives the officer no headshot multiplier (noCriticalHits), again after a respawn; officerDefense (off by default) lowers all weapon damage the officer takes. Everything goes back when the run ends. The server also drops a hit by a mission NPC that would kill a healthy officer of its run in one shot (cancelLethalHeadshots): healthy means at least lethalCancelAbove (0.75) of his health, as the server's copy of his ped says, so the shot that finishes off a hurt officer always counts and officers can still go down.
-  - 60 rounds per armed NPC (ammo).
-
-- Where hostiles appear (Config.Spawning, owner request of 2026-10-19: "make sure they dont spawn around the player make it be progressive"). Every hostile_waves fight (Gang Shootout, Hostage Rescue, Drug Lab Raid, Gang Hideout Raid, the Weekly Boss) takes its spawn points from the server's spawn director:
-  - Wave 1 appears only once an officer is within activateRange (150 m) of the fight (the middle of its spawn points).
-  - Every hostile appears at least minDistance (40 m) from every officer, minDistanceIndoor (15 m) for a fight marked indoor (inside the Fleeca bank, in and around the raided lab or house), never behind an officer and one wave from one side only. A wave that gets fewer points spawns those and the rest on later ticks, as the officers move or hostiles fall; after waveDelayMax (20 s) it may use points down to hardMin (20 m), never closer. Two hostiles never appear on one point: a point a living hostile stands on (a cuffed suspect who has not been taken away too) is skipped; a body does not keep its point. The boss comes out on his own spot when that spot is allowed, else on another point of the fight.
-  - Counts are still never cut to fit the caps. The one exception: a wave (or the boss) still short of points leaveOutAfter (45 s) after it first had to wait, while nobody of the fight is left standing (the officers stand on or in front of every point, or a cuffed suspect still stands on it), leaves out the hostiles it could not place, so the fight can end; the warning goes to Admin → System → Problems. Never before one of the fight's hostiles has appeared: officers who stand among the points before the fight begins only make it wait, so a fight is never skipped that way. leaveOutAfter 0 waits for ever.
-  - A wave's "after 90 seconds" (nextWave.afterSeconds) counts from its first hostile out, not from while it waited for points, so a wave that waited never brings the next one straight after it.
-  - A location with no spawn points spawns nobody (never at the start point) and the fight completes after its minimum time. With Config.Spawning.enabled = false every hostile appears on the file's points as before.
-  - The raids' crew is already in place before the breach (a fight marked stage = true: Drug Lab Raid and Gang Hideout Raid, objective 2; Config.Spawning.stageAhead). While the officers drive in and stack up (the objective before), wave 1 is placed by the same rules (15 m from every officer at that moment, never behind them, one side), calm and unarmed: no weapon, armour or fight settings in the ped or in its replicated state until it wakes (it still counts as armed for the caps). The whole staged crew wakes, armed and hostile, when the fight starts, or earlier when one of them is hurt or killed, or when an officer comes within stageWakeRange (12 m, on the map) of one of them; an officer nearer to a point of the objective before (a breach entry) than to that one does not wake him. Woken early they fight before the breach, nothing more is staged and the fight does not start until the breach completes. What could not be staged (points too close at the time) comes when the fight starts, by the rules above; the scaled count is unchanged. Staging off (stageAhead = false, enabled = false or stage = false): the crew appears when the fight starts, as before.
-  - Hidden points first (Config.Spawning.preferHidden, losTimeoutMs 1500 ms): when more points pass the rules above than a wave needs, the games of the officers near the fight (up to 4, nearest first; none within activateRange: the nearest one) say which of them they can see (a line of sight from the officer's head and his camera to 1.0 m and 1.7 m above the point; the map, vehicles and objects block it). Points no asked officer can see are used first, and of two sides that hold as many points the one with more hidden points wins; the boss's own spot stays first. No answer within losTimeoutMs (or one still owed from an earlier ask) = every point seen, the mission's own order; the distance and behind rules run again after the wait, from where the officers stand by then. preferHidden = false: the mission's own order, nobody is asked.
-  - The ground probe (Config.Spawning.ground, collisionTimeoutMs 6000 ms, interiorTimeoutMs 5000 ms) is how a game judges one point of a mission for a person, a vehicle or an object: it loads the collision there (and the inside of a building there: pinned until it is ready), then finds the highest ground under the point (looked for from 2 m over it, and again from 50 m over it for a point buried deeper or under a roof); under a low roof or the floor above (a trailer, a house room, a garage deck: a surface less than 2 m over the point) the point stands on the floor under it when that needs the smaller move (none when it fits its range), and the surface over it is its roof. The point is ok when its height over that ground is inside its kind's range (a person -0.3 to 1.6 m, a vehicle -0.2 to 1.5 m, an object -0.1 to 0.5 m); outside it, it is put on the ground (a person 1 m over it, a vehicle on its wheels by its model's size, an object on it) when that moves it at most snapWithin (3 m), else it is under the ground or floating. No ground found = no ground; water over the ground = in water; a building's inside that never gets ready = inside not loaded; a person or a vehicle whose space on the ground hits the map, a vehicle or an object = in a wall (a wall probe that cannot finish is not a wall). The Check spawn points tool uses it (see Admin test mode), and so does the placer.
-  - The placer (Config.Spawning.place, on): when the server asks it to (the ask goes with the entity, below), the game of a participant puts a new mission person, vehicle or object on the ground at the server's point. The game that simulates the entity does it when it is a participant's; when a bystander's game or nobody's does, the participant nearest to it takes it over (only from the participants his game can see). It keeps the entity frozen, keeps the ground around it loaded, judges the point with the ground probe (ignoring the entity itself), and when the point is ok or can be put on the ground it moves the entity straight up or down onto the ground there (a person standing on it, keeping what he was doing; a vehicle on its wheels; an object on it) and lets a person or a vehicle go (an object, and a person held cuffed, stay frozen). It never picks another spot. A bad point (under the ground, floating, no ground, in water, in a wall, inside not loaded) leaves the entity frozen where it is. Either way it tells the server once (placed or bad, why, the ground's height and where it was put). A person seated in a vehicle and anything attached to another entity go where that one goes: not moved, let go, told as placed; the same when he is seated, attached or set somewhere else by the server while his ground is checked. Until it is placed nothing else lets it go: the host's game may already tell a person to fight or run, and he does so frozen until the placer has put him on the ground (or the server stops asking). An entity already more than 3 m from its point was placed and let go before (by a game that could not tell the server): it is left where it is and told as placed. At most four entities are placed at a time by one game. A game that loses the entity during the check moves nothing and tells nothing; the end of the run stops what is still being placed. When the server has moved the ask to another point (below), the entity is first moved to that point, still frozen, then placed there; one far from both points was placed and let go before, as above.
-  - The server's side (Config.Spawning.place, placeTimeoutMs 8000 ms, retries 2, onTimeout 'unfreeze'): every new mission person, vehicle and object (of every block, the prisoner transport included) is frozen as it is made and its first state asks for its placement at the file's point. It waits frozen until a participant's game answers. A placed answer is taken from a participant of that run, for the current ask only, when the height it was put at is within snapWithin + 2 m of the point (one already placed and let go is taken wherever it stands); then the ask is removed and the entity goes on with what its mission tells it. A bad answer for a person the server has seated in a vehicle meanwhile counts as placed. Any other bad answer moves the entity to another point the mission may use there, at most retries times: the next of the points the block offers (Gang Shootout, the raids, Hostage Rescue and the Weekly Boss: the spawn director's other good points of that wave, the wave's side first) that nobody stands on and that the director's distance and behind rules still allow from where the officers stand then; it is the same entity, so the mission keeps counting it, and one console warning names the point, why it was bad, the ground's height and the point used instead. With no such point, or the retries spent, it is let go where it is (as before) with one warning. When the game that simulates a waiting entity changes to one that is not a participant's within activateRange of it, the server freezes it again on that game. The wait only counts while a participant is within activateRange of the point (nobody near: it waits, frozen), and not while a participant's game has said it checks the entity (its placer tells the server before it waits for its turn in a big wave; that pause lasts at most 34 s plus collisionTimeoutMs and interiorTimeoutMs, and only while that participant stays on the run); with no answer within placeTimeoutMs it is let go where it stands ('unfreeze', as before, one warning) or removed and treated as killed ('delete': a hostage or an escort's truck removed this way fails that objective). A person or vehicle the server only moved (Warrant Service's suspect who gives up at the door, the prisoner transport put on its parking point) is always let go where it stands, whatever onTimeout says. Switched off (place = false or enabled = false): nothing is frozen or asked, and whatever still waits is let go.
-  - Warrant doors and scattering suspects (flee_arrest, owner request of 2026-10-19: "make sure they dont spawn around the player", "surronding the officers"). Warrant Service's armed associates appear only at the knock (or when a door-mode NPC dies before it; Config.Spawning.associatesAtKnock, on): each on an associate point at least minDistanceIndoor (15 m) from every officer, never behind the officer at the door (more than behindAngle off his way in, from the start to the door), out of the officers' sight first, one side, armed and hostile at once. The suspect still waits at the door from the start; a location without a suspect point has nobody at the door (never the start point) and the warrant goes on without him. The suspect who surrenders is stood at the door step and put on the ground there by an officer's game like a new person (the placer). Every associate and every scattering suspect (Prison Break's inmates, the raids' cooks and runners) gets a point of his own: never one another person or vehicle of the run stands within 1.5 m of (a body or a cuffed suspect included), never two at once; a scatter's suspects appear only once an officer is within activateRange of their point, at least minDistance (40 m) from every officer, never behind one. A list with fewer points than suspects is said once (System → Problems) and the others come out on a point once it is free again (the one before has run off). Only after waveDelayMax (20 s) with no usable point are the ring round the points (1.25 m more per lap, as before) and a scatter's escape routes (their first point: he has bolted already, and runs on along that route) offered as well, by the same rules. A scatter's suspect on any other point flees along the escape route that starts nearest where he appears (Config.Flee.nearestRoute, on; routes whose first points are within 5 m of as near take turns in the run's shuffled order), so one who appears on a route's first point or on the lane towards it never runs back across the site past the officers to a route on its other side; nearestRoute = false: the routes take turns wherever he appears. Suspects still short leaveOutAfter (45 s) after they began waiting, once someone of the objective has appeared and every one of them is caught, dead or escaped, are left out (one warning), so the objective can end; never before one has appeared. associatesAtKnock = false: the associates wait at their points from the start, as before; enabled = false: everything as before (the ring round a point used again).
-  - Field contacts (field_contact, owner request of 2026-10-19: "make sure they dont spawn around the player"; before, a Suspicious Activity scene popped in 4-17 m from the officer crossing the start circle and the returning driver / thief appeared 14 m / 30 m from the car at a random angle, behind the officer as often as not). A scene (Suspicious Activity: the car and every person, all at once) and each parked car of Parking Patrol (one by one, as the officers come along the street) appear once an officer is within activateRange (150 m) of it while every officer is further than the objective's approach distance plus sceneOutside (25 + 10 = 35 m) from it, so they are there before the officers are on top of them and nobody reacts before an officer walks within the approach distance. An officer standing closer keeps it waiting: after waveDelayMax (20 s) hardMin (20 m) is enough (one warning when it then appears closer than 35 m), after sceneWaitMax (45 s) it appears anyway with one warning naming the mission, the place and the point (0 = it waits until the officers step back); nobody within activateRange starts no clock. The HUD and the checklist count the cars still to come. The returning driver (a citation or impound) and the thief (the first inspect of a stolen car) appear contactRing (25-40 m) from the car on a footpath point the game of the officer who acted picks in front of him, out of his sight first (the server re-checks it: in the ring, near the car's height, 20 m or more from every officer, outside the no-build zones); no usable answer within losTimeoutMs: round the car at those distances, 25 m or more from every officer, in front of that officer first. Each waits frozen until an officer's game has put him on the ground (the placer), then walks up to the car; the driver says what he does (takes the ticket, argues, drives off) when he reaches it (4 m) or has walked as long as it takes at a walk, and does it 3 s later; the thief runs once an officer is within thief.runAt (15 m), as before. The objective never ends while one of them is still on his way. With Config.Spawning.enabled = false everything is as before (the scene and every car at once, the driver 14 m and the thief 30 m from the car at once).
-  - Pursuit cars (pursuit, owner request of 2026-10-19: "i do not want them spawning in the ground or surronding the officers"; before, Traffic Enforcement's violator was made on the road surface itself and the second violator at the first one's point, where an officer who chased the first one back up the road may stand). A car made on a point of the mission's road route itself (spawnOffset, a race loop's waypoint, an open route's first point: the road's own height) is lifted vehicleLift (0.5 m) over it; the mission files' own car points (spawns, spawn: already 0.5 m over the road) are used as written. Every pursuit car goes through the spawn director in its slots' own order (its own slot, then its next two slots further back on the grid, the road or the queue, never one a car of the objective stands on; no line-of-sight ask): never within minDistance (40 m) of an officer (it waits; after waveDelayMax, 20 s, hardMin, 20 m, is enough, never closer), then the placer, which may move it to the slots that passed. A violator that follows another one up the same road (a pursuit with a spawnOffset on the same route earlier in the mission: Traffic Enforcement's second violator) appears secondViolatorUpstream (200 m) up the road from the officer furthest up it among those within 100 m of the road (only as much road as there is before him), not at the first one's point; with nobody on the road it comes from the observation point's spot as the first one. It counts as past the officers (its blip) once past where that officer stood. A location without a start never places a spawnOffset car from a player's position: one warning, and the car takes the objective's other points. With Config.Spawning.enabled = false (or vehicleLift 0, secondViolatorUpstream 0) as before.
-  - Armored Truck Escort (escort, owner request of 2026-10-19: "make sure they dont spawn around the player", "surronding the officers"; before, the truck was made on the depot point itself, inside the car of an officer parked on it, and an ambush car could pop in 20-50 m from a lead car driving ahead of the truck, or behind the truck when it had passed the ambush point). The truck is made on the route's first point, vehicleLift (0.5 m) over the road, and only while no vehicle the server knows (an officer's car, a parked or passing one) and no officer is within 6 m of it: meanwhile it waits and the officers are told once to keep the start clear (HUD), and after waveDelayMax (20 s) it takes the first free spot of four 10 m apart further along the route (one warning naming it); never a taken one. Each ambush car is made at the route's height where it stands plus vehicleLift (before, every car of a wave had its point's height + 0.5 m over 14 m of road), on its own slot when the spawn director allows it (never within minDistance, 40 m, of an officer, a lead car included, never behind one; after waveDelayMax hardMin, 20 m, never closer) and with Config.Spawning.ambushAheadOnly (on) never on another vehicle (4 m), next to the truck (40 m ahead of it along the route and on the map) or behind it: its slot slides further along the route, 15 m at a time up to 300 m (the wave's next cars follow it), and when the truck is on or past the wave's slots they start on the first 15 m mark 100 m or more ahead of it (100-115 m), so each slot keeps its name and the console names a skipped slot once. A car with no slot waits (the other waves still come); a wave still short of slots when the truck arrives, or one the spawn caps (Config.Limits) held back until then that finds no slot once they free up, keeps the cars it has (none: it is left out, one warning), so the escort can end. ambushAheadOnly = false: the ambush point's own slots only (still waiting for officers standing on them), also once the truck is past it, as before. Config.Spawning.enabled = false: everything as before.
-  - Hostage Rescue's hostages (protect_rescue, owner request of 2026-10-19: "make it be progressive"; before, the three hostages were made at run start, in prepare, before the fight even began). Config.Spawning.hostagesAt = 'objective' (shipped): they appear when their own objective starts (after the fight), once an officer is within activateRange of them, each on its hostage point minDistanceIndoor (15 m) or more from every officer and never behind one (the spawn director, at the indoor distance); an officer standing closer keeps them waiting, and hostagesWaitMax (10 s; 0 = until the officers step back) after they began waiting they appear on their points anyway with one warning naming the mission and the place (they are tied up and unarmed, and the rescue cannot go on without them). A location with no hostage points has no hostage (one warning; never on the start point). 'runStart' (or Config.Spawning.enabled = false): at run start, as before. The engine warns once per block whose prepare makes entities (people appear when their objective comes up), unless an owner setting asked for it.
-  - Manhunt's fugitives and clues (search_area, owner request of 2026-10-19: "make it be progressive", "make sure they dont spawn around the player"; before, every fugitive and clue appeared when the search started, 276-560 m from the officers, beyond the 424 m a player's game simulates). Nothing appears when the search starts. Each fugitive has his hiding spot from the start (the circle shrinks towards it) and appears there once an officer is within activateRange (150 m) of it and every officer is minDistance (40 m) or more from it, never closer (no hardMin for him). An officer standing closer keeps him waiting; after waveDelayMax (20 s) of that he hides on another free hiding spot inside the current circle that an officer is near and that is 40 m or more from every officer (one console line). Each clue appears once an officer is within activateRange of it while every officer is minDistance or more from it, or closer where the officers' own games say no officer can see it (Config.Spawning.preferHidden; after waveDelayMax hardMin, 20 m, is enough in sight). A clue or fugitive that appeared stays; "Check clue" is offered only on a clue that is there. Config.Spawning.enabled = false: everything when the search starts, as before.
-
-- Runners tire (Config.Flee, owner request of 2026-10-19: "I want the peds to run out of stamina when they run away"). GTA's NPCs have no stamina, so the server times every mission NPC in the fleeing state while it is on foot: it sprints for sprintSeconds (10), jogs for jogSeconds (12), walks for walkSeconds (8), and is then worn out (spent). Each person's times are stretched or shortened by up to jitter (25%), rolled once from the run seed, and by the Config.NpcDifficulty preset's fleeMult ('hard' 20% longer, 'easy' 20% shorter). Only time spent fleeing on foot counts: a person who flees by car (a field contact's driver who bolts) does not tire while he sits in a vehicle, and his gait there is a sprint. The time is kept when the person stops (an armed inmate turning to fight, a surrender, a feint) or gets into a car, and runs on when he is on foot again. With no participant within recoverRange (60 m) for recoverSeconds (20 s) the person gets his breath back and sprints again. With armedTire = false a person carrying a visible weapon never tires (a contact's hidden weapon never counts). The gait is written to the person's cp bag (gait) only when it changes, never as a new task. The game that owns the runner slows him down to it (OneSync often gives a runner to the officer chasing him, so every participant's game does this for the runners it owns, not only the host's): at most a run while he jogs and a walk once he walks or is worn out, held every frame, played at jogRate (0.95) or walkRate (0.85) of the normal speed, and with windedClipset a jog, then a winded walk. The host gives every leg of his flee at that pace and gives his current leg again when the gait changes; a tired runner with no route left runs 40 m legs on the navmesh straight away from the nearest officer instead of GTA's flee task (which has no speed), along the obstacle when there is no navmesh ahead that way (a shore, a pier's end, a dead end: 60 or 90 degrees off, never back towards the officers), and GTA's flee task held to his pace when there is no way at all or two legs in a row went nowhere; when his leg ends on a game whose AI does not run him (OneSync gave him to the officer chasing him), that game gives him GTA's flee task held to his pace after 3 s standing still, so he never stands at the end of a leg. He gets his own pace back at once when he stops fleeing (a surrender, a fight), gets his breath back, sits in a vehicle or Config.Flee is switched off. A worn-out runner gives up (owner request of 2026-10-19: foot pursuits must end instead of dragging on): as soon as a participant is within giveUpRange (30 m) of a person the clock has worn out, the objective that owns him surrenders him its own way, with no wait (flee_arrest's suspects and inmates, a pursuit's suspects who ran from a stopped car in stop mode, search_area's fugitives, and field_contact's runners; not a person who walks off a consensual contact, and never in a pursuit's follow mode, which has no arrests). With exhausted = 'surrender' he kneels like every surrender; with 'handsUp' he stands with his hands up; either way Cuff suspect is offered as for any surrender. With 'walk' he walks on and gives up only by the other rules (aim, stun, 3 m for 3 s, low health). An armed runner who is worn out gives up too, before he could turn to fight (armedTire = false keeps him fresh, so he never does); one who is already fighting is no runner until he runs again. A worn-out suspect who surrendered does not fake a surrender and bolt while a participant is within giveUpRange. The escape rules are unchanged: a runner nobody keeps up with still escapes.
-
-- The debrief (the result screen, Profile & History and the dispute reviews) lists each person's demeanour and what they did (walked away, ran, drew a weapon, surrendered, faked a surrender, cuffed, escaped, killed), once the run has ended, so a participant who leaves early learns nothing about a person still in play.
-
+- Weights come from the person's truth (Config.Custody.demeanour): guilty people run and fight more often. Only a person rolled armed can be Hostile.
+- Tells: before anyone runs or draws, the run host plays a 1.5–3 s tell every participant sees, and participants within 25 m get a HUD hint such as "Watch his hands" (Config.Npc.tellHints). Nobody draws without one; the weapon is given when the tell ends.
+- Feint: a surrendered unarmed suspect may bolt when no participant is within 6 m and none aims at him for 5 s (flee_arrest feint chance, 0 by default), never while worn out with a participant within Config.Flee.giveUpRange. Killing him still fails the mission.
+- At a stop the car rolls yield, flee or fight when the lights trigger fires: a yielding car pulls to the kerb with hazards on and engine off; a fleeing car drives recklessly; in a fighting car armed passengers may shoot at participants within 40 m (drive-by chance) and a boxed-in driver may ram the nearest participant vehicle once for 3 s (ram chance).
+- Hostile NPCs only target participants, never bystanders.
+- The debrief (result screen, Profile & History, dispute reviews) lists each person's demeanour and what they did (walked away, ran, drew, surrendered, faked a surrender, cuffed, escaped, killed), only after the run has ended.
 - Armed people rolled at run time count toward the builder's 40-armed budget at their configured maximum, and toward the run's maxArmedAlive through their server-only armedTruth.
+
+NPC combat (Config.NpcCombat; never changes points or cash)
+
+- Weapons: only Config.NpcCombat.weapons (pistol, combat pistol, heavy pistol, pump shotgun). Any other named weapon gets its replace weapon, else the fallback; an automatic weapon (the game's Automatic flag) is never given, even when listed. A custom file that names one loads with a console warning. Switched off: nothing is swapped and Config.Builder.allowed.weapons is the only check (switching reloads the missions).
+- Accuracy: tier and Config.NpcDifficulty adds, times accuracyScale (0.7), at most accuracyMax (18), bosses and drive-bys included; single shots (firingPattern) at shootRate 60, at most average combat skill, no charging, less accurate against several officers, bursts from cars. Whichever game owns an NPC applies these.
+- Damage: while the run is live each participant's game halves NPC bullet and melee damage (aiDamage, aiMeleeDamage) and drops headshot multipliers (noCriticalHits), again after a respawn; officerDefense (off) lowers all weapon damage taken. Everything resets at run end. The server drops a hit by a mission NPC that would one-shot an officer of its run at or above lethalCancelAbove (0.75) of his health (cancelLethalHeadshots), so officers can still go down. 60 rounds per armed NPC (ammo).
+
+Where people and cars appear (Config.Spawning; enabled = false spawns everything on the file's points at the old moments)
+
+- The spawn director (every hostile_waves fight: Gang Shootout, Hostage Rescue, Drug Lab Raid, Gang Hideout Raid, the Weekly Boss): wave 1 appears once an officer is within activateRange (150 m) of the fight. Every hostile appears at least minDistance (40 m) from every officer (minDistanceIndoor 15 m in a fight marked indoor), never behind an officer, a wave from one side only. A wave short of points spawns the rest later as officers move or hostiles fall; after waveDelayMax (20 s) points down to hardMin (20 m) are allowed, never closer. A point a living hostile or uncollected cuffed suspect stands on is skipped. The boss uses his own spot when allowed.
+- Counts are never cut, except: a wave still short leaveOutAfter (45 s) after it began waiting, while nobody of the fight is standing, leaves out what it could not place (warning in Admin → System → Problems); never before one hostile of the fight has appeared; 0 waits for ever. nextWave.afterSeconds counts from the wave's first hostile. A location with no spawn points spawns nobody and the fight completes after its minimum time.
+- Staging (fights with stage = true: the raids' objective 2; stageAhead): wave 1 is placed by the same rules while the officers stack up, calm and unarmed (no weapon or fight settings until it wakes; still counted armed for the caps). It wakes when the fight starts, when one of it is hurt, or when an officer comes within stageWakeRange (12 m) of one of it (not an officer nearer a breach entry); woken early it fights, nothing more is staged and the fight waits for the breach. What could not be staged comes when the fight starts.
+- Hidden points first (preferHidden, losTimeoutMs 1500): when more points pass than needed, up to 4 nearby officers' games report which they can see (head and camera to 1.0 and 1.7 m above the point); unseen points are used first, and of equal sides the more hidden one wins. No answer in time = all seen, the mission's order.
+- The ground probe (ground: collisionTimeoutMs 6000, interiorTimeoutMs 5000): loads collision (and the interior) at a point, finds the highest ground under it (from 2 m, then 50 m over it; under a surface less than 2 m over the point it uses the floor beneath when that is the smaller move) and judges it ok when the height is in its kind's range (person -0.3 to 1.6 m, vehicle -0.2 to 1.5 m, object -0.1 to 0.5 m), else snaps it to the ground when that moves it at most snapWithin (3 m). Otherwise it reports no ground, under the ground, floating, in water, inside not loaded or in a wall (a person's or vehicle's space hitting the map or an entity). Check spawn points (Admin test mode) and the placer use it.
+- The placer (place): every new mission person, vehicle and object is made frozen with a placement ask. A participant's game (the owner, or the nearest participant taking it over from a bystander's game) probes the point and moves the entity straight onto the ground there (never another spot), then lets a person or vehicle go (objects and cuffed people stay frozen) and tells the server once; a bad point leaves it frozen. Seated or attached entities go with their parent and count as placed; one already more than 3 m from its point counts as placed and is left. At most four at a time per game.
+- The server side (placeTimeoutMs 8000, retries 2, onTimeout 'unfreeze'): a placed answer counts only from a participant of the run, for the current ask, within snapWithin + 2 m in height. A bad answer moves it, the same entity, to another allowed point the block offers (at most retries times, one console warning each), else it is let go where it is. A new non-participant owner within activateRange re-freezes it. The wait counts only while a participant is within activateRange and no participant's game has said it is checking (at most 34 s plus the probe timeouts). On timeout it is let go ('unfreeze') or removed and treated as killed ('delete': a removed hostage or escort truck fails that objective). An entity the server only moved (the warrant suspect at the door, the parked prisoner transport) is always let go.
+- Warrant doors and scatters (flee_arrest): Warrant Service's associates appear at the knock (or when a door NPC dies first; associatesAtKnock): each at least minDistanceIndoor from every officer, never behind the door officer (behindAngle off his line from start to door), unseen first, one side, armed and hostile at once. The suspect waits at the door from the start (no suspect point = nobody at the door); one who surrenders is stood on the door step and placed. Every associate and scattering suspect (Prison Break's inmates, the raids' cooks and runners) gets his own point, never within 1.5 m of another person or vehicle of the run; scatters appear once an officer is within activateRange, minDistance from every officer, never behind one. Too few points is reported once and the rest wait for a free point; after waveDelayMax the ring round the points (1.25 m per lap) and a scatter's escape-route starts are offered too. A scatter's suspect flees along the escape route starting nearest him (Config.Flee.nearestRoute; routes within 5 m as near take turns). Suspects still short leaveOutAfter after waiting, once one appeared and the rest are caught, dead or escaped, are left out.
+- Field contacts (field_contact): a Suspicious Activity scene, and each parked car of Parking Patrol, appears once an officer is within activateRange while every officer is further than the approach distance plus sceneOutside (25 + 10 m); after waveDelayMax hardMin is enough, after sceneWaitMax (45 s; 0 = wait) it appears anyway with a warning. The HUD and checklist count the cars still to come. The returning driver (citation or impound) and the thief (first inspect of a stolen car) appear contactRing (25–40 m) from the car on a footpath point in front of the acting officer, out of his sight, 20 m from every officer (server-checked; fallback round the car, 25 m from every officer), are placed, then walk up; the driver acts (takes the ticket, argues, drives off) 3 s after reaching the car (4 m) or walking as long as that takes; the thief runs once an officer is within thief.runAt (15 m). The objective never ends while one is on his way.
+- Pursuit cars (pursuit): a car made on the road route itself (spawnOffset, a race waypoint, an open route's first point) is lifted vehicleLift (0.5 m); file car points are used as written. Every pursuit car goes through the director in its slot order (its slot, then two further back; no line-of-sight ask), minDistance from officers (hardMin after waveDelayMax), then the placer. A violator following another up the same route (Traffic Enforcement's second) appears secondViolatorUpstream (200 m) up the road from the furthest officer within 100 m of it, and counts as past the officers once past where he stood. A location without a start never places a spawnOffset car from a player's position (warning; other points used).
+- Armored Truck Escort (escort): the truck is made on the route's first point, vehicleLift over the road, only while no vehicle and no officer is within 6 m (officers are told once to keep the start clear); after waveDelayMax it takes the first free of four spots 10 m apart further along (warning). Each ambush car is made at the route height plus vehicleLift on its own slot when the director allows (minDistance from every officer and lead car, never behind; hardMin after waveDelayMax). With ambushAheadOnly it is never on a vehicle (4 m), within 40 m ahead of the truck or behind it: its slot slides along the route 15 m at a time up to 300 m, and once the truck is past the slots they start 100–115 m ahead of it. A car with no slot waits; a wave still short when the truck arrives keeps what it has (none = left out, warning).
+- Hostage Rescue (protect_rescue, hostagesAt = 'objective'): hostages appear when their objective starts, once an officer is within activateRange, each on its point minDistanceIndoor from every officer and never behind one; after hostagesWaitMax (10 s; 0 = wait) they appear anyway with a warning. No hostage points = no hostage (warning). 'runStart': at run start. The engine warns once per block whose prepare makes entities, unless an owner setting asked for it.
+- Manhunt (search_area): nothing appears when the search starts. Each fugitive has his hiding spot (the circle shrinks towards it) and appears there once an officer is within activateRange and every officer is minDistance or more away (no hardMin); after waveDelayMax of waiting he hides on another free spot in the circle (console line). Each clue appears under the same rule, or closer where no officer can see it (preferHidden; hardMin after waveDelayMax). What appeared stays; "Check clue" is offered only on a clue that is there.
+
+Runners tire (Config.Flee)
+
+- The server times every NPC fleeing on foot: sprint sprintSeconds (10), jog jogSeconds (12), walk walkSeconds (8), then spent; each person's times vary by jitter (25%, from the seed) and the NpcDifficulty fleeMult ('hard' +20%, 'easy' -20%). Only time fleeing on foot counts (in a vehicle he sprints and does not tire); the time is kept across stops and runs on. With no participant within recoverRange (60 m) for recoverSeconds (20 s) he recovers. armedTire = false: a person with a visible weapon never tires.
+- The gait goes in his cp bag only when it changes. The owning game (any participant's, not only the host's) caps him to a run while jogging and a walk when walking or spent, at jogRate (0.95) or walkRate (0.85), with windedClipset. A tired runner with no route runs 40 m navmesh legs away from the nearest officer (60 or 90 degrees off along an obstacle, never back towards the officers), else GTA's flee task held to his pace; a game that does not run his AI gives him that after 3 s standing still. His own pace returns when he stops fleeing, recovers, sits in a vehicle or Config.Flee is off.
+- A spent runner with a participant within giveUpRange (30 m) gives up at once, the owning objective's own way (flee_arrest suspects and inmates, a pursuit's stop-mode runners, search_area fugitives, field_contact runners; never a consensual walk-off or a pursuit's follow mode): exhausted = 'surrender' kneels, 'handsUp' stands with hands up (Cuff suspect offered either way), 'walk' walks on and gives up only by the other rules. A spent armed runner gives up before he can turn to fight; one already fighting is no runner until he runs again. A runner nobody keeps up with still escapes.
 
 ## Scoring, points & XP levels
 
@@ -1601,7 +1072,7 @@ Daily and weekly goals: each officer gets one daily goal (picked at the daily re
 
 ## XP levels & service record
 
-Points, XP and levels are three views of one number, so nobody has to learn two systems.
+Points, XP and levels are three views of one number.
 
 | Name | What it is | Where it shows |
 |---|---|---|
@@ -1613,11 +1084,11 @@ Points, XP and levels are three views of one number, so nobody has to learn two 
 
 - Level curve (Config.XPCurve): level 1 starts at 0 XP; reaching level n needs round(100 × (1.07^(n−1) − 1) ÷ 0.07) XP, so each level needs 7% more than the one before. Level 10 ≈ 1,200 XP, 25 ≈ 5,800, 38 ≈ 16,000, 50 ≈ 37,900. After level 50, every 10,000 XP adds a prestige star (Lv 50 ★2).
 
-- One ladder: the XP level names and badge colours still come from Config.XPLevels, and each name is now a band of numbered levels (Config.XPLevels[n].level: Probationary Lv 1–9, Patrol Officer Lv 10–24, Senior Patrol Lv 25–37, Veteran Lv 38–49, Elite Lv 50 and prestige). The existing xp thresholds stay in the file for old callers and are close to the XP of each band's first level (Patrol Officer 1,000 vs Lv 10 at 1,198; Elite 40,000 vs Lv 50 at 37,900), so names barely move on update. The header shows only "Lv 23" next to the Qbox rank; Home and the profile show "Lv 23 · Senior Patrol". An owner who finds the names too rank-like can relabel them in Config.XPLevels.
+- One ladder: the XP level names and badge colours still come from Config.XPLevels, and each name is now a band of numbered levels (Config.XPLevels[n].level: Probationary Lv 1–9, Patrol Officer Lv 10–24, Senior Patrol Lv 25–37, Veteran Lv 38–49, Elite Lv 50 and prestige). The xp thresholds in the file stay close to each band's first level. The header shows only "Lv 23" next to the Qbox rank; Home and the profile show "Lv 23 · Senior Patrol".
 
 - Levels are cosmetic. They never change the Qbox rank, never unlock missions or mission types and never change pay. They unlock looks only: avatar presets, personal accents and the avatar frame colour (each entry in Config.Profile and theme.personalAccents may set a level), plus an optional level-up item (Item rewards), which is the one admin-configured exception to "cosmetic" and is off unless the owner fills Config.Rewards.levels.
 
-- A level-up shows one toast (the existing scoring.level_up toast, now worded "Lv 24" or "Lv 25 · Senior Patrol" when a band starts) and a banner on the result screen; there is no second level-up event. XP from a flagged run is added only when a supervisor approves it (the result screen says "XP pending review") and is taken back when a run is voided, as today.
+- A level-up shows one toast (scoring.level_up: "Lv 24", or "Lv 25 · Senior Patrol" when a band starts) and a banner on the result screen; there is no second level-up event. XP from a flagged run is added only when a supervisor approves it (the result screen says "XP pending review") and is taken back when a run is voided.
 
 Daily limits
 
@@ -1683,9 +1154,7 @@ Who can change payouts
 | Supervisors | A mission type's payout, unless an admin has set it | Supervisor UI → Payouts |
 | Admins | Any mission type's payout and any single mission's payout; both become permanent | Admin UI → Payouts, or /CrimsonPoliceAdmin payout … |
 
-- Admin payouts are permanent: they stay until an admin changes or clears them, and survive restarts, season resets, Mission Builder re-publishes and reloads.
-
-- When an admin sets a type's payout, that type is locked: supervisors see "Set by admin" and cannot change it.
+- Admin payouts are permanent until an admin changes or clears them (restarts, season resets, re-publishes and reloads keep them); an admin-set type is locked for supervisors ("Set by admin").
 
 - Supervisor limits: a supervisor can set a type's payout only between 50% and 200% of its config default (Config.Payouts.supervisorRange), at most once every 30 minutes per type (Config.Payouts.supervisorCooldown), and must give a reason. Admins are bound only by the overall range.
 
@@ -1701,17 +1170,11 @@ Who can change payouts
 
 How cash is paid (by the server, once per participant per run)
 
-- Claim the row before any money moves: UPDATE cp_mission_runs SET cash_status = 'paying' WHERE id = ? AND cash_status IN ('none','held','pending'). If no row changes, stop: it is already being paid or finished. paid, capped, unfunded and forfeited are final and are never paid again by this flow (only an admin money tool of Full admin control may act on them, and every one ships off).
-
-- Work out the amount with the formula above. If it would take the officer over Config.Cash.dailyCap for the day, pay only up to the cap (0 = no cap).
-
-- If Config.Cash.source = 'society', withdraw the amount from the department's Renewed-Banking account with removeAccountMoney. If that returns false, pay $0, set the final status unfunded and notify the officer and online supervisors.
-
-- Add the money with Qbox: player.Functions.AddMoney(Config.Cash.account, amount, 'crimson-police-mission'). account is 'bank' by default.
-
-- For bank payments, record the deposit in Renewed-Banking: handleTransaction(citizenid, 'Crimson-Police', amount, 'Mission payout: <mission label>', '<department label>', '<character name>', 'deposit', 'CP-<run_uuid>-<citizenid>'). With the society source, also record a 'withdraw' on the department's account.
-
-- Write cash_paid and the final status: capped if the cap cut the amount, otherwise paid. A row still in paying after a crash is never retried automatically; it is listed in Admin UI → Payments (and Leaderboards) for a check against the Renewed-Banking history (transaction id CP-<run_uuid>-<citizenid>), which Payments → Resolve shows, and the admin then marks it paid (no money moves) or, only with the Pay again tool switched on, pays it again with its own transaction id CP-<run_uuid>-<citizenid>-r2 (the step markers saved between the money calls make sure a department is never charged twice).
+- Claim the row first: UPDATE cp_mission_runs SET cash_status = 'paying' WHERE id = ? AND cash_status IN ('none','held','pending'); no row changed = stop. paid, capped, unfunded and forfeited are final (only the Full admin control money tools, all shipped off, act on them).
+- Work out the amount; pay only up to Config.Cash.dailyCap for the day (0 = no cap).
+- Society source: removeAccountMoney from the department's account; false = pay $0, final status unfunded, the officer and online supervisors told.
+- player.Functions.AddMoney(Config.Cash.account ('bank'), amount, 'crimson-police-mission'); for bank payments handleTransaction(citizenid, 'Crimson-Police', amount, 'Mission payout: <mission label>', '<department label>', '<character name>', 'deposit', 'CP-<run_uuid>-<citizenid>'), plus a 'withdraw' on the society account.
+- Write cash_paid and the final status (capped if the cap cut it, else paid). A row left in paying after a crash is never retried automatically: Admin UI → Payments (and Leaderboards) lists it for a check against the bank history, and the admin marks it paid (no money moves) or, only with the Pay again tool on, pays it again as CP-<run_uuid>-<citizenid>-r2 (step markers make sure a department is never charged twice).
 
 A flagged run's cash is held until a supervisor approves it. If the officer is offline at that moment, the payment waits (cash_status = 'pending') and is made the next time they load in. A voided run's held cash stays held until its 48-hour dispute window closes or a dispute about it is rejected, and is then forfeited (cash_status = 'forfeited'). Voiding an already-paid run does not take the money back (only the Take back money tool of Full admin control does, and it ships off).
 
@@ -1767,70 +1230,49 @@ Tablet: the Department Challenge screen shows each department's score bar in its
 
 ## Officer profile
 
-Profile & History gets an Edit profile dialog and three new cards (Service record, Commendations, Look). Public profiles show the same, minus cash, and minus the name and picture when the officer hides their name.
+Profile & History has an Edit profile dialog and the Service record, Commendations and Look cards. Public profiles show the same minus cash, and minus name and picture when the officer hides his name.
 
 | Part | Rules |
 |---|---|
-| Picture | Initials (the default), a preset from Config.Profile.avatarPresets (some unlock at a level), or an image link when Config.Profile.avatarUrls.enabled is on. A link must be https, on an allowed host (exact match, Config.Profile.avatarUrls.hosts; the defaults are r2.fivemanage.com and i.imgur.com), at most 255 characters, have a path ending in .png, .jpg, .jpeg or .webp (a query string is allowed and ignored for this check), and contain no spaces, quotes or angle brackets. cdn.discordapp.com is not a default host: its attachment links carry signed query strings and expire within a day, so the picture would break. Imgur is blocked in some regions (including the UK), which Config health mentions when it is listed. With requireApproval (the default) a new link is Pending, and everyone else keeps seeing the old picture until a supervisor of the officer's department or an admin approves it in Review Queue → Profiles. At most 3 link submissions a day. A picture that fails to load shows the initials |
-| Bio | Up to 280 characters and 3 lines, plain text (links are not clickable), trimmed, control characters removed. Words on Config.Profile.bannedWords and in the shipped list config/banned_words.txt (a short default list the owner can extend or empty) are refused. With Config.Profile.bioRequiresApproval (off by default) a new bio is Pending like a picture. The edit dialog labels it "Visible to other officers". One profile change every 5 minutes |
-| Callsign | Read live from Qbox (set with SC-Police's /callsign), never edited here. When it is missing the profile says "Set it with /callsign" |
-| Commendations | See below |
-| Look | Appearance, personal accent (from the department's personalAccents) and tablet size (85–125%); they apply to the officer's own tablet only. English is the only language, so there is no language choice |
+| Picture | Initials (default), a preset from Config.Profile.avatarPresets (some unlock at a level), or an image link while Config.Profile.avatarUrls.enabled: https, an allowed host by exact match (avatarUrls.hosts: r2.fivemanage.com, i.imgur.com), at most 255 characters, a path ending .png/.jpg/.jpeg/.webp (a query string is ignored), no spaces, quotes or angle brackets. cdn.discordapp.com is not a default (signed links expire within a day); Config health notes Imgur is blocked in some regions. With requireApproval (default) a new link is Pending, and others keep the old picture until a supervisor of the department or an admin approves it in Review Queue → Profiles. 3 link submissions a day. A picture that fails shows the initials |
+| Bio | Up to 280 characters and 3 lines, plain text (links not clickable), trimmed, control characters removed; words in Config.Profile.bannedWords and config/banned_words.txt are refused. With bioRequiresApproval (off) a new bio is Pending. Labelled "Visible to other officers". One profile change every 5 minutes |
+| Callsign | Read live from Qbox (SC-Police's /callsign), never edited here; missing = "Set it with /callsign" |
+| Look | Appearance, personal accent and tablet size (85–125%), own tablet only. English only, so no language choice |
 | Service record | See XP levels & service record |
 
-Commendations
+Commendations (Config.Commendations)
 
-- Supervisors (Department Report → an officer's activity) and admins (Admin UI → Officers) can Commend: pick a kind (Valor, Lifesaving, Teamwork, Professionalism, Leadership, Investigation) and write a citation of 10–255 characters; optionally link the run it is for.
+- Supervisors (Department Report → activity) and admins (Admin UI → Officers) Commend: a kind (Valor, Lifesaving, Teamwork, Professionalism, Leadership, Investigation), a citation of 10–255 characters, optionally the run. A supervisor: own department only (crossDepartment = false), never himself or for a run he was on, 3 a day, not the same officer and kind within 7 days; admins anyone.
+- No points or cash, never counted toward goals, badges, bounties or boards. The recipient gets a toast and a Home announcement for 7 days; with announce the board webhook posts it. The issuer or an admin revokes with a reason; all audited. Config.Profile.showMdtCommendations (off) shows SC-Dispatch MDT commendations read-only, tagged "MDT".
 
-- A supervisor can commend officers of their own department only (Config.Commendations.crossDepartment = false), never themselves, never for a run they took part in, at most 3 a day, and not the same officer with the same kind within 7 days. Admins can commend anyone.
+Field training (Config.FieldTraining, off)
 
-- Commendations carry no points and no cash, and never count toward goals, badges, bounties or boards.
+- A supervisor (Department Report → Field training → Pair trainer) or admin pairs a rookie with an online trainer of the same department at Qbox grade trainerGrades.<department> or more (else supervisorGrade); never his own character as the rookie; one trainer per rookie, at most rookiesPerTrainer per trainer, who is not in training himself. End training (two clicks) unpairs.
+- A completed, unflagged run counts for the rookie when his trainer finished the same run: one towards the task of its type (tasks, a count per type), up to the count; test runs never. At the count the trainer is told and signs it off (Profile → Field training, optional note up to 255 characters), once per task, only his own rookie's. All signed off = done, with the badge Config.FieldTraining.badge (also in the admin Grant / Revoke list while on).
+- requireTrainerFor (empty): a rookie in training may accept or claim a listed type only with his trainer in the unit (err.fto_trainer_needed / err.member_fto_trainer_needed), and joins a live case of a listed type as backup only when his trainer is on it; his Profile card lists those types.
+- trainerBonus (0, at most 1000): points per sign-off as a manual award row (mission id fto_bonus, "Field training sign-off", rookie and task as reason).
+- Audited (ftoPair, ftoUnpair, ftoSignOff); kept in cp_officers.field_training (both storage modes). Department Report shows every rookie's progress per task.
 
-- The recipient gets a toast and a Home announcement for 7 days. With Config.Commendations.announce the board webhook posts it.
+Moderation and reports
 
-- The issuer or an admin can revoke one, with a reason. Every commendation and revoke is written to the audit log.
+- Review Queue → Profiles (supervisors, own department) and Admin UI → Officers: approve or reject a pending picture or bio, clear a bio or picture (reasons required), handle reports; all audited.
+- Report profile: any officer, a reason (picture, bio, other) and up to 140 characters; goes to the reported officer's department's Review Queue and to admins; 3 per reporter a day, one per profile a day (Config.Profile.reports); audited; the reported officer is never told who. A report of an approved picture shows the reviewer the live image.
 
-- Optional (Config.Profile.showMdtCommendations, off by default): SC-Dispatch MDT commendations are shown read-only, tagged "MDT".
+Officer options (Config.OfficerOptions)
 
-Field training (Config.FieldTraining, off as shipped)
+My options (Officer UI, after Profile & History; hidden while enabled is false) holds each officer's choices for his own tablet. Each row says where it is kept: This character (cp_officers.options, any PC) or This PC (every character on it). Each group's card saves on its own and has Back to default. Its Tablet look and privacy card edits look, size, call alerts and hide my name with Edit profile's rules. My keys lists the four Crimson-Police keys and their binding (changed in GTA Settings > Key Bindings > FiveM). Every option is allowed by default except Auto-Ready; option values are in the config copy.
 
-- A supervisor (Department Report → Field training → Pair trainer) or an admin pairs a rookie of the department with an online trainer of the same department whose Qbox grade is at least Config.FieldTraining.trainerGrades.<department> (else the department's supervisorGrade). Never his own character as the rookie; a rookie has one trainer; a trainer takes at most rookiesPerTrainer rookies and is not in training himself. End training (two clicks) removes the pairing.
-- A completed, unflagged run counts for the rookie when his trainer finished the same run too: one run towards the task of its mission type (Config.FieldTraining.tasks, a count per type), up to the task's count. Test runs never count.
-- Once a task's count is reached the trainer is told and signs it off on his tablet (Profile → Field training), with an optional note (up to 255 characters). Only the rookie's own trainer signs off, once per task. When every task is signed off the training is done and the rookie gets the badge Config.FieldTraining.badge (Profile → Badges).
-- Ride-along rule (Config.FieldTraining.requireTrainerFor, shipped empty): a rookie in active training may accept (Mission Board) or claim (a mission call) a listed mission type only with his trainer in the same unit; else the accept is refused (err.fto_trainer_needed for the rookie himself, err.member_fto_trainer_needed for the leader of his unit). A rookie who joins a live case of a listed type as backup is refused the same way unless his trainer is already on the case. The rookie's Profile card lists those types. While field training is on, the Admin UI badge Grant / Revoke list includes its badge.
-- Trainer bonus (Config.FieldTraining.trainerBonus, shipped 0, at most 1000): each sign-off gives the trainer that many points, a manual award row with mission id fto_bonus ("Field training sign-off") and the rookie and task as its reason; the trainer is told. His Profile card says the bonus.
-- Pairing, ending and every sign-off are in the audit log (ftoPair, ftoUnpair, ftoSignOff); the record is cp_officers.field_training (015), so the database and the saves folder keep it alike. Supervisors see every rookie's progress per task in Department Report.
-
-Moderation: Supervisor UI → Review Queue → Profiles (their department) and Admin UI → Officers: approve or reject a pending picture or bio (reason required), clear a bio or a picture (reason required), and handle reports. Every action is audited.
-
-Officer options
-
-My options holds the choices each officer makes for their own tablet, saved per character (cp_officers.options, so they follow the character to any PC). The Officer UI has a My options screen (after Profile & History; hidden while Config.OfficerOptions.enabled is false). Its Tablet look and privacy card changes the look, tablet size, mission call alerts and hide my name with the same rules as Edit profile and the Profile toggle, and Edit profile's Look tab links to it (More options). Each option group has its own card: a row shows only once its feature added it and only while it is allowed, says where it is kept (This character: saved with the character on any PC; This PC: kept on this PC for every character), and saves on its own; Back to default puts the group's options back. My keys lists the four Crimson-Police keys (open the tablet, open Dispatch, ready for the unit's mission, contact action) with the key each is bound to, or not set; players change them in GTA Settings > Key Bindings > FiveM. Later updates add each option with its own rule here.
-
-- Mission HUD (kept on this PC, for every character played on it; they apply at once, even before the tablet opens): HUD side (right, as before, or left; notifications stay top right), HUD size (on top of the screen size; officers pick inside Config.OfficerOptions.bounds.hudScale, shipped 0.8 to 1.3, default 1.0), Compact HUD (only the current objective, how many are done of how many and the timer; off by default) and Fewer animations (the HUD, the result card and notifications appear without sliding in, and the off-route warning does not flash; off by default). Each is allowed by default (Config.OfficerOptions.allow).
-
-- Easier to read (saved with the character, on any PC; they apply at once, even before the tablet opens): Use my tablet look on the HUD (off by default: the mission HUD, the result card and notifications keep the department theme; on: they take the officer's tablet look, the appearance such as colour-blind, midnight or high contrast and the accent; the open Admin UI keeps its own theme) and Text size (Normal, as before, or Large: the text on the tablet and the mission HUD is 15% bigger). Each is allowed by default (Config.OfficerOptions.allow).
-
-- Pop-ups (kept on this PC, for every character played on it): Notification time (Short: 3 s, warnings and errors 5 s; Normal, as before: 5 s and 7 s; Long: 8 s and 12 s; a notification that brings its own time, such as the ready check, keeps it), Result card time (seconds the mission result card stays, inside Config.OfficerOptions.bounds.resultTime, shipped 8 to 60, default 25 as before; the officer can still close it sooner) and Fewer pop-ups during a mission (off by default: while it is on and the officer is on a run, unit invites, commendations, rewards and profile news that are not warnings or errors go only to the bell; route, custody and mission messages, warnings and errors always pop up) and Key hints (on by default: the unit ready check banner says "or press K" with the ready key, a new mission call adds "F6 opens Dispatch" with the Dispatch key and the contact HUD line names the contact key; a key that is not bound, or is bound to a mouse or pad button, is never named). Each is allowed by default (Config.OfficerOptions.allow).
-
-- Mission Board (saved with the character, on any PC): Favourite types (these mission types come first on the board, in the board's order), Hidden types (these fold under "Hidden types (n) - Show" below the cards and can still be opened and accepted; a favourite is never folded, and at least one type is always left on the board, so a list that hides every type is refused) and Accept in one click (off by default: Accept on a type card starts it at once, without the confirm; the confirm's lines, the random draw, the type cooldown, the route and a unit leader's unit note, show as a footnote under the cards; the Twists button on a card opens the old dialog to add twists; the Weekly Boss still asks first) and My usual twists (none by default: the twists enabled in Config.Events.twists that start ticked on the accept step of the Mission Board and of a mission call claim, where that card offers them; the officer can untick them and the total bonus line follows; when he picks any they replace his department's pre-ticked twists, a twist the department or the type does not offer is never ticked or sent, a twist switched off later is dropped from the saved list, and the server checks the chosen twists at the accept as before, bonuses only for a completed run). Only the order and folding of the type cards change: the Weekly Boss and the Cross-Department card stay where they are, and Accept still runs every check and draws a mission of the type at random (Hard rule Mission choice). Each is allowed by default (Config.OfficerOptions.allow).
-- Dispatch (saved with the character, on any PC): Claim in one click (off by default: Claim on a mission call takes it at once, without the confirm; the confirm's lines, the random draw and the abandon cooldown, show as a footnote under the calls; a Twists button on a call opens the old dialog to add twists; the claim window still ranks every claim by distance, then fewer claims), Call pop-ups ('all' by default; 'favourites' = a new mission call pops up, with its tone, only when its type is one of the officer's favourite types, and every call still shows on Dispatch; with no favourite type picked every call pops up; the answer is cached with calls_muted for 30 s and a change of the officer's options clears it; muting every call stays Mute call alerts on Dispatch, cp_officers.calls_muted) and Tablet key opens Dispatch after a call (off by default: for 20 seconds after a mission call pops up on this client, the tablet key or command opens the Officer UI on Dispatch; nothing is claimed). Each is allowed by default (Config.OfficerOptions.allow).
-- Opening the tablet: Open on (saved with the character; 'last' by default = the screen the tablet was closed on; 'home' = Home; 'active_on_run' = Unit while the unit's ready check waits for the officer's answer, Active Mission while he is on a run, else the last screen; the session carries opening { onRun, readyCheck }; a screen Lua names, the Dispatch key or the key after a call, wins) and Remember my filters (kept on this PC, off by default: Dispatch's filter and the Leaderboard's period, board, department and metric start from the choices of the last visit, kept in the local option filters, which is not a row of My options). Officer UI only. Each is allowed by default (Config.OfficerOptions.allow).
-
-- During a mission: Abandon asks in a dialog (saved with the character; on by default, as before; off = no dialog: the first press of Abandon on Active Mission turns the button into "Click again to abandon" for 3 seconds and only a second press within them abandons, so an abandon always takes two presses; server:abandon and the type cooldown, Config.Limits.abandonCooldown, are unchanged), Recalculate in one click (saved with the character; off by default: Recalculate route draws the new route at once, without the confirm; Config.Route.maxRecalcs still counts every recalculation) and Distances (kept on this PC: 'metric', as before, reads m under 1 km then km; 'imperial' reads ft under a tenth of a mile, then miles with one decimal under 10 mi; on the mission HUD, the run bar, Active Mission, the Contact panel and Dispatch; the Mission Builder stays metric). Each is allowed by default (Config.OfficerOptions.allow).
-
-- Map: Objective GPS (saved with the character: 'route', as before, a GPS line to each objective; 'waypoint' = a map waypoint put on each new objective pointer instead, such as the next door of a Business Check, never over a waypoint the officer set himself, removed with the objective while it is still there; 'off' = neither, the Active Mission Objective GPS button still sets one), Objective line on the HUD (kept on this PC; on, as before: the HUD names what the map points to and how far; off = no such line) and Colour-blind map colours (kept on this PC; off, as before; on = objective blips, circles and the GPS line use blue, yellow, orange, white and purple, never red or green: enemies purple, fleeing and follow-ups orange, friendly blue, Radio Silence's last-known circle white). They only hide or recolour: Radio Silence still hides the line and the waypoint, and the drive to the start keeps its own route whatever the officer picks. Each is allowed by default (Config.OfficerOptions.allow).
-
-- Unit: Auto-Ready (saved with the character; off by default and locked: Config.OfficerOptions.allow.autoReady = false, so an owner or a department turns it on). With it on, when the unit leader accepts a mission type the officer's tablet answers Ready for them, but only while they are at the keys (no pause menu, some game input in the last 60 seconds). The server counts that answer only while the officer's department allows the option, the officer has it on and the officer's ped stands within Config.OfficerOptions.autoReadyRange metres (150 by default, 10 to 1000) of the leader's, server-side positions; otherwise it is ignored and the banner still asks. Never for a Cross-Department join. A manual Not ready still wins: after an automatic Ready the banner keeps a Not ready button until the check ends.
-
-- Sounds (kept on this PC, for every character played on it): Mission call tone, Unit tone (a unit invite and a ready check) and Objective cues (a checkpoint passed, a target defused, an item found on a run). Each is on by default, as before; off plays nothing and every pop-up and HUD line still shows. On or off only: the game's sounds have no volume. The Builder's own sounds are not affected. Each is allowed by default (Config.OfficerOptions.allow).
-
-- Config.OfficerOptions: enabled (true; false = no My options screen and every option keeps its default for everyone), allow (per option: false = officers cannot change it and everyone gets the default), defaults (per option: what every officer starts with) and bounds (per number option: { min, max } officers may pick). A department may set its own allow, defaults and bounds in Config.Departments.<key>.officerOptions; they win over the global ones for its officers.
-- An option is a switch, one choice from a list, several choices from a list, or a number. A choice that is no longer offered (a mission type or twist that was removed) is dropped from the saved value, and a number outside the bounds now is clamped to them. Only the options that differ from the default are saved: picking the default again removes it.
-- An option that is not allowed now is ignored, never deleted: allowing it again brings the officer's own choice back.
-- Only an officer on duty in a department can change their options, only their own, and only to a value the rules take; the server checks every change (the tablet's own checks are only for show). Settings refuses an officerOptions that names an unknown option or a value it cannot take.
-
-Report profile: any officer can press "Report profile" on a public profile, pick a reason (picture, bio, other) and add up to 140 characters. Reports go to Review Queue → Profiles of the reported officer's department and to admins, at most 3 per reporter per day and one per reporter per profile per day (Config.Profile.reports), audited; the reported officer is not told who reported them. Content at an approved image link can change at the host, so a report of an approved picture shows the reviewer the live image.
+- Mission HUD (this PC, applies at once): side right or left; HUD size inside bounds.hudScale; Compact HUD (current objective, done count, timer); Fewer animations (no slide-ins, no flashing off-route warning).
+- Easier to read (character): Use my tablet look on the HUD (HUD, result card and notifications take the officer's appearance and accent; the Admin UI keeps its theme); Text size Large (15% bigger on tablet and HUD).
+- Pop-ups (this PC): notification time Short (3 s / 5 s for warnings), Normal (5 / 7) or Long (8 / 12), a notification with its own time keeps it; result card time inside bounds.resultTime; Fewer pop-ups during a mission (invites, commendations, rewards and profile news that are not warnings go to the bell; route, custody and mission messages, warnings and errors always pop up); Key hints (name the ready, Dispatch and contact keys; never an unbound, mouse or pad key).
+- Mission Board (character): Favourite types first; Hidden types fold under "Hidden types (n) - Show" (still openable; a favourite never folds; one type always stays); Accept in one click (no confirm, its lines as a footnote, Twists button for the old dialog, the Weekly Boss still asks); My usual twists pre-ticked on accept and claim where offered (they replace the department's ticks; an unoffered twist is never ticked or sent; a removed twist is dropped; the server checks at accept). Only order and folding change: every check and the random draw still run.
+- Dispatch (character): Claim in one click (no confirm; the claim window still ranks); Call pop-ups 'favourites' (only favourite types pop up, every call still listed; no favourites = all; cached with calls_muted for 30 s); Tablet key opens Dispatch for 20 s after a call pops up (claims nothing).
+- Opening the tablet: Open on (character) 'last', 'home' or 'active_on_run' (Unit while a ready check waits, Active Mission on a run); a screen Lua names, the Dispatch key or the after-call key wins. Remember my filters (this PC): Dispatch's filter and the Leaderboard's choices.
+- During a mission: Abandon asks in a dialog (character; off = "Click again to abandon" for 3 s, always two presses; cooldowns unchanged); Recalculate in one click (character; maxRecalcs still counts); Distances (this PC) metric or imperial (ft under 0.1 mi, then miles) on HUD, run bar, Active Mission, Contact panel and Dispatch (the Builder stays metric).
+- Map: Objective GPS (character) 'route', 'waypoint' (a waypoint on each new objective pointer, never over his own, removed with the objective) or 'off' (the button still works); Objective line on the HUD (this PC); Colour-blind map colours (this PC: blue, yellow, orange, white, purple, never red or green). They only hide or recolour: Radio Silence still hides, and the drive to the start keeps its route.
+- Unit: Auto-Ready (character; locked off by allow.autoReady = false): answers Ready when the leader accepts, only while the officer is at the keys (no pause menu, input in the last 60 s); the server counts it only while allowed, on, and within autoReadyRange (150 m) of the leader; never for a Cross-Department join; a manual Not ready still wins.
+- Sounds (this PC): mission call tone, unit tone, objective cues; on or off only; pop-ups still show; the Builder's sounds unaffected.
+- Rules: allow (false = locked to the default), defaults and bounds; a department's own in Config.Departments.<key>.officerOptions win for its officers. An option is a switch, one choice, several choices or a number; a choice no longer offered is dropped and a number out of bounds clamped; only values differing from the default are saved. A disallowed option is ignored, never deleted. Only an on-duty officer changes his own, server-checked; Settings refuses an officerOptions naming an unknown option or impossible value.
 
 ## Item rewards (optional)
 
@@ -1856,954 +1298,159 @@ Off by default (Config.Rewards.enabled = false). When on, completed runs can als
 
 ## Mission Builder
 
-Supervisors build missions on the tablet (Supervisor UI) and admins in the Admin UI: they choose every setting, place spots in the world, record routes by driving them, test, and publish. Nothing needs Lua editing or a restart, and each published mission is also saved as a Lua file that developers can edit.
-
-Where: Supervisor UI → Mission Builder, or Admin UI → Missions → Builder. Which builder actions supervisors may use is set in Config.Permissions (its supervisor list: by default they build, test, publish and archive their own missions; admins can always do everything, including rolling back and breaking edit locks).
+Supervisors build missions on the tablet (Supervisor UI → Mission Builder) and admins in Admin UI → Missions → Builder: every setting, spots placed in the world, routes recorded by driving, test, publish. No Lua editing or restart; each published mission is also saved as a Lua file. Which builder actions supervisors may use is Config.Permissions' supervisor list (by default build, test, publish and archive their own missions); admins can do everything, including rollback and breaking edit locks.
 
 Flow
 
-- New mission → pick up to 6 objective blocks, in the order officers will do them.
-
-- Details → name, description, mission type (required; it sets the points and the base payout), difficulty (1–3 stars), min and max officers (1–4), time limit (2–20 min), start timeout (5–15 min), cooldown (5–60 min), "Available to" (departments from Config.Departments; none selected = every department), vehicle-damage penalties on or off (off is suggested when the mission has a pursuit or escort block or armed NPCs), optional items (admins only: a supervisor's save, validate, test and publish refuse any item with builder.error.item_forbidden while Config.Builder.supervisorItems is false, as shipped, and the Details step locks the field with a sentence saying why; an officer can use or sell a mission item before the run takes it back. Armour, bandages, ammo-*, weapon_*, money, black_money and cash are never mission items, for anyone. A run hands out a custom mission's items only when the version was published by an admin or the console, or edited in code; a version a supervisor published, or one with no record of who published it, hands out none and says so once in System → Problems: "items skipped: saved by a supervisor"), and bonuses and penalties picked from the standard list in Config.Bonuses (a flat bonus or penalty is capped at 50 points, a percentage one at 25% of P; block settings such as a hostage-hit penalty keep their own ranges). There is no payout field.
-
-- Block settings → every block has its own settings panel (tables below). Each value has the minimum, maximum and default shown, and the tablet will not accept anything outside that range. These ranges and defaults live in config/blocks.lua, so they can be changed without touching code. While Config.Builder.foldAdvanced is true (as shipped) a panel shows the objective name and the block's basics (hostile_waves: Waves, Enemies per wave, Weapons, Difficulty Easy/Normal/Hard, which set accuracy, armour and health inside their ranges) and folds the rest, with the minimum time ("Flag runs finished faster than") and presence range ("Officers must stay within"), under a closed "More settings"; Details folds everything but name, type, difficulty and team size the same way. An error opens the fold; false shows every setting open.
-
-- Place it in the world → the tablet closes into placement mode (see Placement tool) and reopens when done.
-
-- Record routes → blocks that move along roads (escort, pursuit) record a road route by driving it; a checkpoint route recorded this way is saved as checkpoints (see Route recording).
-
+- New mission → up to 6 objective blocks, in the order officers do them.
+- Details → name, description, mission type (required; sets points and base payout), difficulty (1–3 stars), min and max officers (1–4), time limit (2–20 min), start timeout (5–15 min), cooldown (5–60 min), "Available to" (none = every department), vehicle-damage penalties (off suggested with a pursuit or escort block or armed NPCs), optional items, and bonuses and penalties from Config.Bonuses (a flat one capped at 50 points, a percentage at 25% of P; block settings keep their own ranges). There is no payout field.
+- Items: admins only while Config.Builder.supervisorItems is false (shipped): a supervisor's save, validate, test and publish refuse any item (builder.error.item_forbidden) and the field is locked with the reason. Armour, bandages, ammo-*, weapon_*, money, black_money and cash are never mission items. A run hands out a custom mission's items only when its version was published by an admin or the console or edited in code; otherwise none, said once in System → Problems ("items skipped: saved by a supervisor"). An officer can use or sell a mission item before the run takes it back.
+- Block settings → each block's panel shows every value with its minimum, maximum and default and refuses anything outside; the ranges and defaults are config/blocks.lua (its copy is under Config). With Config.Builder.foldAdvanced (shipped true) a panel shows the objective name and the basics (hostile_waves: Waves, Enemies per wave, Weapons, Difficulty Easy/Normal/Hard, which set accuracy, armour and health inside their ranges) and folds the rest, with the minimum time ("Flag runs finished faster than") and presence range ("Officers must stay within", 50–800 m), under "More settings"; Details folds all but name, type, difficulty and team size. An error opens the fold.
+- Place it in the world → the tablet closes into the placement tool and reopens when done.
+- Record routes → escort and pursuit record a road route by driving; a checkpoint route recorded this way is saved as checkpoints.
 - Scaling → tick which counts scale with the tier; each block suggests a default.
+- Test run → played privately at any tier in admin test mode; points and cash shown, never saved or paid. Optional: an untested draft publishes after "Publish without testing?"; only while Config.Builder.requireTestToPublish is true does a supervisor's draft need a passed test at the tier its maxOfficers reaches (e.g. Heavy for 4 officers); an admin never does.
+- Publish → the mission joins its type's pool for the chosen departments and its Lua file is written.
 
-- Test run → the builder plays it privately at any tier, in the same test mode admins use (see Admin test mode); points and cash are shown but not saved or paid. Testing is optional: a draft can be published untested (one confirm, "Publish without testing?"). Only while Config.Builder.requireTestToPublish is true does a supervisor's draft need one passed test at the tier its maxOfficers reaches (for example Heavy for a 4-officer mission); an admin never does.
+Block settings (every range and default is config/blocks.lua; these are the rules that are more than a range)
 
-- Publish → the mission joins its type's pool for the chosen departments, and its Lua file is written.
-
-Block settings
-
-Every block also has a Presence range setting (50–800 m): how close partners must stay in runs with 2 or more participants. The defaults are in Anti-exploit → Presence range.
-
-hostile_waves
-
-| Setting | Range | Default |
-|---|---|---|
-| Waves | 1–6 | 3 |
-| Hostiles per wave | 1–15 (every armed NPC in the mission counts toward 40 before scaling) | 7 |
-| Next wave | when this many or fewer are alive (0–5), or after this long (30–300 s) | 2, or 90 s |
-| Weapons | from Config.Builder.allowed.weapons | Pistol, Combat Pistol |
-| Accuracy | 5–60 | 25 |
-| Armour | 0–100 | 0 |
-| Health | 100–400 | 200 |
-| Behaviour | Hold cover, Balanced or Push | Balanced |
-| Surrender chance under 25% health | 0–100% | 30% |
-| Ped models | from Config.Builder.allowed.peds | gang set |
-| Boss | off, or model, health, armour and weapon | off |
-| Block NPC traffic within | 0–200 m | 120 m |
-| Spawn points | placed; at least 1.5 × the largest wave | — |
-| Behaviour | one of Hold cover, Balanced, Push, or rolled per run with weights | Balanced |
-| Spawn sets | 0–4 named sets per location, 1–3 used per run | 0 (off) |
-
-escort
-
-| Setting | Range | Default |
-|---|---|---|
-| Route | recorded by driving (see Route recording) | — |
-| Vehicle | from Config.Builder.allowed.escortVehicles | stockade |
-| Speed | 20–120 km/h | 60 km/h |
-| Driving style | Careful, Normal or Fast (always keeps to its lanes) | Normal |
-| Vehicle toughness | × 0.5–3.0 health | × 1.5 |
-| Fail if stopped for | 15–120 s | 60 s |
-| Arrival radius | 10–50 m | 20 m |
-| Ambush points | 1–10, placed on the route at least 150 m apart | 5 |
-| Ambush waves | 1–5 | 2 |
-| Cars per wave | 1–5 | 2 |
-| Attackers per car | 1–4 | 2 |
-| Attacker weapons, accuracy, armour | as hostile_waves | — |
-| Stop points | 0–5, added with E while recording; the truck waits 10–60 s at each, and that wait never counts toward "Fail if stopped for" | none; 20 s wait |
-
-pursuit
-
-| Setting | Range | Default |
-|---|---|---|
-| Mode | Follow (stay close) or Stop (stop, then arrest) | Stop |
-| Vehicles | 1–5 | 1 |
-| Vehicle models | from Config.Builder.allowed.vehicles | sports set |
-| Route | free flee, or a recorded road route (e.g. a race loop) | free flee |
-| Speed and style | 40–160 km/h; Cautious or Reckless | 120 km/h, Reckless |
-| Suspects per vehicle | 1–4 | 1 |
-| Chance to flee on foot after the stop | 0–100% | 20% |
-| Distance to hold (Follow mode) | 50–300 m | 150 m |
-| Lost after | 150–600 m for 5–30 s | 250 m for 10 s |
-| Duration | 60–600 s | 180 s |
-| Response when lit up | yield / flee / fight percentages adding up to 100 | 0 / 100 / 0 |
-| After the stop | Arrest (as today) or Contact (hand the car and its people to the next field_contact objective) | Arrest |
-| Observe first | off, Pace a speeder, or Follow a reckless driver | off |
-| Posted speed | 50–130 km/h | 80 km/h |
-| Over the limit | 10–60 km/h, rolled between the two values | 20–45 km/h |
-| Drive-by chance | 0–100% (armed passengers shoot from the car) | 0% |
-| Ram chance | 0–100% (a boxed-in driver rams once) | 0% |
-| Spawn offset | off, or up to 250 m ahead of (+) or upstream of (−) the nearest participant or the observation point along the route; upstream cars drive past the officer | off |
-| Pace tolerance | 0–10 km/h: the pace is graded on the median of the per-second samples, which may be this far under the limit | 5 km/h |
-
-checkpoint_route
-
-| Setting | Range | Default |
-|---|---|---|
-| Checkpoints | 2–20, placed or recorded by driving | — |
-| Use | all in order, or a random N | all |
-| Radius | 3–20 m | 10 m |
-| Stop at each for | 0–30 s | 10 s |
-| Vehicle required | yes / no; when yes, a checkpoint counts only while the officer is driving a vehicle (any vehicle, checked by the server) | yes |
-| Medal times | Gold, Silver and Bronze in seconds, or off | off |
-| Contact penalty | 0–10 s per hit | 2 s |
-
-interact_points
-
-| Setting | Range | Default |
-|---|---|---|
-| Points | 1–10 placed | — |
-| Use | all, or a random N | all |
-| Label and progress time | text; 1–30 s | "Checking…"; 5 s |
-| Animation | from Config.Builder.allowed.animations | clipboard |
-| Logged result | off, or 2–4 choices with the correct one rolled by the server | off |
-| Together | off, or 2–4 different officers within 3–15 s; the count is min(setting, participants still in the run) | off; 6 s |
-| Solo progress | 3–20 s per point, used when only one participant is left for a together step | 8 s |
-| Hidden items are | Devices (for a skill_check) or Items to seize | Devices |
-| Evidence finds | 0–100% chance a point yields evidence | 0% |
-
-skill_check
-
-| Setting | Range | Default |
-|---|---|---|
-| Checks | 1–8 | 4 |
-| Difficulty of each | easy, medium or hard | easy, medium, medium, hard |
-| Miss penalty | 0–120 s off the timer | 30 s |
-| Fail after | 1–3 misses in a row | 2 |
-| When the misses run out | Fail the case (as today), or a setback: a recovery step, a personal penalty for the officer who missed, then a retry | Fail |
-| Recovery step | 5–30 s | 10 s |
-| Retry after | 10–120 s | 30 s |
-
-protect_rescue
-
-| Setting | Range | Default |
-|---|---|---|
-| NPCs | 1–6 | 3 |
-| Models | from Config.Builder.allowed.peds | civilian set |
-| Restrained | yes / no | yes |
-| Time to free | 1–15 s | 6 s |
-| Safe marker | placed | — |
-| Penalty per hit | 0–100 | 50 |
-| Fail if one dies | yes / no | yes |
-
-flee_arrest
-
-| Setting | Range | Default |
-|---|---|---|
-| Suspects | 1–10 | 1 |
-| Surrender / flee / fight chances | percentages adding up to 100 | 50 / 30 / 20 |
-| Armed chance and weapons | 0–100%; from the allowed list | 20%; pistol |
-| Escape after | 200–800 m for 10–60 s | 400 m for 20 s |
-| Gives up when | aimed at within 5–15 m (10 m by default), stunned, or a participant stays within 3 m for 3 s; and, whatever is set here, worn out by Config.Flee with a participant within its giveUpRange | all three |
-| Demeanour | rolled from Config.Custody.demeanour, or fixed | rolled |
-| Feint chance | 0–50% | 0% |
-| After an arrest | Cuff only, or hand over to transport | Cuff only |
-
-search_area
-
-| Setting | Range | Default |
-|---|---|---|
-| Starting circle | 200–1,000 m; also the start radius of every location (see Guardrails) | 600 m |
-| Clues | 1–5 | 3 |
-| Circle after each clue | list of radii | 300, 150, 50 m |
-| Fugitives | 1–5 | 1 |
-| Runs when a participant is within | 10–60 m | 30 m |
-
-field_contact
-
-| Setting | Range | Default |
-|---|---|---|
-| Mode | Parked cars, Scene, or Stop (works the car and people of the pursuit objective before it) | Scene |
-| People | 1–4 (Scene; Stop takes them from the stop; Parked has none) | 1 |
-| Cars | 0–6 (Parked: cars to check; Scene: 0 or 1) | 1 |
-| Truths | a set from Config.Custody.profileSets (scene, traffic, parking, stolenCar) | scene |
-| People react within | 10–40 m | 25 m |
-| Probable cause needed for a vehicle search | yes / no | yes |
-| After an arrest | Cuff only, or hand over to transport | Hand over |
-| Returning driver (Parked) | 0–100% | 25% |
-| An escape fails the mission | yes / no | yes |
-| Best decision bonus | 0–20 points each | 10 |
-| Spots | placed: Parked: 5+ kerb spots, each with a posted rule; Scene: a car spot, 3+ person spots, 2+ escape paths; optional transport point | — |
-
-process_scene
-
-| Setting | Range | Default |
-|---|---|---|
-| Bodies kept | 0–8 (the latest ones) | 4 |
-| Photograph & tag | 2–15 s | 5 s |
-| Bag body | 2–15 s | 6 s |
-| Release to coroner | 2–15 s | 8 s |
-| Coroner van | on / off | on |
-| Scene marker | placed | — |
+- hostile_waves: the next wave comes when this many or fewer are alive, or after its time; spawn points at least 1.5 × the largest wave; behaviour (Hold cover, Balanced, Push) fixed or rolled per run with weights; 0–4 named spawn sets per location, 1–3 used per run; an optional boss; NPC traffic blocked within a radius.
+- escort: the truck always keeps to its lanes; ambush points placed on the route at least 150 m apart; stop points added with E while recording, and the wait there never counts toward "Fail if stopped for".
+- pursuit: Follow (stay close) or Stop (stop, then arrest); free flee or a recorded route (a race loop); yield / flee / fight percentages when lit up; after the stop Arrest or Contact (the next field_contact objective); observe first (Pace a speeder or Follow a reckless driver) against a posted speed, the overspeed rolled between two values, the pace graded on the median of per-second samples within the pace tolerance; drive-by and ram chances; spawn offset ahead (+) of or upstream (−) of the nearest participant or the observation point (upstream cars drive past the officer).
+- checkpoint_route: all in order or a random N; vehicle required = counts only while the officer drives a vehicle (server-checked); optional Gold/Silver/Bronze times; a contact penalty in seconds per hit.
+- interact_points: optional logged result (2–4 choices, the correct one rolled by the server); together = 2–4 different officers within a window, the count min(setting, participants left), with solo progress per point when one is left; hidden items are Devices (for a skill_check) or Items to seize; an evidence chance per point.
+- skill_check: when the misses run out, fail the case or a setback (a recovery step, a personal penalty for the officer who missed, then a retry).
+- protect_rescue: restrained or not, time to free, a safe marker, a penalty per hit, fail if one dies.
+- flee_arrest: gives up when aimed at within the aim distance, stunned or a participant stays within 3 m for 3 s (as ticked), and always when worn out by Config.Flee within its giveUpRange; demeanour rolled from Config.Custody.demeanour or fixed; after an arrest cuff only or hand over.
+- search_area: the starting circle is also every location's start radius; the circle shrinks to the listed radii after each clue; fugitives run when a participant is within the set range.
+- field_contact: Parked cars (5+ kerb spots, each with a posted rule), Scene (a car spot, 3+ person spots, 2+ escape paths) or Stop (the car and people of the pursuit before it); truths from Config.Custody.profileSets; optional transport point.
+- process_scene: keeps the latest bodies; the coroner van can be off.
 
 Route recording
 
-- Start it from the block's settings on the tablet. The tablet closes and the recording HUD appears; drive the route in any vehicle, at any speed — driving slowly is fine.
+- Started from the block's settings: the tablet closes and the recording HUD appears; drive the route in any vehicle at any speed. Every 25 m the position snaps to the nearest road node (GetClosestVehicleNodeWithHeading); samples more than 8 m from a road are rejected ("Off road").
+- Saved as road waypoints only: one at every junction or turn over 30° and at least every 150 m, duplicates removed; never the builder's speed, lane or line. At run time the NPC vehicle drives waypoint to waypoint with lane-following driving (TaskVehicleDriveToCoordLongrange) at the block's speed and style.
+- Keys: E adds a stop point (escort), Backspace undoes the last 100 m, P pauses, X finishes. Afterwards the map shows the route and its length; Test drive sends the vehicle along it and marks any waypoint not reached within 30 s for re-recording.
+- Checks: 0.8–8 km; start and end 300 m apart (a race loop ends within 50 m of its start); a road path between each pair of waypoints (CalculateTravelDistanceBetweenPoints); no waypoint in a no-build zone.
+- A patrol (checkpoint route) recorded by driving is saved as plain checkpoints about Config.Builder.route.patrolSpacing (300 m) apart plus its end (at most the block's maximum), so the route checks do not apply. **Place checkpoints** is its main button.
+- Stored in the objective as route = { points = { vec3(...), ... }, stops = { { at = <waypoint index>, wait = <seconds> } } } with the block's own speed (km/h) and style, the same format for escort, pursuit and checkpoint_route.
 
-- Every 25 m the position is snapped to the nearest road node (GetClosestVehicleNodeWithHeading). Samples more than 8 m from any road (grass, pavement, car parks) are rejected with an "Off road" warning.
+Placement and the point list
 
-- The route is saved as road waypoints only: one at every junction or turn (heading change over 30°) and at least one every 150 m, with duplicates removed. The builder's speed, lane and exact line are never stored.
+- Placement tool: a ghost preview follows the aim; scroll rotates, E places, Backspace undoes, Delete (or Backspace) aimed at a placed point removes it, X cancels and keeps the points as they were, Enter returns to the tablet. Areas are ox_lib zones. A spot failing a guardrail shows red and cannot be placed.
+- Point list (Locations step): one row per stored point (the start, then each point of each key; not flee paths or road routes) with number, kind, distance from the start and street, and GPS, Set here (moves it to where the builder stands, spacing-checked) and Delete (autosaved). The hovered row is ringed on the map.
+- Teleport (owner decision): the start row and each point row have Teleport while Config.Builder.teleport is on and the builder may (admins always; others with a grant for department and grade in Config.Permissions.builderTeleport, shipped empty). The screen names the point, never a position; the server checks the grant, refuses in the arena, on a run or while down, reads the saved point, audits builderTeleport and sends the coordinates; the client fades, freezes, loads collision, finds the ground, places him and unfreezes. Unsaved changes are saved first. Other tools only set GPS waypoints.
+- Show on map: closes the tablet and opens the pause map with temporary blips on the location's start, spawn points and checkpoints (All locations: every start). Client action builderShowMap { points = { kind, coords } } (1–300), refused in the arena; cleared when the tablet opens, on a new show, on unload, entering the arena and resource stop. Read-only, so no config option.
 
-- At run time the NPC vehicle drives from waypoint to waypoint with normal lane-following driving (TaskVehicleDriveToCoordLongrange) at the speed and style set in the block. It follows the same roads, not the exact spots the builder drove.
+Guardrails (while placing, and again by the server on publish)
 
-- HUD keys while recording: E adds a stop point (escort only), Backspace undoes the last 100 m, P pauses and resumes, X finishes.
+- A custom mission pays its type's payout (× its star multiplier) until an admin sets a mission payout.
+- Only models, weapons, vehicles and animations in Config.Builder.allowed.
+- At most 40 armed NPCs per mission before scaling, over every block (hostile waves, escort attackers, every flee_arrest suspect with an armed chance above 0), with the running total shown; at run time 25 armed alive and 80 entities at once still apply.
+- Spawn points on the ground (not in water, walls or the air), at least 30 m from the start, outside Config.Builder.noBuildZones (police stations, hospitals, the prison interior, the Crimson-Arena Trailer Park and lobby by default).
+- Armed spawn points (hostile_waves spawns, spawn sets and boss spot, escort ambushPoints, pursuit spawn / spawns, flee_arrest associates) must also be outside the start circle plus Config.Builder.spawnMargin (40 m), measured flat (a 60 m start: 100 m). Hostages, door suspects, scatters, fugitives and field-contact people keep the 30 m, as does a mission with a search_area objective. The placement tool refuses a closer point, publishing refuses it (one message per location and key), and the map and in-world ring show the distance. Points a built-in plays at its own start stay allowed in a duplicate of it (compared with the shipped files at server start, before the built-ins load); moved or new points follow the rule. An older custom file still loads with one warning per location and key; republishing it needs the points moved. The block guardrail at file load stays at 30 m.
+- Locations of one mission at least 100 m apart; a custom mission needs Config.Builder.minLocations (1) and an edited built-in Config.Builder.minLocationsOverride (3).
+- Start radius 20–150 m, except with a search_area objective: there every location's start radius is its first search_area's starting circle (200–1,000 m, 600 m) and the run starts on entering it.
+- Every objective has a minimum time (minSeconds, or the block's default), the time limit is 2–20 minutes, and every block's required points are placed.
 
-- After recording, the tablet shows the route on the map with its length. Test drive spawns the vehicle and sends it along the route at the chosen speed so the builder can watch or follow; any waypoint it fails to reach within 30 s is marked for re-recording.
+Editing safety and lifecycle
 
-- Checks: 0.8–8 km long; start and end at least 300 m apart (a race loop must end within 50 m of its start); a road path exists between each pair of waypoints (CalculateTravelDistanceBetweenPoints); no waypoint inside a no-build zone.
+- One editor at a time: opening locks a mission for 30 minutes, renewed while editing; an admin can break it. Drafts autosave every 30 s. Editing a published mission works on a draft (the next version) while the published one stays live. Admins roll a custom mission back to its previous version from Admin UI → Missions (from its .bak file).
+- Draft → Tested → Published → Archived. Each run records its version. Built-ins are read-only in the builder and can be duplicated. Every save, test, publish, archive and rollback is audited.
 
-- A patrol (checkpoint route) recorded by driving is not a road route: it is saved as plain checkpoints about `Config.Builder.route.patrolSpacing` (300 m) apart along the drive, plus its end (at most the block's checkpoint maximum), so the route checks above do not apply and a short beat publishes. **Place checkpoints** is its main button.
+Lua export
 
-Route data as stored in an objective of the mission file. Speed and style are the block's own settings, so the same route format works for escort, pursuit and checkpoint_route:
-
-route = {
-  points = {            -- road waypoints from the recording, snapped to road nodes
-    vec3(0.0, 0.0, 0.0),
-    -- ...
-  },
-  stops = {             -- escort only: stop points added with E while recording
-    { at = 12, wait = 20 },   -- waypoint index, seconds the truck waits there
-  },
-},
-speed = 60,             -- km/h: the block's own speed setting
-style = 'normal',       -- the block's own style setting; vehicles always keep to their lanes
-
-Placement tool: a ghost preview of the ped, vehicle or marker follows your aim; scroll rotates, E places, Backspace undoes, Delete (or Backspace) aimed at a placed point removes it, X cancels and keeps the points as they were, Enter returns to the tablet. Areas are drawn as ox_lib zones. A spot that fails a check below shows red and cannot be placed.
-
-Point list (Locations step, under the map): one row per stored point (the start, then each point of each key; not flee paths or recorded road routes) with its number, kind, distance from the start and stored street, and GPS, Set here (that point moves to where the builder stands; the other points are sent for the spacing checks) and Delete (that point only, autosaved). The row under the pointer is ringed on the map.
-
-Teleport (B8, owner decision; replaces "the builder never teleports"): the start row and each point-list row have Teleport while Config.Builder.teleport is on and the builder may: admins always, anyone else only with a grant for his department and grade in Config.Permissions.builderTeleport (minGrade or grades; shipped empty = admins only). The screen names the point (mission, location, key, number), never a position: the server checks the grant, refuses in the arena, on a run or while down, reads the saved point (built-in missions too), writes the audit row builderTeleport (mission, #location, key#number) and sends the player its own coordinates; the client fades out, freezes, loads the collision, finds the ground, puts him there and unfreezes. Unsaved changes are saved first. The test drive and the other tools still only set GPS waypoints.
-
-Show on map (B17): next to the location's name, Show on map closes the tablet and opens the pause map with temporary blips on the location's start, spawn points (peds, vehicles) and checkpoints (markers, areas, routes); All locations under the location list does the same for every start of the mission. Client action builderShowMap { points = { kind, coords } } (1-300), refused in the arena; the blips are cleared when the tablet opens again, on a new show, on unload, on entering the arena and on a resource stop. No config option: it only reads the draft and touches only the builder's own map.
-
-Guardrails (checked while placing, and again by the server on publish)
-
-- There is no payout field: a custom mission pays its type's payout (× its star multiplier) until an admin sets a mission payout.
-
-- Only models, weapons, vehicles and animations in Config.Builder.allowed can be picked.
-
-- At most 40 armed NPCs per mission before scaling, counting every block (hostile waves, escort attackers, and every flee_arrest suspect whenever its armed chance is above 0), with the running total shown in the builder; at run time the caps still apply (25 armed NPCs alive and 80 entities at any one moment).
-
-- Spawn points must be on the ground (not in water, inside walls or in the air), at least 30 m from the start point, and outside the no-build zones (Config.Builder.noBuildZones: police stations, hospitals, the prison interior and the Crimson-Arena Trailer Park and lobby by default).
-
-- Armed spawn points (owner request of 2026-10-19: "surronding the officers") must also be outside the start circle plus Config.Builder.spawnMargin (40 m), measured flat (2D) as officers arrive: with a 60 m start, 100 m from the start. They are a hostile_waves objective's spawns, spawn sets and boss spot, escort ambushPoints, pursuit spawn / spawns and flee_arrest associates; hostages, suspects at a door, scattering suspects, fugitives and field-contact people keep the 30 m. The placement tool refuses a closer point as it is aimed at, publishing refuses it (one message per location and key, instead of the 30 m one), and the Locations map and the in-world ring show that distance. Points a built-in mission plays at its own start (same coordinates, same circle) stay allowed in a duplicate of it: they play as in the built-in, where the spawn director keeps them away from the officers; a moved or new point follows the rule. At server start, before the built-ins are loaded, they are compared with the shipped built-in files, so a hand edit of such a duplicate (or of an edited built-in) is judged the same at start as on a later reload. A mission with a search_area objective keeps the 30 m (its start is the search circle, entered anywhere). A custom mission file published before still loads, with one loader warning per location and key; publishing it again (or a hand edit of its file) needs the points moved. The block guardrail that runs when files load stays at the 30 m.
-
-- Locations of the same mission must be at least 100 m apart, and each mission needs at least 3.
-
-- Each location's start marker has a start radius of 20–150 m, except in a mission with a search_area objective: there the search circle is the start marker (the run starts when a participant enters it, as in Manhunt), so every location's start radius equals the starting circle of its first search_area objective (that block's startRadius, 200–1,000 m, 600 m by default).
-
-- Every objective has a minimum time (minSeconds, or the block's default), the time limit is 2–20 minutes, and every block must have its required points placed.
-
-- A mission must pass a test run at the tier its maxOfficers reaches before it can be published.
-
-Editing safety
-
-- Only one person can edit a mission at a time: opening it locks it for 30 minutes, renewed while they keep editing. An admin can break the lock.
-
-- Drafts autosave every 30 seconds.
-
-- Editing a published mission works on a draft (the next version) while the published version stays live.
-
-- Admins can roll a custom mission back to its previous version from Admin UI → Missions (restored from its .bak file).
-
-Lifecycle: Draft → Tested → Published → Archived. Each run records the version it was played on. Built-in missions are read-only in the builder and can be duplicated into an editable copy. Every save, test, publish, archive and rollback is written to the audit log.
-
-Lua export for developers — every publish writes missions/custom/<mission_id>.lua, in exactly the same shape as a built-in mission file (see Example files). Chances are written as fractions (30% becomes 0.30) and progress times in milliseconds (5 s becomes 5000), the units built-in files use.
-
-- The server writes it with SaveResourceFile. A header comment lists the mission id, version, type, who published it and when.
-
-- The file is the source of truth for a published custom mission: on start and on reload, the server loads every published custom mission from its file. If a file is missing, the server rewrites it from the database and warns.
-
-- Publishing overwrites the file and keeps the previous one as <mission_id>.v<version>.lua.bak.
-
-- A developer can edit the file and run /CrimsonPoliceAdmin reload. The server checks it against the same guardrails and saves it as a new version marked "edited in code".
-
-- Mission files are data files, never scripts: the server reads every mission file (built-in, custom, edited built-in, backup, pasted import) as data and never runs it (FXServer cannot stop running text: its Lua has no debug.sethook). A file keeps to the layout the Mission Builder writes: comments, then one RegisterMission({ ... }) of plain values (strings, numbers, true, false, nil, tables, and vec3/vector3 with 3 numbers or vec4/vector4 with 4). Anything else (a variable, a sum such as 10 * 60, joined text, a function, a loop, a key given twice, CfxLua's own syntax) is refused; the console line and the Admin UI load result name the file and the line. A refused hand edit is not taken in and the last published version stays live.
-
-- If the builder draft and the file both changed since the last publish, the reload keeps the file, saves the draft as <mission_id>.draft.lua.bak and records the conflict in the audit log.
-
-- Payouts never come from the file: a payout field added by hand is ignored with a console warning.
-
-- Archiving moves the file to missions/custom/archived/.
+- Every publish writes missions/custom/<mission_id>.lua with SaveResourceFile, in the shape of a built-in file (see Example files): chances as fractions (30% = 0.30), progress times in ms, a header comment with id, version, type, publisher and time. The previous file is kept as <mission_id>.v<version>.lua.bak; archiving moves it to missions/custom/archived/.
+- The file is the source of truth for a published custom mission, loaded on start and reload; a missing one is rewritten from storage with a warning. A developer may edit it and run /CrimsonPoliceAdmin reload: it is checked against the same guardrails and saved as a new version marked "edited in code". If both the draft and the file changed since the last publish, the reload keeps the file, saves the draft as <mission_id>.draft.lua.bak and audits the conflict.
+- Mission files (built-in, custom, edited built-in, backup, pasted import) are data, never run (FXServer's Lua has no debug.sethook to stop running text): comments, then one RegisterMission({ ... }) of plain values (strings, numbers, true, false, nil, tables, vec3/vector3 of 3 numbers, vec4/vector4 of 4). Anything else (a variable, a sum such as 10 * 60, joined text, a function, a loop, a key given twice, CfxLua syntax) is refused, naming the file and line in the console and the Admin UI; the last published version stays live.
+- Payouts never come from the file: a hand-added payout field is ignored with a console warning.
 
 ## Data model
 
-Nineteen tables (prefix cp_) hold everything. Leaderboards are computed from cp_mission_runs, which has one row per participant per run, so every point and every payment traces back to the run that earned it.
+All storage is in cp_ tables. The exact columns are the migration files in Crimson-Police/sql/migrations/ (001_initial.sql is the fresh schema; 002–017 only add) and the column meanings are in docs/ARCHITECTURE.md §3–§5. Leaderboards are computed from cp_mission_runs, one row per participant per run, so every point and payment traces back to the run that earned it.
 
--- sql/migrations/001_initial.sql: the full schema for a fresh install
+| Table | What a row is |
+|---|---|
+| cp_schema_migrations | One applied migration file (number, name, time); created by the runner before 001 |
+| cp_officers | One character (citizenid): department, XP, streak and its weekly grace, hide_name, suspension; copies of callsign and rank_label (refreshed from Qbox on load and tablet open, never written back); the profile (bio, avatar and its review state, look, call mute; 004); license, board exclusion, retirement, anti-farm override (008); options (010, JSON of the My options that differ from the default, NULL = all defaults); mission_ban (012, NULL or past its end = none); field_training (015, NULL = not in field training) |
+| cp_mission_runs | One participant of one run: run_uuid (shared by the run), operation_id, type, mission and version, location, department, season, participants and departments, tier, first twist (every twist in breakdown), state (completed, failed, abandoned), end_reason, base/bonus/penalty/final points, cash base, multiplier, paid and cash_status, duration, breakdown JSON, flagged with flag_reason, voided; the service-record counts, medal, mission call and response time (003); a void's kind and batch and the cash taken back (008); live_catches (014). mission_type is also 'manual_award' or 'goal' |
+| cp_mission_runs_archive | The same columns in the same order (the retention job copies with INSERT ... SELECT *) |
+| cp_seasons, cp_badges | Seasons (name, start, end, active) and earned badges (citizenid, badge, time) |
+| cp_operations | One Cross-Department Mission (mission, launcher, status, times; the last launch times Config.CrossDept.cooldown) |
+| cp_custom_missions | One custom mission: type, published version and definition, draft version and definition (autosaved), draft_tested, file_path, edit lock |
+| cp_dept_bounties | A department bounty (objective, winner) |
+| cp_type_payouts, cp_mission_payouts | Base payout per type (admin_locked = an admin's permanent value; updated_at also times the supervisor cooldown) and an admin's payout per mission (permanent until cleared) |
+| cp_disputes | One dispute per run row; goes_to supervisor (flagged or voided) or admin (failed); handled_by is never a participant |
+| cp_mission_tests | The admin test log, with def_hash (002: which version a test covered) |
+| cp_audit | One staff action: actor and role, category (picks the webhook), action, target, old and new value, reason, the actor's license (008); indexed by target and action and by action and time (017) |
+| cp_profile_reports, cp_commendations | Profile reports (the reporter is never shown to the reported officer) and commendations (004) |
+| cp_mission_calls | One mission call (code MC-nnnn per day, area, outcome, who posted, paged, claimed, claimants, reason; 005); department = the lane that posted it, NULL = server-wide (013) |
+| cp_item_rewards | One item reward (006); stays empty while Config.Rewards.enabled is false |
+| cp_settings, cp_settings_history | A setting an admin changed in game (key path, {"v": value} or {"none": true}; no row = config.lua) and every change, reset, switch and revert with old and new value (007, 008) |
+| cp_badge_overrides, cp_dept_funding, cp_admin_jobs, cp_admin_requests, cp_staff_notices, cp_storage_meta | Badge grant/block overrides, department funding deposits (pending before the deposit), bulk jobs (their id is the void_batch), request ids (one money or bulk action acts once), staff notices, the storage generation marker (008) |
+| cp_pvp_pairs | The anti-farm pair ledger (009): one row per officer and suspect of a closed live or volunteer case, an admin's block, exclusion or suspension, a duty-off time, and volunteer strikes and strike blocks (vol_strike, vol_block while Config.Volunteers.saveStrikes is on); empty until such a thing happens; case and duty rows kept for Config.RealSuspects.pairLedgerDays |
+| cp_dept_controls | One department (or '*' server-wide) and Mission control a supervisor or admin changed (011); no row = the config value; a row past expires_at is ignored, also after a restore |
+| cp_pvp_cases | One closed live or volunteer case as the Real suspects screen reads it, never a position (016); only the newest Config.RealSuspects.casesKept, none older than pairLedgerDays, while Config.RealSuspects.saveCases is on |
 
-CREATE TABLE IF NOT EXISTS cp_schema_migrations (   -- created by the migration runner before 001 runs
-  version    INT PRIMARY KEY,                  -- the file's number, e.g. 1 for 001_initial.sql
-  name       VARCHAR(100) NOT NULL,            -- the file name
-  applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE cp_officers (
-  citizenid       VARCHAR(50) PRIMARY KEY,     -- Qbox citizenid
-  callsign        VARCHAR(32) NULL,            -- copy of metadata.callsign (set by SC-Police); display only
-  rank_label      VARCHAR(40) NULL,            -- copy of the Qbox job grade name; display only
-  display_name    VARCHAR(64) NULL,
-  department      VARCHAR(32) NULL,            -- key from Config.Departments
-  xp              INT NOT NULL DEFAULT 0,
-  streak_days     TINYINT NOT NULL DEFAULT 0,
-  last_complete   DATE NULL,
-  grace_week      DATE NULL,                   -- start of the week the grace count below belongs to
-  grace_used      TINYINT NOT NULL DEFAULT 0,  -- missed days forgiven in that week
-  hide_name       TINYINT(1) NOT NULL DEFAULT 0,
-  suspended_until DATETIME NULL                -- Crimson-Police suspension (separate from SC-Dispatch)
-);
-
-CREATE TABLE cp_operations (                   -- Cross-Department Missions
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  mission_id  VARCHAR(40) NOT NULL,
-  launched_by VARCHAR(50) NOT NULL,            -- citizenid of the supervisor or admin
-  status      ENUM('joining','running','waiting','completed','cancelled') NOT NULL DEFAULT 'joining',
-  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,  -- the last launch starts Config.CrossDept.cooldown
-  ended_at    DATETIME NULL
-);
-
-CREATE TABLE cp_mission_runs (                 -- one row per participant per run
-  id              INT AUTO_INCREMENT PRIMARY KEY,
-  run_uuid        VARCHAR(36) NOT NULL,        -- shared by every participant of one run
-  operation_id    INT NULL,                    -- set for Cross-Department Missions
-  mission_type    VARCHAR(32) NOT NULL,        -- a type key, 'manual_award' or 'goal'
-  mission_id      VARCHAR(40) NOT NULL,
-  mission_version SMALLINT NULL,               -- custom missions only
-  location_label  VARCHAR(64) NULL,            -- the drawn location
-  citizenid       VARCHAR(50) NOT NULL,
-  department      VARCHAR(32) NOT NULL,        -- participant's department when the run ended
-  season_id       INT NULL,
-  participants    TINYINT NOT NULL DEFAULT 1,
-  departments_n   TINYINT NOT NULL DEFAULT 1,  -- distinct departments on the run
-  tier            ENUM('standard','reinforced','heavy','major','critical') NOT NULL DEFAULT 'standard',  -- points and cash tier used for this row
-  modifier        VARCHAR(20) NULL,            -- the run's first twist; every twist is in breakdown.twists
-  state           ENUM('completed','failed','abandoned') NOT NULL,
-  end_reason      VARCHAR(24) NOT NULL,        -- how this participant's run ended (see Mission lifecycle)
-  points_base     SMALLINT NOT NULL,           -- P = the type's config points x star multiplier
-  bonus_points    SMALLINT NOT NULL DEFAULT 0,
-  penalty_points  SMALLINT NOT NULL DEFAULT 0,
-  final_points    SMALLINT NOT NULL DEFAULT 0,
-  cash_base       INT NOT NULL DEFAULT 0,      -- B, locked when the type was accepted
-  cash_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.00,
-  cash_paid       INT NOT NULL DEFAULT 0,
-  cash_status     ENUM('none','held','pending','paying','paid','capped','unfunded','forfeited') NOT NULL DEFAULT 'none',
-  duration_s      SMALLINT NOT NULL DEFAULT 0,
-  breakdown       JSON NULL,                   -- points and cash breakdown shown on the tablet
-  flagged         TINYINT(1) NOT NULL DEFAULT 0,
-  flag_reason     VARCHAR(64) NULL,            -- why: 'outside_help', 'too_fast', 'speed', 'presence' or 'unexpected_event'
-  voided          TINYINT(1) NOT NULL DEFAULT 0,
-  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_board  (created_at, citizenid, voided),
-  INDEX idx_season (season_id, citizenid),
-  INDEX idx_dept   (season_id, department),
-  INDEX idx_draw   (citizenid, mission_type, created_at),
-  INDEX idx_run    (run_uuid)
-);
-
-CREATE TABLE cp_mission_runs_archive LIKE cp_mission_runs;   -- rows older than Config.Retention.runArchiveMonths
-
-CREATE TABLE cp_seasons (
-  id        INT AUTO_INCREMENT PRIMARY KEY,
-  name      VARCHAR(64) NOT NULL,
-  starts_at DATETIME NOT NULL,
-  ends_at   DATETIME NULL,
-  active    TINYINT(1) NOT NULL DEFAULT 0
-);
-
-CREATE TABLE cp_badges (
-  citizenid VARCHAR(50) NOT NULL,
-  badge_id  VARCHAR(40) NOT NULL,
-  earned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (citizenid, badge_id)
-);
-
-CREATE TABLE cp_custom_missions (
-  id                   VARCHAR(40) PRIMARY KEY,
-  mission_type         VARCHAR(32) NOT NULL,  -- required; sets points and base payout
-  status               ENUM('draft','published','archived') NOT NULL DEFAULT 'draft',
-  published_version    SMALLINT NULL,         -- the version players run now
-  published_definition JSON NULL,             -- copy of the published file
-  draft_version        SMALLINT NULL,         -- the next version, being edited in the builder
-  draft_definition     JSON NULL,             -- autosaved every Config.Builder.autosaveSeconds
-  draft_tested         TINYINT(1) NOT NULL DEFAULT 0,  -- 1 = passed a test run at the tier its maxOfficers reaches
-  file_path            VARCHAR(128) NULL,     -- missions/custom/<id>.lua
-  edited_in_code       TINYINT(1) NOT NULL DEFAULT 0,
-  locked_by            VARCHAR(50) NULL,      -- citizenid editing it now
-  locked_until         DATETIME NULL,         -- edit lock expiry (Config.Builder.editLockMinutes)
-  created_by           VARCHAR(50) NOT NULL,
-  updated_by           VARCHAR(50) NOT NULL,
-  updated_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-CREATE TABLE cp_dept_bounties (
-  season_id INT NOT NULL,
-  week      TINYINT NOT NULL,
-  objective VARCHAR(40) NOT NULL,             -- key from Config.Challenge.bounties
-  winner    VARCHAR(32) NULL,                 -- department key
-  PRIMARY KEY (season_id, week)
-);
-
-CREATE TABLE cp_type_payouts (                 -- base cash payout per mission type
-  mission_type VARCHAR(32) PRIMARY KEY,        -- key from Config.MissionTypes
-  amount       INT NOT NULL,
-  admin_locked TINYINT(1) NOT NULL DEFAULT 0,  -- 1 = set by an admin: permanent, read-only for supervisors
-  updated_by   VARCHAR(50) NOT NULL,
-  updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP  -- also times the supervisor cooldown
-);
-
-CREATE TABLE cp_mission_payouts (              -- admin only; permanent until an admin clears it
-  mission_id VARCHAR(40) PRIMARY KEY,
-  amount     INT NOT NULL,
-  set_by     VARCHAR(50) NOT NULL,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-CREATE TABLE cp_disputes (
-  id         INT AUTO_INCREMENT PRIMARY KEY,
-  run_id     INT NOT NULL,                     -- cp_mission_runs.id
-  citizenid  VARCHAR(50) NOT NULL,
-  reason     VARCHAR(255) NOT NULL,
-  goes_to    ENUM('supervisor','admin') NOT NULL, -- flagged or voided run: supervisor; failed run: admin
-  status     ENUM('open','approved','rejected') NOT NULL DEFAULT 'open',
-  handled_by VARCHAR(50) NULL,                 -- never a participant of that run
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  handled_at DATETIME NULL
-);
-
-CREATE TABLE cp_mission_tests (                -- admin test log (see Admin test mode)
-  id              INT AUTO_INCREMENT PRIMARY KEY,
-  mission_id      VARCHAR(40) NOT NULL,
-  mission_version SMALLINT NULL,               -- custom missions only
-  location_index  TINYINT NOT NULL,
-  tier            ENUM('standard','reinforced','heavy','major','critical') NOT NULL,
-  testers         TINYINT NOT NULL DEFAULT 1,
-  result          ENUM('passed','failed') NOT NULL,
-  note            VARCHAR(255) NULL,
-  tested_by       VARCHAR(50) NOT NULL,        -- citizenid of the admin
-  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_mission (mission_id, location_index, created_at)
-);
-
-CREATE TABLE cp_audit (
-  id         INT AUTO_INCREMENT PRIMARY KEY,
-  actor      VARCHAR(50) NOT NULL,             -- citizenid, or 'console'
-  role       ENUM('supervisor','admin','console') NOT NULL,
-  category   ENUM('audit','flags','builder','operations') NOT NULL DEFAULT 'audit', -- picks the webhook
-  action     VARCHAR(40) NOT NULL,
-  target     VARCHAR(64) NULL,
-  old_value  VARCHAR(64) NULL,
-  new_value  VARCHAR(64) NULL,
-  reason     VARCHAR(255) NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- sql/migrations/002_test_def_hash.sql: cp_mission_tests.def_hash (which version of a mission a test covered)
-
--- sql/migrations/003_run_stats.sql · service-record counts, the drawn location and mission calls per run row.
--- Every column is added to cp_mission_runs AND cp_mission_runs_archive in the same order, because the
--- retention job copies rows with INSERT ... SELECT *. Counts are per participant row.
-ALTER TABLE cp_mission_runs ADD COLUMN location_index TINYINT NULL;
-ALTER TABLE cp_mission_runs ADD COLUMN arrests SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN citations SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN impounds SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN rescues SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN vehicles_stopped SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN evidence SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN decisions_ok SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN decisions_bad SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN decisions_best SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN lethal SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD COLUMN medal TINYINT NULL;
-ALTER TABLE cp_mission_runs ADD COLUMN mission_call_id INT NULL;
-ALTER TABLE cp_mission_runs ADD COLUMN response_s SMALLINT NULL;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN location_index TINYINT NULL;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN arrests SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN citations SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN impounds SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN rescues SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN vehicles_stopped SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN evidence SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN decisions_ok SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN decisions_bad SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN decisions_best SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN lethal SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN medal TINYINT NULL;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN mission_call_id INT NULL;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN response_s SMALLINT NULL;
-ALTER TABLE cp_mission_runs ADD INDEX idx_location (citizenid, mission_id, created_at);
-ALTER TABLE cp_mission_runs ADD INDEX idx_call (mission_call_id);
-
--- sql/migrations/004_profile.sql · profile pictures, bio, look, call mute, commendations and reports.
-ALTER TABLE cp_officers ADD COLUMN bio VARCHAR(280) NULL;
-ALTER TABLE cp_officers ADD COLUMN avatar_kind VARCHAR(12) NOT NULL DEFAULT 'initials';
-ALTER TABLE cp_officers ADD COLUMN avatar_value VARCHAR(255) NULL;
-ALTER TABLE cp_officers ADD COLUMN avatar_pending VARCHAR(255) NULL;
-ALTER TABLE cp_officers ADD COLUMN avatar_status VARCHAR(10) NOT NULL DEFAULT 'none';
-ALTER TABLE cp_officers ADD COLUMN avatar_reviewed_by VARCHAR(50) NULL;
-ALTER TABLE cp_officers ADD COLUMN appearance VARCHAR(24) NULL;
-ALTER TABLE cp_officers ADD COLUMN accent VARCHAR(7) NULL;
-ALTER TABLE cp_officers ADD COLUMN ui_scale DECIMAL(3,2) NULL;
-ALTER TABLE cp_officers ADD COLUMN profile_updated_at DATETIME NULL;
-ALTER TABLE cp_officers ADD COLUMN calls_muted TINYINT(1) NOT NULL DEFAULT 0;
-ALTER TABLE cp_officers ADD COLUMN bio_pending VARCHAR(280) NULL;
-
-CREATE TABLE IF NOT EXISTS cp_profile_reports (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  citizenid   VARCHAR(50) NOT NULL,           -- the officer reported
-  reporter    VARCHAR(50) NOT NULL,           -- citizenid of the reporter (never shown to the reported officer)
-  reason      ENUM('picture','bio','other') NOT NULL,
-  note        VARCHAR(140) NULL,
-  department  VARCHAR(32) NOT NULL,           -- the reported officer's department when reported
-  status      ENUM('open','cleared','dismissed') NOT NULL DEFAULT 'open',
-  handled_by  VARCHAR(50) NULL,
-  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  handled_at  DATETIME NULL,
-  INDEX idx_queue (department, status, created_at),
-  INDEX idx_reporter (reporter, created_at)
-);
-
-CREATE TABLE IF NOT EXISTS cp_commendations (
-  id            INT AUTO_INCREMENT PRIMARY KEY,
-  citizenid     VARCHAR(50) NOT NULL,          -- the officer commended
-  kind          VARCHAR(24) NOT NULL,          -- a Config.Commendations.kinds id
-  citation      VARCHAR(255) NOT NULL,
-  run_uuid      VARCHAR(36) NULL,              -- the run it is for, if any
-  department    VARCHAR(32) NOT NULL,          -- the recipient's department when it was given
-  issued_by     VARCHAR(50) NOT NULL,          -- citizenid, or 'console'
-  issuer_role   ENUM('supervisor','admin') NOT NULL,
-  revoked       TINYINT(1) NOT NULL DEFAULT 0,
-  revoked_by    VARCHAR(50) NULL,
-  revoke_reason VARCHAR(255) NULL,
-  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  revoked_at    DATETIME NULL,
-  INDEX idx_officer (citizenid, revoked, created_at),
-  INDEX idx_issuer (issued_by, created_at)
-);
-
--- sql/migrations/005_mission_calls.sql · the history of mission calls (Dispatch).
-CREATE TABLE IF NOT EXISTS cp_mission_calls (
-  id           INT AUTO_INCREMENT PRIMARY KEY,
-  code         VARCHAR(12) NOT NULL,           -- e.g. MC-0427 (numbered per day)
-  mission_type VARCHAR(32) NOT NULL,
-  area         VARCHAR(32) NULL,               -- a Config.MissionCalls.areas key, NULL = county-wide
-  priority     TINYINT NOT NULL DEFAULT 3,
-  status       ENUM('open','claimed','lapsed','withdrawn','closed') NOT NULL DEFAULT 'open',
-  outcome      VARCHAR(16) NULL,               -- completed, failed, abandoned or reopened
-  created_by   VARCHAR(50) NULL,               -- NULL = posted by the server, else a citizenid or 'console'
-  paged_to     VARCHAR(50) NULL,               -- leader citizenid of a paged unit
-  claimed_by   VARCHAR(50) NULL,               -- leader citizenid of the winning claim
-  claimants    TINYINT NOT NULL DEFAULT 0,     -- valid claims inside the claim window
-  run_uuid     VARCHAR(36) NULL,
-  reopened     TINYINT(1) NOT NULL DEFAULT 0,
-  reason       VARCHAR(255) NULL,              -- withdraw reason
-  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  claimed_at   DATETIME NULL,
-  closed_at    DATETIME NULL,
-  INDEX idx_status (status, created_at),
-  INDEX idx_run (run_uuid)
-);
-
--- sql/migrations/006_item_rewards.sql · optional item rewards (Config.Rewards).
-CREATE TABLE IF NOT EXISTS cp_item_rewards (
-  id         INT AUTO_INCREMENT PRIMARY KEY,
-  row_id     INT NULL,                        -- cp_mission_runs.id for run rewards
-  source     ENUM('run','medal','goal','level','boss','season') NOT NULL,
-  source_key VARCHAR(64) NOT NULL,            -- run_uuid, goal id and period, level number or season id
-  citizenid  VARCHAR(50) NOT NULL,
-  item       VARCHAR(64) NOT NULL,
-  count      SMALLINT NOT NULL DEFAULT 1,
-  value      INT NOT NULL DEFAULT 0,          -- count x the item's configured value
-  status     ENUM('held','pending','giving','given','forfeited') NOT NULL DEFAULT 'pending',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  given_at   DATETIME NULL,
-  UNIQUE KEY uq_reward (citizenid, source, source_key, item),
-  INDEX idx_officer (citizenid, status),
-  INDEX idx_row (row_id)
-);
-
--- sql/migrations/007_settings.sql · settings an admin changed in game (Admin UI → Settings), over config.lua.
-CREATE TABLE IF NOT EXISTS cp_settings (
-  setting_key VARCHAR(191) NOT NULL PRIMARY KEY,  -- the Config key path, e.g. Tablet.deskDistance
-  value_json  JSON NOT NULL,                      -- {"v": <value>}, or {"none": true} for "not set" (nil)
-  updated_by  VARCHAR(50) NULL,                   -- citizenid, or 'console'
-  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- sql/migrations/008_admin_control.sql · full admin control: corrections, overrides, jobs, settings history.
--- Every column is added to cp_mission_runs AND cp_mission_runs_archive in the same order, because the
--- retention job copies rows with INSERT ... SELECT *. One column per statement, never with a key (files mode).
-ALTER TABLE cp_officers ADD COLUMN board_excluded TINYINT(1) NOT NULL DEFAULT 0;
-ALTER TABLE cp_officers ADD COLUMN retired_at DATETIME NULL;
-ALTER TABLE cp_officers ADD COLUMN retire_batch VARCHAR(36) NULL;
-ALTER TABLE cp_officers ADD COLUMN cooldown_clears JSON NULL;
-ALTER TABLE cp_officers ADD COLUMN cap_extra JSON NULL;
-ALTER TABLE cp_officers ADD COLUMN boss_extra JSON NULL;
-ALTER TABLE cp_officers ADD COLUMN license VARCHAR(64) NULL;
-ALTER TABLE cp_officers ADD INDEX idx_license (license);
-
-ALTER TABLE cp_mission_runs ADD COLUMN void_kind VARCHAR(12) NULL;
-ALTER TABLE cp_mission_runs ADD COLUMN void_batch VARCHAR(36) NULL;
-ALTER TABLE cp_mission_runs ADD COLUMN cash_reclaimed INT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN void_kind VARCHAR(12) NULL;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN void_batch VARCHAR(36) NULL;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN cash_reclaimed INT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs ADD INDEX idx_cash (cash_status, created_at);
-ALTER TABLE cp_mission_runs ADD INDEX idx_batch (void_batch);
-ALTER TABLE cp_mission_runs_archive ADD INDEX idx_batch (void_batch);
-
-ALTER TABLE cp_audit ADD COLUMN actor_ident VARCHAR(64) NULL;
-ALTER TABLE cp_seasons ADD COLUMN planned_end DATETIME NULL;
-ALTER TABLE cp_seasons ADD COLUMN next_name VARCHAR(64) NULL;
-ALTER TABLE cp_custom_missions ADD COLUMN overrides_builtin TINYINT(1) NOT NULL DEFAULT 0;
-ALTER TABLE cp_custom_missions ADD COLUMN base_hash VARCHAR(64) NULL;
-ALTER TABLE cp_mission_tests ADD COLUMN unplayed TINYINT(1) NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_tests ADD COLUMN hidden TINYINT(1) NOT NULL DEFAULT 0;
-
-CREATE TABLE IF NOT EXISTS cp_badge_overrides (
-  citizenid  VARCHAR(50) NOT NULL,
-  badge_id   VARCHAR(64) NOT NULL,
-  mode       ENUM('grant','block') NOT NULL,  -- grant: kept whatever the rows say; block: never given
-  by_actor   VARCHAR(50) NOT NULL,
-  reason     VARCHAR(255) NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (citizenid, badge_id)
-);
-
-CREATE TABLE IF NOT EXISTS cp_dept_funding (
-  id         INT AUTO_INCREMENT PRIMARY KEY,
-  department VARCHAR(32) NOT NULL,
-  amount     INT NOT NULL,
-  txn        VARCHAR(64) NULL,                -- CP-FUND-<id>, set before the deposit
-  state      VARCHAR(12) NOT NULL,            -- pending (before the deposit), done or failed
-  by_actor   VARCHAR(50) NOT NULL,
-  reason     VARCHAR(255) NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_dept (department, created_at)
-);
-
-CREATE TABLE IF NOT EXISTS cp_settings_history (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  setting_key VARCHAR(191) NOT NULL,
-  action      VARCHAR(40) NOT NULL,           -- settingChanged, settingReset, missionSwitch ...
-  old_json    JSON NULL,                      -- the full values; NULL = config.lua's value
-  new_json    JSON NULL,
-  by_actor    VARCHAR(50) NOT NULL,           -- citizenid, or 'console'
-  by_ident    VARCHAR(64) NULL,               -- the acting player's license
-  reason      VARCHAR(255) NULL,
-  reverts_id  INT NULL,                       -- the history row a Revert undid
-  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_key (setting_key, created_at)
-);
-
-CREATE TABLE IF NOT EXISTS cp_admin_jobs (
-  id         VARCHAR(36) PRIMARY KEY,         -- also the void_batch of the rows it changed
-  kind       VARCHAR(24) NOT NULL,            -- bulkVoid, restoreBatch, retire, recordMove, seasonReopen ...
-  state      VARCHAR(12) NOT NULL,            -- running, done, failed, rolledback
-  filter     JSON NULL,
-  detail     JSON NULL,                       -- ids done, per-kind data
-  done       INT NOT NULL DEFAULT 0,
-  total      INT NOT NULL DEFAULT 0,
-  actor      VARCHAR(50) NOT NULL,
-  reason     VARCHAR(255) NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NULL,
-  INDEX idx_state (state, created_at)
-);
-
-CREATE TABLE IF NOT EXISTS cp_admin_requests (
-  request_id VARCHAR(36) PRIMARY KEY,         -- the NUI's request id: one money or bulk action acts once
-  action     VARCHAR(40) NOT NULL,
-  actor      VARCHAR(50) NOT NULL,
-  result     JSON NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_created (created_at)
-);
-
-CREATE TABLE IF NOT EXISTS cp_staff_notices (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  text        VARCHAR(280) NOT NULL,
-  departments JSON NULL,                      -- NULL = every department
-  expires_at  DATETIME NOT NULL,
-  by_actor    VARCHAR(50) NOT NULL,
-  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  removed_at  DATETIME NULL
-);
-
-CREATE TABLE IF NOT EXISTS cp_storage_meta (
-  meta_key   VARCHAR(32) PRIMARY KEY,         -- generation, state (active or left_behind)
-  meta_value VARCHAR(255) NULL,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- sql/migrations/009_real_suspects.sql · police vs real criminal players: the pair ledger (anti-farm).
--- One row per officer and suspect of a closed case (live crimes and volunteer suspects share it), an admin's pair
--- block, exclusion or suspension, and every time a character left police duty (job hops survive a restart). An
--- exclude row keeps '' in officer_citizenid; suspend and duty_off rows keep '' in suspect_citizenid.
-CREATE TABLE IF NOT EXISTS cp_pvp_pairs (
-  id                INT AUTO_INCREMENT PRIMARY KEY,
-  kind              VARCHAR(12) NOT NULL,           -- live, volunteer, block, exclude, suspend or duty_off
-  run_uuid          VARCHAR(36) NULL,
-  officer_citizenid VARCHAR(50) NOT NULL,
-  officer_license   VARCHAR(64) NULL,
-  suspect_citizenid VARCHAR(50) NOT NULL,
-  suspect_license   VARCHAR(64) NULL,
-  outcome           VARCHAR(16) NULL,               -- detained, booked, got_away, left, void, gone ...
-  scored            TINYINT(1) NOT NULL DEFAULT 0,  -- 1 = that suspect's detain or booking scored for that officer
-  until_at          DATETIME NULL,                  -- block, exclude and suspend rows: when they run out
-  created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_officer (officer_citizenid, created_at),
-  INDEX idx_suspect (suspect_citizenid, created_at)
-);
-
--- sql/migrations/010_officer_options.sql · each character's officer options (My options, CP.Options).
--- JSON of only the options that differ from the default; NULL = every option at its default.
-ALTER TABLE cp_officers ADD COLUMN options JSON NULL;
-
--- sql/migrations/011_dept_controls.sql · Mission controls (CP.DeptControls): what a department's supervisors (or an
--- admin) changed inside the bounds an admin set. One row per department and control; '*' = a server-wide control.
--- No row = the config value. expires_at NULL = until it is changed or reset; a row past expires_at is ignored.
-CREATE TABLE IF NOT EXISTS cp_dept_controls (
-  department  VARCHAR(32) NOT NULL,
-  control_key VARCHAR(40) NOT NULL,
-  value_json  JSON NOT NULL,                      -- {"v": <value>}
-  expires_at  DATETIME NULL,
-  set_by      VARCHAR(50) NOT NULL,               -- citizenid, or 'console'
-  set_role    VARCHAR(12) NOT NULL,               -- supervisor, admin or console
-  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (department, control_key)
-);
-
--- sql/migrations/012_mission_ban.sql · a supervisor's temporary mission ban of one officer (CP.MissionBan).
--- JSON {"until": <unix time>, "by": <citizenid>, "name": <who set it>, "dept": <department>, "reason": <text>,
--- "at": <unix time>}; NULL = no ban. A ban past its "until" counts as none.
-ALTER TABLE cp_officers ADD COLUMN mission_ban JSON NULL;
--- sql/migrations/013_call_department.sql · the department lane a mission call was posted in (CP.MissionCalls, step
--- P12: the callLane Mission control); NULL = a server-wide call (the server's own, or one staff created or paged).
-ALTER TABLE cp_mission_calls ADD COLUMN department VARCHAR(32) NULL;
--- sql/migrations/014_live_catches.sql · suspects detained in a live case per run row (CP.LiveCrime: the
--- live_catches Rank by tab). Added to cp_mission_runs AND cp_mission_runs_archive in the same order, because the
--- retention job copies rows with INSERT ... SELECT *.
-ALTER TABLE cp_mission_runs ADD COLUMN live_catches SMALLINT NOT NULL DEFAULT 0;
-ALTER TABLE cp_mission_runs_archive ADD COLUMN live_catches SMALLINT NOT NULL DEFAULT 0;
--- sql/migrations/015_field_training.sql · a rookie's field training (CP.FieldTraining), on his officer row.
--- JSON {"trainer": <citizenid>, "trainerName": <text>, "dept": <department>, "by": <who paired them>, "byName": <text>,
--- "at": <unix time>, "tasks": {"<mission type>": {"runs": <n>, "signedBy": <citizenid>, "signedName": <text>,
--- "signedAt": <unix time>, "note": <text>}}, "doneAt": <unix time>}; NULL = not in field training.
-ALTER TABLE cp_officers ADD COLUMN field_training JSON NULL;
--- sql/migrations/016_saved_cases.sql · closed real-suspect cases kept over a restart (CP.Opponents).
--- One row per closed live or volunteer case: what the Admin UI Real suspects screen reads of it (the suspects and
--- officers by name, the timeline, the damage ledger, the volunteer's part), never a position. Only the newest
--- Config.RealSuspects.casesKept rows are kept, none older than Config.RealSuspects.pairLedgerDays. Volunteer strikes
--- and strike blocks are rows of cp_pvp_pairs (kind vol_strike or vol_block; the player key in suspect_license).
-CREATE TABLE IF NOT EXISTS cp_pvp_cases (
-  run_uuid   VARCHAR(36) NOT NULL PRIMARY KEY,
-  kind       VARCHAR(12) NOT NULL,                 -- live or volunteer
-  closed_at  DATETIME NOT NULL,
-  case_json  JSON NOT NULL,
-  INDEX idx_closed (closed_at)
-);
--- sql/migrations/017_lookup_indexes.sql · indexes for lookups that read every row of their table.
--- cp_audit had only its id: the auto-suspension check (action and target), the flagged-run notes of the Admin UI
--- run lists (target IN ...), the Type of the Day and mission control overrides, the builder's publisher lookup, the
--- reward take-back check (target) and the per-day caps of supervisor actions (action and time) each read the whole
--- log. cp_disputes is looked up by its run (one dispute per run). Only indexes are added: no data changes.
-ALTER TABLE cp_audit ADD INDEX idx_audit_target (target, action);
-ALTER TABLE cp_audit ADD INDEX idx_audit_action (action, created_at);
-ALTER TABLE cp_disputes ADD INDEX idx_dispute_run (run_id);
-
-sql/migrations/001_initial.sql creates the first fourteen tables, and 002–016 add the columns and the fifteen tables above (see Database upgrades); 017 adds only indexes. 008 (full admin control) adds a void's kind and batch and the cash taken back to both run tables, the license, board exclusion, retirement and the anti-farm override markers to cp_officers, the acting player's license to cp_audit, and the tables of badge overrides, department funding, the settings history, bulk jobs, request ids, staff notices and the storage marker. 009 (police vs real criminal players) adds the pair ledger cp_pvp_pairs: it stays empty until a live crime or volunteer case closes, an admin blocks, excludes or suspends someone there, or an officer leaves duty while one of the two features is on, and its case and duty rows are kept for Config.RealSuspects.pairLedgerDays. 010 (officer options) adds cp_officers.options, the JSON of the My options choices of that character that differ from the default (NULL = all defaults). 011 (Mission controls) adds cp_dept_controls: one row per department and control a supervisor or admin changed (no row = the config value); a backup restores it like any other table, and a restored row that has expired stays ignored. 012 (mission ban) adds cp_officers.mission_ban, a supervisor's temporary mission ban of that officer (NULL = none; one past its end counts as none). 013 (department call lanes) adds cp_mission_calls.department, the department whose lane posted the call (NULL = a server-wide call). 014 (live catches) adds live_catches to both run tables: the suspects detained in a live case on that row (0 on every other row). 015 (field training) adds cp_officers.field_training, a rookie's field training: his trainer, who paired them, the runs counted and the sign-offs per task, and when it was done (NULL = not in field training). 016 (saved cases) adds cp_pvp_cases: one row per closed live crime or volunteer case (what the Real suspects screen reads of it, never a position), so a restart keeps the last Config.RealSuspects.casesKept closed cases (none older than pairLedgerDays) while Config.RealSuspects.saveCases is on; volunteer strikes and strike blocks are cp_pvp_pairs rows (vol_strike, vol_block) while Config.Volunteers.saveStrikes is on. 017 (lookup indexes) adds indexes only: cp_audit by target and action and by action and time, cp_disputes by run, so the auto-suspension check, the flagged-run notes, the per-day caps and the dispute lookups no longer read the whole table. cp_settings holds only the settings an admin changed in game; a setting with no row uses config.lua. Every stat column of 003 is written on every run row, and only rows with state = 'completed' are ever summed (service record, boards, goals, bounties, badges). cp_mission_calls keeps the call history for Config.Retention.missionCallDays; cp_item_rewards stays empty while Config.Rewards.enabled is false. Every table and column works the same with the database off (the saves folder). A mission type with no row in cp_type_payouts uses the payout from Config.MissionTypes, and the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout. Published custom missions are loaded from their Lua files; the database keeps drafts, metadata and edit locks. callsign and rank_label in cp_officers are copies refreshed from Qbox whenever the officer loads in or opens the tablet, so boards can show officers who are offline; Crimson-Police never writes them back. Voided runs stay for audit but are left out of every board. At each daily reset the server moves runs older than Config.Retention.runArchiveMonths (12) into cp_mission_runs_archive and deletes audit rows older than Config.Retention.auditDays (180); 0 turns either off. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
+- Only rows with state = 'completed' are summed (service record, boards, goals, bounties, badges); voided runs stay for audit but are left out of every board.
+- A type with no cp_type_payouts row uses Config.MissionTypes' payout; the Weekly Boss uses Config.Events.weeklyBoss.payout until an admin sets a mission payout.
+- Published custom missions load from their Lua files; the database keeps drafts, metadata and edit locks.
+- At each daily reset runs older than Config.Retention.runArchiveMonths (12) move to the archive and audit rows older than Config.Retention.auditDays (180) are deleted (0 turns either off); mission calls are kept Config.Retention.missionCallDays. XP and badges live in cp_officers and cp_badges, so archiving never changes them or the all-time board.
+- Every table works the same with the database off (the saves folder).
 
 Database upgrades
 
-Crimson-Police creates and upgrades its own tables, so an update never needs a manual SQL import and never wipes run history, leaderboards, payouts or custom missions.
+Crimson-Police creates and upgrades its own tables: an update never needs a manual SQL import and never wipes history, boards, payouts or custom missions.
 
-With Config.Database.enabled = false (database off), the same tables, built by the same migrations, are kept as JSON documents in Crimson-Police/saves/ by an engine inside the resource that runs the same queries, so every feature works exactly as with a database; the server owner keeps and backs up that folder, and /CrimsonPoliceAdmin storage copy database-to-files | files-to-database moves the data between the two.
-
-- Every schema change is a numbered file in sql/migrations/: 001_initial.sql (the schema above), then 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql, 005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, and so on. A released file is never edited; every later change gets a new file.
-
-- On start, modules/migrations/ creates cp_schema_migrations if it is missing, runs every file whose number is not recorded there yet, in order, and records each one when it finishes. Other modules wait for it before their first query.
-
-- The runner reads each file with LoadResourceFile, splits it into statements at each ; that ends a line, and runs them one at a time with MySQL.query.await. Migration files never put a ; inside a comment or a string.
-
-- If a statement fails (or anything else in the runner raises), the runner stops and prints the file, the error, the fix and one line naming `ensure Crimson-Police`, and Crimson-Police does not start, so it never runs on a half-upgraded database. FXServer never lets a resource stop itself (StopResource on the calling resource is refused), so the resource stays started in a failed state: every request is refused with err.not_started at once, nothing reads or writes the store, the start-up jobs end quietly, and in the server console only `CrimsonPoliceAdmin check` and `CrimsonPoliceAdmin storagemode reset` (also `storage mode reset`, which then answers at once without an audit row) work. The owner fixes the problem, then types `ensure Crimson-Police` (or restarts it in txAdmin). MySQL applies table changes at once and can't roll them back, so migrations are written to be safe to run again (CREATE TABLE IF NOT EXISTS, and IF NOT EXISTS on columns and indexes where the database supports it).
-
-- Migrations only add: new tables, new columns with defaults, new indexes. With the database off the same files run on the saves folder, which takes these forms: CREATE TABLE [IF NOT EXISTS], ALTER TABLE t ADD [COLUMN] [IF NOT EXISTS] ... [FIRST | AFTER c], ADD [UNIQUE] INDEX/KEY [IF NOT EXISTS] [name] (cols), several ADDs in one ALTER, and CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON t (cols). A NOT NULL DATETIME or DATE column added to a table that has rows needs a DEFAULT (MariaDB would fill in zero dates, which the saves folder does not hold). They never DROP or TRUNCATE a table, and never delete rows of runs, officers, seasons, badges, payouts, disputes, audit entries, tests or custom missions. To change a column, a migration adds the new column and copies the data across; the old column stays.
-
-- With the database on, the runner first checks the database server: it needs JSON_VALUE that reads a JSON null as NULL (MariaDB 10.3 or newer, MySQL 8.0.21 or newer; Qbox itself asks for MariaDB 10.9 or newer and does not support MySQL). An older server fails the start before any table is touched, with the server named and the fix; MySQL starts with one warning. After the migrations every cp_ table that is not utf8mb4 (a database made by txAdmin's recipe is `utf8`, which refuses emoji in names and reasons) is switched to utf8mb4 once, its JSON columns kept binary. Only Crimson-Police's own tables are touched. `storage copy files-to-database` switches the target's tables the same way before it writes a row.
-
-- On start the console prints "Crimson-Police database at version N" (with the database off: "Crimson-Police saves folder at version N") and each file it applied.
-
-- Updating the resource: replace the code but keep your config/, logos/ and missions/custom/ folders (and saves/ with the database off). If a custom mission file goes missing anyway, the server rewrites it from the database (or the saves folder) on start.
+- With Config.Database.enabled = false the same migrations build the same tables as JSON documents in Crimson-Police/saves/, run by an engine inside the resource with the same queries; the owner backs up that folder, and /CrimsonPoliceAdmin storage copy database-to-files | files-to-database moves the data.
+- Every schema change is a new numbered file in sql/migrations/; a released file is never edited. On start modules/migrations/ creates cp_schema_migrations if missing, runs every unrecorded file in order (split at each ; that ends a line, one statement at a time; no ; in a comment or string) and records each. The console prints "Crimson-Police database at version N" (database off: "saves folder at version N") and each file applied.
+- A failing statement stops the runner: it prints the file, the error, the fix and `ensure Crimson-Police`, and the resource stays started in a failed state (FXServer refuses a self-stop): every request gets err.not_started, nothing touches the store, and only `CrimsonPoliceAdmin check` and `CrimsonPoliceAdmin storagemode reset` (also `storage mode reset`, answered at once without an audit row) work in the console. Migrations are safe to run again (IF NOT EXISTS on tables, columns and indexes).
+- Migrations only add tables, columns with defaults and indexes; they never DROP or TRUNCATE or delete rows of runs, officers, seasons, badges, payouts, disputes, audit, tests or custom missions; a changed column is a new column with the data copied. The saves folder takes CREATE TABLE [IF NOT EXISTS], ALTER TABLE t ADD [COLUMN] [IF NOT EXISTS] ... [FIRST | AFTER c], ADD [UNIQUE] INDEX/KEY [IF NOT EXISTS] [name] (cols), several ADDs in one ALTER, and CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON t (cols). A NOT NULL DATETIME or DATE column added to a table with rows needs a DEFAULT (no zero dates).
+- With the database on, the runner first needs JSON_VALUE that reads a JSON null as NULL (MariaDB 10.3+, MySQL 8.0.21+; Qbox asks for MariaDB 10.9+ and does not support MySQL): an older server fails the start before any table is touched, naming the server and the fix; MySQL starts with one warning. After the migrations every cp_ table that is not utf8mb4 is switched once (JSON columns kept binary); `storage copy files-to-database` does the same before it writes.
+- Updating the resource: replace the code, keep config/, logos/, missions/custom/ (and saves/ with the database off). A custom mission file that goes missing is rewritten from storage on start.
 
 ## Architecture, folders & events
 
-The server owns runs, draws, scaling, points and cash. The client runs objectives and reports progress, which the server validates before awarding anything. Every feature has its own folder, so each part can be edited and debugged on its own.
+The folder layout, the feature folders, the module APIs and every net event, callback and action are in docs/ARCHITECTURE.md (§1 folders and load order, §5 modules, §7 blocks, §8 events, callbacks and actions). The rules that shape the whole resource:
 
-Folder layout
+- The server owns runs, draws, scaling, points and cash; the client runs objectives and reports progress, which the server validates before awarding anything. Every feature has its own folder (modules/<feature>/, blocks/<block_id>/) that exposes one global table (e.g. CP.Cash) and keeps everything else local.
 
-Crimson-Police/
-  fxmanifest.lua
-  config/config.lua                  every setting (see Config)
-  config/blocks.lua                  Mission Builder block ranges and defaults
-  shared/init.lua                    the CP namespace, RegisterMission(), shared helpers
-  shared/locale.lua                  loads locales/en.json
-  locales/en.json                    all player-facing text
-  logos/                             department logos: sast.png, fib.png, ...
-  missions/builtin/index.lua         list of built-in mission ids, read by the server
-  missions/builtin/<mission_id>.lua  one file per built-in mission
-  missions/custom/<mission_id>.lua   one file per custom mission, written by the Mission Builder
-  missions/custom/archived/          archived custom missions
-  missions/custom/overrides/         edited built-in missions (archived/ inside it)
-  missions/custom/deleted/           custom missions deleted for good (Bring back puts them back)
-  saves/_backups/, saves/exports/    backups and audit exports (every folder the resource writes ships with a .gitkeep:
-                                     the server cannot create folders on Linux)
-  modules/<feature>/server.lua       one folder per feature (see the table below)
-  modules/<feature>/client.lua       only where the feature has client code
-  blocks/<block_id>/server.lua       one folder per objective block
-  blocks/<block_id>/client.lua
-  web/src/                           React + TypeScript: officer/, supervisor/, admin/, hud/, shared/
-  web/dist/                          Vite build loaded by fxmanifest
-  sql/migrations/                    numbered database upgrades: 001_initial.sql … 007_settings.sql, applied in order on start
-  items/                             the tablet item image and the ox_inventory snippet to paste (never loaded by the resource)
-  config/banned_words.txt            the default banned-word list for profile bios
+- Only modules/integrations/* call qbx_core, sc-police, sc-dispatch, sc-ambulance, sc-multijob or Renewed-Banking or read their tables (ox_lib, ox_target, ox_inventory and oxmysql are called directly). Qbox only: the qbx_core exports and events in the Appendix, never exports['qb-core'], GetCoreObject() or QBCore.Functions.
 
-Feature folders
+- Only modules/alerts/ writes the crimsonArena state bag; only modules/permissions/ decides whether a role may do an action, and every crimson-police:server:sup:* and crimson-police:server:admin:* event re-checks the sender's role and Config.Permissions on the server.
 
-| Folder | Files | What it owns |
-|---|---|---|
-| modules/access/ | server, client | Departments, roles, duty, active job, rank and callsign, suspension checks |
-| modules/permissions/ | server | Config.Permissions; every supervisor and admin action asks this module first |
-| modules/tablet/ | server, client | Opening and closing the three UIs and the mission HUD; session, theme and logo data; tablet prop |
-| modules/schedule/ | server | The daily and weekly resets (Config.Time) and the retention job; other modules subscribe to them |
-| modules/draw/ | server | Mission pools, the random draw, location reservations |
-| modules/runs/ | server, client | Run lifecycle, end reasons, start timeout, abandon, cooldowns, server run caps, run host, cleanup |
-| modules/route/ | server, client | The start route: sampling the GPS line, off-route warnings and abandons, recalculations, the server drift check |
-| modules/calls/ | server | Real calls vs NPC calls, ending runs on real calls, the 60-second rule, "On a call" |
-| modules/alerts/ | server | The alert-suppression flag (crimsonArena state bag) and the call backstop (shots fired, person down, person dead) |
-| modules/downed/ | server, client | Downed checks, Failed results, pick-up and drop-off, EMS requests |
-| modules/units/ | server, client | Unit invites and membership |
-| modules/operations/ | server, client | Cross-Department Missions, the board lock and the launch cooldown |
-| modules/scaling/ | server | Tiers and scaled counts |
-| modules/scoring/ | server | Points, streaks, XP, XP levels, badges |
-| modules/goals/ | server | Daily and weekly goals |
-| modules/cash/ | server | Cash formula and payments, including pending payments |
-| modules/payouts/ | server | Editable type and mission payouts, supervisor limits |
-| modules/leaderboard/ | server | Boards and caching |
-| modules/challenge/ | server | Department challenge and bounties |
-| modules/events/ | server | Type of the Day, modifiers, Weekly Boss |
-| modules/builder/ | server, client | Mission Builder, block settings, placement tool, route recording and test drive, edit locks, autosave, versions and rollback, Lua export, custom mission loading |
-| modules/disputes/ | server | Officer disputes and where they go |
-| modules/admin/ | server | Supervisor and admin actions, /CrimsonPoliceAdmin, audit log, webhooks |
-| modules/anticheat/ | server | Objective validation, presence and idle checks, flagged runs |
-| modules/opponents/ | server | Real-player suspects of live crimes and volunteer cases (off by default): cases keyed by citizenid, the watch, leaving and instances, staff notes; proof/: the cuff pair and custody hold, release, rescue, cuff-break and self-uncuff, downs, bookings and the hospital rules; conduct/: the armed definition, the damage ledger, excessive force, the unarmed-shot and ran-over penalties, the cash-seizure audit |
-| modules/volunteers/ | server, client | Volunteer suspects (off by default): the volunteer command, its ox_lib consent, roles and menu, the window, ends and strikes; the modes per mission type and mission, the volunteer slots, who is free and the hold for a 'players_only' run, the start-up check; match/: the yes/no pop-up, travel, in position, engagement, no-show, Cancel this case, the release and the endings |
-| modules/integrations/qbx/ | server, client | Every qbx_core call |
-| modules/integrations/sc_dispatch/ | server | Responding listener, mdt_dispatch lookup, shots-fired and person-down listeners, ClearNotification, suspension check |
-| modules/integrations/sc_ambulance/ | server, client | EMS on duty, the revive event, the EMS request, and the listen-only hospital-respawn fact for real suspects (CP.Ambulance.on) |
-| modules/integrations/renewed_banking/ | server | Bank transaction entries and society accounts |
-| modules/migrations/ | server | Applies new files in sql/migrations/ on start and records them in cp_schema_migrations |
-| modules/testing/ | server, client | Admin test mode: test runs, test controls, the debug overlay and the test log |
-| modules/missioncalls/ | server, client | Mission calls: posting, claims, lapses, re-dispatch, stats, the Dispatch screen data, call toasts |
-| modules/custody/ | server, client | Contact truths and facts, police actions, dispositions and grading, the custody chain, transport van, tow truck, coroner van |
-| modules/profile/ | server | Avatar, bio, look preferences and the call mute, commendations, profile reports and moderation |
-| modules/rewards/ | server | Item rewards: rolls, delivery, locker, held and forfeited rewards |
-| modules/confighealth/ | server | The start-up config check and Admin UI → Permissions → Config health |
-| modules/settings/ | server, client | Settings changed in game (Admin UI → Settings) over config.lua and blocks.lua, the mission and location switches, and the same values on every client |
-| modules/integrations/sc_police/ | server | The read-only police:server:Impound listener, and the listen-only cuff, escort, jail, bobby-pin and cash-seizure facts for real suspects (CP.ScPolice.on) |
-| blocks/field_contact/ | server, client | The contact objective (parked, scene and stop modes) |
-| blocks/process_scene/ | server, client | The coroner objective |
+- A block's server.lua creates and deletes that step's networked NPCs and vehicles and validates its objective events; its client.lua shows markers, blips, ox_target options and UI and, on the run host's client, runs the NPC AI. If the run host leaves, the next participant becomes host; if nobody is left, the server deletes everything.
 
-Module rules
-
-- Each module exposes one global table (e.g. CP.Cash) and keeps everything else local. Other modules only call the functions on that table.
-
-- Only modules/integrations/* may call qbx_core, sc-police, sc-dispatch, sc-ambulance, sc-multijob or Renewed-Banking, or read their database tables, so a change in one of those resources is fixed in one place. ox_lib, ox_target, ox_inventory and oxmysql may be called directly.
-
-- Qbox only: modules/integrations/qbx/ uses only the qbx_core exports and events listed in the Appendix. Never exports['qb-core'], GetCoreObject() or QBCore.Functions, even though some installed resources still use them.
-
-- Only modules/alerts/ sets or clears the crimsonArena state bag, and only modules/permissions/ decides whether a role may do an action.
-
-- Every block folder has the same interface: server.lua creates and deletes that step's networked NPCs and vehicles (OneSync server-side CreatePed / CreateVehicle) and validates its objective events; client.lua shows markers, blips, ox_target options and UI, and on the run host's client runs the NPC AI. A block's builder ranges and defaults come from Config.Blocks[<block_id>].
-
-- If the run host leaves, the next participant becomes host; if nobody is left, the server deletes everything.
+- Mission files are read as data with LoadResourceFile (never run): the built-ins in missions/builtin/index.lua and every published custom mission, so /CrimsonPoliceAdmin reload updates server and clients without a restart. Every module waits for CP.Migrations.ready() before its first query. Every folder the resource writes ships with a .gitkeep (the server cannot create folders on Linux).
 
 - With Config.Debug = true, each module prints its own tagged lines, e.g. [crimson-police:cash].
-
-- fxmanifest.lua loads, in order: config/config.lua, config/blocks.lua, shared/*.lua, modules/**/server.lua or client.lua, then blocks/**/server.lua or client.lua. Mission files are not listed as scripts: at start and on reload the server reads every built-in mission named in missions/builtin/index.lua and every published custom mission (its file_path in cp_custom_missions) with LoadResourceFile, reads it as data (it is never run), and sends the definitions to clients, so /CrimsonPoliceAdmin reload updates both without a restart.
-
-- Every module waits for CP.Migrations.ready() before its first database query, so nothing reads a table before its migration has run.
-
-Net events (all prefixed crimson-police:; runId is always the run's run_uuid, shared by every participant)
-
-| Event | Direction | Payload | Notes |
-|---|---|---|---|
-| server:acceptType | C → S | missionType (a type key, or 'weekly_boss' for the Weekly Boss card), or { missionType, twists } | Leader only; the server checks role, duty, unit, cooldowns, a real call in progress, the server run caps, the Cross-Department lock and every chosen twist (it must be one the type offers now), closes invites, then draws and reserves the location |
-| server:unitInvite / server:unitRespond / server:unitLeave | C → S | targetSrc / accepted / — | Any department; up to 4 members; invites only before the type is accepted |
-| server:joinOperation | C → S | operationId | Joins the active Cross-Department Mission |
-| client:start | S → C | runId, drawn mission, location, start point, expected tier, seed, host, test, the run's twists | Sent at accept. Every participant gets the same seed; host says whose client runs the NPC AI; the client sets the start route; test is true for test runs |
-| server:routeStatus | C → S | runId, metres from the start route, coords | Every 2 s until that participant reaches the start; no report for 10 s counts as off route |
-| server:recalcRoute | C → S | runId | Allowed up to 2 times per participant per run; when allowed, the client samples a new line from where it is |
-| client:routeWarning | S → C | runId, seconds left (nil clears it) | The off-route warning on the HUD and the tablet |
-| client:inProgress | S → C | runId, tier, scaled counts | Sent to every participant when the run moves to In progress; the HUD switches to the objectives |
-| server:objective | C → S | runId, objectiveId, evidence (coords, entity netId, time) | Rate-limited and validated |
-| server:abandon | C → S | runId | Always a normal abandon with the type cooldown; real calls end runs by themselves |
-| server:dispute | C → S | rowId (the officer's own cp_mission_runs.id), reason | Own flagged, voided or failed runs from the last 48 hours only |
-| client:operation | S → all officers | state (launched, started, ended), mission label | Updates every Mission Board |
-| client:pickup | S → C | runId, drop-off coords | Fade out; the server triggers SC-Ambulance's revive; the client moves to the drop-off and fades in |
-| client:requestEMS | S → C | runId | Sends SC-Ambulance's EMS request from the downed officer's client, after the server has removed their flag |
-| client:runEnded | S → C | runId, result, end_reason, points and cash breakdown | Ends that participant's run on their client (cleanup and a HUD message, e.g. "Mission ended — you're on a real call") and shows the result screen |
-| client:tierChanged | S → C | runId, new tier, points and cash tier | Sent to everyone still on the run when the team shrinks; the HUD shows the new tier |
-| client:missionCall | S → C | id, code, type label, priority, area label (paged when it is a page) | A new call's toast and tone, only to officers who could claim it and have not muted call alerts (the server skips them); the client also drops it on a run or in Crimson-Arena |
-| client:readyCheck | S → C | type, type label, seconds left, leader name, the twists the leader chose (nil clears it) | The unit ready check; the type and the twists, never the mission |
-| client:contactAct | S → run host | runId, netId, behaviour, args | The only truth-derived signal a client gets, at the moment the behaviour starts |
-| client:contactConfirm | S → C | netId, choice, factKey | Opens the case-fail confirm on the tablet (an ox_target choice never decides a knowing error) |
-| client:serviceVehicle | S → C | runId, id, op (drive, load, leave), kind, vehicle, driver, destination | The driving client of a transport van, tow truck or coroner van |
-| client:serviceBlip | S → C | runId, id, kind (prisonerVan, towTruck), show, net id, coords | Every officer on the run: the transport van's or tow truck's map blip on or off (when its status changes) |
-| server:custody | C → S | runId, netId, action, phase (begin, finish), extra | Every police action; the server checks reach, time and state at both ends |
-| server:stunHit | C → S | netId | Excessive-force telemetry, accepted only when it matches what the server saw within 1 s |
-| server:tabletItemGone | C → S | — | requireItem: the item left the inventory; the server re-checks and closes the tablet |
-| server:tabletClosed | C → S | — | The tablet closed (once per close): the server stops the badge and Dispatch pushes to it |
-
-Supervisor and admin actions use their own events (crimson-police:server:sup:* and crimson-police:server:admin:*), and each re-checks the sender's role and Config.Permissions on the server.
-
-Callbacks (ox_lib): crimson-police:getSession (role, department, rank, callsign, theme, logo URL, the actions this player may use), crimson-police:getMissionTypes, crimson-police:getBoard (period, filter), crimson-police:getProfile (citizenid), crimson-police:getMissionList (supervisors and admins only), and for this build getMissionCalls, getNavCounts, getProfileEdit, getRewardsLocker, sup:getMissionCalls, sup:getProfileQueue, admin:getRewards, admin:getAreaCoverage, admin:getLocationStats, admin:getOfficerProfile, admin:getConfigHealth and admin:getTabletAccess. The full lists, with payloads, are in docs/ARCHITECTURE.md §8.
 
 Exports
 
 | Export | Side | Purpose |
 |---|---|---|
-| IsOnMission(src) | Server | True from the moment the player's run is Accepted until it ends; other scripts can use it |
-| GetDepartment(src) | Server | Returns the player's department key, or nil |
-| GetAvailablePolice() | Server | Read-only: the number of on-duty officers who could answer a crime (Config.LiveCrime.availablePolice: 'idle' = on no mission, 'duty' = all on duty) and a count per department; nil while Config.LiveCrime.enabled is false |
+| IsOnMission(src) | Server | True from the moment the player's run is Accepted until it ends |
+| GetDepartment(src) | Server | The player's department key, or nil |
+| GetAvailablePolice() | Server | Read-only: the on-duty officers who could answer a crime (Config.LiveCrime.availablePolice) and a count per department; nil while Config.LiveCrime.enabled is false |
 | OpenTablet() | Client | Opens the Officer UI with the same checks as /CrimsonPolice |
 
-Server-only event: crimson-police:server:liveCrimeEnded when a live case ends (Config.LiveCrime.endEvent), with the reporting script's names for the crime, how the run ended, each suspect's outcome by citizenid and the counts of suspects caught and officers; no server id or position. Other scripts listen with AddEventHandler only.
-
-Server-only event: crimson-police:server:volunteerEnded when a mission a volunteer said yes to ends (Config.Volunteers.endEvent), with the volunteer's citizenid, the mission id and type, the suspect he played, the mode, his outcome, why his part was voided (if it was), whether officers reached him, how the run ended and the officer count; no server id or position. Other scripts listen with AddEventHandler only.
+Server-only events (other scripts listen with AddEventHandler; no server id or position in either): crimson-police:server:liveCrimeEnded when a live case ends (Config.LiveCrime.endEvent: the reporting script's crime names, how the run ended, each suspect's outcome by citizenid, the counts of suspects caught and officers), and crimson-police:server:volunteerEnded when a volunteer's mission ends (Config.Volunteers.endEvent: his citizenid, the mission id and type, his role, the mode, his outcome, why his part was voided, whether officers reached him, how the run ended, the officer count).
 
 There is deliberately no export for awarding points: only goal rewards and an admin's logged manual award add points outside a run.
 
 ## Settings changed in game
 
-An admin can change every setting of config/config.lua and config/blocks.lua in game, in the Admin UI Settings screen, so a server owner never has to edit a file. These rules apply:
+An admin can change every setting of config/config.lua and config/blocks.lua in Admin UI → Settings, so the owner never has to edit a file:
 
 - Who: admins only (the openAdmin permission). The server checks every change again; officers and supervisors never see the screen.
-- What: every key of the two files, including the shipped defaults, the department tables, point and pay settings and the Mission Builder ranges. The exceptions change only in config.lua and show as locked: Config.Database (database on or off, and the saves folder), because the changed settings are stored there, and Config.AdminAce and Config.QboxAdmins, because they decide who is an admin (changed in game they could make every player an admin or lock every admin out). Discord webhooks are convars in server.cfg, never settings.
+- What: every key of the two files, including the shipped defaults, the department tables, point and pay settings and the Mission Builder ranges. Locked (config.lua only): Config.Database (the changed settings are stored there) and Config.AdminAce and Config.QboxAdmins (who is an admin). Webhooks are server.cfg convars, never settings.
 - Storage: one row per changed setting in cp_settings (key path and JSON value), through the migrations, so it works with the database on and with the saves folder. A changed setting wins over config.lua; a setting with no row follows config.lua. Reset deletes the row and puts config.lua's value back; Reset all deletes every row. Setting a value equal to config.lua's is a reset.
 - Checking: a value must have the kind and shape of its config.lua value (number, whole number, text, true/false, colour, vector, list, table with the same fields), stay inside a known range (the blocks.lua { min, max, default } triples keep min ≤ default ≤ max; chances stay 0–1; positive numbers stay positive; penalties stay negative), and pick an existing option. A Mission Builder export folder outside missions/custom is refused. A saved value that is no longer allowed (after an update) is ignored with one console line and config.lua's value is used until an admin changes or resets it.
 - When it applies: at once for everything read at the moment of use (mission desks too: every client makes its desk zones again). Command names, default keys, the locale, Config.Time.resetHour and Config.Leaderboard.weekStartsOn are read at start: a change is saved and used after the next start, and the screen says so. A change to what the mission loader reads (Config.Blocks, MissionTweaks, mission types, bonuses, Mission Builder limits) reloads the missions; runs already going keep their definition. The Settings screen tells the owner to restart Crimson-Police (txAdmin or the server console); it never restarts the resource itself.
-- Clients: every client gets the changed settings when it starts and after every change, so client code reads the same values as the server.
+- Every client gets the changed settings at start and after every change.
 - After each change the Config health check runs again and its result is shown. Every change is in the audit log (who, when, the setting, old → new), which the screen lists as its history.
 - Mission switches: Admin UI → Missions has an on/off switch for every mission and for each location of it (Config.DisabledMissions and Config.DisabledLocations, saved the same way). Off stops new draws everywhere (Mission Board, mission calls, Cross-Department Missions, the Weekly Boss); a run that is already going finishes. A mission whose every location is off is never drawn.
-- Also locked (config.lua only): the tablet title and the two command names (Hard rule Names; another resource's command with the same name would lock the owner out of the Admin UI), the call-id prefixes Config.Calls.npcCallPrefix and ownRunCallPrefixes (they mirror sc-npcpolice's and sc-dispatch's id formats), and each bonus's each, block and engineOnly (they describe what the code does). The real-call, alert, start-route and downed numbers of Hard rules 15-18 have known ranges (for example Calls.dodgeWindow 10-300 s, Route.maxDrift 200-5000 m); the rules themselves are never a switch, apart from Route.required (Hard rule 17, the owner's switch: an on/off gameplay rule, not a money switch).
+- Also locked (config.lua only): the tablet title and the two command names, the call-id prefixes Config.Calls.npcCallPrefix and ownRunCallPrefixes, and each bonus's each, block and engineOnly. The real-call, alert, start-route and downed numbers of Hard rules 15-18 have known ranges (for example Calls.dodgeWindow 10-300 s, Route.maxDrift 200-5000 m); the rules themselves are never a switch, apart from Route.required (Hard rule 17, the owner's switch: an on/off gameplay rule, not a money switch).
 - A bonus's kind (points or pct) changes only together with its value, in one save: points are whole numbers from -500 to 500, pct from -1 to 1, and a bonus stays a bonus and a penalty stays a penalty. A reset puts both back.
 - Point values (mission type points, bonus values, the scoring rules, Type of the Day, modifiers, the Weekly Boss points, the cross-department and scaling multipliers, goal and bounty points) are marked as such: a change applies to runs that end after it (a run going now may end with either value; past rows keep their points) and also posts a notice to the flags webhook.
 - Money switches: Config.Cash.allowUnfundedRetry, allowCapTopUp, allowPayAgain, restoreForfeited, allowAddFunds, allowClawback, allowManualCash and Config.Rewards.allowTakeBack all ship false. Turning one on needs the typed word ENABLE, which the server checks too; every change is audited and posts to the audit webhook (a full webhook queue never drops it). Turning one off needs nothing.
@@ -2813,7 +1460,7 @@ An admin can change every setting of config/config.lua and config/blocks.lua in 
 
 ## Full admin control
 
-At the owner's request ("admins get full control over everything in the admin tablet"), everything an admin may want to do is a button in the Admin UI; no config edit, console command or database access is needed, apart from the three console ways back in for when the Admin UI cannot open (CrimsonPoliceAdmin settings …, CrimsonPoliceAdmin storage …, set cp_settings_safe 1). Who is an admin does not change: the AdminAce ace, Qbox admins while Config.QboxAdmins is true, and the server console. Every admin is equal; supervisors get no new power. These rules apply to every admin action of this section:
+Everything an admin may want to do is a button in the Admin UI (no config edit, console or database access), apart from the three console ways back in for when the Admin UI cannot open (CrimsonPoliceAdmin settings …, CrimsonPoliceAdmin storage …, set cp_settings_safe 1). Who is an admin does not change: the AdminAce ace, Qbox admins while Config.QboxAdmins is true, and the server console. Every admin is equal; supervisors get no new power. These rules apply to every admin action of this section:
 
 - Admins and the console only: every action has an admin-only permission key (officerRecords, pointsAdjust, bulkVoid, restoreRun, progression, antiFarmOverride, liveRuns, editBuiltins, missionAdmin, boardsAdmin, payments, rewardsAdmin, deptFunds, departmentsAdmin, storageAdmin, playerSupport, recordMove, cleanup) that no Config.Permissions switch can give a supervisor. The server checks it on every action and every read.
 - Reasons, typed words, previews: a reason (1-255 characters) where the action changes a record; a typed word for dangerous ones (VOID 12, ENABLE, the citizenid, the amount); a preview of the exact effect for bulk actions, valid for 120 seconds and refused when the data changed since.
@@ -2824,7 +1471,7 @@ At the owner's request ("admins get full control over everything in the admin ta
 - Maintenance lock: from the start of a storage copy, a storage switch or a backup restore until the owner restarts Crimson-Police, no new run, mission call claim, test run or operation starts, payments and scheduled jobs wait, and every action but the status reads is refused; a banner says so on every tablet. When the work is done the Admin UI and one console line say "Restart Crimson-Police now from txAdmin or the server console": Crimson-Police never restarts itself. A store another one took over from (after a storage switch) stays locked and pays nothing until an admin uses it again. A backup restore that stops part way (or a server that stops during one) puts the money state back and keeps the lock, also after a restart (Config.Backups.holdAfterFailedRestore), until a restore works: the banner names the automatic backup to restore, and that restore is the one action the lock allows.
 - Backup restore: every part of the backup is read before anything changes (a missing or damaged part, or rows without a column this version needs and has no default for, refuse the restore and change nothing); a backup made before a migration that added a column with a default gets that default. Keep N never removes the backup being restored. Money and voids only move forward: a payment made after the backup stays paid, a given reward stays given, and the officer (after a record move), the void and the flag of every row that is or can still be paid are the live ones.
 
-The owner decisions (each with its undo in the Admin UI, listed in the root README under Waiting for the owner's OK):
+Owner decisions (each with its undo):
 
 | # | Decision | Ships | Undo |
 |---|---|---|---|
@@ -5549,62 +4196,7 @@ Config.Blocks.hostile_waves = {
 
 Copy these shapes exactly. Every mission file, built-in or custom, contains one RegisterMission({ ... }) call of plain values (it is read as data, never run); the coordinates below are placeholders.
 
-Built-in mission: missions/builtin/gang_shootout.lua
-
-RegisterMission({
-  id           = 'gang_shootout',
-  label        = 'Gang Shootout',
-  description  = 'Armed gang members are holed up at a remote hideout. Clear it and secure the scene.',
-  type         = 'tactical',     -- sets points and base payout; there is no payout field
-  departments  = {},             -- empty = every department
-  minOfficers  = 1,
-  maxOfficers  = 4,
-  difficulty   = 3,
-  timeLimit    = 600,            -- seconds after the start
-  startTimeout = 600,            -- seconds to reach the start
-  cooldown     = 1200,           -- per officer, seconds
-  vehiclePenalties = false,      -- gunfire damages vehicles here, so no heavy-damage penalty
-
-  locations = {
-    {
-      label  = 'Hideout A',
-      start  = { coords = vec3(0.0, 0.0, 0.0), radius = 80.0 },   -- placeholder
-      spawns = { vec4(0.0, 0.0, 0.0, 0.0) },                      -- 12+ hostile spawn points
-      scene  = vec3(0.0, 0.0, 0.0),                               -- "Secure the scene" point
-    },
-    -- ...at least 5 locations
-  },
-
-  objectives = {
-    {
-      block        = 'hostile_waves',
-      label        = 'Neutralise all hostiles',
-      minSeconds   = 60,                                       -- quicker than this is rejected
-      waves        = { 7, 7, 6 },                              -- base counts, scaled by tier
-      nextWave     = { aliveAtMost = 2, afterSeconds = 90 },
-      weapons      = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' },
-      accuracy     = 25,                                       -- plus the tier's accuracy
-      armour       = 0,                                        -- plus the tier's armour
-      surrender    = { belowHealth = 0.25, chance = 0.30 },
-      blockTraffic = 120.0,
-    },
-    {
-      block      = 'interact_points',
-      label      = 'Secure the scene',
-      minSeconds = 8,
-      points     = 'scene',
-      progress   = { label = 'Securing scene', duration = 8000 },
-    },
-  },
-
-  scaling   = { 'objectives.1.waves' },    -- counts multiplied by the tier
-  items     = {},                          -- no items for this mission
-  bonuses   = {
-    { id = 'no_participant_downed', pctOfPoints = 0.10 },
-    { id = 'hostile_arrested', points = 5, each = true },
-  },
-  penalties = {},                          -- the common penalties always apply
-})
+Built-in missions: every file in Crimson-Police/missions/builtin/ is the reference shape (for example gang_shootout.lua: the fields of Mission catalog, then locations, objectives with their block settings, scaling, items, bonuses and penalties; the common penalties always apply and there is no payout field).
 
 Custom mission exported by the Mission Builder: missions/custom/custom_dockside_raid.lua
 
@@ -5637,7 +4229,7 @@ RegisterMission({
       spawns   = { vec4(0.0, 0.0, 0.0, 0.0) },
       evidence = { vec3(0.0, 0.0, 0.0) },
     },
-    -- ...at least 3 locations
+    -- ...Config.Builder.minLocations or more
   },
 
   objectives = {
@@ -5655,7 +4247,7 @@ RegisterMission({
 
 ## Anti-exploit & fairness
 
-No client message can award points or cash directly. The server re-checks every objective and flags anything that looks impossible.
+No client message can award points or cash directly: the server re-checks every objective and flags anything that looks impossible.
 
 | Risk | Control |
 |---|---|
@@ -5670,25 +4262,25 @@ No client message can award points or cash directly. The server re-checks every 
 | Faking a responding event for a free abandon | Only a call that exists and is active in SC-Dispatch's mdt_dispatch table counts; anything else is ignored |
 | Farming the same route | Random missions and locations, per-mission cooldowns, hourly cap |
 | Two runs on the same spot, or too many runs at once | Locations in use are reserved; at most 12 runs are active at once, 4 of them Tactical (Config.Limits) |
-| Joining a unit or operation only for the multiplier or cash | In runs with 2 or more participants, each participant must stay within the current objective's presence range (150 m by default, 300 m around an escorted vehicle, 400 m in pursuits; see Presence range below) for 70% of the run to get points or cash; anyone who doesn't keeps the run's result with 0 points and $0, and their row is flagged for review |
-| Inflating the tier with idle participants | 3 minutes after the run moves to In progress, anyone who has not reached the start (the same arrival check the start route uses) is removed as Abandoned (idle) and the tier is recalculated; it can only go down |
+| Joining a unit or operation only for the multiplier or cash | With 2+ participants each must stay within the objective's presence range (below) for 70% of the run, else he keeps the result with 0 points and $0 and his row is flagged |
+| Inflating the tier with idle participants | 3 minutes after In progress anyone not yet at the start is removed as Abandoned (idle) and the tier recalculated (only down) |
 | Off-duty, suspended or non-police players | Active job, duty, Crimson-Police suspension and SC-Dispatch suspension are checked on accept, on join and on every objective |
 | Switching job mid-run with sc-multijob | That participant is Abandoned (type cooldown applies); the run continues for the rest |
 | Staying on a mission during a real call | Responding to, or being assigned, a real call ends the run automatically; supervisors can also force recall |
 | Payout changed mid-run | The base payout is locked at accept; the tier is set at the start and can only go down |
-| Supervisor payout abuse | Only 50–200% of the type's config payout, at most once per 30 minutes per type, with a reason; every change is audited and posted to the audit webhook; admin-set types are locked |
-| Reviewing your own runs | Runs your current character took part in never appear in your Review Queue. Runs of your other characters (any character of your licenses) may still be listed there, but the server refuses every approval, void or dispute answer on them, as it does for any participant of that run. A dispute about such a run is offered to another supervisor of the department, or to an admin when none who could answer it is online |
-| Easy custom missions built to farm | Allowed lists, minimum objective times, bonus caps, an optional test before publishing (required for supervisors only with Config.Builder.requireTestToPublish), and neutral star multipliers by default; every publish is posted to the builder webhook, and admins can archive or roll back |
-| Double cash payments | One payment per participant per run: the row is claimed (paying) before any money moves, and a row with a final status is never paid again, and the Renewed-Banking entry carries the transaction id CP-<run_uuid>-<citizenid> |
+| Supervisor payout abuse | 50–200% of the config payout, once per 30 minutes per type, with a reason, audited and posted; admin-set types are locked |
+| Reviewing your own runs | Runs of the current character never show in the Review Queue; runs of his other characters may, but every action on them is refused; such a dispute goes to another supervisor of the department, else an admin |
+| Easy custom missions built to farm | Allowed lists, minimum objective times, bonus caps, the optional test (Config.Builder.requireTestToPublish), neutral star multipliers; every publish goes to the builder webhook; admins archive or roll back |
+| Double cash payments | One payment per participant per run: the row is claimed (paying) before money moves, a final status is never paid again, and the bank entry carries CP-<run_uuid>-<citizenid> |
 | Hand-editing a payout into an exported Lua file | Ignored, with a console warning; payouts only come from the Payouts screens |
-| Disconnect abuse | A disconnected participant is Failed (partial points, no cash) and gets the type cooldown (on the Weekly Boss: its mission cooldown and that week's attempt spent, no type cooldown), so disconnecting is never a free reroll; the run continues for anyone left |
-| Friends or bystanders clearing a mission for you | When a mission NPC dies, the server checks who killed it (GetPedSourceOfDeath, or the driver of the vehicle that did it). A kill by a player who isn't on the run flags the run for review (flag_reason = 'outside_help'), holding its points and cash; the Review Queue shows who it was. The number of outside kills that flags a run is Config.AntiCheat.outsideKillsToFlag |
+| Disconnect abuse | Failed (partial points, no cash) with the type cooldown (Weekly Boss: its mission cooldown and that week's attempt, no type cooldown); the run continues |
+| Friends or bystanders clearing a mission for you | A mission NPC killed by a non-participant (GetPedSourceOfDeath, or the driver of the vehicle) flags the run outside_help after Config.AntiCheat.outsideKillsToFlag kills, holding points and cash; the Review Queue names him |
 | Using test runs to farm | Only admins can start them, and nothing in a test run is saved or paid |
 | Farming mission calls | A claim runs every accept check; only leaders claim; one claim per 1.5 s per player; caps and cooldowns apply; a re-dispatched call excludes the old claim's members; staff-created calls are rate-limited and audited |
 | Winning claims by connection speed | The 1.5-second claim window ranks by distance to the area, then fewer recent claims |
-| Faking police actions or facts | Every action is a server-checked begin and finish (participant, arrived, on duty, not in the arena, reach at both ends measured with server coordinates, elapsed time, state order; actions of 3 s or more also sampled every second, people and cars alike); truths never leave the server; facts go only to participants; a `stunned` report the server did not see (no ragdoll within 1 s) adds a staff note (Config.AntiCheat.stunNeedsProof = 'flag', shipped: nobody's points are held), flags that officer for review ('hold') or is refused ('strict') |
-| Guessing the truth instead of doing the work | Contacts spawn unarmed with no demeanour or combat data on the client; weapons appear at the draw, behaviour cues only when they start, hints only for tells already seen. Decisions are graded against the truth, with Best only when the deciding fact was revealed lawfully; an arrest with no lawful supporting fact is Acceptable at best; knowing errors fail the case, missed procedure costs points |
-| Reading the truth from the client (mod menu, state bags) | Nothing truth-derived is on the client before its behaviour starts: the leak spec (tests/field_contact_spec.lua) checks every Entity().state:set, GiveWeaponToPed, TriggerClientEvent and push during a full field_contact run |
+| Faking police actions or facts | Server-checked begin and finish (Police actions & decisions); truths never leave the server; facts go only to participants; an unseen `stunned` report adds a staff note (Config.AntiCheat.stunNeedsProof 'flag', shipped), flags the officer ('hold') or is refused ('strict') |
+| Guessing the truth instead of doing the work | Contacts carry no demeanour or combat data on the client; weapons at the draw, cues only when they start; grading as in Police actions & decisions |
+| Reading the truth from the client | The leak spec (tests/field_contact_spec.lua) checks every state set, weapon give, client event and push during a full field_contact run |
 | Farming arrests and stats | One arrest per person; wrongful arrests never count; stats, goals, bounties and badges count completed rows only; one scoring event per act |
 | Staff steering calls to themselves | Page refused for the issuer's own unit; the issuer's unit can't claim a paged or created call; no rapid response on staff calls; audited |
 | Picking the mission through a narrow area | A call names an area to a viewer only when their eligible pool there has 2+ missions and 3+ locations; otherwise it draws as the board does |
@@ -5698,14 +4290,12 @@ No client message can award points or cash directly. The server re-checks every 
 | Leader putting members on a run they didn't want | Ready check; decline or timeout costs nothing |
 | Kicking a partner to take their share | Kick, make leader and disband only work before a type is accepted |
 | Commendation inflation | Own department only, never yourself or your own run, 3 a day, 7-day same-kind cooldown, audited, zero points |
-| Offensive pictures or bios | Links off by default, host allow-list, supervisor approval, optional bio approval, a shipped banned-word list, Report profile, rate limits, clear with audit |
+| Offensive pictures or bios | Links off by default, host allow-list, approval, optional bio approval, banned words, Report profile, rate limits, audited clears |
 | Item reward farming | Off by default; admin config only; deterministic rolls; held and forfeited with the run; daily item and value caps; presence share; never in the arena |
 | Opening the tablet at a desk from afar | The server checks the desk box with server-side coordinates |
-| Boosting the tier with friends who then leave | The NPCs still to come shrink, and leaving by choice, disconnecting or never arriving also drops the points and cash tier to the team that's left. Only a real call, a force recall or going down keeps it (Config.Rescale.keepPayTierFor) |
+| Boosting the tier with friends who then leave | Leaving by choice, disconnecting or never arriving shrinks the NPCs to come and drops the pay tier; only a real call, force recall or going down keeps it (Config.Rescale.keepPayTierFor) |
 
-Presence range (runs with 2 or more participants)
-
-Each participant must stay within the current objective's presence range for 70% of the run (Config.AntiCheat.presenceShare). The range depends on the block, because chases and escorts spread officers out:
+Presence range (runs with 2 or more participants): each participant must stay within the current objective's range for 70% of the run (Config.AntiCheat.presenceShare), measured per block:
 
 | Block | Measured from | Default range |
 |---|---|---|
@@ -5721,15 +4311,34 @@ Each participant must stay within the current objective's presence range for 70%
 | field_contact | The nearest contact not yet decided | 150 m |
 | process_scene | The nearest body, or the scene marker | 150 m |
 
-A mission can give any objective its own presenceRange, and the Mission Builder sets it per block (50–800 m). The defaults live in config/blocks.lua; Config.AntiCheat.presenceRadius (150 m) is used only for a block without one.
+A mission may give any objective its own presenceRange (the builder: 50–800 m per block); the defaults are in config/blocks.lua, and Config.AntiCheat.presenceRadius (150 m) is used only for a block without one.
 
-Flagged runs are held off the leaderboards, and their cash is held, until a supervisor approves or voids them, and each one records why it was flagged (flag_reason). Three voided runs in 30 days suspends that officer from Crimson-Police for 7 days (all three numbers are in Config.AntiCheat).
+Flagged runs are held off the boards, with their cash, until a supervisor approves or voids them, each with its flag_reason. Three voided runs in 30 days suspend that officer from Crimson-Police for 7 days (Config.AntiCheat).
 
-Mission controls (rules 11.1). Supervisors may change a few mission rules for their own department only while an admin switched them on (Config.Permissions.supervisor.missionControls, the master switch, and the control's own on in Config.MissionControls.controls), only to values inside the admin's min and max (a department may have its own in Config.Departments.<key>.missionControls), at most once per Config.MissionControls.changeWait per control and department, always with a reason, every change in the audit log with who, old and new value. Narrowing the bounds later moves a saved value into them at once; switching a control or the master switch off brings back the config value at once. A control that relaxes a rule never applies to the supervisor who set it, any other character of his license, or a unit he is in (Config.MissionControls.selfExempt). Admins change any department, within the same bounds. Everything ships off except the seven server-wide cooldown controls (cooldownScale, abandonCooldown, noRepeat, hourlyCap, dailyCap, happyHour, clearCooldown; owner decision): cooldownScale (x every mission's cooldown, per mission type, 0-2 shipped, 0 = none) and abandonCooldown (the abandon type cooldown, 0-900 s shipped) are server-wide (one value for every department), outside the master switch and on as shipped, so any supervisor may change them; both are applied when a cooldown is read, so a change, a reset or the admin switch counts at once for cooldowns already running and after a restart. Three more server-wide cooldown controls ship on the same way: noRepeat (false = the no-repeat rule is off; the draw and a mission call's eligible pool then ignore every member's history), hourlyCap (1-16 shipped; config Limits.maxCompletionsHour) and dailyCap (0-40 shipped, 0 = no cap; config Limits.maxCompletionsDay). The accept checks, the Mission Board and Weekly Boss locks, mission call claims, the home screen and Live missions read them for the officers concerned (CP.Draw.limits), so the self rule applies. Happy hour (happyHour, server-wide, outside the master switch, on as shipped, 5-30 minutes): a supervisor starts it for the minutes he picks; until it ends no mission has a cooldown for anyone (cooldownScale reads 0 for every type) and, when ticked, the no-repeat rule is off; the abandon cooldown, the caps and the cash rules stay; the self rule keeps the setter's and his unit's cooldowns; it is a timed row (expires_at), so a restart keeps it, and when it ends every cooldown counts against its real end again. One at a time; a supervisor at most Config.MissionControls.happyHourPerDay a day (1 shipped). Officers see a banner on Home and the Mission Board; admins end it from Admin UI → Live (End now) or Permissions → Mission controls (Reset). Two supervisor actions (controls of kind action, no saved value): clearCooldown (server-wide, outside the master switch, on as shipped) lets a supervisor clear one mission or type cooldown of an officer of any department from Department Report, never his own character, never while the officer is on a run, with a reason; each officer at most Config.AdminControl.cooldownClearsPerDay clears a day by all staff, a supervisor at most Config.MissionControls.clearCooldownPerDay (5). addRunTime (per department, under the master switch, off as shipped, 1-5 minutes a click) adds time to a running mission of his department from Live Missions, never his own; the run's total with an admin's additions stays within Config.MissionControls.addRunTimeMax (300 s, never above Config.AdminControl.runTimeAddMax), a supervisor at most Config.MissionControls.addRunTimePerDay (10) a day, and the time limit the fast-finish bonus is judged on never changes. In a run (per department, under the master switch, off as shipped, read for the leader and his unit at the accept and locked in run.controls, so a change never moves a live run): startTimeout (300-900 s shipped) replaces Config.Limits.startTimeout and the mission's own; readyCheck (10-40 s shipped) replaces Config.Units.readyTimeout, and 0 (no ready check) only while its bounds carry canTurnOff = true (false as shipped); timeLimit (x1.0-1.25 shipped) scales the mission's time limit while the fast-finish bonus still uses the unscaled limit; idleCheck (60-180 s shipped) is stricter only, never above Config.AntiCheat.idleCheck. (per department, under the master switch, off as shipped): difficulty picks one of the Config.NpcDifficulty presets the admin lists (easy and normal shipped) for runs the department leads, read at the accept; NPC health, aim, surrender and flee follow it, Config.NpcCombat still caps on top, points and cash never change; unitSize (2-4 shipped) is the largest unit the department's leaders may lead (invites, joins, the accept), never above Config.Limits.maxUnitSize. (per department, under the master switch, off as shipped): types switches mission types, or single missions, off for the department until switched back on (a catalog switch like Config.DisabledMissions, not a mission pause): its officers see the type card locked ("Off for SAST by command"), the accept and mission call claims refuse a unit with a member of that department (err.type_off_department), a single mission off is never drawn for such a unit, other departments are not affected, the Weekly Boss never; at least one type stays on. featuredType names one mission type its officers see as "Recommended by command", sorted right after their own favourite types; points and pay never change. (missionBan, kind action, per department, under the master switch, off as shipped, 1-24 hours): from Department Report a supervisor bars one online officer of his own department with a lower grade (never himself or another character of his license) from taking missions for the hours he picks, with a reason; at most Config.MissionControls.missionBanPerDay (3) a day. Until it ends the officer cannot accept from the Mission Board (nor can a unit he is in), claim a mission call or join a Cross-Department Mission (err.mission_banned / err.member_mission_banned); his board shows "Mission ban until 18:40 (by Sgt Doe)" with every card locked. The tablet stays usable (it is not a suspension, which stays admin-only) and a mission already running goes on. The supervisor who set it lifts it early from the same dialog, an admin from Admin UI → Officers → Today & cooldowns (antiFarmOverride); both, and the ban, are audited under flags (cp_webhook_flags). Saved in cp_officers.mission_ban, so a restart keeps it. (per department, under the master switch, off as shipped): callLane gives the department its own lane of mission calls next to the server's: the seconds between two lane calls (a range inside the admin's min and max, 120-600 shipped), how many may be open at once (1 to Config.MissionControls.callLaneMaxOpen, 2 shipped), the areas (none picked = every area) and the callable mission types with a weight 0-10 each. The lane posts on its own gap, one call at a time, only to idle units whose every member is of that department; officers of other departments never see its calls (Dispatch, pop-ups, the claimable count) and a unit with a member of another department cannot claim one (err.mc_other_department), nor the unit of the supervisor who set the lane (the self rule, err.mc_own_call). Lane calls count against Config.MissionCalls.maxOpen; the server's own flow counts only its own calls against its target, so with no lane it is unchanged. The call row keeps the department (cp_mission_calls.department), Dispatch tags the card "SAST call" and the staff mission calls panel lists the lane. staffCallWait (60-120 s shipped) replaces Config.MissionCalls.staffCooldown for staff calls created by the department's supervisors; the one who shortened it keeps the config wait. (per department, under the master switch, off as shipped): notices lets a supervisor post a short notice (up to Config.MissionControls.noticeMaxLength characters, 280 shipped, 1-30 days) for his own department only, shown on that department's Home Announcements card and never another's; the banned-word list applies, a supervisor posts at most Config.MissionControls.noticesPerDay (5) a day, at most 5 run at once per department (apart from the admins' 5 staff notices), any supervisor of the department may end one, and every post and end is audited. crossDept { join, places } keeps the department's officers out of Cross-Department Missions (err.op_department_out) or caps how many of them take part in one (err.op_department_full, 0 = no cap); it never relaxes a rule, so it applies to the setter too; every board still shows only the running operation and the launch wait stays server-wide. (per department, under the master switch, off as shipped): boards { showToOthers, metrics } shows other departments the department's officers by callsign only (Leaderboard rows, profiles, Home's top 3; the picture hidden too) and limits the Rank by tabs its own officers see to the ticked Config.Leaderboard.metrics (Points always); presentation only, counts, the Department Challenge and the admin boards never change. reviewRules { secondVoid, adminOnlyKinds } is stricter only: with secondVoid a supervisor's Void of a flagged row of the department only marks it pending until a second supervisor of that department voids it too (a restart clears a pending Void); flags of the kinds in adminOnlyKinds leave the supervisors' Review queue and only admins approve or void them; admins always void at once and Config.AntiCheat's flag triggers are never relaxed. (per department, under the master switch, off as shipped): twists { offered, ticked } narrows the accept step (Mission Board, mission call claims) of units the department leads to the offered twists among those enabled in Config.Events.twists and pre-ticks the ticked ones; a chosen twist the leader's department does not offer is refused (err.twist_department); other departments keep every twist and the bonuses never change. (typeOfTheDay, kind choice, per department, under the master switch, off as shipped): a supervisor picks one mission type for the next day (never today), at most once a day for his department (err.tod_picked_today; admins may correct it); on that day his department's officers earn the Type of the Day multiplier (Config.Events.todMultiplier, the admin's) on that type instead of the server's type, other departments keep the server's; the setter and a unit he is in keep the server's type; the pick counting today is read back from yesterday's last audit row of the control, so a restart keeps it and a change today never moves today's type; switching the control off drops it at once. (per department, under the master switch, off as shipped with min = max = 1.0, so nothing moves until an admin opens the max): happyHourPoints (kind number, scope run) multiplies the final points of a completed run the department leads that was accepted while a happy hour ran, after the cap and the Type of the Day; it is fixed at the accept (run.controls.pointsBonus), so the end of the hour never cuts a live run, and the one who started the happy hour and a unit he is in get none. twistPoints (kind map, scope run) multiplies each twist's points share on runs the department leads, read at the accept; the chosen twists together still stop at Config.Events.twistMaxPoints and the accept step shows the raised share. Both never apply to test runs, Cross-Department runs or the Weekly Boss, and the runs count normally on the boards, in the contest and the weekly bounty. (pushMission, kind action, per department, under the master switch, off as shipped; the Mission choice Hard rule's push exception): in the Page a unit dialog (Live Missions, Admin UI → Missions) a supervisor may pick one mission of the call's type for a unit of his own department (never his own unit); the call names that mission, stays offered only to that unit for its whole offer (no pop-up for anyone else, other officers never see it on Dispatch) and only that unit sees the mission's name; its leader accepts (the accept runs every rule: cooldowns, caps, unit size, the department's switched-off missions, a start in the named area; only the random draw is skipped, the location is still picked at random) or declines it; a declined push, a refused accept or a failed ready check ends the call, an abandoned run is never re-dispatched, and the issuer is told. It is a staff call, so it never earns rapid response. A supervisor pushes at most Config.MissionControls.pushMissionPerDay (5) a day (counted from the audit log, admins any); every push is audited as mcPush with the mission. (awardPoints, kind action, per department, under the master switch, off as shipped, 1-50 points an award; owner decision 2026-10-19, the Points Hard rule): from Department Report a supervisor gives an officer of his own department (online job, else cp_officers.department; offline officers too) a logged manual award of the points he picks, with a reason; never to himself or any character of his license (license: and license2:). It goes through the admin's own point-adjust path (CP.Corrections.adjust): Config.AdminControl.pointAdjust = false stops it, adjustDailyLimit and the typed confirmation at adjustConfirmAbove apply too, the row is a manual award like an admin's (breakdown.by, the reason, shown in the officer's history; only an admin undoes it by voiding the row), audited as manualAward with role supervisor. A supervisor gives at most Config.MissionControls.awardPointsPerDay (100, 0 = no limit) points a day in all, counted from today's rows; admins skip the department and per-day rule. Admins set it all in Admin UI → Permissions → Mission controls: per control the admin switch and min / max, the value in force with who set it, when and how long it still runs, and Reset (with a reason); a control that is not server-wide also per department its own bounds and Reset; and the grants per department.
+Mission controls (rules 11.1; every value, bound and per-day limit is in Config.MissionControls)
+
+- A supervisor changes a control for his own department only while the admin switched it on (Config.Permissions.supervisor.missionControls, the master switch, and the control's own on), only inside the admin's min and max (a department may have its own in Config.Departments.<key>.missionControls), at most once per changeWait per control and department, with a reason, audited with old and new value. Narrowed bounds move a saved value into them at once; switching a control or the master switch off restores the config value at once. A relaxing control never applies to its setter, his other characters or his unit (selfExempt). Admins change any department within the same bounds, in Admin UI → Permissions → Mission controls (per control: the switch, min/max, the value in force with who set it and how long it runs, Reset with a reason; per department bounds and grants).
+- Server-wide, outside the master switch, on as shipped (owner decision): cooldownScale (x every mission's cooldown per type, 0 = none) and abandonCooldown (the abandon type cooldown), both read when a cooldown is read, so a change counts at once for running cooldowns and after a restart; noRepeat (false = the draw and a call's pool ignore history), hourlyCap (Limits.maxCompletionsHour) and dailyCap (Limits.maxCompletionsDay, 0 = no cap), read through CP.Draw.limits for the officers concerned (accept checks, board and boss locks, call claims, Home, Live missions); happyHour; clearCooldown.
+- happyHour (5–30 min): until it ends no mission has a cooldown for anyone (cooldownScale reads 0) and, when ticked, no-repeat is off; abandon cooldown, caps and cash rules stay; the setter and his unit keep theirs. A timed row (expires_at), so a restart keeps it; afterwards cooldowns count against their real end. One at a time; happyHourPerDay (1) per supervisor. A banner on Home and the Mission Board; admins end it from Admin UI → Live (End now) or Mission controls (Reset).
+- clearCooldown (action): clears one mission or type cooldown of an officer of any department from Department Report, never his own character, never while the officer is on a run, with a reason; per officer at most Config.AdminControl.cooldownClearsPerDay by all staff, per supervisor clearCooldownPerDay (5).
+- The rest are per department, under the master switch, off as shipped:
+  - addRunTime (1–5 min a click): adds time to a running mission of his department from Live Missions, never his own; the run's total with admin additions stays within addRunTimeMax (300 s, never above Config.AdminControl.runTimeAddMax); addRunTimePerDay (10); the fast-finish limit never changes.
+  - In a run (read for the leader's unit at accept, locked in run.controls): startTimeout replaces Config.Limits.startTimeout and the mission's own; readyCheck replaces Config.Units.readyTimeout (0 only while its bounds carry canTurnOff = true); timeLimit scales the time limit (fast finish still on the unscaled one); idleCheck is stricter only, never above Config.AntiCheat.idleCheck.
+  - difficulty: one of the Config.NpcDifficulty presets the admin lists, for runs the department leads (NPC health, aim, surrender, flee; Config.NpcCombat still caps; points and cash unchanged). unitSize: the largest unit its leaders may lead, never above Config.Limits.maxUnitSize.
+  - types: switches types or single missions off for the department (a catalog switch like Config.DisabledMissions): the card shows "Off for SAST by command", accepts and claims refuse a unit with a member of that department (err.type_off_department), a switched-off mission is never drawn for it; other departments and the Weekly Boss unaffected; one type stays on. featuredType: one type shown "Recommended by command", sorted after the officer's favourites; points and pay unchanged.
+  - missionBan (action, 1–24 h): from Department Report bars one online officer of his department with a lower grade (never his own license) from missions, with a reason; missionBanPerDay (3). He cannot accept (nor his unit), claim or join a Cross-Department Mission (err.mission_banned / err.member_mission_banned); his board shows "Mission ban until 18:40 (by Sgt Doe)". The tablet stays usable (not a suspension, which stays admin-only) and a running mission goes on. The setter lifts it from the same dialog, an admin from Officers → Today & cooldowns (antiFarmOverride); all audited under flags. Kept in cp_officers.mission_ban.
+  - callLane: the department's own lane of mission calls (gap range, open at once up to callLaneMaxOpen, areas, callable types with weights 0–10), one call at a time, only to idle units all of that department; other departments never see its calls and cannot claim them (err.mc_other_department), nor can the setter's unit (err.mc_own_call). Lane calls count against Config.MissionCalls.maxOpen; the server's flow counts only its own calls against its target. Saved in cp_mission_calls.department; Dispatch tags it "SAST call". staffCallWait replaces Config.MissionCalls.staffCooldown for its supervisors' staff calls (the one who shortened it keeps the config wait).
+  - notices: a short notice (noticeMaxLength, 1–30 days) on his department's Home Announcements only; banned words apply; noticesPerDay (5); at most 5 running per department (besides the admins' 5); any supervisor of the department may end one; audited. crossDept { join, places }: keeps its officers out of Cross-Department Missions (err.op_department_out) or caps their places (err.op_department_full, 0 = no cap); never relaxes, so it applies to the setter too.
+  - boards { showToOthers, metrics }: other departments see its officers by callsign only (rows, profiles, Home's top 3, picture hidden), and its own officers see only the ticked Rank by tabs (Points always); presentation only. reviewRules { secondVoid, adminOnlyKinds }, stricter only: a supervisor's Void stays pending until a second supervisor of the department voids too (a restart clears it); listed flag kinds go to admins only; admins void at once.
+  - twists { offered, ticked }: narrows the accept step of units it leads to the offered twists (among Config.Events.twists) and pre-ticks the ticked ones; another is refused (err.twist_department).
+  - typeOfTheDay (choice): picks one type for the next day (never today), once a day (err.tod_picked_today; admins may correct it); that day its officers earn Config.Events.todMultiplier on it instead of the server's type, except the setter and his unit; read back from yesterday's last audit row, so a restart keeps it; switching off drops it at once.
+  - happyHourPoints (min = max = 1.0 as shipped): multiplies the final points of a completed run it leads accepted during a happy hour, after the cap and the Type of the Day, fixed at accept (run.controls.pointsBonus); not for the starter of the happy hour or his unit. twistPoints: multiplies each twist's points share, still within Config.Events.twistMaxPoints. Neither applies to test, Cross-Department or Weekly Boss runs.
+  - pushMission (action; the Mission choice push exception): in Page a unit (Live Missions, Admin UI → Missions) a supervisor picks one mission of the call's type for a unit of his department (never his own); only that unit is offered the call and sees the mission's name; its leader accepts (every accept rule runs; only the random draw is skipped, the location is still random) or declines; a decline, refused accept or failed ready check ends the call, an abandoned run is never re-dispatched, and the issuer is told. A staff call: no rapid response. pushMissionPerDay (5, from the audit log; admins any); audited as mcPush.
+  - awardPoints (action, 1–50 points; owner decision, the Points Hard rule): from Department Report a logged manual award to an officer of his department (online job, else cp_officers.department; offline too), with a reason, never to his own license (license: and license2:). It goes through CP.Corrections.adjust (Config.AdminControl.pointAdjust, adjustDailyLimit and adjustConfirmAbove apply), shows in the officer's history, only an admin undoes it by voiding the row, audited as manualAward with role supervisor; awardPointsPerDay (100, 0 = no limit) in all; admins skip the department and per-day rule.
 
 ## Supervisor & admin actions
 
-Supervisors work from the Supervisor UI and admins from the Admin UI. Admins can always do every action marked Admin below. Config.Permissions.supervisor switches the supervisor actions on or off; by default all are on except rolling back missions, breaking edit locks and editing other people's missions. Nobody can approve, void or answer a dispute about a run they, or another character on their license, took part in. Actions that list a /CrimsonPoliceAdmin subcommand can also be run from the server console.
+Admins can always do every action marked Admin. Config.Permissions.supervisor switches the supervisor actions; by default all are on except rolling back missions, breaking edit locks and editing other people's missions. Nobody approves, voids or answers a dispute about a run any character of his license took part in. A /CrimsonPoliceAdmin subcommand also works from the server console.
 
 | Action | Who | Where | What it does |
 |---|---|---|---|
@@ -5744,17 +4353,9 @@ Supervisors work from the Supervisor UI and admins from the Admin UI. Admins can
 | Manual award | Admin (Supervisor: the awardPoints Mission control, Give points below) | Admin UI → Leaderboards; /CrimsonPoliceAdmin award <citizenid> <points> <reason> | Manual points, stored as a 'manual_award' row |
 | Start or end a season | Admin | Admin UI → Seasons & Challenge; /CrimsonPoliceAdmin season start <name> or season end | Opens or closes a season and its department challenge |
 | Override this week's bounty | Admin | Admin UI → Seasons & Challenge | Replaces the randomly picked bounty for the current week |
-| Give points | Supervisor (awardPoints Mission control: own department, never his own characters, 1-50 an award, 100 a day), Admin | Supervisor UI → Department Report | A logged manual award through the admin's point-adjust path; reason required |
-| Mission ban, or lift one | Supervisor (missionBan Mission control: own department, a lower grade, never himself, 1-24 h, 3 a day; lifts only his own), Admin (lifts any) | Supervisor UI → Department Report; Admin UI → Officers → Today & cooldowns | No missions, mission calls or Cross-Department joins until it ends; the tablet stays usable and a running mission goes on; reason required |
-| Post or end a department notice | Supervisor (notices Mission control: own department only, 280 characters, 5 a day, 5 running), Admin (own department) | Supervisor UI → Mission controls | Shown on that department's Home Announcements only; banned words refused; audited |
-| Department's Cross-Department participation | Supervisor (crossDept Mission control: own department) | Supervisor UI → Mission controls | Opt out (no joins) or cap places per operation; the board lock and launch wait stay server-wide; audited with a reason |
-| Department's leaderboard visibility | Supervisor (boards Mission control: own department) | Supervisor UI → Mission controls | Names or callsigns only for other departments, the Rank by tabs his officers see; presentation only; audited with a reason |
-| Department's review rules | Supervisor (reviewRules Mission control: own department) | Supervisor UI → Mission controls | A Void needs a second supervisor of the department; picked flag kinds go to admins only; stricter only; audited with a reason |
-| Department's twists | Supervisor (twists Mission control: own department) | Supervisor UI → Mission controls | The enabled twists its leaders are offered at the accept step and the pre-ticked ones; another twist is refused; bonuses never change; audited with a reason |
-| Department's cash bonuses | Supervisor (happyHourCash and twistCash Mission controls: own department) | Supervisor UI → Mission controls | x the cash of runs accepted during a happy hour, x each twist's cash; only inside the admin's min and max, twists still under twistMaxCash; never test, Cross-Department or boss runs; under the daily cash cap; audited with a reason |
-| Department's points bonuses | Supervisor (happyHourPoints and twistPoints Mission controls: own department) | Supervisor UI → Mission controls | x the final points of runs accepted during a happy hour, x each twist's points share; only inside the admin's min and max, completed runs only, never for the happy hour's starter; audited with a reason |
-| Department's Type of the Day | Supervisor (typeOfTheDay Mission control: own department) | Supervisor UI → Mission controls | one mission type for the next day, once a day; that day its officers earn the admin's Type of the Day multiplier on it; never the setter's own runs or a unit he is in; audited with a reason |
-| Department's goals | Supervisor (goals Mission control: own department) | Supervisor UI → Mission controls | which of the admin's daily and weekly goals his officers draw from, from the next weekly reset; points unchanged; never the setter's own goals; audited with a reason |
+| Department Mission controls (Give points, Mission ban, notices, Cross-Department participation, boards, review rules, twists, Type of the Day, points bonuses) | Supervisor (each its own Mission control, own department), Admin | Supervisor UI → Department Report and Mission controls; Admin UI → Officers → Today & cooldowns | As in Anti-exploit & fairness → Mission controls; reason required, audited |
+| Department's cash bonuses | Supervisor (happyHourCash and twistCash Mission controls) | Supervisor UI → Mission controls | x the cash of runs accepted during a happy hour, x each twist's cash, inside the admin's bounds, twists still under twistMaxCash; never test, Cross-Department or boss runs; under the daily cash cap |
+| Department's goals | Supervisor (goals Mission control) | Supervisor UI → Mission controls | Which of the admin's daily and weekly goals his officers draw from, from the next weekly reset; points unchanged; never the setter's own goals |
 | Suspend or unsuspend an officer | Admin | Admin UI → Officers; /CrimsonPoliceAdmin suspend <citizenid> <days> | Blocks an officer from Crimson-Police for that many days; 0 days lifts it |
 | Publish a draft (tested or not) | Supervisor (own missions; any mission with builderEditAny), Admin | Supervisor UI → Mission Builder; Admin UI → Missions | Makes the draft the live version and writes its Lua file |
 | Archive or restore a custom mission | Supervisor (own missions; any mission with builderEditAny), Admin | Supervisor UI → Mission Builder; Admin UI → Missions | Removes a custom mission from its pool, or puts it back |
@@ -5811,17 +4412,13 @@ Test controls (on the HUD, only for the admin who started the test)
 
 Running through the catalog: Admin UI → Testing lists every mission and each of its locations with its last test result (Passed, Failed or Not tested), the tier, who tested it and when. After each test the admin marks it Passed or Failed, with an optional note such as "spawn 3 is inside a wall". Results are saved in cp_mission_tests and posted to the builder webhook. A mission edited, re-published or reloaded since its last test shows "Changed since test", so staff can see what still needs checking before go-live.
 
-Check spawn points (Config.Testing.spawnCheck, owner request of 2026-10-19: "Double check all coordinates etc for every ped"): an admin's own game checks every point of every mission, one mission or one location, so the bad ones can be fixed in the files.
+Check spawn points (Config.Testing.spawnCheck): an admin's own game checks every point of every mission, one mission or one location, so bad ones can be fixed in the files.
 
-- The server lists every point of a location with what is there: a person, a vehicle or an object where one appears, a marker where officers stand (doors, checkpoints, search centres, scenes), a path where someone drives or runs (routes); each mission's objectives say which (the escort truck stands at its route's first point). People, vehicles and objects also show how far they are from the start and from the points of the objective before (where the officers stand when theirs starts), noted when closer than Config.Spawning.minDistance (40 m).
-
-- The admin's game visits each location: the screen fades, he is frozen, unseen and unhurt at its start, the map loads around it (up to sceneTimeoutMs, 8 s), and his game notes which of the people, vehicles and objects within 200 m it sees from there. Then every point is judged by the ground probe (see Where hostiles appear) as a person, a vehicle (by its model) or an object; a marker or a path point is judged as a person standing there, without the wall check (a door may stand in the space). A point further than moveWithin (150 m) is checked from right over it (he is moved there and the map loads around it). Route points are only checked with routes = true (it takes much longer).
-
-- Each location's answers go to the server, which keeps its own coordinates and writes one console line per point that is not right (also in Admin UI → System → Problems): spawn check: gang_shootout #4 spawns[7] (1153.75, -3169.50, 5.88) UNDERGROUND ground 6.40 (-0.52) [ped]. A point the probe could put on the ground (within snapWithin) reads HEIGHT OFF. The last report of each location stays in memory until the restart.
-
-- It spawns nothing and moves nobody else. It is refused in the arena, on a mission, in a vehicle, while down and while one already runs; Stop ends it after the point being checked. When it ends he is back where he was, facing the same way, as he was (frozen or invincible only if he was before). If Crimson-Arena takes him meanwhile, he is not moved again. If a run of his starts meanwhile (a test he starts or joins), the check ends at once and he stays where he is (seen again, frozen or invincible only if he was before); while it runs, Start test is disabled and the test teleport is refused.
-
-- In Admin UI → Testing: a "Check spawn points" button (and a check item on every location row) opens the check: all missions, one mission or one location; Start and Stop; the progress (mission 7/19, location 3/6, point 12/40); the points checked and the ones to look at; and the results, each with its mission, location, point (spawns[7]), what is there, x y z, the ground under it and the height over it, the result with a plain hint, and notes (close to the start or to the objective before, seen from the start). Problems only by default. "Teleport here" puts the admin on the ground at one point (the server gives the position from the mission file, the screen sends none; audited; Config.Testing.spawnCheck.teleport, not while a check runs). "Copy report" copies one line per point to look at in the console's format, and the locations that could not be checked. The check and its results stay while the tablet is closed. The button is hidden while Config.Testing.enabled or spawnCheck.enabled is false.
+- The server lists every point of a location with what stands there (a person, vehicle or object; a marker where officers stand; a path point), from each objective's point kinds (the escort truck at its route's first point), and notes people, vehicles and objects closer than Config.Spawning.minDistance (40 m) to the start or to the objective before.
+- The admin's game visits each location frozen, unseen and unhurt (the screen fades; the map loads for up to sceneTimeoutMs, 8 s), notes which spawns within 200 m it sees from the start, then judges every point with the ground probe (markers and path points as a person, without the wall check). A point further than moveWithin (150 m) is checked from right over it. Route points only with routes = true.
+- The server keeps its own coordinates and writes one console line per bad point (also System → Problems), e.g. spawn check: gang_shootout #4 spawns[7] (1153.75, -3169.50, 5.88) UNDERGROUND ground 6.40 (-0.52) [ped]; a point the probe could snap reads HEIGHT OFF. The last report per location stays until the restart.
+- It spawns and moves nobody else. Refused in the arena, on a mission, in a vehicle, while down or while one runs; Stop ends it after the current point. Afterwards he is back where and as he was; if Crimson-Arena takes him meanwhile he is not moved again; a run of his starting meanwhile ends the check at once (Start test is disabled and the test teleport refused while it runs).
+- Admin UI → Testing: "Check spawn points" (and a check item per location row): all, one mission or one location; Start and Stop; progress; results with mission, location, point, what is there, x y z, ground, height, the result with a hint and notes; problems only by default. "Teleport here" puts the admin on the ground at a point (position from the file, audited; spawnCheck.teleport; not during a check). "Copy report" copies the console lines and the locations that could not be checked. Results stay while the tablet is closed. Hidden while Config.Testing.enabled or spawnCheck.enabled is false.
 
 Every test start is written to the audit log. The options are in Config.Testing.
 
@@ -5867,247 +4464,65 @@ Discipline ladder: verbal warning → run voided (points removed, held cash not 
 
 ## Performance, testing & acceptance
 
-The release is accepted when every check below passes on a test server with at least 10 officers from both departments. Checks about seasons, boards other than Weekly, goals, special events and the Mission Builder belong to Phases 3 and 4 and are run when those phases ship.
+The release is accepted when every check below passes on a test server with at least 10 officers of both departments (the in-game run is docs/IN_GAME_CHECKLIST.md; the automated suite is docs/TESTING.md).
 
 Performance targets
 
 - Client resmon at most 0.02 ms idle and 0.10 ms during a run (no per-frame loops outside active objectives).
-
-- Server resmon at most 0.25 ms with 30 officers online and a Critical-tier Cross-Department Mission running; leaderboard queries under 50 ms.
-
-- The Officer UI opens in under 300 ms, and no entity is left behind after any run ends.
-
-Acceptance checks
-
-- ☐ Any on-duty SAST or FIB officer can open /CrimsonPolice and start a mission at any time; off-duty, suspended and non-department players cannot
-
-- ☐ Only the active job counts: holding sast as a second sc-multijob job gives no access
-
-- ☐ Qbox only: qb-core is not a dependency, and a search of the code finds no GetCoreObject or QBCore.Functions
-
-- ☐ The header shows the department name and tag, the rank (Qbox job grade name) and the callsign; a callsign changed with SC-Police's /callsign shows the next time the tablet opens
-
-- ☐ Every screen, the mission HUD and all notifications are Crimson-Police's own NUI; ox_lib only appears as the progress bar and skill check during missions
-
-- ☐ Adding BCSO to Config.Departments with its own colours and logos/bcso.png shows BCSO's name, colours and watermark to BCSO officers, and adds BCSO to the boards, the challenge, unit invites and the builder, with no code or SQL changes
-
-- ☐ The watermark sits behind all content, never blocks clicks, and a missing logo shows no broken image
-
-- ☐ Officers can only accept a mission type; the drawn mission is random and never their last one in that type unless it is the only eligible one
-
-- ☐ Abandoning, leaving the start route or not reaching the start within the start timeout puts the whole type on cooldown
-
-- ☐ More than 120 m off the start route warns after 10 seconds and ends that participant's run as Abandoned after 30; getting back on the route resets the timer; Recalculate route works twice per run; stopping route reports counts as off route
-
-- ☐ Being assigned to, or marking responding to, a real SC-Dispatch call ends that participant's run at once as Abandoned with no cooldown while the rest of the unit carries on; SC-NPCPolice calls (npccall-…) never end a run; un-marking within 60 seconds applies the type cooldown; a partner's person-down call never ends the other partners' runs; a faked call id does nothing; an officer responding to a real call can't accept a mission
-
-- ☐ Mission gunfire by participants who have reached the start creates no SC-Dispatch shots-fired call and no SC-Ambulance person-down alert; a shots-fired, person-down or dead call forced through while the flag is on is cleared within 3 seconds; the flag is removed when the run ends (a downed participant keeps it until the pick-up or the EMS request), and a flag another resource set is never removed
-
-- ☐ A participant who goes down Fails with the type cooldown; with no EMS on duty they are revived and moved to the nearest drop-off after 15 seconds, with no bill; with EMS on duty an EMS request is sent for them; hospital:server:RevivePlayer is never triggered
-
-- ☐ Two runs never use the same location at once; with 12 runs active (or 4 Tactical) new accepts are refused and the cards show "Server busy"
-
-- ☐ SAST and FIB officers can form one unit; invites close when the leader accepts a type, and the unit's runs earn the cross-department points bonus
-
-- ☐ A run's tier matches its participant count at the start and changes hostile numbers, accuracy, armour, points and cash as in the scaling table; waves respect the 25-alive and 80-entity caps without cutting counts
-
-- ☐ Every participant sees the same NPCs; if the run host leaves, the next participant takes over the NPC AI; NPCs never drop weapons
-
-- ☐ Launching a Cross-Department Mission hides every other mission for every department and the server refuses other accepts; the lock lifts only when it is completed or cancelled; it auto-cancels after 30 idle minutes; a new one can't be launched within 30 minutes of the last
-
-- ☐ Supervisors can play missions like officers and see the full Mission List; officers never see individual missions
-
-- ☐ Officer, Supervisor and Admin UIs each show only their own screens, and the server rejects supervisor or admin actions from anyone without the role; a supervisor action switched off in Config.Permissions is hidden and refused
-
-- ☐ Supervisors can change a type's payout only when no admin has set it, only within 50–200% of its config payout, at most once per 30 minutes per type and with a reason; admin-set type and mission payouts survive restarts, season resets, re-publishes and reloads until an admin changes or clears them
-
-- ☐ Nobody can approve, void or answer a dispute about a run they took part in, nor a run of another of their characters (same license)
-
-- ☐ Completed runs pay each participant base payout × tier × twists into the bank with a Renewed-Banking entry; Failed and Abandoned results pay nothing
-
-- ☐ No payment is ever made twice for the same participant and run; with the society source, an empty department account pays $0 and marks the run unfunded; held cash approved while the officer is offline is paid when they next load in
-
-- ☐ Daily and weekly goals award their points once when completed; with Config.Time.resetHour = 6, Type of the Day, daily goals and the daily cash cap reset at 06:00
-
-- ☐ A dispute about a flagged or voided run reaches the department's supervisors, a dispute about a failed run reaches admins, and each can be approved or rejected
-
-- ☐ Mission items are given and removed through ox_inventory correctly
-
-- ☐ Forged or too-fast objective events are rejected and flag the run, and flagged runs hold their cash until approved
-
-- ☐ The weekly board resets on Monday at the reset hour (00:00 by default) and posts the top 3 to Discord; each webhook convar posts only its own category, and an empty one posts nothing
-
-- ☐ The department challenge score matches the configured scoring mode, and the weekly bounty is applied once
-
-- ☐ A Mission Builder mission can be drafted, test-run, published into its type's pool and completed without a restart
-
-- ☐ A route recorded at any speed is saved as road waypoints; the NPC vehicle drives those roads at the set speed and style, in its lane, not the builder's exact line; off-road samples are rejected; a route outside 0.8–8 km or through a no-build zone can't be saved; Test drive marks unreachable waypoints
-
-- ☐ The builder only offers models, weapons, vehicles and animations from Config.Builder.allowed and values inside config/blocks.lua; spots inside no-build zones, within 30 m of the start, or locations under 100 m apart are refused; publishing needs no test (with Config.Builder.requireTestToPublish on, a supervisor needs a passed test at the tier maxOfficers reaches)
-
-- ☐ Only one person can edit a mission at a time; drafts autosave every 30 seconds; the published version stays live while a draft is edited; an admin can break an edit lock and roll back to the previous version
-
-- ☐ Publishing writes missions/custom/<mission_id>.lua; editing it and running /CrimsonPoliceAdmin reload loads it as a new version, and a hand-added payout field is ignored
-
-- ☐ Voided runs disappear from every board within 60 seconds
-
-- ☐ A participant who disconnects is cleaned up and gets the type cooldown (on the Weekly Boss: its mission cooldown and that week's attempt spent instead), and the run continues for the rest of the unit
-
-- ☐ Stopping the resource mid-run removes every mission entity and alert flag, and nobody gets a cooldown for those runs
-
-- ☐ All 13 missions and the Weekly Boss complete end-to-end at every tier they support, with correct points and cash breakdowns
-
-- ☐ An admin can start any mission (built-in, custom, archived or turned off) at any location and tier from Admin UI → Testing or /CrimsonPoliceAdmin test; the test saves and pays nothing, starts no cooldown, ignores the caps and the Cross-Department lock, still reserves its location, and shows the points and cash it would have earned
-
-- ☐ The test controls work (skip and restart objective, pause timer, force complete or fail, debug overlay, teleport, end test), and only the admin who started the test sees them
-
-- ☐ Admin UI → Testing shows every mission and location with its last result, and a mission changed since its last test shows "Changed since test"
-
-- ☐ A mission NPC killed by a player who isn't on the run flags the run for review with flag_reason = 'outside_help'
-
-- ☐ A fresh database is built by 001_initial.sql; a new 002_ file is applied once on the next start; a failing migration leaves the resource refusing every request (err.not_started) with one console line naming the fix and `ensure Crimson-Police`; no migration drops a table or deletes history
-
-- ☐ When a partner leaves mid-run, waves not yet spawned shrink to the team that's left; the points and cash tier stays for a real call, force recall or downed partner and drops for any other reason
-
-- ☐ In a unit, a partner up to 400 m from the suspect vehicle in a pursuit, or 300 m from an escorted truck, still counts as present
-
-- ☐ Missing one day in a week keeps an officer's streak (that day adds nothing); a second missed day that week resets it
-
-- ☐ Missions with vehiclePenalties = false (Stolen Vehicle Takedown, Street Race Bust and the others listed in Scoring) never apply the heavy-damage penalty, while their ramming penalties still apply
-
-Mission calls, custody, newer missions, boards, profile and rewards checks
-
-- ☐ A mission call can be claimed only by a leader who passes every accept check; with two units claiming within 1.5 seconds the nearer one wins; the mission is drawn only after the claim and starts in the call's area; a claimed run abandoned before arrival re-dispatches once and excludes the old claimants
-
-- ☐ No mission call ever reaches SC-Dispatch (no AddNotification, no F10 popup, no MDT row); calls are withdrawn when a Cross-Department Mission launches; an officer on a real call can't claim
-
-- ☐ Traffic Enforcement: the violator drives past the observation point with a HUD cue and its own blip; a clean driver who was paced and cited is graded Best; a car lit up before it is paced costs the officer −15 (stop_without_cause) and nothing else; a yielding car pulls over; a stolen car cited after its stolen plate reached the decider, and confirmed, fails the case
-
-- ☐ A partner's STOLEN result that arrives while an officer's Cite bar is already running grades that citation as an unknowing mistake, not a case fail; a case-failing choice always shows the confirm first, and ox_target never runs it directly
-
-- ☐ A person who runs from Order out or a frisk and is caught grades Arrest as Best; a clean person who walks away from a consensual contact is "free to leave" and costs nothing
-
-- ☐ Drugs hidden in a car with no cue, no admission and refused consent: Release grades Acceptable ("Not discoverable lawfully"); an arrest with no lawful supporting fact is never Best
-
-- ☐ During a full field_contact run no state bag, weapon, client event or push carries a truth, a demeanour or an armed flag before its behaviour starts; weapons appear only at the draw
-
-- ☐ A vehicle search without probable cause or consent costs −15 and its findings don't count; a frisk only finds weapons
-
-- ☐ Releasing a person after their warrant was revealed fails the case; releasing one whose warrant was never checked costs −15 and doesn't
-
-- ☐ Arrested people walk with the escorting officer, sit in the rear seat, and are handed to the transport van; an armed person handed over unsearched costs −10
-
-- ☐ Impound sends the car away on the tow truck and never counts as a wreck; a tow truck or van that is not in place within 60 s falls back (fade out or placed); the driving client moves when it leaves
-
-- ☐ sc-police /imp by a participant on any mission car fails the objective and flags the run and is never an Impound disposition; /imp by a non-participant ends the run as not counted with no cooldown for anyone; no mission car ever has a plate listed in player_vehicles
-
-- ☐ Seated people are reachable through their door's ox_target option; Run plate from a vehicle, Place in vehicle, Hand over and Escort work from the contact key and the Contact panel
-
-- ☐ After a pursuit hands a car to a contact, cuffs, custody and deaths of its people reach the contact objective and never the finished pursuit
-
-- ☐ Process the scene keeps at most its body limit, and with nobody killed it completes at once with +15
-
-- ☐ Drug Lab Raid's breach counts only when two different officers finish both entries within 6 seconds, and falls back to a solo breach when one participant is left; a toxic fire is a setback (Ventilate, −15 to the officer who missed, retry after 30 s) and never fails the case
-
-- ☐ One person gives exactly one arrest, and one act gives one bonus id; a wrongful arrest leaves the arrests stat, goals and the bounty count unchanged; an abandoned or failed row adds nothing to any stat, goal, bounty or badge
-
-- ☐ No claimable mission call gives a viewer a pool smaller than the board's for that type (an area is named only with 2+ missions and 3+ locations for them); the issuer's unit can't claim a paged or created call, and staff calls never earn rapid response
-
-- ☐ The zone lint fails on a new mission's location within the clearance of any other mission and on any new pair not on tests/zone_lint_baseline.txt, and only warns on the listed existing pairs
-
-- ☐ The spawn lint fails on two spawn points of a built-in run within 1.5 m, on a spawn list with fewer points than the largest team's count, and on an armed spawn inside the start circle plus Config.Builder.spawnMargin outside a wave, a scatter or a staged crew, unless tests/spawn_lint_baseline.txt lists it (that list only shrinks)
-
-- ☐ A Builder duplicate of every new mission validates and publishes
-
-- ☐ Illegal Parking Patrol, Traffic Enforcement, Suspicious Activity, Drug Lab Raid and Gang Hideout Raid complete end to end at every tier they support, with correct decision ledgers
-
-- ☐ Levels follow Config.XPCurve and the XP level name is the band of the number; one level-up toast per level; the result screen shows XP gained and a level-up; a flagged run shows "XP pending review"
-
-- ☐ Every Rank by metric respects the period, filters, minimum runs, privacy, voids and flags; kills never appear anywhere
-
-- ☐ A pending avatar link is visible only to its owner until approved; a link whose path ends in .png is accepted with a query string; a bio with a banned word is refused; Report profile reaches the Review Queue within its rate limit; a supervisor can't commend themselves, an officer of another department or for their own run, or more than 3 a day
-
-- ☐ A personal accent only comes from the department's personalAccents; primary colour and watermark never change
-
-- ☐ With item rewards on: rolls are the same after a reconnect, flagged runs hold them, voided runs forfeit them, nothing is given in Crimson-Arena, and the daily caps hold
-
-- ☐ A mission desk opens the tablet only within its box plus 2 m, for its departments; with requireItem every other way needs the item
-
-- ☐ A kicked member gets no cooldown; kick, make leader and disband are refused once a type is accepted; a declined ready check costs nobody a cooldown
-
-- ☐ Two active runs of different missions never have locations within 200 m of each other while another location is free
-
-- ☐ Every player-facing text comes from locales/en.json (English only); tools/check_contracts.py reports no missing key
-
-- ☐ With Config.Database.enabled = false every check above passes the same way: calls, commendations, profiles, stats, boards and item rewards are kept in the saves folder, survive a restart, and move with /CrimsonPoliceAdmin storage copy
+- Server resmon at most 0.25 ms with 30 officers and a Critical-tier Cross-Department Mission; leaderboard queries under 50 ms.
+- The Officer UI opens in under 300 ms; no entity is left behind after any run.
+
+Acceptance checks (each one rule of this spec)
+
+- ☐ Access: on-duty SAST or FIB officers open /CrimsonPolice and start a mission any time; off-duty, suspended, non-department players and an sc-multijob second job cannot.
+- ☐ Qbox only: no qb-core dependency, no GetCoreObject or QBCore.Functions in the code.
+- ☐ Header: department name and tag, rank and callsign (a /callsign change shows at the next open); every screen, the HUD and notifications are Crimson-Police NUI (ox_lib only for progress bars and skill checks).
+- ☐ Departments: BCSO added by config and logo alone gets its name, colours and watermark and joins boards, challenge, invites and builder; the watermark never blocks clicks; a missing logo shows no broken image.
+- ☐ Draw: only a type is accepted; the mission is random and never the last one unless it is the only one; abandoning, leaving the route or missing the start timeout cools down the whole type.
+- ☐ Route: 120 m off warns after 10 s and abandons after 30 s; back on resets; Recalculate twice; missing reports count as off route.
+- ☐ Real calls: assigned or responding ends that participant's run with no cooldown; npccall-… never; un-marking within 60 s applies the cooldown; a partner's person-down call never ends the others' runs; a faked call id does nothing; on a call = can't accept.
+- ☐ Alerts: arrived participants' gunfire makes no shots-fired or person-down alert; forced ones clear within 3 s; the flag goes at run end (a downed participant keeps it until pick-up or EMS request); another resource's flag is never removed.
+- ☐ Downed: Failed with the type cooldown; no EMS = revived at the nearest drop-off after 15 s with no bill; EMS on duty = an EMS request; hospital:server:RevivePlayer never triggered.
+- ☐ Capacity: no shared locations; at 12 runs (or 4 Tactical) accepts are refused with "Server busy"; runs of different missions stay 200 m apart while another location is free.
+- ☐ Units and scaling: mixed-department units earn the bonus; invites close at accept; the tier matches the scaling table; waves respect 25 alive and 80 entities without cutting counts; leaves rescale as in When someone leaves mid-run; kick, make leader and disband are refused after accept; a declined ready check costs nothing.
+- ☐ NPCs: every participant sees the same ones; the next participant takes over the AI when the host leaves; NPCs never drop weapons; a kill by a non-participant flags outside_help.
+- ☐ Cross-Department: the lock hides and refuses every other mission until completed or cancelled; auto-cancel after 30 idle minutes; no relaunch within 30 minutes.
+- ☐ Roles: supervisors play like officers and see the Mission List; officers never see missions; each UI shows only its screens and the server refuses actions without the role or switched off in Config.Permissions; nobody reviews a run of any character of his license.
+- ☐ Payouts and cash: supervisor limits (no admin value, 50–200%, 30 minutes, reason); admin values survive restarts, resets, re-publishes and reloads; completed runs pay base × tier × twists with a bank entry, never twice; an empty society account pays $0 (unfunded); held cash approved offline pays on the next load-in.
+- ☐ Goals, resets and boards: goals award once; resetHour 6 moves Type of the Day, daily goals and the cash cap to 06:00; the weekly board resets Monday and posts the top 3; each webhook convar posts only its category; voided runs leave every board within 60 s; the challenge and bounty follow the configured mode, once; every Rank by metric respects period, filters, minimum runs, privacy, voids and flags; kills never appear.
+- ☐ Disputes and flags: flagged or voided runs go to supervisors, failed runs to admins; forged or too-fast events are rejected and flag the run; flagged cash is held.
+- ☐ Items: mission items given and removed through ox_inventory; item rewards (when on) roll the same after a reconnect, are held by flags, forfeited by voids, never given in Crimson-Arena, inside the daily caps.
+- ☐ Builder: draft, test, publish and complete without a restart; routes saved as road waypoints and driven in lane at the set speed; off-road, 0.8–8 km and no-build checks; Test drive marks unreachable waypoints; only allowed models and blocks.lua ranges; spot checks; publishing needs no test unless requireTestToPublish for a supervisor; one editor, 30 s autosave, the live version kept while editing, lock breaking and rollback; the Lua file is written, reloads as a new version, and a hand-added payout is ignored.
+- ☐ Disconnects and stops: a disconnect is cleaned up with the type cooldown (Weekly Boss: its cooldown and that week's attempt), the run goes on; a resource stop removes every entity and alert flag with no cooldown.
+- ☐ Missions: every built-in mission and the Weekly Boss complete at every tier they support with correct points, cash and decision ledgers; vehiclePenalties = false never applies the heavy-damage penalty but keeps ramming penalties; presence counts 400 m in a pursuit and 300 m round an escort.
+- ☐ Test mode: an admin starts any mission at any location and tier; nothing saved or paid, no cooldown, caps and lock ignored, location still reserved, would-be points and cash shown; test controls only for that admin; Testing shows last results and "Changed since test".
+- ☐ Migrations: a fresh database from 001; a new file applied once; a failing one leaves err.not_started with one console line naming the fix and `ensure Crimson-Police`; nothing dropped.
+- ☐ Streaks: one missed day a week keeps the streak; a second resets it.
+- ☐ Mission calls: only a leader passing every accept check claims; within 1.5 s the nearer unit wins; drawn after the claim, in the area; an early-abandoned claim re-dispatches once without the old claimants; never reaches SC-Dispatch; withdrawn at an operation's launch; no viewer's pool smaller than the board's; the issuer's unit can't claim a staff call, which never earns rapid response.
+- ☐ Contacts and custody: the Traffic Enforcement grading (paced and cited = Best; lit before paced = −15 only; stolen cited after the confirm fails); a partner's mid-bar fact is an unknowing mistake; case-failing choices always confirm, never from ox_target; running from an order then caught = Arrest Best; consensual walk-off costs nothing; undiscoverable drugs = Release Acceptable; no lawful fact = never Best; no truth, demeanour or armed flag leaves the server before its behaviour; unlawful searches −15 with findings ignored; a frisk finds weapons only; a released known warrant fails, an unchecked one −15; escort, seat and van hand-over; unsearched armed hand-over −10; tow and van fallbacks after 60 s and AI hand-over; /imp rules and reserved plates; seated people via their door; adopted contacts get their events; Process the scene limits and +15; the Drug Lab breach and toxic fire rules; one person one arrest, one act one bonus, wrongful arrests and unfinished rows count nowhere.
+- ☐ Lints: the zone and spawn lints fail as in Location lints; a Builder duplicate of every new mission validates and publishes.
+- ☐ Profile: XP follows Config.XPCurve with one toast per level and "XP pending review" on flags; avatar, bio, report and commendation rules; personal accents only from the department.
+- ☐ Desks open the tablet only within the box plus 2 m for their departments; with requireItem every other way needs the item.
+- ☐ Every player-facing text is in locales/en.json; tools/check_contracts.py reports no missing key.
+- ☐ With Config.Database.enabled = false every check passes the same way, kept in the saves folder across restarts and moved by /CrimsonPoliceAdmin storage copy.
 
 ## Build order
 
-Build in this order. Each step names the folders it touches and the check that proves it is done; do not start a step until the previous step's check passes.
+Each step is proven by its acceptance checks (Performance, testing & acceptance) before the next starts; docs/ARCHITECTURE.md §5 has the module of each.
 
-Phase 1 · Core
+| Phase | Steps (in order) |
+|---|---|
+| 1 · Core | Resource skeleton and migrations; integrations; access, roles and permissions; Officer UI and theming; draw and run lifecycle; route to the start; real calls and alert suppression; downed participants; the first blocks and missions with test mode; objective validation; points; cash; the weekly board |
+| 2 · Teams and full catalog | Units; scaling; the remaining blocks and missions; Supervisor UI, Admin UI, payouts and disputes; Cross-Department Missions |
+| 3 · Seasons and events | Monthly, season and department boards, badges and goals; the department challenge; special events |
+| 4 · Mission Builder | Builder UI, block settings and placement; route recording and test drive; test, publish, versions, locks and Lua export |
+| 5 · Newer features | Foundation (migrations 003–006, hooks, stats, decisions, held bodies); police actions; new missions and block upgrades; Dispatch; team tools; progression and profile; item rewards; access and tablet shell; documentation and release (tools/check_all.sh passes) |
 
-| Step | Folders and files | Done when |
-|---|---|---|
-| 1. Resource skeleton | fxmanifest.lua, config/, shared/, locales/en.json, sql/migrations/, modules/migrations/ | The resource starts with no errors, creates every table through sql/migrations/001_initial.sql, and a second start applies nothing |
-| 2. Integrations | modules/integrations/qbx/, sc_dispatch/, sc_ambulance/, renewed_banking/ | Each wrapper returns correct data for a test player: job, rank, callsign, duty, suspension, responding status, call lookup, EMS on duty, bank entry |
-| 3. Access, roles and permissions | modules/access/, modules/permissions/ | The server identifies an on-duty SAST officer, an FIB supervisor and an admin correctly, refuses off-duty, suspended and second-job players, and refuses a supervisor action switched off in Config.Permissions |
-| 4. Officer UI and theming | modules/tablet/, web/src/officer/, web/src/hud/, web/src/shared/, logos/ | /CrimsonPolice opens a tablet titled Crimson-Police with the officer's department name, rank, callsign, colours and watermark; an FIB officer sees FIB's |
-| 5. Draw and run lifecycle | modules/draw/, modules/runs/, modules/schedule/ | Accepting a type draws a random eligible mission and reserves its location; start timeout, abandon, type cooldown, the server run caps and end reasons behave as specified; the server creates and deletes the mission's entities |
-| 6. Route to the start | modules/route/ | Leaving the route warns at 10 seconds and abandons at 30 with the type cooldown; Recalculate works twice; missing reports and the drift check behave as specified; with Config.Route.required off nobody is warned or abandoned for the route, and a run keeps the value it was accepted with; once the run is In progress a partner still driving follows the action (GPS to the objective, no route check) and arrives within 150 m of it, with the switch on and off; lateArriveRange 0 keeps the start only |
-| 7. Real calls and alert suppression | modules/calls/, modules/alerts/ | A real call ends the run with no cooldown, an NPC call does not, and the 60-second rule applies; test gunfire during a run creates no shots-fired call, and one forced through is cleared |
-| 8. Downed participants | modules/downed/ | Going down is Failed with the type cooldown; with no EMS on duty the officer is picked up after 15 seconds; with EMS on duty the EMS request is sent |
-| 9. First blocks and missions | modules/testing/, blocks/checkpoint_route/, blocks/interact_points/, missions/builtin/beat_patrol.lua, business_check.lua, evoc_course.lua | Beat Patrol, Business Check and EVOC Course complete end-to-end, and /CrimsonPoliceAdmin test starts each of them at any tier and location with working test controls |
-| 10. Objective validation | modules/anticheat/ | Forged or too-fast objective events are rejected and flag the run |
-| 11. Points | modules/scoring/ | Breakdowns match the points formula for solo runs |
-| 12. Cash | modules/cash/ | Completed runs pay the config default payouts into the bank with a Renewed-Banking entry, and never twice |
-| 13. Weekly leaderboard | modules/leaderboard/ | The top 25 show with the viewer's row pinned, and the board resets on Monday |
-
-Phase 2 · Teams and full catalog
-
-| Step | Folders and files | Done when |
-|---|---|---|
-| 14. Units | modules/units/ | SAST and FIB officers form a unit of up to 4, invites close at accept, and every member shares one drawn mission and the same NPCs |
-| 15. Scaling | modules/scaling/ | Tier, counts, accuracy, armour, points and cash match the scaling table for 1–4 participants |
-| 16. Remaining blocks and missions | the other 7 blocks/<block_id>/ folders and 10 missions/builtin/ files | All 13 missions complete at every tier they support |
-| 17. Supervisor UI, Admin UI, payouts and disputes | web/src/supervisor/, web/src/admin/, modules/admin/, modules/payouts/, modules/disputes/ | Each UI shows only its own screens; payout edits follow the supervisor limits and admin rules; nobody can review their own runs; flagged runs and disputes can be reviewed; every /CrimsonPoliceAdmin subcommand works; each webhook posts its own category; Admin UI → Testing lists every mission and location with its last test result |
-| 18. Cross-Department Missions | modules/operations/ | Launch locks every board; join, start, fail-relaunch, cancel, idle auto-cancel and the 30-minute launch cooldown work with up to 8 participants |
-
-Phase 3 · Seasons and events
-
-| Step | Folders and files | Done when |
-|---|---|---|
-| 19. Monthly, season and department boards; badges; goals | modules/leaderboard/, modules/scoring/, modules/goals/ | Boards, filters, badges and goals match the spec, and daily things reset at Config.Time.resetHour |
-| 20. Department challenge | modules/challenge/ | Scores, bounties and winners match the configured mode |
-| 21. Special events | modules/events/, missions/builtin/weekly_boss_kingpin.lua | Type of the Day, twists and the Weekly Boss behave as specified |
-
-Phase 4 · Mission Builder
-
-| Step | Folders and files | Done when |
-|---|---|---|
-| 22. Builder UI, block settings and placement tool | modules/builder/, config/blocks.lua, web/src/supervisor/, web/src/admin/ | A mission can be drafted with every block's settings (only in-range values and allowed models) and placed in-game; no-build zones and spacing rules are enforced |
-| 23. Route recording and test drive | modules/builder/ | A route recorded at any speed is saved as road waypoints; the test drive follows those roads in lane at the set speed; the route checks refuse bad routes |
-| 24. Test, publish, versions, locks and Lua export | modules/builder/ | Publishing writes the Lua file (a passed test at the tier maxOfficers reaches is needed only for supervisors while Config.Builder.requireTestToPublish is on); edit locks, autosave and rollback work; /CrimsonPoliceAdmin reload picks up a hand edit as a new version |
-
-Go live after Phase 2, when units, the full catalog and the Supervisor and Admin UIs (needed to review flagged runs) are in. Steps 6–8 enforce Hard rules 15–18, so they are never skipped or postponed. Phases 3 and 4 ship once the live server has run for 2 weeks with fewer than 2 disputes a week, their checks pass and command staff sign off.
-
-Phase 5 · Mission calls, custody and the newer features (English only; docs/ARCHITECTURE.md §5 has how each part reads the contracts)
-
-| Step | Folders and files | Done when |
-|---|---|---|
-| 25. Foundation | config/, sql/migrations/003–006, shared/, modules/runs, scoring, missions, scaling | Migrations apply once; hooks, stats, decisions and held bodies work in unit tests |
-| 26. Police actions | modules/custody, modules/npc, blocks/field_contact, blocks/process_scene, modules/integrations/sc_police | A stop, a scene contact and a parking sweep grade correctly; the custody chain, tow and coroner work at every tier |
-| 27. New missions and block upgrades | blocks/pursuit, flee_arrest, hostile_waves, interact_points, missions/builtin/, modules/builder | All 18 missions and the Weekly Boss complete end to end at every tier they support; the builder offers the new blocks |
-| 28. Dispatch | modules/missioncalls, modules/draw, modules/integrations/sc_dispatch | Calls post, lapse, get claimed first-come (with the claim window), draw inside their area, reopen once, and never reach SC-Dispatch |
-| 29. Teams | modules/units, modules/operations | Kick, make leader, disband, withdraw invite, ready check and operation leave/remove work and never touch a locked unit |
-| 30. Progression and profile | modules/leaderboard, profile, goals, challenge | Levels, metric boards, service record, avatars, bio, commendations and personal accents work with privacy and voids |
-| 31. Item rewards | modules/rewards | Rewards roll once, are held and forfeited with the run, respect the caps and are never given in the arena |
-| 32. Access and tablet shell | modules/tablet, modules/confighealth, web/src/layouts | Desks and requireItem are checked on the server; sidebar badges, the bell, the header avatar and level, the personal look and Config health work |
-| 33. Documentation and release | docs/, tests/e2e_spec.lua, locales/en.json, web/dist | tools/check_all.sh passes every step; every acceptance check passes |
+Go live after Phase 2 (units, the full catalog and the Supervisor and Admin UIs needed to review flagged runs). The route, real-call, alert and downed steps enforce Hard rules 15–18 and are never skipped or postponed. Phases 3 and 4 ship once the live server has run 2 weeks with fewer than 2 disputes a week, their checks pass and command staff sign off.
 
 ## Server owner checklist
 
-These are settings and choices only the server owner can make. The AI builds the resource; nothing here changes its code.
+Settings and choices only the server owner can make.
 
 - ☐ Set each department's supervisorGrade to your real Qbox grade level. SC-Dispatch's roster treats grade 4 and up as command staff. The start-up check (/CrimsonPoliceAdmin check) lists each department's Qbox job and grades, and warns when a job does not exist in Qbox or when nobody or everybody would be a supervisor.
 
@@ -6135,7 +4550,6 @@ These are settings and choices only the server owner can make. The AI builds the
 
 - ☐ When updating, keep your config/, logos/ and missions/custom/ folders.
 
-- ☐ The amendments are in the Hard rules, Do not build, Interfaces and Mission catalog above (mission calls, the three new patrol and investigation missions, the eighth Officer screen, bodies kept for Process the scene): confirm them before go-live.
 
 - ☐ Test every new location at Heavy tier in Admin UI → Testing before go-live.
 
@@ -6159,7 +4573,7 @@ These are settings and choices only the server owner can make. The AI builds the
 
 ## Appendix: integration reference
 
-These calls were read from the uploaded copies of the resources. Use only these calls, only from modules/integrations/, and never edit the resources themselves.
+Use only these calls, only from modules/integrations/, and never edit the resources themselves.
 
 qbx_core (Qbox APIs only, as used by the installed SC resources and Renewed-Banking)
 
@@ -6175,7 +4589,7 @@ qbx_core (Qbox APIs only, as used by the installed SC resources and Renewed-Bank
 | Event QBCore:Server:SetDuty (src, onDuty) | Server | Going off duty mid-run removes the officer as Abandoned (off_duty) |
 | Event QBCore:Server:PlayerLoaded (player) | Server | Pays pending cash and refreshes the stored callsign and rank |
 | Events QBCore:Client:OnJobUpdate, QBCore:Client:SetDuty (onDuty), qbx_core:client:onGroupUpdate, QBCore:Client:OnPlayerUnload | Client | Refresh or close the tablet when the job, duty or character changes |
-| Table player_vehicles (read-only) | Server | CP.Qbx.plateOwned(plate): `SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1` through the real oxmysql (CP.Storage.realMySQL in files mode); used only to reroll a mission plate that a player owns. On error the reserved pattern alone is used |
+| Table player_vehicles (read-only) | Server | CP.Qbx.plateOwned(plate): `SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1` through the real oxmysql (also in files mode), only to reroll an owned mission plate; on error the reserved pattern alone is used |
 
 qbx_core fires the QBCore:-named events itself (Qbox kept those names), so listening to them is Qbox-native; Hard rule 2 bans the QBCore core object and QBCore.Functions, not these events. Downed = the ped is dead, or the player's metadata has isdead or inlaststand set to true (the same check sc-dispatch and sc-ambulance use).
 
@@ -6191,25 +4605,25 @@ sc-police
 | Export GetCurrentCops() | Exists on the server; Crimson-Police does not need it |
 | NPC arrests | Crimson-Police uses its own ox_target "Cuff suspect" action for NPCs, never sc-police's player cuffing or jail |
 | Prison | sc-police's prison files are not loaded by its fxmanifest; Prison Break only spawns outside the walls anyway |
-| Net event police:server:Impound (plate, fullImpound, price, body, engine, fuel, netId) | A second, read-only handler in modules/integrations/sc_police. sc-police broadcasts police:client:DeleteVehicle for netId to every client after its 5-second progress bar. Crimson-Police never triggers it and never cancels it; it records the sender, the netId and the sender's server-side distance to the car when netId is a run vehicle. sc-police's handler checks neither the sender's job nor the distance, and it runs `UPDATE player_vehicles SET state = ... WHERE plate = ?` when the plate is owned, so it is never treated as a lawful disposition |
-| /imp and /depot | sc-police's client picks the closest vehicle with no distance limit (qbx bridge GetClosestVehicle), so they can remove a mission vehicle; see Police actions & decisions → Impound. Officers are told never to use them on mission cars |
+| Net event police:server:Impound (plate, fullImpound, price, body, engine, fuel, netId) | A second, read-only handler (modules/integrations/sc_police): for a run vehicle it records the sender, the netId and his server-side distance; never triggered or cancelled. sc-police deletes the car on every client after its 5 s bar, checks neither job nor distance and updates player_vehicles by plate, so it is never a lawful disposition |
+| /imp and /depot | They pick the closest vehicle with no distance limit, so they can remove a mission car (Police actions & decisions → Impound); officers are told never to use them on mission cars |
 
 sc-dispatch
 
 | Call | Side | Use in Crimson-Police |
 |---|---|---|
-| Net event sc-dispatch:server:ToggleResponding (callId, isResponding) | Server listener | A second, read-only handler. sc-dispatch's client sends it when an officer responds, when a dispatcher assigns them (AutoResponding = true) and when they are detached, so it covers every real-call case. callId is the call's unique_id when it has one, otherwise its row id |
+| Net event sc-dispatch:server:ToggleResponding (callId, isResponding) | Server listener | A second, read-only handler; sent on responding, on a dispatcher's assignment (AutoResponding = true) and on detach. callId is the unique_id, else the row id |
 | Table mdt_dispatch (read-only) | Server | Confirms a call is real and active: SELECT unique_id FROM mdt_dispatch WHERE (id = ? OR unique_id = ?) AND active = 1, with the number and the string form of callId; an unknown or inactive call is ignored |
 | Event sc-dispatch:server:callClearedByOfficer (callId) | Server listener | Remove that call from the responding map |
 | playerDropped | Server | Remove the player's responding entries |
-| Event QBCore:Server:OnPlayerUnload (src) | Server | A character switch keeps the server id: remove that src's responding entries (and any mark still being looked up) so the next character is not "On a call"; the dodge-rule data stays until it expires |
-| Net event sc-dispatch:server:ShotsFired (data: coords, street, zone) | Server listener | The backstop. sc-dispatch names the call shots_<src>_<os.time()>; if the sender is an In-progress participant within 300 m of their mission, wait 1 second and clear it |
-| exports['sc-dispatch']:ClearNotification(uniqueId, jobTable) | Server | Clears a call that slipped through: ClearNotification('shots_<src>_<time>', { 'police' }) for the current and the previous second. Any job list containing police clears the call for every job in SC-Dispatch's Config.Police.AllowedJobs, which already lists sast, fib and bcso |
-| State bag crimsonArena | Both | With Config.Integrations.CrimsonArena = true (already set), sc-dispatch's IsInCombatSafeZone() skips shots-fired, person-down and person-dead calls while LocalPlayer.state.crimsonArena.active is true. Crimson-Police sets it with Player(src).state:set('crimsonArena', { active = true, source = 'crimson-police' }, true) |
+| Event QBCore:Server:OnPlayerUnload (src) | Server | A character switch keeps the server id: drop that src's responding entries (and pending lookups); the dodge-rule data stays until it expires |
+| Net event sc-dispatch:server:ShotsFired (data: coords, street, zone) | Server listener | The backstop: the call is shots_<src>_<os.time()>; from an In-progress participant within 300 m of his mission, wait 1 s and clear it |
+| exports['sc-dispatch']:ClearNotification(uniqueId, jobTable) | Server | ClearNotification('shots_<src>_<time>', { 'police' }) for the current and previous second; a list with police clears it for every job in Config.Police.AllowedJobs (sast, fib, bcso) |
+| State bag crimsonArena | Both | With Config.Integrations.CrimsonArena = true, IsInCombatSafeZone() skips shots-fired, person-down and dead calls while state.crimsonArena.active; set with Player(src).state:set('crimsonArena', { active = true, source = 'crimson-police' }, true) |
 | exports['sc-dispatch']:IsPlayerSuspended(citizenid, jobname) | Server | Refuse suspended officers |
 | exports['sc-dispatch']:AddNotification(data) | Server | Do not use: missions never create dispatch calls |
 | Call id formats | — | shots_, panic_, emshelp_, playerdown_ and playerdead_ followed by <src>_<time> (sc-dispatch); emsdown_<src>_<time> (sc-ambulance); npccall-<n>-<time> (sc-npcpolice) |
-| Shots-fired exemption | — | Outside Crimson-Police, sc-dispatch only skips shots-fired calls for on-duty police, bcso and fib, and alerts the jobs in Config.Dispatch.ShotsFired.AlertJobs (which include sast and fib) |
+| Shots-fired exemption | — | sc-dispatch itself skips shots-fired only for on-duty police, bcso and fib, and alerts Config.Dispatch.ShotsFired.AlertJobs (incl. sast, fib) |
 | Roster | — | Config.Roster.CommandGrade = 4: grade 4 and up count as command staff in SC-Dispatch |
 | Net event sc-dispatch:client:AssignedToCall (info) | — | Not needed: the assigned officer's client also sends ToggleResponding |
 | Table mdt_dispatch (read-only) | Server | Dispatch screen strip: SELECT priority, COUNT(*) AS n FROM mdt_dispatch WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority, with Config.Calls.npcCallPrefix (LIKE-escaped) followed by %; cached 15 s; hidden on error |
@@ -6243,7 +4657,7 @@ sc-ambulance
 |---|---|---|
 | exports['sc-ambulance']:GetDoctorCount() | Server | On-duty ambulance players; 0 means no EMS, so a downed participant is picked up |
 | Client event hospital:client:Revive | Server → client | TriggerClientEvent('hospital:client:Revive', src) revives a picked-up officer; SC-Ambulance's own server code revives players the same way |
-| Net event hospital:server:EMSDownAlert (street) | Client → server | Sent from the downed officer's own client after their flag is removed; SC-Ambulance creates an emsdown_<src>_<time> call for EMS through sc-dispatch. It ignores flagged players and players who are not down |
+| Net event hospital:server:EMSDownAlert (street) | Client → server | Sent from the downed officer's client after his flag is removed; SC-Ambulance makes an emsdown_<src>_<time> call (it ignores flagged or not-down players) |
 | State bag crimsonArena | Both | With Config.ArenaIntegration.Enabled = true (already set), SC-Ambulance sends no automatic person-down alert for flagged players |
 | Net event hospital:server:RevivePlayer | — | Never trigger it: SC-Ambulance bans any sender who is not EMS and carries no first aid |
 | Check-in points | — | Pillbox (308.19, -595.35, 43.29) and Paleto (-254.54, 6331.78, 32.43): the default drop-offs in Config.Downed.dropOffs |

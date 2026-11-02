@@ -332,6 +332,27 @@ end
 H.eq((ReadRepo('docs/TESTING.md') or ''):find('before the ' .. 'speed-up', 1, true), nil,
     'TESTING has no old timing story')
 
+-- SPEC: its prose (everything but the two config copies) stays cut down, carries no build history, and every
+-- ARCHITECTURE section it names exists
+local prose = spec
+for _, rel in ipairs({ 'Crimson-Police/config/config.lua', 'Crimson-Police/config/blocks.lua' }) do
+    local file = ReadRepo(rel) or ''
+    local at = prose:find(file, 1, true)
+    if at then prose = prose:sub(1, at - 1) .. prose:sub(at + #file) end
+end
+H.ok(#prose > 100000 and #prose < 280000, ('SPEC prose stays small (%d bytes)'):format(#prose))
+for _, phrase in ipairs({ 'owner request of', 'owner\'s request of', 'as before', 'owner decision of', 'as today' }) do
+    H.eq(prose:find(phrase, 1, true), nil, 'SPEC has no history phrase: ' .. phrase)
+end
+local specUnknown = {}
+for num in (prose .. ' '):gmatch('ARCHITECTURE%.md §(%d[%d%.]*)') do
+    num = num:gsub('%.$', '')
+    if not heads[num] then specUnknown[#specUnknown + 1] = num end
+end
+H.eq(table.concat(specUnknown, ' '), '', 'every ARCHITECTURE section SPEC names exists')
+H.eq(prose:find('\nFolder layout\n', 1, true), nil, 'SPEC keeps no copy of the ARCHITECTURE folder layout')
+H.eq(prose:find('CREATE TABLE cp_', 1, true), nil, 'SPEC restates no migration: the tables point at sql/migrations')
+
 -- step FX1: a disconnect on the Weekly Boss costs its mission cooldown and that week's attempt, never the type cooldown
 -- (modules/draw skips the type cooldown for the boss); every SPEC line about the disconnect cooldown says so
 for line in spec:gmatch('[^\n]+') do

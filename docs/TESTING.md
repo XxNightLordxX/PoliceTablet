@@ -547,6 +547,9 @@ Run `tools/check_all.sh` once, right before the commit (its steps are listed at 
   the folder README that covers it.
 - **No build history in the docs**: they describe what the code does now, not which step changed it. Step and plan
   ids stay out of the prose (only `docs/IN_GAME_CHECKLIST.md` keeps its step tags); `tests/docs_spec.lua` checks it.
+- **One place per fact**: SPEC states each rule once and points at ARCHITECTURE, the migrations and the config
+  copy instead of restating them; its prose (everything but the config copies) stays under 280 KB
+  (`tests/docs_spec.lua`).
 - **Commit messages** say what changed and why. The only numbers in them come from the gate.
 
 ### Keeping the style applied
