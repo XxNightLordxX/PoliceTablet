@@ -215,5 +215,7 @@
   "err.refused": "The server refused that request.",
   "err.no_permission": "You don't have permission to do that.",
   "ui.screen.admin_rewards": "Rewards",
-  "ui.nav.plain.admin_rewards": "Rewards for every feature"
+  "ui.nav.plain.admin_rewards": "Rewards for every feature",
+  "ui.help.sup_controls": "Pick a group, change a value within its limits and give a reason. Reset puts the config value back.",
+  "ui.help.sup_review": "Open a row to see the details, then Approve or Void with a reason."
 }

@@ -423,6 +423,50 @@ do
     DC.unregister('t_carry')
 end
 
+-- Step H4: DC.mine (sup:getMyControls), the Department Report's 'Your controls today' card.
+do
+    Config.Permissions.supervisor.missionControls = true
+    local used = 0
+    DC.register('t_day', {
+        kind = 'action',
+        integer = true,
+        range = { 1, 50 },
+        viewExtra = function() return { perDay = 4 } end,
+        usedToday = function() return used end,
+    })
+    Config.MissionControls.controls = { t_wait = { on = true, min = 300, max = 900 }, t_day = { on = true, max = 10 } }
+    Config.Departments.sast.missionControls = nil
+    local r = Cb('sup:getMyControls', 2)
+    H.ok(r.ok == false and r.error == 'err.controls_card_off',
+        'shipped: no card, nothing is read (' .. cjson.encode(r) .. ')')
+    Config.Tablet.supervisorControlsCard = true
+    used = 3
+    r = Cb('sup:getMyControls', 2)
+    local by = {}
+    for _, c in ipairs(r.ok and r.data.controls or {}) do by[c.key] = c end
+    H.ok(
+        by.t_wait and by.t_wait.kind == 'number' and by.t_wait.min == 300 and by.t_wait.max == 900
+            and by.t_wait.value ~= nil and by.t_wait.perDay == nil,
+        'a value control: its value and the admin limits, no day count: ' .. cjson.encode(by.t_wait or {})
+    )
+    H.ok(by.t_day and by.t_day.perDay == 4 and by.t_day.usedToday == 3 and by.t_day.max == 10,
+        'an action with a day count: today\'s use of the supervisor: ' .. cjson.encode(by.t_day or {}))
+    Config.MissionControls.controls.t_day.on = false
+    r = Cb('sup:getMyControls', 2)
+    by = {}
+    for _, c in ipairs(r.ok and r.data.controls or {}) do by[c.key] = c end
+    H.ok(by.t_wait and not by.t_day, 'a control switched off is not listed')
+    r = Cb('sup:getMyControls', 5)
+    H.ok(r.ok and #r.data.controls == 0, 'an officer may use none')
+    Config.MissionControls.controls.t_day.on = true
+    r = Cb('sup:getMyControls', 1)
+    by = {}
+    for _, c in ipairs(r.ok and r.data.controls or {}) do by[c.key] = c end
+    H.ok(by.t_day and by.t_day.perDay == nil and by.t_day.usedToday == nil, 'an admin has no day count')
+    Config.Tablet.supervisorControlsCard = false
+    DC.unregister('t_day')
+end
+
 Config.Permissions.supervisor = keepSup
 Config.MissionControls = keepMC
 Config.Departments.sast.missionControls = nil

@@ -44,6 +44,7 @@ import { MissionBanDialog } from '../components/MissionBanDialog';
 import { AwardPointsDialog } from '../components/AwardPointsDialog';
 import { CommendDialog } from '../components/CommendDialog';
 import { FieldTrainingPanel } from '../components/FieldTrainingPanel';
+import { MyControlsCard } from '../components/MyControlsCard';
 import './DeptReport.css';
 
 // Best dispositions as a share of all of them ("–" without decisions).
@@ -609,6 +610,7 @@ function FullDeptReport() {
                     }
                 />
             </Card>
+            <MyControlsCard />
             <FieldTrainingPanel />
             <Row gap={2} className="boards-report-note">
                 <Icon name="info" size={13} />

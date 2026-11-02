@@ -15,6 +15,7 @@ import type {
     MissionListData,
     MissionControlState,
     MissionControlsView,
+    MyControlsView,
     MissionListEntry,
     OfficerDetail,
     OfficerSearchData,
@@ -1697,3 +1698,20 @@ registerMock('request', 'admin:exportAudit', (f: AuditFilters): AuditExport => {
     ];
     return { csv: lines.join('\n'), rows: rows.length, truncated: false };
 });
+
+// ============================================================================
+//                             YOUR CONTROLS TODAY
+// ============================================================================
+// DEPARTMENT REPORT, STEP H4, ?supControlsCard.
+// A value control left as configured, one changed, and two actions with a day count (one used up).
+
+registerMock('request', 'sup:getMyControls', (): MyControlsView => ({
+    controls: EMPTY
+        ? []
+        : [
+              { key: 'cooldownScale', kind: 'number', value: 0.5, configValue: 1, min: 0, max: 2, changed: true },
+              { key: 'hourlyCap', kind: 'number', value: 8, configValue: 8, min: 1, max: 16 },
+              { key: 'awardPoints', kind: 'action', min: 1, max: 50, perDay: 100, usedToday: 40 },
+              { key: 'missionBan', kind: 'action', min: 1, max: 24, perDay: 3, usedToday: 3 },
+          ],
+}));

@@ -53,5 +53,6 @@
   "fto.toast.bonus": "+{points} points for signing off a task of {name}.",
   "fto.bonus_reason": "Field training: signed off {task} for {name}",
   "fto.needs_trainer": "With your trainer in the unit only: {types}",
-  "fto.bonus_hint": "You get {points} points for each task you sign off."
+  "fto.bonus_hint": "You get {points} points for each task you sign off.",
+  "fto.pairs_title": "Pairings ({n})"
 }

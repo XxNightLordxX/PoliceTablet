@@ -120,7 +120,13 @@ export interface Session {
         officerNav?: { order: 'classic' | 'mostUsed'; activeFirst: boolean; compact: boolean };
         // Config.Tablet.supervisorByTask / supervisorCompact / supervisorLanding (step G5): the Supervisor UI sidebar and
         // the screen it opens on (layouts/supervisorNav)
-        supervisorNav?: { byTask: boolean; compact: boolean; landing: 'first' | 'report' | 'review' | 'live' };
+        // controlsCard: Config.Tablet.supervisorControlsCard (step H4), the Department Report's 'Your controls today'
+        supervisorNav?: {
+            byTask: boolean;
+            compact: boolean;
+            landing: 'first' | 'report' | 'review' | 'live';
+            controlsCard?: boolean;
+        };
         // true while this player may change at least one Mission control (CP.DeptControls.available)
         missionControls?: boolean;
         // Config.OfficerOptions resolved for the officer's department (CP.OptionDefs.resolve)

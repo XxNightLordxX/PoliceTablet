@@ -335,6 +335,10 @@ do
     H.eq(E('Tablet.supervisorCompact').default, false, 'the Supervisor UI sidebar ships with names')
     H.eq(E('Tablet.supervisorLanding').default, 'first', 'the Supervisor UI ships opening on its first screen')
     H.eq(E('Tablet.supervisorLanding').kind, 'enum', 'supervisorLanding is a choice')
+    H.eq(E('Tablet.supervisorControlsCard').default, false, 'the Department Report ships with no controls card')
+    H.eq(E('Tablet.supervisorControlsCard').kind, 'boolean', 'supervisorControlsCard is a switch')
+    H.ok((E('Tablet.supervisorControlsCard').desc or ''):find('Your controls today', 1, true) ~= nil,
+        'supervisorControlsCard: its config.lua comment is its description')
     H.ok(not Check('Tablet.supervisorLanding', 'payouts'), 'another landing is refused')
     H.eq(E('AdminUi.plainLayout').default, false, 'the Admin UI ships with its sidebar as before')
     H.eq(E('AdminUi.plainLayout').kind, 'boolean', 'plainLayout is a switch')

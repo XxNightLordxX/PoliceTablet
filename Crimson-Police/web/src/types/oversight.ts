@@ -504,6 +504,24 @@ export interface DeptNoticesView {
     maxDays: number;
     notices: DeptNotice[];
 }
+// sup:getMyControls (step H4, Config.Tablet.supervisorControlsCard): the controls this player may use now, for the
+// Department Report's 'Your controls today' card. perDay / usedToday: supervisors only, for a control with a day count.
+export interface MyControl {
+    key: string;
+    kind: MissionControlState['kind'];
+    value?: MissionControlValue;
+    configValue?: MissionControlValue;
+    min?: number;
+    max?: number;
+    // a supervisor's change is live (else the config value is in use)
+    changed?: boolean;
+    timeLeft?: number;
+    perDay?: number;
+    usedToday?: number;
+}
+export interface MyControlsView {
+    controls: MyControl[];
+}
 export interface MissionControlsDepartment {
     key: string;
     label: string;

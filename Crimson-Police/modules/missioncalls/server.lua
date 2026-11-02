@@ -1108,6 +1108,7 @@ function MC.registerControls()
         kind = 'action',
         bounded = false,
         viewExtra = function() return { perDay = MC.pushPerDay and MC.pushPerDay() or nil } end,
+        usedToday = function(src) return MC.pushesToday and MC.pushesToday(src) or nil end,
     })
     return true
 end
@@ -1565,6 +1566,8 @@ local function PushesToday(issuer)
     if not okK then return nil end
     return tonumber(n)
 end
+-- That player's pushes today (step H4, the 'Your controls today' card).
+MC.pushesToday = function(src) return PushesToday((StaffIssuer(src))) end
 
 -- The checks of a push before the call is posted: nil, or the error key. role and dept come from CanPush.
 local function PushCheck(src, role, dept, missionId, typeKey, areaKey, unit, issuer)

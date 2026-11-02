@@ -847,12 +847,14 @@ local function RegisterSupControls()
         master = false,
         bounded = false,
         viewExtra = function() return { perDay = LiveCtl.supClearPerDay() } end,
+        usedToday = function(src) return UsedToday('cooldownClear', ActorOf(src)) end,
     })
     dc.register(TIME_KEY, {
         kind = 'action',
         integer = true,
         range = { 1, ADD_MINUTES_MAX },
         viewExtra = function() return { perDay = LiveCtl.supTimePerDay(), maxSeconds = LiveCtl.supTimeMax() } end,
+        usedToday = function(src) return UsedToday('runTimeAdd', ActorOf(src)) end,
     })
     return true
 end

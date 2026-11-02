@@ -8,10 +8,8 @@ import {
     Countdown,
     Dialog,
     EmptyState,
-    ErrorState,
     Field,
     Icon,
-    LoadingBlock,
     Screen,
     SegmentedControl,
     Textarea,
@@ -39,6 +37,9 @@ import { controlName, useValueText } from '../../admin/components/MissionControl
 import { ReasonChips } from '../../admin/components/ReasonChips';
 import { useAdminAction } from '../../admin/components/kit';
 import { DeptNoticesCard } from '../components/DeptNoticesCard';
+import { ScreenStatus } from '../../officer/components/ScreenStatus';
+import { screenStateOf } from '../../officer/screens/screenHead';
+import { SUP_GROUP_HELP, SUP_HEADS } from './supHead';
 import './MissionControls.css';
 
 const REASON_MAX = 255;
@@ -961,8 +962,9 @@ export default function MissionControls() {
 
     return (
         <Screen
-            title={t('ui.screen.sup_controls')}
+            title={t(SUP_HEADS.controls.title)}
             subtitle={t('sup.controls.subtitle')}
+            help={t(SUP_HEADS.controls.help)}
             className="sup-mc"
             actions={
                 <Button size="sm" variant="ghost" icon="refresh" disabled={loading} onClick={() => void refetch()}>
@@ -976,15 +978,14 @@ export default function MissionControls() {
                     <span>{t('sup.controls.self_note')}</span>
                 </p>
             ) : null}
-            {!data && loading ? <LoadingBlock /> : null}
-            {!data && !loading && error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
+            <ScreenStatus state={screenStateOf(!!data, loading, error)} error={error} onRetry={() => void refetch()} />
             {data && groups.length === 0 && !notices ? (
                 <Card>
                     <EmptyState icon="clock" title={t('sup.controls.empty')} text={t('sup.controls.empty_text')} />
                 </Card>
             ) : null}
             {groups.map(g => (
-                <Card key={g.key} title={t(`sup.controls.group.${g.key}`)}>
+                <Card key={g.key} title={t(`sup.controls.group.${g.key}`)} subtitle={t(SUP_GROUP_HELP[g.key])}>
                     <div className="sup-mc-list">
                         {g.rows.map(c => (
                             <ControlRow

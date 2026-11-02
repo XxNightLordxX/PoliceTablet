@@ -476,10 +476,17 @@ Grades start at 0.
 | `supervisorByTask` | `true` = the sidebar is grouped by task under four headings: **People** (Department Report: officers, give points, mission bans, field training), **Missions** (Mission List, Live Missions, Cross-dept, Mission controls, Builder), **Rewards** (Payouts) and **Review** (Review Queue) |
 | `supervisorCompact` | `true` = a narrow strip of icons, each name on hover (the Review Queue count shows on its icon) |
 | `supervisorLanding` | The screen the Supervisor UI opens on: `'first'` (as before), `'report'`, `'review'` or `'live'`. A screen the supervisor may not see falls back to the first one. Once a screen is picked, the Supervisor UI keeps it until the player reconnects |
+| `supervisorControlsCard` | `true` = Department Report shows a **Your controls today** card: each Mission control the supervisor may use now, the value in use (config or changed), the admin's limits (min to max) and today's use against the per-day count (for example Give points 40 of 100 used, Mission ban 3 of 3 used). Read only; shipped `false` (no card) |
 
 Only the layout changes: every screen keeps its permission, and a screen a supervisor may not see stays hidden (a
 heading with nothing under it is not shown). Each control keeps showing its admin limits where it is used (for
 example Give points shows the min to max points and today's use), and risky actions still ask first.
+
+Inside the screens, Mission controls and Review Queue share the Officer UI header (the screen name, its subtitle and
+one help line) and its load states (spinner, error with Retry, "Could not refresh" over what was loaded last). Each
+Mission controls group says what it is for in one line. Department notices are split into **Post a notice** and
+**Running now (n)**, Field training lists its **Pairings (n)**. Ending a notice or a field training takes two
+clicks; every Mission control change, Approve, Void and Reject asks for a reason, as before.
 
 ### 4.4 What supervisors may do
 

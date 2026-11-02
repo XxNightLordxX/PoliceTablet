@@ -114,6 +114,10 @@ Config.Tablet = {
     -- The screen the Supervisor UI opens on: 'first' = the first one it shows (as before), 'report' = Department
     -- Report, 'review' = Review Queue, 'live' = Live Missions (a screen the supervisor may not see = the first one)
     supervisorLanding = 'first',
+    -- true = Department Report shows a 'Your controls today' card: each Mission control the supervisor may use now,
+    -- its current value, the admin's limits (min and max) and today's use against the per-day count; false = no
+    -- card (as before). Only shows what the server already checks
+    supervisorControlsCard = false,
     -- Mission desks: ox_target boxes that open the Officer UI. The coordinates are placeholders near the
     -- base-game stations, 2 m or more from sc-police's duty points: check them on your MLO.
     -- departments = nil lets every department use a desk; prop = a laptop only that player sees, or false.

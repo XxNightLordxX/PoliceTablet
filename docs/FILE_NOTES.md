@@ -5097,12 +5097,40 @@ The server refuses the supervisor's own character, an officer on a run, the offi
 the supervisor's own clears a day.
 ```
 
+## Crimson-Police/web/src/supervisor/components/DeptNoticesCard.tsx
+
+```text
+Supervisor UI · Mission controls · Department notices (step P13, the notices Mission control): post a short notice
+for the supervisor's own department (it shows on that department's Officer Home Announcements card only) and end
+one that is still running. Server: sup:getDeptNotices, server:sup:postNotice, server:sup:endNotice. Step H4: the
+card is split by task (Post a notice, Running now), shows the stale line when a refresh fails; End takes two clicks.
+```
+
+## Crimson-Police/web/src/supervisor/components/FieldTrainingPanel.tsx
+
+```text
+Supervisor UI · Department Report · Field training (step T1, Config.FieldTraining): every pairing of the department
+with its progress, Pair trainer (a rookie of the department and an online trainer at or above the trainer grade) and
+End training (two clicks). The server checks every rule again. Nothing shows while the feature is off. Step H4: a
+Pairings heading with the count, and the stale line when a refresh fails.
+```
+
 ## Crimson-Police/web/src/supervisor/components/MissionBanDialog.tsx
 
 ```text
 Supervisor UI · Department Report · Mission ban (step P11): hours (the admin's min to max) and a reason, or Lift for
 the ban the viewer set. The server checks every rule again (own department, a lower grade, never himself, the
 officer online, the supervisor's bans a day).
+```
+
+## Crimson-Police/web/src/supervisor/components/MyControlsCard.tsx
+
+```text
+Supervisor UI · Department Report · Your controls today (step H4, Config.Tablet.supervisorControlsCard, session
+config.supervisorNav.controlsCard): sup:getMyControls (CP.DeptControls.mine, live on push 'missionControls') lists
+each control this player may use now with the value in use, the admin's min and max and today's use against the
+per-day count (a control's usedToday function). Read only. Rows: myControls.ts (myControlRow, myControlRows: the
+most used up first). Walk: supervisor/screens/supHead.walk.ts.
 ```
 
 ## Crimson-Police/web/src/supervisor/components/OperationPanel.tsx
@@ -5173,6 +5201,8 @@ Supervisor UI · Mission controls (screen key 'sup_controls', title key 'ui.scre
 controls an admin switched on (sup:getMissionControls), grouped, each with the config value, the value in use, an
 editor by kind, Back to config, who changed it and when, and the change-wait countdown. Every save asks for a
 reason (server:sup:setMissionControl / server:sup:resetMissionControl). Live: push 'missionControls'.
+Step H4: header and load states from supHead.ts (SUP_HEADS) and officer ScreenStatus; each group card has a help
+line (SUP_GROUP_HELP, sup.controls.group_help.<group>). Review Queue uses the same. Walk: supHead.walk.ts.
 ```
 
 ## Crimson-Police/web/src/supervisor/screens/MissionList.tsx
@@ -5209,6 +5239,15 @@ their other characters may, but every action on them is refused (err.own_run).
 Approve, void or reject, always with a reason; every decision is final and audited.
 Data: callback sup:getReviewQueue · actions server:sup:reviewFlagged { rowId, decision, reason } and
 server:sup:handleDispute { disputeId, decision, reason } (modules/admin, modules/disputes).
+```
+
+## Crimson-Police/web/src/supervisor/screens/supHead.walk.ts
+
+```text
+Supervisor screens inside (step H4) against the browser mocks (node walk.mjs, a gate step): Mission controls and
+Review Queue use the shared header and load states, each Mission controls group says what it is for, Notices and
+Field training are split by task with the stale line, the risky actions still ask first, and the Department
+Report's 'Your controls today' rows (myControls.ts) show value, limits and today's use.
 ```
 
 ## Crimson-Police/web/src/types/admin_rs.ts

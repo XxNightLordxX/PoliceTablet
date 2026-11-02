@@ -67,6 +67,8 @@ local a = W.audits and W.audits('deptNoticePost')
 H.ok(a[1] and a[1].role == 'supervisor', 'audited as supervisor')
 local view = DN.view(2)
 H.ok(view and view.usedToday == 1 and view.perDay == 5 and #view.notices == 1, 'the card lists it')
+H.eq(DC.def('notices').usedToday and DC.def('notices').usedToday(2), 1,
+    'the control counts his posts for the Your controls today card (H4)')
 
 -- ============================================================================
 --                               TEXT AND LIMITS

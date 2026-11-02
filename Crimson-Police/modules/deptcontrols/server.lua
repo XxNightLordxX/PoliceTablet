@@ -112,6 +112,8 @@ end
 --   overlays    optional { [other key] = fn(value, thisValue) -> value }: while this control has a live change, DC.get
 --               of the other key returns fn's value (the self rule of this change still applies)
 --   viewExtra   optional fn(dept) -> table: more fields for this control's row in DC.view
+--   usedToday   optional fn(src) -> number: that player's uses today, for a control whose viewExtra gives a perDay
+--               (step H4: the Department Report's 'Your controls today' card, DC.mine)
 --   bounded     false: the control has no min and max (the admin's card shows only its switch)
 --   flags       optional { name, ... }: more true / false fields its bounds may carry (readyCheck's canTurnOff)
 --   list        a 'choice' control: the bounds field with the names a supervisor may pick (difficulty: 'presets');
@@ -157,6 +159,7 @@ function DC.register(key, def)
         carry = type(def.carry) == 'function' and def.carry or nil,
         overlays = type(def.overlays) == 'table' and def.overlays or nil,
         viewExtra = type(def.viewExtra) == 'function' and def.viewExtra or nil,
+        usedToday = type(def.usedToday) == 'function' and def.usedToday or nil,
         bounded = def.bounded ~= false and def.kind ~= 'bool' and def.kind ~= 'choice',
         flags = Flags(def.flags),
         list = def.kind == 'choice' and def.list or nil,
@@ -850,6 +853,58 @@ function DC.view(src)
     return out
 end
 
+-- A control's per-day count for a supervisor (its viewExtra's perDay; 0 or none = no count) and his uses today.
+local function DayUse(def, dept, n)
+    if not def.viewExtra then return nil, nil end
+    local ok, extra = pcall(def.viewExtra, dept)
+    local perDay = ok and type(extra) == 'table' and math.tointeger(tonumber(extra.perDay)) or nil
+    if not perDay or perDay <= 0 then return nil, nil end
+    local used = nil
+    if def.usedToday then
+        local okU, u = pcall(def.usedToday, n)
+        if okU then used = math.tointeger(tonumber(u)) end
+        if not okU then CP.err(TAG, 'the day count of %s failed: %s', def.key, tostring(u)) end
+    end
+    return perDay, used
+end
+
+-- DC.mine(src) (step H4, Config.Tablet.supervisorControlsCard): the controls that player may use now (DC.canChange),
+-- each with its current value, the admin's limits and, for a supervisor, today's use of a control with a per-day count
+-- (admins have none). { controls = { { key, kind, value, configValue, min, max, changed, timeLeft, perDay, usedToday
+-- } } }, or nil, errKey. Read only.
+function DC.mine(src)
+    local n = math.tointeger(tonumber(src))
+    if not n or n <= 0 or not CP.Access then return nil, 'err.no_permission' end
+    local tab = type(Config.Tablet) == 'table' and Config.Tablet or {}
+    if tab.supervisorControlsCard ~= true then return nil, 'err.controls_card_off' end
+    local officer = CP.Access.getOfficer(n)
+    local admin = CP.Access.isAdmin(n) == true
+    if not officer and not admin then return nil, 'err.no_permission' end
+    local out = {}
+    for _, key in ipairs(order) do
+        local def = defs[key]
+        local ok, _, role, dept = DC.canChange(n, key, nil)
+        if ok then
+            local f = ControlFields(def, dept)
+            local perDay, used = nil, nil
+            if role == 'supervisor' then perDay, used = DayUse(def, dept, n) end
+            out[#out + 1] = {
+                key = key,
+                kind = def.kind,
+                value = f.value,
+                configValue = f.configValue,
+                min = f.min,
+                max = f.max,
+                changed = f.saved ~= nil,
+                timeLeft = f.timeLeft,
+                perDay = perDay,
+                usedToday = perDay and (used or 0) or nil,
+            }
+        end
+    end
+    return { controls = out }
+end
+
 -- ============================================================================
 --                                CONFIG CHECKS
 -- ============================================================================
@@ -911,6 +966,7 @@ end
 local function Payload(p) return type(p) == 'table' and p or {} end
 
 CP.Net.callback('sup:getMissionControls', function(src) return DC.view(src) end, { rate = 3 })
+CP.Net.callback('sup:getMyControls', function(src) return DC.mine(src) end, { rate = 3 })
 
 -- A supervisor's own department (a server-wide control: any); the action itself runs DC.canChange.
 local function SupPermission(src, p)

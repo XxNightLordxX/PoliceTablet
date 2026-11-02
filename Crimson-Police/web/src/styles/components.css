@@ -301,6 +301,16 @@
     font-size: var(--cp-fs-sm);
 }
 
+/* step H4: a small heading over one task inside a card (Post a notice, Running now, Pairings) */
+.cp-section-title {
+    margin: 4px 0 0;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
 .cp-screen__actions {
     display: flex;
     gap: 8px;

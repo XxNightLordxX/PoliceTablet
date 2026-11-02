@@ -148,6 +148,7 @@ local function Register()
         integer = true,
         range = { 1, HOURS_MAX },
         viewExtra = function() return { perDay = MB.perDay() } end,
+        usedToday = function(src) return MB.usedToday(src) end,
     })
     return true
 end
@@ -155,6 +156,13 @@ Register()
 MB.register = Register
 
 local function IsAdmin(src) return CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true end
+
+-- Mission bans that player set today (step H4, the 'Your controls today' card).
+function MB.usedToday(src)
+    local _, info = Call('Qbx', 'getInfo', src)
+    local actor = type(info) == 'table' and info.citizenid or nil
+    return actor and Kit.dailyCount('missionBan', { actor = actor }) or 0
+end
 
 -- The hours a supervisor may pick in his department: lo, hi | nil.
 local function HoursRange(dept)

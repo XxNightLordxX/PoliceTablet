@@ -1,6 +1,4 @@
 // Supervisor UI · Department Report · Field training (step T1, Config.FieldTraining): every pairing of the department
-// with its progress, Pair trainer (a rookie of the department and an online trainer at or above the trainer grade) and
-// End training (two clicks). The server checks every rule again. Nothing shows while the feature is off.
 
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Dialog, EmptyState, Field, Select } from '../../shared/components';
@@ -9,6 +7,8 @@ import { t } from '../../shared/i18n';
 import { asList } from '../../types/boards';
 import type { FtoDept, FtoView } from '../../types/fieldTraining';
 import { FtoProgress, FtoTaskList } from '../../officer/components/FieldTrainingCard';
+import { ScreenStatus } from '../../officer/components/ScreenStatus';
+import { screenStateOf } from '../../officer/screens/screenHead';
 import '../../officer/components/ProfileCards.css';
 
 function EndButton({ view, onDone }: { view: FtoView; onDone: () => void }) {
@@ -39,7 +39,7 @@ function EndButton({ view, onDone }: { view: FtoView; onDone: () => void }) {
 }
 
 export function FieldTrainingPanel() {
-    const { data, refetch } = useRequest<FtoDept | false>('sup:getFieldTraining', {});
+    const { data, loading, error, refetch } = useRequest<FtoDept | false>('sup:getFieldTraining', {});
     const { run, busy } = useAction();
     const [pairing, setPairing] = useState(false);
     const [rookie, setRookie] = useState('');
@@ -78,6 +78,8 @@ export function FieldTrainingPanel() {
                 </Button>
             }
         >
+            <ScreenStatus state={screenStateOf(true, loading, error)} error={error} onRetry={() => void refetch()} />
+            <h4 className="cp-section-title">{t('fto.pairs_title', { n: pairs.length })}</h4>
             {pairs.length === 0 ? <EmptyState compact icon="idCard" title={t('fto.none')} /> : null}
             {pairs.map(v => (
                 <div key={v.rookie.citizenid}>

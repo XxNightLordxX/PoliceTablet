@@ -212,6 +212,12 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] The Ballas member gets on the list from Home; a unit accepts Investigation with Real suspect OK: Jobs shows the job with its Reward line "$1,500 if you get away, $500 if you are caught" and no position. Accept, travel, the unit reaches him (Active: giving up is no longer free), he runs and the unit gives the mission up: he is paid $1,500 cash once, History shows "got away" and no strike. (G7)
 - [ ] Live control → anti-farm → Clear cooldowns for both officers, and Settings → Real suspects: Job hop minutes and Suspect cooldown 0: the same unit and volunteer play again at once. He accepts, the unit waits at the start, after 60 s he presses Give up: one strike in History, Active empty, nothing paid. (G7)
 
+## Supervisor screens inside (H4)
+
+- [ ] Mission controls and Review Queue show their name, subtitle and one help line; each Mission controls group card has its own line under the title. (H4)
+- [ ] Mission controls: Department notices shows Post a notice and Running now (n); End asks for a second click. Department Report: Field training shows Pairings (n). (H4)
+- [ ] `Config.Tablet.supervisorControlsCard = true`: Department Report shows Your controls today; give 10 points to an officer, open Department Report again: the Give points row is up by 10; a control the admin switches off leaves the card. Shipped `false`: no card. (H4)
+
 ## Restarts and logout
 
 - [ ] Start the server: the console shows the database or saves folder at version 11 (10 after O1, 11 after P1). (O1, P1)

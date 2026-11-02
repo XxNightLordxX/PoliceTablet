@@ -1,6 +1,4 @@
 // Supervisor UI · Mission controls · Department notices (step P13, the notices Mission control): post a short notice
-// for the supervisor's own department (it shows on that department's Officer Home Announcements card only) and end
-// one that is still running. Server: sup:getDeptNotices, server:sup:postNotice, server:sup:endNotice.
 
 import { useState } from 'react';
 import { Button, Card, EmptyState, Field, NumberInput, Textarea } from '../../shared/components';
@@ -10,9 +8,15 @@ import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import type { DeptNoticesView } from '../../types/oversight';
 import { useAdminAction } from '../../admin/components/kit';
+import { ScreenStatus } from '../../officer/components/ScreenStatus';
+import { screenStateOf } from '../../officer/screens/screenHead';
 
 export function DeptNoticesCard() {
-    const { data, refetch } = useRequest<DeptNoticesView>('sup:getDeptNotices', {}, { pushTopic: 'missionControls' });
+    const { data, loading, error, refetch } = useRequest<DeptNoticesView>(
+        'sup:getDeptNotices',
+        {},
+        { pushTopic: 'missionControls' },
+    );
     const { run, busy } = useAdminAction();
     const [text, setText] = useState('');
     const [days, setDays] = useState<number | null>(3);
@@ -46,9 +50,14 @@ export function DeptNoticesCard() {
     };
 
     return (
-        <Card title={t('sup.notices.title', { dept: data.short })}>
-            <p className="sup-mc-row__desc">{t('mc.control_desc.notices')}</p>
+        <Card title={t('sup.notices.title', { dept: data.short })} subtitle={t('mc.control_desc.notices')}>
             <div className="sup-mc-notices">
+                <ScreenStatus
+                    state={screenStateOf(true, loading, error)}
+                    error={error}
+                    onRetry={() => void refetch()}
+                />
+                <h4 className="cp-section-title">{t('sup.notices.post_title')}</h4>
                 <Field label={t('sup.notices.text', { n: data.maxLength })} required>
                     <Textarea value={text} onChange={setText} maxLength={data.maxLength} rows={3} disabled={busy} />
                 </Field>
@@ -68,6 +77,7 @@ export function DeptNoticesCard() {
                         {t('sup.notices.post')}
                     </Button>
                 </div>
+                <h4 className="cp-section-title">{t('sup.notices.running', { n: notices.length })}</h4>
                 {notices.length ? (
                     <ul className="sup-mc-notices__list">
                         {notices.map(n => (

@@ -309,6 +309,8 @@ local function SupervisorNav()
         byTask = tab.supervisorByTask == true,
         compact = tab.supervisorCompact == true,
         landing = SUP_LANDINGS[tab.supervisorLanding] and tab.supervisorLanding or 'first',
+        -- Config.Tablet.supervisorControlsCard (step H4): the Department Report's 'Your controls today' card
+        controlsCard = tab.supervisorControlsCard == true,
     }
 end
 

@@ -4110,6 +4110,11 @@ pattern, so a missing module reads as config).
   `server:sup:resetMissionControl` with a reason. `DC.available(src)` (true while that player may change at least
   one control) is sent as `session.config.missionControls`, so the screen shows with the master switch off while a
   control outside it (the cooldown controls, as shipped) is on.
+- Your controls today (step H4, Config.Tablet.supervisorControlsCard, shipped false): `DC.mine(src)` lists the
+  controls `DC.canChange` lets that player use now, each `{ key, kind, value, configValue, min, max, changed,
+  timeLeft, perDay?, usedToday? }`; perDay is the control's `viewExtra` perDay and usedToday its registered
+  `usedToday(src)` (awardPoints, missionBan, notices, clearCooldown, addRunTime, pushMission), supervisors only.
+  Callback `sup:getMyControls` (rate 3; `err.controls_card_off` while the switch is off). Read only.
 
 ### 5.50 CP.FieldTraining — modules/fieldtraining (S; field training, steps T1 and T2)
 Config.FieldTraining (ships `enabled = false`: the hook counts nothing, every action answers `err.fto_off`, both reads
@@ -4690,7 +4695,7 @@ Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome
 Parity-plus: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
-`admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`,
+`admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`, `sup:getMyControls` (step H4),
 `sup:getDeptNotices` (step P13, §5.49), `sup:getOfficerCooldowns` (`{ citizenid }`, step P7) and `admin:getMissionControls` (§5.49; rate 3);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 

@@ -4,15 +4,12 @@ import { useState } from 'react';
 import {
     Badge,
     Button,
-    Card,
     ConfirmDialog,
     Dialog,
     EmptyState,
-    ErrorState,
     Grid,
     IconButton,
     KeyValue,
-    LoadingBlock,
     Money,
     Points,
     Row,
@@ -31,6 +28,9 @@ import { toast } from '../../shared/toast';
 import { useCan } from '../../shared/session';
 import type { DisputeView, FlaggedRow, ReviewQueueData, ReviewTab } from '../../types/oversight';
 import { ProfilesReview } from '../components/ProfilesReview';
+import { ScreenStatus } from '../../officer/components/ScreenStatus';
+import { screenStateOf } from '../../officer/screens/screenHead';
+import { SUP_HEADS } from './supHead';
 import './ReviewQueue.css';
 
 type TabKey = ReviewTab;
@@ -419,15 +419,12 @@ export default function SupReviewQueue() {
     ];
     const current: TabKey = tabs.some(x => x.key === tab) ? tab : (tabs[0]?.key ?? 'flagged');
 
+    // the shared load states (step H4): spinner, error with Retry, nothing sent, or the stale line over the last list
+    const loadState = screenStateOf(!!data, loading, error);
     let body;
     if (current === 'profiles') body = <ProfilesReview />;
-    else if (loading && !data) body = <LoadingBlock />;
-    else if (error && !data)
-        body = (
-            <Card>
-                <ErrorState error={error} onRetry={() => void refetch()} />
-            </Card>
-        );
+    else if (loadState !== 'ready' && loadState !== 'stale')
+        body = <ScreenStatus state={loadState} error={error} onRetry={() => void refetch()} />;
     else if (current === 'flagged')
         body = (
             <Table
@@ -488,8 +485,9 @@ export default function SupReviewQueue() {
 
     return (
         <Screen
-            title={t('ui.screen.sup_review')}
+            title={t(SUP_HEADS.review.title)}
             subtitle={t('sup.review.subtitle')}
+            help={t(SUP_HEADS.review.help)}
             actions={
                 <IconButton
                     icon="refresh"
@@ -508,6 +506,9 @@ export default function SupReviewQueue() {
                     onChange={k => setTab(k as TabKey)}
                     aria-label={t('ui.screen.sup_review')}
                 />
+            ) : null}
+            {current !== 'profiles' && loadState === 'stale' ? (
+                <ScreenStatus state="stale" error={error} onRetry={() => void refetch()} />
             ) : null}
             {body}
             <div className="oversight-rq-note">{t('sup.review.own_rule')}</div>

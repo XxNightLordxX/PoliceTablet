@@ -66,6 +66,7 @@ local function Register()
         kind = 'action',
         bounded = false,
         viewExtra = function() return { maxLength = DN.maxLength(), perDay = DN.perDay() } end,
+        usedToday = function(src) return DN.usedToday(src) end,
     })
     return true
 end
@@ -101,6 +102,9 @@ local function ActorOf(src)
     local _, info = Call('Qbx', 'getInfo', src)
     return type(info) == 'table' and info.citizenid or ('player:%d'):format(src)
 end
+
+-- Notices that player posted today (step H4, the 'Your controls today' card).
+function DN.usedToday(src) return Kit.dailyCount('deptNoticePost', { actor = ActorOf(src) }) end
 
 -- What the Supervisor UI's Department notices card shows: nil, errKey when that player may not post (the control is
 -- off, not a supervisor), else { department, short, maxLength, perDay, usedToday, activeMax, maxDays, notices }.

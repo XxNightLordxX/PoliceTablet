@@ -98,6 +98,7 @@ H.ok(MB.first({ { citizenid = 'OFF00009' }, { citizenid = 'OFF00007' } }).citize
 H.ok(CP.LiveCtl.officerRunState('OFF00007').missionBan.by == 'Rank Sam Super', 'Admin UI Today & cooldowns shows it')
 view = MB.supView(2, 'OFF00007')
 H.ok(view.ban and view.canLift == true and view.usedToday == 1, 'the setter may lift it')
+H.eq(CP.DeptControls.def('missionBan').usedToday(2), 1, 'the Your controls today card counts it too (H4)')
 
 -- ============================================================================
 --                                     LIFT

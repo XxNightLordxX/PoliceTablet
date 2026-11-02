@@ -250,6 +250,7 @@ H.ok(a and a.role == 'supervisor' and a.target == 'AP_OFF03' and a.new == '30' a
 ok, res = Give(2, 'AP_OFF06', 50)
 H.eq(ok, true, 'an officer of his department who is offline (cp_officers)')
 H.eq(SA.supView(2, 'AP_OFF03').usedToday, 80, 'the dialog counts today\'s points')
+H.eq(CP.DeptControls.def('awardPoints').usedToday(2), 80, 'and so does the Your controls today card (H4)')
 ok, err = Give(2, 'AP_OFF03', 21)
 H.eq(err, 'err.award_daily_limit', 'over awardPointsPerDay (80 + 21 > 100)')
 ok = Give(2, 'AP_OFF03', 20)

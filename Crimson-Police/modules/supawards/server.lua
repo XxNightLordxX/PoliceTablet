@@ -74,6 +74,7 @@ local function Register()
         integer = true,
         range = { 1, HardMax() },
         viewExtra = function() return { perDay = SA.perDay() } end,
+        usedToday = function(src) return SA.usedToday(src) end,
     })
     return true
 end
@@ -124,6 +125,9 @@ local function ActorOf(src)
     local _, info = Call('Qbx', 'getInfo', src)
     return type(info) == 'table' and info.citizenid or nil
 end
+
+-- Points that player gave today (step H4, the 'Your controls today' card).
+function SA.usedToday(src) return UsedToday(src, ActorOf(src)) end
 
 -- What the Department Report's officer dialog needs for Give points: nil when that player may not give this officer
 -- points (the control or AdminControl.pointAdjust off, not a supervisor, his own character, another department),
