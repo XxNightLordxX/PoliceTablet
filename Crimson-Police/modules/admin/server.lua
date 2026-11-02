@@ -298,6 +298,11 @@ function Admin.missionLabel(missionId)
     if missionId == 'manual_cash' then return CP.L('admin.mission.manual_cash') end
     if missionId == 'goal' then return CP.L('admin.mission.goal') end
     if missionId == 'fto_bonus' then return CP.L('admin.mission.fto_bonus') end
+    -- Config.FeatureRewards rows (step G3)
+    if type(missionId) == 'string' and CP.Locale and CP.Locale.has and missionId:match('^reward_%a+$')
+        and CP.Locale.has('admin.mission.' .. missionId) then
+        return CP.L('admin.mission.' .. missionId)
+    end
     local def = Has('Missions', 'get') and CP.Missions.get(missionId) or nil
     if type(def) == 'table' and def.label then return def.label end
     return tostring(missionId or '')

@@ -248,6 +248,12 @@ end
 --                                   SIGN-OFF
 -- ============================================================================
 
+-- step G3: the feature rewards it asks for (CP.FeatureRewards, its own spec pays them)
+local frPaid = {}
+CP.FeatureRewards = {
+    payLater = function(feature, cid, opts) frPaid[#frPaid + 1] = { feature = feature, cid = cid, key = opts.key } end,
+}
+
 ok, err = FT.signOff(2, { rookie = 'FT_ROO04', task = 'patrol' })
 H.eq(err, 'err.fto_not_trainer', 'only his own trainer signs off (not a supervisor)')
 ok, err = FT.signOff(3, { rookie = 'FT_ROO04', task = 'tactical' })
@@ -271,6 +277,16 @@ H.eq(Run(4, 'tactical'), true, 'the tactical run')
 ok, view = FT.signOff(3, { rookie = 'FT_ROO04', task = 'tactical' })
 H.ok(ok == true and view.doneAt ~= nil, 'the last task: training done')
 H.ok(badges[1] and badges[1].citizenid == 'FT_ROO04' and badges[1].badge == 'field_training', 'the badge is given')
+H.ok(
+    #frPaid == 3 and frPaid[1].feature == 'ftoSignOff' and frPaid[1].cid == 'FT_TRN03'
+        and frPaid[1].key == 'fto:FT_ROO04:patrol',
+    'G3: the trainer is paid per sign-off, once per rookie and task'
+)
+H.ok(
+    frPaid[3] and frPaid[3].feature == 'ftoComplete' and frPaid[3].cid == 'FT_ROO04'
+        and frPaid[3].key == 'fto:FT_ROO04:done',
+    'G3: the rookie is paid once when his training is done'
+)
 H.eq(Toasts('fto.toast.done'), 1, 'the rookie is told')
 H.eq(Run(4, 'patrol'), false, 'a finished training counts nothing more')
 H.eq(#FT.mine(3).rookies, 1, 'and frees the trainer\'s place')

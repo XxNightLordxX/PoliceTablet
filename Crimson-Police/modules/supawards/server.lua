@@ -183,7 +183,12 @@ local function Award(ctx, cid)
         end
     end
     if not (CP.Corrections and CP.Corrections.adjust) then return false, 'err.module_unavailable' end
-    return CP.Corrections.adjust(ctx, cid, points)
+    local ok, res = CP.Corrections.adjust(ctx, cid, points)
+    -- Config.FeatureRewards.supAward (step G3): money for the awarded points, once per award row
+    if ok == true and type(res) == 'table' and res.rowId and CP.FeatureRewards and CP.FeatureRewards.payLater then
+        CP.FeatureRewards.payLater('supAward', cid, { key = ('sup:%s'):format(tostring(res.rowId)), points = points })
+    end
+    return ok, res
 end
 
 Kit.supAction('server:sup:awardPoints', 'missionControls', function(ctx)

@@ -48,6 +48,7 @@ say the same things in short and point back here.
    - [6.9 Handcuff and evidence items](#69-handcuff-and-evidence-items)
    - [6.10 Adding a department](#610-adding-a-department)
    - [6.11 Field training (FTO)](#611-field-training-fto)
+   - [6.12 Feature rewards: money and items for every feature](#612-feature-rewards-money-and-items-for-every-feature)
 7. [Settings to check in your other resources](#7-settings-to-check-in-your-other-resources)
 8. [All commands and keys](#8-all-commands-and-keys)
    - [8.1 Commands](#81-commands)
@@ -1075,7 +1076,8 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
   `Config.` switch, On or Off, and a **Settings** link that shows that setting in All settings. The switch there saves
   the same setting as the list (audited, Reset puts `config.lua`'s value back) and works at once. Risky ones (safe
   spawning, the GPS route, mission calls, live crimes, volunteers, Mission controls, field training, item rewards)
-  ask first; the money switches (cash and items for live and volunteer cases) still need the typed **ENABLE**.
+  ask first; cash and items for live and volunteer cases and the feature rewards (6.12) are plain switches (they
+  ship off; only the admin money tools still need the typed **ENABLE**).
   Mission blocks have no switch of their own: turn a mission or one of its locations off in **Missions**. Under a
   feature, **Limits** shows a button for each of its caps, cooldowns and per-day counts with its value now (for
   example Mission controls: bans, notices and points a day; field training: rookies per trainer; item rewards: the
@@ -1480,6 +1482,35 @@ trainer on the same card, and the trainer sees his trainees there with a **Sign 
 Training** badge. **End training** (click twice) removes a pairing. Pairing, ending and every sign-off are in the audit
 log. Nothing is lost on a restart: the training is saved with the officer (database or saves folder).
 
+### 6.12 Feature rewards: money and items for every feature
+
+Missions pay their type's payout (5.3). `Config.FeatureRewards` pays the features outside a mission, each with a
+money amount already set, and **every one ships off**: nothing pays until you switch it on in **Admin UI → Settings →
+Features → Money** (no typed word needed). Each row there shows its money, account and items as buttons, and the
+**Item rewards** switch they share, so you can see at a glance whether items are on.
+
+| Feature | Who is paid | Default money |
+| --- | --- | --- |
+| `suspect` | the volunteer who played a suspect (see the rules below) | escaped $1500, caught $500 (`money.got_away`, `money.caught`) |
+| `surrender` | the officer who talked a live-case suspect down (once per suspect) | $300 |
+| `ftoSignOff` | the trainer, for each task he signs off (once per rookie and task) | $250 |
+| `ftoComplete` | the rookie, when his training is done (once) | $1000 |
+| `supAward` | the officer a supervisor gave points (Give points) | $5 a point, at most $2500 (`maxMoney`) |
+
+- `account`: `'bank'`, `'cash'` or `'item'`. With `'item'` the money is paid as the item in `moneyItem` (shipped
+  `'black_money'`, a dirty-money item; it must exist in your ox_inventory), one item per dollar.
+- `items`: add items per feature, e.g. `items = { { item = 'water', count = { 1, 2 }, chance = 0.5, value = 20 } }`
+  (count a number or a low and a high, chance 0-1 per payment, value for `Config.Rewards.dailyValueCap`). Settings
+  refuses an item ox_inventory does not know and the forbidden ones (weapons, ammo, money items...). Items are given
+  only while `Config.Rewards.enabled` is on, under its daily caps.
+- Every payment is a row in **Admin UI → Payments** (named, for example, "Suspect pay (volunteer case)"), audited as
+  "Feature reward paid", paid once per case whatever happens twice, pending until the player logs in if he is
+  offline, and counted in `Config.Cash.dailyCap`. With `Config.Cash.source = 'society'` officers are paid from their
+  department's account; a suspect is always paid new money.
+- A volunteer suspect is paid only for a case the server saw end fairly: officers reached him, he did not drop out
+  (no-show, cancel, logging off, leaving the search circle), he was not AFK, and his outcome was escaped, detained or
+  booked. Test runs never pay.
+
 ---
 
 ## 7. Settings to check in your other resources
@@ -1605,8 +1636,8 @@ is how the run ended (`completed`, `failed`, `abandoned`), each outcome is `deta
 `AddEventHandler` only (never `RegisterNetEvent`, so no client can send it). It carries no server id and no position.
 
 Server-only event for other scripts: `crimson-police:server:volunteerEnded` (`Config.Volunteers.endEvent = true`)
-when a mission a volunteer said yes to ends (Crimson-Police gives volunteers nothing; another script can reward
-them), with `{ citizenid, missionId, missionType, role, mode, outcome, dropout, engaged, result, reason, officers,
+when a mission a volunteer said yes to ends (Crimson-Police pays volunteers only with
+`Config.FeatureRewards.suspect` on, 6.12; another script can reward them too), with `{ citizenid, missionId, missionType, role, mode, outcome, dropout, engaged, result, reason, officers,
 endedAt }`: `citizenid` is the volunteer, `role` the suspect he played (`runner`, `driver`, `fugitive`), `mode` the
 mission's mode, `outcome` his outcome as above, `dropout` why his part was voided (`no_show`, `cancelled`, `left`,
 `afk`, `out_of_bounds`) or `nil`, `engaged` whether officers reached him, `result` and `reason` how the run ended and
@@ -2373,7 +2404,7 @@ Live crimes:
   never). Admin test contracts are never LIVE calls.
 - ☐ `Config.LiveCrime.maxLiveRuns` (2) fits how many officers you have; `caseTime` (1800 s) is the longest case.
 - ☐ Points only: a live case pays no cash and rolls no item rewards (`Config.LiveCrime.cash` and `items` stay
-  `false` unless you decide otherwise; Settings asks for the typed word ENABLE).
+  `false` unless you decide otherwise; switched on, it pays its mission type's payout).
 - ☐ Turn it on: `Config.LiveCrime.enabled = true` (config.lua, or Settings: no restart needed).
 
 Volunteers:
@@ -2388,9 +2419,9 @@ Volunteers:
   ticks **Real suspect OK**, a volunteer who fits is asked, else the NPC plays as before. `'players_only'` offers the
   type only while a volunteer is free. While every mode is `'npc'`, nothing changes.
 - ☐ Admin UI → **Permissions** → **Config health** shows no warning about a mode.
-- ☐ Points only: `Config.Volunteers.payCash` and `payRewards` stay `false` unless you decide otherwise. Crimson-
-  Police gives volunteers nothing; another script can reward them from the `volunteerEnded` event
-  ([8.3](#83-exports-for-other-scripts)).
+- ☐ Points only: `Config.Volunteers.payCash` and `payRewards` stay `false` unless you decide otherwise. Volunteers
+  are paid only with `Config.FeatureRewards.suspect` on (6.12, fair cases only); another script can reward them too
+  from the `volunteerEnded` event ([8.3](#83-exports-for-other-scripts)).
 
 Both:
 
@@ -3211,8 +3242,8 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   from the number of suspects (`Config.LiveCrime.tier = 'crew'`; `'officers'` = the officers, like a mission). It
   gets no Type of the Day multiplier, counts for no daily or weekly goal and not for the department challenge or the
   weekly bounty, pays no cash and rolls no item rewards until the owner turns on `Config.LiveCrime.typeOfTheDay`,
-  `goals`, `challenge`, `cash` or `items` (all `false`; `cash` and `items` are money switches: Settings asks for the
-  typed word ENABLE). Each suspect detained is a **live catch** for every officer on the case (stored per run row,
+  `goals`, `challenge`, `cash` or `items` (all `false`; since step G3 `cash` and `items` are plain switches: the
+  cash is the mission type's payout). Each suspect detained is a **live catch** for every officer on the case (stored per run row,
   migration 014); add `'live_catches'` to `Config.Leaderboard.metrics` to show a **Live catches** Rank by tab.
   Staff data (steps V17 and V18): admins with the `antiFarmOverride` key can
   read each open case and the last `Config.RealSuspects.casesKept` closed ones (16; saved in the database or the saves
@@ -3285,9 +3316,10 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   shares only a connection or PC with him gets the Linked accounts flag (his points wait for review), and a no-show
   or a cancel is a staff note on the case. When the mission ends each officer and the volunteer get a pair row
   (kind `volunteer`), which feeds those caps and the repeated-pairing flag. From his yes on the mission pays points
-  only: `Config.Volunteers.payCash` and `payRewards` (money switches, the typed word ENABLE in Settings; both shipped
-  false) turn on its cash and item rewards, and `typeOfTheDay`, `goals` and `challenge` (each shipped false) let it
-  count for the Type of the Day multiplier, the officers' goals and the department challenge and bounty.
+  only: `Config.Volunteers.payCash` and `payRewards` (plain switches since step G3; both shipped false) turn on its
+  cash and item rewards (the volunteer's own pay is `Config.FeatureRewards.suspect`, 6.12), and `typeOfTheDay`,
+  `goals` and `challenge` (each shipped false) let it count for the Type of the Day multiplier, the officers' goals
+  and the department challenge and bounty.
   Warrant Service's wanted person (step V23): the first built-in suspect a volunteer can play (the runner at the
   door, `flee_arrest`'s door mode). With the investigation mode set to `'players_when_available'` or `'players_only'`,
   the volunteer who says yes is sent to the suspect's spot beside the front door instead of the NPC. While the

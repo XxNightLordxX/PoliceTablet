@@ -724,6 +724,20 @@ function V.sendEnded(m, run, state, reason)
     return ok
 end
 
+-- The volunteer's own pay (Config.FeatureRewards.suspect, step G3): only for a case the server saw end fairly
+-- (CP.FeatureRewards.fairSuspect: officers reached him, no dropout, not AFK, a real outcome), never a test run.
+function V.payVolunteer(m, run, state, reason)
+    local FR = CP.FeatureRewards
+    if not (FR and FR.enabled and FR.enabled('suspect')) then return false end
+    if type(m) ~= 'table' or not m.yesAt or type(run) ~= 'table' or run.test then return false end
+    local payload = V.endPayload(m, run, state, reason)
+    if not payload then return false end
+    local _, case = Opp('close', run)
+    local rec = type(case) == 'table' and type(case.suspects) == 'table' and case.suspects[m.cid] or nil
+    local afk = type(rec) == 'table' and (rec.afk == true or tonumber(rec.share) == 0) or false
+    return FR.suspectEnded(run.id, payload, afk) == true
+end
+
 V.matchActions = {
     answer = function(src, data)
         local ok, why = V.answer(src, data)
@@ -768,6 +782,7 @@ CP.Hooks.on('run:ended', function(run, state, reason)
             v.phase, v.why, v.engaged = m.phase, m.why, m.engagedAt ~= nil
         end
         V.sendEnded(m, run, state, reason)
+        V.payVolunteer(m, run, state, reason)
     end
     if m.phase == 'asking' and m.token then
         TriggerClientEvent(CP.e('client:volunteerAskClose'), m.src, m.token)

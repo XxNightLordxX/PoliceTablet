@@ -192,6 +192,15 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] With the criminal tablet open, officers take a mission a volunteer can play: Jobs shows the suspect, type, area and timer (no pop-up); Accept sets the waypoint and Active shows the meet point and time left; Give up within a minute is free (no strike in History). Close the tablet while a question is open: the pop-up comes up for the seconds left. (G2)
 - [ ] `access = 'granted'`: Admin UI → Permissions → Extra grants → Criminal tablet for one gang from a grade: only its members open `/crimtab`; the grant gives no Supervisor UI button. Resmon of Crimson-Police with the tablet closed stays at 0.02 ms or less. (G2)
 
+## Feature rewards (G3)
+
+- [ ] Shipped: Admin UI → Settings → Features → Money lists Pay volunteer suspects, Pay talk-downs, Pay field training sign-offs, Pay finished field training and Pay supervisor point awards, all Off, each with its money, account and items buttons and the Item rewards switch. Nothing is paid by any of them while Off. (G3)
+- [ ] Live-case cash and volunteer-case cash switch on with one click (no typed ENABLE); Cash.allowManualCash still asks for ENABLE. (G3)
+- [ ] Pay volunteer suspects On, account cash: a volunteer escapes officers who reached him: he gets $1500 cash and Admin UI → Payments shows "Suspect pay (volunteer case)"; a no-show, a cancel, an AFK catch or a test run pays nothing; the same case never pays twice. (G3)
+- [ ] Account item with moneyItem black_money (an item in your ox_inventory): the volunteer gets 1500 black_money instead of cash; a full inventory leaves the payment pending until his next login. (G3)
+- [ ] Settings → FeatureRewards.surrender.items: an unknown item name or a weapon is refused; `{ { item = 'water', count = 1 } }` is saved, and with Item rewards On the officer who talks a suspect down gets the water once per suspect. (G3)
+- [ ] Field training On and Pay field training sign-offs On: each sign-off pays the trainer $250 once; the last one pays the rookie $1000 once. Give points On: 10 points pay the officer $50 (at most $2500). (G3)
+
 ## Restarts and logout
 
 - [ ] Start the server: the console shows the database or saves folder at version 11 (10 after O1, 11 after P1). (O1, P1)

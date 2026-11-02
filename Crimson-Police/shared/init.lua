@@ -305,6 +305,7 @@ local CONFIG_SECTIONS = {
     'LiveCrime',
     'Volunteers',
     'CriminalTablet',
+    'FeatureRewards',
     'Custody',
     'Decisions',
     'Npc',

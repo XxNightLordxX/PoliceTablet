@@ -3932,7 +3932,8 @@ Config.Builder = {
 -- ============================================================================
 -- Rules for every case where the suspect is a real player instead of an NPC: a LIVE crime (Config.LiveCrime) or a
 -- mission played against a volunteer (Config.Volunteers). Nothing here does anything while both are off.
--- Crimson-Police never gives a suspect anything (no points, cash or items) and never tells officers who he is.
+-- Crimson-Police never tells officers who a suspect is, and gives him nothing unless Config.FeatureRewards.suspect
+-- is on (a volunteer paid for a fair case).
 Config.RealSuspects = {
     -- The NPC-mission rules that do not fit a fight with a real player (each can be set back). 'normal' = an
     -- officer's own shots-fired, person-down and EMS calls go out like any officer's, so backup can come; 'silenced'
@@ -4143,8 +4144,8 @@ Config.LiveCrime = {
     typeOfTheDay = false,            -- true = a live case of today's Type of the Day gets its points multiplier too
     goals = false,                   -- true = live cases count for the officers' daily and weekly goals
     challenge = false,               -- true = live cases count for the department challenge and the weekly bounty
-    -- Money switches (the typed word ENABLE turns them on in Settings). true = a live case pays cash like a mission
-    -- of its type; false = points only
+    -- Money: true = a live case pays the officers cash like a mission of its type (its Config.MissionTypes payout,
+    -- so the money is set already); false = points only. Ships off
     cash = false,
     items = false,                   -- true = a live case rolls the item rewards of its type too (Config.Rewards)
 }
@@ -4156,8 +4157,8 @@ Config.LiveCrime = {
 -- mission for an hour. When officers take a mission whose suspect a real player can play (Warrant Service's wanted
 -- person, Street Race Bust's driver, Manhunt's fugitive) and a volunteer fits, he gets a yes/no pop-up; if he says
 -- yes he plays that suspect instead of the NPC. Volunteers see pop-ups, notifications and a menu (or the criminal
--- tablet below, once it is on), and Crimson-Police gives them nothing. Set a mode per mission type below: while every
--- mode is 'npc', nothing changes even with enabled = true.
+-- tablet below, once it is on); they are paid only with Config.FeatureRewards.suspect on. Set a mode per mission
+-- type below: while every mode is 'npc', nothing changes even with enabled = true.
 Config.Volunteers = {
     enabled = false,                 -- true = players can volunteer with the command below
     -- The chat command (without the /) a player volunteers with: it asks him to agree to the rules and pick the
@@ -4232,8 +4233,9 @@ Config.Volunteers = {
     typeOfTheDay = false,            -- true = today's Type of the Day points multiplier applies to it too
     goals = false,                   -- true = it counts for the officers' daily and weekly goals
     challenge = false,               -- true = it counts for the department challenge and the weekly bounty
-    -- Money switches (the typed word ENABLE turns them on in Settings). true = it pays the officers cash like any
-    -- mission of its type; false = points only (its cash is 0)
+    -- Money: true = it pays the officers cash like any mission of its type (its Config.MissionTypes payout, so the
+    -- money is set already); false = points only (its cash is 0). Ships off. The volunteer's own pay is
+    -- Config.FeatureRewards.suspect
     payCash = false,
     payRewards = false,              -- true = it rolls the item rewards of its type too (Config.Rewards)
 }
@@ -4876,6 +4878,66 @@ Config.Rewards = {
                 { item = 'sprunk', count = { 1, 2 }, weight = 2, value = 25 },
             },
         },
+    },
+}
+
+-- ============================================================================
+--                               FEATURE REWARDS
+-- ============================================================================
+-- Money and items for the features outside a mission's own pay: the volunteer who plays a suspect, the officer who
+-- talks a suspect down, field training and supervisor point awards. Each feature has its own switch (all ship off,
+-- so nothing pays until you turn one on in Admin UI -> Settings -> Features) and a money amount ready to use. Every
+-- payment is a row of the payments ledger (Admin UI -> Payments: audited, paid once per case, pending until the
+-- player logs in, Config.Cash.dailyCap applies). Items are given only while Config.Rewards.enabled is on, under its
+-- daily caps, and must exist in ox_inventory (never weapons, ammo or the forbidden names of Config.Rewards).
+-- An items list holds { item = 'water', count = 1, chance = 1.0, value = 20 } entries: count a number or { min, max
+-- }, chance 0-1 for each payment, value in dollars for Config.Rewards.dailyValueCap.
+Config.FeatureRewards = {
+    -- The volunteer suspect (the criminal player of Config.Volunteers), paid once per case, and only for a case the
+    -- server saw end fairly: officers reached him, he did not drop out or go AFK and his part was not void
+    suspect = {
+        enabled = false,             -- true = a volunteer suspect is paid for a fair case
+        account = 'cash',            -- 'bank' | 'cash' | 'item' (the money is the item named in moneyItem)
+        moneyItem = 'black_money',   -- the dirty-money item paid when account = 'item' (must exist in ox_inventory)
+        money = {
+            got_away = 1500,         -- dollars when he escaped
+            caught = 500,            -- dollars when he was detained or booked (he played the part to the end)
+        },
+        items = {},                  -- items for a fair case (see the list shape above)
+    },
+    -- The officer who talked a live-case suspect down (Talk them down), paid once per suspect when the peaceful
+    -- arrest counts (the suspect was not AFK)
+    surrender = {
+        enabled = false,             -- true = the officer who talked a suspect down is paid
+        account = 'bank',            -- 'bank' | 'cash' | 'item'
+        moneyItem = 'black_money',   -- the money item when account = 'item'
+        money = 300,                 -- dollars per peaceful arrest
+        items = {},                  -- items per peaceful arrest
+    },
+    -- Field training (Config.FieldTraining): the trainer for each task he signs off
+    ftoSignOff = {
+        enabled = false,             -- true = the trainer is paid for each sign-off
+        account = 'bank',            -- 'bank' | 'cash' | 'item'
+        moneyItem = 'black_money',   -- the money item when account = 'item'
+        money = 250,                 -- dollars per task signed off
+        items = {},                  -- items per task signed off
+    },
+    -- Field training: the rookie once every task is signed off and his training is done
+    ftoComplete = {
+        enabled = false,             -- true = the rookie is paid when his training is done
+        account = 'bank',            -- 'bank' | 'cash' | 'item'
+        moneyItem = 'black_money',   -- the money item when account = 'item'
+        money = 1000,                -- dollars for the finished training
+        items = {},                  -- items for the finished training
+    },
+    -- Supervisor point awards (the Give points Mission control): the officer who got the points
+    supAward = {
+        enabled = false,             -- true = an officer given points by a supervisor is paid too
+        account = 'bank',            -- 'bank' | 'cash' | 'item'
+        moneyItem = 'black_money',   -- the money item when account = 'item'
+        money = 5,                   -- dollars per point awarded
+        maxMoney = 2500,             -- dollars one award pays at most (0 = no limit)
+        items = {},                  -- items per award
     },
 }
 

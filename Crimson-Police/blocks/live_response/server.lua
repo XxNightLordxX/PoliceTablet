@@ -202,6 +202,19 @@ local function Line(ctx, st, id, ev)
     return true
 end
 
+-- Config.FeatureRewards.surrender (step G3): the officer who talked the suspect down (an officer of this run, never
+-- the suspect), once per run and suspect. A suspect who gave himself up by his own command pays nobody.
+local function PayTalkDown(run, suspectCid, by)
+    local FR = CP.FeatureRewards
+    if not (FR and FR.enabled and FR.enabled('surrender')) or type(run) ~= 'table' or run.test then return false end
+    by = math.tointeger(tonumber(by))
+    if not by or by <= 0 or type(run.participants) ~= 'table' then return false end
+    local p = run.participants[by]
+    local cid = type(p) == 'table' and p.citizenid or nil
+    if type(cid) ~= 'string' or cid == suspectCid then return false end
+    return FR.payLater('surrender', cid, { key = ('%s:%s'):format(tostring(run.id), suspectCid) })
+end
+
 -- A detain of a suspect who surrendered and was not hit since (CP.Opponents.peaceful, step RP1): the shared
 -- peaceful_arrest line, weighted by his share, and a timeline line naming who talked him down.
 local function Peaceful(ctx, st, ev)
@@ -214,6 +227,7 @@ local function Peaceful(ctx, st, ev)
     st.lines.peaceful_arrest[ev.cid] = weight
     ctx.award('peaceful_arrest', { weight = weight })
     if O.timeline then O.timeline(ctx.run, { what = 'peaceful_arrest', label = ev.label, by = by }) end
+    PayTalkDown(ctx.run, ev.cid, by)
 end
 
 local function OnEvent(ctx, src, ev)

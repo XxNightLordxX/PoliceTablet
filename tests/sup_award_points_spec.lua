@@ -225,8 +225,19 @@ H.eq(#rows + #audits, 0, 'nothing refused wrote a row or an audit')
 --                         THE AWARD: THE ADMIN'S PATH
 -- ============================================================================
 
+local frPaid = {}  -- step G3: the feature reward it asks for (CP.FeatureRewards pays it, tests/feature_rewards_spec)
+CP.FeatureRewards = {
+    payLater = function(feature, cid, opts)
+        frPaid[#frPaid + 1] = { feature = feature, cid = cid, key = opts.key, points = opts.points }
+    end,
+}
 local res
 ok, res = Give(2, 'AP_OFF03', 30)
+H.ok(
+    frPaid[1] and frPaid[1].feature == 'supAward' and frPaid[1].cid == 'AP_OFF03' and frPaid[1].points == 30
+        and frPaid[1].key == 'sup:' .. tostring(res.rowId),
+    'G3: the awarded officer\'s pay is asked once per award row'
+)
 H.ok(ok == true and res.points == 30 and res.citizenid == 'AP_OFF03', 'a SAST officer gets 30 points')
 H.ok(
     rows[1] and rows[1].missionId == 'manual_award' and rows[1].by == 'AP_SUP02'

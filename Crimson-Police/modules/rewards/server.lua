@@ -312,6 +312,16 @@ local function Usable(name)
     return bad[name:lower()] == nil
 end
 
+-- For other modules (CP.FeatureRewards, step G3): may this item be given now (not forbidden, not refused by the last
+-- check)? And is it an ox_inventory item: true | false | nil (ox_inventory is not running: unknown)?
+function Rewards.usable(name) return Usable(name) end
+
+function Rewards.itemKnown(name)
+    if type(name) ~= 'string' or name == '' then return false end
+    if not InventoryStarted() then return nil end
+    return ItemDef(name) ~= nil
+end
+
 -- Config health lines ({ level, text }), for CP.ConfigHealth (WP8) and the admin view.
 function Rewards.health()
     EnsureChecked()

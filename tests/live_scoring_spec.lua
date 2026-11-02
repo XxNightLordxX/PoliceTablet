@@ -231,13 +231,14 @@ end
 do
     H.load('modules/settings/server.lua')
     local S = CP.Settings
-    H.eq((S.entry('LiveCrime.cash') or {}).money, true, 'LiveCrime.cash is a money switch')
-    H.eq((S.entry('LiveCrime.items') or {}).money, true, 'LiveCrime.items is a money switch')
-    H.ok(
-        ((S.entry('LiveCrime.cash') or {}).desc or ''):find('true = a live case pays cash like a mission', 1, true)
-            ~= nil,
-        'LiveCrime.cash: its comment is the description'
-    )
+    -- step G3: plain switches (they ship off; no typed ENABLE)
+    H.eq((S.entry('LiveCrime.cash') or {}).money, nil, 'LiveCrime.cash needs no typed ENABLE')
+    H.eq((S.entry('LiveCrime.items') or {}).money, nil, 'LiveCrime.items needs no typed ENABLE')
+    H.ok(((S.entry('LiveCrime.cash') or {}).desc or ''):find(
+        'true = a live case pays the officers cash like a mission',
+        1,
+        true
+    ) ~= nil, 'LiveCrime.cash: its comment is the description')
     H.eq((S.entry('LiveCrime.items') or {}).desc,
         'true = a live case rolls the item rewards of its type too (Config.Rewards)', 'LiveCrime.items: its comment')
     H.eq((S.entry('LiveCrime.tier') or {}).kind, 'enum', 'LiveCrime.tier is a pick')
@@ -291,8 +292,8 @@ do
     vc.typeOfTheDay = false
 
     local S = CP.Settings
-    H.eq((S.entry('Volunteers.payCash') or {}).money, true, 'Volunteers.payCash is a money switch')
-    H.eq((S.entry('Volunteers.payRewards') or {}).money, true, 'Volunteers.payRewards is a money switch')
+    H.eq((S.entry('Volunteers.payCash') or {}).money, nil, 'Volunteers.payCash needs no typed ENABLE')
+    H.eq((S.entry('Volunteers.payRewards') or {}).money, nil, 'Volunteers.payRewards needs no typed ENABLE')
     H.eq((S.entry('Volunteers.payRewards') or {}).desc,
         'true = it rolls the item rewards of its type too (Config.Rewards)', 'Volunteers.payRewards: its comment')
 end

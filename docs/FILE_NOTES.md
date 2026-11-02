@@ -2002,6 +2002,17 @@ Contract interpretations (details in docs/notes/engine_a.md)
   * rollModifier uses CP.U.rng(CP.U.hash(run.seed .. ':modifier'))
 ```
 
+## Crimson-Police/modules/featurerewards/server.lua
+
+```text
+CP.FeatureRewards (server, step G3): the money and items of the features outside a mission's own pay
+(Config.FeatureRewards): the volunteer suspect, the officer who talked a suspect down, field training sign-offs and
+completion, and supervisor point awards. Each payment is one row of the payments ledger (cp_mission_runs, mission
+type manual_award, mission id reward_<feature>) paid by CP.Cash (audited, pending until login, the daily cap), and
+its items are run rewards of that row (CP.Rewards, under Config.Rewards.enabled and its daily caps). The row's
+run_uuid is made from the feature and the case key, so one case pays once whatever calls it twice.
+```
+
 ## Crimson-Police/modules/fieldtraining/server.lua
 
 ```text
@@ -5458,6 +5469,15 @@ Part 1 runs the real migrations runner in its own environment with the real sche
 until the promise is resolved, and resolve() resumes the waiting threads in order: scheduler.lua:85-100 and
 deferred.lua of build 35245). Part 2 runs the whole resource (tests/fixtures/admin_missions/boot.lua) on a
 database user without the CREATE right.
+```
+
+## tests/feature_rewards_spec.lua
+
+```text
+Feature rewards (step G3, Config.FeatureRewards): money and items for the volunteer suspect, the officer who talks a
+suspect down, field training sign-offs and completion, and supervisor point awards. Every feature ships off with
+a money amount ready; a payment is one ledger row paid once per case (CP.Cash), its items are run rewards of that
+row (CP.Rewards), and a suspect is paid only for a case the server saw end fairly.
 ```
 
 ## tests/field_contact_director_spec.lua

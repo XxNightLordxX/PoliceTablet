@@ -404,9 +404,18 @@ PayClaimed = function(row, rowId, cid, src, progress)
     end
     local charName = info.name or cid
 
-    local society = Config.Cash and Config.Cash.source == 'society'
+    -- a feature reward row (CP.FeatureRewards, step G3) names its own account ('bank', 'cash' or 'item' with a money
+    -- item) and may always be new money (a suspect has no department account)
+    local cashBd = type(bd.cash) == 'table' and bd.cash or {}
+    local society = Config.Cash and Config.Cash.source == 'society' and cashBd.source ~= 'server'
     local account = dept and dept.societyAccount
     local moneyAccount = (Config.Cash and Config.Cash.account) or 'bank'
+    local moneyItem = nil
+    if cashBd.account == 'bank' or cashBd.account == 'cash' then
+        moneyAccount = cashBd.account
+    elseif cashBd.account == 'item' and type(cashBd.moneyItem) == 'string' and cashBd.moneyItem ~= '' then
+        moneyAccount, moneyItem = 'item', cashBd.moneyItem
+    end
     -- Step markers (claimed -> withdrawn -> added) and what this payment used, saved before and between the money
     -- calls: an admin resolving a payment left in 'paying' reads them (Admin UI -> Payments).
     Mark(rowId, {
@@ -444,7 +453,11 @@ PayClaimed = function(row, rowId, cid, src, progress)
     if amount > 0 then
         progress.moved = true
         local okMoney, whyMoney = false, nil
-        if CP.Qbx.addMoney then
+        if moneyItem then
+            if CP.FeatureRewards and CP.FeatureRewards.giveMoneyItem then
+                okMoney, whyMoney = CP.FeatureRewards.giveMoneyItem(src, moneyItem, amount)
+            end
+        elseif CP.Qbx.addMoney then
             okMoney, whyMoney = CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission')
         end
         if not okMoney and whyMoney == 'error' then

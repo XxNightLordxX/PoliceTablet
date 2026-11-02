@@ -53,12 +53,9 @@ local MONEY_SWITCHES = {
     'Cash.allowClawback',
     'Cash.allowManualCash',
     'Rewards.allowTakeBack',
-    -- a live case pays cash or rolls items only with these on (Config.LiveCrime, V13)
-    'LiveCrime.cash',
-    'LiveCrime.items',
-    -- a volunteer case pays cash or rolls items only with these on (Config.Volunteers, V22b)
-    'Volunteers.payCash',
-    'Volunteers.payRewards',
+    -- Live-case and volunteer-case pay (Config.LiveCrime.cash / items, Config.Volunteers.payCash / payRewards) and
+    -- Config.FeatureRewards are ordinary feature switches since step G3 (owner decision 2026-11-02): they ship off
+    -- and pay the amounts set in config.lua, without the typed word.
 }
 local MONEY_WORD = 'ENABLE'
 
@@ -155,7 +152,7 @@ local GROUPS = {
         },
     },
     { key = 'npcs', sections = { 'spawning', 'suspect_behaviour', 'scaling_by_participants' } },
-    { key = 'pay', sections = { 'cash', 'payout_editing', 'disputes' } },
+    { key = 'pay', sections = { 'cash', 'payout_editing', 'disputes', 'feature_rewards' } },
     {
         key = 'points',
         sections = {
@@ -251,7 +248,7 @@ Play.groups = {
             'alert_suppression',
         },
     },
-    { key = 'play_economy', sections = { 'cash', 'payout_editing', 'disputes', 'item_rewards' } },
+    { key = 'play_economy', sections = { 'cash', 'payout_editing', 'disputes', 'item_rewards', 'feature_rewards' } },
     {
         key = 'play_system',
         sections = {
@@ -517,6 +514,65 @@ Play.features = {
         limits = {
             'Rewards.dailyItemCap',
             'Rewards.dailyValueCap',
+        },
+    },
+    -- Config.FeatureRewards (step G3): each feature's money, account and items next to its switch, with the item
+    -- switch they share
+    {
+        key = 'reward_suspect',
+        play = 'economy',
+        path = 'FeatureRewards.suspect.enabled',
+        limits = {
+            'FeatureRewards.suspect.money.got_away',
+            'FeatureRewards.suspect.money.caught',
+            'FeatureRewards.suspect.account',
+            'FeatureRewards.suspect.items',
+            'Rewards.enabled',
+        },
+    },
+    {
+        key = 'reward_surrender',
+        play = 'economy',
+        path = 'FeatureRewards.surrender.enabled',
+        limits = {
+            'FeatureRewards.surrender.money',
+            'FeatureRewards.surrender.account',
+            'FeatureRewards.surrender.items',
+            'Rewards.enabled',
+        },
+    },
+    {
+        key = 'reward_fto_signoff',
+        play = 'economy',
+        path = 'FeatureRewards.ftoSignOff.enabled',
+        limits = {
+            'FeatureRewards.ftoSignOff.money',
+            'FeatureRewards.ftoSignOff.account',
+            'FeatureRewards.ftoSignOff.items',
+            'Rewards.enabled',
+        },
+    },
+    {
+        key = 'reward_fto_complete',
+        play = 'economy',
+        path = 'FeatureRewards.ftoComplete.enabled',
+        limits = {
+            'FeatureRewards.ftoComplete.money',
+            'FeatureRewards.ftoComplete.account',
+            'FeatureRewards.ftoComplete.items',
+            'Rewards.enabled',
+        },
+    },
+    {
+        key = 'reward_sup_award',
+        play = 'economy',
+        path = 'FeatureRewards.supAward.enabled',
+        limits = {
+            'FeatureRewards.supAward.money',
+            'FeatureRewards.supAward.maxMoney',
+            'FeatureRewards.supAward.account',
+            'FeatureRewards.supAward.items',
+            'Rewards.enabled',
         },
     },
     { key = 'testing', play = 'system', path = 'Testing.enabled', limits = { 'Testing.maxTesters' } },
@@ -896,6 +952,9 @@ local RANGES = {
     ['Goals.weeklyPoints'] = { 0, 100000 },
     ['Rewards.dailyItemCap'] = { 0, 1000 },
     ['Rewards.dailyValueCap'] = { 0, 10000000 },
+    ['FeatureRewards.*.money'] = { 0, 1000000 },
+    ['FeatureRewards.*.money.*'] = { 0, 1000000 },
+    ['FeatureRewards.*.maxMoney'] = { 0, 1000000 },
     -- Mission Builder: how far outside the start circle armed spawn points stay (Config.Builder.spawnMargin)
     ['Builder.spawnMargin'] = { 0, 150 },
     -- Mission Builder: how far outside the start circle a location's points may be (Config.Builder.maxPointFromStart)
@@ -1530,6 +1589,8 @@ local KNOWN = {
             { surrender = true, flee = true, fight = true }),
         check = SumOf100,
     },
+    ['FeatureRewards.*.items'] = { tpl = ANY },
+    ['FeatureRewards.*.account'] = { tpl = Enum({ 'bank', 'cash', 'item' }), kind = 'enum' },
     ['Rewards.weeklyBoss'] = { tpl = Alts(NIL, ANY), nullable = true },
     ['Rewards.byType'] = { tpl = ANY },
     ['Rewards.byMission'] = { tpl = ANY },

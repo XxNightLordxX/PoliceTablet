@@ -686,6 +686,14 @@ do
         return out
     end
     H.eq(Config.Volunteers.endEvent, true, 'endEvent ships true (behind enabled = false)')
+    -- step G3: the volunteer's own pay (the real fairness rule; the payment itself is tests/feature_rewards_spec)
+    H.load('modules/featurerewards/server.lua')
+    local frPaid = {}
+    CP.FeatureRewards.payLater = function(feature, cid, opts)
+        frPaid[#frPaid + 1] = { feature = feature, cid = cid, key = opts.key, outcome = opts.outcome }
+        return true
+    end
+    Config.FeatureRewards.suspect.enabled = true
     for _, v in ipairs(V.list()) do V.stop(v.src) end
     Civilian(30, 'VMR00030')
     H.clockMs = H.clockMs + 2000
@@ -746,6 +754,11 @@ do
     H.eq(view and view.engaged, true, '...and that he was reached')
     CP.Hooks.fire('run:ended', run, 'completed', 'completed')
     H.eq(#Sent(), 1, 'never twice for one run')
+    H.ok(
+        #frPaid == 1 and frPaid[1].feature == 'suspect' and frPaid[1].cid == 'VMR00030' and frPaid[1].key == run.id
+            and frPaid[1].outcome == 'detained',
+        'G3: a fair case (reached, no dropout, not AFK) pays the volunteer once, keyed by the run'
+    )
 
     -- a no-show: the event says why he dropped out; endEvent = false sends nothing
     Reset()
@@ -761,6 +774,7 @@ do
     H.eq(p.outcome, 'void', 'a no-show: his outcome is void')
     H.eq(p.dropout, 'no_show', '...and why')
     H.eq(V.staffView(run.id, case).why, 'no_show', 'staff see the dropout too')
+    H.eq(#frPaid, 1, 'G3: a no-show is never paid')
 
     Config.Volunteers.endEvent = false
     Reset()
@@ -770,6 +784,7 @@ do
     Finish(run, 'completed', 'completed')
     H.eq(#Sent(), 0, 'endEvent = false: no event')
     Config.Volunteers.endEvent = true
+    Config.FeatureRewards.suspect.enabled = false
     closeOut = nil
     H.eq(V.staffView('nope', nil), nil, 'no case: nothing for staff')
 end

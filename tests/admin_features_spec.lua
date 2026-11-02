@@ -145,9 +145,32 @@ do
         for _, f in ipairs(S._features) do if f.path == path then hit = true end end
         H.ok(hit, path .. ': listed in Features')
     end
-    -- the money switches keep their typed ENABLE (the view says money)
-    H.eq(S.view('LiveCrime.cash').money, true, 'cash for live cases is a money switch')
-    H.eq(S.view('Volunteers.payCash').money, true, 'cash for volunteer cases is a money switch')
+    -- step G3 (owner decision 2026-11-02): live-case and volunteer cash are plain switches (no typed ENABLE); the
+    -- admin money tools keep it
+    H.eq(S.view('LiveCrime.cash').money, nil, 'cash for live cases needs no typed ENABLE')
+    H.eq(S.view('Volunteers.payCash').money, nil, 'cash for volunteer cases needs no typed ENABLE')
+    H.eq(S.view('Cash.allowManualCash').money, true, 'a money tool keeps its typed ENABLE')
+    -- step G3: every feature reward is a Money feature with its amounts and the shared item switch as limits
+    for _, key in ipairs({
+        'reward_suspect',
+        'reward_surrender',
+        'reward_fto_signoff',
+        'reward_fto_complete',
+        'reward_sup_award',
+    }) do
+        local f
+        for _, x in ipairs(S._features) do if x.key == key then f = x end end
+        H.ok(f and f.play == 'economy' and S.view(f.path) and S.view(f.path).value == false,
+            key .. ': a Money feature, Off')
+        local hasItems = false
+        for _, l in ipairs(f and f.limits or {}) do if l == 'Rewards.enabled' then hasItems = true end end
+        H.ok(hasItems, key .. ': shows the item switch next to it')
+        H.eq(f and S.view(f.path).money, nil, key .. ': no typed ENABLE')
+    end
+    H.eq(S.view('FeatureRewards.suspect.money.got_away').value, 1500, 'the suspect\'s default money')
+    H.eq((S.check('FeatureRewards.suspect.money.got_away', -5)), false, 'never a negative amount')
+    H.eq((S.check('FeatureRewards.suspect.account', 'gold')), false, 'account: bank, cash or item only')
+    H.eq((S.check('FeatureRewards.suspect.account', 'item')), true, 'item is an account')
 
     local view = S.all()
     H.eq(#view.features, #S._features, 'the view lists every feature')

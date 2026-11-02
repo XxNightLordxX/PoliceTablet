@@ -1,0 +1,15 @@
+{
+  "admin.mission.reward_suspect": "Suspect pay (volunteer case)",
+  "admin.mission.reward_surrender": "Talk-down reward",
+  "admin.mission.reward_ftoSignOff": "Field training sign-off pay",
+  "admin.mission.reward_ftoComplete": "Field training completed",
+  "admin.mission.reward_supAward": "Supervisor award pay",
+  "settings.feature.reward_suspect": "Pay volunteer suspects",
+  "settings.feature.reward_surrender": "Pay talk-downs",
+  "settings.feature.reward_fto_signoff": "Pay field training sign-offs",
+  "settings.feature.reward_fto_complete": "Pay finished field training",
+  "settings.feature.reward_sup_award": "Pay supervisor point awards",
+  "err.feature_reward_items": "Items must be a list of at most 10 entries, each with an item name.",
+  "err.feature_reward_unknown_item": "That item does not exist in ox_inventory.",
+  "admin.action.featureReward": "Feature reward paid"
+}

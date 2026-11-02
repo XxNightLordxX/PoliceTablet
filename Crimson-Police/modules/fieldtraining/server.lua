@@ -486,10 +486,17 @@ function FT.signOff(src, payload)
         rec.tasks[task] = st
         local id = Kit.auditSync(src, 'audit', 'ftoSignOff', rookie, nil, task, note, { role = 'supervisor' })
         if not id then return false, 'err.internal' end
-        Finish(rookie, rec, r.name)
+        local done = Finish(rookie, rec, r.name)
         if not WriteRecord(rookie, rec) then return false, 'err.internal' end
         Kit.notify(rookie, 'success', 'fto.toast.signed', { task = TaskLabel(task), name = st.signedName })
         Bonus(officer.citizenid, r.name or rookie, task)
+        -- Config.FeatureRewards (step G3): the trainer per sign-off, the rookie once his training is done; each once
+        -- per rookie and task whatever pairing comes later
+        local FR = CP.FeatureRewards
+        if FR and FR.payLater then
+            FR.payLater('ftoSignOff', officer.citizenid, { key = ('fto:%s:%s'):format(rookie, task) })
+            if done then FR.payLater('ftoComplete', rookie, { key = ('fto:%s:done'):format(rookie) }) end
+        end
         return true, FT.view(rookie, r.name, rec)
     end)
 end

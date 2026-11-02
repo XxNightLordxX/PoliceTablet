@@ -3437,7 +3437,7 @@ names and payloads as built in its step VC3 (commit e20316f, its README "Integra
   - `LC.counts(run, what)` for 'typeOfTheDay', 'goals', 'challenge', 'cash', 'items': true for any other run, and for
     a live run only while that Config.LiveCrime switch is true (all shipped false). Type of the Day: the x2 is not
     applied. Cash: `Cash.compute` uses B = 0 (nothing paid, nothing to pay again). Items: `row:settled` rolls no item
-    reward. `cash` and `items` are money switches in Settings (`MONEY_SWITCHES`: the typed word ENABLE).
+    reward. `cash` and `items` are plain Settings switches since step G3 (no longer in `MONEY_SWITCHES`).
   - `LC.rowFilter(what, alias)`: `AND COALESCE(<alias>mission_id, '') <> 'live_crime'` while the switch is off ('' when
     on), added to the goal progress query (`goals`) and to the challenge's officer and week sums (`challenge`; the
     weekly bounty reads the same sums). `LC.MISSION_ID = 'live_crime'` is the live case's mission id (V14).
@@ -3640,7 +3640,8 @@ run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc
   items, CP.Scoring gives no Type of the Day. The result breakdown carries `realSuspect = 'volunteer'`;
   `V.rowFilter(what, alias)` adds `AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(<alias>breakdown, '$.realSuspect')), '')
   <> 'volunteer'` to CP.Goals' progress and CP.Challenge's aggregates while that switch is off. `payCash` and
-  `payRewards` are Settings money switches (ENABLE). Specs: tests/volunteer_match_spec.lua,
+  `payRewards` are plain Settings switches since step G3. `V.payVolunteer(m, run, state, reason)` (run:ended, after
+  `sendEnded`) asks CP.FeatureRewards (5.52) to pay the volunteer for a fair case. Specs: tests/volunteer_match_spec.lua,
   tests/live_scoring_spec.lua, tests/boards_metrics_spec.lua.
 
 **Results for other scripts and staff (V26, modules/volunteers/match/server.lua + CP.Opponents staff).** The design
@@ -4174,6 +4175,34 @@ A front end of CP.Volunteers (5.47) for players who play real suspects, behind `
   seconds left (`CP.Volunteers.tabletClosed`).
 - NUI: web/src/criminal (CriminalTablet.tsx, model.ts, criminal.walk.ts), its own CSS; mocks/criminal.mock.ts
   (`?ui=crimtab`). Spec: tests/crimtab_spec.lua.
+
+### 5.52 CP.FeatureRewards — modules/featurerewards (S; feature rewards, step G3)
+
+Money and items for the features outside a mission's own pay, behind `Config.FeatureRewards.<feature>.enabled` (all
+shipped false, each with a default money amount): `suspect` (the volunteer, by outcome), `surrender` (the officer who
+talked a live-case suspect down), `ftoSignOff` (the trainer per task), `ftoComplete` (the rookie), `supAward` (per
+point awarded, up to `maxMoney`).
+
+- `FR.pay(feature, cid, { key, outcome, points, reason })` (must yield) -> `{ rowId, status, amount, items }` | nil,
+  why (`off`, `invalid`, `nothing`, `duplicate`, `busy`, `error`). One cp_mission_runs row: mission_type
+  `manual_award` (out of every run count), mission_id `reward_<feature>`, run_uuid `FR.uuidOf(feature, key, cid)`
+  (`fr-<code>-<hash>`, at most 36 characters; the same key never pays twice), department `none` for a suspect, the
+  breakdown's `cash.account` / `cash.moneyItem` / `cash.source = 'server'` (suspect). Audited (`featureReward`),
+  paid by `CP.Cash.pay` (pending while offline, the daily cap), items rolled by `FR.rollItems` (deterministic per key
+  and player, `CP.Rewards.usable`) and stored as run rewards of that row through `CP.Rewards._grant` (so
+  `Config.Rewards.enabled` and its daily caps apply, and voiding the row forfeits them).
+- `FR.payLater` runs it in a thread for the hooks: `V.payVolunteer` (5.47; `FR.fairSuspect`: engaged, no dropout,
+  not AFK, outcome got_away / detained / booked; key = the run id), the live_response block's peaceful arrest (7.3;
+  the talking officer's citizenid from `run.participants[by]`; key `<runId>:<suspect cid>`), `FT.signOff` (key
+  `fto:<rookie>:<task>`, and `fto:<rookie>:done` when the training is done) and the `server:sup:awardPoints` action
+  (key `sup:<award row id>`).
+- CP.Cash's PayClaimed honours the row's `cash.account` (`bank` | `cash` | `item`: `FR.giveMoneyItem`, CanCarryItem
+  then AddItem, a raise leaves the row paying) and `cash.source = 'server'` (never the society account).
+- Settings: the `FeatureRewards.*` paths (economy features `reward_*`, each with its money, account, items and
+  `Rewards.enabled` as limits); `FR.checkSetting` (registered validator) refuses forbidden items, items ox_inventory
+  does not know (`CP.Rewards.itemKnown`), counts outside 1-100 and chances outside 0-1. Spec:
+  tests/feature_rewards_spec.lua (and the hook lines in field_training, sup_award_points, live_response and
+  volunteer_match specs).
 
 ## 6. Cross-cutting conventions
 

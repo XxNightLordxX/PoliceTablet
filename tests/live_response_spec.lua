@@ -179,8 +179,21 @@ do
         entries[#entries + 1] = entry
         return plainTimeline(run, entry)
     end
+    -- step G3: the officer who talked him down is paid once (Config.FeatureRewards.surrender; its own spec pays it)
+    local frPaid = {}
+    CP.FeatureRewards = {
+        enabled = function(f) return f == 'surrender' end,
+        payLater = function(feature, cid, opts)
+            frPaid[#frPaid + 1] = { feature = feature, cid = cid, key = opts.key }
+            return true
+        end,
+    }
+    ctx.run.participants = { [1] = { citizenid = 'LR_OFF1' }, [2] = { citizenid = 'LR_OFF2' } }
     B.onEvent(ctx, nil, { type = 'opp_detained', cid = 'CB', label = 'B', share = 0.5 })
     B.onEvent(ctx, nil, { type = 'opp_detained', cid = 'CB', label = 'B', share = 0.5 })
+    H.ok(#frPaid == 1 and frPaid[1].feature == 'surrender' and frPaid[1].cid == 'LR_OFF2' and frPaid[1].key == 'LR1:CB',
+        'G3: the officer who talked him down is paid once per run and suspect')
+    CP.FeatureRewards = nil
     local p = Lines(ctx, 'peaceful_arrest')
     H.eq(#p, 1, 'a peaceful detain: one peaceful_arrest line per suspect')
     H.eq(p[1].opts.weight, 0.5, 'weighted by his share')
