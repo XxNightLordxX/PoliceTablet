@@ -2330,7 +2330,21 @@ end
 MC._calls = function() return calls end
 MC._setNextPost = function(ts) nextPostAt = ts end
 
+-- The calls live in memory: rows a restart left open or claimed (their run was dropped with no row) are closed
+-- once at start, so Dispatch history and the Supervisor UI never show them open for ever.
+function MC.closeLeftover()
+    local lapsed = Exec('UPDATE cp_mission_calls SET status = \'lapsed\', closed_at = NOW() WHERE status = \'open\'')
+    local ended = Exec([[UPDATE cp_mission_calls SET status = 'closed', outcome = 'restart', closed_at = NOW()
+        WHERE status = 'claimed']])
+    if (lapsed or 0) + (ended or 0) > 0 then
+        CP.log(TAG, '%d open and %d claimed call(s) left by the last server start closed', lapsed or 0, ended or 0)
+    end
+end
+
 CreateThread(function()
+    Wait(0)
+    local mig = CP.Migrations
+    if mig and not (mig.started and not mig.started()) then MC.closeLeftover() end
     while true do
         Wait(math.max(1000, math.floor(Num(Cfg().checkEvery, 10) * 1000)))
         local ok, err = pcall(MC._tick)

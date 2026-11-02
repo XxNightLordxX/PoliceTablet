@@ -1953,6 +1953,9 @@ accepts or declines it.
 Staff-posted calls wait 2 minutes between them (a department's **Wait between staff calls** Mission control may
 change that); an admin may **Post anyway** with a reason. A department may also get its own **call lane** (Mission
 controls → Calls, [4.4](#44-what-supervisors-may-do)): extra calls only its officers see and claim.
+Calls are kept in memory: after `restart Crimson-Police` a call that was still open shows as **Lapsed** and a claimed
+call whose run the restart dropped shows as **Ended by a restart** in the dispatch history and the Supervisor UI
+(the run itself leaves no row, pay or cooldown); the tablet posts new calls as usual.
 
 ### 9.6 Police actions and custody
 
@@ -3017,6 +3020,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 | `docs/STYLE.md` | The code style. `python3 tools/restyle.py` formats the tree, `--check` lists what isn't |
 | `docs/TESTING.md` | How to set up a machine, run the checks and read a failure |
 | `docs/LOOPS.md` | Every loop and timer: when it runs, its interval and why (step LP1) |
+| `docs/WORKFLOWS.md` | Every officer, supervisor and admin workflow, the end-to-end spec that drives it and its result (step WF1) |
 | `docs/IN_GAME_CHECKLIST.md` | What to check in game after an update, one line per change |
 | `docs/PROCESS.md` | How work gets done (branches, the gate, reviews) |
 | `docs/FILE_NOTES.md` | The long file headers |

@@ -5057,15 +5057,6 @@ Unit while the unit's ready check waits for the officer's answer, Active Mission
 last screen. Only the Officer UI: the Supervisor and Admin UIs keep their screens.
 ```
 
-## Crimson-Police/web/src/shared/rowWindow.ts
-
-```text
-Windowed lists (step OP3, Config.AdminUi.windowRows, shipped false): rowWindow() works out the rows of a scroll
-position (more than 100 rows, 12 above and below the view, spacers for the rest); useRowWindow() is the Table's scroll
-handler (one update per animation frame) and measures the first drawn row; useGrowingLimit() lets the Settings search
-results start with 60 rows and add 60 each time an IntersectionObserver sees the end within 600 px.
-```
-
 ## Crimson-Police/web/src/shared/options.ts
 
 ```text
@@ -5073,6 +5064,15 @@ The officer options (CP.OptionDefs) as the open UI and the HUD see them. A 'loca
 from this PC: the Lua client sends { type: 'localOptions', options } on 'ready' and after every change. A 'server'
 option comes from the session (session.options), refreshed by the push 'options'; else the department default
 (session.config.officerOptions.defaults). OptionsProvider sits next to the session context in App.tsx.
+```
+
+## Crimson-Police/web/src/shared/rowWindow.ts
+
+```text
+Windowed lists (step OP3, Config.AdminUi.windowRows, shipped false): rowWindow() works out the rows of a scroll
+position (more than 100 rows, 12 above and below the view, spacers for the rest); useRowWindow() is the Table's scroll
+handler (one update per animation frame) and measures the first drawn row; useGrowingLimit() lets the Settings search
+results start with 60 rows and add 60 each time an IntersectionObserver sees the end within 600 px.
 ```
 
 ## Crimson-Police/web/src/shared/session.tsx
@@ -6653,4 +6653,14 @@ turned on by the admin through the Admin UI's own Settings action. Only the othe
 3. A SAST + FIB unit (cross-department) run. 4. A mission call: created by a supervisor, claimed, run, paid.
 5. Supervisor controls and awards (a control, a cooldown clear, Give points with its default money and items).
 6. Review, void and dispute.
+```
+
+## tests/workflows_full_spec.lua
+
+```text
+Full workflow testing, step WF1 (the owner: "do a full workflow testing of everything"): every workflow the other
+end-to-end specs leave out, driven start to finish on the REAL server side of Crimson-Police (every server file
+loaded as in game, database off: the saves folder, as shipped), every switch on through the Admin UI's own Settings,
+and a `restart Crimson-Police` and a player drop and reconnect in the middle. docs/WORKFLOWS.md lists every workflow
+with the spec that drives it. Only the other resources and the natives are stubs.
 ```

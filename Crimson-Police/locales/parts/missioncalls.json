@@ -92,6 +92,7 @@
   "mc.outcome.lapsed": "Lapsed",
   "mc.outcome.open": "Open",
   "mc.outcome.reopened": "Re-dispatched",
+  "mc.outcome.restart": "Ended by a restart",
   "mc.outcome.unknown": "–",
   "mc.outcome.withdrawn": "Withdrawn",
   "mc.plays.last": "Last played",

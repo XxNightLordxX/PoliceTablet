@@ -2120,6 +2120,8 @@ Full notes: docs/notes/missioncalls.md.
 - Hooks: run:arrived, run:ended (close with the outcome, or re-dispatch once when nobody arrived and the end reason
   is quit, off_route, start_timeout, idle, real_call or force_recall), row:settled and participant:left (cache),
   home:extras (callsOpen). `CP.Schedule.onDaily` deletes history older than Config.Retention.missionCallDays.
+- `closeLeftover()` runs once at start (step WF1): calls live in memory, so rows a restart left `open` become
+  `lapsed` and rows left `claimed` become `closed` with outcome `restart` (their run was dropped with no row).
 - Net: callbacks `getMissionCalls`, `sup:getMissionCalls`, `admin:getAreaCoverage`; actions
   `server:claimMissionCall`, `server:declineMissionCall` (step P19), `server:sup:mcWithdraw|mcPage|mcCreate` and
   `server:admin:*`; plain `server:mcWatch` (deprecated, kept for older clients; the `tablet:closed` hook ends the watch);
@@ -3698,6 +3700,9 @@ read, and one spec that runs both features through the whole real server side.
   middle of each (Restart(): onResourceStop, H.restart, every server file loaded again from the same saves folder):
   an open case, its surrender and an unfinished run end with no row, pay or cooldown; the settings, closed cases,
   payments and the training record stay.
+- tests/workflows_full_spec.lua (step WF1, files mode always): every workflow the specs above leave out, with a
+  `restart Crimson-Police` and a player drop and reconnect in the middle; docs/WORKFLOWS.md is its table (workflow,
+  spec file, steps covered, result) over every end-to-end spec.
 
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 

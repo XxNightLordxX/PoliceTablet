@@ -399,3 +399,12 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   the cursor, Escape and keys work, and the app comes back 2 s later. (Z6)
 - [ ] A volunteer's window ends; a unit draws a players_only mission a few seconds later (before the sweep): he is not
   asked, and the mission card says nobody is free. (Z6)
+
+## Full workflow testing (WF1)
+
+- [ ] A supervisor creates a mission call (or the tablet posts one), an officer claims it and drives to the start,
+  then `restart Crimson-Police`: after the restart Supervisor UI → Mission calls (today) and the dispatch history show
+  the open call as Lapsed and the claimed one as Ended by a restart, never Open or Claimed; new calls post as usual.
+  (WF1)
+- [ ] Play through docs/WORKFLOWS.md once on a test server with every switch on, with one `restart Crimson-Police`
+  and one player quitting and coming back in the middle; each row's result matches. (WF1)
