@@ -162,6 +162,8 @@ const CONFIG: Session['config'] = {
                 : ['Balance change', 'Event', 'Correction'],
         // ?plainLayout: the Admin UI plain layout (Config.AdminUi.plainLayout = true, step G6)
         plainLayout: typeof window !== 'undefined' && /[?&]plainLayout\b/.test(window.location.search),
+        // ?rewardsScreen: the Rewards screen (Config.AdminUi.rewardsScreen = true, step H1)
+        rewardsScreen: typeof window !== 'undefined' && /[?&]rewardsScreen\b/.test(window.location.search),
     },
     // ?rsOff: no Real suspects screen (Config.LiveCrime.enabled and Config.Volunteers.enabled both false)
     realSuspects: { screen: !(typeof window !== 'undefined' && /[?&]rsOff\b/.test(window.location.search)) },

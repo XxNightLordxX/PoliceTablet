@@ -1510,12 +1510,25 @@ Features → Money** (no typed word needed). Each row there shows its money, acc
 
 | Feature | Who is paid | Default money |
 | --- | --- | --- |
-| `suspect` | the volunteer who played a suspect (see the rules below) | escaped $1500, caught $500 (`money.got_away`, `money.caught`) |
+| `suspect` | the volunteer who played a suspect (see the rules below) | escaped $1500, caught $500 (`money.got_away`, `money.caught`); `byType` sets other amounts per mission type |
 | `surrender` | the officer who talked a live-case suspect down (once per suspect) | $300 |
 | `ftoSignOff` | the trainer, for each task he signs off (once per rookie and task) | $250 |
 | `ftoComplete` | the rookie, when his training is done (once) | $1000 |
 | `supAward` | the officer a supervisor gave points (Give points) | $5 a point, at most $2500 (`maxMoney`) |
 
+- `suspect.byType` (shipped `{}`): dollars by mission type, e.g. `byType = { investigation = { got_away = 2000,
+  caught = 600 } }`. A mission type or an outcome you leave out pays `money.got_away` / `money.caught`; the criminal
+  tablet's Jobs card shows the amounts of the job's own type. Settings refuses a type that is not in
+  `Config.MissionTypes`.
+- **The Rewards screen** (`Config.AdminUi.rewardsScreen`, shipped `false`; turn it on in Admin UI → **Settings**):
+  Admin UI → **Rewards** (in the plain layout, under the Rewards group) puts every feature that pays on one page:
+  each NPC mission type (its payout, paid as `Config.Cash.account`, and its own `Config.Rewards.byType` item pool),
+  live cases and volunteer cases for officers (their cash and item switches; they pay the mission type's payout),
+  volunteer suspects (money by outcome and by mission type), talk-downs, field training and supervisor awards (each
+  with its switch, money, account, money item and items list). The items use the same item picker as Settings (only
+  items your ox_inventory has; the server checks every name again). The **Item rewards** switch sits on top with a
+  one-click **Turn item rewards on**. Every change saves like a setting (checked, audited, in Settings → History).
+  Nothing is paid differently with the screen on or off.
 - `account`: `'bank'`, `'cash'` or `'item'`. With `'item'` the money is paid as the item in `moneyItem` (shipped
   `'black_money'`, a dirty-money item; it must exist in your ox_inventory), one item per dollar.
 - `items`: add items per feature, e.g. `items = { { item = 'water', count = { 1, 2 }, chance = 0.5, value = 20 } }`
@@ -1789,7 +1802,7 @@ reorganizes the Admin UI for owners who want plain words and fewer places to loo
 | **NPC missions**: missions against computer suspects and the runs going on now | Missions; Running now (Live) |
 | **Player vs police**: real players as suspects | Player suspects (Real suspects; while live crimes or volunteers are on) |
 | **Police teamwork**: officers, departments and boards | Officers; Departments, Leaderboards, Seasons and challenges (under More) |
-| **Rewards**: what each mission and feature pays | Mission pay (Payouts) |
+| **Rewards**: what each mission and feature pays | Mission pay (Payouts); Rewards for every feature (Rewards, with `Config.AdminUi.rewardsScreen`) |
 | **Permissions**: who may do what | Who can do what (Permissions) |
 | **Economy**: every payment made | Payments made (Payments) |
 | **System**: settings, server health, activity log and tests | Settings; Server health (System); Activity log (Audit Log) and Test tools (Testing) under More |

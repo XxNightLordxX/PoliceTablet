@@ -184,6 +184,13 @@ do
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.plainLayout, false,
         'anything but true counts as off')
     Config.AdminUi.plainLayout = false
+    -- Config.AdminUi.rewardsScreen (H1): the Rewards screen, shipped off
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.rewardsScreen, false,
+        'rewardsScreen ships off: no Rewards screen')
+    Config.AdminUi.rewardsScreen = true
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.rewardsScreen, true,
+        'rewardsScreen on: the session asks for it')
+    Config.AdminUi.rewardsScreen = false
     -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
     H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
     Config.LiveCrime.enabled = true

@@ -173,6 +173,11 @@ Config.AdminUi = {
     -- rarely used tools fold under More, a search box finds any screen or setting, and a breadcrumb shows where you
     -- are; false = the sidebar as before. Only the layout changes
     plainLayout = false,
+    -- true = the Admin UI gets a Rewards screen: every feature that pays (NPC mission types, live and volunteer
+    -- cases for officers, volunteer suspects, talk-downs, field training, supervisor awards) on one page, each with
+    -- its money, how it is paid and its items, saved like any setting; false = no such screen (Settings still has
+    -- every value). Nothing is paid differently
+    rewardsScreen = false,
 }
 
 -- ============================================================================
@@ -2245,6 +2250,9 @@ Config.FeatureRewards = {
             got_away = 1500,         -- dollars when he escaped
             caught = 500,            -- dollars when he was detained or booked (he played the part to the end)
         },
+        -- Dollars by mission type (a Config.MissionTypes key), e.g. investigation = { got_away = 2000, caught = 600 };
+        -- a type or outcome left out pays the money above. Empty = every type pays the money above
+        byType = {},
         items = {},                  -- items for a fair case (see the list shape above)
     },
     -- The officer who talked a live-case suspect down (Talk them down), paid once per suspect when the peaceful

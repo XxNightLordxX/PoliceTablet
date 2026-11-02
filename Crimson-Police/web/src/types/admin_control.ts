@@ -99,4 +99,7 @@ export interface RewardPoolSlotProps {
     value: unknown;
     disabled?: boolean;
     onSave: (value: unknown) => void | Promise<unknown>;
+    // Rewards.byType / byMission only (Admin UI -> Rewards, step H1): edit this one key; the save sends the whole map
+    // with it in place (an empty pool removes the key)
+    only?: string;
 }

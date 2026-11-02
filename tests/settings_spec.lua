@@ -340,6 +340,14 @@ do
     H.eq(E('AdminUi.plainLayout').kind, 'boolean', 'plainLayout is a switch')
     H.ok((E('AdminUi.plainLayout').desc or ''):find('Only the layout changes', 1, true) ~= nil,
         'plainLayout: its config.lua comment is its description')
+    -- step H1: the Rewards screen ships off; volunteer suspect money by mission type ships empty
+    H.eq(E('AdminUi.rewardsScreen').default, false, 'the Admin UI ships with no Rewards screen')
+    H.eq(E('AdminUi.rewardsScreen').kind, 'boolean', 'rewardsScreen is a switch')
+    H.ok((E('AdminUi.rewardsScreen').desc or ''):find('Nothing is paid differently', 1, true) ~= nil,
+        'rewardsScreen: its config.lua comment is its description')
+    H.ok(E('FeatureRewards.suspect.byType') ~= nil, 'byType is one setting edited as a whole')
+    H.ok((E('FeatureRewards.suspect.byType').desc or ''):find('pays the money above', 1, true) ~= nil,
+        'byType: its config.lua comment is its description')
     H.ok((E('AdminUi.reasonChips').desc or ''):find('a click fills the box', 1, true) ~= nil,
         'reasonChips: its config.lua comment is its description')
     H.eq(E('MissionTypes.patrol.dailyLimit').nullable, true, 'dailyLimit = nil is a setting that may stay unset')

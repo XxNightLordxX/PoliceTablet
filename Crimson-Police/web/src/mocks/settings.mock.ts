@@ -29,6 +29,16 @@ function s(path: string, kind: SettingView['kind'], value: unknown, desc: string
     } as SettingView;
 }
 
+const MONEY = { min: 0, max: 1000000, integer: true };
+// Config.FeatureRewards: each feature and its shipped money
+const FEATURES: [string, number][] = [
+    ['suspect', 0],
+    ['surrender', 300],
+    ['ftoSignOff', 250],
+    ['ftoComplete', 1000],
+    ['supAward', 5],
+];
+
 const data: SettingsData = {
     sections: [
         {
@@ -199,6 +209,52 @@ const data: SettingsData = {
                     settings: [
                         s('LiveCrime.enabled', 'boolean', false, 'true = real players doing crimes become suspects'),
                         s('LiveCrime.cash', 'boolean', false, 'true = a live case pays cash', { money: true }),
+                    ],
+                },
+            ],
+        },
+        // Admin UI -> Rewards (step H1, ?rewardsScreen): what each feature pays, its account and items
+        {
+            key: 'feature_rewards',
+            title: 'Feature rewards',
+            file: 'config',
+            group: 'pay',
+            changed: 0,
+            count: 0,
+            groups: [
+                {
+                    path: 'FeatureRewards',
+                    label: 'Feature rewards',
+                    desc: '',
+                    settings: [
+                        ...['patrol', 'tactical'].flatMap(k => [
+                            s(`MissionTypes.${k}.label`, 'text', k === 'patrol' ? 'Patrol' : 'Tactical', 'shown name'),
+                            s(`MissionTypes.${k}.payout`, 'number', k === 'patrol' ? 250 : 800, 'dollars', MONEY),
+                        ]),
+                        s('Cash.account', 'enum', 'bank', "'bank' or 'cash'", { options: ['bank', 'cash'] }),
+                        s('Rewards.enabled', 'boolean', false, 'true = officers can earn items'),
+                        s('Rewards.byType', 'json', {}, 'chance per roll, rolls per run, and a weighted pool'),
+                        s('LiveCrime.items', 'boolean', false, 'true = a live case rolls the item rewards of its type'),
+                        s('Volunteers.payCash', 'boolean', false, 'true = it pays the officers cash'),
+                        s('Volunteers.payRewards', 'boolean', false, 'true = it rolls the item rewards of its type'),
+                        ...FEATURES.flatMap(([k, money]) => [
+                            s(`FeatureRewards.${k}.enabled`, 'boolean', false, 'true = this feature pays'),
+                            ...(k === 'suspect'
+                                ? [
+                                      s('FeatureRewards.suspect.money.got_away', 'number', 1500, 'dollars', MONEY),
+                                      s('FeatureRewards.suspect.money.caught', 'number', 500, 'dollars', MONEY),
+                                      s('FeatureRewards.suspect.byType', 'json', {}, 'dollars by mission type'),
+                                  ]
+                                : [s(`FeatureRewards.${k}.money`, 'number', money, 'dollars', MONEY)]),
+                            ...(k === 'supAward'
+                                ? [s('FeatureRewards.supAward.maxMoney', 'number', 2500, 'dollars', MONEY)]
+                                : []),
+                            s(`FeatureRewards.${k}.account`, 'enum', k === 'suspect' ? 'cash' : 'bank', 'paid as', {
+                                options: ['bank', 'cash', 'item'],
+                            }),
+                            s(`FeatureRewards.${k}.moneyItem`, 'text', 'black_money', 'the money item'),
+                            s(`FeatureRewards.${k}.items`, 'json', [], 'items per payment'),
+                        ]),
                     ],
                 },
             ],

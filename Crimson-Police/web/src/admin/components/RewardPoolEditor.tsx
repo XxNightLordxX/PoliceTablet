@@ -24,8 +24,13 @@ const ENTRY_PATHS = ['Rewards.byType', 'Rewards.byMission'];
 const SPEC_PATHS = ['Rewards.medals', 'Rewards.goals', 'Rewards.levels', 'Rewards.season'];
 const BOSS_PATH = 'Rewards.weeklyBoss';
 
+// FeatureRewards.<feature>.items: a flat list of { item, count, chance, value } (step H1)
+export function isFeatureItems(path: string): boolean {
+    return /^FeatureRewards\.[A-Za-z]+\.items$/.test(path);
+}
+
 export function handlesRewardPool(path: string): boolean {
-    return ENTRY_PATHS.includes(path) || SPEC_PATHS.includes(path) || path === BOSS_PATH;
+    return ENTRY_PATHS.includes(path) || SPEC_PATHS.includes(path) || path === BOSS_PATH || isFeatureItems(path);
 }
 
 interface SpecRow {
@@ -34,9 +39,11 @@ interface SpecRow {
     hi: number;
     weight: number;
     value: number;
+    // feature items only: the chance for each payment (0-1)
+    chance: number;
 }
 
-interface Group {
+export interface Group {
     key: string;
     chance: number;
     rolls: number;
@@ -56,7 +63,14 @@ function toSpec(v: unknown): SpecRow | null {
     const c = s.count;
     const lo = Array.isArray(c) ? num(c[0], 1) : num(c, 1);
     const hi = Array.isArray(c) ? num(c[1], lo) : lo;
-    return { item: String(s.item ?? ''), lo, hi, weight: num(s.weight, 1), value: num(s.value, 0) };
+    return {
+        item: String(s.item ?? ''),
+        lo,
+        hi,
+        weight: num(s.weight, 1),
+        value: num(s.value, 0),
+        chance: num(s.chance, 1),
+    };
 }
 
 function specsOf(v: unknown): SpecRow[] {
@@ -70,9 +84,16 @@ function specsOf(v: unknown): SpecRow[] {
         .filter((s): s is SpecRow => !!s);
 }
 
-function groupsOf(path: string, value: unknown): Group[] {
+export function groupsOf(path: string, value: unknown, only?: string): Group[] {
     if (path === BOSS_PATH) return [{ key: 'weeklyBoss', chance: 1, rolls: 1, specs: specsOf(value) }];
+    if (isFeatureItems(path)) return [{ key: 'items', chance: 1, rolls: 1, specs: specsOf(value) }];
     const map = value && typeof value === 'object' ? (value as Raw) : {};
+    if (only !== undefined) {
+        const e = map[only] && typeof map[only] === 'object' ? (map[only] as Raw) : null;
+        return [
+            { key: only, chance: e ? num(e.chance, 0) : 0.1, rolls: e ? num(e.rolls, 1) : 1, specs: specsOf(e?.pool) },
+        ];
+    }
     return Object.keys(map)
         .sort()
         .map(key => {
@@ -85,13 +106,23 @@ function groupsOf(path: string, value: unknown): Group[] {
         });
 }
 
-function specValue(s: SpecRow, pooled: boolean): Raw {
+function specValue(s: SpecRow, pooled: boolean, listed = false): Raw {
     const out: Raw = { item: s.item, count: s.lo === s.hi ? s.lo : [s.lo, s.hi], value: s.value };
     if (pooled) out.weight = s.weight;
+    if (listed) out.chance = s.chance;
     return out;
 }
 
-function valueOf(path: string, groups: Group[]): unknown {
+// The value a save sends: the whole setting (with only, the full map with that one key replaced or removed).
+export function valueOf(path: string, groups: Group[], base?: unknown, only?: string): unknown {
+    if (isFeatureItems(path)) return (groups[0]?.specs ?? []).map(s => specValue(s, false, true));
+    if (only !== undefined) {
+        const out: Raw = { ...(base && typeof base === 'object' ? (base as Raw) : {}) };
+        const g = groups[0];
+        if (!g || g.specs.length === 0) delete out[only];
+        else out[only] = { chance: g.chance, rolls: g.rolls, pool: g.specs.map(s => specValue(s, true)) };
+        return out;
+    }
     if (path === BOSS_PATH) {
         const specs = groups[0]?.specs ?? [];
         if (specs.length === 0) return null;
@@ -110,17 +141,21 @@ function valueOf(path: string, groups: Group[]): unknown {
     return out;
 }
 
-export function RewardPoolEditor({ path, value, disabled, onSave }: RewardPoolSlotProps) {
+export function RewardPoolEditor({ path, value, disabled, onSave, only }: RewardPoolSlotProps) {
     const pooled = ENTRY_PATHS.includes(path);
-    const [groups, setGroups] = useState<Group[]>(() => groupsOf(path, value));
+    const listed = isFeatureItems(path);
+    // one fixed group: the boss item, a feature's items list, or the one key of a map (no key box, no add or remove)
+    const fixed = path === BOSS_PATH || listed || only !== undefined;
+    const [groups, setGroups] = useState<Group[]>(() => groupsOf(path, value, only));
     const [dirty, setDirty] = useState(false);
     useEffect(() => {
-        setGroups(groupsOf(path, value));
+        setGroups(groupsOf(path, value, only));
         setDirty(false);
-    }, [path, value]);
-    const built = useMemo(() => valueOf(path, groups), [path, groups]);
+    }, [path, value, only]);
+    const built = useMemo(() => valueOf(path, groups, value, only), [path, groups, value, only]);
     const items = useRequest<RewardItemChoices>('admin:rewardItems', {});
-    const preview = useRequest<RewardPoolPreview>('admin:rewardPoolPreview', { path, value: built });
+    // the pool preview knows Config.Rewards only; a feature's items are checked by the server when saved
+    const preview = useRequest<RewardPoolPreview>('admin:rewardPoolPreview', { path, value: built }, { skip: listed });
     const options = (items.data?.items ?? []).map(i => ({ value: i.name, label: `${i.label} (${i.name})` }));
 
     const edit = (gi: number, fn: (g: Group) => Group) => {
@@ -130,8 +165,8 @@ export function RewardPoolEditor({ path, value, disabled, onSave }: RewardPoolSl
     const editSpec = (gi: number, si: number, patch: Partial<SpecRow>) =>
         edit(gi, g => ({ ...g, specs: g.specs.map((s, i) => (i === si ? { ...s, ...patch } : s)) }));
 
-    const err = preview.data?.error;
-    const expected = preview.data?.expected ?? [];
+    const err = listed ? undefined : preview.data?.error;
+    const expected = (listed ? [] : (preview.data?.expected ?? [])).filter(e => only === undefined || e.key === only);
 
     return (
         <div className="reward-pools">
@@ -140,7 +175,7 @@ export function RewardPoolEditor({ path, value, disabled, onSave }: RewardPoolSl
                     <div className="reward-pools__head">
                         {path === BOSS_PATH ? (
                             <strong>{t('rewardpool.boss')}</strong>
-                        ) : (
+                        ) : fixed ? null : (
                             <Field label={t('rewardpool.key')}>
                                 <TextInput
                                     value={g.key}
@@ -173,7 +208,7 @@ export function RewardPoolEditor({ path, value, disabled, onSave }: RewardPoolSl
                                 </Field>
                             </>
                         ) : null}
-                        {path !== BOSS_PATH ? (
+                        {!fixed ? (
                             <IconButton
                                 icon="trash"
                                 size="sm"
@@ -223,6 +258,19 @@ export function RewardPoolEditor({ path, value, disabled, onSave }: RewardPoolSl
                                     onChange={v => editSpec(gi, si, { hi: v ?? 1 })}
                                 />
                             </Field>
+                            {listed ? (
+                                <Field label={t('rewardpool.chance')}>
+                                    <NumberInput
+                                        value={s.chance}
+                                        integer={false}
+                                        step={0.05}
+                                        min={0}
+                                        max={1}
+                                        disabled={disabled}
+                                        onChange={v => editSpec(gi, si, { chance: v ?? 1 })}
+                                    />
+                                </Field>
+                            ) : null}
                             {pooled ? (
                                 <Field label={t('rewardpool.weight')}>
                                     <NumberInput
@@ -261,7 +309,7 @@ export function RewardPoolEditor({ path, value, disabled, onSave }: RewardPoolSl
                         onClick={() =>
                             edit(gi, x => ({
                                 ...x,
-                                specs: [...x.specs, { item: '', lo: 1, hi: 1, weight: 1, value: 0 }],
+                                specs: [...x.specs, { item: '', lo: 1, hi: 1, weight: 1, value: 0, chance: 1 }],
                             }))
                         }
                     >
@@ -269,7 +317,7 @@ export function RewardPoolEditor({ path, value, disabled, onSave }: RewardPoolSl
                     </Button>
                 </div>
             ))}
-            {path !== BOSS_PATH ? (
+            {!fixed ? (
                 <Button
                     size="sm"
                     icon="plus"
@@ -300,7 +348,7 @@ export function RewardPoolEditor({ path, value, disabled, onSave }: RewardPoolSl
                     <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => (setGroups(groupsOf(path, value)), setDirty(false))}
+                        onClick={() => (setGroups(groupsOf(path, value, only)), setDirty(false))}
                     >
                         {t('common.cancel')}
                     </Button>

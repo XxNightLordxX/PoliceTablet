@@ -381,6 +381,8 @@ local function ExtraConfig(deptKey)
             reasonChips = ReasonChips(aui.reasonChips),
             -- step G6: the plain layout (layouts/adminNav.ts), shipped false = as before
             plainLayout = aui.plainLayout == true,
+            -- step H1: the Rewards screen (admin/screens/Rewards.tsx), shipped false = no such screen
+            rewardsScreen = aui.rewardsScreen == true,
         },
         realSuspects = { screen = RealSuspectsScreen() },
         officerNav = OfficerNav(),

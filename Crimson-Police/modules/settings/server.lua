@@ -525,6 +525,7 @@ Play.features = {
         limits = {
             'FeatureRewards.suspect.money.got_away',
             'FeatureRewards.suspect.money.caught',
+            'FeatureRewards.suspect.byType',
             'FeatureRewards.suspect.account',
             'FeatureRewards.suspect.items',
             'Rewards.enabled',
@@ -623,6 +624,7 @@ local OPEN = {
     'LiveCrime.types',                  -- the crime keys are Crimson-Contracts' contract keys
     'Volunteers.modes',                 -- mission type keys (V21)
     'Volunteers.missionModes',          -- mission ids (V21)
+    'FeatureRewards.suspect.byType',    -- mission type keys (H1)
     'Permissions.builderTeleport',      -- department keys
     'Permissions.grants',               -- power keys (Admin UI -> Permissions -> Extra grants)
     'MissionControls.grants',           -- department keys
@@ -1622,6 +1624,7 @@ local KNOWN = {
         check = SumOf100,
     },
     ['FeatureRewards.*.items'] = { tpl = ANY },
+    ['FeatureRewards.suspect.byType'] = { tpl = ANY },
     ['FeatureRewards.*.account'] = { tpl = Enum({ 'bank', 'cash', 'item' }), kind = 'enum' },
     ['Rewards.weeklyBoss'] = { tpl = Alts(NIL, ANY), nullable = true },
     ['Rewards.byType'] = { tpl = ANY },

@@ -4126,6 +4126,16 @@ drawer only calls the server actions the rest of the Admin UI already uses (setM
 resetMissionSwitches, setMissionPayout, setMissionTweak); the actions it lists are passed in by the Missions screen.
 ```
 
+## Crimson-Police/web/src/admin/components/RewardPoolEditor.tsx
+
+```text
+Slot: Settings → Item rewards: a structured editor for the reward pools (item picker without forbidden items,
+chance 0–1, rolls 0–10, count 1–100, weight above 0, value 0 or more) with the server's verdict and the expected
+items and value per run at each tier. The server checks every value again (the raw editor gets the same answers).
+Step H1: also the items list of a feature reward (FeatureRewards.<feature>.items: item, count, chance per payment,
+value), and one key of Rewards.byType (prop only) for the Admin UI Rewards screen.
+```
+
 ## Crimson-Police/web/src/admin/components/SpawnCheckDialog.tsx
 
 ```text
@@ -4148,6 +4158,13 @@ Admin UI split by play (step AP1) walked against the browser mocks (node walk.mj
 the admin screens under NPC missions, Player vs police, Police teamwork, then money and the server, and Settings ->
 Features lists each feature switch by section with the setting it writes (a risky one asks first, a money one
 keeps its typed ENABLE).
+```
+
+## Crimson-Police/web/src/admin/components/rewardsScreen.ts
+
+```text
+The Rewards screen's rows built from the settings data (rewardRows, missionTypes, itemSwitch) and the volunteer
+suspect's money by mission type (typeAmount, withTypeAmount). Pure helpers; walk: rewardsScreen.walk.ts.
 ```
 
 ## Crimson-Police/web/src/admin/components/spawnCheckStore.ts
@@ -4284,6 +4301,15 @@ the antiFarmOverride key. Cases: every open case and the last Config.RealSuspect
 opens its suspects, flag lines, timeline and damage ledger (admin:getRsCase; never a position, and never a case of
 the admin's own characters). Pairs and blocks: pair statistics and the running admin rows (admin:getRsPairs), and
 the three tools (block a pair, exclude a suspect, suspend an officer), each with days and a reason, audited.
+```
+
+## Crimson-Police/web/src/admin/screens/Rewards.tsx
+
+```text
+Admin UI · Rewards (screen key 'admin_rewards', step H1, Config.AdminUi.rewardsScreen): every feature that pays on
+one page. Each row shows its switch, its money and how it is paid, and its items (the RewardPoolEditor item picker,
+checked against ox_inventory by the server); the Item rewards switch sits on top with a one-click turn on. Every
+change saves through the Settings save flow (server:admin:setSetting: checked, audited, pushed as 'settings').
 ```
 
 ## Crimson-Police/web/src/admin/screens/Seasons.tsx

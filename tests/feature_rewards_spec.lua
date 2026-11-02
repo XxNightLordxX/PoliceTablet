@@ -77,6 +77,18 @@ H.eq(FR.money('suspect', { outcome = 'got_away' }), FC.suspect.money.got_away, '
 H.eq(FR.money('suspect', { outcome = 'detained' }), FC.suspect.money.caught, 'detained pays caught')
 H.eq(FR.money('suspect', { outcome = 'left' }), 0, 'left pays nothing')
 H.eq(FR.money('suspect', { outcome = 'void' }), 0, 'void pays nothing')
+-- step H1: per mission type money for the suspect, falling back to the per-outcome default
+H.eq(type(FC.suspect.byType) == 'table' and next(FC.suspect.byType), nil, 'byType ships empty')
+H.eq(FR.money('suspect', { outcome = 'got_away', missionType = 'investigation' }), FC.suspect.money.got_away,
+    'byType empty: a type pays the default')
+FC.suspect.byType = { investigation = { got_away = 2000 } }
+H.eq(FR.money('suspect', { outcome = 'got_away', missionType = 'investigation' }), 2000, 'a set type pays its amount')
+H.eq(FR.money('suspect', { outcome = 'booked', missionType = 'investigation' }), FC.suspect.money.caught,
+    'an outcome the type leaves out pays the default')
+H.eq(FR.money('suspect', { outcome = 'got_away', missionType = 'patrol' }), FC.suspect.money.got_away,
+    'another type pays the default')
+H.eq(FR.money('suspect', { outcome = 'got_away' }), FC.suspect.money.got_away, 'no type: the default')
+FC.suspect.byType = {}
 H.eq(FR.money('supAward', { points = 3 }), 3 * FC.supAward.money, 'supAward: per point')
 H.eq(FR.money('supAward', { points = 100000 }), FC.supAward.maxMoney, 'supAward: up to maxMoney')
 
@@ -176,5 +188,30 @@ H.eq(FR.checkSetting('FeatureRewards.suspect.items', { { item = 'water', chance 
     'chance above 1 is refused')
 H.eq(FR.checkSetting('FeatureRewards.suspect.moneyItem', 'nope_item'), 'err.feature_reward_unknown_item',
     'an unknown money item is refused')
+-- step H1: suspect.byType names known mission types and dollars by outcome only
+H.eq(FR.checkSetting('FeatureRewards.suspect.byType', {}), nil, 'an empty byType')
+H.eq(FR.checkSetting('FeatureRewards.suspect.byType', { tactical = { got_away = 3000, caught = 900 } }), nil,
+    'a known type with both outcomes')
+H.eq(FR.checkSetting('FeatureRewards.suspect.byType', { nope = { got_away = 1 } }), 'err.feature_reward_by_type',
+    'an unknown mission type is refused')
+H.eq(FR.checkSetting('FeatureRewards.suspect.byType', { patrol = { left = 1 } }), 'err.feature_reward_by_type',
+    'an unknown outcome is refused')
+H.eq(FR.checkSetting('FeatureRewards.suspect.byType', { patrol = { caught = -5 } }), 'err.feature_reward_by_type',
+    'a negative amount is refused')
+H.eq(FR.checkSetting('FeatureRewards.suspect.byType', 'x'), 'err.feature_reward_by_type', 'not a table: refused')
+
+-- step H1: a fair case pays its mission type's amount (suspectEnded passes the type on)
+FC.suspect.enabled = true
+FC.suspect.byType = { tactical = { got_away = 3100 } }
+local nTyped = #moneyCalls
+H.eq(FR.suspectEnded(
+    'run-typed-1',
+    { citizenid = 'FR_SUSPECT1', outcome = 'got_away', engaged = true, missionType = 'tactical' },
+    false
+), true, 'a fair tactical case is paid')
+H.advance(100)
+H.eq(moneyCalls[nTyped + 1] and moneyCalls[nTyped + 1].amount, 3100, 'it pays the tactical amount')
+FC.suspect.byType = {}
+FC.suspect.enabled = false
 
 return H

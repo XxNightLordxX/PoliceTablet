@@ -52,13 +52,13 @@ local function Dollars(n)
     return (out:gsub('^,', ''))
 end
 
--- What Pay volunteer suspects (Config.FeatureRewards.suspect, step G3) pays for a fair case, as the Jobs card's
--- Reward line; nil while it is off (the card says Crimson-Police pays nothing).
-function C.rewardText()
+-- What Pay volunteer suspects (Config.FeatureRewards.suspect, step G3) pays for a fair case of missionType (its byType
+-- amounts, step H1), as the Jobs card's Reward line; nil while it is off (the card says Crimson-Police pays nothing).
+function C.rewardText(missionType)
     local FR = CP.FeatureRewards
     if not (FR and FR.enabled and FR.enabled('suspect')) then return nil end
-    local away = FR.money('suspect', { outcome = 'got_away' })
-    local caught = FR.money('suspect', { outcome = 'detained' })
+    local away = FR.money('suspect', { outcome = 'got_away', missionType = missionType })
+    local caught = FR.money('suspect', { outcome = 'detained', missionType = missionType })
     local cfg = FR.cfg('suspect') or {}
     local items = type(cfg.items) == 'table' and next(cfg.items) ~= nil and (Config.Rewards or {}).enabled == true
     if away <= 0 and caught <= 0 and not items then return nil end
@@ -135,8 +135,8 @@ function C.view(src)
     local strikes = V.strikeInfo and V.strikeInfo(cid) or { strikes = {} }
     local ask = volOn and V.askOf and V.askOf(cid) or nil
     if ask then
+        ask.reward = C.rewardText(ask.missionType)
         ask.missionType = TypeLabel(ask.missionType)
-        ask.reward = C.rewardText()
     end
     local case = V.caseOf and V.caseOf(cid) or nil
     return {

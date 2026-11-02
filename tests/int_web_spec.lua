@@ -339,8 +339,9 @@ do
         local key, group = entry:match('key: \'([%w_]+)\''), entry:match('group: \'(%w+)\'')
         if key and groups[group or ''] then groups[group][#groups[group] + 1] = key end
     end
+    -- admin_rewards (H1) shows only with Config.AdminUi.rewardsScreen on (shipped off)
     H.eq(table.concat(groups.main, ','),
-        'admin_home,admin_payouts,admin_missions,admin_live,admin_officers,admin_settings',
+        'admin_home,admin_payouts,admin_rewards,admin_missions,admin_live,admin_officers,admin_settings',
         'the everyday admin screens stay in the sidebar')
     H.eq(#groups.more, 9, 'the other nine fold under More (' .. table.concat(groups.more, ',') .. ')')
     local rs = admin:match('key: \'admin_rs\',(.-)}') or ''

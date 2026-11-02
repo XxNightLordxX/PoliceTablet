@@ -41,6 +41,7 @@ import AdminLive from '../admin/screens/Live';
 import AdminPayments from '../admin/screens/Payments';
 import AdminSystem from '../admin/screens/System';
 import AdminRealSuspects from '../admin/screens/RealSuspects';
+import AdminRewards from '../admin/screens/Rewards';
 
 export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     key: K;
@@ -166,6 +167,16 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_payouts',
         icon: 'dollar',
         component: AdminPayouts,
+        play: 'economy',
+        group: 'main',
+    },
+    {
+        // Rewards (step H1, Config.AdminUi.rewardsScreen): every feature that pays, its money, account and items
+        key: 'admin_rewards',
+        titleKey: 'ui.screen.admin_rewards',
+        icon: 'gift',
+        component: AdminRewards,
+        visible: s => s.config?.adminUi?.rewardsScreen === true,
         play: 'economy',
         group: 'main',
     },

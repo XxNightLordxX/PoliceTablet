@@ -16,6 +16,7 @@ export type SupervisorScreenKey =
 export type AdminScreenKey =
     | 'admin_home'
     | 'admin_payouts'
+    | 'admin_rewards'
     | 'admin_missions'
     | 'admin_seasons'
     | 'admin_leaderboards'

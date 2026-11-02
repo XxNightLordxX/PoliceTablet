@@ -205,5 +205,7 @@
   "err.rate_limited": "Too many requests. Wait a moment and try again.",
   "err.no_response": "No response from the server.",
   "err.refused": "The server refused that request.",
-  "err.no_permission": "You don't have permission to do that."
+  "err.no_permission": "You don't have permission to do that.",
+  "ui.screen.admin_rewards": "Rewards",
+  "ui.nav.plain.admin_rewards": "Rewards for every feature"
 }

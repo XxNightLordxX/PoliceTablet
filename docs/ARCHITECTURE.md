@@ -4200,7 +4200,14 @@ point awarded, up to `maxMoney`).
   then AddItem, a raise leaves the row paying) and `cash.source = 'server'` (never the society account).
 - Settings: the `FeatureRewards.*` paths (economy features `reward_*`, each with its money, account, items and
   `Rewards.enabled` as limits); `FR.checkSetting` (registered validator) refuses forbidden items, items ox_inventory
-  does not know (`CP.Rewards.itemKnown`), counts outside 1-100 and chances outside 0-1. Spec:
+  does not know (`CP.Rewards.itemKnown`), counts outside 1-100 and chances outside 0-1.
+- Step H1: `suspect.byType` (`{ [mission type] = { got_away, caught } }`, shipped `{}`): `FR.money('suspect', {
+  outcome, missionType })` pays the type's amount for that outcome when set, else `money.got_away` / `money.caught`;
+  `FR.suspectEnded` passes the end payload's `missionType`, and `CP.CrimTab.rewardText(missionType)` shows the job's
+  own amounts. `FR.checkSetting` refuses an unknown type, another outcome key or an amount outside 0-1,000,000
+  (`err.feature_reward_by_type`). The Admin UI Rewards screen (`Config.AdminUi.rewardsScreen`, session
+  `config.adminUi.rewardsScreen`; web admin/screens/Rewards.tsx, admin/components/rewardsScreen.ts) edits these paths
+  and the mission types' payouts and pools through `server:admin:setSetting`. Spec:
   tests/feature_rewards_spec.lua (and the hook lines in field_training, sup_award_points, live_response and
   volunteer_match specs).
 

@@ -201,6 +201,9 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Account item with moneyItem black_money (an item in your ox_inventory): the volunteer gets 1500 black_money instead of cash; a full inventory leaves the payment pending until his next login. (G3)
 - [ ] Settings → FeatureRewards.surrender.items: an unknown item name or a weapon is refused; `{ { item = 'water', count = 1 } }` is saved, and with Item rewards On the officer who talks a suspect down gets the water once per suspect. (G3)
 - [ ] Field training On and Pay field training sign-offs On: each sign-off pays the trainer $250 once; the last one pays the rookie $1000 once. Give points On: 10 points pay the officer $50 (at most $2500). (G3)
+- [ ] Rewards screen (H1): shipped, the Admin UI has no Rewards screen. `Config.AdminUi.rewardsScreen` On in Settings: Admin UI → Rewards lists Patrol, Training, Investigation and Tactical (payout, Paid as, item pool), Live cases and Volunteer cases (officers), Volunteer suspects, Talk-downs, Field training sign-offs, Finished field training and Supervisor point awards. Change a payout: Settings → History and the Activity log show it. (H1)
+- [ ] Rewards screen: with Item rewards Off, the top card says Off and **Turn item rewards on** turns it on in one click; each Items block then loses its "Item rewards are off" badge. (H1)
+- [ ] Rewards screen → Volunteer suspects: the item picker lists only your ox_inventory items; saving `water` x1 works, a weapon is refused. Money by mission type: Investigation Got away $2000 → a volunteer who escapes an Investigation case gets $2000, a Patrol case still pays $1500; the criminal tablet's Jobs card shows $2,000 for an Investigation job. (H1)
 
 ## Every workflow end to end (G7)
 

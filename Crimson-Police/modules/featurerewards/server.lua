@@ -47,20 +47,28 @@ function FR.enabled(feature)
     return c ~= nil and c.enabled == true
 end
 
--- The dollars a feature pays: suspect by outcome (got_away, or caught for detained and booked), supAward per point
--- (up to maxMoney), every other feature its money.
+-- The suspect's money for one outcome key ('got_away' | 'caught'): his mission type's own amount in byType (step H1)
+-- when it is set, else the per-outcome default.
+local function SuspectMoney(c, key, missionType)
+    local by = type(c.byType) == 'table' and type(missionType) == 'string' and c.byType[missionType] or nil
+    if type(by) == 'table' and tonumber(by[key]) then return Num(by[key], 0) end
+    local m = type(c.money) == 'table' and c.money or {}
+    return Num(m[key], 0)
+end
+
+-- The dollars a feature pays: suspect by outcome (got_away, or caught for detained and booked) and by his mission
+-- type (opts.missionType), supAward per point (up to maxMoney), every other feature its money.
 function FR.money(feature, opts)
     local c = FR.cfg(feature)
     if not c then return 0 end
     opts = type(opts) == 'table' and opts or {}
     local n = 0
     if feature == 'suspect' then
-        local m = type(c.money) == 'table' and c.money or {}
         local o = opts.outcome
         if o == 'got_away' then
-            n = Num(m.got_away, 0)
+            n = SuspectMoney(c, 'got_away', opts.missionType)
         elseif o == 'detained' or o == 'booked' then
-            n = Num(m.caught, 0)
+            n = SuspectMoney(c, 'caught', opts.missionType)
         end
     elseif feature == 'supAward' then
         n = Num(c.money, 0) * math.max(0, math.floor(Num(opts.points, 0)))
@@ -289,7 +297,11 @@ end
 
 function FR.suspectEnded(runId, payload, afk)
     if not FR.enabled('suspect') or not FR.fairSuspect(payload, afk) then return false end
-    return FR.payLater('suspect', payload.citizenid, { key = tostring(runId), outcome = payload.outcome })
+    return FR.payLater('suspect', payload.citizenid, {
+        key = tostring(runId),
+        outcome = payload.outcome,
+        missionType = payload.missionType,
+    })
 end
 
 -- ============================================================================
@@ -346,12 +358,32 @@ local function CheckItems(v)
     return nil
 end
 
+local BY_TYPE_KEYS = { got_away = true, caught = true }
+
+-- suspect.byType (step H1): { [mission type] = { got_away = dollars, caught = dollars } }, known types only.
+local function CheckByType(v)
+    if type(v) ~= 'table' then return 'err.feature_reward_by_type' end
+    local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
+    for k, e in pairs(v) do
+        if type(k) ~= 'string' or type(types[k]) ~= 'table' or type(e) ~= 'table' then
+            return 'err.feature_reward_by_type'
+        end
+        for field, n in pairs(e) do
+            if not BY_TYPE_KEYS[field] or type(n) ~= 'number' or n ~= n or n < 0 or n > MAX_MONEY then
+                return 'err.feature_reward_by_type'
+            end
+        end
+    end
+    return nil
+end
+
 -- errKey | nil for one FeatureRewards.* path and its new value.
 function FR.checkSetting(path, value)
     local seg = {}
     for part in tostring(path):gmatch('[^%.]+') do seg[#seg + 1] = part end
     if seg[1] ~= 'FeatureRewards' then return nil end
     if seg[3] == 'items' then return CheckItems(value) end
+    if seg[2] == 'suspect' and seg[3] == 'byType' then return CheckByType(value) end
     if seg[3] == 'moneyItem' and type(value) == 'string' and value ~= '' then
         if CP.Rewards and CP.Rewards.itemKnown and CP.Rewards.itemKnown(value) == false then
             return 'err.feature_reward_unknown_item'
