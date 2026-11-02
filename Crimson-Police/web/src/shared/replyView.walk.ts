@@ -1,8 +1,11 @@
-// Smoother workflows (step WF2) against the browser mocks (node walk.mjs, a gate step): Approve / Void on the Review
+// Smoother workflows (steps WF2 and WF3) against the browser mocks (node walk.mjs, a gate step): replies that carry the
+// fresh view (Review Queue, Dispatch, Admin Backups) and the remembered supervisor dialog values.
 
 import '../mocks/oversight.mock';
 import '../mocks/missioncalls.mock';
+import '../mocks/admin_system.mock';
 import { keepLastUsed, lastUsed, rememberOn, resetLastUsed, startNumber } from '../supervisor/components/lastUsed';
+import type { BackupsData } from '../types/admin_system';
 import type { DispatchView } from '../types/missioncalls';
 import type { ReviewQueueData } from '../types/oversight';
 import { action, request } from './nui';
@@ -84,6 +87,20 @@ async function steps(): Promise<void> {
         const v = replyView<DispatchView>(res.data, 'view');
         ok(res.ok && !!v, 'Decline answers with the Dispatch view');
         ok(!!v && !v.calls.some(c => c.id === pushed.id), 'the declined call is gone from it');
+    }
+
+    // step WF3, Admin UI -> System -> Backups: Backup now and Delete answer with the fresh list
+    const made = await action('server:admin:backupNow', {});
+    const name = made.ok && made.data ? (made.data as { name?: string }).name : undefined;
+    const list = replyView<BackupsData>(made.data, 'view');
+    ok(
+        made.ok && !!list && list.backups.some(b => b.name === name),
+        'Backup now answers with the list, the new one in it',
+    );
+    if (name) {
+        const del = await action('server:admin:deleteBackup', { name, reason: 'old', confirm: name });
+        const after = replyView<BackupsData>(del.data, 'view');
+        ok(del.ok && !!after && !after.backups.some(b => b.name === name), 'Delete answers with the list without it');
     }
 
     // Config.Tablet.supervisorRemember: off (as shipped) keeps nothing

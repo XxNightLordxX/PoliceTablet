@@ -1806,6 +1806,24 @@ end
 --                            STORAGE, BACKUPS (NET)
 -- ============================================================================
 
+-- Step WF3 (smoother workflows): a Storage or Backups action replies with the panel's fresh view under data.view, so the
+-- Admin UI needs no second request after it (admin:getStorage allows one read in 5 seconds).
+local function WithView(res, view)
+    local out = {}
+    for k, v in pairs(type(res) == 'table' and res or {}) do out[k] = v end
+    out.view = view
+    return out
+end
+
+function Sys.backupsView()
+    return {
+        backups = Sys.backups(),
+        keep = Config.Backups and Config.Backups.keep or 7,
+        daily = Config.Backups and Config.Backups.daily == true,
+        folder = BACKUP_DIR,
+    }
+end
+
 Kit.callback('admin:getStorage', 'storageAdmin', function(ctx)
     if not CP.Net.rateOk(ctx.src, 'sys:storage', 1, 5000) then return nil, 'err.rate_limited' end
     return Sys.storageView()
@@ -1844,7 +1862,7 @@ Kit.action('server:admin:storageCopy', 'storageAdmin', function(ctx)
     -- the store in use changed under the running server: only a restart reads it again
     local live = targetKind == mode
     if live then Maint.askRestart('storage') else Maint.finish('storage') end
-    return true, { message = key, vars = vars, money = money, restart = live }
+    return true, WithView({ message = key, vars = vars, money = money, restart = live }, Sys.storageView())
 end, {
     requestId = true,
     confirm = function(p) return p.force == true and 'REPLACE' or nil end,
@@ -1856,7 +1874,7 @@ Kit.action('server:admin:setStorageMode', 'storageAdmin', function(ctx)
     local ok, res = Sys.switchStorage(ctx.src, p.enabled, p.folder, p.startEmpty == true)
     if not ok then return false, res end
     ctx.audit('storageSwitch', res.mode, nil, res.folder or 'database', { critical = true })
-    return true, res
+    return true, WithView(res, Sys.storageView())
 end, { reason = true, requestId = true, confirm = 'SWITCH', rate = 1 })
 
 Kit.action('server:admin:useStoreAgain', 'storageAdmin', function(ctx)
@@ -1865,24 +1883,17 @@ Kit.action('server:admin:useStoreAgain', 'storageAdmin', function(ctx)
     if not WriteMeta(MySQL, U.uuid(), 'active') then return false, 'err.internal' end
     Maint.finish('left_behind')
     ctx.audit('storageUseAgain', nil, 'left_behind', 'active', { critical = true })
-    return true, { state = 'active' }
+    return true, WithView({ state = 'active' }, Sys.storageView())
 end, { reason = true, confirm = 'USE', maintenance = true, rate = 1 })
 
-Kit.callback('admin:getBackups', 'storageAdmin', function()
-    return {
-        backups = Sys.backups(),
-        keep = Config.Backups and Config.Backups.keep or 7,
-        daily = Config.Backups and Config.Backups.daily == true,
-        folder = BACKUP_DIR,
-    }
-end, { rate = 2 })
+Kit.callback('admin:getBackups', 'storageAdmin', function() return Sys.backupsView() end, { rate = 2 })
 
 Kit.action('server:admin:backupNow', 'storageAdmin', function(ctx)
     if not CP.Net.rateOk(ctx.src, 'sys:backup', 1, 60000) then return false, 'err.rate_limited' end
     local ok, res = Kit.withLock('backup', function() return Sys.backup(ctx.src, 'manual') end)
     if not ok then return false, res end
     ctx.audit('backupCreated', res.name, nil, ('%d rows'):format(Int(res.rows)))
-    return true, res
+    return true, WithView(res, Sys.backupsView())
 end, { reason = 'optional', rate = 1 })
 
 Kit.callback('admin:previewRestore', 'storageAdmin', function(ctx)
@@ -1903,15 +1914,16 @@ Kit.action('server:admin:restoreBackup', 'storageAdmin', function(ctx)
     if not okT then return false, effect end
     if type(effect) ~= 'table' or effect.name ~= p.name then return false, 'err.preview_stale' end
     local ok, res = Sys.restore(ctx.src, p.name, ctx.reason)
-    if ok then ctx.audited = true end
-    return ok, res
+    if not ok then return false, res end
+    ctx.audited = true
+    return true, WithView(res, Sys.backupsView())
 end, { reason = true, requestId = true, confirm = 'RESTORE', rate = 1, maintenance = true })
 
 Kit.action('server:admin:deleteBackup', 'storageAdmin', function(ctx)
     local ok, err = Sys.deleteBackup(ctx.payload.name)
     if not ok then return false, err end
     ctx.audit('backupDeleted', ctx.payload.name)
-    return true, { name = ctx.payload.name }
+    return true, WithView({ name = ctx.payload.name }, Sys.backupsView())
 end, {
     reason = true,
     confirm = function(p) return type(p.name) == 'string' and p.name or '?' end,

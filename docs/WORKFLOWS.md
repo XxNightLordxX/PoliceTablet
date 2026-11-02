@@ -19,10 +19,10 @@ criminal tablet and the Admin UI (`/CrimsonPoliceAdmin`, its sidebar grouped by 
 has a one-line help under its title that says what to do next, and every error it can show says what went wrong
 and what to do about it (tests/workflow_errors_spec.lua holds the common ones to that).
 
-Each workflow has a short **How it works** paragraph for owners and staff, the spec that drives it, and what step WF2
-changed to make it smoother (before -> after, counted in tablet requests to the server, fixed waits and the
-player's clicks). Anything that changes what players see is a Config option shipped as before; a pure speed-up is
-on for everyone.
+Each workflow has a short **How it works** paragraph for owners and staff, the spec that drives it, and what steps WF2
+(Officer, Supervisor, Field training, System) and WF3 (Criminal, Admin) changed to make it smoother (before -> after,
+counted in tablet requests to the server, fixed waits and the player's clicks). Anything that changes what players see
+is a Config option shipped as before; a pure speed-up is on for everyone.
 
 ## Officer
 
@@ -274,7 +274,9 @@ his time. Backing out after the free seconds is a strike.
 Spec: tests/realsuspects_e2e_spec.lua (3, 5, 6). Covers: `/crimsonheat` and the criminal tablet, the pop-up, the yes,
 engaged, the knock, the cuff, volunteerEnded, a strike after the free seconds. Result: **Pass**.
 
-Smoother (WF2): not reviewed in WF2 (a WF3 step follows).
+Smoother (WF3): no change needed. Every criminal tablet action (save roles, renew, stop, the pop-up answer) already
+answers with the fresh view in one request, and the free Give up runs out on its own on the page (no polling). Stop
+keeps its second click (it ends the volunteer time); the other buttons are one click.
 
 ## Admin
 
@@ -288,7 +290,10 @@ Spec: tests/workflows_full_spec.lua (1). Covers: Settings opened, the Features t
 refused, item rewards toggled on, the Rewards pools edited, an extra grant (mission calls for one officer), the hourly
 cap, a season started; **restart**: every change kept. Result: **Pass**.
 
-Smoother (WF2): not reviewed in WF2 (a WF3 step follows).
+Smoother (WF3): no change needed in the steps: a Setting's save reply carries the changed setting and the screen
+applies it (no second fetch); the typed ENABLE stays on the money tools (risky). The common Settings errors now say what to do next (for example "That is
+not valid JSON. Check the brackets, quotes and commas.", "This is not a Crimson-Police settings export. Paste a file
+made by Export in Settings.").
 
 ### Corrections
 
@@ -298,7 +303,9 @@ retires or unretires an officer; each needs a reason and is audited.
 Spec: tests/workflows_full_spec.lua (9), tests/admin_control_e2e_spec.lua (1). Covers: Give points, void a run (XP
 down), **restart** (still voided), restore (XP back, cash never taken back); retire and unretire. Result: **Pass**.
 
-Smoother (WF2): not reviewed in WF2 (a WF3 step follows).
+Smoother (WF3): no change needed in the steps: each correction needs its reason and is audited, so the dialog stays
+(its rules require it). Its errors now say what to do next (for example "That run is already voided. Use Restore on it
+to undo the void.", "That is over your daily adjustment limit. Give fewer points, or try again tomorrow.").
 
 ### Backups and restore
 
@@ -309,7 +316,10 @@ Spec: tests/workflows_full_spec.lua (10), tests/admin_control_e2e_spec.lua (4), 
 Backup, a payment after it, preview, RESTORE, no new run until the restart, **restart**: the payment stays paid,
 nothing paid twice, runs start again. Result: **Pass**.
 
-Smoother (WF2): not reviewed in WF2 (a WF3 step follows).
+Smoother (WF3): Backup now, Restore and Delete answered and then the Backups list was asked for again; now each reply
+carries the fresh list (2 tablet requests -> 1, a pure speed-up). RESTORE and the typed backup name stay (risky). The
+backup errors say what to do next ("Delete an older backup instead.", "Refresh the backups list and pick another
+one.").
 
 ### Storage copy
 
@@ -320,7 +330,10 @@ Spec: tests/workflows_full_spec.lua (12), tests/storage_copy_spec.lua. Covers: T
 (every run row, the XP, the Builder missions), the folder in use unchanged, runs start at once; the switch, force and
 both directions in storage_copy_spec. Result: **Pass**.
 
-Smoother (WF2): not reviewed in WF2 (a WF3 step follows).
+Smoother (WF3): Copy, Switch storage and Use again answered and then the Storage panel was asked for again, and
+admin:getStorage allows one read in 5 seconds, so that second read could be refused and leave the panel stale; now each
+reply carries the fresh Storage view (2 requests -> 1, never refused, a pure speed-up). The typed REPLACE, SWITCH and
+USE stay (risky).
 
 ## System
 
@@ -348,6 +361,18 @@ options -> During a mission), Auto-Ready, the tablet opening on Active Mission w
 the tablet), the last screen of each tablet kept while the resource runs, remembered Dispatch filters, the run, unit,
 calls and operation views pushed to every member at once, and the Supervisor UI grouped by task
 (`Config.Tablet.supervisorByTask`).
+
+## What WF3 changed (before -> after)
+
+| Workflow | Before | After | Kind |
+|---|---|---|---|
+| Backups: Backup now, Restore, Delete | 2 tablet requests (the action, then admin:getBackups) | 1 (the reply carries the list) | speed-up, for everyone |
+| Storage copy: Copy, Switch storage, Use again | 2 requests (the action, then admin:getStorage, which allows one read in 5 s and could refuse it) | 1 (the reply carries the view) | speed-up, for everyone |
+| Common Admin errors (Backups, Storage, Corrections, Settings) | 24 texts said only what went wrong | each also says what to do next | text, for everyone |
+| Volunteer by the criminal tablet | one request per action, the reply carries the view | unchanged | already smooth |
+
+Kept on purpose: the typed RESTORE, REPLACE, SWITCH, USE and ENABLE words and the reason on every correction (risky or
+audited actions).
 
 ## Defects found and fixed
 

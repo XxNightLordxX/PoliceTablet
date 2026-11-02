@@ -1,6 +1,4 @@
--- Easy to understand (step WF2, docs/WORKFLOWS.md): every error an officer or a supervisor meets on the common
--- workflows (accept, unit, Dispatch, the run, Review Queue, the supervisor dialogs) says what went wrong and what to do
--- next, in the merged locales/en.json and in every locales/parts file that carries the key. Plain Lua, no stubs.
+-- Easy to understand (steps WF2 and WF3, docs/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
 
 local H = dofile('tests/harness.lua')
 local cjson = require('cjson')
@@ -53,6 +51,31 @@ local KEYS = {
     'err.unknown_mission',
     'err.happy_hour_running',
     'err.mission_ban_none',
+    -- step WF3: the Admin workflows (Backups, Storage copy, Corrections, Settings)
+    'err.backup_protected',
+    'err.backup_unknown',
+    'err.confirm_mismatch',
+    'err.not_left_behind',
+    'err.storage_same',
+    'err.export_write',
+    'err.already_voided',
+    'err.not_voided',
+    'err.nothing_to_void',
+    'err.row_not_found',
+    'err.invalid_row',
+    'err.not_participant',
+    'err.officer_not_retired',
+    'err.officer_retired',
+    'err.adjust_daily_limit',
+    'err.batch_restored',
+    'err.batch_unknown',
+    'err.once_a_day',
+    'err.setting_check',
+    'err.setting_json',
+    'err.history_unknown',
+    'err.import_format',
+    'err.import_nothing',
+    'err.setting_required',
 }
 
 -- A next step: a text that is itself the instruction ("Enter a reason ..."), a second sentence, or a clause after a

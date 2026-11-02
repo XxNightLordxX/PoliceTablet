@@ -813,6 +813,10 @@ end
 -- ============================================================================
 
 do
+    -- the replies carry the Storage view (step WF3), whose database side reads information_schema: shadow mode compares
+    -- it with the saves folder engine, which has none, so there the view's table counts are left out
+    local realStatus = CP.Admin.storageStatus
+    if H.storage == 'shadow' then CP.Admin.storageStatus = function() return {} end end
     local eff, ov = CP.Storage.effective({ enabled = true, folder = 'saves' }, function(k) return kvp[k] end)
     H.ok(eff.enabled == true and ov == nil, 'no in-game choice: config.lua')
     eff, ov = CP.Storage.effective({ enabled = true, folder = 'saves' }, function(k)
@@ -864,6 +868,8 @@ do
         requestId = Rid(13),
     })
     H.ok(ok == true, 'switched: ' .. tostring(e))
+    H.ok(type(e) == 'table' and e.view and e.view.state == 'left_behind' and e.view.maintenance ~= nil,
+        'the reply carries the fresh Storage view (no second request, step WF3)')
     H.ok(kvp.cp_storage_mode == 'files' and kvp.cp_storage_folder == 'saves/other', 'the choice is in the KVP')
     H.eq(Sys.storageMeta().state, 'left_behind', 'this store is marked left behind')
     H.eq((Maint.active()), 'storage', 'the storage lock holds until the restart')
@@ -882,6 +888,7 @@ do
     local okC, key = Sys._consoleStorageMode(0, { 'reset' })
     H.ok(okC and key == 'sysadmin.console.storagemode_reset' and kvp.cp_storage_mode == nil,
         'console storagemode reset clears the in-game choice')
+    CP.Admin.storageStatus = realStatus
 end
 
 -- ============================================================================

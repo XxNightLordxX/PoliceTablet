@@ -3710,6 +3710,11 @@ read, and one spec that runs both features through the whole real server side.
   Config.Tablet.supervisorRemember (shipped false) lets the supervisor dialogs open with the values last used
   (supervisor/components/lastUsed.ts, page memory only). docs/WORKFLOWS.md is ordered by group (Officer, Supervisor,
   Field training, Criminal, Admin, System) with a How it works paragraph per workflow.
+- Smoother workflows (step WF3, the Criminal and Admin groups): server:admin:backupNow, server:admin:restoreBackup and
+  server:admin:deleteBackup answer with data.view (Sys.backupsView(), the view of admin:getBackups);
+  server:admin:storageCopy, server:admin:setStorageMode and server:admin:useStoreAgain with data.view
+  (Sys.storageView(), the view of admin:getStorage, which allows one read in 5 seconds). The System screen applies it
+  through shared/replyView.ts and asks again only when it is missing.
 
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 

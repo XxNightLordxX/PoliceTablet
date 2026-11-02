@@ -3021,7 +3021,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 | `docs/STYLE.md` | The code style. `python3 tools/restyle.py` formats the tree, `--check` lists what isn't |
 | `docs/TESTING.md` | How to set up a machine, run the checks and read a failure |
 | `docs/LOOPS.md` | Every loop and timer: when it runs, its interval and why (step LP1) |
-| `docs/WORKFLOWS.md` | Every workflow by group (Officer, Supervisor, Field training, Criminal, Admin, System): how it works in plain English, the end-to-end spec that drives it, its result (step WF1) and what step WF2 made smoother |
+| `docs/WORKFLOWS.md` | Every workflow by group (Officer, Supervisor, Field training, Criminal, Admin, System): how it works in plain English, the end-to-end spec that drives it, its result (step WF1) and what steps WF2 and WF3 made smoother |
 | `docs/IN_GAME_CHECKLIST.md` | What to check in game after an update, one line per change |
 | `docs/PROCESS.md` | How work gets done (branches, the gate, reviews) |
 | `docs/FILE_NOTES.md` | The long file headers |

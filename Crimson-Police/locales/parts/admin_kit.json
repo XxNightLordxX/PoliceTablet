@@ -54,7 +54,7 @@
   "err.job_kind": "This kind of bulk change is not available.",
   "err.job_failed": "The bulk change stopped. Rows done so far are listed in Corrections.",
   "err.maintenance": "Crimson-Police is locked for maintenance. The banner at the top of the tablet says what ends it.",
-  "err.confirm_mismatch": "The typed word does not match.",
+  "err.confirm_mismatch": "The typed word does not match. Type it exactly as the dialog shows it.",
   "err.retired": "Your Crimson-Police record is retired. Ask an admin.",
   "ui.maintenance.title.restore_failed": "A backup restore stopped part way",
   "ui.maintenance.officer_restore_failed": "New missions, mission calls and payments wait until an admin finishes restoring a backup. Your runs and pay are safe.",

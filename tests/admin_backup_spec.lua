@@ -187,6 +187,8 @@ do
     local ok, res = Act('server:admin:backupNow', 1, {})
     H.ok(ok == true and res and res.name and res.rows >= 5, 'a backup is made: ' .. tostring(res and res.name or res))
     first = res.name
+    H.ok(res.view and #res.view.backups == 1 and res.view.backups[1].name == first and res.view.keep ~= nil,
+        'the reply carries the fresh Backups list (no second request, step WF3)')
     local list = Cb('admin:getBackups', 1, {})
     H.ok(list and #list.backups == 1 and list.backups[1].name == first, 'it is listed')
     local fh = io.open(GetResourcePath() .. '/saves/_backups/' .. first .. '.manifest.json')
@@ -246,6 +248,7 @@ do
     ok, e = Act('server:admin:restoreBackup', 1,
         { name = first, previewToken = pv.previewToken, reason = 'test', confirm = 'RESTORE', requestId = Rid(4) })
     H.ok(ok == true and e.restart == true, 'restored: ' .. tostring(type(e) == 'table' and e.backup or e))
+    H.ok(e.view and #e.view.backups == 2, 'the restore reply carries the list with its automatic backup (step WF3)')
     H.eq((Maint.active()), 'restore', 'the restore lock holds until the owner restarts')
     H.eq(Maint.view().restart, true, 'and the Admin UI asks for the restart')
 
@@ -305,8 +308,9 @@ do
     H.ok(okD == false and eD == 'err.reason_required', 'a reason is required')
     okD, eD = Act('server:admin:deleteBackup', 1, { name = other.name, reason = 'old', confirm = 'nope' })
     H.ok(okD == false and eD == 'err.confirm_mismatch', 'the typed backup name')
-    okD = Act('server:admin:deleteBackup', 1, { name = other.name, reason = 'old', confirm = other.name })
+    okD, eD = Act('server:admin:deleteBackup', 1, { name = other.name, reason = 'old', confirm = other.name })
     H.ok(okD == true and #Sys.backups() == 2, 'deleted')
+    H.ok(type(eD) == 'table' and eD.view and #eD.view.backups == 2, 'the reply carries the list without it (step WF3)')
     H.eq(Num(One('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'backupDeleted\'').n), 1, 'audited')
 end
 

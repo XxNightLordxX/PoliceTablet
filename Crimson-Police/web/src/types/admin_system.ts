@@ -48,6 +48,8 @@ export interface StorageCopyReply {
     vars?: Record<string, unknown>;
     money?: { updated: number; inserted: number } | null;
     restart?: boolean;
+    // step WF3: the fresh Storage view, so the panel needs no second request
+    view?: StorageView;
 }
 
 // ============================================================================

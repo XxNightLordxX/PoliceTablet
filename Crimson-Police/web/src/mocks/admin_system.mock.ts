@@ -68,12 +68,14 @@ registerMock('action', 'server:admin:storageCopy', () => ({ message: 'admin.cmd.
 registerMock('action', 'server:admin:setStorageMode', () => ({ mode: 'database', restart: true }));
 registerMock('action', 'server:admin:useStoreAgain', () => ({ state: 'active' }));
 
-registerMock('request', 'admin:getBackups', (): BackupsData => ({
+const backupsView = (): BackupsData => ({
     backups: [...backups].reverse(),
     keep: 7,
     daily: false,
     folder: 'saves/_backups',
-}));
+});
+
+registerMock('request', 'admin:getBackups', backupsView);
 
 registerMock('action', 'server:admin:backupNow', () => {
     const b: BackupView = {
@@ -88,7 +90,8 @@ registerMock('action', 'server:admin:backupNow', () => {
     for (const x of backups) x.protected = false;
     b.protected = true;
     backups.push(b);
-    return b;
+    // step WF3: the reply carries the fresh list, as the server's does
+    return { ...b, view: backupsView() };
 });
 
 registerMock('request', 'admin:previewRestore', (a: { name?: string }): RestorePreview => ({
@@ -107,11 +110,11 @@ registerMock('request', 'admin:previewRestore', (a: { name?: string }): RestoreP
     expiresAt: now() + 120,
 }));
 
-registerMock('action', 'server:admin:restoreBackup', () => ({ restart: true }));
+registerMock('action', 'server:admin:restoreBackup', () => ({ restart: true, view: backupsView() }));
 registerMock('action', 'server:admin:deleteBackup', (p: { name?: string }) => {
     const i = backups.findIndex(b => b.name === p?.name);
     if (i >= 0) backups.splice(i, 1);
-    return { name: p?.name };
+    return { name: p?.name, view: backupsView() };
 });
 
 registerMock('request', 'admin:getWebhooks', (): { webhooks: WebhookView[] } => ({

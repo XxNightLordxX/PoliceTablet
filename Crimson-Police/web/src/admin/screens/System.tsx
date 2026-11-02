@@ -30,6 +30,7 @@ import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigation } from '../../shared/navigation';
 import { request } from '../../shared/nui';
+import { applyReplyView } from '../../shared/replyView';
 import { toast } from '../../shared/toast';
 import { copyLine } from '../components/copyText';
 import { useAdminAction } from '../components/kit';
@@ -98,7 +99,7 @@ function Codes({ label, items }: { label: string; items: string[] }) {
 // ============================================================================
 
 function StoragePanel() {
-    const { data, loading, error, refetch } = useRequest<StorageView>(
+    const { data, loading, error, refetch, setData } = useRequest<StorageView>(
         'admin:getStorage',
         {},
         { pushTopic: 'maintenance' },
@@ -117,6 +118,8 @@ function StoragePanel() {
     const files = data.mode === 'files';
     const migrations = data.migrations;
     const blocked = busy || data.runsGoing > 0;
+    // step WF3: the reply carries the fresh Storage view (data.view); an older server's reply asks again
+    const fresh = (reply: unknown) => applyReplyView<StorageView>(reply, 'view', setData, () => void refetch());
 
     const doCopy = async (typed: string) => {
         if (!copy) return;
@@ -126,7 +129,7 @@ function StoragePanel() {
             { success: 'sysadmin.ui.copy_done' },
         );
         setCopy(null);
-        if (res.ok) void refetch();
+        if (res.ok) fresh(res.data);
     };
     const doSwitch = async (reason: string, typed: string) => {
         const res = await run(
@@ -135,12 +138,12 @@ function StoragePanel() {
             { success: 'sysadmin.ui.switch_done' },
         );
         setSwitching(false);
-        if (res.ok) void refetch();
+        if (res.ok) fresh(res.data);
     };
     const doUseAgain = async (reason: string, typed: string) => {
         const res = await run('server:admin:useStoreAgain', { reason, confirm: typed }, { requestId: false });
         setUseAgain(false);
-        if (res.ok) void refetch();
+        if (res.ok) fresh(res.data);
     };
 
     return (
@@ -326,15 +329,17 @@ function StoragePanel() {
 // ============================================================================
 
 function BackupsPanel() {
-    const { data, loading, error, refetch } = useRequest<BackupsData>('admin:getBackups', {});
+    const { data, loading, error, refetch, setData } = useRequest<BackupsData>('admin:getBackups', {});
     const { run, busy } = useAdminAction();
+    // step WF3: the reply carries the fresh Backups list (data.view); an older server's reply asks again
+    const fresh = (reply: unknown) => applyReplyView<BackupsData>(reply, 'view', setData, () => void refetch());
     const [preview, setPreview] = useState<RestorePreview | null>(null);
     const [confirmRestore, setConfirmRestore] = useState(false);
     const [deleting, setDeleting] = useState<BackupView | null>(null);
 
     const backupNow = async () => {
         const res = await run('server:admin:backupNow', {}, { requestId: false, success: 'sysadmin.ui.backup_done' });
-        if (res.ok) void refetch();
+        if (res.ok) fresh(res.data);
     };
     const openPreview = async (b: BackupView) => {
         const res = await request<RestorePreview>('admin:previewRestore', { name: b.name });
@@ -350,7 +355,7 @@ function BackupsPanel() {
         );
         setConfirmRestore(false);
         setPreview(null);
-        if (res.ok) void refetch();
+        if (res.ok) fresh(res.data);
     };
     const doDelete = async (reason: string, typed: string) => {
         if (!deleting) return;
@@ -360,7 +365,7 @@ function BackupsPanel() {
             { requestId: false, success: 'sysadmin.ui.delete_done' },
         );
         setDeleting(null);
-        if (res.ok) void refetch();
+        if (res.ok) fresh(res.data);
     };
 
     const columns: TableColumn<BackupView>[] = [

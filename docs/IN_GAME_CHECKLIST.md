@@ -420,3 +420,12 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   Crimson-Police: the dialogs open empty. Shipped `false`: they always open empty.
 - [ ] Errors read with a next step: claim a call another unit just took ("Pick another call on Dispatch"), invite
   into a full unit ("Its leader can remove a member to make room"), submit a supervisor dialog with no reason.
+
+## Smoother workflows (WF3)
+
+- [ ] Admin UI -> System -> Backups: Backup now, then Delete an older backup: the list changes at once (one request,
+  the reply carries the list). Restore one after typing RESTORE: the list shows the automatic backup at once.
+- [ ] Admin UI -> System -> Storage: Copy all data to the other storage, then at once Copy again or Switch storage:
+  the panel shows the new state at once and never says "too many requests" (the reply carries the view).
+- [ ] Errors read with a next step: delete the newest backup ("Delete an older backup instead."), void a run that is
+  already voided ("Use Restore on it to undo the void."), import a file that is not a settings export.
