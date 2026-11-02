@@ -121,6 +121,8 @@ local function NewRun(id, o)
         r.participants[s] = { src = s, citizenid = 'CID' .. s, status = 'active', arrived = o.arrived or false }
     end
     runs[id] = r
+    -- a real run fires run:created, which arms the downed check (step LP4: it sleeps while no run is live)
+    if CP.Downed and CP.Downed._arm then CP.Downed._arm() end
     return r
 end
 

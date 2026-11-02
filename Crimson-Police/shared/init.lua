@@ -206,6 +206,31 @@ function CP.Perf.rangeSq(rangeSq)
     return cap < rangeSq and cap or rangeSq
 end
 
+-- A tick that runs only while it has work (step LP4): arm() starts it unless it runs (a second arm() is a no-op);
+-- each pass waits ms, then calls pass(); a pass that returns true (nothing left to watch) ends the loop until the
+-- next arm(). A failing pass is logged and the loop goes on.
+---@param tag string the log tag
+---@param ms number|function the wait before each pass (milliseconds, or a function read before each pass)
+---@param pass function the pass; returns true when it found nothing to do
+---@return function arm, function running
+function CP.Perf.armed(tag, ms, pass)
+    local running = false
+    local function Arm()
+        if running then return end
+        running = true
+        CreateThread(function()
+            while true do
+                Wait(type(ms) == 'function' and ms() or ms)
+                local ok, idle = pcall(pass)
+                if not ok then CP.err(tag, 'tick failed: %s', tostring(idle)) end
+                if ok and idle == true then break end
+            end
+            running = false
+        end)
+    end
+    return Arm, function() return running end
+end
+
 -- ============================================================================
 --                                    HOOKS
 -- ============================================================================

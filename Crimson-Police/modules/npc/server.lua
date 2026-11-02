@@ -1329,9 +1329,9 @@ local function CheckPed(run, netId, info, rec)
 end
 
 local function Tick()
-    if not (CP.Runs and CP.Runs.all) then return end
+    if not (CP.Runs and CP.Runs.all) then return true end
     local ok, list = pcall(CP.Runs.all)
-    if not ok or type(list) ~= 'table' then return end
+    if not ok or type(list) ~= 'table' then return true end
     local seen, live = {}, {}
     for _, run in pairs(list) do
         if IsLive(run) and type(run.entities) == 'table' then
@@ -1382,15 +1382,17 @@ local function Tick()
     for k, at in pairs(forceAt) do
         if t - at > 60000 then forceAt[k] = nil end
     end
+    -- nothing live and nothing remembered: the watcher sleeps until the next run
+    return next(live) == nil and next(peds) == nil and next(watches) == nil and next(rolls) == nil
+        and next(shotAt) == nil and next(forceAt) == nil
 end
 
-CreateThread(function()
-    while true do
-        Wait(TICK_MS)
-        local ok, err = pcall(Tick)
-        if not ok then CP.err(TAG, 'watcher tick failed: %s', tostring(err)) end
-    end
-end)
+-- The watcher runs only while a run is live or a record is kept (step LP4: it woke every second all day): armed at
+-- start and by every run created; the pass that finds neither ends it.
+local ArmTick
+ArmTick, Npc._ticking = CP.Perf.armed(TAG, TICK_MS, Tick)
+if CP.Hooks and CP.Hooks.on then CP.Hooks.on('run:created', function() ArmTick() end) end
+ArmTick()
 
 -- ============================================================================
 --                                "Cuff suspect"

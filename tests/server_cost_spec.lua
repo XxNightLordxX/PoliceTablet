@@ -44,7 +44,49 @@ end
 
 Adv(125000, 500)
 sql = {}
+-- every Wait of the resource's own files during the idle two minutes (step LP4)
+local wakes = {}
+local realWait = _G.Wait
+_G.Wait = function(ms)
+    local info = debug.getinfo(2, 'S')
+    local file = info.source:match('Crimson%-Police/(.*)$')
+    if file then wakes[file] = (wakes[file] or 0) + 1 end
+    return realWait(ms)
+end
+_G.Citizen.Wait = _G.Wait
 Adv(120000, 500)
+_G.Wait = realWait
+_G.Citizen.Wait = realWait
+
+-- ============================================================================
+--            TICKS THAT SLEEP WITH NO RUN (step LP4, docs/LOOPS.md)
+-- ============================================================================
+-- the run engine (with the job recheck), custody, the NPC watcher, the drive-to-start and downed checks, the Testing
+-- upkeep and the unit sweep woke every 1-5 s all day; now each runs only while what it watches exists (a run, a test,
+-- a unit), armed again by the next one. The mission calls push flag is a SetTimeout armed by a change, not a 1 s loop.
+for _, m in ipairs({
+    { 'Runs', 'modules/runs/server.lua', '_engineTicking', 2 },
+    { 'Custody', 'modules/custody/server.lua' },
+    { 'Npc', 'modules/npc/server.lua' },
+    { 'Route', 'modules/route/server.lua' },
+    { 'Downed', 'modules/downed/server.lua' },
+    { 'Testing', 'modules/testing/server.lua' },
+    { 'Units', 'modules/units/server.lua' },
+}) do
+    local mod, field = CP[m[1]], m[3] or '_ticking'
+    local ticking = type(mod[field]) == 'function' and mod[field]()
+    H.eq(ticking, false, ('idle server: the %s tick is not running (%s)'):format(m[1], tostring(ticking)))
+    -- the run engine's file keeps its 60 s cache housekeeping (two passes in two minutes)
+    local n, most = wakes[m[2]] or 0, m[4] or 0
+    H.ok(n <= most, ('idle server, two minutes: %s wakes at most %d times (%d)'):format(m[2], most, n))
+end
+do
+    local n = wakes['modules/missioncalls/server.lua'] or 0
+    local every = math.max(1, tonumber(Config.MissionCalls.checkEvery) or 10)
+    H.ok(n <= math.ceil(120 / every) + 1,
+        ('idle server, two minutes: mission calls wake only for their %d s check (%d; +120 before LP4)'):format(every,
+            n))
+end
 local officers = 0
 for _, s in ipairs(GetPlayers()) do
     if CP.Access.getOfficer(tonumber(s)) then officers = officers + 1 end

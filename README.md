@@ -1118,6 +1118,13 @@ end check sleeps while no happy hour runs instead of waking every 30 s all day (
 runs). One new switch, off as shipped: `Config.Performance.markerRange` caps how far away the per-frame objective
 markers draw (try `60` if resmon is high while you drive towards an objective).
 
+Step LP4 was the final loop proof (every loop answers five questions in `docs/LOOPS.md` under **Final loop proof**):
+with no run the server's per-run ticks sleep instead of waking every 1-5 s all day (the run engine, whose job recheck
+is now on the same thread, custody, the NPC watcher, the drive-to-start and downed checks, the Testing upkeep and the
+unit sweep), and wake again with the next run, test or unit; the mission calls screen push is one timer after a change
+instead of a 1 s loop; a HUD countdown wakes once a second instead of five times. Nothing to configure, and players
+see no change: while a run is on every tick keeps its old pace.
+
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.
 
@@ -3020,7 +3027,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 | `docs/WEB_UI.md` | The web UI developer guide |
 | `docs/STYLE.md` | The code style. `python3 tools/restyle.py` formats the tree, `--check` lists what isn't |
 | `docs/TESTING.md` | How to set up a machine, run the checks and read a failure |
-| `docs/LOOPS.md` | Every loop and timer: when it runs, its interval and why (step LP1) |
+| `docs/LOOPS.md` | Every loop and timer: when it runs, its interval and why (step LP1), the five questions and the loop census (step LP4) |
 | `docs/WORKFLOWS.md` | Every workflow by group (Officer, Supervisor, Field training, Criminal, Admin, System): how it works in plain English, the end-to-end spec that drives it, its result (step WF1) and what steps WF2 and WF3 made smoother |
 | `docs/IN_GAME_CHECKLIST.md` | What to check in game after an update, one line per change |
 | `docs/PROCESS.md` | How work gets done (branches, the gate, reviews) |

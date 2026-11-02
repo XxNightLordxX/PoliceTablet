@@ -165,6 +165,14 @@ export interface CountdownOptions {
     onDone?: () => void;
 }
 
+// The wait until the countdown's next whole second (step LP4: one wake a second at the step, was a 200 ms poll):
+// `elapsedMs` since the countdown started; 1-1000 ms, plus a few ms so the step lands just after the boundary.
+export const COUNTDOWN_SLACK_MS = 5;
+export function countdownWaitMs(elapsedMs: number): number {
+    const into = Math.max(0, elapsedMs) % 1000;
+    return 1000 - into + COUNTDOWN_SLACK_MS;
+}
+
 // Counts `seconds` down locally, one step per second, never below 0. Restarts whenever `seconds`
 // (or `resetKey`) changes. Returns null when `seconds` is null.
 export function useCountdown(seconds: number | null | undefined, opts: CountdownOptions = {}): number | null {
@@ -182,18 +190,25 @@ export function useCountdown(seconds: number | null | undefined, opts: Countdown
         if (base === null || paused || base <= 0) return;
         const start = Date.now();
         let last = base;
-        const id = setInterval(() => {
-            const next = Math.max(0, base - Math.floor((Date.now() - start) / 1000));
+        let id: ReturnType<typeof setTimeout> | null = null;
+        const step = () => {
+            const elapsed = Date.now() - start;
+            const next = Math.max(0, base - Math.floor(elapsed / 1000));
             if (next !== last) {
                 last = next;
                 setLeft(next);
-                if (next === 0) {
-                    clearInterval(id);
-                    onDone.current?.();
-                }
             }
-        }, 200);
-        return () => clearInterval(id);
+            if (next === 0) {
+                id = null;
+                onDone.current?.();
+                return;
+            }
+            id = setTimeout(step, countdownWaitMs(elapsed));
+        };
+        id = setTimeout(step, countdownWaitMs(0));
+        return () => {
+            if (id !== null) clearTimeout(id);
+        };
     }, [base, paused, resetKey]);
 
     return left;

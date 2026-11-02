@@ -233,6 +233,8 @@ end
 -- One per live run: contacts = { [netId] = contact }, begins = { [src] = { netId, action, at } }, services,
 -- confirms, the force window and the label counters. Contacts hold the truth: nothing here is replicated.
 
+local ArmTick   -- the custody tick (below): a new book starts it
+
 local function BookOf(run)
     local b = books[run.id]
     if not b then
@@ -248,6 +250,7 @@ local function BookOf(run)
             nextService = 0,
         }
         books[run.id] = b
+        ArmTick()
     end
     return b
 end
@@ -2208,12 +2211,11 @@ function Custody._tick()
     end
 end
 
-CreateThread(function()
-    while true do
-        Wait(TICK_MS)
-        local ok, err = pcall(Custody._tick)
-        if not ok then CP.err(TAG, 'tick failed: %s', tostring(err)) end
-    end
+-- The tick runs only while a run has a custody book (step LP4: it woke every second all day); a book armed it
+-- (BookOf), and the pass that drops the last one ends it.
+ArmTick, Custody._ticking = CP.Perf.armed(TAG, TICK_MS, function()
+    Custody._tick()
+    return next(books) == nil
 end)
 
 -- The objective's service vehicle (coroner): mark it released so it leaves.

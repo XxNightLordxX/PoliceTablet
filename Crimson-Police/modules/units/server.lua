@@ -332,6 +332,7 @@ local function NewUnit(leaderSrc, leaderInfo)
         createdAt = os.time(),
     }
     units[unit.id] = unit
+    Units._arm()   -- the sweep (end of the file)
     unitIdBySrc[leaderSrc] = unit.id
     CP.log(TAG, 'unit %d formed by %d', unit.id, leaderSrc)
     return unit
@@ -1557,11 +1558,14 @@ CreateThread(function()
         end)
     end
     if CP.Hooks and CP.Hooks.on then CP.Hooks.on('run:ended', function(run) NoteRun(run) end) end
-    while true do
-        Wait(CP.Perf.ms(SWEEP_MS))
-        local ok, err = pcall(Units._sweep)
-        if not ok then CP.err(TAG, 'sweep failed: %s', tostring(err)) end
-    end
+    Units._arm()
+end)
+
+-- The sweep runs only while a unit exists (step LP4: it woke every 5 s all day): a new unit arms it, and the pass
+-- that finds no unit and no ready check ends it.
+Units._arm, Units._ticking = CP.Perf.armed(TAG, function() return CP.Perf.ms(SWEEP_MS) end, function()
+    Units._sweep()
+    return next(units) == nil and next(readyChecks) == nil
 end)
 
 -- Test hook (tests/teams_spec.lua): the constant and a reset of all state.

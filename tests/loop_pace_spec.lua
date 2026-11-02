@@ -138,8 +138,9 @@ end
 -- per frame stays per frame: the armed shooting check and the in-range markers never go through CP.Perf
 Has('modules/runs/client.lua', 'if IsPedArmed(ped, 6) then\n                Wait(0)',
     'armed: the shot check every frame')
--- the run engine's 1 s tick (run deadlines, HUD timers) is not scaled
-H.ok(Read('modules/runs/server.lua'):find('CP.Perf', 1, true) == nil, 'the run engine keeps its own 1 s tick')
+-- the run engine's 1 s tick (run deadlines, HUD timers) is not scaled (step LP4 only arms it while it has work)
+H.ok(Read('modules/runs/server.lua'):find('CP.Perf.ms', 1, true) == nil, 'the run engine keeps its own 1 s tick')
+Has('modules/runs/server.lua', 'CP.Perf.armed(TAG, 1000,', 'the armed run engine tick stays 1 s')
 
 -- ============================================================================
 --                 CHECKPOINT ROUTE: THE FAR WAIT IN A CAR (Z4)

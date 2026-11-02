@@ -671,6 +671,7 @@ function Testing.invite(adminSrc, targets, opts)
                     seq = inviteSeq,
                 }
                 invites[inv.id] = inv
+                Testing._arm()   -- the upkeep loop (end of the file)
                 lobby.order[#lobby.order + 1] = inv.id
                 TriggerClientEvent(CP.e('client:testInvite'), target, {
                     inviteId = inv.id,
@@ -877,6 +878,7 @@ local function StartWith(adminSrc, def, opts, draft)
         debug = false,
     }
     tests[run.id] = meta
+    Testing._arm()
     byAdmin[adminSrc] = run.id
 
     if lobby and lobby.missionId == def.id then
@@ -1330,6 +1332,7 @@ end
 local function AddPending(meta, entry)
     local list = pending[meta.adminCid] or {}
     pending[meta.adminCid] = list
+    Testing._arm()
     table.insert(list, 1, entry)
     while #list > PENDING_MAX do table.remove(list) end
 end
@@ -1471,6 +1474,7 @@ function Testing.record(src, payload)
         CP.err(TAG, 'recording the test of %s #%d failed: %s', missionId, locationIndex, tostring(id))
         local list = pending[cid] or {}
         pending[cid] = list
+        Testing._arm()
         table.insert(list, 1, entry)
         return false, 'err.internal'
     end
@@ -2390,10 +2394,12 @@ AddEventHandler('playerDropped', function()
     end
 end)
 
-CreateThread(function()
+-- The upkeep runs only while a test, an invitation or a result waiting for its admin is kept (step LP4: it woke every
+-- 2 s all day): armed at start (results from before a restart) and by each of those; the pass that finds none ends
+-- it.
+do
     local sinceDebug, sinceMaintenance = 0, 0
-    while true do
-        Wait(BASE_TICK_MS)
+    Testing._arm, Testing._ticking = CP.Perf.armed(TAG, BASE_TICK_MS, function()
         sinceDebug = sinceDebug + BASE_TICK_MS
         sinceMaintenance = sinceMaintenance + BASE_TICK_MS
         if sinceDebug >= DEBUG_EVERY_MS then
@@ -2421,8 +2427,10 @@ CreateThread(function()
                 if #list == 0 then pending[cid] = nil end
             end
         end
-    end
-end)
+        return next(tests) == nil and next(invites) == nil and next(pending) == nil
+    end)
+end
+Testing._arm()
 
 -- Test hooks (tests/testing_spec.lua only).
 Testing._geometry = Geometry

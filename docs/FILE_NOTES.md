@@ -6010,6 +6010,16 @@ outcomes on the result card (CP.LiveCrime.resultView in the RunResult). Labels a
 a server id, a position or one suspect's state while the case runs. Plain Lua with stubs.
 ```
 
+## tests/loop_census_spec.lua
+
+```text
+Loop census (step LP4, docs/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
+(CreateThread) or runs a `while true do`, and every web/src file that sets a timer (setTimeout, setInterval) or asks
+for an animation frame, has a census row in docs/LOOPS.md with the same counts. A new loop, or a removed one, fails
+here until its row is written (and its five questions answered in the tables above the census).
+CP_LOOP_CENSUS_PRINT=1 prints the rows the code needs.
+```
+
 ## tests/memsql_spec.lua
 
 ```text

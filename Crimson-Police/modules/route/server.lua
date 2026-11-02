@@ -10,8 +10,9 @@ local MAX_METRES = 100000.0
 local REPORT_MIN_GAP_MS = 900
 local POSITION_TOLERANCE = 150.0   -- metres between the reported and the server-side position (at least)
 
-local states = {}     -- states[runId][src] = st
-local stopped = {}    -- stopped[runId][src] = true after an explicit stop (the safety net leaves them alone)
+local states = {}               -- states[runId][src] = st
+local ArmTick                   -- the tick (end of the file): a run or a tracked participant starts it
+local stopped = {}              -- stopped[runId][src] = true after an explicit stop (the safety net leaves them alone)
 
 -- ============================================================================
 --                                   HELPERS
@@ -143,7 +144,7 @@ end
 
 local function MarkStopped(runId, src)
     local s = stopped[runId]
-    if not s then s = {}; stopped[runId] = s end
+    if not s then s = {}; stopped[runId] = s; ArmTick() end
     s[src] = true
 end
 
@@ -209,6 +210,7 @@ function R.begin(run, src)
     if type(p) ~= 'table' or p.status ~= 'active' or p.arrived then return false end
     local byRun = states[run.id]
     if not byRun then byRun = {}; states[run.id] = byRun end
+    ArmTick()
     if stopped[run.id] then stopped[run.id][src] = nil end
     if byRun[src] then return true end
     local now = GetGameTimer()
@@ -471,7 +473,7 @@ local function Tick()
     local now = GetGameTimer()
     local _, runs = RunsCall('all')
     -- idle server (no run, nothing tracked): nothing to check, no tables built
-    if (type(runs) ~= 'table' or runs[1] == nil) and next(states) == nil and next(stopped) == nil then return end
+    if (type(runs) ~= 'table' or runs[1] == nil) and next(states) == nil and next(stopped) == nil then return true end
     local known = {}
     if type(runs) == 'table' then
         for _, run in ipairs(runs) do
@@ -519,6 +521,7 @@ local function Tick()
         end
         if type(run) ~= 'table' or run.state == 'ended' then stopped[runId] = nil end
     end
+    return (type(runs) ~= 'table' or runs[1] == nil) and next(states) == nil and next(stopped) == nil
 end
 
 -- ============================================================================
@@ -603,11 +606,11 @@ AddEventHandler('playerDropped', function()
     end
 end)
 
+-- The tick runs only while there is a run or a tracked participant (step LP4: it woke every second all day): armed
+-- at start, by a run created and by begin(); the pass that finds no run and nothing tracked ends it.
+ArmTick, R._ticking = CP.Perf.armed(TAG, 1000, Tick)
+if CP.Hooks and CP.Hooks.on then CP.Hooks.on('run:created', function() ArmTick() end) end
 CreateThread(function()
     Wait(0)
-    while true do
-        Wait(1000)
-        local ok, err = pcall(Tick)
-        if not ok then CP.err(TAG, 'tick failed: %s', tostring(err)) end
-    end
+    ArmTick()
 end)

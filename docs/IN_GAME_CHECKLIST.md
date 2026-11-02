@@ -429,3 +429,13 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   the panel shows the new state at once and never says "too many requests" (the reply carries the view).
 - [ ] Errors read with a next step: delete the newest backup ("Delete an older backup instead."), void a run that is
   already voided ("Use Restore on it to undo the void."), import a file that is not a settings export.
+
+## Final loop proof (LP4)
+
+- [ ] Idle server (no run, nobody in Testing, no unit): resmon shows Crimson-Police's server side lower than before;
+  start a run: the HUD timers count, the drive-to-start warning comes, custody (cuff, transport, coroner), downed
+  and NPC deaths work as before; end it, start another: all of it works again.
+- [ ] Testing: invite an officer, start a test: the debug stream and the invitation expiry work; a unit's invite
+  still expires after 120 s; `jobRecheck`: go off duty during a run, you leave it within `jobRecheck` seconds.
+- [ ] Dispatch open: a call claimed by another unit updates within about a second. A HUD countdown steps once a
+  second and ends on time.

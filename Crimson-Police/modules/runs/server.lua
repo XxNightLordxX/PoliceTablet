@@ -2040,6 +2040,7 @@ local function AddOrphan(citizenid, name)
     if not o then
         o = { names = {}, at = os.time(), sweptAt = 0 }
         orphans[citizenid] = o
+        Runs._armEngine()   -- the engine thread (end of the file)
     end
     o.names[name] = true
 end
@@ -3636,6 +3637,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     end
 
     runs[id] = run
+    Runs._armEngine()
     for _, src in ipairs(run.order) do bySrc[src] = id end
     Call('Draw', 'reserve', id, mission.id, locationIndex)
 
@@ -5504,23 +5506,24 @@ local function ArenaExitSweeps()
     end
 end
 
-CreateThread(function()
-    local n = 0
-    while true do
-        Wait(1000)
+-- One engine thread (step LP4: the 1 s tick and the job recheck were two loops over the same runs, both awake all
+-- day): every pass (1 s) the run deadlines and HUD timers, every 5th the arena exit sweeps, every jobRecheck seconds
+-- the job and duty re-check. It runs only while a run or an orphaned item is kept: a run created or an orphan arms
+-- it, and the pass that finds neither ends it.
+do
+    local pass = 0
+    Runs._armEngine, Runs._engineTicking = CP.Perf.armed(TAG, 1000, function()
+        pass = pass + 1
         Runs._tick()
-        n = n + 1
-        if n % 5 == 0 and next(orphans) ~= nil then pcall(ArenaExitSweeps) end
-    end
-end)
-
-CreateThread(function()
-    while true do
-        Wait(math.max(1, math.floor(Num(Config.AntiCheat and Config.AntiCheat.jobRecheck, 10))) * 1000)
-        local ok, err = pcall(Runs._jobRecheck)
-        if not ok then CP.err(TAG, 'job recheck failed: %s', tostring(err)) end
-    end
-end)
+        if pass % 5 == 0 and next(orphans) ~= nil then pcall(ArenaExitSweeps) end
+        if pass % math.max(1, math.floor(Num(Config.AntiCheat and Config.AntiCheat.jobRecheck, 10))) == 0 then
+            local ok, err = pcall(Runs._jobRecheck)
+            if not ok then CP.err(TAG, 'job recheck failed: %s', tostring(err)) end
+        end
+        return next(runs) == nil and next(orphans) == nil
+    end)
+end
+Runs._armEngine()
 
 CreateThread(function()
     while true do

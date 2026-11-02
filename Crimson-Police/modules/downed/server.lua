@@ -345,6 +345,7 @@ local function NewEntry(run, src)
         seq = seq,
     }
     entries[src] = e
+    D._arm()
     alerts('hold', src, true)                      -- keepFlag: the flag stays until the pick-up / EMS request
     CP.log(TAG, '%d went down on run %s (flag %s)', src, tostring(run.id), tostring(e.flagged))
     return e
@@ -375,9 +376,9 @@ local function Prune()
 end
 
 local function Tick()
-    if not (CP.Runs and CP.Runs.all) then return end
+    if not (CP.Runs and CP.Runs.all) then return next(entries) == nil end
     local _, runs = RunsCall('all')
-    if type(runs) ~= 'table' then return end
+    if type(runs) ~= 'table' then return next(entries) == nil end
     local work = {}
     for _, run in ipairs(runs) do
         if type(run) == 'table' and run.id ~= nil and run.state ~= 'ended' then
@@ -389,7 +390,18 @@ local function Tick()
         if src then Detect(w.run, src) end
     end
     Prune()
+    -- no live run and nothing kept: the check sleeps until the next run
+    return #work == 0 and next(entries) == nil and next(runs) == nil
 end
+
+-- The check runs only while a run is live or an entry is kept (step LP4: it woke every checkEvery seconds all day):
+-- armed at start, by a run created and by a new entry; the pass that finds neither ends it.
+D._arm, D._ticking = CP.Perf.armed(TAG, function()
+    local every = tonumber(Config.Downed.checkEvery) or 2
+    if every < 0.5 then every = 0.5 end
+    return math.floor(every * 1000)
+end, Tick)
+if CP.Hooks and CP.Hooks.on then CP.Hooks.on('run:created', function() D._arm() end) end
 
 -- ============================================================================
 --                                  PUBLIC API
@@ -495,11 +507,5 @@ CreateThread(function()
     else
         CP.err(TAG, 'modules/integrations/qbx is missing: downed participants cannot be detected')
     end
-    while true do
-        local every = tonumber(Config.Downed.checkEvery) or 2
-        if every < 0.5 then every = 0.5 end
-        Wait(math.floor(every * 1000))
-        local ok, err = pcall(Tick)
-        if not ok then CP.err(TAG, 'tick failed: %s', tostring(err)) end
-    end
+    D._arm()
 end)

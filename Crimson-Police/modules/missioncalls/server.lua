@@ -587,7 +587,22 @@ end
 --                                  THE CALLS
 -- ============================================================================
 
-local function MarkDirty() dirty = true end
+-- The screen's own pushes are coalesced: a burst of changes (a claim window) is one push, sent 1 s after the first
+-- change by one SetTimeout (step LP4: a loop woke every second all day to look at the flag).
+local MarkDirty
+do
+    local held = false
+    MarkDirty = function()
+        dirty = true
+        if held then return end
+        held = true
+        SetTimeout(1000, function()
+            held = false
+            local ok, err = pcall(MC._pushAll)
+            if not ok then CP.err(TAG, 'push failed: %s', tostring(err)) end
+        end)
+    end
+end
 
 local function NextCode(now)
     local _, day = Call('Schedule', 'dayKey', now)
@@ -2349,17 +2364,6 @@ CreateThread(function()
         Wait(math.max(1000, math.floor(Num(Cfg().checkEvery, 10) * 1000)))
         local ok, err = pcall(MC._tick)
         if not ok then CP.err(TAG, 'check failed: %s', tostring(err)) end
-    end
-end)
-
--- The screen's own pushes are coalesced: a burst of changes (a claim window) is one push.
-CreateThread(function()
-    while true do
-        Wait(1000)
-        if dirty then
-            local ok, err = pcall(PushAll)
-            if not ok then CP.err(TAG, 'push failed: %s', tostring(err)) end
-        end
     end
 end)
 
