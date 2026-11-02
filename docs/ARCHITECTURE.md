@@ -4151,6 +4151,30 @@ in training. Every read-change-write of one record runs under a per-rookie lock 
 - Tests: tests/field_training_spec.lua (plain Lua, stubbed rows); the 015 column and its JSON_VALUE read in
   tests/foundation_spec.lua.
 
+### 5.51 CP.CrimTab — modules/crimtab (client, server; the criminal tablet, step G2)
+
+A front end of CP.Volunteers (5.47) for players who play real suspects, behind `Config.CriminalTablet` (shipped off).
+
+- Server: `CP.CrimTab.canUse(src)` -> ok, errKey, info (`err.crimtab_off`, `_not_loaded`, `_on_duty` (police on duty,
+  always), `_police` (access `'everyone'`: a police job of Config.Departments), `_no_access` (access `'granted'`: no
+  `criminalTablet` extra grant, CP.Permissions.granted)); `view(src)`; `replacesCommand(src)`; `record(payload)` /
+  `historyOf(cid)` (memory, newest first, `historySize`). Callback `crimtab:get` -> the view; action
+  `server:crimtab:act` `{ what = 'join' | 'renew' | 'roles' | 'stop' | 'answer' | 'cancel', roles, token, yes }` ->
+  the fresh view or a `volunteer.refused.*` / `err.crimtab_*` key. History lines come from the server-only
+  `server:volunteerEnded` event. `client:crimtabOpen` (the volunteer command with `replaceCommand`) and
+  `client:crimtabClose` (duty or job change that ends access).
+- CP.Volunteers adds `strikeInfo(cid)`, `listingOf(src)`, `refusalKey(why)`, `askOf(cid)` (token, role,
+  missionType, area = the location label, km, seconds, travelMinutes) and `caseOf(cid)` (phase, role, his own meet
+  point, seconds, freeCancel, graceSeconds). Never a run id, an officer, a server id or a live position.
+- `criminalTablet` is a grantable extra power (5.3) that `actionsFor` never lists (no Supervisor UI).
+- Client: `/crimtab` (`command`) and the `useCriminalTablet` export (`item`) open it with
+  `CP.Tablet.panelFocus('crimtab')`; NUI message `crimtab` `{ open, view, screen }`; NUI endpoints `crimtabClose` and
+  `crimtabAnswered` (closes the pop-up of that token). It refreshes on the volunteer client events only while open.
+  While it is open a question goes to its Jobs screen instead of the pop-up; closing it shows the pop-up for the
+  seconds left (`CP.Volunteers.tabletClosed`).
+- NUI: web/src/criminal (CriminalTablet.tsx, model.ts, criminal.walk.ts), its own CSS; mocks/criminal.mock.ts
+  (`?ui=crimtab`). Spec: tests/crimtab_spec.lua.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs

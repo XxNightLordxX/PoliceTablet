@@ -6,6 +6,9 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { AdminLayout } from './layouts/AdminLayout';
 import { OfficerLayout } from './layouts/OfficerLayout';
 import { SupervisorLayout } from './layouts/SupervisorLayout';
+import { CriminalTablet } from './criminal/CriminalTablet';
+import { landingOf, normalizeCrimView } from './criminal/model';
+import type { CrimScreen, CrimView } from './types/criminal';
 import { defaultScreen, landingScreen, screensFor } from './layouts/screens';
 import { TABLET_H, TABLET_W, tabletScale } from './layouts/TabletFrame';
 import BuilderOverlay from './hud/BuilderOverlay';
@@ -107,6 +110,8 @@ export default function App() {
     const [screens, setScreens] = useState<ScreenState>(initialScreens);
     const [switching, setSwitching] = useState(false);
     const [openSeq, setOpenSeq] = useState(0);
+    // the criminal tablet (step G2): its view and screen while open, else null
+    const [crim, setCrim] = useState<{ view: CrimView; screen: CrimScreen } | null>(null);
     const hudScale = useHudScale();
     const viewport = useViewport();
 
@@ -159,6 +164,15 @@ export default function App() {
     useNuiEvent('close', () => {
         setTabletShown(false);
         setUi(null);
+    });
+    useNuiEvent('crimtab', m => {
+        if (!m.open) return setCrim(null);
+        setCrim(prev => {
+            const view = normalizeCrimView(m.view) ?? prev?.view ?? null;
+            if (!view) return prev;
+            const screen = m.screen ? landingOf(view, m.screen) : (prev?.screen ?? landingOf(view, null));
+            return { view, screen };
+        });
     });
     useNuiEvent('session', m => {
         if (m.session) setSession(normalizeSession(m.session));
@@ -222,6 +236,20 @@ export default function App() {
         const res = await request<Session>('getSession', { ui });
         if (res.ok && res.data) setSession(normalizeSession(res.data));
     }, [ui]);
+
+    const closeCrim = useCallback(() => {
+        setCrim(null);
+        void fetchNui('crimtabClose', {});
+    }, []);
+    const crimScreen = useCallback((screen: CrimScreen) => setCrim(prev => (prev ? { ...prev, screen } : prev)), []);
+    const crimView = useCallback((view: CrimView) => setCrim(prev => (prev ? { ...prev, view } : prev)), []);
+    useKeyRelease(
+        !!crim && !ui,
+        e => e.key === 'Escape',
+        () => {
+            if (!closeTopLayer()) closeCrim();
+        },
+    );
 
     // Escape closes the top dialog first, then the UI (on its key-up: useKeyRelease).
     useKeyRelease(
@@ -381,6 +409,18 @@ export default function App() {
                             // Lua releases the NUI focus instead of holding it on an empty page.
                             <QuietBoundary name={`${ui} layout`} resetKey={`${ui}:${openSeq}`} onError={close}>
                                 {layout}
+                            </QuietBoundary>
+                        ) : null}
+
+                        {crim && !uiOpen ? (
+                            <QuietBoundary name="criminal tablet" resetKey={crim.screen} onError={closeCrim}>
+                                <CriminalTablet
+                                    view={crim.view}
+                                    screen={crim.screen}
+                                    onScreen={crimScreen}
+                                    onView={crimView}
+                                    onClose={closeCrim}
+                                />
                             </QuietBoundary>
                         ) : null}
 

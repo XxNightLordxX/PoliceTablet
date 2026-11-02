@@ -88,6 +88,7 @@ local RESTART = {
     'Tablet.command',
     'Tablet.adminCommand',
     'Volunteers.command',
+    'CriminalTablet.command',
     'RealSuspects.surrender.command',
     'Tablet.keybind',
     'Tablet.dispatchKey',
@@ -174,6 +175,7 @@ local GROUPS = {
             'real_suspects',
             'live_crimes',
             'volunteer_suspects',
+            'criminal_tablet',
             'field_training',
         },
     },
@@ -224,7 +226,7 @@ Play.groups = {
             'blocks',
         },
     },
-    { key = 'play_pvp', sections = { 'real_suspects', 'live_crimes', 'volunteer_suspects' } },
+    { key = 'play_pvp', sections = { 'real_suspects', 'live_crimes', 'volunteer_suspects', 'criminal_tablet' } },
     {
         key = 'play_team',
         sections = {
@@ -375,6 +377,15 @@ Play.features = {
             'Volunteers.strikeHours',
             'Volunteers.blockHours',
             'Volunteers.askTries',
+        },
+    },
+    {
+        key = 'criminal_tablet',
+        play = 'pvp',
+        path = 'CriminalTablet.enabled',
+        limits = {
+            'CriminalTablet.historySize',
+            'Volunteers.windowMinutes',
         },
     },
     {
@@ -734,6 +745,7 @@ local RANGES = {
     ['Volunteers.cancelGraceSeconds'] = { 0, 600 },
     ['Volunteers.driverReportEvery'] = { 0, 300 },   -- V24
     ['Volunteers.fugitiveOutSeconds'] = { 0, 300 },  -- V25
+    ['CriminalTablet.historySize'] = { 1, 100 },     -- G2
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -1454,6 +1466,8 @@ local KNOWN = {
     },
     ['Tablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['Volunteers.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
+    ['CriminalTablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
+    ['CriminalTablet.item'] = { tpl = Alts(FALSE, ITEM_NAME), kind = 'optionalText' },
     ['RealSuspects.surrender.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['Tablet.adminCommand'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['Tablet.keybind'] = { tpl = Text('^[%w_%-]*$', 32) },
@@ -1564,6 +1578,7 @@ local KNOWN = {
     },
     -- V22: a volunteer who drops out, and how such a run ends
     ['Volunteers.onVoid'] = { tpl = Enum({ 'npc', 'end' }), kind = 'enum' },
+    ['CriminalTablet.access'] = { tpl = Enum({ 'everyone', 'granted' }), kind = 'enum' },
     ['Volunteers.voidRun'] = { tpl = Enum({ 'cancelled', 'keep_earned' }), kind = 'enum' },
     -- V13: which team sets a live case's tier
     ['LiveCrime.tier'] = { tpl = Enum({ 'crew', 'officers' }), kind = 'enum' },

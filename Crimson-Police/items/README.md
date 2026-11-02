@@ -15,3 +15,9 @@ Crimson-Police never loads anything from this folder and never edits ox_inventor
    the inventory. The server checks it, and the tablet closes when the item leaves the inventory.
 5. Restart the server (or restart ox_inventory, then Crimson-Police). The start-up check in the console (and Admin UI → Permissions →
    Config health) says whether the item and its picture were found.
+
+## The criminal tablet item (optional)
+
+The `['crimson_criminal_tablet'] = { ... },` entry opens the criminal tablet for volunteer suspects
+(`Config.CriminalTablet`). Copy it the same way, then set `item = 'crimson_criminal_tablet'` inside
+`Config.CriminalTablet`. It shows the police tablet's picture until you add a picture of your own.

@@ -135,23 +135,9 @@ end)
 -- ============================================================================
 
 -- The yes/no pop-up: closed by the server (another answer came, the run ended) or after its seconds. Only a click
--- answers; the server checks the token and the time again.
-RegisterNetEvent(CP.e('client:volunteerAsk'), function(token, info)
-    if type(token) ~= 'string' or type(info) ~= 'table' then return end
-    if busy then
-        pcall(lib.closeAlertDialog)
-        pcall(lib.closeInputDialog)
-    end
-    pcall(lib.hideContext, false)
-    local mine = { token = token }
-    ask = mine
-    local seconds = math.floor(tonumber(info.seconds) or 30)
-    SetTimeout(seconds * 1000, function()
-        if ask == mine and not mine.closed then
-            mine.closed = true
-            pcall(lib.closeAlertDialog)
-        end
-    end)
+-- answers; the server checks the token and the time again. While the criminal tablet is open (G2) its Jobs screen
+-- asks instead, and the pop-up shows only if the tablet closes with the question still open.
+local function ShowAsk(mine, info, seconds)
     CreateThread(function()
         busy = true
         local ok, answer = pcall(lib.alertDialog, {
@@ -171,9 +157,50 @@ RegisterNetEvent(CP.e('client:volunteerAsk'), function(token, info)
         ask = nil
         if mine.closed then return end
         mine.closed = true
-        Send('answer', { token = token, yes = ok and answer == 'confirm' })
+        Send('answer', { token = mine.token, yes = ok and answer == 'confirm' })
     end)
+end
+
+RegisterNetEvent(CP.e('client:volunteerAsk'), function(token, info)
+    if type(token) ~= 'string' or type(info) ~= 'table' then return end
+    if busy then
+        pcall(lib.closeAlertDialog)
+        pcall(lib.closeInputDialog)
+    end
+    pcall(lib.hideContext, false)
+    local seconds = math.floor(tonumber(info.seconds) or 30)
+    local mine = { token = token, info = info, untilMs = GetGameTimer() + seconds * 1000 }
+    ask = mine
+    SetTimeout(seconds * 1000, function()
+        if ask == mine and not mine.closed then
+            mine.closed = true
+            pcall(lib.closeAlertDialog)
+        end
+    end)
+    if CP.CrimTab and CP.CrimTab.isOpen and CP.CrimTab.isOpen() then
+        mine.inTablet = true
+        return
+    end
+    ShowAsk(mine, info, seconds)
 end)
+
+-- The criminal tablet answered this question: the pop-up (if it shows) closes without answering again.
+function CP.Volunteers.askAnswered(token)
+    if not ask or ask.token ~= token then return end
+    ask.closed = true
+    ask = nil
+    pcall(lib.closeAlertDialog)
+end
+
+-- The criminal tablet closed: a question it was showing comes up as the pop-up for the seconds left.
+function CP.Volunteers.tabletClosed()
+    local mine = ask
+    if not mine or mine.closed or not mine.inTablet then return end
+    mine.inTablet = false
+    local left = math.floor((mine.untilMs - GetGameTimer()) / 1000)
+    if left < 3 then return end
+    ShowAsk(mine, mine.info, left)
+end
 
 RegisterNetEvent(CP.e('client:volunteerAskClose'), function(token)
     if not ask or ask.token ~= token then return end

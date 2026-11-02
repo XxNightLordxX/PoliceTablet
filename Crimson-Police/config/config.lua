@@ -158,11 +158,12 @@ Config.Permissions = {
     -- the list form bcso = { grades = { 3, 5 } }. Empty = admins only.
     builderTeleport = {},
     -- Extra grants (Admin UI -> Permissions -> Extra grants): a power for people who are not supervisors, by power key
-    -- (a key of supervisor above, builderTeleport, or fieldTraining = pair and unpair field training). Each power may
-    -- name departments from a grade, e.g. departments = { sast = { minGrade = 3 } } (or { grades = { 3, 5 } }), Qbox
-    -- gangs the same way, e.g. gangs = { ballas = { minGrade = 2 } }, and single characters by their citizenid, e.g.
-    -- the list citizenids = { 'ABC12345' }. A power switched off above stays off for everyone, an admin-only action
-    -- can never be granted and admins still come only from AdminAce and QboxAdmins. Empty = only supervisors (and the
+    -- (a key of supervisor above, builderTeleport, fieldTraining = pair and unpair field training, or criminalTablet,
+    -- the criminal tablet while Config.CriminalTablet.access is 'granted'). Each power may name departments from a
+    -- grade, e.g. departments = { sast = { minGrade = 3 } } (or { grades = { 3, 5 } }), Qbox gangs the same way,
+    -- e.g. gangs = { ballas = { minGrade = 2 } }, and single characters by their citizenid, e.g. the list
+    -- of citizenids = { 'ABC12345' }. A power switched off above stays off for everyone, an admin-only action can
+    -- never be granted and admins still come only from AdminAce and QboxAdmins. Empty = only supervisors (and the
     -- builderTeleport grades), as before
     grants = {},
     -- Always admin-only, whatever is set above: single-mission payouts, clearing
@@ -1329,9 +1330,9 @@ Config.LiveCrime = {
 -- A player who is not on police duty can volunteer, with the command below, to be the suspect of a police tablet
 -- mission for an hour. When officers take a mission whose suspect a real player can play (Warrant Service's wanted
 -- person, Street Race Bust's driver, Manhunt's fugitive) and a volunteer fits, he gets a yes/no pop-up; if he says
--- yes he plays that suspect instead of the NPC. Volunteers only see pop-ups, notifications and a menu (they have no
--- tablet), and Crimson-Police gives them nothing. Set a mode per mission type below: while every mode is 'npc',
--- nothing changes even with enabled = true.
+-- yes he plays that suspect instead of the NPC. Volunteers see pop-ups, notifications and a menu (or the criminal
+-- tablet below, once it is on), and Crimson-Police gives them nothing. Set a mode per mission type below: while every
+-- mode is 'npc', nothing changes even with enabled = true.
 Config.Volunteers = {
     enabled = false,                 -- true = players can volunteer with the command below
     -- The chat command (without the /) a player volunteers with: it asks him to agree to the rules and pick the
@@ -1410,6 +1411,29 @@ Config.Volunteers = {
     -- mission of its type; false = points only (its cash is 0)
     payCash = false,
     payRewards = false,              -- true = it rolls the item rewards of its type too (Config.Rewards)
+}
+
+-- ============================================================================
+--                               CRIMINAL TABLET
+-- ============================================================================
+-- A tablet of its own for players who play real suspects, with a dark street look (nothing like the police
+-- tablet): Home (volunteer on or off, the hour window), Jobs (the suspect police want played right now: the mission
+-- type, the suspect, the area; Accept is the same yes as the pop-up), Active (the meet point, the rules and the
+-- time left, give up), History (cases since the last restart, outcomes and strikes with when they run out) and
+-- Rules. It runs on Volunteer suspects above (Config.Volunteers.enabled must be on too) and never shows where an
+-- officer is. Police on duty can never open it.
+Config.CriminalTablet = {
+    enabled = false,                 -- true = players can open the criminal tablet with the command or item below
+    command = 'crimtab',             -- the chat command (without the /) that opens it (restart to change)
+    -- An ox_inventory item name that also opens it (items/ox_inventory_items.lua has an entry to paste), or false
+    item = false,
+    -- Who may use it: 'everyone' = every player whose job is not a police job (Config.Departments); 'granted' =
+    -- only the players named by the criminalTablet extra grant (Admin UI -> Permissions -> Extra grants)
+    access = 'everyone',
+    -- true = the volunteer command (Config.Volunteers.command) opens this tablet for a player who may use it,
+    -- instead of the pop-up menu; false = the command keeps its menu
+    replaceCommand = false,
+    historySize = 20,                -- past cases each player's History keeps (memory only: a restart clears it)
 }
 
 -- ############################################################################

@@ -160,4 +160,38 @@ do
     H.ok(n.description:find('60 minutes', 1, true) ~= nil, 'in English, with the minutes')
 end
 
+do
+    -- G2: while the criminal tablet is open its Jobs screen asks instead of the pop-up; closing it shows the pop-up
+    -- for the seconds left; an answer from the tablet closes a pop-up without answering twice
+    local tabletOpen = true
+    CP.CrimTab = {
+        isOpen = function() return tabletOpen end,
+    }
+    local before, sentBefore = #shown.alerts, #Sent('answer')
+    H.fire(CP.e('client:volunteerAsk'), nil, 'va4_000004', { role = 'runner', seconds = 30, travelMinutes = 5 })
+    H.step(0)
+    H.eq(#shown.alerts, before, 'tablet open: no pop-up')
+    H.advance(10000, 1000)
+    tabletOpen = false
+    answers.alert = { 'confirm' }
+    CP.Volunteers.tabletClosed()
+    H.step(0)
+    H.eq(#shown.alerts, before + 1, 'the tablet closed: the pop-up comes up')
+    H.ok(shown.alerts[#shown.alerts].content:find('20 seconds', 1, true) ~= nil, 'for the seconds left')
+    H.eq(#Sent('answer'), sentBefore + 1, 'and its click answers')
+
+    tabletOpen = true
+    H.fire(CP.e('client:volunteerAsk'), nil, 'va5_000005', { role = 'runner', seconds = 30, travelMinutes = 5 })
+    H.step(0)
+    local closes = closed.alert
+    CP.Volunteers.askAnswered('va5_000005')
+    H.ok(closed.alert > closes, 'answered in the tablet: any pop-up closes')
+    tabletOpen = false
+    CP.Volunteers.tabletClosed()
+    H.step(0)
+    H.eq(#shown.alerts, before + 1, 'and it never comes up again')
+    H.eq(#Sent('answer'), sentBefore + 1, 'nor answers twice')
+    CP.CrimTab = nil
+end
+
 return H

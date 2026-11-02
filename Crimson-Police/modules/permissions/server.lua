@@ -44,10 +44,13 @@ for _, a in ipairs(ADMIN_ONLY_LIST) do ADMIN_ONLY[a] = true end
 local SUPERVISOR_ALWAYS = { viewMissionList = true, fieldTraining = true }
 
 -- Powers an extra grant may give besides the supervisor switches (Config.Permissions.grants): the builder Teleport
--- button and field training pairing. viewMissionList (the department report and the live list) is never granted.
-local EXTRA_POWERS_LIST = { 'builderTeleport', 'fieldTraining' }
+-- button, field training pairing and the criminal tablet (G2, read by CP.CrimTab while Config.CriminalTablet.access
+-- is 'granted'). viewMissionList (the department report and the live list) is never granted.
+local EXTRA_POWERS_LIST = { 'builderTeleport', 'fieldTraining', 'criminalTablet' }
 local EXTRA_POWERS = {}
 for _, a in ipairs(EXTRA_POWERS_LIST) do EXTRA_POWERS[a] = true end
+-- Player powers: grantable, but no supervisor action (never in actionsFor, so never the Supervisor UI button).
+local PLAYER_POWERS = { criminalTablet = true }
 
 -- Review actions: never on a run the reviewer took part in.
 local REVIEW_ACTIONS = { reviewFlagged = true, handleDisputes = true, handleFailedDispute = true, voidAnyRun = true }
@@ -305,7 +308,9 @@ function P.actionsFor(src)
     else
         -- extra grants: the granted supervisor powers that are switched on, and the granted extra powers
         for _, a in ipairs(P.grantedFor(n)) do
-            if sup[a] == true or SUPERVISOR_ALWAYS[a] or EXTRA_POWERS[a] then out[#out + 1] = a end
+            if (sup[a] == true or SUPERVISOR_ALWAYS[a] or EXTRA_POWERS[a]) and not PLAYER_POWERS[a] then
+                out[#out + 1] = a
+            end
         end
     end
     table.sort(out)

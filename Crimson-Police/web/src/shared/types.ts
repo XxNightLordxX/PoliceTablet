@@ -556,9 +556,13 @@ export interface NuiMessageMap {
     locale: { type: 'locale'; locale: Record<string, string> };
     // this PC's 'local' officer options (modules/options/client.lua): on 'ready' and after every change
     localOptions: { type: 'localOptions'; options: Record<string, OfficerOptionValue> };
+    // the criminal tablet (step G2, modules/crimtab/client.lua): open with its view (and a screen), a fresh view, or
+    // closed (open = false)
+    crimtab: { type: 'crimtab'; open: boolean; view?: unknown; screen?: string | null };
 }
 export type NuiMessageType = keyof NuiMessageMap;
 export type NuiMessage = NuiMessageMap[NuiMessageType];
 
 // NUI → Lua endpoints (POST https://<resource>/<endpoint>).
-export type NuiEndpoint = 'ready' | 'opened' | 'close' | 'request' | 'action' | 'client' | 'switchUi';
+export type NuiEndpoint =
+    'ready' | 'opened' | 'close' | 'request' | 'action' | 'client' | 'switchUi' | 'crimtabClose' | 'crimtabAnswered';

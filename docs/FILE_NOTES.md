@@ -1721,6 +1721,24 @@ Test hooks: CP.Challenge._boot(), _weekIndex(season, ts), _weekWindow(season, n)
   _closeDueWeeks(season, nowTs, includeCurrent), _collect(seasonId, fresh), _standingsFrom(data)
 ```
 
+## Crimson-Police/modules/crimtab/client.lua
+
+```text
+CP.CrimTab (client, step G2): opens and closes the criminal tablet (Config.CriminalTablet) and keeps it fresh. The
+NUI asks the server for everything through the tablet's request and action endpoints (crimtab:get,
+server:crimtab:act); this side only takes the NUI focus (CP.Tablet.panelFocus, owner 'crimtab'), sends the view
+and refreshes it when the volunteer events say something changed. Nothing runs while it is closed.
+```
+
+## Crimson-Police/modules/crimtab/server.lua
+
+```text
+CP.CrimTab (server, step G2): the criminal tablet for players who play real suspects (Config.CriminalTablet). It is
+a front end of CP.Volunteers: opting in and out, the question he has open (Jobs), the suspect he plays (Active),
+his past cases and strikes (History) and the rules. The server decides everything; the tablet never learns a run,
+an officer or anyone's live position.
+```
+
 ## Crimson-Police/modules/deptcontrols/server.lua
 
 ```text
@@ -4475,6 +4493,15 @@ src/builder/useDraftEditor.ts · one open mission in the Mission Builder (docs/n
 The unsaved draft is kept in the module store (store.ts), so closing the tablet for a tool loses nothing.
 ```
 
+## Crimson-Police/web/src/criminal/CriminalTablet.tsx
+
+```text
+The criminal tablet (step G2): a burner-phone style tablet for players who play real suspects, nothing like the
+police tablet. Home (volunteer on or off), Jobs (the question he has open), Active (the suspect he plays), History
+(past cases and strikes) and Rules. Every button goes through server:crimtab:act; the server checks everything and
+answers the fresh view.
+```
+
 ## Crimson-Police/web/src/hud/BuilderOverlay.tsx
 
 ```text
@@ -5280,6 +5307,15 @@ Mission cooldowns as Mission controls (step P2): cooldownScale (x every mission'
 abandonCooldown (the abandon type cooldown), both server-wide and outside the master switch. Runs.cooldowns works
 the end out when it is read from { at, secs, type } entries, so a change, a reset or the admin switch counts at once,
 the self rule holds for the setter and any unit he is in, and a restart (rebuild from the rows) gives the same.
+```
+
+## tests/crimtab_spec.lua
+
+```text
+The criminal tablet (step G2): CP.CrimTab on the server over CP.Volunteers. Shipped off; who may use it (never on
+police duty, access 'everyone' or 'granted' through the criminalTablet extra grant); opting in and out; the job
+he is asked (no run, officer or position); Accept into Active; giving up; History and strikes; the volunteer
+command opening it (replaceCommand); closing on duty. Plain Lua with stubs.
 ```
 
 ## tests/custody_clearance_spec.lua

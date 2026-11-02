@@ -158,6 +158,7 @@ do
         'real_suspects',
         'live_crimes',
         'volunteer_suspects',
+        'criminal_tablet',
         'units',
         'mission_controls',
         'field_training',
@@ -179,6 +180,18 @@ do
     local allKeys = {}
     for _, sec in ipairs(S.all().sections) do allKeys[#allKeys + 1] = sec.key end
     H.eq(table.concat(allKeys, ','), table.concat(keys, ','), 'the All view lists the sections in config.lua order')
+    -- G2: the criminal tablet has its own section after Volunteer suspects, each key described by its comment
+    H.eq(titles.criminal_tablet, 'Criminal tablet', 'the criminal tablet section')
+    H.eq(E('CriminalTablet.enabled').desc, 'true = players can open the criminal tablet with the command or item below',
+        'its switch is described')
+    H.ok((E('CriminalTablet.access').desc or ''):find('criminalTablet extra grant', 1, true) ~= nil,
+        'who may use it says where the grant is')
+    H.eq(E('CriminalTablet.command').restart, true, 'the command applies after a restart')
+    H.ok(Check('CriminalTablet.access', 'granted'), 'access \'granted\' is valid')
+    H.ok(not Check('CriminalTablet.access', 'police'), 'another access value is refused')
+    H.ok(not Check('CriminalTablet.historySize', 500), 'History above its range is refused')
+    H.ok(Check('CriminalTablet.item', false) and Check('CriminalTablet.item', 'crimson_criminal_tablet'),
+        'the item is false or an item name')
     H.eq(E('Limits.maxUnitSize').section, 'run_limits', 'Config.Limits has its own System section, Run limits')
     H.eq(titles.run_limits, 'Run limits', 'titled from its banner')
     H.eq(E('Rescale.enabled').section, 'scaling_by_participants', 'the rest of the scaling section stays')

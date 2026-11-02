@@ -428,6 +428,39 @@ function V.clearStrikes(cid)
     return true, { strikes = count, blockedUntil = blocked }
 end
 
+-- His strikes and block for the criminal tablet's History (G2): { strikes = { expiresAt (os.time), ... } oldest first,
+-- blockedUntil = os.time() or nil, strikeHours }. Every key of his player (license and citizenid), like clearStrikes.
+function V.strikeInfo(cid)
+    local out = { strikes = {}, strikeHours = math.floor(Num(Cfg().strikeHours, 24, 1, 8760)) }
+    if type(cid) ~= 'string' or cid == '' then return out end
+    local now, seen = os.time(), {}
+    for _, who in ipairs({ whoOf[cid], 'cid:' .. cid }) do
+        if not seen[who] then
+            seen[who] = true
+            StrikeCount(who, now)
+            for _, at in ipairs(strikesOf[who] or {}) do out.strikes[#out.strikes + 1] = at + StrikeSeconds() end
+            local untilAt = BlockedAt(who, now)
+            if untilAt and untilAt > (out.blockedUntil or 0) then out.blockedUntil = untilAt end
+        end
+    end
+    table.sort(out.strikes)
+    return out
+end
+
+-- What the criminal tablet's Home shows (G2): { listed, untilAt, roles = { role, ... }, windowMinutes, maxStrikes }.
+function V.listingOf(src)
+    local n = ToSrc(src)
+    local cid = n and cidOf[n]
+    local v = cid and listed[cid]
+    return {
+        listed = v ~= nil,
+        untilAt = v and v.untilAt or nil,
+        roles = v and RoleList(v.roles) or {},
+        windowMinutes = math.floor(WindowSeconds() / 60),
+        maxStrikes = MaxStrikes(),
+    }
+end
+
 V.roles = ROLES
 V.endListing = End
 V._sweep = Sweep
@@ -719,9 +752,16 @@ local function Refused(src, why, untilAt)
     Note(src, 'error', key, vars)
 end
 
+-- The volunteer.refused.* text of a refusal reason (the criminal tablet, G2), 'volunteer.refused.other' for any other.
+function V.refusalKey(why) return REFUSAL[why] and ('volunteer.refused.' .. why) or 'volunteer.refused.other' end
+
 local ACTIONS = {
     open = function(src)
         if not On() then return Refused(src, 'off') end
+        -- Config.CriminalTablet.replaceCommand (G2): the criminal tablet instead of this menu, for a player who may use it
+        if CP.CrimTab and CP.CrimTab.replacesCommand and CP.CrimTab.replacesCommand(src) then
+            return TriggerClientEvent(CP.e('client:crimtabOpen'), src)
+        end
         local listedCid = cidOf[src]
         if listedCid and listed[listedCid] then
             return TriggerClientEvent(CP.e('client:volunteerMenu'), src, MenuOf(src, { citizenid = listedCid }))

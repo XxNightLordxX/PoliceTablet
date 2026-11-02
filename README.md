@@ -79,6 +79,7 @@ say the same things in short and point back here.
      - [9.16.2 Rules for cases with real suspects](#9162-rules-for-cases-with-real-suspects)
      - [9.16.3 What is built in for fairness](#9163-what-is-built-in-for-fairness)
      - [9.16.4 When something does not happen](#9164-when-something-does-not-happen)
+     - [9.16.5 The criminal tablet](#9165-the-criminal-tablet)
 10. [Before go-live, updating and backups](#10-before-go-live-updating-and-backups)
     - [10.1 Before go-live checklist](#101-before-go-live-checklist)
     - [10.2 Updating](#102-updating)
@@ -755,7 +756,9 @@ Supervisor UI → **Mission controls** (below).
 
 - **Extra grants: a power for people who are not supervisors.** Admin UI → **Permissions** → **Extra grants** lists
   every supervisor power (review, disputes, Mission controls, builder, mission calls, commendations and the rest), plus
-  **Builder teleport** and **Field training** (pair and unpair). Click **Edit** on one and give it to a department
+  **Builder teleport**, **Field training** (pair and unpair) and **Criminal tablet** (who may use the criminal tablet
+  while `Config.CriminalTablet.access = 'granted'`, [9.16.5](#9165-the-criminal-tablet); it never adds a Supervisor UI
+  screen). Click **Edit** on one and give it to a department
   from a grade (or only some grades), to a Qbox gang from a grade, or to one character by citizen ID. Each change
   saves the setting `Config.Permissions.grants`, is checked by the server and is in the audit log; it works at once.
   An officer with a grant gets the **Supervisor UI** button with only the screens of his powers, always for his own
@@ -1550,6 +1553,7 @@ In the server console, type every command **without** the slash.
 | `CrimsonPoliceAdmin settings reset all` | Console only | Puts every setting changed in game back to config.lua |
 | `/CrimsonPoliceAdmin missioncall <type> [area]` | Admins, console | Posts a mission call now. Type = `patrol`, `investigation` or `tactical`. Area = `south_ls`, `downtown`, `west_ls`, `vinewood`, `east_ls`, `port`, `senora`, `north`, `west_county` or `county` (the default). Not while a Cross-Department Mission runs; 2 minutes between calls from the same person (the console counts as one) |
 | `/crimsonheat` | Players who are **not** on police duty, only with `Config.Volunteers.enabled = true` | Volunteers to play a mission's suspect for `Config.Volunteers.windowMinutes` (60): agree to the rules, tick the suspects to play. Typed again it opens the menu (time left, Renew, Change the suspects you play, Stop, and Cancel this case while you play one). The name is `Config.Volunteers.command` (restart to change it). See [9.16](#916-real-suspects-live-crimes-and-volunteers) |
+| `/crimtab` | Players who are **not** on a police job (or who hold the `criminalTablet` extra grant), only with `Config.CriminalTablet.enabled = true`; never on police duty | Opens the criminal tablet: Home (get on or off the volunteer list), Jobs, Active, History and Rules. The name is `Config.CriminalTablet.command` (restart to change it). See [9.16.5](#9165-the-criminal-tablet) |
 | `/surrender` | A suspect of a live case, only with `Config.LiveCrime.enabled = true` | Asks him to confirm, then surrenders him to the officers of his case (one must be within `Config.RealSuspects.surrender.surrenderRange`, 50 m). The name is `Config.RealSuspects.surrender.command` (restart to change it). See [9.16.2](#9162-rules-for-cases-with-real-suspects) |
 
 "Admins, console" means an admin in game **and** the server console. "Console only" commands are the three ways
@@ -2483,6 +2487,33 @@ For staff:
 | A cuff did not count | The officer must be on the case and within `Config.RealSuspects.cuffRange` (3.5 m), and the cuffs must hold `custodyHoldSeconds` (30 s). The timeline shows each cuff and why it did not count |
 | `/surrender` or **Talk them down** does nothing | `Config.LiveCrime.enabled` or `Config.RealSuspects.surrender.enabled` is `false`, the player is not a free suspect of a live case (volunteer cases have no surrender), no officer of the case is within `surrenderRange` (50 m), or the officer is not within `talkRange` (15 m) of a free suspect. A new command name needs a restart |
 | The Real suspects screen is missing | Both features are off, the admin has no `antiFarmOverride` key, or `Config.RealSuspects.adminScreen = false` |
+
+#### 9.16.5 The criminal tablet
+
+A tablet of its own for volunteer suspects (step G2, `Config.CriminalTablet`), with a dark street look nothing like
+the police tablet. It ships **off** (`enabled = false`): until you turn it on, nothing changes and `/crimsonheat`
+keeps its pop-up menu. It runs on volunteers, so `Config.Volunteers.enabled` must be on too.
+
+- **Open it** with `/crimtab` (`command`, restart to rename it) or an ox_inventory item: paste the
+  `crimson_criminal_tablet` entry of `items/ox_inventory_items.lua` into ox_inventory and set
+  `Config.CriminalTablet.item = 'crimson_criminal_tablet'` (shipped `false`: no item). With
+  `replaceCommand = true`, `/crimsonheat` opens the tablet instead of its menu for a player who may use it.
+- **Who may use it**: `access = 'everyone'` (shipped) lets every player whose job is not a police job of
+  `Config.Departments` use it. `access = 'granted'` lets only the players named by the **Criminal tablet** extra
+  grant use it: Admin UI → **Permissions** → **Extra grants** (by Qbox gang and grade, department and grade, or
+  citizen ID). Police on duty can never open it, and an open tablet closes when its player goes on police duty.
+- **Home**: agree to the rules, tick the suspects you play and **Get on the list** for `Config.Volunteers.windowMinutes`;
+  while on it: the time left, **Save suspects**, **Renew** and **Get off the list** (two clicks).
+- **Jobs**: the question police just sent you (the suspect, the mission type, the area, how far, the time to get
+  there and to answer). **Accept** is the same yes as the pop-up (the meet point becomes your waypoint); **Decline**
+  costs nothing. While the tablet is open the question shows here instead of the pop-up; close the tablet and the
+  pop-up comes up for the seconds left.
+- **Active**: the suspect you play, the phase (get to the meet point, in position, police reached you), the time left
+  to get there, your meet point, the rules and **Give up** (free right after your yes, a strike later).
+- **History**: your strikes with when each runs out, a strikes block, and your past cases with how they ended (the
+  last `historySize`, 20, since the last restart). **Rules**: the numbers of your server's config.
+- It never shows a run, an officer or anyone's live position, and every button is checked again by the server.
+- Rewards: Crimson-Police still pays volunteers nothing; a job shows "None from Crimson-Police".
 
 ---
 

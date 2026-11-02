@@ -532,6 +532,44 @@ function V.matchOf(cid)
     return { phase = m.phase, role = m.role }
 end
 
+-- The question he has open now, for the criminal tablet's Jobs (G2) -> nil or { token, role, missionType, area, km,
+-- seconds (left to answer), travelMinutes }. area: the location's label; never the run, an officer or a position.
+function V.askOf(cid)
+    local m = cid and byCid[cid] and matches[byCid[cid]] or nil
+    if not m or m.phase ~= 'asking' or m.cid ~= cid or not m.token or not m.deadline then return nil end
+    local run = m.run
+    local def = type(run.mission) == 'table' and run.mission or {}
+    local here = Coords(m.src)
+    local loc = type(run.location) == 'table' and run.location or {}
+    return {
+        token = m.token,
+        role = m.role,
+        missionType = run.missionType or def.type,
+        area = type(loc.label) == 'string' and CP.U.clip(loc.label, 64) or nil,
+        km = (here and m.meet) and math.floor(CP.U.dist(here, m.meet) / 100 + 0.5) / 10 or nil,
+        seconds = math.max(0, math.ceil((m.deadline - GetGameTimer()) / 1000)),
+        travelMinutes = math.ceil(Num(Cfg().travelSeconds, 300, 60, 1800) / 60),
+    }
+end
+
+-- The suspect he plays now, for the criminal tablet's Active (G2) -> nil or { phase, role, meet = { x, y, z } (his
+-- own meet point, already his waypoint), seconds (left to reach it while travelling), freeCancel (a cancel now is no
+-- strike), graceSeconds }.
+function V.caseOf(cid)
+    local m = cid and byCid[cid] and matches[byCid[cid]] or nil
+    if not m or m.cid ~= cid or not CANCEL_PHASES[m.phase] then return nil end
+    local now = GetGameTimer()
+    local grace = math.floor(Num(Cfg().cancelGraceSeconds, 60, 0, 600))
+    return {
+        phase = m.phase,
+        role = m.role,
+        meet = Plain(m.meet),
+        seconds = m.phase == 'travel' and math.max(0, math.ceil(((m.travelUntil or now) - now) / 1000)) or nil,
+        freeCancel = not m.engagedAt and now - (m.yesAt or 0) <= grace * 1000,
+        graceSeconds = grace,
+    }
+end
+
 -- His answer to the pop-up. Checked: the token of his open question, not later than askSeconds (plus lag), the run
 -- still running, and (for a yes) every check of the ask again. A no or no answer is never a strike.
 function V.answer(src, data)
