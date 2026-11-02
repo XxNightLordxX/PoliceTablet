@@ -6197,6 +6197,16 @@ get a suspect's live position, a suspect cuffed while down counts only Config.Re
 volunteer is asked first and can say no, and staff read each case's timeline.
 ```
 
+## tests/resmon_spec.lua
+
+```text
+Client resmon (step OP1, docs/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
+each native counted when a Crimson-Police file calls it. The idle game calls none; the busiest frame loop of a run
+(the checkpoint course: two markers, the inside and contact checks) calls few per frame and builds no string; the
+HUD sends one NUI message per change; a 'local' officer option decodes this PC's KVP only when it changed. The tired
+runner pacer's count is in tests/fixtures/npc/client_check.lua.
+```
+
 ## tests/run.lua
 
 ```text

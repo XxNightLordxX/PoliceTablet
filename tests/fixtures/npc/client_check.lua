@@ -1282,6 +1282,30 @@ do
     paceKept = AddPed(5047, 847, -200, 50, 0)
     BagChange(paceKept, 847, Runner(1, { gait = 'walk' }))
     H.eq(GW.capNow(paceKept), 1.0, 'a runner held to his walk')
+
+    -- ---- RESMON (step OP1): THE PACER'S NATIVES PER FRAME ------------------
+    -- The cap and the move rate every frame; his entity, owner, vehicle and death every 100 ms, not every frame.
+    -- 60 frames of 16 ms: before, the four checks ran every frame (6 natives a frame for this runner).
+    local CHECKS = { 'DoesEntityExist', 'NetworkHasControlOfEntity', 'GetVehiclePedIsIn', 'IsEntityDead' }
+    local seen, saved = {}, {}
+    for _, name in ipairs(CHECKS) do
+        saved[name] = _G[name]
+        seen[name] = 0
+        _G[name] = function(e, ...)
+            if e == paceKept then seen[name] = seen[name] + 1 end
+            return saved[name](e, ...)
+        end
+    end
+    local caps0 = Count('SetPedMaxMoveBlendRatio', paceKept)
+    for _ = 1, 60 do H.step(16) end
+    for _, name in ipairs(CHECKS) do _G[name] = saved[name] end
+    local checks = seen.DoesEntityExist + seen.NetworkHasControlOfEntity + seen.GetVehiclePedIsIn + seen.IsEntityDead
+    local caps = Count('SetPedMaxMoveBlendRatio', paceKept) - caps0
+    print(('  [resmon] pacer, one runner, 60 frames: %d caps, %d checks (%.1f natives a frame)'):format(caps, checks,
+        (caps * 2 + checks) / 60))
+    H.eq(caps, 60, 'resmon: the cap is set every frame')
+    H.ok(checks <= 60, ('resmon: the four checks about every 100 ms, not every frame (%d in 60 frames)'):format(checks))
+    H.eq(GW.capNow(paceKept), 1.0, 'resmon: still held to his walk')
 end
 
 -- ============================================================================

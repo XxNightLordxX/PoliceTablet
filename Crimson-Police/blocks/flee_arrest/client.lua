@@ -10,6 +10,7 @@ local WATCH_RANGE = 40.0
 local REPORT_MS = 1500           -- the same report for the same suspect at most this often
 local CONTROL_MS = 250
 local MARKER_RANGE = 150.0
+local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 local KNOCK_RANGE = 2.5
 local KNOCK_ANIM = { dict = 'timetable@jimmy@doorknock@', clip = 'knockdoor_idle' }
@@ -211,7 +212,7 @@ local function MarkerLoop(S)
     CreateThread(function()
         while S.alive and S.current and not S.knocked do
             local d = S.door
-            if U.dist(GetEntityCoords(cache.ped), d) <= MARKER_RANGE then
+            if U.distSq(GetEntityCoords(cache.ped), d) <= MARKER_RANGE_SQ then
                 DrawMarker(0, d.x, d.y, d.z + 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, 0.35, 0.35, 240, 200, 40, 180,
                     true, true, 2, false, nil, nil, false)
                 Wait(0)

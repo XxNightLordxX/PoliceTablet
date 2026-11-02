@@ -288,3 +288,12 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Auto-Ready allowed and on: join a unit, stand at the keys, the leader accepts a type: you are Ready at once. Turn Auto-Ready off in My options: the next ready check asks you; on again: answered after you move. (LP1)
 - [ ] Criminal tablet: close it with Escape twice in a row (open, Escape, open, Escape quickly): the pause menu never opens, and Escape opens it normally a second later. (LP1)
 - [ ] Search Area, Device Check, Interact Points: the markers show near each clue, device and point as before. Testing debug drawing still draws the test area. (LP1)
+
+## Resmon (OP1)
+
+- [ ] No run, tablet closed, Config.Debug off: resmon shows Crimson-Police at 0.00-0.01 ms on the client.
+- [ ] EVOC course run: drive through a checkpoint too fast ("Stop inside" shows), stop, hold, cross: the HUD line and
+  the markers behave as before; resmon stays below what it showed before the update.
+- [ ] Foot chase with a tired runner (Config.Flee on): he jogs, then walks, and is let go when he surrenders or gets
+  into a car, as before.
+- [ ] My options -> Sounds -> objective cues off: no cue plays; on again: the next cue plays.

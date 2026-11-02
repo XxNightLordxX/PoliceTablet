@@ -8,6 +8,7 @@ local LOOP_MS = 1000
 local RETASK_MS = 8000          -- re-issue "follow" to a walking hostage this often
 local CONTROL_MS = 250          -- the next pass after a hostage was asked for (the old wait for control)
 local MARKER_RANGE = 150.0
+local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local MARKER_FAR_MS = 1500      -- the marker loop's pace while too far away to draw (per frame in range)
 local FREE_ANIM = { dict = 'mp_arresting', clip = 'a_uncuff' }
 
@@ -206,7 +207,7 @@ local function MarkerLoop(S)
         local d = (tonumber(S.ctx.obj.safeRadius) or 6.0) * 2.0
         while S.alive and S.current do
             local safe = S.safe
-            if U.dist(GetEntityCoords(cache.ped), safe) <= MARKER_RANGE then
+            if U.distSq(GetEntityCoords(cache.ped), safe) <= MARKER_RANGE_SQ then
                 DrawMarker(1, safe.x, safe.y, safe.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, d, d, 1.0, 60, 200, 90, 110,
                     false, false, 2, false, nil, nil, false)
                 Wait(0)

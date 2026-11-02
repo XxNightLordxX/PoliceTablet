@@ -1084,6 +1084,12 @@ higher than you want while idle, raise `Config.Performance.loopScale` (Admin UI 
 `2` halves every idle and far-away wake again, `4` is the slowest. A higher value makes far markers, the map pointer
 and the walk-away close react later (at `4`, up to 6-8 s), never the per-frame drawing near you.
 
+Step OP1 trimmed what runs inside those loops (measured in `tests/resmon_spec.lua`, numbers in `docs/LOOPS.md`
+under **Resmon**): with no run and the tablet closed Crimson-Police calls no game native at all; in a run the busiest
+frame loop (a checkpoint course) calls about a quarter fewer natives a frame and builds no text or table per frame, a
+tired runner is held to his pace with about 40 % fewer natives, and the HUD sends one NUI message per change instead
+of one per server update. Nothing you see changes and there is nothing to configure.
+
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.
 

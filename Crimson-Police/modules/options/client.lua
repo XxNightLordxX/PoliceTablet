@@ -13,13 +13,21 @@ local function Copy(v)
     return out
 end
 
--- The KVP object: {} when there is none, the native is missing or it does not read.
-local function ReadStore()
+-- The KVP object: {} when there is none, the native is missing or it does not read. The text read last and its object
+-- are kept: an O.get (GpsMode once a second in a run, the Auto-Ready watcher) decodes the KVP only when it changed.
+-- copy = true: a table of the caller's own to change (O.setLocal), never the kept one.
+local readRaw, readObj = nil, nil
+local function ReadStore(copy)
     if type(GetResourceKvpString) ~= 'function' then return {} end
     local ok, raw = pcall(GetResourceKvpString, KVP)
     if not ok or type(raw) ~= 'string' or raw == '' then return {} end
-    local okDecode, t = pcall(json.decode, raw)
-    return okDecode and type(t) == 'table' and t or {}
+    if raw ~= readRaw or copy then
+        local okDecode, t = pcall(json.decode, raw)
+        t = okDecode and type(t) == 'table' and t or {}
+        if copy then return t end
+        readRaw, readObj = raw, t
+    end
+    return readObj
 end
 
 local function WriteStore(t)
@@ -109,7 +117,7 @@ function O.setLocal(key, value)
     if rules.enabled == false or Part(rules, 'allow')[key] == false then return false, 'err.option_locked' end
     local clean, err = Defs.check(key, value, Part(rules, 'bounds')[key])
     if clean == nil then return false, err or 'err.option_value' end
-    local store = ReadStore()
+    local store = ReadStore(true)
     local default = Part(rules, 'defaults')[key]
     if default ~= nil and Defs.same(default, clean) then store[key] = nil else store[key] = clean end
     if not WriteStore(store) then return false, 'err.internal' end

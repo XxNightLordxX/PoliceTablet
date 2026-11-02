@@ -248,6 +248,15 @@ function U.dist(a, b)
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 
+-- The squared distance (no square root): a range check compares it with the range squared.
+function U.distSq(a, b)
+    local ax, ay, az = Xyz(a)
+    local bx, by, bz = Xyz(b)
+    if not ax or not bx then return math.huge end
+    local dx, dy, dz = ax - bx, ay - by, az - bz
+    return dx * dx + dy * dy + dz * dz
+end
+
 function U.dist2d(a, b)
     local ax, ay = Xyz(a)
     local bx, by = Xyz(b)

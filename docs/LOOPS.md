@@ -1,4 +1,4 @@
-# Loops and timers (steps LP1, LP2)
+# Loops and timers (steps LP1, LP2, OP1)
 
 Every repeating loop of Crimson-Police: where it is, what it does, when it runs, its interval and why that interval.
 "before -> after" shows the step LP2 change (owner, after LP1: "Try to fix the loops make it occur less often"); a
@@ -31,6 +31,32 @@ asked" pass, the run engine's 1 s tick (run deadlines, HUD timers) or a server d
 User-visible intervals stay config options with their unit (for example `Config.Route` `every`,
 `Config.Downed.checkEvery`, `Config.MissionCalls.checkEvery`, `Config.AntiCheat.jobRecheck`,
 `Config.Tablet.pauseGuardMs`). Step LP2 changed none of them.
+
+## Resmon (step OP1)
+
+Owner: "Optimize everything and debug everything then help make resmon better also help with making loops more
+efficient". LP1 and LP2 set when each loop runs; OP1 trimmed what a pass does. `tests/resmon_spec.lua` loads every
+client script and counts each native a Crimson-Police file calls (and the Lua memory a frame allocates);
+`tests/fixtures/npc/client_check.lua` counts the pacer's. Numbers are from the harness, before -> after:
+
+| What | Measure | Before -> after |
+| --- | --- | --- |
+| idle (no run, tablet closed), two minutes | natives called | 0 -> 0 (no thread wakes, tests/loops_spec.lua) |
+| checkpoint course, in a car inside the checkpoint, course running | natives a frame | 13.3 -> 10.3 (no `PlayerPedId()`: `cache.ped`; one `GetGameTimer` a frame) |
+| the same | Lua memory a frame | 0.30 KB -> 0.00 KB (the "Stop inside" / "Hold still" / "drive a vehicle" line looked up once, not every frame) |
+| the same | undriveable check (3 natives) | every frame -> every 100 ms sample (its retry is 3 s) |
+| tired runner pacer, one runner, 60 frames | natives for the runner | 369 -> 221 (cap and move rate every frame, plus one clock read; entity, owner, vehicle and death every 100 ms instead of every frame) |
+| HUD patches from the server that change nothing | NUI messages | one per patch -> none (21 identical patches: 22 -> 1 message) |
+| a 'local' officer option read (sound cues, HUD target line, GPS mode) | KVP JSON decodes | one per read -> one per KVP change (100 reads: 100 -> 1) |
+
+Also: the marker loops of escort, flee_arrest, process_scene and protect_rescue compare squared distances
+(`CP.U.distSq`, no square root a frame); search_area's 250 ms suspect loop reads `cache.ped` and formats its circle
+key once per snapshot, not every pass.
+
+Checked and kept: no client thread runs at idle (LP1); event and state bag handlers cost nothing until their event
+fires; ox_target zones and options of a block are added on its start and removed on its stop; no client -> server
+event is sent per frame (telemetry: a vehicle sample every 5 s while driving, lights and siren and the first shot
+once); `ctx.hudDetail` lines are sent only when the text changes.
 
 ## Client loops
 

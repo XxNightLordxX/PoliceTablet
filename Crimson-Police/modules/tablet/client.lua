@@ -177,6 +177,21 @@ function T.notify(kind, text, opts)
     })
 end
 
+-- true when the patch changes nothing the HUD shows: every value the same plain value (a table always counts as new),
+-- every cleared key already unset.
+local function SameHud(hud, patch)
+    for k, v in pairs(patch) do
+        local cur = hud[k]
+        if v == false and NULLABLE_HUD[k] then
+            if cur ~= nil then return false end
+        elseif type(v) == 'table' or v ~= cur then
+            return false
+        end
+    end
+    return true
+end
+
+-- One NUI message per HUD change: a patch that changes nothing (the same timer, detail or message again) sends none.
 function T.hud(patch)
     if patch == nil then
         state.hud = nil
@@ -184,6 +199,7 @@ function T.hud(patch)
         return
     end
     if type(patch) ~= 'table' then return end
+    local same = state.hud ~= nil and SameHud(state.hud, patch)
     local hud = state.hud or {}
     for k, v in pairs(patch) do
         if v == false and NULLABLE_HUD[k] then hud[k] = nil else hud[k] = v end
@@ -194,6 +210,7 @@ function T.hud(patch)
         state.arenaHidden = true
         return
     end
+    if same and not state.arenaHidden then return end
     T.send({ type = 'hud', hud = hud })
 end
 

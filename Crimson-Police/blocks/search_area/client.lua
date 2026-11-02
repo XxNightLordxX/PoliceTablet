@@ -350,11 +350,13 @@ local function Loop(S)
             if S.current then
                 local ctx = S.ctx
                 local gu = ctx.obj.givesUp or {}
-                local myPos = GetEntityCoords(PlayerPedId())
+                local myPos = GetEntityCoords(cache.ped)
                 local host = IsHost(S)
                 local close = false
                 local c = S.data.circle
-                local key = c and ('%d:%d'):format(c.n or 0, math.floor(c.r)) or nil
+                -- the circle's key is formatted once per circle table (a snapshot), not every pass
+                if c ~= S.keyOf then S.keyOf, S.keyNow = c, c and ('%d:%d'):format(c.n or 0, math.floor(c.r)) or nil end
+                local key = S.keyNow
                 -- a new circle, or one Radio Silence now hides (Config.Markers.radioSilence changed in Settings)
                 local hideArea = CP.Markers.hidden(ctx, 'searchArea')
                 if (key ~= S.circleKey and not hideArea) or (hideArea and S.circleKey) then DrawCircle(S) end

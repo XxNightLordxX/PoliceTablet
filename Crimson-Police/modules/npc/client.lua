@@ -1449,6 +1449,9 @@ do
     local RATE_RANGE = { 0.5, 1.0 }
     local CLIPSET_BLEND = 0.25       -- how fast the jog or the winded walk blends in and out
     local CLIPSET_WAIT_MS = 3000     -- a clip set that has not loaded by then is not used
+    -- the per-frame pacer looks at each runner's entity, owner, vehicle and death this often (four natives), and only
+    -- holds him to his pace on the frames between (two natives): a bag write looks again on the next frame
+    local PACE_CHECK_MS = 100
     local paced = {}                 -- [netId] = { entity, clipset } the tired runners this game holds to their gait
     local tiredSeen = {}             -- [netId] = true: a bag of this ped asked for a pace (any game may have set it)
     local clipsets = {}              -- [name] = 'loading' | 'ready' | 'failed'
@@ -1540,16 +1543,21 @@ do
             LetGoAll()
             return
         end
+        local now = Now()
         for netId, p in pairs(paced) do
             local ent = p.entity
-            if not DoesEntityExist(ent) or not NetworkHasControlOfEntity(ent) then
-                -- gone, or another game owns him now: that game holds him to the same bag
-                paced[netId] = nil
-            else
-                local bag = bags[netId]
-                local pace = bag and bag.run == run.id and PaceFor(bag, ent)
-                if pace then HoldPace(p, pace) else LetGo(netId, ent) end
+            if now >= (p.checkAt or 0) then
+                p.checkAt = now + PACE_CHECK_MS
+                if not DoesEntityExist(ent) or not NetworkHasControlOfEntity(ent) then
+                    -- gone, or another game owns him now: that game holds him to the same bag
+                    paced[netId], p.pace = nil, nil
+                else
+                    local bag = bags[netId]
+                    p.pace = bag and bag.run == run.id and PaceFor(bag, ent) or nil
+                    if not p.pace then LetGo(netId, ent) end
+                end
             end
+            if p.pace and paced[netId] == p then HoldPace(p, p.pace) end
         end
     end
 
@@ -1585,6 +1593,8 @@ do
             if not p or p.entity ~= ent then
                 paced[netId] = { entity = ent }
                 EnsurePacer()
+            else
+                p.checkAt = nil -- a new bag: its pace is read on the next frame
             end
         elseif paced[netId] or tiredSeen[netId] then
             LetGo(netId, ent)

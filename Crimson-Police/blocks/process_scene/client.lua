@@ -10,6 +10,7 @@ local CORONER_OPTION = 'crimson-police:coroner'
 local REACH = 2.5
 local VAN_REACH = 6.0
 local MARKER_RANGE = 120.0
+local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 local SCENE_KEY = 'scene'        -- the scene blip's key in the objective pointer (the server's marker)
 local ANIMS = {
@@ -161,7 +162,7 @@ local function MarkerLoop(S)
     CreateThread(function()
         while S.alive and S.current and not S.released do
             local p = S.scene
-            if p and U.dist(GetEntityCoords(cache.ped), p) <= MARKER_RANGE then
+            if p and U.distSq(GetEntityCoords(cache.ped), p) <= MARKER_RANGE_SQ then
                 DrawMarker(1, p.x, p.y, p.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 0.6, 200, 200, 200, 90,
                     false, false, 2, false, nil, nil, false)
                 Wait(0)

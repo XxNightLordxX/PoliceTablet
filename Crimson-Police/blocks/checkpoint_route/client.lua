@@ -9,6 +9,7 @@ local function Cue(name)
 end
 
 local VIEW_DISTANCE = 150.0      -- markers are drawn only this close to the current checkpoint
+local VIEW_DISTANCE_SQ = VIEW_DISTANCE * VIEW_DISTANCE
 local STOP_SPEED = 1.5           -- m/s: slower than this counts as stopped
 local RETRY_MS = 2500            -- re-report a checkpoint the server has not confirmed yet
 local SAMPLE_MS = 100            -- contact sampling interval while the course runs
@@ -49,13 +50,19 @@ local function Purge(ctx)
     end
 end
 
+-- Squared distance of two points (no square root, no vector): the frame loop's range checks.
+local function DistSq(a, b)
+    local dx, dy, dz = a.x - b.x, a.y - b.y, a.z - b.z
+    return dx * dx + dy * dy + dz * dz
+end
+
 local function V3(t)
     return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
 end
 
 -- Driving a vehicle: in one and in its driver seat (the server checks the same with its own natives).
 local function IsDriving(veh)
-    return veh ~= nil and veh ~= 0 and DoesEntityExist(veh) and GetPedInVehicleSeat(veh, -1) == PlayerPedId()
+    return veh ~= nil and veh ~= 0 and DoesEntityExist(veh) and GetPedInVehicleSeat(veh, -1) == cache.ped
 end
 
 local function NetIdOf(veh)
@@ -73,9 +80,27 @@ end
 --                                   HUD LINE
 -- ============================================================================
 
-local function Say(st, text, ms)
+local function Say(st, text, ms, t)
     st.transient = text
-    st.transientUntil = GetGameTimer() + (ms or EVENT_MS)
+    st.transientUntil = (t or GetGameTimer()) + (ms or EVENT_MS)
+end
+
+-- A status line kept up every frame while its condition lasts ("Stop inside", "Hold still" done, "drive a vehicle"):
+-- its text is looked up once and kept until the next snapshot or a rename in Settings -> Names, so a frame builds no
+-- string and no table.
+local function SayStatus(st, key, t)
+    local texts = st.statusTexts
+    if not texts or st.statusLabels ~= Config.Labels then
+        texts = {}
+        st.statusTexts, st.statusLabels = texts, Config.Labels
+    end
+    local text = texts[key]
+    if not text then
+        text = CP.L(key)
+        texts[key] = text
+    end
+    st.transient = text
+    st.transientUntil = t + STATUS_MS
 end
 
 local function StreetLine(p)
@@ -217,7 +242,7 @@ local function DrawMarkers(ctx, st, d, pos)
     DrawMarker(1, cur.x, cur.y, cur.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, r * 2.0, r * 2.0, 2.0, 220, 40, 50, 110,
         false, false, 2, false, nil, nil, false)
     local nxt = st.points[d.current + 1]
-    if nxt and #(pos - nxt) < VIEW_DISTANCE then
+    if nxt and DistSq(pos, nxt) < VIEW_DISTANCE_SQ then
         DrawMarker(1, nxt.x, nxt.y, nxt.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, r * 2.0, r * 2.0, 1.0, 240, 200, 60, 60,
             false, false, 2, false, nil, nil, false)
     end
@@ -256,7 +281,7 @@ local function CheckInside(ctx, st, d, pos, veh, t)
     end
     if ctx.obj.vehicleRequired ~= false and not IsDriving(veh) then
         st.holdStart, st.holdShown = nil, nil
-        Say(st, CP.L('block.checkpoint_route.hud.need_vehicle'), STATUS_MS)
+        SayStatus(st, 'block.checkpoint_route.hud.need_vehicle', t)
         return
     end
     local stopFor = tonumber(ctx.obj.stopFor) or 0
@@ -264,10 +289,10 @@ local function CheckInside(ctx, st, d, pos, veh, t)
         Report(ctx, st, d.current, veh, t)
         return
     end
-    local ent = veh ~= 0 and veh or PlayerPedId()
+    local ent = veh ~= 0 and veh or cache.ped
     if GetEntitySpeed(ent) > STOP_SPEED then
         st.holdStart, st.holdShown = nil, nil
-        Say(st, CP.L('block.checkpoint_route.hud.stop_here'), STATUS_MS)
+        SayStatus(st, 'block.checkpoint_route.hud.stop_here', t)
         return
     end
     st.holdStart = st.holdStart or t
@@ -275,16 +300,16 @@ local function CheckInside(ctx, st, d, pos, veh, t)
     if left > 0 then
         if st.holdShown ~= left or not st.transient then
             st.holdShown = left
-            Say(st, CP.L('block.checkpoint_route.hud.hold', { seconds = left }), 1100)
+            Say(st, CP.L('block.checkpoint_route.hud.hold', { seconds = left }), 1100, t)
         end
     else
         Report(ctx, st, d.current, veh, t)
-        Say(st, CP.L('block.checkpoint_route.hud.hold_done'), STATUS_MS)
+        SayStatus(st, 'block.checkpoint_route.hud.hold_done', t)
     end
 end
 
 local function CheckContact(ctx, st, veh, t)
-    if veh == 0 or GetPedInVehicleSeat(veh, -1) ~= PlayerPedId() then
+    if veh == 0 or GetPedInVehicleSeat(veh, -1) ~= cache.ped then
         st.lastSpeed, st.lastBody, st.collided = nil, nil, false
         return
     end
@@ -332,7 +357,7 @@ local function Loop(ctx, st)
                 local pos = GetEntityCoords(ped)
                 -- not cache.vehicle: it is false on foot, and the checks below compare veh with 0
                 local veh = GetVehiclePedIsIn(ped, false)
-                if #(pos - st.points[d.current]) < VIEW_DISTANCE then
+                if DistSq(pos, st.points[d.current]) < VIEW_DISTANCE_SQ then
                     sleep = 0
                     DrawMarkers(ctx, st, d, pos)
                     CheckInside(ctx, st, d, pos, veh, t)
@@ -340,7 +365,11 @@ local function Loop(ctx, st)
                 if st.courseRunning then
                     if sleep > SAMPLE_MS then sleep = SAMPLE_MS end
                     if st.track.contacts then CheckContact(ctx, st, veh, t) end
-                    if st.track.undriveable then CheckUndriveable(ctx, st, t) end
+                    -- the undriveable check reads three natives: once a sample, not every frame (its retry is 3 s)
+                    if st.track.undriveable and t - (st.undriveCheckAt or 0) >= SAMPLE_MS then
+                        st.undriveCheckAt = t
+                        CheckUndriveable(ctx, st, t)
+                    end
                 end
             end
             if t >= (st.lineCheckAt or 0) then
@@ -363,6 +392,7 @@ local function Apply(ctx, st, data)
     st.points = {}
     for i, p in ipairs(data.points or {}) do st.points[i] = V3(p) end
     st.track = data.track or {}
+    st.statusTexts = nil
     local running = data.course and data.course.running == true
     if running and not st.courseRunning then
         st.courseStartLocal = GetGameTimer() - ((data.course and data.course.elapsedMs) or 0)

@@ -9,6 +9,7 @@ local RETASK_MS = 12000
 local STUCK_MPS = 1.0
 local STOP_RANGE = 4.0
 local MARKER_RANGE = 150.0
+local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 
 local active = {}
@@ -303,7 +304,7 @@ local function MarkerLoop(S)
             local r = RouteOf(S)
             local p = r.points[#r.points]
             local arrival = tonumber(S.ctx.obj.arrival) or 20.0
-            if p and #(GetEntityCoords(cache.ped) - p) <= MARKER_RANGE then
+            if p and U.distSq(GetEntityCoords(cache.ped), p) <= MARKER_RANGE_SQ then
                 DrawMarker(1, p.x, p.y, p.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, arrival * 2.0, arrival * 2.0, 1.5, 60,
                     140, 240, 70, false, false, 2, false, nil, nil, false)
                 Wait(0)
