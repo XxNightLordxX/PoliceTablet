@@ -6,7 +6,7 @@
 --   * the boundary listeners (daily, weekly, monthly) other modules subscribe to; checked every 60 s
 --     and fired once when a boundary passes, never just because the resource started
 --   * the retention job (Config.Retention) run at each daily reset (plus one catch-up run shortly after
---     start, see docs/ARCHITECTURE.md §13.12): cp_mission_runs rows older than runArchiveMonths are copied
+--     start, see docs/ARCHITECTURE.md §5.6): cp_mission_runs rows older than runArchiveMonths are copied
 --     into cp_mission_runs_archive and then deleted, cp_audit rows older than auditDays are deleted
 --
 -- Public API (server)

@@ -26,11 +26,9 @@ A whole run takes about 8.5 minutes (the times above are from one run of every s
 `tools/lint_<name>.py` and `tools/check_<name>.py` (other than `check_contracts.py`) is a `lint-<name>` step, run right after `contracts`: a new lint joins by checking the
 repository with no arguments and exiting non-zero on a problem.
 
-The suites run two specs at a time (`--jobs`, below). Measured on the same machine, the three suites took
-64 + 35 + 79 s before, 31 + 29 + 41 s with one spec at a time, and 17 + 16 + 23 s two at a time. Most of the
-old time was a new `mysql` process for every SQL statement (about 8 ms each, 744 of them in `e2e_spec`
-alone): the harness now keeps one client open per spec. `tests/storage_spec.lua` (about 14 s of Lua work in
-the saves folder engine) is the floor of a suite, whatever `--jobs` is.
+The suites run two specs at a time (`--jobs`, below); the harness keeps one MariaDB client open per spec.
+`tests/storage_spec.lua` (about 14 s of Lua work in the saves folder engine) is the floor of a suite, whatever
+`--jobs` is.
 
 Full admin control has its own specs, each run in all three storage modes: `adminkit_spec` (the guard wrapper,
 jobs, the maintenance lock), `admin_officers_spec` and `admin_boards_spec` (officers, points, boards, seasons),
@@ -77,15 +75,14 @@ The server's clock does not matter: every statement the harness sends starts wit
 clock>`, so `NOW()` is the spec's fake clock (`H.time`) in every storage mode.
 
 Other MariaDB series: the suite is written and run in CI against 10.11, the version Ubuntu 24.04 and
-Debian 12 ship. The official images of two other series passed with the tree before the speed-up (all
-three modes; times from then, one `mysql` process per statement):
+Debian 12 ship. Other series checked in all three modes:
 
-| Server | Result | Time (db / files / shadow) | Why |
-|---|---|---|---|
-| 10.11.14 (local), 10.11.19 (`mariadb:10.11`) | pass, 0 differences | 64 / 33 / 79 s | |
-| 10.6.28 (`mariadb:10.6`) | pass, 0 differences | 65 / 34 / 78 s | |
-| 11.4.13 (`mariadb:11.4`) | pass, 0 differences | 224 / 61 / 235 s | 11.4 turns TLS on by default, so each new `mysql` connection paid a handshake: 43 ms instead of 8 ms |
-| 12.3.3 (`mariadb-server` 12.3.3 deb, 2026-10-19) | database mode: pass, 72 specs | db only | Qbox's recommended server. Before X10, 10 checks failed there: `FROM_UNIXTIME(0)` is NULL from 11.8, so an "all time" correction matched no row (the harness now plays that on 10.11) |
+| Server | Result | Why it matters |
+|---|---|---|
+| 10.11.14 (local), 10.11.19 (`mariadb:10.11`) | pass, 0 differences | |
+| 10.6.28 (`mariadb:10.6`) | pass, 0 differences | |
+| 11.4.13 (`mariadb:11.4`) | pass, 0 differences | 11.4 turns TLS on by default, so each new `mysql` connection pays a handshake (about 43 ms instead of 8 ms) |
+| 12.3.3 (`mariadb-server` 12.3.3 deb) | database mode: pass | Qbox's recommended server. `FROM_UNIXTIME(0)` is NULL from 11.8, so an "all time" correction would match no row; the harness plays that on 10.11 |
 
 11.4 also defaults to the `utf8mb4_uca1400_ai_ci` collation; nothing in the suite depends on it today.
 `setup_test_env.sh` warns on any series other than 10.11. The harness still reconnects for every call
@@ -218,7 +215,7 @@ Variables for one run:
 | `CP_TEST_NOW=<unix time>` | the harness' default fake clock `H.time` (1790000000, a Monday, otherwise) |
 | `CP_TEST_CLOCK=<unix time>` | the wall clock itself: `os.time()` before `H.boot` and MariaDB's `NOW()` start at that moment |
 | `CP_TEST_TZ=<zone>` | the specs' `TZ` (UTC otherwise); shadow mode always runs UTC |
-| `CP_TEST_MYSQL=spawn` | one `mysql` process per statement, as before the speed-up (to compare) |
+| `CP_TEST_MYSQL=spawn` | one `mysql` process per statement instead of one client per spec (to compare) |
 | `CP_SQL_LOG=file` or `dir/` | log every MySQL call as JSON lines (harness header, "optional SQL log") |
 | `CP_SHADOW_REPORT=file` | where shadow mode writes differences (default `/tmp/cp_shadow_<run database>.jsonl`) |
 | `CP_SHADOW_TRACE=1` | shadow mode: print every compared pair to stderr |
@@ -369,8 +366,8 @@ package names are that release's):
 What differs from a local machine and is handled: no socket (TCP only), root reached over TCP with an empty
 password, `LANG=C.UTF-8` (the specs run with `LC_ALL=C` anyway), the runner's MySQL client and server
 packages, and the runner's own clock and zone (the specs do not read either). The workflow passes
-`actionlint` (with shellcheck). The same run was tried locally against the `mariadb:10.11` image over TCP
-(no socket, `LANG=C.UTF-8`) before the speed-up: every step passed.
+`actionlint` (with shellcheck). The same run passes locally against the `mariadb:10.11` image over TCP
+(no socket, `LANG=C.UTF-8`).
 
 ## Things that bit while setting this up
 

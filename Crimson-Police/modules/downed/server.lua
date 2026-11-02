@@ -49,7 +49,7 @@
 --   entry per run, so nothing fires twice (also when the 2 s poll still sees metadata "down" right after the
 --   revive). A disconnect (playerDropped) or character unload (CP.Qbx.onPlayerUnload) cancels it.
 -- Every participant downed: CP.Runs ends a run that has no active participant left; when a down removed the
--- last one and the run is still open 5 s later, this module ends it as failed (see docs/ARCHITECTURE.md §13.24).
+-- last one and the run is still open 5 s later, this module ends it as failed (see docs/ARCHITECTURE.md §5.12).
 
 CP.Downed = CP.Downed or {}
 local D = CP.Downed

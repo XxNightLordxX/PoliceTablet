@@ -31,7 +31,7 @@
 --                        enabled, base, payoutSource ('admin'|'type'|'event'), missionPayout|nil,
 --                        fallback (B without the mission payout), setBy|nil, setByName|nil,
 --                        updatedAt|nil, missing (a stored payout whose mission is not loaded) }
--- Net (docs/ARCHITECTURE.md §13.11 has the response shapes)
+-- Net (docs/ARCHITECTURE.md §5.18 has the response shapes)
 --   callback 'sup:getPayouts'   (permission setTypePayout)  -> SupPayoutsView
 --   callback 'admin:getPayouts' (admin)                     -> AdminPayoutsView
 --   action 'server:sup:setTypePayout'     { type, amount, reason }                 -> SupPayoutType

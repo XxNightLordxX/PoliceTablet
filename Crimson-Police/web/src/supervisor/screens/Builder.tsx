@@ -3,7 +3,7 @@
 // The supervisor's drafts plus the published and archived custom missions (builder:list), and the step editor
 // (src/builder). Actions follow session.actions: builderEdit (build, record routes, test their own missions),
 // builderPublish, builderArchive, builderEditAny (other people's missions), builderRollback, breakEditLock —
-// the server re-checks every one (docs/ARCHITECTURE.md §13.7.2). Placement, route recording and test
+// the server re-checks every one (docs/ARCHITECTURE.md §5.28.2). Placement, route recording and test
 // drives close the tablet (modules/builder/client.lua) and reopen it here when they end.
 
 import { useState } from 'react';

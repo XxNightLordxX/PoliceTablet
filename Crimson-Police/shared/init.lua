@@ -238,7 +238,7 @@ end
 -- ============================================================================
 --                                    HOOKS
 -- ============================================================================
--- In-resource events between modules (docs/ARCHITECTURE.md §13.14 lists them). fire() calls every listener in
+-- In-resource events between modules (docs/ARCHITECTURE.md §5.10 lists them). fire() calls every listener in
 -- the caller's thread, in the order they were added, each in pcall: a failing listener is logged and the
 -- next one still runs. Listeners may only yield where the hook's contract allows it.
 CP.Hooks = CP.Hooks or { _list = {}, _byId = {}, _next = 0 }

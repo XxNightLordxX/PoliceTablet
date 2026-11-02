@@ -35,7 +35,7 @@
 --   event 'crimson-police:client:missions' (list) to every client after each load / register / unregister
 --       (sent with TriggerLatentClientEvent: the list is tens of kB)
 --
--- Contract interpretations (details in docs/ARCHITECTURE.md §13.12)
+-- Contract interpretations (details in docs/ARCHITECTURE.md §5.6)
 --   * CP.Builder.loadPublished() entries: a definition with loader fields, { def, meta }, or meta only
 --     ({ id, filePath, version }) whose file is read here; if the hook throws, loaded custom missions stay
 --   * reload(): CP.Builder.onReload() first, then loadAll()

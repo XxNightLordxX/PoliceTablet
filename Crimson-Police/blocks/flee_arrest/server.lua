@@ -1102,7 +1102,7 @@ end
 
 -- Stand the suspect DOOR_STEP in front of the door, facing out. Where he waited does not matter: inside
 -- (the card: "the suspect inside") or on the door step next to the door (the built-in houses have no
--- interior a ped can walk out of, docs/ARCHITECTURE.md §13.17), he always ends up outside, never behind the
+-- interior a ped can walk out of, docs/ARCHITECTURE.md §5.6), he always ends up outside, never behind the
 -- facade.
 local function MoveToDoor(ctx, p)
     local door = PointList(ctx.location, ctx.obj.door)[1]

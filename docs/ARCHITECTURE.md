@@ -46,7 +46,8 @@ exposes that is not listed here is private to that module (keep it `local`).
    the top of `modules/storage/memsql.lua` (anything else fails there with "the saves folder engine (files mode)
    does not support ..."). Reads of another resource's table (today only sc-dispatch's `mdt_dispatch`) still go
    read-only to the real oxmysql. The only code that sends `cp_` statements to the real oxmysql in files mode
-   is the admin's storage copy (`/CrimsonPoliceAdmin storage copy`, §5.29). FiveM resource KVP is never used.
+   is the admin's storage copy (`/CrimsonPoliceAdmin storage copy`, §5.29). Resource KVP holds only the storage
+   choice made in game (§5.29) and this PC's local officer options (§5.48), never game data.
 7. **Server authority.** The client never sends points or cash amounts. Clients report objective
    events and telemetry; the server validates. Every `sup:*`/`admin:*` handler calls
    `CP.Permissions.can(src, action)` first, and every officer action calls `CP.Access.getOfficer(src)`.
@@ -104,7 +105,7 @@ exposes that is not listed here is private to that module (keep it `local`).
 PoliceTablet/                      (git repo)
   README.md                        the one owner document (install, permissions, config, commands, troubleshooting);
                                    every folder README below is a short note that points to its section
-  docs/ARCHITECTURE.md             this file: code structure, events, storage, the web UI (§12), module notes (§13)
+  docs/ARCHITECTURE.md             this file: code structure, module APIs and notes (§5), events, storage, the web UI (§12)
   docs/SPEC.md                     the product spec (markdown)
   docs/INTEGRATIONS.md             checked facts about the other resources, and the Crimson-Arena rules
   docs/TESTING.md                  the checks, CI, working on the code; docs/IN_GAME_CHECKLIST.md what to check in game
@@ -178,11 +179,10 @@ Extra module folders beyond the spec's table (allowed: "each feature in its own 
 More folders (all in the spec's Feature folders table; §5.30–§5.34):
 `modules/custody/` (server, client), `modules/missioncalls/` (server, client), `modules/profile/` (server),
 `modules/rewards/` (server), `modules/confighealth/` (server), `modules/integrations/sc_police/` (server),
-`blocks/field_contact/` and `blocks/process_scene/` (server, client). How each part reads the contracts, with
-its deviations, is in §13 (Module notes).
+`blocks/field_contact/` and `blocks/process_scene/` (server, client).
 
 `modules/diag/` (client, §5.35): the F8 command `CrimsonPoliceState`, with the freeze fix
-(§13.15).
+(§5.15).
 
 `modules/npccombat/` (client, server, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat), the
 protection drop and the `crimsonPoliceRun` player bag.
@@ -220,7 +220,7 @@ Full admin control also has `modules/corrections/` (§5.38), `modules/livectl/` 
 | `CP.Locale.label(key, fallback, vars)` | shared/locale.lua | The locale text when the key exists, else the fallback (config or mission text): the optional label overrides of §10 |
 | `CP.Hooks.on(name, fn) -> id`, `CP.Hooks.off(id) -> bool`, `CP.Hooks.fire(name, ...) -> n` | shared/init.lua | Both sides. Listeners run in the caller's thread, in the order added, each in pcall (a failure is logged, the next still runs). The hooks and who fires them: §5.10 |
 | `CP.Net.action(name, handler, opts)` | shared/net.lua | server: registers net event `crimson-police:<name>`; handler `(src, payload) -> ok, data|errKey`; replies to `reqId`. While `CP.Maintenance.active()` (§5.37) every action is refused with `err.maintenance` before its handler runs, unless it was registered with `opts.maintenance = true` (status reads and the actions that end a lock). Callbacks are never gated by the lock. After a failed start (`CP.Migrations.failed()`) every action is refused with `err.not_started` before its handler runs, and a handler that raised it while it waited for the start answers it too |
-| `CP.Net.callback(name, handler, opts)` | shared/net.lua | server: ox_lib callback `crimson-police:<name>`; handler `(src, args) -> data` or `nil, errKey`; reply `{ok,data,error}`. After a failed start every callback answers `err.not_started` before its handler runs. `opts.latent = true` (the three big exports `admin:exportAudit`, `admin:exportAuditPart`, `admin:exportPayments`; `Kit.callback` passes it through): when the client sent a reply id (the callback's second argument after `args`), the data goes as `TriggerLatentClientEvent('crimson-police:client:actionResult', src, Config.Limits.exportBps, id, true, data)` and the callback answers `{ ok = true, latent = id }`, so up to 5000 CSV rows no longer hold back the admin's other events (`exportBps` 200000; below 100000 counts as 100000; 0 = one plain answer, as before) |
+| `CP.Net.callback(name, handler, opts)` | shared/net.lua | server: ox_lib callback `crimson-police:<name>`; handler `(src, args) -> data` or `nil, errKey`; reply `{ok,data,error}`. After a failed start every callback answers `err.not_started` before its handler runs. `opts.latent = true` (the three big exports `admin:exportAudit`, `admin:exportAuditPart`, `admin:exportPayments`; `Kit.callback` passes it through): when the client sent a reply id (the callback's second argument after `args`), the data goes as `TriggerLatentClientEvent('crimson-police:client:actionResult', src, Config.Limits.exportBps, id, true, data)` and the callback answers `{ ok = true, latent = id }`, so up to 5000 CSV rows no longer hold back the admin's other events (`exportBps` 200000; below 100000 counts as 100000; 0 = one plain answer) |
 | `CP.Net.rateOk(src, key, max, windowMs)` | shared/net.lua | server: a token bucket per (src, key): `max` calls at once, then one back every `windowMs / max` (a new key starts full; `playerDropped` clears the player's buckets). `CP.Net.action` (`opts.rate`, default 8 a second) and `CP.Net.callback` (default 6) answer `err.rate_limited` past it. `Config.Limits.netRateResponse` (read at each refusal): `'block'` (shipped) refuses quietly; `'log'` also prints one `CP.warn('net', ...)` a minute per player once one name is refused 3 x its limit (at least 20) in a minute, never for an admin (`CP.Access.isAdmin`); `'kick'` prints that warning and calls `DropPlayer(src, CP.L('err.rate_kick'))` once |
 | `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args, opts)` | shared/net.lua | client; both return `{ ok, data, error }` and never raise (`err.timeout` after timeoutMs, default 15000; `err.no_response` when ox_lib raises). `opts` is the timeout in ms or `{ timeoutMs, latent = true }`: latent sends a reply id (from the `actionResult` ids) and, on a `{ latent = id }` answer, waits up to 60 s more for that latent `actionResult`. The tablet's NUI `request` path always passes `latent = true`; the NUI waits 90 s (`EXPORT_TIMEOUT_MS`, `request(name, args, { timeoutMs })`) for the three exports instead of its 20 s |
 | `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `reassertAiDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
@@ -315,7 +315,7 @@ metres, km/h; chances are fractions (0.30); progress durations are milliseconds.
 | `interact_points` | 5 | `points` (location key: vec3/vec4, list of them, or list of `{ coords, heading, label }`) · `use` ('all'\|'random') · `count` · `target = { label, icon, radius }` · `progress = { label, duration (ms), anim }` · `roll = { outcomes = { { id, chance, followUp = { label, duration } } } }` (server rolls per point) · `logResult = { choices = { 'secure', 'found_open' }, correct = { secure = 'secure', open = 'found_open' } }` · `hidden = { count, prop, label }` (N of the points hide a device; done when all found; found devices go to `run.shared.devices`) · `fastBonus = { seconds, id }` |
 | `skill_check` | 10 | `targets` ('shared:devices' or a location key) · `checks` [{'easy','medium','medium','hard'}] · `missPenalty` [30] s off the run timer · `failAfter` [2] misses in a row on one target · `target = { label, icon }` · `explosion` [true] (effect only, damage 0) |
 | `hostile_waves` | 60 | `spawns` (location key: list of vec4) · `waves` [{7,7,6}] · `nextWave = { aliveAtMost = 2, afterSeconds = 90 }` · `weapons` · `accuracy` [25] · `armour` [0] · `health` [200] · `behaviour` ('hold'\|'balanced'\|'push') · `surrender = { belowHealth = 0.25, chance = 0.30 }` · `peds` (models) · `boss = { model, label, health, armour, weapon, spawn (location key), surrender = {...} }` (does not scale) · `blockTraffic` [120.0] · `indoor` [false] (the fight is inside a building: the spawn director keeps `Config.Spawning.minDistanceIndoor`, not `minDistance`; Hostage Rescue and the raids' fights) · `stage` [false] (wave 1 is placed ahead of time while the objective before runs, calm and unarmed, and wakes when the fight starts; the raids' fights; see below) · `scene` handled by a following interact_points |
-| `protect_rescue` | 15 | `npcs` (location key: list of vec4) · `count` [3] · `peds` · `restrained` [true] · `freeTime` [6000] ms · `target = { label = 'Cut restraints' }` · `safe` (location key vec3) · `safeRadius` [6.0] · `hitPenalty` [50] · `failIfDies` [true] · the hostages appear when this objective starts, through the spawn director (`Config.Spawning.hostagesAt` 'objective'; 'runStart' or `enabled = false`: in `prepare`, when the run moves to In progress, as before) |
+| `protect_rescue` | 15 | `npcs` (location key: list of vec4) · `count` [3] · `peds` · `restrained` [true] · `freeTime` [6000] ms · `target = { label = 'Cut restraints' }` · `safe` (location key vec3) · `safeRadius` [6.0] · `hitPenalty` [50] · `failIfDies` [true] · the hostages appear when this objective starts, through the spawn director (`Config.Spawning.hostagesAt` 'objective'; 'runStart' or `enabled = false`: in `prepare`, when the run moves to In progress) |
 | `flee_arrest` | 30 | `mode` ('door'\|'scatter') · door mode: `door` (vec4 key), `knock = { label, duration }`, `suspect` (vec4 key), `fleeTo` (list key), `responses = { surrender = 0.5, flee = 0.3, fight = 0.2 }`, `associates = { count, spawns, weapons, accuracy, armour }` (always fight) · scatter mode: `spawns` (list key), `routes` (list of lists of vec3), `suspects` [5], `armedShare` [0.4] · common: `models`, `weapons`, `fireWithin` [15.0], `escape = { distance, seconds }`, `givesUp = { aim = 10.0, stun = true, close = { distance = 3.0, seconds = 3 } }`, `armedGivesUp = { stun = true, belowHealth = 0.5 }`, `cuff = { label = 'Cuff suspect', duration = 5000 }`, `aliveBonus = { id, points, each }` |
 | `pursuit` | 30 | `mode` ('stop'\|'follow') · `vehicles` [1] · `models` · `suspectsPerVehicle` [1] · `spawn` (vec4 key) or `spawns` (list key) · `route` (location key of a road route `{ points, loop }`, nil = free flee) · `speed` [120] km/h · `style` ('cautious'\|'reckless') · `trigger` ('arrive' \| `{ distance = 60.0, lights = true }` \| `{ ahead = 50.0 }`) · `stopped = { speed = 5.0, seconds = 5 }` · `footFlee` [0.2] · `surrenderOnAim` [true] · `arrest = { label, duration }` · follow mode: `hold` [150], `lost = { distance = 250, seconds = 10 }`, `duration` [180], `medals = { gold = 40, silver = 80, bronze = 150 }` (average distance, m) · `escape = { distance, seconds }` · `complete` ('all_detained'\|'all_or_timeout_any') · `ramSpeed` [100] km/h (0 = any contact counts as a ram) · `ramPenaltyId` ['hard_ram'] · `neverShoots` [true] |
 | `escort` | 60 | `route` (location key `{ points = {...}, stops = { { at = 12, wait = 20 } } }`) · `vehicle` ['stockade'] · `speed` [60] · `style` ['normal'] · `toughness` [1.5] · `stoppedFail` [60] · `arrival` [20.0] · `ambushPoints` (list key) · `ambush = { waves = 2, carsPerWave = 2, perCar = 2, models, peds, weapons, accuracy, armour }` · `clearRadius` [100.0] |
@@ -326,7 +326,7 @@ metres, km/h; chances are fractions (0.30); progress durations are milliseconds.
 | `skill_check` (added) | — | `onFail` ['fail'] \| `{ setback = { label, duration = 10000, penalty = 'lab_fire' }, retryAfter = 30 }`: failAfter misses start a recovery step (a dwell at the target, report 'recover'), the officer who missed pays the penalty, a retry opens retryAfter s after the recovery; the case never fails |
 | `flee_arrest` (added) | — | `demeanour` (weights, a fixed name, or 'rolled') · `feint` [0] (percent, unarmed suspects only; bolts after Config.Npc.feintAfter with nobody within feintRange or aiming) · `custody` ['cuff'] \| 'handover' (`CP.Custody.enableChain`) |
 | `hostile_waves` (added) | — | `behaviour` (a name, or weights `{ hold = 0.5, balanced = 0.4, push = 0.1 }`, rolled per spawn from the objective seed) · `spawnSets = { keys = { 'front', 'house', 'garage' }, use = 2, intel = true }` (the intel line `block.hostile_waves.intel` in `run.shared.intel`) · `boss.aliveBonus = { id, points }` · Config.NpcDifficulty changes feel only (health, surrender) |
-| `search_area` | 60 | `center` (vec3 key) · `startRadius` [600] · `shrinkTo` [{300,150,50}] · `clues` (list key, 6+) · `clueCount` [3] · `clueProps` (`'witness'` = a witness NPC) · `clueProgress = { label, duration = 4000 }` · `hiding` (vec4 list key, 6+) · `fugitives` [1] · `runDistance` [30.0] · `givesUp = { stun = true, close = { distance = 3.0, seconds = 3 } }` · `escape = { distance = 300, seconds = 30 }` · `cuff = {...}` · each fugitive and clue appears once an officer is near it, through the spawn director (`Config.Spawning`; `enabled = false`: all when the search starts, as before) |
+| `search_area` | 60 | `center` (vec3 key) · `startRadius` [600] · `shrinkTo` [{300,150,50}] · `clues` (list key, 6+) · `clueCount` [3] · `clueProps` (`'witness'` = a witness NPC) · `clueProgress = { label, duration = 4000 }` · `hiding` (vec4 list key, 6+) · `fugitives` [1] · `runDistance` [30.0] · `givesUp = { stun = true, close = { distance = 3.0, seconds = 3 } }` · `escape = { distance = 300, seconds = 30 }` · `cuff = {...}` · each fugitive and clue appears once an officer is near it, through the spawn director (`Config.Spawning`; `enabled = false`: all when the search starts) |
 
 Each block's `server.lua` exposes `defaults(obj)` and `validate(obj, mission, location)` so the
 loader and the Mission Builder apply exactly these defaults and guardrails.
@@ -361,11 +361,11 @@ a second ask offers the last resort for what is still missing: the old ring roun
 laps = ceil(total / #list)) and, in scatter mode, each escape route's first point (an inmate there runs on along that
 route), each checked against the run's people like any point. Any other scatter inmate's route is `RouteFor`: with
 `Config.Flee.nearestRoute` (on) the route whose first point is nearest where he appears, routes within `ROUTE_TIE`
-(5 m) of as near taken in `st.routeOrder` from his turn on; off, `st.routeOrder` in turn (as before). `Config.Spawning.leaveOutAfter` (and at least
+(5 m) of as near taken in `st.routeOrder` from his turn on; off, `st.routeOrder` in turn. `Config.Spawning.leaveOutAfter` (and at least
 `waveDelayMax`) short while someone of the objective has appeared and every one of them is done: the missing ones are
 left out (`st.leftOut`, one `CP.warn` `<n> inmate(s) left out: ...`; `AssocTarget` / `InmateTarget`, the checklist and
 the HUD count without them). A door location with no `suspect` point: nobody at the door (`st.noSuspect`, one
-`CP.warn`), never the start point. `enabled = false` or `associatesAtKnock = false`: as before (associates at the
+`CP.warn`), never the start point. `enabled = false` or `associatesAtKnock = false`: associates at the
 objective's start; the ring with `enabled = false`). The suspect a surrender stands at the door step (`MoveToDoor`,
 server `SetEntityCoords`) is asked to be placed again there: `CP.Spawn.again` (§5.43).
 
@@ -377,8 +377,7 @@ while wornOut is true), `pursuit` for a suspect in `'fleeing'` in stop mode only
 `search_area` for a fugitive in `'fleeing'`, `field_contact` for a contact in `'fleeing'` who is not walking off a
 consensual contact. The escape rules are unchanged.
 
-field_contact through the spawn director (Config.Spawning; owner request of 2026-10-19: "make sure they dont
-spawn around the player"): a scene (scene mode: its car and every person, all at once) and each parked car (parked
+field_contact through the spawn director (Config.Spawning): a scene (scene mode: its car and every person, all at once) and each parked car (parked
 mode: per spot, in any order) appear once `ctx.whenNear` says an officer is within `activateRange` of one of its points
 while every officer is further than the objective's `approach` + `sceneOutside` from all of them; an officer standing
 closer keeps it waiting (one `CP.log` per point: `spots[1] waits: an officer is 20 m from it, it appears beyond 35 m`),
@@ -396,11 +395,10 @@ participant first, in front of the asked officer's ped first, else the one furth
 `st.walkIns` (the ones on their way) holds the objective open. Once `CP.Spawn.holding(netId)` is false (an officer's
 game placed him, or his placement timed out) he is told `walk_to` his car; the driver's outcome (HUD message, then
 takes / argues / drives off `ARRIVE_PAUSE_S` 3 s later) waits until he is within 4 m of the car or has walked
-`RETURN_WALK_S` + distance / 1 m/s; the thief runs at `thief.runAt` as before. `enabled = false`: everything as before
+`RETURN_WALK_S` + distance / 1 m/s; the thief runs at `thief.runAt`. `enabled = false`: nothing changes
 (scene and cars at once, the driver 14 m and the thief 30 m from the car at a random angle, at once).
 
-pursuit through the director (Config.Spawning; owner request of 2026-10-19: "i do not want them spawning in
-the ground or surronding the officers"). `PlaceFor(ctx, st, i)` returns slot i's point, its console name
+pursuit through the director (Config.Spawning). `PlaceFor(ctx, st, i)` returns slot i's point, its console name
 (`spawnOffset -200 m, 8 m back`, `spawns[3]`, `route[12]`, `50 m ahead of the start`) and, for spawnOffset, the slot's
 base (`OffsetSpot`: `{ p, label, watch }`, kept in `st.offset` once the first car is out, so the next cars queue
 behind it). A point of the road route itself (spawnOffset's `AlongRoute`, a loop's waypoint, an open route's first
@@ -410,16 +408,15 @@ mission with a spawnOffset on the same route precedes (`LaterViolator`: Traffic 
 the participant furthest up the road among those within `ON_ROAD` (100 m, 2D) of it (`RoadSpot`: his metres along the
 route on the nearest segment) and is placed `secondViolatorUpstream` metres before him (`AtRoad`, never before the
 route's first point); `st.watchFrom` = his road point is then where `WatchCruise` judges "passed" instead of the start.
-No participant on the road, `secondViolatorUpstream = 0` or the director off: from the start as before. No start: one
+No participant on the road, `secondViolatorUpstream = 0` or the director off: from the start. No start: one
 `CP.warn` and the spawnOffset branch is skipped (the next ones: spawns, spawn, ahead of the start, the route), never a
 player's position. `SpawnVehicle` offers `Candidates` (slot i, then the slots `vehicles + 1` and `vehicles + 2`, none
 within `SLOT_TAKEN` 4 m of a car of the objective; labelled `vehicle <i> at <name>`) to `ctx.choosePoints(cands, 1,
 { name, wave = 'vehicle <i>', since = st.waitMs[i], ordered = true })`: the first that passes is used, the rest that
 pass go to `spawnVehicle` as `alt` (the placer's other points, §5.43); none passes: no car this tick (SpawnMissing tries
-again each tick, the objective waits). `enabled = false` or no `ctx.choosePoints`: slot i at once, as before.
+again each tick, the objective waits). `enabled = false` or no `ctx.choosePoints`: slot i at once.
 
-escort through the director (Config.Spawning; owner request of 2026-10-19: "make sure they dont spawn around
-the player"). `SpawnTruck` takes `TruckSpot(ctx, st)`: route[1] (heading to route[2]) and `TRUCK_SPOTS` (4) spots
+escort through the director (Config.Spawning). `SpawnTruck` takes `TruckSpot(ctx, st)`: route[1] (heading to route[2]) and `TRUCK_SPOTS` (4) spots
 `TRUCK_STEP` (10 m) apart along the route (`RouteAt`: the route's height there), each z + `vehicleLift`. A spot is
 taken while a vehicle the server knows (`GetAllVehicles`, FXServer: a Lua list of handles) or an active participant
 (his ped) is within `TRUCK_CLEAR` (6 m, 3D) of it. route[1] free: used. Taken: the truck waits (`tr.waitMs`, one HUD
@@ -438,14 +435,12 @@ stays the same while the truck moves), or within `SLOT_CLEAR` (4 m) of a vehicle
 still short of slots the cars it has (`w.want = #w.cars`) or drops it (none), one `CP.warn`: at the truck's arrival
 for every waiting wave (`CutShortWaves`), and after it for a car that finds no slot (`ChooseSlot`: a wave the spawn
 caps held back until then). `enabled = false`: route[1] at the road's height at once and the own slot at the point's height + 0.5 m at
-once, as before; `ambushAheadOnly = false`: the own slot only, through the director.
+once; `ambushAheadOnly = false`: the own slot only, through the director.
 
-search_area through the director (Config.Spawning; owner request of 2026-10-19: "make it be progressive",
-"make sure they dont spawn around the player"; before, every fugitive and clue appeared when the search started,
-276-560 m from the officers, beyond the 424 m a player's game simulates). `start` and each `tick` call `SpawnMissing`,
+search_area through the director (Config.Spawning). `start` and each `tick` call `SpawnMissing`,
 which plans the clues (`PlanClues`, `cl.name` = `clues[5]`) and the hiding order (`st.order`) once, then `SpawnNear`
 (in a pcall, `st.spawning` cleared always). Fugitive i has his own spot from the start (`Slot(i)`: point `order[k]`,
-the `REUSE_OFFSET` ring per lap as before, named `hiding[3]`); `FugitiveAnchor` counts a fugitive who has not appeared
+the `REUSE_OFFSET` ring per lap, named `hiding[3]`); `FugitiveAnchor` counts a fugitive who has not appeared
 as hidden there, so the circle shrinks towards his spot. `SpawnFugitiveNear`: once `ctx.whenNear(spot)`, his spot
 (`own = true`, `centre` = his spot, so it is never behind an officer) and the `OtherSpots` (no fugitive's own spot,
 none a fugitive appeared on, inside the current circle, an officer near it) go to `ctx.choosePoints(cands, 1, { name =
@@ -458,20 +453,20 @@ Each clue (`ClueReady`): once `ctx.whenNear(cl.coords)`, `ctx.choosePoints({ { c
 officer's game can see it (§5.10 `opts.unseen`); after `waveDelayMax` `hardMin` (20 m) in sight. What appeared stays
 until it is checked, lost or the run ends. `st.slots[i]` marks the fugitives made, `st.count` counts them; the client
 offers "Check clue" only on a clue that is there (`netId`). `enabled = false`: `SpawnAll`, everything at once when the
-search starts, as before.
+search starts.
 
-protect_rescue through the director (Config.Spawning; owner request of 2026-10-19: "make it be progressive").
+protect_rescue through the director (Config.Spawning).
 With `hostagesAt = 'objective'` (shipped) `prepare` makes nothing; the hostages appear when the objective starts
 (`start`, then each `tick` for the ones still missing): once `ctx.whenNear` says an officer is within `activateRange`
 of the middle of their points, `SpawnDirected` offers every free spot (`Slot(i)`: hostage i on point `order[k]`, the
-`REUSE_OFFSET` ring per lap as before, named `hostages[3]`) to `ctx.choosePoints(offer, #offer, { name = 'the hostages
+`REUSE_OFFSET` ring per lap, named `hostages[3]`) to `ctx.choosePoints(offer, #offer, { name = 'the hostages
 (<key>)', wave = 'hostages', since = st.waitMs, centre, indoor = true })`: minDistanceIndoor (15 m) from every
 officer, never behind one (no line-of-sight ask: every spot is asked for). The spots it refuses wait (`st.waitMs`,
 counted while an officer is near); after `hostagesWaitMax` (10 s; 0 = never) the rest appear on their spots anyway
 with one `CP.warn` naming the mission, the place, the nearest officer's distance and the setting (they are tied up and
 unarmed, and the rescue cannot go on without them). `st.slots[i]` marks the spots used, `st.spawned` counts them. A
-location with no hostage points spawns nobody, with one `CP.warn` (never the start point, as before). `hostagesAt =
-'runStart'` or `enabled = false`: in `prepare` on every spot in order, with the retry thread, as before
+location with no hostage points spawns nobody, with one `CP.warn` (never the start point). `hostagesAt =
+'runStart'` or `enabled = false`: in `prepare` on every spot in order, with the retry thread
 (`spawnsInPrepare` returns true then).
 
 Evidence field_contact accepts: `{ type = 'action', netId, action, phase = 'begin'|'finish' }` (from the plain
@@ -618,7 +613,7 @@ Cooldowns are kept in memory by `CP.Runs` and rebuilt from `cp_mission_runs` row
    leaving deletes what it placed like every run entity, and `stop` reaches it at the end like every prepared
    objective. A `stage` that returns true marks the objective staged (`objectives[i + 1].staged`, `ctx.staged`, one
    `CP.log` line); one that raises an error is logged, never called again for that objective (one `CP.warn`), and the
-   objective starts as before. Read live: switched off mid-run, nothing more is staged and what was placed stays.
+   objective starts unstaged. Read live: switched off mid-run, nothing more is staged and what was placed stays.
    `stage` may wait (each spawn waits for its entity, and every run ticks in its own thread), so objective i can
    complete meanwhile from an officer's event: the engine then holds the start of i + 1 until `stage` returns (at
    most `TICK_STUCK_MS`, 30 s), so its `start` gets `ctx.staged` and everything `stage` placed, and nothing is placed
@@ -635,1554 +630,2023 @@ Cooldowns are kept in memory by `CP.Runs` and rebuilt from `cp_mission_runs` row
 
 ## 5. Module APIs
 
-Signatures are `CP.X.fn(args) -> returns`. "S" = server, "C" = client. Functions marked
-*(hook)* are called by other modules at the named moment; implement them even if they do little.
-All functions that may query the database must be called from a thread (they may yield).
+Signatures are `CP.X.fn(args) -> returns`. "S" = server, "C" = client. Functions marked *(hook)* are called by other
+modules at the named moment. Functions that may query the database must be called from a thread (they may yield).
+Each module's file header documents its public API in full; each section here gives what the module is for, its API,
+its events and storage, and the rules that are not obvious from the code.
 
 ### 5.1 Integrations (only these touch outside resources)
 
-Verified integration facts (exact signatures, payloads, pitfalls) are in `docs/INTEGRATIONS.md`.
-Implementers of modules/integrations/* must follow it; the most important points are repeated here.
+Checked facts about the other resources (signatures, payloads, pitfalls) are in `docs/INTEGRATIONS.md`; implementers
+of `modules/integrations/*` follow it. Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking,
+sc_police}/`, `tests/core_spec.lua`. Every listener (server and client, all integrations) runs in its own
+`CreateThread` inside `pcall`, so it may query or wait without holding up the other resource's dispatch.
 
 **CP.Qbx** — modules/integrations/qbx
-- S `getPlayer(src) -> player|nil` (raw qbx player object)
-- S `getInfo(src) -> info|nil` where `info = { src, citizenid, name, firstname, lastname, job = { name, label, type, onduty, gradeLevel, gradeName }, callsign, metadata, isDead, inLastStand }`
-  — reused for `Config.Limits.playerInfoCacheMs` (1000; 0 = one `GetPlayer` per call), cleared at once by every
-  qbx_core event below plus `QBCore:Player:SetPlayerData`, `playerDropped` and a qbx_core stop/start; each caller
-  gets its own copy of the top level and `job` (`metadata` is read only). `getPlayer` is never cached.
-- S `getByCitizenId(citizenid) -> src|nil`
-- S `getOnlinePlayers() -> { src, ... }` — ascending; one `GetQBPlayers` copy at start, when qbx_core starts and every
-  60 s, kept by `PlayerLoaded` / `OnPlayerUnload` / `playerDropped` in between (`playerInfoCacheMs = 0`: every 1 s and
-  after each of those events)
-- S `knownJob(src) -> jobName|nil` — the primary job qbx_core last reported, kept only by `QBCore:Server:PlayerLoaded`,
-  `QBCore:Server:OnJobUpdate`, `QBCore:Player:SetPlayerData` (qbx_core's UpdatePlayerData: its SetPlayerData export,
-  SetJob, the group functions), every `getInfo` and the `GetQBPlayers` copy of `getOnlinePlayers` (at start and when
-  qbx_core starts); cleared on unload, drop and a qbx_core stop. nil = not known. It never feeds `CP.Access`'s onLost.
-- S `getJobs() -> table` (qbx jobs)
-- S `addMoney(src, account, amount, reason) -> boolean, why|nil` — amount rounded with `CP.U.round`; `why = 'error'` when `AddMoney` raised (the balance may already have changed: never retry or refund; CP.Cash leaves the row `paying`); a plain refusal returns only `false`
-- S `isDowned(src) -> boolean` (`metadata.isdead == true or metadata.inlaststand == true`) — read with `exports.qbx_core:GetMetadata` (a numeric src only), not a copy of the whole Player; a Qbox without that export falls back to `GetPlayer` until qbx_core starts again
-- S `onDutyChange(fn(src, onDuty))`, `onPlayerLoaded(fn(src))`, `onJobChange(fn(src, job))`, `onPlayerUnload(fn(src))`, `onGroupUpdate(fn(src))` — register listeners (any number).
-- S `onMetaDataChange(fn(src, key, old, new), keys?)` — `qbx_core:server:onSetMetaData (key, oldValue, value, source)`, fired after the value is set; `keys` filters before any thread starts (CP.Downed uses `isdead` / `inlaststand`).
-  Sources: `QBCore:Server:SetDuty (src, onDuty)`, `QBCore:Server:PlayerLoaded (player)`,
-  `QBCore:Server:OnJobUpdate (src, job)`, `QBCore:Server:OnPlayerUnload (src)`,
-  `qbx_core:server:onGroupUpdate (src, groupName, grade|nil)`, `qbx_core:server:onSetMetaData` — all server-local: register with
-  **AddEventHandler only, never RegisterNetEvent** (a net handler would let clients spoof them). SetDuty can
-  arrive stale/out of order: listeners must re-read `getInfo(src).job.onduty` before acting on "on duty".
-- C `getPlayerData() -> PlayerData`, `onJobUpdate(fn(job))`, `onDutyChange(fn(onDuty))`, `onUnload(fn())`, `onLoaded(fn())`
+- S `getPlayer(src)` (raw qbx player, never cached); `getInfo(src) -> { src, citizenid, name, firstname, lastname,
+  job = { name, label, type, onduty, gradeLevel, gradeName }, gang, callsign, metadata, isDead, inLastStand, license }
+  | nil`, reused for `Config.Limits.playerInfoCacheMs` (1000; 0 = no cache) and cleared by every qbx_core event below,
+  `playerDropped` and a qbx_core restart; each caller gets its own copy of the top level and `job`. `callsign` is nil
+  for a missing value, `''` and `'NO CALLSIGN'` (trimmed, not clipped); `gradeName` falls back to the job definition.
+- S `getByCitizenId(citizenid) -> src|nil`; `getOnlinePlayers() -> { src }` (ascending; one `GetQBPlayers` copy at
+  start, when qbx_core starts and every 60 s, kept by load/unload/drop in between; with `playerInfoCacheMs = 0` every
+  1 s); `knownJob(src) -> jobName|nil` (the primary job qbx_core last reported, from its events, `getInfo` and the
+  `GetQBPlayers` copy; never feeds `CP.Access.onLost`); `getJobs()`.
+- S `addMoney(src, account, amount, reason) -> bool, 'error'?` (rounded half up; 0 = true without a call; negative,
+  NaN or infinite = false; `'error'` when `AddMoney` raised: the balance may have changed, never retry or refund),
+  `getMoney(src, account)`, `removeMoney(src, account, amount, reason) -> true | false | false, 'error'`.
+- S `isDowned(src)` (`metadata.isdead` or `inlaststand`, read with `exports.qbx_core:GetMetadata`, falling back to
+  `GetPlayer` on a Qbox without that export).
+- S listeners: `onDutyChange(fn(src, onDuty))` (a `true` is re-read from PlayerData first, so a stale `true` arrives as
+  `false`; listeners still re-read before acting), `onPlayerLoaded`, `onJobChange(fn(src, job))` (job in the
+  `getInfo` shape), `onPlayerUnload`, `onGroupUpdate`, `onMetaDataChange(fn(src, key, old, new), keys?)`. Sources:
+  `QBCore:Server:SetDuty`, `QBCore:Server:PlayerLoaded`, `QBCore:Server:OnJobUpdate`, `QBCore:Server:OnPlayerUnload`,
+  `QBCore:Player:SetPlayerData`, `qbx_core:server:onGroupUpdate`, `qbx_core:server:onSetMetaData` — all server-local:
+  **AddEventHandler only, never RegisterNetEvent** (clients could spoof them).
+- S read-only lookups, always on the real oxmysql (`CP.Storage.realMySQL` with the database off), never with a cp_
+  table in the statement, nil or `{}` on error (one error line a minute): `plateOwned(plate)` (`player_vehicles`; only
+  to reroll a mission plate), `licenseOf(citizenid)`, `characterExists(citizenid)`, `citizenidsOfLicense(license)`
+  (at most 20), `userLicenses(license)` (that license, then the `license`/`license2` of the Qbox `users` row that has
+  it; just `{ license }` without that table).
+- C `getPlayerData()` (`{}` while `LocalPlayer.state.isLoggedIn == false`), `onJobUpdate(fn(job))` (also on
+  `qbx_core:client:onGroupUpdate`, the only event when the active job is removed), `onDutyChange`, `onUnload`,
+  `onLoaded`.
 
-**CP.Dispatch** — modules/integrations/sc_dispatch (S only)
-- `available() -> boolean` (sc-dispatch started)
-- `isSuspended(citizenid, jobName) -> boolean`
-- `lookupActiveCall(callId) -> uniqueId|nil` — `SELECT unique_id FROM mdt_dispatch WHERE (id = ? OR unique_id = ?) AND active = 1` with the number and string form
-- `clearNotification(uniqueId, jobs)` (pcall-wrapped)
-- `normalizeCallId(id) -> string` (`123`, `'123'`, `123.0` → `'123'`; other strings unchanged)
-- `onResponding(fn(src, callId, isResponding))` (RegisterNetEvent `sc-dispatch:server:ToggleResponding`; capture `source` first), `onCallCleared(fn(callId))` (AddEventHandler only — server-local), `onDispatchRestart(fn())` (sc-dispatch start/stop wipes every call), `onShotsFired(fn(src, data, receivedAt))`, `onPlayerDown(fn(src, data, receivedAt))`, `onPlayerDead(fn(src, data, receivedAt))` — listeners; `receivedAt = os.time()` when the event arrived
+**CP.Dispatch** — modules/integrations/sc_dispatch (S)
+- `available()`, `isSuspended(citizenid, jobName)`, `normalizeCallId(id) -> string` (`123`, `'123'`, `123.0` →
+  `'123'`), `lookupActiveCall(callId) -> uniqueId|nil` (`mdt_dispatch` by id or unique_id, active; nil when
+  sc-dispatch is stopped; the numeric form only for digit-only ids; an empty unique_id returns the row id; `npccall-`
+  rows are returned, the caller classifies), `clearNotification(uniqueId, jobs) -> bool` (pcall; refuses numbers and
+  digit-only strings, which would match unrelated rows by id).
+- `realCallSummary() -> { total, p1 } | nil` (active real calls by priority, excluding `Config.Calls.npcCallPrefix`;
+  cached `Config.MissionCalls.realCallCache` s), `mdtCommendations(citizenid) -> list|nil` (`employee_incidents`
+  commendations, last 10; `Config.Profile.showMdtCommendations`). Read-only.
+- Listeners: `onResponding(fn(src, callId, isResponding))` (`sc-dispatch:server:ToggleResponding`, callId as sent,
+  validated, at most 64 characters), `onCallCleared(fn(callId))` (server-local), `onDispatchRestart(fn())`
+  (sc-dispatch start or stop wipes every call), `onShotsFired`, `onPlayerDown`, `onPlayerDead` (`fn(src, data,
+  receivedAt)`; data is a sanitised `{ coords, street, zone, sex }`, client-supplied, so distance checks use server ped
+  coords; no coords = dropped). Net listeners are rate limited per player (ToggleResponding 6/s, the alerts 5/s).
 
 **CP.Ambulance** — modules/integrations/sc_ambulance
-- S `doctorCount() -> integer` (pcall; 0 when sc-ambulance is not started, with one error log)
-- S `revive(src)` → `TriggerClientEvent('hospital:client:Revive', src)` (numeric src only, never -1)
-- C `sendEMSRequest()` → `TriggerServerEvent('hospital:server:EMSDownAlert', streetName)` from the downed player's own client
-- S `on(kind, fn) -> bool` (real suspects) — listen-only `hospital:server:RespawnAtHospital(hospitalIndex)`: a
-  second, read-only handler that calls each `'respawn'` listener with `(src, hospitalIndex)` (a whole number 1..255;
-  anything else is dropped). It returns at once while no listener exists or `CP.Opponents.active()` is not true (no
-  native read), rate-limits `'scp:respawn'` 6 a second per sender (dropped silently), calls each listener inside
-  pcall (one error line a minute) and never yields; it never triggers, cancels or answers a hospital:* event and
-  never touches `hospital:server:RevivePlayer`. Unknown kind or no function → false.
+- S `doctorCount()` (min of `GetDoctorCount()` and the live on-duty `ambulance` count; 0 with one error log when
+  sc-ambulance is stopped).
+- S `revive(src) -> bool` → `TriggerClientEvent('hospital:client:Revive', src)`; refuses non-integer, non-positive,
+  disconnected and in-arena ids (an error in that check refuses too), sends nothing while sc-ambulance is stopped.
+- C `sendEMSRequest() -> bool` → `hospital:server:EMSDownAlert` from the downed player's own client; at most once per
+  5 s, false while the local player carries Crimson-Arena's flag.
+- S `on('respawn', fn(src, hospitalIndex)) -> bool` (real suspects): a second, read-only
+  `hospital:server:RespawnAtHospital` handler; returns at once without a listener or while `CP.Opponents.active()` is
+  not true, rate-limits 6/s, index 1..255, each listener in pcall, never yields, never answers a hospital:* event.
 
-**CP.Banking** — modules/integrations/renewed_banking (S only)
-- `recordDeposit(citizenid, amount, message, issuer, receiver, transId)`
-- `withdrawSociety(account, amount) -> boolean`
-- `recordSocietyWithdraw(account, amount, message, issuer, receiver, transId)`
-- `societyBalance(account) -> number|nil`
-- Full admin control (economy): `depositSociety(account, amount) -> boolean` (`addAccountMoney`), `recordWithdraw(citizenid,
-  amount, message, issuer, receiver, transId)` (a personal `withdraw` entry: a clawback), `recordSocietyDeposit(account,
-  amount, message, issuer, receiver, transId)` (added funds, a refunded clawback), and `findTxn(transId, { citizenid,
-  account }) -> { personal = entry|nil, society = entry|nil }` with `entry = { found, amount, type, time }`: reads
-  `player_transactions` (id = citizenid) and `bank_accounts_new` (id = account) through the real oxmysql
-  (`CP.Storage.realMySQL` with the database off), read only, and returns only the entry with that `trans_id`, never the
-  rest of the history. Not found proves nothing (Renewed-Banking writes history only for a cached player).
-- **CP.Qbx** (economy): S `getMoney(src, account) -> number|nil` (`PlayerData.money[account]`; bank may be below 0),
-  `removeMoney(src, account, amount, reason) -> true | false | false, 'error'` (`player.Functions.RemoveMoney`; `'error'`
-  = it raised and the balance may have changed).
+**CP.Banking** — modules/integrations/renewed_banking (S)
+- `recordDeposit`, `recordWithdraw` (a clawback), `recordSocietyWithdraw`, `recordSocietyDeposit` (all `(account or
+  citizenid, amount, message, issuer, receiver, transId)`), `withdrawSociety(account, amount)`,
+  `depositSociety(account, amount)`, `societyBalance(account)`, `findTxn(transId, { citizenid, account }) -> {
+  personal, society }` (entries `{ found, amount, type, time }` read from `player_transactions` / `bank_accounts_new`
+  on the real oxmysql, only that `trans_id`; not found proves nothing: Renewed-Banking writes history only for a
+  cached player).
+- Never raise; return booleans (`societyBalance` a number or nil). 0 amounts send nothing and return true. Texts cut
+  to message 200, issuer/receiver 100, transId 128 bytes (never inside a UTF-8 character); `'` and `\` removed from
+  the message; title `Config.Tablet.title`.
 
-More integrations:
-- **CP.Qbx** S `plateOwned(plate) -> bool|nil` — `SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1`, read-only,
-  always the real oxmysql (`CP.Storage.realMySQL` with the database off); nil on error (the caller then uses the
-  reserved plate pattern alone). Used only to reroll a mission plate.
-- **CP.Qbx** (full admin control) S `getInfo(src)` gains `license` (`PlayerData.license`); `licenseOf(citizenid) ->
-  license|nil` (the online player's, else `SELECT license FROM players WHERE citizenid = ?`), `characterExists(citizenid)
-  -> bool|nil`, `citizenidsOfLicense(license) -> { citizenid }` (`SELECT citizenid FROM players WHERE license = ? LIMIT
-  20`), `userLicenses(license) -> { license, ... }` (this one first, then the `license` and `license2` of Qbox's
-  `users` row that has it: `SELECT license, license2 FROM users WHERE license = ? OR license2 = ? LIMIT 5`; just `{
-  license }` without that table). Read only, always the real oxmysql (`CP.Storage.realMySQL` with the database off),
-  never a cp_ table in the same statement; nil or `{}` (one error line a minute) when the lookup fails.
-- **CP.Dispatch** S `realCallSummary() -> { total, p1 } | nil` — the Dispatch screen's real-call strip:
-  `SELECT priority, COUNT(*) AS n FROM mdt_dispatch WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?)
-  GROUP BY priority` with `Config.Calls.npcCallPrefix` LIKE-escaped plus `%`; cached
-  `Config.MissionCalls.realCallCache` s; nil on error (the strip is hidden). S `mdtCommendations(citizenid) -> list
-  | nil` — `SELECT title, issued_by, UNIX_TIMESTAMP(created_at) AS ts FROM employee_incidents WHERE citizenid = ?
-  AND type = 'commendation' ORDER BY created_at DESC LIMIT 10` (Config.Profile.showMdtCommendations, off by default);
-  nil on error. Both read-only, never mixed with a cp_ table.
-- **CP.ScPolice** — modules/integrations/sc_police (S only). A second, read-only `police:server:Impound` handler:
-  when its netId (the 7th argument) is a vehicle of a live run it calls `CP.Runs.noteExternalRemoval(netId, src,
-  'sc_impound', dist)` with the sender's server-side distance. It never triggers, cancels or answers a police:*
-  event. `onImpound(src, netId) -> bool`.
-- **CP.ScPolice** S `on(kind, fn) -> bool` (real suspects) — listen-only facts from a second, read-only handler for
-  each of sc-police's `police:server:CuffPlayer(playerId, isSoftcuff)` → `'cuff'` (officerSrc, targetSrc,
-  isSoftcuff == true), `UncuffPlayer(playerId)` → `'uncuff'` (officerSrc, targetSrc), `CuffBreakAlert(officerId)` →
-  `'cuffBreak'` (suspectSrc, officerSrc), `EscortPlayer(playerId)` → `'escort'` (officerSrc, targetSrc),
-  `JailPlayer(targetId, jailTime)` → `'jail'` (officerSrc, targetSrc, jailTime raw: the listener clamps it),
-  `BobbyPinResult(success)` → `'bobbyPin'` (pickerSrc, success == true; sc-police ignores a result with no pending
-  attempt, this handler does not) and `SeizeCash(playerId)` → `'seizeCash'` (officerSrc, targetSrc). Every handler:
-  `local src = source` first; returns at once while no listener of its kind exists or `CP.Opponents.active()` is not
-  true, so with no case open it reads no native; then
-  `CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)` (dropped silently); then the sender and ids must be whole numbers
-  1..65535 (else dropped); each listener runs inside pcall (one `CP.err` a minute per kind), inside the event, and must
-  not yield. `police:server:SetHandcuffStatus` is never registered (cuffs come from the qbx `ishandcuffed` metadata
-  only). Unknown kind or no function → false; the same function twice is kept once.
+**CP.ScPolice** — modules/integrations/sc_police (S)
+- A second, read-only `police:server:Impound` handler: a live run's vehicle → `CP.Runs.noteExternalRemoval(netId, src,
+  'sc_impound', dist)`. `onImpound(src, netId) -> bool`.
+- `on(kind, fn) -> bool` (real suspects), listen-only handlers for `CuffPlayer` → `'cuff'` (officerSrc, targetSrc,
+  isSoftcuff), `UncuffPlayer` → `'uncuff'`, `CuffBreakAlert` → `'cuffBreak'` (suspectSrc, officerSrc), `EscortPlayer`
+  → `'escort'`, `JailPlayer` → `'jail'` (jailTime raw, the listener clamps), `BobbyPinResult` → `'bobbyPin'` (pickerSrc,
+  success), `SeizeCash` → `'seizeCash'`. Each: `local src = source` first, returns at once without a listener or an
+  active case, `CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)`, ids must be 1..65535, listeners in pcall and must not
+  yield. `police:server:SetHandcuffStatus` is never registered (cuffs come from the `ishandcuffed` metadata). It never
+  triggers, cancels or answers a police:* event.
 
 ### 5.2 CP.Access — modules/access
-- S `departmentForJob(jobName) -> deptKey|nil`
-- S `department(key) -> sanitised dept` `{ key, label, short, jobs, supervisorGrade, societyAccount, theme = { primary, accent, background, surface, text }, logo = { url|nil, watermark, opacity, size, grayscale } }` (invalid colours fall back to the Crimson-Police default with one console warning; `text` auto-picked with `CP.U.contrastText`; `logo.url` = `https://cfx-nui-<CP.resource>/logos/<file>` or the configured https url)
-- S `departments() -> { dept, ... }` sorted by key
-- S `getOfficer(src) -> officer|nil, errKey` — on-duty, active job in a department, not suspended (Crimson-Police or SC-Dispatch). errKeys: `err.not_police`, `err.not_on_duty`, `err.suspended`, `err.suspended_dispatch`
-- S `maybeOfficer(src) -> boolean` — a pre-filter for loops over every online player, with no Qbox lookup: false only
-  when `CP.Qbx.knownJob(src)` is in no turned-on department (so `getOfficer` would refuse); an unknown job is true.
-  Call `getOfficer` for the full check. Loops never call `exports.qbx_core:GetPlayer` per player (loop rule 8).
-- S `isAdmin(src) -> boolean` (`IsPlayerAceAllowed(src, adminAce())`, or `IsPlayerAceAllowed(src, 'admin')` while `Config.QboxAdmins == true`: Qbox's own admin ace, which a stock Qbox server gives `group.admin`; only an explicit `true` counts, so a config.lua without the line keeps the ace alone; src 0 = console = true). Every admin check in the resource goes through it
-- S `adminAce() -> string` (`Config.AdminAce`, or `'crimsonpolice.admin'` when it is empty or not a string)
-- S `qboxAdminAce() -> 'admin'|nil` (`'admin'` while `Config.QboxAdmins == true`, else nil)
-- S `isSupervisor(src) -> boolean`
-- S `role(src) -> 'admin'|'supervisor'|'officer'|nil` (highest)
-- S `recheck(src, jobName) -> ok, endReason` — for players on a run: `'off_duty'|'job_change'|'suspended'` when they no longer qualify (job change = active job name differs from `jobName`, the one they accepted with; a job outside every department also counts as job_change)
-- S `isSuspended(citizenid) -> boolean, untilTs` (cp_officers.suspended_until)
-- S `suspend(citizenid, days, actorSrc, reason) -> ok, errKey` (0 days lifts it)
-- S `refreshOfficerRow(src)` — upsert cp_officers callsign, rank_label, display_name, department (on load and on tablet open)
-- S `onLost(fn(src, endReason))` — fired immediately on qbx duty/job events for a player who no longer qualifies
-- S export `GetDepartment(src) -> deptKey|nil`
-
-Full admin control (§5.37):
-- S `getOfficer(src)` also refuses a retired officer (`cp_officers.retired_at` set): `err.retired` (cached 15 s like the
-  suspension).
-- S `isRetired(citizenid) -> bool`; `dispatchSuspension(citizenid, jobName?) -> { suspended, available }` (view only).
-- S `suspend(citizenid, days, actorSrc, reason, opts)`: `opts.untilTs` suspends until that exact moment (future, at most
-  3650 days away; days is then ignored).
-- S `refreshOfficerRow(src)` also writes `cp_officers.license` (never clears a known one).
-- One player has a `license:` and usually a `license2:` identifier, and Qbox stores each character under one of them
-  (qbx_core Login accepts either; a new character gets `license2` first; `players.license` is never rewritten, so a
-  QBCore-era character keeps `license:`). `GetPlayerIdentifierByType` returns the first identifier that starts with the
-  text given, so every lookup passes the type with its colon (`'license:'`, `'license2:'`, `'fivem:'`).
-- S `licenseOfSrc(src) -> license|nil` (`CP.Qbx.getInfo(src).license`, else `GetPlayerIdentifierByType(src,
-  'license:')`), `licensesOfSrc(src) -> { license }` (that one, the `license:` and the `license2:` identifier, no
-  repeats; `{}` for the console), `licenseOf(citizenid) -> license|nil` (`cp_officers.license`, else
-  `CP.Qbx.licenseOf`; cached 15 s), `selfCitizenids(src) -> { citizenid }` (the current character first, then every
-  cp_officers row and Qbox character of any of `licensesOfSrc`; the console has none), `sameUser(a, b) -> bool` (the
-  same text, or one Qbox `users` row has both: `CP.Qbx.userLicenses`; the record move's license check).
-- Hook `admin:changed { citizenid }` drops that officer's suspension, retirement and license caches at once.
-
-Full admin control, System:
-- Turned-off departments (`Config.Departments.<key>.enabled = false`): `department(key)` and `departments()` still
-  return them (`enabled = false` in the sanitised record), so their pending and held pay still finds the society
-  account; `departmentForJob(job)` leaves them out, `offDepartmentForJob(job) -> deptKey|nil` names the one that lists
-  the job, and `getOfficer` then refuses with `err.department_off`.
-- S `explain(src, via?) -> { ok, error?, steps = { { check, ok, vars? } }, via, src, citizenid, name, job, department }`:
-  the opening checks in order (job, department on, duty, suspended, SC-Dispatch suspension, retired, arena, the way);
-  the verdict is `getOfficer` then `CP.Tablet.checkAccess` (the opening code itself), so it never disagrees with a real
-  open attempt.
+Who is an officer, of which department, with which role. Tests: `tests/core_spec.lua`.
+- S `departmentForJob(jobName) -> deptKey|nil` (turned-on departments only; a job in two departments belongs to the
+  first key, with a warning), `offDepartmentForJob(job)` (the turned-off department that lists it).
+- S `department(key)`, `departments()` (sorted, copies, turned-off ones included with `enabled = false` so their pay
+  still finds the society account) → `{ key, label, short, jobs, supervisorGrade, societyAccount, enabled, theme = {
+  primary, accent, background, surface, text }, logo = { url, file, watermark, opacity, size, grayscale } }`. Invalid
+  colours fall back to the Crimson-Police default (`Config.AdminTheme` / web `DEFAULT_THEME`), one warning per
+  department and key; an invalid or missing `text` is picked with `CP.U.contrastText(background)`. `logo.url` (https)
+  wins over `logo.file` (a bare png/webp/svg/jpg/jpeg name, served as `https://cfx-nui-<CP.resource>/logos/<file>`);
+  `size` clamped to 0.05-1. No numeric `supervisorGrade` = no supervisors (warning); `societyAccount` defaults to the
+  first job name.
+- S `getOfficer(src) -> officer|nil, errKey` — loaded character, active job in a turned-on department, on duty, not
+  suspended (Crimson-Police or SC-Dispatch, cached 15 s), not retired (`cp_officers.retired_at`). Errors
+  `err.not_police`, `err.department_off`, `err.not_on_duty`, `err.suspended`, `err.suspended_dispatch`, `err.retired`.
+- S `maybeOfficer(src)` — a pre-filter for loops over every player, no Qbox lookup: false only when
+  `CP.Qbx.knownJob(src)` is in no turned-on department. Loops never call `GetPlayer` per player.
+- S `isAdmin(src)` — `IsPlayerAceAllowed(src, adminAce())`, or the ace `admin` while `Config.QboxAdmins == true`
+  (explicit true only); src 0 (console) = true. Every admin check goes through it. `adminAce()` (`Config.AdminAce`,
+  else `'crimsonpolice.admin'`), `qboxAdminAce()`.
+- S `isSupervisor(src)`, `role(src) -> 'admin'|'supervisor'|'officer'|nil`.
+- S `recheck(src, jobName) -> ok, endReason` — `'off_duty'|'job_change'|'suspended'` for a player on a run who no
+  longer qualifies (a different active job, or one outside every department, is job_change); true for a player
+  without a character (the drop path ends the run).
+- S `onLost(fn(src, endReason))` — fired on qbx duty/job events and from `suspend()` for a player whose last known job
+  (seeded on start, load, getOfficer, recheck and every qbx event) was a department job. Listeners decide whether the
+  player is on a run.
+- S `isSuspended(citizenid) -> bool, untilTs`; `suspend(citizenid, days, actorSrc, reason, opts) -> ok, errKey` (0 days
+  lifts; whole days 0-3650 or `opts.untilTs`; a player actor needs `can(actorSrc, 'suspend')`, console/anticheat skip
+  it; the end is capped at 2147483647 because MariaDB's `FROM_UNIXTIME` gives NULL beyond; `err.internal` when it
+  cannot be stored; the caller writes the audit; the online officer gets a toast). `isRetired(citizenid)`,
+  `dispatchSuspension(citizenid, jobName?) -> { suspended, available }`.
+- S `refreshOfficerRow(src)` — upserts `cp_officers` callsign, rank_label, display_name, department and license
+  (never clears a known license) on character load, on a department job update and on tablet open; off-duty members
+  too, civilians get no row. Text limits (name 64, callsign 32, rank 40, label 64, short 16) are cut in bytes without
+  splitting a UTF-8 character (MariaDB strict mode refuses a half character).
+- S licenses: a player has `license:` and usually `license2:`, and Qbox stores each character under one of them, so
+  every `GetPlayerIdentifierByType` passes the type with its colon. `licenseOfSrc(src)`, `licensesOfSrc(src)`,
+  `licenseOf(citizenid)` (`cp_officers.license`, else `CP.Qbx.licenseOf`; 15 s cache), `selfCitizenids(src)` (the
+  current character, then every row and character of his licenses), `sameUser(a, b)` (one Qbox `users` row has both).
+- S `explain(src, via?) -> { ok, error?, steps = { { check, ok, vars? } }, ... }` — the opening checks in order (job,
+  department on, duty, suspended, SC-Dispatch, retired, arena, the way); the verdict is `getOfficer` then
+  `CP.Tablet.checkAccess`, so it never disagrees with a real open.
+- Hook `admin:changed { citizenid }` drops that officer's suspension, retirement and license caches.
+- S export `GetDepartment(src)` (the active job's department, on duty or not).
+- C `current()`, `department()`, `roles()`, `setSession(session)`, `clear()` (used by the tablet).
 
 ### 5.3 CP.Permissions — modules/permissions (S)
-- `can(src, action, ctx) -> boolean, errKey` — admin: always true for admin and supervisor actions. Supervisor: `CP.Access.isSupervisor(src)` and `Config.Permissions.supervisor[action] == true`. Admin-only actions (never allowed for supervisors whatever the config): `setMissionPayout`, `clearPayout`, `manualAward`, `handleFailedDispute`, `voidAnyRun`, `seasons`, `bountyOverride`, `suspend`, `reloadMissions`, `testRun`, `openAdmin`. Also `viewMissionList` (supervisors and admins). errKey `err.no_permission`.
-- `actionsFor(src) -> { actionName, ... }` (for the session)
-- `tookPart(citizenid, runUuid, asSuspect) -> boolean` (any cp_mission_runs or cp_mission_runs_archive row of that run
-  for that citizenid; a failed lookup counts as taking part). With `asSuspect` (the self rule over suspects) a real
-  suspect of that run's case counts too (`CP.Opponents.suspectOfRun`); `CP.AdminKit.selfRun`, `canReviewRun` and the
-  commendation issuer check pass it, a commendation's recipient check does not (a suspect is no officer of the run)
-- Full admin control: 18 more admin-only keys, none of which a `Config.Permissions.supervisor` switch can give a
-  supervisor: `officerRecords`, `pointsAdjust`, `bulkVoid`, `restoreRun`, `progression`, `antiFarmOverride`, `liveRuns`,
-  `editBuiltins`, `missionAdmin`, `boardsAdmin`, `payments`, `rewardsAdmin`, `deptFunds`, `departmentsAdmin`,
-  `storageAdmin`, `playerSupport`, `recordMove`, `cleanup` (also listed in modules/admin's ADMIN_ONLY mirror for the
-  Permissions screen). `isAdminOnly(action) -> bool`, `adminOnlyKeys() -> { key }` (the 29, in order).
-- `probe(src, name)` — a player who is not an admin asked for an admin-only action: `can` (an admin-only key),
-  AdminKit's guard and `Kit.callback` (the action or callback name) call it before their unchanged refusal. One
-  `CP.warn('security', 'player <src> (<name>) sent admin-only <name> while not an admin')` (kept in CP.Problems) per
-  player and name a minute (`CP.Net.rateOk`), at most `Config.AntiCheat.adminProbeLines` (5) lines a minute per player;
-  0 = none; src 0 or not a player never counts. No officer or supervisor path asks an admin-only key of a non-admin:
-  CP.Testing asks `builderEdit` alone for draft tests and `test:state` (every admin passes it), builder overrides check
-  `actor.isAdmin` first.
-- `canReviewRun(src, runUuid) -> boolean, errKey` — false when the reviewer, or any character of their licenses
-  (`CP.AdminKit.selfRun`), took part (`err.own_run`)
-- `gradeGrant(officer, grant) -> boolean` — a grade grant `{ minGrade = N }` (that grade and up) or `{ grades = { ... } }`
-  (only those) against `officer.gradeLevel`; `Config.Permissions.builderTeleport` (B8) and
-  `Config.MissionControls.grants` use it.
-- Extra grants (`Config.Permissions.grants`, Admin UI -> Permissions -> Extra grants): `{ [power] = { departments
-  = { [dept] = gradeGrant }, gangs = { [gang] = gradeGrant }, citizenids = { cid, ... } } }`, saved and audited as the
-  setting `Permissions.grants` (cp_settings or the saves folder), read at every call. `isGrantable(power)` (a key of
-  `Config.Permissions.supervisor`, on or off, or the extra powers `builderTeleport` and `fieldTraining`; never an
-  admin-only key, never `viewMissionList`), `grantableKeys()`, `granted(src, power)` (his citizenid, his department
-  with his grade via `getOfficer`, or his Qbox gang with its grade via `CP.Qbx.getInfo(src).gang`), `grantedFor(src)`.
-  `can`: a non-admin passes a supervisor action as a supervisor by grade or with `granted(src, action)`; the switch,
-  the department check and the review self rule stay. `fieldTraining` joins `viewMissionList` as every supervisor's.
-  `actionsFor` of a granted officer lists his granted powers that are switched on; the tablet then opens the
-  Supervisor UI for him (`roles.supervisor`) with only those screens. Users: `CP.DeptControls.canChange` and its view
-  (a `missionControls` grant passes the supervisor rule and skips `Config.MissionControls.grants`),
-  `CP.Builder.canTeleport` (`builderTeleport`), field training pairing (`fieldTraining`). Admins never come from a
-  grant (`Config.AdminAce` / `Config.QboxAdmins` only). Shipped `{}`: today's rules exactly.
+- `can(src, action, ctx) -> bool, errKey` (`err.no_permission`). Admins and the console: true for any action.
+  Supervisor: `CP.Access.isSupervisor(src)` (or an extra grant, below) and `Config.Permissions.supervisor[action] ==
+  true`. `ctx.runUuid` applies the own-run rule to `reviewFlagged`, `handleDisputes`, `handleFailedDispute`,
+  `voidAnyRun` (admins included, `err.own_run`); `ctx.department` / `departments` keep supervisors to their department
+  (`err.other_department`). `viewMissionList` and `fieldTraining` belong to every supervisor.
+- Admin-only keys (no supervisor switch can give them; mirrored in modules/admin's ADMIN_ONLY for the Permissions
+  screen): `setMissionPayout`, `clearPayout`, `manualAward`, `handleFailedDispute`, `voidAnyRun`, `seasons`,
+  `bountyOverride`, `suspend`, `reloadMissions`, `testRun`, `openAdmin`, `officerRecords`, `pointsAdjust`, `bulkVoid`,
+  `restoreRun`, `progression`, `antiFarmOverride`, `liveRuns`, `editBuiltins`, `missionAdmin`, `boardsAdmin`,
+  `payments`, `rewardsAdmin`, `deptFunds`, `departmentsAdmin`, `storageAdmin`, `playerSupport`, `recordMove`,
+  `cleanup`. `isAdminOnly(action)`, `adminOnlyKeys()` (the 29, in order).
+- `actionsFor(src)` (for the session; a granted officer's switched-on granted powers, which open the Supervisor UI
+  with only those screens).
+- `tookPart(citizenid, runUuid, asSuspect)` — any live or archived row of that run (a failed lookup counts as taking
+  part); `asSuspect` also counts a real suspect of the run's case (`CP.Opponents.suspectOfRun`).
+  `canReviewRun(src, runUuid)` — false when the reviewer or any character of his licenses took part (`err.own_run`).
+- `probe(src, name)` — a non-admin asked for an admin-only action: one `CP.warn('security', ...)` per player and name a
+  minute, at most `Config.AntiCheat.adminProbeLines` (5) a minute per player (0 = none). No officer or supervisor path
+  asks an admin-only key of a non-admin.
+- `gradeGrant(officer, { minGrade = N } | { grades = { ... } })` (`Config.Permissions.builderTeleport`,
+  `Config.MissionControls.grants`).
+- Extra grants (`Config.Permissions.grants`, Admin UI → Permissions → Extra grants, saved as the setting
+  `Permissions.grants`): `{ [power] = { departments = { [dept] = gradeGrant }, gangs = { [gang] = gradeGrant },
+  citizenids = { ... } } }`. `isGrantable(power)` (a supervisor switch key or `builderTeleport` / `fieldTraining`; never
+  admin-only or `viewMissionList`), `grantableKeys()`, `granted(src, power)`, `grantedFor(src)`. The switch, the
+  department check and the review self rule still apply. Used by `CP.DeptControls.canChange` (a `missionControls`
+  grant skips `Config.MissionControls.grants`), `CP.Builder.canTeleport` and field training pairing. Admins never come
+  from a grant. Shipped `{}`.
 
 ### 5.4 CP.Tablet — modules/tablet (owns the NUI)
+Files: `modules/tablet/server.lua`, `modules/tablet/client.lua`; items/ (the tablet image and the ox_inventory entry
+an owner pastes, client.export `Crimson-Police.useTablet`; never loaded by the resource).
+
 Server:
-- callback `getSession(args)` → Session (§9.2). `args.ui` = 'officer'|'supervisor'|'admin'.
-- `notify(src, kind, key, vars, opts)` → client toast (`kind` = 'info'|'success'|'warning'|'error'); `opts = { title = key, duration = ms }`
-- `notifyMany(srcs, kind, key, vars)`
-- `push(src, topic, data)` → NUI `{ type = 'push', topic, data }` (live screen updates)
-- `openAdmin(src)` → opens the Admin UI (called by modules/admin for `/CrimsonPoliceAdmin`)
-- Logo check at start (`LoadResourceFile` of each department's logo file, once the saved settings are loaded) and one
-  warning per logo the NUI reports as failed (`logoFailed` client action).
-- `logoFor(dept) -> { url, watermark, opacity, size, grayscale } | nil`: the logo a department's tablets show now (the
-  session logo and the Admin UI → Departments preview). Clients load `https://cfx-nui-<res>/logos/<file>` only from the
-  files FXServer packed at the start, so a `logo.file` that was not one of the start's department files (an upload with a
-  new name, the first logo of a department added in game) keeps the department's start logo (or none) until the
-  restart, and `logoFailed` never blames such a pending file.
+- callback `getSession(args)` → Session (§9.2), 4/s per player. `args = { ui = 'officer'|'supervisor'|'admin', via =
+  'command'|'keybind'|'item'|'export'|'desk'|'dispatch', desk = index, silent }`. The Supervisor UI is for officers at
+  or above `supervisorGrade`, granted officers and on-duty admins (`roles.supervisor` is the same rule);
+  `session.officer` is filled whenever the player qualifies, also in the Admin UI. The silent session (the HUD theme at
+  login) opens nothing, skips the access checks and `refreshOfficerRow`. Session extras: `officer.avatar`,
+  `officer.level`, `prefs`, `access = { via, desk }`, `maintenance` (§5.37), and the config values `dispatch`,
+  `leaderboardMetrics`, `profile`, `commendationKinds`, `rewards`, `format`. nil fields arrive in the NUI as missing
+  keys.
+- `checkAccess(src, officer, via, desk)` — every Officer and Supervisor open ends here after `CP.Access.getOfficer`:
+
+| Rule | Error |
+|---|---|
+| The way's `Config.Tablet.access` switch is false (dispatch follows keybind; item also needs `Config.Tablet.item`; export is always on) | err.access_off |
+| `CP.Alerts.inArena(src)`, every way | err.in_arena |
+| Desk: no such `Config.Tablet.desks` index, or the ped (server coords) is outside the box grown by 2 m (`rotation` turns it) | err.not_at_desk |
+| Desk: the desk lists departments and not the officer's | err.desk_department |
+| requireItem: every way but a desk needs the item (ox_inventory Search in pcall; a failure or a stopped ox_inventory = no item) | err.no_tablet_item |
+
+  An unknown `via` is the command; a request that names no way (switchUi, refreshSession) uses the src's last passed
+  way. Helpers `desk(i)`, `deskAllows(desk, dept)`, `inDeskBox(desk, coords, margin)`, `hasTabletItem(src)`.
+- `itemOk(src)` — requireItem again for `server:acceptType` and `server:claimMissionCall`: true when requireItem is
+  off, when the last way was a desk and the ped is still within `deskDistance` + 2 m of its box, or when the item is
+  there now.
+- `notify(src, kind, key, vars, { title, duration })` (kind info|success|warning|error), `notifyMany(srcs, ...)`,
+  `push(src, topic, data)` (NUI `{ type = 'push' }`), `pushAdmins(topic, data)`, `notifyAdmins(kind, key, vars)`,
+  `onlineAdmins()` (only admins, never anyone else), `openAdmin(src)` (`false, 'err.not_in_game'` from the console).
+- Sidebar badges: `navCounts(src) -> NavCounts`, callback `getNavCounts`. Counts: invites, calls
+  (`CP.MissionCalls.claimableCount`), review (supervisors: flagged rows, disputes, profile queue; 30 s cache),
+  commendations, rewards, onRun, and the ones other modules add with `registerNavCount(key, fn(src, officer|nil),
+  { adminOnly })` (`adminReview`, `adminDisputes`, `adminPayments`, `adminLive` go to admins only). Each through a
+  guarded call (a missing module gives 0); the set is cached 5 s per src. A push of unit, invites, calls, profile or
+  rewards clears the cache and, for a src that asked in the last 10 minutes, schedules one `nav` push 1 s later; a
+  `run` push does so only when the run starts or ends or once per `Config.MissionCalls.eligibilityCache` s.
+  `navChanged(src)` schedules one.
+- Plain events: `server:tabletClosed` (4/s; ends the nav watch, fires `tablet:closed`), `server:tabletItemGone` (2/s;
+  with requireItem on, not at a desk and the item really gone → `client:closeTablet` with the errKey),
+  `server:logoFailed` (a department key or `{ department, url }`; one warning per logo).
+- Logos: checked at start with `LoadResourceFile` once the saved settings are loaded. `logoFor(dept)`: clients load
+  only files FXServer packed at start, so a logo file that was not a start file keeps the start logo (or none) until
+  the restart; `session.logo` is nil without a valid logo.
+- Callback `admin:getTabletAccess` (admins) → TabletAccessView (web/src/types/access.ts): ways, item, deskDistance,
+  desks, each department's personal accents and the appearances.
+
 Client:
-- `/CrimsonPolice` command (`Config.Tablet.command`), optional keybind (`Config.Tablet.keybind`, via
-  `RegisterKeyMapping`), optional ox_inventory item (`Config.Tablet.item`), export `OpenTablet()`.
-- `open(ui)` / `close()` / `isOpen()`; the Officer/Supervisor UI plays the tablet prop
-  (`Config.Tablet.prop`) and animation; closing removes the prop.
-- `playerDown() -> boolean`: dead or in last stand (qbx metadata, or a dead ped). No CP screen holds the NUI focus
-  while it is true (the tablet closes, the test panel and its prompt let go).
-- `send(msg)` → `SendNUIMessage(msg)`
-- `notify(kind, text, opts)` (already translated text) and handler for `crimson-police:client:notify`
-- `hud(patch)` → merges into the HUD state and sends `{ type = 'hud', hud = state }`; `hud(nil)` hides it
-- `result(result)` → `{ type = 'result', result }`
-- `overlay(o)` → `{ type = 'overlay', overlay = o }` (placement, recording, pick-up fade text)
-- `registerClientAction(name, fn(payload) -> ok, data|errKey)` — NUI 'client' endpoint handlers
-- NUI callbacks: `ready`, `close`, `request`, `action`, `client`, `switchUi` (§9.1)
-- Closes the tablet on job/duty loss (`CP.Qbx` client events) and character unload.
-
-More (§13.1):
-- S `getSession(args)`: `args = { ui, via = 'command'|'keybind'|'item'|'export'|'desk'|'dispatch', desk = index,
-  silent }`. For the Officer and Supervisor UIs every way ends in `T.checkAccess(src, officer, via, desk)`; its
-  rules and errors, and the desk helpers, are in §13.1 (Tablet access). The session gains `officer.avatar`, `officer.level`, `prefs`, `access = { via, desk }` and the config values
-  `dispatch`, `leaderboardMetrics`, `profile`, `commendationKinds`, `rewards`, `format` (English only: no language
-  list and no per-player language).
-- S `itemOk(src)`: requireItem again for `server:acceptType` and `server:claimMissionCall` (`err.no_tablet_item`):
-  true when requireItem is off, when the last passed way was a desk and the ped is still in that desk box grown by
-  `Config.Tablet.deskDistance` + 2 m, or when the item is in the inventory now.
-- S `navCounts(src) -> NavCounts` and callback `getNavCounts`: invites, calls (CP.MissionCalls.claimableCount),
-  review (supervisors: flagged rows, disputes and profile queue; 30 s cache), commendations, rewards, onRun, each
-  through a guarded call (a missing module gives 0); the whole set is cached 5 s per src. Every push of unit,
-  invites, calls, profile or rewards schedules one `nav` push 1 s later for a src that asked in the last 10 min; a
-  `run` push only when the run starts or ends, or once per Config.MissionCalls.eligibilityCache seconds.
-- Plain event `server:tabletClosed` (4 a second; sent by the client once per close): ends the src's `nav` watch and
-  fires the `tablet:closed (src)` hook (MissionCalls ends its Dispatch watch).
-- Plain event `server:tabletItemGone` (2 a second): with requireItem on, not at a desk and the item really gone, the
-  server sends `client:closeTablet` (errKey). Callback `admin:getTabletAccess` → TabletAccessView
-  (web/src/types/access.ts).
-- C Down (metadata `isdead` / `inlaststand`, or a dead ped): the Officer and Supervisor UIs refuse to open
-  (`err.downed`) and close within 0.5 s when the officer goes down while they are open, so no NUI focus is held
-  while sc-ambulance's death or last stand screen is up (the owner's rule for sc-dispatch's bill). The Admin UI is
-  exempt.
-- C Every `open` sent to the NUI carries `seq`. Once the NUI said at `ready` that it confirms (`{ acks = true }`), an
-  open it does not confirm with `opened { seq }` within 6 s closes the tablet and releases the focus (a crashed or
-  never-loaded page must not hold the cursor). The NUI hands the focus back itself (`close`) when an `open` cannot
-  be shown or a layout crashes (§9.1).
-- C `open(ui, opts)` with `opts = { via, desk, screen }`; key mapping `crimsonpolice_dispatch`
-  (`Config.Tablet.dispatchKey`) opens on Dispatch; mission desks are ox_target box zones (`crimson-police:desk`)
-  created once, shown only to an on-duty officer of an allowed department outside Crimson-Arena (display only),
-  removed on resource stop and on a foreign arena flag; at a desk `Config.Tablet.deskScenario` plays and the tablet
-  closes beyond `Config.Tablet.deskDistance`; with requireItem the client checks the item every 2 s while open.
-
-Full admin control:
-- S `registerNavCount(key, fn(src, officer|nil) -> number, { adminOnly })`: a sidebar count another module owns.
-  `adminOnly` counts (`adminReview`, `adminDisputes`, `adminPayments`, `adminLive`) are computed and sent for admin
-  players only, never to an officer or supervisor; others for officers. `navChanged(src)` schedules a `nav` push.
-- S `pushAdmins(topic, data) -> n` and `notifyAdmins(kind, key, vars) -> n`: to every online admin (`GetPlayers` +
-  `CP.Access.isAdmin`), never anyone else (the `adminjob` progress, admin screens); `onlineAdmins() -> { src }`.
-- S the Session gains `maintenance` (`CP.Maintenance.view()`, §5.37).
-- C on `settings:changed`, when `Config.Labels` changed, the NUI gets `{ type = 'locale', locale = CP.Locale.all() }`
-  (§9.1) so an open tablet shows the new names at once.
+- `/CrimsonPolice` (`Config.Tablet.command`, toggles the Officer UI), key mapping `crimsonpolice_tablet` (always
+  registered, default `Config.Tablet.keybind`, `''` = unbound), `crimsonpolice_dispatch` (`Config.Tablet.dispatchKey`:
+  opens or switches to Dispatch), the ox_inventory item (`Config.Tablet.item`), export `OpenTablet()`.
+- `open(ui, { via = 'export', desk, screen })`, `close()`, `isOpen()`, `send(msg)`, `notify(kind, text, opts)`,
+  `hud(patch)` (shallow merge; `false` clears `modifier`, `timer`, `route`, `message`, `detail`; `hud(nil)` hides),
+  `result(result)`, `overlay(o)`, `push(topic, data)` (local), `registerClientAction(name, fn(payload) -> ok,
+  data|errKey)`. NUI callbacks: `ready`, `close`, `request`, `action` (forwards only `server:` names), `client`,
+  `switchUi` (§9.1).
+- `switchUi` replies the new Session and sends an `open` for the new UI; a UI closed meanwhile stays closed
+  (`err.tablet_closed`). The prop stays between officer and supervisor and goes for admin.
+- Prop and animation: `Config.Tablet.prop`, a local object on bone 60309, animation
+  `amb@code_human_in_bus_passenger_idles@female@tablet@base` (flag 49), re-applied every second while open.
+- Mission desks: one ox_target box zone per desk (`crimson-police:desk`), created once, shown only to an on-duty
+  officer of an allowed department with the tablet closed outside Crimson-Arena (display only: the server decides),
+  with an optional local laptop prop; removed on resource stop and on a foreign arena flag, created again after. At a
+  desk no prop: `Config.Tablet.deskScenario` plays and the tablet closes beyond `Config.Tablet.deskDistance` (checked
+  every 0.5 s). With requireItem the client checks the item every second while open (not at a desk) and reports its
+  loss once.
+- Down (`isdead` / `inlaststand`, or a dead ped, `playerDown()`): the Officer and Supervisor UIs refuse
+  (`err.downed`) and close within 0.5 s, so no NUI focus is held under sc-ambulance's screens. The Admin UI is exempt.
+- Every `open` carries `seq`; once the NUI said at `ready` that it confirms (`{ acks = true }`), an open not confirmed
+  with `opened { seq }` within 6 s closes the tablet and releases the focus. The NUI itself hands the focus back when an
+  open cannot be shown or a layout crashes (§9.1).
+- The `theme` message (always a theme, the default for non-officers, plus `locale`) goes at login, after duty/job
+  changes (debounced 1.5 s), on unload and on NUI `ready` (which also re-sends HUD, overlay and open UI). On
+  `settings:changed` with new `Config.Labels` the NUI gets `{ type = 'locale' }`.
+- Crimson-Arena (rule 8): a foreign `crimsonArena` value closes every UI, hides HUD, overlays and the result card and
+  cancels a progress bar (`lib.progressActive` first); while it is foreign every way to open refuses with
+  `err.in_arena` and a result card that arrives is dropped (the run stays in the Profile history).
+  `SetNuiFocus(false, false)` only when a UI was open.
+- Closes on job/duty loss and character unload. The tablet client does not handle `client:hud` / `client:runEnded`.
 
 ### 5.5 CP.Schedule — modules/schedule (S)
-All times are server local time; the "day" starts at `Config.Time.resetHour`.
-- `now() -> os.time()`
-- `dayKey(ts?) -> 'YYYY-MM-DD'` (the reset-adjusted day), `dayStart(ts?) -> ts`
-- `weekStart(ts?) -> ts` (resetHour on `Config.Leaderboard.weekStartsOn`), `weekKey(ts?) -> 'YYYY-MM-DD'` of the week start
-- `monthStart(ts?) -> ts` (1st of the month at resetHour)
-- `weekday(ts?) -> 'monday'..'sunday'` of the reset-adjusted day
-- `sqlTime(ts) -> 'YYYY-MM-DD HH:MM:SS'`
-- `onDaily(fn(dayKey))`, `onWeekly(fn(weekKey, prevWeekStartTs))`, `onMonthly(fn(monthStartTs))` — fired once when the boundary passes (checked every 60 s; never fired just because the resource started)
-- `onDailyJob(fn(dayKey))` — a long job for each daily reset (the daily backup): after the daily listeners, the jobs run
-  one after another in one thread and the retention job runs when the last one has returned, so the reset listeners,
-  the weekly and monthly ones and the next boundary check never wait for them (a reset that comes while the previous
-  reset's jobs still run is skipped with a warning)
-- Retention job at each daily reset: move `cp_mission_runs` rows older than `Config.Retention.runArchiveMonths` months into `cp_mission_runs_archive` (INSERT … SELECT then DELETE, only when > 0); delete `cp_audit` rows older than `Config.Retention.auditDays` (0 = off).
-- Full admin control (economy): the archive never moves a row whose money or item rewards are unfinished
-  (`cash_status` held, pending or paying; a `cp_item_rewards` row held, pending or giving), and deletes a live row only
-  when its archive copy matches on cash status and amount paid too; the job also purges `cp_admin_requests` older than
-  7 days and `cp_settings_history` with `Config.Retention.auditDays`. It waits up to 60 s for the shared busy lock
-  (`CP.AdminKit.waitIdle`, then skips with `skipped = 'busy'`) and holds it (`cleanup`) while it works; while
-  `CP.Maintenance` holds a lock the retention job and every boundary check wait (`skipped = 'maintenance'`).
-  `cleanupView() -> CleanupView` (§9.5: last result `{ at, by, archived, kept, auditDeleted, requestsDeleted,
-  historyDeleted, durationMs, error, skipped }`, `running`, `nextRunAt`, the retention values). Callback
-  `admin:getCleanup` and action `server:admin:runCleanupNow { reason }` (§8.4.4).
+Times are server local; the "day" starts at `Config.Time.resetHour`. Day, week and month arithmetic uses `os.time`
+date normalisation, so DST never shifts a day. Tests: `tests/engine_a_spec.lua`.
+- `now()`, `dayKey(ts?) -> 'YYYY-MM-DD'`, `dayStart(ts?)`, `weekStart(ts?)` (resetHour on
+  `Config.Leaderboard.weekStartsOn`), `weekKey(ts?)`, `monthStart(ts?)`, `weekday(ts?) -> 'monday'..'sunday'`,
+  `sqlTime(ts)`.
+- `onDaily(fn(dayKey))`, `onWeekly(fn(weekKey, prevWeekStartTs))`, `onMonthly(fn(monthStartTs))` — once when the
+  boundary passes (checked every 60 s; never just because the resource started; a clock moved back to an earlier day
+  fires nothing, with a warning).
+- `onDailyJob(fn(dayKey))` — a long job per daily reset (the daily backup): after the daily listeners the jobs run one
+  after another in one thread, then the retention job, so listeners and the next boundary check never wait (a reset
+  that comes while the previous jobs still run is skipped with a warning).
+- Retention job, at each daily reset and once 120 s after start (idempotent): `cp_mission_runs` rows older than
+  `Config.Retention.runArchiveMonths` move to `cp_mission_runs_archive` (`INSERT IGNORE ... SELECT`, then a DELETE of
+  only the rows whose archive copy matches, cash status and amount paid included), never a row whose money or item
+  reward is unfinished (held, pending, paying, giving); `cp_audit` and `cp_settings_history` older than
+  `Config.Retention.auditDays` are deleted (0 = off), `cp_admin_requests` after 7 days. It waits up to 60 s for the
+  busy lock (`CP.AdminKit.waitIdle`, else `skipped = 'busy'`) and holds it (`cleanup`); during a maintenance lock it
+  and every boundary check wait (`skipped = 'maintenance'`).
+- `cleanupView() -> CleanupView` (§9.5), callback `admin:getCleanup`, action `server:admin:runCleanupNow { reason }`
+  (§8.4.4).
 
 ### 5.6 CP.Missions — modules/missions
+The mission registry. Files: `modules/missions/server.lua`, `client.lua`; tests `tests/engine_a_spec.lua`,
+`tests/missions_a_spec.lua`, `tests/missions_b_spec.lua`.
+
 Server:
-- `loadAll()` — reads `missions/builtin/index.lua` (`return { 'id', ... }`) and each
-  `missions/builtin/<id>.lua` with the mission file reader (below; read as data, never run), then asks
-  `CP.Builder.loadPublished()` for custom missions; normalises and validates each (blocks' `validate`),
-  keeps the valid ones, warns about the rest, then broadcasts.
-- `reload() -> summary` (admin `/CrimsonPoliceAdmin reload`; also calls `CP.Builder.onReload()`
-  for hand edits), `get(id)`, `all() -> { [id] = def }`, `list() -> sorted list`,
-  `byType(type) -> list` (excludes the boss), `isEnabled(id)` (published, not archived, not in
-  `Config.DisabledMissions`), `normalize(def, meta) -> def|nil, err`, `serializeForClient(def)`
-- `register(def)` / `unregister(id)` — used by the builder for publish/archive without a reload.
-- `registerEngine(def) -> def|nil, err` / `engine(id)` — a mission the engine builds itself (CP.LiveCrime's
-  `live_crime`, §5.46), normalized with `meta.engine` (it may use an engine-only block) and kept in a registry of its
-  own: `get`, `all`, `list`, `byType`, the draw, `client:missions` and the Mission Builder never see it, and
-  `register` refuses its id.
-- `parse(luaSource, chunkName) -> def|nil, err` — reads one mission file's source as the loader does and returns the raw definition (used by the builder for custom files and hand-edit reloads, and by CP.Testing).
-- The mission file reader (shared/utils.lua): mission files are data and are never run. FXServer builds its Lua
-  with `LUA_SANDBOX`, so its `debug` table has only getinfo, getmetatable, setmetatable, getupvalue and traceback
-  (no `sethook`): text that runs could not be stopped, and mission text that reached a string method would reach
-  CfxLua's own C functions (`string.blob` allocates any size in one call). So no mission text is executed:
-  - `CP.U.parseMissionFile(text, chunkName) -> def|nil, err` — the table of the file's single
-    `RegisterMission(...)` call. `CP.U.readMissionCalls(text, chunkName) -> list|nil, err` (every call's value) and
-    `CP.U.readMissionReturn(text, chunkName) -> true, value|nil, err` (`return <value>`, for index.lua).
-  - Accepted: comments; `RegisterMission(<table>)` or `RegisterMission <table>`, `;` between statements; values
-    nil, true, false, numerals as Lua's lexer cuts them (hex, exponents, any number of unary `-`, converted by
-    `tonumber`), quoted strings with every Lua 5.4 escape and long strings `[==[...]==]` (line breaks as Lua reads
-    them), tables (`name = v`, `[k] = v` with a string, number or boolean key, positional), and `vec3`/`vector3`
-    with exactly 3 numbers or `vec4`/`vector4` with exactly 4, built by the runtime's own constructors. A UTF-8 byte
-    order mark is skipped. A key given twice in one table is refused.
-  - Refused with `<chunk>:<line>: <reason> near '<text>'` (the text clipped to 40 printable characters): any other
-    name, an operator, a call, `local`, `function`, CfxLua's extra syntax (backtick hashes, `+=`, `/* */`, `?.`,
-    `{ .a }`, `local a in t`) and every malformed token. The loader prefixes `syntax error: `; its own messages stay
-    (`the file is empty`, `never calls`, `exactly one call is allowed`, `RegisterMission expects a table`).
-  - Bounded (`CP.U.missionFileLimits`): 1,048,576 bytes of text (checked before reading), 100,000 values, tables 32
-    deep. Time and memory are linear in the text; the reader never touches the string metatable, the GC or `_G`,
-    and reads the text with its own copies of `string.byte`, `sub`, `find` and `match`.
-  - Every path that turns a file into a definition uses it: built-ins and index.lua, custom files, edited built-ins
-    (overrides), the Builder's publish read-back and draft/backup files, `ShippedOf` (Edit in Builder, baselines),
-    `admin:previewImport` (the reason goes back to the Admin UI with `err.import_parse`), CP.Testing.
-- callback `getMissionDefs` → every definition for clients (plain tables, vectors as {x,y,z,w}).
-Client:
-- `CP.Missions.get(id)`; receives `crimson-police:client:missions` (full list) after load/reload.
+- `loadAll()` — waits for `CP.Migrations.ready()` (so built-ins are normalised with the settings changed in game),
+  reads `missions/builtin/index.lua` and each built-in with the mission file reader, then `CP.Builder.loadPublished()`
+  (its file sync runs first) and `CP.Builder.loadOverrides()`; normalises and validates each, keeps the valid ones,
+  warns about the rest, then broadcasts `client:missions` (`TriggerLatentClientEvent`, 200000 B/s; the 14 built-ins
+  are about 60 kB). A custom entry may be a definition with loader fields, `{ def, meta }`, or meta only (then the
+  loader reads the file); `defHash` is the file's hash, else a canonical hash of the definition. If `loadPublished`
+  throws, the custom missions already loaded stay.
+- Edited built-ins (§8.4.2): each override replaces its built-in under the same id (`source = 'builtin'`,
+  `overridden`, `overrideVersion`, `baseHash`, `shippedHash`); a broken override is logged, listed in
+  `overrideFailed`, and the shipped mission plays. `Config.MissionTweaks` apply on top.
+- `reload() -> summary` (`/CrimsonPoliceAdmin reload` and `server:admin:reloadMissions`: `can(src,
+  'reloadMissions')`, 1 per 5 s, audited) calls `CP.Builder.onReload()` first (hand edits become new versions). The
+  summary: `{ loaded, builtin, custom, warnings, failed = { { id, file, error } }, overridden, overrideFailed,
+  warningTexts (first 200), builder, at }`; `loadSummary()` (callback `admin:getMissionLoad`, Config health
+  `missions`).
+- `get(id)`, `all()`, `list()`, `byType(type)` (no boss), `isEnabled(id)` (published, not archived, not in
+  `Config.DisabledMissions`, at least one location on), `isLocationEnabled(id, index, map?)`
+  (`Config.DisabledLocations[id]` by label, an alias in the location's `aliases`, or number), `enabledLocations(def)`,
+  `label(def, field, n)` (§10), `rawOf(id)`, `refreshBuiltin(id)` (runs going keep their definition).
+- `register(def)` / `unregister(id)` — the Builder's publish/archive without a reload; `register` refuses to replace a
+  built-in; `unregister` removes custom missions only (built-ins are turned off in `Config.DisabledMissions`).
+- `registerEngine(def)` / `engine(id)` — a mission the engine builds itself (`live_crime`, §5.46), normalised with
+  `meta.engine` (may use an engine-only block) in its own registry: the draw, `client:missions` and the Builder never
+  see it, and `register` refuses its id.
+- `normalize(def, meta) -> def|nil, err` (English developer text, not locale keys), `parse(luaSource, chunkName)` (the
+  raw definition; chunkName with or without `@`), `serializeForClient(def)`, `checkTweak(id, tweak) -> ok | false,
+  errKey, reason` (CP.Settings asks it on every change made in game), `trial(patch) -> { checked, failed }` (every
+  mission through the loader with a settings patch, put back before it returns), `stats(args)` (callback
+  `admin:getMissionStats`, 60 s cache per filter).
+- callback `getMissionDefs` (`nil, 'err.not_ready'` before the first load; the client retries 12 times from 3 s to
+  15 s and ignores a reply once a push arrived). Client: `CP.Missions.get(id)`.
 
-Also: `normalize` keeps `quietPatrol` and `decisions`, applies `Config.MissionTweaks`, refuses
-engineOnly bonus ids and reward-like keys; `label(def, field, n)` (§10); the new block ids field_contact and
-process_scene are known to the loader.
+`normalize` rules:
+- Rejected: an id that is not `^[%a][%w_]*$` or longer than 40; no label; a type not in `Config.MissionTypes` (the
+  Weekly Boss is forced to `tactical`); not `1 <= minOfficers <= maxOfficers <= Config.Limits.maxUnitSize`; difficulty
+  outside 1..#`Config.Difficulty.pointsByStars`; `timeLimit`/`startTimeout` outside 60–3600 s; `cooldown` outside
+  0–86400 s; no location with `start = { coords, radius }` (a bare vector becomes radius 50 with a warning); no
+  objective; an unknown block or a block `validate` that fails for any location; an item named `armour`, `bandage`,
+  `ammo-*` or `weapon_*` (Crimson-Arena rule 4); any point (start and every data key, recursively) inside a
+  `Config.Builder.noBuildZones` zone (2D); engine-only bonus ids.
+- The loader fields (`source`, `isBoss`, `status`, `version`, `filePath`) are set before the blocks' `validate`,
+  which exempts built-ins (`source == 'builtin'`) from the Builder's model and weapon lists.
+- Warnings only (the Builder enforces them for custom missions): fewer locations than expected (built-in 5, or 3 for
+  `armored_truck_escort`, `evoc_course`, `weekly_boss_kingpin`; custom `Config.Builder.minLocations`), locations
+  closer than `minLocationGap`, more armed NPCs than `maxHostiles`, more objectives than `maxBlocks`, unknown
+  departments, a scaling base above its `max`.
+- Dropped with a warning: scaling entries that do not resolve to a number or list of numbers, nameless items, bonus or
+  penalty ids not in `Config.Bonuses` without their own points; every payout-like top-level key (`*payout*`, `cash`,
+  `cashBase`, `basePay`, `money`, `pay`, `reward`, `rewards`).
+- Defaults: `description = ''`, `departments = {}`, `minOfficers = 1`, `maxOfficers = minOfficers`, difficulty and
+  cooldown from `Config.Blocks.details[...][3]`, `startTimeout = Config.Limits.startTimeout`, `vehiclePenalties =
+  true`, `minSeconds` from §3.3, `presenceRange = Config.Blocks[block].presenceRange[3]` (fallback
+  `Config.AntiCheat.presenceRadius`), labels `run.objective_default` / `run.location_default`.
+- Kept: `quietPatrol`, `decisions`. `Config.MissionTweaks` (cooldown, timeLimit, startTimeout, disabledLocations,
+  peds, vehicles, weapons) are applied and re-validated.
 
-Settings additions (§5.36): `isLocationEnabled(id, index, map?) -> bool` (`Config.DisabledLocations[id]` lists the
-locations turned off, by label, an old label in the location's `aliases` (`U.isLocationName`) or number; `map`
-replaces that table), `enabledLocations(def) -> { index }`;
-`isEnabled(id)` is also false when every location of the mission is off. `loadAll` waits for `CP.Migrations.ready()`
-first, so built-in missions are normalised with the settings changed in game.
+The mission file reader (shared/utils.lua). Mission files are data and are never run: FXServer's Lua is built with
+`LUA_SANDBOX` (no `debug.sethook`), so running text could not be stopped and could reach CfxLua's own C functions.
+- `CP.U.parseMissionFile(text, chunk) -> def|nil, err` (the single `RegisterMission(...)` call's table),
+  `readMissionCalls(text, chunk)` (every call's value), `readMissionReturn(text, chunk)` (`return <value>`, for
+  index.lua).
+- Accepted: comments; `RegisterMission(<table>)` or `RegisterMission <table>`; `;`; nil, booleans, numerals as Lua's
+  lexer cuts them, every Lua 5.4 string form; tables with name, `[string|number|boolean]` or positional keys;
+  `vec3`/`vector3` of 3 numbers and `vec4`/`vector4` of 4. A UTF-8 BOM is skipped; a key given twice is refused.
+- Refused with `<chunk>:<line>: <reason> near '<text>'`: any other name, operator or call, `local`, `function`,
+  CfxLua's extra syntax, any malformed token. Limits (`CP.U.missionFileLimits`): 1,048,576 bytes, 100,000 values,
+  tables 32 deep; linear time; it never touches the string metatable, the GC or `_G`.
+- Used by every path that turns a file into a definition: built-ins, index.lua, custom files, overrides, the
+  Builder's read-back, drafts and backups, `ShippedOf`, `admin:previewImport` (`err.import_parse`), CP.Testing.
 
-Full admin control (§8.4.2): `loadAll` asks `CP.Builder.loadPublished()` first (its file sync runs before), then
-`CP.Builder.loadOverrides()`, and swaps each built-in for its override under the same id (`source = 'builtin'`,
-`overridden = true`, `overrideVersion`, `baseHash`, `shippedHash`); a broken override is logged, listed in
-`overrideFailed` and the shipped mission plays. `Config.MissionTweaks` apply on top of the override. The summary keeps
-`overridden`, `overrideFailed`, `warningTexts` (the first 200), the Builder's sync result (`builder`) and `at`.
-`loadSummary()` (callback `admin:getMissionLoad`; Config health line `missions`), `refreshBuiltin(id)` (one built-in
-loaded again after an override changes; runs going keep their definition), `rawOf(id)`, `checkTweak(id, tweak) ->
-ok | false, errKey, reason` (the loader's answer for a `MissionTweaks` entry; CP.Settings asks it on every change made
-in game, never at boot), `trial(patch) -> { checked, failed }` (A14: every mission through the loader with a settings
-patch on Config, put back before it returns) and `stats(args)` (callback `admin:getMissionStats`: counts and sums in
-SQL, rates and averages in Lua, 60 s cache per filter).
+#### Built-in missions
+There are 19 in `missions/builtin/index.lua`. Files: `missions/builtin/*.lua` (each a header comment and one `RegisterMission({ ... })` in the Example-file field
+order; no payout field; `departments = {}`), checked by `tests/missions_b_spec.lua`.
+
+| Mission | Locations | Per location |
+|---|---|---|
+| warrant_service | 6 houses: Grove Street, Forum Drive, Mirror Park, Wild Oats Drive, Sandy Shores, Paleto Bay | door, suspect (on the step beside the door), 4 fleeTo, 4 associates, yard |
+| manhunt | 5 regions: Sandy Shores, Grapeseed, Paleto Bay, Harmony, Grand Senora Desert | start radius 600, 6–7 clues, 7 hiding spots |
+| gang_shootout | 5 hideouts: Stab City, Grand Senora scrapyard, Paleto sawmill, Terminal, Elysian Island | 14 spawns facing the approach, scene |
+| hostage_rescue | 6 Fleeca banks | 7 hostile spots, 3 hostages, safe marker outside |
+| bomb_disposal | 6 24/7 stores | 7 hiding spots at floor level |
+| armored_truck_escort | 3 routes: Del Perro → Hawick (1.87 km), Route 68 Harmony (0.87 km), Banham Canyon → Chumash (0.86 km) | route { points, stops }, 5–7 ambush points |
+| prison_break | 6 breakout points outside Bolingbroke | 8 inmate spawns, 2–3 escape routes |
+| weekly_boss_kingpin | 3 compounds: Madrazo ranch, O'Neil Ranch, Marlowe Vineyards | 18 spawns, boss, scene (in front of the main house) |
+
+- Interior points (Fleeca, 24/7) come from well-known anchor positions plus offsets and are the most reliable. Rural
+  spots are estimates on open ground with z a little high (a ped drops rather than sinks). Nothing is placed behind a
+  facade without an interior (a ped there is stuck, a target unreachable).
+- **Check in game with Admin test mode before release**, in this order: the three truck routes (straight-line
+  waypoints every ≤ 140 m between anchors; the escort passes a waypoint within 20 m, so re-record them with the
+  Builder's route recorder), the gang hideout rings (Terminal and Elysian Island first: a point can land in a
+  container), the Kingpin compounds, the prison terrain heights, the manhunt spots.
+- The spec's guardrails (checked by the test): counts, 100 m spacing, map bounds (x −4000..4600, y −4200..8000), every
+  point and path segment outside `Config.Builder.noBuildZones`, points 30 m+ from and within 150 m of their start
+  (except manhunt, road and escape routes), z within 8 m of the start (25 m for routes and manhunt), hostile headings
+  facing the approach, door headings facing the street, contiguous flee paths and escape routes (no jump over 250 m),
+  prison points 180 m+ from the zone centre and 230 m+ from the prison middle, a route waypoint every 150 m, ambush
+  spacing, the armed budget (Kingpin 30 + boss ≤ 40), escape routes 150 m clear of the Crimson-Arena Skydome.
+- File choices: hostile_waves objectives leave `spawns` out (default `'spawns'`); flee_arrest scatter writes it.
+  Door-mode `knock.duration = 3000`. Kingpin `cooldown = 1200` (the weekly limit is `CP.Events.bossAvailable`). Boss
+  surrender `{ belowHealth = 0.25, chance = 0.30 }` so "arrested alive" can happen (`kingpin_alive` from the block
+  default). Bomb prop `prop_c4_final_green`; manhunt clues `prop_cs_heist_bag_02`, `prop_npc_phone_02`, `'witness'`.
+  Escort waves and cars `max = 5`.
+- `minSeconds` is a floor honest play cannot reach (more than 1 s under it flags the whole run `too_fast`): hostage
+  hostiles 12, hostage rescue 8, warrant 8 (3 s knock + 5 s cuff), Kingpin waves 90, bomb search 3, defuse 5, escort
+  45 (the shortest route takes about 52 s), others the block default.
+
+- The five field-contact missions:
+
+| Mission | Type, officers | Locations | Objectives |
+|---|---|---|---|
+| parking_patrol | patrol, 1, quietPatrol | 7 districts × 10 kerb spots | field_contact parked (`parking` truths) |
+| suspicious_activity | investigation, 1–2 | 7 scenes: car, people, fleeTo, transport | field_contact scene |
+| traffic_enforcement | patrol, 1–2 | 7 corridors, each with a `speed` key | pursuit observe + handoff; field_contact stop; the same pair again with `team = 2` |
+| drug_lab_raid | tactical, 2–4 | 7 rural labs, 250 m clearance | breach together; waves (inside/yard sets); cooks (`cook_arrested`); stash seize (`stash_found_fast`); shut-down skill_check with a setback (`lab_fire`); process_scene |
+| gang_hideout_raid | tactical, 2–4 | 7 hideouts | breach together; waves (front/house/garage sets) + lieutenant boss (`lieutenant_alive`); runners; cache seize; process_scene |
+
+  Geometry came from the GTA vehicle-node graph (kerb spots on the straightest non-freeway edge; corridors touching a
+  no-build zone were rejected). **Check in game before release:** kerb spot headings, the lab and hideout interiors,
+  the corridor speeds. Retrofits: stolen_vehicle_takedown (responses 25/65/10, handoff, `profileSet = 'stolenCar'`,
+  `driveBy = 50`, a field_contact stop, `vehicle_impounded`), warrant_service (yard finds 60 %, process_scene),
+  gang_shootout (process_scene, 4 bodies), beat_patrol and business_check (`quietPatrol`).
+- Zone lint (`tests/zone_lint_spec.lua`): a footprint is a location's start and every point (a route by its two ends);
+  new missions keep `Config.Draw.zoneClearance` (200 m) from every other footprint (drug_lab_raid 250 m), no point in a
+  no-build zone; the known close pairs are in `tests/zone_lint_baseline.txt` (a new pair fails; `BASELINE_MAX` stops it
+  growing).
+- Spawn lint (`tests/spawn_lint_spec.lua`): no two spawn points of a location within 1.5 m, a point for each person the
+  largest team brings (real `CP.Scaling` counts), armed spawns outside the start circle plus
+  `Config.Builder.spawnMargin` unless the director places them (waves, scatter, staged); known cases in
+  `tests/spawn_lint_baseline.txt`, which may only shrink.
 
 ### 5.7 CP.Draw — modules/draw (S)
-- `pool(missionType, members) -> { def, ... }, reasonKey` — published, enabled, type match, open to
-  every member's department, supports `#members`, off per-mission cooldown for every member
-- `draw(missionType, members, opts) -> def, locationIndex | nil, reasonKey` — no-repeat rules
-  (`Config.Draw.avoidLast` / `avoidLastLarge` / `largePool`), location via `pickLocation`
-- `pickLocation(def, participantSrcs, rng, opts) -> index|nil` — skips reserved locations and
-  (while another is free) spots with a non-participant player within `Config.Draw.playerClearance`
-- `reserve(runId, missionId, index)`, `release(runId)`, `isReserved(missionId, index) -> boolean`
-- `recordLast(citizenid, missionType, missionId)`
-- `boardCards(src) -> BoardData` (§9.4; callback `getMissionTypes`)
-- Handles `server:acceptType` (payload = type key or `'weekly_boss'`, or `{ missionType, twists }`): leader only; checks role,
-  duty, unit, cooldowns, `CP.Calls.isOnCall`, hourly cap, `CP.Runs.capsOk`, `CP.Operations.isLocked`,
-  `CP.Events.bossAvailable`, `CP.Alerts.foreignFlag` for every member (`err.in_arena`), then the twists
-  (`Draw.checkTwists`); then `CP.Units.lock(unit)`, the ready check (with the twists), draw, `CP.Runs.create({ twists })`.
-- Twists: `twistOffer(key, defs)` (CP.Events.twistOffer; each board card's `twists`), `twistCaps()`
-  (BoardData `twistMax`), `checkTwists(typeKey, officers, raw) -> keys | nil, errKey` (against the type's pool for
-  those officers; `{}` without twists). `accept(src, typeKey, opts)` takes `opts.twists`; its reply adds `twists`.
-
-More (§13.16):
-- `pool(type, members, opts)`, `draw(type, members, opts)`, `pickLocation(def, srcs, rng, opts)`: `opts.area` (hard:
-  only missions and locations in that area), `opts.avoid` (soft), `opts.nearCoords` (county-wide weighting
-  `1 / (1 + km / Config.MissionCalls.countyWeightKm)`), `opts.exclude` (hard). Rules in pickLocation's order:
-  reservations, exclude and area (hard); zone clearance (`Config.Draw.zoneClearance` from every point of every held
-  location of any mission; soft, falls back to the reservation rule, but never to a location within
-  `Config.Draw.hardClearance` of one: then nil and `draw` tries the type's next mission); avoid = each participant's last
-  `Config.Draw.avoidLastLocations` locations of that mission (soft); player clearance; then a weighted pick (half
-  weight for a spot taken within `Config.Draw.locationFreshness`, and the county-wide weighting).
-- `footprint(def, index) -> { vec3 }` (start and every point; routes sampled every 50 m).
-- A location turned off (`CP.Missions.isLocationEnabled`) is a hard rule of `pickLocation` (also for Cross-Department
-  Missions, the Weekly Boss and a random test location) and counts in no area (`pool` with `opts.area`,
-  `CP.MissionCalls`); `_locationOn(def, i)`.
-- `check(src, typeKey, counts?) -> ok, errKey` — every accept check without changing anything (a claim runs these).
-- `accept(src, typeKey, opts)` — `opts.area`, `opts.nearCoords`, `opts.missionCall` (`{ id, code, area, staff }`; the
-  response target is set here from the unit's nearest member to the drawn start), `opts.onDone`. Units of 2+ go
-  through `CP.Units.readyCheck(unit, typeKey, onReady, onCancel)` (guarded: without it the draw follows at once)
-  and the accept returns `{ pending = true }`.
-- Daily cap: `Config.Limits.maxCompletionsDay` and `Config.MissionTypes[type].dailyLimit` through
-  `CP.Runs.completionsToday`: `err.daily_cap`, `err.member_daily_cap`, `err.type_daily_cap`,
-  `err.member_type_daily_cap`; the card is locked (`locked.daily = true`, `until` = next day start); BoardData
-  gains `callsOpen`.
-- `noRepeat(list, hist)`, `history(citizenid, type)`, `typeValues(type, officers, list) -> cash, points`,
-  `recordLocation(citizenid, missionId, index)`, `locationStats(missionId)` (callback `admin:getLocationStats`).
-
-Full admin control: the accept check (`check`, `CheckAccept`) refuses `err.maintenance` while
-`CP.Maintenance.active()`. An edited built-in is drawn under the built-in's id like the built-in it replaces.
+Which mission and location a unit gets, and the accept. Tests: `tests/engine_a_spec.lua`, `tests/missioncalls_spec.lua`.
+- `pool(missionType, members, opts) -> { def }, reasonKey` — published, enabled, type match, open to every member's
+  department, supports `#members`, off per-mission cooldown for every member; `opts.area` keeps missions with a
+  location in that area.
+- `draw(missionType, members, opts) -> def, locationIndex | nil, reasonKey` — no-repeat (below), then `pickLocation`;
+  a mission with no location tries the type's next mission.
+- `pickLocation(def, srcs, rng, opts) -> index|nil`, rules in order: reservations, a location turned off,
+  `opts.exclude` and `opts.area` (hard); zone clearance (`Config.Draw.zoneClearance` from every point of every held
+  location of any mission; soft, but never within `Config.Draw.hardClearance`); `opts.avoid` and each participant's
+  last `Config.Draw.avoidLastLocations` locations of that mission (soft); player clearance
+  (`Config.Draw.playerClearance`, soft, ignores in-arena players); then a weighted pick (half weight for a spot taken
+  within `Config.Draw.locationFreshness`; `opts.nearCoords` weights by `1 / (1 + km /
+  Config.MissionCalls.countyWeightKm)`). A turned-off location counts in no area. `footprint(def, index)` (start and
+  every point, routes sampled every 50 m), `_locationOn(def, i)`.
+- `reserve(runId, missionId, index)`, `release(runId)`, `isReserved(missionId, index)` — several holders per spot.
+  `acceptType` holds a provisional `pending:<src>:<ms>` reservation around `CP.Runs.create`; a 60 s sweep releases
+  pending holders older than 60 s and unknown holders older than 120 s.
+- No-repeat: per citizenid the distinct missions of the type with completed or abandoned rows, newest first, plus a
+  15-minute in-memory `recordLast(citizenid, missionType, missionId)`; the unit avoids the union of every member's
+  last `Config.Draw.avoidLast` (`avoidLastLarge` when the pool has `largePool`+ missions). When the histories cover the
+  whole pool it relaxes to `avoidLast`, then to "not anyone's latest", then the whole pool; a pool of one repeats. If
+  every candidate's locations are in use the accept fails with `err.no_location`. `noRepeat(list, hist)`,
+  `history(citizenid, type)`, `recordLocation`, `locationStats(missionId)` (callback `admin:getLocationStats`).
+- `boardCards(src) -> BoardData` (§9.4; callback `getMissionTypes`): one card per `Config.MissionTypes` key by config
+  points; `points` = the pool's best `CP.Scoring.P(def)`, `cash` = `CP.Cash.range(key, officers)` (with fallbacks),
+  `typeValues(type, officers, list)`. `locked` priority: a member not an officer > type cooldown (`until`) > hourly cap
+  > daily cap (`locked.daily`, `until` = next day start) > empty pool (`board.locked_empty[_solo]` or
+  `board.locked_mission_cooldown`). `onCall` when a member is on a real call; `callsOpen`. While
+  `CP.Operations.isLocked()` only `operation` is filled.
+- `check(src, typeKey, counts?) -> ok, errKey` — every accept check without changing anything (a claim runs exactly
+  these); `counts = { lastHour(cid), today(cid, type) }` replaces CP.Runs' counts (the calls' cache).
+- `accept(src, typeKey, opts)` / `server:acceptType` (payload a type key, `'weekly_boss'` or `{ missionType, twists
+  }`). Checks in order: the leader is an officer (his own `CP.Access` error), unit leader, unit not locked, unit size,
+  maintenance, the Cross-Department lock, every member an officer, then per member `CP.Alerts.inArena`
+  (`err.in_arena`), active run, real call, hourly cap, daily caps (`Config.Limits.maxCompletionsDay`,
+  `Config.MissionTypes[type].dailyLimit`: `err.daily_cap`, `err.member_daily_cap`, `err.type_daily_cap`,
+  `err.member_type_daily_cap`), type cooldown; then `CP.Runs.capsOk` (`err.server_busy`), the boss checks and the
+  twists (`checkTwists`). Only then `CP.Units.lock(unit)` (unlocked on any later failure), the ready check for units
+  of 2+ (`CP.Units.readyCheck`, reply `{ pending = true }`), the draw and `CP.Runs.create`. Rate: 1 accept per 1.5 s
+  per player and an in-flight guard per member (`err.busy`). `opts`: `area`, `nearCoords`, `missionCall = { id, code,
+  area, staff }` (the response target is set from the unit's nearest member to the drawn start), `onDone`, `twists`.
+- Weekly Boss accept: the Tactical type cooldown does not block it (accepted as `weekly_boss`; abandoning starts no type
+  cooldown); the hourly cap, the Tactical server cap, the operation lock, the boss's own cooldown, department, size and
+  once-per-week do. Passed to `create` as `missionType = 'tactical'`, `isBoss = true`.
+- Twists: `twistOffer(key, defs)` (each card's `twists`), `twistCaps()` (`twistMax`), `checkTwists(typeKey, officers,
+  raw) -> keys | nil, errKey`.
+- An edited built-in is drawn under the built-in's id.
 
 ### 5.8 CP.Scaling — modules/scaling (S)
-- `tierFor(n) -> row` (first `Config.Scaling` row with `maxParticipants >= n`, else the last)
-- `tierByName(name) -> row`, `lower(a, b) -> row` (the lower tier), `label(name) -> text`
-- `scaleCount(base, tier) -> int` (`CP.U.round(base * tier.count)`)
-- `apply(mission, tier) -> objectivesCopy` — deep copy of `mission.objectives` with every
-  `mission.scaling` path scaled (numbers and lists of numbers; `{ path, max }` clamps)
-- `combat(baseAccuracy, baseArmour, tier, run) -> accuracy, armour` (+ tier; + `Config.Events.armoredArmour` when the run's modifier is `armored_hostiles`)
-
-Also: `combat()` adds `Config.NpcDifficulty[preset].accuracyAdd/armourAdd`; `feel() -> { healthMult,
-surrenderMult, fleeMult }` for the blocks (fleeMult stretches CP.Npc's flee clock, §5.11). Presets change how NPCs feel, never points or cash. Config.NpcCombat:
-the accuracy `combat()` returns is then `CP.NpcCombat.scaleAccuracy` (× accuracyScale, at most accuracyMax); a
-boss's accuracy goes through `ctx.combat` too (its armour stays the file's).
+- `tierFor(n)` (first `Config.Scaling` row with `maxParticipants >= n`, else the last), `tierByName(name)` (unknown =
+  the first row), `lower(a, b)`, `label(name)`, `scaleCount(base, tier)` (`round(base * tier.count)`).
+- `apply(mission, tier) -> objectivesCopy` — a deep copy with every `mission.scaling` path scaled (paths start at an
+  objective index, `objectives.` optional; numbers and lists of numbers; `{ path, max }` clamps).
+- `combat(baseAccuracy, baseArmour, tier, run) -> accuracy, armour` — + tier, + `Config.Events.armoredArmour` with
+  `armored_hostiles`, + `Config.NpcDifficulty[preset].accuracyAdd/armourAdd`; accuracy then goes through
+  `CP.NpcCombat.scaleAccuracy` and is clamped to 0..100; armour is ≥ 0, not capped. A boss's accuracy goes through
+  `ctx.combat` too (its armour stays the file's).
+- `feel() -> { healthMult, surrenderMult, fleeMult }` for the blocks (fleeMult stretches CP.Npc's flee clock, §5.11).
+  Difficulty presets change how NPCs feel, never points or cash.
 
 ### 5.9 CP.Events — modules/events (S)
-- `typeOfTheDay(dayKey?) -> typeKey|nil` (seed = `CP.U.hash(dayKey)`; nil when `Config.Events.typeOfTheDay` is false)
-- `rollModifier(run) -> key|nil` — a random twist on top of the chosen ones: `Config.Events.modifierChance` (0, as
-  shipped, never rolls); never for operations, the boss or tests; only an enabled twist that fits `run.mission` and is
-  not on the run yet
-- `modifiers() -> { key = { label = locale key, armedOnly, enabled, points, cash } }` (the Today screen)
-- Twists the officers choose (`CP.Twists` holds the list and the bonus maths):
-  `twistFits(key, def) -> bool` (Armored Hostiles only where a block's `armedCount` is above 0, Time Crunch only with a
-  time limit, none on the boss); `twistOffer(missionType, defs) -> { { key, label, desc, points, cash, some? } }`
-  (every enabled twist that fits a mission of the pool; `some` = not all of them; `{}` for `weekly_boss`);
-  `checkTwists(raw, missionType, defs) -> keys | nil, errKey` (`err.invalid_payload`, `err.twist_unavailable`);
-  `fitTwists(run, chosen) -> kept, dropped` (after the draw; nothing on tests, operations or the boss)
-- `bossAvailable(src, officer) -> ok, reasonKey` — enabled, weekday in `Config.Events.weeklyBoss.days`, not used this week (any boss row this week except end_reason real_call/force_recall/cancelled)
-- `bossCard(src) -> card|nil` (§9.4)
-
-Full admin control (§5.39):
-- `typeOfTheDay(dayKey?)` answers today's admin override first; `rolledTypeOfTheDay(dayKey?)` is the seed's pick.
-  `todOverride() -> { day, type ('none' = none today), by, reason, at } | nil`; `setTodOverride(choice, meta) -> ok,
-  errKey` (`choice` a type, `'none'` or `'auto'`/nil = back to the roll); `todDay()`. The choice lives in memory and in
-  its `cp_audit` row (action `todOverride`, target = the day key, new_value = the choice), which a restart reads back:
-  a backup restore never replaces cp_audit, and another day's override is ignored, so it always ends at the daily
-  reset. No resource KVP.
-- `rollModifier(run)` skips every twist with `Config.Events.twists.<key>.enabled = false`; `modifiers()` adds `enabled`.
-- The weekly attempt: a boss row counts only while `voided = 0`, and `cp_officers.boss_extra = { week, n }` adds `n`
-  attempts for that week. `bossUsage(citizenid) -> { used, extra, left, week }`; `forgetBossUsage(citizenid?)`. The
-  `usedCache` entry is dropped on `admin:changed { citizenid }`, and the whole cache on `row:voided` / `row:restored`.
+- `typeOfTheDay(dayKey?)` — today's admin override first, else `rolledTypeOfTheDay` (seed `CP.U.hash(dayKey)`; nil
+  when `Config.Events.typeOfTheDay` is false). `todOverride()`, `setTodOverride(choice, meta)` (a type, `'none'`, or
+  `'auto'`/nil), `todDay()`: the choice lives in memory and in its `cp_audit` row (action `todOverride`, target the
+  day key), read back on restart; another day's override is ignored, so it ends at the daily reset.
+- `rollModifier(run)` — a random twist on top of the chosen ones with `Config.Events.modifierChance` (0 as shipped);
+  deterministic per run (`hash(run.seed .. ':modifier')`); never for operations, the boss or tests; only an enabled
+  twist that fits and is not on the run yet. `modifiers()` (the Today screen: label, armedOnly, enabled, points, cash).
+- Twists the officers choose (`CP.Twists`, §2, holds the list and the bonus maths): `twistFits(key, def)` (Armored
+  Hostiles only where a block's `armedCount` > 0, Time Crunch only with a time limit, none on the boss),
+  `twistOffer(missionType, defs)` (every enabled twist that fits a mission of the pool; `some` = not all; `{}` for the
+  boss), `checkTwists(raw, missionType, defs)` (`err.invalid_payload`, `err.twist_unavailable`), `fitTwists(run,
+  chosen) -> kept, dropped` (nothing on tests, operations or the boss).
+- `bossAvailable(src, officer) -> ok, reasonKey` — enabled, a boss day (`Config.Events.weeklyBoss.days`), no
+  Cross-Department Mission (`err.operation_locked`), the boss mission present and on (`err.boss_unavailable`), and
+  this week's attempt not used. Used = an unvoided `weekly_boss_kingpin` row since the reset of the week's first boss
+  day (rows are written when a run ends, so a Sunday-night run ending after Monday's reset uses this week's attempt)
+  whose end reason is not `real_call`, `force_recall` or `cancelled`, minus `cp_officers.boss_extra = { week, n }`.
+  `bossUsage(citizenid) -> { used, extra, left, week }`, `forgetBossUsage(citizenid?)`; the cache drops on
+  `admin:changed`, `row:voided`, `row:restored`.
+- `bossCard(src)` (§9.4): locked by the hourly cap too; `available` = the unit may take this week's attempt; `busy`,
+  `onCall`, `typeOfTheDay` (true when it is `tactical`) as on type cards; cash `CP.Cash.range('weekly_boss')` or the
+  base × tier, points `CP.Scoring.P(def)` or `Config.Events.weeklyBoss.points`.
 
 ### 5.10 CP.Runs — modules/runs (the engine)
-Server:
-- `create(opts) -> run|nil, errKey` — `opts = { mission, locationIndex, missionType, members = { officer }, leaderSrc, operationId, test, isBoss }`
-- `get(runId)`, `getBySrc(src) -> run, participant` (active participants only), `all() -> list`,
-  `isOnMission(src)` (+ export `IsOnMission(src)`)
-- `capsOk(missionType) -> ok, errKey` (`Config.Limits.maxConcurrentRuns` / `maxConcurrentTactical`; operations and tests don't count)
-- `cooldowns(citizenid) -> { types = { [type] = untilTs }, missions = { [id] = untilTs } }`, `onCooldown(citizenid, missionType, missionId) -> boolean, untilTs`
-- `completionsLastHour(citizenid) -> int`
-- `markArrived(run, src)` *(hook, from CP.Route)*
-- `removeParticipant(run, src, endReason, opts) -> rowId|nil` — `opts.keepFlag` (downed), `opts.silent`
-- `addParticipant(run, src, opts) -> participant|nil, errKey` — a late join of a live case (`run.live`) only;
-  §5.46 "Backup joins the case". `_newParticipant(run, o, now, first)` builds the record for `create` and it.
-- `reclassify(citizenid, runId, newEndReason)` *(hook, from CP.Calls: real_call → real_call_cancelled)* — updates the row, applies the type cooldown, drops the pay tier if the run is still running
 
-Full admin control (§5.39):
-- `create` refuses `err.maintenance` while `CP.Maintenance.active()` (checked at the start and again right before the
-  run is registered), for every kind of run: normal, test, operation and boss.
-- `cancelRun(run, endReason = 'cancelled', opts = { src, reason }) -> ok, errKey`: an admin's End run / End test.
-  Participants who are down leave the way every end handles them (`CP.Downed.handle`, Hard rule 18); everyone else
-  leaves together as Abandoned with `endReason` (no cooldown, no points, no pay) through the same path as `endRun`
-  (`CleanupRun`: objectives stopped, entities deleted, the reservation released, items removed, flags cleared, routes
-  stopped, rows written, `run:ended`). A Cross-Department Mission's run is ended through `CP.Operations.cancel(src,
-  reason)`, so `cp_operations` says cancelled.
-- `addTime(run, seconds, maxTotal) -> ok, totalAdded | false, errKey`: only while the timer runs
-  (`err.live_timer_not_running`; before that `adjustTimer` would raise `run.timeLimit`); `run.timeAdded` keeps the
-  total (`err.live_time_max` past `maxTotal`); `run.timeLimit` never changes, so `fast_finish` is judged on the
-  original limit.
-- `clearCooldowns(citizenid, scope, key)`: after the `cp_officers.cooldown_clears` marker was saved (CP.LiveCtl), the
-  in-memory table is rebuilt; the rebuild (`LoadCooldowns`) skips every row created at or before the marker's `all`,
-  `type[<type>]` or `mission[<id>]` time, so a clear survives a restart.
-- `completionsToday(citizenid, missionType, raw)`: the day count (no type, not `raw`) takes off today's extra runs
-  (`cp_officers.cap_extra = { day, n }`, `extraRunsToday(citizenid)`); a type's own count and the hourly count never.
-- `admin:changed { citizenid }` drops that officer's cooldown, today and last-hour caches (`_forgetOfficer`).
-- `endRun(run, state, endReason)` — state `'completed'|'failed'`; an active participant who is down at that moment (`CP.Qbx.isDowned`, not in the arena) leaves first through `CP.Downed.handle` (result Failed, end_reason `downed`) and only the others get the run's end state
-- `noteWeaponFired(run, src)` — server-side proof for `no_weapons_fired` (CP.Npc: a participant's gun hit or gun kill on a mission ped; the `weapon_fired` telemetry also goes through it)
-- `objectiveComplete(run, index, data) -> boolean` (false when minSeconds is not reached yet; flags `too_fast`)
-- `dispatch(run, index, src, ev) -> ok, reason` — deliver a SERVER-originated event (e.g. from CP.Npc: `{ type = 'cuffed', netId }`, `{ type = 'shot', netId, src }`, `{ type = 'damaged', netId, attacker }`) to the block's `onEvent` of objective `index` (the objective that owns the entity, `cp.obj`), bypassing the client anti-cheat checks
-- Test hooks (used by CP.Testing; only valid on test runs): `testSkip(run)` (mark the current objective done regardless of minSeconds and start the next), `testRestart(run)` (block `restart` for the current objective, or stop+delete its entities and `start` again), `anchor(run) -> vec3` (teleport target: the current objective's reference point, or the start before In progress; a second value, the
-  net id, when that point is a live entity of the objective: the one it was on while that one lives, else the lowest
-  net id, kept in `run.objectives[i].anchorNetId`; never custody's van or its driver, roles `service` /
-  `service_driver`)
-- Row fields owned by the engine at insert: `season_id = CP.Challenge.currentSeason() and .id`, `department` = the participant's department at the end, `departments_n`, `participants` (active at the end, plus themselves), `tier` = pay tier name, `modifier`, `mission_version`, `location_label`, `duration_s`, `breakdown` = RunResult JSON (9.6)
-- `entityDied(run, netId, killerSrc)` — the single death path: marks the entity dead (for corpse cleanup and caps), updates stats, calls the owning block's `onEntityDead`. CP.Npc calls it for peds (with killer attribution); CP.Runs itself detects wrecked vehicles (`GetVehicleEngineHealth <= -3999` / not driveable / `GetEntityHealth <= 0`) and calls it with killerSrc nil
-- `failRun(run, reasonKey)` → `endRun(run, 'failed', 'mission_failed')`
-- `award(run, id, opts)`, `penalize(run, id, opts)` — `opts = { src = nil (shared) | src (personal), count = 1 }`, weight
-  = 0-1 (default 1: a part of each occurrence, count x weight; weight 0 records nothing; CP.Scoring reads a
-  line's count to two decimals, so live_response's detain at a suspect's share 0.5 is half a line)
-- `adjustTimer(run, seconds)` (negative = time off), `pauseTimer(run, paused)`, `remaining(run)`
-- `spawnPed(run, opts) -> entity, netId` · `opts = { obj = i, model, coords = vec4, role, armed = false, weapon, accuracy, armour, health, cfg = {}, tag, alt }`
-- `spawnVehicle(run, opts) -> entity, netId` · `opts = { obj, model, coords = vec4, role, tag, plate, alt }`
-- `spawnObject(run, opts) -> entity, netId` · `opts = { obj, model, coords = vec3|vec4, role, tag, frozen = true, alt }`
-- Every new entity of the three asks for its placement (Config.Spawning.place): the engine's Track calls
-  `CP.Spawn.ask(run, netId, entity, kind, opts)` (§5.43, server) once the net id exists and writes what it returns
-  into the cp bag as `place` (§6.2) with the first write; `opts.alt` = the other points the block may use there (a
-  list of points or `{ coords, label, indoor }`, at most 8 kept: hostile_waves passes the director's spare points),
-  where the entity goes instead when an officer's game finds its point bad.
-- Spawn director (Config.Spawning, owner request of 2026-10-19: "make sure they dont spawn around the player make it
-  be progressive"; blocks call it through `ctx.choosePoints` / `ctx.whenNear`, which fill in `opts.obj`). Every
-  distance is 2D, every participant is an active one (`activeSrcs`) at its server-side ped coords.
-  - `choosePoints(run, candidates, n, opts) -> points, indexes, spare` — at most `n` (nil = every one that passes) of
-    the block's `candidates` (best first: vec3/vec4, `{ x, y, z }`, `{ [1], [2], [3] }` or `{ coords, indoor = true }`),
-    returned as the candidates' own values in list order (hidden ones first, below), with their indexes in `candidates`;
-    `spare` = the other candidates that pass the distance and behind rules (the ones in the wave's sector first, then
-    the rest, in the same order), where an entity whose point an officer's game finds bad may go instead (§5.43).
-    Skipped: a point closer than `minDistance` to any participant (`minDistanceIndoor` with `opts.indoor` or a point's
-    own `indoor = true`); a point "behind" a participant within `activateRange` of it, i.e. more than `behindAngle`
-    degrees between participant → point and the participant's own line to the scene, participant → `opts.centre`
-    (default the middle of the candidates), whichever side he came in from: a point between an officer and the scene is
-    never behind him, a point at his back always is (a participant within 5 m of the centre has no line of his own and
-    faces the way in, `opts.from`, default `location.start.coords`, → the centre; none when those two are under 5 m
-    apart); and a point outside the wave's sector: the points left must fit in one `maxSpread`-degree sector seen from
-    the participants within `activateRange` of the centre (all of them when none is), the one that holds every point of
-    `opts.placed` (what this wave already used), then the most points up to `n`, then the block's earliest point. Too
-    few good points: fewer come back, never a bad one. `opts.wave` names the wave: its clock (in `run.spawning[obj]`)
-    starts at the first ask (`opts.since`, an `os.time()`, sets it instead) and is dropped once a call returns all `n`;
-    after `waveDelayMax` seconds the distance becomes `min(that distance, hardMin)`, never lower. `opts.name` names the
-    list for the console; a candidate `{ coords, label = 'yard[3]' }` is named by its own label (hostile_waves names
-    each point by its location key and file index, a ring copy `spawns[3] +1.25 m`).
-    Console (with `Config.Spawning.log`): one `CP.log` line per skipped point, reason and wave (`run <id>: spawns[7]
-    skipped: 30 m from <name>` / `behind <name>` / `outside this wave's 150 degree sector`, the last only when the wave
-    is short of points for it) and one `CP.warn` per wave that used closer points after the wait.
-    `Config.Spawning.enabled = false`: the first `n` candidates as they are. `testRestart` clears the objective's
-    clocks.
-    Hidden first (`Config.Spawning.preferHidden`): when more candidates pass the distance and behind rules
-    than `n`, the block did not pass `opts.ordered = true` (keep its own order and ask no game: pursuit's car slots on
-    a road) and the caller can yield (`coroutine.isyieldable()`), the director asks the games of the participants
-    within `activateRange` of the centre (nearest first, at most 4; none that close: the nearest one) through the
-    ox_lib callback `crimson-police:client:spawn:visible` (§8.1, `CP.Spawn.visible` §5.43) with the first 32 passing
-    points and `ms = losTimeoutMs - 250`, each ask in its own thread, and waits at most `losTimeoutMs` (`Wait(50)`).
-    A point is hidden only when every asked game answered with a table whose entry for it is exactly `false`. No
-    usable answer from one of them (timeout, a raised callback, no table), or one of them still busy with an earlier
-    ask (a per-player flag cleared when ox_lib's await returns), means nothing is known: the block's order, one
-    `CP.log` per wave (`run <id>: <name>: no usable answer from <officer> within <ms> ms, every point counts as
-    seen`). After every wait (answered or not; a busy game or a call that cannot yield does not wait) the rules run
-    again from the participants' coords, so an officer who walked up meanwhile never gets a point inside the
-    distance. With an answer the passing points are then ordered hidden first (a candidate `{ coords, first = true }`
-    stays ahead of all others: hostile_waves marks the boss's own spot), each group in the block's order, and the
-    sector choice counts hidden points (a `first` one counts as hidden) after the wave's own points and the number of
-    points: of two sectors with as many points, the one with more hidden points wins. One `CP.log` per wave: `run <id>: <name>: <k> of <m> points out of the
-    officers' sight, used first`. `preferHidden = false`, `enabled = false`, `#passing <= n` or a caller that cannot
-    yield: nobody is asked.
-    Out of sight instead of far (`opts.unseen = true`: a Manhunt clue, a harmless thing that only must not
-    pop up in front of an officer): a point that fails only the distance rule (not behind anyone) still passes when no
-    asked game can see it. When fewer than `n` points pass otherwise (one point, `ordered` or not), the games are asked
-    about those close points the same way (`AskHidden`; the rules run again after the wait) and the hidden ones are
-    added after the others; the rest are skipped with one `CP.log` per point (`<name> skipped: 25 m from <officer>
-    and not known to be out of his sight`); such a point never counts towards the "closer points after the wait"
-    warning. That ask replaces the hidden-first one in the same call. `preferHidden = false` (or a caller that cannot
-    yield, or a busy game): nobody is asked and the close points are skipped.
-  - `whenNear(run, point, range) -> boolean, nearestMetres|nil` — true when a participant is within `range` (default
-    `activateRange`) of `point`; always true while `Config.Spawning.enabled = false` and for a point that is none.
-  - Stage ahead (`Config.Spawning.stageAhead`; §4.4 step 3, §7.1): while objective i is current, the 1 s tick
-    calls objective i + 1's block hook `stage(ctx, dt)` (when the block has one) once a tick until i + 1 starts, with
-    objective i + 1's own ctx, so what it spawns belongs to i + 1 from the start (`ownerOf`, `entitiesFor { obj }`, the
-    caps) and is deleted at the end like every run entity. `stage` returning true sets `run.objectives[i + 1].staged`
-    (`ctx.staged` in every later hook of that objective, its `start` included; console `run <id>: objective 2 staged
-    ahead (objective 1 running)`, `... (objective 1 done)` when objective 1 completed while it staged); an error sets
-    `stageOff` (never called again, `CP.warn` `run <id>: objective 2 stopped staging ahead after an error; it starts as
-    before`). `stage` may yield (a spawn waits for its entity): `run.objectives[i + 1].staging` (the tick's thread) is
-    set while it runs, and `StartObjective(i + 1)` called meanwhile (objective i completed by an officer's event)
-    waits for it with `Wait(0)`, at most `TICK_STUCK_MS` (30 s), never from inside the hook itself or where it cannot
-    yield; held longer, the objective starts unstaged and the stage's return is not marked staged (`CP.warn` `run
-    <id>: objective 2 started before its stage ahead returned`). A staged entity's events reach its own objective's
-    block before it starts (`onEntityDead`, `dispatch` from CP.Npc, `rescale`), never `onParticipantLeft` or `tick`;
-    its client half has not started. `testRestart` clears `staged` of the objective it restarts. Off (`stageAhead =
-    false` or `enabled = false`, read live): never called; a missing key counts as on (the shipped value).
-    Used by `hostile_waves` objectives with `stage = true` (the raids' fights, §3.3; `Config.Spawning.stageWakeRange`
-    wakes their calm crew early).
-- `deleteEntity(run, netId)`, `entitiesFor(run, filter) -> list`, `canSpawn(run, n, armed) -> boolean` (caps `Config.Limits.maxArmedAlive` / `maxEntities`, counted now; callers wait and retry, never cut counts)
-- `send(run, eventName, ...)` → `TriggerClientEvent` to every active participant
-- `objectiveEvent(run, index, data)` → `crimson-police:client:objective` (runId, index, data)
-- The objective pointer (Config.Markers; drawn by §5.44): `marker(run) -> marker|nil` — the current objective's
-  pointer in the §5.44 shape: its block's `marker(ctx)` hook (§7.1) when the block has one, normalised (keys as strings,
-  a net id is its own key, coords `{ x, y, z }` to the centimetre, labels as text or a CP.Lt token string, a target's
-  `beyond` above 0 to the decimetre, at most 32 targets, a target with neither coords nor a net id dropped); `false`
-  from the hook = none (the block shows the objective itself); no hook, a hook that returns nil or no marker (one
-  `CP.warn` per block), or one that raised an error (then not called again for that objective,
-  `run.objectives[i].markerOff`) = the fallback, named after the objective (else `markers.objective`), so every
-  objective, a Mission Builder one included, has one: a pin `{ kind = 'point', look = 'objective', coords = anchor(run),
-  label }`, or, when the anchor is a live entity of the objective, that entity as the one target `{ kind = 'targets',
-  label, targets = { { key = netId, netId, x, y, z, look = 'objective', label } } }` (each game follows it, Radio
-  Silence 'area' hides it like any person or car). nil while `Config.Markers.enabled = false` or no objective is active.
-  `startMarker(run, i)` — the pointer for objective i's `client:objective` `{ action = 'start', marker }`
-  (StartObjective, `testRestart`), remembered in `run.markerSent`. `syncMarker(run, nowMs) -> sent` — called right after
-  the block's `start` and at the end of every 1 s tick: sends `client:marker` (runId, index, marker) to the participants
-  only when the pointer changed since it was sent: a new shape (kind, keys, net ids, looks, labels, numbers, beyond,
-  radius, route, a fixed point's place) at once, new positions (targets, or a point that names a net id, to the metre)
-  at most every `Config.Markers.trackEvery` seconds (1-10); nil (enabled turned off, a hook now false) is sent once,
-  which clears it. `actionPoints(run) -> { { coords, radius? } }` (for CP.Route's late partners, §5.12): the
-  current objective's `anchor(run)`, then the pointer last sent (`run.markerSent.marker`, no block hook runs): its point
-  or circle (`radius` for an area), every target at its server position (a target with only a net id: the run's
-  entity where the server has it); empty before In progress.
-- `hud(run, patch)` → `crimson-police:client:hud` to participants; `hudFor(run, src, patch)`
-- `view(run, src) -> ActiveMissionView` (§9.4) and `summary(run) -> LiveRun` (§9.5)
-- `isParticipant(run, src)`, `activeSrcs(run) -> list`, `host(run) -> src`
-- Handles `server:objective` (runId, index, evidence) → `CP.AntiCheat.checkEvent` → block `onEvent`; the
-  server-only types (`cuffed`, `decide`, `action`, `removed`, `handed_over`, `impounded`, `shot`, `damaged`: sent
-  by CP.Npc / CP.Custody through `dispatch` / `entityEvent`; `opp_contact`, `opp_cuffed`, `opp_released`,
-  `opp_detained`, `opp_booked`, `opp_down`, `opp_up`, `opp_lost`, `opp_left`, `opp_void`, `opp_in_place`,
-  `opp_left_spot`, `opp_out_of_bounds`, `opp_cuff_attempt`: sent by CP.Opponents, §5.45) are refused and flag the
-  sender `unexpected_event`;
-  `server:abandon` (runId) → `removeParticipant(run, src, 'quit')`; `server:telemetry` (runId, kind, data)
-  kinds: `ped_hit`, `lights_siren`, `weapon_fired`, `vehicle` (netId of the vehicle they drive).
-- Loops: 1 s timer/block tick; `Config.AntiCheat.jobRecheck` access recheck; corpse cleanup
-  (`Config.Limits.corpseCleanup`); start timeout per participant; `playerDropped` → `disconnected`;
-  character unload → `disconnected`; resource stop → delete all entities, no rows.
-- Entity state bag: every spawned entity gets `Entity(e).state:set('cp', { run = id, obj = i, role, state = 'idle', armed, cfg }, true)`. The server keeps its own copy in `run.entities[netId].bag` and never reads the bag back (a client can write the bag of an entity it owns): the armed-alive cap counts through `CP.Npc.getState`, and "is this a run entity" (vehicle / pedestrian telemetry) is answered from `run.entities` only.
-Client:
-- `CP.Runs.current() -> clientRun|nil` (`{ id, mission, location, locationIndex, seed, isHost, test, state, tier, payTier, modifier, objectiveIndex }`)
-- `report(index, evidence)` → `server:objective` (fills `coords` = player coords and `time` = GetGameTimer())
-- `telemetry(kind, data)`
-- `getEntity(netId, timeoutMs) -> entity|nil`, `control(entity, timeoutMs) -> boolean` (NetworkRequestControlOfEntity loop; host only)
-- `hudDetail(text|nil)` — a client-side HUD line for the current objective (e.g. "Hold still: 6 s")
-- Registers client actions (NUI `client` endpoint): `logResult` `{ point, choice }` → `report(currentIndex, { type = 'log', point, choice })` (Business Check tablet log)
-- Runs the client halves of blocks: `prepare`, `start`, `update`, `stop`, `hostChanged` (§7.2).
-- Personal telemetry loops during a run (only while on a run): ped hits by the player's vehicle,
-  lights/siren on Beat Patrol and Business Check, weapon fired, current vehicle netId.
+Files: `modules/runs/server.lua`, `modules/runs/client.lua`, `locales/parts/engine_b.json`; tests
+`tests/engine_a_spec.lua`, `tests/engine_b_spec.lua` (client half: `tests/fixtures/engine_b/client_spec.lua`).
 
-More (§13.14):
-- `noteStat(run, src|nil, key, n)` — citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok,
-  decisions_best, decisions_bad, lethal (nil src = every active participant now); `noteArrest(run, src, netId) ->
-  bool` (one arrest per person per run; false for a repeat).
-- `decide(run, src, entry) -> bool` — entry `{ contact, kind, choice, verdict ('best'|'ok'|'wrong'|'critical'),
+#### Server API
+- `create(opts) -> run|nil, errKey` — `opts = { mission, locationIndex, missionType, members = { officer | src },
+  leaderSrc, operationId, test, isBoss, missionCall }`. See "Creating a run" below.
+- `get(runId)`, `getBySrc(src) -> run, participant` (active participants only), `all()`, `isOnMission(src)` (+ export
+  `IsOnMission(src)`), `isParticipant(run, src)`, `activeSrcs(run)`, `host(run)`.
+- `capsOk(missionType) -> ok, errKey` (`Config.Limits.maxConcurrentRuns` / `maxConcurrentTactical`; `weekly_boss`
+  counts as Tactical; operations and tests never count).
+- `cooldowns(citizenid) -> { types = { [type] = untilTs }, missions = { [id] = untilTs } }`,
+  `onCooldown(citizenid, missionType, missionId) -> bool, untilTs`, `clearCooldowns(citizenid, scope, key)`.
+- `completionsLastHour(citizenid)` (completed rows of the last 3600 s, no `manual_award`/`goal`),
+  `completionsToday(citizenid, missionType|nil, raw)` (completed rows since `CP.Schedule.dayStart`, no
+  manual_award, goal or operation rows; the day count without a type and not `raw` takes off today's extra runs,
+  `cp_officers.cap_extra = { day, n }`, `extraRunsToday(citizenid)`). Both cached 10 s and dropped on a completion;
+  `admin:changed { citizenid }` drops that officer's caches (`_forgetOfficer`).
+- `markArrived(run, src)` (from CP.Route; also patches that participant's HUD `route = { status = 'arrived',
+  distance = 0 }`), `addParticipant(run, src, opts)` (late join of a live case only, §5.46; `_newParticipant` builds
+  the record for both), `removeParticipant(run, src, endReason, opts) -> rowId|nil` (`opts.keepFlag` for downed,
+  `opts.silent` = no toast or result screen, `opts.notify` = a locale key toasted to the leaver).
+- `endRun(run, 'completed'|'failed', endReason)`, `failRun(run, reasonKey)` (= `endRun(run, 'failed',
+  'mission_failed')`), `cancelRun(run, endReason = 'cancelled', { src, reason })` (§5.39: down participants go through
+  `CP.Downed.handle`, everyone else leaves as Abandoned through the normal cleanup; an operation's run is ended through
+  `CP.Operations.cancel`).
+- `reclassify(citizenid, runId, newEndReason)` (from CP.Calls: `real_call` → `real_call_cancelled`).
+- `objectiveComplete(run, index, data) -> bool`, `dispatch(run, index, src, ev) -> ok, reason` (a server-originated
+  event such as `{ type = 'cuffed' | 'shot' | 'damaged', ... }` from CP.Npc to the owning block's `onEvent`, no
+  client checks), `objectiveEvent(run, index, data)` (→ `client:objective`), `send(run, event, ...)` (every active
+  participant), `entityEvent(run, netId, ev)` (handed_over, impounded, removed to the owning objective).
+- Points: `award(run, id, opts)`, `penalize(run, id, opts)` — `opts = { src (personal) | nil (shared), count = 1,
+  weight = 0-1 }` (count × weight; weight 0 records nothing; CP.Scoring reads a line's count to two decimals).
+- Stats: `noteWeaponFired(run, src)` (proof for `no_weapons_fired`), `noteStat(run, src|nil, key, n)` (citations,
+  impounds, rescues, vehicles_stopped, evidence, decisions_ok/best/bad, lethal; nil src = every active participant),
+  `noteArrest(run, src, netId) -> bool` (once per person per run), `notePerson(run, netId, { label?, demeanour?,
+  did? })` (the people debrief; `did` ∈ walked_away, ran, drew, surrendered, feinted, cuffed, escaped, killed, each
+  once; RunResult.people only for rows settled after the run ended).
+- `decide(run, src, entry) -> bool` — `entry = { contact, kind, choice, verdict = 'best'|'ok'|'wrong'|'critical',
   bonusId, points, truthKey, bestChoice, facts, factLog, discoverable, knownAt, failKey, netId }`: the ledger, the
-  decision stats, noteArrest for an Arrest graded best or ok, the personal award or penalty (points 0 = graded, no
-  points), and 'critical' fails the run with failKey. `factLog = { { key, text, at } }` (every fact the decider had,
-  as text, with the os time it reached them) is kept as `{ key, text, atS }` (seconds from the start).
-- `notePerson(run, netId, { label?, demeanour?, did? }) -> bool` — the people debrief: a person's label and
-  demeanour, and what they did (`did` one of walked_away, ran, drew, surrendered, feinted, cuffed, escaped, killed;
-  each once, in order). CP.Custody notes every contact person, flee_arrest every person with a demeanour.
-  Server-only until the run ends: RunResult.people is filled only for rows settled when the run has ended.
-- `adopt(run, netId, toIndex)`, `adoptMany(run, netIds, toIndex) -> n` — an entity moves to another objective
-  (record, bag, CP.Npc.adopt); the host gets `client:objective` `{ action = 'adopt', netId, obj, from }`.
-  `ownerOf(run, netId)`, `entityEvent(run, netId, ev)` (handed_over, impounded, removed to the owning objective).
-- `spawnPed(run, { hidden = true, armed, weapon, accuracy, armour })` — a contact: bag armed = false and no
-  weapon or combat cfg; `armedTruth` counts toward `maxArmedAlive`. `arm(run, netId) -> bool` gives it once (the draw).
-- `isMissionPlate(plate)` — every mission vehicle gets a `Config.Custody.plates` plate, rerolled (5 tries) when
-  `CP.Qbx.plateOwned` says a player owns it; plates come from their own random stream, never the run seed.
-- `holdBodies(run, { roles, max })`, `heldBodies(run)`, `releaseBody(run, netId)`; `pauseFastClock(run)` (once; the
-  time limit grows by 60 s + 20 s per held body).
-- `noteExternalRemoval(netId, src, via, dist)` — remembered 15 s. A vanished run vehicle whose last sample had engine
-  and body above 0 is removed, not wrecked: `{ type = 'removed' }` to its objective; a participant's removal flags
-  `sc_impound` and fails the run (`reason.vehicle_removed`); anyone else's, or none recorded, removes everyone with
-  `vehicle_removed_external` and writes the audit (`vehicleRemoved`, reason = the sender's citizenid).
-- `completionsToday(citizenid, missionType|nil)` — completed rows since the daily reset, no manual_award, goal or
-  operation rows; 10 s cache cleared on a completion.
-- create `opts.missionCall` (rapid_response on arrival within targetS, never for staff calls); `view` adds `intel`,
-  `missionCall = { code, targetS, arrivedS }` and `contact` (CP.Custody.view); RunResult adds decisions, people,
-  stats (lethal left out), missionCall, progress and items. Config.Decisions.debrief = false sends the officer's
-  result card without decisions and people and leaves them out of the officer's own history (getProfile); the
-  stored breakdown keeps them for disputes and staff.
-- `hud`, `hudFor`, `ctx.hud`, `ctx.send` accept CP.Lt tokens. Client: HUD patches and objective updates are resolved
-  with `CP.Locale.resolveAll` before the NUI; the 'adopt' action calls the new objective's client half
-  `adopt(ctx, netId, from)` and the old one's `release(ctx, netId)`; `CP.Runs.adoptedBy(netId)`.
-- Hooks it fires (CP.Hooks): `run:created (run)`, `run:arrived (run, src, isFirst)`, `run:inProgress (run)`,
-  `participant:left (run, src, endReason)`, `row:settled (run, p, rowId, row, result)` (may yield; listeners may add
-  to result), `run:ended (run, state, endReason)` (may yield). Fired elsewhere: `row:approved (rowId)` and
-  `row:voided (rowId)` (CP.Scoring), `row:forfeited (rowId)` (CP.Cash), `arena:exited (src)` (CP.Alerts' 1 s
-  reconcile when inArena turns false), `xp:levelUp (citizenid, src|nil, oldLevel, newLevel)` (CP.Scoring),
-  `goal:completed (citizenid, goalId, period)` (CP.Goals), `season:ended (seasonId, { champion, top10 })`
-  (CP.Challenge), `home:extras (citizenid, src, extras)` (CP.Scoring homeData), `officer:loaded (src)` (CP.Cash),
-  `tablet:closed (src)` (CP.Tablet's `server:tabletClosed`).
+  decision stats, `noteArrest` for an Arrest graded best or ok, the personal award or penalty (points 0 = graded, no
+  points); `critical` fails the run with `failKey`. `factLog` entries are kept as `{ key, text, atS }`.
+- Timer: `adjustTimer(run, seconds)` (negative = time off), `pauseTimer(run, paused)`, `remaining(run)` (nil before
+  In progress), `addTime(run, seconds, maxTotal)` (§5.39: only while the timer runs, total in `run.timeAdded`,
+  `run.timeLimit` unchanged so `fast_finish` uses the original limit), `pauseFastClock(run)` (once; the time limit
+  grows by 60 s + 20 s per held body).
+- Entities: `spawnPed(run, { obj, model, coords = vec4, role, armed, weapon, accuracy, armour, health, cfg, tag, alt,
+  hidden })`, `spawnVehicle(run, { obj, model, coords, role, tag, plate, alt, vehicleType })`, `spawnObject(run, {
+  obj, model, coords, role, tag, frozen = true, alt })` → `entity, netId` or nil over the caps;
+  `deleteEntity(run, netId)`, `entitiesFor(run, filter)`, `canSpawn(run, n, armed)`, `entityDied(run, netId,
+  killerSrc)` (the single death path), `adopt(run, netId, toIndex)` / `adoptMany(run, netIds, toIndex) -> n`,
+  `ownerOf(run, netId)`, `arm(run, netId) -> bool` (a hidden contact gets its weapon, armour and combat cfg once),
+  `holdBodies(run, { roles, max })` / `heldBodies(run)` / `releaseBody(run, netId)` (bodies kept for Process the
+  scene, FIFO past max), `isMissionPlate(plate)`, `noteExternalRemoval(netId, src, via, dist)`.
+- Spawn director: `choosePoints(run, candidates, n, opts) -> points, indexes, spare`, `whenNear(run, point, range)
+  -> bool, metres` (blocks use `ctx.choosePoints` / `ctx.whenNear`). Below.
+- Pointer: `marker(run)`, `startMarker(run, i)`, `syncMarker(run, nowMs) -> sent`, `actionPoints(run)`. Below.
+- HUD and views: `hud(run, patch)`, `hudFor(run, src, patch)` (both accept CP.Lt tokens), `view(run, src) ->
+  ActiveMissionView` (§9.4), `summary(run) -> LiveRun` (§9.5).
+- Test hooks (test runs only, CP.Testing): `testSkip(run)`, `testRestart(run)` (the block's `restart`, else stop,
+  delete its entities, clear its state, prepare, start; clears the objective's spawn clocks and `staged`),
+  `anchor(run) -> vec3, netId?` (the current objective's first point from its fields — checkpoints, points, spawns,
+  npcs, targets, door, suspect, spawn, center, route, safe, scene or `run.shared.devices` — then a live entity of
+  it (kept in `run.objectives[i].anchorNetId`, never custody's van or driver), then the start).
+
+#### Creating a run
+- `members` may be officer tables (§3.1) or srcs (resolved with `CP.Access.getOfficer`, then `CP.Qbx.getInfo` for
+  non-police test admins). Refusals: `err.invalid_mission`, `err.invalid_location`, `err.no_members`,
+  `err.member_unavailable`, `err.already_on_run` / `err.member_on_run`, `err.in_arena`, `err.server_busy`,
+  `err.maintenance` (while `CP.Maintenance.active()`, every kind of run).
+- The lookups during `create` may yield, so right before the run is registered (no yield in between) it re-checks
+  that no member is on a run, every member is online, the caps (not tests or operations) and maintenance: two racing
+  accepts never put one officer on two runs or pass the caps together. `CP.Draw.reserve`'s return is ignored (the
+  draw holds a provisional reservation; a spot may have several holders).
+- The modifier is rolled only for runs that are not tests, operations or the boss. Time Crunch: `timeLimit =
+  round(timeLimit × (1 − Config.Events.timeCrunchCut))`.
+- `run.unit = CP.Units.unitOf(leaderSrc)`, kept and unlocked when the run ends (not for test runs).
+- `opts.missionCall = { id, code, area, targetS, staff }`: `rapid_response` (personal) on arrival within `targetS`,
+  never for staff calls.
+- Mission items are given at accept with metadata `{ cpRun = run.id, cpItem = true }`, never to an in-arena player,
+  and removed by slot (ox_inventory's Search matches values only). Items not found go on an in-memory orphan list by
+  citizenid, swept on player load (5 s after), 10 s after `CP.Alerts.foreignClearedAt[src]` and every 60 s. Items are
+  kept back only while the player is in a routing bucket other than 0; the `crimsonArena` flag alone in bucket 0 (a
+  client can write it) does not keep them, but keeps the orphan record so the sweep after the flag clears still runs.
+  The load sweep and a sweep 15 s after resource start also remove any `cpItem` (mission items and
+  `Config.Custody.evidenceItem`) whose `cpRun` is not live: that is what takes back items after a restart.
+- `client:start` carries `timeLimit` and the drawn `location` (the mission is sent without `locations`). A start whose
+  radius is at least 200 m (Manhunt's search circle) gets a local radius blip until the officer is inside or the
+  first objective starts.
+
+#### Route, objectives, timer, HUD
+- The server calls `CP.Route.begin(run, src)` for every participant at accept and `CP.Route.stop(run, src)` when one
+  leaves or the run ends; the client begins on `client:start` and stops when its own participant entry is `arrived`.
+- The tier counts every active participant (arrived or not); `client:inProgress` and objective actions go to every
+  active participant, so late arrivals run the client halves too. A leave before the start recalculates
+  `expectedTier` (`client:tierChanged`); a forced test tier never changes.
+- `ctx` is built once per objective (so `ctx.rng` continues); `ctx.obj`, `ctx.tier`, `ctx.state` are refreshed on
+  every hook; `ctx.state` is `run.objectives[i].state`.
+- `objectiveComplete`: `minSeconds` counts from the objective's start. An early call returns false; more than 1 s
+  early flags `too_fast` once per objective (`CP.AntiCheat.flag`, never for tests). Completed objectives keep their
+  entities until the run ends. `onTimeout` returning `'completed'` ends the run completed/completed, else
+  failed/`time_limit`.
+- Every run ticks in its own 1 s thread, so a block tick that waits never delays other runs; a run whose previous
+  tick is still busy skips that second (one warning after 30 s).
+- `ctx.hud(patch)`: `detail`, `value`, `max` go to that objective's HUD entry (`false` clears), every other key is a
+  top-level patch. HUD objectives (§9.3): one entry per objective, `value`/`max`/`detail` from the block's
+  `checklist`, `ctx.hud` values win, done objectives keep their last checklist. The full list is resent when it
+  changes; the `run` topic is pushed at most every 2 s for progress. Timer patches `{ remaining, paused }` on start,
+  adjust, pause and every 30 s. Client HUD messages clear after 8 s; the ended HUD hides 12 s after the end.
+- Stage ahead (`Config.Spawning.stageAhead`, read live, missing = on): while objective i is current the tick calls
+  objective i + 1's `stage(ctx, dt)` hook (with i + 1's own ctx, so what it spawns belongs to i + 1) until i + 1
+  starts. `true` sets `run.objectives[i + 1].staged` (`ctx.staged` in later hooks); an error stops staging for that
+  objective (`CP.warn`). A yielding `stage` sets `staging`; `StartObjective(i + 1)` waits for it up to 30 s, then
+  starts unstaged. A staged entity's events (`onEntityDead`, `dispatch`, `rescale`) reach its block before it starts,
+  never `onParticipantLeft` or `tick`. Used by `hostile_waves` objectives with `stage = true` (§3.3;
+  `Config.Spawning.stageWakeRange` wakes their calm crew early).
+
+#### Spawn director (Config.Spawning)
+Every distance is 2D from active participants' server-side ped coords. `choosePoints` returns at most `n` (nil =
+every passing one) of the block's `candidates` (vec3/vec4, `{ x, y, z }` or `{ coords, indoor, label, first }`) in
+list order, their indexes, and `spare` (other passing points, the wave's sector first) for an entity whose point a game
+finds bad (§5.43). A point is skipped when:
+- it is closer than `minDistance` (`minDistanceIndoor` for indoor points) to a participant; after `waveDelayMax`
+  seconds of a wave (`opts.wave`, clock in `run.spawning[obj]`, `opts.since` sets its start) the distance becomes
+  `min(distance, hardMin)` and one `CP.warn` is printed;
+- it is "behind" a participant within `activateRange`: more than `behindAngle` degrees off that participant's line to
+  the scene centre (`opts.centre`, default the middle of the candidates; within 5 m of it, the way in from
+  `opts.from` / the start);
+- it is outside the wave's sector: the points must fit one `maxSpread`-degree sector seen from the participants near
+  the centre, the sector holding `opts.placed` first, then the most points, then the earliest.
+Too few good points: fewer come back, never a bad one. `Config.Spawning.enabled = false`: the first `n` as they are.
+With `Config.Spawning.log`, one `CP.log` per skipped point and reason.
+
+Hidden first (`preferHidden`): when more points pass than `n`, the block did not pass `opts.ordered`, and the caller
+can yield, the director asks up to 4 nearby participants' games (`client:spawn:visible`, §5.43) about the first 32
+points and waits at most `losTimeoutMs`. A point is hidden only when every asked game says exactly `false`; any
+missing answer (timeout, error, busy game) means nothing is known. The rules then run again from fresh coords, and
+passing points are ordered hidden first (a `first = true` candidate stays ahead: the boss's spot); of two sectors with
+as many points, the one with more hidden points wins. `opts.unseen = true` (a harmless thing that must only not pop up
+in sight): a point failing only the distance rule still passes when no asked game sees it; such a point never counts
+toward the wait warning.
+
+`whenNear(run, point, range)` is true when a participant is within `range` (default `activateRange`), and always
+while the director is off.
+
+#### The objective pointer (Config.Markers, drawn by §5.44)
+`marker(run)` is the block's `marker(ctx)` hook (§7.1), normalised (keys as strings, coords to the centimetre, at most
+32 targets, labels text or CP.Lt token strings). `false` = none; no hook, nil, or an error (then `markerOff` for that
+objective) = the fallback: a pin at `anchor(run)` or, when the anchor is a live objective entity, that entity as the one
+target. nil while Markers are off or no objective is active. `startMarker` rides on `client:objective {
+action = 'start' }`; `syncMarker` runs after `start` and every tick and sends `client:marker` only on a change (shape
+at once, positions at most every `Config.Markers.trackEvery` s; nil once). `actionPoints(run)` (CP.Route's late
+partners, §5.12): the anchor, then the last sent pointer's points; empty before In progress.
+
+#### Entities
+- Every spawned entity gets the `cp` state bag `{ run, obj, role, state = 'idle', armed, cfg, place }` (§6.2). The
+  server keeps its own copy in `run.entities[netId].bag` and never reads the bag back; "is this a run entity" is
+  answered from `run.entities` only.
+- Every new entity asks for its placement (`CP.Spawn.ask`, §5.43), written into the bag as `place`; `opts.alt` (at
+  most 8) are the other points it may move to.
+- Caps `Config.Limits.maxArmedAlive` / `maxEntities` are counted now (callers wait and retry, never cut counts); spawns
+  still waiting for their entity count (`run.pendingSpawns`); cuffed NPCs do not count as armed; corpses count until
+  deleted (`Config.Limits.corpseCleanup`). A hidden contact's `armedTruth` counts toward `maxArmedAlive`. An entity
+  that appears after 3 s is deleted when it does (within 30 s, model checked).
+- Vehicles use `CreateVehicleServerSetter` (`opts.vehicleType`, default `'automobile'`), falling back to
+  `CreateVehicle`. Wrecks: `GetVehicleEngineHealth <= -3999` always, `GetEntityHealth <= 0` only after a positive
+  value was seen (server-side health reads 0 until a client synced it). An entity missing on 2 ticks goes through
+  `entityDied` (killer nil). Ped deaths come from CP.Npc.
+- Plates: every mission vehicle gets a `Config.Custody.plates` plate from its own random stream (never the run seed),
+  rerolled up to 5 times when `CP.Qbx.plateOwned` says a player owns it; a plate a mission asks for is kept only when
+  it fits that pattern and no player owns it.
+- External removal (remembered 15 s): a vanished vehicle whose last sample had engine and body above 0 was removed,
+  not wrecked: `{ type = 'removed' }` to its objective; by a participant → flag `sc_impound` and fail
+  (`reason.vehicle_removed`); by anyone else or unknown → everyone leaves with `vehicle_removed_external`
+  (abandoned, no points, cash or cooldown) and the audit `vehicleRemoved`.
+- Host: an offline host passes to the next in join order; a host silent for 15 s (`GetPlayerLastMsg`) hands over only
+  to a responsive participant.
+
+#### Events, telemetry, access
+- `server:objective` (runId, index, evidence): active participant, run in progress, integer index; evidence sanitised
+  (≤ 32 keys, depth ≤ 3, strings ≤ 256). Server-only types (`cuffed`, `decide`, `action`, `removed`, `handed_over`,
+  `impounded`, `shot`, `damaged`, and CP.Opponents' `opp_*`, §5.45) from a client are refused and flag
+  `unexpected_event`. `CP.AntiCheat.checkEvent` sees every other event (a throw drops it); then `CP.Access.recheck`
+  (may yield; everything is checked again after it) and the block's `onEvent`. Block rejections are logged, never
+  flagged; events for unknown runs or from non-participants are only logged.
+- `server:abandon` (runId) → `removeParticipant(run, src, 'quit')`.
+- `server:telemetry` (runId, kind, data), in-arena senders ignored: `vehicle` (driver of a non-mission vehicle, at most
+  every 3 s, lowest engine/body kept); `ped_hit` (a non-mission ped within 30 m of a sender in a vehicle, once per ped,
+  at most 10 per participant → `pedestrian_hit`); `lights_siren` (once per participant on `quietPatrol` missions —
+  Beat Patrol, Business Check — in a vehicle once in progress); `weapon_fired` (once → `run.stats.weaponsFired`, `p.firedWeapon`).
+- `CP.Access.onLost`: `off_duty` is re-verified with `CP.Access.recheck(src, p.job)` before the removal; `job_change`
+  and `suspended` are trusted; any other reason counts as `job_change`.
+- Loops: the 1 s tick per run; `Config.AntiCheat.jobRecheck`; corpse cleanup; the start timeout per participant; the
+  60 s cooldown maintenance and orphan sweep. `playerDropped` and character unload → `disconnected`; resource stop →
+  delete all entities, no rows.
+
+#### Leaving and ending (§4.3)
+- Everything that must not race (status, cooldowns, host, rescale, flags, route) happens before the first yield; then
+  the row, the payment and the hooks.
+- A participant who is down at `endRun` (`CP.Qbx.isDowned`, not in the arena) leaves first through `CP.Downed.handle`
+  (Failed, `downed`). `removeParticipant` counts `run.stats.downs` for `downed`, calls `onParticipantLeft` for the
+  current objective and `rescale` for every objective not done.
+- The last participant out ends the run; `run.endState` and `CP.Operations.onRunEnded` get `'failed'` when that last
+  result was failed (downed/disconnected), else `'abandoned'`.
+- Operation runs start cooldowns like any run. Weekly Boss: never a type cooldown; the mission cooldown and the week's
+  attempt apply.
+- `reclassify` replaces only a `real_call` end reason, sets `state` and the JSON `endReason`, applies the new reason's
+  cooldowns from now, drops the pay tier if the run is still running, and works from the row alone once the run is
+  gone; false when nothing matched.
+
+#### Rows (cp_mission_runs)
+- One insert per participant with every column (nil as `NULL` literals): `season_id`, `department` (the active job's
+  department at the end when it still is one, else the accept-time one), `participants` (active at the end plus the
+  row's officer), `departments_n`, `tier` (pay tier), `modifier`, `mission_version`, `location_label`,
+  `location_index`, `duration_s`, the stat columns (arrests, citations, impounds, rescues, vehicles_stopped,
+  evidence, decisions_*, lethal), `medal` (1-3 from the medal_* awards), `mission_call_id`, `response_s`,
+  `penalty_points` (positive sum), `bonus_points`, `cash_multiplier` (mTier × mMod, 2 decimals) and `breakdown` =
+  RunResult JSON (§9.6). Only completed rows are summed by badges and stat goals.
+- Presence: completed/failed results of runs that ever had 2+ participants are checked with
+  `CP.AntiCheat.presenceOk`; a failure flags `presence`.
+- Flagged rows keep their computed points and cash (an approval releases them); `cash_status = 'held'` only for
+  completed flagged rows. `CP.Cash.pay` runs for completed unflagged rows with an amount; the final status is written
+  into the breakdown and the result. `CP.Scoring.onRowCounted` for unflagged completed/failed rows,
+  `CP.Goals.onRunCompleted` for unflagged completed rows, `CP.Draw.recordLast` for completed and abandoned rows.
+- Test runs compute the RunResult (would-have points and cash) and write nothing.
+- RunResult extras: `failReason`, `cash.paid`, decisions, people, stats (lethal left out), missionCall, progress
+  (CP.Scoring's `row:settled` listener), items. `Config.Decisions.debrief = false` sends the officer's card without
+  decisions and people and keeps them out of the officer's own history; the stored breakdown keeps them.
+- `view` adds `me`, `isBoss`, `operationId`, `startIn` (accepted runs, not arrived), `intel` (`run.shared.intel`),
+  `missionCall = { code, targetS, arrivedS }` and `contact` (CP.Custody.view).
+
+#### Cooldowns
+Kept in memory per citizenid, rebuilt from rows of the last `max(abandonCooldown, largest mission cooldown)` seconds on
+the first `cooldowns()` call and on player load; voided rows count, rows at or before a `cp_officers.cooldown_clears`
+marker (`all`, `type[<type>]`, `mission[<id>]`) do not, so a clear survives a restart. An online map (`citizenid <->
+src`, from the Qbox load/unload listeners, `playerDropped`, the accept re-check and the start sweep) decides which
+entries the 60 s maintenance prunes; `CP.Qbx.getByCitizenId` is called once only for a citizen the map has never seen.
+
+#### Hooks (CP.Hooks, shared/init.lua, both sides)
+Listeners run in the caller's thread, in the order added, each in pcall.
+
+| Hook | Arguments | Fired by | May yield |
+|---|---|---|---|
+| run:created | run | CP.Runs.create | no |
+| run:arrived | run, src, isFirst | markArrived (after In progress on the first arrival) | no |
+| run:inProgress | run | the engine, after every block's prepare | no |
+| participant:left | run, src, endReason | removeParticipant | no |
+| row:settled | run, p, rowId, row, result | after cash, XP and goals, before client:runEnded; listeners may add to result | yes |
+| run:ended | run, state, endReason | after every row | yes |
+| row:approved / row:voided | rowId | CP.Scoring.onRowApproved / onRowVoided | yes |
+| row:forfeited | rowId | CP.Cash.forfeit and the forfeiture job | yes |
+| arena:exited | src | CP.Alerts' 1 s reconcile when inArena turns false | no |
+| xp:levelUp | citizenid, src or nil, oldLevel, newLevel | CP.Scoring | no |
+| goal:completed | citizenid, goalId, period (`daily:<day>` / `weekly:<week>`) | CP.Goals, after the goal row | yes |
+| season:ended | seasonId, { champion, top10 } | CP.Challenge | yes |
+| home:extras | citizenid, src, extras | CP.Scoring homeData | no |
+| officer:loaded | src | CP.Cash, after the pending payments | yes |
+| tablet:closed | src | CP.Tablet `server:tabletClosed` | no |
+
+#### Client
+- `CP.Runs.current() -> { id, mission, location, locationIndex, seed, isHost, test, state, tier, payTier, modifier,
+  objectiveIndex } | nil`, `report(index, evidence)` (adds `coords` and `time`), `telemetry(kind, data)`,
+  `getEntity(netId, timeoutMs)`, `control(entity, timeoutMs)` (host only), `hudDetail(text|nil)`,
+  `adoptedBy(netId)`.
+- Runs the block client halves: `prepare`, `start`, `update`, `stop`, `hostChanged` (§7.2); an `adopt` action calls
+  the new objective's `adopt(ctx, netId, from)` and the old one's `release(ctx, netId)`.
+- HUD patches and objective updates are resolved with `CP.Locale.resolveAll` before the NUI.
+- NUI client action `logResult { point, choice }` → `report(current, { type = 'log', ... })` (Business Check).
+- Telemetry loops only while on a run: ped hits by the player's vehicle, lights/siren, weapon fired, current vehicle.
 
 ### 5.11 CP.Npc — modules/npc (shared NPC behaviour for blocks)
-Server:
-- `setState(run, netId, state, extra)` — authoritative ped state in the `cp` bag:
-  `'idle'|'hostile'|'fleeing'|'surrendered'|'cuffed'|'dead'|'restrained'|'freed'|'safe'|'driving'|'stopped'`
-- `getState(netId) -> state`, `isNeutralised(netId) -> boolean` (dead or cuffed) — from the server record per net id (seeded from `run.entities[netId].bag`, mirrored back after every write), never from the replicated bag
-- `rollSurrender(run, netId, chance) -> boolean` (server rng)
-- `enableCuff(run, netId, opts)` — participants get ox_target "Cuff suspect" when state is `surrendered`
-  (`opts = { label, duration = 5000, maxDistance = 3.0 }`); a validated cuff sets `cuffed` and calls the
-  block's `onEvent` with `{ type = 'cuffed', netId }`
-- `onDeath(fn(run, netId, killerSrc|nil, killerIsParticipant))` — every mission ped death once
-  (server polls health; killer from `GetPedSourceOfDeath`, or the driver of the killing vehicle);
-  `CP.AntiCheat.onNpcKilled` is called for non-participant killers
-- `weaponDamageEvent` listener: a participant shooting a `surrendered`/`cuffed`/`restrained` ped →
-  `CP.Runs.penalize(run, 'shot_surrendered', { src })` and the owning block's `onEvent` `{ type = 'shot', netId, src }`;
-  a gun hit (not melee, not a vehicle) by an active participant on a mission ped, or a participant's gun kill
-  (noted before `entityDied`), → `CP.Runs.noteWeaponFired(run, src)`
-- `onDamaged(fn(run, netId, attackerSrc))` for blocks that care (hostages)
-- The flee clock (Config.Flee): GTA AI has no stamina, so the 1 s watcher adds the time every ped spends in
-  `'fleeing'` on foot to `rec.fleeSpent` (kept across flee/hostile flips, a surrender and a feint; a state change away
-  from fleeing counts up to that moment). Time fleeing on foot only: while `GetVehiclePedIsIn(e, false) ~= 0` (a field
-  contact's driver who bolts drives off in the `'fleeing'` state) nothing is counted and the gait is `'sprint'`; the
-  clock is kept for when he is on foot again. The gait is `'sprint'` until sprintSeconds, `'jog'` until +
-  jogSeconds, `'walk'` until + walkSeconds, then `'spent'`, each time × (1 ± jitter: one roll per ped from `CP.U.rng`
-  of the run seed and its net id, the same whenever the record is made again) × `CP.Scaling.feel().fleeMult`. No
-  active participant within recoverRange for recoverSeconds sets the clock back to 0. With armedTire = false a ped
-  whose bag or engine record is armed (never armedTruth) does not tire; with enabled = false nothing tires and no gait
-  is written (a gait already written goes back to `'sprint'`). While the ped is fleeing, a gait change is written as
-  the bag key `gait` through `setState(run, netId, 'fleeing', { gait = g })` (same state: the task and taskSeq are
-  kept, so no re-task); a ped that turns to fleeing again gets its clock's gait in the same write. A missing gait is a
-  sprint.
-- `gaitOf(netId) -> 'sprint'|'jog'|'walk'|'spent'|nil` — the clock's gait now (`'sprint'` when Config.Flee is off,
-  the ped does not tire or it sits in a vehicle; nil for a net id that is not a living ped of a live run)
-- `fleeClock(netId) -> { gait, spent, sprint, jog, walk, inVehicle }|nil` — read only: the seconds run on foot so far,
-  the seconds of running at which this ped's sprint, jog and walk end, and whether it sits in a vehicle now
-- `wornOut(netId, near) -> boolean, task|nil` — the give-up rule of a worn-out runner (Config.Flee.exhausted,
-  giveUpRange 5-100 m, read live): true when `gaitOf(netId)` is `'spent'` (so never while Config.Flee is off, for a ped
-  that does not tire or one in a vehicle), exhausted is not `'walk'` and `near` (the block's own metres to its nearest
-  participant) is within giveUpRange; the second value is the task the block writes with its own surrender: nil for
-  `'surrender'` (a missing or unknown value; he kneels, the host's surrendered re-task) or a fresh
-  `{ action = 'handsUp', args = {} }` for `'handsUp'`. It reads only the server's clock (never the bag) and not the
-  ped's state: the block checks that (§3.3 "Worn-out runners")
-- A second `weaponDamageEvent` listener (Config.NpcCombat.cancelLethalHeadshots): `CancelEvent()` for a hit with
-  `willKill` whose `parentGlobalId` is an armed, living mission ped of a live run and whose every hit is the ped of
-  an active participant of that run in routing bucket 0, not in the arena, and healthy: the server's
-  `GetEntityHealth` / `GetEntityMaxHealth` of that ped (the synced health node) give at least
-  `CP.NpcCombat.lethalCancelAbove()` (0.75) of the part above GTA's 100-point death line. willKill is any hit the
-  shooter's game expects to kill, so the shot that finishes off a hurt officer is never dropped; unknown health
-  (0) is not healthy. The only `CancelEvent` of the
-  resource (docs/INTEGRATIONS.md, Crimson-Arena rule 11). It runs after the listener above and does nothing when the event was
-  already cancelled.
-Client (host runs AI; all participants see targets):
-- `apply(entity, cfg)` — model config from the `cp` bag: accuracy, armour, health, weapon,
-  `SetPedDropsWeaponsWhenDead(ped, false)`, 
-  combat attributes by behaviour, no ragdoll/flee when hostile (relationship groups `CRIMSONPOLICE_HOSTILE`/`CRIMSONPOLICE_NEUTRAL`)
-- `task(entity, action, args)` actions: `combat` (nearest participant), `flee` (from participants, or along points, at
-  the bag's gait), `handsUp`, `kneel`, `cuffed`, `follow` (walk to coords), `cower`, `wander`, `enterVehicle`, `driveTo`, `driveRoute` (TaskVehicleDriveToCoordLongrange waypoint by waypoint)
-- Reacts to `cp` state bag changes (`AddStateBagChangeHandler('cp', ...)`) on the host: surrendered →
-  hands up then kneel; cuffed → cuffed anim + freeze; fleeing → flee; hostile → combat. A task that undoes a pose
-  (`Release`, and `kneel`) lets the ped go (`FreezeEntityPosition(ped, false)`) only when `CP.Spawn.holds(ped)` is
-  false (§5.43: he still waits for his placement); else the task runs with him frozen, and the host loop lets
-  him go once the ask is gone.
-- Server: `setPlace(run, netId, place|nil) -> bool` writes CP.Spawn's placement ask into the entity's bag, or removes
-  it (§6.2): through this module's record when it keeps one for the entity (so its later writes keep or drop the ask),
-  else into the engine's copy (`run.entities[netId].bag`); no `seq` change, nothing is re-tasked. `place` is one of the
-  bag keys `setState`'s `extra` cannot write.
-- `nearestParticipant(coords) -> ped, dist` using the run's participant list.
-- Config.NpcCombat (§5.42) in `apply`: the weapon through `CP.NpcCombat.weapon` (an older bag's automatic is
-  swapped), `CP.NpcCombat.ammo()` rounds, the accuracy at most accuracyMax, and for an armed ped not calm the caps:
-  `SetPedShootRate`, `SetPedFiringPattern`, the combat ability at most abilityMax, attributes 27 (perfect accuracy)
-  and 24 (proximity fire rate) off, 49 (enemy accuracy scaling) on, and with noCharge 13 and 50 off (also in every
-  behaviour). The firing pattern goes on again after each `TaskCombatPed`.
-- The combat governor: every participant's game (not only the host) applies those caps (settings only, never a
-  task; its only task is the flee of a tired runner below), to each armed mission ped of its run it owns (`NetworkHasControlOfEntity`), once per entity handle and bag
-  `seq`, and again when it owns the ped again after another game had it (1 s loop while on a run). On the same
-  terms it holds a calm person waiting `idle` with no `contact` in the bag (a raid's staged crew before the breach)
-  to the host's calm settings: `SetBlockingOfNonTemporaryEvents(true)` and `SetPedFleeAttributes(0, false)`, so an
-  officer aiming at him or a shot nearby never makes him run on the game OneSync gave him to.
-- Tired runners (Config.Flee, the bag key `gait` of the server's flee clock; missing = sprint, ignored unless the
-  state is `fleeing` and Config.Flee is on): the host gives every flee leg on foot at the gait's move blend ratio
-  (TaskFollowNavMeshToCoord: sprint 3.0, jog 2.0, walk and spent 1.0) and gives the current leg again when the gait
-  changes (same state: the bag handler does not re-task). A tired runner with no route left (or at its end) runs
-  navmesh legs of 40 m straight away from the nearest participant instead of TaskSmartFleePed (no speed argument):
-  to the GetSafeCoordForPed point (flags 2 + 8: not isolated, not water) when it lies at least 10 m ahead along that
-  line and no nearer to that participant than he is; none that way (a shore, a pier's end, a dead end): the same
-  40 m at 60, -60, 90 and -90 degrees off it, in turn; none at all: TaskSmartFleePed (the pacer holds it to his
-  gait). ENAV_NO_STOPPING; the next leg 5 m before the end, when stuck, or when a participant is nearer its end than
-  he is; stuck on 2 legs in a row (no navmesh path: the task stands him still): TaskSmartFleePed. A sprinting runner
-  keeps TaskSmartFleePed, a driver his car. A tired runner with no route (no `fleePoints`) whom the AI loop of the
-  game that owns him does not run (a partner's game, or the host's after it lost him for 10 s) and who stands still
-  (under 0.3 m/s) for 3 governor passes gets a flee task again from that game: the host's full flee (away legs, its
-  AI loop), or TaskSmartFleePed on any other game (it never ends; that game's pacer holds his gait).
-- The pacer: every participant's game (host or not) holds each tired runner of its run that it owns (on foot,
-  alive) to his gait every frame (`Wait(0)` while there is one): `SetPedMaxMoveBlendRatio` 2.0 (jog) or 1.0 (walk,
-  spent) and `SetPedMoveRateOverride` jogRate / walkRate (0.5-1.0), both of which last one frame; with
-  windedClipset the movement clip set `move_m@JOG@` (jog) or `move_injured_generic` (walk, spent) once
-  `RequestClipSet` has loaded it (3 s at most). A new bag reaches it in the same frame; the 1 s governor loop picks up
-  a runner OneSync hands over. It lets go in the same frame (cap 3.0, rate 1.0, `ResetPedMovementClipset`) when he
-  is no longer tired: another state, a sprint again, a vehicle, dead, Config.Flee off, another game owns him (that
-  game holds him), the run's end, the resource's stop; a game that gets back a ped a bag had marked tired, after his
-  breath came back, resets it once.
-- Animation sets: the run's end on this player's game (client:runEnded of the current run) and the resource's
-  stop let go of every animation dictionary the poses and tells loaded (`RemoveAnimDict`) and of the jog and winded
-  walk clip sets (`RemoveClipSet`, loaded or not), so they do not stay resident all session. The next run loads them
-  again when it needs them (3 s at most each).
+Files: `modules/npc/{server,client}.lua` (the headers are the full API reference), `locales/parts/npc.json`; tests
+`tests/npc_spec.lua` with the client halves `tests/fixtures/npc/client_check.lua` and `target_check.lua`.
 
-More (§13.10):
-- States `contacted`, `escorted`, `seated`, `released`, `handed_over`, `impounded`; contacted, escorted and seated are
-  protected (shot_surrendered); `isNeutralised` accepts dead, cuffed, escorted, seated and handed_over.
-- `adopt(netId, obj)`; a hidden contact is refused 'hostile' until `CP.Runs.arm` gave it its weapon.
-- excessive_force: a participant's melee or taser hit on a cuffed, escorted, seated or contacted ped
-  (weaponDamageEvent), the health-drop fallback, and validated `stun_hit` telemetry; at most once per person per 10 s.
-- `watch(run, netId, src, range)`, `inReachSince(run, netId, src) -> ms|nil`, `unwatch(netId, src)` (the dwell sampler
-  of police actions, peds and vehicles); `stunMatches(netId, windowMs)`, `runOf(netId)`.
-- `stunProof(netId)`: the server saw that person ragdoll within 1 s (the watcher's sample or `IsPedRagdoll` now). A
-  state change is no proof here (a cheat menu could send the report the moment a runner starts to run); the game
-  repeats the report every 1.5 s while he is down. Always true with `Config.AntiCheat.stunNeedsProof = 'off'`.
-- `stunCheck(run, src, netId) -> ok`: a block's `stunned` report (flee_arrest, pursuit, search_area, field_contact)
-  under `Config.AntiCheat.stunNeedsProof` (through `CP.AntiCheat.stunReport`, §5.26): `'flag'` (shipped) takes it as
-  given and, when the server saw no fall, adds one `stun_unproven` staff note per officer and run (nobody's
-  points are held); `'hold'` the same with a `stun_unproven` flag on that officer (his row is held for review);
-  `'strict'` refuses an unseen stun (the block answers `no_stun` and the person keeps running); `'off'` takes every
-  report in range with no check (the distances alone decide).
-- The `lethal` stat when a participant kills a ped of a suspect role; `Config.Custody.handcuffsItem` makes Cuff
-  suspect need that item (`err.npc_no_handcuffs`; never used or taken).
-- Client: ox_target options `crimson-police:contact_<action>` on peds and vehicles, `crimson-police:custody_escort`,
-  per door `crimson-police:seat_<action>_<door>` (bones door_dside_f, door_pside_f, door_dside_r, door_pside_r), the
-  `crimsonpolice_contact` key (Run plate from the driver seat, Hand over, Place in vehicle, Escort), host tasks for
-  escort, tells and contactAct behaviours, `stun_hit` from CEventNetworkEntityDamage.
+Server:
+- `setState(run, netId, state, extra) -> bool` — states `idle`, `hostile`, `fleeing`, `surrendered`, `cuffed`, `dead`,
+  `restrained`, `freed`, `safe`, `driving`, `stopped`, `contacted`, `escorted`, `seated`, `released`, `handed_over`,
+  `impounded`. The bag is replaced as a whole; `extra.cfg` merges into `bag.cfg`; `extra.task = { action, args }` is a
+  one-off host task identified by `bag.taskSeq`; `run`, `obj`, `state`, `seq`, `taskSeq` and `place` cannot be written
+  through `extra`; a state change drops a previous task; `seq` grows on every write; the same state without extra is a
+  no-op. Refused for an unknown state, a bad or foreign net id, an ended run, a missing entity. A hidden contact is
+  refused `hostile` until `CP.Runs.arm` armed it.
+- `getState(netId)`, `isNeutralised(netId)` (dead, cuffed, escorted, seated, handed_over) — from the server record
+  (seeded from `run.entities[netId].bag`, mirrored back), never from the replicated bag. `adopt(netId, obj)`.
+- `setPlace(run, netId, place|nil) -> bool` — CP.Spawn's placement ask into the bag or out of it (§6.2), no `seq`
+  change, nothing re-tasked.
+- `rollSurrender(run, netId, chance)` — one deterministic stream per run, each ped rolled once (repeated calls return
+  the first result); a chance above 1 is a percentage.
+- `enableCuff(run, netId, opts)` — `bag.cuff = { label (≤ 64, default npc.cuff), duration (500–60000 ms, 5000),
+  maxDistance (1–10 m, 3.0) }`; participants get ox_target "Cuff suspect" while `surrendered`. `server:npcCuff` (runId,
+  netId; 3 per 2 s) is validated: run in progress, active arrived officer not in the arena, a live surrendered cuffable
+  ped of this run within `maxDistance + 0.5`, and in reach (`maxDistance + 1.5`) for at least `duration − 2 s`
+  (sampled every second); `Config.Custody.handcuffsItem` needs that item (never used or taken,
+  `err.npc_no_handcuffs`). Then `setState('cuffed')` and `{ type = 'cuffed', netId }` to the block (a refusing block
+  does not revert it). Refusals toast `err.npc_*`.
+- Deaths: a 1 s check over every live run's peds; health ≤ 0 or a vanished entity whose record remains is a death
+  (once; `deleteEntity` is not). Killer: `GetPedSourceOfDeath` → a player's ped or the killing vehicle's driver (an NPC
+  = no player), else the last player weapon hit within 5 s; an in-arena killer is dropped. `CP.AntiCheat.onNpcKilled`
+  (outside killers) runs before `CP.Runs.entityDied` (which may end the run). `onDeath(fn(run, netId, killerSrc,
+  killerIsParticipant))`. CP.Npc never fails a run itself: the block's `onEntityDead` decides (with a 3 s grace after a
+  surrender). Participant always means an active one. A participant killing a suspect-role ped adds the `lethal` stat.
+- `weaponDamageEvent`: the shooter is the sender, except a parent NPC the sender owns (nobody); a parent naming a
+  vehicle is never a shot; at most 32 hits; returns at once when already cancelled; in-arena senders ignored.
+  - A participant shooting a `surrendered`/`cuffed`/`restrained` ped → `shot_surrendered` (personal, once per shooter and
+    ped per 2 s, never within 3 s of the surrender, any weapon but unarmed/melee/vehicle/fall; a toast with
+    `Config.Scoring.common.shotSurrendered`) and `{ type = 'shot', netId, src }` to the block.
+  - A participant's gun hit or gun kill on a mission ped → `CP.Runs.noteWeaponFired`.
+  - excessive_force: a participant's melee or taser hit on a cuffed, escorted, seated or contacted ped, the health-drop
+    fallback, and validated `stun_hit` telemetry (a taser there is force, not shot_surrendered; once per person per
+    10 s, through CP.Custody).
+  - The host-owned gap (no event for damage to one's own entities): a 1 s health + armour poll attributes a drop with no
+    event in the last 2 s via `GetPedSourceOfDamage` (an NPC, a driver, or a player only when he owns the ped); a drop
+    with no source is ignored.
+  - `onDamaged(fn(run, netId, attackerSrc))` for `hostage` peds only, one report per ped and attacker per second;
+    `{ type = 'damaged' }` to the block only for a participant attacker.
+- A second listener (`Config.NpcCombat.cancelLethalHeadshots`): `CancelEvent()` for a `willKill` hit from an armed
+  living mission ped on active participants in bucket 0, not in the arena, whose synced health is at least
+  `CP.NpcCombat.lethalCancelAbove()` (0.75) of the part above 100 (so the shot that finishes a hurt officer is never
+  dropped). The only `CancelEvent` of the resource (Crimson-Arena rule 11).
+- Dwell sampler for police actions: `watch(run, netId, src, range)`, `inReachSince(run, netId, src)`, `unwatch` (a
+  sample out of range restarts it). `stunMatches(netId, windowMs)`, `runOf(netId)`, `stunProof(netId)` (a ragdoll the
+  server saw within 1 s; a state change is no proof; true with `stunNeedsProof = 'off'`), `stunCheck(run, src, netId)`
+  (a block's `stunned` report through `CP.AntiCheat.stunReport`, §5.26).
+- Flee clock (Config.Flee; GTA AI has no stamina): the 1 s watcher adds every ped's time fleeing on foot to
+  `rec.fleeSpent` (kept across flips; nothing counts in a vehicle). Gait `sprint` until sprintSeconds, `jog`, `walk`,
+  then `spent`, each × (1 ± jitter, one roll per ped from the seed) × `CP.Scaling.feel().fleeMult`; no participant
+  within recoverRange for recoverSeconds resets it; `armedTire = false` keeps armed peds fresh; `enabled = false` = no
+  tiring. A gait change is written as bag key `gait` in the same `fleeing` state (no re-task). `gaitOf(netId)`,
+  `fleeClock(netId)`, `wornOut(netId, near) -> bool, task|nil` (spent, `Config.Flee.exhausted` not `'walk'`, within
+  `giveUpRange`; task nil = kneel, or `{ action = 'handsUp' }`; the block checks the ped's state, §3.3).
+- `playerDropped` forgets that player's reach samples and shot windows.
+
+Client (the host runs the AI; every participant sees targets):
+- `apply(entity, cfg)` — never heals on a new host (health only on an untouched ped, armour only when 0); max health and
+  weapons ensured; `SetPedDropsWeaponsWhenDead(false)`; calm states disarmed and in `CRIMSONPOLICE_NEUTRAL`, else
+  `cfg.group`. Hostile: flee attributes off, combat attributes 17 off / 58 on, no ragdoll from player impact (ragdoll
+  from weapons stays: stuns), blocked non-temporary events, `SetPedDiesWhenInjured(true)`. Config.NpcCombat (§5.42):
+  the weapon via `CP.NpcCombat.weapon`, ammo, accuracy ≤ accuracyMax, and for an armed ped `SetPedShootRate`,
+  `SetPedFiringPattern` (again after each `TaskCombatPed`), ability ≤ abilityMax, attributes 27 and 24 off, 49 on, with
+  noCharge 13 and 50 off.
+- Relationship groups: HOSTILE hates PLAYER (5), 0 to itself, 3 to NEUTRAL and common ambient/gang groups (incl.
+  sc-npcpolice's NPCCALL_HOSTILE / NPCCALL_RIVAL); NEUTRAL 3 to everything; PLAYER's own relations are never set.
+  "Hostile only to participants" is enforced by targeting (combat on participants only, no guard task).
+- `task(entity, action, args)`: `combat`, `flee` (from participants or along points, at the bag's gait), `handsUp`,
+  `kneel`, `cuffed`, `follow`, `cower`, `wander`, `enterVehicle`, `driveTo`, `driveRoute`. Speeds are m/s (`kmh`
+  accepted); a numeric `drivingStyle` wins over the name (`careful` 786603, `normal` 786475, `fast` 786492, `reckless`
+  787004). Routes start at `args.startIndex` or the nearest point ahead; a waypoint is reached within `max(12 m, 1.2 ×
+  speed, stopRange + 4)` (2.5 m on foot) or when passed close by; a flee route ends in `TaskSmartFleePed`.
+- The host's AI loop (500 ms while it manages a ped): retargets combat every 3 s (switching when another participant
+  is 40 % closer); with nobody a hostile stands still (never `TaskGuardCurrentPosition`, which attacks bystanders);
+  steps routes, re-tasks stuck peds, keeps poses playing. A managed task ends on a state change or leaving the vehicle.
+  Identical pose/combat tasks are ignored, movement tasks debounced 1.5 s.
+- `cp` bag handler: waits one frame, applies cfg once per handle after `CP.Runs.control`, re-tasks only on a state or
+  task change (surrendered → hands up then kneel; cuffed → pose and freeze; fleeing → flee; hostile → combat); a pose
+  release unfreezes only when `CP.Spawn.holds(ped)` is false (§5.43). On `client:hostChanged` to this client every ped
+  is re-applied. Every client marks every ped with a cp bag `SetPedDropsWeaponsWhenDead(false)` + `SetPedMoney(0)`
+  (OneSync may move a dying ped to anyone).
+- The combat governor (every participant's game, 1 s while on a run): applies the combat caps to each armed mission ped
+  it owns, once per handle and `seq`, and holds a calm `idle` person without `contact` (a raid's staged crew) calm
+  (`SetBlockingOfNonTemporaryEvents`, flee attributes 0).
+- Tired runners: the host runs each foot leg at the gait's move blend ratio (sprint 3.0, jog 2.0, walk/spent 1.0) and
+  re-gives it on a gait change; with no route left, 40 m navmesh legs straight away from the nearest participant to a
+  `GetSafeCoordForPed` point (then ±60°, ±90°, then `TaskSmartFleePed`); stuck twice → `TaskSmartFleePed`. A runner
+  standing still on a game that does not run his AI gets a flee task again from it. The pacer (every game, `Wait(0)`
+  while it owns one) holds each owned tired runner to his gait every frame (`SetPedMaxMoveBlendRatio`,
+  `SetPedMoveRateOverride` jogRate/walkRate, clip sets `move_m@JOG@` / `move_injured_generic` with `windedClipset`),
+  and lets go in the same frame when he is no longer tired.
+- "Cuff suspect": global ped options `crimson-police:cuff` and up to 8 `crimson-police:cuff:<n>` for other labels
+  (ox_target labels are static); canInteract checks the ped's run, state, label, distance, on foot, alive, not in the
+  arena. The bar is cancelled when the suspect stops being surrendered, moves out of reach + 1 m, or Crimson-Arena
+  places the player. The option set (with the contact, custody and seat options) exists only while on a run (added
+  one frame after `client:start`, removed after `client:runEnded` once the eye menu is closed).
+- `nearestParticipant(coords)`. The run's end and resource stop release the animation dictionaries and clip sets.
+  `client:runEnded` of another run only drops its cached participant list.
 
 ### 5.12 CP.Route — modules/route (Hard rule 17)
-Server: `begin(run, src)`, `stop(run, src)`, `status(run, src) -> { status, secondsLeft, recalcsLeft, distance }`;
-handles `server:routeStatus` (runId, metres, coords) and `server:recalcRoute` (runId); arrival check
-(ped within `location.start.radius` of `location.start.coords`) every 1 s → `CP.Runs.markArrived`;
-off-route timing per `Config.Route`; drift check; `client:routeWarning` (runId, secondsLeft|nil);
-abandons with `off_route`. Test runs with `useStartRoute = false`: only the arrival check.
-`Config.Route.required` (the owner's switch for Hard rule 17, shipped `true`) is locked at accept as
-`run.routeRequired` (sent in `client:start` as `routeRequired`; a test run is always `true`, its Start route switch
-decides): with `false` the reports, Recalculate and the arrival check stay, but no warning, countdown, drift check or
-`off_route` end; `status` carries `required` and `CP.Runs.view` copies it to `route.required`.
-`requiredFor(run) -> boolean` is the one decision: `run.routeRequired` once locked; before the lock (CP.Runs
-calls it in `create`) a test run `true`, a live crime (`run.live`) `Config.LiveCrime.requireRoute == true` (shipped
-false: no warning, countdown, drift check, `off_route` end or type cooldown from it; the GPS line, Recalculate and the
-start timeout stay), every other run (NPC missions and volunteer suspects) `Config.Route.required`. Late joiners
-begin with the run's locked value.
-First contact (`Config.RealSuspects.routeEnds`, shipped `'first_contact'`): in a case with a real suspect
-(`run.realSuspect`) the 1 s tick, before the distance-to-start test, counts a participant as arrived (`markArrived`,
-the route watch stops) when `CP.Opponents.nearAny(run, coords, contactRange)` is true; `'start'` = only the start.
-Late partners (owner decision; `Config.Route.lateArriveRange`, shipped 150 m, 0 = off): once
-`run.state == 'in_progress'`, the 1 s tick switches a participant who has not arrived to mode `'action'` once: no
-warning, report, drift or `off_route` check any more (with `required` on or off), reports and Recalculate are refused,
-`status` is `{ status = 'action', distance, secondsLeft }` (metres to the action; the seconds until his start
-deadline) and he gets `client:routeStatus` (runId, that status) plus a `run` push. He arrives (`markArrived`, as at the
-start) inside the start circle or within the range of `CP.Runs.actionPoints(run)` (anywhere inside a pointer circle).
-on that switch `CP.Runs.extendStart(run, src, Config.Route.followActionSeconds)` (shipped 300; 300 when the
-key is missing, 0 = not called) moves his start deadline (`p.deadline`, os.time, the one TickRun removes him at with
-`start_timeout`) to now + that, never earlier than it was; only an active participant who has not arrived.
-Client: `begin(runId, startCoords)` (waypoint + GPS sampling every `Config.Route.sampleEvery` m with
-`GetPosAlongGpsTypeRoute`), `recalculate()`, `stop()`, reports every `Config.Route.reportEvery` s;
-client actions `setGps`, `recalcRoute` registered with `CP.Tablet.registerClientAction`. `current() -> { runId,
-arrived, routeOn, action }`. `follow(runId, dropStart, secondsLeft) -> boolean` (CP.Runs calls it on
-`client:routeStatus` 'action' with that status' secondsLeft): a new token stops the sampling and the reports, a pending
-Recalculate resolves, the HUD route is `{ status = 'action', secondsLeft }` (the HUD counts it down and, like the run
-bar, shows it from 120 s, `ACTION_LEFT_SHOWN`);
-`dropStart` (CP.Markers `leads`) removes the start pin (line off first) and our start waypoint before `action` is set,
-so CP.Markers' objective line is his one line; without it the pin loses its line and our waypoint stays (put back when
-he has none). `setGps` / `recalcRoute` then answer `err.route_action`; arrival toasts `route.arrived_action`.
-The named start pin (`Config.Markers.startBlip`, look `Config.Markers.kinds.start` through
-`CP.Markers.style`) lives from `begin` until arrival / `stop`. Its blip route is on while the route is sampled (the
-radar-blip slot is read first) and afterwards only while our waypoint is gone (`IsWaypointActive` /
-`GetFirstBlipInfoId(8)` more than 15 m from the start), re-checked with every report and switched only on change;
-`setGps` turns it off at once. `startBlip = false`: the pin exists only while the route is sampled.
+Files for §5.12–§5.15: `modules/route/{server,client}.lua`, `modules/calls/server.lua`, `modules/alerts/server.lua`,
+`modules/downed/{server,client}.lua`, `locales/parts/safety.json`; tests `tests/safety_spec.lua`. Only the numbers
+come from `Config.Route` / `Calls` / `Alerts` / `Downed`, read at call time. Their events are in the table below.
+
+Server: `begin(run, src)`, `stop(run, src)`, `status(run, src) -> { status, secondsLeft, recalcsLeft, distance,
+required }` (`'off'` only while the warning is shown; `distance` is the straight line, the HUD's the polyline left),
+`requiredFor(run)`.
+- Arrival: every 1 s, the ped within `location.start.radius` of the start (2D) → `CP.Runs.markArrived` in its own
+  thread (then `CP.Alerts.set`, idempotent); the arrived state is kept. For Manhunt, when objective 1 is a
+  `search_area`, the larger of the start and its starting circle counts. The tick also begins the route for any active
+  participant without one (a missed `begin` cannot skip rule 17).
+- Reports (`server:routeStatus`) count only for the sender's active run, with finite metres ≥ 0 and coords within
+  `max(maxDeviation, 150 m)` of the server ped. Off route starts at the first report above `maxDeviation`, or
+  `reportTimeout` s after the last good report (the first report has `reportTimeout` from `begin`); the warning comes
+  after `warnAfter` s off and every second with the seconds left; the run is abandoned `off_route` after
+  `abandonAfter` s in one stretch. A good report ends the stretch and withdraws the warning. The tablet's view is
+  pushed when the warning appears, goes, and after a granted recalculation. Drift check per `Config.Route`.
+- Recalculate (`server:recalcRoute`, ≤ `maxRecalcs`) ends the off stretch and gives a fresh `reportTimeout`; the drift
+  reference is not reset.
+- `Config.Route.required` (shipped true) is locked at accept as `run.routeRequired` (sent in `client:start`; copied to
+  the view's `route.required`). `requiredFor(run)`: the locked value, else a test run true, a live crime
+  `Config.LiveCrime.requireRoute` (shipped false), every other run `Config.Route.required`. With false the reports,
+  Recalculate and arrival stay, but no warning, countdown, drift check or `off_route` end. Late joiners begin with the
+  locked value. Tests with `useStartRoute = false`: only the arrival check.
+- First contact (`Config.RealSuspects.routeEnds = 'first_contact'`): in a real-suspect case a participant also arrives
+  when `CP.Opponents.nearAny(run, coords, contactRange)`.
+- Late partners (`Config.Route.lateArriveRange`, 150 m, 0 = off): once the run is in progress a participant who has not
+  arrived switches once to mode `'action'` (no warning, reports, drift or off_route; Recalculate refused,
+  `err.route_action`), gets `client:routeStatus` and a `run` push, and arrives inside the start circle or within range
+  of `CP.Runs.actionPoints(run)`. `CP.Runs.extendStart(run, src, Config.Route.followActionSeconds)` (300) moves his
+  start deadline to now + that, never earlier.
+
+Client: `begin(runId, startCoords, { startRoute, radius })` (waypoint and GPS sampling every `Config.Route.sampleEvery`
+m from a temporary route blip, slot 1 then 0; no route within 5 s → the straight line and `route.no_gps`; also started
+1 s after `client:start` as a fallback), `recalculate()`, `stop()` (never touches the HUD; removes the waypoint only
+while it points at our start), reports every `Config.Route.reportEvery` s, `current() -> { runId, arrived, routeOn,
+action }`, `follow(runId, dropStart, secondsLeft)` (on the `'action'` status: stops sampling, HUD route `{ status =
+'action', secondsLeft }` shown from 120 s; `dropStart` (CP.Markers `leads`) removes the start pin and waypoint so the
+objective line is his one line). Client actions `setGps` (re-sets the waypoint) → `{ runId }`, `recalcRoute` →
+`{ recalcsLeft }` or `err.route_inactive|route_arrived|route_disabled|route_no_recalcs|busy|timeout`. The named start pin
+(`Config.Markers.startBlip`, look `kinds.start`) lives from `begin` to arrival; its blip route is on while sampled and
+afterwards only while our waypoint is gone; `startBlip = false`: the pin exists only while sampled.
+
+| Event | Direction | Args | Notes |
+|---|---|---|---|
+| `server:routeStatus` | C → S | runId, metres, coords | plain; ≥ 0.9 s apart per player |
+| `server:recalcRoute` | C → S | runId | plain; 1 per 2 s; always answered with `client:routeRecalc` |
+| `server:pickupDone` | C → S | runId, ok? | plain; 2 per 5 s (downed) |
+| `client:routeWarning` | S → C | runId, secondsLeft \| nil | every second while shown; nil = withdrawn |
+| `client:routeRecalc` | S → C | runId, ok, recalcsLeft | |
+| `client:routeStatus` | S → C | runId, RouteStatus | on arrival and on the switch to `'action'` |
+| `client:pickup` | S → C | runId, dropOff | |
+| `client:pickupCancel` | S → C | runId | a cancel after `client:pickup`: fade back in, never teleport |
+| `client:requestEMS` | S → C | runId | |
+| `client:downedEnded` | S → C | runId, reason | once, whenever a downed entry leaves the pending stages |
 
 ### 5.13 CP.Calls — modules/calls (Hard rule 15)
-- `isOnCall(src) -> boolean` (a live real-call responding entry, `Config.Calls.respondingExpiry`)
-- `isOnCall(src, { except = set })`: entries matching an `exemptFor`-shaped set are ignored (a claim of that case)
-- `exemptFor(run) -> { exact = { [id] = true }, prefixes = { ... } }` (critic C1 / C15): exact = the case's own
-  call (`run.live.dispatchId`, as sent and normalized); prefixes = `'<prefix><src>_'` for every participant and every
-  suspect (`CP.Opponents.caseOf(run)`, the watch's server ids) with each `ownRunCallPrefixes` entry plus `shots_`
-- Listens through `CP.Dispatch.onResponding` / `onCallCleared`; npccall- ids never end a run;
-  own-run call ids (`Config.Calls.ownRunCallPrefixes` + `<partnerSrc>_`) are ignored for partners; on a run with
-  `run.realSuspect` every id that matches `exemptFor(run)` is ignored too;
-  only `CP.Dispatch.lookupActiveCall` hits count; ends the run with `real_call` and within
-  `Config.Calls.dodgeWindow` of an un-mark calls `CP.Runs.reclassify(..., 'real_call_cancelled')`.
-- An admin's **Treat as a normal abandon** (CP.LiveCtl, §5.39) uses the same `CP.Runs.reclassify` on a free abandon
-  of the last 24 h, found from the saved rows (`end_reason = 'real_call'`), never from this module's memory.
+- `isOnCall(src, { except })` — a live real-call responding entry (`Config.Calls.respondingExpiry`; each re-checked in
+  mdt_dispatch at most every 10 s, may yield); `except` ignores entries matching an `exemptFor` set.
+- `exemptFor(run) -> { exact, prefixes }` — the case's own call (`run.live.dispatchId`) and `'<prefix><src>_'` for
+  every participant and suspect with each `Config.Calls.ownRunCallPrefixes` entry plus `shots_`.
+- Classifying a mark (`CP.Dispatch.onResponding`): NPC prefix (no lookup) → `lookupActiveCall` (only a hit counts) →
+  NPC prefix on the canonical id → own-run prefixes (any participant of the sender's run, also partners who left) →
+  in a real-suspect case `exemptFor(run)` → a real call: the run ends `real_call` (a sender not on a run is just
+  recorded). The map is keyed by the canonical id with the raw form as alias.
+- Dodge rule: an un-mark within `Config.Calls.dodgeWindow` of the free abandon (the same call, or one never marked;
+  a dispatcher detach looks the same) → `CP.Runs.reclassify(..., 'real_call_cancelled')`. An un-mark that arrives
+  during the lookup or while the row is written is applied once the row exists.
+- Every free abandon is audited (`free_abandon`, flags, with the count of the last 24 h); an admin's **Treat as a
+  normal abandon** (§5.39) reclassifies a saved `real_call` row of the last 24 h.
 
 ### 5.14 CP.Alerts — modules/alerts (Hard rule 16; the only writer of the crimsonArena bag)
+The full rule set is the Crimson-Arena section of `docs/INTEGRATIONS.md` (rules 1–3, 9).
 - `set(src, run)` → `Player(src).state:set('crimsonArena', { active = true, source = 'crimson-police' }, true)`;
-  refused (false, one log line per run) for a run with `run.realSuspect` while `Config.RealSuspects.officerAlerts` is
-  not `'silenced'` (`alertsGoOut(run)`, shipped `'normal'`: the officers' own calls go out); with `'silenced'` only an
-  active participant gets it (a suspect never does)
-- `releaseRun(run) -> n`: clears every active participant's flag of ours once a run became a case with a real
-  suspect (a volunteer who says yes after an officer arrived); nothing while `alertsGoOut(run)` is false
-- `clear(src)` → only when the current value's `source == 'crimson-police'`; sets it to nil (replicated)
-- `has(src) -> boolean` (our flag is on)
-- `foreignFlag(src) -> boolean` — a `crimsonArena` value with `active == true` whose `source` is not `'crimson-police'` (Crimson-Arena's). `set` does nothing (returns false) while a foreign flag is present.
-- `inArena(src) -> boolean` — `foreignFlag(src) or GetPlayerRoutingBucket(src) ~= 0` (the gate every module uses)
-- `wanted` intent table, re-assert of our flag after a foreign wipe, `foreignClearedAt[src]` — see docs/INTEGRATIONS.md, Crimson-Arena rules 1–3 and 9
-- `hold(src, on)` (CP.Downed keeps a downed participant's flag), `forget(src) -> boolean` — drops our intent, hold, orphan timer and queued re-assert **without touching the bag** (CP.Runs uses it when an in-arena participant leaves; Crimson-Arena rule 1)
-- Start: removes leftover Crimson-Police flags from every online player. Stop: clears all.
-- Backstop listeners (shots fired within `Config.Alerts.backstopRadius` of the run's start or the
-  participant's objective area; person down/dead while flagged) → clear after `Config.Alerts.backstopDelay` s.
-  Skipped for runs where `alertsGoOut(run)` is true.
-
-Also: the 1 s reconcile fires `arena:exited (src)` once when `inArena(src)` turns false (flag cleared, or the
-bucket back to 0 with no flag change).
+  refused in a routing bucket ≠ 0, over any value that is not ours, and in a real-suspect case while
+  `Config.RealSuspects.officerAlerts` is not `'silenced'` (`alertsGoOut(run)`; with `'silenced'` only active
+  participants, never a suspect). `releaseRun(run)` clears our flags once a run became such a case.
+- `clear(src, { force })` — only our value; ignored while CP.Downed holds it (`hold(src, on)`) unless forced.
+  `forget(src)` drops our intent, hold, orphan timer and queued re-assert without touching the bag (rule 1).
+- `has(src)`, `foreignFlag(src)` (an active value whose source is not ours), `inArena(src)` (`foreignFlag` or bucket
+  ≠ 0: the gate every module uses), `onInArena(fn(src, run))`, `foreignClearedAt[src]` (a table, recorded from the
+  change handler's old value, so an exit counts even when we never saw the foreign value).
+- An in-arena participant is removed here (`removeParticipant(run, src, 'quit', { notify = 'run.left_for_arena' })`
+  after `forget`, `CP.Route.stop`, `CP.Downed.cancel`) or by the engine's own re-check, whichever runs first. Our flag
+  is re-asserted after a foreign wipe. An intent whose run no longer lists the player is removed after 3 s; a value of
+  ours left on a player who moved bucket is removed once he is back in bucket 0 with no intent.
+- The 1 s reconcile fires `arena:exited (src)` once when `inArena` turns false.
+- Backstop (not for runs where `alertsGoOut` is true): shots fired within `Config.Alerts.backstopRadius` (3D, of the
+  start or `CP.Runs.anchor`) of a flagged or arrived participant, or a flagged person down/dead → clear the call after
+  `Config.Alerts.backstopDelay` s (repeated when an earlier clear may have run before the call existed).
+- Start: removes leftover flags of ours from every player; stop: clears all.
 
 ### 5.15 CP.Downed — modules/downed (Hard rule 18)
-Server: every `Config.Downed.checkEvery` s checks active participants with `CP.Qbx.isDowned`;
-downed → `CP.Runs.removeParticipant(run, src, 'downed', { keepFlag = true })`, run stats `downs + 1`;
-no EMS (`CP.Ambulance.doctorCount() == 0`) → after `Config.Downed.pickupDelay` s `client:pickup`
-(runId, dropOff) then `CP.Ambulance.revive(src)` then `CP.Alerts.clear(src)`; EMS on duty →
-`CP.Alerts.clear(src)` then `client:requestEMS` (runId). Once per downed participant; cancelled on drop/unload.
-Also reacts at once to `CP.Qbx.onMetaDataChange` (`isdead` / `inlaststand` set to true).
-`handle(run, src) -> boolean` *(hook, from CP.Runs.endRun)*: holds the flag and removes the participant with
-`{ keepFlag = true }` before anything yields, then starts the pick-up / EMS flow in its own thread; false (nothing
-done) when they are not active, in the arena, the run ended, or that down is already past the leave.
-`cancel(src, reason)`, `isPending(src)`.
-`reasonFor(run) -> 'downed'|'downed_case'|'downed_kept'`: in a case with a real suspect and
-`Config.RealSuspects.downed ~= 'failed'` (shipped `'keep_earned'`) a live officer leaves with `downed_case` and a
-volunteer-suspect officer with `downed_kept` (§4.3; `CP.Runs.endRun` uses it too); every such case waits
-`Config.RealSuspects.downedPickupDelay` (shipped 400 s, sc-ambulance's DeathTime) instead of `Config.Downed.pickupDelay`.
-Client: `client:pickup` → fade out, overlay "Picked up by an NPC unit", wait for revive, detach, move to the drop-off, fade in; `client:requestEMS` → `CP.Ambulance.sendEMSRequest()`.
-End of the follow-up: every way an entry leaves the pending stages (done, every cancel reason, the EMS hand-over)
-sends `client:downedEnded` (runId, reason) once. The client tracks its own fade and overlay (set before the call that
-shows them, cleared after the one that removes them); a pick-up still running for that run stops as on
-`client:pickupCancel`, otherwise anything of ours still on screen is undone. C `restore(why) -> boolean`: the same
-safety net, a no-op while a pick-up runs; CP.Runs calls it at every run cleanup. `server:pickupDone` is sent once per
-pick-up (before the screen is restored), and a pick-up whose abort fails still ends and clears `busy()`.
+- Server: every `Config.Downed.checkEvery` s, and at once on `onMetaDataChange` (`isdead` / `inlaststand`), active
+  participants with `CP.Qbx.isDowned` leave through `removeParticipant(run, src, reasonFor(run), { keepFlag = true })`
+  (a down is counted once). Then, once per down (cancelled on drop/unload): no EMS (`doctorCount() == 0`) → after
+  `Config.Downed.pickupDelay` s EMS is checked again, then `client:pickup (runId, dropOff)`, the revive 1.5 s later
+  (`CP.Ambulance.revive`), the flag removed on `server:pickupDone` or 30 s after; EMS on duty → `CP.Alerts.clear` then
+  one `client:requestEMS` — except when our flag was off and `inlaststand` was true (sc-ambulance sends its own alert).
+- `handle(run, src) -> bool` *(hook, from CP.Runs.endRun)*: holds the flag and removes the participant before anything
+  yields, then the follow-up in its own thread; false when not active, in the arena, or already past.
+  `cancel(src, reason)`, `isPending(src)`. A down that left a run with nobody active and still open after 5 s ends it
+  `failed`/`mission_failed`.
+- `reasonFor(run)`: `downed`, or in a real-suspect case with `Config.RealSuspects.downed ~= 'failed'` (shipped
+  `'keep_earned'`) `downed_case` (live officer) / `downed_kept` (volunteer-suspect officer) (§4.3); those cases wait
+  `Config.RealSuspects.downedPickupDelay` (400 s, sc-ambulance's DeathTime).
+- Every way an entry leaves the pending stages (done, gave up, timeout, every cancel reason, the EMS hand-over) sends
+  `client:downedEnded` once.
+- Client: `client:pickup` → fade out, overlay "Picked up by an NPC unit", wait up to 20 s for the revive (revived =
+  both metadata false and the ped alive; no metadata after a logout is never revived: abort, no teleport), move to the
+  drop-off, fade in; `server:pickupDone` goes first and once. `client:requestEMS` → `CP.Ambulance.sendEMSRequest()`. The
+  client tracks its own fade and overlay; `client:downedEnded` / `client:pickupCancel` stop a running pick-up or undo
+  what is left, and `restore(why)` is the same safety net (a no-op while a pick-up runs; CP.Runs calls it at every
+  cleanup). The pick-up thread always clears `busy()` and restores the screen, even when its abort fails.
 
 ### 5.16 CP.Units — modules/units
-Server: `unitOf(src) -> unit|nil` (`unit = { id, leader, members = { src... }, invites = { [src] = expiresAt }, locked }`),
-`members(src) -> { src... }` (solo: `{ src }`), `isLeader(src)`, `lock(unit)`, `unlock(unit)` *(hook: runs call it when the run ends)*,
-`remove(src)`; handles `server:unitInvite` (targetSrc), `server:unitRespond` ({ accepted, unitId }),
-`server:unitLeave`; callback `getUnit` → UnitView (§9.4). Pushes `unit` topic to members.
-Client: nothing beyond NUI (optional toast on invite).
-Full admin control (§5.39): `adminList() -> AdminUnit[]` (§9.5), `adminGet(unitId) -> unit|nil`,
-`adminRemove(unitId, src) -> ok, data|errKey` and `adminDisband(unitId) -> ok, data|errKey`: refused while the unit is
-locked for a run (`err.live_unit_locked`), in a ready check (`err.live_unit_ready_check`) or has a member on a run
-(`err.live_unit_on_run`); the members get the leader-kick and disband toasts (`unit.admin_removed_you`,
-`unit.admin_removed`, `unit.admin_disbanded`). Units stay memory-only.
+Files for §5.16–§5.17: `modules/{units,operations}/{server,client}.lua`, `locales/parts/teams.json`, web
+`officer/screens/Unit.tsx`, `supervisor/screens/CrossDept.tsx`, `supervisor/components/OperationPanel.tsx` (props `{
+scope: 'sup' | 'admin' }`, never wrapped in `<Screen>`), `officer/components/ReadyCheckBanner.tsx`, `types/teams.ts`
+(every view shape), `mocks/teams.mock.ts` (`?teams=leader|member|solo|invites|locked|lockedoff|long|full`,
+`?op=joining|running|waiting|none|cooldown|empty|fresh`, `&lua=1`); tests `tests/teams_spec.lua` (its own database
+`<run database>_teams`). Both screens normalise lists first (Lua sends `{}` and drops nil keys).
 
-More (§13.25): `kick(src, target)`, `promote(src, target)`, `disband(src)` (leader
-only; `err.unit_locked` once a type is accepted; a kicked officer can't be invited by that unit for
-`Config.Units.kickReinvite` s), `cancelInvite(src, target)` (leader or inviter), `Config.Units.invitePolicy`
-('anyone' | 'leader'), `readyCheck(unit, typeKey, onReady, onCancel, extra?) -> started` (units of 2+: every member
-but the leader gets `client:readyCheck` with the type and `extra.twists`, never the mission; the ReadyCheckView has
-`twists` too; all accept → onReady once; a decline, the timeout
-(`Config.Units.readyTimeout`), leaving, off duty, a real call or the arena → `onCancel(reasonKey, srcs)`; nobody gets
-a cooldown), `lastPartners(src)` (900 s), distance bands (`Config.Units.nearbyBands`, server coordinates), UnitView
-additions (canManage, readyCheck, avatars, levels, distanceBand, lastPartner, pendingSent, sizeFit counts only).
-Actions `server:unitKick`, `server:unitPromote`, `server:unitDisband`, `server:unitCancelInvite`, `server:unitReady`;
-key mapping `crimsonpolice_ready` (Config.Tablet.readyKey).
+Units live in memory only (a restart drops them, as it drops runs).
+- `unitOf(src) -> { id, leader, members = { src }, invites = { [src] = expiresAt }, locked } | nil`, `members(src)`
+  (solo `{ src }`), `isLeader(src)`, `view(src)`, `remove(src)` (never touches runs; called on drop, unload and
+  `CP.Access.onLost`; cancels invites to that player).
+- Forming unit = the first inviter plus pending invites; it dissolves when its last invite expires or is declined,
+  and at `lock`. Any member may invite (`Config.Units.invitePolicy = 'leader'`: only the leader,
+  `err.unit_invite_leader_only`, view `unit.blocked_policy`); the cap is `members + open invites <
+  Config.Limits.maxUnitSize`. Invites last 120 s, one per (unit, target); joining drops the officer's other invites;
+  accepting while in another unlocked unit moves him. Inviters and targets must be on-duty officers, not on a run, not
+  in the arena (`err.in_arena`), not in a full or locked unit. The invitee gets one `unit` push with `invited = true`
+  and a toast.
+- Leader succession: `members` is in join order; when the leader leaves `members[1]` leads; one member left dissolves
+  the unit.
+- `lock(unit)` (withdraws pending invites), `unlock(unit|id)` *(hook: at run end)* — ignored while a member is still
+  on a normal run (no operation, no test) or a ready check is pending; a unit locked 30 s with nobody on a normal run
+  is unlocked by the 2 s sweep.
+- `server:unitLeave` while locked and on a normal run → `removeParticipant(run, src, 'quit')` first; operation and
+  test runs are left alone. A player who no longer qualifies may still leave.
+- Leader controls (refused with `err.unit_locked` once a type is accepted): `kick(src, target)` (no cooldowns; that
+  unit cannot invite him for `Config.Units.kickReinvite` s, `err.unit_kicked_recently`), `promote(src, target)`,
+  `disband(src)`, `cancelInvite(src, target)` (leader or inviter).
+- `readyCheck(unit, typeKey, onReady, onCancel, extra?) -> started` — from `CP.Draw.accept` after the lock for units of
+  2+ (false = no check needed). The leader's accept is his answer; every other member gets `client:readyCheck` with the
+  type and `extra.twists`, never the mission. All Ready → `onReady` once. A decline, the timeout
+  (`Config.Units.readyTimeout`), a member leaving, off duty, disconnecting, in the arena or on a real call →
+  `onCancel(reasonKey, srcs)` (`err.unit_ready_declined|timeout|cancelled`, toasts name who did not answer); nobody
+  gets a cooldown. A second check while one is pending → `onCancel('err.busy')`. The last Ready re-checks the arena.
+- `lastPartners(src)` (the online officers of his last ended non-test run, 900 s), distance bands
+  (`Config.Units.nearbyBands`, server coords).
+- UnitView extras: `me`, `maxSize`, `inviteTtl`, `canInvite`, `inviteBlocked`, `onRun`, `unit.canManage`,
+  `unit.readyCheck`, `unit.pending`, members' `avatar` and `level`, `invitable[].distanceBand` / `lastPartner`,
+  `pendingSent`, `sizeFit = { [type] = { now, plusOne } }` (pool counts only), `operation` (`officerCard`).
+- Full admin control (§5.39): `adminList()`, `adminGet(unitId)`, `adminRemove(unitId, src)`, `adminDisband(unitId)` —
+  refused while locked (`err.live_unit_locked`), in a ready check (`err.live_unit_ready_check`) or with a member on a
+  run (`err.live_unit_on_run`).
+
+| Kind | Name | Payload → reply |
+|---|---|---|
+| action | `server:unitInvite` | `targetSrc` or `{ targetSrc }` → `{ unitId, expiresIn }` |
+| action | `server:unitRespond` | `{ accepted, unitId }` or a boolean (newest invite) → `{ unitId, accepted }` |
+| action | `server:unitLeave` | → `{ left, abandoned }` |
+| callback | `getUnit` | → UnitView |
+| action | `server:unitKick` / `server:unitPromote` | `{ targetSrc }` → `{ kicked }` / `{ leader }` |
+| action | `server:unitDisband` | → `{ disbanded }` |
+| action | `server:unitCancelInvite` | `{ targetSrc }` → `{ cancelled }` |
+| action | `server:unitReady` | `{ accepted }` or a boolean → `{ accepted }` (the key mapping sends it without a reply id) |
+| client event | `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName, twists }` or nil to clear |
+| key mapping | `crimsonpolice_ready` | `Config.Tablet.readyKey`: answers Ready |
+| push | `unit` | `{ unitId|false, invited?, readyCheck? }` to members and invitees; `board` to members |
 
 ### 5.17 CP.Operations — modules/operations (Cross-Department Missions)
-Server: `active() -> op|nil`, `isLocked() -> boolean`, `boardCard(src) -> card|nil`, `launch(src, missionId)`,
-`startNow(src)`, `relaunch(src)`, `cancel(src, reason)`, `join(src, opId)` (`server:joinOperation`),
-`onRunEnded(run, state)` *(hook)*, idle auto-cancel, launch cooldown, notifications to every on-duty
-officer (`client:operation` (state, missionLabel)). Actions `server:sup:op*` and `server:admin:op*`
-(§8). Callback `sup:getOperation`.
+- `active()`, `isLocked()` (joining, running, waiting), `view`, `boardCard(src)`, `officerCard(src)`,
+  `cooldownLeft()`, `eligible(def)` (published and enabled, `departments` empty, `maxOfficers >= 2`, never the boss).
+- `launch(src, missionId)` — `Config.CrossDept.enabled ~= false`, no active operation, the cooldown over (counted from
+  the last persisted `created_at`; an admin may skip it with `{ skipCooldown = true, reason }`, audited
+  `opLaunchSkipCooldown`), an eligible mission, not during maintenance. `launched_by` = the actor's citizenid.
+- Joining: `join(src, opId)` re-checks the state after the checks that may yield, so two joins never pass the cap
+  together. Minimum to start = max(`Config.CrossDept.minParticipants`, the mission's `minOfficers`); maximum =
+  `Config.CrossDept.maxParticipants`. Waitlist (`Config.CrossDept.waitlist`, default true): a full operation queues the
+  officer; a place freed before the start goes to the first on it, re-checked like a join; the list closes at the
+  start. `leave(src)` before the start only (`err.op_leave_started`); `removeJoiner(src, target, reason)`
+  (launchCrossDept, before the start, `err.op_remove_started`, audited).
+- `startNow(src)` — whoever opened the current window, any admin, or anyone with the permission when that person is
+  offline. At the window's end the run starts by itself with enough joiners, else `waiting` (`not_enough`); a manual
+  start that fails keeps the window open. At start every joiner is re-checked (dropped with a toast), the location
+  comes from `CP.Draw.pickLocation`, and `CP.Runs.create({ ..., members in join order, leaderSrc = first joiner,
+  operationId })`; cooldowns, caps and the modifier are CP.Runs' and CP.Events' (they read `operationId`).
+- `onRunEnded(run, state)` *(hook)*: completed → `completed` (final, the lock lifts); anything else → `waiting`
+  (`failed`, or `abandoned` when everyone left); a running operation whose run vanished for 60 s counts as failed.
+  `relaunch(src)` only in `waiting`: a new window with an empty list, not a new launch (cooldown and `created_at`
+  stay).
+- Idle auto-cancel (`Config.CrossDept.idleCancel`): the clock starts at launch and when the run ends, is cleared while
+  a run exists, is not reset by a relaunch, and never cuts an open window short; reason `sup.crossdept.reason_idle`.
+- `cancel(src, reason)` — 1–200 characters (control characters become spaces, invalid UTF-8 `err.invalid_payload`),
+  shown to participants; everyone still on the run leaves `cancelled`.
+- Notifications: `client:operation (state, missionLabel, { id, relaunched })` (launched, started, ended, cancelled) to
+  every on-duty officer; pushes `operation` and `board` on every change; toasts to participants, and to everyone with
+  `launchCrossDept` when it goes to `waiting`.
+- Audit (category operations, target `#<id> <missionId>`): `opLaunch`, `opStart`, `opRelaunch`, `opCancel`,
+  `opAutoCancel` (console), `opRemoveJoiner`; results without an actor go to the operations webhook. Status writes are
+  queued in order on one worker thread; the launch insert is synchronous. At start every open `cp_operations` row is
+  set `cancelled`. `history(args)` (callback `admin:getOperations`, live and archived rows).
+- Net (every `server:sup:op*` / `server:admin:op*` needs `can(src, 'launchCrossDept')`, the admin ones also an admin;
+  officer paths `getOfficer`):
 
-Also: `leave(src)` / `server:leaveOperation` (before the start, no penalty; `err.op_leave_started` after),
-`removeJoiner(src, target, reason)` / `server:<scope>:opRemoveJoiner` (launchCrossDept, a reason, before the start,
-audited `opRemoveJoiner`), the waitlist (`Config.CrossDept.waitlist`: a freed place goes to the first on it, re-checked
-like a join), `officerCard(src)`.
+| Kind | Name | Payload → reply |
+|---|---|---|
+| action | `server:joinOperation` | `operationId` or `{ operationId }` (nil = the active one) → `{ id, joined, max }` or `{ waitlisted, position }` |
+| action | `server:leaveOperation` | → `{ left }` |
+| action | `server:sup\|admin:opLaunch` | `{ missionId }` → `{ id }` |
+| action | `server:sup\|admin:opStart` | → `{ runId, participants }` |
+| action | `server:sup\|admin:opRelaunch` | → `{ id }` |
+| action | `server:sup\|admin:opCancel` | `{ reason }` → `{ id }` |
+| action | `server:sup\|admin:opRemoveJoiner` | `{ src, reason }` → `{ removed }` |
+| callback | `sup:getOperation` | → OperationView (`types/teams.ts`) |
+| client event | `client:operation` | `(state, missionLabel, extra = { id, relaunched })` |
+| push | `operation`, `board` | `{ id|false, status|false }` to every online department member (`operation` also to admins) |
 
-Full admin control (§8.4.2): `history(args) -> Paged` (callback `admin:getOperations`: `cp_operations` plus
-participants and points from live and archived run rows, the union in a derived table); an admin may launch during
-the cooldown (`server:admin:opLaunch { skipCooldown = true, reason }`, audited `opLaunchSkipCooldown`); `launch`,
-`relaunch` and the start refuse `err.maintenance` while `CP.Maintenance.active()`.
+  BoardData.operation adds `missionType`, `description`, `min`, `runState`, `waitlist`, `waitlistPosition`,
+  `waitlistOpen`; a waitlisted viewer gets `joinBlocked = 'err.op_waitlisted'`, a full one `err.op_full` only without the
+  waitlist.
 
 ### 5.18 CP.Scoring — modules/scoring (S)
-- `P(mission) -> number` (type points × `Config.Difficulty.pointsByStars[difficulty]`; boss: `Config.Events.weeklyBoss.points`)
-- `compute(run, p, result, opts) -> breakdown` (§9.6 `points`) — formula of the spec incl. cap, streak, ToD, failed credit (`objectivesDone / total`)
-- `isFirstRunSinceDuty(src) -> boolean` + duty tracking (via `CP.Qbx.onDutyChange`)
-- `streak(citizenid) -> { days, multiplier, graceLeft }`
-- `onRowCounted(citizenid, row)` *(hook: row counts toward boards now — completed/failed and not flagged)* → XP, streak (completed only), badges
-- `onRowApproved(rowId)`, `onRowVoided(rowId)` *(hooks)* — XP add/remove, badges
-- `manualAward(actorSrc, citizenid, points, reason) -> ok, errKey` (a `manual_award` row, audited)
-- `xpLevel(xp) -> { label, badge, xp, next }`, `badges(citizenid) -> list`
-
-Also: `levelXp(n)`, `levelOf(xp)`, `xpLevel(xp) -> { n, label, badge, xp, levelXp,
-nextLevelXp, prestige, next }` (Config.XPCurve; the label is the Config.XPLevels band of the level; `xp` = levelXp for
-old callers), `progressFor(citizenid, gained, pending)` (pending XP never sets levelUp), badges by_the_book and
-first_responder, engineOnly ids valued from Config.Bonuses (rapid_response from Config.MissionCalls.rapidResponse), one
-level-up toast (`scoring.level_up`), stats and badges from completed rows only, `homeData` level and missionsToday
-plus the `home:extras` hook.
+Points, streaks, XP and badges. Files: `modules/{scoring,goals,cash,payouts}/server.lua` (§5.18–§5.21),
+`locales/parts/economy.json`, `web/src/types/economy.ts` (every view shape), `web/src/mocks/economy.mock.ts`
+(`?economy=empty|lua|edge|error`); tests `tests/economy_spec.lua` (its own database `cp_test_economy`).
+- `P(mission)` — type points × `Config.Difficulty.pointsByStars[difficulty]` (boss: `Config.Events.weeklyBoss.points`),
+  whole points (halves up; `points_base` is a SMALLINT).
+- `compute(run, p, result, opts) -> breakdown` (§9.6 `points`, with the extras `cap`, `scoreCap`, `todMultiplier`; a
+  row without them shows the shipped 2 and 2). Lines are whole points; `each` multiplies by the count (`× n`);
+  penalties are negative. What counts:
+  (a) every id on the mission card with its recorded count (shared `run.score.shared` + personal `p.score`), valued by
+  the entry's `points` / `pctOfPoints` × P, else `Config.Bonuses`; (b) `no_participant_downed` and `no_weapons_fired`
+  at the end, only when the card lists them; (c) unlisted recorded ids only when they are common personal ids
+  (`pedestrian_hit`, `lights_siren` on quietPatrol missions, `shot_surrendered`) or have a value hint in
+  `run.score.values` (kingpin_alive, inmate_alive, hostage_hit, ...) — an id only in Config.Bonuses does not count;
+  (d) the common ones: `fast_finish` (duration ≤ fastShare × timeLimit, not with `run.flags.medals`), the modifier
+  (`Config.Events.modifierPoints` × P), `first_run`, `no_vehicle_damage`, `heavy_damage` (not with `vehiclePenalties
+  == false`).
+  Custom missions: file values never raise points; a card entry is valued only when its id is in Config.Bonuses,
+  clamped to `Config.Builder.bonusCap` (50 points / 25 % of P per occurrence); block hints still count (a positive one
+  capped at `bonusCap.points`).
+  Failed = floor(failedCredit × P × share), no bonuses or multipliers (reported as 1.0); abandoned = 0. A presence
+  failure (§5.10) gives final 0 and $0 with the lines listed. Type of the Day (`run.missionType`; the boss is Tactical)
+  applies after the cap. M_streak includes today; M_cross = `Config.CrossDepartmentPoints` with 2+ departments; M_team
+  = the pay tier's `points`.
+- `streak(citizenid) -> { days, multiplier, graceLeft }` — consecutive reset days with a completed counted run; each
+  missed day is forgiven while its week has `Config.Scoring.streakGraceDays` left (a forgiven day adds nothing).
+  `streak_days` is stored capped at 127. An approval applies the row's own day; voids never rewrite streaks.
+- `isFirstRunSinceDuty(src)` — per citizenid in memory: a duty start (off → on, re-read from `getInfo`, or a load on
+  duty) arms it; after a restart it counts as used when there is a completed run since today's reset. Tests never use
+  it.
+- XP = lifetime points of counted rows, manual_award and goal rows included; idempotent per row
+  (`breakdown.xpCounted` set by a conditional UPDATE before adding, removed before taking back); never below 0.
+  `levelXp(n)`, `levelOf(xp)`, `xpLevel(xp) -> { n, label, badge, xp, levelXp, nextLevelXp, prestige, next }`
+  (`Config.XPCurve`; the label is the `Config.XPLevels` band), `progressFor(citizenid, gained, pending)` (pending XP
+  never levels up; fills RunResult.progress from the `row:settled` listener), one level-up toast (`scoring.level_up`),
+  hook `xp:levelUp`.
+- Hooks `onRowCounted(citizenid, row)` (completed/failed, not flagged → XP, streak for completed, badges),
+  `onRowApproved(rowId)`, `onRowVoided(rowId)`.
+- `badges(citizenid) -> { id, label, earnedAt, earnedTs }` — counted over live and archived completed, unflagged,
+  unvoided rows: `iron_wheels` (no_vehicle_damage), `sharpshooter` (gang_shootout with no_participant_downed),
+  `road_warrior` (patrol rows), `partner_in_crime` (2+ participants), `joint_task_force` (2+ departments),
+  `by_the_book`, `first_responder`; checked after every counted row and approval, removed after a void drops the count.
+- `manualAward(actorSrc, citizenid, points, reason)` — admin only, whole points 1–10,000, reason ≤ 255, the officer
+  must be in cp_officers (`err.unknown_officer`); a `manual_award` row with a RunResult-shaped breakdown (`kind`,
+  `reason`), audited `manualAward`, the officer told when online.
+- callback `getHome` → HomeData (§9.4) with `typeOfTheDay.multiplier/cap`, `card.streak.graceDays`, level,
+  missionsToday and the `home:extras` hook. Home refreshes on a data-less `run` push (the run ended) and every 60 s.
 
 ### 5.19 CP.Goals — modules/goals (S)
-- `forOfficer(citizenid) -> { daily = Goal, weekly = Goal }` (`Goal = { id, label, count, progress, done, points }`)
-- `onRunCompleted(citizenid)` *(hook)* → inserts a `goal` row once per period when a goal completes
-
-Also: stat goals (`stat = 'arrests'` …) sum that column over completed rows; missionCall goals count rows with a
-`mission_call_id`; `goal:completed` fires after the goal row.
+- `forOfficer(citizenid) -> { daily = Goal, weekly = Goal }` (`Goal = { id, label, count, progress, done, points }`;
+  labels from `Config.Goals`, `goals.unnamed` as fallback).
+- A goal has `type`, `unit`, `crossDepartment`, `mission`, `stat` (sums that column) or missionCall (rows with a
+  `mission_call_id`). Progress counts completed, unflagged, unvoided mission rows since the period start, capped at
+  `count`.
+- `onRunCompleted(citizenid)` *(hook)* and after an approval: a `goal` row once per period (found by `mission_id` = goal
+  id + `breakdown.period`, so daily and weekly goals with one id never collide), then `goal:completed`.
 
 ### 5.20 CP.Cash — modules/cash (S)
-- `compute(run, p) -> amount, breakdown` (§9.6 `cash`)
-- `pay(rowId)` — the claim-then-pay flow of the spec (paying → paid/capped/unfunded)
-- `payPending(src)` *(hook: player loaded)* — pays `pending` rows
-- `release(rowId)` (flag approved: held → pay now or pending), `forfeit(rowId)`
-- `range(missionType, members) -> min, max` for board cards (modifiers and admin payouts in the pool)
-- `stuckPayments() -> list` (rows still `paying`)
-- `earnedThisWeek(citizenid) -> number`
-- Forfeiture job (every 10 min): voided rows with `cash_status = 'held'` older than `Config.Disputes.windowHours` and no open dispute → `forfeited`
-
-Full admin control: `paidToday(citizenid) -> number|nil` — cash counted against `Config.Cash.dailyCap` today. A manual
-cash payment (`mission_type = 'manual_award'`, `mission_id = 'manual_cash'`) is outside the daily cap: neither cut by
-it nor counted in it (the cap lookup of `pay` leaves it out too).
-
-Also: `row:forfeited (rowId)` fires from `forfeit` and the forfeiture job (one UPDATE per row); `officer:loaded
-(src)` fires right after the pending payments of a player who loaded in.
-
-Full admin control (economy, §5.40 calls these inside its AdminKit actions):
-- **Step markers**: the claimed payment writes `breakdown.cash.step = 'claimed'` with `payAmount` (after the cap),
-  `account`, `source` (`server`|`society`), `societyAccount` and `txn` before any money moves, then `'withdrawn'` after
-  the society withdrawal and `'added'` after `AddMoney` (one JSON_SET under `cash_status = 'paying'`).
-- **Waiting**: `pay`, `payPending` (and so the login payment) do nothing while `CP.Maintenance.active()`; the rows wait
-  and are paid by the sweep after the restart, or at once on `maintenance:changed (nil)`. A `left_behind` store never
-  pays. The forfeiture job skips while locked, waits up to 60 s for the shared busy lock and holds it (`forfeiture`).
-- **Departments**: the payment's department comes from `CP.Access.department`, and from `Config.Departments` when that
-  leaves a turned-off department out, so its pay still comes from its own account.
-- `amountOf(row)`, `txnOf(row)`, `department(key)`, `rowBusy(rowId, citizenid)` (pay() works on it or the officer's
-  payment lock is held), `paymentsHeld() -> kind|nil`, `nextForfeitureAt() -> ts|nil`.
-- Admin tools, each `-> ok, data | false, errKey`; a money tool claims first, then calls `audit(info) -> id|false`
-  (false: the claim is undone, `err.audit_failed`), then moves money under the officer's payment lock, then writes the
-  final state: `markPaid(rowId, audit)` (paying → paid/capped, no money), `payAgain(rowId, audit)` (claim
-  `breakdown.cash.again`; at step `withdrawn` only `AddMoney`, at `claimed` both, at `added` refused; txn `-r2`; online
-  only), `payCapRest(rowId, audit)` (claim `breakdown.cash.restPaid`; pays owed − paid with txn `-r`, `cash_paid` grows,
-  status stays capped; a refusal takes the marker back), `clawback(rowId, amount, audit)` (claim `cash_reclaimed =
-  cash_reclaimed + ? WHERE cash_reclaimed + ? <= cash_paid`; refused when the balance is lower; RemoveMoney; txn
-  `-back<n>`; the department is refunded only when `breakdown.cash.source = 'society'`), `toPending(rowId,
-  'unfunded'|'forfeited')` / `backFromPending(rowId, from)` (forfeited only with `cash_paid = 0`, never voided or
-  flagged), `adminForfeit(rowId, 'voided'|'cancel')` (held/pending → forfeited; `voided` needs no open dispute and fires
-  `row:forfeited`, `cancel` keeps the item rewards).
-- A manual cash row (`mission_id = 'manual_cash'`) is not cut by the daily cap in `pay`.
+- `compute(run, p) -> amount, breakdown` (§9.6 `cash`). The amount paid is `breakdown.cash.amount`; `round(cash_base ×
+  cash_multiplier)` only when the breakdown has none (the DECIMAL(4,2) multiplier loses precision).
+- `pay(rowId)` — an offline officer's row goes to `pending` (no money moves). Otherwise the claim `UPDATE ... SET
+  cash_status = 'paying' WHERE id = ? AND cash_status IN ('none','held','pending') AND state = 'completed' AND flagged
+  = 0 AND voided = 0` must change the row, so a flagged or voided row is never paid. Then, under pcall: an error
+  before the first money call puts the row back to `pending`, after it leaves it `paying` (`stuckPayments()`), so
+  nothing is ever paid twice. Step markers in `breakdown.cash.step`: `claimed` (with `payAmount`, `account`, `source`
+  server|society, `societyAccount`, `txn`) before money moves, `withdrawn`, `added`.
+- Daily cap (`Config.Cash.dailyCap`): paid/capped cash of rows on the row's own reset day; one officer's payments are
+  serialised in-process. Final status `capped` when the cap cut it, else `paid`. Manual cash rows (`mission_id =
+  'manual_cash'`) are neither cut by nor counted in it. `paidToday(citizenid)`.
+- Society source: the player is re-fetched before `withdrawSociety`; false → `unfunded` ($0; the officer and his
+  department's online supervisors are told). A failed AddMoney after the withdrawal is refunded with
+  `depositSociety` and the row goes back to `pending`. The department comes from `CP.Access.department` (also for a
+  turned-off department).
+- Renewed-Banking: `recordDeposit(citizenid, amount, 'Mission payout: <label>', <department>, <name>,
+  'CP-<run_uuid>-<citizenid>')` only with `Config.Cash.account == 'bank'`; the society source also
+  `recordSocietyWithdraw` with the same id.
+- `payPending(src)` *(hook: player loaded + 5 s, and a sweep 15 s after start for players already online)* — pays
+  `pending` rows and completed unflagged mission rows still `none` with `cash_base > 0`; then `officer:loaded`.
+- `release(rowId)` (the caller cleared `flagged` first; never a voided row), `forfeit(rowId)` (voided held/pending
+  only; fires `row:forfeited`). Forfeiture job (at start, then every 10 min): voided held/pending rows older than
+  `Config.Disputes.windowHours` without an open dispute → `forfeited`; it skips during maintenance and holds the busy
+  lock (`forfeiture`).
+- Maintenance: `pay` and `payPending` do nothing while `CP.Maintenance.active()`; the rows are paid after the restart or
+  on `maintenance:changed (nil)`. A `left_behind` store never pays.
+- `range(missionType, members) -> min, max` (pool from `CP.Draw.pool`; max includes `modifierCash` when
+  `modifierChance > 0`, never for the boss; empty pool → the type payout), `earnedThisWeek(citizenid)`,
+  `stuckPayments()`, `amountOf(row)`, `txnOf(row)`, `department(key)`, `rowBusy(rowId, citizenid)`, `paymentsHeld()`,
+  `nextForfeitureAt()`.
+- Admin money tools (§5.40), each `-> ok, data | false, errKey`; claim first, then `audit(info)` (false: the claim is
+  undone, `err.audit_failed`), then the money under the officer's payment lock, then the final state:
+  `markPaid(rowId, audit)` (no money), `payAgain(rowId, audit)` (at step `withdrawn` only AddMoney, at `claimed` both,
+  at `added` refused; txn `-r2`; online only), `payCapRest(rowId, audit)` (owed − paid, txn `-r`, stays capped),
+  `clawback(rowId, amount, audit)` (`cash_reclaimed + ? <= cash_paid`; refused when the balance is lower; txn
+  `-back<n>`; the department refunded only for society source), `toPending(rowId, 'unfunded'|'forfeited')`,
+  `backFromPending(rowId, from)`, `adminForfeit(rowId, 'voided'|'cancel')` (`voided` needs no open dispute and fires
+  `row:forfeited`; `cancel` keeps item rewards).
 
 ### 5.21 CP.Payouts — modules/payouts (S)
-- `typePayout(type) -> amount, adminLocked` · `missionPayout(missionId) -> amount|nil`
-- `baseFor(mission) -> B` · `sourceFor(mission) -> 'admin'|'type'|'event'`
-- `setType(src, type, amount|nil, reason, role) -> ok, errKey` (nil = clear, admin only; supervisor limits)
-- `setMission(src, missionId, amount|nil, reason) -> ok, errKey` (admin only)
-- `list() -> { types = {...}, missions = {...} }`
-- Registers `server:sup:setTypePayout`, `server:admin:setTypePayout`, `server:admin:setMissionPayout`, callbacks `sup:getPayouts`, `admin:getPayouts`.
-- Full admin control (economy): `setType(src, type, amount, reason, 'admin', { unlock = true })` sets the amount and
-  leaves the type open to supervisors (audit new value `unlocked:<amount>`); `server:admin:setTypePayout` takes `unlock`.
-  `previewAdjust(src, { mode = 'pct'|'amount', value, scope = 'types'|'missions'|'both' })` (−90..+500 % in Lua, or ±
-  an amount; each value clamped to `Cash.minPayout`–`maxPayout`; the token is bound to every entry and its old value)
-  and `adjustAll(ctx)` (each change through `setType` / `setMission`, so one audit line per value, plus
-  `payoutsAdjustAll`; `lockTypes` locks every changed type, otherwise each keeps its lock state). `admin:getPayouts`
-  rows carry `outOfRange` and the view `outOfRange` (stored payouts outside the current range) and `supervisorRange`.
-  `settings:changed` on `MissionTypes.*`, `Cash.*`, `Payouts.*`, `Events.weeklyBoss.payout`, `Difficulty.cashByStars`
-  pushes `payouts` and `board`.
+- `typePayout(type) -> amount, adminLocked`, `missionPayout(missionId)`, `baseFor(mission) -> B`, `sourceFor(mission)
+  -> 'admin'|'type'|'event'`, `list() -> { types, missions }`.
+- `setType(src, type, amount|nil, reason, role, { unlock })` (nil = clear, admin only; `unlock` leaves the type open to
+  supervisors, audited `unlocked:<amount>`), `setMission(src, missionId, amount|nil, reason)` (admin only; a new payout
+  only for a loaded mission; stored payouts of missions not loaded are listed with `missing = true`).
+- Supervisor range = ceil(default × low share) .. floor(default × high share), within Config.Cash limits; supervisors
+  always need a reason, admins unless `Config.Payouts.requireReason = false`; an unchanged value is refused
+  (`err.payout_unchanged`). Supervisor values are stored (admin_locked = 0) and start the 30 min cooldown through
+  `updated_at`. `updated_by` / `set_by` = citizenid or `'console'`.
+- `previewAdjust(src, { mode = 'pct'|'amount', value, scope = 'types'|'missions'|'both' })` (−90..+500 % or ± an
+  amount, each clamped to `Cash.minPayout`–`maxPayout`; the token binds every entry and its old value) and
+  `adjustAll(ctx)` (each change through `setType`/`setMission`, plus `payoutsAdjustAll`; `lockTypes` locks every changed
+  type).
+- Audit: actions `setTypePayout`, `clearTypePayout`, `setMissionPayout`, `clearMissionPayout` (old/new amounts or
+  `config:<n>` / `type:<n>` / `event:<n>`), role supervisor|admin|console; without modules/admin it writes cp_audit
+  directly.
+- Net:
+
+| Kind | Name | Permission |
+|---|---|---|
+| callback | `getHome` (scoring) | `CP.Access.getOfficer` |
+| callback | `sup:getPayouts` | `setTypePayout` |
+| callback | `admin:getPayouts` (rows with `outOfRange`, view `outOfRange`, `supervisorRange`) | admin + `setMissionPayout` |
+| action | `server:sup:setTypePayout { type, amount, reason }` | setTypePayout |
+| action | `server:admin:setTypePayout { type, amount \| null, reason, clear?, unlock? }` | admin; clearing = `clearPayout` |
+| action | `server:admin:setMissionPayout { missionId, amount \| null, reason, clear? }` | `setMissionPayout`; clearing = `clearPayout` |
+
+  Pushes `payouts` and `board` to every online player after a change, and on `settings:changed` of `MissionTypes.*`,
+  `Cash.*`, `Payouts.*`, `Events.weeklyBoss.payout`, `Difficulty.cashByStars`. Supervisor Payouts counts cooldowns
+  down locally and refetches when one ends.
 
 ### 5.22 CP.Leaderboard — modules/leaderboard (S)
-- callback `getBoard({ period, filter, department })` → Board (§9.4); cache `Config.Leaderboard.cacheSeconds`
-- `invalidate()` *(hook: void/approve)*, `seasonPoints(citizenid) -> number`, `announcements() -> {...}`
-- Weekly reset: top 3 to `cp_webhook_board`, "Officer of the Week" badge.
-- callback `getProfile(citizenid|nil)` → Profile (own when nil) and `server:setHideName` action.
-
-More (§13.5):
-- `getBoard` arg `metric` (Config.Leaderboard.metrics: points, missions, arrests, impounds, citations, rescues, calls,
-  judgement, live_catches (the `live_catches` column of 014; not on the shipped list); `err.invalid_metric`
-  otherwise). Every stat is summed from `voided = 0 AND flagged = 0 AND state =
-  'completed'` rows (all-time through the archive union); judgement = decisions_best ÷ (decisions_ok +
-  decisions_bad), ranked only with Config.Leaderboard.minDecisions decisions; the cache key includes the metric.
-  Rows gain `value`, `metric`, `level = { n, badge }` and `avatar`; kills (`lethal`) are never read by a board query.
-- `serviceRecord(citizenid, seasonId|nil) -> ServiceStats, lethal`, `personalBests(citizenid)`,
-  `favouritePartner(citizenid)`; `getProfile` gains bio, avatar, level, commendations, mdtCommendations, service
-  `{ lifetime, season }`, bests, favouritePartner and (own profile only) cleanArrestRate; `profile(viewer, target,
-  { staff = true })` is the admin view.
-- Weekly metric badges (`Config.Leaderboard.weeklyBadges`): `top_<metric>_<weekKey>` to #1 of the week.
+Boards, profiles and the weekly announcements. Files: `modules/leaderboard/server.lua`, `modules/challenge/server.lua`
+(§5.23), `locales/parts/boards.json`, `web/src/types/boards.ts` (every shape), `web/src/mocks/boards.mock.ts`
+(`?boards=edge|empty`); tests `tests/boards_spec.lua` (a five-officer week and a three-week SAST/FIB season with known
+numbers), `tests/boards_metrics_spec.lua`. Both Lua headers document every response shape.
+- callback `getBoard({ period, filter, department, metric })` → Board (§9.4). Counted rows = `voided = 0 AND flagged =
+  0`; points = `SUM(final_points)`; `runs`/`failed` leave out `manual_award`/`goal` rows. Filters: a type key (the boss
+  is stored as `tactical`), `unit` (participants ≥ 2), `cross` (departments_n ≥ 2), `department` (award rows
+  included); errors `err.invalid_filter`, `err.invalid_period`, `err.unknown_department`, `err.invalid_metric`.
+- Metrics (`Config.Leaderboard.metrics`): points (XP on All-time), missions, arrests, impounds, citations, rescues,
+  calls (rows with a mission_call_id), judgement (decisions_best ÷ (decisions_ok + decisions_bad), ranked only with
+  `minDecisions`), live_catches (not shipped). Stats come from counted completed rows only, all-time through the
+  archive union; `lethal` is never read by a board query and no payload carries kills.
+- `Config.Leaderboard.minRunsToRank` counts inside the board's window and filter; All-time uses lifetime completed
+  runs and `cp_officers.xp` and is always Overall. Ties: the value, (judgement) decisions, points, fewer failed,
+  "reached first" (the latest counted row that changed the total), citizenid.
+- The Season board shows the active season's rows, between seasons the last ended one (`season.active`); none ever →
+  empty. `me` is always present (`rank = 0` = not ranked yet; the viewer sees his own name even when hidden). Rows
+  carry `value`, `metric`, `level = { n, badge }` and `avatar` (a hidden name shows callsign initials).
+- Cache: one entry per (period, filter, department, metric, window) for `Config.Leaderboard.cacheSeconds`; concurrent
+  misses share one query. `invalidate()` *(hook: void/approve)* drops boards, season points and announcements and
+  calls `CP.Challenge.invalidate()`; a result whose query was in flight during an invalidate is returned once, not
+  cached.
+- callback `getProfile(citizenid|nil)` → Profile: the last 20 rows of any type (award rows never disputable).
+  Someone else's: callsign when hidden, no cash, the breakdown cut to the RunResult fields without `cash`, flagged and
+  voided rows still listed. `canDispute` = own row, not an award, flagged/voided/failed, within
+  `Config.Disputes.windowHours`, and no `cp_disputes` row ever (one dispute per row). Extras: `departmentLabel`,
+  `seasonPoints`, `disputeWindowHours`, `badges[i].kind` (`week`|`champion`|`top10`|`achievement`), bio, avatar, level,
+  commendations, mdtCommendations (`Config.Profile.showMdtCommendations`), service `{ lifetime, season }`, bests,
+  favouritePartner, and on the own profile cleanArrestRate (arrests ÷ (arrests + lethal)). `profile(viewer, target, {
+  staff = true })` is the admin view. Action `server:setHideName`.
+- `serviceRecord(citizenid, seasonId|nil) -> ServiceStats, lethal`, `personalBests(citizenid)` (fastest completed run
+  per mission), `favouritePartner(citizenid)` (most shared completed runs), `seasonPoints(citizenid)`.
+- `announcements()` — computed from the database: the previous week's top 3 during this week and the previous month's
+  during this month (`weekly_top3` / `monthly_top3`, names respect hide_name).
+- Weekly job (`CP.Schedule.onWeekly`, and once 60 s after start; idempotent by the badge): `Config.Leaderboard.
+  weeklyBadges` `top_<metric>_<weekKey>` to #1 of each listed metric, then Overall top 3 → `CP.Admin.webhook('board')`
+  and `officer_of_week_<weekKey>` for #1 with a toast. Monthly only invalidates.
+- callback `admin:getBoards` (`openAdmin`): ranked rows with `cash` (`SUM(cash_paid)` of every row, voided and flagged
+  included), `realName`, `hidden`, `unranked`, `stuck` (`CP.Cash.stuckPayments()`); with `citizenid` also that
+  officer's rows (Void run).
+- Web: dates from the server are `'YYYY-MM-DD'` in server time and formatted at noon UTC, so every player sees the
+  server's week; run tables use `table-layout: fixed` with ellipsis so long names never push the buttons out. Give
+  points 1–10,000 with a reason; Void run needs a reason.
 
 ### 5.23 CP.Challenge — modules/challenge (S)
-- `currentSeason() -> season|nil`, `startSeason(src, name)`, `endSeason(src)`
-- `standings(seasonId?) -> { departments = {...} }`, `bounty(weekKey?)`, `overrideBounty(src, objective)`
-- Weekly close: bounty winner once; season end: champions, badges, board webhook.
-- callbacks `getChallenge`, `getDeptContributors`, `admin:getSeasons`; `championBanner(dept)`.
-
-Also: bounties `most_arrests` and `most_calls` from counted completed rows; the Department Report's officers
-gain arrests, citations, impounds, decisionsOk, decisionsBest, decisionsBad and calls; `sup:getOfficerActivity` adds
-the officer's active commendations; `season:ended` fires after the season results.
+- `currentSeason()` (cached, reloaded every 5 min and after every change), `startSeason(src, name)` (ends a running one
+  first), `endSeason(src)`, `standings(seasonId?)`, `bounty(weekKey?)`, `overrideBounty(src, objective)`,
+  `championBanner(dept)` (the latest ended season's champion when it is `dept`), `invalidate()`.
+- Weeks: week 1 runs from the season start to the first weekly reset; week n = resets since the start + 1.
+  `cp_dept_bounties.winner` NULL = open, `''` = no winner; week 0 (`objective = 'season_champion'`) stores the season
+  champion.
+- Bounty pick: `CP.U.rng(CP.U.hash('<seasonId>:<week>')):pick(Config.Challenge.bounties)`, stored when first needed.
+  Objectives `most_tactical`, `most_cross`, `most_unit`, `most_completed`, `most_arrests`, `most_calls` (an unknown id
+  counts completed runs, one warning). Winner: the objective's count in that week ÷ the department's season-to-date
+  active officers (`minRunsActive`); ties by completed runs, then unit runs; all zero or a perfect tie → none. Weeks
+  close at the weekly reset, at start (catch-up) and at season end. Bonus = floor(bountyBonus × the winner's counted
+  points that week), derived whenever standings are computed.
+- Scores: `average` (points of active officers + bonuses ÷ active officers), `total`, `top10`; departments from
+  `CP.Access.departments()` at call time.
+- Season end: a champion only with points or runs and no perfect tie (none with `Config.Challenge.enabled = false`);
+  trophies `season_<id>_champion` (its active officers) and `season_<id>_top10`; one board webhook; audit `season_end`;
+  hook `season:ended`.
+- Callbacks `getChallenge`, `getDeptContributors` (with avatars), `admin:getSeasons`, `sup:getDeptReport`,
+  `sup:getOfficerActivity` (`viewMissionList`; supervisors get their own department, only admins pass `department`;
+  activity = this week's department rows; the report's officers carry arrests, citations, impounds, decisions and
+  calls; activity adds the officer's active commendations with `mine`; `err.other_department`,
+  `err.unknown_officer`). Actions `server:admin:startSeason`, `endSeason` (`seasons`), `overrideBounty`
+  (`bountyOverride`); permission before the payload; `err.busy` during another season change.
 
 ### 5.24 CP.Disputes — modules/disputes (S)
-- `server:dispute` ({ rowId, reason }) — own flagged/voided/failed rows within `Config.Disputes.windowHours`
-- `forSupervisor(src) -> list`, `forAdmin() -> list`, `forOfficer(citizenid, goesTo?, viewerSrc?) -> list`, `handle(src, disputeId, decision, reason, awardPoints)`
-- Each DisputeView carries the disputed row's debrief when it has one: `decisions` (the whole ledger, each fact with
-  the time it reached the decider) and `people`; the Review Queue and Admin UI → Officers show them
-- `supervisorCanAnswer(runUuid) -> boolean` — switch `Config.Permissions.supervisor.handleDisputes` on and an online supervisor of the run's departments who did not take part (on or off duty). While it is false for an open flagged/voided-run dispute, the admins are the ones told about it at filing and `admin:getOfficer` lists it on the Admin UI Officers screen (Approve / Reject)
+Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `locales/parts/oversight.json`,
+`web/src/types/oversight.ts` (every response shape), `web/src/mocks/oversight.mock.ts` (answers through `luaify()`;
+`?oversight=edge|empty`); tests `tests/oversight_spec.lua`.
+- `server:dispute { rowId, reason }` → `{ disputeId, goesTo, kind }` — own rows only (on duty), flagged, voided or
+  failed (kind priority in that order), within `Config.Disputes.windowHours` from `created_at`, never award rows, 3
+  filings a minute. One dispute per row ever: `err.dispute_open`, `err.dispute_final`.
+- `forSupervisor(src)`, `forAdmin()` (`admin:getDisputes`), `forOfficer(citizenid, goesTo?, viewerSrc?)`. Each
+  DisputeView carries the row's debrief (`decisions` with each fact's time, `people`).
+- `handle(src, disputeId, decision, reason, awardPoints)` — claim first (`status = 'open'`), then apply. Approving a
+  flagged row goes through `CP.Admin.approveFlagged(..., { skipPermission, noAudit, quiet })` (one audit
+  `disputeApproved`, one toast); approving a voided row clears voided and flagged, `onRowApproved`, `CP.Cash.release`;
+  rejecting a voided row forfeits held/pending cash; rejecting a flagged row keeps it in the queue. A failing manual
+  award re-opens the dispute. The supervisor endpoint refuses failed-run disputes; the admin endpoint answers any
+  (failed: Approve and give points / Dismiss; flagged or voided: Approve / Reject without `awardPoints`).
+- `supervisorCanAnswer(runUuid)` — `Config.Permissions.supervisor.handleDisputes` on and an online supervisor (on or
+  off duty) of the run's departments who did not take part. New disputes toast those supervisors and post to the flags
+  webhook; when it is false the online admins are told and `admin:getOfficer` lists the dispute.
+- A live run counts as the reviewer's own too (a participant has no row until he leaves): `err.own_run`, hidden from
+  his queue.
 
 ### 5.25 CP.Admin — modules/admin (S)
-- `/CrimsonPoliceAdmin` (`Config.Tablet.adminCommand`) and every subcommand of the spec (console too):
-  `payout type <type> <amount|clear> <reason>`, `payout mission <id> <amount|clear> <reason>`,
-  `award <citizenid> <points> <reason>`, `season start <name>` / `season end`,
-  `suspend <citizenid> <days>`, `reload`, `test <missionId> [tier] [location]`. No args → `CP.Tablet.openAdmin(src)`.
-  Also `storage` (the storage in use, rows per `cp_` table, the saves folder's size) and
-  `storage copy database-to-files|files-to-database [force]` (§5.29); console or an admin (`CP.Access.isAdmin`) only.
-  `check` runs `CP.ConfigHealth.run()` again: every line in the console (coloured by level) and the counts, in game only
-  the counts (a toast: error, warning or success).
-- A player who is not an admin and types the command gets `err.not_admin` and, once per player per start, one console
-  warning naming them and the line that makes them one: `add_ace identifier.<fivem:… or license:…> <adminAce> allow`.
-- `webhooks() -> { { category, convar, state = 'on'|'off'|'invalid' } }` in the order audit, flags, board, builder,
-  operations (Config health lists them; `invalid` = not an https:// link, that webhook is off).
-- `audit(actor, role, category, action, target, old, new, reason, opts)` — `actor` = src or citizenid or 'console';
-  writes `cp_audit` and posts to the category webhook (`cp_webhook_audit|flags|builder|operations`, convars).
-  `opts = { noWebhook = true (a bulk row; its summary line posts), critical = true, ident = license }`; every row stores
-  `actor_ident`, the acting player's license (`CP.Access.licenseOfSrc`), so every character of one player can be found
-- `auditSync(actor, role, category, action, target, old, new, reason, opts) -> id | false` — the row written in the
-  caller's thread (false when not in a thread or the insert failed: a money or typed-word action then moves nothing);
-  its post is `critical` unless opts says otherwise
-- `webhook(category, title, description, fields, opts)` (category 'board' also allowed). The queue holds 100 posts:
-  when full, the oldest **ordinary** post is dropped (a `critical` one never is) and, once there is room, one audit
-  post says how many were dropped (`_webhookDropped()` counts them)
-- `webhooks()` rows gain `discord` (the link is `https://discord.com/api/webhooks/<id>/<token>` or
-  `discordapp.com`, the whole host anchored); the link itself never leaves the module
-- `storageStatus() -> { mode, folder (the setting, never a full path), tables = { { name, rows } }, totalRows, bytes?,
-  files?, version, migrations (CP.Migrations.status()), loadError?, busy?, error? }` — the storage command as data
-- `storageCopy(src, direction, force) -> ok, messageKey, vars` — the copy of the `storage copy` command (one at a
-  time, never during a run, sharing `CP.AdminKit`'s busy lock); its replies also reach src
-- `ownRunCheck(src, runUuid) -> ok, errKey` (public); `missionLabel` names `manual_adjust` and `manual_cash` rows;
-  `_auditWhere(args)` also filters `target`, `role`, `actorIdent` and `reason` (LIKE with `%` and `_` escaped) and,
-  when `action` is not given, `actions` (a list of at most 30 action names, `a.action IN (...)`; the Audit Log's
-  **Cash actions** preset), and `admin:getAudit` rows carry `actorIdent`
-- `storage mode reset` (console only): `SUB.storage` hands it to `CP.Sysadmin._consoleStorageMode`, the same as the
-  `storagemode reset` subcommand; after a failed start (`CP.Migrations.failed()`) it clears the KVP and answers at
-  once without the audit row (`sysadmin.console.storagemode_reset_not_started`)
-- After a failed start `Admin.command` refuses every subcommand and the in-game open with `admin.cmd.not_started`,
-  except the console's `check`, `storagemode` and `storage mode`
-- `voidRun(src, rowIdOrRunUuid, reason)`, `approveFlagged(src, rowId, reason)`, `voidFlagged(src, rowId, reason)`
-- Supervisor/admin screen callbacks and actions listed in §8.3. `admin:getMissions` adds `switch`
-  (`CP.Settings.missionView(def)`: the mission's and each location's on/off and config.lua's values).
-
-Also: `registerSubcommand(name, fn, helpKey)` with `fn(src, args) -> ok, messageKey, vars` (the reply is sent
-for it; helpKey is the console usage line; a built-in name can't be taken) — other modules add
-`/CrimsonPoliceAdmin` subcommands (CP.MissionCalls: `missioncall <type> [area]`). The storage command lists every
-cp_ table, the four new ones included.
+- `/CrimsonPoliceAdmin` (`Config.Tablet.adminCommand`, registered unrestricted; `CP.Access.isAdmin` decides; console
+  too). No args → `CP.Tablet.openAdmin(src)`. Subcommands: `payout type <type> <amount|clear> <reason>`, `payout
+  mission <id> <amount|clear> <reason>`, `award <citizenid> <points> <reason>`, `season start <name>` / `season end`,
+  `suspend <citizenid> <days>`, `reload`, `test <missionId> [tier] [location]` (in game only, not in the arena; any
+  order; `random` or a location number; through `CP.Testing.command`, which adds accepted testers and tier `auto`),
+  `storage` (mode, rows per cp_ table, the saves folder's size), `storage copy database-to-files|files-to-database
+  [force]` (§5.29), `storage mode reset` (console; = `storagemode reset`, §5.41), `check` (`CP.ConfigHealth.run()`: every
+  line in the console, the counts in game). Citizenids resolve to the stored spelling or an exact/upper-case online
+  id; mission ids match case-insensitively. Replies: coloured `print` in the console, `CP.Tablet.notify` in game.
+  After a failed start every subcommand is refused (`admin.cmd.not_started`) except the console's `check`,
+  `storagemode` and `storage mode`.
+- `registerSubcommand(name, fn(src, args) -> ok, messageKey, vars, helpKey)` — other modules add subcommands
+  (`missioncall`); a built-in name cannot be taken.
+- A non-admin who types the command gets `err.not_admin` and, once per player per start, a console line naming the
+  `add_ace identifier.<fivem:… or license:…> <adminAce> allow` that would make him one.
+- `audit(actor, role, category, action, target, old, new, reason, opts)` — writes `cp_audit` and posts the category
+  webhook. `actor` src, citizenid or `'console'` (src 0); role outside `supervisor|admin|console` is stored as
+  `console` ("console or automatic"); category `board` and unknown ones are stored as `audit` (board posts to its own
+  webhook). `opts = { noWebhook, critical, ident }`; every row stores `actor_ident` (the actor's license). Outside a
+  coroutine it writes from a new thread and returns nil. `auditSync(...) -> id | false` writes in the caller's thread
+  (false = a money or typed-word action moves nothing); its post is critical.
+- Who audits: CP.Payouts, CP.Scoring.manualAward, CP.Challenge, CP.Testing and CP.Missions audit themselves; CP.Admin
+  audits the command's reload, suspensions, `forceRecall`, `approveFlagged`, `voidFlagged`, `voidRun`; CP.Disputes
+  `disputeApproved`/`disputeRejected`; CP.AntiCheat `runFlagged`, `runNoted`, `autoSuspend`.
+- `webhook(category, title, description, fields, opts)` and `webhooks() -> { { category, convar, state =
+  'on'|'off'|'invalid', discord } }` (audit, flags, board, builder, operations; convars `cp_webhook_*` read at call
+  time; only https). The queue: one post per url every 2.1 s, 429 `retry_after` honoured, 5xx retried 3 times, 100
+  posts (the oldest ordinary post is dropped, never a critical one; one post then says how many). Embed limits: title
+  256, description 3500, 20 fields of 1000. The link never leaves the module.
+- Review: `approveFlagged(src, rowId, reason)` (clears `flagged`, keeps `flag_reason`, then `CP.Cash.release` when
+  held, `onRowApproved`, invalidate), `voidFlagged` (only while still flagged, else `err.conflict`; cash stays held
+  until forfeited), `voidRun(src, rowIdOrRunUuid, reason)` (every unvoided row of a run); a void calls
+  `onRowVoided` and `CP.AntiCheat.onVoided` (mission rows only). Supervisor scope = any row or live participant of the
+  run in their department; `ownRunCheck(src, runUuid)` and `canReviewRun` apply to every reviewer.
+- Force recall (optional reason, audited): runs involving the caller's department, tests included; never a run the
+  caller is or was on (`err.recall_own_run`, tests excepted: a free reroll); a target who already left →
+  `err.not_participant`. The officer gets `admin.notice.force_recalled`.
+- Manual award 1–10,000 points. Text is clipped by characters (cp_* columns are utf8mb4 and strict mode refuses a cut
+  sequence), webhook texts too.
+- `storageStatus()` (the storage command as data; the folder setting, never a full path) and `storageCopy(src,
+  direction, force)` (one at a time, never during a run, under `CP.AdminKit`'s busy lock).
+- `missionLabel` names `manual_adjust` and `manual_cash` rows. `_auditWhere(args)` filters category, action or
+  `actions` (up to 30: the Audit Log's Cash actions preset), actor, `actorIdent`, target, role, reason (LIKE escaped),
+  dates.
+- Callbacks and actions: §8.3 (permissions: `getMissionList` / `sup:getLiveRuns` need `viewMissionList`,
+  `sup:getReviewQueue` needs `reviewFlagged` or `handleDisputes`, every `admin:*` needs `openAdmin`). An admin with an
+  officer character sees his own department in the Supervisor UI, one without sees all. `getMissionList` carries
+  `crossDeptEligible` (`CP.Operations.eligible`); `admin:getMissions` adds `switch` (`CP.Settings.missionView`);
+  `admin:getOfficer` adds the last 10 suspension entries and the disputes the admin should answer;
+  `admin:exportAudit` gives 5,000 rows at most (formula-leading cells prefixed with `'`, 1 export per 3 s).
+- UI notes: supervisor screens poll (Mission List 20 s + push `operation`, Live Missions 10 s, Review Queue 30 s);
+  suspend/unsuspend need a reason in the UI; the audit Copy button uses a selected textarea and `execCommand('copy')`
+  first (FiveM's CEF refuses `navigator.clipboard`); audit dates are server-local `YYYY-MM-DD`.
 
 ### 5.26 CP.AntiCheat — modules/anticheat (S)
-- `checkEvent(run, src, index, evidence) -> ok, reason` — valid participant, index is the current
-  objective, rate limit, speed (`Config.AntiCheat.maxSpeed` between events), duplicate
-- `flag(run, src|nil, reason, detail)` — whole run (src nil) or one participant
-- `note(run, src|nil, reason, detail, about?)` — a staff note about one participant or the case (src nil); `about`
-  (a suspect's citizenid, CP.Opponents) keeps one case note per reason and suspect instead of one per reason
-- Two classes (critic 2 #12): only an **officer's own conduct** is a flag. A flag sets `p.flagged` / `run.flagged`;
-  `CP.Cash.compute` then makes the row `held` and CP.Rewards holds its items until a supervisor approves. Everything
-  a suspect does himself, and a fact staff should check without holding anyone's points (`stun_unproven` with
-  `stunNeedsProof = 'flag'`), is a **note**: the same input checks and clips, cp_audit category `flags` action
-  `runNoted` with the arguments `runFlagged` uses (target = run id, old_value = citizenid or nil, new_value =
-  reason, reason = detail), its own once-per-(reason, citizenid or `*`, `about`) list per run, a test run only logs
-  it, and it never sets `p.flagged` or `run.flagged`. The Review run detail (`sup:getReviewQueue` /
-  `admin:getFlagged` rows, `notes = { { reason, detail, note = true } }`) shows the notes of a held run as
-  "Note: <flag line>"; the queue still lists only held rows.
-- `stunMode() -> 'flag'|'hold'|'strict'|'off'` — Config.AntiCheat.stunNeedsProof read now (a true from before it was
-  a choice reads as `'strict'`, false as `'off'`, missing or unknown as `'flag'`); `stunReport(run, src, seen,
-  netId) -> ok` — a block's `stunned` report: seen or `'off'` = true; unseen: `'flag'` = true plus
-  `note(... 'stun_unproven')`, `'hold'` = true plus `flag(... 'stun_unproven')`, `'strict'` = false (the detail
-  names the objective and the person's net id, `admin.anticheat.stun_detail`)
-- `onNpcKilled(run, killerSrc)` — outside kills ≥ `Config.AntiCheat.outsideKillsToFlag` → flag `outside_help`
-- presence sampling (runs with 2+ participants) using block `presence`; idle check
-  (`Config.AntiCheat.idleCheck`); `presenceOk(run, p) -> boolean` *(used by scoring/cash at the end)*
-- `onVoided(citizenid)` → auto-suspension after `voidsToSuspend` in `voidWindowDays`
+- `checkEvent(run, src, index, evidence) -> ok, reason` (after CP.Runs' own checks): run in progress, active
+  participant, not in arena (`err.in_arena`, never flagged), 10 events/s per src, index = the current objective (a
+  later one flags `unexpected_event`; an earlier or finished one is lag, `err.stale_event`), exact duplicates within
+  1 s dropped (`err.duplicate_event`; blocks' `try`/`seq` keep retries distinct). Speed: server ped coords at each
+  accepted event; `distance / max(1 s, elapsed) > Config.AntiCheat.maxSpeed` flags the whole run `speed`; pairs across
+  a routing-bucket change are discarded.
+- Two classes: only an officer's own conduct is a **flag**. `flag(run, src|nil, reason, detail)` sets `p.flagged` /
+  `run.flagged` (the first reason stays), so CP.Cash holds the row and CP.Rewards its items until a supervisor
+  approves; every distinct (reason, participant) is written to cp_audit (`runFlagged`, target = run id, old_value =
+  citizenid, new_value = reason, reason = detail), which is where the Review Queue reads who and the other reasons.
+  Test runs are never flagged. A **note** (`note(run, src|nil, reason, detail, about?)`: what a suspect does, or a fact
+  to check without holding points) writes the same row as `runNoted` once per (reason, citizenid or `*`, `about`) and
+  never sets a flag; the Review run detail shows a held run's notes as "Note: <line>".
+- `stunMode() -> 'flag'|'hold'|'strict'|'off'` (`Config.AntiCheat.stunNeedsProof`; true reads as strict, false as off,
+  unknown as flag); `stunReport(run, src, seen, netId) -> ok`: seen or off = true; unseen: flag = true + note
+  `stun_unproven`, hold = true + flag, strict = false.
+- `onNpcKilled(run, killerSrc)` — outside kills ≥ `Config.AntiCheat.outsideKillsToFlag` → `outside_help`.
+- Presence: sampled every 5 s for in-progress runs with 2+ participants, the current objective only, with a read-only
+  ctx and the block's `presence` (fallback the start and `presenceRange[3]` / `Config.AntiCheat.presenceRadius`).
+  `presenceOk(run, p)` (scoring and cash at the end) records the `presence` flag with its share once.
+- Idle check once per run at `startedAt + Config.AntiCheat.idleCheck`: active participants not arrived leave as `idle`.
+- `onVoided(citizenid)` — voided mission rows within `voidWindowDays` since the last `autoSuspend` reach
+  `voidsToSuspend` → `CP.Access.suspend(citizenid, suspendDays, 0, 'auto')` + audit `autoSuspend` (never while one is
+  active).
 
 ### 5.27 CP.Testing — modules/testing
-Server: `start(adminSrc, { missionId, location = index|'random', tier, useStartRoute, testers = { src } }) -> ok, errKey`,
-controls (`skip`, `restart`, `pause`, `complete`, `fail`, `end`, `teleport`), invites, `record(adminSrc, {...})`,
-`list() -> tests view`. A test run goes through `CP.Runs.create({ test = {...} })` so everything else is identical.
-`startDraft(src, def, { tier, location, useStartRoute }) -> ok, errKey` (Mission Builder test of an unpublished draft: `test.draft = true`; at the end the tester records Passed/Failed and the result goes to `CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash)`, defHash = the tested definition's).
-Client: test-control panel focus key (RegisterKeyMapping `+crimsonpolice_testpanel`, default F7: sc-multijob binds F9;
-silent unless this player controls a test or has an invitation waiting), debug overlay drawing. The panel and the
-invitation prompt let go of the NUI focus within 250 ms of the player going down (`CP.Tablet.playerDown`) and take
-none while down (toast `test.downed`). `releaseFocus()` (CP.Diag's unstick) and `focusKind() -> 'controls' |
-'invites' | nil` (CP.Diag's state).
+Admin test mode. Files: `modules/testing/{server,client}.lua`, `locales/parts/testing.json`, web
+`admin/screens/Testing.tsx`, `hud/TestControls.tsx`, `hud/DebugOverlay.tsx`, `admin/components/SpawnCheckDialog.tsx`,
+`spawnCheckStore.ts`, `types/testing.ts` (every shape; Lua `false` = no value, lists may arrive as `{}`),
+`mocks/testing.mock.ts`; tests `tests/testing_spec.lua`.
 
-Full admin control (§8.4.2): `markLocationChecked` (an `unplayed = 1` row, status `checked`, never a draft's pass) and
-`hideTestResult` (`hidden`, K on the old value); `list()` ignores hidden rows and gives each mission its `switch`
-(`CP.Settings.missionView`). `start` refuses `err.maintenance` while `CP.Maintenance.active()`.
+Flow — invite first, then Start (nobody joins a test once it started):
+1. Admin UI → Testing → **Start a test**: mission (any status: built-in, custom, disabled, archived — read from
+   `missions/custom/archived/<id>.lua` with `CP.Missions.parse` + `normalize`), location (index or Random), tier (Auto
+   or a fixed one; default the tier `maxOfficers` reaches), start route (default `Config.Testing.useStartRoute`).
+2. Optional testers (callback `test:candidates`) and `server:test:invite { missionId, targets }`: each gets
+   `client:testInvite` (toast naming the panel key) and answers on the Testing screen or with the panel key's prompt →
+   `server:testRespond { inviteId, accepted }`. One lobby per admin; unanswered invites expire after 120 s, accepted ones
+   after 15 min; seats `Config.Testing.maxTesters - 1`.
+3. `server:admin:startTest { ..., testers }` → `start(adminSrc, { missionId, location, tier, useStartRoute, testers })`
+   re-validates every tester and calls `CP.Runs.create({ test = {...} })`, so everything else is identical.
+   `/CrimsonPoliceAdmin test` goes through `command(src, args)` (accepted testers join).
 
-Check spawn points (Config.Testing.spawnCheck; owner request of 2026-10-19: "Double check all coordinates etc
-for every ped"). The server lists the points, the admin's own game judges them with `CP.Spawn.probe` (§5.43); nothing
-is spawned and only his ped moves. Refused with `err.spawn_check_disabled` while Config.Testing.enabled or
-spawnCheck.enabled is false.
-- `spawnPoints(src, { missionId?, location?, point? })` (ox_lib callback `server:test:spawnPoints`, testRun): no mission =
-  `{ missions = { { id, label, source, locations = { { index, label } } } } }` of `CP.Missions.all()` in the Testing
-  order; a mission = that one (`resolveMission`: archived ones too); a mission and a location (`err.in_arena`,
-  `err.spawn_check_on_run`: his game is about to move him) = `{ missionId, missionLabel, location, locationLabel,
-  start = { x, y, z, r }, points }`. A point: `{ id ('spawns[7]', 'routes#2[3]'), key, i, kind, as, wall, model?,
-  obj, block, x, y, z, h?, above = { lo, hi }, dStart?, dPrevious?, near? }`. `kind` (what is there) is `ped`,
-  `vehicle`, `prop`, `marker` or `path`, from the blocks' `pointKinds` (§7.1; a block without it: its
-  `requiredPoints` as markers; a key no objective uses: a marker with `obj = false`); a key two objectives use takes
-  the higher of ped > vehicle > prop > path > marker, and its first objective of that kind. `as` is what the probe
-  judges it as (a marker and a path point as a person: someone stands or walks there), `wall` is true for a person
-  and a vehicle, `model` a vehicle's model when the block names one, `h` the file's heading (a vehicle at a route's
-  first point faces the next one), `above` Config.Spawning.ground of `as`. People, vehicles and objects get the 2D
-  distance to the start (`dStart`) and to the nearest point of another key the objective before uses
-  (`dPrevious`: where the officers stand when it starts); `near = { 'start', 'previous' }` lists those under
-  Config.Spawning.minDistance. Built from `GeometryOf(mission, location, nil, { flat = true })`, the debug overlay's
-  geometry without a run (every point once, headings kept, at most 1000 points and 64 routes of 1000).
-  With `point` (an id, at most 64 characters; "Teleport here"): `{ missionId, location, point }` (that one
-  row), refused `err.spawn_check_teleport_disabled` while Config.Testing.spawnCheck.teleport is false and
-  `err.invalid_payload` for an id the location does not have; audited (`audit`/`testControl`, target
-  `<missionId>#<index>`, new value `teleport <id>`) and `CP.log`ged.
-- `spawnCheckReport(src, { missionId, location, results = { { id, status, groundZ?, dz?, roofZ?, seen? } } })`
-  (action `server:test:spawnCheckReport`, testRun): `err.invalid_payload` for an id the location does not have,
-  one id twice, more results than points or a status the probe never gives (`ok`, `snap`, `underground`,
-  `floating`, `no_ground`, `in_water`, `in_wall`, `interior_not_loaded`, and `skipped`); the server's own coordinates
-  are used; a height that is no finite number (or over 100 km) is kept as none. Every status but ok and skipped gives
-  one `CP.warn` with tag `spawncheck` (so Admin UI → System → Problems lists it too): `spawn check: gang_shootout #4
-  spawns[7] (1153.75, -3169.50, 5.88) UNDERGROUND ground 6.40 (-0.52) [ped; 12.3 m from the start; seen from the
-  start]` (`snap` reads HEIGHT OFF: a placer can put it on the ground, the file is still off); one `CP.log` per
-  location. The report replaces the location's last one in memory: `spawnReports()` -> copies `{ missionId,
-  missionLabel, location, locationLabel, at, by, checked, bad, points }` by mission then location.
-- Client: client actions `spawnCheck` (`{ missionId?, location? }` -> `{ started, missions, locations }`; refused
-  `err.invalid_payload`, `err.spawn_check_disabled`, `err.spawn_check_running`, `err.in_arena`,
-  `err.spawn_check_on_run` (`CP.Runs.current()`), `err.spawn_check_in_vehicle`, `err.spawn_check_dead`,
-  `err.invalid_location`, `err.test_unknown_mission`) and `spawnCheckStop` (-> `{ stopping }`: the check ends after
-  the point being probed). In a thread: fade out; his coords, heading, freeze, visibility and `GetPlayerInvincible`
-  are kept; `FreezeEntityPosition` true, `SetEntityVisible(ped, false, false)`, `SetEntityInvincible` true. Per
-  location the points are asked for again (a refusal `err.in_arena`, `err.spawn_check_on_run`, `err.no_permission` or
-  `err.spawn_check_disabled` ends the check, another one skips the location): fade, `SetEntityCoords` to 1 m over
-  the start (a ped's root is about 1 m over his feet, so he stands on it and the sight check looks from a standing
-  officer's eyes),
-  `NewLoadSceneStartSphere(start, 200.0, 0)` until `IsNewLoadSceneLoaded` or sceneTimeoutMs (1000-30000), then
-  `NewLoadSceneStop`, fade in; `CP.Spawn.visible` from there of the people, vehicles and objects within 200 m (32 a
-  time, Config.Spawning.losTimeoutMs) gives `seen`; then each point: a path point is `skipped` unless
-  spawnCheck.routes is true; one further than spawnCheck.moveWithin (2D) from where he is: he is moved to 1 m over it
-  and the scene loads there; `CP.Spawn.probe(as, x, y, z, h, model, { wall })`. The location's results go to
-  `server:test:spawnCheckReport` (only `id`, `status`, `groundZ`, `dz`, `roofZ`, `interior`, `seen`). NUI push topic
-  `spawnCheck`: `{ state = 'started', missions, locations }`, `{ state = 'location', progress, missionId,
-  missionLabel, location, locationLabel, points }` (or `{ ..., error }` for a skipped location), `{ state = 'point',
-  progress, missionId, location, result }` (the server's point with the answer), and at the end `done`, `stopped` or
-  `failed` `{ progress, totals = { points, bad, locations }, error? }`; `progress = { mission, missions, location,
-  locations, point, points }` (location = its place in this mission's list). Every move re-checks Crimson-Arena (rule
-  13): once the arena owns him (or the crimsonArena bag turns foreign: the check stops) he is never moved again and
-  his freeze is the arena's; visibility and invincibility come back. A run of his that starts during the check (a
-  test he starts or joins: `CP.Runs.current()` before the start move and before each point, or the server's
-  `err.spawn_check_on_run`) ends it with `err.spawn_check_on_run` after reporting what was checked, and he is never
-  moved again: unfrozen unless he was frozen before, seen and hurt as before, the screen faded in, where he is.
-  A logout (`CP.Qbx.onUnload`) ends it like the arena: his ped is never moved again and not let go (qbx's character
-  screen freezes and places it), seen and hurt as before, the screen faded in; a scene load stops early then.
-  Otherwise, and on resource stop, he is put back where he was, facing the same way, unfrozen unless he was frozen
-  before, seen and hurt as before, the screen faded in. A stop in the first fade (before he is hidden) only fades the
-  screen in, and a stop ends our own load scene (`NewLoadSceneStop`, never another resource's). A test teleport
-  caught by a stop in its fade or ground wait fades the screen in and undoes its own freeze (not of a ped
-  Crimson-Arena owns). The test panel's teleport (`testControl` / `teleport` to the
-  start or objective) is refused `err.spawn_check_running` while a check runs, and the Testing screen's Start test
-  buttons are disabled then.
-  A skipped location's push also carries `missionLabel`. "Teleport here": the client action `teleport`
-  with `{ target = 'point', missionId, location, point }` needs no test run; refused `err.invalid_payload`,
-  `err.spawn_check_running` (a check runs: it puts him back afterwards), `err.in_arena`, `err.spawn_check_on_run`;
-  then `server:test:spawnPoints { missionId, location, point }` gives the coordinates (the NUI sends none; an answer
-  without them is `err.test_control_failed`), the arena and a running check are checked again, and the test
-  teleport's move puts him (or the vehicle he drives) on the ground there.
-- Admin UI → Testing: `admin:getTests` `config.spawnCheck = { enabled, teleport, routes }` (enabled is false
-  while Config.Testing.enabled is). While enabled the screen shows a "Check spawn points" button and a per-location
-  item that open the dialog (`web/src/admin/components/SpawnCheckDialog.tsx`: scope, Start / Stop, progress, the
-  results with "Teleport here" and "Copy report"). `web/src/admin/components/spawnCheckStore.ts` takes the
-  `spawnCheck` pushes at module level, so a check and its results outlive the dialog and the open tablet; the copied
-  report has one line per point to look at in the server's console format.
+Rules:
+- Gates: `testRun`, `Config.Testing.enabled`, `CP.Alerts.inArena` for the admin and every tester (also for inviting
+  and accepting), not on a run, one test per admin (`err.test_already_running`), 2 s between starts, maintenance.
+  Cooldowns and caps are never checked. The Cross-Department lock is skipped for admin tests, checked for a
+  non-admin draft test (`err.operation_locked`).
+- Admins need not be police: the participant record comes from `getOfficer` when on duty, else `CP.Qbx.getInfo` with
+  the active job's department or the first department key, rank the grade name or `test.admin_rank`, and `job = nil`
+  (no duty/job re-checks).
+- A fixed tier becomes `test.forcedTier` (no rescale); Auto scales normally. A chosen location another run holds is
+  refused (`err.test_location_busy`); Random uses `CP.Draw.pickLocation`.
+- Controls (`server:test:control`, only the starting admin): `skip`/`restart` (`CP.Runs.testSkip`/`testRestart`, In
+  progress only), `pause`/`resume`, `complete`, `fail` (`test.fail_forced`), `end` (`failRun(run,
+  'test.ended_by_admin')`: the `cancelled` reason's text names operations), `teleport { target = 'start'|'objective' }`
+  (refused in the arena and with `Config.Testing.allowTeleport = false`; the client re-checks the arena flag, probes the
+  ground, moves the vehicle when driving and undoes only its own freeze), `debug { enabled? }`
+  (`Config.Testing.debugOverlay`). Complete/fail/end are audited (`testControl`); starts `testStart`/`testDraft`.
+- The debug stream (every 2 s while on, admin only, never while he is in the arena): `client:test { controls, runId,
+  debug }` with counts against the caps, spawn points, waypoints, zones, AI host and timer, plus the geometry (points,
+  routes, zones; capped at 240 points, 16 routes, 1200 waypoints) when the state or objective changed. The NUI gets it
+  as push `test` (not through the HUD); in-world markers are drawn by the Lua client within 250 m.
+- Panel key `+crimsonpolice_testpanel` (`Config.Testing.panelKey`, F7; F9 is sc-multijob's): with controls →
+  `SetNuiFocus(true, true)` for the HUD panel; without → the invitation prompt while an invite is open; nothing to
+  open → nothing at all. Released by the key/Escape (on key-up), when the test ends or he leaves, on a foreign arena
+  value, on stop, and within 250 ms of going down (none taken while down, `test.downed`); a press within
+  `panelKeyGuardMs` (300) of letting go is ignored. A mouse/pad binding sends `key = false` (Escape only).
+  `releaseFocus()`, `focusKind() -> 'controls'|'invites'|nil` (CP.Diag).
+- Test runs settle through CP.Runs and write nothing; the result shows what it would have earned. When the admin
+  disconnects the test ends for everyone (`test.ended_admin_left`).
+- `record(adminSrc, {...})` (`server:admin:recordTest`, alias `server:test:record`): only for a test this admin ran in
+  the last 6 h (`err.test_not_run`), picked by its `key` (run id), claimed once; tier, testers, `def_hash` and version
+  come from the test; notes ≤ 255 bytes; audited (`recordTest` / `recordDraftTest`) and posted to the builder webhook.
+  `markLocationChecked` (an `unplayed = 1` row, status `checked`), `hideTestResult` (`hidden`).
+- `list()` (`admin:getTests`): a location's last row is "changed" when its `def_hash` differs from the mission's
+  `defHash`, is missing, or (custom) its version differs; hidden rows are ignored; each mission carries `switch`.
+- `startDraft(src, def, { tier, location, useStartRoute })` (`builderEdit` or `testRun`): `test.draft = true`; the
+  recorded result calls `CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash)` (a pass counts
+  only for that content). `test:state` is open to `testRun` or `builderEdit`.
+
+Check spawn points (`Config.Testing.spawnCheck`; refused `err.spawn_check_disabled` while it or Testing is off). The
+server lists the points, the admin's own game judges them with `CP.Spawn.probe` (§5.43); nothing is spawned and only
+his ped moves.
+- `spawnPoints(src, { missionId?, location?, point? })` (callback `server:test:spawnPoints`, testRun): the catalog, one
+  mission, or one location's `{ start, points }`. A point: `{ id ('spawns[7]', 'routes#2[3]'), key, i, kind =
+  ped|vehicle|prop|marker|path (from the blocks' `pointKinds`, §7.1), as (what the probe judges), wall, model?, obj,
+  block, x, y, z, h?, above, dStart?, dPrevious?, near? }` (`near` lists start/previous closer than
+  `Config.Spawning.minDistance`); at most 1000 points and 64 routes. With `point` ("Teleport here", needs
+  `spawnCheck.teleport`) the one row, audited `testControl`.
+- `spawnCheckReport(src, { missionId, location, results })` (action, testRun): statuses `ok`, `snap`, `underground`,
+  `floating`, `no_ground`, `in_water`, `in_wall`, `interior_not_loaded`, `skipped`; every bad one is one `CP.warn` with
+  tag `spawncheck` (listed in System → Problems) naming mission, location, point, coords, status and ground; the
+  report replaces the location's last one in memory (`spawnReports()`).
+- Client actions `spawnCheck { missionId?, location? }` (refused on a run, in a vehicle, dead, in the arena, while one
+  runs) and `spawnCheckStop`. In a thread: fade out, keep his coords, heading, freeze, visibility and invincibility;
+  freeze, hide, make invincible; per location move to 1 m over the start, `NewLoadSceneStartSphere(start, 200.0, 0)`
+  (`sceneTimeoutMs`), `CP.Spawn.visible` of the points within 200 m gives `seen`; then each point (paths `skipped`
+  unless `spawnCheck.routes`; further than `moveWithin` → move there) through `CP.Spawn.probe`; the results go to the
+  server; NUI push `spawnCheck` (started, location, point, done/stopped/failed with totals). Every move re-checks
+  Crimson-Arena (rule 13): once the arena owns him he is never moved again; a run of his that starts, or a logout, ends
+  the check where he is. Otherwise, and on resource stop, he is put back as he was. The test teleport is refused while
+  a check runs and Start test is disabled. `spawnCheckStore.ts` keeps the pushes at module level, so results outlive
+  the dialog; "Copy report" gives one line per point in the console format.
 
 ### 5.28 CP.Builder — modules/builder
-Server: drafts, locks, autosave, test runs of drafts (via `CP.Testing`/`CP.Runs` with `test.draft = true`),
-publish (Lua export with `SaveResourceFile`), archive/restore, rollback (.bak), reload of hand edits,
-`loadPublished() -> { def, ... }` *(hook for CP.Missions.loadAll)*, `onReload()`,
-`onDraftTested(missionId, version, tierName, passed, src, defHash)` *(hook from CP.Testing; a pass counts only for the draft content with that defHash)*. Testing is optional: a passed test at the tier `CP.Scaling.tierFor(maxOfficers)` (`draft_tested = 1`) is needed to publish only while `Config.Builder.requireTestToPublish` is true, and only for supervisors (never admins). List entries carry `needsTest`, `builder:config` carries `requireTestToPublish` (for the viewer), and an untested publish is audited as `publishUntested`.
-Client: placement tool, route recording, test drive; overlays through `CP.Tablet.overlay`.
+The Mission Builder: drafts, locks, autosave, draft tests (`CP.Testing.startDraft`, `test.draft = true`), publish (a Lua
+file written with `SaveResourceFile`), archive/restore, rollback, hand edits, edited built-ins, and the in-world tools
+(placement, route recording, test drive). Files: `modules/builder/server.lua`, `client.lua`,
+`locales/parts/builder_server.json`, `builder_client.json`; web `web/src/builder/` (MissionList, BuilderEditor and its
+seven steps, BlockPanels, LocationMap, store, schema, applyResult, useDraftEditor), `supervisor/screens/Builder.tsx`
+(`sup_builder`), `admin/screens/Missions.tsx` (`admin_missions`), `hud/BuilderOverlay.tsx`, `types/builder_server.ts`
+and `types/builder_client.ts` (every shape below), mocks `builder_server.mock.ts`, `builder_client.mock.ts`; tests
+`tests/builder_server_spec.lua` (its own database `cp_test_builder_server` and a temporary
+`missions/custom/test_builder_<n>/`), `tests/builder_client_spec.lua`, `tests/int_duplicates_spec.lua`. Everything
+sent or accepted is plain JSON; times shown are seconds; `serverTime` is `os.time()`.
 
-Full admin control (§8.4.2): edited built-in missions are override rows (`cp_custom_missions.overrides_builtin = 1`,
-`base_hash` = the shipped file's hash when the edit was made or kept) with their files in
-`<exportPath>overrides/<id>.lua` (`.v<n>.lua.bak`, `.draft.lua.bak`, `<id>.base.lua` = the shipped file at that
-time, `archived/`); never in `missions/builtin/`. Override rows are admin-only in `Allows`, `VisibleTo` and `LoadRow`
-(supervisors never, whatever `builderEditAny` says) and only while `Config.AdminControl.editBuiltins` is on;
-`changeOwner` and `deleteMission` refuse them. `B.validate(def, { baseline = { def, raw } })` checks an override with
-the custom-mission rules, the shipped file as a baseline by value (a model, weapon or zone it uses is allowed, a
-number may stay at or below its shipped value). `B.loadOverrides() -> { [id] = { raw, filePath, hash, version,
-baseHash, editedInCode } }` *(hook for CP.Missions.loadAll; empty while editBuiltins is off; a missing file is written
-again from the row)*, `B.shippedOf(id) -> { path, content, raw, hash }`, `B.editBuiltinsOn()`, `B.onTestHidden(missionId,
-defHash)` (a removed pass makes that draft untested again). `Begin()` lets admins past `Builder.enabled = false`.
-Armed spawns: `B.armedKeepOut(start, searchCircle) -> metres | nil` (2D: `start.radius +
-Config.Builder.spawnMargin`, never under `minSpawnFromStart`; nil at a search circle) is the distance `B.validate`
-holds every armed spawn key to (`ARMED_FIELDS`: hostile_waves spawns / boss.spawn / spawnSets.keys, escort
-ambushPoints, pursuit spawn / spawns, flee_arrest associates.spawns; error `builder.error.spawn_armed`; a point a
-built-in mission plays at the same start is trusted: the loaded built-ins, and the shipped file of each one not
-loaded, listed by `CP.Missions.builtinIds()`; at server start the file sync runs before any built-in is loaded, so a
-hand edit is checked against the shipped files). `B.armedTooClose(runtimeDef, builtins?) -> { { location, key,
-min, have } }` lists the keys still inside it: `CP.Missions.normalize` warns with it for a published custom file (it
-still loads; `meta.builtins` = the built-in definitions to trust, which `loadAll` sets to the ones it is loading).
-The client's `B.checkSpot` refuses such a point while placing (`builderPlace` payload `armed`, `startRadius`;
-`B.armedKeepOut(ctx)` on the client).
-Deleted custom missions go flat into `<exportPath>deleted/` as `<id>-<time>__<file>` and `<id>-<time>__row.json`, with
-an `index.json` list whose `folder` is that name prefix (no folder is made per deletion). The export folder and its
-`archived/`, `overrides/`, `overrides/archived/` and `deleted/` ship with a `.gitkeep`; `B.ensureExportDirs()` reports
-a missing one, and `B.missingExportDirs(path) -> { rel, ... }` is the Settings check of `Builder.exportPath` (a path
-whose folders are not there yet is refused with `err.setting_export_folder`).
+#### 5.28.1 The draft definition
+The definition of §3.2 in builder units, stored as JSON in `cp_custom_missions.draft_definition` and
+`published_definition` (a copy of the published file plus `_file`). The Lua file is produced only on publish. Field
+rules: `id` set by the server; `label` 1–64, `description` 0–500 characters; `type` a `Config.MissionTypes` key
+(required); `departments` (`[]` = every one); officers, difficulty, `timeLimit`, `startTimeout`, `cooldown` in the
+`Config.Blocks.details` ranges (seconds); `locations` ≥ `Config.Builder.minLocations` (edited built-ins
+`minLocationsOverride`, 3), at most 20; a start radius 20–150 m (default 60); objectives 1..`Config.Builder.maxBlocks`;
+`scaling` at most 20 (`"objectives.1.waves"` or `{ path, max }`); `items` at most 10, count 1–100; labels 64.
+
+##### 5.28.1.1 Units (builder form ↔ Lua file)
+- Vectors `{ x, y, z }` / `{ x, y, z, w }` (w = heading), rounded to 2 decimals when stored so the file round-trips;
+  written as `vec3(...)` / `vec4(...)`.
+- Chances are whole percent in the builder and two-decimal fractions in the file (`percentFields`): hostile_waves
+  `surrender.chance`, `boss.surrender.chance`; flee_arrest `responses.*` (sum 100), `armedShare`; pursuit `footFlee`;
+  interact_points `roll.outcomes.*.chance` (sum 100). Health shares (`belowHealth`) stay fractions.
+- Progress times are seconds in the builder (one decimal) and milliseconds in the file (`secondsFields`):
+  interact_points `progress.duration`, `roll.outcomes.*.followUp.duration`; protect_rescue `freeTime`; flee_arrest
+  `knock.duration`, `cuff.duration`; hostile_waves `cuff.duration`; pursuit `arrest.duration`; search_area
+  `clueProgress.duration`, `cuff.duration`. The upgrades' percent, seconds and spawn fields (§7.4) are handled the
+  same way, and the export keeps the Lua key order.
+
+##### 5.28.1.2 Location keys
+`start` (`{ coords, radius }`) is required; every other key is named by the objectives that read it. Values: vec3,
+vec4, lists of them, `{ coords, heading?, label? }` lists, lists of vec3 lists (flee routes), or a road route. The
+block's `requiredPoints(obj)` lists the keys every location must have. Spawn keys (`spawnFields`: hostile_waves
+`spawns`, `boss.spawn`; protect_rescue `npcs`; flee_arrest `suspect`, `associates.spawns`, `spawns`; pursuit `spawn`,
+`spawns`; escort `ambushPoints`; search_area `hiding`) are ≥ `Config.Builder.minSpawnFromStart` from the start. Armed
+keys (`ARMED_FIELDS`: hostile_waves `spawns`, `boss.spawn`, `spawnSets.keys`; escort `ambushPoints`; pursuit `spawn`,
+`spawns`; flee_arrest `associates.spawns`) must also be outside `B.armedKeepOut(start, searchCircle)` = start radius +
+`Config.Builder.spawnMargin` (2D; none at a search circle; `builder.error.spawn_armed`); a point a built-in plays at
+the same start (within 0.05 m) is trusted. `B.armedTooClose(def, builtins?)` feeds the loader's warning for older
+published files (they still load). A key's points further than the start radius + `maxPointFromStart` are
+`builder.error.points_far`, except routes, checkpoints, fleeTo, road routes and an interact_points random key with a
+point in the start circle. Markers may be near the start; no-build zones apply to every point (2D).
+
+##### 5.28.1.3 Road routes
+`{ points, stops = { { at, wait } }, loop }` — snapped road waypoints. Length (sum of waypoint distances) within
+`Config.Builder.route.minLength`–`maxLength` (0.8–8 km); open route ends ≥ `minStartEndGap` (300 m) apart; a loop ends
+within `loopClose` (50 m); no waypoint in a no-build zone; 2–500 waypoints; stops at most
+`Config.Blocks.escort.stops[2]`, interior only, `wait` within `stopWait`. The road path between waypoints is checked
+on the client while recording (the server has no path finding).
+
+##### 5.28.1.4 Bonuses and penalties
+Only `Config.Bonuses` ids: `bonuses` positive, `penalties` negative; `{ id, points }` (kind points) or `{ id, pct }`
+(whole percent of P); a missing value is filled from config when stored; caps `|points| ≤ bonusCap.points` (50), `pct
+≤ bonusCap.share × 100` (25); an id with `block = '<id>'` needs that block; `each` from config. File form `{ id,
+points, each }` / `{ id, pctOfPoints = 0.10 }`. `B.customBonusFields` drops the objective-level ids and values the
+blocks refuse on custom missions (non-standard aliveBonus/detainBonus/fastStop/ramPenaltyId/fastBonus ids and
+points, `fastStop.seconds` above 120, field_contact `allCorrect`/`aliveBonus` points, process_scene `aliveBonus` to `{
+id }`, a skill_check setback `penalty` not in Config.Bonuses), so the block defaults apply.
+
+##### 5.28.1.5 Never in a definition
+No payout field (`*payout*`, `cash`, `cashBase`, `basePay`, `money`, `pay`, `reward`, `rewards`) at any depth:
+`builder.error.payout_field`, stripped when stored. Loader fields and `_file` are stripped. Items `armour`,
+`bandage`, `ammo-*`, `weapon_*` (any case) are refused (Crimson-Arena rule 4). `RENAMED_FIELDS` reads old names as new
+(`policeVehicle` → `vehicleRequired`).
+
+##### 5.28.1.6 `published_definition._file`
+`{ hash (CP.U.hashHex of the file as written; hand edits compare with it), version, publishedAt, publishedBy,
+publisher ("Sergeant John Doe (SAST, citizenid ABC12345)"; an admin outside a department `(admin, citizenid …)`; `]]`
+and control characters neutralised), reason = publish|rollback|code_edit|restore_file }`. A published row without it
+takes the file on disk as its baseline.
+
+#### 5.28.2 Lifecycle, versions and locks
+- `status`: `draft` → `published` → `archived` (→ published by restore); the list shows Draft → Tested → Published →
+  Archived (`tested` = `draft_tested = 1`). A published mission may carry a draft (`hasDraft`) of the next version.
+- Versions: a new draft is v1; the first save of a published mission creates `published_version + 1`; publish
+  consumes the draft; rollback and an accepted hand edit publish `published_version + 1` (rollback moves a draft to
+  the next number, a code edit replaces it). Every run row stores the version it played.
+- `draft_tested` is set only by `onDraftTested` for a pass of the current draft (same version, and the `defHash` that
+  ran equals the stored content's hash) at `CP.Scaling.tierFor(maxOfficers)` or higher (`testAtMaxTier = false`: any);
+  any stored content change resets it. Testing is optional: it is needed to publish only while
+  `Config.Builder.requireTestToPublish` is true, and only for supervisors (list entries carry `needsTest`; an untested
+  publish is audited `publishUntested`).
+- Edit lock (`locked_by`, `locked_until`, computed in SQL): `lock`, `save`, `autosave` take or renew it for
+  `Config.Builder.editLockMinutes`; held by someone else it refuses save, autosave, publish, test and discardDraft
+  (`err.builder_locked`); released on publish, `unlock`, the holder's drop or unload, and `breakLock`. The UI autosaves
+  every `autosaveSeconds` while it holds the lock.
+- Built-ins are read-only (view, duplicate). A custom id is `custom_` + the label's slug (`[a-z0-9_]`, ≤ 30), `_2`... on
+  a clash, `INSERT IGNORE` with retry; a never-published draft is renamed when the slug changes (`previousId`; a test
+  started before the rename never reaches it).
+- Save stores incomplete drafts and returns `errors` and `valid`; publish refuses with `err.builder_invalid`.
+- Discard deletes a never-published row, else only the draft.
+
+| Action | Own mission | Someone else's |
+|---|---|---|
+| builder:list / get / config, create, duplicate, validate | builderEdit | builderEdit |
+| lock, unlock, save, autosave, test, discardDraft | builderEdit | builderEditAny |
+| publish | builderPublish | builderPublish + builderEditAny |
+| archive, restore | builderArchive | builderArchive + builderEditAny |
+| rollback | builderRollback | builderRollback + builderEditAny |
+| breakLock | breakEditLock | breakEditLock |
+
+Admins always pass and may be off duty (identity from `CP.Qbx.getInfo`); supervisors must be on-duty officers.
+`Begin()` lets admins past `Builder.enabled = false`. Draft tests refuse `err.in_arena`.
+
+#### 5.28.3 Callbacks (reply `{ ok, data, error }`)
+- `builder:list {}` → `{ missions = BuilderListEntry[] (every row, newest change first), builtins, me, serverTime }`;
+  an entry has id, label, type, `status` (display), `dbStatus`, `version`, `draftVersion`, `hasDraft`, `draftTested`,
+  `editedInCode`, `filePath`, `owner`, `updatedBy`, `updatedAt`, `lock = { citizenid, name, secondsLeft, mine }`,
+  `requiredTier`, `needsTest`, `can = { edit, publish, archive, restore, rollback, breakLock, discard }`.
+- `builder:get { id }` → the entry plus `definition` (the draft, or the published copy), `publishedDefinition`,
+  `readOnly`, `errors`, `armed`, `backups` (versions with a `.bak`), `publishedAt`, `publishedBy`. Built-ins:
+  `source = 'builtin'`, read-only. `err.builder_unknown_mission`.
+- `builder:config {}` → `Config.Blocks` (verbatim), `blockList` (with `available`, default `minSeconds`,
+  `presenceRange`), `allowed`, the Builder limits (maxHostiles, maxBlocks, minLocations, minLocationsOverride,
+  maxLocations 20, minLocationGap, minSpawnFromStart, spawnMargin, maxPointFromStart, bonusCap), `bonuses` (from
+  Config.Bonuses), `noBuildZones`, departments, missionTypes, tiers, autosaveSeconds, editLockMinutes, testAtMaxTier,
+  keepBackups, exportPath, route, startRadius `[20, 150, 60]`, item limits, `percentFields`, `secondsFields`,
+  `spawnFields`, `forbiddenItems`, `useStartRoute`, `templates`, `requireTestToPublish`, and the viewer's
+  `permissions`.
+- BuilderError `{ path (e.g. `locations.2.spawns`), message (translated), key?, vars? }`.
+
+#### 5.28.4 Actions (`server:builder:<name>`, reply `{ ok, data | error }`)
+Every action can answer `err.builder_disabled`, `err.invalid_payload`, `err.builder_unknown_mission`,
+`err.no_permission`, `err.rate_limited`.
+
+| Action | Payload | Result | Other errors |
+|---|---|---|---|
+| `create` | `{ type, label? }` or `{ template, label? }` (`Config.Builder.templates`: a built-in's settings and objectives, one empty location) | `{ id, record }` — draft v1, locked by me | `err.builder_bad_type`, `err.builder_unknown_template` |
+| `duplicate` | `{ id }` | `{ id, record }` — "‹label› (copy)", errors show what to fix | |
+| `lock` / `unlock` | `{ id }` | `{ id, lock }` / `{ id }` | `err.builder_locked`, `err.builder_read_only` |
+| `save` | `{ id, definition }` | `{ id, previousId?, version, savedAt, valid, errors, draftTested, lock }`; audited | `err.builder_locked`, `err.builder_too_large` |
+| `autosave` | `{ id, definition }` | `{ id, version, savedAt, draftTested, lock }`; not audited; one per 5 s | `err.builder_locked` |
+| `validate` | `{ id, definition? }` | `{ valid, errors, armed, maxHostiles, requiredTier }` | |
+| `test` | `{ id, tier?, location?, useStartRoute? }` | `{ id, version, tier, location, requiredTier }` — the stored draft (autosave first) through `startDraft` | `err.in_arena`, `err.builder_bad_tier`, `err.builder_bad_location`, `err.builder_invalid`, `err.builder_no_draft`, `err.builder_testing_unavailable` |
+| `publish` | `{ id }` | `{ id, version, filePath, backup }` | `err.builder_no_draft`, `err.builder_invalid`, `err.builder_not_tested`, `err.builder_locked`, `err.builder_read_only`, `err.builder_file_write` |
+| `archive` / `restore` | `{ id }` | `{ id, filePath }` | `err.builder_not_published` / `err.builder_not_archived`, `err.builder_file_write` |
+| `rollback` | `{ id }` | `{ id, version, fromVersion }` | `err.builder_not_published`, `err.builder_no_backup`, `err.builder_invalid` |
+| `breakLock` | `{ id }` | `{ id, previous }` | |
+| `discardDraft` | `{ id }` | `{ id, deleted }` | `err.builder_no_draft`, `err.builder_locked` |
+| `teleport` | `{ missionId, location, key, index }` | the same; the point goes to the caller in `client:builder:teleport` (`Config.Builder.teleport`; admins or a `builderTeleport` grant, `CP.Builder.canTeleport`; audited) | `err.builder_teleport_off`, `err.no_permission`, `err.in_arena`, `err.builder_on_run`, `err.builder_dead`, `err.builder_no_point` |
+
+- Publish writes `missions/custom/<id>.lua` in the spec's custom-example shape, keeps the previous file as
+  `<id>.v<n>.lua.bak` (`Config.Builder.keepBackups`), stores `published_definition`, releases the lock and calls
+  `CP.Missions.register`. Archive moves the file to `archived/` and unregisters; restore moves it back. Rollback
+  re-checks the newest older `.bak` against the guardrails (not the test) and publishes it with a fresh header.
+- Guardrails (`B.validate(def, opts)`): every SPEC guardrail and route rule, the block's `validate` for every location
+  (as a custom mission), `requiredPoints`, `armedCount`, z sanity (|x|,|y| ≤ 10000, −250 ≤ z ≤ 1500), `minSeconds` ≥ 1
+  with the objectives' minimum times fitting the time limit (field_contact at least 30, process_scene 5), and
+  `CP.Missions.normalize` on publish, test, validate and reloads. A mission with a `search_area` uses its search
+  circle as the start: every start radius equals the first search_area's `startRadius` (200–1000 m,
+  `builder.error.start_radius_search`). Every built-in's duplicate passes them (`Config.Builder.allowed.peds` holds
+  every ped a built-in uses).
+- Live updates: NUI push `builder { event, id, by? }` (changed, published, archived, restored, rolledBack, tested,
+  lockBroken, reloaded, deleted) to everyone who opened the builder in the last 15 minutes; `client:builder { event =
+  lockBroken|reloaded|deleted, id }` to the editor who lost it.
+- Audit (category builder, which posts the builder webhook): create, duplicate, save (explicit), test,
+  testPassed/testFailed, publish, publishUntested, archive, restore, rollback, breakLock, discardDraft, codeEdit,
+  codeEditConflict.
+
+#### 5.28.5 Server hooks
+- `loadPublished() -> { def }` (for `CP.Missions.loadAll`, also at start): each published row's file, read as data;
+  definitions carry the loader fields; a missing file is rewritten from `published_definition`; a changed file goes
+  through the hand-edit check.
+- `onReload() -> { checked, unchanged, edited, rejected, conflicts, rewritten }` (from `CP.Missions.reload`): a file
+  whose hash differs from `_file.hash` is parsed, payout fields stripped (warning), checked against the guardrails
+  (builder copy) and `normalize` (as written), then stored as a new version with `edited_in_code = 1` (only our
+  header's `version:` line updated, an `edited:` line added; the previous version regenerated as `.bak`). A file that
+  fails stays on disk unused (the last published version stays live, with a warning on every reload). If the draft
+  also changed since the last publish the file wins: the draft goes to `<id>.draft.lua.bak`, is cleared, the lock
+  released, the editor told, `codeEditConflict` audited. The actor is `console`.
+- `onDraftTested(missionId, version, tierName, passed, src, defHash) -> bool`, `onTestHidden(missionId, defHash)` (a
+  removed pass makes that draft untested again), `validate(def, opts)`, `exportLua(def, meta)` (pure).
+- Edited built-ins (§8.4.2, only while `Config.AdminControl.editBuiltins` is on, admin-only in `Allows`, `VisibleTo`,
+  `LoadRow`): override rows (`overrides_builtin = 1`, `base_hash` = the shipped file's hash) with files in
+  `<exportPath>overrides/<id>.lua` (`.v<n>.lua.bak`, `.draft.lua.bak`, `<id>.base.lua`, `archived/`), never in
+  `missions/builtin/`; `changeOwner` and `deleteMission` refuse them. `validate(def, { baseline = { def, raw } })` uses
+  the shipped file as a baseline (its models, weapons and zones are allowed; a number may stay at or below its shipped
+  value). `loadOverrides()`, `shippedOf(id)`, `editBuiltinsOn()`.
+- Deleted custom missions go flat into `<exportPath>deleted/` as `<id>-<time>__<file>` and `__row.json`, listed in
+  `index.json`. The export folders ship with a `.gitkeep`; `ensureExportDirs()` reports a missing one and
+  `missingExportDirs(path)` is the Settings check of `Builder.exportPath` (`err.setting_export_folder`).
+
+#### 5.28.6 Client protocol (builder client ↔ builder UI)
+The tools take minutes (an NUI request waits 20 s), so each is started by a client action and its result delivered
+later.
+
+| Client action | Payload | Reply |
+|---|---|---|
+| `builderPlace` | `{ missionId, location, key, kind = ped\|vehicle\|marker\|area\|start, model?, heading, multiple, min?, max?, radius?, radiusMin?, radiusMax?, minGap?, points, start, spawn, armed?, startRadius?, otherStarts, label?, ui? }` | `{ started }` or `err.in_arena` / `err.builder_busy` |
+| `builderHere` | the builderPlace payload | `{ ok, reason, point, street?, result? }` at once: the spot he stands on (or his vehicle), checked as an aimed spot; `street` names a new mission; `err.builder_here_off` without `Config.Builder.useMyPosition` |
+| `builderAutoPoints` | builderPlace payload + `count`, `anchor?` | `{ ok, reason, wanted, proposed, result? }`: spots on a ring `Config.Builder.autoFillRing` beyond the key's keep-out, snapped to the navmesh or the road side, judged by `CP.Spawn.probe` and `B.checkSpot`; applied only when kept; more than 250 m away → not ok; `err.builder_auto_off`, `err.builder_auto_start` |
+| `builderCheckPoints` | `{ missionId, location, ui?, start, startRadius?, offset, keys = { { key, kind?, model?, spawn?, armed?, minGap?, route?, points } } }` | `{ ok, reason, moved, failed, keys = { { key, points, failed, checked } } }`: "Move the whole location here" — every point moves by `offset`, routes only move, others are put on the ground and checked; 20 s at most |
+| `builderRecord` | `{ missionId, location, key, stops, loop }` | `{ started }` |
+| `builderTestDrive` | `{ missionId, location, key, route, vehicle, speed, style }` | `{ started }` |
+| `builderResult` | `{}` | the pending result (or nil), cleared |
+| `builderCancel` | `{}` | `{ cancelled }` |
+| `builderWaypoint` | `{ coords }` | `{ ok }` |
+| `builderShowMap` | `{ points = { { kind = start\|spawn\|checkpoint, coords } } }` (1–300) | `{ shown }`: temporary pause-map blips until the tablet opens again |
+| `builderTeleport` | `{ missionId, location, key, index }` | the same, once he is on the ground at the server's point |
+
+- Results (kept until read and pushed as `builder { event = 'clientResult', id, result }`, each with an increasing
+  `seq`): `placement { points, radius?, cancelled }`, `recording { route, length, rejected, rejectedSamples (≤ 50),
+  unreachable, droppedStops, cancelled }` (fewer than two waypoints = cancelled), `testdrive { completed, failed,
+  cancelled }`. Overlays (`CP.Tablet.overlay`, every 150 ms): placement, recording, testdrive (fields in
+  `types/builder_client.ts`).
+- Flow: the tool closes the tablet, runs, cleans up everything it set (ghost, vehicle, driver, blips, zones,
+  waypoint), stores the result and reopens the tablet on `payload.ui` 300 ms later (not after the arena, death, unload
+  or deletion). The NUI keeps editor state in module memory (`builder/store.ts`), queues `clientResult` pushes, pulls
+  `builderResult` on reopen (deduplicated by `seq`), applies it (`applyResult.ts`) and autosaves.
+
+#### 5.28.7 Client rules
+- Stored heights: peds at ground + 1.0 m, vehicles at their root height (`GetModelDimensions`), markers on the aimed
+  surface, starts and areas on the ground.
+- Spot checks (`B.checkSpot`, in order): every point placed, nothing aimed at, further than 50 m, in a no-build zone,
+  water, not on the ground (more than 0.75 m from ground z or steeper than ~45°; not for markers), the capsule probe
+  (peds, vehicles), armed keep-out, `minSpawnFromStart` (3D), `minLocationGap` to other starts, `minGap` within the
+  key. Checks use the point as stored, which the server re-checks on save and publish.
+- Recording: a sample further than `maxOffRoad` from a node is still taken on a road surface with the node within 4 ×
+  `maxOffRoad`; waypoints are the snapped node positions; a turn adding up to `turnAngle` makes a waypoint; Backspace
+  undoes `undoMetres` and sampling waits until he is back at the end (also after a resume or another car); E or the
+  horn adds an escort stop. Each segment is checked with `CalculateTravelDistanceBetweenPoints` (≥ 100000 = no path)
+  as soon as its second waypoint is kept (path nodes stream only near the player). Checkpoint routes may be recorded
+  (thinned to `checkpoints[2]`, ends kept) or placed. A pursuit race loop uses keys `^raceLoop\d*$` (loop = true).
+  Search areas need 6 clue and 6 hiding spots.
+- Test drive: more than 200 m from the start a waypoint leads there (never a teleport); the spawn must be 6 m clear; a
+  local vehicle and driver (`s_m_m_armoured_01`, fallback `a_m_m_business_01`) drive waypoint by waypoint; a waypoint
+  not reached within `testDriveTimeout` goes to `failed`; stops are waited out; reckless drives as fast (a test drive
+  must stay in lane).
+- Refusals: `err.in_arena` (the state bag; the server re-checks the bucket), `err.builder_busy` (one tool at a time),
+  `err.builder_dead`, `err.builder_on_run`, `err.builder_disabled`, `err.builder_bad_vehicle`, `err.invalid_payload`.
+  A foreign arena value or being put on a run stops a running tool (checked every 250 ms; no reopen).
+  `client:builder` lockBroken/reloaded stop that mission's tool (the result arrives cancelled); deleted drops it.
+- Screens: the Supervisor screen is gated by `session.actions.builderEdit` and each action by its permission and the
+  row's `can.*`; the Admin catalog merges `admin:getMissions` with `builder:list` (launch through `opLaunch` for
+  `crossDeptEligible` missions). Autosave every `autosaveSeconds` while dirty (with a `rev` guard), before a tool,
+  test or publish; leaving saves and unlocks; validation runs 1.5 s after the last change. After a Random-location
+  test the UI asks which location ran.
 
 ### 5.29 CP.Storage (with CP.Storage.MemSQL) — modules/storage (S)
-Where Crimson-Police keeps its data (`Config.Database`). `enabled = true` (the default): MySQL/MariaDB through
-oxmysql, exactly as before, tables built by the migrations runner, no SQL import. `enabled = false` ("database
-off"): Crimson-Police never sends a query to oxmysql for its own data; every `cp_` table lives in the saves folder
-(`Config.Database.folder`, default `saves` inside the resource; FXServer's file sandbox only lets a resource write
-inside resource folders, so an absolute path must point inside the resource). The mode is called `'files'` in code
-and "the saves folder" in player- and owner-facing text (`CP.Storage.name()` gives `'database'` or `'saves folder'`
-for console lines). FiveM resource KVP is never used. The module's one global table is `CP.Storage`; the engine's
-code is `CP.Storage.MemSQL` (memsql.lua creates `CP.Storage` and puts it there).
+Where Crimson-Police keeps its data (`Config.Database`). `enabled = true` (default): MySQL/MariaDB through oxmysql,
+tables built by the migrations runner, no SQL import. `enabled = false` ("database off", `'files'` in code, "the saves
+folder" in owner text): every `cp_` table lives in the saves folder (`Config.Database.folder`, default `saves` inside
+the resource; FXServer's sandbox only lets a resource write inside resource folders). `CP.Storage.MemSQL` is the
+engine (memsql.lua creates `CP.Storage` and puts it there).
 
-- **Load order.** fxmanifest loads `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` (it only defines
-  `CP.Storage.MemSQL`), then `modules/storage/server.lua` (`CP.Storage`), before every other server module. In files mode
-  `server.lua` opens the saves folder and replaces this resource's `MySQL` global with the shim at file load (the
-  one exception to ground rule 5, so no module ever holds the wrong `MySQL`). The `modules/**/server.lua` glob
-  loads `server.lua` a second time; that load returns at once. The migrations runner then builds the same tables
-  in the engine (only the migrations the saves folder has not recorded yet) and prints `storage: ...`.
-- **CP.Storage** (server): `mode() -> 'database'|'files'`, `name() -> 'database'|'saves folder'`,
-  `folder() -> full path|nil` (files mode), `describe() -> text` (the runner's start-up line), `loadError() ->
-  text|nil` (a saves folder that is missing, cannot be written or cannot be read: every statement then fails with that
-  text and nothing in the folder is changed; for a folder outside the resource it names FXServer's sandbox),
-  `hasSavedData() -> bool` (the configured folder holds saves), `realMySQL` (oxmysql's `MySQL`, files mode), `db`
-  (the engine, files mode), `MemSQL` (the engine's code). A new saves folder is announced on start, once oxmysql is
-  connected (`realMySQL.ready`): when the real database holds Crimson-Police data (`cp_schema_migrations` has rows, or
-  the database cannot tell) the warning names the storage copy command; when it has none (a first install with the
-  database off) one plain line says the folder is empty. A new database next to a saves folder with data is
-  announced by the migrations runner, naming the storage copy command.
-- **The migrations runner** (`modules/migrations`, `CP.Migrations.ready() / isReady() / version() / started() /
-  failed()`): a failed statement (or any error in the runner, which runs under pcall) fails the
-  start with the file, the statement and the driver's error, then one `How to fix it:` line for the usual first-start
-  errors (no CREATE/ALTER right, a wrong password, no rights on the database, an unknown database, a server or host
-  that cannot be reached), for a storage switched to in game the `storagemode reset` line (with
-  `Config.Tablet.adminCommand`), and one line naming `ensure <resource>`. A failed start is a state, not a stop:
-  FXServer refuses StopResource on the calling resource (citizen-server-impl ServerResources.cpp STOP_RESOURCE), so
-  the resource stays started. `failed()` then names what failed (nil otherwise); `ready()` is a barrier that raises
-  `err.not_started` at once, and in every thread that was waiting in it; `started()` waits the same way and answers
-  true or false without raising (start-up threads and loops end quietly with it); CP.Net answers every action and
-  callback `err.not_started` before its handler runs; CP.warn and CP.err drop the lines that carry `err.not_started`;
-  the console command registers at once (Settings.waitLoaded returns early) and refuses everything but the console's
-  `check` and `storagemode reset` / `storage mode reset` (`admin.cmd.not_started`); the reset answers at once without an
-  audit row (`sysadmin.console.storagemode_reset_not_started`). Nothing reads or writes the store after the failure.
-  After `CP.Settings.boot()` and before any caller of `ready()` goes on, the runner calls `CP.Sysadmin.startLocks()`
-  (the left-behind and unfinished-restore locks), so the cash forfeiture, the pending pay, the reward jobs, the
-  clean-up and the admin job resume already see them; each of those also reads the lock after its wait for the store. When oxmysql has not connected 30 s after start (it waits without a word) one warning names
-  `set mysql_connection_string` and `Config.Database.enabled = false` (database mode only: the saves folder never
-  waits for oxmysql).
-- **The database server** (database mode only, `CP.Storage.mode() == 'database'`; the saves folder engine has no
-  server version or character sets): before the first table statement the runner sends one probe, `SELECT VERSION(),
-  JSON_VALUE('{"a":"b"}', '$.a'), JSON_VALUE('{"a":null}', '$.a') IS NULL`. A server without JSON_VALUE (MySQL before
-  8.0.21) or one that reads a JSON null as the text `null` (MariaDB 10.2) fails the start (`failed()` = 'the database
-  server is too old', the server named, the fix: MariaDB 10.9 or newer, Qbox's minimum, or the saves folder): every
-  payment step uses JSON_VALUE, so it would fail half way. MySQL that has it starts with one warning (Qbox does not
-  support MySQL; on MySQL, once an officer has a cooldown clear, cap raise or extra boss attempt, the next is
-  refused, as LiveCtl's marker compare-and-set never matches a JSON column, and a copy to the saves folder can reuse
-  a deleted run id, as MySQL caches information_schema's AUTO_INCREMENT). A server that does not answer is left to
-  the migrations' own errors. After the migrations, every cp_ table whose collation is not utf8mb4 (txAdmin's recipe
-  deployer makes the database `CHARACTER SET utf8`, so every table took utf8mb3 and refused emoji) gets `ALTER TABLE
-  ... CONVERT TO CHARACTER SET utf8mb4`, one console line each, and its JSON columns (LONGTEXT on MariaDB; no other
-  cp_ column is) go back to `utf8mb4_bin` as a utf8mb4 database makes them. A table that cannot be switched is a
-  warning and the start goes on. Only cp_ tables are touched. `storage copy files-to-database` runs the same switch
-  (`CP.Migrations._utf8mb4Tables(target.rows)`, oxmysql's query, as in files mode `MySQL` is the saves folder
-  engine) after it makes the target's tables and before it writes a row, so a saves folder with emoji copies into
-  txAdmin's database.
-- **CP.Storage.MemSQL** (server; it also runs under plain lua5.4 in the tests, with the global `json`):
-  `new({ store }) -> db`; `db:exec(sql, params) -> { kind = 'rows', cols, types, rows, n } | { kind = 'write',
-  affected, changed, insertId, info, warnings }`, synchronous and atomic (a failing statement changes nothing),
-  and saved before it returns (every changed document written as `.tmp` first, then renamed into place in a
-  crash-safe order; a save that fails part way is undone in memory and in the folder); with `db.slice` (set by
-  CP.Storage on a server: `{ wait = Citizen.Wait, ms = 4, saveMs = CP.Storage.saveTurnMs }`) a SELECT run from a
-  thread gives the server its turn every 4 ms (the clock is read every 32 rows), and every other statement waits for
-  it; the answers of JSON_EXTRACT, JSON_VALUE and JSON_CONTAINS are kept per (path, text) in `CP.Storage.MemSQL.jmemo`
-  (two generations of half of `jmemo.cap` each, `Config.Database.jsonCacheEntries`, 100000; a hit in the older one
-  moves back; the texts an UPDATE replaced are forgotten after the statement, a DELETE keeps them); a DELETE of
-  more than 64 rows from one table (`BULK_DELETE_ROWS`: the nightly run archive) leaves them in the table's index
-  buckets until its loop ends and then drops them in one pass over each bucket they were in, also when the loop fails
-  (the undo then adds every row back), instead of one `table.remove` per row and index, which shifts the whole bucket;
-  an UPDATE puts the new row in the old one's place in each bucket whose key it keeps; `db:load()`; `db:bulk(fn)` (the write-through paused, every document saved once at
-  the end: bulk imports and the storage copy); `db:tableNames()`; `folderStore(dir, { docRows, label })` (the saves folder: its file
-  layout and crash-safe save sequence are in the header of memsql.lua; `label` is the folder as the owner named it, for
-  example `saves/second`, in the messages about its files, default dir); `luaRows(res)` (engine rows typed like
-  oxmysql).
-- **The shim**, `CP.Storage.MemSQL.shim(db, { realMySQL, resource }) -> MySQL`: `query`, `single`, `scalar`, `insert` and
-  `update` (each callable with a callback, and with `.await`), plus `ready`. It copies oxmysql's return shapes,
-  typing (TINYINT(1) as booleans, DECIMAL and SUM as strings, DATETIME/DATE as milliseconds, text always as
-  strings, UPDATE counting matched rows), error text and parameter checks. Any other key (`prepare`,
-  `transaction`, ...) raises. With `db.slice.saveMs` (`Config.Database.saveTurnMs`, 4; read at every save, 0 = never)
-  a thread that has spent that many milliseconds saving gives the server its turn (`wait(0)`) after the statement
-  that used them up, as oxmysql's await yields after every query: never inside a statement (each change is on disk
-  before its statement returns), never while a sliced SELECT holds the engine, and not in a thread that cannot yield
-  (the main chunk, the migrations at load). The time is counted per thread (a weak-keyed table) and starts again when
-  the thread was away longer than the budget since its last save. A callback (`MySQL.update(sql, p, cb)`) whose save
-  used up the budget gets its answer a tick later, as with oxmysql. It routes by the tables a statement names: only `cp_` tables go to the engine; only
-  other resources' tables (today sc-dispatch's `mdt_dispatch`, Hard rule 15) go read-only to `realMySQL` (nil,
-  and one warning, when oxmysql is not started); a statement mixing both, or writing another resource's table,
-  is an error.
-- **Supported SQL** (the full list is the header of memsql.lua; anything else fails with "the saves folder
-  engine (files mode) does not support ..."):
-  - SELECT [DISTINCT] with aliases or `*`, FROM a table, a derived table or DUAL, [INNER] JOIN and LEFT
-    [OUTER] JOIN ... ON, WHERE, GROUP BY, ORDER BY, LIMIT/OFFSET (numbers or `?`), UNION ALL in derived tables.
-  - INSERT [IGNORE] ... VALUES (one or more rows) or SELECT, ON DUPLICATE KEY UPDATE with `VALUES(c)`; UPDATE
-    [IGNORE] with an alias; DELETE FROM t [WHERE] and DELETE a FROM t a [INNER|LEFT] JOIN ....
-  - CREATE TABLE [IF NOT EXISTS] (PRIMARY KEY, UNIQUE, KEY/INDEX) or LIKE; ALTER TABLE ADD [COLUMN] [IF NOT
-    EXISTS] ... [FIRST|AFTER c], ADD [UNIQUE] INDEX/KEY [IF NOT EXISTS], several ADDs in one ALTER; CREATE [UNIQUE]
-    INDEX [IF NOT EXISTS] ... ON t; types INT,
-    TINYINT, SMALLINT, MEDIUMINT, BIGINT, VARCHAR(n), DECIMAL(p,s), DATETIME, DATE, ENUM, JSON.
-  - `+ - *`, comparisons, AND/OR/NOT, IS [NOT] NULL, [NOT] IN (list or subquery), [NOT] EXISTS, scalar and
-    correlated subqueries, [NOT] LIKE, CASE, `± INTERVAL n SECOND|MINUTE|HOUR`; COUNT SUM MAX MIN GROUP_CONCAT;
-    COALESCE IFNULL NULLIF IF GREATEST LEAST ROUND, DATE DATE_FORMAT UNIX_TIMESTAMP FROM_UNIXTIME NOW
-    CURRENT_TIMESTAMP TIMESTAMPDIFF, SUBSTRING_INDEX CHAR_LENGTH LOWER UUID, JSON_SET JSON_REMOVE JSON_EXTRACT
-    JSON_UNQUOTE JSON_VALUE JSON_VALID JSON_CONTAINS JSON_TYPE.
-  - MariaDB semantics: utf8mb4_general_ci comparison with MariaDB's own weight and LOWER() tables for every BMP
-    character (`tools/gen_collation.py`) and PAD SPACE order, NULL logic, strict mode with its errors and
-    warnings, BIGINT overflow as MariaDB's error 1690, NULLs first when ascending, MariaDB's error messages.
-    NOW(), DATE() and UNIX_TIMESTAMP follow the FXServer's local time zone; a DATE is saved as its calendar day.
-    A comparison of two parameters or literals uses utf8mb4_general_ci (the connection collation with
-    `charset=utf8mb4`; a connection string without a charset makes MariaDB use utf8mb4_unicode_ci there).
-  - Not supported (unused today): comma, RIGHT and CROSS joins, HAVING, BETWEEN, WITH, window functions, UNION
-    without ALL, AVG and DISTINCT inside an aggregate, `/ % DIV MOD REGEXP`, other INTERVAL units, TEXT, CHAR and
-    TIMESTAMP columns, fractional seconds, ALTER forms other than ADD, RENAME/DROP/SET/SHOW, Lua table
-    parameters, `MySQL.prepare`, transactions. A migration that adds a NOT NULL DATETIME or DATE column to a
-    table with rows needs a DEFAULT.
-- **Rule for new SQL.** Modules never test the mode: every statement is written once and must run in both. A
-  new or changed statement must use only the constructs above, or the change must extend the engine with
-  MariaDB's exact behaviour. The whole suite must then pass in all three storage modes, and
-  `lua5.4 tests/run.lua --storage=shadow` must report 0 differences (plus `--fuzz` after an engine change;
-  §11). A statement on another resource's table may only read, and never together with a `cp_` table.
-- **Storage copy** (CP.Admin, `/CrimsonPoliceAdmin storage copy database-to-files|files-to-database [force]`,
-  console or the admin ace). It copies every `cp_` table except `cp_schema_migrations` between MariaDB and a
-  saves folder engine. The MariaDB side is the real oxmysql (`MySQL` in database mode, `CP.Storage.realMySQL` in
-  files mode). The files side is `CP.Storage.db` in files mode, or else an engine opened on
-  `Config.Database.folder` for the command. The copy:
-  - first runs on the target the migrations the source has (the same `sql/migrations` files);
-  - keeps ids and AUTO_INCREMENT counters, and writes into an engine inside one `db:bulk`;
-  - into the storage in use (the server keeps writing meanwhile), raises its counters to the source's before the
-    first row and writes every row with `ON DUPLICATE KEY UPDATE`, so a row the server wrote first is replaced by
-    the copied one instead of failing the copy;
-  - reads DATETIME with `UNIX_TIMESTAMP` and writes it with `FROM_UNIXTIME`, and moves DATE as `YYYY-MM-DD`;
-  - is refused while a run or a Cross-Department Mission is active, and into a target with rows unless `force`
-    (which empties it first);
-  - empties the target again on any failure (the source is only read);
-  - is audited as `storageCopy`, also in the target's `cp_audit` when the target is not the storage in use.
-  `/CrimsonPoliceAdmin storage` prints the mode, the saves folder path, the rows of every table and the
-  folder's size.
-- Tests: `tests/memsql_spec.lua` (the engine: MariaDB's answers, the collation table checked against the local
-  MariaDB, a crash and a refused file operation at every point of a save, FXServer's inverted `os.rename`, hand-edited
-  and missing documents, the SELECT slicing, the one-pass index sweep of a bulk DELETE), `tests/storage_spec.lua` (files mode end to end, a restart, and
-  50,000 runs with their timings, an fsync per document written, how long a board holds the server thread, and
-  sizes), `tests/storage_copy_spec.lua` (the storage command and both copy
-  directions in both modes, MariaDB and a temporary saves folder together). `lua5.4 tests/run.lua --storage=files`
-  runs the whole suite in files mode, and `--storage=shadow` checks the engine against MariaDB statement by
-  statement (§11).
+- Load order: `@oxmysql/lib/MySQL.lua`, then `memsql.lua` (defines only `CP.Storage.MemSQL`), then `server.lua`, before
+  every other server module. In files mode `server.lua` opens the folder and replaces this resource's `MySQL` global
+  with the shim at file load (the one exception to ground rule 5); the glob's second load returns at once.
+- `CP.Storage`: `mode() -> 'database'|'files'`, `name() -> 'database'|'saves folder'`, `folder()`, `describe()` (the
+  start-up line), `loadError()` (a folder that is missing, not writable or not readable: every statement fails with that
+  text and nothing is changed), `hasSavedData()`, `realMySQL` (oxmysql's `MySQL` in files mode), `db`, `MemSQL`. A new
+  saves folder next to a database with Crimson-Police data, or a new database next to a folder with data, is announced
+  with the storage copy command.
+- The storage chosen in Admin UI → System is kept in the server's resource KVP (`cp_storage_mode` = database|files,
+  `cp_storage_folder`) and read before `Config.Database` (which it then reflects); a start-up line, System → Storage
+  and Config health (`storage`) name the override. `effective(cfg, kvp) -> { enabled, folder }, override|nil` (pure),
+  `override()`, `validFolder(f)` (relative, under `saves`, no `..`, `//` or full path). `storage mode reset` /
+  `storagemode reset` (console) clears it. Each store holds `cp_storage_meta` (`generation`, `state` =
+  active|left_behind): a switch writes a new generation into both and marks the old one `left_behind`; a store that
+  starts `left_behind` begins that maintenance lock (§5.41).
+- The migrations runner (`modules/migrations`, `CP.Migrations.ready() / isReady() / version() / started() /
+  failed() / status()`): a failed statement or runner error fails the start with the file, the statement, the driver's
+  error and one `How to fix it:` line for the usual first-start errors (rights, password, unknown database, host),
+  the `storagemode reset` line for a storage switched in game, and `ensure <resource>`. A failed start is a state, not a
+  stop (FXServer refuses StopResource on the calling resource): `ready()` raises `err.not_started` (also in threads
+  waiting in it), `started()` answers false without raising, CP.Net answers every action and callback
+  `err.not_started`, CP.warn/CP.err drop lines carrying it, the console command accepts only `check` and the storage
+  mode reset; nothing touches the store afterwards. After `CP.Settings.boot()` and before any `ready()` caller goes on,
+  it calls `CP.Sysadmin.startLocks()`. When oxmysql has not connected 30 s after start one warning names `set
+  mysql_connection_string` and `Config.Database.enabled = false`.
+- The database server (database mode only): before the first table statement one probe `SELECT VERSION(),
+  JSON_VALUE(...)`; no JSON_VALUE (MySQL before 8.0.21) or a JSON null read as text (MariaDB 10.2) fails the start
+  ('the database server is too old'; fix: MariaDB 10.9+ or the saves folder), since every payment step uses JSON_VALUE.
+  MySQL with it starts with one warning (Qbox does not support MySQL; LiveCtl's marker compare-and-set never matches a
+  JSON column there, and a copy can reuse a deleted run id). After the migrations every cp_ table not in utf8mb4
+  (txAdmin's recipe makes the database utf8) is converted, one line each, its JSON columns back to `utf8mb4_bin`; a
+  failure is a warning. `storage copy files-to-database` runs the same switch (`CP.Migrations._utf8mb4Tables`).
+- `CP.Storage.MemSQL` (also runs under plain lua5.4 in the tests): `new({ store })`, `db:exec(sql, params) -> { kind =
+  'rows', cols, types, rows, n } | { kind = 'write', affected, changed, insertId, info, warnings }` — synchronous,
+  atomic, saved before it returns (`.tmp` then rename in a crash-safe order; a failed save is undone in memory and on
+  disk). With `db.slice` a SELECT in a thread gives the server its turn every 4 ms and other statements wait for it.
+  JSON_EXTRACT/VALUE/CONTAINS answers are memoised per (path, text) (`jmemo`, two generations,
+  `Config.Database.jsonCacheEntries` 100000). A DELETE of more than 64 rows (`BULK_DELETE_ROWS`) sweeps the index
+  buckets once at the end. `db:load()`, `db:bulk(fn)` (one save at the end), `db:tableNames()`, `folderStore(dir, {
+  docRows, label })` (the file layout is in memsql.lua's header), `luaRows(res)`.
+- The shim `MemSQL.shim(db, { realMySQL, resource })`: `query`, `single`, `scalar`, `insert`, `update` (callback or
+  `.await`) and `ready`, with oxmysql's return shapes, typing (TINYINT(1) booleans, DECIMAL and SUM strings, DATETIME as
+  ms, UPDATE counting matched rows), errors and parameter checks; any other key raises. With
+  `Config.Database.saveTurnMs` (4; 0 = never) a thread that spent that long saving yields after the statement (never
+  inside one), as oxmysql's await does. Only `cp_` tables go to the engine; other resources' tables (today
+  `mdt_dispatch`) go read-only to `realMySQL`; mixing both or writing another resource's table is an error.
+- Supported SQL (the full list is memsql.lua's header; anything else fails with "the saves folder engine (files mode)
+  does not support ..."): SELECT [DISTINCT] from tables, derived tables or DUAL with [INNER]/LEFT JOIN, WHERE, GROUP BY,
+  ORDER BY, LIMIT/OFFSET, UNION ALL in derived tables; INSERT [IGNORE] VALUES or SELECT with ON DUPLICATE KEY UPDATE;
+  UPDATE [IGNORE]; DELETE incl. joined; CREATE TABLE / LIKE / INDEX; ALTER TABLE ADD column or index; types INT,
+  TINYINT, SMALLINT, MEDIUMINT, BIGINT, VARCHAR(n), DECIMAL(p,s), DATETIME, DATE, ENUM, JSON; `+ - *`, comparisons,
+  logic, IS NULL, IN, EXISTS, subqueries, LIKE, CASE, `± INTERVAL n SECOND|MINUTE|HOUR`; COUNT SUM MAX MIN GROUP_CONCAT;
+  COALESCE IFNULL NULLIF IF GREATEST LEAST ROUND DATE DATE_FORMAT UNIX_TIMESTAMP FROM_UNIXTIME NOW CURRENT_TIMESTAMP
+  TIMESTAMPDIFF SUBSTRING_INDEX CHAR_LENGTH LOWER UUID JSON_SET JSON_REMOVE JSON_EXTRACT JSON_UNQUOTE JSON_VALUE
+  JSON_VALID JSON_CONTAINS JSON_TYPE. MariaDB semantics: utf8mb4_general_ci with MariaDB's weight and LOWER tables
+  (`tools/gen_collation.py`) and PAD SPACE, NULL logic, strict mode errors and warnings, BIGINT overflow (1690), NULLs
+  first ascending, MariaDB's messages, the server's local time zone. Not supported (unused): comma/RIGHT/CROSS joins,
+  HAVING, BETWEEN, WITH, window functions, UNION without ALL, AVG, DISTINCT inside an aggregate, `/ % DIV MOD REGEXP`,
+  other INTERVAL units, TEXT/CHAR/TIMESTAMP columns, fractional seconds, other ALTER forms, RENAME/DROP/SET/SHOW, table
+  parameters, `MySQL.prepare`, transactions. A migration adding a NOT NULL DATETIME/DATE column to a table with rows
+  needs a DEFAULT.
+- Rule for new SQL: modules never test the mode; a new statement uses only these constructs or extends the engine with
+  MariaDB's exact behaviour; the suite must pass in all three storage modes and `--storage=shadow` report 0 differences
+  (plus `--fuzz` after an engine change; §11). A statement on another resource's table only reads, never with a cp_
+  table.
+- Storage copy (`/CrimsonPoliceAdmin storage copy database-to-files|files-to-database [force]`, console or an admin):
+  every `cp_` table but `cp_schema_migrations` between MariaDB (the real oxmysql) and a saves folder engine. It runs the
+  source's migrations on the target first; keeps ids and AUTO_INCREMENT counters (an engine target inside one
+  `db:bulk`); into the storage in use it raises the counters first and writes with ON DUPLICATE KEY UPDATE; moves
+  DATETIME through UNIX_TIMESTAMP/FROM_UNIXTIME and DATE as `YYYY-MM-DD`; is refused during a run or an operation and
+  into a target with rows unless `force` (which empties it); empties the target again on failure; is audited
+  `storageCopy` (also in the target's cp_audit). `/CrimsonPoliceAdmin storage` prints mode, path, rows and size.
+- Tests: `tests/memsql_spec.lua` (MariaDB's answers, the collation table, a crash at every point of a save, FXServer's
+  inverted `os.rename`, hand-edited documents, slicing, the bulk DELETE), `tests/storage_spec.lua` (files mode end to
+  end, a restart, 50,000 runs with timings and sizes), `tests/storage_copy_spec.lua`. `--storage=files` runs the whole
+  suite in files mode; `--storage=shadow` checks the engine against MariaDB statement by statement (§11).
 
 ---
 
 ### 5.30 CP.Custody — modules/custody (police actions, contacts, custody chain)
-Truths, demeanours and cues live only in this module's book per run (never in run.entities, a bag, an event or a
-push). Full notes: §13.10.
-- `rollTruth(rng, setName, role)`, `rollDemeanour(rng, truthKey)`, `rollProfile(rng, setName, role, hasCar, truth?)`
-  → `{ truth, demeanour, cues }` (Config.Custody.profileSets, demeanour, cues; deterministic per seed).
-- `register(run, obj, netId, contact) -> contact` (the bag gets only `contact = { label, kind, actions }` and the
-  state), `get(run, netId)`, `contactsOf(run, obj|nil)` (sorted by net id).
-- `act(run, netId, behaviour, args)` — the only truth-derived signal to a client: `client:contactAct` to the run host
-  when the behaviour starts (walk_away, flee_on_approach, flee_on_order, tell_then_draw (a tell first, then
-  `CP.Runs.arm`), leave, exit_and_stand, walk_to, drive_off); once per behaviour per contact.
-- `begin(src, runId, netId, action, extra)` / `finish(...)` — every action: live run, active arrived participant, on
-  duty, not in the arena, the owning objective current, the action allowed, state order, reach at both ends
-  (server coordinates), finish ≥ Config.Custody.times[action] − actionSlack, and for actions of 3 s or more the
-  dwell sampler. A cancelled bar sends no finish.
-- `reveal(run, netId, factKey, src, data)` (sentTo = active participants now; data.suppressed = inadmissible),
-  `knownTo(run, factKey, netId, src) -> ms|nil`, `probableCause(run, vehNetId) -> bool, sources` (plain_view, odour,
-  admission, weapon, arrest, stolen, consent).
-- `grade(run, netId, choice, src, beginMs) -> entry, failFact` (pure: the Dispositions table with the mission's
-  `decisions` overrides and Config.Decisions; Best only with the deciding fact admissible; points 0 for a caught
-  runner or a `revealed` deciding fact).
-- `enableChain(run, netId, opts)` (searchPerson, escort, seat, handover for any block's cuffed suspect),
-  `requestTransport(run, coords, { obj, point })`, `transport(run, src)`, `impound(run, netId, src)` (tow truck, or a
-  fade with Config.Custody.tow.enabled = false), `serviceVehicle(run, kind, coords, opts)`, `checkRoadPoint(run,
-  handle, reply, side)`, `releaseService`, `serviceStatus`, `_servicesOf(run)` (tests).
-- Service vehicles: the driving client is the nearest active participant outside the arena (else the host); it is
-  asked for a road point 150–250 m away (`client:roadPoint`), the server checks it (within spawnDistance,
-  Config.Custody.serviceClearance, 30 m, from every player, again when it spawns there) and retries every 3 s; the AI
-  moves on leave, down, arena or beyond serviceHandoff. A vehicle has arrived when below 1.5 m/s within 15 m of a
-  placed parking point (a transport, coroner or tow point), or, for the prisoner van with no transport point,
-  anywhere within Config.Custody.transport.parkWithin of the scene; after serviceTimeout a van is placed at its
-  parking point and a tow that did not load fades the car (impounded). A van is placed only while no player
-  is within serviceClearance of its parking point. A late van (`Placed`) drives on until then and is moved with
-  SetEntityCoords plus `CP.Spawn.again` (it waits frozen for an officer's game, from = where it was). A van that got
-  no road point (`Fallback`) asks the driving client for one beside the scene (`side`: `{ near = the parking point,
-  min = serviceClearance, max = serviceClearance + 40 }`, the same callback and check) and is made there, or waits. A
-  tow truck that got no road point is never made: the car fades out (impounded). Config.Spawning.enabled = false:
-  the vans are placed as before.
-- People debrief: `register` notes each person (label, demeanour) through CP.Runs.notePerson, and the behaviours
-  (walked_away, ran, drew), cuffs, escapes and deaths as they happen; `grade` adds the factLog (every fact the
-  decider had, as text, with when it reached them).
-- `onCuffed`, `markGone`, `markDead`, `closeObjective(run, obj) -> n` (undecided contacts: missed_offence −5, never a
-  fail), `noteForce(run, netId, src)`, `view(run, obj, src) -> ContactView|nil` (web/src/types/custody.ts; choices'
-  failsCase only from facts that reached this viewer), `giveEvidence(run)` (Config.Custody.evidenceItem, off).
-- Net: plain `server:custody` (runId, netId, action, phase, extra; 4 per 2 s), action `server:contactDecide`
-  (`{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }`; within 25 m), plain
-  `server:stunHit` (netId; 2 per s), `client:contactAct`, `client:contactConfirm`, `client:serviceVehicle`,
-  `client:serviceBlip` (§5.44 `service`), the
-  ox_lib callback `client:roadPoint`, client action `contactAction` (`{ netId, action }`), push `contactConfirm`,
-  HUD patch `contact` (`{ label, fact, hint, confirm, suppressed }`).
-- Blocks: `blocks/field_contact` (modes parked, scene, stop; returning driver, thief, escapes, all_correct,
-  procedure_complete, a 'removed' car never becomes an Impound) and `blocks/process_scene` (holds bodies, pauses the
-  fast clock, coroner van, all_taken_alive with no bodies). ox_target names `crimson-police:body_tag`,
-  `crimson-police:body_bag`, `crimson-police:coroner`.
+Truths, facts, police actions, grading, the custody chain and the service vehicles (prisoner van, tow truck, coroner
+van). Files: `modules/custody/{server,client}.lua`, `locales/parts/custody.json`, the blocks `field_contact` and
+`process_scene` (§7.4), web `officer/components/ContactPanel.tsx` (replaces the Business Check log on Active Mission
+when `view.contact` has entries), `hud/ContactCard.tsx` (HUD patch `contact`), `types/custody.ts`, mock
+`mocks/custody.mock.ts` (`?contact=1`). Truths, demeanours and cues live only in this module's book per run (never in
+`run.entities`, a bag, an event or a push).
+- `rollTruth(rng, setName, role)` (`Config.Custody.profileSets[set][role]`, role person|driver|passenger|vehicle,
+  falling back to person then driver; weighted over sorted keys), `rollDemeanour(rng, truthKey)`
+  (`Config.Custody.demeanour[truth]`; only an armed truth can be hostile), `rollProfile(rng, setName, role, hasCar,
+  truth?) -> { truth, demeanour, cues }` (in one fixed order: where (person or car; never car for a hostile),
+  plainView, odour, admits (`Config.Custody.admission`), consents, bolts (runner always, nervous 15 %), minor).
+- `register(run, obj, netId, contact)` — the record `{ kind, role, label, truth, demeanour, cues, vehicleOf, owner,
+  spot, level, actions, allowWarn, observed, evading, custody, revealed, state, consensual, transportPoint, caught, ran,
+  chain }`; the bag gets only `contact = { label, kind, actions }` and the state (actions never depend on the truth);
+  `revealed` facts are known from the start; each person is noted for the people debrief. `get(run, netId)`,
+  `contactsOf(run, obj|nil)`.
+- `act(run, netId, behaviour, args)` — the only truth-derived signal to a client: `client:contactAct { runId, netId,
+  behaviour, args, seconds }` to the host when it starts, once per behaviour per contact. walk_away, leave,
+  exit_and_stand, walk_to, drive_off; flee_on_approach, flee_on_order and tell_then_draw play a `Config.Npc.tellSeconds`
+  tell first (participants within tellRange get a `custody.tell.*` hint); tell_then_draw then `CP.Runs.arm` and
+  hostile.
+- `begin(src, runId, netId, action, extra)` / `finish(...)` — every action: live in-progress run, active arrived
+  participant, on duty, not in the arena, the owning objective current, the action in its list, the state order, reach
+  at both ends (server coords), finish ≥ `Config.Custody.times[action] − actionSlack`, and for actions of 3 s or more
+  the CP.Npc dwell sampler (in reach for the time − 2 s). A cancelled bar sends no finish and counts for nothing.
+- `reveal(run, netId, factKey, src, data)` — sent to every active participant now (the panel is pushed, a HUD line);
+  `data.suppressed` = inadmissible (struck through, never graded, never a cause, never a knowing error; found again
+  lawfully it counts from then). `knownTo(run, factKey, netId, src) -> ms|nil` (a knowing error needs it ≤ the
+  decision's begin). `probableCause(run, vehNetId) -> bool, sources` (plain_view, odour, admission, weapon, arrest,
+  stolen, consent).
+- `grade(run, netId, choice, src, beginMs) -> entry, failFact` — pure: the Dispositions table with the mission's and
+  objective's `decisions` overrides (`{ wrongfulArrest = 'fail' }` makes it critical) and `Config.Decisions`; Best only
+  with the deciding fact admissible; points 0 for a caught runner or a `revealed` deciding fact; adds the factLog.
+- Decisions: `warn` (stops only, `allowWarn`), `cite`, `release`, `arrest`, `noAction`, `impound` (a car), `cite` (a
+  parked car). Citations and impounds graded Best/OK → `noteStat`; Arrest → `noteArrest` through `decide`; let-go people
+  are released and removed after releaseDespawn; a stopped car whose people all went drives off; someone let go while
+  seated in an undecided car waits until the car is settled. A case-failing choice with
+  `Config.Decisions.confirmKnownErrors` decides nothing until confirmed. A failed effect is refused with its error.
+- `enableChain(run, netId, opts)` — after a cuff, for any block: searchPerson, escort, seat, handover, and the transport;
+  `{ type = 'handed_over' }` to the owning objective. `requestTransport(run, coords, { obj, point })` (a request while
+  the van is on its way moves it; one after it left sends a new one), `transport(run, src) -> { status, netId,
+  distance }`, `impound(run, netId, src)` (`Config.Custody.tow`; `enabled = false` fades the car at once).
+- `serviceVehicle(run, kind = transport|tow|coroner, coords, { obj, point, target, decider })`, `checkRoadPoint(run,
+  handle, reply, side)`, `releaseService`, `serviceStatus(handle)`, `_servicesOf(run)`. The driving client is the
+  nearest active participant outside the arena (else the host; handed on when he leaves, goes down, enters the arena or
+  is beyond serviceHandoff). It is asked (`client:roadPoint`) for a road point 150–250 m away; the server checks it
+  (spawnDistance ±5 m, `Config.Custody.serviceClearance` 30 m from every player) and retries every 3 s. Vehicle and
+  driver spawn through CP.Runs, locked. Arrival = within 15 m of the parking point below 1.5 m/s (the van without a
+  transport point: within `transport.parkWithin` of the scene). After serviceTimeout a van is placed at its parking
+  point (only while no player is within serviceClearance; then it waits frozen for `CP.Spawn.again`) and a tow that did
+  not load fades the car (impounded). A van without a road point asks for one beside the scene (30–70 m from the
+  parking point) or waits; a tow truck without one is never made. The tow loads within 8 m of the flatbed. The van
+  leaves `transport.leaveAfter` after its objective is done, the coroner when process_scene releases it; leaving
+  vehicles are deleted 25 s later with driver and cargo. `Config.Spawning.enabled = false`: vans are placed directly.
+- `onCuffed`, `markGone(run, netId, how)`, `markDead`, `closeObjective(run, obj) -> n` (undecided contacts:
+  `Config.Decisions.undecidedAtEnd` (missed_offence −5) for the officer who last worked each, never a fail),
+  `noteForce(run, netId, src)` (excessive_force, once per person per 10 s), `view(run, obj, src) -> ContactView|nil`
+  (choices' `failsCase` only from facts that reached this viewer, and only for a knowing error; `confirm` when a
+  confirm waits), `giveEvidence(run)` (`Config.Custody.evidenceItem`, off; on run:inProgress, one item per
+  participant of a run with a field_contact or process_scene objective, taken back like every mission item).
+
+| Name | Side | Payload |
+|---|---|---|
+| `server:custody` | C → S plain, 4 per 2 s | runId, netId, action, phase `'begin'\|'finish'`, extra (`{ offence }`, `{ door }`); `runPlateFromVehicle`, `seat`, `handover` may send netId 0 (the car in front, the person escorted, everyone escorted or seated) |
+| `server:contactDecide` | NUI action | `{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }`; within 25 m; a confirmed choice uses the begin time of the ox_target choice that asked (60 s) |
+| `server:stunHit` | C → S plain, 2/s | netId; accepted only when CP.Npc saw a ragdoll or state change of that detained, escorted, seated or compliant ped within 1 s |
+| `client:contactAct` | S → host | `{ runId, netId, behaviour, args, seconds }` |
+| `client:contactConfirm` | S → decider | `{ netId, choice, factKey }`: the tablet opens with push `contactConfirm` |
+| `client:serviceVehicle` | S → driving client | `{ runId, id, op = 'drive'\|'load'\|'leave', kind, veh, driver, dest, target, away }` |
+| `client:serviceBlip` | S → participants | §5.44 `service` |
+| `client:roadPoint` | ox_lib callback S → C | `{ near, min, max }` → `{ coords, heading }` or nil |
+| client action `contactAction` | NUI → client | `{ netId, action }`: closes the tablet and runs the begin/bar/finish flow |
+| HUD patch `contact` | S → C | `{ label, fact, hint, confirm, suppressed }` (CP.Lt tokens) |
+
+Client (`modules/npc/client.lua`, `modules/custody/client.lua`): ox_target options `crimson-police:contact_<action>`
+on peds and vehicles, `crimson-police:custody_escort`, per door `crimson-police:seat_<action>_<door>` (bones
+door_dside_f, door_pside_f, door_dside_r, door_pside_r), all reading the cp bag only; the `crimsonpolice_contact` key
+(`Config.Tablet.contactKey`: Run plate from the driver seat, Hand over at the van, Place in vehicle, Escort on/off);
+host tasks for escort, stand, leave, the tells and behaviours; `CP.Custody.perform` (the begin/bar/finish flow), the
+confirm, the road point callback and the service vehicle driving.
 
 ### 5.31 CP.MissionCalls — modules/missioncalls (Dispatch)
-Full notes: §13.16.
-- Locations turned off (§5.36) count in no area.
-- `list(src) -> DispatchView` (only for officers with the tablet open: callback `getMissionCalls` and the `calls`
-  push to watchers), `eligibility(src) -> { at, unit, types }` (cached per unit for
-  Config.MissionCalls.eligibilityCache s; cleared on row:settled, participant:left and duty changes; no database
-  query per call or per viewer), `areaFor(src, call) -> areaKey|nil`, `claim(src, callId) -> ok, { runId } |
-  { pending } | errKey`, `withdraw(src, id, reason)`, `page(src, typeKey, area, leaderSrc)`, `create(src, typeKey,
-  area)`, `claimableCount(src)`, `areaOf(coords)`, `areaIndex()`, `stats(citizenid) -> { answered, avgResponse,
-  rapid }`, `supView(src) -> SupCallsView`.
-- The claim: every accept check (CP.Draw.check), then the call's rules (excluded citizenids, the issuer's unit,
-  paged, priority window, a pool in the area); valid claims within `claimWindowMs` are ranked by the nearest
-  member's distance to the area centre, then fewer calls won in the last hour, then the earliest; the row moves
-  open → claimed with `UPDATE ... WHERE id = ? AND status = 'open'` before the accept; a declined ready check puts it
-  back with the offer time it had left and tries the next claimant; losers get `err.mc_taken_by`.
-- Hooks: run:arrived, run:ended (close with the outcome, or re-dispatch once when nobody arrived and the end reason
-  is quit, off_route, start_timeout, idle, real_call or force_recall), row:settled and participant:left (cache),
-  home:extras (callsOpen). `CP.Schedule.onDaily` deletes history older than Config.Retention.missionCallDays.
-- `closeLeftover()` runs once at start: calls live in memory, so rows a restart left `open` become
-  `lapsed` and rows left `claimed` become `closed` with outcome `restart` (their run was dropped with no row).
+The tablet's own call board. Files: `modules/missioncalls/server.lua`, `client.lua`,
+`locales/parts/missioncalls.json`; tests `tests/missioncalls_spec.lua`. The Officer Dispatch screen, the board's
+"n mission calls open" link, MissionCallsPanel (Supervisor Live Missions, Admin Missions → Dispatch),
+AreaCoverageMatrix (Admin Testing) and LocationPlays (Admin Missions) read it; mock `mocks/missioncalls.mock.ts`
+(`?calls=empty|run|op`).
+- `list(src) -> DispatchView` — only for officers with the tablet open (callback `getMissionCalls`, push `calls` to
+  watchers).
+- `eligibility(src) -> { at, unit, types }` — every accept check (`CP.Draw.check`), the eligible pool after no-repeat,
+  missions and locations per area, the card's cash and points; cached per unit for
+  `Config.MissionCalls.eligibilityCache` s and cleared on row:settled, participant:left and duty changes. The
+  no-repeat history and hourly/daily counts are read once per officer until his next settled row or duty change (a
+  count at its cap is read again every 60 s); a claim reads them fresh. No query per call or per viewer.
+- `areaFor(src, call)` — the area a call names to that viewer, only with `minMissionsPerArea` missions and
+  `minLocationsPerArea` locations in his pool there; nil = county-wide. `areaOf(coords)` (nearest centre),
+  `areaIndex()` (the coverage matrix). Turned-off locations count in no area.
+- `claim(src, callId) -> ok, { runId } | { pending } | errKey` — every accept check, then the call's rules (excluded
+  citizenids, the issuer's unit for the whole offer, paged, priority window, a pool in the area). Claims within
+  `claimWindowMs` are ranked by the nearest member's distance to the area centre, then fewer calls won in the last
+  hour, then the earliest; losers get `err.mc_taken_by`. The row moves open → claimed (`UPDATE ... WHERE status =
+  'open'`) before the accept; a declined ready check puts it back with its remaining offer time, excludes the
+  declining unit by citizenid and tries the next claimant. `err.maintenance` during a maintenance lock.
+- Staff calls: `withdraw(src, id, reason)`, `page(src, typeKey, area, leaderSrc)`, `create(src, typeKey, area, {
+  skipWait, reason })` (an admin's **Post anyway** during the wait between staff calls, audited `mcCreateSkipWait`;
+  supervisors still wait); audited (category operations); `missionCall.staff = true`, so no rapid_response. A paged
+  call toasts only the paged unit; when pageTime ends the other idle units that could claim it get the toast once.
+- `claimableCount(src)` (Home and board `callsOpen`), `stats(citizenid) -> { answered, avgResponse, rapid }`,
+  `supView(src) -> SupCallsView` (claimed calls of other departments hidden from supervisors), `history(args) ->
+  Paged` (callback `admin:getMissionCalls`), `closeLeftover()` (at start: rows left `open` become `lapsed`, `claimed`
+  become `closed` with outcome `restart`; calls live in memory).
+- Hooks: run:arrived, run:ended (close with the outcome, or re-dispatch once — the claim's members excluded — when
+  nobody arrived and the end reason is quit, off_route, start_timeout, idle, real_call or force_recall), row:settled
+  and participant:left (cache), home:extras. `CP.Schedule.onDaily` deletes history older than
+  `Config.Retention.missionCallDays`. `/CrimsonPoliceAdmin missioncall <type> [area]`.
 - Net: callbacks `getMissionCalls`, `sup:getMissionCalls`, `admin:getAreaCoverage`; actions
-  `server:claimMissionCall`, `server:declineMissionCall`, `server:sup:mcWithdraw|mcPage|mcCreate` and
-  `server:admin:*`; plain `server:mcWatch` (deprecated, kept for older clients; the `tablet:closed` hook ends the watch);
-  `client:missionCall` (toast and tone, only to idle units that could claim and have not muted calls); push `calls`.
-  Nothing is ever sent to SC-Dispatch.
-
-Full admin control (§8.4.2): `create(src, type, area, { skipWait, reason })` (an admin's **Post anyway** during the
-wait between staff calls; audited `mcCreateSkipWait`; the wait still applies to supervisors), `history(args) -> Paged`
-(callback `admin:getMissionCalls`), and `claim` refuses `err.maintenance` while `CP.Maintenance.active()`.
+  `server:claimMissionCall`, `server:declineMissionCall`, `server:sup:mcWithdraw|mcPage|mcCreate`, `server:admin:*`;
+  plain `server:mcWatch` (deprecated; the `tablet:closed` hook ends the watch, so the client runs no poll);
+  `client:missionCall` (toast and tone, only to members of idle units who could claim and have not set
+  `cp_officers.calls_muted`, read at most every 30 s; the client drops it on a run or in the arena). Nothing is ever
+  sent to SC-Dispatch.
 
 ### 5.32 CP.Profile — modules/profile (pictures, bio, look, commendations, moderation)
-Full notes: §13.21. English only: a profile has no language (no column, pref or picker).
-- `avatarOf(row, { own })`, `avatarFor(citizenid, viewerSrc|nil) -> Avatar` (a hidden name shows the callsign's
-  initials, never the picture, unless own), `prefsFor(citizenid) -> Prefs`, `commendations(citizenid, { staff,
-  viewer })`, `newCommendations(citizenid)`, `report(src, citizenid, reason, note)`, `validateBio(text)`,
-  `validateUrl(url)`, `set(officer, payload)`, `editView(officer)`, `queue(dept|nil)`, `adminView(citizenid)`.
-- Net: callback `getProfileEdit`; actions `server:profile:set` (`{ bio?, avatar? = { kind, value }, appearance?,
-  accent?, uiScale?, callsMuted? }`), `server:profile:report`,
-  `server:sup|admin:reviewAvatar`, `clearProfile`, `handleReport`, `commend`, `revokeCommendation`; callbacks
-  `sup:getProfileQueue`, `admin:getOfficerProfile`; push `profile` to the officer after every change. Commendations
-  are zero-points: only cp_commendations and the audit row are written.
+English only: a profile has no language. Web: `shared/components/Avatar.tsx` (presets `web/src/assets/avatars/*.svg`;
+links fall back to initials), `officer/components/{ProfileEditDialog,CommendationsCard,ServiceRecordCard,LookCard}.tsx`,
+`supervisor/components/{CommendDialog,ProfilesReview}.tsx`, mock `mocks/profile.mock.ts`.
+- `avatarOf(row, { own })` (approved link or preset, else initials; frame = the level badge; a hidden name shows the
+  callsign's initials, never the picture, unless own), `avatarFor(citizenid, viewerSrc|nil)`, `prefsFor(citizenid) ->
+  { appearance, accent, uiScale (clamped to Config.Profile.uiScale), callsMuted }`.
+- `commendations(citizenid, { staff, viewer })` (active, newest first; `staff` adds revoked ones; `viewer` adds `mine`;
+  a hidden issuer shows by callsign), `newCommendations(citizenid)` (last `Config.Commendations.announceDays`, 60 s
+  cache).
+- `validateBio(text)` (≤ bioMax characters and bioLines lines, control characters removed, no word or phrase of
+  `Config.Profile.bannedWords` or `config/banned_words.txt`), `validateUrl(url)` (https, an exact host of
+  `avatarUrls.hosts`, ≤ 255, a .png/.jpg/.jpeg/.webp path, no spaces, quotes, backticks, backslashes or angle
+  brackets).
+- `report(src, citizenid, reason, note)` (picture, bio, other; never your own; one per profile per reporter per day,
+  `Config.Profile.reports.perDay`; audited `profileReport`), `set`, `editView`, `queue(dept|nil)`,
+  `adminView(citizenid)`.
+
+| Name | Payload | Rules |
+|---|---|---|
+| callback `getProfileEdit` | → ProfileEdit (+ bioPending) | own |
+| `server:profile:set` | `{ bio?, avatar? = { kind, value }, appearance?, accent?, uiScale?, callsMuted? }` → `{ pending }` | picture and bio share `Config.Profile.editCooldown`; a preset above the level is refused; a link needs `avatarUrls.enabled`, counts toward `perDay`, and with `requireApproval` waits in `avatar_pending`; `bioRequiresApproval` → `bio_pending`; accent only from the department's `personalAccents` at or below the level; the mute saves `calls_muted` and clears MissionCalls' cache |
+| `server:profile:report` | `{ citizenid, reason, note? }` | any officer |
+| `server:sup\|admin:reviewAvatar` | `{ citizenid, decision = 'approve'\|'reject', reason, what? = 'avatar'\|'bio' }` | reviewProfiles, own department (admins any), never your own, reason required, a claim UPDATE; audited reviewAvatar / reviewBio |
+| `server:sup\|admin:clearProfile` | `{ citizenid, what, reason }` | same; audited clearBio / clearAvatar |
+| `server:sup\|admin:handleReport` | `{ id, decision = 'clear'\|'dismiss', reason }` | same, on the report's department; clear also clears the content; final once handled |
+| `server:sup\|admin:commend` | `{ citizenid, kind, citation, runUuid? }` → `{ id }` | issueCommendation / openAdmin; kind from `Config.Commendations.kinds`; never yourself; supervisors own department unless `crossDepartment`, `perSupervisorPerDay`; `sameKindCooldownDays`; a run must be the recipient's and not the issuer's. Zero points: only cp_commendations and the audit row are written; toast, Home news, optional board webhook |
+| `server:sup\|admin:revokeCommendation` | `{ id, reason }` | the issuer or any admin; audited |
+| callback `sup:getProfileQueue` | `{ department? }` → ProfileQueueItem[] | reviewProfiles; reports show the live content, never the reporter |
+| callback `admin:getOfficerProfile` | `{ citizenid }` → the staff profile with realName, pending values, every commendation, open reports | openAdmin |
+
+Push `profile` (`{ citizenid }`) to the officer after every change. Hooks: `home:extras` (commendation count and news,
+from the cache only), `officer:loaded` (warms the cache).
 
 ### 5.33 CP.Rewards — modules/rewards (optional item rewards)
-Full notes: §13.22. Off by default (`Config.Rewards.enabled = false`): no listener writes a row and
-nothing calls ox_inventory.
-- `lockerCount(citizenid)`, `forRow(rowId)`, `deliver(citizenid)`, `locker(src) -> RewardsLocker`, `claim(src, id)`,
-  `adminView(page)`, `validate()`, `forbidden(name)`, `health()` (registered with CP.ConfigHealth), `entryFor(missionId,
-  type)`, `chanceFor(entry, tier, evidence)`, `roll(runId, citizenid, entry, chance)` (seed of run id and citizenid).
-- Status flow held → pending → giving → given, forfeited; claim before give (`UPDATE ... SET status = 'giving' WHERE
-  id = ? AND status = 'pending'`), then CanCarryItem, then `AddItem(src, item, count, { cpReward = <row id> })`
-  (never cpItem). In Crimson-Arena or offline the reward waits in the locker; retried on officer:loaded and 10 s after
-  arena:exited. A row left `giving` is listed for admins.
-- Listens to row:settled, row:approved, row:voided, row:forfeited, goal:completed, xp:levelUp, season:ended,
-  officer:loaded, arena:exited, home:extras. Net: callback `getRewardsLocker`, action `server:rewards:claim`
-  (`{ id }`), callback `admin:getRewards` (`{ page }`), push `rewards`.
-- Full admin control (economy): `Usable()` checks `forbidden()` itself (an item added in game before the next check is
-  never given); `checkSetting(path, value) -> errKey|nil` is registered as the Settings validator of `Rewards` (pool
-  shape, chance 0–1, rolls 0–10, count 1–100 or `{ lo, hi }`, weight > 0, value ≥ 0, never a forbidden item), and every
-  `settings:changed` on a `Rewards.*` path runs `validate()`. Delivery (`deliver`, a grant's delivery) and the
-  forfeiture job wait while `CP.Maintenance.active()`; the forfeiture job waits for and holds the busy lock
-  (`rewardForfeiture`). `adminView(args)` takes `{ page, citizenid, status, source, from, to }` (rows gain `rowId`,
-  `online`; the view `allowTakeBack`). `checkInventory(id)` (ox_inventory `Search` for the item tagged `cpReward = id`,
-  then only the slots whose own `metadata.cpReward` is the id: Search matches metadata values and ignores the keys, so
-  an untagged food item's `degrade = 60` would match reward 60; online only), `resolve(id, 'given'|'locker', audit)`
-  (`giving` → given, or → pending and delivered again; `err.reward_found` when the item is there), `cancel(id)`
-  (pending/held → forfeited), `takeBack(id, audit)` (given → forfeited under the reward lock, `RemoveItem(src, item,
-  n, slot.metadata, slot.slot)` of exactly the tagged slots with each slot's own metadata, because RemoveItem matches
-  the whole table and ox_inventory added `durability`, `degrade` or `container` and `size` when it gave the item;
-  refused and undone when they are not all there), `undoForfeit(rowId)` (on `row:forfeitUndone`: the row's forfeited rewards back to pending, held while the row
-  is voided, once; ones an admin cancelled or took back stay), `expected(entry)` (items and value per run at each tier,
-  in Lua), `itemChoices()`. Net in §8.4.4.
+Off by default (`Config.Rewards.enabled = false`): no listener writes a row and nothing calls ox_inventory. Only admins
+set rewards, in config; mission files and the Builder never carry a reward field. Files: `modules/rewards/server.lua`,
+`locales/parts/rewards.json`, web `types/rewards.ts`, `officer/components/RewardsLocker.tsx` (on Home, hidden while
+empty), `admin/components/ItemRewardsPanel.tsx` (Admin UI → Leaderboards → Item rewards), mock `mocks/rewards.mock.ts`
+(`?rewards=off|arena`).
 
-Full admin control, System: the storage switched to in Admin UI → System is kept in the server's KVP
-(`cp_storage_mode` = `database`|`files`, `cp_storage_folder`), outside the storage itself where the settings live, and
-read by `Install` before `Config.Database` (which it then reflects); a start-up line names the override and System →
-Storage and Config health (`storage`) show it. `effective(cfg, kvp) -> { enabled, folder }, override|nil` (pure, for the
-specs), `override() -> { mode, folder }|nil`, `validFolder(f)` (relative, under `saves`, no `..`, no `//`, no full path).
-`CrimsonPoliceAdmin storage mode reset` (or `storagemode reset`; console only) clears the KVP. Each store holds `cp_storage_meta` (`generation`,
-`state` = `active`|`left_behind`): a switch writes a new generation into both and marks the old one `left_behind`; a
-store that starts `left_behind` begins the `left_behind` maintenance lock (CP.Sysadmin, §5.41).
+Data: `cp_item_rewards`, one row per officer, source, source key and item (`uq_reward`); `row_id` is the run row for
+run, medal and boss rewards (held and forfeited with it), NULL otherwise. Times from `os.time()`, never NOW().
+
+| source | source_key | when |
+|---|---|---|
+| run | run_uuid | row:settled: the run entry's rolls |
+| medal | run_uuid | row:settled: `Config.Rewards.medals[gold/silver/bronze]` from row.medal |
+| boss | `week:<weekKey>` | row:settled of a Weekly Boss run, once per week |
+| goal | `<goalId>@<period>` | goal:completed: `goals[goalId]`, else `goals.daily` / `goals.weekly` |
+| level | the level | xp:levelUp: `levels[n]` for every level passed |
+| season | `champion:<id>` / `top10:<id>` | season:ended: every officer of the champion department with a counted run row in the season; the top 10 |
+
+- Who: each participant of a completed non-test run who met the presence share. A flagged participant or run: every
+  reward of the row is `held`.
+- Rolls: `U.rng(hash('<run id>:<citizenid>:item-rewards'))` (a second settle rolls the same; the unique key stores
+  nothing twice); each roll draws hit, pick and count. Chance = entry.chance + tierChance[pay tier] + min(findBonus ×
+  the run's finds (every participant's `evidence`), findBonusMax), clamped to [0, 1]. The entry: byMission, else
+  byType, else examplePools with `useExamplePools`.
+- Caps per officer per reset day, every source together, forfeited not counted: `dailyItemCap` and `dailyValueCap`
+  (count × configured value); past a cap nothing is given (0 = no cap).
+- Validation (3 s after start, on first use, once ox_inventory is up, and on every `settings:changed` of `Rewards.*`): a
+  forbidden name (armour, bandage, ammo-\*, weapon_\*, money, black_money, cash, and `Config.Rewards.forbidden` with `*`
+  wildcards; case-insensitive) or an item ox_inventory does not know is turned off with a warning and a Config health
+  line; `Usable()` checks `forbidden()` again at give time. `checkSetting(path, value)` is the Settings validator of
+  `Rewards` (pool shape, chance 0–1, rolls 0–10, count 1–100 or `{ lo, hi }`, weight > 0, value ≥ 0).
+- Status: `held` → `pending` (the locker) → `giving` → `given`; `forfeited`; given and forfeited are final. Delivery:
+  claim (`UPDATE ... SET status = 'giving' WHERE id = ? AND status = 'pending'`), CanCarryItem, `AddItem(src, item,
+  count, { cpReward = <row id> })` (never cpItem, so the mission-item sweep leaves it alone). No room → back to pending
+  with one toast; in the arena or offline nothing is called; retried on officer:loaded and 10 s after arena:exited;
+  never dropped in the world. A row left `giving` is never retried automatically (listed as Stuck). Delivery and the
+  forfeiture job wait during maintenance.
+- row:approved: held → pending → given; row:voided: pending → held; row:forfeited: held/pending → forfeited. Its own
+  10-minute job (holding the busy lock `rewardForfeiture`) forfeits the held rewards of a voided row whose dispute window
+  closed with no open dispute (CP.Cash fires row:forfeited only when cash was held). `undoForfeit(rowId)` on
+  `row:forfeitUndone` (once; ones an admin cancelled or took back stay).
+- History: every status change writes `breakdown.items` (`{ name, label, count, status }`, giving shows as pending)
+  with `JSON_SET` on that path only; `result.items` leaves forfeited out.
+- API: `lockerCount(citizenid)` (30 s cache; home:extras `rewardsWaiting`), `forRow(rowId)`, `deliver(citizenid)`,
+  `locker(src)` (canClaim false with `rewards.reason.off|arena|inventory`), `claim(src, id)`, `validate()`,
+  `forbidden(name)`, `health()` (registered as `rewards`), `entryFor`, `chanceFor`, `roll`, `expected(entry)`,
+  `itemChoices()`, `adminView({ page, citizenid, status, source, from, to })`.
+- Admin tools (§8.4.4): `checkInventory(id)` (Search for `cpReward = id`, then only slots whose own metadata has it:
+  Search matches values and ignores keys; online only), `resolve(id, 'given'|'locker', audit)` (`err.reward_found` when
+  the item is there), `cancel(id)`, `takeBack(id, audit)` (exactly the tagged slots, each with its own metadata,
+  because ox_inventory adds keys when it gives; refused and undone when not all there).
+- Net: callback `getRewardsLocker`, action `server:rewards:claim { id }` (2/s), callback `admin:getRewards`
+  (openAdmin), push `rewards` whenever the locker changes.
 
 ### 5.34 CP.ConfigHealth — modules/confighealth
 `register(name, fn -> { { level = 'ok'|'warn'|'error', text } })` (a second register replaces it), `run() ->
-ConfigHealthItem[]` (errors first; a failing check is one error line). Runs 5 s after start (only that first run
+ConfigHealthItem[]` (errors first; a failing check is one error line). Runs 5 s after start (it registers CP.Rewards' `health` then; only that first run
 prints to the console, one line per problem, then one summary line: plain when every check passed, a warning with the
 counts otherwise, naming `/CrimsonPoliceAdmin check`) and on callback `admin:getConfigHealth` (admins) and the `check`
 subcommand (§5.25). Built-in checks: items (the item, its way, and its picture in `ox_inventory/web/images/<item>.png`
@@ -2202,17 +2666,19 @@ A line may also carry `fix` (the Settings path that fixes it: Permissions and Se
 `cfgLine` (a server.cfg line to paste: **Copy the line**); `run()` passes both through. CP.Sysadmin registers `storage`
 (an in-game storage choice, a store left behind).
 
-### 5.35 CP.Diag — modules/diag (client; the freeze fix)
-F8 command `CrimsonPoliceState`: four `[crimson-police:diag]` lines with the screen fade, NUI focus (and keep input),
-scripted camera, pause menu, player control, frozen, dead, last stand and dead metadata, in a vehicle, then what
-Crimson-Police holds (tablet, panel focus, test panel focus, pick-up, run) and which of the rest is not ours (the
-test panel's and the test prompt's focus are ours: `state().testFocus` is `'controls'` or `'invites'`).
-`CrimsonPoliceState unstick` first closes our tablet, releases our panel focus and the test panel's
-(`CP.Testing.releaseFocus()`), runs `CP.Downed.restore`, then calls `SetNuiFocus(false, false)` whatever is open: FiveM
-keeps one focus vote per resource, so that frees a focus a broken page of ours holds and never touches another
-resource's. `state() -> table`, `unstick()`.
-Admin UI → Officers → Support: `client:diagUnstick` runs `unstick()`; `client:diagState (token)` answers
-`server:diagState (token, state())` (the server keeps only the answer of the player it asked, known keys only).
+### 5.35 CP.Diag — modules/diag (client)
+No Crimson-Police state may outlive a run or a downed follow-up (the safety nets of §5.4, §5.15 and the web's
+`QuietBoundary`, §9.1); this command says what holds the screen.
+- F8 `CrimsonPoliceState`: four `[crimson-police:diag]` lines with the screen fade, NUI focus, scripted camera, pause
+  menu, control, frozen, dead/last stand, vehicle, then what Crimson-Police holds (tablet, panel focus, test panel
+  focus `'controls'|'invites'`, pick-up, run). `CrimsonPoliceState unstick` closes our tablet, releases our and the
+  test panel's focus, runs `CP.Downed.restore`, then `SetNuiFocus(false, false)` (FiveM keeps one focus vote per
+  resource, so this never touches another resource's). `state()`, `unstick()`.
+- Admin UI → Officers → Support: `client:diagUnstick` runs `unstick()`; `client:diagState (token)` answers
+  `server:diagState (token, state())` (only the asked player's answer, known keys only).
+- Lint FX10 (`tools/lint_fivem.py`, `tools/lua_flow.py`, a Lua 5.4 parser with flow analysis): a while/repeat loop that
+  can go round with no Wait while waiting on game state, or an ipairs loop that appends to its own table; checked by
+  `tests/freeze_spec.lua` on `tests/fixtures/lint/fx10_loops.lua`.
 
 ### 5.36 CP.Settings — modules/settings (settings changed in game)
 Server:
@@ -2594,7 +3060,7 @@ action goes through `CP.AdminKit` (admins only, audited).
 
 ### 5.42 CP.NpcCombat — shared/npccombat.lua and modules/npccombat (client, server)
 
-How hard armed mission NPCs fight back (Config.NpcCombat, the owner's request of 2026-10-19). Config is read at every
+How hard armed mission NPCs fight back (Config.NpcCombat). Config is read at every
 call, so a Settings change applies to the next NPC; `enabled = false` makes every function answer the old behaviour
 (the weapon as named, 250 rounds, no caps, no damage settings).
 - Shared (§2): `weapon(name)` — the name when it is in `weapons`, else `replace[name]`, else `fallback`; never an
@@ -2618,7 +3084,7 @@ call, so a Settings change applies to the next NPC; `enabled = false` makes ever
   are one value per game, and another script (Crimson-Contracts' guard scaling) may set or reset it mid-run. `settings:changed` applies a mid-run change at once. A
   foreign `crimsonArena` value of the local player (docs/INTEGRATIONS.md, Crimson-Arena rule 8) stops it at once, before the server
   ends the run for that player. Start data with `npcCombat = false` (`CP.Runs.create` opts.npcCombat = false, for the live case's
-  live runs; `run.npcCombat` is then false) starts nothing; with the field missing it starts as before.
+  live runs; `run.npcCombat` is then false) starts nothing; with the field missing it starts them as usual.
 - Client `drop(runId)` and the event `client:npcCombatDrop` (runId): for the active run only, `noCriticalHits` and
   `officerDefense` go back exactly as `stop` puts them back (the ped's own flag 2, the defense modifier read before the
   run) and `a.dropped` keeps them off for the rest of that run (`settings:changed`, a respawn); `aiDamage` and
@@ -2641,1521 +3107,705 @@ call, so a Settings change applies to the next NPC; `enabled = false` makes ever
 
 ### 5.43 CP.Spawn — modules/spawn (client, server)
 
-What this officer's game can see of the points the server's spawn director may use (Config.Spawning.preferHidden,
-§5.10, owner request of 2026-10-19: no one spawning in front of or around the officers).
-- `visible(points, budgetMs) -> { boolean }` — one answer per point (at most 32; `{ x, y, z }` or `{ [1], [2], [3]
-  }`): `false` when every line of sight from the officer's eyes (his head bone SKEL_Head 31086 and
-  `GetFinalRenderedCamCoord`, the camera he sees through) to 1.0 m and 1.7 m above the point hits something
-  (`StartShapeTestLosProbe` flags 1 + 2 + 16: the map, vehicles, objects; options 7; his car, else his ped,
-  ignored), else `true`: one clear line, a probe that did not start (handle 0), an invalid result (status 0), a probe
-  still running when `budgetMs` (kept to 50-5000, default 5000) ran out, or an entry that is no point. Probes run
-  asynchronously, at most 16 at once, polled each frame with `GetShapeTestResult`; the ones still running at the
-  end are read for up to 60 more frames in a thread so the game frees their handles. Needs a thread (`Wait(0)`).
-- The ox_lib callback `crimson-police:client:spawn:visible` (§8.1) answers the server's `{ points, ms }` with
-  `visible(points, ms)` (`{}` for args that are no table, and when it raises: one `CP.warn`).
-- `walkIn(car, ring, budgetMs) -> { { x, y, z, hidden } }` (Config.Spawning.contactRing): where a returning
-  driver or a thief appears for the car at `car` (`{ x, y, z }`). Round the car, in the direction this officer looks
-  (`GetFinalRenderedCamRot(2).z`, else his ped's heading) and 25, 50 and 75 degrees either side, at ring[1], halfway
-  and ring[2] (ring kept to 5-100 m), `GetSafeCoordForPed(x, y, car z + 1.0, false, 4 + 8)` (no navmesh from a
-  building's inside, none in water; found as true or 1); a navmesh point is kept when it is 2D within the ring from the
-  car, ring[1] or more from him, at most 90 degrees off his view and 2 m or more from one kept already. Its z is the
-  navmesh's + 1.0 (a standing person's point). `visible(kept, budgetMs)`: hidden ones first, then seen ones, each in
-  that order, at most 8. Empty when nothing fits. Needs a thread.
-- The ox_lib callback `crimson-police:client:spawn:walkIn` (§8.1) answers the server's `{ car, ring, ms }` with
-  `walkIn(car, ring, ms)` (`{}` for args that are no table, and when it raises: one `CP.warn`).
-- `probe(kind, x, y, z, h, model, opts) -> result` — whether the point is fit to put a `'ped'`, a `'vehicle'`
-  (`model`: its name or hash, for its size) or a `'prop'` (`'object'` and any other kind) on, heading `h` (
-  Config.Spawning.ground; the Check spawn points tool calls it, §5.27, and the placer below). Needs a
-  thread. Coordinates are sent to the game as decimals. In order:
-  1. collision: `RequestCollisionAtCoord` each frame until `HasCollisionLoadedAroundEntity(opts.entity or
-     PlayerPedId())` or `Config.Spawning.collisionTimeoutMs` (kept to 500-30000 ms; `result.loaded`);
-  2. interior: `GetInteriorAtCoords` ~= 0 and not `IsInteriorReady` -> `PinInteriorInMemory`, wait for it up to
-     `interiorTimeoutMs` (500-30000 ms); never ready -> `interior_not_loaded` (nothing else probed); the probe unpins
-     only an interior it pinned;
-  3. ground: `GetGroundZAndNormalFor_3dCoord` from z + 2.0 (the highest ground under the point) and from z + 50.0
-     (a roof or a bridge over it: `result.roofZ` when that is over z + 2; the ground over a point buried deeper than
-     2 m when the first finds nothing), retried each frame with `RequestCollisionAtCoord` until either finds ground
-     or the collision deadline passes; none -> `no_ground`. When the z + 2.0 look found a surface over z + 0.1 (a low
-     roof or the floor above over a person inside, a garage deck over a car, or the ground over a buried point), a
-     third look from z + 0.1 finds the ground right under the point: the point stands on the one it needs the
-     smaller move to (0 inside its range, as in 5; the one under it on a tie), and then the surface over it is
-     `result.roofZ`. A vehicle's model is sized (as in 6) before this choice;
-  4. water: the Builder's check (`TestProbeAgainstWater` z + 2.0 to z - 1.5, or `GetWaterHeight` over the ground +
-     0.1) -> `in_water`;
-  5. height: dz = z - groundZ inside the kind's range (`pedAbove` -0.3..1.6, `vehicleAbove` -0.2..1.5, `propAbove`
-     -0.1..0.5; read live, the default when a range is not two ordered numbers) -> `ok`; outside it -> `snap` when
-     |groundZ + lift - z| <= `snapWithin` (0-10, default 3.0; lift: a person 1.0, as the Builder stores a standing
-     ped; a vehicle -min.z of `GetModelDimensions`, 0.2-1.5; an object 0.0), else `underground` (dz under the range)
-     or `floating` (over it);
-  6. wall (a ped or a vehicle that is ok or snap, unless `opts.wall == false`: a marker an officer walks to, where a
-     door may stand in the space): the Builder's capsule on the ground at groundZ
-     (`StartShapeTestCapsule` flags 1 + 2 + 16, options 7: a person 0.45-1.7 m, r 0.32; a vehicle along its heading,
-     sized from its model, loaded for it with `RequestModel` and let go again when it was not loaded, a car of
-     unknown size `{ lift 0.5, half 2.3, r 0.8, midZ 1.0 }` otherwise; ignoring `opts.ignore`, else his car or his
-     ped), polled up to 1 s; a hit -> `in_wall`; not started, lost or unfinished = not known (`result.wall` nil, an
-     unfinished one is drained like the line-of-sight probes).
-  `result = { status, kind, x, y, z, groundZ, dz, normalZ, roofZ, interior, loaded, water, wall, sized, lift }`: `z`
-  is where to put it (the point's own z, or groundZ + lift for `snap`); `sized` (vehicles) whether the model gave its
-  size; `lift` (once the ground is found) how far the entity's point sits over the ground (5). A point whose x, y or z
-  is no number answers `{ status = 'no_ground' }` without asking the game.
-- The placer (Config.Spawning.place; the server's side, which writes the ask, is below): an
-  `AddStateBagChangeHandler('cp', nil, ...)` of its own. A bag of an entity (`entity:<netId>`) with `place
-  = { x, y, z, h?, kind, token }` (§6.2) of the run this player is on (`CP.Runs.current().id == bag.run`), whose token
-  (a string or an integer) this game has not taken yet, and x, y, z numbers, starts one placement (a bag with no
-  `place`, or dead, forgets the net id's token; a run's end, `client:runEnded`, forgets its asks and a placement still
-  running for it tells nothing). In a thread: the entity must exist here within 3 s (`NetworkDoesNetworkIdExist` /
-  `NetworkGetEntityFromNetworkId`; not streamed here: nothing, its bag comes again when it streams in); this player
-  must be an active participant (`status == 'active'`). Who places it: the game that controls it
-  (`NetworkHasControlOfEntity`, or `NetworkGetEntityOwner` is this player); when another participant's game controls
-  it, that one; when a bystander's or nobody's does, the participant nearest to the point of the ones whose ped this
-  game has (the lower server id on a tie). An entity more than 3 m (flat) from the ask's x, y, and from `place.from`
-  when the ask has one, has been placed and let go already (a game that placed it could not tell the server: its
-  player left the run): it is neither frozen nor moved, `'placed'` with reason `'moved'` and z its height now. Else it
-  tells the server it checks the entity (`server:spawnChecking`, §8.2, once per token), so the ask's time waits for
-  it; when it then gives up with no answer (its turn never came, this player left the run, control not given or lost,
-  the entity gone, or a raise) it sends one more `server:spawnChecking` with `done = true`, so the ask's time runs on
-  at once instead of after the whole check time. At most 4 placements run at once (the rest wait up to
-  30 s; the slot is taken before control is asked for), each with control (asked with
-  `NetworkRequestControlOfEntity` for up to 2 s; not given: no answer, only the `done` word above; a later write
-  of the bag tries again). Then
-  `FreezeEntityPosition(ent, true)`, `SetEntityLoadCollisionFlag(ent, true)`; a person in a vehicle
-  (`IsPedInAnyVehicle`) or anything attached (`IsEntityAttached`) is not moved: `'placed'` with reason `'seated'` /
-  `'attached'`; else, when it stands more than 3 m from x, y (an ask the server moved to another point: it waits at
-  `from`), `SetEntityCoordsNoOffset(ent, x, y, z, keepTasks = a person, false, true)` first, so the collision loaded
-  and probed is the one around it there; then `probe(kind, x, y, z, h or GetEntityHeading, GetEntityModel for a
-  vehicle, { entity = ent, ignore = ent })`. Seated or attached by the time the probe ends (the server seats a
-  pursuit's, an escort's or a transport's people right after it makes them), or more than 3 m from x, y (the server
-  set it somewhere else during the check): not moved, let go (but an object or a cuffed person), `'placed'` with
-  reason `'seated'` / `'attached'` / `'moved'` (z its height) (`kind`: `place.kind` 'ped' / 'vehicle' / 'object', else `GetEntityType`). ok or snap: with
-  control still held (else no answer, only the `done` word), `SetEntityCoordsNoOffset(ent, x, y, groundZ + lift,
-  keepTasks = a person, false, true)` at the server's x, y (it never picks another spot), `SetVehicleOnGroundProperly` for a
-  vehicle, `PlaceObjectOnGroundProperly` for an object, and the entity is let go (`FreezeEntityPosition(ent,
-  false)`) except an object and a person whose bag is now in the `cuffed` state (CP.Npc holds that pose frozen; a
-  later write of the same ask updates the state): `'placed'`. Any other status: it stays frozen, not moved: `'bad'`.
-  Told with `server:spawnPlaced` (§8.2) `runId, { netId, token, result = 'placed'|'bad', reason (the probe's status,
-  or 'seated'/'attached'/'moved'), groundZ, dz, z (where it was put; nil for bad) }`, once per token; a raise is one
-  `CP.warn`, no answer, only the `done` word.
-- `CP.Spawn.holds(entity) -> bool`: true while the entity waits for its placement: its cp bag
-  (`Entity(entity).state.cp`, not dead) carries a `place` with a token and this game has not put it on the ground
-  for that token ('placed'; a bad point keeps it held). CP.Npc's host game never lets such a person go
-  (modules/npc/client.lua `LetGo`, used by `Release` and `kneel`, §5.11): the game that places him does, or the
-  server when it takes an answer or gives up (below), so a host whose game has no ground loaded where he stands does
-  not drop him through the map while another game checks his ground. CP.Npc lets him go itself once the ask is gone
-  (the host loop).
-- Server (owner request of 2026-10-19: "i do not want them spawning in the ground"; a far game with
-  no ground loaded may simulate a new ped first). `CP.Spawn.ask(run, netId, entity, kind, opts) -> place|nil`, called
-  by the engine's Track for every new mission entity (§5.10; `kind` 'ped' / 'vehicle' / 'object'): with
-  `Config.Spawning.enabled` and `place` on, and `opts.coords` a point, it sends `FreezeEntityPosition(entity, true)`
-  (a server RPC: FXServer keeps it for the first game that takes an entity nobody simulates yet, ServerRPC.cpp),
-  keeps the ask `{ x, y, z, h, kind, token }` (the file's point; the token unique per ask, a string) with up to 8
-  other points from `opts.alt`, and returns it for the bag (§6.2). `CP.Spawn.waiting(runId) -> n` counts the
-  entities of a run that still wait. A check every 1 s (a thread that runs while any ask is open): an ask whose
-  run ended, or whose entity is gone, dead or no longer the run's, is dropped; with place (or enabled) switched off in
-  Settings every waiting entity is let go; the game that simulates it (`NetworkGetEntityOwner`: a player's server id,
-  -1 = nobody) changed to one that is not an active participant's within `activateRange` (2D) of the point: frozen
-  again (the freeze reaches that game; the entity is marked so a later answer also lets it go from here); the time
-  (`placeTimeoutMs`) only runs while an active participant is within `activateRange` of the point, so an entity
-  nobody is near (staged ahead, a van coming in) waits frozen without a limit, and not while an active participant's
-  game has said it checks the entity (`server:spawnChecking` for the ask's current token, taken once per token: the
-  placer's turn in a big wave, its control asks and the probe's loads, at most 34 s + `collisionTimeoutMs` +
-  `interiorTimeoutMs`, each kept to 500-30000 ms, and only while that participant stays on the run; a new token
-  after a bad point clears it, and so does that game's `done = true` word when it gives up with no answer, while a
-  later checking word for the same token is still not taken); past it `onTimeout`: `'unfreeze'`
-  (default) lets it go where it stands, `'delete'` (never for an ask of `CP.Spawn.again` below: a person or
-  vehicle the server only moved, a warrant's suspect who gives up at the door or the prisoner transport put on its
-  parking point, is always let go where it stands) counts it as gone (`Runs.entityDied`, the objective's
-  `onEntityDead`) and deletes it, with one `CP.warn` (`run <id>: ped <model> at x y z was not placed by an officer's
-  game within 8000 ms; let go where it stands (Config.Spawning.onTimeout)`).
-  The answer, `server:spawnPlaced` (§8.2, at most 30 a second per player): taken only from an active participant of
-  that run, for an open ask with that net id and its current token; anything else is ignored. `'placed'`: refused
-  (one `CP.warn`, the ask stays open) when its `z` is more than `ground.snapWithin` + 2 m from the ask's z (reason
-  `'moved'` is not checked: it stands where it ran to); else the ask is over: `place` leaves the bag
-  (`CP.Npc.setPlace`, else the engine's copy), and the entity is let go from here when the server froze it again
-  after an owner change, when the game left it as it was (reason `'seated'`, `'attached'`, `'moved'`), or when it is
-  an object made with `frozen = false`; an object otherwise stays frozen, and a person CP.Npc holds cuffed is never let
-  go from here. `'bad'` for a person the server sees seated in a vehicle (`GetVehiclePedIsIn`; seated after his game
-  checked his ground): the ask is over, he is let go, one `CP.log`. Any other `'bad'` (in a thread of its own): while fewer than
-  `Config.Spawning.retries` other points were tried, the next of its other points that is free (no entity of the run
-  within 1 m, not another waiting entity's point) and that the director allows now (`Runs.choosePoints(run, free, 1,
-  { obj })`: the distance and behind rules from where the officers stand by then) becomes the ask: x, y, z, h of
-  that point, a new token, `from = { x, y }` of the point it waits at, its time back to 0 (the officer's game moves
-  it there and places it; the same entity, so the objective that made it keeps counting it); one `CP.warn` `run <id>:
-  ped <model> at x y z is underground (ground 31.40); used spawns[4] (70.00 170.00 31.00) instead`. No such point, or
-  the retries spent: the ask is over and the entity is let go where it is (as before), one `CP.warn` ending `used it
-  there (no other point allowed)` / `used it there (Config.Spawning.retries = 2 spent)`.
-  `CP.Spawn.again(run, netId, coords, from) -> place|nil`: the server moved a live person (or vehicle) of
-  the run itself (flee_arrest's surrendering suspect, stood at the door step with `SetEntityCoords`): with place on it
-  freezes him, replaces any open ask with one at `coords` (a new token, no other points: a bad answer lets him go where
-  he stands with one warning), `from = { x, y }` where he stood before (the placer moves him to `coords` first when
-  the server's move has not reached its game), writes it to his bag and returns it; nil when place is off or he is not
-  a live entity of the run. `CP.Spawn.holding(netId) -> boolean`: true while an ask for that entity is open
-  (it waits frozen; field_contact walks a returning driver or a thief to his car only after that).
+What an officer's game can see of the spawn director's points (`Config.Spawning.preferHidden`, §5.10), the ground probe
+of one point (`Config.Spawning.ground`), and the placer that puts a new mission entity on the ground when the server
+asks (`Config.Spawning.place`), so nothing spawns in front of the officers or in the ground.
+
+#### Client
+- `visible(points, budgetMs) -> { boolean }` (at most 32 points) — `false` when every line from the officer's eyes (head
+  bone 31086 and `GetFinalRenderedCamCoord`) to 1.0 m and 1.7 m over the point hits something (`StartShapeTestLosProbe`
+  flags 1 + 2 + 16, options 7, his car or ped ignored); anything unknown (a probe not started, an invalid result, out
+  of budget (50–5000 ms), no point) is `true`. At most 16 probes at once; unfinished ones are drained so the game frees
+  them. Callback `client:spawn:visible` (`{ points, ms }`; `{}` on bad args or an error).
+- `walkIn(car, ring, budgetMs) -> { { x, y, z, hidden } }` (`Config.Spawning.contactRing`): where a returning driver or
+  a thief appears for a car: in the direction he looks and 25/50/75° either side, at ring[1], halfway and ring[2] (5–100
+  m), `GetSafeCoordForPed` (no interior, no water), kept when within the ring, ring[1]+ from him, ≤ 90° off his view and
+  2 m from others; hidden first, at most 8. Callback `client:spawn:walkIn` (`{ car, ring, ms }`).
+- `probe(kind = 'ped'|'vehicle'|'prop', x, y, z, h, model, opts) -> result` (needs a thread), in order:
+  1. collision loaded around `opts.entity` or his ped (`collisionTimeoutMs`, 500–30000);
+  2. interior: not ready → pinned and waited for (`interiorTimeoutMs`); never ready → `interior_not_loaded` (it unpins
+     only what it pinned);
+  3. ground: `GetGroundZAndNormalFor_3dCoord` from z + 2.0 and z + 50.0 (a roof → `roofZ`); none → `no_ground`; with a
+     surface over z + 0.1 a look from z + 0.1 finds the ground right under, and the point takes the one it needs the
+     smaller move to;
+  4. water → `in_water`;
+  5. height: dz = z − groundZ inside the kind's range (`pedAbove` −0.3..1.6, `vehicleAbove` −0.2..1.5, `propAbove`
+     −0.1..0.5) → `ok`; else `snap` when within `snapWithin` (3.0) of groundZ + lift (a person 1.0, a vehicle its model's
+     −min.z, an object 0), else `underground` / `floating`;
+  6. wall (people and vehicles that are ok or snap, unless `opts.wall == false`): a capsule on the ground (a person
+     0.45–1.7 m r 0.32; a vehicle sized from its model) → `in_wall`; not finished = not known.
+  `result = { status, kind, x, y, z (where to put it), groundZ, dz, normalZ, roofZ, interior, loaded, water, wall,
+  sized, lift }`; a non-number coordinate answers `no_ground` at once.
+- The placer: its own `AddStateBagChangeHandler('cp', ...)`. A bag of this player's run with `place = { x, y, z, h?,
+  kind, token, from? }` (§6.2) and a token not taken yet starts one placement (a run's end forgets them). The entity
+  must exist here within 3 s and this player must be active. The game that controls it places it; else the
+  participant nearest the point. An entity already more than 3 m from the ask (and from `from`) was placed before:
+  `'placed'` reason `'moved'`. Else it tells the server it checks (`server:spawnChecking`, once per token, and `done =
+  true` when it gives up), takes one of 4 slots (waiting up to 30 s), asks control (2 s), freezes it, loads its
+  collision, moves it to x, y first when it waits at `from`, and probes. Seated, attached or moved meanwhile: not moved,
+  let go (not an object or a cuffed person). ok or snap: put at x, y, groundZ + lift (never another spot), vehicles and
+  objects set on the ground, let go except objects and cuffed people: `'placed'`. Else frozen and `'bad'`. Answered once
+  per token with `server:spawnPlaced (runId, { netId, token, result, reason, groundZ, dz, z })`.
+- `holds(entity) -> bool` — true while its bag carries a `place` this game has not placed; CP.Npc's host never lets such
+  a person go (§5.11), so a host with no ground loaded never drops him through the map.
+
+#### Server
+- `ask(run, netId, entity, kind, opts) -> place|nil` (from the engine's Track for every new entity): with `enabled` and
+  `place` on and a point, `FreezeEntityPosition(entity, true)` (FXServer keeps the RPC for the first game that takes it),
+  the ask `{ x, y, z, h, kind, token }` with up to 8 other points from `opts.alt`. `waiting(runId) -> n`,
+  `holding(netId)` (field_contact walks a returning driver to his car only after it).
+- A 1 s check while any ask is open: drops asks of ended runs or gone/dead entities; with place or enabled off lets every
+  entity go; refreezes when the simulating game changes to one that is not an active participant's within
+  `activateRange`. The time (`placeTimeoutMs`) runs only while a participant is within `activateRange` (staged entities
+  wait without limit) and not while a participant's game said it checks (at most 34 s + the two load timeouts). Past
+  it, `onTimeout = 'unfreeze'` (default) lets it go where it stands, `'delete'` counts it as gone and deletes it (never
+  for an `again` ask); one `CP.warn`.
+- `server:spawnPlaced` (30/s per player): only from an active participant, for an open ask with that net id and token.
+  `'placed'` with z more than `snapWithin` + 2 m off is refused (warn); else `place` leaves the bag (`CP.Npc.setPlace`)
+  and the entity is let go from here when needed. `'bad'` for a person now seated: over, let go. Other `'bad'`: while
+  fewer than `Config.Spawning.retries` other points were tried, the next free point the director allows now
+  (`Runs.choosePoints(run, free, 1, { obj })`) becomes the ask (a new token, `from` = where it waits; one `CP.warn` naming
+  both points); else it is let go where it is (one warn).
+- `again(run, netId, coords, from) -> place|nil` — the server moved a live person or vehicle itself (a warrant suspect
+  at the door, the prisoner van on its point): freezes it and replaces any ask with one at `coords` (no other points; a
+  bad answer lets it go).
 
 ### 5.44 CP.Markers — modules/markers (client)
 
-The current objective on this officer's map (Config.Markers, the owner's request of 2026-10-19: "ensure all objectives
-as they come up mark on the map"). One pointer per officer: a blip, or a circle with its
-centre, and at most one GPS line. modules/runs/client.lua drives it: `client:objective` `start` → `set(runId, index,
-msg.marker, ctx)` after the block's own `start` (ctx = the block's client ctx, for Radio Silence), `client:marker` →
-`update` (only for the current, started objective of this run), `stop` → `clear(runId, index)` before the block's
-`stop`, and every `Cleanup` (run end, leaving, a new start, resource stop) → `clear()` before the blocks stop (`clear()`
-without arguments also removes the run's service vehicles).
-- The marker (from the server, §5.10 `marker`; nil = none): `{ kind = 'point'|'area'|'targets', look, label, key,
-  number, coords = { x, y, z }, radius (area), route = true|false|'block', targets = { { key, netId, x, y, z, look,
-  label, variant, number, beyond } } }`. `look` is a `Config.Markers.kinds` key (default `'objective'`, an area
-  `'searchArea'`); `variant` `'boss'|'next'|'followUp'|'setback'|'surrendered'` picks the kind's bossScale, nextScale,
-  followUpColour, setbackColour or surrenderedScale (0.6 when the kind has none; the server's flee_arrest,
-  search_area, pursuit and field_contact markers send `'surrendered'` for one who gave up, and their blocks style their own blip with
-  it, so he is one size near and far). `beyond` (metres): this target takes the line before the others while this officer is
-  farther than that from it (kept until he is within 75 % of it), and never closer: then the others share it (escort:
-  the truck while HE is farther than clearRadius from it, else the destination; decided in each
-  officer's game). `route = false`: no line; `'block'`: the block keeps its own line (checkpoint_route), CP.Markers
-  draws none. At most 32 targets.
-- One icon per target: `adopt(key, blip)` — a block hands over the blip it draws for target `key` (a net id or a
-  point index, the marker's `key`): that blip is the pointer, CP.Markers draws no icon of its own for it and only sets
-  its line, `SetBlipPriority` and one flash; a blip handed over while CP.Markers' own icon of that target is still
-  flashing flashes for the rest of that one flash (a block draws its blips from its first snapshot, just after the start
-  message's pointer). `release(key, blip?)` — the block takes it back before removing it: its line goes off and
-  CP.Markers draws the target again; with `blip`, only when that is the blip handed over for `key`. Used by
-  interact_points (each pending or follow-up point's numbered blip in kinds.point, followUp while it needs a follow-up,
-  key = its point number; a hidden search's centre in kinds.searchArea, key `'area'`, its circle in `styleArea`;
-  a snapshot keeps every blip that still shows the same point, a changed status is restyled in place),
-  skill_check (each device still to work, armed, set back or waiting to be tried again, numbered in
-  kinds.device, setback while set back, restyled in place, key `'d<n>'`; kept across snapshots; named
-  after the mission's target (`obj.target.label`, Drug Lab Raid "Shut down the lab"), else `block.skill_check.blip`
-  "Device {n}", set back `block.skill_check.blip_setback` "{action} {n}" ("Ventilate 1"), the server's marker naming
-  each the same; a set-back blip flashes until it is fixed, `SetBlipFlashes(false)` when it is restyled out of
-  setback), process_scene
-  (the scene's blip in kinds.scene, key `'scene'`), checkpoint_route (the current checkpoint's
-  numbered blip in kinds.checkpoint, key `'cp<n>'`, the next one at nextScale; the marker says `route = 'block'`, so
-  the block keeps its own line on that blip, in `routeColour()`, on only while `canRoute(ctx)` allows one: checked
-  when the checkpoint changes and once a second in its loop, the route natives only when the answer changes; this ends
-  the second line a late partner had while still driving to the start), pursuit (each live car's blip in kinds.vehicle and each suspect's out of the car in kinds.suspect, key
-  = its net id; the observe violator only once it passed: a suspect running on foot in kinds.fleeing,
-  restyled in place when he stops, fights or gives up (surrenderedScale), and the server's marker gives him the same look) and escort (the truck's blip in kinds.escort, key = its net
-  id; the destination's in kinds.destination, key `'dest'`; the attackers' red dots stay detail blips), flee_arrest
-  (the front door's blip before the knock, key `'door'`; each suspect's, associate's or inmate's in
-  kinds.fleeing while he runs, else kinds.suspect, a surrendered one at surrenderedScale, restyled in place when his state changes,
-  key = his net id), protect_rescue (each hostage's in kinds.hostage, key = his net id; the safe point's in
-  kinds.safePoint, key `'safe'`) and field_contact (each contact's, key = its net id: a car in kinds.contactVehicle, a
-  person in kinds.contact, kinds.fleeing while he runs, kinds.suspect once he draws or gave up, restyled in place) and
-  search_area (the circle's centre in kinds.searchArea, key `'center'`, its circle in `styleArea`, a shrunk
-  circle's new centre handed over before the old one goes; each clue's numbered blip in kinds.clue, key `'c<n>'`; each
-  fugitive's in kinds.fleeing while he runs, kinds.suspect at surrenderedScale once he gave up, restyled in place, key = his net
-  id). An adopted blip that no longer exists falls back the same way at the next check. `clear` hands every adopted
-  blip back with its line off. CP.Markers draws its own icon only for what no block draws: a fight area (hostile_waves,
-  kinds.fightArea, a red skull and circle named `markers.fight` "Hostiles"), a fallback anchor, a target not
-  streamed here, and service vehicles. Detail blips that are never handed over are still styled with `style`, so
-  they follow `shortRange` too: hostile_waves' hostiles (kinds.hostile, a boss at bossScale named after
-  `obj.boss.label` with its first letter upper-cased, else `block.hostile_waves.boss_label`).
-- Own icons: a point or an area's centre `AddBlipForCoord` (an area adds `AddBlipForRadius`, colour of its kind,
-  alpha `areaAlpha`); a target `AddBlipForEntity` while `NetworkDoesNetworkIdExist(netId)` and the entity exists here,
-  else (`farTargets`) `AddBlipForCoord` at the server's position, moved with `SetBlipCoords` on every update, swapped
-  for the entity blip once it streams in and back once it streams out. Unchanged elements keep their blip, line
-  and flash; a new look, label or number redraws the blip.
-- `style(blip, kind, label, opts)` — the look of `kinds[kind]` and what every objective blip gets:
-  `SetBlipSprite/Colour/Scale`, `SetBlipAsShortRange(shortRange)`, `SetBlipCategory(category)`, `ShowNumberOnBlip`
-  for `opts.number`, the name (`BeginTextCommandSetBlipName('STRING')`); `opts.variant = 'setback'` also starts
-  `SetBlipFlashes(true)` with no timer while `setbackFlash` is on (a set-back device flashes until it is
-  fixed; the block stops it). The pointer also gets `SetBlipPriority(12)` and flashes once, `SetBlipFlashes` +
-  `SetBlipFlashTimer(flashSeconds * 1000)` (none at 0; none on a set-back target, which already flashes).
-- `styleArea(blip, kind)` — a block's own circle (`AddBlipForRadius`) in the colour of `kinds[kind]` at `areaAlpha`, as
-  CP.Markers draws its own circles (search_area; interact_points' hidden search).
-- `routeColour() -> integer` — `Config.Markers.routeColour` (0-85, default 5): the colour of every Crimson-Police GPS
-  line, a block's own included (checkpoint_route).
-- The line: on ONE blip, the one the pointer leads to (`cur.pointed`: of what the map shows, the point or
-  centre, or this officer's nearest target, moved only when another is 25 % closer; a target with `beyond` first while
-  he is farther than that from it; kept while the line is off, so the HUD line and Objective GPS name the same one),
-  `SetBlipRoute` + `SetBlipRouteColour(routeColour)`; off within `routeOffWithin` of a point or target
-  and inside an area's radius. `canRoute(ctx)` — false while `enabled` or `route` is off, under Radio Silence, while
-  `CP.Route.current()` exists and has neither arrived nor switched to the action (CP.Route samples the start's line
-  from the blip-route slot first, §5.12; a late partner's `action`, comes after CP.Route dropped the start's
-  line), and while the officer has a waypoint (`IsWaypointActive`: his own, or the one Objective GPS set). Every blip
-  CP.Markers removes or hands back loses its line first. `leads(ctx) -> boolean` — whether an objective line can
-  show at all for ctx's run (`enabled` and `route` on, Radio Silence not hiding lines): CP.Runs asks it before a late
-  partner's game drops the start (`CP.Route.follow(runId, dropStart)`).
-- The HUD line (`Config.Markers.hudLine`): each check sends `CP.Tablet.hud({ target = { label, distance,
-  inside? } })` for what the pointer leads to (its label, else `markers.objective`; `distance` in metres to the point,
-  the target or an area's edge, in 10 m steps under 1 km and 100 m steps above; `inside` = within an area's radius),
-  only when that changes, and `{ target = false }` once when there is none: nothing shown on the map (Radio Silence
-  included: no distance to a suspect it hides), the officer still driving to the start, `hudLine` or `enabled` off, and
-  at every `clear`. The NUI shows it under the objectives while `phase` is `'objectives'` (§9.3).
-- `objectiveGps() -> ok, { label } | errKey` — the client action `setObjectiveGps` (registered with
-  `CP.Tablet.registerClientAction` once every module has loaded; payload ignored): `SetNewWaypoint` on what the pointer
-  leads to, its line off at once (the waypoint is the officer's one line) and a toast `markers.gps_set`. Refused
-  with `err.objective_gps_off` (`objectiveGps` or `enabled` off), `err.objective_gps_none` (nothing on the map),
-  `err.objective_gps_start` (still driving to the start: the start keeps his line) and `err.objective_gps_silence`
-  (Radio Silence hides the line: `'area'` or `'none'`). While the waypoint stays ours (`GetFirstBlipInfoId(8)` within
-  15 m of where we put it) each check moves it to the pointer once that is more than 50 m off (a moving car or suspect,
-  the next nearest door); `clear` (the objective's stop, the run's end) and a `set` for another objective remove it
-  (`SetWaypointOff`). A waypoint the officer put in its place is never moved or removed.
-- The officer's map options (My options -> Map, `shared/options_map.lua`, read with `CP.Options.get`):
-  `objectiveGps` (server enum, default `'route'`): `'route'` = the line above; `'waypoint'` = no line (`canRoute`
-  false) and, at each new pointer (`run|index|element`, not within `routeOffWithin` or an area's radius), a
-  `SetNewWaypoint` where a line could go (`enabled`, `route`, not `hidden(ctx, 'route')`, not driving to the start,
-  the marker's `route` not false) and never over a waypoint of the officer's own; it is then Objective GPS's (followed,
-  removed with the objective) and one he cleared comes back only with the next pointer; `'off'` = no line, no
-  waypoint and `leads` false (the Objective GPS button still sets one). A change of `objectiveGps`
-  (`options:changed`) drops a waypoint `'waypoint'` set. `hudTargetLine` (local bool, default true): false sends
-  `{ target = false }` like `hudLine` off. `colourblindMap` (local bool, default false): `colour(role, fallback)` gives
-  the colour id of a role (`start` 5, `objective` 5, `target` 17, `hostile` 27, `friendly` 3, `area` 0) while it is
-  on, else `fallback`; `style`, `styleArea`, CP.Markers' own circles (kind roles: fleeing and the followUp / setback
-  variants = target; hostile, suspect, vehicle, fightArea = hostile; escort, hostage, safePoint, prisonerVan, towTruck
-  = friendly; start = start; anything else = objective), the last-known circle (`area`) and `routeColour()`
-  (`objective`) ask it, so the start pin and every block that styles through CP.Markers follow. Only colour arguments
-  change; blips drawn before a switch keep theirs.
-- `hidden(ctx, kind, variant?) -> boolean`: true when Radio Silence (`ctx.radioSilence`; nil ctx = the
-  current pointer's) hides a block's own blip of `kind` (a `Config.Markers.kinds` key, or `'route'` for a GPS line) by
-  `Config.Markers.radioSilence` (an unknown value counts as `'area'`). Every block client asks it before it draws a
-  blip or a line (checkpoint_route, search_area, pursuit, flee_arrest, escort, hostile_waves, protect_rescue,
-  interact_points, skill_check, process_scene, field_contact) and drops a blip it now hides: `'none'` hides everything
-  but `start`, `prisonerVan` and `towTruck`; `'area'` (shipped) hides `'route'`, the `'next'` variant (a second
-  checkpoint), `point` and `device` (CP.Markers shows the nearest itself, below) and every kind but the objective's
-  circle or one point (start, checkpoint, searchArea, fightArea, destination, safePoint, scene, objective and the
-  service vehicles); `'full'` hides nothing. The block server markers send the same pointer with or without Radio
-  Silence (interact_points and skill_check sent none before M8); search_area keeps its circle as the pointer once
-  inside unless the mode is `'full'`. CP.Markers' own pointer under `'area'`: it hides every target that has a `netId`
-  (a person or a car), whatever its look (a target without a look gets `objective`); of several points it still shows
-  (Business Check's doors, Bomb Disposal's devices) it shows only this officer's nearest (`cur.single`, moved only when
-  another one is 25 % closer); with `radioSilenceLastKnown` > 0 a hidden moving target gets a 200 m circle
-  (`markers.last_known`) where it was, moved every that many seconds.
-- `service(key, spec)` — a prisoner van or tow truck coming to this officer: `spec = { netId, coords, kind =
-  'prisonerVan'|'towTruck', label }`, nil removes it. Shown in every Radio Silence mode while `serviceVehicles` is on,
-  never routed, removed by `clear()` (the run's end) and at resource stop. modules/custody/client.lua calls it
-  from `client:serviceBlip` (key `service:<id>`, only for the officer's current in-progress run and the two
-  kinds); the server (modules/custody/server.lua `SyncBlip`, in its 1 s tick) sends that to every active
-  participant when a transport van's or tow truck's status changes: shown while coming, parked or loading (at the
-  server's position; the client follows the vehicle once it streams in), off once it leaves or is gone; `run:arrived`
-  sends the ones on the map to a late partner. The coroner van stays unmarked; a vehicle never made sends nothing.
-- One check loop (1 s) only while a pointer element or a service vehicle is on the map, never two (it ends by itself
-  after `clear`): streaming swaps, adopted blips that went, the nearest target, the line, the HUD line (sent on change
-  only) and the Objective GPS waypoint. No entity pool scans.
+The current objective on this officer's map (`Config.Markers`): one pointer per officer (a blip, or a circle with its
+centre) and at most one GPS line. modules/runs/client.lua drives it: `client:objective start` → `set(runId, index,
+msg.marker, ctx)` after the block's `start`; `client:marker` → `update` (the current started objective only); `stop` →
+`clear(runId, index)` before the block's stop; every cleanup → `clear()` (also removes service vehicles).
+- The marker (§5.10 `marker`; nil = none): `{ kind = 'point'|'area'|'targets', look, label, key, number, coords, radius,
+  route = true|false|'block', targets = { { key, netId, x, y, z, look, label, variant, number, beyond } } }`. `look` is
+  a `Config.Markers.kinds` key (default `objective`, an area `searchArea`); `variant` `boss|next|followUp|setback|
+  surrendered` picks the kind's bossScale, nextScale, followUpColour, setbackColour or surrenderedScale (0.6 by default).
+  `beyond`: this target takes the line while the officer is farther than that from it (until within 75 %), never
+  closer (escort: the truck while he is beyond clearRadius, else the destination). `route = false`: no line; `'block'`:
+  the block keeps its own line (checkpoint_route). At most 32 targets.
+- One icon per target: `adopt(key, blip)` — a block hands over the blip it draws for target `key`: that blip is the
+  pointer (CP.Markers sets only its line, priority and one flash); `release(key, blip?)` takes it back (line off,
+  CP.Markers draws the target again). Blocks that hand over: interact_points (numbered points, the hidden search's
+  centre `'area'`), skill_check (devices `'d<n>'`, named after `obj.target.label`, else `block.skill_check.blip`; a
+  set-back device flashes until fixed), process_scene (`'scene'`), checkpoint_route (`'cp<n>'`, the next at nextScale,
+  its own line in `routeColour()` while `canRoute` allows), pursuit (cars, suspects on foot; the observe violator only
+  once it passed), escort (the truck, `'dest'`), flee_arrest (`'door'` before the knock, people by net id),
+  protect_rescue (hostages, `'safe'`), field_contact (cars and people), search_area (`'center'` with its circle,
+  `'c<n>'` clues, fugitives). People switch between kinds suspect / fleeing / surrenderedScale and are restyled in
+  place. CP.Markers draws its own icon only for a hostile_waves fight area (`kinds.fightArea`, "Hostiles"), a fallback
+  anchor, a target not streamed here, and service vehicles; detail blips never handed over (hostiles, the boss at
+  bossScale) are still styled with `style`.
+- Own icons: `AddBlipForCoord` (an area adds `AddBlipForRadius` at `areaAlpha`); a target `AddBlipForEntity` while it
+  exists here, else (`farTargets`) a coord blip at the server's position, swapped as it streams. Unchanged elements keep
+  their blip, line and flash.
+- `style(blip, kind, label, opts)` — sprite, colour, scale, `shortRange`, `category`, `ShowNumberOnBlip`, the name;
+  `variant = 'setback'` flashes with no timer while `setbackFlash`. The pointer gets `SetBlipPriority(12)` and one flash
+  of `flashSeconds`. `styleArea(blip, kind)` (a block's own circle), `routeColour()` (`Config.Markers.routeColour`, 0–85,
+  default 5: every Crimson-Police line).
+- The line: on one blip, the one the pointer leads to (the point or centre, or the nearest target, moved when another is
+  25 % closer; a `beyond` target first), `SetBlipRoute` in `routeColour`; off within `routeOffWithin` and inside an
+  area. `canRoute(ctx)` false while `enabled` or `route` is off, under Radio Silence, while CP.Route is still driving to
+  the start, or while the officer has a waypoint. `leads(ctx)` — whether an objective line can show for that run (CP.Runs
+  asks before a late partner's game drops the start, §5.12).
+- HUD line (`Config.Markers.hudLine`): `CP.Tablet.hud({ target = { label, distance, inside? } })` for what the pointer
+  leads to (10 m steps under 1 km, 100 m above), on change only; `{ target = false }` when there is none (Radio Silence
+  included), on the way to the start, off, and at every `clear`. Shown under the objectives (§9.3).
+- `objectiveGps()` — client action `setObjectiveGps`: `SetNewWaypoint` on the pointer's target (its line off, toast
+  `markers.gps_set`); `err.objective_gps_off|none|start|silence`. While the waypoint stays ours it follows the pointer
+  once it is 50 m off; `clear` and another objective remove it; a waypoint the officer set himself is never touched.
+- Officer options (`shared/options_map.lua`): `objectiveGps` (server enum, `'route'`): `'waypoint'` = no line and a
+  waypoint at each new pointer where a line could go (never over his own); `'off'` = no line, no waypoint, `leads` false.
+  `hudTargetLine` (local, true). `colourblindMap` (local, false): `colour(role, fallback)` gives fixed colours per role
+  (start 5, objective 5, target 17, hostile 27, friendly 3, area 0) to `style`, `styleArea`, own circles and
+  `routeColour()`.
+- `hidden(ctx, kind, variant?)` — whether Radio Silence (`Config.Markers.radioSilence`; unknown = `'area'`) hides a
+  block's blip of `kind` (or `'route'`); every block client asks before drawing. `'none'` hides everything but start,
+  prisonerVan and towTruck; `'area'` (shipped) hides `'route'`, the `'next'` variant, `point` and `device`, and every
+  kind but the objective's circle or one point (start, checkpoint, searchArea, fightArea, destination, safePoint, scene,
+  objective, service vehicles); `'full'` hides nothing. CP.Markers' own pointer under `'area'` hides every target with a
+  net id and shows only the nearest of several points; with `radioSilenceLastKnown` > 0 a hidden moving target gets a
+  200 m `markers.last_known` circle, moved every that many seconds. search_area keeps its circle as the pointer.
+- `service(key, spec)` — a prisoner van or tow truck coming to this officer (`spec = { netId, coords, kind =
+  'prisonerVan'|'towTruck', label }`, nil removes): shown in every Radio Silence mode while `serviceVehicles` is on,
+  never routed. modules/custody/client.lua calls it from `client:serviceBlip` (key `service:<id>`); the server
+  (`SyncBlip` in its 1 s tick) sends it on each status change (coming, parked, loading; off once it leaves), and
+  `run:arrived` sends the ones on the map to a late partner. The coroner van stays unmarked.
+- One 1 s check loop only while something is on the map (streaming swaps, adopted blips, nearest target, line, HUD
+  line, the waypoint). No entity pool scans.
 
 ### 5.45 CP.Opponents — modules/opponents (S)
 
-The real suspects of a case, shared by live crimes (§5.46) and volunteer suspects (§5.47); the owner's decision of
-2026-10-26, "Build all 3 but options in the config.lua". A case belongs to one run and one objective; each suspect is
-keyed by citizenid and carries his state (free, cuffed, detained, booked, lost, left or void), the proof the server
-checks before anything scores (the sc-police cuff pair and custody hold, bookings, downs), the officers' conduct
-ledger, the identity and pair rules, a position trail and a timeline for review, and staff notes that never
-hold points. A claimed LIVE call opens a live case (volunteers: §5.47), so nothing runs while
-Config.LiveCrime.enabled and Config.Volunteers.enabled are false (both shipped false). Rules: Config.RealSuspects.
+The real suspects of a case, shared by live crimes (§5.46) and volunteer suspects (§5.47). A case belongs to one run
+and one objective; each suspect is keyed by citizenid and carries his state (free, cuffed, detained, booked, lost, left
+or void), the server proof that decides every detain and booking, the officers' conduct ledger, the identity and pair
+rules, a position trail and a timeline for review, and staff notes that never hold points. Nothing runs while
+`Config.LiveCrime.enabled` and `Config.Volunteers.enabled` are false (both shipped false). Rules:
+`Config.RealSuspects`. Record times are GetGameTimer() ms; `t` in the timeline, notes and trail and
+`case.openedAt` / `closedAt` are os.time() seconds.
 
-Core (modules/opponents/server.lua). Times inside a record are GetGameTimer() milliseconds; `t` in the timeline,
-notes and trail and `case.openedAt` / `closedAt` are os.time() seconds (`case.openedMs` is the GetGameTimer() of
-the open).
-- `case = { runId, run, kind = 'live'|'volunteer', index, openedAt, openedMs, scene, lostRule = { range, seconds }|nil, meet|nil,
-  suspects = { [cid] = rec }, order = { cid... }, timeline, ledger, trail = { [cid] = ring }, notes, crimeEndedAt }`;
-  `rec = { cid, src, license, label = 'A'|'B'|... (shuffled with CP.U.rng(run.seed), C5), state, since, contactAt,
-  lastContactAt, lastCoords, md = { ishandcuffed, isdead, inlaststand, injail }, down, downAt, protectUntil, cuff,
-  outsideCuff, cuffedAt, detainedAt, bookedAt, injailAt, jail, share, caughtBy, armedUntil, everArmed, firstHitAt,
-  lastHitAt, conduct, penalized, afk (true = AFK by his samples), near, dropAt, leftAt, byLeave, notes,
-  outcome }`.
-- `open(run, spec) -> case|nil`: `spec = { kind, index, members, scene, lostRule, meet }`; `members` is a list of
-  citizenids or a map keyed by them (`{ [cid] = true }`, or Crimson-Contracts' `{ [cid] = src }`: the server ids in
-  it are never read, C9). Each src comes from `CP.Qbx.getByCitizenId` and one `getInfo` (license, the metadata mirror)
-  at open. A suspect who is offline starts in the disconnect-grace path (src nil, dropAt now, the license read in a
-  thread with `CP.Qbx.licenseOf`; critic 2 #19). A citizenid that is a suspect of another case is left out. A second
-  open of the run returns its case.
-- `close(run) -> { [cid] = outcome }, case`: 'detained', 'booked', 'got_away' (free, cuffed with no detain, lost),
-  'left', 'void', or the outcome a later step set. A leave still waiting for its grace (a drop, or offline since the
-  open) is made final first, as below (the onLeave rule or cuffed -> detained, and the `rs_combat_log` note), with no
-  objective event, so a suspect who logs off just before End case, the time limit or the last officer leaving is
-  never 'got_away' by the leave. The `run:ended` hook closes the case; a second call for the same run (another
-  `run:ended` listener) answers the same outcomes (the last `Config.RealSuspects.casesKept` closed cases are kept, 16
-  shipped, 1-200; staff read them too).
-- `active()` (true while a case is open; the sc-police facts only pass then), `caseOf(run)`, `bySrc(src) -> case, rec`,
-  `byCid(cid) -> case, rec`, `view(run)` (a copy for blocks with no server ids: label, state, online, contact, down,
-  afk, share, byLeave, everArmed, outcome, md), `nearAny(run, coords, range) -> true, cid, metres` (a free or cuffed
-  suspect at the last watch pass; no native read), `crimeEnded(run)`, `noteArmed(cid)`, `trailOf(run, cid)` (oldest
-  first), `setState(run, cid, state, { event, why, by })` (for the proof step), `send(run, cid, kind, extra)` (a
-  server-only event that is not a state change: opp_down, opp_up, opp_cuff_attempt), `timeline(run, entry)` (a staff
-  timeline line), `onTick(fn)` (fn(case, now) once per case on every watch pass, after the suspects), and two fields
-  the proof step sets: `onMeta` (`fn(rec, key, old, new, case)` after the mirror changed) and `onClose`
-  (`fn(case)` at the close, before the outcomes are read).
-- `eligible(src, opts) -> ok, reason` (events and claims only, never per tick), refused in this order: `not_loaded`
-  (no getInfo), `in_case`, `instance` (bucket other than 0), `arena_flag` (CP.Alerts.foreignFlag), `on_duty` (on duty
-  in a Config.Departments job), `job_hop` (`Opp.lastPoliceAt(cid)`, os.time(), within jobHopMinutes), `afk`; with `opts.intake` also `no_position`, `no_start_zone`, `down`, `cuffed`, `jailed` (metadata);
-  then `excluded` (`IsPlayerAceAllowed(src, excludeAce)`, a server BOOL native: truthiness) and `admin`
-  (`CP.Access.isAdmin` while `excludeAdmins` is not false; critic 2 #29).
-- `note(run, reason, detail, cid)`: `{ t, what = reason, label, detail }` in the case's notes, the suspect's notes and
-  the timeline, and `CP.AntiCheat.note(run, nil, reason, detail, cid)` (§5.26: audited as runNoted once per reason and
-  suspect, so every suspect of a crew who logs off is in the audit, shown in the Review run detail, never
-  `run.flagged` or `p.flagged`). Everything a suspect does himself is a note: `rs_combat_log`,
-  `rs_evade_instance`, `rs_fake_arena_flag`, `rs_teleport`, `rs_went_on_duty` here (critic 2 #12).
-- `sampleCrew(key, cids)` / `unsampleCrew(key, cids?)`: AFK samples for citizenids with no case yet (a crew whose
-  contract started, a volunteer; C17); the same key again adds to its list, `unsampleCrew` without cids drops the key.
-- Event-kept maps (critic 2 #20, LOOP_RULES 8): `srcOf[cid]` / `cidOf[src]` for tracked citizenids only, set at open,
-  `sampleCrew` and `CP.Qbx.onPlayerLoaded` (getInfo once: an event path), cleared by `CP.Qbx.onPlayerUnload` and
-  `playerDropped`, so a server id another player gets after a drop never matches a record (C9). `rec.md` is seeded by
-  getInfo at open and at a rejoin and then kept by `CP.Qbx.onMetaDataChange(fn, { 'ishandcuffed', 'isdead',
-  'inlaststand', 'injail' })` (old == new ignored). `CP.Qbx.onDutyChange` / `onJobChange` putting a suspect on duty
-  in a Config.Departments job: free or cuffed -> void, and the note `rs_went_on_duty` (critic 2 #19). Another script's
-  crimsonArena flag is seen by a state bag change handler (and checked at open, at a rejoin and on the way out of an
-  instance): in bucket 0 it is the note `rs_fake_arena_flag` once, and he stays tracked (C8).
-- The watch: one thread, `Wait(1000)`, started by the first `open` or `sampleCrew`, ended when no case and no crew is
-  left (an exit token: never two copies). A pass reads each case's active participants' server coords once, and per
-  suspect with a src only `GetPlayerRoutingBucket`, `GetPlayerPed` and `GetEntityCoords` (and
-  `GetPlayerCameraRotation` on an AFK sample): never a Qbox export. A bucket other than 0 is leaving (critic 2 #14):
-  cuffed -> detained, free -> the onLeave rule at once, detained and booked stay (C25), always the note
-  `rs_evade_instance` ("contact N s ago" / "no contact"). A move faster than Config.AntiCheat.maxSpeed since the last
-  pass is the note `rs_teleport` (not on the first pass after a rejoin or an instance). Contact: an active participant
-  within contactRange (`contactAt` once with `opp_contact`, `lastContactAt` every pass). Lost, with `case.lostRule`
-  only: a free suspect, after contact or `crimeEnded`, with no participant within `range` for `seconds`. A trail point
-  every `trail.every` s, at most `trail.max` per suspect (a ring). AFK: a sample every `afkSampleEvery` s (coords and
-  camera; still = moved under 1 m and turned under 2 degrees since the stillness began, AFK after `afkSeconds`), for
-  free suspects who are not down and sampled crews only: the samples stop while a suspect is cuffed, detained or
-  booked (C17) or down (`rec.down`, kept by the proof step: lying still waiting for EMS or the respawn timer is not
-  AFK), and `rec.afk` keeps its value from the cuff or the down. Offline suspects only wait for their grace.
-- Leaving: `playerDropped` and `CP.Qbx.onPlayerUnload`. A cuffed suspect is detained at the drop (C18); a character
-  switch or logout is final at once; any other drop waits `disconnectGrace` s for a rejoin. When the leave is final:
-  cuffed -> detained, free -> `Config.RealSuspects.onLeave` ('void' -> left, 'caught' -> detained with `byLeave` and
-  share 1, or 0 when he was AFK, 'escaped' -> lost), detained and booked keep their state, and always the note
-  `rs_combat_log` ("left within N s of contact" inside evadeWindow, "contact N s ago", "no contact", or "offline when
-  the case opened"). Rejoin within the grace: the same record with the new src, the mirror read again; a suspect who
-  left cuffed or detained and comes back within reconnectNoticeMinutes: the toast `opp.back_in_city` to the case's
-  active participants (no name).
-- Every state change: the timeline, and while the run is In progress `CP.Runs.dispatch(run, case.index, nil, { type =
-  'opp_<state>' ('opp_released' for free), cid, label, prev, by, share, why })` (before that the state is only kept;
-  the block reads `view` at its start). The opp_* types are server-only (§8.2: `server:objective` refuses them from a
-  client and flags `unexpected_event`).
-- Opponents are never in `run.entities`, CP.Npc's registry or a `cp` bag. Resource stop clears everything.
+#### Core (modules/opponents/server.lua)
+- `case = { runId, run, kind = 'live'|'volunteer', index, openedAt, openedMs, scene, lostRule, meet, suspects = { [cid]
+  = rec }, order, timeline, ledger, trail, notes, crimeEndedAt }`; `rec` holds cid, src, license, `label` ('A', 'B', ...
+  shuffled with the run seed), state and its times, `md` (the metadata mirror: ishandcuffed, isdead, inlaststand,
+  injail), down, protectUntil, cuff, outsideCuff, jail, share, caughtBy, armedUntil, everArmed, hit times, conduct, afk,
+  near, dropAt, leftAt, byLeave, notes, outcome.
+- `open(run, { kind, index, members, scene, lostRule, meet }) -> case|nil` — `members` a list of citizenids or a map
+  keyed by them (server ids in it are never read). Each src from `CP.Qbx.getByCitizenId` and one `getInfo` at open; an
+  offline suspect starts in the disconnect grace; a suspect of another case is left out; a second open returns the
+  case.
+- `close(run) -> { [cid] = outcome }, case` — 'detained', 'booked', 'got_away' (free, cuffed with no detain, lost),
+  'left', 'void', or one a later step set. A leave still in its grace is made final first, so logging off before the
+  end is never 'got_away' by the leave. The `run:ended` hook closes the case; the last `casesKept` (16, 1–200) closed
+  cases are kept.
+- `active()` (true while a case is open; the sc-police facts pass only then), `caseOf(run)`, `bySrc(src)`,
+  `byCid(cid)`, `view(run)` (for blocks, no server ids: label, state, online, contact, down, afk, share, byLeave,
+  everArmed, outcome, md), `nearAny(run, coords, range) -> true, cid, metres` (last watch pass, no native read),
+  `crimeEnded(run)`, `noteArmed(cid)`, `trailOf(run, cid)`, `setState(run, cid, state, { event, why, by })`,
+  `send(run, cid, kind, extra)` (opp_down, opp_up, opp_cuff_attempt), `timeline(run, entry)`, `onTick(fn)`, and the
+  proof step's `onMeta` / `onClose`.
+- `eligible(src, opts) -> ok, reason` (events and claims only), refused in this order: `not_loaded`, `in_case`,
+  `instance` (bucket ≠ 0), `arena_flag`, `on_duty` (a Config.Departments job), `job_hop` (`lastPoliceAt` within
+  `jobHopMinutes`), `afk`; with `opts.intake` also `no_position`, `no_start_zone`, `down`, `cuffed`, `jailed`; then
+  `excluded` (`IsPlayerAceAllowed(src, excludeAce)`) and `admin` (while `excludeAdmins` is not false).
+- `note(run, reason, detail, cid)` — the case's, the suspect's and the timeline's note plus `CP.AntiCheat.note`
+  (audited `runNoted` once per reason and suspect, never a flag). Everything a suspect does himself is a note:
+  `rs_combat_log`, `rs_evade_instance`, `rs_fake_arena_flag`, `rs_teleport`, `rs_went_on_duty` here.
+- `sampleCrew(key, cids)` / `unsampleCrew(key, cids?)` — AFK samples for citizenids with no case yet.
+- Event-kept maps: `srcOf[cid]` / `cidOf[src]` for tracked citizenids only (set at open, `sampleCrew`, player load;
+  cleared on unload and drop, so a reused server id never matches); `rec.md` seeded by getInfo and kept by
+  `CP.Qbx.onMetaDataChange`. A suspect going on duty in a department job: free or cuffed → void and `rs_went_on_duty`.
+  Another script's crimsonArena flag in bucket 0 is `rs_fake_arena_flag` once (he stays tracked).
+- The watch: one 1 s thread while a case or crew exists. Per pass: the participants' coords once, and per suspect only
+  `GetPlayerRoutingBucket`, `GetPlayerPed`, `GetEntityCoords` (and the camera on an AFK sample), never a Qbox export.
+  - A bucket ≠ 0 is leaving: cuffed → detained, free → the onLeave rule, detained and booked stay; note
+    `rs_evade_instance`.
+  - A move faster than `Config.AntiCheat.maxSpeed` is `rs_teleport` (not right after a rejoin or an instance).
+  - Contact: a participant within `contactRange` (`opp_contact` once). Lost (with `case.lostRule`): a free suspect after
+    contact or `crimeEnded` with no participant within `range` for `seconds`.
+  - Trail: a point every `trail.every` s, at most `trail.max` (a ring). AFK: a sample every `afkSampleEvery` s (moved
+    under 1 m and turned under 2° since the stillness began, AFK after `afkSeconds`), only for free suspects who are not
+    down and sampled crews.
+- Leaving (`playerDropped`, unload): cuffed → detained at the drop; a logout or character switch is final at once, any
+  other drop waits `disconnectGrace` s. Final: cuffed → detained, free → `Config.RealSuspects.onLeave` ('void' → left,
+  'caught' → detained with `byLeave` and share 1 (0 when AFK), 'escaped' → lost), detained and booked stay; always
+  `rs_combat_log` (left within N s of contact, contact N s ago, no contact, offline at open). A rejoin within the grace
+  keeps the record; one who left cuffed or detained and returns within `reconnectNoticeMinutes` makes the case's
+  officers get `opp.back_in_city` (no name).
+- Every state change goes to the timeline and, while the run is in progress, `CP.Runs.dispatch(run, case.index, nil,
+  { type = 'opp_<state>' ('opp_released' for free), cid, label, prev, by, share, why })` (server-only types, §5.10).
+  Opponents are never in `run.entities`, CP.Npc's registry or a `cp` bag. Resource stop clears everything.
 
-Proof (modules/opponents/proof/server.lua; critic C10, C18, C19, C26, C28, critic 2 #5, #6, #15, #30). The server
-facts that decide every detain and booking. Inputs: the `CP.ScPolice.on` facts ('cuff', 'uncuff', 'cuffBreak',
-'bobbyPin', 'escort', 'jail') and `CP.Ambulance.on('respawn')` (§5.1: they pass only while a case is open), the
-metadata mirror through `Opp.onMeta` (ignored while the suspect is in a bucket other than 0, where Crimson-Arena
-rewrites cuffs and downs) and `Opp.onTick`. Times are GetGameTimer() ms. Nothing here calls CP.AntiCheat.flag: a
-suspect's own acts are `Opp.note`s.
-- Cuff pair. A 'cuff' by an active participant of a run with `run.live` calls `CP.LiveCrime.cuffHint(run, src)` (F3:
-  the staff timeline line `participant_cuff` naming the officer, never the target, at most one per officer every 10 s)
-  for every target, suspect or not (C5), after the attempt below is kept. On a free suspect the attempt is
-  kept only when the officer is on duty in a turned-on department job (`CP.Qbx.getInfo` job and
-  `CP.Access.departmentForJob`, never `getOfficer`: a listener must not yield, and getOfficer's suspension and retired
-  lookups await the database on a cache miss, so the suspect's cuffed state could arrive first; a participant passed
-  getOfficer when he joined, and a suspension ends his part in the run; sc-police checks neither job nor duty), both
-  are in bucket 0, the officer is not `CP.Alerts.inArena`, and the server distance is within `cuffRange`: a
-  participant's as `rec.cuff = {
-  officerSrc, at }` (timeline `cuff_attempt`, `opp_cuff_attempt`), an on-duty officer outside the case's as
-  `rec.outsideCuff = { src, at }`; a refused participant attempt is the timeline line `cuff_refused` (why
-  not_on_duty, instance, arena, distance). `ishandcuffed` false -> true (old == new ignored: sc-police registers
-  SetHandcuffStatus twice) within `cuffPairWindow` of `rec.cuff` -> `cuffed` (`cuffedAt`, `caughtBy = { officer }`)
-  with `share` 0 and the note `rs_afk_catch` when `rec.afk` (critic 2 #15), `neutralisedShare` when `rec.down`
-  (whoever downed him, C28) or after a C26 respawn, else 1; within the window of `rec.outsideCuff` ->
-  `rec.outsideCuffed = true`, the line `cuffed_by_outsider` and the outside-cuff rule (critic C11,
-  `Config.RealSuspects.outsideCuff`): `'assist'` (shipped) = `cuffed` for the case (`why outside_assist`, `caughtBy = {
-  outsider }`, the same share rules) while an active participant is within `contactRange` of the suspect, else
-  stopped; `'stopped'` = always stopped: `rec.outcome = 'stopped'`, `stoppedBy`, state `void` (why `stopped`) and the
-  note `rs_outside_cuff`. In a live case the outsider then gets `CP.LiveCrime.offer(run, src, 'cuff')`. No pair ->
-  the line `cuffed_unproven` only.
-- Hold. On the watch pass a `cuffed` suspect whose mirror still says cuffed after `custodyHoldSeconds` -> `detained`
-  (`custody_hold`, by the cuffing officer), once per suspect per case (detained and booked never go back). Every
-  detain is refused while `rec.protectUntil` lasts: the line `spawn_protected` and back to free. An 'escort' by an
-  on-duty participant (same plausibility, `cuffRange`) of a downed suspect who is free -> `detained` (`escort_down`)
-  at `neutralisedShare` (0 and `rs_afk_catch` when AFK).
-- Getting free during the hold (`ishandcuffed` true -> false while `cuffed`): explained by, in this order, a
-  participant's 'uncuff' within 5 s (`released`), a 'bobbyPin' success within 5 s (`rescued`, no note) from a sender
-  who is not the suspect, not cuffed or down (`CP.Qbx.getInfo(sender).metadata` at the event), in bucket 0, counted
-  near him on at least 2 watch passes before the result, with no earlier rescue of this suspect in the case (the
-  nearest such cuffed suspect is the one he picked; critic 2 #6), or the suspect's own 'cuffBreak' within 5 s when the
-  cuffs came off between 2 s and `breakFreeSeconds` after `cuffedAt` and it is his first break-free in the case
-  (`broke_free`; critic 2 #30). Each of these goes back to free (`opp_released` with that why). sc-police sends its
-  cuff-break alert just after the uncuffed state, so an unexplained release waits 2 s (and is decided at the close);
-  anything else is a self-uncuff (sc-police /fixcuffs or an admin /resetcuffs: both a server SetMetaData with no
-  event) -> `detained` (`self_uncuff`) and the note `rs_self_uncuff` ("self-uncuff or admin reset"). An 'uncuff' by
-  someone outside the case (sc-police asks only for the handcuffs item) explains nothing either, but it is kept
-  (bucket 0, within `cuffRange`; the line `uncuffed_by_outsider`, else `uncuff_refused`): when it came within 5 s of
-  the cuffs coming off the detain is `outside_uncuff` and the note is `rs_outside_uncuff`, which names him instead of
-  saying that no officer uncuffed the suspect. The suspect's uncuff of himself stays a self-uncuff.
-- Rescue candidates. Only while a suspect is `cuffed` and not yet released, the pass reads the online players once
-  (`CP.Qbx.getOnlinePlayers()`, the event-kept list) and their server coords, and keeps `rec.near[src]` = consecutive
-  passes within `rescueRange` for players who are neither the suspect nor a participant (reset when out of range).
-  With no suspect cuffed the pass reads nothing; a hold lasts at most `custodyHoldSeconds`.
-- Down. `isdead` or `inlaststand` true -> `rec.down`, `downAt`, `downNear` (a participant within contactRange then),
-  `opp_down`; both false -> up, `upAt`, `opp_up`.
-- Booking, matched in either order (critic 2 #5: sc-police writes injail inside its own JailPlayer handler and qbx
-  fires onSetMetaData at once): `rec.injailAt` = the last injail 0 -> above 0 change; a 'jail' by an on-duty
-  participant within `jailRange` of a `detained` suspect -> `rec.jail = { officerSrc, t = math.floor(tonumber(jailTime)
-  or 0) (C19), at, inZone }` (inZone: the officer inside one of `bookingZones`, {} = anywhere). Whichever arrives
-  second pairs them within 10 s (each is used once) -> `booked` (`rec.jailTime = min(t, jailTimeMax)`) when `t >=
-  minJailTime` and inZone; else the line `booking_too_short` or `booked_outside_station`, no booking. A
-  participant's jail that cannot be a booking is the line `jail_refused` (why not_detained, for a jail during the
-  hold, not_on_duty, instance, arena or distance; with the months): sc-police jails him all the same, and that injail
-  rise can never pair later. A jail by
-  someone outside the case of a free or cuffed suspect, paired the same way with the injail change -> outcome
-  `stopped` (state `void`, counts for nobody) and the note `rs_outside_jail`. sc-police's prison exports are never
-  called (not loaded).
-- Hospital. A 'respawn' of a suspect who is not down (or got up more than 5 s before), or was down for less than
-  `earlyRespawnSeconds` -> `void` (free or cuffed only) and the note `rs_early_respawn`. Otherwise
-  `rec.protectUntil = now + spawnProtectSeconds` (line `spawn_protect`), unless a participant was within contactRange
-  at the down and is again at the respawn (C26: no protection, `rec.hospitalCatch`, and his next cuff scores at
-  `neutralisedShare`; line `respawn_in_contact`).
+#### Proof (modules/opponents/proof/server.lua)
+Inputs: the `CP.ScPolice.on` facts (cuff, uncuff, cuffBreak, bobbyPin, escort, jail), `CP.Ambulance.on('respawn')`,
+the metadata mirror (ignored in a bucket ≠ 0, where Crimson-Arena rewrites cuffs and downs) and the watch. Nothing here
+flags: a suspect's own acts are notes.
+- Cuff pair: a 'cuff' by an active participant of a live run also gives `CP.LiveCrime.cuffHint` (staff line naming the
+  officer, at most one per 10 s). On a free suspect the attempt is kept when the officer is on duty in a turned-on
+  department job (read from `getInfo`, never `getOfficer`: a listener must not yield), both are in bucket 0, the
+  officer is not in the arena, and the server distance is within `cuffRange`: a participant's as `rec.cuff`
+  (`cuff_attempt`), an outside officer's as `rec.outsideCuff`; a refused participant attempt is the line
+  `cuff_refused`. `ishandcuffed` false → true within `cuffPairWindow` of `rec.cuff` → `cuffed` with `share` 0 and note
+  `rs_afk_catch` when AFK, `neutralisedShare` when down (or after an in-contact respawn), else 1. Within the window of
+  an outside cuff: `Config.RealSuspects.outsideCuff = 'assist'` (shipped) = cuffed for the case while a participant is
+  within `contactRange`, else stopped; `'stopped'` = outcome `stopped`, state void, note `rs_outside_cuff`; in a live
+  case the outsider gets `CP.LiveCrime.offer(run, src, 'cuff')`. No pair → the line `cuffed_unproven`.
+- Hold: a cuffed suspect still cuffed after `custodyHoldSeconds` → `detained` (`custody_hold`), once; detained and booked
+  never go back. Refused while `rec.protectUntil` lasts (`spawn_protected`, back to free). An on-duty participant's
+  'escort' of a downed free suspect → `detained` (`escort_down`) at `neutralisedShare`.
+- Getting free during the hold is explained by a participant's 'uncuff' within 5 s (`released`), a 'bobbyPin' success
+  within 5 s from a plausible rescuer (not the suspect, not cuffed or down, bucket 0, near him on 2+ passes, the case's
+  first rescue of him: `rescued`), or his own 'cuffBreak' within 5 s between 2 s and `breakFreeSeconds` after the cuff
+  (his first: `broke_free`) — each back to free. An unexplained release waits 2 s; anything else is a self-uncuff →
+  `detained` (`self_uncuff`, note `rs_self_uncuff`); an outsider's uncuff within 5 s makes it `outside_uncuff` with
+  note `rs_outside_uncuff`. Rescue candidates (`rec.near`, players within `rescueRange`) are read only while a suspect
+  is cuffed.
+- Down: `isdead`/`inlaststand` true → `rec.down` (`opp_down`, with who was near), both false → up (`opp_up`).
+- Booking, matched in either order within 10 s: the injail rise and a 'jail' by an on-duty participant within
+  `jailRange` of a detained suspect (`inZone` = inside one of `bookingZones`, `{}` = anywhere) → `booked` with
+  `min(jailTime, jailTimeMax)` when ≥ `minJailTime` and in zone, else `booking_too_short` / `booked_outside_station`. A
+  participant jail that cannot be a booking is `jail_refused`. An outsider's jail of a free or cuffed suspect → outcome
+  `stopped` and note `rs_outside_jail`. sc-police's prison exports are never called.
+- Hospital: a respawn while not down (or up for 5 s+), or after less than `earlyRespawnSeconds` down → void and note
+  `rs_early_respawn`. Otherwise `protectUntil = now + spawnProtectSeconds`, unless a participant was within
+  `contactRange` at the down and is again at the respawn (no protection; his next cuff scores at `neutralisedShare`).
 
-Conduct (modules/opponents/conduct/server.lua; critic C6, C7, critic 2 #12). How officers treat a real suspect,
-from server facts only. Every flag here is an officer-conduct flag: `CP.AntiCheat.flag(run, officerSrc, reason,
-detail)` with the server id of the officer who fired, drove or seized, so only his points are held for review (never
-his partner's, never `run.flagged`; AC.flag refuses anyone who is not a participant of the run). A supervisor's void
-of his row in Review is the "Failed": nothing here ends or fails a run, and nothing cancels a game event.
-- Armed (C6): `rec.armedUntil` / `rec.everArmed`. The watch pass (`Opp.onTick`) reads `GetSelectedPedWeapon(
-  GetPlayerPed(src))` of every tracked suspect (not lost, left or void, not in an instance; natives only): a weapon
-  that is not WEAPON_UNARMED and not in `Config.RealSuspects.lessLethal` (each name hashed once with joaat, again when
-  the list or any setting changes) sets `armedUntil = now + armedMemory` and `everArmed`. The officer's hit reads his
-  hand once more (he may have drawn between two passes). A suspect's hit on an active participant of his case sets
-  `everArmed`, and so does `Opp.noteArmed(cid)` (Crimson-Contracts' crew shot). The first time is the timeline
-  line `armed` (why weapon, damage). `Opp.armedState(cid) -> armedNow, everArmed`.
-- The ledger. A third read-only `weaponDamageEvent` listener (CP.Npc has two): it returns at once while
-  `Opp.active()` is false (no native read), and while a case is open it reads nothing for a sender who is neither a
-  suspect of a case nor an active participant of a run with a case. A hit is blamed only on its sender (a forged
-  packet never costs a third party); damage from an NPC the sender simulates (a ped, or a car an NPC drives:
-  `parentGlobalId`, as CP.Npc's ShooterOf reads it) is nobody's. Victims: each `hitGlobalId(s)` (at most 32)
-  through `NetworkGetEntityFromNetworkId`, a player's ped when `IsPedAPlayer` is truthy (a server BOOL native), the
-  victim's server id = `NetworkGetEntityOwner`; both in routing bucket 0. Only a participant -> his case's suspect
-  (dir 'officer') and a suspect -> a participant of his case (dir 'suspect') go in `case.ledger`: `{ t, at, lastAt,
-  dir, from, to, cid, label, weapon (unsigned hash), willKill, state, down, n, rules }`; the same sender, victim and
-  weapon within 2 s adds to the last line (`n`), and at most `damageLogMax` lines are kept (the oldest go first).
-- A participant's hit on his case's suspect, in this order: (1) the suspect is in custody: still restrained (CP's
-  own proven `cuffed` or `detained` state AND the event-kept cuffs mirror `rec.md.ishandcuffed`; C7 forbids raw
-  metadata on its own, and a `cuffed` rec whose cuffs came off, `rec.freedAt`, is not), or `detained` and down for
-  more than `downGrace` s (sc-ambulance disables every control while he is down); or down (`rec.down`, kept by the
-  proof step) for more than `downGrace` s with an earlier hit by the case's officers (`rec.firstHitAt` before
-  `downAt`) -> flag `rs_excessive_force`, any weapon. `detained` never goes back to free: a suspect who freed himself
-  (a self-uncuff), was revived after an escort while down, or was bobby-pinned after the hold is not in custody, so
-  what he does then never holds an officer's points (critic 2 #12); (2) a shot (a weapon that is not less-lethal, not WEAPON_UNARMED, not a vehicle and not a fall) on a
-  suspect who was never armed (`not everArmed and armedUntil < now`) -> the personal penalty `rs_unarmed_shot`
-  (`CP.Runs.penalize(run, id, { src = officerSrc })`) and the flag `rs_unarmed_shot`; (3) WEAPON_RUN_OVER_BY_CAR or
-  WEAPON_RAMMED_BY_CAR on a suspect on foot (`GetVehiclePedIsIn(ped, false) == 0`) -> the penalty `rs_ran_over` and
-  the flag `rs_vdm` (ramming the car he flees in is never penalised). Each penalty and each flag once per officer
-  per suspect; a timeline line names the officer (`by`). Config.Bonuses `rs_unarmed_shot` and `rs_ran_over` are
-  engine-only pct penalties (-0.25 each, `each`): -25% of P per suspect on that officer's row.
-- Cash seizures: the `CP.ScPolice.on('seizeCash')` fact (only while a case is open). sc-police acts only for an
-  on-duty job of type `leo`, so anyone else's event is ignored (`CP.Qbx.getInfo` job type and duty); it takes
-  nothing from a target with no cash, and whether CP's handler runs before or after its own is not known, so every
-  record says Seize Cash was used (an attempt). An attempt by an active participant of a run with a case, or any
-  attempt on a suspect, is audited (`CP.Admin.audit(officerSrc, nil, 'flags', 'seizeCash', runId,
-  'own_suspect'|'other_case'|'not_suspect', CP's state of the target, "target, server distance, CP-cuffed")`, in its
-  own thread: a listener never yields; CP-cuffed is the restrained test above). One on a suspect who is not under
-  arrest (`cuffed`, `detained`, or `booked`: CP's proven states, on purpose not the cuffs mirror) or from more than
-  3 m away (server coords) -> the flag `rs_bad_seize` on the seizing officer when he is a participant of that case
-  (his own conduct, with or without cash); an officer outside the case cannot be flagged on its run, so it is the
-  staff note `rs_bad_seize` (Opp.note, naming him).
+#### Conduct (modules/opponents/conduct/server.lua)
+How officers treat a real suspect, from server facts only. Every flag is an officer-conduct flag on the officer who
+fired, drove or seized (`CP.AntiCheat.flag(run, officerSrc, ...)`: only his points are held); nothing ends a run or
+cancels an event; a supervisor's void in Review is the "Failed".
+- Armed: the watch reads each tracked suspect's `GetSelectedPedWeapon`; a weapon not unarmed and not in
+  `Config.RealSuspects.lessLethal` sets `armedUntil = now + armedMemory` and `everArmed` (also his hit on a participant
+  and `Opp.noteArmed`). `Opp.armedState(cid) -> armedNow, everArmed`.
+- The ledger: a third read-only `weaponDamageEvent` listener, returning at once while no case is open and reading
+  nothing for senders who are neither suspects nor participants with a case. A hit is blamed only on its sender
+  (damage from an NPC he simulates is nobody's); victims are player peds in bucket 0. Participant → his suspect (dir
+  officer) and suspect → a participant (dir suspect) go into `case.ledger` (the same sender, victim and weapon within 2 s
+  adds to the last line; at most `damageLogMax` lines).
+- A participant's hit on his suspect, in order: (1) the suspect is in custody (CP's proven cuffed or detained AND the
+  cuffs mirror; a suspect who freed himself is not), detained and down for more than `downGrace`, or down for more than
+  `downGrace` after an earlier hit by the case's officers → flag `rs_excessive_force`; (2) a lethal shot on a suspect
+  never armed → penalty and flag `rs_unarmed_shot`; (3) run over or rammed while on foot → penalty `rs_ran_over` and
+  flag `rs_vdm`. Each once per officer per suspect. `rs_unarmed_shot` and `rs_ran_over` are engine-only pct penalties
+  (−0.25 each, `each`).
+- Cash seizures (`CP.ScPolice.on('seizeCash')`, only on-duty `leo` jobs count): every attempt by a participant of a run
+  with a case, or on a suspect, is audited (`seizeCash`, own_suspect|other_case|not_suspect); one on a suspect not
+  under arrest (CP's proven states) or from more than 3 m → flag `rs_bad_seize` on a participant, a staff note for an
+  outsider.
 
-Identity and pairs (modules/opponents/pairs/server.lua, table `cp_pvp_pairs` from
-sql/migrations/009_real_suspects.sql; critic C27, critic 2 #21-#23, #30). The anti-farm core both features share.
-Every answer below is a memory lookup (no database statement on a claim, a view or a tick); the ledger is read once at
-start, and every write goes to the database in a thread.
-- `selfBlock(officerSrc, suspects) -> blocked, kind, flags, match`: `suspects` is a list of citizenids or a map keyed
-  by them (`{ [cid] = src }`: the server id is only a hint, checked against getInfo). In this order, per suspect: (1)
-  `own_character`: one of `CP.Access.selfCitizenids(officerSrc)` (every character of his licenses, offline ones
-  included); (2) `own_license`: his player's licenses (`CP.Access.licensesOfSrc` and Qbox's users row of each,
-  `CP.Qbx.userLicenses`) hold the suspect's license (online: `getInfo(src).license`; offline: `CP.Qbx.licenseOf(cid)`,
-  kept per citizenid), strictly: a nil or unknown license on either side refuses (`Opp.sameUserStrict(a, b)`, which
-  asks `CP.Access.sameUser` otherwise; critic 2 #22); (3) both online: every identifier (`GetNumPlayerIdentifiers` /
-  `GetPlayerIdentifier`, i = 0..n-1) and token (`GetNumPlayerTokens` / `GetPlayerToken`, kind `token`), compared as
-  whole strings grouped by the text before ':' (never `GetPlayerIdentifierByType`, which matches by prefix): a shared
-  one of a kind in `Config.RealSuspects.identityMatch.block` -> `linked_account`; of a kind in `identityMatch.flag`
-  (`ip`, `token`) -> not blocked, `flags = { 'rs_linked_accounts' }` (an officer-conduct flag: the caller raises it
-  with `CP.AntiCheat.flag(run, thatOfficerSrc, ...)`). `match = { cid, kinds }` names the suspect and the
-  kinds only: identifiers are never stored, logged, audited or sent. Characters and licenses are read once per
-  officer session (`selfCache[src]`, cleared by `CP.Qbx.onPlayerUnload`, `onPlayerLoaded` (a character switch) and
-  `playerDropped`; critic 2 #21): a cache hit with online suspects runs no database statement.
-- Duty maps from `CP.Qbx.onDutyChange` / `onJobChange` / `onPlayerLoaded` / `onPlayerUnload` and `playerDropped`
-  (getInfo once per event; Config.Departments jobs, a turned-off department too), seeded at start from
-  `getOnlinePlayers`: `Opp.dutySince(cid)` (os.time() his department duty began; the resource start for one on duty
-  then or never seen going on duty), `Opp.lastPoliceAt(cid)` (he left department duty, a department job, or logged
-  off on duty; `eligible` reads it for `job_hop`), `Opp.lastSuspectAt(cid)` (a case with him as a suspect closed:
-  the `run:ended` hook and the case rows). Each time someone leaves police duty a `duty_off` row is written (officer =
-  cid, suspect ''), while Config.LiveCrime.enabled or Config.Volunteers.enabled is on, so a restart keeps the
-  job-hop history (critic 2 #30); the maps themselves are always kept.
-- The ledger `cp_pvp_pairs (id, kind, run_uuid, officer_citizenid, officer_license, suspect_citizenid,
-  suspect_license, outcome, scored, until_at, created_at)`, kind `live` | `volunteer` (one row per officer and suspect
-  of a closed case), `block` (an admin pair block), `exclude` (officer ''), `suspend` (suspect '') and `duty_off`.
-  `Opp.recordPairs(run, rows)` at a case's close: `rows = { { officer, suspect, scored, outcome?, kind?,
-  officerLicense?, suspectLicense? } }` (kind defaults to the case's, the licenses to the participant's getInfo and
-  the suspect record's); kept in memory at once, the same row twice once, written as one INSERT in a thread, created_at
-  = FROM_UNIXTIME(os.time()). At start (in a thread, after the clean-up below): the case and duty_off rows of the last
-  max(pairCooldownHours, 24 h, pairFlag.days, jobHopMinutes, suspectCooldownMinutes) and every admin row whose until_at
-  is still ahead; a longer window set in game reads the older rows once (`settings:changed`).
-- Caps: `Opp.pairOk(officerCid, suspectCid) -> ok, reason, until` (`blocked` an admin block, `pair_cooldown` a scored
-  case of the pair within pairCooldownHours, `suspect_cooldown` any case of the pair within suspectCooldownMinutes;
-  rows with outcome `gone`, nobody reached the suspects, never count), `Opp.suspectDayCount(cid)` (cases since today's
-  reset, `CP.Schedule.dayStart`, in which he scored for someone: maxCatchesPerSuspectDay), `Opp.officerDayCount(cid,
-  kind?)` (his cases today, `gone` left out), `Opp.excluded(cid)`, `Opp.suspended(officerCid)` (-> bool, until), and
-  the admin writers `Opp.block(officerCid, suspectCid, days)`, `Opp.exclude(cid, days)`, `Opp.suspend(
-  officerCid, days)` (-> true, until | false, 'invalid_citizenid' | 'invalid_days'; 0 < days <= 3650).
-- Pair repeat (C27): `Opp.checkPairFlags(run)` after recordPairs, for each officer and suspect of the run: the cases of
-  that pair (matched by license, else citizenid) within pairFlag.days reach pairFlag.count AND a second sign exists (a
-  detain within fastCatchSeconds of `case.openedMs`, a suspect never armed who got less than 30 m from where contact
-  was made, `rec.movedAfterContact` kept by an `Opp.onTick` listener while he is free, or a case shorter than 180 s)
-  -> `CP.AntiCheat.flag(run, thatOfficerSrc, 'rs_pair_repeat', detail)` (personal, once per officer and run) and a
-  `pair_repeat` timeline line; returns the flagged officers' citizenids.
-- Retention (critic 2 #23, LOOP_RULES 11): once at start and on every `CP.Schedule.onDaily`, in a thread: `DELETE`
-  the `live`, `volunteer` and `duty_off` rows older than pairLedgerDays (one statement per kind) and the admin rows
-  whose until_at has passed; never in a tick.
+#### Identity and pairs (modules/opponents/pairs/server.lua, table `cp_pvp_pairs`, migration 009)
+The anti-farm core both features share. Every answer is a memory lookup; the ledger is read once at start and every
+write goes to the database in a thread.
+- `selfBlock(officerSrc, suspects) -> blocked, kind, flags, match`, per suspect in order: `own_character` (one of
+  `CP.Access.selfCitizenids`), `own_license` (his licenses and their Qbox users rows hold the suspect's; strict: an
+  unknown license refuses), and with both online every identifier and token compared whole by kind: a shared kind in
+  `identityMatch.block` → `linked_account`, in `identityMatch.flag` (ip, token) → not blocked with `flags = {
+  'rs_linked_accounts' }` (the caller flags that officer). `match = { cid, kinds }`; identifiers are never stored,
+  logged or sent. Characters and licenses are cached per officer session.
+- Duty maps (kept by duty/job/load/unload/drop events): `dutySince(cid)`, `lastPoliceAt(cid)`, `lastSuspectAt(cid)`; a
+  `duty_off` row is written whenever someone leaves police duty while a feature is on, so a restart keeps the job-hop
+  history.
+- The ledger rows: kind `live` | `volunteer` (one per officer and suspect of a closed case), `block`, `exclude`
+  (officer ''), `suspend` (suspect ''), `duty_off`. `recordPairs(run, rows)` at the close (one INSERT in a thread). At
+  start the rows of the longest window in use and every running admin row are read.
+- Caps: `pairOk(officerCid, suspectCid) -> ok, reason, until` (`blocked`, `pair_cooldown` (a scored case within
+  `pairCooldownHours`), `suspect_cooldown` (any case within `suspectCooldownMinutes`); `gone` rows never count),
+  `suspectDayCount(cid)` (`maxCatchesPerSuspectDay`), `officerDayCount(cid, kind?)`, `excluded(cid)`,
+  `suspended(cid)`, and the admin writers `block`, `exclude`, `suspend` (0 < days ≤ 3650).
+- Pair repeat: `checkPairFlags(run)` after recordPairs: the pair's cases within `pairFlag.days` reach `pairFlag.count`
+  and a second sign exists (a detain within `fastCatchSeconds`, a never-armed suspect who moved under 30 m after contact,
+  or a case under 180 s) → flag `rs_pair_repeat` on that officer.
+- Retention, at start and daily: `live`, `volunteer` and `duty_off` rows older than `pairLedgerDays` and ended admin
+  rows are deleted.
 
-Staff (modules/opponents/staff/server.lua). What admins read about a case, server-only (never on an officer's
-tablet: `Opp.view` has no names), and the three admin tools. Nothing runs until an admin asks.
-- Names fixed at the line: every timeline entry with a `src` gets `who = { cid, name }` and one with a numeric `by`
-  gets `byWho`, resolved when the line is written (a participant of the run, a suspect, else `CP.Qbx.getInfo`), so a
-  server id another player gets after a drop never renames an old line. `rec.name` is read at the open and a rejoin.
-- `Opp.cases()` (open cases newest first, then the kept closed ones), `Opp.findCase(runId) -> case, open`,
-  `Opp.wasSuspect(cid, runId)` (memory). Pairs: `Opp.suspectOfRun(cid, runUuid) -> true|false|nil` (memory, then
-  `SELECT 1 FROM cp_pvp_pairs WHERE run_uuid = ? AND suspect_citizenid = ? AND kind IN ('live', 'volunteer')`; nil =
-  the database did not answer), `Opp.pairStats(cid?) -> lines, from` (per officer and suspect from the ledger in
-  memory: cases, scored, lastAt, lastOutcome, kinds; the most cases first, at most 200), `Opp.adminRows()` (running
-  blocks, exclusions and suspensions, the latest end first).
-- `Opp.staffCases()` (one line per case: runId, kind, open, openedAt, closedAt, missionId, suspects, detained,
-  booked, flags, notes, officers) and `Opp.staffCase(runId)` (the same plus suspects with citizenid, name, label,
-  state, outcome, share, everArmed, afk, down, byLeave, seconds from the open to contact / cuff / detain / booking;
-  `lines` = the timeline as text, `opp.line.<what>` or the flag text; `flagLines` = the officer-conduct flags
-  (rs_excessive_force, rs_unarmed_shot, rs_vdm, rs_bad_seize, rs_linked_accounts, pair_repeat) and the suspect notes,
-  each with `flag` or `note`, its kind, its text and detail; `ledger` with the officer by name). No trail point is
-  answered. The closed cases are saved (modules/opponents/saved/server.lua, table `cp_pvp_cases` from
-  migration 016) while `Config.RealSuspects.saveCases` is on (shipped true) and either feature is on: one row per
-  closed case (run_uuid, kind, closed_at, case_json = `Opp.savedForm(case)`: the suspect fields staff read with his
-  notes, the run's participants by server id with citizenid, name, callsign and status, the timeline and the damage
-  ledger with plain values only, the volunteer's part; never a position), written one frame after the close (after
-  every `run:ended` hook) and never per tick. The start (and the first `settings:changed` that turns a feature on)
-  prunes rows older than `pairLedgerDays` and past the newest `casesKept`, then reads those back through
-  `Opp.fromSaved` and `Opp.restoreClosed(list)` (before the cases closed since the start; `casesKept` still holds).
-  Each close trims the rows past `casesKept`, and the daily pass prunes again. A restored case is marked `restored`
-  (its suspects read as offline). Open cases are not saved: a restart ends their runs.
-- The self rule over suspects: `Kit.selfRun` and `P.canReviewRun` count a suspect of the run's case as taking part,
-  so a staff member never reviews, voids or reads the case he was a suspect in (fails closed).
-- Admin callbacks and actions (CP.AdminKit, key `antiFarmOverride`; §8.4.1): `admin:getRsCases`, `admin:getRsCase`
-  (`{ runUuid }`, `err.own_run` for his own case, `err.rs_no_case` when it is no longer kept; latent),
-  `admin:getRsPairs` (`{ citizenid? }`: pairStats, adminRows, and that citizenid's exclusion and suspension), and
-  `server:admin:rsBlockPair` (`{ officer, suspect, days, reason }`), `server:admin:rsExclude` / `rsSuspend`
-  (`{ citizenid, days, reason }`): 0 < days <= 3650, a reason, refused for the admin's own characters
-  (`err.self_target`) and while both features are off (`err.rs_off`), one per target per 10 s, audited
-  (`rsBlockPair`, `rsExclude`, `rsSuspend`). They call `Opp.block` / `exclude` / `suspend` (a longer one wins). The
-  Admin UI screen is Real suspects.
-- Staff tools: `server:admin:rsLift` (`{ kind, officer?, suspect?, reason }`, Config.RealSuspects.staffLift)
-  calls `Opp.lift(kind, officer, suspect)`: the row ends in memory at once and its cp_pvp_pairs rows are deleted in a
-  thread (a restart does not bring it back); a row that is not running is `err.rs_no_row`, the admin's own characters
-  `err.self_target`, audited `rsLift`. `server:admin:rsClearStrikes` (`{ citizenid, reason }`, volunteers on and
-  Config.Volunteers.staffClearStrikes) calls `CP.Volunteers.clearStrikes(cid)`: his strikes and strike block under
-  his player key (the license he volunteered under, else Qbox's players table, and `cid:<citizenid>`) go, with their
-  vol_strike / vol_block rows; nothing to clear is `err.rs_no_strikes`, audited `rsClearStrikes`. Names
-  (Config.RealSuspects.staffNames): admin:getRsPairs answers `names = { [citizenid] = name }` for every citizenid its
-  pairs and admin rows name, and admin:getRsCases fills a missing officer or volunteer name, each from one batched
-  lookup per call (`Opp.staffNames`: loaded characters from CP.Qbx's player cache, then `CP.Qbx.characterNames`, one
-  `players` statement per 100 citizenids, then one `cp_officers` statement for the rest); never a query per row.
-  Weapon names (Config.RealSuspects.weaponNames): each damage-ledger line carries `weaponName` from
-  `CP.Weapons.label` (shared/weapons.lua: the common GTA weapon names hashed once at load; signed and unsigned
-  hashes read the same); an unknown hash has none and the screen shows `#<hash>`. Both callbacks also answer `lift`,
-  and getRsCases `clearStrikes`, so the screen shows the buttons only when the server allows them.
-- Admin UI screen (web/src/admin/screens/RealSuspects.tsx, screen key `admin_rs`, under More): shown when the
-  session has `antiFarmOverride` and `Session.config.realSuspects.screen` (modules/tablet: true while
-  Config.LiveCrime.enabled or Config.Volunteers.enabled is on and Config.RealSuspects.adminScreen is not false; read
-  when the UI opens). Tab Cases: admin:getRsCases (filters All / Open / With flags or notes; `own` rows greyed and not
-  opened); a row opens a right drawer with admin:getRsCase (suspects, officers, flag lines, timeline, damage ledger;
-  the ledger names a suspect by his label in the case). Tab Pairs and blocks: admin:getRsPairs (with `citizenid` when
-  a valid one is typed: his exclusion, suspension and admin rows). One tool dialog for the three actions
-  (admin/components/realSuspects.ts `toolRequest` checks the citizenids, 1-3650 days and the reason first; the server
-  checks them all again); a done tool refetches the pairs. No new server code: the screen only reads the staff answers above.
+#### Staff (modules/opponents/staff/server.lua, saved/server.lua)
+Server-only (never on an officer's tablet). Timeline lines get the names fixed when written (`who`, `byWho`).
+- `cases()`, `findCase(runId)`, `wasSuspect(cid, runId)`, `suspectOfRun(cid, runUuid) -> true|false|nil` (memory, then
+  `cp_pvp_pairs`), `pairStats(cid?)` (at most 200 lines), `adminRows()`, `staffCases()`, `staffCase(runId)` (suspects
+  with names, times from open to contact/cuff/detain/booking, the timeline as text, flag and note lines, the ledger by
+  name; never a trail point).
+- Closed cases are saved in `cp_pvp_cases` (migration 016) while `Config.RealSuspects.saveCases` (shipped true) and a
+  feature are on: one row per case (`case_json = Opp.savedForm(case)`, plain values, never a position), written one
+  frame after the close; the start prunes rows past `pairLedgerDays` and `casesKept` and restores them (marked
+  `restored`). Open cases are not saved: a restart ends their runs.
+- The self rule: `Kit.selfRun` and `P.canReviewRun` count a suspect of the run's case as taking part (fails closed).
+- Admin (`antiFarmOverride`, §8.4.1): callbacks `admin:getRsCases`, `admin:getRsCase { runUuid }` (`err.own_run`,
+  `err.rs_no_case`; latent), `admin:getRsPairs { citizenid? }`; actions `server:admin:rsBlockPair { officer, suspect,
+  days, reason }`, `rsExclude` / `rsSuspend { citizenid, days, reason }`, `rsLift { kind, officer?, suspect?, reason }`
+  (`Config.RealSuspects.staffLift`; `err.rs_no_row`), `rsClearStrikes { citizenid, reason }` (volunteers on and
+  `Config.Volunteers.staffClearStrikes`; `err.rs_no_strikes`): a reason, never the admin's own characters
+  (`err.self_target`), `err.rs_off` while both features are off, one per target per 10 s, audited. Names
+  (`staffNames`) come from one batched lookup per call; weapon names from `CP.Weapons.label` (shared/weapons.lua;
+  unknown = `#<hash>`).
+- Admin UI → Real suspects (`admin/screens/RealSuspects.tsx`, key `admin_rs`, under More): shown with
+  `antiFarmOverride` and `Session.config.realSuspects.screen` (a feature on and `Config.RealSuspects.adminScreen` not
+  false). Tabs Cases (a drawer with the case) and Pairs and blocks; one tool dialog (`admin/components/realSuspects.ts`
+  checks the inputs first).
 
 ### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S)
 
-Option A, live crimes (Config.LiveCrime, `enabled` shipped false). The adapter in modules/integrations/crimson_contracts
-listens to Crimson-Contracts' server-only lifecycle events (crimson-contracts:server:*, AddEventHandler only, from the
-scripts in Config.LiveCrime.sources) and never requires that resource; CP.LiveCrime turns a contract whose police
-alert went out into a red LIVE call on the Dispatch screen, opens a CP.Opponents case for the crew when a unit claims
-it (no draw: the engine-only `live_crime` mission with the `live_response` block, §7.3), lets backup join the case,
-scores it with the live_* lines (points only unless the owner turns on its money switches), and reports the result to
-other scripts with the read-only export GetAvailablePolice and a server-only end event.
+Live crimes (`Config.LiveCrime`, `enabled` shipped false). The adapter listens to Crimson-Contracts' server-only
+lifecycle events (AddEventHandler only, from the scripts in `Config.LiveCrime.sources`) and never requires that
+resource; CP.LiveCrime turns a contract whose police alert went out into a red LIVE call on Dispatch, opens a
+CP.Opponents case for the crew when a unit claims it (no draw: the engine-only `live_crime` mission with the
+`live_response` block, §7.3), lets backup join, scores it with the live_* lines (points only unless the owner turns on
+its money switches), and reports results through the export `GetAvailablePolice` and a server-only end event.
 
-**Intake.** Crimson-Contracts sends its events only with `ContractsConfig.LifecycleEvents = true` (shipped false);
-names and payloads as its README "Integration" lists them:
+#### Intake
+Crimson-Contracts sends these only with `ContractsConfig.LifecycleEvents = true` (shipped false):
 
-| Event | Payload (Crimson-Contracts) | CP.LiveCrime |
+| Event | Payload | Handler |
 |---|---|---|
-| `crimson-contracts:server:contractStarted` | `{ id, uid = '<id>_<start time>', key, label, locationLabel, coords = { x, y, z }, members = { [citizenid] = server id }, leaderCitizenId, startedAt, test }` | `onStarted` |
+| `crimson-contracts:server:contractStarted` | `{ id, uid = '<id>_<start time>', key, label, locationLabel, coords, members = { [citizenid] = server id }, leaderCitizenId, startedAt, test }` | `onStarted` |
 | `crimson-contracts:server:dispatchSent` | `{ id, uid, dispatchId = 'crimson_contract_<id>_<time>', title, street, coords }` (never for ATM alerts) | `onAlert` |
-| `crimson-contracts:server:contractEnded` | `{ id, uid, outcome = 'completed'\|'failed'\|'cancelled', reason }` (also for a contract that never started) | `onEnded` |
+| `crimson-contracts:server:contractEnded` | `{ id, uid, outcome = 'completed'\|'failed'\|'cancelled', reason }` | `onEnded` |
 | `crimson-contracts:server:memberRejoined` | `{ id, uid, citizenid, src }` | `onRejoined` |
 | `crimson-contracts:server:crewShot` | `{ id, uid, citizenid, suppressed, trigger = 'shot'\|'gun_kill' }` | `onCrewShot` |
 
-- **Adapter (CP.CrimsonContracts, `CC.EVENTS`).** The five handlers are registered always (C29: turning `enabled` on
-  in Admin UI → Settings needs no restart) and return at once while `Config.LiveCrime.enabled ~= true`. Then:
-  `GetInvokingResource()` must be in `Config.LiveCrime.sources` (read on each event; any other script, or none, is
-  dropped with one CP.warn per minute per script that names the setting); the payload must be a table of the shapes
-  above: `id` a whole number, `uid` a name (letters, digits, `_`, `-`) of at most 32, `key` and `outcome` / `trigger`
-  names of at most 64 / 16, `citizenid` / member keys names of at most 50 and at most 16 members (at least one),
-  `coords` a table of three finite numbers, `test` / `suppressed` booleans or nil, `dispatchId` a name of at most 64
-  or nil; `label`, `locationLabel`, `title`, `street`, `reason` must be strings and are trimmed, freed of control
-  characters and cut to 64 / 64 / 50 / 100 / 128 bytes. Anything else drops the event (one warning per minute per
-  script and event). **Every server id in a payload is ignored (C9):** `members` keeps only its keys and
-  memberRejoined's `src` is never read. The clean copy goes to `CP.LiveCrime.<fn>(resource, data)` inside pcall.
-- **Records.** `crimes['<resource>:<uid>'] = { crimeKey, res, uid, id, key, label, locationLabel, coords, members = {
-  [cid] = true }, leader, startedAt, receivedAt, test, sampled, alertedAt, dispatchId, title, street, missionType,
-  suspects = { [cid] = true }, armed = { [cid] = os.time() }, ignored, ended, endedAt, outcome, endReason, runId }`, in
-  memory only: at most 200 at once, pruned on the next event 1 h after the end (or 2 h after the start when no end
-  ever came); a reporting resource that stops ends its open crimes (`outcome = 'stopped'`). No timer or thread.
-- `onStarted`: a known uid is ignored; `test == true` (an admin's `/testcriminalcontract`, C16) is kept as a test
-  record, audited `liveCrimeIgnored` (new value `test`) and never sampled or reported. Otherwise, while its key maps to
-  a mission type, `CP.Opponents.sampleCrew(crimeKey, cids)` starts the crew's AFK samples at the contract start (C17).
-- `onAlert` (once per crime): an unknown, test or ended crime, or an id that does not match, is ignored. The key maps
-  through `Config.LiveCrime.types` (a Config.MissionTypes key; false, missing or an unknown type = off: audit
-  `liveCrimeIgnored`, `type_off`). Each member is found with `CP.Qbx.getByCitizenId(cid)` (an event path) and his
-  `getInfo` citizenid must match; he is a suspect when `CP.Opponents.eligible(src, { intake = true })` passes and his
-  server coords are within `Config.LiveCrime.suspectRadius` (300 m, C24) of the crime. None -> audit
-  `liveCrimeIgnored` (`no_suspect`, the reasons counted) and the samples stop. Else `suspects`, `alertedAt`,
-  `dispatchId`, `title`, `street`, `missionType` are stored, the members who are not suspects stop being sampled, the
-  audit `liveCrimeReported` (new value `<suspects>/<crew>`, the reasons for the others) is written and
-  `CP.LiveCrime.post(crime)` is called (it posts the LIVE call, below). Audit lines are
-  category `audit`, actor console, target the crime key, written in their own thread; they carry no citizenid.
-- `onEnded`: `ended`, `endedAt`, `outcome`, `endReason`; the open run of `crime.runId` (the live case sets it; its
-  `run.live.crimeKey` must match) gets `CP.Opponents.crimeEnded(run)`; the samples stop; its LIVE call lapses
-  (`CP.MissionCalls.endLive`, also when the reporting resource stops).
-- `onRejoined`: a member of a crime whose case runs gets a `crew_rejoined` timeline line (CP.Opponents re-resolves him
-  on the qbx load event itself).
-- `onCrewShot` (C6): `crime.armed[cid] = os.time()` for a member, and `CP.Opponents.noteArmed(cid)` when he is a
-  suspect of the crime's running case. The live case copies `crime.armed` into the case when it opens. Crimson-Contracts sends
-  at most one `'shot'` per contract (the report that made its police roll; later reports are not checked there) and
-  one `'gun_kill'` per guard shot dead by a crew member, so a crew member who only fired after that roll is not
-  reported: CP.Opponents' own weapon sample and damage ledger decide whether he is armed in the case.
-- API: `LC.get(crimeKey)`, `LC.crimeOf(run)` (`run.live.crimeKey`), `LC.inCrew(cid) -> bool, crime` (a member of a
-  crime that has not ended; always false while `enabled` is off and for test crimes; volunteer matching uses it), `LC.post(crime)`.
-- **The LIVE call.** `LC.post(crime)` calls `CP.MissionCalls.postLive(crime)` and stores `crime.callId`; a
-  refusal other than `posted` is audited `liveCrimeIgnored` with its reason (`max_live`, `calls_off`, `off`,
-  `invalid`). `postLive` keeps the call in memory only (no cp_mission_calls row: a negative id, code `LIVE-<n>`, its
-  own counter), `type` = the crime's mission type, `area` = `MC.areaOf(crime.coords)`, priority 1, `offerEnds` = now +
-  `Config.LiveCrime.offerTime` (300 s, 30-3600), `live = { crimeKey, title, street, coords, suspects = <count> }`. It
-  refuses while `Config.LiveCrime.enabled ~= true` or `Config.MissionCalls.enabled == false`, a second call for the
-  same crime, and a call while `MC.liveCount()` (LIVE calls open, claiming or claimed) is at
-  `Config.LiveCrime.maxLiveRuns` (2, 1-20; a claimed call stays until its case ends). The toast
-  (`client:missionCall` with `live = true, title, street`) goes to every member of an idle unit who has not muted
-  call alerts (favourite types are ignored: it is a real crime) and is not on a real call; the client shows it as an
-  `error` (red) notification titled "LIVE call". The card (`LiveCard`) carries `live, liveTitle, liveStreet,
-  suspects`, the distance to the crime's reported place (never a suspect's), no cash, points or twists, and is locked
-  for a non-leader. LIVE calls never count in `OpenCalls` (maxOpen and lanes), in `MC.claimableCount`, or in
-  `WithdrawAll` (a Cross-Department lock leaves them); they lapse in `Expire` like any call and through
-  `MC.endLive(crimeKey)` when the crime ends. Their claim opens the crime's case (below).
-- **The claim and the case.** `MC.claim` of a LIVE call: `err.live_case_off` while `Config.LiveCrime.enabled ~=
-  true`; any twists are dropped. `ClaimCheck` calls `Draw.check(src, type, nil, live = { crimeKey })` and the call's
-  own rules (`CallRule`), never the type's pool. The window and `TryNext` work as for any call; `Draw.accept` gets
-  `opts.live` and `missionCall.staff = true` (no rapid response for a real crime).
-  - CP.Draw's live path (`CheckAccept(src, type, counts, live)`): every accept rule of a mission (leader, unit size,
-    duty, arena, on a run, mission ban, mission types turned off, hourly / daily / type daily caps) except: no server run caps
-    (`CapsOk`; `maxLiveRuns` caps live cases), the type cooldown only with `Config.LiveCrime.typeCooldown` (shipped
-    false), the Cross-Department lock only without `duringOperation` (shipped true), and `IsOnCall(src, except)` with
-    `CP.Calls.exemptFor` of the case-to-be (the crime's `dispatchId` and the claimants' own shots / down calls). Then
-    `LC.claimCheck(crime, officers)`. `AcceptStart` skips the twists and the ready check unless
-    `Config.LiveCrime.readyCheck` (shipped false); the ready check's re-checks use the same `except` and lock rule.
-    `FinishAccept` runs `claimCheck` again (the window may have waited), takes `LC.missionFor(crime)` (no draw, no
-    no-repeat record) and calls `CP.Runs.create` with `live = LC.liveOf(crime)` and `npcCombat = false`.
-  - `LC.claimCheck(crime, officers) -> true | false, err` (memory only): `err.live_case_off`; `err.live_case_gone` (no,
-    ended or test crime, or every suspect in another case: `Opp.byCid`); `err.mc_taken_by` (its run is open);
-    `err.live_case_suspect_used` (every free suspect has `Opp.suspectDayCount >= maxCatchesPerSuspectDay`); then per
-    officer `err.live_case_own_suspect` (a crew member, or `Opp.selfBlock` blocked: own character, own license, linked
-    account), `err.live_case_suspended` (`Opp.suspended`), `err.live_case_recent_suspect` (`Opp.lastSuspectAt` within
-    `jobHopMinutes`), and per suspect `err.live_case_pair_blocked` / `err.live_case_pair_cooldown` (`Opp.pairOk`:
-    `blocked`, or `pair_cooldown` / `suspect_cooldown`). The simplest safe rule: a pair cap refuses the claim (another
-    unit may take it) instead of scoring nothing.
-  - The engine mission: `LC.engineMission()` registers `live_crime` once with `CP.Missions.registerEngine(def)` (a
-    registry of its own: `Missions.engine(id)` answers it, `Missions.get`, `list`, `byType`, the draw, client:missions,
-    the boards and the Mission Builder never see it, and `Missions.register` refuses its id); one `live_response`
-    objective, `cooldown = 0`, `vehiclePenalties = false`, a placeholder location. `LC.missionFor(crime) -> def, 1`: a
-    copy with the crime's mission type, the label "Live case: <alert title>", `timeLimit = caseTime` (1800 s,
-    60-3600) and one location, the crime's place with `sceneRadius` as its start circle. `LC.liveOf(crime) = {
-    crimeKey, dispatchId, title, street, suspects = <count> }` (no citizenid, no server id).
-  - `CP.Runs.create` opts.live: `run.live` (a clean copy) and `run.realSuspect = 'live'` before the route lock
-    (`requiredFor`: `Config.LiveCrime.requireRoute`); no `Runs.capsOk`; the operation lock only with
-    `duringOperation = false`; the on-call re-check passes `{ except = Calls.exemptFor(run) }`. A row of mission
-    `live_crime` starts the abandon (type) cooldown only with `Config.LiveCrime.typeCooldown` (at the end, at the
-    rebuild from the rows and at a reclassify).
-  - `run:created` (CP.LiveCrime): `crime.runId = run.id`; `Opp.open(run, { kind = 'live', index = 1, members =
-    crime.suspects, scene = crime.coords })`; each suspect in `crime.armed` gets `Opp.noteArmed`; a participant whose
-    `Opp.selfBlock` answers the `rs_linked_accounts` flag gets `CP.AntiCheat.flag(run, src, 'rs_linked_accounts',
-    'suspect <label>, shared <kinds>')`; a timeline line per officer. No case (the crime is gone, or every suspect is in
-    another case by now): the run ends at once as `cancelled` (no cooldown, no penalty).
-  - `run:ended` (CP.LiveCrime): `Opp.close(run)` (the same outcomes as CP.Opponents' own close), then
-    `Opp.recordPairs(run, rows)`, one row per participant and suspect: `scored` = the run completed and the suspect
-    was detained or booked with a share above 0; `outcome` = the suspect's, or `gone` when no participant arrived;
-    then `Opp.checkPairFlags(run)`. CP.MissionCalls closes a claimed LIVE call with its run and never re-dispatches it.
-- Config.LiveCrime keys: `caseTime = 1800` (60-3600 s), `readyCheck = false`, `typeCooldown = false`,
-  `duringOperation = true`.
-- **Backup joins the case.** While `enabled` and `Config.LiveCrime.backup` (shipped true) are on, an on-duty
-  officer on no mission is asked (`LC.offer(run, src, why)`, the event `client:liveJoinOffer`, an ox_lib alert dialog
-  that closes after `joinOfferSeconds`, 30, 10-120) when he (a) marks himself responding to the crime's own call
-  (`CP.Dispatch.onResponding`, the id normalized and compared with `crime.dispatchId`; an officer still on a mission
-  is asked 3 s later, after CP.Calls ended it for the real call), (b) stands within `sceneRadius` of the reported
-  place (a scan of `CP.Qbx.getOnlinePlayers()` and server coords on CP.Opponents' watch pass, at most every 5 s per
-  case, `CP.Access.maybeOfficer` first) or (c) cuffs a suspect from outside the case (the proof's outside-cuff rule).
-  One offer at a time per officer and case (a token, `untilMs`); the scene asks once per case, a response or a cuff
-  again once the last offer ran out. `LC.joinCheck(run, src)` (memory only): `err.live_join_off`,
-  `err.live_case_gone` (not a live run, ended, test crime or `crime.runId` not this run), `err.live_join_already`,
-  `err.already_on_run`, `err.live_join_full` (`maxOfficers`, 6, 1-16, the claiming unit counts), then the officer
-  rules of a claim (`OfficerOk`: crew member, suspended, recent suspect, self rule, pair block or cooldown). A yes
-  (`server:liveJoin`, `LC.answer`) with the right token before `untilMs` calls `CP.Runs.addParticipant(run, src, {
-  via })`: refuses a run it does not hold or that ends, a run that is not live (or a test or operation),
-  `err.live_join_left` (a leave is final), on a run, in the arena, `getOfficer` (duty, suspensions, retired), a
-  mission ban, `isOnCall` with `exemptFor(run)` (his response to the crime's call is part of the case), field
-  training's ride-along rule (`CP.FieldTraining.joinCheck` with the active participants as his unit), then
-  `joinCheck` again with no yield until he is in `run.participants` / `order` / `bySrc` (`joinedLate`, `joinedVia`,
-  `sharedBefore` = a copy of `run.score.shared`: CP.Scoring's count of a shared line subtracts it, so lines recorded
-  before he joined are not his). His client gets `client:start` (the run's `clientStart`, kept for live runs, with the
-  participants and host of now), CP.NpcCombat's `runStarted`, `CP.Route.begin` (the run's locked route rule), and
-  while In progress `client:inProgress` (remaining time) and `prepare` / `start` of the active objective; the case's
-  officers are told, `participant:joined` fires (CP.LiveCrime: the timeline line `officer_joined`, the
-  `rs_linked_accounts` flag as at the open) and the run view is pushed, with the HUD objectives forced out again
-  (`RefreshHud(run, true)`: the active objective's `o.hud` detail, value and max, so he sees the live_response phase
-  text at once). The timeline also keeps `join_offered` and `join_declined`. Pair rows at the end include him (he is in `run.participants`).
-- **The officers' tablet.** `Config.LiveCrime.caseCard` and `resultOutcomes` (both shipped true, behind
-  `enabled`). Labels and counts only: never a citizenid, a server id, a position or, while the case runs, one
-  suspect's state (the steps are the same for every suspect, like the HUD).
-  - Ready check: with `readyCheck = true`, CP.Draw passes `extra.live = LC.readyLine(ctx.live)` (`{ title, street,
-    suspects }`, nil with `caseCard = false` or a crime that is gone) to `Units.readyCheck`; it is kept in the check
-    and sent in `client:readyCheck` and the ReadyCheckView (`live`). The banner shows the red LIVE line ("LIVE case,
-    real players: <title>, <street>. Suspects: n") and the member's game a red toast (`unit.ready.toast_live`).
-  - Active Mission: `Runs.view` adds `live = LC.caseView(run, src)` (`LiveCaseView`, web/src/types/run_ui.ts):
-    `{ title, street, suspects (LC.crewSize), host, phase }`, and while the live_response objective runs the block's
-    `caseView(ctx)` (§7.3): `phase`, `secureS`, `secureNeed`, `reported` (labels of the last-reported points),
-    `reportedAgoS`, `nextReportS`, `reportsOn`. The card (`LiveCaseCard`) shows the three steps, the suspect count,
-    "Last reported 40s ago: Suspect A" and when the next report comes, a fairness line and, for the host, where End
-    case is. Nothing on it changes between two reports or with one suspect's state.
-  - Result card: `Settle` adds `rr.live = LC.resultView(run)` (stored in the row's breakdown like the rest):
-    `{ title, street }`, plus `open = true` for an officer who left while the case still ran, or, once the run has
-    ended, `outcomes = { { label, outcome } }` sorted by label (`detained`, `booked`, `got_away`, `left`, `void`,
-    `stopped`). The run has ended before the participants are settled, so `LC.resultView` closes the case
-    (`Opp.close` is idempotent: the `run:ended` hook gets the same outcomes from the closed list). With
-    `resultOutcomes = false` only the title and street are sent and the card shows no live part.
-- **Scoring.** A run is live when it carries `run.live` or `run.realSuspect = 'live'`; the rules read
-  the run, never `enabled`, so a case that runs when the owner turns live crimes off ends by the rules it started
-  with. CP.LiveCrime answers, and CP.Scoring, CP.Cash, CP.Rewards, CP.Goals and CP.Challenge ask:
-  - `LC.isLive(run)`, `LC.linesOnly(run)` (Config.LiveCrime.linesOnly, shipped true): `Scoring.compute` makes the
-    subtotal the lines only (the live_* lines, each detain and booking weighted by the suspect's share, and
-    whatever conduct penalties are recorded) and skips the end-of-run lines (fast finish, twists, first run, vehicle
-    damage); P stays the base of the pct shares and of the cap (`scoreCap` x P). The breakdown carries
-    `linesOnly = true`, and the result card and the Profile breakdown show "Live case: the lines below are the
-    points" instead of the Base points line. A failed live case keeps today's failed credit (its one objective is
-    never done, so 0).
-  - `LC.tierRow(run)` (Config.LiveCrime.tier, shipped 'crew'): the Config.Scaling row for `LC.crewSize(run)` (the
-    crime's suspects, else the case's, else `run.live.suspects`; at least 1) is the points and cash multiplier and
-    the pay tier on the result card; 'officers' = the run's own pay tier, like a mission.
-  - `LC.counts(run, what)` for 'typeOfTheDay', 'goals', 'challenge', 'cash', 'items': true for any other run, and for
-    a live run only while that Config.LiveCrime switch is true (all shipped false). Type of the Day: the x2 is not
-    applied. Cash: `Cash.compute` uses B = 0 (nothing paid, nothing to pay again). Items: `row:settled` rolls no item
-    reward. `cash` and `items` are plain Settings switches (not in `MONEY_SWITCHES`).
-  - `LC.rowFilter(what, alias)`: `AND COALESCE(<alias>mission_id, '') <> 'live_crime'` while the switch is off ('' when
-    on), added to the goal progress query (`goals`) and to the challenge's officer and week sums (`challenge`; the
-    weekly bounty reads the same sums). `LC.MISSION_ID = 'live_crime'` is the live case's mission id.
-  - Live catches: the live_response block notes `CP.Runs.noteStat(run, nil, 'live_catches', 1)` once per suspect
-    whose detain line was recorded (share > 0; a booking is no catch); `cp_mission_runs.live_catches` (and the
-    archive's, migration 014) holds it per row, never on the result card. The board metric `live_catches` sums it
-    over counted completed rows; the owner adds it to Config.Leaderboard.metrics (and weeklyBadges) to show it.
-- **Results for other scripts (critic C21).** The design is silent past "a read-only export and a server-only
-  end event"; the simplest safe one, all in modules/livecrime/server.lua:
-  - `LC.sendEnded(run, state, reason, outcomes, case)` from the `run:ended` hook (after the pair rows), once per run
-    (`run.liveEndSent`), not for a test crime, while `Config.LiveCrime.endEvent ~= false` (shipped true; live runs
-    exist only while `enabled`): `TriggerEvent('crimson-police:server:liveCrimeEnded', LC.endPayload(...))` inside
-    pcall. Payload `{ resource, uid, id, key, result = state, reason, suspects = { [cid] = outcome }, caught,
-    officers, endedAt }`: the crime record's names (or `resource` / `uid` split from `run.live.crimeKey` when the
-    record was pruned; `id`, `key` nil then), outcomes as on the result card (an unknown one reads `got_away`),
-    `caught` = detained + booked. Citizenids are the reporting script's own crew list; no server id, no position.
-    Crimson-Contracts is frozen and does not listen yet.
-  - `LC.availablePolice() -> count, { [dept] = count } | nil` and the server export `GetAvailablePolice` (pcall, nil
-    on an error): nil while `enabled ~= true`; else every online player whose cached qbx job is on duty in a
-    turned-on department (`CP.Access.departmentForJob`), and with `Config.LiveCrime.availablePolice = 'idle'`
-    (shipped; Settings enum `idle` / `duty`) only those `CP.Runs.isOnMission` says are on no mission. Memory only,
-    never yields (no suspension or real-call lookup). Spec: tests/live_results_spec.lua.
-- **Surrender and Talk them down.** modules/opponents/surrender/server.lua; `Config.RealSuspects.surrender`
-  (`enabled` shipped true; every path also needs `Config.LiveCrime.enabled`). Live cases only (a volunteer case has
-  none). The design was silent past "surrender or talk-down choices, server checks distance, case membership and
-  states"; the simplest safe one: a surrender is a mark on the suspect's record (`rec.surrender = { at, coords, by,
-  ended }`), never a CP.Opponents state, so the cuff, the detain and the booking stay the proof's.
-  - The suspect's command (`command`, shipped `surrender`; RegisterCommand on the server the first time the feature
-    is on at start or on `settings:changed`, a new name needs a restart; 2 per 3 s): `Opp.surrenderCommand(src)`
-    refuses `livecrime.surrender.off`, `not_wanted` (no free suspect of a live case), `already`, `cannot` (down, in an
-    instance), `pending`; else the question.
-  - Talk them down (`server:liveTalkDown`, no args, 2 per 2 s): `Opp.talkDown(src)` -> the officer must be an active
-    participant of an open live case (`livecrime.talk.no_case`); the nearest free suspect (online, bucket 0, not down,
-    not surrendered) within `talkRange` (15 m) by server coords of both, else `livecrime.talk.none`; one open question
-    per suspect (`busy`); the same officer and suspect again only after `talkCooldown` (30 s, `cooldown`). Timeline
-    `talk_down` (by = the officer).
-  - The question: `client:liveSurrenderAsk { token, seconds = askSeconds (20, 5-60), talk }`, an ox_lib alert dialog
-    closed after `seconds`; the answer `server:liveSurrender(token, yes)` (3 a second). The token must be the
-    suspect's open one for this case. No: timeline `talk_refused` and the officer is told. Yes, before `untilMs`:
-    `Enabled`, still a free live suspect not down, bucket 0, and an active officer of the case within
-    `surrenderRange` (50 m) of his server position (`livecrime.surrender.no_officer`); then `rec.surrender`, timeline
-    `surrendered` (by = the talker), the suspect and the case's officers are told (labels only).
-  - The watch pass (`Opp.onTick`): while he is free a surrender ends (`surrender_ended`, why) when he was cuffed after
-    it and is free again (`released`), a weapon was seen after it (`armedUntil - armedMemory > at`, `armed`), his last
-    watch position is more than `breakRange` (10 m) from where he gave up (`moved`), or `holdSeconds` (120 s) passed
-    (`lapsed`); lost, left or void end it silently. The prompt: an active officer within `talkRange` of a free,
-    unsurrendered suspect is told once per officer and suspect (`livecrime.talk.hint`, the label only).
-  - `Opp.peaceful(run, cid) -> bool, by`: a live case, a surrender that has not ended, `cuffedAt >= at`, not
-    detained by a leave, and no officer hit since (`rec.lastHitAt < at`, the damage ledger). The staff screen reads the new
-    lines through `opp.line.<what>`. Memory only; a question is dropped at the run's end. Spec:
-    tests/live_surrender_spec.lua.
-- Config.LiveCrime keys: `sources = { 'crimson-contracts' }` (a list of resource names), `types` (an OPEN table
-  in Settings: Crimson-Contracts' contract keys -> a Config.MissionTypes key or false, checked by Settings),
-  `suspectRadius = 300.0` (10-2000 m).
+- Adapter (`CP.CrimsonContracts`, `CC.EVENTS`): the handlers are always registered (turning `enabled` on in Settings
+  needs no restart) and return at once while it is off. `GetInvokingResource()` must be in `sources` (else dropped with
+  one warning a minute); the payload must match the shapes (`id` whole, `uid` a name ≤ 32, keys ≤ 64, citizenids ≤ 50,
+  1–16 members, finite coords; texts trimmed, control characters removed, cut to 64/64/50/100/128 bytes); anything
+  else is dropped. Every server id in a payload is ignored (`members` keeps only its keys). The clean copy goes to
+  `CP.LiveCrime.<fn>(resource, data)` in pcall.
+- Records: `crimes['<resource>:<uid>']` in memory only (at most 200; pruned 1 h after the end or 2 h after a start
+  with no end; a reporting resource that stops ends its crimes `stopped`). No timer.
+- `onStarted`: a known uid is ignored; `test == true` (an admin's test contract) is a test record, audited
+  `liveCrimeIgnored` (`test`), never sampled or reported; otherwise, while its key maps to a type,
+  `CP.Opponents.sampleCrew` starts the crew's AFK samples.
+- `onAlert` (once per crime): the key maps through `Config.LiveCrime.types` (an OPEN Settings table: contract key → a
+  `Config.MissionTypes` key or false; off → `liveCrimeIgnored type_off`). Each member found online whose getInfo
+  matches is a suspect when `CP.Opponents.eligible(src, { intake = true })` passes and he is within
+  `Config.LiveCrime.suspectRadius` (300 m, 10–2000) of the crime. None → `liveCrimeIgnored no_suspect`. Else the
+  record keeps suspects and the alert, the others stop being sampled, the audit `liveCrimeReported` (`<suspects>/<crew>`)
+  is written and `LC.post(crime)` posts the LIVE call. Audit lines: category audit, actor console, target the crime
+  key, no citizenid.
+- `onEnded`: the open case's run gets `CP.Opponents.crimeEnded(run)`; samples stop; the LIVE call lapses
+  (`CP.MissionCalls.endLive`). `onRejoined`: a timeline line. `onCrewShot`: `crime.armed[cid]` (copied into the case at
+  open) and `CP.Opponents.noteArmed` for a running case's suspect (Crimson-Contracts reports at most one `shot` per
+  contract and one `gun_kill` per guard, so the case's own weapon sample decides the rest).
+- API: `LC.get(crimeKey)`, `LC.crimeOf(run)`, `LC.inCrew(cid) -> bool, crime` (false while off and for tests),
+  `LC.post(crime)`.
+
+#### The LIVE call
+- `CP.MissionCalls.postLive(crime)` keeps the call in memory only (a negative id, code `LIVE-<n>`), type = the crime's
+  mission type, area from its coords, priority 1, `offerEnds` = now + `Config.LiveCrime.offerTime` (300, 30–3600),
+  `live = { crimeKey, title, street, coords, suspects }`. Refused (audited) while off, while `Config.MissionCalls.enabled
+  == false`, for a second call of a crime, and at `Config.LiveCrime.maxLiveRuns` (2, 1–20) open or claimed LIVE calls.
+- The toast (`client:missionCall` with `live = true`) goes to every member of an idle unit who has not muted calls and
+  is not on a real call (favourites ignored), shown as a red "LIVE call". The card shows the distance to the reported
+  place (never a suspect's), no cash, points or twists, locked for non-leaders. LIVE calls never count in open-call
+  limits, `claimableCount` or `WithdrawAll`.
+
+#### The claim and the case
+- `MC.claim` of a LIVE call: `err.live_case_off` while off; twists dropped; `Draw.check(src, type, nil, { crimeKey })`
+  and the call's rules, never a pool; `missionCall.staff = true` (no rapid response).
+- CP.Draw's live path: every accept rule of a mission (leader, size, duty, arena, on a run, mission ban, types off,
+  hourly/daily caps) except no server run caps (`maxLiveRuns` caps cases), the type cooldown only with
+  `Config.LiveCrime.typeCooldown` (false), the operation lock only with `duringOperation = false` (shipped true), and
+  `IsOnCall(src, except)` with `CP.Calls.exemptFor` of the case-to-be. Then `LC.claimCheck`. No twists or ready check
+  unless `Config.LiveCrime.readyCheck` (false). `FinishAccept` runs `claimCheck` again, takes `LC.missionFor(crime)`
+  and calls `CP.Runs.create` with `live = LC.liveOf(crime)` and `npcCombat = false`.
+- `LC.claimCheck(crime, officers)` (memory only): `err.live_case_off`, `err.live_case_gone` (no, ended or test crime,
+  or every suspect in another case), `err.mc_taken_by`, `err.live_case_suspect_used` (every free suspect at
+  `maxCatchesPerSuspectDay`), then per officer `err.live_case_own_suspect` (crew member or `Opp.selfBlock`),
+  `err.live_case_suspended`, `err.live_case_recent_suspect` (`lastSuspectAt` within `jobHopMinutes`), and per suspect
+  `err.live_case_pair_blocked` / `err.live_case_pair_cooldown` (`Opp.pairOk`). A pair cap refuses the claim (another
+  unit may take it) rather than scoring nothing.
+- The engine mission: `LC.engineMission()` registers `live_crime` once with `CP.Missions.registerEngine` (one
+  `live_response` objective, `cooldown = 0`, `vehiclePenalties = false`). `LC.missionFor(crime) -> def, 1`: the crime's
+  type, label "Live case: <alert title>", `timeLimit = Config.LiveCrime.caseTime` (1800, 60–3600), one location at the
+  crime with `sceneRadius` as start circle. `LC.liveOf(crime) = { crimeKey, dispatchId, title, street, suspects }`.
+- `CP.Runs.create` with `opts.live` sets `run.live` and `run.realSuspect = 'live'` before the route lock, skips
+  `capsOk`, passes `exemptFor(run)` to the on-call re-check; a `live_crime` row starts a type cooldown only with
+  `typeCooldown`.
+- `run:created`: `crime.runId`; `Opp.open(run, { kind = 'live', index = 1, members = crime.suspects, scene })`; armed
+  suspects noted; a participant with `rs_linked_accounts` from `selfBlock` is flagged. No case possible → the run ends
+  `cancelled` (no cooldown, no penalty).
+- `run:ended`: `Opp.close(run)`, `Opp.recordPairs` (one row per participant and suspect; `scored` = completed with the
+  suspect detained or booked at a share above 0; `gone` when no participant arrived), `Opp.checkPairFlags`. A claimed
+  LIVE call closes with its run and is never re-dispatched.
+
+#### Backup joins the case
+While `enabled` and `Config.LiveCrime.backup` (shipped true) are on, an on-duty officer on no mission is asked
+(`LC.offer(run, src, why)`, `client:liveJoinOffer`, an ox_lib alert closed after `joinOfferSeconds`, 30, 10–120) when
+he marks himself responding to the crime's own call (an officer still on a mission is asked 3 s after CP.Calls ended
+it), stands within `sceneRadius` of the place (scanned at most every 5 s per case, `maybeOfficer` first), or cuffs a
+suspect from outside the case. One offer at a time per officer and case. `LC.joinCheck(run, src)`:
+`err.live_join_off`, `err.live_case_gone`, `err.live_join_already`, `err.already_on_run`, `err.live_join_full`
+(`maxOfficers`, 6, 1–16), then the officer rules of a claim. A yes (`server:liveJoin`, `LC.answer`, the right token in
+time) → `CP.Runs.addParticipant(run, src, { via })`: refuses a run that is not live or ends, `err.live_join_left` (a
+leave is final), on a run, arena, `getOfficer`, mission ban, on call (with `exemptFor`), field training's ride-along
+rule, then `joinCheck` again with no yield until he is registered (`joinedLate`, `sharedBefore` = a copy of
+`run.score.shared`, so shared lines from before are not his). He gets `client:start` (the kept `clientStart`), the
+combat settings, the route, and while in progress `client:inProgress` and the active objective's client half; the
+officers are told, `participant:joined` fires and the view and HUD are pushed. Pair rows include him.
+
+#### The officers' tablet
+`Config.LiveCrime.caseCard` and `resultOutcomes` (both true). Labels and counts only: never a citizenid, server id,
+position, or one suspect's state while it runs.
+- Ready check (with `readyCheck`): `extra.live = LC.readyLine(ctx.live)` (`{ title, street, suspects }`) in the check
+  and `client:readyCheck`; the banner shows the red LIVE line.
+- Active Mission: `Runs.view` adds `live = LC.caseView(run, src)` (`{ title, street, suspects, host, phase }` plus the
+  block's `caseView(ctx)`, §7.3); the LiveCaseCard shows the three steps, the count, the last report and the next,
+  and for the host where End case is.
+- Result card: `rr.live = LC.resultView(run)` (`{ title, street }`, plus `open = true` for one who left while it ran, or
+  `outcomes = { { label, outcome } }` once ended; `resultView` closes the case, which is idempotent).
+
+#### Scoring
+A run is live when it carries `run.live` or `run.realSuspect = 'live'`; the rules read the run, never `enabled`.
+- `LC.isLive(run)`, `LC.linesOnly(run)` (`Config.LiveCrime.linesOnly`, true): `Scoring.compute` makes the subtotal the
+  lines only (the live_* lines, detain and booking weighted by share, conduct penalties) without the end-of-run lines;
+  P stays the base of pct shares and the cap; the breakdown carries `linesOnly = true`.
+- `LC.tierRow(run)` (`Config.LiveCrime.tier`, 'crew'): the Config.Scaling row for `LC.crewSize(run)` is the points and
+  cash multiplier and the pay tier; 'officers' = the run's own tier.
+- `LC.counts(run, what)` for typeOfTheDay, goals, challenge, cash, items: true for other runs, for a live run only
+  while that `Config.LiveCrime` switch is on (all false: no x2, B = 0, no item roll). `cash` and `items` are plain
+  switches. `LC.rowFilter(what, alias)` adds `AND COALESCE(mission_id, '') <> 'live_crime'` to the goal and challenge
+  sums while off. `LC.MISSION_ID = 'live_crime'`.
+- Live catches: `noteStat(run, nil, 'live_catches', 1)` per suspect whose detain line was recorded;
+  `cp_mission_runs.live_catches` (migration 014); the board metric `live_catches` (not shipped on the list).
+
+#### Results for other scripts
+- `LC.sendEnded(run, state, reason, outcomes, case)` from `run:ended`, once per run, not for tests, while
+  `Config.LiveCrime.endEvent ~= false`: `TriggerEvent('crimson-police:server:liveCrimeEnded', { resource, uid, id, key,
+  result = state, reason, suspects = { [cid] = outcome }, caught, officers, endedAt })` in pcall (no server id, no
+  position).
+- `LC.availablePolice() -> count, { [dept] = count } | nil` and the export `GetAvailablePolice` (nil while off): online
+  players on duty in a turned-on department; with `Config.LiveCrime.availablePolice = 'idle'` (shipped; or `duty`) only
+  those on no mission. Memory only, never yields. Tests `tests/live_results_spec.lua`.
+
+#### Surrender and Talk them down (modules/opponents/surrender/server.lua)
+`Config.RealSuspects.surrender` (`enabled` true; also needs `Config.LiveCrime.enabled`); live cases only. A surrender is
+a mark on the record (`rec.surrender = { at, coords, by, ended }`), never a state: cuff, detain and booking stay the
+proof's.
+- The suspect's command (`command`, `surrender`; registered the first time the feature is on, a new name needs a
+  restart; 2 per 3 s): refuses `livecrime.surrender.off`, `not_wanted`, `already`, `cannot` (down, in an instance),
+  `pending`; else the question.
+- Talk them down (`server:liveTalkDown`, 2 per 2 s): an active participant of an open live case, the nearest free
+  suspect (online, bucket 0, not down, not surrendered) within `talkRange` (15 m), one open question per suspect, the
+  same pair again after `talkCooldown` (30 s).
+- The question `client:liveSurrenderAsk { token, seconds = askSeconds (20, 5–60), talk }`, answered with
+  `server:liveSurrender(token, yes)` (3/s): no → `talk_refused`; yes in time, still a free suspect not down, bucket 0, an
+  officer of the case within `surrenderRange` (50 m) → `rec.surrender`, `surrendered`, everyone told (labels only).
+- A surrender ends when he was cuffed after it and is free again, a weapon was seen after it, he moved more than
+  `breakRange` (10 m), or after `holdSeconds` (120). An officer within `talkRange` of a free suspect gets a hint once.
+- `Opp.peaceful(run, cid) -> bool, by`: a surrender not ended, cuffed after it, not detained by a leave, no officer hit
+  since. Tests `tests/live_surrender_spec.lua`.
 
 ### 5.47 CP.Volunteers — modules/volunteers (server, client; stub)
 
-Options B and C, volunteer suspects (Config.Volunteers, `enabled` shipped false). A player who is not on police duty
-volunteers with the command in Config.Volunteers.command for an hour and only ever sees ox_lib notifications, dialogs
-and a context menu (no tablet). A mode per mission type or mission ('npc', 'players_when_available', 'players_only')
-decides whether a mission whose block offers a volunteer slot (§7.3) is played against a volunteer who said yes to the
-pop-up instead of the NPC; 'players_only' is offered only while a volunteer who fits is online. Every mode ships
-'npc', so nothing changes even with `enabled = true`.
+Volunteer suspects (`Config.Volunteers`, `enabled` shipped false). A player not on police duty volunteers for an hour
+with `Config.Volunteers.command` and only sees ox_lib notifications, dialogs and a context menu (no tablet). A mode per
+mission type or mission (`'npc'`, `'players_when_available'`, `'players_only'`) decides whether a mission whose block
+offers a volunteer slot (§7.3) is played against a volunteer who said yes instead of the NPC. Every mode ships `'npc'`,
+so nothing changes even with `enabled = true`. The owner's checklist and the rules to paste are README 9.16; the SOP
+has the same rules.
 
-**The opt-in (modules/volunteers).** Memory only (matching: below). Server:
-- `check(src) -> ok, reason, info, untilAt`: `enabled`, a loaded character, `CP.Opponents.eligible(src)` (no intake
-  test: where he stands counts only at a match), an admin's Exclude (`Opp.excluded`), and the strikes block of his
-  player key (the license, else `cid:<citizenid>`, so another character of the same player is blocked too).
-- `join(src, roles)` (roles: `{ runner|driver|fugitive = true }`, the §7.3 slot roles; at least one) puts him on the
-  list for `windowMinutes` (60) and starts his AFK samples (`Opp.sampleCrew('volunteers', { cid })`); `renew(src)`
-  (the same checks, a fresh window from now), `setRoles(src, roles)`, `stop(src)`, `list()` (copies, oldest first:
-  cid, src, name, roles, since, untilAt), `isListed(cid)`, `strikes(cid)`, `endListing(cid, why)`.
-- Ends (`why`, each but `left` told to the player as `volunteer.ended.<why>`): stopped, expired, on_duty (the qbx duty
-  and job listeners, and the sweep), excluded, strikes, disabled (`settings:changed` with enabled off), left (drop or
-  character unload). A 15 s sweep runs only while the list holds someone (expiry, enabled, exclusion, block, duty).
-- `strike(cid, why) -> count, blockedUntil|nil`: later steps give one for a yes followed by a no-show or walking away;
-  `strikes` (3) within `strikeHours` (24) block the player for `blockHours` (24) and end his listing. Strikes and
-  blocks are saved while volunteers are on and `Config.Volunteers.saveStrikes` is on (shipped true): each
-  strike is a `cp_pvp_pairs` row of kind `vol_strike` and a block one of kind `vol_block` (citizenid in
-  suspect_citizenid, the player key in suspect_license, until_at; a block removes his `vol_strike` rows), written in a
-  thread when it happens, read back once at the start, and pruned at the start and daily (strikes past `strikeHours`,
-  blocks that ran out). The list itself stays memory only: after a restart a player volunteers again.
-- Net: `server:volunteer` (action, data; rate 4 per 2 s): `open` answers `client:volunteerMenu` (`{ active = false,
-  minutes, roles, strikes, maxStrikes }` for the start, `{ active = true, minutesLeft, roles, strikes, maxStrikes }`
-  while listed) or a refusal; `join`, `renew`, `roles` (`data.roles`) and `stop`. Every answer is
-  `client:volunteerNote` (kind, locale key, vars): `volunteer.refused.<reason>` (`.other` for an unknown one).
-- Client: the command (`command`, restart to rename) is registered once `enabled` is on (at the start or on
-  `settings:changed`); with enabled off later it answers `volunteer.refused.off`. The start is an ox_lib alert (the
-  rules, "I agree") then an input dialog with one checkbox per role; the listed menu is an ox_lib context menu (time
-  left with roles and strikes, Renew, Change the suspects you play, Stop with a confirm). Notes are `lib.notify`.
-  Specs: tests/volunteers_spec.lua, tests/volunteers_client_spec.lua.
+#### The opt-in (modules/volunteers)
+- `check(src) -> ok, reason, info, untilAt`: `enabled`, a loaded character, `CP.Opponents.eligible(src)`, an admin's
+  Exclude, and the strike block of his player key (the license, else `cid:<citizenid>`, so other characters are blocked
+  too).
+- `join(src, roles)` (roles `{ runner|driver|fugitive = true }`, at least one) lists him for `windowMinutes` (60) and
+  starts his AFK samples; `renew(src)`, `setRoles(src, roles)`, `stop(src)`, `list()` (oldest first), `isListed(cid)`,
+  `strikes(cid)`, `endListing(cid, why)`. Ends (told as `volunteer.ended.<why>`, except `left`): stopped, expired,
+  on_duty, excluded, strikes, disabled, left. A 15 s sweep runs only while the list holds someone. The list is memory
+  only (after a restart a player volunteers again).
+- `strike(cid, why) -> count, blockedUntil|nil`: a yes followed by a no-show or walking away; `strikes` (3) within
+  `strikeHours` (24) block for `blockHours` (24). With `Config.Volunteers.saveStrikes` (shipped true) strikes and
+  blocks are `cp_pvp_pairs` rows of kind `vol_strike` / `vol_block`, read at start and pruned at start and daily.
+  `clearStrikes(cid)` (the staff tool, §5.45).
+- Net: `server:volunteer` (action, data; 4 per 2 s): `open` → `client:volunteerMenu` (`{ active, minutes|minutesLeft,
+  roles, strikes, maxStrikes, case? }`), `join`, `renew`, `roles`, `stop`, `answer`, `cancel`; every answer is
+  `client:volunteerNote` (kind, key, vars), refusals `volunteer.refused.<reason>`.
+- Client: the command is registered once `enabled` is on (restart to rename; later off answers
+  `volunteer.refused.off`). Start: an ox_lib alert with the rules, then one checkbox per role; listed: a context menu
+  (time left, Renew, Change roles, Stop with a confirm). Tests `tests/volunteers_spec.lua`,
+  `tests/volunteers_client_spec.lua`.
 
-**Modes, slots and who is free (modules/volunteers + CP.Draw).** Memory only; the asking is below.
-- Config: `modes` (by mission type, shipped `'npc'` for each of the four) and `missionModes` (by mission id, beats its
-  type; shipped `{}`), Settings `Volunteers.modes` / `Volunteers.missionModes` (open maps of the three modes; a
-  `modes` key must be a Config.MissionTypes key, `err.setting_volunteer_type`).
-- `modeOf(def)`: `'npc'` while `enabled` is off, for the Weekly Boss and for a value that is no mode. `slotOf(def,
-  index)`: the first objective whose block's `volunteerSlot(obj, def, location)` answers `{ role, ... }` with a §5.47
-  role -> a copy with `obj` (the objective's number), cached per definition (weak keys) and location; an error is
-  logged and counts as no slot. `slotRoles(def) -> roles set, set of indices with no slot`; `canTake(def)`.
-- `available(roles) -> { cid... }`: listed volunteers who play one of `roles` (nil = any) and are not held, oldest
-  first. `reserve(holder, def, index) -> cid|nil` holds the first one who fits that location's slot and still passes
-  `check`; `rekey(old, new)`, `release(holder)`, `reservedFor(holder)`. A hold ends with `run:ended` (the run id), when
-  that volunteer's listing ends (any `why`), and at resource stop. A held volunteer is never offered to anyone else.
-- `drawGate(def, realOk) -> true | false, why`: only `'players_only'` closes a mission: `real_suspect` (the unit did not
-  tick "Real suspect OK"), `no_slot`, `no_volunteer`. `cardInfo(list) -> nil | { required, available }` for a card's
-  pool: nil unless a mission of it has a mode other than `'npc'` and a slot; required = every mission is
-  `'players_only'`; available = free volunteers who fit any of those slots.
-- CP.Draw: `Draw.pool(type, members, { realSuspect })` drops a mission `drawGate` closes; with none left and no
-  cooldown the reason is `board.locked_real_suspect` or `board.locked_no_volunteer` (Draw.draw: `err.real_suspect_needed`
-  / `err.volunteer_none`). Draw.draw picks a `'players_only'` mission only at a location with a slot (the indices with
-  none join `exclude`). The board card's pool is read with `realSuspect = true` and carries `realSuspect =
-  cardInfo(list)`; `server:acceptType` takes `payload.realSuspect == true` (anything else is no) into the accept and
-  the twists' check. A mission call claim and a pushed mission carry no tick: the claim's draw leaves
-  `'players_only'` missions out and `Draw.checkMission` refuses one (`err.mc_push_volunteer`). FinishAccept, after the
-  draw: with the tick and a mode other than `'npc'` at a location with a slot, `CP.Runs.create` gets `volunteer = {
-  mode, role, obj }` (`run.volunteer`, never a citizenid; not for live, boss or test runs); `'players_only'` also
-  holds a volunteer under the pending token (none: `err.volunteer_none`), moved to the run id after the create, or let
-  go when the create fails. `'players_when_available'` holds nobody (the matching asks whoever is free, else the NPC).
-- Officer tablet (MissionBoard.tsx): a red "Real suspect" badge on such a card; its accept dialog (always opened, even
-  with Accept in one click) has a "Real suspect OK" toggle that starts off, with "required" and the free count.
-- Start-up check: `CP.ConfigHealth.register('volunteers')` (Permissions -> Config health; the console on the first run):
-  off -> one ok line; on -> warn for a key that is no type or mission, a value that is no mode, and a non-npc mode
-  none of whose missions has a slot (`no_slot`: plays the NPC; `no_slot_only`: never offered); the ok line counts the
-  missions that may play a volunteer. Spec: tests/volunteer_modes_spec.lua.
+#### Modes, slots and who is free
+- `modes` (per type, shipped `'npc'` for each) and `missionModes` (per mission, beats its type, `{}`), Settings
+  `Volunteers.modes` / `missionModes` (a `modes` key must be a type, `err.setting_volunteer_type`).
+- `modeOf(def)` (`'npc'` while off, for the boss and for no mode), `slotOf(def, index)` (the first objective whose
+  block's `volunteerSlot(obj, def, location)` answers `{ role, ... }`; cached; an error is no slot), `slotRoles(def)`,
+  `canTake(def)`.
+- `available(roles)` (listed, not held, oldest first), `reserve(holder, def, index)`, `rekey(old, new)`,
+  `release(holder)`, `reservedFor(holder)`. A hold ends with `run:ended`, the volunteer's listing, or resource stop; a
+  held volunteer is never offered to anyone else.
+- `drawGate(def, realOk)`: only `'players_only'` closes a mission (`real_suspect`, `no_slot`, `no_volunteer`);
+  `cardInfo(list) -> nil | { required, available }`.
+- CP.Draw: `pool(type, members, { realSuspect })` drops missions `drawGate` closes (board reasons
+  `board.locked_real_suspect` / `board.locked_no_volunteer`; draw `err.real_suspect_needed` / `err.volunteer_none`); a
+  `'players_only'` mission is drawn only at a location with a slot. The card carries `realSuspect = cardInfo(list)`;
+  `server:acceptType` takes `payload.realSuspect == true`. Claims and pushed missions carry no tick (`'players_only'`
+  left out; `Draw.checkMission` refuses one, `err.mc_push_volunteer`). After the draw, with the tick and a non-npc mode
+  at a slot location, `CP.Runs.create` gets `volunteer = { mode, role, obj }` (never a citizenid; not for live, boss or
+  test runs); `'players_only'` also holds a volunteer (none: `err.volunteer_none`).
+- Mission Board: a red "Real suspect" badge; its accept dialog (always opened) has a "Real suspect OK" toggle (off),
+  with "required" and the free count.
+- Config health `volunteers`: warns for unknown keys, non-modes, and a non-npc mode with no slot (`no_slot` plays the
+  NPC, `no_slot_only` never offered). Tests `tests/volunteer_modes_spec.lua`.
 
-**Matching, consent, travel and engagement (modules/volunteers/match/server.lua).** Memory only; runs only for a
-run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc'`), never for live, boss or test runs.
-- Start: the `run:created` hook, one frame later (`SetTimeout(0)`: FinishAccept moves a `'players_only'` hold to the
-  run id after the create) -> `V.match(run)`: the slot of the run's location (`V.slotOf`: role, `meet`, else the
-  location's start), `meetRadius`. One 2 s thread (exit token) runs only while a match is asking or has a volunteer.
-- Asking: the candidates are the run's held volunteer first, then `V.available({ [role] = true })` (oldest first),
-  each asked at most once, at most `askTries` (3) per run. A candidate must pass `V.check`, `CP.Opponents.eligible(src,
-  { intake = true })` (not down, cuffed, jailed or in a no-start zone) and `Opp.selfBlock(officer, { cid })` for every
-  active participant (none is his player). He is held for the run (`V.hold(runId, cid)`) and gets
-  `client:volunteerAsk` (token, `{ role, seconds = askSeconds, km (server coords to the meet point), travelMinutes }`):
-  an ox_lib alert (Yes, I play it / No) that closes itself after `seconds`; the server closes it with
-  `client:volunteerAskClose` (token) when it times out or the run ends. A no, no answer (the tick after
-  `askSeconds` + 2 s) or a listing that ended asks the next one; neither is ever a strike.
-- Answer checks (`server:volunteer` action `answer`, `{ token, yes }`, same rate limit): the token of his own open
-  question, from the server id that was asked, at most 2 s after the deadline (else `volunteer.ask.too_late`); a yes
-  runs every ask check again in a thread (selfBlock may read the database) and otherwise asks the next one
+#### Matching, consent, travel and engagement (modules/volunteers/match/server.lua)
+Memory only; only for runs with `run.volunteer`.
+- Start: `run:created` one frame later → `V.match(run)` (the slot's role, `meet` (else the start), `meetRadius`). One
+  2 s thread while a match asks or has a volunteer.
+- Asking: the held volunteer first, then `available({ [role] = true })`, each once, at most `askTries` (3). A candidate
+  must pass `V.check`, `eligible(src, { intake = true })`, `Opp.selfBlock` for every participant and `V.capsOk(run, cid)`
+  (`suspect_used`, `officer_suspended`, `officer_recent_suspect`, `pair_blocked`, `pair_cooldown`). He gets
+  `client:volunteerAsk (token, { role, seconds = askSeconds, km, travelMinutes })` (closed with
+  `client:volunteerAskClose`). A no, no answer or an ended listing asks the next one — never a strike. The answer must
+  be his own open token, from the asked server id, at most 2 s late (`volunteer.ask.too_late`); a yes re-runs every check
   (`volunteer.ask.not_now`).
-- Yes: `Opp.open(run, { kind = 'volunteer', index = obj, members = { cid }, meet })`, `run.realSuspect =
-  'volunteer'` (from then on CP.Calls, CP.Alerts, CP.Downed and CP.Route treat the run as a case with a real suspect)
-  and `CP.Alerts.releaseRun(run)`; timeline `volunteer_yes` (count = how many were asked); the officers' toast
-  `volunteer.officer.yes`; `client:volunteerCase` `{ phase = 'travel', role, meet, seconds = travelSeconds, radius }`
-  (his own map waypoint, removed in position or at the end). His listing does not expire while he plays (the sweep).
-- Travel: within `meetRadius` of the meet point (server coords) -> `in_position` (timeline, `volunteer.case.
-  in_position`); not there after `travelSeconds` -> no-show. First contact (`rec.contactAt`, an active participant
-  within contactRange) in any phase -> `engaged`: `CP.NpcCombat.dropFor(run, src, 'volunteer')` for every active
-  participant and every later joiner (`participant:joined`), unless `Config.RealSuspects.npcCombat` is true; timeline
-  `engaged`.
-- Dropping out (`Voided`): a no-show, his own **Cancel this case** (action `cancel`, also run by Stop volunteering
-  while he plays one; the volunteer menu sends `case = { phase, role }` while he plays), or his suspect `left` / `void`
-  in the case. His suspect is set `void` (why `volunteer_<why>`), timeline `no_show` / `volunteer_cancel`, the note
-  `volunteer.case.<why>`. Strikes (`V.strike`): a no-show, a leave, and a cancel later than `cancelGraceSeconds` (60)
-  after his yes or after the engagement.
-- Endings: nobody said yes -> `'players_when_available'` plays the NPC (phase `npc`, toast `volunteer.officer.npc`),
-  `'players_only'` ends. A volunteer who dropped out before the engagement -> the NPC while `onVoid = 'npc'` (shipped)
-  and the mode is not `'players_only'` (timeline `volunteer_npc`), else the run ends; after the engagement it always
-  ends. The end (toast `volunteer.officer.void_end`): `voidRun = 'cancelled'` (shipped) `CP.Runs.cancelRun(run,
-  'cancelled')` (Abandoned, no cooldown, penalty or pay); `'keep_earned'` `CP.Runs.endRun(run, 'completed',
-  'completed')` with `run.keepEarned = true` (CP.Scoring scores the lines only, no base points or end-of-run
-  lines, and CP.Cash pays no mission cash). `run.realSuspect` stays once a yes came.
-- Release (`run:ended`): an open question closes; a volunteer who played gets `volunteer.case.released` and
-  `client:volunteerCase { phase = 'over' }`; the hold goes.
-- Blocks: `ctx.volunteer()` (CP.Runs' ctx, `V.matchView(run, index)`): nil unless the objective is the run's volunteer
-  slot, else `{ role, mode, phase = 'asking'|'travel'|'in_position'|'engaged'|'npc'|'void', meet, label, real,
-  engaged }`: never a citizenid, server id or live position. flee_arrest's door mode reads it (§7.3).
-- Config.Volunteers keys: `askSeconds` (30, 10-120), `askTries` (3, 1-10), `travelSeconds` (300, 60-1800),
-  `meetRadius` (25, 5-200 m), `cancelGraceSeconds` (60, 0-600), `onVoid` ('npc' | 'end'), `voidRun` ('cancelled' |
-  'keep_earned'). Specs: tests/volunteer_match_spec.lua, tests/volunteers_client_spec.lua.
-- Config.Volunteers keys: `afkCatchVoids` (true: an AFK catch is a void, `Voided(m, 'afk')`, a strike) and
-  `doorAssociates` (false: flee_arrest's door spawns no associate while a volunteer may play, §7.3).
-- Config.Volunteers keys: `driverNpcCars` (false: a volunteer driver's pursuit spawns no NPC car; true: one
-  fewer) and `driverReportEvery` (30 s, Settings 0-300; 0 = no last-reported point), §7.3.
-- Config.Volunteers keys: `fugitiveNpcs` (false: no NPC fugitive while a volunteer hides; true: one fewer)
-  and `fugitiveOutSeconds` (30 s, Settings 0-300; 0 = no circle rule), §7.3. What a block may tell the volunteer who
-  plays (only in travel, in_position, engaged): `V.caseNote(run, kind, key, vars)`, `V.caseArea(run, area|nil)`
-  (`client:volunteerArea`) and `V.outOfBounds(run)` (`Voided(m, 'out_of_bounds')`, a strike).
+- Yes: `Opp.open(run, { kind = 'volunteer', index = obj, members = { cid }, meet })`, `run.realSuspect = 'volunteer'`
+  (CP.Calls, Alerts, Downed and Route now treat it as a real-suspect case), `CP.Alerts.releaseRun`; officers told;
+  officers whose `selfBlock` flags `rs_linked_accounts` are flagged (also later joiners). The volunteer gets
+  `client:volunteerCase { phase = 'travel', role, meet, seconds = travelSeconds, radius }` (his own waypoint); his
+  listing does not expire while he plays.
+- Travel: within `meetRadius` → `in_position`; late after `travelSeconds` → no-show. First contact → `engaged`:
+  `CP.NpcCombat.dropFor(run, src, 'volunteer')` for every participant and later joiner unless
+  `Config.RealSuspects.npcCombat`.
+- Dropping out: a no-show, his own Cancel this case (also Stop volunteering while playing), his suspect `left`/`void`,
+  an AFK catch with `afkCatchVoids` (true), or `V.outOfBounds(run)`: the suspect goes `void`, a staff note
+  `rs_volunteer_dropout` (a leave already has `rs_combat_log`). Strikes: no-show, leave, AFK, out of bounds, and a
+  cancel later than `cancelGraceSeconds` (60) after the yes or the engagement.
+- Endings: nobody said yes → `'players_when_available'` plays the NPC, `'players_only'` ends. A dropout before the
+  engagement → the NPC while `onVoid = 'npc'` (shipped) and not `'players_only'`, else the end; after the engagement
+  always the end: `voidRun = 'cancelled'` (shipped; `cancelRun`, no cooldown, penalty or pay) or `'keep_earned'`
+  (`endRun` completed with `run.keepEarned`: lines only, no mission cash).
+- Release (`run:ended`): an open question closes, the player gets `phase = 'over'`, the hold goes; `Opp.close`, one
+  pair row per participant (kind `volunteer`; `gone` while no officer reached him), `Opp.checkPairFlags`.
+- Blocks read `ctx.volunteer()` (`V.matchView`: `{ role, mode, phase = asking|travel|in_position|engaged|npc|void, meet,
+  label, real, engaged }`, never an id or a live position) and may tell the volunteer `V.caseNote(run, kind, key,
+  vars)` and `V.caseArea(run, area|nil)` (`client:volunteerArea`) in travel, in_position or engaged.
+- Keys: `askSeconds` (30, 10–120), `askTries` (3, 1–10), `travelSeconds` (300, 60–1800), `meetRadius` (25, 5–200),
+  `cancelGraceSeconds` (60, 0–600), `onVoid`, `voidRun`, `afkCatchVoids`, `doorAssociates` (false), `driverNpcCars`
+  (false), `driverReportEvery` (30, 0–300), `fugitiveNpcs` (false), `fugitiveOutSeconds` (30, 0–300) (§7.3). Tests
+  `tests/volunteer_match_spec.lua`.
 
-**Gates (modules/volunteers/match/server.lua; critic 2 #9, #11, #12).** Before any built-in block offers a slot:
-- Caps: `V.capsOk(run, cid) -> true | false, why`, part of every ask check (`Fits`): `suspect_used` (his
-  `Opp.suspectDayCount` reached `maxCatchesPerSuspectDay`), and per active participant's citizenid
-  `officer_suspended` (`Opp.suspended`), `officer_recent_suspect` (`Opp.lastSuspectAt` within jobHopMinutes),
-  `pair_blocked` / `pair_cooldown` (`Opp.pairOk`). Memory only. A refusal asks the next one (never a strike).
-- Officer-conduct flags: at the yes, every active officer whose `Opp.selfBlock` answers flags (`rs_linked_accounts`:
-  only an ip or token shared) gets `CP.AntiCheat.flag(run, officerSrc, reason, 'suspect <label>, shared <kinds>')`;
-  an officer who joins while a volunteer plays (`participant:joined`, in a thread) is checked the same way.
-- Staff note: a no-show or his own cancel is `Opp.note(run, 'rs_volunteer_dropout', '<label>: <why>', cid)` (a leave
-  already has `rs_combat_log`); never a flag.
-- Pair ledger: at `run:ended` of a run with a yes, `Opp.close(run)` and one `Opp.recordPairs` row per participant
-  with a citizenid and the volunteer: kind `volunteer`, scored = the run completed and he was detained or booked for
-  a share above 0, outcome `gone` while no officer reached him (no `engagedAt` / `contactAt`), the suspect's license
-  from his case record; then `Opp.checkPairFlags(run)`.
-- What a volunteer case (`V.isCase(run)`: `run.realSuspect == 'volunteer'`, from the yes on) takes part in:
-  `V.counts(run, what)` for `typeOfTheDay`, `goals`, `challenge`, `cash` (Config.Volunteers.payCash) and `items`
-  (payRewards), each shipped false; any other run true. CP.Cash.compute sets B = 0 (cash 0), CP.Rewards rolls no
-  items, CP.Scoring gives no Type of the Day. The result breakdown carries `realSuspect = 'volunteer'`;
-  `V.rowFilter(what, alias)` adds `AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(<alias>breakdown, '$.realSuspect')), '')
-  <> 'volunteer'` to CP.Goals' progress and CP.Challenge's aggregates while that switch is off. `payCash` and
-  `payRewards` are plain Settings switches. `V.payVolunteer(m, run, state, reason)` (run:ended, after
-  `sendEnded`) asks CP.FeatureRewards (5.52) to pay the volunteer for a fair case. Specs: tests/volunteer_match_spec.lua,
-  tests/live_scoring_spec.lua, tests/boards_metrics_spec.lua.
-
-**Results for other scripts and staff (modules/volunteers/match/server.lua + CP.Opponents staff).** The volunteerEnded
-event and the volunteer cases in the staff callbacks, the twin of liveCrimeEnded:
-- `V.sendEnded(m, run, state, reason)` from the `run:ended` hook (after the pair rows), once per run that had a yes
-  (`m.endSent`), never for a test run, while `Config.Volunteers.endEvent ~= false` (shipped true; volunteer cases
-  exist only while `enabled`): `TriggerEvent('crimson-police:server:volunteerEnded', V.endPayload(...))` inside
-  pcall. Payload `{ citizenid, missionId, missionType, role, mode, outcome, dropout, engaged, result = state, reason,
-  officers, endedAt }`: outcome from `Opp.close` (an unknown one reads `got_away`), `dropout` = `m.why` when it is a
-  strike reason (no_show, cancelled, left, afk, out_of_bounds), `engaged` = an officer reached him. No server id, no
-  position. Crimson-Contracts is frozen and does not listen.
-- Staff: at the yes the case gets `case.volunteer = { role, mode }`; at `run:ended` it also keeps the last `phase`,
-  `why` and `engaged`. `V.staffView(runId, case)` answers `{ role, mode, phase, why, engaged }` (live from the match
-  while the run runs, else from `case.volunteer`); `Opp.staffCases` / `Opp.staffCase` add it as `volunteer` on a
-  volunteer case (pcall; nil for a live case). `V.staffList()`: the volunteers on the list (`citizenid, name, roles,
-  since, untilAt, strikes, playing` = the phase of the run asking him or that he plays; no server id).
-  `admin:getRsCases` carries it as `listed` (empty while `Config.Volunteers.enabled` is off).
-- Admin UI (RealSuspects.tsx): Cases filters `live` / `volunteer` (`filterCases`); a volunteer line's Kind names the
-  role; the drawer shows role, mode, phase (with why) and reached in place of "The crime"; a Volunteers tab
-  (`sortListed`: playing or asked first, then oldest) reads `listed` from the same request. Read-only: no new tool.
-  Specs: tests/volunteer_match_spec.lua, tests/opponents_staff_spec.lua, tests/realsuspects_config_spec.lua,
-  web/src/admin/components/realSuspects.walk.ts.
-
-**Docs and end-to-end checks.** What an owner, his players and his staff read, and one spec that runs both
-features through the whole real server side.
-- README 9.16 (Real suspects: live crimes and volunteers): 9.16.1 the owner checklist (Crimson-Contracts'
-  `ContractsConfig.LifecycleEvents`, `sources`, `types`, `maxLiveRuns`, the money switches, `excludeAdmins` /
-  `excludeAce`, the modes, Config health, the in-game checklist), 9.16.2 the rules to paste into a server's rules
-  (officers, suspects, staff), 9.16.3 what the server does for fairness (no points for hurting players:
-  `neutralisedShare`, the AFK share 0, `rs_unarmed_shot` / `rs_ran_over`; no live position: the last reported points;
-  consent and opt-out; the anti-farm caps; the staff timeline), 9.16.4 an Issue | Solution table. 8.1 lists
-  `/crimsonheat`, 10.1 says to keep both switches off until then. SPEC's SOP carries the same rules.
-- docs/IN_GAME_CHECKLIST.md has a check for each part of both features.
-- tests/realsuspects_e2e_spec.lua (files mode always, as shipped: H.useFiles): every modules/**/server.lua and
-  blocks/**/server.lua loaded, only the other resources and natives stubbed. As shipped a reported crime, the
-  volunteer command and the Mission Board change nothing; a live crime from Crimson-Contracts' events to the LIVE
-  card, the claim, the scene secured, a downed suspect cuffed for half a detain, a suspect who moves every second seen
-  by the officers only at the last reported points, End case, liveCrimeEnded, the run rows (points, no cash, one
-  live catch) and the staff timeline; a volunteer from `/crimsonheat` to the pop-up, the yes, in position, engaged,
-  the knock, the cuff that completes Warrant Service's first step, volunteerEnded, the staff timeline and Stop.
-  tests/realsuspects_docs_spec.lua keeps the README section, its config key paths, the checklist and the SOP in step.
-- tests/workflows_e2e_spec.lua (files mode always): the officer and supervisor workflows on the same real
-  server side with the switches on: an NPC mission from accept to the paid row and its item, a SAST + FIB unit run,
-  a mission call from a supervisor's create to the claim and the pay, a cooldown clear, a Mission control, Give points
-  with its feature money and item, a commendation, and review, void and dispute releasing held cash and items.
-- tests/live_fto_e2e_spec.lua (files mode always): a live crime from the LIVE call to the paid rows (claim,
-  a backup's join, detain, booking, a talk-down with its feature money and item, End case, the staff screen), field
-  training (pair, a counted run, sign-off, badge, trainer bonus, both payments), and `restart Crimson-Police` in the
-  middle of each (Restart(): onResourceStop, H.restart, every server file loaded again from the same saves folder):
-  an open case, its surrender and an unfinished run end with no row, pay or cooldown; the settings, closed cases,
-  payments and the training record stay.
-- tests/workflows_full_spec.lua (files mode always): every workflow the specs above leave out, with a
-  `restart Crimson-Police` and a player drop and reconnect in the middle; docs/WORKFLOWS.md is its table (workflow,
-  spec file, steps covered, result) over every end-to-end spec.
-- Smoother workflows: server:sup:reviewFlagged and server:sup:handleDispute answer with data.queue
-  (CP.Admin.reviewQueueFor, the view of sup:getReviewQueue, through CP.Admin.withReviewQueue) and
-  server:declineMissionCall with data.view (MC.list); the NUI applies it (shared/replyView.ts) and asks again only
-  when it is missing. Active Mission's tablet log relies on the immediate 'run' push of a new log point (no fixed wait).
-  Config.Tablet.supervisorRemember (shipped false) lets the supervisor dialogs open with the values last used
-  (supervisor/components/lastUsed.ts, page memory only). docs/WORKFLOWS.md is ordered by group (Officer, Supervisor,
-  Field training, Criminal, Admin, System) with a How it works paragraph per workflow.
-- Smoother workflows (the Criminal and Admin groups): server:admin:backupNow, server:admin:restoreBackup and
-  server:admin:deleteBackup answer with data.view (Sys.backupsView(), the view of admin:getBackups);
-  server:admin:storageCopy, server:admin:setStorageMode and server:admin:useStoreAgain with data.view
-  (Sys.storageView(), the view of admin:getStorage, which allows one read in 5 seconds). The System screen applies it
-  through shared/replyView.ts and asks again only when it is missing.
-- Replies that carry their screen's view, the rest: server:sup|admin:mcWithdraw, mcPage and mcCreate answer with
-  data.view (MC.supView, the view of sup:getMissionCalls); server:sup:forceRecall and server:sup:addRunTime with
-  data.view (CP.Admin.liveRunsFor, the view of sup:getLiveRuns, through CP.Admin.withLiveRuns);
-  server:sup:clearCooldowns with data.view (CP.LiveCtl.supCooldownsView, the view of sup:getOfficerCooldowns);
-  server:sup:commend, revokeCommendation, missionBan, liftMissionBan and awardPoints, sent with activityOf (the
-  officer's citizenid, from the department report's activity dialog), with data.activity (CP.Challenge.supActivity,
-  the view of sup:getOfficerActivity, through CP.Challenge.withActivity); server:admin:voidRun, restoreRun,
-  setVoidKind and flagRow, sent with views = { rowId, archived, citizenid, runs, officer }, with data.view (the run's
-  detail, admin:getRun), data.runs (admin:getOfficerRuns with the list's own filters) and data.officer
-  (CP.Admin.officerDetail, admin:getOfficer), through CP.Corrections.withViews; server:admin:resetAllSettings with
-  data.view (Settings.all()). Each screen applies it and asks again only when it is missing.
-- Config.Tablet.supervisorReviewLive (shipped false): CP.Admin.shareReviewQueue(src) runs after every decision of
-  server:sup:reviewFlagged, server:sup:handleDispute, server:admin:reviewFlagged and server:admin:handleDispute and
-  pushes 'reviewQueue' (that supervisor's own CP.Admin.reviewQueueFor) to every other supervisor of the decider's
-  department (an admin without one: every department) who asked sup:getReviewQueue in the last 75 s; leaving or
-  closing the tablet forgets him.
-- CP.Permissions.can with a department in ctx looks the officer up once (CP.Access.getOfficer) and passes it to
-  CP.Access.isSupervisor(src, officer) and CP.Permissions.granted(src, cap, officer).
+#### Scoring, results and staff
+- `V.isCase(run)` (`run.realSuspect == 'volunteer'`), `V.counts(run, what)` for typeOfTheDay, goals, challenge, cash
+  (`payCash`), items (`payRewards`), all shipped false: cash B = 0, no items, no Type of the Day. The breakdown carries
+  `realSuspect = 'volunteer'`; `V.rowFilter(what, alias)` keeps those rows out of goal and challenge sums while off.
+  `V.payVolunteer(m, run, state, reason)` asks CP.FeatureRewards (§5.52) to pay the volunteer for a fair case.
+- `V.sendEnded(m, run, state, reason)`, once per run with a yes, never for tests, while `Config.Volunteers.endEvent ~=
+  false`: `TriggerEvent('crimson-police:server:volunteerEnded', { citizenid, missionId, missionType, role, mode,
+  outcome, dropout, engaged, result = state, reason, officers, endedAt })` in pcall (no server id, no position).
+- Staff: the case keeps `case.volunteer = { role, mode, phase, why, engaged }`; `V.staffView(runId, case)` is added to
+  `Opp.staffCases` / `staffCase`; `V.staffList()` (listed volunteers with roles, strikes and `playing`, no server id)
+  is `admin:getRsCases.listed`. The Real suspects screen filters live/volunteer, shows the volunteer's part in the
+  drawer, and has a Volunteers tab. Tests `tests/opponents_staff_spec.lua`, `tests/realsuspects_config_spec.lua`.
+- End-to-end specs (files mode): `tests/realsuspects_e2e_spec.lua` (both features through the real server side, and
+  that the shipped config changes nothing), `tests/workflows_e2e_spec.lua`, `tests/live_fto_e2e_spec.lua` (with a
+  restart in the middle), `tests/workflows_full_spec.lua`; `docs/WORKFLOWS.md` is their table.
 
 ### 5.48 CP.Options — modules/options (S; officer options)
 
 Each character's own tablet choices (My options), saved sparse in `cp_officers.options` (JSON of only the keys that
-differ from the default; NULL = all defaults; migration 010). The rules are CP.OptionDefs (§2, shared/options.lua);
-no option is registered by this module: each feature registers its own keys.
-- `effective(citizenid, deptKey, raw) -> { key = value }`: every 'server' option: the default, then the saved value
-  while the option is allowed and the value still passes `check` (a list entry no longer offered is dropped). A saved
-  value of an option that is not allowed now is ignored, not deleted (allowing it again brings it back). `raw` = the
-  row's `options` (nil: read it; false: no row). `Config.OfficerOptions.enabled = false`: the defaults only.
-- `set(src, patch) -> true, { values } | false, errKey`: the officer from `CP.Access.getOfficer` (on duty, department);
-  an unknown or 'local' key `err.invalid_payload`, allow false or `enabled = false` `err.option_locked`, a bad value
-  `err.option_value`; writes the sparse JSON, then `CP.Tablet.push(src, 'options', { values })`.
-- `view(officer) -> { enabled, schema, values }` (schema: allowed options only: key, kind, values, default, bounds,
-  store, group, order), `config(deptKey) -> { enabled, allow, defaults, bounds }`, `decode(raw)`.
-- Net: callback `getOptions` (rate 4); action `server:options:set` (`{ key = value, ... }`, rate 4). The session
-  (`getSession`) carries `options` (the effective values, read in the same cp_officers SELECT as the profile) and
-  `config.officerOptions` for the officer's department. Settings checks `Config.OfficerOptions` allow, defaults and
-  bounds and a department's `officerOptions` with `checkConfig`.
-- Admin: `admin:getOfficerLook` also returns `options` (the saved sparse values as `{ key, value }` in
-  `CP.OptionDefs.keys()` order, unknown keys last); `server:admin:resetOfficerOptions` (modules/profile, perm
-  `officerRecords`, reason, audit `optionsReset`) sets `cp_officers.options` to NULL and, when the officer is online,
-  pushes `options` with the department defaults. `admin:getDepartmentSetup` carries `optionDefs` (each My options row
-  with the global allow, default and bounds), `optionsEnabled` and each department's `officerOptions`;
-  `server:admin:saveDepartment` takes `fields.officerOptions` (`{}` = back to the global options) as the setting
-  `Departments.<key>.officerOptions` (json, nullable, read live; part of an added department's record).
-- Client (modules/options/client.lua): `get(key)` (allow false or `enabled = false` -> the default; a
-  'local' option -> this PC's resource KVP `crimsonpolice:options`, one sparse JSON object; a 'server' option -> the
-  session's `options`, refreshed by the push `options`; a value that no longer passes `check` with the session bounds
-  -> the default), `setLocal(key, value) -> true, clean | false, errKey` (`err.invalid_payload` for an unknown or
-  'server' key, `err.option_locked`, `err.option_value`; numbers clamped to the session bounds), `localValues()`,
-  `refresh()`. CP.Access (client) keeps the session's `prefs`, `options` and `config.officerOptions`. §8.5 lists the
-  client actions, the NUI message and the hook. Web: `shared/options.ts` (`OptionsProvider` in App.tsx next to the
-  session context; `useOption(key)` = this PC's value, else the session's, else the department default).
-- Screen: Officer UI `options` (web/src/officer/screens/MyOptions.tsx, after `profile`, hidden while
-  `config.officerOptions.enabled` is false). One column: the Tablet look and privacy card (`getProfileEdit` and
-  `server:profile:set` for appearance, accent, tablet size and call alerts; `getProfile` and `server:setHideName` for
-  hide my name), one card per `schema` group (rows by kind; a `server` row saves `server:options:set { [key]: value }`
-  500 ms after the last change, a `local` row the client action `setLocalOption`; an inline Saved; Back to default
-  per group) and My keys (client action `getKeyLabels`, §8.5). Edit profile's Look tab: More options ->
-  `navigate('options')`. Browser mock: web/src/mocks/options.mock.ts (`?options=locked`: officer options off).
-- Mission HUD options (shared/options_hud.lua, group `hud`, all `local`): `hudSide` ('right' | 'left';
-  `HudColumn` class `is-left`: left edge, transform origin left; toasts stay top-right), `hudScale` (number 0.5-2,
-  bounded by `Config.OfficerOptions.bounds.hudScale`, shipped 0.8-1.3; the column scale = `useHudScale()` x
-  `hudScale`, still fitted to the screen height), `hudCompact` (bool; `Hud` lists only the current objective, else
-  the first not done, else the last, with the done/total count and the timer) and `reduceMotion` (bool; `MotionPref`
-  in App.tsx sets the body class `cp-reduce-motion`, which drops the HUD and result card slide-in, the off-route
-  flash and the toast slide-in). Shipped allowed, defaults right / 1.0 / false / false (the HUD as before). Mock:
-  `?hud=progress&hudSide=left&hudCompact=1` (also `hudScale=1.2`, `reduceMotion=1`).
-- Easier to read (shared/options_look.lua, group `look`, both `server`): `hudLook` (bool; App.tsx
-  `AmbientLook` writes `applyAppearance(document.documentElement, mergeAppearance(theme, appearance, accent))` with
-  the officer's prefs while it is on, else the plain theme; the open Admin UI keeps its theme) and `textSize`
-  ('normal' | 'large'; `textScaleOf` = 1 or 1.15 is `--cp-fs-scale` on `.cp-tablet` (TabletFrame, officer and
-  supervisor only) and `.cp-hud-column`; styles/base.css declares the `--cp-fs-*` sizes again on both, and the fixed
-  sizes of hud.css and the tablet are `calc(Npx * var(--cp-fs-scale, 1))`). The client's `theme` message carries
-  `prefs` { appearance, accent } and `options` { hudLook, textSize } (modules/tablet/client.lua `AmbientLook`) and is
-  sent again on the hook `options:changed` for those two keys, so the HUD has them before the first open; the NUI
-  uses the theme message's values until a newer officer or supervisor session arrives (`OptionsProvider ambient`).
-  Shipped allowed, defaults false / 'normal'. Mock: `?hud=progress&look=colourblind&hudLook=1&textSize=large`.
-- Pop-ups (shared/options_popups.lua, group `popups`, all `local`): `toastTime` ('short' | 'normal' |
-  'long'; the toast time table 3/5 s, 5/7 s or 8/12 s for info and success / warning and error, in
-  web/src/shared/toast.ts `TOAST_MS` and modules/tablet/client.lua `TOAST_MS`; a Lua toast without a duration gets
-  it from the client's table, a UI toast from `toastMs()`, which App.tsx `ToastTimePref` keeps on the option; an
-  explicit duration, such as the ready check's, is kept), `resultTime` (integer seconds 5-120, bounded by
-  `Config.OfficerOptions.bounds.resultTime`, shipped 8-60, default 25; `ResultScreen` closes after it and its timer
-  bar runs that long) and `quietRun` (bool). The server `CP.Tablet.notify(src, kind, key, vars, opts)` forwards
-  `opts.channel = 'social'`; units (the `unit.invite*` toasts), profile (commendations, reviews, admin changes) and
-  rewards send it. The client `CP.Tablet.notify` marks a social info or success toast `bellOnly` while quietRun is
-  on and `CP.Runs.current()` is set: App.tsx `addToast` skips it and the header bell (layouts/NotificationBell.tsx)
-  still lists it. Any other channel (route, custody, run, warnings, errors) always shows. Shipped allowed, defaults
-  'normal' / 25 / false (as before). Mock: `?result=parity&resultTime=10` (also `toastTime=short|long`).
-- Key hints (shared/options_popups.lua `keyHints`, local bool, shipped allowed and on: it only adds
-  text). `CP.Options.keyHint(cmd)` (modules/options/client.lua) is the text label of the key bound to a key
-  mapping (`CP.Tablet.keyLabel`, the `t_` instructional button) or nil (option off, unbound, a mouse or pad
-  button). modules/missioncalls/client.lua appends `mc.toast.dispatch_key` to the new-call toast; the client
-  action `getKeyHints` answers `{ keys = { tablet?, dispatch?, ready?, contact? } }` with the named keys only, read
-  by `useKeyHint(name)` (web/src/shared/keyHints.ts) in ReadyCheckBanner.tsx (`unit.ui.ready_key`, while the check
-  waits for the officer) and hud/ContactCard.tsx (`custody.hud.contact_key`). Mock: ready K, Dispatch F6.
-- Sounds (shared/options_sounds.lua, group `sounds`, all `local` bools): `soundCalls`, `soundUnit`,
-  `soundCues`. `CP.Options.sound(group, name, set, p3)` (modules/options/client.lua) plays `PlaySoundFrontend` only
-  while the group's option is on (group 'calls' | 'unit' | 'cues'); modules/missioncalls (calls), modules/units
-  (invite and ready check) and the blocks checkpoint_route, skill_check and interact_points (cues) call it. The
-  toasts and HUD lines are not affected; the Builder's own sound is not grouped. Shipped allowed, all true.
-- Mission Board (shared/options_board.lua, group `board`, all `server`): `favouriteTypes` and `hiddenTypes`
-  (lists; values = the Config.MissionTypes keys in the board's points order, a function asked at every call, so a new
-  type is offered at once and a removed one dropped from a saved list) and `skipAcceptConfirm` (bool). A def may carry
-  `guard(clean) -> nil | errKey` (`CP.OptionDefs.refused`): `hiddenTypes` refuses a list that hides every type
-  (`err.option_hide_all`, in `CP.Options.set` and in `checkConfig` for a config default). The NUI only: MissionBoard.tsx
-  runs `arrangeTypeCards` (officer/screens/boardOrder.ts: favourites first in the server order, then the rest; hidden
-  types folded under "Hidden types (n)"; a favourite is never folded; with every type hidden the first card stays). The
-  Weekly Boss card and the Cross-Department card are never reordered or folded. `skipAcceptConfirm`: a type card's
-  Accept sends `server:acceptType` at once (no twists; a Twists button opens the old dialog), the dialog's lines
-  (random draw, cooldown, route, the unit note) show as a footnote under the cards; the Weekly Boss still asks.
-  `server:acceptType` and the draw are unchanged. Shipped allowed, defaults `{}`, `{}`, false. Walk:
-  officer/screens/boardOrder.walk.ts. Mock: `?fav=tactical&hide=training&oneClick=1`.
-- My usual twists (shared/options_board.lua, group `board`, `server`): `usualTwists` (list; values = the
-  `CP.Twists.ORDER` keys enabled in Config.Events.twists, asked at every call, so a twist switched off is dropped from
-  a saved list). The NUI only: officer/components/twistTicks.ts `tickedTwists(offered, usual)` gives the keys the
-  accept dialog (MissionBoard.tsx, Dispatch.tsx claim) starts with: the officer's usual twists that the card offers
-  (the offer already holds only the department's twists), in the offered order, when he picked any; else
-  the department's `ticked` ones; else none. The usual list is read through a ref, so an options push never resets a
-  dialog already open. `server:acceptType` / `server:claimMissionCall` and `CP.Events.checkTwists` are unchanged.
-  Shipped allowed, default `{}`. Walk: officer/components/usualTwists.walk.ts. Mock: `?usual=time_crunch`.
-- Dispatch and opening (shared/options_dispatch.lua, groups `dispatch` and `opening`): `skipClaimConfirm`
-  (bool, server; Dispatch.tsx `claimNow` sends `server:claimMissionCall` at once with no twists, a Twists button opens
-  the dialog, the dialog's lines are the footnote `mc.oneclick.note`; the claim window is unchanged), `callAlerts`
-  ('all' | 'favourites', server; modules/missioncalls/server.lua `AlertsOf` caches calls_muted and the favourite set
-  together for MUTE_CACHE_S, `CP.Options.set` clears it through `_forgetMuted`; `Toast` skips `client:missionCall`
-  for a type outside the set, Dispatch lists every call; a paged call still reaches the paged unit),
-  `dispatchKeyAfterCall` (bool, server; modules/tablet/client.lua `ScreenAfterCall`: `ToggleOfficer` opens with
-  screen 'dispatch' while `CP.MissionCalls.lastCueAt()` is under DISPATCH_AFTER_CALL_MS = 20000), `openOn` ('last' |
-  'home' | 'active_on_run', server; the session's `opening` { onRun, readyCheck } from modules/tablet/server.lua
-  `Opening` (CP.Runs.getBySrc, CP.Units.readyCheckOf with the officer's answer missing); App.tsx's 'open' handler uses
-  `openScreenFor` (web/src/shared/openOn.ts) when Lua names no screen), `rememberFilters` (bool, local) and `filters`
-  (list, local, `hidden = true`: kept like any option but not in `CP.Options.view`'s schema; values
-  'dispatch.filter:*', 'leaderboard.period|filter|department|metric:*' from the config, asked at every call;
-  web/src/shared/filters.ts `useRememberedFilter` in Dispatch.tsx and Leaderboard.tsx). Shipped allowed, defaults
-  false, 'all', false, 'last', false. Walk: shared/openOn.walk.ts. Mock: `?oneClickClaim=1`,
-  `?openOn=active_on_run` (with the dev panel's run toggle or `?readyCheck=1`), `?rememberFilters=1`.
-- During a mission (shared/options_run.lua, group `run`): `abandonConfirm` (bool, server, default true;
-  ActiveMission.tsx `pressAbandon` runs `abandonPress(confirm, armed)` from officer/screens/abandonPress.ts: 'dialog'
-  as before, else 'arm' (the button reads `run.abandon.again` for ABANDON_ARM_MS = 3000) then 'abandon', which
-  sends `server:abandon` unchanged), `skipRecalcConfirm` (bool, server; the route card's Recalculate calls
-  `recalcRoute` at once, Config.Route.maxRecalcs unchanged) and `distanceUnits` ('metric' | 'imperial', local;
-  `formatDistance(m, units)` in web/src/shared/format.ts, `useFormatDistance()` in shared/options.ts, used by
-  hud/Hud.tsx, layouts/RunBar.tsx, ActiveMission.tsx, ContactPanel.tsx and Dispatch.tsx; the Builder stays metric).
-  NUI only, no server change. Shipped allowed, defaults true, false, 'metric'. Walk:
-  officer/screens/abandonPress.walk.ts. Mock: `?abandonConfirm=0&oneClickRecalc=1&units=imperial` (with
-  `?hud=offroute`: the route line in miles).
-- Unit (shared/options_unit.lua, group `unit`): `autoReady` (bool, server, default false, shipped locked:
-  `Config.OfficerOptions.allow.autoReady = false`). Client: CP.Options.activeWithin(ms) (modules/options/client.lua: a
-  watcher polls a few game controls every 250 ms only while the option is on) and CP.Units.autoReadyNow() (option on,
-  no pause menu, input within 60 s) send `server:unitReady { accepted = true, auto = true }` on client:readyCheck.
-  Server: Units.ready(src, accepted, auto) counts it only when AutoCounts passes (CP.OptionDefs.resolve allows it for
-  the department, CP.Options.effective has it on, the ped is within Config.OfficerOptions.autoReadyRange, clamped 10 to
-  1000, of the leader's, server-side; a check started with extra.crossDepartment never does), else
-  'err.unit_ready_auto' and the member still answers. The answer is stored as 'auto': CheckView.autoForMe keeps the
-  banner's Not ready button and a manual Not ready still cancels the check.
+differ from the default; NULL = defaults; migration 010). The rules are CP.OptionDefs (§2, shared/options.lua); each
+feature registers its own keys in a `shared/options_*.lua` file.
+- `effective(citizenid, deptKey, raw)` — every `server` option: the default, then the saved value while the option is
+  allowed and still passes `check` (a saved value of a disallowed option is ignored, not deleted).
+  `Config.OfficerOptions.enabled = false`: defaults only.
+- `set(src, patch)` — the officer from `getOfficer`; unknown or `local` key `err.invalid_payload`, not allowed
+  `err.option_locked`, bad value `err.option_value`, a def's `guard` (`CP.OptionDefs.refused`); writes the sparse JSON,
+  then push `options { values }` and hook `options:changed`.
+- `view(officer) -> { enabled, schema, values }` (allowed options only; `hidden` ones left out), `config(deptKey)`,
+  `decode(raw)`.
+- Net: callback `getOptions`, action `server:options:set { key = value }` (both 4/s). The session carries `options` and
+  `config.officerOptions`. Settings checks `Config.OfficerOptions` and each department's `officerOptions` with
+  `checkConfig`.
+- Admin: `admin:getOfficerLook` returns the saved `options`; `server:admin:resetOfficerOptions` (modules/profile,
+  `officerRecords`, reason, audit `optionsReset`) sets them NULL; `admin:getDepartmentSetup` carries `optionDefs`,
+  `optionsEnabled` and each department's `officerOptions`; `server:admin:saveDepartment` takes `fields.officerOptions`
+  (`{}` = the global options) as `Departments.<key>.officerOptions`.
+- Client (modules/options/client.lua): `get(key)` (not allowed → default; `local` → this PC's KVP
+  `crimsonpolice:options`; `server` → the session's), `setLocal(key, value)`, `localValues()`, `refresh()`,
+  `keyHint(cmd)`, `sound(group, name, set, p3)`, `activeWithin(ms)`. §8.5 lists the client actions, the NUI message and
+  the hook. Web: `shared/options.ts` (`OptionsProvider`, `useOption(key)` = this PC's value, else the session's, else
+  the department default).
+- Screen: Officer UI `options` (`officer/screens/MyOptions.tsx`, hidden while disabled): the Tablet look and privacy
+  card, one card per group (a `server` row saves 500 ms after the last change, a `local` row through `setLocalOption`;
+  Back to default per group) and My keys (`getKeyLabels`). Mock `mocks/options.mock.ts` (`?options=locked`).
+
+| Option | Store | Default | Effect |
+|---|---|---|---|
+| `hudSide` | local | right | the HUD column on the left (`is-left`); toasts stay top-right |
+| `hudScale` | local | 1.0 (bounds 0.8–1.3) | × the HUD column scale, still fitted to the screen |
+| `hudCompact` | local | false | only the current objective, with done/total and the timer |
+| `reduceMotion` | local | false | body class `cp-reduce-motion` drops slide-ins and the off-route flash |
+| `hudLook` | server | false | the HUD uses the officer's appearance and accent (`AmbientLook`) |
+| `textSize` | server | normal | `large` = `--cp-fs-scale` 1.15 on the tablet and HUD; the `theme` message carries `prefs` and these two options, re-sent on `options:changed`, so the HUD has them before the first open |
+| `toastTime` | local | normal | short 3/5 s, normal 5/7 s, long 8/12 s for info+success / warning+error (`TOAST_MS` in toast.ts and tablet/client.lua); explicit durations kept |
+| `resultTime` | local | 25 (bounds 8–60) | the result card's time |
+| `quietRun` | local | false | on a run, social toasts (`opts.channel = 'social'`: unit invites, profile, rewards) go to the bell only |
+| `keyHints` | local | true | key labels in toasts and banners (`useKeyHint`, client action `getKeyHints`) |
+| `soundCalls` / `soundUnit` / `soundCues` | local | true | `CP.Options.sound` plays frontend sounds per group (calls, unit invites and checks, block cues) |
+| `favouriteTypes` / `hiddenTypes` | server | `{}` | Mission Board order (`arrangeTypeCards` in `boardOrder.ts`): favourites first, hidden folded (never all: `err.option_hide_all`); boss and operation cards never moved |
+| `skipAcceptConfirm` | server | false | Accept sends at once (a Twists button opens the dialog; the dialog's lines become a footnote); the boss still asks |
+| `usualTwists` | server | `{}` | the twists the accept and claim dialogs start ticked (`twistTicks.ts`), else the department's ticked ones |
+| `skipClaimConfirm` | server | false | Dispatch claims at once (`mc.oneclick.note`) |
+| `callAlerts` | server | all | `favourites` = call toasts only for favourite types (cached with the mute flag; a paged call still reaches the paged unit) |
+| `dispatchKeyAfterCall` | server | false | the tablet key opens on Dispatch within 20 s of a call cue |
+| `openOn` | server | last | `home` or `active_on_run` (the session's `opening`, `openOn.ts`) |
+| `rememberFilters` / `filters` | local | false / hidden | Dispatch and Leaderboard filters kept (`filters.ts`) |
+| `abandonConfirm` | server | true | false = press twice within 3 s instead of the dialog (`abandonPress.ts`) |
+| `skipRecalcConfirm` | server | false | Recalculate at once |
+| `distanceUnits` | local | metric | `formatDistance(m, units)` on the HUD, run bar, Active Mission, Contact panel, Dispatch (the Builder stays metric) |
+| `objectiveGps`, `hudTargetLine`, `colourblindMap` | server / local / local | route / true / false | §5.44 |
+| `autoReady` | server | false (locked: `allow.autoReady = false`) | answers a ready check near the leader: `server:unitReady { accepted, auto }` counted only when allowed, on, input within 60 s and within `Config.OfficerOptions.autoReadyRange` (10–1000) of the leader on the server; never for a cross-department check; else `err.unit_ready_auto` |
+
+Every option ships allowed (except `autoReady`) with defaults that keep the tablet as it was. Walks:
+`boardOrder.walk.ts`, `usualTwists.walk.ts`, `openOn.walk.ts`, `abandonPress.walk.ts`.
 
 ### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls)
 
-Rules a department's supervisors may change for their own department (Supervisor UI → Mission controls),
-only while an admin switched them on and only inside the admin's bounds. One row of `cp_dept_controls` per
-department and control (migration 011; `'*'` = a server-wide control); no row, an expired row (`expires_at` passed;
-a restored backup's expired row stays ignored) or a switched-off control = the config value. This module registers
-no control: each feature registers its own and reads it with `get` (callers use the `Call('DeptControls', ...)`
-pattern, so a missing module reads as config).
-- `register(key, { kind = 'number'|'bool'|'map', scope = 'between'|'run', configValue(officer), check?(value, bounds),
-  clamp?(value, bounds), relaxes?(value, configValue), integer?, serverWide?, master? })`; `unregister(key)`,
-  `def(key)`, `keys()`. `serverWide = true`: one value for every department, saved under `'*'`, changed by a
-  supervisor of any department. `master = false`: the master switch does not apply (the control's own `on` does).
-- `bounds(dept, key)` = `Config.MissionControls.controls[key]` with `Config.Departments[dept].missionControls[key]`
-  over it, field by field (`{ on, min, max }`; `{}` = off).
-- `get(dept, key, officer) -> value, row?`: the row while the master switch
-  (`Config.Permissions.supervisor.missionControls`) and the control's `on` are true and the row has not expired,
-  clamped into today's bounds; else `configValue(officer)`. `officer` = an officer table, a list (a unit) or
-  `{ members }`: when `Config.MissionControls.selfExempt` and one of them is the row's `set_by` or another character of
-  that license (`CP.Access.licenseOf`, `sameUser`) and the value relaxes the rule, the config value.
-- `snapshot(leader) -> { key = value }`: the scope 'run' controls for `run.controls`.
-- `canChange(src, key, dept) -> ok, errKey, role, dept`: admins any department (`err.control_off` while the control
-  is off); a supervisor his own (`err.other_department`), with `CP.Permissions.can(src, 'missionControls')` unless
-  `master = false`, his department's grade grant in `Config.MissionControls.grants` (`CP.Permissions.gradeGrant`) and
-  the control on.
-- `set(src, key, value, reason, opts?) -> true, { department, key, value } | false, errKey`: the only write.
-  `canChange`, the reason (`Kit.reason`), the value inside the bounds (`err.control_value`, never clamped), for a
-  supervisor the change wait (`Config.MissionControls.changeWait` seconds per department and control,
-  `err.control_wait`; admins are exempt), then `INSERT ... ON DUPLICATE KEY UPDATE`, audit `missionControlSet`
-  (target `dept:key`, old, new, reason; role supervisor or admin), hook `deptControls:changed { dept, key }`, push
-  `missionControls { department, key }` to that department's supervisors (every department for `'*'`) and the admins.
-  `opts.department` (admins), `opts.expiresAt` (os.time; server code only).
-- `reset(src, dept, key, reason)`: deletes the row (`err.control_not_set` when there is none), audit
-  `missionControlReset`, the same hook and push.
-- `view(src) -> { master, changeWait, selfExempt, departments = { { key, label, short, controls } }, serverWide }`: a
-  supervisor his department (with the master switch, or while a control outside it is on), an admin every department;
-  each control `{ key, kind, scope, serverWide, master, on, active, min, max, value, configValue, saved, setBy,
-  setRole, at, expiresAt, timeLeft, waitLeft }`.
-- `checkConfig(map, boot) -> errKey?`: `Config.MissionControls.controls` and a department's `missionControls` name
-  registered controls only, with `on` true/false, `min` not above `max` and both inside the control's `range`
-  (`register(..., { range = { lo, hi } })`) (`err.control_config`).
-- Registered controls (modules/runs `Runs.registerControls`): `cooldownScale` (map mission type -> x the
-  mission cooldown, range 0-4, config `{}` = 1) and `abandonCooldown` (number, seconds, range 0-86400, config
-  `Config.Limits.abandonCooldown`), both `serverWide`, `master = false`, shipped on. The cooldown cache keeps
-  `missions[id] = { at, secs, type }` and `types[type] = at`; `Runs.cooldowns(citizenid, { officer })` works the end
-  out when read (the live mission definition's cooldown x the scale for its type; at + the abandon cooldown), read for
-  `officer` (default the character; Draw passes the unit, so the self rule covers it). An entry is pruned, and the
-  rows are read back, as far as the bound `max` reaches. `Runs.cooldownScale(type)` feeds the Mission list
-  (`cooldownNow`) and Today & cooldowns (`scale`). Mission calls clear their eligibility cache on
-  `deptControls:changed`.
-- Registered controls (modules/draw `Draw.registerControls`): `noRepeat` (bool, config `true`),
-  `hourlyCap` (whole number, range 1-1000, config `Config.Limits.maxCompletionsHour`) and `dailyCap` (whole number,
-  range 0-1000, 0 = no cap, config `Config.Limits.maxCompletionsDay`), all `serverWide`, `master = false`, shipped on.
-  `Draw.limits(officers) -> { noRepeat, hour, day }` reads them for a unit's members (nil = server-wide, no self
-  rule). `noRepeat = false`: `Draw.draw` and the calls' `BuildTypeState` give every member an empty history. The caps
-  feed the accept checks, the board and boss locks (modules/events), livectl `Counts` and the home screen's
-  `missionsToday`; the calls' count cache is re-read at the lower of the config and server-wide cap.
-- Happy hour (modules/happyhour `CP.HappyHour`): control `happyHour` (map `{ minutes, noRepeat = 0|1 }`,
-  `serverWide`, `master = false`, shipped on with min 5 / max 30 minutes). New `DC.register` options: `duration`
-  (fn(value) -> seconds: `DC.set` saves `expires_at = now + duration`, so the window survives a restart), `allow`
-  (one more rule: one running at a time `err.happy_hour_running`; a supervisor at most
-  `Config.MissionControls.happyHourPerDay` a day `err.happy_hour_used`, counted with
-  `Kit.dailyCount('missionControlSet', { target = '*:happyHour' })`), `overlays` (while the row is live, `DC.get`
-  of `cooldownScale` reads 0 for every mission type and, when ticked, `noRepeat` reads false; the self rule of the
-  happy hour row still applies, so the setter and his unit keep their cooldowns) and `viewExtra` (`perDay`,
-  `usedToday` on its view row). `DC.heldBy(officer, row)`, `DC.expired(dept, key)` (a 15 s tick finds the end and
-  fires `deptControls:changed` with `expired = true`). `HH.state(officer) -> { endsAt, left, minutes, noRepeat, by,
-  byRole, self } | nil` is in the session (`happyHour`), `getMissionTypes` (`happyHour`) and `admin:getLiveRuns`;
-  push `happyHour` (the state or false) goes to every online officer and admin on a start, an end now or the end.
-  End now = `server:admin:resetMissionControl { department = '*', key = 'happyHour' }` (or the supervisor reset).
-- Action controls (modules/livectl): kind `action` = a staff action with no saved value; `DC.get` reads
-  nil, `DC.set` / `DC.reset` refuse it (`err.control_unknown`), `DC.available` ignores it, `DC.canChange` says who
-  may use it; option `bounded = false` (no min / max on the admin card). `clearCooldown` (`serverWide`, `master =
-  false`, shipped on, owner decision: a cooldown change is for every department): `server:sup:clearCooldowns
-  { citizenid, scope = 'type'|'mission', key, reason }` through `Kit.supAction` (permission `DC.canChange`; self
-  `err.self_target`; `LiveCtl.clearCooldowns`, so the officer's `cooldown_clears` count shared with admins
-  `err.live_clear_limit` and `err.live_officer_on_run`; a supervisor at most `Config.MissionControls.clearCooldownPerDay`
-  a day `err.sup_clear_used`, `Kit.dailyCount('cooldownClear', { actor })`; audit `cooldownClear` role supervisor;
-  toast `sup.notice.cooldowns_cleared`), `sup:getOfficerCooldowns { citizenid }` -> `LiveCtl.officerCooldowns`
-  (cooldowns, the officer's clears, `mine = { perDay, usedToday }`), and `sup:getOfficerActivity` gains
-  `cooldownClear` (`LiveCtl.supClearView`). `addRunTime` (per department, under the master switch, range 1-10
-  minutes, shipped off with 1-5): `server:sup:addRunTime { runId, minutes, reason }` (a run with a participant of his
-  department `err.other_department`, never a test or his own run `err.own_run`, `Runs.addTime` with
-  `LiveCtl.supTimeMax()` = min(`Config.MissionControls.addRunTimeMax`, `Config.AdminControl.runTimeAddMax`) counted
-  on `run.timeAdded` with an admin's additions, so `run.timeLimit` and the fast-finish bonus stay;
-  `Config.MissionControls.addRunTimePerDay` `err.sup_time_used`; audit `runTimeAdd` role supervisor; toast
-  `sup.notice.time_added`); `sup:getLiveRuns` gains `addTime` (`LiveCtl.supTimeView`) and per run `timeAdded`, `own`.
-- In a run (modules/runs `Runs.registerRunControls`): `startTimeout` (60-3600 s), `readyCheck` (5-120 s,
-  0 = none only while the bounds carry `canTurnOff = true`, a registered flag: `DC.register(.., { flags =
-  { 'canTurnOff' } })`, accepted by `DC.checkConfig` and the Settings template, shown as a box on the admin card and
-  sent as `flags` / `canTurnOff` in the view), `timeLimit` (x 0.5-2) and `idleCheck` (30-1800 s, stricter only: the
-  check and the clamp never go above `Config.AntiCheat.idleCheck`); scope `run`, per department, under the master
-  switch, shipped off. `Runs._create` stores `run.controls, run.controlsChanged = DC.snapshot({ department of the
-  leader, members = the officers })` (the snapshot returns the values and which keys a saved change gave) before the
-  participants' deadlines: a changed `startTimeout` replaces the mission's; a changed `timeLimit` keeps
-  `run.fastBaseLimit` (the unscaled limit, Time Crunch applied to both, moved by a pre-start `Runs.adjustTimer` too)
-  and scales `run.timeLimit`; scoring judges `fast_finish` on `run.fastBaseLimit or run.timeLimit`. Test runs keep the
-  config. `AC._idleCheck` uses min(`run.controls.idleCheck`, `Config.AntiCheat.idleCheck`). The ready check runs
-  before the run: CP.Draw reads `Runs.readySeconds(leader officer, officers)` (0 = no check) and passes it as
-  `Units.readyCheck(.., { timeout })`.
-- Difficulty and unit size, scope `run`, per department, under the master switch, shipped off. A new kind
-  `choice` in CP.DeptControls: one name from the list the bounds hold in the field `list` names (`DC.register(..,
-  { kind = 'choice', list = 'presets', choices = fn })`; `DC.checkConfig` accepts that field as names the `choices`
-  function knows, each once; the view sends `list`, `offered` and `choices`; the supervisor screen shows a segmented
-  pick, the admin card a box per name). `difficulty` (modules/scaling `Scaling.registerControls`): config value
-  `Config.NpcDifficulty.preset`; easier relaxes (easy < normal < hard). `Preset(run)` uses `run.controls.difficulty`
-  when `run.controlsChanged.difficulty`; `Scaling.feel(run)` and `Scaling.combat(.., run)`; the callers pass the run
-  (npc flee `FleeMult(run)`, hostile_waves `Feel(ctx)`, escort `feel(ctx.run)`). Config.NpcCombat still caps on top;
-  points and cash never read it. `unitSize` (modules/units `Units.registerControls`, 2 to `Config.Limits.maxUnitSize`,
-  never relaxes): `Units.maxSize(dept)` for the leader's department caps invites, joins and the view; CP.Draw's accept
-  check refuses `err.unit_too_large` above it.
-- Mission Board controls, scope `between`, per department, under the master switch, shipped off,
-  registered by CP.Draw (`Draw.registerBoardControls`). `types` (kind `map` with its own check and clamp, no min and
-  max): `{ [type] = false, missions = { [id] = false } }`; the check refuses unknown types or missions and every type
-  off (`err.control_types_all_off`), the clamp drops what no longer exists; never relaxes, so the setter gets it too.
-  `Draw.offFor(dept)` reads it; `Eligibility` treats a mission off for any member's department like `def.departments`
-  leaving it out (never the Weekly Boss), so `Draw.pool`, the draw and a mission call's pool follow; the accept check
-  refuses `err.type_off_department` for any member; the board card is locked "Off for <dept> by command" with
-  `offByCommand`. Mission calls (toast and claim) go through `Draw.check` and `Draw.pool`, so they skip such units.
-  It is a catalog switch (like Config.DisabledMissions), never a timed pause. `featuredType` (kind `choice` with no
-  `list`: every type key is offered; a choice control without `list` offers everything its `choices` gives): the
-  card's `featured` for viewers of that department; the web sorts it right after the officer's favourites and shows
-  "Recommended by command"; points never read it. The web fold rule (`arrangeTypeCards`) never counts a card off by
-  command as the card left to accept.
-- Mission ban (modules/missionban, CP.MissionBan): `missionBan`, kind `action`, per department, under the
-  master switch, range 1-168 hours, shipped off with 1-24. `cp_officers.mission_ban` (migration 012) holds
-  `{ until, by, name, dept, reason, at }`; every ban is read once after the migrations and kept in memory, so the
-  checks never wait on the store. `MB.get(citizenid, now)` (a ban past `until` = none), `MB.first(officers, now) ->
-  officer, ban`, `MB.view(citizenid) -> { until, by, reason }`, `MB.supView(src, citizenid) -> { min, max, perDay,
-  usedToday, ban, canLift }` (nil = not offered: control off, not a supervisor, his own character), `MB.perDay()`,
-  `MB.clearCache()`. Net: `server:sup:missionBan { citizenid, hours, reason }` (`Kit.supAction`, permission
-  `DC.canChange`; self `err.self_target`; the target online `err.mission_ban_offline` (his grade comes from Qbox), his
-  department `err.other_department`, a lower grade than the supervisor's `err.mission_ban_grade`, hours inside the
-  bounds `err.mission_ban_hours`, `Config.MissionControls.missionBanPerDay` `err.mission_ban_used`; audit `missionBan`
-  category flags; toast `sup.notice.mission_banned`; push `board` to his unit), `server:sup:liftMissionBan
-  { citizenid, reason }` (only the setter `err.mission_ban_not_yours`) and `server:admin:liftMissionBan` (`Kit.action`,
-  antiFarmOverride, also while the control is off); audit `missionBanLift`. CP.Draw's accept check refuses
-  `err.mission_banned` / `err.member_mission_banned` (mission call toasts and claims go through it, the Weekly Boss
-  too); the board gets `missionBan = { until, by, reason (own only), name (a member) }` and every card a lock with
-  `until`. CP.Operations: `Ops.join`, the card's `joinBlocked` and the waitlist refill refuse `err.mission_banned`.
-  `sup:getDeptReport` rows carry `missionBan` (the view), `sup:getOfficerActivity` gains `missionBan` (supView) and
-  `missionBanState`, `admin:getOfficerRunState` gains `missionBan`. A live run is never ended.
-- Call lanes and the staff call wait (modules/missioncalls, `MC.registerControls`): `callLane`, kind `map`
-  with its own check and clamp (`MC._cleanLane`), per department, under the master switch, range 30-3600 s, shipped
-  off with 120-600; value `{ spawnEvery = { lo, hi }, maxOpen (1 to Config.MissionControls.callLaneMaxOpen), areas,
-  types = { [callable type] = weight 0-10 } }`, read with no officer (the self rule is the claim rule below);
-  `viewExtra` gives `laneTypes`, `laneAreas`, `maxOpenCap`, `weightMax`. `MC._tick` posts, after the server's own
-  flow, one call per due lane (`laneNext[dept]`, its own gap) through the same `PostCall` (its types and weights, its
-  areas, only idle units whose every member is of that department) with `call.department` and `laneSetBy`; the row
-  keeps `cp_mission_calls.department` (migration 013). Every open call counts against `Config.MissionCalls.maxOpen`;
-  the server's own flow counts only calls with no department against its target. `CallRule` refuses
-  `err.mc_other_department` (a member of another department) and `err.mc_own_call` (`DC.heldBy`: the lane's setter);
-  `MC.list` / `MC.claimableCount` leave other departments' lane calls out; cards carry `department` and
-  `departmentShort`; `MC.supView` shows staff their own department's lane calls (admins all) and `lanes`. On
-  `deptControls:changed` the eligibility and no-repeat history caches are emptied and a changed lane posts at the next
-  check. `staffCallWait`, kind `number`, range 0-3600, shipped off with 60-120: `MC.create` reads it for the issuer's
-  department and the issuer (`MC.staffWait`; a shorter wait relaxes, so the self rule keeps the setter on
-  `Config.MissionCalls.staffCooldown`).
-- Department notices and Cross-Department participation. `notices`, kind `action` (modules/deptnotices,
-  `CP.DeptNotices`), per department, under the master switch, unbounded, shipped off: `server:sup:postNotice
-  { text, days, reason? }` (`Kit.supAction`, permission `DC.canChange`; the department is always the poster's own;
-  text through `CP.Corrections.noticeText` with `Config.MissionControls.noticeMaxLength` (`err.notice_text`,
-  `err.notice_banned`), days 1-30 `err.notice_expiry`, one a minute per player, `Config.MissionControls.noticesPerDay`
-  for supervisors `err.notice_per_day` (audit count), at most `CP.Corrections.NOTICES_ACTIVE` running for the
-  department `err.dept_notice_too_many`) saves a `cp_staff_notices` row with `departments = [dept]` and `by_actor =
-  'sup:<citizenid>'` (`Corr.insertNotice`; audit `deptNoticePost`, category board; `CP.Leaderboard.invalidate`), so
-  `LB.announcements(dept)` shows it on that department's Home only. `server:sup:endNotice { id }` ends a running
-  notice of the poster's department (`err.dept_notice_unknown` otherwise; audit `deptNoticeEnd`).
-  `sup:getDeptNotices` -> `{ department, short, maxLength, perDay?, usedToday?, activeMax, maxDays, notices }`
-  (web/src/supervisor/components/DeptNoticesCard.tsx on the Mission controls screen). The admin's staff notice limit
-  counts only notices whose `by_actor` is not `sup:` (`Corr.runningNotices`, `Corr.isDeptNotice`). `crossDept`, kind
-  `map` (modules/operations, `Ops.registerControls`), per department, under the master switch, unbounded, shipped
-  off; value `{ join, places (0 = no cap, at most Config.CrossDept.maxParticipants) }` (`Ops._cleanCross`; it never
-  relaxes, so it applies to the setter too); `viewExtra` gives `placesMax`. `Ops.join`, the waitlist refill and the
-  card's `joinBlocked` refuse `err.op_department_out` (join = false) and `err.op_department_full` (the department's
-  joiners reached places). The board lock (`Ops.isLocked`) and the launch cooldown are unchanged and server-wide.
-- Leaderboard visibility and review rules. `boards`, kind `map` (modules/leaderboard,
-  `LB.registerControls`), per department, under the master switch, unbounded, shipped off; value `{ showToOthers,
-  metrics }` (`LB._cleanBoards`: only `Config.Leaderboard.metrics` names, points always first; it never relaxes);
-  `viewExtra` gives `metricsAll`. `LB.boardMetrics(dept)` gives the Rank by tabs (Session.config.leaderboardMetrics in
-  `CP.Tablet`'s ExtraConfig, and `ParseBoardArgs` refuses another tab for an officer with `err.invalid_metric`);
-  `LB.hidesNamesFrom(dept, viewerDept)` makes `PublicRow` (through `LB._shownTo`, a copy with hideName and the
-  avatar row's hide_name set), `LB.profile` and the top 3 of `LB.announcements(dept)` (`ForViewer`, the text rebuilt
-  from `textKey` / `textVars`) show callsigns only. The cached boards, counts, the challenge and `LB.adminBoard`
-  never change. `reviewRules`, kind `map` (new modules/reviewrules, `CP.ReviewRules`), per department, under the
-  master switch, unbounded, shipped off; value `{ secondVoid, adminOnlyKinds }` (`RR._clean`, kinds from its
-  FLAG_KINDS list, `viewExtra` `flagKinds`; it never relaxes). `Admin.voidFlagged` for a supervisor asks
-  `RR.voidStep(officer, row)` for the row's department: the first Void is kept in memory (`pending[rowId]`, audit
-  `voidPending`, result `{ rowId, pending = true }`), the same user again `err.void_second_needed`, a supervisor of
-  another department `err.void_second_dept`, a second supervisor of the row's department voids it. `RR.clear` runs
-  when a row is voided or approved. `RR.adminOnly(dept, kind)`: `Admin.flaggedRows(dept, cid, admin)` leaves such
-  rows out of a supervisor's queue and `approveFlagged` / `voidFlagged` refuse a supervisor `err.review_admin_only`.
-  Queue rows carry `voidPending { name, at }`. Admins and the console are never bound.
-- The department's twists. `twists`, kind `map` (modules/events, `Events.registerTwistControl`), per
-  department, under the master switch, scope `run`, unbounded, shipped off; value `{ offered, ticked }`
-  (`Events._cleanTwists`: only twists enabled in `Config.Events.twists`, ticked within offered; it never relaxes);
-  config value: every enabled twist offered, none ticked; `viewExtra` gives `twistsAll { key, label }`.
-  `Events.deptTwists(dept)` gives the sets; `Events.twistOffer(type, list, dept)` keeps only the offered twists and
-  marks `ticked = true`; `Events.checkTwists(raw, type, list, dept)` refuses another one with
-  `err.twist_department`. `CP.Draw` passes the leader's department (board cards: the unit leader's; the accept:
-  `ctx.leader`), CP.MissionCalls too (a unit's type state: `unit.leader`'s officer; a claim: the claimer, who leads).
-- Cash bonuses, per department, under the master switch, scope `run`, range 1-3, shipped off with
-  `min = max = 1.0`; a raise relaxes (self rule). `happyHourCash`, kind `number` (modules/happyhour,
-  `HH.registerCash`): at the accept `Cd.rc.apply` calls `HH.cashBonusFor(value, officers)`, which gives the value
-  while a happy hour row is live and does not hold the unit (`DC.heldBy`), saved as `run.controls.cashBonus`.
-  `twistCash`, kind `map` `{ [twist] = x }` (modules/events, `Events.registerTwistCashControl`, `Events._cleanTwistCash`,
-  `Events.deptTwistCash`; config value every enabled twist at 1.0, `viewExtra` `twistsAll`). `CP.Twists.bonus(list,
-  scale)` multiplies each twist's cash by its scale before the `twistMaxCash` cap; `CP.Twists.scaleOf(run)` and
-  `CP.Cash.bonusOf(run)` give nothing for test, Cross-Department (`operationId`) and boss runs (`Cd.rc.apply` also
-  drops both there). `Cash.compute` pays `round(B * mTier * mMod * mBonus)` and puts `mBonus` on `breakdown.cash`
-  only when it is not 1 (the result card and Profile show it); `Events.twistOffer` shows the department's raised cash.
-- Points bonuses, the same shape as the cash bonuses: per department, under the master switch, scope
-  `run`, range 1-3, shipped off with `min = max = 1.0`; a raise relaxes (self rule). `happyHourPoints`, kind `number`
-  (`HH.registerPoints`): `Cd.rc.apply` calls `HH.pointsBonusFor(value, officers)` (the same rule as
-  `HH.cashBonusFor`) and saves `run.controls.pointsBonus`; `Scoring.bonusOf(run)` (1.0 on test, Cross-Department and
-  boss runs) multiplies the final points after the cap and the Type of the Day, and `Scoring.compute` puts `mBonus`
-  on the points breakdown only when it is not 1 (the result card and Profile show a Happy hour line). `twistPoints`,
-  kind `map` `{ [twist] = x }` (`Events.registerTwistPointsControl`, `Events.deptTwistPoints`; both twist maps share
-  one registration helper). `CP.Twists.bonus(list, scale, pscale)` multiplies each twist's points share by `pscale`
-  before the `twistMaxPoints` cap; `CP.Twists.pointsScaleOf(run)` reads `run.controls.twistPoints`; the scoring's
-  twist lines, the run view's expected points and `Events.twistOffer` use it. `Cd.rc.apply` drops both on
-  Cross-Department and boss runs.
-- Type of the Day, `typeOfTheDay`, kind `choice` (every mission type), per department, under the master
-  switch, shipped off; a pick relaxes (self rule). modules/events `Events.registerDeptTodControl`: `allow` refuses a
-  supervisor's second change of the day (`err.tod_picked_today`); the pick counts on the next day only:
-  `Events.deptTypeOfTheDay(dept)` reads yesterday's last `missionControlSet` / `missionControlReset` cp_audit row of
-  target `<dept>:typeOfTheDay` once per day (cached by day), while `DC.active(dept, key)` (new) says the control
-  counts. `Events.typeOfTheDay(dayKey, department, who)` returns that pick unless `DC.heldBy(who, { setBy })`, else
-  the server type (admin override, then the roll). Callers pass the department: the board (viewer, unit), the boss
-  card, `Scoring.compute` (participant, run participants), Home, Dispatch (`MC.list`) and the run view's expected
-  points. `viewExtra`: `todFor` (tomorrow), `todToday`, `todServer` for the supervisor's line.
-- Department goals, `goals`, kind `map` `{ daily = { id, ... }, weekly = { id, ... } }`, per department,
-  under the master switch, shipped off with `min = 1, max = 5` (how many goals of a list a pick holds; an empty list
-  = every goal), range 1-20; a pick relaxes (self rule: the setter keeps the admin's whole lists). modules/goals
-  `Goals.registerControl`: `check` / `clamp` (`Goals._cleanPick`) keep only the admin's enabled goals of that kind;
-  the new DC def field `carry(ctx)` (DC.set calls it after `allow`) saves `from` (the next week's key) and `prev`
-  (the lists that count this week, read from the live row), so a pick counts from the next weekly reset and a second
-  change in a week never moves that week's goals. `Pick(kind, citizenid, ts, dept)` narrows the list to the
-  department's ids for the week of ts (same seed, same points); the officer's department is read (online job, else
-  `cp_officers.department`) only while some department has the control on; `Goals.forOfficer(citizenid,
-  department)` takes it from Home. `viewExtra`: `goalsAll`, `goalsFrom`, `goalsNow`. A reset or the control off
-  goes back to every goal at once.
-- Push a chosen mission, `pushMission`, kind `action`, per department, under the master switch, shipped
-  off (the Mission choice Hard rule's fifth exception). modules/missioncalls registers it; `MC.page(src, type, area,
-  leaderSrc, { missionId })` checks `DC.canChange(src, 'pushMission', leader's department)` (a supervisor's own
-  department only, `err.mc_push_department`; admins any department the control is on for), every unit member of
-  that department, `Config.MissionControls.pushMissionPerDay` (`Kit.dailyCount('mcPush', { actor })`,
-  `err.mc_push_used`; admins any) and `CP.Draw.checkMission(id, type, officers, area)` (enabled, not the boss, of the
-  call's type, `Eligibility` with the department's switched-off missions and every member's mission cooldown, a
-  location in the area); the call keeps `missionId` and `issuerSrc`, is audited `mcPush` (old value: the mission)
-  and toasts only the paged unit (`pushed`, `missionLabel`). `CallRule` keeps it the paged unit's for the whole offer
-  (`err.mc_paged`), `Shown` hides it from everyone else, `ToastPageEnded` skips it, the card's pool is that mission
-  (`missionLabel` only for the paged unit), the claim passes `missionId` to `Draw.accept`, whose `FinishAccept`
-  replaces `Draw.draw` with `Draw.checkMission` + `Draw.pickLocation`. A failed accept or ready check withdraws it
-  (no next claimant), `MC.decline` (`server:declineMissionCall`, the paged unit's leader) withdraws it with reason
-  `declined`, the issuer is told; `OnRunEnded` never re-dispatches it. `supView.push` gives the Page dialog the
-  missions of the callable types and the supervisor's `perDay` / `usedToday`.
-- Give points (modules/supawards, CP.SupAwards), `awardPoints`, kind `action`, per department, under the
-  master switch, shipped off with `min = 1, max = 50` (points an award), range 1-10000 (`CP.Corrections.adjustMax`).
-  `server:sup:awardPoints { citizenid, points, reason, confirm? }` (`Kit.supAction`, permission
-  `DC.canChange(src, 'awardPoints')`; R, S strict (every character of the actor's licenses), L 1 per 10 s per
-  officer, T = the citizenid at or above `AdminControl.adjustConfirmAbove` via `Corr.adjustConfirm`): positive
-  points inside the department's bounds (`err.award_points_range`), `AdminControl.pointAdjust = false` refuses
-  (`err.award_off`); a supervisor only for an officer of his own department (online job, else
-  `cp_officers.department`; `err.other_department`) and at most `Config.MissionControls.awardPointsPerDay` points a
-  day (`Kit.dailySum` of today's `manual_award` rows by his license's characters, `err.award_daily_limit`; 0 = no
-  limit); admins skip both. Then `CP.Corrections.adjust(ctx, citizenid, points)`, the one point-adjust path the admin
-  action `server:admin:adjustPoints` also uses (adjustDailyLimit, `Scoring.adjust` row, audit `manualAward` with
-  `ctx.role`, caches). `SA.supView(src, citizenid)` feeds `sup:getOfficerActivity.awardPoints` (`{ min, max, perDay,
-  usedToday, confirmAbove }`, nil when not offered).
-- Rows are cached per department, cleared on every write and on `settings:changed` for `MissionControls.*`,
-  `Permissions.supervisor.missionControls` and `Departments.*`. Bounds are always read live.
-- Net: §8.3 (`sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` through
-  `Kit.supAction`; `admin:getMissionControls`, `server:admin:setMissionControl`, `server:admin:resetMissionControl`
-  through `Kit.callback` / `Kit.action`).
-- Admin UI → Permissions → Mission controls (web/src/admin/components/MissionControlsCard.tsx): the admin
-  view also carries `bounds` (Config.MissionControls.controls as saved), each control's `own` (the department's
-  bounds), `integer` and `range`, and each department's `boundsPath` (`Departments.<key>.missionControls`, a setting
-  for a config.lua department: optional, read live, no missions reload). The card saves through
-  `server:admin:setSetting` (`MissionControls.controls` and `MissionControls.grants` as whole maps, a department's
-  bounds or none) and resets through `server:admin:resetMissionControl`; `admin:getPermissions` gains
-  `missionGrants` (department key -> `{ minGrade }` | `{ grades }`).
-- Supervisor UI → Mission controls (web/src/supervisor/screens/MissionControls.tsx, screen key
-  `sup_controls`): `sup:getMissionControls` (live on push `missionControls`), the active controls grouped (Delays and
-  repeats, In a run, Board, Calls, Officers, Department), saved through `server:sup:setMissionControl` and
-  `server:sup:resetMissionControl` with a reason. `DC.available(src)` (true while that player may change at least
-  one control) is sent as `session.config.missionControls`, so the screen shows with the master switch off while a
-  control outside it (the cooldown controls, as shipped) is on.
-- Your controls today (Config.Tablet.supervisorControlsCard, shipped false): `DC.mine(src)` lists the
-  controls `DC.canChange` lets that player use now, each `{ key, kind, value, configValue, min, max, changed,
-  timeLeft, perDay?, usedToday? }`; perDay is the control's `viewExtra` perDay and usedToday its registered
-  `usedToday(src)` (awardPoints, missionBan, notices, clearCooldown, addRunTime, pushMission), supervisors only.
-  Callback `sup:getMyControls` (rate 3; `err.controls_card_off` while the switch is off). Read only.
+Rules a department's supervisors may change for their own department (Supervisor UI → Mission controls), only while
+an admin switched them on and only inside the admin's bounds. One row of `cp_dept_controls` per department and control
+(migration 011; `'*'` = server-wide); no row, an expired row (`expires_at` passed) or a switched-off control = the
+config value. Each feature registers its own controls and reads them with `get` (through `Call('DeptControls', ...)`,
+so a missing module reads as config).
+
+#### API
+- `register(key, { kind = 'number'|'bool'|'map'|'choice'|'action', scope = 'between'|'run', configValue(officer),
+  check?, clamp?, relaxes?(value, configValue), integer?, serverWide?, master?, range = { lo, hi }, flags?, list?,
+  choices?, bounded?, duration?, allow?, overlays?, carry?, viewExtra?, usedToday? })`, `unregister`, `def`, `keys`.
+  `serverWide` = one value under `'*'`, changed by a supervisor of any department; `master = false` = the master switch
+  does not apply. `duration(value)` saves `expires_at = now + duration` (survives a restart); `allow` adds a rule;
+  `overlays` changes other controls while the row is live; `carry(ctx)` stores extra fields at a set.
+- `bounds(dept, key)` = `Config.MissionControls.controls[key]` with `Config.Departments[dept].missionControls[key]` over
+  it, field by field (`{ on, min, max, ... }`; `{}` = off).
+- `get(dept, key, officer) -> value, row?` — the row while the master switch (`Config.Permissions.supervisor.
+  missionControls`) and the control's `on` are true and it has not expired, clamped into today's bounds; else
+  `configValue(officer)`. Self rule: with `Config.MissionControls.selfExempt`, when `officer` (an officer, a list or `{
+  members }`) is the row's `set_by` or another character of his license and the value relaxes the rule, the config
+  value. `heldBy(officer, row)`, `active(dept, key)`, `expired(dept, key)` (a 15 s tick fires `deptControls:changed {
+  expired = true }`), `snapshot(leader) -> values, changed` (the scope `run` controls, stored as `run.controls` /
+  `run.controlsChanged` before the deadlines are set; test runs keep the config).
+- `canChange(src, key, dept) -> ok, errKey, role, dept` — admins any department (`err.control_off` while off); a
+  supervisor his own (`err.other_department`), with `can(src, 'missionControls')` unless `master = false`, his grade grant
+  in `Config.MissionControls.grants`, and the control on.
+- `set(src, key, value, reason, opts?)` — the only write: `canChange`, a reason, the value inside the bounds
+  (`err.control_value`, never clamped), for a supervisor `Config.MissionControls.changeWait` (`err.control_wait`), then
+  upsert, audit `missionControlSet` (target `dept:key`), hook `deptControls:changed { dept, key }`, push
+  `missionControls` to that department's supervisors (all for `'*'`) and admins. `reset(src, dept, key, reason)`
+  (`err.control_not_set`; audit `missionControlReset`).
+- `view(src)` (each control `{ key, kind, scope, serverWide, master, on, active, min, max, value, configValue, saved,
+  setBy, setRole, at, expiresAt, timeLeft, waitLeft, flags, list, offered, choices, ... }`), `available(src)` (sent as
+  `session.config.missionControls`), `mine(src)` (Your controls today, `Config.Tablet.supervisorControlsCard`, false;
+  callback `sup:getMyControls`, `err.controls_card_off`), `checkConfig(map, boot)` (registered names only, `on`
+  boolean, `min ≤ max` inside `range`, known flags and list names; `err.control_config`).
+- Kind `action`: a staff action with no saved value (`get` nil, `set`/`reset` refuse `err.control_unknown`); `bounded =
+  false` = no min/max. Kind `choice`: one name from the bounds' `list` (or every name `choices` gives).
+- Rows are cached per department, cleared on every write and on `settings:changed` of `MissionControls.*`,
+  `Permissions.supervisor.missionControls` and `Departments.*`; bounds are read live.
+
+#### The controls (shipped off unless said; per department under the master switch unless said)
+
+| Key | Kind, scope | Module | What it does |
+|---|---|---|---|
+| `cooldownScale` | map type → × (0–4), between; server-wide, no master, on | runs | × the mission cooldown; the cache keeps `{ at, secs, type }` and works the end out when read (`Runs.cooldowns(cid, { officer })`); `Runs.cooldownScale(type)` |
+| `abandonCooldown` | number 0–86400 s; server-wide, no master, on | runs | replaces `Config.Limits.abandonCooldown` |
+| `noRepeat` | bool; server-wide, no master, on | draw | false = every member's no-repeat history is empty |
+| `hourlyCap` / `dailyCap` | whole 1–1000 / 0–1000 (0 = none); server-wide, no master, on | draw | `Draw.limits(officers) -> { noRepeat, hour, day }` feeds the accept checks, board and boss locks, livectl counts, Home `missionsToday` |
+| `happyHour` | map `{ minutes, noRepeat }`; server-wide, no master, on (5–30 min) | happyhour | while live: `cooldownScale` reads 0 and, when ticked, `noRepeat` false (the setter's unit keeps theirs); one at a time (`err.happy_hour_running`), `happyHourPerDay` (`err.happy_hour_used`); `HH.state(officer)` in the session, `getMissionTypes`, `admin:getLiveRuns`; push `happyHour`; End now = reset `'*' happyHour` |
+| `clearCooldown` | action; server-wide, no master, on | livectl | `server:sup:clearCooldowns { citizenid, scope, key, reason }` (`LiveCtl.clearCooldowns`; `clearCooldownPerDay`, `err.sup_clear_used`; never self); `sup:getOfficerCooldowns` |
+| `addRunTime` | action 1–10 min (1–5) | livectl | `server:sup:addRunTime { runId, minutes, reason }` (a run with his department, never a test or his own; `Runs.addTime` with min(`addRunTimeMax`, `runTimeAddMax`) shared with admins; `addRunTimePerDay`, `err.sup_time_used`) |
+| `startTimeout` | number 60–3600 s, run | runs | replaces the mission's |
+| `readyCheck` | number 5–120 s, run (0 only with flag `canTurnOff`) | runs | `Runs.readySeconds(leader, officers)` → `Units.readyCheck(.., { timeout })` |
+| `timeLimit` | × 0.5–2, run | runs | scales `run.timeLimit`; `run.fastBaseLimit` keeps the unscaled one for `fast_finish` |
+| `idleCheck` | number 30–1800 s, run (stricter only) | anticheat | min(it, `Config.AntiCheat.idleCheck`) |
+| `difficulty` | choice of presets, run (easier relaxes) | scaling | `Scaling.feel(run)`, `combat(.., run)`; NpcCombat still caps; never points or cash |
+| `unitSize` | number 2..maxUnitSize (never relaxes) | units | `Units.maxSize(dept)` caps invites and joins; accept `err.unit_too_large` |
+| `types` | map `{ [type] = false, missions = { [id] = false } }`, between (never relaxes) | draw | off for a member's department like `def.departments` (never the boss); accept `err.type_off_department`; card "Off for <dept> by command"; every type off refused (`err.control_types_all_off`) |
+| `featuredType` | choice of every type | draw | the card's `featured` ("Recommended by command") for that department; never points |
+| `missionBan` | action 1–168 h (1–24) | missionban | `cp_officers.mission_ban` (migration 012) `{ until, by, name, dept, reason, at }`, all kept in memory; `server:sup:missionBan { citizenid, hours, reason }` (online, own department, a lower grade, `missionBanPerDay`; audit `missionBan`), `server:sup:liftMissionBan` (only the setter), `server:admin:liftMissionBan` (antiFarmOverride, also while off); accept, operations join and claims refuse `err.mission_banned` / `err.member_mission_banned`; a live run is never ended |
+| `callLane` | map `{ spawnEvery = { lo, hi }, maxOpen, areas, types = { [type] = 0–10 } }` 30–3600 s (120–600) | missioncalls | one call per due lane for idle units all of that department (`cp_mission_calls.department`, migration 013); counts against `maxOpen`; `err.mc_other_department`, `err.mc_own_call` (the setter) |
+| `staffCallWait` | number 0–3600 s (60–120) | missioncalls | `MC.staffWait`; a shorter wait relaxes |
+| `notices` | action, unbounded | deptnotices | `server:sup:postNotice { text, days, reason? }` (own department, `noticeMaxLength`, 1–30 days, one a minute, `noticesPerDay`, `NOTICES_ACTIVE`; a `cp_staff_notices` row with `by_actor = 'sup:<cid>'` shown on that department's Home), `server:sup:endNotice { id }`, `sup:getDeptNotices` |
+| `crossDept` | map `{ join, places }` (never relaxes) | operations | `err.op_department_out`, `err.op_department_full`; lock and cooldown stay server-wide |
+| `boards` | map `{ showToOthers, metrics }` (never relaxes) | leaderboard | `LB.boardMetrics(dept)` (the Rank by tabs; another tab `err.invalid_metric`), `LB.hidesNamesFrom(dept, viewerDept)` (callsigns only); cached boards and admin views unchanged |
+| `reviewRules` | map `{ secondVoid, adminOnlyKinds }` (never relaxes) | reviewrules | `RR.voidStep`: a first supervisor Void is pending (`voidPending`), a second supervisor of the row's department voids (`err.void_second_needed`, `err.void_second_dept`); `RR.adminOnly(dept, kind)` hides such rows from supervisors (`err.review_admin_only`) |
+| `twists` | map `{ offered, ticked }`, run (never relaxes) | events | `Events.deptTwists(dept)`; offers only those, marks ticked; `err.twist_department` |
+| `happyHourCash` / `twistCash` | number / map `{ [twist] = × }` 1–3, run (raise relaxes) | happyhour / events | `run.controls.cashBonus` while a happy hour holds the unit not; `CP.Twists.bonus(list, scale)` before `twistMaxCash`; `Cash.compute` pays `round(B × mTier × mMod × mBonus)`; never test, operation or boss runs |
+| `happyHourPoints` / `twistPoints` | the same shape | happyhour / events | `Scoring.bonusOf(run)` after the cap and ToD; `CP.Twists.bonus(list, scale, pscale)` before `twistMaxPoints` |
+| `typeOfTheDay` | choice of every type (relaxes) | events | one change a day (`err.tod_picked_today`), counts from the next day (`Events.deptTypeOfTheDay(dept)` reads yesterday's last audit row); `Events.typeOfTheDay(dayKey, department, who)` unless `heldBy` |
+| `goals` | map `{ daily = { id }, weekly = { id } }` 1–20 (1–5; relaxes) | goals | the department's goals from the next weekly reset (`carry` saves `from` and `prev`); `Goals.forOfficer(cid, department)` |
+| `pushMission` | action | missioncalls | `MC.page(.., { missionId })`: own department, every member of it, `pushMissionPerDay` (`err.mc_push_used`), `Draw.checkMission` (enabled, not the boss, of the type, eligible, a location in the area); only the paged unit sees and may claim it; `FinishAccept` uses that mission; a decline (`server:declineMissionCall`) or failed accept withdraws it; never re-dispatched; audited `mcPush` |
+| `awardPoints` | action 1–10000 (1–50) | supawards | `server:sup:awardPoints { citizenid, points, reason, confirm? }`: own department, `awardPointsPerDay` (`err.award_daily_limit`), `AdminControl.pointAdjust` (`err.award_off`), the confirm above `adjustConfirmAbove`; through `CP.Corrections.adjust` like the admin path |
+
+#### Screens and net
+- Net §8.3: `sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` (through
+  `Kit.supAction`), `admin:getMissionControls`, `server:admin:setMissionControl`, `server:admin:resetMissionControl`.
+- Supervisor UI → Mission controls (`supervisor/screens/MissionControls.tsx`, `sup_controls`): live on push
+  `missionControls`, grouped (Delays and repeats, In a run, Board, Calls, Officers, Department), saved with a reason;
+  shown while `available(src)` (with the master switch off when a server-wide control is on, as shipped).
+- Admin UI → Permissions → Mission controls (`admin/components/MissionControlsCard.tsx`): the view adds `bounds`,
+  each control's `own`, `integer`, `range` and each department's `boundsPath` (`Departments.<key>.missionControls`);
+  saves through `server:admin:setSetting` (`MissionControls.controls`, `MissionControls.grants`, a department's
+  bounds) and resets through `server:admin:resetMissionControl`; `admin:getPermissions` adds `missionGrants`.
+- The supervisor views that carry each tool's limits: `sup:getOfficerActivity` (`cooldownClear`, `missionBan`,
+  `missionBanState`, `awardPoints`), `sup:getLiveRuns` (`addTime`, per run `timeAdded`, `own`), `sup:getDeptReport`
+  rows (`missionBan`), `MC.supView` (`lanes`, `push`).
 
 ### 5.50 CP.FieldTraining — modules/fieldtraining (S; field training)
 Config.FieldTraining (ships `enabled = false`: the hook counts nothing, every action answers `err.fto_off`, both reads
@@ -4497,7 +4147,7 @@ fugitive) or it is no slot. flee_arrest, pursuit and search_area offer one (belo
 **flee_arrest's runner slot (blocks/flee_arrest).** Door mode only (Warrant Service): `volunteerSlot` answers
 `{ role = 'runner', meet = <the location's suspect point> }`, none for scatter mode or a location with no suspect point.
 The block reads `ctx.volunteer()` on start, every tick and on every `opp_*` event (`st.vol`):
-- nil (no match, `enabled` off, a mode 'npc', or phase `npc`): everything as before (the NPC at the door).
+- nil (no match, `enabled` off, a mode 'npc', or phase `npc`): nothing changes (the NPC at the door).
 - `'wait'` (phase `asking`): nobody at the door; the knock is taken with no response line, the HUD says
   `block.flee_arrest.detail_waiting`; the objective cannot complete. Phase `npc` later spawns the NPC as usual (a
   knock already made applies his rolled response at once).
@@ -4522,7 +4172,7 @@ hands its stopped car to field_contact, which works NPC occupants), no `observe`
 so of the built-in missions only Street Race Bust offers one; a custom stop pursuit may too. The volunteer drives his
 own car (no car is made for him). The block reads `ctx.volunteer()` on start, every tick and on every `opp_*` event
 (`st.vol`; all its code sits in one local table `Vol`, the file is near Lua's 200 locals):
-- nil (no match, `enabled` off, a mode 'npc', or phase `npc`): everything as before (the NPC cars).
+- nil (no match, `enabled` off, a mode 'npc', or phase `npc`): nothing changes (the NPC cars).
 - `'wait'` (phase `asking`): no car is made and the start trigger is held (a race does not start); the HUD says
   `block.pursuit.hud_volunteer_wait`; the objective cannot complete. Phase `npc` later makes the cars as usual and
   the trigger runs.
@@ -4534,11 +4184,11 @@ own car (no car is made for him). The block reads `ctx.volunteer()` on start, ev
   detained racer: `all_or_timeout_any` and `onTimeout` count him). `lost` fails the objective
   `block.pursuit.fail_escaped`. HUD (client half, from the snapshot's `volunteer` / `volunteerDone` only):
   `block.pursuit.hud_volunteer` while every NPC car is stopped and he is not caught, else the usual lines.
-- Pointer: the NPC cars and people as before, plus his last-reported point (`key = 'last:driver'`, look
+- Pointer: the NPC cars and people, plus his last-reported point (`key = 'last:driver'`, look
   `searchArea`, "Suspect vehicle: last reported"): CP.Opponents' server-side `rec.lastCoords` while he is free,
   online and outside an instance, taken every `Config.Volunteers.driverReportEvery` s (30; 0 = none) once his phase
   is `in_position` or `engaged`, never in between and dropped once he is caught; with nothing else to show, the
-  first car's point (the meet point). Presence: the NPCs as before, else his server-side last coordinates (never
+  first car's point (the meet point). Presence: the NPCs, else his server-side last coordinates (never
   sent), else the start.
 - `'void'`: nothing spawns. Voids (no-show, cancel, leave, AFK catch) stay with CP.Volunteers' `onVoid` / `voidRun`.
   Spec: tests/pursuit_volunteer_spec.lua.
@@ -4548,7 +4198,7 @@ answers `{ role = 'fugitive', meet = <the location's first hiding spot> }` (insi
 position means being inside it). He hides on foot or by car anywhere in the circle. The block reads
 `ctx.volunteer()` on start, every tick and on every `opp_*` event (`st.vol`; all its code sits in one local table
 `Vol`):
-- nil (no match, `enabled` off, a mode 'npc', or phase `npc`): everything as before (the NPC fugitives).
+- nil (no match, `enabled` off, a mode 'npc', or phase `npc`): nothing changes (the NPC fugitives).
 - `'wait'` (phase `asking`): no fugitive is made (clues still are), the HUD says
   `block.search_area.hud_volunteer_wait`; the objective cannot complete. Phase `npc` later makes the fugitives.
 - `'real'` (travel, in_position, engaged): `FugTarget` is 0, or one fewer than the objective's (scaled) fugitives
@@ -4609,6 +4259,220 @@ Config.Blocks entry, so builder:config never lists it). Its settings are Config.
   the run host while the objective runs, with an alert dialog; removed at stop, on a host change and at resource stop.
 
 ---
+
+### 7.4 Block notes
+Each block's file header documents its fields, events and rules; the field lists are §3.3. What is not obvious from
+the code:
+
+#### Rules for every block
+- Every random pick is made once with `ctx.rng` when the state is built and kept in `ctx.state` (the rng is stored
+  there, so it keeps advancing); hostile_waves' low-health surrender uses `CP.Npc.rollSurrender`.
+- `validate` applies the defaults to a copy and returns `false, CP.L('block.<id>.invalid.<what>', vars)`; it checks the
+  `Config.Blocks` ranges, the allowed animations, the 40-armed budget, required points and `Config.Builder.noBuildZones`
+  for every point, including points written into an objective (Crimson-Arena rule 7). Built-ins (`mission.source ==
+  'builtin'`) are trusted on the allowed model/weapon lists, spawn-point counts and the distance from the start.
+  `onEvent` reject reasons are short log ids (`too_far`, `not_held`, `wrong_state`), not locale keys.
+- Every §7.1/§7.2 hook is defined. Client halves keep their state in a per-file map keyed by `runId:index`.
+- Timed interactions take a `*_start` and a finish, both distance-checked, the finish at least 80 % of the duration
+  later (or sampled dwell: the officer in reach for the duration minus 1.5–2 s). Progress bars still running at stop
+  are cancelled. `seq`/`try` counters keep a retry from being an exact duplicate.
+- Spawning runs under a re-entry flag cleared by a pcall wrapper (one failed CreatePed never freezes the objective), at
+  most 8 spawns per tick, `ctx.canSpawn(1, armed)` before each one; counts are never cut. Host AI requests control
+  before every task and retries on the next 500 ms loop.
+- Killing a surrendered, cuffed, restrained or unarmed suspect fails the run (`run.fail_killed_unarmed`), except within
+  3 s of a surrender (a shot in flight); only participant kills count. Cuffs are accepted only when
+  `CP.Npc.getState(netId) == 'cuffed'` and the sender is in reach; `tick` also picks cuffs up from the bag.
+- Health shares are measured above GTA's 100-point death line: `(hp - 100) / (max - 100)`.
+- The server mostly sends full snapshots with `ctx.send` on every change (and once more on the first tick); clients
+  write their own HUD line with `ctx.hudDetail`, rebuilt only when its text can change.
+
+#### checkpoint_route, interact_points, skill_check
+Locale `locales/parts/blocks_a.json` (also `bonus.medal_*`, `bonus.no_contact`, `bonus.devices_found_fast`); tests
+`tests/blocks_a_spec.lua`.
+
+| Block | Client → server (`ctx.report`) | Server → client (`ctx.send`) |
+|---|---|---|
+| checkpoint_route | `{ type='checkpoint', index, netId?, try }` · `{ type='contact', netId }` · `{ type='undriveable', netId }` | `{ kind='state', points, current, done, total, finished, medals, track={contacts,undriveable}, course={running,elapsedMs,penalty,contacts,time,medal,held} }` |
+| interact_points | `{ type='interact', point, seq }` · `{ type='followup', point, seq }` · `{ type='log', point, choice }` (from the tablet) | `{ kind='state', points={ {coords,heading,label,status,outcome?,outcomeLabel?,followUp?,found?} }, hidden, found, total, done, log }` |
+| skill_check | `{ type='check', target, index, success, seq }` (one per round) | `{ kind='state', targets={ {coords,netId,status,next,streak,worker} }, checks }` · `{ kind='explode', target, coords, by, effect }` |
+
+- Ids: checkpoint_route `medal_gold|silver|bronze` and `no_contact` (medal courses only, with the EVOC card values 50 /
+  25 / 10 and 10 as hints, capped for custom missions); interact_points `correct_log`, `wrong_log`, `fastBonus.id`;
+  skill_check `no_missed_checks`. All shared.
+- `use = 'random'` always picks a pool point inside the start first, then the pool's circular order from it.
+- checkpoint_route: `timerStart = 'first'` on a first-objective medal course holds the run timer until checkpoint 1
+  counts (at most 120 s; not when already paused; `course.held`). Each counted contact adds `contactPenalty` s to the
+  course time and takes it off the run timer; at most one contact per 1.2 s per participant, 60 per objective. A
+  `location.medals` table overrides `obj.medals`; `no_contact` also needs no server body-health loss of 10+.
+  `vehicleRequired` (old files' `policeVehicle` is read as it) only requires DRIVING any vehicle, decided with server
+  natives (FiveM has no server-side vehicle class). Stop time: the server's own 1 s samples must have the participant
+  inside, ≤ 3 m/s, for `stopFor − 2` s; drive-through gates allow radius + 12 m. Undriveable: accepted only for the
+  reporter's vehicle at engine ≤ 100 (or tank ≤ 0); the tick fails the run when a course vehicle seen healthy reaches
+  engine ≤ 0.
+- interact_points: a main action needs the server sample within radius + 3 m for `progress.duration − 1.5 s`, a
+  follow-up likewise. `ctx.state.log = { point, choices = { { id, label } } }` (read by the view for Business Check; the
+  oldest waiting door is shown); without a roll the server picks the correct log choice with equal chances. Hidden
+  devices spawn when found (`role = 'device'`, `tag = 'shared:devices'`, frozen) and are appended to
+  `run.shared.devices = { { netId, coords, point, model, heading } }`; the search is done once all are found and
+  spawned; `fastBonus` counts from this objective's start. Custom missions: `progress.anim` an allowed name,
+  `hidden.prop` `prop_ld_bomb` or `prop_c4_final_green`, `fastBonus.id` a Config.Bonuses id.
+- skill_check (`targets = 'shared:devices'`): a miss repeats the round and costs `missPenalty` s; `failAfter` misses in
+  a row set it off; one worker per target (freed after 15 s idle); it re-spawns a device prop that no longer exists (3
+  tries) and measures from the recorded coords. The explosion `AddExplosion(x, y, z, 2, 0.0, true, false, 1.0)` (no
+  damage) plays only on the client named in `by`; `onTimeout` sets off every armed device and the run fails
+  `time_limit`.
+
+#### hostile_waves, protect_rescue, flee_arrest
+Locale `locales/parts/blocks_b.json`; tests `tests/blocks_b_spec.lua`. Extra evidence: `free_start`, `knock_start`,
+`knock`, `aim`, `stunned`, `low_health`. Optional fields beyond §3.3: hostile_waves `boss.aliveBonus` (`{ id =
+'kingpin_alive', points = 50 }`), `boss.accuracy`, `boss.behaviour`, `cuff`; flee_arrest `accuracy`, `armour`,
+`cuff.maxDistance`; protect_rescue `target.icon`, `target.distance`.
+- Defaults: flee_arrest scatter `suspects` 5 and `armedShare` 0.4 (§3.3; config/blocks.lua's values are Builder UI
+  defaults), `knock.duration` 3000, `safeRadius` 6.0, boss health/armour `Config.Blocks.hostile_waves.health[2]` /
+  `armour[2]` (400 / 100), boss weapon `WEAPON_ASSAULTRIFLE`, npcs key `'hostages'`, associates `'associates'`; text
+  defaults through `CP.L` (a file's label wins).
+- Waves: "alive" = not dead and not cuffed (a surrendered hostile waiting for cuffs counts); `afterSeconds` from the
+  wave's start; the next wave only once the current one is fully spawned. The boss spawns after the last wave at
+  `boss.spawn`, stats as written (no tier, no modifier). Besides the host's `low_health` report, `tick` polls each
+  hostile's server health for its one surrender roll.
+- Door mode: the response is rolled at the objective start (an armed suspect counts toward the cap) and kept secret:
+  the pistol is given only at the reveal; a surrendering suspect is placed 1 m outside the door. Every flee_arrest NPC
+  spawns `cfg.group = 'neutral'`.
+- Escape: only fleeing or hostile suspects/inmates, beyond `escape.distance` from every participant for
+  `escape.seconds`. Armed inmates: exactly `round(suspects × armedShare)`; hostile within `fireWithin`, fleeing beyond
+  1.5 ×; they give up only when stunned or below `armedGivesUp.belowHealth`. `stunned`: the reporter within 50 m and a
+  participant within 30 m. Lock-on aim counts for `givesUp.aim`.
+- protect_rescue watches its hostages the whole run; damage comes from `CP.Npc.onDamaged` (so `shot`/`damaged` events
+  change nothing while it listens); the same attacker within 1 s counts once; `no_hostage_hurt` is lost by any damage
+  and recorded only after minSeconds; `hostage_hit` needs an active participant attacker. One pending Cut restraints
+  per participant. The host never waits for control of a hostage another client owns (`ctx.control(ent, 0)`, retry
+  after 250 ms).
+- presence: nearest living hostile / hostage / suspect, else the start, safe point or door.
+- Traffic (hostile_waves client): `AddRoadNodeSpeedZone`, `SetRoadsInArea` and one `ClearAreaOfVehicles` around the
+  start; held while a later objective of the run exists (Secure the scene), restored when the last stops, the run ends
+  or the resource stops; a later objective with the same area takes it over.
+- Custom guardrails: flee_arrest `aliveBonus.id` a Config.Bonuses id without points; `boss.aliveBonus` `kingpin_alive`
+  (50) or such an id; `givesUp.close` off or exactly 3 m / 3 s; knock and cuff durations 1000–30000 ms; `cuff.maxDistance`
+  ≤ 3 m. The file's `aliveBonus.points` is a hint only on built-ins.
+
+#### pursuit, escort, search_area
+Locale `locales/parts/blocks_c.json`; tests `tests/blocks_c_spec.lua`.
+
+| Block | Client → server (`ctx.report`) | Server → client (`ctx.send`) |
+|---|---|---|
+| pursuit | `{ type='ram', netId, speed }` (km/h, pre-impact) · `{ type='lights_near', netId }` · `{ type='aim', netId }` · `{ type='stunned', netId }` · `{ type='undriveable', netId }` (own vehicle) · `low_health`, and `cuffed` / `shot` from CP.Npc | `{ kind='state', mode, fled, trigger, lights, vehicles={ {netId,index,state,occupants,routeDone} }, suspects={ {netId,vehicle,seat,state,armed} }, detained, neutralised, total, stopped, vtotal, escaping, follow={inRange,duration,hold,lost,average} }` |
+| escort | `{ type='toughened', netId }` (host only) · `cuffed` / `shot` from CP.Npc | `{ kind='state', truck={netId,driver,wp,gen,stop={at,left},arrived,toughened,health,stoppedFor,stoppedFail}, waves={ {k,triggered,done,alive} }, attackers={netId}, completed }` |
+| search_area | `{ type='clue_start', clue }` · `{ type='clue', clue }` · `{ type='stunned', netId }` · `cuffed` / `shot` from CP.Npc | `{ kind='state', circle={x,y,z,r,n}, clues={ {i,x,y,z,kind,model,netId,status} }, fugitives={ {netId,state} }, checked, clueTotal, arrests, neutralised, total, entered, escaping }` |
+
+States: pursuit cars `waiting` → `fleeing` → `stopped` | `wrecked`; pursuit peds `driving` → `stopped` → `fleeing` |
+`hostile` | `surrendered` → `cuffed`, or `dead`; fugitives `idle` → `fleeing` → `surrendered` → `cuffed`; escort attackers
+`hostile`, driver `driving`.
+- Ids (shared): pursuit `ramPenaltyId` (`hard_ram`; Pursuit Sim `ram`) per counted ram, `detainBonus`
+  (`racer_detained`) per detained suspect, `allDetainedBonus` once, `fastStop.id` (`vehicle_stopped_fast`: every car
+  stopped within `fastStop.seconds` of the objective start), `medal_*` (follow mode, only after the full `duration`,
+  card values as hints); escort `truck_healthy` (above 50 % at arrival); search_area `clues_first` (every clue before
+  the first arrest). Completion awards are recorded before the first `ctx.complete()`.
+- Added fields: pursuit `peds`, `weapons` (only with `neverShoots = false`), `detainBonus`, `allDetainedBonus`,
+  `fastStop`, `failIfUndriveable`; escort `driver` (`s_m_m_armoured_01`); search_area `peds`, `witnessModel`. Defaults:
+  pursuit `escape` 400 m / 20 s for stop + `all_detained`, else false; `arrest.duration` 5000; search_area `escape`
+  300 m / 30 s, clue props `{ 'prop_cs_heist_bag_02', 'prop_npc_phone_02', 'witness' }`. Custom guardrails: pursuit ids
+  `false`, a Config.Bonuses id or the default, `fastStop.seconds` ≤ 120; escort `driver` an allowed ped; search_area
+  `clueProps` only its own, `givesUp.close` off or 3 m / 3 s; durations 1000–30000 ms; `cuff.maxDistance` ≤ 3 m.
+- Pursuit start (at the objective start), placement priority: `spawns` (shuffled) > `spawn` (stacked 8 m back) >
+  `trigger.ahead` > a loop route (racer i starts `2 + (i-1)` waypoints before the one nearest the intercept) > an open
+  route's first point > 50 m ahead. `trigger = 'arrive' | { ahead }` flees at once; `{ distance, lights }` waits for a
+  validated `lights_near`, a participant within 15 m, or body health −25.
+- Stopped = below `stopped.speed` for `stopped.seconds`, counted only once the car was faster than 15 km/h (or 30 s
+  after it fled) and while a participant is within 50 m; wrecked or vanished counts as stopped. Occupants are then
+  told to get out (`TaskLeaveVehicle` every 2.5 s, warped out from the 3rd try) and switch to fleeing / hostile /
+  surrendered only once the server sees them out (a seated suspect can be neither cuffed nor safely fled on foot).
+  Give-ups: aim within 25 m of a waiting suspect (`surrenderOnAim`), aim within `flee_arrest.aimDistance` of a running
+  one, stun (participant within 30 m, reporter within 60 m), or the close rule; armed ones only by stun or below 50 %.
+- Completion (stop mode): every suspect cuffed or dead without a participant kill; `all_or_timeout_any` (Street Race
+  Bust) also needs one detained (`onTimeout` returns completed with ≥ 1). A kill by a participant who already left is an
+  outside kill, never a fail (the same for the escort driver and search_area's people).
+- Rams: the ramming driver reports the touch's rising edge with the pre-impact speed; accepted in a vehicle within 12 m
+  (+2), speed at most his highest server-sampled speed of the last 3.5 s + 40 km/h, once per 2.5 s per car; counted when
+  `ramSpeed <= 0 or speed > ramSpeed`. A ram also makes a waiting car flee.
+- Follow mode: the target is the suspect nearest the party (its car while driven); one sample per tick; `inRange` while
+  ≤ `hold`; the average sets the medal; lost = beyond `lost.distance` for `lost.seconds`; undriveable as in
+  checkpoint_route. If every suspect is gone without a participant kill the objective ends without a medal. `prepare`
+  sets `run.flags.medals`.
+- Escort: the truck spawns at `route.points[1]`; a waypoint is passed within 20 m (4 waypoints of look-ahead); a stop
+  waypoint's wait never counts toward `stoppedFail`; stopped = below 1 m/s, counted only while the host is within 400 m
+  (only his client drives it) and after it moved. Destroyed = death, health ≤ 0, engine ≤ −3999 or missing 2 ticks, not
+  once done. Health % = min(engine, body) / (1000 × toughness after the host's `toughened`). Complete = on the final
+  stretch within `arrival` of the last waypoint, every triggered wave neutralised and no living attacker within
+  `clearRadius`. A participant killing the driver fails the run.
+- Escort waves: `ambush.waves` at distinct random `ambushPoints` sorted along the route; a wave triggers within 120 m
+  or once the truck passed its point; each car spawns with its crew when the caps allow, 7 m apart alternating 4.5 m
+  left/right, doors locked, crews seated with `SetPedIntoVehicle`. Rescale drops planned waves beyond the new count.
+- Search circle: `startRadius` around `location[center]`; each checked or lost clue shrinks it to the next `shrinkTo`
+  with a centre within 0.7 × radius of a fugitive at large (nested when possible). Completion needs every fugitive
+  neutralised. Clues: `clueCount` spots, props cycled (`witness` = a ped); `clue_start` then `clue` within 2.5 m (+2), 80 %
+  of `clueProgress.duration` apart. A witness killed by a participant fails the run; otherwise a lost clue shrinks the
+  circle but `clues_first` is gone. Fugitives run when a participant is within `runDistance` and escape only after
+  running.
+- presence: pursuit the nearest suspect (its car while driving), escort the truck, search_area the metres outside the
+  circle.
+- Every mission vehicle is locked (`SetVehicleDoorsLocked(veh, 2)`; peds can still get out); NPCs are unarmed except
+  escort attackers (and pursuit with `neverShoots = false`).
+- Driving passes the style name and m/s to `CP.Npc.task`; lap-end and stuck re-tasks pass `force = true`; the lap end
+  counts only after the car got 30 m away. The host calls `ctx.control` before anything it does (re-applying and
+  re-tasking when control comes back) and never waits for an entity another client owns (`ctx.control(ent, 0)`, next
+  pass after 250 ms); a witness on its phone is left with the client that owns it.
+
+#### Optional upgrades (fields in §3.3; an objective without them behaves as without them)
+- pursuit: `responses` roll per vehicle from its own seed stream (every participant and re-run sees the same); `yield`
+  pulls over with hazards, `fight` gets out armed (the hidden truth is armed only then). `handoff = 'contact'` counts
+  occupants still seated as settled. `observe`: the officer must be behind the violator; the snapshot's `watch = {
+  behind, seconds }` drives the HUD, and the violator gets its cue and blip only after passing the observation point;
+  `stop_without_cause` (−15) is personal. Drive-by: a passenger targets the nearest participant within 40 m; a boxed-in
+  fight car rams once, only a participant. Stats `vehicles_stopped` and `noteArrest` per cuff.
+- interact_points: `together` needs `min(count, participants)` distinct officers within `window`; a stale or repeated
+  hold resets with a HUD line. `hidden.kind = 'seize'` has no prop; finds note the `evidence` stat and
+  `run.shared.evidence`. `fastBonus.after = 1` (the raids) counts `stash_found_fast` from the breach.
+- skill_check `onFail.setback`: the recovery is a sampled dwell finished by a `'recover'` report; the retry is timed
+  from its end; the state sends `setback` and `retryIn`.
+- flee_arrest: a compliant or nervous inmate who scatters surrenders; the feint is rolled at the first surrender and
+  the client reports aim; killing a feinting suspect still fails; `custody = 'handover'` counts only once handed over.
+- hostile_waves `spawnSets` names the chosen sets in `run.shared.intel`; protect_rescue notes `rescues` at the safe
+  marker; flee_arrest and hostile_waves `noteArrest` per cuff.
+
+#### field_contact (blocks/field_contact)
+Defaults also `transport = 'transport'`, `models`, `vehicles`, `weapons`, `aliveBonus = { id = 'subject_alive' }`,
+`allCorrect = { id = 'all_correct' }` (valued by Config.Bonuses).
+- parked: `cars` random kerb spots of the location's `spots`; each car rolls the set's vehicle truth (a free spot never
+  a violation; level from `Config.Custody.parkingRules[rule]`). Returning driver (at most `returning.max`,
+  `returning.chance` per cite or impound of a car that is not stolen): takes the ticket 60 %, argues until Explain the
+  citation 30 %, drives off 10 % (cites only). The thief (`thief.chance`, on the first inspect of a stolen car) waits
+  30 m away and runs once an officer is within `thief.runAt`.
+- scene: a variant from `scene` (occupied_car, loitering, casing); the first participant within `approach` sets people
+  off by demeanour (evasive walk_away, runner flee_on_approach, hostile tell_then_draw; compliant and nervous stand). A
+  consensual contact may leave: walking beyond the escape distance costs nothing.
+- stop: takes the `run.shared.contacts` entries owned by this objective, in the pursuit block's format `{ vehicle,
+  occupants = { { netId, seat, state, truth } }, observed = { kind, speed, zone }, forced, profileSet, truth, taken }`
+  (occupant state fleeing/cuffed = ran on foot; forced = PIT or box-in, everyone Evading; observed gives the driver a
+  violation). `revealed = { 'stolen' }` on the objective makes the plate known (Stolen Vehicle Takedown). A person the
+  pursuit spawned unarmed but rolled armed gets armedTruth and a hidden weapon.
+- Runners and walkers give up when aimed at within 10 m (`aim`), stunned, or with a participant within 3 m for 3 s. A
+  runner or drawer cuffed through Cuff suspect is that officer's arrest and earns aliveBonus once; their Arrest
+  decision is then Best with 0 points.
+- Escape (beyond `escape.distance` for `escape.seconds`): `escapeFails` fails the case, else `missed_arrest` (shared).
+  Killing a person who never drew fails the case (`run.fail_killed_unarmed`).
+- `vehicle_impounded` (shared, `each`) for each car lawfully impounded when the card lists it.
+- Complete when every contact is decided (an Arrest handed over with `custody = 'handover'`), dead or gone, and any
+  returning driver is done; then `all_correct` (every decision Best) and `procedure_complete` per officer (everyone he
+  arrested was ID-checked and searched). On the time limit undecided contacts count as missed. A car removed by
+  sc-police `/imp` is gone, never an Impound.
+
+#### process_scene (blocks/process_scene)
+prepare: `CP.Runs.holdBodies(run, { roles, max = bodies })`. start: `pauseFastClock`; no bodies → aliveBonus and it
+completes at once (minSeconds 0). Else the coroner van goes to the location's `coroner` point (or the scene) unless
+`coroner = false`. Client reports `tag_begin`/`tag`, `bag_begin`/`bag` (a body within 2.5 m), `release_begin`/`release`
+(the parked van within 6 m, or the scene without a van); each finish needs the step's duration (−0.5 s) and the
+officer in reach for it minus 2 s. Bag releases the body and spawns the bag prop; Release deletes the bags and sends
+the van. ox_target names `crimson-police:body_tag`, `body_bag`, `coroner`.
 
 ## 8. Net events, callbacks and actions (complete list)
 
@@ -4690,7 +4554,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:stunHit` | netId (plain event, no reqId; 2 per s) | custody |
 | `server:tabletItemGone` | — (plain event; 2 per s) | tablet |
 | `server:tabletClosed` | — (plain event, once per close; 4 per s): ends the `nav` watch, fires `tablet:closed` | tablet |
-| `server:mcWatch` | false = the tablet closed (plain event; deprecated, no longer sent: `server:tabletClosed` replaces it) | missioncalls |
+| `server:mcWatch` | false = the tablet closed (plain event; deprecated, not sent: `server:tabletClosed` replaces it) | missioncalls |
 | `server:claimMissionCall` | `{ callId, twists? }` → `{ runId }` or `{ pending }` (the twists are checked before the claim joins the window) | missioncalls |
 | `server:declineMissionCall` | `{ callId }`: the paged unit's leader turns a pushed mission down | missioncalls |
 | `server:contactDecide` | `{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }` | custody |
@@ -4945,8 +4809,8 @@ every action.
 | `server:admin:addDepartmentFunds` | `{ department, amount, reason, confirm, requestId }` | deptFunds | P I R T(amount) W `allowAddFunds`; 1..`addFundsMax`; 1 per 10 s per department |
 | callback `admin:previewPayoutAdjust` | `{ mode, value, scope }` → PayoutAdjustPreview | setTypePayout | P |
 | `server:admin:adjustAllPayouts` | `{ mode, value, scope, lockTypes?, reason, confirm = 'ADJUST', previewToken, requestId }` | setTypePayout | P I R T V |
-| `server:admin:setTypePayout` (existing) | gains `unlock?: boolean` | setTypePayout | as before |
-| callback `admin:getRewards` (existing) | gains `{ citizenid?, status?, source?, from?, to? }` | openAdmin | as before |
+| `server:admin:setTypePayout` (existing) | gains `unlock?: boolean` | setTypePayout | unchanged |
+| callback `admin:getRewards` (existing) | gains `{ citizenid?, status?, source?, from?, to? }` | openAdmin | unchanged |
 | callback `admin:checkRewardInventory` | `{ id }` → RewardInventoryCheck | rewardsAdmin | P |
 | callback `admin:rewardItems` | `{}` → RewardItemChoices | rewardsAdmin | P |
 | callback `admin:rewardPoolPreview` | `{ path, value }` → RewardPoolPreview | rewardsAdmin | P |
@@ -5058,6 +4922,25 @@ NUI → Lua: `fetch('https://Crimson-Police/<endpoint>', { method: 'POST', body:
 
 The web bridge exposes `request<T>(name, args)`, `action<T>(name, payload)`, `clientAction<T>(name, payload)`
 and `useNuiEvent(type, handler)`. In a normal browser (dev) the bridge uses registered mocks.
+
+Safety nets: `QuietBoundary` (renders nothing for the broken part) wraps the HUD column, HUD, result card, debug
+overlay, overlays, toasts and each layout; a crashed layout or an `open` that cannot be shown calls `close`; the root
+boundary calls `close` and mounts the app again after 2 s (sending `ready` again, at most 3 times). An older build
+without `acks` is never closed by the 6 s open check (§5.4).
+
+Replies that carry their screen's view (`shared/replyView.ts` applies `data.view` / `queue` / `activity` / `runs` /
+`officer`; the screen asks again only when it is missing): `server:sup|admin:reviewFlagged` and `handleDispute`
+(`queue`, `CP.Admin.reviewQueueFor`), `server:declineMissionCall` (`MC.list`), `server:sup|admin:mcWithdraw|mcPage|
+mcCreate` (`MC.supView`), `server:sup:forceRecall` and `addRunTime` (`CP.Admin.liveRunsFor`), `server:sup:
+clearCooldowns` (`CP.LiveCtl.supCooldownsView`), `server:sup:commend|revokeCommendation|missionBan|liftMissionBan|
+awardPoints` sent with `activityOf` (`activity`, `CP.Challenge.supActivity`), `server:admin:voidRun|restoreRun|
+setVoidKind|flagRow` sent with `views = { rowId, archived, citizenid, runs, officer }` (`CP.Corrections.withViews`),
+`server:admin:backupNow|restoreBackup|deleteBackup` (`Sys.backupsView`), `storageCopy|setStorageMode|useStoreAgain`
+(`Sys.storageView`; `admin:getStorage` allows one read per 5 s), `server:admin:resetAllSettings` (`Settings.all()`).
+`Config.Tablet.supervisorReviewLive` (false): after each review decision `CP.Admin.shareReviewQueue(src)` pushes
+`reviewQueue` to the department's other supervisors who asked for the queue in the last 75 s.
+`Config.Tablet.supervisorRemember` (false): supervisor dialogs open with the values last used
+(`supervisor/components/lastUsed.ts`, page memory only).
 
 ### 9.2 Session
 
@@ -5318,7 +5201,7 @@ interface RunResult { runId: string; missionLabel: string; missionType: string;
   `mission.<id>.label`, `mission.<id>.description`, `mission.<id>.location.<n>`. A missing key uses the text from
   config or the mission file, so custom missions keep the builder's text.
 - English only: `locales/en.json` is the only language file. Text for a player's screen that is
-  built on the server may be sent as a `CP.Lt(key, vars)` token (§2); it resolves in the server language.
+  built on the server may be sent as a `CP.Lt(key, vars)` token (§2); it resolves in the server language. There is no per-player language (no column, preference, list or picker).
 - The UI reads the same strings via `t(key, vars)`: the client sends them once with the reply to `ready` (the
   `theme` message) and again as `locale` after a `Config.Labels` change. Sessions carry no locale.
 
@@ -5381,7 +5264,7 @@ read a failure.
 
 ## 12. Web UI developer guide
 
-For developers only: server owners never build the UI (the root `README.md`, section 12, says why). 
+For developers only: server owners never build the UI (the root `README.md`, section 12, says why).
 
 React 18 + TypeScript + Vite 6, in `Crimson-Police/web/`. Builds into `web/dist`, which FiveM loads as
 `ui_page 'web/dist/index.html'` of the resource **Crimson-Police**. `dist/` is committed, so rebuild
@@ -5626,3719 +5509,72 @@ only when `isEnvBrowser()` (no `window.invokeNative`).
 
 ---
 
-## 13. Module notes
-
-How each part of the code reads the contracts above, with the exact names and shapes it registers. Each part
-has its own section, named after its area. When a section here and §0–§11 disagree, §0–§11 win.
-
-### 13.1 Access & UI shell · tablet ways, mission desks, badges, the bell, the officer's look and Config health
-
-The tablet ways, desks, badges and config health on top of the foundation; the API rows are in §5. English is the
-only language (owner decision): the per-player language engine, the convar follow, plurals, CP.Lp,
-check_contracts --locales, the per-language merge, locale injection on the client and the CP.L → CP.Lt conversion of
-the engine's HUD and board-card text were not built. Tokens keep resolving in the server language (foundation.md).
-
-#### Tablet access (modules/tablet/server.lua)
-
-`getSession` (args and session fields: §5.4): for the Officer and Supervisor UIs every way ends in
-`T.checkAccess(src, officer, via, desk)` after CP.Access.getOfficer (department, duty, suspensions):
-
-| Rule | Error |
-|---|---|
-| A way whose Config.Tablet.access switch is false (dispatch follows keybind; item also needs Config.Tablet.item; export is always on) | err.access_off |
-| CP.Alerts.inArena(src), for every way | err.in_arena |
-| Desk: the index names no Config.Tablet.desks entry (spoofed, 0, negative, not whole) or the ped is outside the box grown by 2 m (server coordinates; `rotation` turns the box, z included) | err.not_at_desk |
-| Desk: departments set and the officer's department not in it | err.desk_department |
-| requireItem: every way but a desk needs the item; ox_inventory Search(src, 'count', item) in pcall, a failed lookup or a stopped ox_inventory counts as no item (only while requireItem is on) | err.no_tablet_item |
-
-- The silent session (the HUD theme at login) opens nothing and skips these checks. An unknown `via` is the command.
-- A request that names no way (switchUi, refreshSession) is checked with the way of the last session that passed for
-  that src (`lastWay`), so walking away from a desk and switching UI is refused.
-- `T.desk(i)`, `T.deskAllows(desk, dept)`, `T.inDeskBox(desk, coords, margin)`, `T.hasTabletItem(src)`,
-  `T.checkAccess(...)`.
-- Net: plain `crimson-police:server:tabletItemGone` (the client saw the item go): with requireItem on, not opened at a
-  desk and the item really gone, the server sends `crimson-police:client:closeTablet` (errKey) to that player.
-- Callback `admin:getTabletAccess` (admins) → TabletAccessView (web/src/types/access.ts): ways, item, deskDistance,
-  desks (index, label, coords, size, rotation, departments or nil, prop), each department's personal accents and the
-  appearances.
-
-#### Sidebar badges (modules/tablet/server.lua)
-
-`T.navCounts(src) -> NavCounts` and callback `getNavCounts`. Each count through a guarded call (a missing or failing
-module gives 0): invites (CP.Units.invitesFor, else the open invites of CP.Units.view), calls
-(CP.MissionCalls.claimableCount), review (supervisors only: CP.Admin.flaggedRows(dept, own citizenid) with
-reviewFlagged, CP.Disputes.forSupervisor with handleDisputes, CP.Profile.queue(dept) with reviewProfiles; 30 s cache per
-src), commendations (CP.Profile.newCommendations), rewards (CP.Rewards.lockerCount), onRun (CP.Runs.getBySrc). The
-whole set is cached 5 s per src.
-
-Push 'nav': every CP.Tablet.push of unit, invites, calls, profile or rewards clears that src's cache and, when the
-src asked getNavCounts or opened the tablet in the last 10 minutes, schedules one 'nav' push 1 s later (a burst is one
-push). A 'run' push does so only when the run starts or ends (the push carries a view, or nil), or when the last
-run-triggered one is Config.MissionCalls.eligibilityCache seconds old, so the progress pushes of a run no longer rebuild
-every badge. An open tablet asks getNavCounts again every 5 minutes (navBadges.ts). The client sends the plain event
-server:tabletClosed once per close (4 a second per src): it ends the watch (a scheduled 'nav' push is dropped) and fires
-the 'tablet:closed (src)' hook (MissionCalls stops its Dispatch pushes). Cleared on playerDropped.
-server:tabletItemGone is rate limited (2 a second per src).
-
-#### Client (modules/tablet/client.lua)
-
-- `T.open(ui, opts)`: opts `{ via, desk, screen }` (via defaults to 'export'); the command names 'command', the key
-  mapping 'keybind', the item 'item', the OpenTablet export 'export', a desk 'desk'. The open NUI message carries
-  `screen`.
-- Key mapping `crimsonpolice_dispatch` (Config.Tablet.dispatchKey, unbound): opens the Officer UI on Dispatch, or
-  switches an open Officer UI to it.
-- Mission desks: one ox_target addBoxZone per desk (option `crimson-police:desk`, 2 m), created once at start and
-  again only after they were removed; canInteract shows it only to an on-duty officer of an allowed department, with
-  the tablet closed and outside Crimson-Arena (display only: the server decides). An optional local laptop prop
-  (never networked) per desk. Removed on resource stop and when a foreign crimsonArena value appears; created again
-  when the arena lets the player go. `T.deskZones()`.
-- At a desk: no handheld prop or animation; Config.Tablet.deskScenario plays, and the tablet closes when the player is
-  more than Config.Tablet.deskDistance from the desk's box (0 inside it, rotation included; checked every 0.5 s); the
-  scenario is cleared on close.
-- requireItem: while the tablet is open (not at a desk) the client looks for the item every second
-  (exports.ox_inventory:Search('count', item), pcall) and reports its loss once through server:tabletItemGone.
-- Net: `crimson-police:client:closeTablet` (errKey) closes the Officer or Supervisor UI with a toast.
-
-#### Config health (modules/confighealth/server.lua)
-
-`CP.ConfigHealth.register(name, fn -> { { level = 'ok'|'warn'|'error', text } })` (a second register of a name
-replaces it), `run() -> ConfigHealthItem[]` (errors first, then warnings, then ok; a failing check is one error line),
-Runs 5 s after start (and registers CP.Rewards.health then); only the first run prints its problems to the console.
-Callback `admin:getConfigHealth` (admins) runs every check again, so "Check again" shows a fix at once.
-
-Built-in checks: items (the tablet item in ox_inventory, requireItem without an item, the item way off, no
-ox_inventory), desks (coords, size, unknown departments, ox_target running, off), colours (each department theme's four
-colours, personalAccents colours, levels and duplicates), tweaks (Config.MissionTweaks ids and whether each was applied),
-locale (locales/en.json loads; Config.Locale other than en warns: English only), avatars (links on with no valid host,
-bad host names, expiring hosts such as cdn.discordapp.com, no approval).
-
-#### Web
-
-- layouts/TabletFrame.tsx: `prefs` and `profile` props; mergeAppearance (theme.ts) applies the appearance
-  (department, midnight, high_contrast, colourblind) and a personal accent that is one of the department's; the primary
-  colour, logo and watermark stay the department's; colourblind and high contrast set extra status and text colours
-  (applyAppearance). The tablet size is Prefs.uiScale clamped to Config.Profile.uiScale, never larger than the
-  viewport (`clampUiScale`, `tabletScale(width, height, uiScale)`).
-- layouts/Header.tsx: the officer's Avatar and "Lv n" (band in the tooltip) next to the callsign; the bell
-  (layouts/NotificationBell.tsx: the last 20 toasts of the NUI session from the toast bus, unseen count), also in the
-  Admin UI header (layouts/AdminLayout.tsx).
-- layouts/Sidebar.tsx: `live` dot; layouts/navBadges.ts: `useNavCounts()` (getNavCounts + push 'nav') and
-  `navBadge(key, counts)`: Home rewards, Dispatch calls, Unit invites, Active Mission live dot, Profile commendations,
-  Review Queue open items.
-- OfficerLayout mounts the ReadyCheckBanner above every screen but Unit (which has its own) and refreshes the session on
-  a 'profile' push, so a saved look applies at once. Both tablet layouts call setMoneyFormat(session.config.format).
-- shared/format.ts: `setMoneyFormat`, formatMoney follows Config.Format (currency, currencyAfter), `fmtPlain` (Form.tsx
-  NumberInput ranges), formatDateTime through the locale's date locale.
-- shared/data.ts: normalizeSession keeps the session's config values (dispatch, profile, format ...).
-- Admin UI: Permissions shows Config health; Departments lists each department's personal accents and mission desks and
-  previews every look (appearance and accent) in the theme preview.
-- Browser mock (mocks/core.mock.ts): getNavCounts, admin:getConfigHealth, admin:getTabletAccess; the session carries
-  the officer's look from the profile mock; `?uiScale=0.85`, `?uiScale=1.25`, `?look=<appearance>`, `?accent=%23rrggbb`.
-
-#### Item files
-
-items/crimson_police_tablet.png, items/ox_inventory_items.lua (the ox_inventory entry, client.export
-'Crimson-Police.useTablet'; never loaded by the resource), items/README.md.
-
-### 13.2 Blocks: checkpoint_route, interact_points, skill_check
-
-Files: `Crimson-Police/blocks/{checkpoint_route,interact_points,skill_check}/{server,client}.lua`,
-`Crimson-Police/locales/parts/blocks_a.json`, `tests/blocks_a_spec.lua`.
-Each file's header comment lists the fields it reads, the evidence it accepts and the ids it records.
-
-#### Evidence and messages (the exact shapes)
-
-| Block | Client → server evidence (`ctx.report`) | Server → client (`ctx.send`) |
-|---|---|---|
-| checkpoint_route | `{ type='checkpoint', index, netId?, try }` · `{ type='contact', netId }` · `{ type='undriveable', netId }` | `{ kind='state', points, current, done, total, finished, medals, track={contacts,undriveable}, course={running,elapsedMs,penalty,contacts,time,medal,held} }` |
-| interact_points | `{ type='interact', point, seq }` · `{ type='followup', point, seq }` · `{ type='log', point, choice }` (the last one comes from the tablet) | `{ kind='state', points={ {coords,heading,label,status,outcome?,outcomeLabel?,followUp?,found?} }, hidden, found, total, done, log }` |
-| skill_check | `{ type='check', target, index, success, seq }` (one per round) | `{ kind='state', targets={ {coords,netId,status,next,streak,worker} }, checks }` · `{ kind='explode', target, coords, by, effect }` |
-
-`point`, `target` and `index` are 1-based positions in the lists the server sends. `seq` / `try` count the
-client's own reports, so a retry, or a second miss on the same round, is never an exact duplicate of an
-earlier report (the servers ignore them).
-Point statuses: `pending` → (`followup`) → (`log`) → `done`; `dropped` after a rescale.
-
-**`ctx.state.log`** (interact_points; read by `CP.Runs.view` for the Active Mission `log` field):
-`nil` or `{ point = <n>, choices = { { id = 'secure', label = 'Secure' }, { id = 'found_open', label = 'Found open – secured' } } }`.
-Labels are already translated on the server. Several doors can wait for their log at once; the oldest one is shown.
-
-**`run.shared.devices`** (written by interact_points `hidden`, read by skill_check `targets = 'shared:devices'`):
-`{ { netId, coords = vector3, point, model, heading } }`, appended when a device is found and its prop has
-spawned. `netId` is the device's identity for skill_check; `model`/`heading` let skill_check re-create the prop.
-
-#### Bonus / penalty ids recorded
-
-- checkpoint_route: `medal_gold` | `medal_silver` | `medal_bronze` (only on medal courses, from the course time + contact seconds), `no_contact` (only on medal courses).
-  Each carries the EVOC card value as its `opts.points` hint (50 / 25 / 10, `no_contact` 10; capped by
-  `Config.Builder.bonusCap.points` on non-built-in missions), so a custom medal course scores its medals although
-  a custom file cannot list those ids (they are not in `Config.Bonuses`); a file that lists them keeps its own points.
-- interact_points: `correct_log` (award), `wrong_log` (penalize), `fastBonus.id` (e.g. `devices_found_fast`).
-- skill_check: `no_missed_checks`.
-
-All are shared (no `src`). They are always recorded; scoring decides the value. The ids that are not in
-`Config.Bonuses` need explicit values in the mission file (see requests below).
-
-#### Contract interpretations
-
-1. **Randomness.** Every random pick (random checkpoints, door outcomes, hiding spots) is made once with
-   `ctx.rng` when the state is first built (in `prepare`) and kept in `ctx.state`, so it does not matter
-   whether the engine builds a fresh `ctx.rng` per call.
-2. **Random selection keeps the start first.** With `use = 'random'` a pool point inside `location.start`
-   (within `start.radius`) is always picked and comes first; the rest follow in the pool's circular order
-   from it. This gives "Start: the first checkpoint / business" for Beat Patrol and Business Check.
-3. **HUD.** The server never calls `ctx.hud`. It sends full snapshots with `ctx.send` on every change,
-   plus once more on the first tick after `start`, in case an update arrives before the client's `start`.
-   The client writes the only HUD line with `ctx.hudDetail`. Progress counts also come from `checklist`.
-   The markers draw every frame in range, but the line is built only when what it shows can change:
-   checkpoint_route on a snapshot, the course clock's whole second or a rename in Settings -> Names (a new
-   `Config.Labels` table); interact_points on a snapshot or a rename; skill_check checks it every 250 ms near a
-   device and on the next frame after a snapshot, a message, its end or a round change. It is sent only when its
-   text changes.
-4. **validate** first applies the block defaults to a copy. It returns `false, <translated text>`
-   (`CP.L` of a `block.<id>.invalid.*` key), which reads fine in the console and in `t()`. It checks the
-   Config.Blocks ranges, the Config.Builder.allowed animations and `Config.Builder.noBuildZones` for every
-   point. Custom missions (`mission.source ~= 'builtin'`) also get: interact_points `progress.anim` only an
-   allowed animation name (built-ins may give a raw `{ scenario }` / `{ dict, clip }`), `hidden.prop` one of the
-   block's device models (`prop_ld_bomb`, `prop_c4_final_green`), `fastBonus.id` a `Config.Bonuses` id. It does not apply `minSpawnFromStart` to hiding spots, because Bomb Disposal's start is at the building.
-5. **onEvent reject reasons** are short ids for logs (`too_far`, `not_held`, `wrong_state`, …), not locale keys.
-6. **checkpoint_route timing.** `timerStart` sets when the *course clock* (used for medals) starts. On a medal
-   course that is the mission's **first** objective, `timerStart = 'first'` also holds the run timer
-   (`CP.Runs.pauseTimer(run, true)` at the objective start) until checkpoint 1 counts (EVOC: "the timer starts
-   at the first checkpoint"). The hold ends after at most 120 s even if nobody crosses checkpoint 1 (so a run
-   can't sit paused forever), on `stop`, and is re-applied by `restart`. It is not taken when the timer is
-   already paused (test controls), and never on non-medal routes (Beat Patrol) or later objectives (that would
-   hand out free time mid-run). The snapshot carries `course.held`; the HUD then says "The timer starts at
-   checkpoint 1". Each counted contact adds `contactPenalty` s to the course time **and** takes the same
-   seconds off the run timer (`CP.Runs.adjustTimer`). Contacts are tracked when `contactPenalty > 0` or medals
-   are on. The server counts at most one contact per 1.2 s per participant and 60 per objective. The running
-   course clock on the HUD shows whole seconds (one NUI update a second); the final time shows tenths.
-7. **Medals.** A `location.medals` table overrides `obj.medals`. `medals = true` means "take them from the
-   location" (validate requires them). `no_contact` also needs no server-side body-health loss of 10 or more on
-   the course vehicle.
-8. **Driving a vehicle (was: police vehicle).** At the owner's request the police-vehicle check was removed:
-   FiveM has no server-side `GetVehicleClass` native (qbx_core's export of that name asks a random client), so
-   it had to trust the class a client reported. `vehicleRequired` (was `policeVehicle`, default on) now only
-   requires the participant to be DRIVING a vehicle, any vehicle, decided with server natives alone:
-   `GetVehiclePedIsIn(ped, false) ~= 0` and `GetPedInVehicleSeat(veh, -1) == ped`. On foot the report is
-   refused with `not_in_vehicle`, as a passenger with `not_driving`; the checkpoint report carries no
-   vehicle class or model any more (anything extra in it is ignored), and the police-vehicle list is gone
-   from config/config.lua.
-   Published mission files and stored drafts that still say `policeVehicle` keep working: `defaults()` (and
-   the builder when it reads a file or draft) reads it as `vehicleRequired`, without a warning. The lights &
-   siren penalty (Beat Patrol, Business Check) is unchanged.
-9. **Stop time.** The client counts `stopFor` while stopped (< 1.5 m/s) inside the marker. The server
-   accepts the report only if its own 1 s samples had that participant inside the marker, **stopped**
-   (server `GetEntitySpeed` of the vehicle, or of the ped on foot, ≤ 3 m/s) and driving a vehicle when
-   `vehicleRequired` is on, for at least `stopFor − 2` s. Drive-through gates allow radius + 12 m (lag at speed).
-10. **Undriveable.** A client report is accepted only for the reporter's vehicle, and only when the server
-    sees engine health ≤ 100 (or petrol tank ≤ 0). The server tick also fails the run by itself when a
-    course vehicle it has seen healthy reaches engine health ≤ 0.
-11. **interact_points dwell.** A main action is accepted when the server sampled the participant within
-    target radius + 3 m, while the point was pending, for at least `progress.duration − 1.5 s`. A follow-up
-    is accepted the same way for `followUp.duration − 1.5 s` while the point waits for its follow-up (the
-    officer who checked the door starts that clock at the check; walking away resets it).
-12. **logResult without roll** (builder: "2–4 choices, the correct one rolled by the server"): the server
-    rolls one of the choices per point with equal chances, and that choice is the correct log.
-13. **Hidden devices spawn when found**, not at start (nothing to see or take before the search). The
-    device prop is spawned with `role = 'device', tag = 'shared:devices', frozen = true`. The search is done
-    once every device is found **and** spawned, so it waits on `ctx.canSpawn`. `fastBonus` counts from this
-    objective's start, which for Bomb Disposal is the run start.
-    `ctx.spawnObject` yields until the object exists, and a search report and the tick run in two threads,
-    so spawning is guarded by `st.spawning` (the loop holding it also spawns what was found meanwhile; it
-    is cleared even when a spawn throws). A prop that finishes after a test-control restart is deleted, not
-    shared. skill_check's re-creation has the same guard (`st.restoring`) between `start` and the tick.
-    ARCHITECTURE §7.1 says the engine deletes an objective's entities when it stops, so skill_check does not
-    rely on the search objective's props: while it runs, an armed device whose prop no longer exists is
-    spawned again by skill_check itself (same model/coords/heading, waits for `ctx.canSpawn`, gives up after
-    3 failed spawns). Distance checks fall back to the device's recorded coords, so defusing never depends
-    on the prop existing.
-14. **skill_check.** A miss repeats the same round and costs `missPenalty` seconds. `failAfter` misses in a
-    row on one target set it off. One participant works a target at a time (the lock frees after 15 s idle).
-    The explosion is `AddExplosion(x, y, z, 2, 0.0, true, false, 1.0)` (damage scale 0), played only by the
-    client named in `by`: the participant who missed, or the run host when the timer runs out. `onTimeout`
-    sends the effect for every armed device and returns nil, so the run fails with `time_limit`.
-15. **Hooks.** Every hook of §7.1/§7.2 is defined. `onEntityDead` does nothing because these blocks spawn
-    no peds or vehicles. `hostChanged` only records the flag (no NPC AI).
-    The client halves keep their state in a per-file map keyed by `runId:index` (seeded with the first
-    `ctx.state` they see), so they work whether the engine passes the same `ctx.state` every call or a fresh
-    one; the entry is dropped on `stop`, and stale entries of finished runs are purged at the next run.
-16. **Locale.** `blocks_a.json` also holds `bonus.medal_gold`, `bonus.medal_silver`, `bonus.medal_bronze`,
-    `bonus.no_contact` and `bonus.devices_found_fast` (mission-card extras these blocks record). If another
-    part defines them too, the texts must match. Pursuit Sim's medals use the same `bonus.medal_*` ids.
-
-### 13.3 Blocks: hostile_waves, protect_rescue, flee_arrest
-
-Files: `Crimson-Police/blocks/{hostile_waves,protect_rescue,flee_arrest}/{server,client}.lua`,
-`Crimson-Police/locales/parts/blocks_b.json`, `tests/blocks_b_spec.lua` (run: `lua5.4 tests/run.lua blocks_b`).
-Each file's header lists the fields it reads (with defaults), the evidence it accepts and the ids it records.
-
-#### Contract interpretations
-
-- **ctx.rng** is stored in `ctx.state.rng` on first use, so the sequence keeps advancing even if the engine builds
-  a new ctx for every hook call. Every random pick (spawn points, models, weapons, door response, armed
-  inmates, routes) uses it. The only exception is the low-health surrender of hostile_waves, which calls
-  `CP.Npc.rollSurrender(run, netId, chance)` (§5.11 "surrender rolls"), falling back to `ctx.rng` if that function
-  is missing.
-- **Validate reasons** follow blocks_a: `false, CP.L('block.<id>.invalid.<what>', vars)` (translated text, with
-  field/min/max vars). Built-in missions (`mission.source == 'builtin'`) are trusted on the allowed model and weapon
-  lists, the spawn-point count (1.5 × largest wave, 1 point per NPC) and the minimum distance from the start (the
-  Hostage Rescue hostiles are inside a store, so they are closer than 30 m to its start). Ranges, types, the
-  40-armed budget, required points and `Config.Builder.noBuildZones` are checked for every mission: every spawn
-  point (waves, boss spot, hostage spots, suspects, associates, inmates), the protect_rescue safe marker, the
-  flee_arrest door marker and every fleeTo / route waypoint (docs/INTEGRATIONS.md, Crimson-Arena rule 7; the loader only sees
-  location keys, not points written into an objective). Custom missions also keep the boss spot and the hostage
-  spots `Config.Builder.minSpawnFromStart` away from the start, like every other spawn point.
-  When `location` is nil, `validate` walks `mission.locations`.
-- **Text defaults** (`knock.label`, `cuff.label`, `target.label`, `boss.label`) are filled with `CP.L(...)` text, so
-  translated labels end up in the objective. A label written in a mission file wins.
-- **Defaults that conflict with config/blocks.lua**: for flee_arrest scatter, `suspects` [5] and `armedShare` [0.4]
-  follow §3.3 and the Prison Break card. `Config.Blocks.flee_arrest.suspects[3] = 1` and `armedChance[3] = 20` are
-  treated as Mission Builder UI defaults; their ranges are still used for validation.
-  Defaults with no value anywhere: `knock.duration` 3000 ms, `safeRadius` 6.0 (§3.3), boss health/armour =
-  `Config.Blocks.hostile_waves.health[2]` / `armour[2]` (400 / 100, the Kingpin card), boss weapon
-  `WEAPON_ASSAULTRIFLE`, the protect_rescue npcs key `'hostages'`, the associates key `'associates'`.
-- **Health share** (surrender under 25 %, armed give-up under 50 %) is measured above GTA's 100-point death
-  threshold: `(hp - 100) / (max - 100)`, where `max = max(configured health, GetEntityMaxHealth)`. A ped at or below
-  100 is dying and never gets a roll.
-- **"alive" in nextWave** means not neutralised (not dead and not cuffed); a surrendered hostile waiting for cuffs
-  still counts. afterSeconds is measured from when the wave started. The next wave starts only once the current
-  one is fully spawned. A wave no bigger than aliveAtMost lets the next one start straight away.
-- **Boss**: spawns after the last wave by the same nextWave rule, at `boss.spawn` (or a spawn point). Its
-  accuracy/armour/health are used as written (no tier, no modifier). `boss.aliveBonus = { id = 'kingpin_alive',
-  points = 50 }` is an added optional field (the card's +50).
-- **Spawning**: at most 8 spawns per tick (larger waves need a few ticks; the count is never cut).
-  `ctx.canSpawn(1, armed)` is checked before every single spawn, so one oversized wave cannot block forever.
-  Partly spawned waves are topped up to the rescaled count only. Entities that vanish with no death event count
-  as dead.
-- **Surrender grace**: a participant kill within 3 s of an armed ped surrendering is treated as a shot already in
-  flight, not as killing a surrendered NPC. After that, killing a surrendered, cuffed, restrained or unarmed
-  suspect/inmate/hostage fails the run with `run.fail_killed_unarmed`. Only kills by a participant count
-  (`run.participants[src]`, which includes people who left). Outsider kills are CP.AntiCheat's job.
-- **Cuffs**: `onEvent { type = 'cuffed' }` is accepted only when `CP.Npc.getState(netId) == 'cuffed'` and the
-  sender is within reach. `tick` also syncs from the bag, so an event that went missing or was rejected cannot
-  leave the objective stuck (the award is given once either way).
-- **Timed interactions** (Cut restraints, Knock and announce) take two events: `*_start` and then the finish. Both
-  are distance-checked on the server, and the finish must come at least 80 % of the duration after the start.
-- **Door response** is rolled when the objective starts (so a fighting suspect spawns armed and counts toward the
-  armed cap) and is kept secret until the knock: his pistol is given in hand only at the reveal (server
-  `GiveWeaponToPed`, and `cfg.weapon` in the bag for a new host), never shown at the door before it. A door-mode NPC
-  dying before the knock reveals it.
-  A surrendering suspect is placed 1 m outside the door with server `SetEntityCoords`, facing out.
-- **Escape**: only suspects/inmates that are `fleeing` or `hostile` (never associates, idle or surrendered ones),
-  more than escape.distance from every active participant, for escape.seconds in a row.
-- **Armed inmates**: switch to `hostile` when a participant is within fireWithin and back to `fleeing` beyond
-  1.5 × fireWithin. Exactly `round(suspects × armedShare)` are armed (2 of 5). Armed ones give up only when
-  stunned or under armedGivesUp.belowHealth, which the server polls every tick (no random roll).
-- **flee_arrest relationship group**: every flee_arrest NPC spawns with `cfg.group = 'neutral'`, armed or not.
-  Door-mode NPCs must not open fire before the knock and armed inmates only within fireWithin; CP.Npc's combat
-  task puts a ped in `CRIMSONPOLICE_HOSTILE` when the server turns it `hostile` (and apply reads the state first).
-- **stunned** evidence: the reporter must be within 50 m of the suspect (clients only look within 40 m) and some
-  participant within 30 m.
-- **hostile_waves surrender**: besides the host's `low_health` report, `tick` checks the server-side health of
-  every hostile that has not rolled yet. The report can reach the server before the damage syncs (it is then
-  refused as `health_ok` and the client never re-reports), so the poll is what guarantees the one roll.
-- **Spawning** in all three blocks runs under a re-entry flag that is cleared by a pcall wrapper even when a
-  spawn throws, so one failed CreatePed never freezes the objective; the next tick retries.
-- **Host AI** (all three clients): control is requested before every task (OneSync gives ownership to the
-  closest player, usually the officer next to the ped), and a ped only counts as applied/tasked when
-  `CP.Npc.apply`/`CP.Npc.task` did not return false; otherwise the next loop (500 ms) retries. Without this a
-  freed hostage owned by the officer who cut its restraints never got its `follow` task. The protect_rescue host
-  never waits for the hand-over: it calls `ctx.control(ent, 0)` (one request, no wait) for a hostage another client
-  owns, skips it for that pass and runs the next pass after 250 ms (CONTROL_MS).
-- **Progress bars** ("Cut restraints", "Knock and announce") still running when the objective or run stops are
-  cancelled (`lib.cancelProgress`) in the client cleanup. Lock-on aim (`IsPlayerTargettingEntity`) counts as
-  aiming for `givesUp.aim` like free aim.
-- **protect_rescue** watches its hostages for the whole run, including while objective 1 is current: deaths come
-  from `onEntityDead`, damage comes from `CP.Npc.onDamaged` (server-only). `onEvent` cannot tell a CP.Npc dispatch
-  from client evidence of the same shape (both arrive as `{ type = 'shot'|'damaged', netId, ... }`), so while
-  onDamaged is listened to, `shot`/`damaged` events are acknowledged and change nothing (CP.Npc always calls
-  onDamaged for the same hit); only without onDamaged do they count. Hits by the same attacker on the same
-  hostage within 1 s count once. `no_hostage_hurt` is lost by any damage from anyone and is recorded only once
-  minSeconds has passed since the objective started (a completion refused as too fast must not keep it).
-  `hostage_hit` needs an active participant attacker (`ctx.participants()`: someone who left shoots as an outsider,
-  as in CP.Npc and CP.AntiCheat; the kill rule above still counts them). One pending "Cut restraints" per
-  participant: a new `free_start` replaces that participant's previous one.
-- **presence**: hostile_waves = nearest non-neutralised hostile, else the start point; protect_rescue = nearest
-  living hostage, else the safe point; flee_arrest = nearest suspect not neutralised, else the door or start.
-- **HUD**: server `ctx.hud({ detail, value, max })` only when it changes. flee_arrest also sends
-  `ctx.hud({ message = { text, kind = 'warning' } })` for the door response. The clients use `ctx.hudDetail`
-  for personal hints (cuff nearby, stay close, escape countdown, hostages walking).
-- **Traffic** (hostile_waves client, every participant, from the objective's start): `AddRoadNodeSpeedZone` +
-  `SetRoadsInArea` (box around the start) + one `ClearAreaOfVehicles` in the radius. When the objective stops
-  and the run (`CP.Runs.current()`) has a later objective, the block is **held**: every objective of a run
-  shares its location, so Gang Shootout / Kingpin "Secure the scene" keeps NPC traffic out ("blocked within
-  120 m while the run is active"). It is restored when the last objective stops, as soon as that run is no
-  longer the client's current run (end, silent removal; polled every 500 ms), or on resource stop. A later
-  hostile_waves objective with the same area takes the held block over instead of adding a second one.
-- **Custom-mission guardrails** (validate, `mission.source ~= 'builtin'`), on top of the allowed lists:
-  flee_arrest `aliveBonus.id` must be a `Config.Bonuses` id with no `points` / `pctOfPoints`; hostile_waves
-  `boss.aliveBonus` is `kingpin_alive` (points absent or the block's 50) or a `Config.Bonuses` id without points;
-  flee_arrest `givesUp.close` is off or exactly `closeDistance` / `closeSeconds` (3 m / 3 s); flee_arrest
-  `knock.duration` / `cuff.duration` and hostile_waves `cuff.duration` are 1000-30000 ms; `cuff.maxDistance` (when
-  set) at most 3 m. At run time the file's `aliveBonus.points` is passed as a hint only on built-in missions;
-  elsewhere the boss's `kingpin_alive` carries the block constant (50) and any other id no hint.
-
-#### Contract deviations
-
-- Added optional fields: hostile_waves `boss.aliveBonus`, `boss.accuracy`, `boss.behaviour`, `cuff`; flee_arrest
-  `accuracy` / `armour` (armed suspects and inmates; defaults are the hostile_waves defaults), `cuff.maxDistance`;
-  protect_rescue `target.icon` / `target.distance`.
-- Extra evidence types beyond §6.2's examples: `free_start`, `knock_start`, `knock`, `aim`, `stunned`, `low_health`.
-- Extra locale keys from the review: `block.protect_rescue.invalid.points_start`, `block.flee_arrest.invalid.route_zone`.
-- `ctx.award`/`ctx.penalize` opts carry `points` (request 1).
-
-### 13.4 Blocks: pursuit, escort, search_area
-
-Files: `Crimson-Police/blocks/{pursuit,escort,search_area}/{server,client}.lua`,
-`Crimson-Police/locales/parts/blocks_c.json`, `tests/blocks_c_spec.lua` (run: `lua5.4 tests/run.lua blocks_c`).
-Each file's header lists the fields it reads (with defaults), the evidence it accepts and the ids it records.
-
-#### Evidence and messages (exact shapes)
-
-| Block | Client → server evidence (`ctx.report`) | Server → client (`ctx.send`) |
-|---|---|---|
-| pursuit | `{ type='ram', netId, speed }` (km/h, pre-impact) · `{ type='lights_near', netId }` · `{ type='aim', netId }` · `{ type='stunned', netId }` · `{ type='undriveable', netId }` (own vehicle) · accepted too: `low_health`, and `cuffed` / `shot` from CP.Npc | `{ kind='state', mode, fled, trigger, lights, vehicles={ {netId,index,state,occupants,routeDone} }, suspects={ {netId,vehicle,seat,state,armed} }, detained, neutralised, total, stopped, vtotal, escaping, follow={inRange,duration,hold,lost,average} }` |
-| escort | `{ type='toughened', netId }` (host only) · `cuffed` / `shot` from CP.Npc | `{ kind='state', truck={netId,driver,wp,gen,stop={at,left},arrived,toughened,health,stoppedFor,stoppedFail}, waves={ {k,triggered,done,alive} }, attackers={netId}, completed }` |
-| search_area | `{ type='clue_start', clue }` · `{ type='clue', clue }` · `{ type='stunned', netId }` · `cuffed` / `shot` from CP.Npc | `{ kind='state', circle={x,y,z,r,n}, clues={ {i,x,y,z,kind,model,netId,status} }, fugitives={ {netId,state} }, checked, clueTotal, arrests, neutralised, total, entered, escaping }` |
-
-Vehicle states: `waiting` → `fleeing` → `stopped` | `wrecked`. Pursuit ped states (cp bag via `CP.Npc.setState`):
-`driving` → `stopped` (told to get out) → `fleeing` | `hostile` | `surrendered` → `cuffed`, or `dead`.
-Search-area fugitives: `idle` (hidden) → `fleeing` → `surrendered` → `cuffed`. Escort attackers: `hostile`, driver `driving`.
-`onEvent` reject reasons are short log ids (`too_far`, `duplicate`, `wrong_state`, `implausible` …), not locale keys.
-
-#### Bonus / penalty ids recorded (all shared, `count = 1`)
-
-- pursuit: `ramPenaltyId` (`hard_ram`; Pursuit Sim sets `ram`) per counted ram · `detainBonus` (`racer_detained`) per
-  detained suspect · `allDetainedBonus` (`all_racers_detained`) once · `fastStop.id` (`vehicle_stopped_fast`) once ·
-  `medal_gold` | `medal_silver` | `medal_bronze` (follow mode, only once the full `duration` was held), each with the
-  Pursuit Sim card value as its `opts.points` hint (50 / 25 / 10, capped by `Config.Builder.bonusCap.points` on
-  non-built-in missions), so custom follow objectives score their medals (their files cannot list medal ids).
-- escort: `truck_healthy` once, when the truck's health at its arrival was above 50 %.
-- search_area: `clues_first` once, when every clue was checked before the first arrest.
-
-Ids are recorded whenever the event happens; the mission file gives the value (ids outside `Config.Bonuses` need
-`points` on built-in files; custom missions value only `Config.Bonuses` ids and block hints).
-Custom-mission guardrails (validate, `mission.source ~= 'builtin'`): pursuit `detainBonus` / `allDetainedBonus` /
-`fastStop.id` / `ramPenaltyId` are `false`, a `Config.Bonuses` id or the block default, `fastStop.seconds` at most
-120, `arrest.duration` 1000-30000 ms; escort `driver` the default `s_m_m_armoured_01` or a
-`Config.Builder.allowed.peds` model; search_area `clueProps` only the block's own props (and `witness`),
-`givesUp.close` off or exactly flee_arrest's 3 m / 3 s, `clueProgress.duration` / `cuff.duration` 1000-30000 ms,
-`cuff.maxDistance` (when set) at most 3 m. Awards that belong to the completion (medal, all detained, truck healthy) are recorded once, **before**
-the first `ctx.complete()` call, so they exist when the engine scores the run inside `complete`.
-
-#### Contract interpretations
-
-1. **Randomness**: `ctx.rng` is stored in `ctx.state.rng` on first use and used for every pick (spawn order,
-   models, footFlee rolls, wave points, clue spots, hiding spots, circle centres). `math.random` is never used.
-2. **validate** applies the defaults to a copy and returns `false, CP.L('block.<id>.invalid.*', vars)`. Built-in
-   missions (`mission.source == 'builtin'`) are trusted on the allowed lists, route length/ends, ambush spacing,
-   no-build zones, the 30 m spawn distance and the 6+ spot minimum; ranges, types, counts, required keys and the
-   armed budget are checked for every mission. With `location = nil` every `mission.locations[i]` is checked.
-3. **Added optional fields** (defaults keep the contract behaviour): pursuit `peds`, `weapons` (only with
-   `neverShoots = false`), `detainBonus`, `allDetainedBonus`, `fastStop = { id, seconds }`, `failIfUndriveable`;
-   escort `driver` (ped model, `s_m_m_armoured_01`); search_area `peds`, `witnessModel`. Defaults of fields with no
-   value in §3.3 / config: pursuit `escape` = flee_arrest's 400 m / 20 s for stop + `all_detained`, else `false`;
-   `medals` only in follow mode; `arrest.duration` 5000; search_area `escape` 300 m / 30 s, clue props
-   `{ 'prop_cs_heist_bag_02', 'prop_npc_phone_02', 'witness' }`.
-4. **Pursuit start**: spawns at objective start. Placement priority: `spawns` (list, shuffled) > `spawn` (stacked
-   8 m back along its heading) > `trigger.ahead` (that many metres ahead of `location.start`, along its vec4 heading,
-   else towards the next route waypoint) > a loop route (racer i starts `2 + (i-1)` waypoints before the waypoint
-   nearest the intercept start, facing the next one) > an open route's first point > 50 m ahead of the start.
-   `trigger = 'arrive' | { ahead }` flee at once; `{ distance, lights }` waits for a validated `lights_near`
-   (reporter in a vehicle within distance + 10 m), or any participant within 15 m, or the car's body health −25.
-5. **Stopped** = below `stopped.speed` for `stopped.seconds` in a row, counted only once the car has been faster
-   than 15 km/h (or 30 s after it fled) **and while a participant is within 50 m** (a PIT/box-in needs officers
-   there; a racer waiting at a light far away is not stopped). A wrecked or vanished car counts as stopped.
-6. **After the stop** the occupants are set `stopped` (host: `TaskLeaveVehicle`, repeated every 2.5 s while they are
-   still seated, warping them out with flag 16 from the 3rd attempt). Only once the server sees them out of the car
-   do they switch to `fleeing` (footFlee roll) / `hostile` (armed) / `surrendered` (`surrenderOnAim = false`): there
-   is no time-out that switches a seated suspect, because CP.Npc's `flee` for a ped in the driver's seat is a
-   vehicle flee (the stopped car would drive off again) and a suspect surrendered in a seat cannot be cuffed.
-   Give-ups: aim within 25 m of a waiting suspect (`surrenderOnAim`), aim within `flee_arrest.aimDistance` of a
-   running one (always), stun (a participant within 30 m and the reporter within 60 m), or a participant within
-   `flee_arrest.closeDistance` for `closeSeconds`; armed ones only by stun or below 50 % health. Arrest = `CP.Npc.enableCuff` with `arrest`.
-7. **Completion (stop mode)**: every suspect cuffed or dead without a participant kill (a crash death cannot block
-   the run); with `all_or_timeout_any` (Street Race Bust) at least one racer must also be detained, so racers that
-   all died in crashes leave the run to fail at the time limit ("Fail if: the time limit ends with no racer
-   detained"). `all_racers_detained` only when all were cuffed. `onTimeout` returns `'completed'` for
-   `all_or_timeout_any` with ≥ 1 detained. Killing an unarmed/surrendered/cuffed suspect by an **active**
-   participant fails with `run.fail_killed_unarmed` (3 s grace for an armed suspect that just gave up); a kill by a
-   player who already left the run is an outside kill (CP.Npc / CP.AntiCheat flag it), never a fail. The same rule
-   holds for the escort driver and the search_area fugitives and witness.
-8. **Rams**: the ramming driver's client reports the rising edge of `IsEntityTouchingEntity` with the pre-impact
-   speed, only when `ramSpeed == 0` or the speed is above it. The server accepts it when the reporter is in a
-   vehicle, within 12 m (+2) of the suspect car (server coords), the speed is at most the reporter's highest
-   server-sampled speed of the last 3.5 s + 40 km/h, and no ram by that participant on that car was counted in the
-   last 2.5 s. Counted when `ramSpeed <= 0 or speed > ramSpeed`. Rams also make a waiting car flee.
-9. **`vehicle_stopped_fast`**: awarded once when every suspect vehicle is stopped within `fastStop.seconds` of
-   the objective start (Stolen Vehicle Takedown: the run start).
-10. **Follow mode**: the target is the suspect nearest the party: its car while it is still driven, else the suspect
-    on foot (never the first one in table order, which can run the other way). One sample per tick (nearest
-    participant distance) from the flee on; `inRange += dt` while ≤ `hold`; the average over all samples sets the
-    medal (`< gold`, `< silver`, `< bronze`). Lost = more than `lost.distance` for `lost.seconds` in a row.
-    Undriveable = a vehicle the participant drove during the objective reaching engine ≤ 0 on the server, or a
-    client report confirmed by engine ≤ 100 or tank ≤ 0. A medal is only awarded once the full `duration` was held.
-    If every suspect is gone (dead without a participant kill) the objective ends **without** a medal (a getaway
-    driver rammed into a wall after a few seconds must not become a Gold medal once minSeconds pass). `prepare` sets
-    `run.flags.medals = true`.
-11. **Escort progress**: the truck spawns at `route.points[1]` facing `points[2]`; a waypoint is passed within 20 m
-    (4 waypoints of look-ahead for cut corners). Reaching a stop waypoint (never the first or last) starts its wait;
-    the wait never counts toward `stoppedFail`. Stopped = below 1 m/s, counted only while the run host is within
-    400 m of the truck (only the host's client drives it, and only while OneSync streams the truck to it: a partner
-    may start the run with the leader still far away), once the truck moved (3 m/s) or 30 s after the host first
-    came that close. Destroyed = `onEntityDead` for the truck, entity health ≤ 0, engine ≤ −3999, or the entity
-    missing for 2 ticks in a row (the engine's MISSING_TICKS; every block entity uses the same tolerance); not once
-    the objective is done (the truck stays parked at the destination while a later objective runs).
-    Health % = min(engine, body) / baseline, baseline = 1000 × toughness after the host's `toughened` report (else
-    1000); the host reads the toughness from the truck's cp bag `cfg.toughness` (else `ctx.obj.toughness`).
-    `truck_healthy` uses the health **at the moment the truck arrives** ("arrives above 50% health"), recorded once
-    before the first `ctx.complete()`. Completion also needs every triggered (not dropped) wave neutralised
-    (each attacker killed or cuffed, however far behind: "neutralise each ambush wave"), not only no attacker
-    within `clearRadius`. A participant killing the (unarmed) driver fails the run, also after the objective is done;
-    otherwise a dead driver just leaves the truck stuck (stoppedFail), with no message once the objective is done.
-12. **Escort waves**: `ambush.waves` waves at distinct random `ambushPoints` (cycled when there are more waves than
-    points; spread over the route when the location has none), sorted along the route. A wave triggers within
-    120 m of its point or once the truck passed its nearest waypoint; its `carsPerWave` is read at that moment. A car
-    spawns together with its crew once `canSpawn(perCar + 1, false)` and `canSpawn(perCar, true)` both hold.
-    Cars are placed at the point, 7 m apart along the road, alternating 4.5 m left/right, facing the truck, and
-    doors-locked (the crew can get out, nobody can get in); attackers are seated with the server `SetPedIntoVehicle`
-    and set `hostile`. **Complete** = truck on the final stretch (the next waypoint is the last one: a route may
-    pass its destination earlier) and within `arrival` (2D) of the last waypoint, no triggered wave still waiting
-    to spawn or with an attacker not neutralised (see 11), and no living attacker within `clearRadius` of the truck
-    (waves not triggered by the arrival are dropped). Rescale drops planned waves beyond the new count and lowers
-    counts still missing.
-13. **Search circle**: starts at `startRadius` around `location[center]` (or `location.start.coords`). Each checked
-    (or lost) clue moves to the next `shrinkTo` radius; the new centre is within 0.7 × radius of a fugitive still at
-    large (hidden ones preferred), nested in the old circle when one of 12 tries allows it. After the list ends the
-    circle stays. `entered` (a participant inside the start circle) only drives the HUD. Completion needs every
-    fugitive neutralised; checking clues is not required (the circle and `clues_first` reward it).
-14. **Clues**: `clueCount` spots sampled from `location[clues]`; clue i uses `clueProps[((i-1) % #props) + 1]`
-    (`'witness'` = a witness ped standing at the spot). Check = `clue_start` then `clue` within 2.5 m (+2) of the spot,
-    at least 80 % of `clueProgress.duration` apart. A witness killed by a participant fails the run; killed by anyone
-    else, or a clue entity that vanished, is `lost`: it shrinks the circle but `clues_first` can no longer be earned.
-    Once the search is over (a later objective runs) a witness killed by anyone else changes nothing.
-15. **Fugitives** run when a participant is within `runDistance` (server distance every tick), escape after
-    running only, give up by stun (hidden or running) or the close rule (running). Presence = metres outside the
-    current circle (0 inside).
-16. **Presence**: pursuit = nearest suspect not neutralised (its car while driving), escort = the truck,
-    search_area = distance beyond the circle edge.
-17. **Nothing to take**: every mission vehicle (pursuit cars, the escorted truck, every ambush car) is locked
-    (`SetVehicleDoorsLocked(veh, 2)` on the server; pursuit cars and the truck again by the host); peds inside can
-    still get out. NPCs are unarmed except escort attackers (and pursuit with
-    `neverShoots = false`); CP.Npc.apply sets no weapon drops.
-18. **HUD**: the server only sends `ctx.hud({ message = { text, kind } })` for events (car fleeing/stopped, ambush,
-    stop, wave cleared, arrival, circle shrinks, fugitive running). The HUD line is the client's `ctx.hudDetail`;
-    progress counts come from `checklist`. After the escort's arrival the line counts the attackers within
-    `clearRadius`, or, when none is that close, every attacker still to neutralise; search_area asks to check clues
-    while one is still `pending` (a `lost` clue is handled), then to find the fugitives.
-19. **Driving**: the clients pass the objective's style name (`cautious`/`reckless`, `careful`/`normal`/`fast`) and
-    the speed in m/s to `CP.Npc.task`; CP.Npc owns the mapping to lane-following driving flags. Lap-end and
-    stuck re-tasks (and every escort segment) pass `force = true`, because CP.Npc ignores identical repeats. The
-    lap end (the waypoint just behind the car when the lap was tasked) only counts after the car first got 30 m
-    away from it, so a racer is re-tasked once per lap, not on every loop pass at the start line.
-20. **Host control**: the host calls `ctx.control` before anything it does to a run entity (not only on first
-    sight); when control comes back from another client the entity is re-applied (`CP.Npc.apply`) and re-tasked,
-    because local config and tasks may not survive an ownership change. A new escorted truck (test restart) is
-    toughened again; clue zones are rebuilt when a clue number gets a new spot; a clue check still in its progress
-    bar is cancelled when the objective stops. `ctx.control` waits frames, so the objective can stop meanwhile:
-    after the host AI the loop draws no blip and writes no HUD line once the objective was cleaned up. The pursuit
-    host never waits: it calls `ctx.control(ent, 0)` (one request, no wait) for an entity another client owns, skips
-    it for that pass and runs the next pass after 250 ms, where the hand-over is picked up as a regain. The
-    search_area host does the same, and leaves a witness it has set up that is on its phone
-    (`IsPedUsingScenario`) with the client that owns it (usually the officer talking to it) instead of pulling it
-    back; when control comes back the witness is set up again without restarting the scenario, so the phone
-    animation never replays in front of that officer.
-
-### 13.5 Boards (leaderboards, department challenge, profile, seasons)
-
-Files: `modules/leaderboard/server.lua`, `modules/challenge/server.lua`, `web/src/officer/screens/{Leaderboard,Challenge,Profile}.tsx`
-(+ sibling `.css`), `web/src/admin/screens/{Seasons,Leaderboards}.tsx` (+ `.css`), `web/src/supervisor/screens/DeptReport.tsx`
-(+ `.css`), `web/src/types/boards.ts`, `web/src/mocks/boards.mock.ts`, `locales/parts/boards.json`, `tests/boards_spec.lua`.
-Both Lua files document their full public API and every response shape in their header comment; the TS
-interfaces for the same shapes are in `web/src/types/boards.ts`.
-
-#### Registered names
-
-- Callbacks: `getBoard`, `getProfile`, `admin:getBoards` (leaderboard); `getChallenge`, `getDeptContributors`,
-  `admin:getSeasons`, `sup:getDeptReport`, `sup:getOfficerActivity` (challenge).
-- Actions: `server:setHideName` (leaderboard); `server:admin:startSeason`, `server:admin:endSeason`,
-  `server:admin:overrideBounty` (challenge).
-- Schedule listeners: `CP.Schedule.onWeekly` (both modules), `CP.Schedule.onMonthly` (leaderboard), registered
-  1–1.5 s after start from a thread (no cross-module calls at load time).
-
-#### Contract interpretations
-
-##### CP.Leaderboard
-- **Counted rows** = `voided = 0 AND flagged = 0`. `runs` = counted completed rows that are not `manual_award`/`goal`,
-  `failed` = counted failed rows (same exclusion). Points = `SUM(final_points)` of counted rows.
-- **Minimum runs** (`Config.Leaderboard.minRunsToRank`) are counted inside the board's own window *and filter*
-  (the Tactical board needs 3 completed Tactical runs). All-time uses lifetime completed runs
-  (`cp_mission_runs` + `cp_mission_runs_archive`); its points are `cp_officers.xp`, and it is always Overall
-  (`filter` is echoed as `overall`).
-- **Tie-break** "reached the score first" = the latest counted row that changed the total (`final_points <> 0`,
-  falling back to the latest counted row), ascending; then `citizenid` so the order is stable.
-- **Filters**: type keys = `mission_type = key` (the Weekly Boss is stored as `tactical`, so it counts there);
-  `unit` = `participants >= 2`, `cross` = `departments_n >= 2` (award/goal rows excluded explicitly);
-  `department` = the row's department (award/goal rows included). Unknown filter → `err.invalid_filter`,
-  unknown period → `err.invalid_period`, unknown department → `err.unknown_department`.
-- **Season board** = rows tagged with the active season's id; between seasons it keeps showing the last ended
-  season (the spec's "resets when an admin starts the next season"); `season.active` tells the UI which.
-  No season ever → empty rows and `season = nil`.
-- **`me`** is always present for an officer. `rank = 0` means "not ranked yet" and carries the window's points,
-  runs and failed (all 0 without rows). The viewer's own row (in `rows` and `me`) shows their own name even
-  when they hide it.
-- **Cache**: one entry per (period, filter, department, window start/season) for `Config.Leaderboard.cacheSeconds`,
-  concurrent misses share one query; `invalidate()` drops boards, season points and announcements and calls
-  `CP.Challenge.invalidate()`. A board (or season-points / challenge aggregate) whose query was in flight when
-  `invalidate()` ran is returned once but not cached, so a void never survives in the cache for another minute.
-- **Profile**: last 20 rows of any type (manual awards and goal rewards are listed and labelled, never
-  disputable). Own profile: cash, `cashStatus` (the row's column, also written into `breakdown.cash.status`).
-  Someone else's profile: name → callsign when hidden, `cash = 0`, `cashStatus = ''`, the breakdown reduced to
-  the RunResult (§9.6) fields without `cash` (extra keys such as a manual award's admin `reason` are dropped),
-  `canDispute = false`; flagged/voided rows are still listed with their badges.
-  `canDispute` = own row, not an award row, flagged or voided or failed, within `Config.Disputes.windowHours`,
-  and no `cp_disputes` row at all for it (`modules/disputes` allows one dispute per row, ever: an open one is
-  `err.dispute_open`, a decided one `err.dispute_final`, so the button is hidden in both cases).
-  Extra fields: `departmentLabel`, `seasonPoints`, `disputeWindowHours`, `runs[i].createdTs`, `badges[i].kind`
-  (`week` | `champion` | `top10` | `achievement`). Badges come from `CP.Scoring.badges` (fallback: `cp_badges`),
-  newest first; this slice labels its own badge ids (`officer_of_week_*`, `season_<id>_champion`, `season_<id>_top10`).
-- **Announcements** are computed from the database (restarts keep them): top 3 of the previous week, shown
-  during the whole current week, and of the previous month, shown during the current month.
-  `{ kind = 'weekly_top3'|'monthly_top3', text (localized), entries = { rank, citizenid, name, callsign,
-  departmentShort, points }, period }`. Names respect hide_name.
-- **Weekly job** (onWeekly): Overall top 3 of the week that ended → `CP.Admin.webhook('board', …)`, badge
-  `officer_of_week_<weekKey>` (weekKey = start date of that week) for #1, toast to #1 if online. Idempotent: an
-  existing badge for that week means it already ran. It also runs once 60 s after start as a catch-up.
-  Monthly reset only invalidates (Home shows the month's top 3; the board webhook is weekly + season only).
-- **admin:getBoards** (`openAdmin`): every ranked row with `cash` (= `SUM(cash_paid)` of **all** rows in the
-  window/filter, voided and flagged included, since voiding never takes money back), `realName`, `hidden`;
-  `unranked` = officers below the minimum; `stuck` = `CP.Cash.stuckPayments()` normalised to
-  `{ rowId, runUuid, citizenid, name, callsign, missionLabel, amount, createdAt (text), transId }` (fallback: own
-  query). Passing `citizenid` adds `runs` = that officer's rows in the window/filter (for Void run), instead of
-  a new callback name.
-
-##### CP.Challenge
-- **Week numbers**: week 1 runs from the season start to the first weekly reset; week n = number of weekly
-  resets since the season started + 1 (DST-safe date arithmetic, `Config.Time.resetHour`, `weekStartsOn`).
-- **cp_dept_bounties**: `winner` NULL = open, `''` = closed without a winner, else the department key.
-  **Week 0** (`objective = 'season_champion'`) stores the season champion at season end (the schema has no
-  champion column); every bounty list uses `week >= 1`.
-- **Bounty pick**: `CP.U.rng(CP.U.hash('<seasonId>:<week>')):pick(Config.Challenge.bounties)`, stored when the
-  week is first needed (season start, weekly reset, first view), so a restart keeps it. An id outside
-  `most_tactical|most_cross|most_unit|most_completed` counts completed runs (one console warning).
-- **Bounty winner**: count of the objective's completed runs in that department that week ÷ the department's
-  season-to-date active officers (`minRunsActive` completed runs); tie-break completed runs, then unit runs that
-  week; all zero or a perfect tie → no winner. Weeks close at the weekly reset, at start (catch-up for weeks that
-  ended while the server was down) and at season end (the partial last week too).
-- **Bonus** = `floor(bountyBonus × the winning department's counted season points of that week)`, derived from
-  the rows whenever standings are computed (a later void lowers it); the winner itself is frozen at close.
-- **Scores**: `average` = (points of active officers + bonuses) ÷ active officers; `total` = all points + bonuses;
-  `top10` = 10 best officers' points + bonuses. Sorted by score, completed runs, unit runs, key. Departments
-  come from `CP.Access.departments()` at call time, so one added mid-season appears at 0.
-- **Season end**: champion = first of the standings when it has points or runs and is not perfectly tied with
-  the second (`''` otherwise, also when `Config.Challenge.enabled = false`); trophy `season_<id>_champion` for the
-  champion's active officers; `season_<id>_top10` for the season board's top 10 (minRuns applies); one board
-  webhook with standings and top 10; audit `season_end` (new = champion or `-`). `startSeason` ends the running
-  season first (audit `season_end` with the localized reason `challenge.audit_replaced`, then `season_start`).
-- **championBanner(dept)** = the most recent ended season's champion (nil when that season had none, or `dept`
-  is another department). Shape `{ season, seasonId, department (label), departmentKey, short }`.
-- **currentSeason()** is cached (reloaded every 5 min and after every change), so the run engine can call it for
-  every row.
-- **Supervisor callbacks** use `CP.Permissions.can(src, 'viewMissionList')` (supervisors and admins, no config
-  switch; there is no dedicated action for the Department Report). Supervisors always get their own department;
-  only admins may pass `department`. Activity = every row of the department since this week's reset (any season,
-  voided/flagged included in run counts; points only from counted rows; cash = `SUM(cash_paid)`).
-  `sup:getOfficerActivity` accepts officers whose stored department is the supervisor's, or who have a row in it
-  this week (else `err.other_department`, unknown → `err.unknown_officer`) and returns only that department's rows.
-- Admin actions: seasons → `seasons`, override → `bountyOverride` (both admin-only in CP.Permissions), checked
-  before the payload is validated (as are the `sup:*` callbacks). `err.busy` while another season change runs.
-
-##### Web
-- The breakdown dialog renders the HUD result card's `cp-result__*` classes (hud.css) with its own markup
-  (`RunBreakdown` in Profile.tsx), so both look the same; public breakdowns simply have no cash block.
-- Reusable exports: `RankCell`, `filterLabel`, `formatDay`, `formatClock` (Leaderboard.tsx), `DeptBars`,
-  `BountyCard`, `formatEndsIn` (Challenge.tsx), `RunBreakdown`, `ResultCell`, `StateBadge`, `missionTypeLabel`
-  (Profile.tsx). Shared helper classes (`boards-muted`, `boards-strong`, `boards-struck`, `boards-flat-table`)
-  live in Leaderboard.css, which every boards screen imports through these exports.
-- Calendar dates come from the server as `'YYYY-MM-DD'` in server time (`window.fromDate`, `bountyHistory[i].startDate`/
-  `endDate`, the report's `week.key`) and `formatDay` formats them in UTC, so a player in another time zone sees the
-  server's week and month (reading the epochs in the browser put them on the day before for anyone west of the server).
-  The weekly subtitle takes its weekday from that date, so it follows `Config.Leaderboard.weekStartsOn`.
-- Give points: 1–10,000 points (modules/admin's `MAX_AWARD`), reason required. Void run: reason required.
-- Every run/officer table uses `table-layout: fixed` (class `boards-fixed`, Leaderboard.css): the officer / mission
-  column takes what the fixed-width columns leave and long names, callsigns and mission labels are cut with an
-  ellipsis (full text as tooltip), so a 64-character name never pushes points, cash or the Void/Dispute buttons
-  out of view. The pinned own row shows "N more completed run(s) to rank" under the name when unranked.
-- Browser mocks have two extra modes for screenshots: `?boards=edge` (64-character names, 32-character callsigns,
-  missing callsigns, a long season name and mission label, big numbers) and `?boards=empty` (every list arrives as
-  `{}` the way Lua encodes an empty table).
-- Mocks for `server:dispute`, `server:admin:voidRun`, `server:admin:awardPoints` are registered as fallbacks
-  (the owners' mocks win; oversight.mock.ts already registers the admin ones).
-
-#### Test scenario (tests/boards_spec.lua)
-
-Part A ranks 5 officers over one week (ties on points broken by failed runs and by time), filters, windows,
-all-time with archived rows, cache expiry and invalidate, profiles (own/public/hidden/disputes), hide-name,
-admin boards and stuck payments (own query and `CP.Cash` shape), the weekly job, announcements.
-Part B runs a season over three weeks: SAST (S1 460 pts/3 runs, S2 380/4, S3 210/1) vs FIB (F1 600/3, F2 255/4);
-week 1 most_tactical → SAST (2/2 vs 1/2, bonus 40), week 2 most_completed → FIB (6/2 vs 5/2, bonus 65), week 3
-most_tactical → SAST (bonus 25); final average FIB 460 vs SAST 452.5 → FIB champion; plus total/top10 modes, a
-department added mid-season, overrides, the weekly reset through `CP.Schedule._check`, supervisor report and
-activity, season end, banner and season rollover. Every SQL statement of both modules runs on MariaDB `cp_test`.
-Note: the harness drops result lines that are empty, so a single-column query returning `''` looks like no row
-(the spec selects two columns there). `cp_test` is shared: a concurrent `tests/run.lua` from another slice can
-drop the database mid-run (seen once; re-running is green).
-
-#### Board metrics, bounties and seasons
-
-##### CP.Leaderboard
-- **Rank by** (`getBoard` arg `metric`, one of Config.Leaderboard.metrics; `err.invalid_metric` otherwise): points
-  (default; XP on All-time), missions (counted completed runs), arrests, impounds, citations, rescues (SUMs), calls
-  (counted completed rows with a mission_call_id) and judgement (decisions_best ÷ (decisions_ok + decisions_bad), in
-  percent with one decimal, ranked only with Config.Leaderboard.minDecisions decisions in the window; more decisions win
-  a tie). Every stat is summed from `voided = 0 AND flagged = 0 AND state = 'completed'` run rows only, and all-time
-  through the archive union. Ties: the value, (judgement) decisions, then points, fewer failed, reached first, citizenid.
-  minRunsToRank, privacy, the pinned own row and the 60 s cache work per metric; the cache key includes the metric.
-- Rows (and `me`) gain `value`, `metric`, `level = { n, badge }` (the number only) and `avatar` (CP.Profile.avatarOf; a
-  hidden name shows the callsign and its initials, never the name or picture). `lethal` is never read by a board query
-  and no payload carries kills.
-- **Service record**: `LB.serviceRecord(citizenid, seasonId|nil) -> ServiceStats, lethal` (runs and success rate count
-  failed rows too; successRate is a percentage; avgResponseS from SUM/COUNT in Lua; rapidResponses counts completed
-  rows whose breakdown holds the rapid_response bonus), `LB.personalBests(citizenid)`
-  (MIN(duration_s) of completed counted rows per mission, archive included), `LB.favouritePartner(citizenid)` (most
-  shared completed runs, self-join on run_uuid).
-- **getProfile** gains bio, avatar, level (LevelInfo: xp = the officer's XP; `next` kept), commendations,
-  mdtCommendations (Config.Profile.showMdtCommendations and CP.Dispatch.mdtCommendations, else nil), service
-  `{ lifetime, season }`, bests, favouritePartner and, on the own profile only, cleanArrestRate (arrests ÷ (arrests +
-  lethal), percent). `LB.profile(viewer, target, { staff = true })` is the admin view (real name, every run field).
-- **Weekly metric badges**: Config.Leaderboard.weeklyBadges (e.g. `{ 'arrests' }`) gives `top_<metric>_<weekKey>` to #1 of
-  the week that ended (value above 0), once per badge, before the Officer of the Week step; label
-  `profile.badge.top_metric`.
-
-##### CP.Challenge
-- Bounties `most_arrests` (SUM of arrests) and `most_calls` (completed rows with a mission_call_id), per active officer
-  like the others, from counted completed rows.
-- The Department Report's officers gain arrests, citations, impounds, decisionsOk, decisionsBest, decisionsBad and calls
-  (this week's counted completed rows); activity runs gain runUuid (the Commend dialog's optional run), and
-  `sup:getOfficerActivity` adds the officer's active `commendations` with `mine` (the viewer issued it: Revoke).
-- Contributors carry `avatar`.
-
-##### Web
-- Leaderboard: "Rank by" select, avatar and level on every row, dates through format.ts (a server date is formatted as
-  its noon UTC, so the player's zone never moves it); Profile: avatar, "Lv n · band", bio, Edit profile, Report profile,
-  Service record and Commendations cards; Home: level, "Missions today n/max", calls open, commendation news, the
-  RewardsLocker mount; Challenge: avatars; Department Report: the new columns, Commend and Revoke (own ones); Review
-  Queue: Profiles tab;
-  Admin Officers: profile moderation, commendations and service record (dates through format.ts).
-
-##### Tests
-tests/boards_metrics_spec.lua (every metric in weekly, monthly, season and all-time, completed rows only, wrongful
-arrests, Judgement, ties, cache per metric, levels and avatars on rows, hidden names, no kills, the service record,
-stat and call goals, most_arrests and most_calls, the report columns and the weekly metric badge).
-
-### 13.6 Mission Builder client (in-world tools and screens)
-
-Files: `modules/builder/client.lua` (CP.Builder, client), `web/src/builder/` (MissionList, BuilderEditor and its
-seven steps, BlockPanels, LocationMap, store, schema, applyResult, useDraftEditor, Builder.css),
-`web/src/supervisor/screens/Builder.tsx`, `web/src/admin/screens/Missions.tsx`, `web/src/hud/BuilderOverlay.tsx`
-(+ `.css`), `web/src/types/builder_client.ts`, `web/src/mocks/builder_client.mock.ts`,
-`locales/parts/builder_client.json`, `tests/builder_client_spec.lua`.
-The Lua header lists the public API, every client action and every event handled; the TypeScript shapes of the
-overlays and of the protocol extensions are in `web/src/types/builder_client.ts`. The protocol itself is
-`§13.7` §6; the server side is `modules/builder/server.lua` (not edited by this slice).
-
-#### Flow of a tool
-
-1. A screen calls a client action (`builderPlace`, `builderRecord`, `builderTestDrive`). The Lua client validates
-   the payload, checks the refusals and answers at once with `{ started = true }` (NUI requests time out after 20 s;
-   the tools take minutes).
-2. The tool thread closes the tablet (`CP.Tablet.close()`), runs the tool and shows its HUD
-   (`CP.Tablet.overlay({ kind = 'placement'|'recording'|'testdrive', … })`, refreshed every 150 ms).
-3. When it ends for any reason the ghost / test vehicle / driver / blips / zones / GPS waypoint it set are removed,
-   the overlay is hidden, the result gets an increasing `seq`, is kept for `builderResult` and pushed
-   (topic `builder`, `{ event = 'clientResult', id = missionId, result }`), and 300 ms later the tablet reopens on
-   `payload.ui` (`'supervisor'` default, `'admin'` from the Admin UI) unless the tool stopped for the arena, death,
-   unload or deletion.
-4. The NUI keeps editor state in module memory (`web/src/builder/store.ts`: open mission, step, location, the
-   running tool, unsaved draft, route meta) because closing the tablet unmounts the screens. A window listener
-   queues `clientResult` pushes even while no editor is mounted; on reopen the editor pulls `builderResult` too
-   (both deduplicated by `seq`), applies the result to the draft (`applyResult.ts`) and autosaves. The running
-   tool is kept until its result is applied: its `PointSpec` says how (flee paths are a list of lists, a recorded
-   checkpoint route is thinned).
-
-#### Contract interpretations
-
-- **Payload extensions (all optional, protocol §6 payloads still work):** `label` (display name on the HUD),
-  `ui` (`'supervisor'|'admin'`, where the tablet reopens), `minGap` (metres between points of one key, used for
-  escort ambush points = `Config.Blocks.escort.ambushGap`), `radiusMin` / `radiusMax` (area radius range, e.g. a
-  search area's `startRadius` range). Aliases from the task text are accepted: `count` → `max`,
-  `existing` → `points`, `block = 'escort'` → `stops = true` (explicit `stops` wins).
-- **Result extras:** every result carries `seq`; recordings also carry `droppedStops` (stop points that were on
-  the first or last waypoint and were removed because stops must be interior, §13.7.1.3). A recording with
-  fewer than two waypoints comes back `cancelled = true` with a warning toast.
-- **Overlay fields** go beyond the protocol's minimum (all listed in `types/builder_client.ts`): placement adds
-  `label, mode, multiple, heading, radius` and `reason` as translated text; recording adds `samples, maxStops,
-  stopsEnabled, waiting ('vehicle'|'return'|'checking'), distance, loop, toStart, zone, tooLong, undoMetres,
-  minLength, maxLength, message`; test drive adds `label, timeLeft, stopLeft, waiting ('approach'|'clear'|
-  'spawning'), distance, speed, done`.
-- **Stored heights:** peds at ground + 1.0 m (what `GetEntityCoords` of a standing ped reads, and what the
-  NPC spawner expects), vehicles at their root height above the ground (from `GetModelDimensions`), markers on
-  the surface aimed at (a counter or a door), starts and areas on the ground. Vectors are rounded to 2 decimals,
-  headings to 2 decimals in 0–360.
-- **Spot checks** (`CP.Builder.checkSpot`, order): every point placed → nothing aimed at → further than 50 m →
-  inside a no-build zone (2D) → water → not on the ground (aimed surface more than 0.75 m from
-  `GetGroundZFor_3dCoord`, or steeper than ~45°; not for markers) → capsule probe pending / blocked (peds and
-  vehicles) → armed spawn key (`ctx.armed`) closer than `ctx.startRadius + ctx.spawnMargin` to the start (2D,
-  `B.armedKeepOut(ctx)`, `builder.place.reason.armed`) → spawn key closer than `minSpawnFromStart` to the start (3D, as the server) → start closer than
-  `minLocationGap` to another start (2D) → closer than `minGap` to a point of the same key. The zone and
-  distance checks use the point as it is stored (`spot.stored`: rounded, a ped at ground + 1 m), which is what
-  the server checks on save and publish.
-- **Road snapping:** a sample further than `maxOffRoad` from the closest vehicle node is still accepted when the
-  vehicle is on a road surface (`IsPointOnRoad`) and the node is within 4 × `maxOffRoad`: long straight roads
-  have sparse nodes, and the server's own check is only on the saved waypoints. Waypoints are the snapped node
-  positions.
-- **Waypoints:** a turn is measured against the heading leaving the previous waypoint, so a slow curve still
-  produces a waypoint once it adds up to `turnAngle`; the sample before a `maxGap` stretch is kept; samples closer
-  than 1 m are duplicates. `length` is the sum of the waypoint distances (what the server measures).
-- **Undo and resume:** Backspace removes the last `undoMetres` of samples (never the first). Sampling then waits
-  until the driver is back within `snapEvery` of the new end (overlay `waiting = 'return'`, a marker shows the
-  spot) so the route never jumps. The same applies to a resume (in a vehicle or on foot) more than 2 ×
-  `snapEvery` away from the end, and to getting back into a driver seat that far from it (another car, or after
-  walking off).
-- **Stop points** (escort): E (or the horn) adds one at the current end with `Config.Blocks.escort.stopWait`
-  default seconds, at most `Config.Blocks.escort.stops[2]`; the editor lets the builder change each wait within
-  the stopWait range afterwards.
-- **Unreachable waypoints:** each segment is checked with `CalculateTravelDistanceBetweenPoints` (≥ 100000 = no
-  path) while recording, as soon as its second waypoint is kept: the player is next to it then, and the game
-  streams path nodes around the player only (far away the native fails with 100000 too). An undo drops the checks
-  of the segments it removes. After X the rest (the last segment) is checked, four per frame, and the indexes are
-  returned in `unreachable` (the map draws them dashed red).
-- **Test drive:** more than 200 m from the route start a GPS waypoint leads there first (`waiting = 'approach'`;
-  the test drive never teleports anyone); the spawn point must be clear of the player (6 m); the local vehicle and a
-  local driver (`s_m_m_armoured_01`, fallback `a_m_m_business_01`) drive waypoint by waypoint with
-  `TaskVehicleDriveToCoordLongrange`; arrival radius max(12 m, 1.2 s at speed), 10 m for the last one; a waypoint
-  not reached within `testDriveTimeout` is added to `failed` and the drive continues; escort stops are waited out
-  with `TaskVehicleTempAction(…, 27)`; a vehicle slower than 0.5 m/s for 6 s is re-tasked; X stops the drive
-  (`cancelled = true`). Driving styles: careful/cautious 786603, normal 786475, fast 786492; **reckless is driven
-  as fast (786492)** because a test drive must stay in its lanes to be a useful check of the recorded road route.
-- **Refusals:** `err.in_arena` (foreign `crimsonArena` value, rule 13), `err.builder_busy` (one tool at a time),
-  `err.builder_dead`, `err.builder_on_run` (the player is on a mission run: the tools would fight the run's
-  HUD and controls), `err.builder_disabled` (`Config.Builder.enabled = false`), `err.builder_bad_vehicle`
-  (test-drive vehicle outside `Config.Builder.allowed.vehicles` / `escortVehicles`, or not a vehicle model),
-  `err.invalid_payload`. A foreign arena value arriving while a tool runs stops it (state bag handler, work
-  queued with `SetTimeout(0)`; the tool also re-checks every 250 ms) and the tablet does not reopen. The same
-  250 ms check stops a tool when the player is put on a mission run (a unit leader drew one): a
-  `builder.tool_stopped_run` toast, no reopen over the run HUD.
-- **Routing bucket:** the bucket half of `CP.Alerts.inArena` has no client native, so the client relies on the
-  state bag; `server:builder:test` re-checks the full `CP.Alerts.inArena` on the server.
-- **Builder events:** `crimson-police:client:builder` `lockBroken` / `reloaded` stop a running tool of that
-  mission (the result is still delivered, cancelled, and the editor shows the lock banner); `deleted` stops it
-  without reopening and drops a pending result of that mission.
-- **Checkpoint routes** can be recorded (thinned evenly to `Config.Blocks.checkpoint_route.checkpoints[2]`
-  points, first and last kept) or placed point by point as markers.
-- **Location keys** follow the block defaults (`hostile_waves` → `spawns`, `escort` → `route` / `ambushPoints`,
-  `protect_rescue` → `hostages` / `safe`, `flee_arrest` → `door`, `suspect`, `fleeTo`, `associates` or
-  scatter `spawns` / `routes`, `search_area` → `center` / `clues` / `hiding`, `skill_check` →
-  `shared:devices` unless targets are placed). A pursuit's race loop uses keys matching `^raceLoop\d*$` and is
-  recorded with `loop = true`. Flee paths (`routes`) are a list of lists; each placement run adds one path.
-  Search areas need at least 6 clue spots and 6 hiding spots (the block's MIN_SPOTS, mirrored in the UI).
-- **Test step:** `server:builder:test` starts the draft test; the tablet then closes after 0.9 s. The tester
-  records Passed / Failed on the Test step with `server:test:record { missionId, location, tier, result, note }`
-  (allowed with `builderEdit` for drafts); when the test was started with location "Random" the UI asks which
-  location ran, because the reply echoes `'random'` (see requests).
-- **Admin catalog** merges `admin:getMissions` (every loaded mission with `filePath`, `editedInCode`,
-  `disabledInConfig`, `crossDeptEligible`) with `builder:list` (drafts and archived custom missions, lock,
-  `can.*`). Built-ins are read-only: view, duplicate, launch. `Config.DisabledMissions` is shown read-only.
-  Launch uses `server:admin:opLaunch { missionId }` for missions the list marks `crossDeptEligible`.
-- **Supervisor screen** is gated by `session.actions.builderEdit`; each row / editor action is also gated by the
-  action (`builderPublish`, `builderArchive`, `builderEditAny`, `builderRollback`, `breakEditLock`) and by the
-  row's `can.*` from `builder:list`; the server re-checks everything.
-- **Autosave:** every `autosaveSeconds` while dirty (`server:builder:autosave`, with the `rev` guard), before any
-  tool starts and before a test or publish; leaving the editor saves (`server:builder:save`) and releases the
-  lock (`server:builder:unlock`). Validation runs 1.5 s after the last change (`server:builder:validate`) and
-  the errors are shown inline per field and per step.
-
-#### Response shapes (client actions)
-
-| action | reply `data` |
-|---|---|
-| `builderPlace` / `builderRecord` / `builderTestDrive` | `{ started = true }` |
-| `builderResult` | the pending `BuilderClientResult & { seq, droppedStops? }` or `nil`; clears it |
-| `builderCancel` | `{ cancelled = boolean }` (false when nothing runs) |
-| `builderWaypoint` | `{ ok = true }` |
-| `builderTeleport` | `{ missionId, location, key, index }` after the move (fade, freeze, collision, ground, unfreeze; only the server's `client:builder:teleport` coordinates for this request are used) |
-| `builderHere` | `{ ok, reason = text or false, point, street? (a start: its street), result? }` (no tool starts; see builder_protocol.md) |
-| `builderAutoPoints` | `{ ok, reason = text or false, wanted, proposed, result? }` (no tool starts; pure core `B.autoFill(o, count, deps)`, ring `B.autoRing`; see builder_protocol.md) |
-| `builderCheckPoints` | `{ ok, reason = text or false, moved, failed, keys = { { key, points, failed = { { index, reason } }, checked } } }` (no tool starts; pure core `B.checkPoints(o, deps)`, payload `B.parseCheckPoints`; see builder_protocol.md) |
-
-Errors come back as the `err.*` keys listed above (`{ ok = false, error }` through the NUI `client` endpoint).
-
-### 13.7 Mission Builder protocol (CP.Builder)
-
-The one contract between the Mission Builder server (`modules/builder/server.lua`, slice builder_server),
-the builder client (`modules/builder/client.lua`: placement tool, route recording, test drive) and the
-builder screens (Supervisor UI → Mission Builder `sup_builder`, Admin UI → Missions `admin_missions`).
-TypeScript shapes: `web/src/types/builder_server.ts`. Browser mocks: `web/src/mocks/builder_server.mock.ts`.
-
-Everything the server sends or accepts is plain JSON (msgpack between Lua states). All times the UI
-shows are seconds; `serverTime` fields are `os.time()` on the server.
-
----
-
-#### 13.7.1 The draft definition (BuilderDefinition)
-
-The builder works on **the mission definition of ARCHITECTURE §3.2 in builder units**. It is stored as
-JSON in `cp_custom_missions.draft_definition` (the draft) and `published_definition` (a copy of the
-published file, plus the reserved `_file` key, §13.7.1.6). The Lua file is only produced on publish.
-
-```jsonc
-{
-  "id": "custom_dockside_raid",       // set by the server; a payload id is ignored
-  "label": "Dockside Raid",           // 1–64 characters
-  "description": "A smuggling crew…", // 0–500 characters
-  "type": "tactical",                 // REQUIRED, a key of Config.MissionTypes (points + base payout)
-  "departments": [],                  // keys of Config.Departments; [] = every department
-  "minOfficers": 2, "maxOfficers": 4, // Config.Blocks.details.officers (1–4), min <= max
-  "difficulty": 3,                    // Config.Blocks.details.difficulty (1–3 stars)
-  "timeLimit": 720,                   // SECONDS, Config.Blocks.details.timeLimit (120–1200 = 2–20 min)
-  "startTimeout": 600,                // SECONDS, Config.Blocks.details.startTimeout (300–900)
-  "cooldown": 1200,                   // SECONDS, Config.Blocks.details.cooldown (300–3600)
-  "vehiclePenalties": false,          // default Config.Blocks.details.vehiclePenalties.default
-  "locations": [                      // >= Config.Builder.minLocations (custom, 1) or minLocationsOverride (edited built-in, 3), at most 20
-    {
-      "label": "Dock 1",                                               // 1–64 characters
-      "start": { "coords": { "x": 1.0, "y": 2.0, "z": 3.0 }, "radius": 60 }, // radius 20–150 m; with a search_area: its startRadius
-      "spawns": [ { "x": 1.0, "y": 2.0, "z": 3.0, "w": 90.0 } ],       // any named key: see §13.7.1.2
-      "evidence": [ { "x": 1.0, "y": 2.0, "z": 3.0 } ],
-      "route": { "points": [ { "x": 0, "y": 0, "z": 0 } ], "stops": [ { "at": 12, "wait": 20 } ] }
-    }
-  ],
-  "objectives": [                     // 1..Config.Builder.maxBlocks, in play order
-    { "block": "hostile_waves", "label": "Clear the dock", "minSeconds": 45, "presenceRange": 150,
-      "waves": [6, 6], "weapons": ["WEAPON_PISTOL", "WEAPON_SMG"], "accuracy": 30, "armour": 10,
-      "surrender": { "belowHealth": 0.25, "chance": 30 } },            // chance in PERCENT
-    { "block": "interact_points", "label": "Seize the shipment", "minSeconds": 6, "points": "evidence",
-      "progress": { "label": "Seizing crates", "duration": 6 } }       // duration in SECONDS
-  ],
-  "scaling": ["objectives.1.waves"],  // or { "path": "objectives.1.waves", "max": 12 }; at most 20
-  "items": [ { "name": "radio", "count": 1 } ],                       // at most 10, count 1–100
-  "bonuses":   [ { "id": "no_participant_downed", "pct": 10 } ],     // standard list only (§13.7.1.4)
-  "penalties": [ { "id": "wrong_log", "points": -5 } ]
-}
-```
-
-##### 13.7.1.1 Units (builder form ↔ Lua file)
-- Vectors are `{ x, y, z }` (vec3) or `{ x, y, z, w }` (vec4, `w` = heading in degrees). The server
-  rounds every component to **2 decimals** when it stores a draft (1 cm), so the file round-trips exactly.
-  In the file they are written as `vec3(x, y, z)` / `vec4(x, y, z, w)`.
-- Seconds, metres, km/h everywhere, as in mission files, **except** the two conversions below, which
-  happen only when the Lua file is written (and are reversed when a file is read back):
-  - **Chances are whole percent (0–100)** in the builder, **fractions with two decimals** in the file
-    (30 → `0.30`). Fields (builder config `percentFields`):
-    `hostile_waves`: `surrender.chance`, `boss.surrender.chance` ·
-    `flee_arrest`: `responses.surrender`, `responses.flee`, `responses.fight` (must add up to 100), `armedShare` ·
-    `pursuit`: `footFlee` · `interact_points`: `roll.outcomes.*.chance` (must add up to 100).
-    Health shares (`belowHealth`) are not chances: they stay fractions (0.25) in both forms.
-  - **Progress times are seconds** in the builder (one decimal allowed), **milliseconds** in the file
-    (5 → `5000`). Fields (builder config `secondsFields`):
-    `interact_points`: `progress.duration`, `roll.outcomes.*.followUp.duration` ·
-    `protect_rescue`: `freeTime` · `flee_arrest`: `knock.duration`, `cuff.duration` ·
-    `hostile_waves`: `cuff.duration` · `pursuit`: `arrest.duration` ·
-    `search_area`: `clueProgress.duration`, `cuff.duration`.
-- Percent values are rounded to whole numbers when stored.
-
-##### 13.7.1.2 Location keys
-`start` is required (`{ coords: vec3, radius }`). Every other key is free-form and named by the
-objectives that read it (`"points": "evidence"` means `location.evidence`). Values are a vec3, a vec4,
-a list of them, a list of `{ coords, heading?, label? }`, a list of lists of vec3 (flee routes), or a
-**road route** `{ points: vec3[], stops?: { at, wait }[], loop?: boolean }`. The block's
-`requiredPoints(obj)` lists the keys that must be placed in every location.
-
-**Spawn keys** (NPC/vehicle spawn points; builder config `spawnFields`, the objective field that names
-the key): `hostile_waves` `spawns`, `boss.spawn` · `protect_rescue` `npcs` · `flee_arrest` `suspect`,
-`associates.spawns`, `spawns` (scatter) · `pursuit` `spawn`, `spawns` · `escort` `ambushPoints` ·
-`search_area` `hiding`. They must be >= `Config.Builder.minSpawnFromStart` from the location's start. **Armed**
-spawn keys (`hostile_waves` `spawns`, `boss.spawn`, `spawnSets.keys` · `escort` `ambushPoints` · `pursuit` `spawn`,
-`spawns` · `flee_arrest` `associates.spawns`) must also be >= the start's radius + `Config.Builder.spawnMargin` (2D;
-`CP.Builder.armedKeepOut`; not at a search circle; a built-in's own point at its own start is trusted).
-
-##### 13.7.1.3 Road routes (from route recording)
-`{ points = { vec3, ... }, stops = { { at = <waypoint index>, wait = <s> } }, loop = true|nil }` — road
-waypoints only (snapped to road nodes). Checks: length (sum of waypoint distances) between
-`Config.Builder.route.minLength` and `maxLength` (0.8–8 km); open route: first and last waypoint >=
-`minStartEndGap` (300 m) apart; `loop = true`: last waypoint within `loopClose` (50 m) of the first; no
-waypoint in a no-build zone; 2–500 waypoints; `stops`: at most `Config.Blocks.escort.stops[2]`,
-`at` in 1..#points, `wait` within `Config.Blocks.escort.stopWait`. A road path between consecutive
-waypoints (`CalculateTravelDistanceBetweenPoints`) is checked by the client while recording (the server
-has no path finding).
-
-##### 13.7.1.4 Bonuses and penalties
-Only ids of `Config.Bonuses`. `bonuses` takes ids with a positive value, `penalties` ids with a negative
-value. An entry is `{ id, points }` for `kind = 'points'` (flat; penalties negative) or `{ id, pct }` for
-`kind = 'pct'` (whole percent of P). A missing value is filled with the config value when the draft is
-stored. Caps: `|points| <= Config.Builder.bonusCap.points` (50), `pct <= bonusCap.share × 100` (25).
-An id whose config has `block = '<id>'` needs an objective of that block. `each` comes from the config.
-File form: `{ id = 'x', points = 5, each = true }` / `{ id = 'x', pctOfPoints = 0.10 }`.
-
-##### 13.7.1.5 Never in a definition
-No payout field (any key containing `payout`, or `cash`, `cashBase`, `basePay`, `money`, `pay`,
-`reward`, `rewards`), at any depth (also inside an objective or a location): refused by validate
-(`builder.error.payout_field`) and stripped when stored.
-Loader fields (`source`, `version`, `filePath`, `defHash`, `editedInCode`, `isBoss`, `status`) and the
-reserved `_file` key are stripped. Item names `armour`, `bandage`, `ammo-*`, `WEAPON_*` / `weapon_*`
-(any case) are refused (Crimson-Arena rule 4).
-
-##### 13.7.1.6 `published_definition._file`
-`{ hash, version, publishedAt, publishedBy, publisher, reason }`: `hash` = `CP.U.hashHex` of the file
-content as written (hand edits are detected by comparing it with the file on disk), `publisher` = the
-text of the header line ("Sergeant John Doe (SAST, citizenid ABC12345)"), `reason` = `publish` |
-`rollback` | `code_edit` | `restore_file`.
-
----
-
-#### 13.7.2 Lifecycle, versions and locks
-
-- `status` (DB): `draft` (never published) → `published` → `archived` (→ `published` again by restore).
-  The list shows the lifecycle **Draft → Tested → Published → Archived**: `tested` = a draft with
-  `draft_tested = 1`. A published mission can carry a draft (`hasDraft`): the next version, edited while
-  the published version stays live.
-- Versions: a new mission's draft is version 1. The first save of a published mission without a draft
-  creates the draft `published_version + 1`. Publish makes the draft the published version and clears
-  the draft. Rollback and an accepted hand edit publish `published_version + 1` and move an existing
-  draft to the next number. Every run row stores the version it was played on.
-- `draft_tested` becomes 1 only through `CP.Builder.onDraftTested` for a passed test of the **current**
-  draft (same version and same content as when the test started) at the tier
-  `CP.Scaling.tierFor(maxOfficers)` or a higher one. Any stored change of the draft content resets it to 0.
-- Edit lock: one editor per mission (`locked_by` citizenid, `locked_until`). `lock`, `save` and
-  `autosave` take or renew it for `Config.Builder.editLockMinutes`; it lapses by itself after that. A
-  stored draft renews it in its own UPDATE; a separate renewal write runs only when the lock is not the
-  caller's or has less than half its time left (`lock` included). A
-  lock held by someone else refuses `save`, `autosave`, `publish`, `test` and `discardDraft` with
-  `err.builder_locked`. The lock is released on publish, on `unlock`, when its holder disconnects or
-  unloads, and by `breakLock` (admins; supervisors with `breakEditLock`). The UI autosaves every
-  `Config.Builder.autosaveSeconds` while it holds the lock.
-- Built-in missions are read-only: `builder:get` shows them, `duplicate` copies them.
-- A custom mission id is `custom_` + a slug of the label (lower case, `[a-z0-9_]`, at most 40
-  characters), unique among custom and built-in missions (`_2`, `_3` … on a clash). While a mission has
-  never been published, `save` renames the id when the label's slug changed (the reply carries the new
-  `id` and `previousId`).
-
-##### Permissions (CP.Permissions.can; admins always pass)
-| Action | Own mission (created_by = me) | Someone else's |
-|---|---|---|
-| builder:list / get / config, create, duplicate | builderEdit | builderEdit |
-| lock, unlock, save, autosave, validate, test, discardDraft | builderEdit | builderEditAny |
-| publish | builderPublish | builderPublish + builderEditAny |
-| archive, restore | builderArchive | builderArchive + builderEditAny |
-| rollback | builderRollback | builderRollback + builderEditAny |
-| breakLock | breakEditLock | breakEditLock |
-
-Supervisors must be on-duty officers (CP.Access); admins may use the builder off duty. Test runs are
-refused with `err.in_arena` while `CP.Alerts.inArena(src)`.
-
----
-
-#### 13.7.3 Callbacks (`CP.Net.callback`, reply `{ ok, data, error }`)
-
-##### `builder:list` (args `{}`) → `BuilderList`
-```ts
-{ missions: BuilderListEntry[];   // every cp_custom_missions row (drafts, published, archived), newest change first
-  builtins: { id, label, type, source: 'builtin', readOnly: true }[];   // for "duplicate"
-  me: string | null;              // my citizenid
-  serverTime: number }
-BuilderListEntry = {
-  id, label, type, source: 'custom',
-  status: 'draft' | 'tested' | 'published' | 'archived',    // lifecycle for display
-  dbStatus: 'draft' | 'published' | 'archived',
-  version: number | null,          // published_version
-  draftVersion: number | null, hasDraft: boolean, draftTested: boolean,
-  editedInCode: boolean, filePath: string | null,
-  owner: { citizenid, name: string | null, mine: boolean },
-  updatedBy: { citizenid, name: string | null }, updatedAt: number,     // os.time() seconds
-  lock: null | { citizenid, name: string | null, secondsLeft: number, mine: boolean },
-  requiredTier: string | null,     // tier name the publish test needs (draft maxOfficers, else published)
-  can: { edit, publish, archive, restore, rollback, breakLock, discard: boolean } }
-```
-
-##### `builder:get` (args `{ id }`) → `BuilderRecord`
-`BuilderListEntry` plus
-```ts
-{ definition: BuilderDefinition;              // the draft, or a copy of the published version (no draft yet)
-  publishedDefinition: BuilderDefinition | null;
-  readOnly: boolean;                          // built-in, no edit permission, or locked by someone else
-  errors: BuilderError[];                     // validation of `definition` right now
-  armed: number;                              // armed NPCs before scaling (all blocks, block armedCount)
-  backups: number[];                          // versions with a <id>.v<n>.lua.bak (rollback targets), newest first
-  publishedAt: number | null; publishedBy: string | null }
-```
-Built-ins: `source: 'builtin'`, `readOnly: true`, `definition` = the built-in file in builder units,
-`status: 'published'`, nulls elsewhere. Errors: `err.builder_unknown_mission`.
-
-##### `builder:config` (args `{}`) → `BuilderConfig`
-```ts
-{ enabled, blocks: Config.Blocks (verbatim, incl. details),
-  blockList: { id, labelKey: 'builder.block.<id>', available: boolean /* registered on the server */,
-               minSeconds: number /* default */, presenceRange: [min, max, default] }[],
-  allowed: Config.Builder.allowed, maxHostiles, maxBlocks, minLocations, minLocationsOverride, maxLocations: 20,
-  minLocationGap, minSpawnFromStart, spawnMargin, maxPointFromStart /* m outside the start circle */,
-  bonusCap: { points: 50, pct: 25 },
-  bonuses: { id, kind: 'points'|'pct', value /* points, or whole percent */, each, block: string|null,
-             penalty: boolean, labelKey: 'bonus.<id>' | 'penalty.<id>' }[],     // Config.Bonuses, sorted
-  noBuildZones: { label, coords: Vec3, radius }[],
-  departments: { key, label, short }[], missionTypes: { key, label, points }[],
-  tiers: { name, labelKey: 'tier.<name>', maxParticipants }[],
-  autosaveSeconds, editLockMinutes, testAtMaxTier, keepBackups, exportPath,
-  route: Config.Builder.route,
-  startRadius: [20, 150, 60], maxItems: 10, itemCount: [1, 100], maxScaling: 20,
-  limits: { label: 64, description: 500, objectiveLabel: 64, locationLabel: 64 },
-  percentFields: Record<blockId, string[]>, secondsFields: Record<blockId, string[]>,
-  spawnFields: Record<blockId, string[]>, forbiddenItems: ['armour', 'bandage', 'ammo-*', 'weapon_*'],
-  useStartRoute: Config.Testing.useStartRoute,
-  permissions: { builderEdit, builderEditAny, builderPublish, builderArchive, builderRollback, breakEditLock } } // mine; admins all true
-```
-
-##### BuilderError (in `errors` lists)
-`{ path: string, message: string, key?: string, vars?: Record<string, string|number> }` — `path` is a
-dotted path into the definition (`label`, `timeLimit`, `locations.2.spawns`, `objectives.1`,
-`bonuses.1.points`, `items.2.name`, `scaling.1`); `message` is already translated (show it as is);
-`key`/`vars` are the locale key (`builder.error.*`) when the text came from this module (block
-`validate` reasons arrive as text only).
-
----
-
-#### 13.7.4 Actions (`CP.Net.action('server:builder:<name>')`, reply `{ ok, data | error }`)
-
-Every action returns `err.builder_disabled` when `Config.Builder.enabled` is false, `err.invalid_payload`
-for a malformed payload, `err.builder_unknown_mission`, `err.no_permission`, `err.rate_limited`.
-
-| Action | Payload | Result data | Other errors |
-|---|---|---|---|
-| `server:builder:create` | `{ type, label? }` | `{ id, record: BuilderRecord }` — a draft v1 with one location stub, locked by me | `err.builder_bad_type` |
-| `server:builder:create` (template) | `{ template, label? }` | as above: the built-in's type, difficulty, team, times, bonuses, penalties and objectives, one empty location (no built-in point); `template` is an id from `builder:config` `templates` (`Config.Builder.templates`) | `err.builder_unknown_template` |
-| `server:builder:duplicate` | `{ id }` (built-in or custom) | `{ id, record }` — editable copy "‹label› (copy)", draft v1, my lock, `record.errors` shows what to fix (built-in values outside builder ranges, non-standard bonuses dropped) | |
-| `server:builder:lock` | `{ id }` | `{ id, lock }` | `err.builder_locked`, `err.builder_read_only` |
-| `server:builder:unlock` | `{ id }` | `{ id }` | |
-| `server:builder:save` | `{ id, definition }` | `{ id, previousId?, version, savedAt, valid, errors: BuilderError[], draftTested, lock }` — always stored (a draft may be incomplete); audited | `err.builder_locked`, `err.builder_too_large` |
-| `server:builder:autosave` | `{ id, definition }` | `{ id, version, savedAt, draftTested, lock }` — stored, lock renewed, not audited; at most one per 5 s | `err.builder_locked` |
-| `server:builder:validate` | `{ id, definition? }` (stored draft when omitted) | `{ valid, errors, armed, maxHostiles, requiredTier }` | |
-| `server:builder:test` | `{ id, tier?, location?, useStartRoute? }` — tier name (default: required tier), location index or `'random'` (default 1), start route (default `Config.Testing.useStartRoute`) | `{ id, version, tier, location, requiredTier }` — `CP.Testing.startDraft(src, def, opts)` with the **stored** draft (autosave first) | `err.in_arena`, `err.builder_bad_tier`, `err.builder_bad_location`, `err.builder_invalid` (not playable), `err.builder_no_draft`, `err.builder_testing_unavailable`, CP.Testing's own keys |
-| `server:builder:publish` | `{ id }` | `{ id, version, filePath, backup: string \| null }` | `err.builder_no_draft`, `err.builder_invalid` (call validate for the list), `err.builder_not_tested`, `err.builder_locked`, `err.builder_read_only` (archived: the draft left over stays until a restore), `err.builder_file_write` |
-| `server:builder:archive` | `{ id }` | `{ id, filePath }` | `err.builder_not_published`, `err.builder_file_write` |
-| `server:builder:restore` | `{ id }` | `{ id, filePath }` | `err.builder_not_archived`, `err.builder_file_write` |
-| `server:builder:rollback` | `{ id }` | `{ id, version, fromVersion }` | `err.builder_not_published`, `err.builder_no_backup`, `err.builder_invalid` |
-| `server:builder:breakLock` | `{ id }` | `{ id, previous: { citizenid, name } \| null }` | |
-| `server:builder:discardDraft` | `{ id }` | `{ id, deleted }` — a never-published mission is deleted, otherwise only its draft | `err.builder_no_draft`, `err.builder_locked` |
-| `server:builder:teleport` | `{ missionId, location, key, index }` | `{ missionId, location, key, index }`; the stored point goes to the caller in `client:builder:teleport` (Config.Builder.teleport; admins, or a Config.Permissions.builderTeleport grant; audited) | `err.builder_teleport_off`, `err.no_permission`, `err.in_arena`, `err.builder_on_run`, `err.builder_dead`, `err.builder_no_point` |
-
-Publish writes `missions/custom/<id>.lua` (SaveResourceFile) in exactly the shape of the spec's custom
-example, keeps the previous file as `<id>.v<previous version>.lua.bak` (`Config.Builder.keepBackups`),
-stores `published_definition`, releases the lock and calls `CP.Missions.register(def)` (joins its type's
-pool at once). Archive moves the file to `missions/custom/archived/<id>.lua` and calls
-`CP.Missions.unregister(id)`; restore moves it back and registers it. Rollback reads the newest
-`<id>.v<n>.lua.bak` with n < published version, checks it against the guardrails and publishes it as
-a new version (the current file becomes a `.bak` in turn).
-
-Live updates: NUI push topic `builder` with `{ event, id, by? }`, `event` = `changed` | `published` |
-`archived` | `restored` | `rolledBack` | `tested` | `lockBroken` | `reloaded` | `deleted` (to everyone
-who opened the builder in the last 15 minutes). Client Lua event `crimson-police:client:builder`
-`{ event = 'lockBroken' | 'reloaded' | 'deleted', id }` goes to the editor who lost the draft or lock,
-so the client can stop an active placement/recording for that mission.
-
----
-
-#### 13.7.5 Server hooks (Lua)
-- `CP.Builder.loadPublished() -> { def, ... }` (for `CP.Missions.loadAll`): every `status = 'published'`
-  row → its file (`LoadResourceFile`, read as data by the loader's reader, never run); definitions carry the loader fields
-  (`source = 'custom'`, `version`, `filePath`, `defHash` = file hash, `editedInCode`, `status`). A
-  missing file is rewritten from `published_definition` with a warning. A file changed since the last
-  publish goes through the hand-edit check first (below).
-- `CP.Builder.onReload() -> summary` (from `CP.Missions.reload`): for every published mission, file hash
-  vs `_file.hash`: unchanged → nothing; changed → parse, strip payout fields (console warning), check the
-  same guardrails (the test requirement excepted) → new version marked `edited_in_code` (header version
-  line updated), previous published version kept as `.v<n>.lua.bak`; if the builder draft also changed
-  since the last publish the file wins, the draft goes to `<id>.draft.lua.bak`, the draft is cleared and
-  the conflict is audited. A file that fails the guardrails is kept on disk but not used (the last
-  published version stays live) and the reason is printed. Summary
-  `{ checked, unchanged, edited = { { id, version } }, rejected = { { id, error } }, conflicts = { id },
-  rewritten = { id } }`.
-- `CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash) -> boolean` (from `CP.Testing`;
-  `defHash` is the hash of the definition the test ran, the one `server:builder:test` gave `startDraft`).
-- `CP.Builder.validate(def, opts) -> errors` and `CP.Builder.exportLua(def, meta) -> text` (pure; tests).
-
----
-
-#### 13.7.6 Client protocol (builder client ↔ builder UI)
-
-The placement tool, recording and test drive take minutes, longer than an NUI request may wait (20 s),
-so each is **started** by a client action and its **result is delivered later**.
-
-Client actions (registered by `modules/builder/client.lua` with `CP.Tablet.registerClientAction`):
-
-| name | payload | immediate reply |
-|---|---|---|
-| `builderPlace` | `{ missionId, location, key, kind: 'ped'\|'vehicle'\|'marker'\|'area'\|'start', model?, heading: boolean, multiple: boolean, min?, max?, radius?, points: (Vec3\|Vec4)[], start: Vec3\|null, spawn: boolean, armed?: boolean, startRadius?: number, otherStarts: Vec3[] }` (armed: an armed spawn key, kept outside the start circle `startRadius` plus `Config.Builder.spawnMargin`) | `{ started: true }` or `err.in_arena` / `err.builder_busy` |
-| `builderHere` | the `builderPlace` payload | `{ ok, reason: string\|false, point, street?, result? }` at once, the tablet stays open: the spot where the player stands (or his vehicle is), checked as an aimed spot; `result` is a placement result with the point added (multiple) or set, only when `ok`. `street` (a start only) is the street it stands on (`GetStreetNameAtCoord`, `''` when unnamed): the New mission wizard names the mission after it. `err.builder_here_off` while `Config.Builder.useMyPosition` is false |
-| `builderAutoPoints` | the `builderPlace` payload of a ped or vehicle key with `multiple` and a `start`, plus `count` (points to add) and `anchor?: Vec3` (the ring's centre, the start when missing) | `{ ok, reason: string\|false, wanted, proposed: Vec[], result? }` once the spots are tried, the tablet stays open: spots on a ring `Config.Builder.autoFillRing` metres beyond the key's keep-out, snapped to the navmesh (`GetSafeCoordForPed`) or the side of the nearest road, judged by `CP.Spawn.probe` (ok or snap) and `B.checkSpot` (the key's `minGap`, else 3 m); `result` holds the old and the proposed points and is applied only when the builder keeps them. A player more than 250 m from the anchor gets `ok = false` and a reason. `err.builder_auto_off` while `Config.Builder.autoFill` is false, `err.builder_auto_start` with no start |
-| `builderCheckPoints` | `{ missionId, location, ui?, start: Vec3 (where the start is now), startRadius?, offset: Vec3 (how far it moved), keys: { key, kind?, model?, spawn?, armed?, minGap?, route?: boolean, points: Vec[] }[] }` (every point list of the location, flattened in `defUtils vecsOf` order) | `{ ok, reason: string\|false, moved, failed, keys: { key, points: Vec[], failed: { index, reason }[], checked }[] }`, the tablet stays open: "Move the whole location here". Every point moves by `offset`; a `route` (a path the mission travels along) only moves; any other point is put on the ground there (a person 1 m over it, a vehicle its lift, a marker on it), judged by `CP.Spawn.probe` (ok or snap) and `B.checkSpot` with the key's points checked before it; `failed` lists the ones that do not fit (index 1-based, the reason in words), the screen offers Fill N for me / Place by hand. 20 s at most (the rest: "Not checked in time"). A player more than 250 m from `start` gets `ok = false`. `err.builder_here_off` while `Config.Builder.useMyPosition` is false. The screen first sets the start with `builderHere`, then applies the start and the moved points with one autosave |
-| `builderRecord` | `{ missionId, location, key, stops: boolean, loop: boolean }` | `{ started: true }` |
-| `builderTestDrive` | `{ missionId, location, key, route: BuilderRoute, vehicle, speed, style }` | `{ started: true }` |
-| `builderResult` | `{}` | the pending result below (or `null`), and clears it |
-| `builderCancel` | `{}` | `{ cancelled: boolean }` |
-| `builderWaypoint` | `{ coords: Vec3 }` | `{ ok: true }` (GPS waypoint to a spot) |
-| `builderShowMap` | `{ points: { kind: 'start' \| 'spawn' \| 'checkpoint', coords: Vec3 }[] }` (1-300) | `{ shown: number }`; the tablet closes, temporary blips go on the pause map and it opens; the blips go when the tablet opens again (refuses in the arena) |
-| `builderTeleport` | `{ missionId, location, key, index }` (`key = 'start'`, `index = 1` for the start) | `{ missionId, location, key, index }` once the player is on the ground at the stored point; the server (`server:builder:teleport`) decides who may and where, and audits it |
-
-The tablet closes while the tool runs and reopens on the builder screen when it ends. The result is
-kept on the client until read and also pushed to the NUI (topic `builder`, `event = 'clientResult'`):
-
-```ts
-BuilderClientResult =
- | { kind: 'placement'; missionId; location; key; points: (Vec3|Vec4)[]; radius?: number; cancelled: boolean }
- | { kind: 'recording'; missionId; location; key; cancelled: boolean;
-     route: { points: Vec3[]; stops: { at: number; wait: number }[]; loop?: boolean };
-     length: number;              // metres
-     rejected: number;            // samples dropped as "Off road" (> Config.Builder.route.maxOffRoad from a road node)
-     rejectedSamples: Vec3[];     // where (at most 50), for the map
-     unreachable: number[] }      // waypoint indexes with no road path to the next one
- | { kind: 'testdrive'; missionId; location; key; completed: boolean; failed: number[] /* waypoints not reached within testDriveTimeout */; cancelled: boolean }
-```
-For `kind: 'start'`, `points` holds one vec3 and `radius` the start radius. The UI writes points into
-`definition.locations[location - 1][key]` (a single vec for single-point keys, a list otherwise) and
-autosaves. Placement checks on the client (a failing spot shows red and cannot be placed): on the ground
-(not in water, inside walls or in the air), outside `noBuildZones` (2D), armed spawn keys (`armed`) >= `startRadius` +
-`spawnMargin` from `start` (2D), spawn keys >= `minSpawnFromStart`
-from `start`, a start >= `minLocationGap` from `otherStarts`. The server re-checks z sanity, no-build
-zones, the start distance and the location gap on save/publish, and `builder.error.points_far` (vars `key`, `n`,
-`total`, `dist`, `max`, `radius`, `limit`): a key's points further than the start radius plus `maxPointFromStart` from
-`start` (2D); escort route / ambushPoints, pursuit route, checkpoint_route checkpoints, flee_arrest routes,
-field_contact fleeTo, any road route and an interact_points `use = 'random'` key with a point inside the start circle
-are exempt. The Locations step shows those errors after a moved start with Move them too / Place again / Keep.
-
-Overlays (`CP.Tablet.overlay`): `{ kind: 'placement', key, placed, min, max, valid, reason? }`,
-`{ kind: 'recording', key, length, points, stops, paused, offRoad, rejected }`,
-`{ kind: 'testdrive', waypoint, total, failed }`, `nil` to hide.
-
-### 13.8 Mission Builder server (CP.Builder)
-
-Files: `Crimson-Police/modules/builder/server.lua`, `§13.7` (the protocol: definition
-shape, every callback/action with payload and result, client placement/recording results),
-`Crimson-Police/web/src/types/builder_server.ts`, `Crimson-Police/web/src/mocks/builder_server.mock.ts`,
-`Crimson-Police/locales/parts/builder_server.json`, `tests/builder_server_spec.lua`
-(run: `lua5.4 tests/run.lua builder_server`).
-
-Response shapes: all in `builder_protocol.md` §3/§4 and `web/src/types/builder_server.ts`.
-
-#### Contract interpretations
-
-1. **Builder units** (task + `config/blocks.lua` header): chances are whole percent, progress times seconds; the
-   field lists are fixed tables (`PERCENT_FIELDS`, `SECONDS_FIELDS`, sent in `builder:config`). Health shares
-   (`belowHealth`) stay fractions. Vectors are rounded to 2 decimals and percents to whole numbers when stored, so
-   the Lua file round-trips exactly (the spec asks for chances "with two decimals").
-2. **Bonus entries** in the builder form are `{ id, points }` (flat kinds) or `{ id, pct }` (pct kinds, whole
-   percent); the stored draft always carries the explicit value (config value when left out). The file gets
-   `points = n` / `pctOfPoints = 0.10` and `each = true` from `Config.Bonuses`. Only `Config.Bonuses` ids are
-   allowed; `bonuses` takes positive ids, `penalties` negative ones.
-3. **Guardrails** (`CP.Builder.validate`): every check of SPEC "Guardrails" + "Route recording" and the task list,
-   plus the block's `validate(obj, mission, location)` for every location (the per-block authority; mission has
-   `source = 'custom'`, so strict checks apply), `requiredPoints`, `armedCount`. Numbers not in config are local
-   constants: start radius 20–150 m (default 60), at most 20 locations, 10 items (count 1–100), 20 scaling entries,
-   500 route waypoints, labels 64 / description 500 characters, "z sanity" |x|,|y| <= 10000 and -250 <= z <= 1500.
-   `minSeconds` must be >= 1 s and the objectives' minimum times must fit in the time limit; the block default is a
-   default, not a floor (the spec's own custom example uses 45 s for hostile_waves, below its default of 60).
-   `publish`, `test`, `validate` (action) and reloads also run `CP.Missions.normalize` (the loader's own checks).
-   **Start radius of a search mission**: when the mission has a `search_area` objective, its search circle is the
-   start marker (the run starts when a participant enters it, as in Manhunt), so every location's start radius
-   must equal the first `search_area` objective's `startRadius` (its block default 600 when unset) and is checked
-   against `Config.Blocks.search_area.startRadius` (200–1000 m) instead of 20–150 m
-   (`builder.error.start_radius_search`). The UI locks the start radius to that circle and keeps it in sync
-   (an editable draft saved before this rule gets its start radii moved onto the circle when it is opened).
-   **Copies of built-ins** (`server:builder:duplicate`): every built-in mission's copy passes these guardrails and
-   can be published after its test (`tests/int_duplicates_spec.lua`); `Config.Builder.allowed.peds` holds every
-   base-game ped a built-in or a block default uses (inmates, the Kingpin, the escort driver).
-   **Renamed fields**: `RENAMED_FIELDS` reads an old objective field name as the new one wherever the builder
-   reads a definition (sanitize, file units, record views): checkpoint_route `policeVehicle` → `vehicleRequired`.
-4. **Spawn points** for `minSpawnFromStart` are the location keys named by the objective fields in `SPAWN_FIELDS`
-   (NPC/vehicle spawns: hostile_waves spawns/boss.spawn, protect_rescue npcs, flee_arrest suspect/associates/spawns,
-   pursuit spawn/spawns, escort ambushPoints, search_area hiding). Markers (interact points, doors, checkpoints,
-   safe spots) may be near the start. No-build zones apply to every point (2D), including route waypoints.
-   **Armed spawn keys** (`ARMED_FIELDS`: hostile_waves spawns/boss.spawn/spawnSets.keys, escort ambushPoints, pursuit
-   spawn/spawns, flee_arrest associates) must also be outside the start circle plus `Config.Builder.spawnMargin`
-   (`B.armedKeepOut`, 2D; error `builder.error.spawn_armed`, which replaces the 30 m one for that key; none at a search
-   circle). A point a built-in mission plays at the same start (same coordinates and radius, within 0.05 m) is
-   trusted, so a duplicate of a built-in publishes; WaiveBaseline waives it for an override like `spawn_start`.
-   `B.armedTooClose(def)` feeds the loader warning for files published before (they still load).
-5. **Road path check** between waypoints (`CalculateTravelDistanceBetweenPoints`) is client-only (the server has no
-   path finding); the client reports `unreachable` waypoints with the recording.
-6. **Save stores incomplete drafts** and returns `errors` + `valid`; publish refuses with `err.builder_invalid`
-   (the UI calls `validate` for the list), because a CP.Net action error is a single locale key.
-7. **draft_tested**: set only by `onDraftTested` for a pass of the **current** draft: same `draft_version`, and
-   the `defHash` CP.Testing hands back (the content that ran) equals the stored draft's content hash (a caller
-   without it: the hash of the last test `server:builder:test` started), at the required tier or a higher one
-   (`testAtMaxTier = false`: any tier). The draft is read after the audit, right before the update. Any stored
-   change of the draft content resets it to 0.
-8. **Versions**: new draft v1; the first save of a published mission without a draft creates
-   `published_version + 1`; publish consumes the draft (draft fields cleared, lock released); rollback and an
-   accepted code edit publish `published_version + 1` and move an existing draft to the next number (rollback) or
-   replace it (code edit).
-9. **Rollback** restores the newest `<id>.v<n>.lua.bak` with n < published version, re-checked against the
-   guardrails (not the test requirement: that content passed its test when it was published), re-exported with a
-   fresh header as the new version; the replaced file becomes a `.bak` in turn. Supervisors need `builderRollback`
-   and, for someone else's mission, `builderEditAny`.
-10. **Hand edits** are processed on reload **and at start** (`loadPublished` runs the same file sync), because the
-    file is the source of truth on start and on reload. An accepted edit keeps the developer's file (only our
-    header's `version:` line is updated and an `edited:` line added), is stored as a new version with
-    `edited_in_code = 1`, and the previous published version is regenerated as `<id>.v<n>.lua.bak` (the edit
-    overwrote it). Payout fields (at any depth) are stripped with a console warning (each load). The guardrails
-    run on the builder copy (builder units), and the file itself must also pass `CP.Missions.normalize` as
-    written, because that file is what goes live. A file that breaks the guardrails or does not load stays on
-    disk untouched and is **not** used: the last published version (`published_definition`) stays live, with a
-    warning on every reload. Conflict (the draft also changed since the
-    last publish, i.e. differs from `published_definition`): the file wins, the draft is written as
-    `<id>.draft.lua.bak`, cleared from the row, the lock is released, the editor is told
-    (`client:builder` `reloaded` + toast) and `codeEditConflict` is audited. The code-edit actor is `console`.
-11. **File hash baseline** lives in `published_definition._file.hash` (no column for it in 001). A published row
-    without it takes the file on disk as its baseline.
-12. **Ids**: `custom_` + slug of the label (`[a-z0-9_]`, slug at most 30 characters), `_2`… on a clash with any
-    custom or built-in id; creation uses `INSERT IGNORE` and retries on a race. An explicit `save` of a
-    never-published draft renames the row when the label's slug changed (`previousId` in the reply). A test
-    started before the rename is outdated (the id and label are part of its content); its result, sent under the
-    old id, never reaches the renamed draft (a new mission may take the old id).
-13. **Permissions**: `builder:list/get/config`, `create`, `duplicate` and `validate` need `builderEdit` (admins
-    always); editing someone else's mission needs `builderEditAny`; publish/archive/restore of someone else's need
-    `builderEditAny` too; `breakLock` needs `breakEditLock`. Any custom mission may be duplicated into an own draft.
-    A duplicate keeps only standard bonuses in its lists and `B.customBonusFields` drops the objective-level ids
-    and values the blocks refuse on custom missions (flee_arrest `aliveBonus` points / non-standard id, the boss's
-    `aliveBonus` points, pursuit non-standard `detainBonus` / `allDetainedBonus` / `fastStop.id` / `ramPenaltyId`
-    and `fastStop.seconds` above 120, interact_points non-standard `fastBonus`), so the block defaults apply. A
-    saved or hand-edited definition that sets them is rejected by the block's validate instead.
-    Supervisors must be on-duty officers (via CP.Permissions/CP.Access); admins may be off duty
-    (identity from `CP.Qbx.getInfo`).
-14. **Header publisher text**: `<rank> <name> (<department short>, citizenid <cid>)`, e.g. "Sergeant John Doe
-    (SAST, citizenid ABC12345)"; an admin outside a department: `(admin, citizenid …)`. `]]` and control
-    characters are neutralised so nothing can close the header comment.
-15. **Discard** of a never-published draft deletes its row (nothing references it); for a published mission only
-    the draft is cleared.
-16. **Locks** are released when the holder drops or unloads their character (`playerDropped`,
-    `CP.Qbx.onPlayerUnload`); lock state is computed in SQL (`TIMESTAMPDIFF`), never from the Lua clock.
-17. **Audit**: `CP.Admin.audit(citizenid|'console', role, 'builder', action, target, old, new, reason)` for create,
-    duplicate, save (explicit only; autosaves are not audited), test, testPassed/testFailed, publish, archive,
-    restore, rollback, breakLock, discardDraft, codeEdit, codeEditConflict. The builder webhook is posted by
-    `CP.Admin.audit` (category webhook), so the builder does not call `CP.Admin.webhook` itself (no double posts).
-18. **Arena**: `server:builder:test` refuses with `err.in_arena` (same text as engine_a's key).
-19. **Tests** use their own database `cp_test_builder_server` (same migrations; the engine_a pattern) so parallel
-    specs that reset `cp_test` cannot interfere; every SQL statement of the module runs there. Mission files go to a
-    temporary `missions/custom/test_builder_<n>/` folder (with `archived/`) that is removed at the end. The task
-    text names `tests/builder_spec.lua`; the owned file is `tests/builder_server_spec.lua`.
-
-### 13.9 Core (integrations, access, permissions, tablet)
-
-Files: `modules/integrations/{qbx,sc_dispatch,sc_ambulance,renewed_banking}/`, `modules/access/`,
-`modules/permissions/`, `modules/tablet/`, `locales/parts/core.json`, `tests/core_spec.lua`,
-`tests/fixtures/core/mdt_dispatch.sql`. Each Lua file's header comment documents its public API.
-
-#### Contract interpretations
-
-##### CP.Qbx
-- `onDutyChange(fn(src, onDuty))`: a `false` from `QBCore:Server:SetDuty` is passed on as is. A `true` is
-  re-read from PlayerData before listeners run, so a stale `true` (sc-police / sc-ambulance forcing a
-  suspended officer off duty inside their own handler) reaches listeners as `false`. Listeners are still
-  expected to re-read before acting on "on duty" (§5.1).
-- `onJobChange(fn(src, job))`: `job` is the live job in the `getInfo` shape
-  (`{ name, label, type, onduty, gradeLevel, gradeName }`), not qbx's raw `{ grade = { name, level } }` table.
-- Every listener (server and client, all integrations) runs in its own `CreateThread` inside `pcall`,
-  so a listener may query the database or wait without holding up qbx_core's synchronous dispatch.
-- `getInfo.callsign` is `nil` for a missing value, `''` and qbx_core's default `'NO CALLSIGN'`; it is
-  trimmed but not clipped (Access clips to 32 when it builds the officer and writes the row).
-  `gradeName` falls back to the grade name in the job definition (`GetJobs`) when the player's job has none.
-- `getOnlinePlayers()` is cached for 1 s (GetQBPlayers copies every player's data); the cache is
-  dropped on load, unload and drop.
-- `addMoney(src, account, 0)` returns `true` without calling qbx_core (nothing to move). Negative,
-  NaN or infinite amounts return `false`. Amounts are rounded half up.
-- Client `onJobUpdate(fn(job))` also fires on `qbx_core:client:onGroupUpdate` with the re-read
-  `PlayerData.job` (the only event when the active job is removed). Client `getPlayerData()` returns
-  `{}` while `LocalPlayer.state.isLoggedIn == false` (qbx_core does not clear PlayerData on logout).
-
-##### CP.Dispatch
-- `onResponding` listeners receive the callId exactly as sent (number or string, validated: no tables,
-  at most 64 characters) and a real boolean. Use `normalizeCallId` / `lookupActiveCall` for keys.
-- Net listeners are rate limited per player: ToggleResponding 6/s, ShotsFired/PlayerDown/PlayerDead 5/s.
-- Alert listeners get a sanitised copy: `{ coords = vector3|nil, street, zone, sex }` (client-supplied:
-  use server-side ped coords for distance checks). Payloads without `coords` are dropped (sc-dispatch
-  creates no call for them either).
-- `lookupActiveCall` returns `nil` when sc-dispatch is not started. The numeric parameter is the integer
-  form only for digit-only ids (`'0x1a'`, `'1e3'` are not treated as numbers), `0` otherwise. An empty
-  or NULL `unique_id` returns the row id as a string. `npccall-` rows ARE returned (caller classifies).
-- `clearNotification` refuses numbers AND digit-only strings (`'123'` would also match unrelated
-  ems/fire rows by row id in sc-dispatch's `id = ? OR unique_id = ?`), returns a boolean.
-- `onDispatchRestart` fires for both `onResourceStart` and `onResourceStop` of `sc-dispatch`.
-
-##### CP.Ambulance
-- `doctorCount()` = min(`GetDoctorCount()`, live count of on-duty `ambulance` players via
-  `CP.Qbx.getOnlinePlayers` + `getInfo`) when the live list is available; export `0` always gives `0`.
-- `revive(src)` returns a boolean; it refuses non-integer, non-positive and disconnected ids, refuses and
-  logs an in-arena src (`CP.Alerts.inArena`, guarded; an error there refuses too, Crimson-Arena rule 3), and sends
-  nothing while sc-ambulance is stopped (the event would have no handler).
-- Client `sendEMSRequest()` returns a boolean and refuses a second request within 5 s. It also returns
-  `false` (without using up the 5 s) while the local player carries Crimson-Arena's `crimsonArena` value:
-  sc-ambulance drops such a request anyway.
-
-##### CP.Banking
-- Texts are cut to their limits (message 200, issuer/receiver 100, transId 128 bytes) without splitting a
-  UTF-8 character.
-- All four functions return booleans (`societyBalance` a number or nil) and never raise. `0` amounts are
-  not sent (a $0 history entry) and return `true`. Title = `Config.Tablet.title`. The message has `'`
-  and `\` removed; issuer/receiver are never nil (`''`).
-
-##### CP.Access
-- An invalid `text` colour falls back to `CP.U.contrastText(background)` (with a warning) rather than the
-  Crimson-Police default text colour, which could be unreadable on a light background. Missing `text`:
-  contrast pick, no warning. Other invalid colours: Crimson-Police default (= `Config.AdminTheme`
-  defaults / web `DEFAULT_THEME`), one warning per department and key, never repeated on rebuild.
-- `logo.url` (https only) wins over `logo.file`; `file` must be a bare `png/webp/svg/jpg/jpeg` file
-  name. `size` is clamped to 0.05-1. The sanitised dept also carries `logo.file` (nil for url logos).
-- A department without a numeric `supervisorGrade` has no supervisors (warning); `societyAccount`
-  defaults to the first job name (Renewed-Banking creates one account per job). A job listed in two
-  departments belongs to the first key (sorted), with a warning.
-- `department()` / `departments()` return copies.
-- Text limits (officer name 64, callsign 32, rank 40, department label 64 / short 16) are applied in bytes
-  without splitting a UTF-8 character: the cp_officers columns count characters and MariaDB strict mode
-  (oxmysql connects as utf8mb4) rejects the whole upsert for a string that ends in half a character.
-- `getOfficer` returns `err.not_police` when the player has no loaded character. Crimson-Police and
-  SC-Dispatch suspension lookups are cached for 15 s (`suspend()` updates the cache at once).
-- `recheck(src, jobName)` returns `true` for a player without a character (the drop/unload path ends the
-  run as `disconnected`).
-- `onLost(fn(src, reason))` compares with the player's last known active job (seeded on start, load,
-  getOfficer, recheck and every qbx event). It fires only for players whose last known job was a
-  department job: `job_change` (different job, incl. unemployed), `off_duty`, `suspended`. It also fires
-  `suspended` from `suspend()` for an online officer. Listeners decide whether the player is on a run.
-- `suspend()` does not write the audit log (the calling module does). When `actorSrc` is a player it
-  must pass `CP.Permissions.can(actorSrc, 'suspend')`; `0`/`nil` (console, anticheat) skip that. The
-  online officer gets a toast (`access.suspended_notice` / `access.unsuspended_notice`). Days must be
-  whole numbers 0-3650; citizenids `[%w_-]`, max 50 characters, used exactly as given. The end time is capped
-  at 2147483647 (2038-01-19 03:14:07 UTC): beyond it MariaDB 10.11's `FROM_UNIXTIME` writes NULL (error 1292 in
-  strict mode) and `UNIX_TIMESTAMP` reads NULL, so from 2028 a 3650-day suspension ends there; a suspension that
-  cannot be stored at all returns `err.internal`.
-- `refreshOfficerRow` also refreshes off-duty department members; civilians get no row. Runs on
-  character load, on OnJobUpdate for a department job, and on Officer/Supervisor UI open.
-- Export `GetDepartment(src)` returns the department of the active job whether or not the player is on
-  duty or suspended.
-- Client side: `CP.Access.current()`, `department()`, `roles()`, plus `setSession(session)` and
-  `clear()` used by the tablet (both halves are this slice).
-
-##### CP.Permissions
-- Admins (and the console) get `true` for any action name.
-- `ctx` (optional): `runUuid` applies the own-run rule to `reviewFlagged`, `handleDisputes`,
-  `handleFailedDispute`, `voidAnyRun` (admins included, `err.own_run`); `department` / `departments`
-  (list or set) restricts supervisors to their department (`err.other_department`).
-- `tookPart` fails closed on a database error (treated as a participant).
-
-##### CP.Tablet
-- Supervisor UI: allowed for officers at/above `supervisorGrade` AND for on-duty officers who are
-  admins; `roles.supervisor` reflects the same rule. `session.officer` is filled whenever the player
-  qualifies as an officer, also in the Admin UI.
-- `session.logo` is nil when the department has no valid logo or its file was missing at start.
-  nil fields (callsign, logo, officer) arrive in the NUI as missing keys (undefined), not `null`.
-- `getSession({ ui, silent = true })` skips `refreshOfficerRow` (used by the theme fetch at login).
-  getSession is rate limited to 4/s per player.
-- `switchUi` replies `{ ok, data = Session }` AND sends an `open` message for the new UI (the web
-  handlers are idempotent). The prop stays when switching officer <-> supervisor and is removed for admin.
-  A UI closed while the session was on its way stays closed and the reply is `err.tablet_closed` (an `ok`
-  reply would make the web draw the UI again without NUI focus).
-- The `theme` message always carries a theme object (the Crimson-Police default when the player is not
-  an officer) plus `locale`; it is sent at login, after duty/job changes (debounced 1.5 s), on unload
-  and on NUI `ready` (which also re-sends the HUD, overlay and open UI).
-- `hud(patch)`: shallow merge; setting a nullable field (`modifier`, `timer`, `route`, `message`,
-  `detail`) to `false` clears it. `hud(nil)` sends `{ type = 'hud' }` (hud missing = null).
-- The command toggles the Officer UI. The key mapping is `crimsonpolice_tablet` (rule 14 prefix),
-  always registered with default key `Config.Tablet.keybind` (`''` = unbound, bindable in GTA settings).
-- Crimson-Arena (Crimson-Arena rule 8): a `crimsonArena` change handler on the local player's bag; a
-  foreign value (active, `source ~= 'crimson-police'`) closes every Crimson-Police UI (prop deleted,
-  animation stopped), hides the HUD, overlays and result card and cancels a progress bar while a run is current
-  (`lib.progressActive` first: `lib.cancelProgress` raises when none runs). While the local value is
-  foreign, the command, key mapping, item, `OpenTablet`, `switchUi` and `client:openAdmin` refuse with the
-  toast `err.in_arena` (also re-checked when the session reply arrives). A result card (`CP.Tablet.result`) that arrives while
-  the value is foreign is dropped, not kept for later (a 25 s notice; the run stays in the Profile history). `SetNuiFocus(false, false)` is only
-  called when a Crimson-Police UI was open (never on an unload or close with nothing open).
-- Prop: `Config.Tablet.prop`, a local (non-networked) object (Crimson-Arena rule 8), bone 60309 with the
-  offsets tuned for `amb@code_human_in_bus_passenger_idles@female@tablet@base` / `base` (flag 49); the
-  animation is re-applied every second while the UI is open if something cleared it.
-- The NUI `action` endpoint only forwards names starting with `server:`.
-- Client-only extra: `CP.Tablet.push(topic, data)` for local live updates.
-- `openAdmin(src)` runs synchronously inside a thread, otherwise in its own thread (returns `true`).
-  From the console it returns `false, 'err.not_in_game'`.
-- `server:logoFailed` accepts a department key or `{ department, url }` (the web sends the latter;
-  a null department is matched by url).
-- The tablet client does not handle `client:hud` / `client:runEnded` (see requests).
-
-### 13.10 Custody · police actions, contacts, custody chain and scene processing
-
-CP.Custody (truths, facts, police actions, grading, the custody chain, the transport van, tow truck and
-coroner van), the field_contact and process_scene blocks, the read-only sc-police listener, the CP.Npc custody states
-and excessive-force detection, the ox_target options and the contact key, the Contact panel and the HUD contact card.
-The API rows are in §5, §7 and §8.
-
-English is the only language; every text is a locale key in locales/parts/custody.json or npc.json.
-
-#### CP.Custody (modules/custody/server.lua)
-
-Where the truths live: §5.30.
-
-| Function | Meaning |
-|---|---|
-| `rollTruth(rng, setName, role) -> truthKey` | Config.Custody.profileSets[setName][role] (role 'person', 'driver', 'passenger', 'vehicle'; a set without the role uses person, then driver). Weighted pick over sorted keys (deterministic) |
-| `rollDemeanour(rng, truthKey) -> name` | Config.Custody.demeanour[truth]; only an armed truth can roll hostile |
-| `rollProfile(rng, setName, role, hasCar, truth?) -> { truth, demeanour, cues }` | Everything hidden about a person in one fixed order: cues.where ('person' or 'car', 50% for contraband with a car, never 'car' for a hostile), plainView (cues.plainView), odour (narcotics, cues.odour), admits (Config.Custody.admission), consents (consent.clean / consent.guilty), bolts (runner always, nervous 15%), minor (the offence) |
-| `register(run, obj, netId, contact) -> contact` | contact = { kind, role, label, truth, demeanour, cues, vehicleOf, owner, spot, level, actions, allowWarn, observed, evading, custody, revealed, state, consensual, transportPoint, caught, ran, chain }. The bag gets only `contact = { label, kind, actions }` and the state (actions never depend on the truth). `revealed` facts are known to the run from the start |
-| `get(run, netId)`, `contactsOf(run, obj|nil)` | Server-side records (sorted by net id) |
-| `act(run, netId, behaviour, args)` | The only truth-derived signal to a client: `client:contactAct { runId, netId, behaviour, args, seconds }` to the run host at the moment it starts. flee_on_approach, flee_on_order and tell_then_draw play a Config.Npc.tellSeconds tell first (participants within tellRange get the `custody.tell.*` HUD hint); tell_then_draw calls CP.Runs.arm when the tell ends, then 'hostile'. Other behaviours: walk_away, leave, exit_and_stand, walk_to, drive_off. Once per behaviour per contact |
-| `begin(src, runId, netId, action, extra)` / `finish(...)` | The two halves of every action (net event below). Checks: live in-progress run, active arrived participant, on duty (CP.Access.getOfficer), not in the arena, the contact's owning objective is current, the action is in its actions list, the state order, reach with server coordinates at both ends, finish ≥ Config.Custody.times[action] − actionSlack after its begin, and for actions of 3 s or more the CP.Npc dwell sampler (in reach for the time minus 2 s). A cancelled bar sends no finish and counts for nothing |
-| `reveal(run, netId, factKey, src, data)` | A fact reaches the run: sentTo = every active participant now (ms and os.time), the Contact panel is pushed, a HUD line (`contact` patch) goes to them. data.suppressed = inadmissible (struck through, never graded, never a cause, never a knowing error). A suppressed fact found again lawfully is known from then on |
-| `knownTo(run, factKey, netId, src) -> ms|nil` | When the server sent that (admissible) fact to that officer. A knowing error needs it ≤ the decision's begin |
-| `probableCause(run, vehNetId) -> bool, sources` | plain_view, odour (intoxicated or odour_cannabis), admission, weapon (a frisk), arrest (an occupant decided Arrest), stolen, consent |
-| `grade(run, netId, choice, src, beginMs) -> entry, failFact` | Pure. The CP.Runs.decide entry: the Dispositions table with the mission's `decisions` overrides (mission and objective; `{ wrongfulArrest = 'fail' }` makes that grade critical with reason.decision_fail) and Config.Decisions; Best only with the deciding fact admissible; points 0 for a caught runner or a `revealed` deciding fact |
-| `enableChain(run, netId, opts)` | Custody chain after a cuff for any block: adds searchPerson, escort, seat, handover (registers a chain record when the ped is not a contact) and requests the transport. `{ type = 'handed_over', netId, src }` goes to the owning objective (CP.Runs.entityEvent) |
-| `requestTransport(run, coords, { obj, point })`, `transport(run, src) -> { status, netId, distance }` | The prisoner van; a request while it is on its way or parked moves it to the new objective; one after it left sends a new van |
-| `impound(run, netId, src)` | The tow truck (Config.Custody.tow; enabled = false fades the car out at once) and `{ type = 'impounded', netId }` to the owner |
-| `serviceVehicle(run, kind, coords, opts) -> handle` | kind transport, tow, coroner; opts = { obj, point (parking point, default coords), target (tow: the car), decider }. See Service vehicles |
-| `checkRoadPoint(run, handle, reply, side) -> vec4|nil` | The server check of a road point: within spawnDistance (±5 m) of the scene (side = true: serviceClearance to serviceClearance + 40 m from the parking point) and Config.Custody.serviceClearance (30 m) from every player |
-| `releaseService(run, handle)`, `serviceStatus(handle) -> status, vehNetId`, `_servicesOf(run)` | process_scene's coroner van; tests |
-| `onCuffed(run, netId, src)`, `markGone(run, netId, how)`, `markDead(run, netId)` | field_contact keeps the records in step with CP.Npc's cuff, escapes, walk-offs and deaths |
-| `closeObjective(run, obj) -> n` | Undecided contacts at the end: CP.Runs.decide with Config.Decisions.undecidedAtEnd (missed_offence, −5) for the officer who last worked each one (else the host); never a fail |
-| `noteForce(run, netId, src)` | excessive_force (personal), at most once per person per 10 s |
-| `view(run, obj, src) -> ContactView|nil` | web/src/types/custody.ts. Entries add `confirm` when this viewer has an ox_target choice waiting for the case-fail confirm. choices[].failsCase is worked out from the facts that reached this viewer only, and only for a knowing error (a mission's stricter `decisions` rule is never flagged: that would give the truth away) |
-
-Decisions: `warn`, `cite`, `release`, `arrest` (a person; warn only where allowWarn, i.e. stops), `noAction`, `impound`
-(a car), `cite` (a parked car). After a decision: citations and impounds (Best or Acceptable) → CP.Runs.noteStat for the
-decider; Arrest → CP.Runs.decide calls noteArrest (Best or Acceptable only); release, warn and cite let the person go
-(state released, removed after releaseDespawn); a stop car whose people were all let go drives off. A person let go
-while seated in a contact car that is not yet decided waits in it (the host would drive the car away): once the car and
-all its people are settled they leave with it (No action), or get out and walk off (Impound, or an arrested driver).
-Config.Custody.evidenceItem (off by default): `giveEvidence(run)` on the run:inProgress hook gives each participant
-of a run with a field_contact or process_scene objective one item (metadata cpRun, cpItem), added to p.items so the
-engine takes it back at the end like every mission item. A failed effect (Place in vehicle, Hand over) is refused to the officer with its error key. A case-failing
-choice with Config.Decisions.confirmKnownErrors decides nothing until confirmed.
-
-Net and callbacks:
-
-| Name | Side | Payload |
-|---|---|---|
-| `crimson-police:server:custody` | client → server, plain event | runId, netId, action, phase ('begin'\|'finish'), extra (`{ offence }`, `{ door = 'door_dside_f' }` for a door option). 4 per 2 s per player. `runPlateFromVehicle`, `seat` and `handover` may send netId 0: the server picks the car in front, the person this officer escorts, or everyone this officer escorts or seated |
-| `server:contactDecide` | NUI action | `{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }`. The officer must be within 25 m of the contact; a confirmed choice uses the begin time of the ox_target choice that asked for it (60 s) |
-| `crimson-police:server:stunHit` | client → server, plain event | netId. 2 per s. Accepted only when CP.Npc saw a ragdoll or a state change of that ped within 1 s and the ped is detained, escorted, seated or compliant |
-| `crimson-police:client:contactAct` | server → run host | `{ runId, netId, behaviour, args, seconds }` |
-| `crimson-police:client:contactConfirm` | server → decider | `{ netId, choice, factKey }`: the client opens the tablet and pushes `contactConfirm` to the NUI |
-| `crimson-police:client:serviceVehicle` | server → driving client | `{ runId, id, op = 'drive'|'load'|'leave', kind, veh, driver, dest, target, away }`. Listed in §8.1 |
-| `crimson-police:client:roadPoint` | ox_lib callback, server → client | `{ near, min, max }` → `{ coords, heading }` or nil |
-| client action `contactAction` | NUI → client | `{ netId, action }` (the Contact panel's action buttons): closes the tablet and runs the same begin/bar/finish flow |
-| push `contactConfirm` | client → NUI | the ContactConfirm shape |
-| HUD patch `contact` | server → client (CP.Runs.hudFor) | `{ label, fact, hint, confirm, suppressed }` (CP.Lt tokens where translatable); `false` fields are empty |
-
-#### Service vehicles
-
-The driving client is the nearest active participant not in the arena (else the host). It is asked for a road point
-150–250 m from the scene; the server checks the answer (checkRoadPoint) and retries every 3 s. The vehicle and its
-driver spawn through CP.Runs (reserved plate, caps: a spawn waits for room and is never cut), locked, and that client
-gets `drive`. A driving client that leaves, is downed, enters the arena or is beyond serviceHandoff hands the AI to the
-next nearest participant. Arrival = within 15 m of the parking point and below 1.5 m/s. Timeouts (serviceTimeout): no
-usable road point → the van is placed at its parking point; a van not parked → placed; a tow truck not loaded → the
-car fades out and counts as impounded. A van is placed only while no player is within Config.Custody.serviceClearance
-(30 m) of its parking point: a late one drives on until then; one with no road point gets a road point
-beside the scene (30-70 m from the parking point, from the driving client, checked) or waits. A placed van waits
-frozen until an officer's game has put it on the ground (CP.Spawn.again). A tow truck with no road point is never
-made: the car fades out (impounded). The tow truck loads when the car is within 8 m of the flatbed. The transport
-leaves Config.Custody.transport.leaveAfter after the objective that called it is done; a coroner van leaves when
-process_scene releases it; leaving vehicles are deleted 25 s later with their driver and cargo.
-
-#### CP.Npc additions (modules/npc/server.lua)
-
-- States contacted, escorted, seated, released, handed_over, impounded. PROTECTED (shot_surrendered) gains contacted,
-  escorted, seated; isNeutralised: dead, cuffed, escorted, seated, handed_over.
-- excessive_force: a participant's melee hit (weaponDamageEvent, not a vehicle or a fall) or taser hit on a cuffed,
-  escorted, seated or contacted ped; the health-drop fallback on a contacted, escorted or seated ped; the stun_hit
-  telemetry (CP.Custody). A taser there is force, not shot_surrendered. Without CP.Custody the module keeps its own
-  10 s window.
-- A hidden contact (spawnPed opts.hidden) is refused 'hostile' until CP.Runs.arm gave it its weapon.
-- `watch(run, netId, src, range)`, `inReachSince(run, netId, src) -> ms|nil`, `unwatch(netId, src)`: the dwell sampler
-  of police actions (peds and vehicles), sampled every tick; a sample out of range restarts it.
-- `stunMatches(netId, windowMs)`, `runOf(netId)`: for the stun_hit check (IsPedRagdoll is sampled every tick).
-  `stunProof(netId)`: a ragdoll the server saw within 1 s (a state change is no proof there; always true with
-  `Config.AntiCheat.stunNeedsProof = 'off'`). `stunCheck(run, src, netId)`: a block's 'stunned' report under
-  stunNeedsProof: `'flag'` (shipped) takes it and notes an unseen stun for staff, `'hold'` takes it and flags that
-  officer, `'strict'` refuses an unseen stun, `'off'` takes every report in range.
-- The lethal stat (CP.Runs.noteStat) when a participant kills a ped of a suspect role (not hostages).
-- Config.Custody.handcuffsItem: Cuff suspect needs the item (ox_inventory Search, never used or taken;
-  err.npc_no_handcuffs).
-
-Client (modules/npc/client.lua): ox_target options `crimson-police:contact_<action>` on peds and vehicles,
-`crimson-police:custody_escort`, and per door `crimson-police:seat_<action>_<door>` (talk, warn, cite, release; bones
-door_dside_f, door_pside_f, door_dside_r, door_pside_r), all reading the cp bag only; the `crimsonpolice_contact` key
-(Config.Tablet.contactKey): Run plate from the driver seat, Hand over at the van, Place in vehicle near the officer's
-last vehicle, Escort on/off; host tasks followPed (escort), stand (contacted), leave (released), the tells and the
-contactAct behaviours; stun_hit from CEventNetworkEntityDamage. modules/custody/client.lua: the begin/bar/finish flow
-(CP.Custody.perform), the confirm, the road point callback and the service vehicle driving.
-
-#### field_contact (blocks/field_contact)
-
-Fields as in the SPEC's mission file format; defaults also `transport = 'transport'` (the location's transport point when it has
-one), `models`, `vehicles`, `weapons` (flee_arrest's), `aliveBonus = { id = 'subject_alive' }`,
-`allCorrect = { id = 'all_correct' }` (valued by Config.Bonuses; a built-in file may add points).
-
-- parked: `cars` random kerb spots of the location's `spots` list; each car rolls the set's vehicle truth, a free spot
-  never rolls a violation, a violation's level is Config.Custody.parkingRules[rule]. Returning driver (at most
-  returning.max per run, returning.chance per cite or impound of a car that is not stolen): takes the ticket (60%),
-  argues until Explain the citation (30%), drives off (10%, cites only). The thief (thief.chance, on the first inspect
-  of a stolen car) waits 30 m away and runs once an officer is within thief.runAt.
-- scene: a variant from `scene` (occupied_car, loitering, casing); people spots shuffled; the first participant within
-  `approach` sets people off by demeanour (evasive: walk_away; runner: flee_on_approach; hostile: tell_then_draw;
-  compliant and nervous stand, contacted). A consensual contact (scene) is free to leave: walking beyond the escape
-  distance for the escape time is lawful and costs nothing.
-- stop: takes the entries of `run.shared.contacts` owned by this objective (or not yet taken from an earlier one).
-  The format the pursuit block writes: `{ vehicle = netId, occupants = { { netId, seat, state, truth } }, observed =
-  { kind, speed, zone } | nil, forced = bool, profileSet = name|nil, truth = car truth|nil, taken = index|nil }`.
-  occupant.state 'fleeing' or 'cuffed' marks someone who ran on foot (Evading, a caught runner when cuffed); forced =
-  stopped by PIT or box-in (everyone Evading); observed gives the driver an observed violation; `revealed = { 'stolen' }`
-  on the objective makes the car's plate known from the start (Stolen Vehicle Takedown). A person the pursuit spawned
-  unarmed but rolled armed here gets armedTruth and a hidden weapon for the draw.
-- Runners and walkers give up (surrendered, then CP.Npc's Cuff suspect) when aimed at within 10 m (client report
-  `aim`), stunned (`stunned`) or when a participant stays within 3 m for 3 s; a walker stops (contacted). A runner or
-  drawer cuffed through Cuff suspect is that officer's arrest (noteArrest) and earns aliveBonus once; their Arrest
-  decision is then Best with 0 points.
-- Escape: beyond escape.distance from every participant for escape.seconds: escapeFails → the case fails
-  (block.field_contact.fail_escaped), else missed_arrest (shared) and the person is removed.
-- Killing a person who never drew fails the case (run.fail_killed_unarmed); a person who drew may be killed.
-- Complete when every contact is resolved: decided (an Arrest handed over when custody = 'handover'), dead, gone, and
-  any returning driver done. Then all_correct (every decision Best) and procedure_complete once per officer (every
-  person they arrested was ID-checked and searched). On the time limit, undecided contacts count as missed.
-- A 'removed' vehicle (sc-police /imp) is marked gone and never becomes an Impound disposition; the engine fails or ends
-  the run as its own rule says.
-
-#### process_scene (blocks/process_scene)
-
-prepare: CP.Runs.holdBodies(run, { roles, max = bodies }). start: CP.Runs.pauseFastClock; the kept bodies are the list;
-none → aliveBonus (shared) and it completes at once (its minSeconds drops to 0: there is nothing to process). Else the
-coroner van is called to the location's `coroner` point (or the scene marker) unless `coroner = false`. Client reports
-`tag_begin`/`tag`, `bag_begin`/`bag` (a body within 2.5 m), `release_begin`/`release` (the parked van within 6 m, or the
-scene marker when the van is off); each finish needs the step's duration (−0.5 s) and the officer in reach for the
-duration minus 2 s (sampled each tick). Bag body releases the body (CP.Runs.releaseBody) and spawns the body-bag prop;
-Release deletes the bags and sends the van away. stop releases whatever is left. ox_target names crimson-police:body_tag,
-crimson-police:body_bag, crimson-police:coroner.
-
-#### CP.ScPolice (modules/integrations/sc_police/server.lua)
-
-A second, read-only `police:server:Impound` handler: when the netId is a vehicle of a live run it calls
-`CP.Runs.noteExternalRemoval(netId, src, 'sc_impound', dist)` with the sender's server-side distance. It never
-triggers, cancels or answers a police:* event. `ScPolice.onImpound(src, netId) -> bool`.
-
-#### Web
-
-- `officer/components/ContactPanel.tsx` (+ .css, classes cp-contact*): replaces the Business Check log panel on Active
-  Mission when view.contact has entries; facts (inadmissible struck through, causes tagged), "Not checked yet",
-  "Not detained: free to leave", tells seen, probable cause per car, the transport status, the action buttons
-  (client action contactAction), the dispositions (server:contactDecide; a failsCase choice or a `confirm` reply opens
-  the case-fail confirm; push contactConfirm and entry.confirm open it too).
-- `hud/ContactCard.tsx`: HUD patch `contact` (newest fact, tell hint, confirm waiting), using the HUD message styles.
-- Active Mission also shows view.intel (run.intel.title) and the mission-call line (target, then the arrival time).
-- `mocks/custody.mock.ts`: `?contact=1` pushes a sample run with a Contact panel and a HUD contact card.
-
-### 13.11 Economy (scoring, goals, cash, payouts)
-
-Files: `Crimson-Police/modules/{scoring,goals,cash,payouts}/server.lua`,
-`web/src/officer/screens/Home.tsx` (+ `Home.css`), `web/src/supervisor/screens/Payouts.tsx` (+ `.css`),
-`web/src/admin/screens/Payouts.tsx` (+ `.css`), `web/src/types/economy.ts`, `web/src/mocks/economy.mock.ts`,
-`locales/parts/economy.json`, `tests/economy_spec.lua`.
-
-#### Registered net entry points
-
-| Kind | Name | Owner function | Permission |
-|---|---|---|---|
-| callback | `getHome` | scoring | `CP.Access.getOfficer` (its error keys) |
-| callback | `sup:getPayouts` | payouts | `CP.Permissions.can(src, 'setTypePayout')` |
-| callback | `admin:getPayouts` | payouts | admin (`CP.Access.isAdmin` + `can('setMissionPayout')`) |
-| action | `server:sup:setTypePayout` `{ type, amount, reason }` | `CP.Payouts.setType(..., 'supervisor')` | setTypePayout |
-| action | `server:admin:setTypePayout` `{ type, amount \| null, reason, clear? }` | `CP.Payouts.setType(..., 'admin')` | admin; clearing = `clearPayout` |
-| action | `server:admin:setMissionPayout` `{ missionId, amount \| null, reason, clear? }` | `CP.Payouts.setMission` | `setMissionPayout`; clearing = `clearPayout` |
-
-Push topics sent: `payouts` (`{ kind = 'type', key }` / `{ kind = 'mission', missionId }`) and `board`
-(`{ reason = 'payouts' }`) to every online player after any payout change. Lua listeners: `CP.Qbx.onDutyChange`,
-`onJobChange`, `onPlayerLoaded` (x2: duty tracking, pending cash 5 s later), `onPlayerUnload`, `playerDropped`.
-Threads: the forfeiture job (at start, then every 10 min) and one start-up sweep 15 s after the resource starts that
-pays the pending rows of players who are already online (they never fire PlayerLoaded again).
-
-#### Response shapes I defined (TypeScript in `web/src/types/economy.ts`)
-
-```ts
-// getHome: HomeData (§9.4); typeOfTheDay also carries the extras { multiplier (Config.Events.todMultiplier),
-// cap (Config.Scoring.scoreCap) } and card.streak the extra graceDays (Config.Scoring.streakGraceDays; 0 = no
-// grace, the Home hint then says nothing about grace) (web/src/types/economy.ts HomeTypeOfTheDay, HomeStreak)
-
-// sup:getPayouts
-SupPayoutsView = { types: SupPayoutType[]; rangeShare: { min, max }; cooldownSeconds; requireReason: true;
-  limits: { min, max }; serverTime }
-SupPayoutType = { key, label, amount, default, min, max, adminLocked, cooldownLeft /* s */, updatedByName?, updatedAt? /* unix s */,
-  stored, canEdit }
-// server:sup:setTypePayout -> SupPayoutType (the new state)
-
-// admin:getPayouts
-AdminPayoutsView = { types: AdminPayoutType[]; missions: AdminPayoutMission[]; limits: { min, max }; requireReason;
-  cooldownSeconds; serverTime }
-AdminPayoutType = { key, label, points, amount, default, adminLocked, stored, updatedBy?, updatedByName?, updatedAt?,
-  supMin, supMax, cooldownLeft, missions /* count, boss excluded */ }
-AdminPayoutMission = { id, label, type?, typeLabel?, difficulty, source: 'builtin'|'custom', isBoss, enabled, base,
-  payoutSource: 'admin'|'type'|'event', missionPayout?, fallback /* B without the mission payout */, setBy?, setByName?,
-  updatedAt?, missing /* stored payout of a mission that is not loaded */ }
-// server:admin:setTypePayout -> AdminPayoutType; server:admin:setMissionPayout -> AdminPayoutMission
-
-// CP.Cash.stuckPayments() (for admin:getStuckPayments, owned by modules/admin)
-StuckPayment = { id, runUuid, citizenid, name, missionId, missionLabel, department, amount, createdAt /* unix s */, transId }
-// CP.Scoring.badges(citizenid) (for Profile)
-{ id, label /* CP.L('badge.<id>') */, earnedAt /* 'YYYY-MM-DD HH:MM:SS' */, earnedTs }
-```
-
-`CP.Payouts.list()` returns `{ types = { AdminPayoutType... }, missions = { AdminPayoutMission... } }`.
-manual_award / goal rows store a RunResult-shaped breakdown (P = final = the points, empty lines, cash 0) plus
-`kind`, `reason` (manual) or `period`, `periodKey`, `goalId` (goal). Every counted row also gets the internal
-breakdown key `xpCounted` (the XP idempotency marker, see below).
-A completed `CP.Scoring.compute` breakdown (RunResult `points`) also carries the optional extras `cap` (the points cap
-in whole points, floor(scoreCap x P)), `scoreCap` (Config.Scoring.scoreCap) and `todMultiplier`
-(Config.Events.todMultiplier), so the result card and the Profile breakdown show the configured cap and Type of the Day
-multiplier (`web/src/shared/data.ts pointsLimits`; a row stored without them falls back to the shipped 2 and 2).
-
-#### Contract interpretations
-
-Scoring
-1. `P` is rounded to whole points (halves up) because `points_base` is a SMALLINT.
-2. Each bonus/penalty line is rounded to whole points; `each = true` multiplies by the recorded count and the label
-   gets `× n` (`scoring.times`). Penalty lines carry negative points; the engine stores the positive sum.
-3. What counts: (a) every id on the mission card (`mission.bonuses` / `penalties`) with the recorded count (shared
-   `run.score.shared` + personal `p.score`); value = the entry's `points` / `pctOfPoints` x P, else `Config.Bonuses`
-   (`each` from the entry or Config.Bonuses); an entry in `penalties` is always negative. (b) the end-evaluated
-   `no_participant_downed` (`run.stats.downs == 0`) and `no_weapons_fired` (`run.stats.weaponsFired == 0`), only when
-   the card lists them. (c) recorded ids the card does not list: the common personal ids (`pedestrian_hit` x
-   `common.pedestrianHit`, `lights_siren` once for beat_patrol/business_check, `shot_surrendered` x
-   `common.shotSurrendered`) and ids with a per-occurrence value hint in `run.score.values` (kingpin_alive,
-   inmate_alive, hostage_hit, ...). An unlisted id that only exists in Config.Bonuses (e.g. hostile_arrested on the
-   Kingpin, recorded by hostile_waves) does **not** count: the mission did not opt in. A card entry with no value
-   of its own that is not in Config.Bonuses uses the recorded hint (each). (d) the common ones: fast_finish
-   (duration <= fastShare x run.timeLimit, not when `run.flags.medals`; label "Finished within {pct}% ..." with pct
-   from fastShare), modifier (`Config.Events.modifierPoints` x P, label "Modifier: <name>"), first_run,
-   no_vehicle_damage (`p.vehicle.seen`, engine and body > noDamageAbove), heavy_damage (body < heavyDamageBelow, not
-   when `vehiclePenalties == false`).
-   Custom missions (`mission.source == 'custom'`): mission-file values never raise points. A card entry is valued
-   only when its id is in Config.Bonuses (`points` or `pctOfPoints` by the id's kind, else the config value, clamped
-   to `Config.Builder.bonusCap`: 50 points / 25% of P per occurrence; `each` from Config.Bonuses only); the
-   `points` / `pctOfPoints` / `each` a file writes on any other id are ignored, so only a block hint can value it.
-   A recorded Config.Bonuses id the card does not list is ignored even with a hint. Hints from block code (medals
-   and `no_contact` with their card values, the boss's `kingpin_alive` 50, `hostage_hit`) still count; a positive
-   one is capped at `bonusCap.points`, a penalty keeps its block-setting range (hitPenalty 0-100).
-4. Failed = floor(failedCredit x P x share) with no bonuses, multipliers or Type of the Day; `subtotal` shows the credit
-   and mTeam/mCross/mStreak are reported as 1.0 (not applied). Abandoned = 0.
-5. Presence (runs with 2+ participants, `CP.AntiCheat.presenceOk(run, p) == false`): SPEC 6.4 / Anti-exploit say the
-   participant keeps the result with **0 points and $0**, so `compute` returns final 0 (lines still listed) and
-   `CP.Cash.compute` returns $0. The engine flags the row `presence` (so the cash status is `held` with $0).
-6. Type of the Day compares `CP.Events.typeOfTheDay()` with `run.missionType` (a boss run counts as Tactical), is
-   applied after the cap and uses `Config.Events.todMultiplier`.
-7. M_streak of a completed row uses the streak **including today** (the projected value after this completion);
-   M_cross = `Config.CrossDepartmentPoints` when `opts.departments` (or the run's active departments + own) >= 2;
-   M_team = the pay tier's `points`.
-8. Streak: consecutive reset-adjusted days with a completed, counted run. Missed days are walked one by one; each is
-   forgiven while its week (from the weekly reset, `CP.Schedule.weekKey`) has grace left
-   (`Config.Scoring.streakGraceDays`); a forgiven day adds nothing. When the streak breaks, the grace of that gap is
-   not used. `streak_days` is stored capped at 127 (signed TINYINT); the multiplier caps at streakMax anyway.
-   `streak()` shows the live streak (alive while yesterday had a run or every missed day up to yesterday is
-   forgivable); `graceLeft` = this week's grace not used, counting pending missed days of this week. An approval
-   applies the row's own day (a day older than last_complete is ignored); voids never rewrite streaks.
-9. XP = lifetime points of counted rows, **including manual_award and goal rows** (they count toward Overall, and the
-   All-time board is lifetime XP). Idempotent per row: `breakdown.xpCounted` is set with a conditional UPDATE before
-   XP is added and removed before XP is taken back, so double hook calls or a void of a never-counted (flagged) row
-   change nothing. XP never goes below 0.
-10. XP level names are configuration (`Config.XPLevels.label`, like mission type labels); `xpLevel().xp` is the
-    level's threshold and `next` the next threshold (nil at the top).
-11. Badges (ids `iron_wheels`, `sharpshooter`, `road_warrior`, `partner_in_crime`, `joint_task_force`) count
-    completed, not flagged, not voided runs in cp_mission_runs **and** cp_mission_runs_archive: Iron Wheels = rows
-    whose breakdown has the `no_vehicle_damage` bonus; Sharpshooter = gang_shootout rows with the
-    `no_participant_downed` bonus; Road Warrior = patrol rows; Partner in Crime = participants >= 2; Joint Task Force =
-    departments_n >= 2. Checked after every counted completed row and approval; after a void, a badge whose count fell
-    below its threshold is removed.
-12. First completed run since going on duty: per citizenid in memory. A new duty start = the live duty goes from off to
-    on (duty or job events, re-read from `CP.Qbx.getInfo`) or a character load while on duty. A duplicate on-duty
-    event changes nothing. After a resource restart the state is unknown: it counts as already used when the officer
-    has a completed run since today's reset. Test runs never use it; any completed row (flagged too) does.
-13. `manualAward`: admin only (`manualAward`), whole points 1–10,000, reason required (<= 255), the officer must exist
-    in cp_officers (`err.unknown_officer`); the row's department is cp_officers.department ('unknown' fallback).
-    Audited as `manualAward` (target citizenid, new = points). The officer is notified when online.
-
-Goals
-14. Goal labels come from `Config.Goals` (configuration text); `goals.unnamed` is only a fallback. Besides `type`,
-    `unit` and `crossDepartment`, a goal may set `mission = '<id>'`. Progress counts completed, not flagged, not voided
-    runs (never manual/goal rows) created since the period start; progress is capped at `count`. A reward row is found
-    by `mission_id = goal id` + `breakdown.period`, so a daily and a weekly goal with the same id do not collide.
-    Rewards are checked on `onRunCompleted` and after an approval (`CP.Scoring.onRowApproved`).
-
-Cash
-15. The amount paid is `breakdown.cash.amount` (exact); `round(cash_base x cash_multiplier)` only when the breakdown has
-    none (cash_multiplier is DECIMAL(4,2) and loses precision, e.g. 1.30 x 1.25).
-16. `pay(rowId)`: offline check first (online = `CP.Qbx.getByCitizenId`): an offline officer's row goes
-    none/held -> `pending` (no money moves); otherwise the claim `UPDATE ... SET cash_status = 'paying' WHERE id = ? AND
-    cash_status IN ('none','held','pending') AND state = 'completed' AND flagged = 0 AND voided = 0` must change the row.
-    The extra guards mean a flagged or voided row is never paid, whatever calls pay. After the claim, the rest runs
-    under pcall: a Lua error before the first call that can move money (society withdrawal or AddMoney) puts the
-    row back to `pending`; an error after that leaves it `paying` (manual check), so nothing is ever paid twice.
-    `payPending(src)` (login + 5 s, start-up sweep) pays `pending` rows and also completed, unflagged, unvoided
-    mission rows still `none` with `cash_base > 0` (the engine's pay never ran: a crash right after the row insert,
-    or a skipped lock wait); no money moved on either and `pay()` claims them like any other row.
-17. Daily cap: the sum of paid/capped cash of rows created on the **same reset-day as the row** (a pending row paid
-    later is capped against its own day). Payments of one officer are serialised in-process, so two rows cannot both
-    pass the cap check.
-18. Society source: the player is re-fetched right before `withdrawSociety`; false -> `unfunded` ($0), the officer and
-    the online supervisors of the row's department are told (`cash.unfunded`, `cash.unfunded_supervisor`).
-    If AddMoney then fails, the money already left the society account and the contract has no refund call: the row
-    stays `paying` (listed by `stuckPayments`, error logged with the transaction id). If `CP.Banking.depositSociety`
-    exists it is used to refund and the row goes back to `pending`. With the server source a failed AddMoney always
-    puts the row back to `pending`.
-19. Renewed-Banking: `recordDeposit(citizenid, amount, 'Mission payout: <label>', <department label>, <character name>,
-    'CP-<run_uuid>-<citizenid>')` only when `Config.Cash.account == 'bank'`; with the society source also
-    `recordSocietyWithdraw(societyAccount, ...)` with the same transaction id (RB's own transfer pattern).
-    Final status `capped` when the cap cut the amount (also down to $0), else `paid`; the breakdown's `cash.status`
-    and `cash.paid` are updated with the row.
-20. `release(rowId)` requires the caller to have cleared `flagged` first (it refuses and warns otherwise) and never
-    releases a voided row. `forfeit(rowId)` only touches voided rows in held/pending. The forfeiture job (at start,
-    then every 10 min) forfeits voided held/pending rows older than `Config.Disputes.windowHours` (from created_at)
-    without an open dispute.
-21. `range(missionType, members)`: members = officer tables or srcs (tier = `CP.Scaling.tierFor(#members)`); pool =
-    `CP.Draw.pool` (fallback: enabled `CP.Missions.byType` that support the size); min = lowest B x tier cash, max =
-    highest B x tier cash x `modifierCash` (when `modifierChance > 0`; never for `'weekly_boss'`). Empty pool -> the
-    type payout.
-22. `earnedThisWeek`: cash_paid of paid/capped rows created since `CP.Schedule.weekStart()`.
-
-Payouts
-23. Supervisor range = ceil(default x low share) .. floor(default x high share), clamped to Config.Cash limits.
-    Supervisors always need a reason (SPEC); admins need one unless `Config.Payouts.requireReason = false`. A value equal
-    to the current one is refused (`err.payout_unchanged`) so it neither audits nor starts the cooldown.
-24. Supervisor-set values are stored (admin_locked = 0), persist over restarts and start the 30 min cooldown via
-    updated_at (written explicitly with `FROM_UNIXTIME(os.time())`). An admin on the supervisor path follows the
-    supervisor rules; the admin path requires an admin. `updated_by` / `set_by` = the actor's citizenid or `'console'`.
-25. Stored mission payouts whose mission is not loaded are listed with `missing = true` so an admin can clear them;
-    a new payout can only be set for a loaded mission.
-26. Audit: `CP.Admin.audit(src, role, 'audit', action, target, old, new, reason)` with actions `setTypePayout`,
-    `clearTypePayout`, `setMissionPayout`, `clearMissionPayout` (old/new are amounts, or `config:<n>` / `type:<n>` /
-    `event:<n>` for the value that applies without the stored one), role `supervisor` | `admin` | `console`. When
-    modules/admin is not loaded the entry is written to cp_audit directly (no webhook) so no change goes unaudited.
-
-UI
-27. Home refreshes on the push `run` that carries no data (the run ended; its rows, XP, goals and cash are written
-    by then) and every 60 s; the per-tick `run` pushes during a run do not refetch it. `announcements` / `goals`
-    may arrive as `{}` / `[]` from Lua and are treated as empty. Announcement kinds `weekly_top3` / `monthly_top3`
-    (modules/leaderboard) get the trophy / podium icons. The Type of the Day text shows the configured multiplier
-    and cap (extras above). Supervisor Payouts counts cooldowns down locally and refetches when one ends.
-    Browser mocks: `?economy=empty|lua|edge|error` (`lua` = empties the way Lua encodes them, `edge` = long names,
-    huge numbers, top level, a 1.5x multiplier).
-
-Tests: `tests/economy_spec.lua` uses its own database `cp_test_economy` (same migrations as cp_test, like the
-engine_a spec) so parallel runs of other specs cannot reset its tables; every SQL statement of the slice runs there.
-
-### 13.12 Missions, draw, scaling, schedule and events
-
-Files: `modules/missions/server.lua`, `modules/missions/client.lua`, `modules/draw/server.lua`,
-`modules/scaling/server.lua`, `modules/schedule/server.lua`, `modules/events/server.lua`,
-`locales/parts/engine_a.json`, `tests/engine_a_spec.lua`.
-
-#### Contract interpretations
-
-##### CP.Missions
-- **Custom missions from `CP.Builder.loadPublished()`**: each entry may be (a) a definition carrying the
-  loader fields (`source`, `version`, `filePath`, `defHash`, `editedInCode`, `status`), (b)
-  `{ def = <definition>, meta = { version, filePath, ... } }`, or (c) meta only
-  `{ id, filePath, version, editedInCode }`, in which case the loader reads the file itself with the same
-  mission file reader used for built-ins (data only, never run). `defHash` is the hash of the file content when the file is readable, else a
-  canonical (sorted keys) hash of the definition. If `loadPublished` throws, the custom missions that are
-  loaded now stay loaded (they are not dropped from their pools).
-- **`reload()`** calls `CP.Builder.onReload()` first (so hand edits become their new versions), then
-  `loadAll()`; `summary.builder` holds the return value of `onReload`.
-- **`register(def)`** reads the loader fields from `def` (default `source = 'custom'`, `status = 'published'`),
-  refuses to replace a built-in mission and re-broadcasts the full list. **`unregister(id)`** only removes
-  custom missions (built-ins are turned off in `Config.DisabledMissions`).
-- **Hard checks (reject)**: id `^[%a][%w_]*$` and at most 40 characters (the `mission_id` column), label,
-  type in `Config.MissionTypes` (the Weekly Boss is forced to `tactical` with a warning), departments a list
-  (a `{ key = true }` map is converted), `1 <= minOfficers <= maxOfficers <= Config.Limits.maxUnitSize`,
-  difficulty 1..#`Config.Difficulty.pointsByStars`, `timeLimit`/`startTimeout` 60–3600 s, `cooldown`
-  0–86400 s, `vehiclePenalties` boolean, at least one location with `start = { coords, radius }` (a bare
-  vector start is converted with radius 50 and a warning), at least one objective, a registered block per
-  objective, the block's `defaults` and `validate(obj, mission, location)` for **every** location, no
-  item named `armour`, `bandage`, `ammo-*` or `weapon_*` (any case; docs/INTEGRATIONS.md, Crimson-Arena rule 4), and no
-  point of any location (start and every named data key, recursively) inside a
-  `Config.Builder.noBuildZones` zone (2D distance, as the blocks and the builder measure it; rule 7 —
-  this also covers Crimson-Arena's Trailer Park and lobby zones).
-- **Loader fields before the guardrails**: `source`, `isBoss`, `status`, `version` and `filePath` are set on
-  the copy *before* the blocks' `validate` runs, because the blocks exempt built-in missions
-  (`mission.source == 'builtin'`) from the Mission Builder's allowed model/weapon lists. (Before this fix
-  the real `prison_break` and `weekly_boss_kingpin` were rejected at load.) `meta.source` other than
-  `'custom'` means `'builtin'`.
-- **`parse(luaSource, chunkName)`** (ARCHITECTURE §5.6) reads one file's source with the same reader
-  (`CP.U.parseMissionFile`) and returns the raw definition (not normalised); `chunkName` may be given with or without the leading `@`
-  (CP.Builder passes the path, CP.Testing `'@' .. path`).
-- **Soft checks (warning only; the builder enforces them as guardrails for custom missions)**: fewer
-  locations than expected (built-in 5, or 3 for `armored_truck_escort`, `evoc_course`,
-  `weekly_boss_kingpin`; custom `Config.Builder.minLocations`, 1), locations closer than
-  `Config.Builder.minLocationGap`, more armed NPCs than `Config.Builder.maxHostiles` (block `armedCount`),
-  more objectives than `Config.Builder.maxBlocks`, unknown department keys, a scaling base above its `max`.
-- **Dropped with a warning**: scaling entries that do not resolve to a number or a list of numbers after the
-  block defaults, items without a name, bonus/penalty entries without an id or whose id is not in
-  `Config.Bonuses` and has no explicit `points`/`pctOfPoints`.
-- **Payout fields**: any top-level key containing `payout` (any case) and `cash`, `cashBase`, `basePay`,
-  `money`, `pay`, `reward`, `rewards` are removed with a console warning.
-- **Defaults**: `description = ''`, `departments = {}`, `minOfficers = 1`, `maxOfficers = minOfficers`,
-  `difficulty = Config.Blocks.details.difficulty[3]`, `startTimeout = Config.Limits.startTimeout`,
-  `cooldown = Config.Blocks.details.cooldown[3]`, `vehiclePenalties = true`, objective `minSeconds` from
-  ARCHITECTURE §3.3 (unless the block's `defaults` set it), `presenceRange = Config.Blocks[block].presenceRange[3]`
-  (fallback `Config.AntiCheat.presenceRadius`), labels `run.objective_default` / `run.location_default`.
-- Mission files are never run: FXServer has no `debug.sethook`, so the old step-budget sandbox refused every
-  file on a real server. The reader accepts only `RegisterMission({ ... })` with plain values and vec3/vec4 of
-  numbers; any name, operator or call is refused with the file and the line (ARCHITECTURE §5.6).
-- Validation reasons returned by `normalize` are English developer-facing text (console, builder), not
-  locale keys.
-- The `crimson-police:client:missions` broadcast uses `TriggerLatentClientEvent(name, -1, 200000, list)`
-  (the full list of 14 built-ins is about 60 kB of JSON), falling back to `TriggerClientEvent` where the
-  native is missing (tests).
-- `getMissionDefs` returns `nil, 'err.not_ready'` before the first load; the client retries (3 s, growing to
-  15 s, 12 attempts) and ignores a callback reply once a push has arrived.
-- `server:admin:reloadMissions` (§8.3 owner "missions") is registered here: `CP.Permissions.can(src,
-  'reloadMissions')`, 1 per 5 s, audited with `CP.Admin.audit(src, role, 'audit', 'reloadMissions', nil,
-  <count before>, '<n> loaded, <m> rejected', nil)`; replies with a plain summary
-  `{ loaded, builtin, custom, warnings, failed = { { id, file, error } } }`.
-
-##### CP.Draw
-- **No-repeat history**: distinct missions of that type whose `cp_mission_runs` rows have
-  `state IN ('completed','abandoned')`, newest first (`MAX(created_at)`, ties by `MAX(id)`), per citizenid;
-  the unit uses the union of every member's last `k` (k = `avoidLast`, or `avoidLastLarge` when the pool has
-  `largePool`+ missions). Failed rows (downed, disconnected, time_limit, mission_failed) are not "completed
-  or abandoned" and do not count. The Weekly Boss never counts (it is not in any pool). `recordLast` adds
-  an in-memory record (15 minutes) that bridges a row that is being written.
-- **When a unit's histories cover the whole pool** (pool of 2+): relax to `avoidLast`, then to "not the
-  single most recent mission of any member", then the whole pool. A pool of one always repeats.
-- The no-repeat rule is strict: if every candidate's locations are in use, the accept fails with
-  `err.no_location` instead of falling back to an avoided mission.
-- **Player clearance** ignores players for whom `CP.Alerts.inArena` is true (docs/INTEGRATIONS.md, Crimson-Arena rule 7).
-- **Reservations** allow several holders per spot (a test run can reserve a spot a live run holds, and
-  vice versa the live draw skips it). `server:acceptType` holds a provisional `pending:<src>:<ms>`
-  reservation around `CP.Runs.create`, and reserves under `run.id` itself if the engine did not. A sweep
-  every 60 s releases pending holders older than 60 s and holders older than 120 s that `CP.Runs.get`
-  does not know (leak protection only).
-- **BoardData**: cards for every `Config.MissionTypes` key sorted by config points (then key). `points` =
-  the best `CP.Scoring.P(def)` in the pool (fallback type points × `pointsByStars`), `cash` =
-  `CP.Cash.range(key, officers)` (fallback: base payout — `CP.Payouts.baseFor` or type payout ×
-  `cashByStars` — × tier cash, top of the range × `Config.Events.modifierCash`). `locked` priority: a member
-  who is not an officer (`board.member_unavailable`) > type cooldown (own or a member's, with `until`) >
-  hourly cap > empty pool (`board.locked_empty` / `board.locked_empty_solo`, or
-  `board.locked_mission_cooldown` with `until` = the earliest per-mission cooldown end). `onCall` is true
-  when any unit member is on a real call. While `CP.Operations.isLocked()` only `operation` is filled
-  (`cards = {}`, `boss = nil`).
-- **acceptType**: payload is the type key (a `{ missionType }`/`{ type }` table is tolerated). Checks in
-  order: officer (the leader's own `CP.Access` error key is returned), unit leader, unit not locked, unit
-  size, Cross-Department lock, every member an officer (`err.member_unavailable`), then per member:
-  `CP.Alerts.inArena` (foreign crimsonArena flag or routing bucket ≠ 0, docs/INTEGRATIONS.md, Crimson-Arena rule 5;
-  `err.in_arena`; without modules/alerts: `foreignFlag` + `GetPlayerRoutingBucket`; ARCHITECTURE §5.7
-  names `foreignFlag`, but §0 rule 14 makes docs/INTEGRATIONS.md, Crimson-Arena mandatory and its rule 5 gates the accept
-  with `inArena`, the stricter superset), active run, real call, hourly cap, type cooldown (own / `err.member_*`
-  variants), then `CP.Runs.capsOk` (always reported as `err.server_busy`), then the boss checks. Invites
-  close (`CP.Units.lock`) only after every check passed; the unit is unlocked on any later failure.
-  Rate: 1 accept per 1.5 s per player (plus CP.Net's 3/s) and an in-flight guard per unit member
-  (`err.busy`).
-- **Weekly Boss accept**: the Tactical *type* cooldown does not block the event card (it is accepted with
-  `weekly_boss`, not the type, and abandoning it starts no type cooldown), but the hourly cap, the Tactical
-  server cap, the Cross-Department lock, the boss mission's own cooldown, department/size and the
-  once-per-week rule do. `missionType = 'tactical'`, `isBoss = true` are passed to `CP.Runs.create`.
-
-##### CP.Events
-- `bossAvailable` also refuses while a Cross-Department Mission is active (`err.operation_locked`), and when
-  the boss mission is missing or disabled (`err.boss_unavailable`).
-- "Used this week" = any `weekly_boss_kingpin` row (`mission_type = 'tactical'`, which also uses
-  `idx_draw`) of that citizenid created since the reset of **the week's first boss day** (Friday with the
-  default config; the week start itself when the week's first day is a boss day) whose `end_reason` is not
-  `real_call`, `force_recall` or `cancelled` (voided rows still count: the attempt was used). Rows are
-  written when a run ends, so a boss run accepted on Sunday night that ends after Monday's reset has a row
-  dated in the new week; counting from the week start would have used up next weekend's attempt.
-  Positive results are cached per citizenid for the week.
-- The boss card is also locked by the hourly cap (`board.locked_hourly` / `board.locked_hourly_member`),
-  which the accept enforces for the boss (it counts as Tactical for the hourly cap).
-- `bossCard.available` = the unit may take this week's attempt (`locked == nil`); `busy` and `onCall` are
-  separate flags as on the type cards. `typeOfTheDay` is true when the Type of the Day is `tactical`
-  (boss runs are Tactical runs). Cash: `CP.Cash.range('weekly_boss', officers)` when it returns a
-  positive range, else `CP.Payouts.baseFor(def)` (or `Config.Events.weeklyBoss.payout`) × tier cash, no
-  modifier. Points: `CP.Scoring.P(def)`, else `Config.Events.weeklyBoss.points`.
-- `rollModifier` uses `CP.U.rng(CP.U.hash(run.seed .. ':modifier'))` (deterministic per run, independent of
-  the objectives' `seed + i` streams). The Tactical check reads `run.missionType`, else `run.mission.type`.
-- `modifiers()` entries are `{ label = 'modifier.<key>', tacticalOnly = bool }`.
-
-##### CP.Scaling
-- `combat`: accuracy is rounded and clamped to 0..100 (`SetPedAccuracy` range); armour is rounded and
-  kept >= 0 but not capped (Critical tier + Armored Hostiles can exceed 100 on NPCs).
-- `apply`: paths are relative to the mission (`objectives.` prefix optional, must start with an objective
-  index); `max` clamps every scaled value. Unknown tiers resolve to the first row (Standard).
-
-##### CP.Schedule
-- The retention job runs at each daily reset **and once 120 s after start** (catch-up for servers that
-  always restart across the reset hour; it only touches rows past the cutoff, so it is idempotent).
-  "Only when > 0": `runArchiveMonths`/`auditDays` of 0 turn the step off, and the INSERT … SELECT / DELETE
-  only run when rows are past the cutoff. Rows are copied with `INSERT IGNORE` and only rows present in the
-  archive are deleted (multi-table DELETE with a join), so a half-finished run can safely repeat.
-- At the daily reset the retention job runs in its own thread *after* the daily listeners fire, so a slow
-  archive never delays Type of the Day, goals, streaks or the cash cap.
-- If the server clock moves backwards to an earlier day, nothing fires (a warning is printed).
-- Day/week/month arithmetic uses `os.time` date normalisation (not `ts - resetHour * 3600`), so DST never
-  shifts a day.
-
-### 13.13 The run engine (modules/runs)
-
-Files: `Crimson-Police/modules/runs/server.lua`, `Crimson-Police/modules/runs/client.lua`,
-`Crimson-Police/locales/parts/engine_b.json`, `tests/engine_b_spec.lua`,
-`tests/fixtures/engine_b/client_spec.lua` (client half, run in its own process by the spec).
-
-#### Contract interpretations
-
-##### Creating a run
-- `create(opts)`: `members` may be officer tables (§3.1) or srcs (resolved with `CP.Access.getOfficer`, then
-  `CP.Qbx.getInfo` for non-police test admins). Refusals: `err.invalid_mission`, `err.invalid_location`,
-  `err.no_members`, `err.member_unavailable` (no src/citizenid), `err.already_on_run` / `err.member_on_run`,
-  `err.in_arena` (`CP.Alerts.inArena`), and `err.server_busy` from a second `capsOk` check for runs that are
-  neither tests nor operations (closes the race between two accepts).
-- `CP.Draw.reserve`'s return value is ignored: the draw holds a provisional reservation during `create`, and a
-  spot may have several holders.
-- `create`'s lookups (`CP.Access.getOfficer`, `CP.Payouts.baseFor`, `CP.Scoring.isFirstRunSinceDuty`, ...) may
-  yield, so right before the run is registered (no yield in between) it re-checks that no member is on a run
-  (`err.already_on_run` / `err.member_on_run`), that every member is still online (`err.member_unavailable`:
-  `playerDropped` found no run to leave, so nothing else would remove them) and, for runs that are neither tests
-  nor operations, the server caps (`err.server_busy`). Two racing accepts can never put one officer on two runs
-  or pass the caps together.
-- The modifier is rolled only for runs that are not tests, operations or the boss (`CP.Events.rollModifier`
-  checks the same). Time Crunch: `timeLimit = round(timeLimit × (1 − Config.Events.timeCrunchCut))`.
-- `run.unit = CP.Units.unitOf(leaderSrc)` is kept and unlocked when the run ends (not for test runs).
-- Mission items are given at accept with metadata `{ cpRun = run.id, cpItem = true }`, never to an in-arena
-  player; removal is by slot (`Search(src, 'slots', name, { cpRun })` then `RemoveItem(..., slot)`). Items not
-  found (offline, arena stash, full inventory) go on an orphan list by citizenid, swept on player load (5 s
-  after), 10 s after `CP.Alerts.foreignClearedAt[src]`, and every 60 s. Removal and sweeps keep the items back
-  only while the player is in a routing bucket other than 0 (`InArena(src, 'match')`: a Crimson-Arena match, or
-  any other instance such as an apartment); the crimsonArena flag on its own, in bucket 0, does not keep them (a
-  client can write it). While that flag is set in bucket 0 (an Arena entry or exit in progress, the inventory
-  maybe still stashed) a sweep runs but keeps the orphan record, so the sweep 10 s after the flag clears still
-  runs. The load sweep and a sweep 15 s after resource start also remove leftovers of any mission item name and
-  of `Config.Custody.evidenceItem` (`metadata.cpItem` whose `cpRun` is not live): the orphan list is in memory
-  only, so after a restart this is what takes back a bag kept by a player who dropped.
-- `client:start` data also carries `timeLimit`; `mission` is sent without `locations` (the drawn one is
-  `location`).
-- Manhunt's start is "the 600 m search circle, shown on the map when the type is accepted": the runs client shows
-  a local radius blip for any start whose radius is at least 200 m, from `client:start` until this officer is
-  inside it (own `client:participants` entry arrived) or the first objective starts (search_area then draws its
-  own circle), and removes it at every cleanup.
-
-##### Route, arrival, In progress
-- The server calls `CP.Route.begin(run, src)` for every participant at accept and `CP.Route.stop(run, src)`
-  when a participant leaves or the run ends. The client calls `CP.Route.begin(runId, startCoords, { startRoute, radius })`
-  on `client:start` (a test with the route off: waypoint only, done by CP.Route), and `CP.Route.stop()` when
-  its own `client:participants` entry becomes `arrived` and at the end.
-- `markArrived` also patches that participant's HUD `route = { status = 'arrived', distance = 0 }`.
-- The tier counts every active participant (arrived or not). `client:inProgress` and the objective actions go
-  to every active participant, so late arrivals run the client halves too.
-- A leave before the start recalculates `expectedTier` (and sends `client:tierChanged` with it as both names).
-  A forced test tier never changes.
-
-##### Objectives, timer, HUD
-- `ctx` is built once per objective and reused (so `ctx.rng` continues); `ctx.obj` / `ctx.tier` / `ctx.state`
-  are refreshed on every hook. `ctx.state` is `run.objectives[i].state`, cleared in place by a test restart.
-- `objectiveComplete`: `minSeconds` counts from the objective's start (ms clock). An early call returns false;
-  more than 1 s early (tick jitter) flags the run once per objective with
-  `CP.AntiCheat.flag(run, nil, 'too_fast', detail)` (fallback `run.flagged` when AntiCheat is absent). Test
-  runs are never flagged. An objective's entities are **not** deleted when it completes (interact_points
-  devices are defused by the next objective); everything goes at run end.
-- `onTimeout` returning `'completed'` ends the run `completed`/`completed`; otherwise `failed`/`time_limit`.
-- Every run ticks in its own thread: a block tick that waits (a wave spawning and waiting for its entities, a
-  row being written) never delays the timers, time limits and checks of the other runs. A run whose previous
-  tick is still busy is skipped that second (one warning after 30 s).
-- `ctx.hud(patch)`: `detail`, `value`, `max` belong to that objective's HUD entry (stored in
-  `run.objectives[i].hud`, `false` clears); every other key (e.g. `message`) is a top-level HUD patch.
-- HUD objectives (§9.3): one entry per objective; the block `checklist` of the current objective gives
-  `value`/`max` (first item) and `detail` (further items as "label v/m"); `ctx.hud` values win; done objectives
-  keep the checklist taken when they completed. The server resends the full list whenever it changes (checked
-  every tick) and pushes the `run` topic at most every 2 s for progress changes.
-- Timer patches `{ remaining (ceil), paused }` on start, adjust, pause and every 30 s. HUD messages clear
-  themselves after 8 s on the client; the ended HUD hides 12 s after the end.
-- `remaining(run)` is nil before In progress (view `remaining = null`).
-
-##### Leaving and ending (ARCHITECTURE §4.3)
-- Everything that must not race (status, cooldowns, host, rescale, flags, route) happens before the first yield;
-  then the row, the payment and the hooks.
-- `removeParticipant` increments `run.stats.downs` for `downed`. `onParticipantLeft` is called for the current
-  objective only; `rescale` for every objective not done (with the re-scaled `ctx.obj`).
-- `opts.notify` = a locale key shown as a toast to the leaver (arena: `run.left_for_arena`); `opts.silent` = no
-  toast and no result screen (`client:runEnded` still arrives with a nil breakdown so the client cleans up).
-- The last participant out ends the run with full cleanup; `run.endState` and `CP.Operations.onRunEnded(run, state)`
-  get `'failed'` when that last result was failed (downed/disconnected), else `'abandoned'`.
-- Operation runs start cooldowns like any run (the spec's exemption is about joining).
-- Weekly Boss: never a type cooldown; the mission cooldown and the row (which uses the week's attempt) apply.
-
-##### Rows (cp_mission_runs)
-- One insert per participant with every column; nil values are written as `NULL` literals so the parameter
-  list never has holes. `penalty_points` is the positive sum of the penalties, `bonus_points` the sum of the
-  bonuses; `cash_multiplier` = mTier × mMod rounded to 2 decimals (the exact amount is in the breakdown).
-- `department` = the department of the player's active job at the end when it still is one, else the
-  accept-time department. `participants` = active at that moment + the row's officer; `departments_n` the
-  distinct departments of that set.
-- Presence: for completed/failed results in runs that ever had 2+ participants, `CP.AntiCheat.presenceOk(run, p)
-  == false` flags the participant through `CP.AntiCheat.flag(run, src, 'presence', detail)` (audited and posted
-  like every flag; detail = the share in range and the share needed), with `p.flagged = { reason = 'presence' }`
-  as the fallback and the test-run preview. The 0 points / $0 come from CP.Scoring / CP.Cash themselves.
-- Flagged rows keep their computed points and cash (so an approval can release them); `cash_status = 'held'`
-  only for completed flagged rows (failed/abandoned stay `none`). `CP.Cash.pay(rowId)` runs only for completed,
-  unflagged rows with an amount > 0; the final `cash_status`/`cash_paid` are read back, written into the
-  breakdown JSON and sent in the result. `CP.Scoring.onRowCounted` runs for unflagged completed/failed rows,
-  `CP.Goals.onRunCompleted` for unflagged completed rows, `CP.Draw.recordLast` for completed and abandoned rows.
-- RunResult (§9.6) extras: `failReason` (the block's locale key) for `mission_failed`, `cash.paid` after payment.
-- Test runs: the RunResult is computed (would-have points and cash, status `none`) and nothing is written.
-
-##### Cooldowns, caps, hourly count
-- Cooldowns live in memory per citizenid; they are rebuilt from `cp_mission_runs` rows of the last
-  `max(abandonCooldown, largest mission cooldown)` seconds on the first `cooldowns()` call for that citizenid and
-  on player load. Voided rows count (the run happened). Boss rows never set a type cooldown.
-- Who is online comes from a map kept by the Qbox load and unload listeners, `playerDropped`, the accept re-check
-  and the sweep 15 s after start (`citizenid -> src` and `src -> citizenid`). An unload (character switch) or a
-  drop forgets the player and drops his loaded entry when it holds no live cooldown. The 60 s maintenance prunes
-  spent values, drops an empty entry that was never loaded, and drops an empty loaded one whose citizen is not
-  online. It calls `CP.Qbx.getByCitizenId` (a whole Player copy) only for a citizen the map has never seen, once;
-  the orphan sweeps (every 60 s and after an arena exit) read the same map.
-- `completionsLastHour`: completed rows of the last 3600 s, excluding `manual_award`/`goal`; cached 10 s and
-  dropped when a completed row is written.
-- `capsOk('weekly_boss')` counts as Tactical; tests and operations never count.
-- `reclassify(citizenid, runId, 'real_call_cancelled')` only replaces a `real_call` end reason (a force recall or
-  a cancelled operation never becomes a normal abandon; other new reasons may replace `real_call`,
-  `force_recall` or `cancelled`). It sets `state` and the JSON `endReason` too, applies the new reason's cooldowns
-  from now, drops the pay tier if the run is still in progress, and works from the row alone once the run is
-  gone. Returns false when nothing matched.
-
-##### Entities, telemetry, evidence
-- `spawnPed/Vehicle/Object` refuse (return nil) over the caps; vehicles use `CreateVehicleServerSetter` with
-  `opts.vehicleType` (default `'automobile'`), falling back to `CreateVehicle`. The armed-alive cap does not count
-  NPCs whose `cp` state is `cuffed`; the entity cap counts corpses until they are deleted.
-- Spawns still waiting for their entity to exist count toward both caps (`run.pendingSpawns`), so interleaved
-  spawns (a block tick and a net event) never pass the caps together. An entity that did not exist within 3 s
-  may still appear later (the RPC reaches a client late): it is deleted as soon as it does (within 30 s, only
-  when its model matches), so nothing is left behind.
-- An entity missing on 2 consecutive ticks goes through `entityDied` (killer nil) and is forgotten. Ped deaths
-  come from `CP.Npc`; only when `CP.Npc.onDeath` does not exist does the engine poll ped health itself.
-- Server-side health is the owner's sync data: a server-created entity reads 0 until a client has created and
-  synced it. So `GetEntityHealth <= 0` only counts as a wreck (or, without CP.Npc, a ped death) after a positive
-  value was seen once; `GetVehicleEngineHealth <= -3999` always counts. (There is no server-side
-  "is driveable" native; an exploded vehicle reads engine -4000 and health 0.)
-- Telemetry: `vehicle` only from the driver of a non-mission vehicle, at most every 3 s, lowest engine/body
-  over the whole run; `ped_hit` for a networked non-player, non-mission ped within 30 m of a sender who is in a
-  vehicle, once per ped per run, at most 10 per participant → `penalize(run, 'pedestrian_hit', { src })`;
-  `lights_siren` once per participant on `beat_patrol`/`business_check` while in a vehicle (accepted or in
-  progress) → `penalize(run, 'lights_siren', { src })`; `weapon_fired` once per participant →
-  `run.stats.weaponsFired + 1`, `p.firedWeapon = true`. In-arena senders are ignored.
-- `server:objective`: active participant, run in progress, index an integer ≥ 1; evidence is sanitised
-  (tables ≤ 32 keys, depth ≤ 3, strings ≤ 256); a server-only type (`cuffed`, `decide`, `action`, `removed`,
-  `handed_over`, `impounded`, `shot`, `damaged`: CP.Npc / CP.Custody send them through `Runs.dispatch` /
-  `Runs.entityEvent`) is refused and flags the sender `unexpected_event` (no real client report sends one);
-  `CP.AntiCheat.checkEvent` sees every other well-formed event, also one
-  for an objective past the last (it flags `unexpected_event` for a later objective), and a check that fails
-  (throws) drops the event like a refusal; then index = the current
-  active objective; `CP.Access.recheck` on every objective event (removes with its reason); after that re-check
-  (it may yield) the participant, the run and the objective are checked again. Block rejections are logged,
-  never flagged. Events for unknown runs or from non-participants are logged only (a forged event must not flag
-  someone else's run).
-- `CP.Access.onLost`: `off_duty` is re-verified with `CP.Access.recheck(src, p.job)` before the removal (duty
-  events can be stale or superseded, INTEGRATIONS "SetDuty"); `job_change` and `suspended` are trusted. Only
-  `off_duty` / `job_change` / `suspended` are used as end reasons (anything else → `job_change`).
-- Host: offline host → next in join order; a host silent for 15 s (`GetPlayerLastMsg`) hands over only to a
-  responsive participant.
-- `anchor(run)`: the current objective's first point from its fields (`checkpoints`, `points`, `spawns`, `npcs`,
-  `targets`, `door`, `suspect`, `spawn`, `center`, `route`, `safe`, `scene`, or `run.shared.devices`), then a
-  live entity of that objective, then the start.
-- `testRestart`: the block's `restart`, else stop + delete its entities + clear its state + prepare + start.
-- `view(run, src)` adds the optional extras the Active Mission screen reads (web/src/types/run_ui.ts): `me` (the
-  viewer's src), `isBoss`, `operationId`, `startIn` (seconds left to reach the start, accepted runs only, for a
-  participant who has not arrived). `area` (street/zone names) needs client natives and is not sent.
-
-### 13.14 Foundation · the engine contracts
-
-The engine contracts every module builds on: migrations 003–006, CP.Hooks, CP.Lt tokens, the engine's stats, decisions,
-adoption, hidden spawns, reserved plates, held bodies and removed vehicles, the XP curve, mission tweaks, NPC
-difficulty and the Session fields. The API rows are in §5.
-
-English is the only language: CP.Lt tokens resolve in the server language, and no per-player language
-exists (no column, pref, language list or picker).
-
-#### Data (sql/migrations, both storage modes)
-
-| File | Adds |
-|---|---|
-| 003_run_stats.sql | cp_mission_runs and cp_mission_runs_archive (same order, for the retention job's `INSERT ... SELECT *`): location_index, arrests, citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok, decisions_bad, decisions_best, lethal, medal, mission_call_id, response_s; indexes idx_location and idx_call |
-| 004_profile.sql | cp_officers: bio, avatar_kind, avatar_value, avatar_pending, avatar_status, avatar_reviewed_by, appearance, accent, ui_scale, profile_updated_at, calls_muted, bio_pending; tables cp_profile_reports and cp_commendations |
-| 005_mission_calls.sql | cp_mission_calls |
-| 006_item_rewards.sql | cp_item_rewards (unique key uq_reward) |
-
-Every stat column is written on every row; only `state = 'completed'` rows are summed (badges, stat goals). The row
-gets location_index, the stats, medal (1 gold, 2 silver, 3 bronze from the medal_* awards), mission_call_id and
-response_s (seconds from accept to that participant's arrival).
-
-#### CP.Hooks (shared/init.lua, both sides)
-
-`CP.Hooks.on(name, fn) -> id`, `CP.Hooks.off(id) -> bool`, `CP.Hooks.fire(name, ...) -> listeners that ran`. Every
-listener runs in the caller's thread, in the order added, each in pcall (a failure is logged with CP.err).
-
-| Hook | Arguments | Fired by | May yield |
-|---|---|---|---|
-| run:created | run | CP.Runs.create | no |
-| run:arrived | run, src, isFirst | CP.Runs.markArrived (after the run moved to In progress on the first arrival) | no |
-| run:inProgress | run | the engine, after every block's prepare | no |
-| participant:left | run, src, endReason | CP.Runs.removeParticipant | no |
-| row:settled | run, p, rowId, row, result | Settle, after the cash, XP and goals and before client:runEnded; listeners may add to result (items) | yes |
-| run:ended | run, state, endReason | after every row (endRun, or the last participant leaving) | yes |
-| row:approved / row:voided | rowId | CP.Scoring.onRowApproved / onRowVoided | yes |
-| row:forfeited | rowId | CP.Cash.forfeit and the forfeiture job (now one UPDATE per row) | yes |
-| arena:exited | src | CP.Alerts' 1 s reconcile, when CP.Alerts.inArena(src) turns false (flag or bucket) | no |
-| xp:levelUp | citizenid, src or nil, oldLevel, newLevel | CP.Scoring's XP update | no |
-| goal:completed | citizenid, goalId, period (`'daily:<day key>'` or `'weekly:<week key>'`, unique per period) | CP.Goals, after the goal row | yes |
-| season:ended | seasonId, { champion, top10 = { citizenid } } | CP.Challenge, after the season results | yes |
-| home:extras | citizenid, src, extras | CP.Scoring homeData (Home: `extras` in HomeData) | no |
-| officer:loaded | src | CP.Cash's player-loaded path, right after the pending payments | yes |
-| tablet:closed | src | CP.Tablet's server:tabletClosed (the client closed its tablet; rate limited) | no |
-
-#### CP.Runs additions
-
-| Function | Meaning |
-|---|---|
-| `noteStat(run, src|nil, key, n)` | citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok, decisions_best, decisions_bad, lethal; nil src = every active participant now |
-| `noteArrest(run, src, netId) -> bool` | one arrest per person per run; false for a repeat |
-| `decide(run, src, entry) -> bool` | entry = { contact, kind, choice, verdict, bonusId, points, truthKey, bestChoice, facts, discoverable, knownAt, failKey, netId }; ledger, decision stats, noteArrest for an Arrest graded best/ok, personal award/penalty (points = 0: graded, no points), 'critical' fails the run with failKey |
-| `adopt(run, netId, toIndex)`, `adoptMany(run, netIds, toIndex) -> n` | moves an entity to another objective (entity record, bag, CP.Npc.adopt) and sends the host `client:objective` `{ action = 'adopt', op = 'adopt', netId, obj, from }` |
-| `ownerOf(run, netId)`, `entityEvent(run, netId, ev)` | the owning objective; dispatch an entity event (handed_over, impounded, removed) to it |
-| `spawnPed(run, { hidden = true, armed, weapon, accuracy, armour })` | a contact: bag armed = false and no weapon/accuracy/armour; `armedTruth` counts toward the caps |
-| `arm(run, netId) -> bool` | the draw: weapon, armour and combat cfg, once |
-| `isMissionPlate(plate)` | every spawned vehicle gets a Config.Custody.plates plate, rerolled (5 tries) when CP.Qbx.plateOwned says a player owns it; a plate a mission asks for is kept only in that pattern and when no player owns it; plates come from their own random stream, never from the run seed (clients see plates) |
-| `holdBodies(run, { roles, max })`, `heldBodies(run)`, `releaseBody(run, netId)` | bodies kept for Process the scene (FIFO past max); deleted at the run end |
-| `pauseFastClock(run)` | stops the fast-completion clock; the time limit grows by 60 s + 20 s per held body; once |
-| `noteExternalRemoval(netId, src, via, dist)` | remembered 15 s. A vanished run vehicle whose last server sample had engine and body above 0 is removed, not wrecked: `{ type = 'removed', netId, src, via }` to its objective; a participant's removal flags sc_impound and fails the run (reason.vehicle_removed); anyone else's, or none recorded (via 'unknown'), removes everyone with end reason vehicle_removed_external (abandoned: no points, cash or cooldown) and writes the audit (vehicleRemoved) |
-| `completionsToday(citizenid, missionType|nil)` | completed rows since CP.Schedule.dayStart, no manual_award/goal/operation rows; 10 s cache cleared on a completion |
-| create opts.missionCall | `{ id, code, area, targetS, staff }`: rapid_response is awarded (personal) on arrival within targetS unless staff |
-| quietPatrol | mission definition flag (Beat Patrol, Business Check): lights_siren counts only once the run is in progress; the three LIGHTS_MISSIONS lists are gone |
-| hud / hudFor / ctx.hud / ctx.send | CP.Lt texts are sent as tokens; the view resolves them (server language) |
-| RunResult | adds decisions, stats (lethal left out), missionCall, progress (CP.Scoring's row:settled listener), items = {} |
-| view | adds intel (run.shared.intel), missionCall `{ code, targetS, arrivedS }`, contact (CP.Custody.view when it exists) |
-
-The client half (token resolving, 'adopt'): §5.10.
-
-#### Other modules
-
-- shared/locale.lua: `CP.Lt(key, vars)`, `CP.Locale.isToken`, `encode`, `tokenize(payload)`, `resolve(text, code)`,
-  `resolveAll(payload, code)`, `label(key, fallback, vars)`. CP.L is unchanged.
-- CP.Scoring: `levelXp(n)`, `levelOf(xp)`, `xpLevel(xp) -> { n, label, badge, xp, levelXp, nextLevelXp, prestige,
-  next }` (xp = levelXp for old callers), `progressFor(citizenid, gained, pending)` (pending XP never sets levelUp), badges by_the_book and
-  first_responder, engineOnly ids valued from Config.Bonuses (rapid_response from Config.MissionCalls.rapidResponse),
-  one level-up toast (scoring.level_up with "Lv n" or "Lv n · band").
-- CP.Missions: normalize keeps quietPatrol and decisions, refuses engineOnly ids and reward-like keys; Config.MissionTweaks
-  (cooldown, timeLimit, startTimeout, disabledLocations, peds, vehicles, weapons) re-validated; `label(def, field, n)`.
-- CP.Scaling: combat() adds Config.NpcDifficulty accuracyAdd/armourAdd; `feel()`.
-- CP.Admin: `registerSubcommand(name, fn(src, args) -> ok, key, vars, helpKey)`.
-- CP.Qbx: `plateOwned(plate) -> bool|nil` (read-only, the real oxmysql).
-- CP.Npc: `adopt(netId, obj)`.
-- CP.Goals: stat and missionCall goals, §5.19.
-- CP.Tablet getSession: the session fields of §5.4.
-
-#### Web
-
-Types: shared/types.ts (LevelInfo, Avatar, Prefs, Session additions, RunResult sections, NavCounts, ConfigHealthItem),
-types/run_ui.ts (DecisionEntry, RunProgress, RunStats, RunMissionCall, RunItem, view extras), types/custody.ts,
-missioncalls.ts, profile.ts, rewards.ts. Screens: 'dispatch' after 'board' (placeholder). Components: Avatar
-(initials in the frame colour), RewardsLocker and ReadyCheckBanner (render null), icons bell, truck, camera, gavel,
-gift, idCard. format.ts: fmtDate and fmtDateTime (the locale's _meta.date_locale, en-GB). ResultScreen: level bar and
-level-up, XP pending, mission call line, decision ledger and items, each only when present; `?result=parity` shows
-them in browser mode.
-
-### 13.15 Downed follow-up, the screen safety net, the tablet while down, the loop lint
-
-What the freeze investigation added (the owner's report: "after my latest call my screen froze with no F8 errors or
-crash log", after a down on the way to a Suspicious Activity start that someone else revived before the 15 s
-pick-up). Crimson-Police left nothing on in that sequence (no fade, no overlay, no focus, no loop without a Wait);
-these changes close the gaps the investigation found on the way, so no Crimson-Police state can outlive a run or a
-downed follow-up, and give the owner a command that says what holds the screen.
-
-#### Downed (modules/downed)
-
-- Server: every way an entry leaves the pending stages sends `client:downedEnded` (runId, reason) once: `Finish`
-  (`client done`, `client gave up`, `timeout`), `CancelEntry` (every reason: `recovered`, `in_arena`, `no_position`,
-  `revive_refused`, `client_abort`, `error`, `unload`, …) and the EMS hand-over (`ems`). Before, a cancel before
-  `client:pickup` (stage `pickup_wait`, the owner's case) told the client nothing.
-- Client: `faded` / `overlaid` say what of the pick-up may still be on screen (set before the call that shows it,
-  cleared after the one that removes it). `client:downedEnded` stops a pick-up still running for that run (as
-  `client:pickupCancel`) or undoes what is left; `CP.Downed.restore(why)` is the same safety net for other callers
-  (a no-op while a pick-up runs), and `modules/runs` calls it at every run cleanup.
-- The pick-up thread can no longer die with `active` set: the abort in the error path runs in pcall, the thread then
-  clears `active` and restores the screen whatever happened. `server:pickupDone` goes first and only once.
-
-#### Tablet (modules/tablet, web)
-
-- Down (metadata `isdead` / `inlaststand`, or a dead ped): the Officer and Supervisor UIs refuse to open (`err.downed`)
-  and close within 0.5 s when the officer goes down. The owner's own rule in sc-dispatch's bill UI: never hold the
-  NUI focus while the death or last stand screen is up.
-- `open` carries `seq`; the NUI confirms with `opened { seq }` once the UI rendered. With `ready { acks = true }` an
-  unconfirmed open closes after 6 s and releases the focus (a crashed page must not hold the cursor). An older web
-  build (no `acks`) is never closed for it.
-- web: `QuietBoundary` (renders nothing for the broken part) around the HUD column, HUD, result card, debug overlay,
-  overlays, toasts and each layout; a crashed layout calls `close`; an `open` that cannot be shown calls `close`; the
-  root boundary calls `close` and mounts the app again after 2 s (then sends `ready` again, at most 3 times).
-
-#### Diagnostics (modules/diag, client)
-
-`CrimsonPoliceState` (F8) prints the screen, focus, camera, control, frozen, down and vehicle state and what of it
-is Crimson-Police's; `CrimsonPoliceState unstick` releases only Crimson-Police's own.
-
-#### Lint FX10 (tools/lint_fivem.py, tools/lua_flow.py)
-
-A while / repeat loop where one pass can go round with no Wait, nothing moves the condition on every pass, and the
-condition waits on game state (a native, a function of the resource that calls one, or a variable the body sets from
-one); an ipairs loop that appends to its own table. `tools/lua_flow.py` is a Lua 5.4 parser with the flow analysis
-(yields: Wait, Citizen.Wait, Citizen.Await, coroutine.yield, lib.callback.await and every function of the resource
-that yields on all paths; ox_lib's progressBar / skillCheck / request* do not count, they return at once when busy).
-0 hits in the resource (83 files, 43 bounded and 63 pure-Lua loops, all fine); on sc-dispatch it finds the one real
-hang, `StopTabletAnimation`'s `while obj and DoesEntityExist(obj)` loop. tests/freeze_spec.lua checks it on
-`tests/fixtures/lint/fx10_loops.lua`.
-
-### 13.16 Mission calls and draw · Dispatch, areas, claims, zone clearance and the daily cap
-
-The tablet's own call board (modules/missioncalls), the draw's area filter, footprints, zone
-clearance, location memory, freshness and daily cap (modules/draw), the read-only SC-Dispatch summaries
-(modules/integrations/sc_dispatch) and the Dispatch screen with the staff panel; the API rows are in §5. English
-only: every text is a key in locales/parts/missioncalls.json.
-
-#### CP.MissionCalls (modules/missioncalls/server.lua)
-
-| Function | Meaning |
-|---|---|
-| `list(src) -> DispatchView` | The Dispatch screen; built only for officers with the tablet open (the getMissionCalls callback and the `calls` push to watchers) |
-| `eligibility(src) -> { at, unit, types }` | The cached per-type state of src's unit: every accept check (CP.Draw.check), the eligible pool after the no-repeat rule, its missions and locations per area, the card's cash and points. Reused for Config.MissionCalls.eligibilityCache seconds; cleared on row:settled, participant:left and duty changes. The no-repeat history and the hourly and daily counts are read once per officer and kept until that officer's next settled row or duty change (a count at its cap is read again every 60 s, so the lock lifts when the hour or day passes); a claim reads them fresh |
-| `areaFor(src, call) -> areaKey or nil` | The area a call names to that viewer: only with minMissionsPerArea missions and minLocationsPerArea locations in their eligible pool there; nil = county-wide (the board's pool, locations weighted towards the unit) |
-| `claim(src, callId) -> ok, { runId } / { pending } / errKey` | Every accept check, then the call's rules (excluded units, the issuer's unit, paged, priority window, a pool); the claim window ranks by distance to the area centre, fewer calls won in the last hour, earliest claim |
-| `withdraw(src, id, reason)`, `page(src, typeKey, area, leaderSrc)`, `create(src, typeKey, area)` | Staff calls, audited (category operations). A paged call toasts only the paged unit; when pageTime ends, the other idle units that could claim it get the toast once |
-| `claimableCount(src) -> n` | Calls the viewer's unit could claim now (Home extras callsOpen, the board's callsOpen) |
-| `areaOf(coords) -> key`, `areaIndex() -> { [type] = { [area] = { missions, locations } } }` | Areas (nearest centre) and the coverage matrix |
-| `stats(citizenid) -> { answered, avgResponse, rapid }` | Completed claimed runs, average response_s and rapid responses |
-| `supView(src) -> SupCallsView` | Open calls, today's calls (claimed calls of other departments hidden from supervisors), pageable idle units |
-
-Hooks listened to: run:arrived (the call's run reached the start), run:ended (close with the outcome, or re-dispatch
-once when nobody arrived and the end reason is quit, off_route, start_timeout, idle, real_call or force_recall),
-row:settled and participant:left (cache), home:extras (callsOpen). CP.Schedule.onDaily deletes history older than
-Config.Retention.missionCallDays. `/CrimsonPoliceAdmin missioncall <type> [area]` goes through
-CP.Admin.registerSubcommand.
-
-Rules worth knowing:
-
-- A call's row moves open → claimed with `UPDATE ... WHERE id = ? AND status = 'open'` before the accept (claim
-  before act); a declined ready check puts it back (`... AND status = 'claimed'`) with the offer time it had left.
-- A declining unit, and the members of a re-dispatched claim, are excluded from that call by citizenid.
-- Staff calls (paged or created) are `missionCall.staff = true`: CP.Runs never awards rapid_response for them. The
-  issuer's citizenid is checked against every member of a claiming unit for the whole offer.
-- The toast (`client:missionCall`) goes only to members of idle units who could claim it and have not set
-  cp_officers.calls_muted (read at most every 30 s per officer); the client drops it on a run or in the arena.
-  Saving the mute flag is the profile module's `server:profile:set`.
-- Nothing is sent to SC-Dispatch: no export, no event, no unit status.
-
-Net: callback `getMissionCalls`, `sup:getMissionCalls`, `admin:getAreaCoverage`; actions `server:claimMissionCall`,
-`server:sup:mcWithdraw|mcPage|mcCreate` and `server:admin:*` (admins only); plain `server:mcWatch` (false = the
-tablet closed; deprecated, kept for older clients); push topic `calls` (DispatchView). The watch also ends on the
-`tablet:closed` hook (modules/tablet's `server:tabletClosed`, sent once per close), so the client runs no poll.
-
-#### CP.Draw additions (modules/draw/server.lua)
-
-| Function | Meaning |
-|---|---|
-| `pool(type, members, opts)`, `draw(type, members, opts)`, `pickLocation(def, srcs, rng, opts)` | opts.area (hard: only missions and locations in that area), opts.avoid (soft), opts.nearCoords (county-wide weighting 1 / (1 + km / countyWeightKm)), opts.exclude (hard, as before) |
-| `footprint(def, index) -> { vec3 }` | The start and every point of a location; route points (any list under a key named route) sampled every 50 m |
-| `check(src, typeKey, counts?) -> ok, errKey` | Every accept check without changing anything (the claim runs exactly these); counts `{ lastHour(cid), today(cid, type) }` replaces CP.Runs' counts (the calls' cache) |
-| `accept(src, typeKey, opts)` | The accept: opts.area, opts.nearCoords, opts.missionCall (`{ id, code, area, staff }`; the response target is set here from the unit's nearest member to the drawn start), opts.onDone (only when a ready check made it wait). Units of 2+ go through `CP.Units.readyCheck(unit, typeKey, onReady, onCancel)` when it exists (guarded fallback: the draw follows at once) and the accept returns `{ pending = true }` |
-| `noRepeat(list, hist)`, `history(citizenid, type)` | The no-repeat rule on its own (for the eligibility cache) |
-| `typeValues(type, officers, list) -> cash, points` | A card's numbers for the call cards |
-| `recordLocation(citizenid, missionId, index)`, `locationStats(missionId)` | The in-memory location memory bridge; callback `admin:getLocationStats` |
-
-Draw rules, in the order pickLocation applies them: reservations and opts.exclude and opts.area (hard); zone
-clearance (Config.Draw.zoneClearance from every point of every held location of any mission, soft: falls back to
-the reservation rule when nothing else is free); opts.avoid, which draw fills with each participant's last
-Config.Draw.avoidLastLocations locations of that mission (cp_mission_runs.location_index plus the in-memory bridge,
-soft); player clearance (as before); then a weighted pick: half weight for a spot any run took within
-Config.Draw.locationFreshness, and the county-wide distance weighting. With equal weights the pick is the old uniform
-one.
-
-Daily cap: Config.Limits.maxCompletionsDay and Config.MissionTypes[type].dailyLimit through
-CP.Runs.completionsToday; the accept refuses err.daily_cap, err.member_daily_cap, err.type_daily_cap or
-err.member_type_daily_cap, and the board card is locked (`locked.daily = true`, `until` = the next day start).
-BoardData gains `callsOpen`.
-
-#### CP.Dispatch additions (modules/integrations/sc_dispatch/server.lua)
-
-- `realCallSummary() -> { total, p1 } | nil`: `SELECT priority, COUNT(*) FROM mdt_dispatch WHERE active = 1 AND
-  (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority` with Config.Calls.npcCallPrefix escaped and `%`
-  appended (the saves folder engine has no LEFT(); both modes send it to the real oxmysql), cached
-  Config.MissionCalls.realCallCache seconds, nil on error (the strip is hidden).
-- `mdtCommendations(citizenid) -> list | nil`: employee_incidents, read-only, nil on error.
-
-#### Web
-
-Officer Dispatch screen (filters All, Claimable, Near me; the real-call strip; notices; call cards with status,
-offer countdown, crew, pay and rapid response; the claim confirm; Recent calls; the mute toggle), the Mission Board's
-"n mission calls open" link and daily-limit badge, MissionCallsPanel (Supervisor Live Missions and the Admin Missions
-Dispatch tab), AreaCoverageMatrix (Admin Testing) and LocationPlays (Admin Missions). Browser mock:
-mocks/missioncalls.mock.ts (`?calls=empty|run|op`).
-
-### 13.17 Built-in missions (Investigation, Tactical, Weekly Boss)
-
-Files: `Crimson-Police/missions/builtin/{warrant_service,manhunt,gang_shootout,hostage_rescue,bomb_disposal,armored_truck_escort,prison_break,weekly_boss_kingpin}.lua`,
-`tests/missions_b_spec.lua`. Each file has a header comment (what, where, which blocks) and exactly one
-`RegisterMission({ ... })` in the Example-file field order. No payout field anywhere; `departments = {}`.
-
-#### Locations
-
-| Mission | Locations | Per location |
-|---|---|---|
-| warrant_service | 6 houses: Grove Street (Davis), Forum Drive (Strawberry), Mirror Park, Wild Oats Drive (Vinewood Hills), Sandy Shores, Paleto Bay | door vec4, suspect vec4 (on the step beside the door), 4 fleeTo, 4 associates (front/side yard), yard (front yard) |
-| manhunt | 5 regions: Sandy Shores, Grapeseed, Paleto Bay, Harmony, Grand Senora Desert (Yellow Jack Inn) | start = { coords = center, radius = 600 }, 6–7 clues (ground level), 7 hiding vec4 |
-| gang_shootout | 5 hideouts: Stab City (Alamo Sea), Grand Senora scrapyard, Paleto Forest sawmill, Terminal container yard, Elysian Island docks | 14 spawns facing the approach, scene |
-| hostage_rescue | 6 Fleeca banks: Legion Square, Hawick Ave (Alta), Hawick Ave (Burton), Blvd Del Perro, Great Ocean Hwy, Route 68 | 7 hostile spots, 3 hostages, safe marker outside |
-| bomb_disposal | 6 24/7 stores: Innocence Blvd, Clinton Ave, Palomino Fwy, Senora Fwy, Great Ocean Hwy (Mt Chiliad), Barbareno Rd (Chumash) | 7 hiding spots at floor level (props stand on them) |
-| armored_truck_escort | 3 routes: Blvd Del Perro → Hawick Ave (1.87 km, stop at Burton), Route 68 Harmony (0.87 km), Great Ocean Hwy Banham Canyon → Chumash (0.86 km) | route { points, stops }, 5–7 ambush points |
-| prison_break | 6 breakout points outside the Bolingbroke perimeter (N, NE, E, W, NW, SW) | 8 inmate spawns, 2–3 escape routes |
-| weekly_boss_kingpin | 3 compounds: La Fuente Blanca (Madrazo ranch), O'Neil Ranch (Grapeseed), Marlowe Vineyards (Tongva Hills) | 18 spawns, boss vec4, scene (all in front of the main house) |
-
-How the points were placed: from well-known anchor coordinates (Fleeca teller/counter/vault positions,
-24/7 clerk and back-room safe positions, shop and house entrance positions used by common FiveM
-resources) plus offsets in each building's own frame. The anchors cross-check (every Fleeca vault sits
-at the same offset from its teller, every 24/7 safe at the same offset from its clerk), so the interiors
-are the most reliable data. Route waypoints on Boulevard Del Perro / Hawick Avenue and Route 68 follow the
-road points in front of three and two Fleeca branches, which line up on one road. Rural spots (manhunt
-regions, hideout spawn rings, compound spawns, prison surroundings) are estimates on flat, open ground;
-their z is biased a little high so a ped drops rather than sinks. **Check in game with Admin test mode
-before release**, in this order: the three truck routes (see below), the gang hideout spawn rings (the
-Terminal and Elysian Island container yards first: a ring point can land inside a container), the three
-Kingpin compounds, the prison breakout terrain heights, the manhunt spots.
-
-The truck routes are not recorded road nodes: between the anchor points (the road in front of each
-Fleeca, the Harmony 24/7 and a few Great Ocean Highway guesses) the waypoints are straight-line
-interpolations every ≤ 140 m, with linearly interpolated z. That is right only where the road really is
-straight between the anchors (Boulevard Del Perro, Hawick Avenue and Route 68 probably are; the Great
-Ocean Highway north of the Banham Canyon Fleeca is not). The escort block passes a waypoint within 20 m
-(2D), so a waypoint more than ~20 m off the road can stall the truck. Re-record the three routes with the
-Mission Builder's route recorder (or check each waypoint with GetClosestVehicleNode) before release.
-
-Placement rule used for peds and interaction points at buildings (after review): nothing is placed
-behind a facade. Most base-game houses and ranch houses have no interior (or only locked story-mode
-doors), so a point behind the front door is inside the building's collision: a ped spawned there is stuck
-and an ox_target point there cannot be reached. Warrant Service associates and yard markers and every
-Kingpin spawn and boss point therefore sit in front of the facade (towards the street / approach). The
-Fleeca and 24/7 interiors are real, enterable interiors, so their inside points stay inside.
-
-Guardrails the spec checks: counts, spacing (100 m), map bounds (x −4000..4600, y −4200..8000), every
-vector outside every `Config.Builder.noBuildZones` circle (including the Crimson-Arena trailer park and
-lobby) and every route / escape route / flee path segment clear of them, every placed point 30 m+ from its
-start (except the manhunt centre and road routes), every point of a location within 150 m of its start
-(except the manhunt circle, the road route and the prison escape routes, which have their own checks),
-every z within 8 m of the start's z (25 m for routes and manhunt spots), hostile spawn headings facing the
-approach (within 90°), door headings facing the street, flee paths and escape routes contiguous (no jump
-over 250 m, starting at the house / breakout), prison points 180 m+ from the zone centre and 230 m+ from the
-prison middle, road route length / a waypoint every 150 m / start–end, ambush spacing and distance to the
-route, armed budget (Kingpin: 30 + boss = 31 ≤ 40, so no exception was needed). Escape routes also stay 150 m clear of
-the Crimson-Arena Skydome (1500, 3000; z 1201) even though it is in the air and has no no-build zone.
-
-#### Contract interpretations
-
-1. hostile_waves objectives leave `spawns` out, exactly like the spec's Example file (the block default
-   is `'spawns'`). flee_arrest scatter mode writes `spawns = 'spawns'` (ARCHITECTURE 3.3 lists it there).
-2. Door-mode `knock.duration = 3000` (the card gives no knock time; the flee_arrest default).
-3. Kingpin `cooldown = 1200` (the card has none). The weekly limit is `CP.Events.bossAvailable`; a
-   one-week cooldown would block the next weekend.
-4. Boss surrender `{ belowHealth = 0.25, chance = 0.30 }` (the hostile default) so "Kingpin arrested alive"
-   can happen. `kingpin_alive` comes from hostile_waves' `boss.aliveBonus` default; the file does not set it.
-5. Bomb device prop `prop_c4_final_green` (a common base-game C4 model); the interact_points default is
-   `prop_ld_bomb`. Manhunt clue props: `prop_cs_heist_bag_02`, `prop_npc_phone_02`, `'witness'`.
-6. minSeconds: hostage hostiles 12 (3 s per base hostile, the Gang Shootout pace), hostage rescue 8 (one 6 s cut
-   and the walk into the safe circle), warrant 8 (the 3 s knock + the 5 s cuff), Kingpin waves 90, bomb search 3,
-   defuse 5, escort 45 (the shortest route takes about 52 s at 60 km/h), others at the block default or the card's
-   progress time. A completion more than 1 s under minSeconds flags the whole run `too_fast`, so the value must be
-   a floor that honest play cannot reach, not a typical time: 30 s here flagged fast units (a surrender cuffed
-   ~17 s after the arrival, three officers cutting all three hostages at once).
-7. Scaling: escort waves and cars carry `max = 5` (the builder range); every other path is a plain string.
-8. Warrant Service `suspect` is on the door step, 0.3 m out and 1.2 m beside the `door` point ("inside or at
-   the door"): see the placement rule above and the flee_arrest mismatch below.
-
-### 13.18 Block upgrades, the five newer missions, Mission Builder
-
-English only. Item rewards stay off
-by default, and no mission file has a reward or payout field. Every mission here works with the database on
-and off. The new missions are built on the `field_contact` and `process_scene` blocks and
-`CP.Custody`.
-
-#### Block upgrades (all optional; an objective without them behaves exactly as before)
-
-##### pursuit (`blocks/pursuit/server.lua`, `client.lua`)
-
-| Field | Meaning |
-|---|---|
-| `responses = { yield, flee, fight }` | Weights. Each vehicle rolls one from its own seed stream, so every participant and every re-run with the same seed sees the same result. `yield` pulls over with hazards and brakes. `flee` is the old pursuit. `fight` makes the occupants get out armed. |
-| `handoff = 'contact'` | When the car is stopped, the pursuit writes `run.shared.contacts = { vehicle, occupants = {{netId, seat, state, truth}}, observed, forced, profileSet }` and calls `CP.Runs.adoptMany` so the next `field_contact` objective owns the car and its people. This happens before the pursuit completes. Occupants still seated count as settled. |
-| `observe = { kind or kinds, zoneSpeed, over, behind, seconds, tolerance }` | The violator cruises past the officer. `pace`: the officer's samples are graded on their median, and it passes when the median is at least `zoneSpeed + over[1] - tolerance`. `zoneSpeed` is a number or a location key. `follow`: the officer stays within 60 m behind for 8 s. Both need the officer behind the violator. The snapshot's `watch = { behind, seconds }` gives the HUD that violator's own window. The violator gets its HUD cue and its blip only after it passes the observation point. |
-| `stop_without_cause` | Lights before the observation completes cost the lighting officer −15. The penalty is personal (`{src}`). Everything else is graded normally. |
-| `spawnOffset` | Spawns upstream along the route, capped at 250 m, so the car drives past the officer. |
-| `driveBy` (percent), `ram` (percent) | Drive-by: a passenger targets the nearest participant within 40 m. Ram: a fight car that is boxed in rams once, and only a participant. |
-| `profileSet` | Hidden truths for the occupants (`armedTruth` is server-only). The truth is armed only when the occupant fights. |
-| `team = n` | The objective is skipped at start when fewer than `n` participants are in the run. Traffic Enforcement uses this for its second violator. |
-| `'removed'` event | A car the engine removed is never stopped and never earns `vehicle_stopped_fast`. |
-| Stats | `vehicles_stopped` (shared by the participants) and `noteArrest` on each cuff. |
-
-##### interact_points
-
-| Field | Meaning |
-|---|---|
-| `together = { count, window, soloProgress }` | `min(count, active participants)` distinct officers, each within `window`. A hold that is too old, or a second hold by the same officer, resets with a HUD line. When the unit drops to one officer, held points finish and `soloProgress` applies. |
-| `hidden.kind = 'seize'` | No prop and no `run.shared.devices`, so Bomb Disposal is unchanged. Each find notes the `evidence` stat. |
-| `hidden.action = { label, duration }` | A follow-up seize at each find. The objective waits for every follow-up. |
-| `finds = { chance, pool }` | Rolled once per point. A find notes `evidence`, is added to `run.shared.evidence` and shows a HUD line. |
-| `fastBonus.after = n` | The fast bonus clock starts when objective `n` ends, not when this objective starts. Drug Lab Raid and Gang Hideout Raid use `after = 1`, so `stash_found_fast` counts from the breach. |
-| ANIMS | Adds `notepad` (`CODE_HUMAN_MEDIC_TIME_OF_DEATH`) and `photo` (`WORLD_HUMAN_PAPARAZZI`). |
-
-##### skill_check
-
-`onFail = 'fail'` is the default and keeps the old behaviour. The other form is
-`onFail = { setback = { label, duration, penalty }, retryAfter }`: `failAfter` misses start a recovery step.
-The recovery is a dwell at the target sampled by the dwell sampler, and a `'recover'` report finishes it. The
-officer who missed pays `penalty`, and a retry opens `retryAfter` seconds after the recovery. The case never
-fails. The state sends `setback` and `retryIn`.
-
-##### flee_arrest
-
-| Field | Meaning |
-|---|---|
-| `demeanour` | A fixed value, weights, or `'rolled'`. The door response comes from `DOOR_RESPONSE`. A compliant or nervous inmate who scatters surrenders. |
-| `feint` (percent) | Rolled at the first surrender, for unarmed suspects only. The suspect bolts after `Config.Npc.feintAfter` when nobody is within `feintRange` and nobody is aiming. The client reports aim. Killing a feinting suspect still fails. |
-| `custody = 'handover'` | Calls `CP.Custody.enableChain`. The suspect counts as done only once handed over. |
-| Stats | `noteArrest` on each cuff. |
-
-##### hostile_waves
-
-| Field | Meaning |
-|---|---|
-| `behaviour` | Weights of hold, balanced and push, rolled per spawn from the objective's own seed. |
-| `spawnSets = { keys, use, intel }` | Picks `use` location keys. The intel line `block.hostile_waves.intel` names the chosen sets and is stored in `run.shared.intel`. |
-| NpcDifficulty feel | Changes `healthMult` and `surrenderMult` only. |
-| Stats | `noteArrest` on each cuff. |
-
-##### protect_rescue
-
-`CP.Runs.noteStat(run, nil, 'rescues', 1)` when a hostage reaches the safe marker.
-
-#### Missions (`missions/builtin/`, 19 in `index.lua`)
-
-| Mission | Type, officers | Locations | Objectives |
-|---|---|---|---|
-| parking_patrol | patrol, 1, quietPatrol | 7 districts × 10 kerb spots | field_contact parked (`parking` truths) |
-| suspicious_activity | investigation, 1–2 | 7 scenes: car, people, fleeTo, transport | field_contact scene |
-| traffic_enforcement | patrol, 1–2 | 7 corridors, each with a `speed` key | pursuit observe + handoff; field_contact stop; the same pair again with `team = 2` |
-| drug_lab_raid | tactical, 2–4 | 7 rural labs, 250 m clearance | breach together; waves (inside/yard sets); cooks (`cook_arrested`); stash seize (`stash_found_fast`); shut-down skill_check with a setback (`lab_fire`); process_scene |
-| gang_hideout_raid | tactical, 2–4 | 7 hideouts | breach together; waves (front/house/garage sets) + lieutenant boss (`lieutenant_alive`); runners; cache seize; process_scene |
-
-Every file has `vehiclePenalties` and a header that says where each spot is and why. Geometry came from the
-GTA vehicle-node graph. Kerb spots follow the straightest non-freeway edge. A corridor with any node inside a
-no-build zone was rejected, so Paleto was dropped and Route 68 Lago Zancudo and GOH Banham Canyon were added.
-**Check in game with Admin test mode before release:** the kerb spot headings, the lab and hideout interiors,
-and the traffic corridor speeds.
-
-Retrofits:
-
-- **stolen_vehicle_takedown:** responses 25/65/10, `handoff = 'contact'`, `profileSet = 'stolenCar'`,
-  `driveBy = 50`, and a field_contact stop objective (stolen revealed, custody cuff). It also gets the
-  `vehicle_impounded` bonus (`each`).
-- **warrant_service:** yard `finds` at 60%, then process_scene (scene `yard`, no coroner, `minSeconds = 5`).
-- **gang_shootout:** process_scene (4 bodies, no coroner).
-- **beat_patrol, business_check:** `quietPatrol = true`.
-
-#### Zone lint (`tests/zone_lint_spec.lua`)
-
-A footprint is a location's start plus every point in it. A route (`{ points }`) counts by its two ends only.
-New missions must keep `Config.Draw.zoneClearance` (200 m) from every other mission's footprint, and
-drug_lab_raid must keep 250 m. No point may be inside a no-build zone. The 102 existing close pairs are in
-`tests/zone_lint_baseline.txt`. They produce one warning line and never fail the spec. A pair that is not in
-the baseline fails. `BASELINE_MAX` stops the baseline from growing.
-
-#### Spawn lint (`tests/spawn_lint_spec.lua`)
-
-Every built-in mission, on the loader's definitions: no two spawn points of one location within 1.5 m (flat); a
-point for each person the largest team brings in every list (the real `CP.Scaling` counts, with each scaling
-entry's max); armed spawns outside the start circle plus `Config.Builder.spawnMargin` unless the objective is a
-wave, a scatter or staged (the spawn director places those). The 26 cases found when it was written are in
-`tests/spawn_lint_baseline.txt`; a new case, a listed armed key that comes closer, or a line that no longer
-matches fails, so the list only shrinks.
-
-#### Mission Builder
-
-- **`modules/builder/server.lua`:** minimum seconds are field_contact 30 and process_scene 5. The builder
-  handles percent, seconds and spawn fields for every option above, along with the Lua export's key order
-  and its fraction and float keys. field_contact people and cars can be scaled.
-- **`B.customBonusFields`:**
-  - strips `allCorrect` and `aliveBonus` points from field_contact;
-  - forces process_scene's `aliveBonus` to `{ id }`;
-  - drops a skill_check setback `penalty` that is not in Config.Bonuses.
-- **`builder:config`:** lists both new blocks with their ranges from `Config.Blocks`.
-- **Client and web:**
-  - kerb spots with a rule (`streets` from the client's place callback);
-  - FieldContact and ProcessScene panels;
-  - a parity panel for each upgraded block;
-  - spawn-set keys and the armed count.
-
-#### Deviations and gaps
-
-- **`vehicle_impounded`** (final review): field_contact records it, shared, for each car lawfully impounded
-  (an Impound graded Best or Acceptable) when the mission's card lists it, so Stolen Vehicle Takedown pays its +10.
-- **Not built, under the English-only decision:**
-  - the CP.L → CP.Lt conversion of block HUD text;
-  - the French and German HUD test;
-  - builder dates through format.ts.
-- **Timing:** the skill_check retry is timed from the end of the recovery.
-- **Pace threshold:** it is `zoneSpeed + over[1] - tolerance`.
-
-### 13.19 NPCs (modules/npc: the NPC state machine, host AI helpers, "Cuff suspect")
-
-Files: `Crimson-Police/modules/npc/server.lua`, `Crimson-Police/modules/npc/client.lua`,
-`Crimson-Police/locales/parts/npc.json`, `tests/npc_spec.lua`, `tests/fixtures/npc/client_check.lua` and
-`tests/fixtures/npc/target_check.lua` (the client half, run by the spec in their own Lua states). Each Lua file's header comment is the full API
-reference. This slice writes no SQL.
-
-#### API (ARCHITECTURE §5.11)
-
-Server: `CP.Npc.setState(run, netId, state, extra)`, `getState(netId)`, `isNeutralised(netId)`,
-`rollSurrender(run, netId, chance)`, `enableCuff(run, netId, opts)`, `onDeath(fn)`, `onDamaged(fn)`.
-Client: `CP.Npc.apply(entity, cfg)`, `task(entity, action, args)`, `nearestParticipant(coords)`.
-
-Net / game events:
-
-| Name | Side | What |
-|---|---|---|
-| `crimson-police:server:npcCuff` (runId, netId) | C → S (plain net event, 3 per 2 s) | the cuff progress bar finished |
-| `weaponDamageEvent` (sender, data) | S (AddEventHandler) | shots at surrendered/cuffed/restrained peds, hostage damage |
-| `playerDropped` | S | forget reach samples and shot windows of that player |
-| `crimson-police:client:start` / `client:participants` / `client:hostChanged` / `client:runEnded` | C (listened to, sent by runs) | participant list, host changes, run end |
-| state bag `cp` (all entities) | C | host re-tasking and cuff option labels |
-| state bag `crimsonArena` (`player:<me>`) | C | cancels a running cuff when Crimson-Arena places the player |
-| ox_target global ped options `crimson-police:cuff`, `crimson-police:cuff:<n>` | C | "Cuff suspect" (and other labels) |
-
-Recorded ids: `shot_surrendered` (CP.Runs.penalize, personal). Block events delivered with
-CP.Runs.dispatch(run, cp.obj, src, ev): `{ type = 'cuffed', netId }`, `{ type = 'shot', netId, src }`,
-`{ type = 'damaged', netId, attacker }`.
-
-#### Contract interpretations
-
-1. **Who fails the mission.** Killing a surrendered, cuffed, restrained or unarmed ped fails the run, but
-   the decision stays with the owning block's `onEntityDead` (every block implements it, with a 3 s
-   "shot already in flight" grace after a surrender). CP.Npc only attributes the killer and reports the
-   death through `CP.Runs.entityDied`; it never calls `failRun` itself (that would bypass the grace).
-2. **Death detection.** 1 s over every ped in `run.entities` of every live run (`kind == 'ped'`).
-   `GetEntityHealth <= 0` is a death. An entity that no longer exists while its record is still in
-   `run.entities` is a death at the first missed check (killer nil), which is before the engine's own
-   2-check vanish rule, so the onDeath listeners hear about it too; a ped removed with
-   `CP.Runs.deleteEntity` (record and entity together) is not a death. Exactly once: CP.Npc's own flag
-   plus the engine's `entities[netId].dead`. The engine leaves ped health deaths to CP.Npc because
-   `CP.Npc.onDeath` exists (modules/runs checks for it).
-3. **Killer attribution.** `GetPedSourceOfDeath` → a player's own ped (matched against `GetPlayerPed` of
-   every player) or the driver of the killing vehicle (`GetPedInVehicleSeat(veh, -1)`). An NPC source means
-   "no player" (no fallback). No source at all → the last player weapon hit on that ped within 5 s. A killer
-   who is in the arena (`CP.Alerts.inArena`) is dropped (nil). Order per death: `CP.AntiCheat.onNpcKilled`
-   (outside killers only) **before** `CP.Runs.entityDied`: entityDied runs the block's `onEntityDead`, which
-   can complete the last objective and end the run, and anti-cheat ignores ended runs, so an outside kill
-   that finished the mission would otherwise never flag it.
-4. **Participant** always means an ACTIVE participant (`run.participants[src].status == 'active'`), the
-   same rule as `CP.Runs.isParticipant` and `CP.AntiCheat.onNpcKilled`. A player who left the run counts
-   as outside help.
-5. **setState(run, netId, state, extra).** The bag is replaced as a whole (`Entity(e).state:set('cp', bag, true)`).
-   `extra.cfg` merges into `bag.cfg`; `extra.task = { action, args }` is a one-off host task
-   (`CP.Npc.task`) for any state, identified by `bag.taskSeq` (the `seq` it was written with; later writes
-   such as a cfg merge or enableCuff keep it, so the host runs the task once); other keys are copied;
-   `run`, `obj`, `state`, `seq`, `taskSeq` are protected. A state change drops a previous `task`. `seq`
-   increments on every write. The same state without extra is a no-op (no replication). Refused (false):
-   unknown state, bad net id, ended run, a net id whose bag belongs to another run, a missing entity.
-6. **rollSurrender** uses one deterministic stream per run, `CP.U.rng((seed ~ 0x4E504331) & 0x7FFFFFFF)`,
-   and rolls each ped once: repeated calls return the first result (a client spamming 'low_health' cannot
-   re-roll). `chance` is a fraction; a value above 1 is read as a percentage (builder units).
-7. **enableCuff** stores `bag.cuff = { label, duration, maxDistance }`: label trimmed, at most 64
-   characters, default `CP.L('npc.cuff')`; duration 500–60000 ms (default 5000); maxDistance 1–10 m
-   (default 3.0). The option only shows while `state == 'surrendered'`.
-8. **Cuff validation** (beyond the brief, all server-side): the run is In progress, the sender is an
-   active and arrived participant, `CP.Access.getOfficer` passes, the sender is not in the arena, the net
-   id is a live ped of this run whose bag says surrendered and cuffable, the sender is within
-   `maxDistance + 0.5 m`, and the sender has been within `maxDistance + 1.5 m` for at least
-   `duration − 2 s` (sampled every second by the watcher) so a modified client cannot skip the progress
-   bar. Then `setState('cuffed')` first (blocks check `getState(netId) == 'cuffed'`), then the dispatch.
-   A block refusing the event does not revert the state (blocks also pick cuffs up from the bag on tick).
-   Every refusal sends the sender a toast `err.npc_*` through `CP.Tablet.notify`.
-9. **shot_surrendered.** Counted once per shooter and ped per 2 s (a burst is one shot), never within 3 s
-   of the surrender (a shot in flight), for any weapon except unarmed/melee/vehicle/fall hashes, and for
-   `restrained` hostages too (as §5.11 lists). The shooter gets the warning toast `npc.shot_surrendered`
-   with the value of `Config.Scoring.common.shotSurrendered`. Scoring maps the id to that value.
-10. **The shooter of a weapon packet** is the sender (the contract's `{ src = sender }`). One exception:
-    `data.parentGlobalId` naming an NPC the sender owns (`NetworkGetEntityOwner`, e.g. a hostile on the
-    host shooting a hostage) → nobody. A parent naming another player's ped or a vehicle another player
-    drives is still the sender, and so is an NPC the sender does not own: a client only sends damage for
-    entities it controls, so such a packet is forged and must never cost another participant
-    `shot_surrendered`, a hostage hit or a failed run. A vehicle parent is never a shot. `hitGlobalIds` and
-    the single `hitGlobalId` form are both read, at most 32 hits. The handler returns at once when
-    `WasEventCanceled()` and never cancels anything; in-arena senders are ignored (docs/INTEGRATIONS.md, Crimson-Arena
-    rules 6 and 11).
-11. **The host-owned gap.** weaponDamageEvent is only raised for damage to an entity owned by ANOTHER
-    client, and the run host usually owns every mission ped. A 1 s health + armour poll covers it: a drop
-    with no weapon event in the last 2 s is attributed with `GetPedSourceOfDamage`: an NPC, a vehicle's
-    driver, or a player's own ped **only when that player owns the ped**. Any other player's hit already
-    came as a weaponDamageEvent, and GetPedSourceOfDamage keeps naming them after later sourceless damage
-    (a fall, a fire), so such a drop is unattributed (hostages: onDamaged with attacker nil, still "hurt").
-    A drop with no source is ignored, so a host lowering max health in `apply` never counts as damage.
-12. **onDamaged** fires only for peds whose role is `hostage`, for every detected hit (attacker nil = an
-    NPC). `{ type = 'damaged' }` is dispatched to the block only when the attacker is a participant. One
-    report per ped and attacker per second.
-13. **Client task speeds are m/s** (the pursuit and escort blocks send m/s); `kmh` is accepted instead.
-    A numeric `drivingStyle` wins over the `style` name. Names: `careful`/`cautious` 786603 (stops for
-    cars, peds and red lights), `normal` 786475, `fast` 786492 (all keep to their lanes), `reckless` 787004
-    (may use oncoming lanes to overtake).
-14. **Managed tasks.** The host's AI loop (500 ms, only while it manages a ped) retargets combat to the
-    nearest active participant every 3 s (switching when another is 40% closer). With no participant a
-    hostile stands still (`TaskStandStill`), never `TaskGuardCurrentPosition`, which attacks every hated
-    ped, i.e. every player, bystanders included. The loop also steps flee and drive routes, re-issues
-    tasks of stuck peds and keeps the kneel / cuffed poses playing. A managed task ends when the ped's cp
-    state changes or it leaves the vehicle it was driving: whoever owns the new state re-tasks (pursuit's
-    `TaskLeaveVehicle` after 'stopped' is never overridden). Repeated identical pose and combat tasks are
-    ignored (no animation replay); identical movement tasks are only debounced for 1.5 s, so a block
-    re-tasking a stuck ped later is obeyed.
-15. **Routes** start at `args.startIndex`, or at the nearest point ahead (the first local minimum of the
-    distance along the route, 50 m hysteresis, so an out-and-back route passing the ped is not skipped).
-    A waypoint is reached within `max(12 m, 1.2 × speed, stopRange + 4 m)` (2.5 m on foot) or when passed
-    close by (within 3× that and beyond it along the leg being driven, which starts at the previous
-    waypoint, or where the task started). The next leg is not used: on a hairpin its point lies on the
-    approach side, so the turn would be cut short. The last point of a route that does not loop must be
-    reached. A flee route ends in `TaskSmartFleePed` from the nearest participant; a loop wraps.
-16. **"No ragdoll/flee when hostile"**: flee attributes off, combat attributes 17 off / 58 on,
-    `SetPedCanRagdollFromPlayerImpact(false)` and blocking of non-temporary events. Ragdoll from weapons
-    stays on because several blocks make suspects give up when stunned (a ped that cannot ragdoll cannot
-    be tased). `SetPedDiesWhenInjured(true)`: no writhing ped that is neither dead nor neutralised.
-17. **apply on a new host** never heals: health is set only on an untouched ped (health at max), armour
-    only when it is 0 on an untouched, undamaged ped; max health and weapons are ensured every time.
-    Calm states (surrendered, cuffed, restrained, freed, safe) are disarmed (RemoveAllPedWeapons, no
-    drop) and in CRIMSONPOLICE_NEUTRAL; `cfg.group` ('hostile'|'neutral') picks the group otherwise.
-18. **Relationship groups.** From CRIMSONPOLICE_HOSTILE: 5 (hate) to PLAYER as §6.1 says, 0 to itself,
-    3 to CRIMSONPOLICE_NEUTRAL and to the common ambient/gang groups incl. sc-npcpolice's
-    NPCCALL_HOSTILE / NPCCALL_RIVAL. From CRIMSONPOLICE_NEUTRAL: 3 to everything. PLAYER's own relations
-    are never set. Because every player is in PLAYER, "hostile only to participants" is enforced by
-    targeting (TaskCombatPed on participants only, blocked non-temporary events, the retarget loop, no
-    guard task, see 14). A non-participant who walks into a running firefight can still be picked by the
-    game's own combat target selection. Making HOSTILE neutral to PLAYER would close that, but it
-    contradicts §6.1 ("hates PLAYER (5)") and cannot be verified outside the game, so the relation stays
-    as the contract says (reviewer note).
-19. **One option per label.** ox_target labels are static, so the global option set holds
-    `crimson-police:cuff` (default label) and one `crimson-police:cuff:<n>` per other label a block passes
-    to enableCuff (e.g. "Detain driver"), at most 8, added the first time a bag with that label is seen.
-    Labels pile up over a client session, so a label that comes after the 8th is offered by the default
-    option (its prompt shows the default label; the progress bar shows the bag's own label).
-    canInteract: the ped's `cp.run` is the local player's run, `cp.state == 'surrendered'`, `cp.cuff` set
-    with this label, within `cp.cuff.maxDistance`, on foot, alive, not in the arena, no cuff running. The
-    progress bar is cancelled when the suspect stops being surrendered, moves out of reach + 1 m, or
-    Crimson-Arena places the player; nothing is sent then.
-    The option set (with the contact, custody and seat options) exists only while the local player is on a
-    run, so ox_target never calls our canInteract for anyone else: added one frame after `client:start`,
-    removed one frame after `client:runEnded` once ox_target's eye menu is closed (it selects an option by
-    its index, and a removal shifts the indexes).
-20. **Host bookkeeping.** The `cp` handler waits one frame (change handlers run before the value is in
-    the bag), applies cfg once per entity handle after `CP.Runs.control`, and re-tasks only on a state or
-    task change. First sight of a ped (stream-in) or a host change uses the poses without transitions.
-    On `client:hostChanged` to this client every known ped of the run is re-applied and re-tasked; the old
-    host drops its AI loop.
-21. **Drops on every client.** Weapons and cash of a dying ped are dropped by whichever client owns it
-    at that moment, and OneSync moves ownership to the nearest player (a partner, or a bystander), so the
-    `cp` handler marks every ped carrying a Crimson-Police bag (any run, participant or not)
-    `SetPedDropsWeaponsWhenDead(false)` + `SetPedMoney(0)` once per entity handle (a local flag; a bag
-    that arrives before its ped is retried for 1.5 s). The host's `apply` still sets both too.
-22. **Stale run ends.** `client:runEnded` for a run other than the current one only drops its cached
-    participant list; the AI state of the current run is kept.
-
-### 13.20 Oversight (admin, disputes, anticheat, supervisor and admin oversight screens)
-
-Files: `modules/admin/server.lua`, `modules/disputes/server.lua`, `modules/anticheat/server.lua`,
-`web/src/supervisor/screens/{MissionList,LiveMissions,ReviewQueue}.tsx` (+ `.css`),
-`web/src/admin/screens/{Officers,Departments,Permissions,Audit}.tsx` (+ `.css`), `web/src/types/oversight.ts`,
-`web/src/mocks/oversight.mock.ts`, `locales/parts/oversight.json`, `tests/oversight_spec.lua`.
-Each Lua file's header comment documents its public API, net names and rules.
-
-#### Contract interpretations
-
-##### CP.Admin
-- **audit roles.** `cp_audit.role` is `ENUM('supervisor','admin','console')`. Any other role passed in (CP.Calls passes
-  `'officer'`, automatic entries may pass nil) is stored as `'console'`, which therefore means "console or automatic".
-  A numeric actor becomes the player's citizenid (`player:<src>` without a character); `0`/`'console'` → `console`.
-- **audit categories.** `'board'` is not in the enum: stored as `'audit'`, posted to the board webhook. Unknown
-  categories are stored as `'audit'`.
-- **audit outside a coroutine** (e.g. called from a non-yielding place) writes from a new thread and returns nil.
-- **Every audit posts its category webhook** (embed: action label, who, role, target, old → new, reason).
-- **Webhooks:** convar read at call time; only `https://` urls (others are off with one warning). Queue: one post
-  per url every 2.1 s, 429 `retry_after` honoured, 5xx/network errors retried up to 3 times, 100 jobs max
-  (oldest dropped). Embed title ≤ 256, description ≤ 3500, ≤ 20 fields (value ≤ 1000); empty fields dropped.
-- **Who audits what (no double entries):** CP.Payouts (setType/setMission), CP.Scoring.manualAward, CP.Challenge
-  (seasons, bounty), CP.Testing (test start/controls/results), CP.Missions' own `server:admin:reloadMissions`
-  audit themselves. CP.Admin audits: the `/CrimsonPoliceAdmin reload` path (`reloadMissions`), suspensions
-  (`suspend`/`unsuspend`, command and UI), `forceRecall`, `approveFlagged`, `voidFlagged`, `voidRun`.
-  CP.Disputes audits `disputeApproved`/`disputeRejected`; CP.AntiCheat audits `runFlagged` and `autoSuspend`.
-- **Console payout commands** pass `role = 'admin'` to `CP.Payouts.setType` (the console acts with admin
-  authority; CP.Payouts stores the audit role `console` for src 0 itself).
-- **Command citizenids** are resolved to the stored spelling (`cp_officers` has a case-insensitive collation),
-  else an online player with that exact or upper-case id; unknown → `err.unknown_officer`.
-- **Command replies:** console `print` (coloured), in game `CP.Tablet.notify`. The command is registered with
-  `restricted = false`; the ace is checked in code (`CP.Access.isAdmin`) so console and players both work.
-  `test` is in game only (`err.not_in_game`), refuses in-arena admins (`err.in_arena`); `[tier] [location]` may come
-  in any order (`random` or a location number within the mission's locations).
-- **Manual award range:** 1–10,000 points per award (typo guard; `final_points` is SMALLINT). Same as CP.Scoring.
-- **Approve** clears `flagged` (keeps `flag_reason`) and sets the breakdown's `$.flagged` to JSON null, then
-  `CP.Cash.release` (only when `cash_status = 'held'`), `CP.Scoring.onRowApproved`, `CP.Leaderboard.invalidate`.
-- **Void** sets `voided = 1` (`voidFlagged` only while the row is still flagged: an approval that landed during
-  its checks stands, `err.conflict`; a flagged row stays flagged: its cash stays held until CP.Cash forfeits it), then
-  `CP.Scoring.onRowVoided`, `CP.AntiCheat.onVoided(citizenid)` (mission rows only, never manual_award/goal),
-  invalidate. `voidRun` by run uuid voids every non-voided row of that run.
-- **Supervisor scope ("runs involving their department")** = any row of that run_uuid (or live participant) in
-  their department, checked with `CP.Permissions.can(src, action, { departments = list })`. The own-run rule is
-  checked separately with `CP.Permissions.canReviewRun` for every reviewer, admins included.
-- **Force recall** takes an optional reason (audited); allowed for runs involving their department (any
-  participant ever on the run), tests included; the recalled officer gets `admin.notice.force_recalled` through
-  `CP.Runs.removeParticipant(..., { notify = ... })`. Never on a run the caller is or was on (`err.recall_own_run`,
-  admins too; test runs excepted): recalling themselves or a partner would be a free reroll (no cooldown, pay tier
-  kept). A target who left while the permission check waited is refused (`err.not_participant`, no audit).
-- **Read permissions:** `getMissionList` / `sup:getLiveRuns` need `viewMissionList` (supervisors and admins);
-  `sup:getReviewQueue` needs `reviewFlagged` or `handleDisputes` (each list only when its switch is on); every
-  `admin:*` callback needs the admin-only `openAdmin` permission.
-- **Supervisor UI scope for admins:** an admin with an officer character sees their own department there; an
-  admin without one sees every department.
-
-##### CP.Disputes
-- One dispute per row **ever**: an open one → `err.dispute_open`, a decided one → `err.dispute_final` ("decision
-  final"). Kind priority when filing: voided > flagged > failed. Manual awards and goal rows are never disputable.
-  Only the officer's own rows (`CP.Access.getOfficer` must pass: on duty). 3 filings per minute per officer.
-- The window is measured from the row's `created_at` (`Config.Disputes.windowHours`, read at call time).
-- Answer: claim first (`status = 'open'` guard), then apply. A failing manual award re-opens the dispute.
-  Approving a flagged row goes through `CP.Admin.approveFlagged(src, rowId, reason, { skipPermission, noAudit })`
-  (the dispute permission was checked; one audit entry `disputeApproved`). Approving a voided row sets
-  `voided = 0, flagged = 0`, `CP.Scoring.onRowApproved`, `CP.Cash.release` when held/pending. Rejecting a voided
-  row forfeits held/pending cash (`CP.Cash.forfeit`); rejecting a flagged row keeps it flagged in the queue.
-- The supervisor endpoint refuses failed-run (admin) disputes; the admin endpoint answers any kind.
-- `admin:getDisputes` (listed in §8.3 without an owner) is registered here: `{ disputes = forAdmin(own citizenid) }`.
-- New disputes toast online supervisors of the run's departments (not participants) or online admins
-  (`admin.notice.new_dispute`) and post to the flags webhook. A flagged/voided-run dispute whose run every online
-  supervisor of those departments took part in, or with no supervisor of those departments online at all (none
-  may answer it; no other one online, on or off duty), toasts the online admins instead. `CP.Disputes.supervisorCanAnswer(runUuid)` (switch on and an online supervisor
-  of the run's departments who did not take part, on or off duty) is the view-time form of that rule.
-
-##### CP.AntiCheat
-- **checkEvent** (after CP.Runs' own checks): in-progress run, active participant, not in arena (`err.in_arena`,
-  never flagged, speed position dropped), 10 events/s per src, index = current objective. A later index flags the
-  run `unexpected_event` (the client can never legitimately be ahead of the server); an earlier or finished one is
-  dropped as lag (`err.stale_event`). Exact duplicates (same objective, same evidence apart from `coords`/`time`,
-  keys sorted) within 1 s are dropped (`err.duplicate_event`); blocks' `try`/`seq` counters keep retries distinct.
-- **Speed:** server-side ped coords at each accepted event; `distance / max(1 s, elapsed) > Config.AntiCheat.maxSpeed`
-  flags the **whole run** `speed` (the spec: "flags the run"). Pairs across a routing-bucket change are discarded
-  (bucket stored with the position, plus a 1 s sweep that drops positions of srcs in another bucket/arena).
-- **Flags:** the first reason stays on `run.flagged` / `p.flagged`; every distinct (reason, participant) is also
-  written to cp_audit (`runFlagged`, target = run id, old_value = citizenid for a personal flag, new_value =
-  reason, reason = detail) — that is where the Review Queue reads "who" (e.g. the outside killer) and extra reasons.
-  Test runs are never flagged. Only an officer's own conduct is a flag.
-- **Notes:** `CP.AntiCheat.note(run, src|nil, reason, detail)` writes the same cp_audit row with `runNoted` (its own
-  once-per-(reason, participant) list) and never touches `run.flagged` / `p.flagged`: nobody's points or items are
-  held. The Review run detail shows the notes of a held run as "Note: <line>"; the queue still lists only held rows.
-- **presenceOk** also records the failing participant's `presence` flag with its share as detail (once); CP.Runs'
-  own presence fallback then sees `p.flagged` already set.
-- **Presence sampling** every 5 s for in-progress runs with `#run.order >= 2`, only for the current active
-  objective, with a read-only ctx built like §7.1 (the engine's ctx is private). Fallback distance: location start;
-  fallback range: `Config.Blocks[block].presenceRange[3]`, then `Config.AntiCheat.presenceRadius`.
-- **Idle check** once per run at `startedAt + Config.AntiCheat.idleCheck`: active participants with `arrived ~= true`
-  are removed with `'idle'` (toast `admin.anticheat.idle_notice`).
-- **Voids → suspension:** counts voided mission rows created within `voidWindowDays`, but only those created after
-  the officer's last `autoSuspend` audit entry (so the same voids never suspend twice); no new suspension while one
-  is active. `CP.Access.suspend(citizenid, suspendDays, 0, 'auto')` + audit `autoSuspend` (role console).
-
-##### UI
-- Supervisor screens poll: Mission List 20 s (+ push `operation`), Live Missions 10 s, Review Queue 30 s.
-- Mission List "Launch" calls `server:sup:opLaunch { missionId }` (CP.Operations) and opens `sup_crossdept`.
-- Review Queue shows `flag.<reason>` labels, the recorded detail, other reasons, held points/cash; details dialog.
-- Officers: void from the history uses `server:admin:voidRun { rowId, reason }`; suspend/unsuspend require a
-  reason in the UI (the console command's reason is optional).
-- Departments: the theme preview is the department's `--cp-*` set (`themeVars`) on a mini tablet, read-only.
-- Audit dates are `YYYY-MM-DD` strings (server local days); the server also accepts unix seconds.
-
-##### Own runs, clipping and the other review rules
-- **Own run = also a live run.** A participant's row is written only when they leave, so a supervisor still ON a run
-  had no row yet and could approve/void a partner's flagged row (or answer the dispute about it). CP.Admin
-  (`ownRunCheck`, the flagged lists) and CP.Disputes (`handle`, the review lists, the new-dispute toasts) now also treat
-  "citizenid is a participant of `CP.Runs.get(runUuid)`" as their own run (`err.own_run`; hidden from their queue).
-- **UTF-8-safe clipping.** `CP.U.clip` cuts bytes; the cp_* columns are utf8mb4 and MariaDB strict mode refuses a cut
-  sequence (error 1366), so an accented 255-character reason made the audit/dispute insert fail. The three modules clip
-  by characters with a local `clip()` (invalid bytes dropped first); webhook texts too (Discord counts characters).
-- `/CrimsonPoliceAdmin test` goes through `CP.Testing.command` when present (it adds the testers who accepted this
-  admin's invitations and accepts tier `auto`); more than `[tier] [location]` is refused. Mission ids in `payout
-  mission` / `test` are matched case-insensitively.
-- `getMissionList.crossDeptEligible` uses `CP.Operations.eligible(def)` when present (the rule the launch applies).
-- A dispute approval of a flagged row calls `approveFlagged(..., { quiet = true })`: one toast for the officer.
-- New-dispute toasts respect `Config.Permissions.supervisor.handleDisputes` (off → admins are told instead).
-- Admin UI → Officers: a failed-run dispute is answered with Approve and give points / Dismiss; a flagged or voided-run
-  dispute (listed while `handleDisputes` is off, or while it is open and `supervisorCanAnswer` is false, i.e. the
-  admins are the ones told about it) with Approve / Reject, which calls `server:admin:handleDispute`
-  `{ disputeId, decision, reason }` without `awardPoints` (approve restores the run and releases held cash). Those
-  rows carry a "Flagged run" / "Voided run" badge and Approved / Rejected status labels.
-- `admin:getOfficer` adds `suspensions` (the last 10 `suspend` / `unsuspend` / `autoSuspend` audit entries) for the
-  spec's "suspensions"; the Officers screen shows them under Suspension (dates with the year).
-- UI: Review Queue tables use fixed column widths (a 64-character name pushed Approve/Void off the table); Live Missions
-  countdowns resync on every poll (a paused timer no longer runs ahead); the audit Copy button uses the selected
-  textarea + `execCommand('copy')` first (FiveM's CEF rejects `navigator.clipboard`) and only reports success when it
-  worked; a filter change goes back to page 1 without first fetching the old page; department cards/preview show the
-  initials when the logo is missing or fails; Mission List says "No missions are loaded" when the list is empty.
-- Mocks: every answer goes through `luaify()` (empty lists as `{}`, nil fields left out, like Lua sends them);
-  `?oversight=edge` (64-character names, 32-character callsigns, missing callsigns, long labels/reasons, huge numbers)
-  and `?oversight=empty` (every list empty) for screenshots.
-
-#### Response shapes (defined here; TS in `web/src/types/oversight.ts`)
-- `getMissionList` → `{ missions = { { id, label, type, typeLabel, source, builtin, version, difficulty, minOfficers,
-  maxOfficers, basePayout, payoutSource, cooldown, timeLimit, locations, enabled, isBoss, departments, runningNow =
-  { { runId, src, name, callsign, departmentShort, test } }, crossDeptEligible } }, canLaunch, crossDeptEnabled,
-  operation = nil | { id, missionId, missionLabel, status } }`
-- `sup:getLiveRuns` → `{ runs = { LiveRun + { missionId, acceptedAt, startedAt, isBoss, departments = { short } },
-  participants + { arrived, department } }, serverTime, canRecall }`
-- `sup:getReviewQueue` → `{ flagged = { FlaggedRow }, disputes = { DisputeView }, canReview, canHandle }`;
-  `admin:getFlagged` → `{ flagged }`; `admin:getDisputes` → `{ disputes }`
-- `FlaggedRow = { rowId, runUuid, citizenid, name, callsign, department, departmentShort, missionId, missionLabel,
-  missionType, missionTypeLabel, location, state, endReason, tier, participants, departments, points, cash (held
-  amount from the breakdown), cashStatus, flagReason, flagDetail, otherReasons, notes (the staff notes of this
-  officer or the case, `{ reason, detail, note = true }`), durationS, createdAt }`
-- `DisputeView` — see the header of modules/disputes/server.lua.
-- `admin:searchOfficers { query }` → `{ officers = { { citizenid, name, callsign, rank, department, departmentShort,
-  xp, suspendedUntil, online } }, query }` (25 max; empty query lists officers by name)
-- `admin:getOfficer { citizenid }` → `{ citizenid, name, callsign, rank, department, departmentShort, departmentLabel,
-  xp, level, streakDays, badges, cash = { total (incl. archive), week }, stats = { runs, completed, failed, abandoned,
-  flagged, voided }, suspension = { suspended, untilTs }, suspensions = { { id, action, actor, actorName, role, days,
-  reason, createdAt } } (10 newest), runs (25 newest), disputes (failed-run disputes; every kind with the switch off; plus open flagged/voided ones no
-  online supervisor can answer with it on),
-  online, own, known, maxAward }`
-- `admin:getDepartments` → `{ departments = { { key, label, short, jobs, supervisorGrade, societyAccount, theme,
-  logo|nil, members, suspended, onDuty, societyBalance|nil } }, cashSource, showSociety }`
-- `admin:getPermissions` → `{ supervisor = { { action, enabled } } (spec order), adminOnly = { ... }, always = { 'viewMissionList' }, teleport = { enabled, departments = { { key, label, short, supervisorGrade, grades = { { level, name } }, grant = { minGrade } | { grades } | nil } } } }` (Builder teleport card; it saves `Permissions.builderTeleport` through `server:admin:setSetting`)
-- `admin:getAudit { category, action, actor, from, to, page }` → `{ rows = { { id, actor, actorName, role, category,
-  action, target, oldValue, newValue, reason, createdAt } }, page, pages, total, pageSize = 50, actions }`
-- `admin:exportAudit { same filters }` → `{ csv, rows, truncated }` (5,000 rows max; formula-leading cells prefixed
-  with `'`; 1 export per 3 s)
-- Actions reply: forceRecall `{ runId, src }`; reviewFlagged `{ rowId }`; voidRun `{ voided, runUuid }`; awardPoints
-  `{ citizenid, points }`; suspend `{ citizenid, days, untilTs }`; dispute `{ disputeId, goesTo, kind }`;
-  handleDispute `{ disputeId, status, kind, points }`.
-
-### 13.21 Profile · pictures, bio, look, reports, commendations and moderation
-
-What `modules/profile/server.lua` adds; the API rows are in §5. English is the only language: a profile has no
-language (no column, pref or picker).
-
-#### CP.Profile (server)
-
-| Function | Meaning |
-|---|---|
-| `avatarOf(row, { own }) -> Avatar` | Pure: the picture from a cp_officers row (approved link or preset, else initials; frame = the level badge). A hidden name (hide_name) shows the callsign's initials and never the picture unless `own` |
-| `avatarFor(citizenid, viewerSrc|nil) -> Avatar` | The same, read from the database; `own` when the viewer is that officer |
-| `prefsFor(citizenid) -> Prefs` | appearance, accent, uiScale (clamped to Config.Profile.uiScale), callsMuted |
-| `commendations(citizenid, { staff, viewer }) -> Commendation[]` | Active ones newest first; `staff` adds revoked ones with issuedBy and revokeReason; `viewer` (a citizenid) adds `mine` (that viewer issued it). An issuer who hides their name is shown by callsign, without a rank, except to staff |
-| `newCommendations(citizenid) -> n` | Commendations of the last Config.Commendations.announceDays days (60 s cache) |
-| `report(src, citizenid, reason, note) -> ok, err` | Report profile (picture, bio, other; note ≤ Config.Profile.reports.reasonMax). Never your own; one per profile per reporter per day; Config.Profile.reports.perDay per reporter per day (counted from cp_profile_reports); audited (profileReport) |
-| `validateBio(text) -> text|nil|false, err` | ≤ bioMax characters and bioLines lines, CRLF → LF, control characters removed, trimmed, no word of Config.Profile.bannedWords or config/banned_words.txt (whole words or phrases, any case) |
-| `validateUrl(url) -> ok, err` | https, exact host from avatarUrls.hosts, ≤ 255 characters, path ending .png/.jpg/.jpeg/.webp (the query string is ignored), no spaces, quotes, backticks, backslashes or angle brackets |
-| `set(officer, payload)`, `editView(officer)`, `queue(dept|nil)`, `adminView(citizenid)` | The handlers below |
-
-#### Net
-
-| Name | Payload → reply | Rules |
-|---|---|---|
-| callback `getProfileEdit` | → ProfileEdit (+ bioPending) | own |
-| action `server:profile:set` | `{ bio?, avatar? = { kind, value }, appearance?, accent?, uiScale?, callsMuted? }` → `{ pending = { avatar, bio } }` | Picture and bio changes share Config.Profile.editCooldown (profile_updated_at); the look and the mute do not. A preset above the officer's level is refused; a link needs avatarUrls.enabled, counts toward avatarUrls.perDay (in memory, per day) and with requireApproval waits in avatar_pending while everyone keeps the old picture. With bioRequiresApproval a bio waits in bio_pending. accent: only the department's theme.personalAccents at or below the level (false clears). The mute saves cp_officers.calls_muted and clears CP.MissionCalls' mute cache |
-| action `server:profile:report` | `{ citizenid, reason, note? }` | any officer |
-| `server:sup:reviewAvatar` / `server:admin:reviewAvatar` | `{ citizenid, decision = 'approve'|'reject', reason, what? = 'avatar'|'bio' }` | reviewProfiles, the officer's department (admins any), never your own profile, reason required; a claim UPDATE on the pending value; audited reviewAvatar / reviewBio; the officer gets a toast |
-| `server:sup:clearProfile` / `server:admin:clearProfile` | `{ citizenid, what = 'bio'|'avatar', reason }` | same rules; audited clearBio / clearAvatar |
-| `server:sup:handleReport` / `server:admin:handleReport` | `{ id, decision = 'clear'|'dismiss', reason }` | same rules on the report's department; clear also clears the reported picture or bio; audited clearReport / dismissReport; final once handled |
-| `server:sup:commend` / `server:admin:commend` | `{ citizenid, kind, citation, runUuid? }` → `{ id }` | issueCommendation (sup) / openAdmin. Kind from Config.Commendations.kinds, citation length from `citation`, never yourself. Supervisors: own department unless crossDepartment, perSupervisorPerDay. Everyone: sameKindCooldownDays; a run must be the recipient's (CP.Permissions.tookPart) and never the issuer's. Zero points: nothing but cp_commendations and the audit row is written. Toast, Home news, optional board webhook (announce) |
-| `server:sup:revokeCommendation` / `server:admin:revokeCommendation` | `{ id, reason }` | the issuer (sup) or any admin; audited |
-| callback `sup:getProfileQueue` | `{ department? }` → ProfileQueueItem[] (+ note, current) | reviewProfiles; supervisors get their department, admins every department (or the one they pass). Reports show the live picture and bio, never the reporter |
-| callback `admin:getOfficerProfile` | `{ citizenid }` → the staff profile: LB.profile with `{ staff = true }` plus realName, bioPending, pendingAvatar, avatarStatus, every commendation, open reports | openAdmin |
-
-Push `profile` (`{ citizenid }`) goes to the officer after every change to their profile.
-
-#### Hooks
-
-- `home:extras`: `extras.commendations` (count) and `extras.news` (`{ kind = 'commendation', text, at }`), read from the
-  cache only; a missing or stale entry is loaded in a thread for the next Home refresh.
-- `officer:loaded`: warms the commendation cache.
-
-#### Web
-
-`shared/components/Avatar.tsx` (presets from `web/src/assets/avatars/*.svg`, links fall back to the initials on an error),
-`officer/components/ProfileEditDialog.tsx`, `CommendationsCard.tsx`, `ServiceRecordCard.tsx`, `LookCard.tsx` (the own
-profile's Look card, read through getProfileEdit) (+ `ProfileCards.css`),
-`supervisor/components/CommendDialog.tsx`, `ProfilesReview.tsx`. The Edit profile dialog has no language picker (English
-only). Browser mocks: `mocks/profile.mock.ts` (it also adds the profile values of getSession to the mock session).
-
-### 13.22 Item rewards (modules/rewards)
-
-Optional ox_inventory item rewards (SPEC "Item rewards (optional)"). Off by default: `Config.Rewards.enabled = false`
-ships, and while it is off no listener writes a row and nothing calls ox_inventory. Only admins set rewards, in
-config; mission files and the Mission Builder never carry a reward field (CP.Missions refuses reward-like keys).
-The API rows are in §5.33.
-
-#### Data (cp_item_rewards, 006_item_rewards.sql, both storage modes)
-
-One row per officer, source, source key and item (`uq_reward`). `row_id` is the cp_mission_runs row for run, medal
-and boss rewards (so they are held and forfeited with it), NULL for goal, level and season rewards.
-
-| source | source_key | when |
-|---|---|---|
-| run | run_uuid | row:settled: the run entry's rolls (one row per item, counts added) |
-| medal | run_uuid | row:settled: Config.Rewards.medals[gold/silver/bronze] from row.medal |
-| boss | `week:<CP.Schedule.weekKey()>` | row:settled of a Weekly Boss run (run.isBoss): weeklyBoss, once per week |
-| goal | `<goalId>@<period>` | goal:completed: goals[goalId], else goals.daily / goals.weekly by the period prefix |
-| level | the level number | xp:levelUp: levels[n] for every level passed, once per level |
-| season | `champion:<id>` / `top10:<id>` | season:ended: season.champion for every officer of the champion department with a completed, unflagged, unvoided run row (not a manual award or goal row) in the season; season.top10 for the top 10 |
-
-Status: `held` (flagged run, or a voided row's reward not given yet) → `pending` (waiting to be given: the Rewards
-locker) → `giving` (claimed, AddItem running) → `given`; `forfeited` when the voided row's dispute window closes.
-given and forfeited are final. A row left in `giving` (AddItem raised) is never retried automatically; it is listed
-in Admin UI → Leaderboards → Item rewards → Stuck.
-
-Every statement is inside the saves folder engine's constructs (INSERT IGNORE, COALESCE(SUM), GROUP BY,
-SELECT DISTINCT, LIMIT ? OFFSET ?, FROM_UNIXTIME / UNIX_TIMESTAMP); times are written from os.time(), never NOW().
-
-#### Rules
-
-- Who: each participant of a Completed, non-test run who met the presence share (p.flagged.reason 'presence', or
-  CP.AntiCheat.presenceShare below Config.AntiCheat.presenceShare in a run of 2+). Flagged (participant or run):
-  every reward of the row is `held`.
-- Rolls: `U.rng(hash('<run id>:<citizenid>:item-rewards'))`, so a reconnect or a second settle rolls the same, and the
-  unique key stores nothing twice. Each roll draws three numbers (hit, pick, count) whatever the outcome.
-  Chance = entry.chance + tierChance[pay tier] + min(findBonus × the run's finds, findBonusMax), clamped to [0, 1].
-  The run's finds are the `evidence` stats of every participant together (the bonus is the run's, so an officer
-  who found nothing still gets it); at least row.evidence.
-  The entry: byMission[mission id], else byType[type], else examplePools[type] when useExamplePools = true.
-- Caps: per officer per reset day (CP.Schedule.dayStart), every source together, forfeited rows not counted:
-  dailyItemCap items and dailyValueCap value (count × the item's configured value). A reward past a cap gives
-  nothing (0 = no cap).
-- Validation (3 s after start, on first use, and again once ox_inventory is up if it was not): a forbidden name (the loader's Crimson-Arena rules armour,
-  bandage, ammo-\*, weapon_\*, plus money, black_money, cash, plus Config.Rewards.forbidden with `*` wildcards; all
-  case-insensitive, anchored) or an item ox_inventory's Items() does not know is turned off, with a console warning
-  (only when enabled, and for example pools only with useExamplePools) and a Config health line.
-- Delivery (claim before give): `UPDATE ... SET status = 'giving' WHERE id = ? AND status = 'pending'`, then
-  CanCarryItem, then `AddItem(src, item, count, { cpReward = <row id> })` (never cpItem, so the mission-item sweep
-  leaves rewards alone). No room or a refused AddItem: back to pending (the locker) and one "no room" toast. In
-  Crimson-Arena (CP.Alerts.inArena) or offline: no inventory call, the reward waits. Retried on officer:loaded and
-  10 s after arena:exited. Never dropped in the world.
-- row:approved: held → pending, then given. row:voided: pending → held. row:forfeited: held/pending → forfeited.
-  CP.Cash fires row:forfeited only for a voided row whose cash was still held or pending, so the module runs its
-  own job every 10 minutes (the cash job's rule): the held rewards of a voided row whose dispute window
-  (Config.Disputes.windowHours from the row's created_at) closed with no open dispute are forfeited. This covers a
-  row voided after its cash was paid, or one that carried no cash.
-- History: every status change writes the row's rewards into the run's breakdown,
-  `JSON_SET(breakdown, '$.items', ...)` on that path only: `breakdown.items` = `{ name, label, count, status }` with
-  status given, pending, held or forfeited (giving shows as pending). The result screen's `result.items` leaves
-  forfeited out. `RunItem.status` in web/src/types/run_ui.ts lacks 'forfeited'; the text
-  `result.item_status.forfeited` is in locales/parts/rewards.json for the screen that renders the history items.
-
-#### API (server)
-
-| Function | Meaning |
-|---|---|
-| `CP.Rewards.lockerCount(citizenid) -> n` | pending rows (30 s cache; home:extras reads the cache only: `extras.rewardsWaiting`) |
-| `CP.Rewards.forRow(rowId) -> RewardRow[]` | the rewards of a cp_mission_runs row (history breakdown) |
-| `CP.Rewards.deliver(citizenid) -> n` | give every pending row of an online officer (under the officer's lock) |
-| `CP.Rewards.locker(src) -> RewardsLocker` | the Home locker: pending, held and giving rows; canClaim false with a reason key (rewards.reason.off, .arena, .inventory) |
-| `CP.Rewards.claim(src, id) -> ok, data|errKey` | own row, pending, enabled, not in the arena, ox_inventory started, room |
-| `CP.Rewards.adminView(page) -> AdminRewardsView` | pools with ok per item, this week's given/held/forfeited item counts, stuck rows, 25 rows per page, health |
-| `CP.Rewards.validate()`, `forbidden(name)`, `health() -> { { level, text } }` | the item check and the Config health lines; registered with CP.ConfigHealth (`register('rewards', health)`) when that module exists |
-| `CP.Rewards.entryFor(missionId, type)`, `chanceFor(entry, tier, evidence)`, `roll(runId, citizenid, entry, chance)` | pure roll helpers |
-
-Listens to (CP.Hooks): row:settled (fills `result.items` with `{ name, label, count, status = given|pending|held }`),
-row:approved, row:voided, row:forfeited, goal:completed, xp:levelUp (work in a thread: the hook may not yield),
-season:ended, officer:loaded, arena:exited (SetTimeout 10 s), home:extras.
-
-Net: callback `getRewardsLocker` → RewardsLocker; action `server:rewards:claim` `{ id }` (rate 2/s); callback
-`admin:getRewards` `{ page }` → AdminRewardsView (openAdmin). Push topic `rewards` to the officer whenever their
-locker changes.
-
-#### Web
-
-- `web/src/types/rewards.ts`: RewardRow (citizenid and name on admin rows), RewardsLocker, RewardsHealthLine,
-  AdminRewardsView (plus enabled, page, pageSize, health).
-- `officer/components/RewardsLocker.tsx` (mounted on Home): hidden while empty; Claim per pending row, held rows show
-  "Waiting for review"; refetches on the `rewards` push.
-- `admin/components/ItemRewardsPanel.tsx`, shown by the Boards / Item rewards switch on Admin UI → Leaderboards.
-- `mocks/rewards.mock.ts`: `?rewards=off` (the shipped default) and `?rewards=arena`.
-- Texts: locales/parts/rewards.json (rewards.*, admin.rewards.*, err.reward_*).
-
-### 13.23 Officer UI: Mission Board and Active Mission
-
-UI-only slice (no Lua, no SQL). Files:
-`Crimson-Police/web/src/officer/screens/MissionBoard.tsx` (+ `MissionBoard.css`),
-`Crimson-Police/web/src/officer/screens/ActiveMission.tsx` (+ `ActiveMission.css`),
-`Crimson-Police/web/src/types/run_ui.ts`, `Crimson-Police/web/src/mocks/run_ui.mock.ts`,
-`Crimson-Police/locales/parts/run_ui.json`, `tests/run_ui_spec.lua`.
-
-#### Contract used (exact names)
+### 12.8 Officer screens: Mission Board, Active Mission and the shell
+Files: `officer/screens/MissionBoard.tsx`, `ActiveMission.tsx`, `types/run_ui.ts`, `mocks/run_ui.mock.ts`,
+`locales/parts/run_ui.json`; tests `tests/run_ui_spec.lua` (the screens use exactly these names and shapes).
 
 | Kind | Name | Payload / shape | Screen |
 |---|---|---|---|
 | request | `getMissionTypes` | `{}` → BoardData (§9.4) | Mission Board |
-| push topics | `board`, `operation`, `run` | one coalesced refetch of the board (`run` only when the active run starts or ends) | Mission Board |
-| action | `server:acceptType` | the type key, or `'weekly_boss'` for the boss card → `{ runId }`; on ok `navigate('active')` | Mission Board |
+| push topics | `board`, `operation`, `run` | one coalesced refetch (`run` only when the active run starts or ends) | Mission Board |
+| action | `server:acceptType` | the type key or `'weekly_boss'` → `{ runId }`; then `navigate('active')` | Mission Board |
 | action | `server:joinOperation` | `operation.id` → `{ id, joined, max }` | Mission Board |
 | request | `getRun` | `{}` → ActiveMissionView \| null (§9.4) | Active Mission |
-| push topic | `run` | the view (applied as it is, no extra getRun) or nil (arrives as a missing field → getRun) | Active Mission |
+| push topic | `run` | the view (applied as is) or nil (→ getRun) | Active Mission |
 | action | `server:abandon` | `runId` → `{ runId }` | Active Mission |
-| client action | `setGps` | `{ runId }` (payload ignored by modules/route) → `{ runId }` | Active Mission |
-| client action | `recalcRoute` | `{ runId }` (ignored) → `{ recalcsLeft }` | Active Mission |
-| client action | `setObjectiveGps` | `{ runId }` (payload ignored by modules/markers) → `{ label }` (shown while In progress, without the route card, `view.objectiveGps` on and no Radio Silence 'area'/'none') | Active Mission |
+| client action | `setGps` / `recalcRoute` | `{ runId }` → `{ runId }` / `{ recalcsLeft }` | Active Mission |
+| client action | `setObjectiveGps` | `{ runId }` → `{ label }` (In progress, no route card, `view.objectiveGps` on, no Radio Silence 'area'/'none') | Active Mission |
 | client action | `logResult` | `{ point, choice }` → `true` | Active Mission (Business Check log) |
 
-No Lua API, no events, no callbacks are registered by this slice.
+Mission Board:
+- Only types are picked: one card per `BoardData.cards` entry (label, points, cash per officer as a range, pool
+  count, Solo / Unit · N, Type of the Day tag with its multiplier, `todMultiplier` else 2); never individual missions,
+  except the Weekly Boss card and the Cross-Department card. While `operation` is set only its card shows.
+- `locked.reason` arrives translated; `locked.until` is an `os.time()` stamp converted with a server-clock offset
+  (`serverTime`, else the offset from the last `open`/`session` message); at 0 the board refetches.
+- Card status priority: locked → on a call → server busy → a board-wide blocker (on a mission, not the leader) →
+  ready; Accept is disabled for any of these and for an empty pool (the server re-checks). The accept confirm says
+  the mission is drawn at random with no reroll and that abandoning, leaving the route or missing the start timeout
+  puts the type on cooldown (the boss: uses the week's attempt).
+- No success toast for accept (the engine sends `run.accepted`); join shows `board.op.joined_toast`.
+- Operation card: status, joined / max with min, the join countdown, Join, "Open Active Mission" once on its run; a
+  `joining` operation without `joinEndsIn` shows "Starting".
+- Refetch: pushes schedule one refetch 150 ms later; one refused with `err.rate_limited` is retried after 1.2 s; plus
+  every 30 s.
 
-#### Contract interpretations
+Active Mission:
+- Abandon (danger confirm) → `server:abandon`; on ok the empty state shows at once (a getRun in flight cannot bring
+  the old view back). The text names the cooldown, the boss attempt or the test run, and that partners go on.
+- Hero: mission, state badge, `TierBadge` (expected until In progress), "Pay: <tier>" only when lower, modifier and
+  boss/operation chips; the timer counts `remaining` locally (restarted from every view; before In progress the
+  start timeout from `startIn`, else "–:––").
+- Route card while Accepted or the route is on/off (and on a test run with the route off until arrival): status,
+  distance, the off-route countdown, Set GPS, Recalculate (confirmed; disabled at 0; shows what is left). Route
+  toasts come from modules/route.
+- Objectives with number, Current tag, `value/max` bar and `detail`; muted while Accepted
+  (`run.objectives.pending`). Partners with status (Left / At the start / En route); the viewer is `view.me`.
+- Radio Silence: a note; the screen never shows coordinates or distances to NPCs, only `area` when sent.
+- Business Check log: one button per choice → `logResult`; "Logged" until the log point changes, the buttons come
+  back if the same point is still asked 6 s later.
+- A TEST RUN banner for test runs. A pushed view is applied as is (no getRun per push; getRun allows 6/s); nil
+  triggers a getRun; a 15 s safety poll.
+- Live cases show their case card; the Contact panel (§5.30) replaces the log when `view.contact` has entries;
+  `view.intel` and the mission-call line show when sent.
 
-##### Mission Board
-- **Only types are picked.** The board shows one card per `BoardData.cards` entry (label, points, cash per
-  officer as `MoneyRange` → "$1,040–$1,300", pool count, Solo / Unit · N, Type of the Day tag). It never lists
-  or previews individual missions; the Weekly Boss card (its mission label) and the Cross-Department card are
-  the spec's exceptions. While `BoardData.operation` is set only the operation card is shown (no type cards,
-  no boss, no unit line).
-- **`locked.reason` is already translated** by the server (`CP.Draw.boardCards` uses `CP.L`), so it is shown
-  as-is. **`locked.until` is an `os.time()` stamp.** The countdown converts it with a server-clock offset:
-  `BoardData.serverTime` when present (requested below), else the offset measured from the last `open` /
-  `session` NUI message (a module-level listener records `session.serverTime − Date.now()` on arrival), else
-  `session.serverTime` the first time the board saw that session. A value below 1e9 is taken as "seconds
-  left" already (defensive). When the countdown reaches 0 the board refetches.
-- **Card status priority**: locked (reason + countdown) → on a call → server busy → a board-wide blocker
-  (already on a mission / not the unit leader) → ready. Accept is disabled for any of these, and also for a
-  pool of 0; the server re-checks everything anyway. Busy and on-call cards also carry a tag; when every card
-  is busy / on call a notice explains it once at the top.
-- **Points**: `card.points` as sent (the best P in the pool). Type of the Day adds a "{multiplier}× today" hint
-  (points are multiplied after the cap; cash is not); the multiplier is the optional `BoardData.todMultiplier`
-  (requested from draw), else 2 (the config default).
-- **Accept confirm** (every card): the mission is drawn at random and revealed after the accept, no reroll;
-  abandoning, leaving the start route or missing the start timeout puts the whole type on cooldown; in a unit
-  every member gets the same mission and invites close. The boss confirm says the attempt of the week is used
-  instead (no type cooldown for the boss, ARCHITECTURE §4.3).
-- **Toasts**: no success toast for `server:acceptType` (the engine notifies `run.accepted`). `server:joinOperation`
-  shows `board.op.joined_toast` (modules/operations sends none). Errors are toasted by `useAction` with `t(err)`.
-- **Operation card**: missionLabel, missionTypeLabel, description, launcher, status (joining / running with
-  runState / waiting), joined / max with `min`, the join countdown (`joinEndsIn`, refetch at 0), Join
-  (`canJoin`), a joined state, and "Open Active Mission" once the joiner is on the operation's run. `boardCard`
-  gives no reason when `canJoin` is false, so the hint is derived (closed, full, already on a mission, else a
-  generic "can't join right now"). `joinEndsIn` is only sent while the window is open, so a `joining`
-  operation without it (Start now just closed the window) shows "Starting" and "Joining is closed".
-- **Unit line**: `BoardData.unit` → "Solo" (build a unit), "Unit of N · you lead", or "Unit of N · only your
-  unit leader picks the type"; the button opens the Unit screen.
-- Refetch: push `board` and `operation` (modules/operations sends both at once, modules/units sends `unit` +
-  `board`), and `run` only when the pushed runId differs from `activeRunId` (a run started or ended: active
-  run and cooldowns change; the view pushed every few seconds during a run changes nothing on the board).
-  Pushes schedule **one** coalesced refetch 150 ms later, and a refetch refused with `err.rate_limited`
-  (getMissionTypes allows 4 calls per second) is retried once after 1.2 s, so a burst never leaves a stale
-  board up until the next poll. Plus every 30 s (busy and on-call states have no push). In a unit the on-call
-  texts say "you or a member of your unit" (BoardCard.onCall is set when any member is on a call).
-- A wide cash range (admin payouts go up to $25,000) wraps after its en dash instead of being cut off; a long
-  type label is ellipsised with the full label as a tooltip.
-
-##### Active Mission
-- **Header**: Abandon (danger) opens a danger ConfirmDialog → `server:abandon(runId)`; on ok the screen shows the
-  empty state at once and refetches, so a getRun still in flight from before the abandon can never bring the
-  old view back (the result card and the `run.ended_quit` toast come from Lua). Message: no points/cash;
-  the whole type goes on cooldown, or "uses up your Weekly Boss attempt" (`isBoss`), or "test run: nothing is
-  saved and no cooldown starts"; plus "the run continues for your partners" when others are active.
-- **Hero**: type eyebrow, mission label and description, state badge (Accepted · heading to the start / In
-  progress), `TierBadge` marked expected until In progress (`tierExpected || state === 'accepted'`), a
-  "Pay: <tier>" chip only when the pay tier is **lower** than the tier (as specified), the modifier chip, Weekly
-  Boss / Cross-Department chips, and, once In progress, "At the start" or "Start route off" instead of the route
-  card. Right column: the timer (`Countdown` of `remaining`, local, paused state, restarted from every fresh
-  view), expected cash and points. Before In progress `remaining` is null: the timer shows "–:––", or the start
-  timeout countdown when the optional `startIn` is sent.
-- **Route card** (shown while Accepted, while this participant's route is `on`/`off`, and — test run with the
-  start route off — while this participant has not arrived yet, so Set GPS stays reachable): on route (+ distance
-  to go), off route with the local countdown of `secondsLeft` (or the no-limit text), arrived, disabled (test run
-  without the route). Set GPS is available until arrival (also for a test run without the route: modules/route
-  still sets the waypoint). Recalculate route asks for confirmation (a limited resource), is disabled at
-  `recalcsLeft == 0`, shows "Recalculations left: N" and keeps the reply's `recalcsLeft` until the next view
-  arrives. The success toasts of both client actions come from modules/route (`route.gps_set`,
-  `route.recalculated`); the screen toasts only errors.
-- **Objectives**: every entry with its number/check mark, "Current" tag, `value/max` bar and `detail`. While
-  Accepted the list is shown muted with `run.objectives.pending` ("The objectives start when the first
-  participant reaches the start"; the view lists them before the start, so ui.json's "Objectives appear when
-  you reach the start" would contradict the list).
-- **Partners**: initials, name (+ "You"), callsign (or "No callsign"), department tag, status (Left / At the
-  start / En route); the viewer is `view.me` when sent, else matched by name + callsign with
-  `session.officer`. A cross-department note appears with 2+ active departments (an empty department tag is
-  not counted). Long names and callsigns are ellipsised.
-- **Radio Silence**: a note panel; the screen never shows coordinates or distances to NPCs/objectives, and shows
-  `area` (street · zone) when the server sends it. The start route status still shows.
-- **Business Check log** (`view.log` while In progress): one button per `log.choices` entry (server-translated
-  labels) → client action `logResult { point, choice }`. After an ok the panel shows "Logged" until the view's
-  log point changes (the server moved on); if the same point is still asked 6 s later (the server refused the
-  log) the buttons come back.
-- **TEST RUN** banner (`hud.test_run` + note) for test runs; expected cash says "Test run: not paid".
-- Empty state "No active mission" with "Open the Mission Board"; loading only on the first fetch; error state
-  with retry. Push `run`: a pushed view is applied as it is (no extra getRun per push: the RunBar applies the
-  same push, and getRun allows 6 calls per second); nil (`CP.Tablet.push(src, 'run', nil)`, which
-  reaches the NUI with no `data` field, i.e. undefined) triggers a getRun, which shows the empty state. Every
-  15 s as a safety net. In progress without a timer (never sent today) the timer says "No run timer".
-
-#### Response shapes defined here (src/types/run_ui.ts, all extras optional)
-- `MissionBoardData` = BoardData with `operation: BoardOperation | null` and `serverTime?: number`.
-- `BoardOperation` = §9.4 operation + `missionType?`, `missionTypeLabel?`, `description?`, `min?`, `runState?`
-  (what `CP.Operations.boardCard` already sends, §13.25).
-- `ActiveMissionData` = ActiveMissionView + `me?: number`, `isBoss?: boolean`, `operationId?: number | null`,
-  `startIn?: number | null` (seconds left to reach the start), `area?: string | null` (street · zone),
-  `objectiveGps?: boolean` (the Objective GPS button: `Config.Markers.objectiveGps` and `enabled`).
-- Replies: `AcceptTypeResult { runId }`, `JoinOperationResult { id, joined, max }`, `AbandonResult { runId }`,
-  `RecalcRouteResult { recalcsLeft }`, `SetGpsResult { runId }`, `ObjectiveGpsResult { label }`, payload
-  `LogResultPayload { point, choice }`.
-
-#### Browser mocks (src/mocks/run_ui.mock.ts)
-- `?board=normal | unit | member | locked | busy | oncall | boss | bossused | operation | opjoined | oprunning |
-  opwaiting | opclosed | empty | error | edge` (`&oncall=1` combines "on a call" with any variant) and
-  `?runv=none | accepted | offroute | progress | test | log | silence | boss | untracked | edge | live`. `edge` answers
-  the way Lua's JSON encoding arrives (empty lists as `{}`, nil fields missing, no optional extras, very long
-  labels/names, missing callsigns, a 3-choice log); `empty` sends `cards: {}`.
-- `live`: a live case In progress with its case card (`SAMPLE_LIVE_CASES[1]`, the Secure step). The three
-  case cards also show in the Gallery, and `?result=live` / `?result=live_open` (DevPanel → Result → Live case, Live
-  (left)) show the result card's suspect outcomes, every one of them, or the "left while it ran" note.
-  (default none, or progress while the dev panel's run toggle / `?run=1` is on). The `getRun` mock is a normal
-  registration, so it overrides core.mock.ts's fallback; it follows `devState.runActive`.
-- Accepting a type starts a simulated run (random mission of that type, 25% modifier, route distance shrinking,
-  In progress after ~10 s, objectives advancing, completed result card); Abandon ends it with the result card and
-  puts the type on a 5-minute cooldown on the board; the Business Check log moves to the next door after a
-  pick; Set GPS / Recalculate route fake the modules/route toasts; Join increments the operation.
-- Error answers use the owners' keys: `err.invalid_type`, `err.already_on_run`, `err.not_leader`,
-  `err.operation_locked`, `err.on_call`, `err.boss_unavailable`, `err.boss_used`, `err.type_cooldown`,
-  `err.member_type_cooldown`, `err.pool_empty`, `err.server_busy`, `err.op_*`, `err.invalid_payload`,
-  `err.invalid_run`, `err.not_on_run`, `err.route_*`, `err.internal`.
-
-### 13.24 Safety (route, calls, alerts, downed: Hard rules 15–18)
-
-Files: `Crimson-Police/modules/route/{server,client}.lua`, `modules/calls/server.lua`,
-`modules/alerts/server.lua`, `modules/downed/{server,client}.lua`, `locales/parts/safety.json`,
-`tests/safety_spec.lua`. Each file's header comment lists what it owns and its public API.
-None of the rules has a config switch; only the numbers come from `Config.Route` / `Calls` / `Alerts` /
-`Downed`, read at call time.
-
-#### Events
-
-| Event | Direction | Args | Notes |
-|---|---|---|---|
-| `server:routeStatus` | C → S | runId, metres, coords | plain `RegisterNetEvent`; ≥ 0.9 s apart per player (and CP.Net.rateOk 3/s) |
-| `server:recalcRoute` | C → S | runId | plain; 1 per 2 s; always answered with `client:routeRecalc` |
-| `server:pickupDone` | C → S | runId, ok (boolean, optional) | plain; **new** (owned by downed); 2 per 5 s |
-| `client:routeWarning` | S → C | runId, secondsLeft \| nil | every second while the warning is shown; nil = warning withdrawn |
-| `client:routeRecalc` | S → C | runId, ok, recalcsLeft | the third argument is an addition (the Active Mission screen shows it) |
-| `client:routeStatus` | S → C | runId, RouteStatus | **new**: sent when the server marks the arrival (`status = 'arrived'`) — the "routeStatus reply" |
-| `client:pickup` | S → C | runId, dropOff (vector3) | |
-| `client:pickupCancel` | S → C | runId | **new**: the server cancelled a pick-up it had already sent (in the arena, recovered, unload); the client fades back in and never teleports. Not sent when the client itself gave up |
-| `client:requestEMS` | S → C | runId | |
-
-Client actions (`CP.Tablet.registerClientAction`): `setGps` (payload ignored; re-sets the waypoint to the
-start, the sampled line is unchanged) → `{ runId }`; `recalcRoute` (payload ignored) → `{ recalcsLeft }` or
-`err.route_inactive | err.route_arrived | err.route_disabled | err.route_no_recalcs | err.busy | err.timeout`.
-
-#### Contract interpretations
-
-##### CP.Route
-- **Distances are 2D** (arrival radius, drift, straight-line `distance`): starts and search circles are map
-  circles. `status().distance` is the straight line to the start; the client HUD `route.distance` is the
-  distance still to drive along the fixed polyline.
-- **Off-route timing.** Off route starts at the first report above `maxDeviation`, or `reportTimeout` s after
-  the last accepted report (so silence warns 20 s and abandons 40 s after the last report with the default
-  numbers). The warning is sent after `warnAfter` s off and then every second with the seconds left; the
-  abandon comes after `abandonAfter` s off in one stretch. A report within `maxDeviation` ends the stretch
-  and withdraws a shown warning (`client:routeWarning(runId, nil)`). The route status (server `status()` and
-  the client HUD) is `'off'` only while that warning is shown: before `warnAfter` s nothing warns (SPEC; the
-  Active Mission screen shows "on route, or the off-route countdown").
-- **A report counts only** when the runId is the sender's active run with a route state, metres is a finite
-  number ≥ 0 and the reported coords are within `maxDeviation` (2D, but never less than 150 m, so a small
-  configured `maxDeviation` cannot reject honest reports sent at speed while the server position lags) of the
-  server-side ped position. Anything else is ignored, i.e. it counts as a missing report.
-- **Tablet**: SPEC says the warning shows "on the HUD and the tablet". The HUD gets `client:routeWarning`; the
-  tablet (run bar / Active Mission) reads `CP.Runs.view` and only refreshes on push topic `'run'`, so the view
-  is pushed (`CP.Tablet.push(src, 'run', CP.Runs.view(run, src))`) when the warning appears, when it goes and
-  after a granted recalculation (the NUI counts `secondsLeft` down itself).
-- **The first report** has `reportTimeout` s from `begin` (the client needs up to ~5 s to find the GPS route).
-- **Recalculate** (≤ `maxRecalcs`) ends the current off stretch and gives a fresh `reportTimeout` (the client
-  resamples from where the player is). The drift reference (closest distance) is not reset.
-- **Manhunt**: the missions give `start = { coords = centre, radius = 600 }`; additionally, when objective 1
-  is a `search_area`, the larger of `location.start` and its starting circle (`location[obj.center]`,
-  `obj.startRadius`) is used.
-- **Safety net**: the 1 s tick also begins the route for any active, not yet arrived participant of an
-  accepted / in-progress run that has no route state (unless `stop` was called for them), so Hard rule 17
-  cannot be skipped by a missed `begin`. `CP.Runs` calls `begin` itself at create (it does).
-- **Arrival** calls `CP.Runs.markArrived` in its own thread and then makes sure the flag is on
-  (`CP.Alerts.set`, idempotent — the engine sets it in markArrived). The arrived state is kept (with its
-  recalc count) so `status()` keeps answering `arrived`.
-- **Client**: the route is read from a temporary route blip (`SetBlipRoute`, `GetGpsBlipRouteFound`,
-  `GetGpsBlipRouteLength`, `GetPosAlongGpsTypeRoute` slot 1, then slot 0), which is removed after sampling;
-  the player follows the waypoint (`SetNewWaypoint`). If no route appears within 5 s the straight line is
-  used, logged, and the player gets `route.no_gps`. `CP.Route.stop()` never touches the HUD and removes the
-  waypoint only while it still points at our start; a stopped run is never begun again on that client.
-  The client also reacts to `client:start` (1 s later, only for the latest start and never for a run that
-  already ended or stopped) as a fallback for a missed `CP.Route.begin`.
-
-##### CP.Calls
-- Order: NPC prefix on the normalised id (no lookup at all) → `CP.Dispatch.lookupActiveCall` (only a hit
-  counts) → NPC prefix again on the canonical id → own-run prefixes → real call.
-- **Own-run ids** match any participant of the sender's run, **including partners who already left** (a
-  downed partner's `playerdown_<src>_…` must not end the others' runs) and the sender themself. A sender who
-  is not on a run gets a real call for the same id.
-- The responding map is keyed by the canonical id the lookup returns; the raw id form is kept as an alias,
-  so `callCleared` and un-marks in either form find the entry.
-- **Dodge rule**: an un-mark within `dodgeWindow` s of the free abandon reclassifies when it is the same
-  call, or an id the sender never marked (a form we could not match must not let a dodge through). An
-  un-mark of a different call they had marked does not.
-- **Quick on/off toggles**: listeners run in their own threads and a mark yields twice (the mdt_dispatch
-  lookup, then the row write inside `removeParticipant`). An un-mark that arrives during the lookup is kept on
-  the pending mark (no responding entry is recorded; the run still ends as `real_call` and is reclassified at
-  once); one that arrives while the row is written is applied right after `removeParticipant` returns
-  (`CP.Runs.reclassify` needs the row). Either way the toggle ends as `real_call_cancelled`.
-- A dispatcher detach also arrives as `ToggleResponding(false)` from the officer's own client and cannot be
-  told apart, so a detach within `dodgeWindow` s counts as an un-mark too.
-- `isOnCall` re-checks each live entry in mdt_dispatch at most every 10 s (it may yield).
-- Every free abandon is audited: `CP.Admin.audit(citizenid, 'officer', 'flags', 'free_abandon', runId, nil,
-  callId, '<text with the count in the last 24 h>')`; a reclassification as `'real_call_cancelled'`.
-
-##### CP.Alerts
-- **Choice for in-arena participants**: this module removes them itself — `CP.Runs.removeParticipant(run,
-  src, 'quit', { notify = 'run.left_for_arena' })` (from the change handler's queued work and the 1 s
-  reconcile), after dropping the intent without touching the bag, `CP.Route.stop` and `CP.Downed.cancel` —
-  and also exposes `CP.Alerts.onInArena(fn(src, run))` listeners (called afterwards). The engine's own 1 s
-  re-check does the same; whichever runs first removes, the other finds the participant already left, and
-  the toast is only sent by the engine when it really removes.
-- `foreignClearedAt` is a **table** (`CP.Alerts.foreignClearedAt[src] = os.time()`), as §5.14 and the
-  engine's item sweeps use it.
-- `set` also refuses in a routing bucket ≠ 0 and over any non-nil value that is not ours (not only a
-  foreign one); `clear` of a downed participant's flag is ignored while `CP.Downed` holds it
-  (`CP.Alerts.hold`), unless `{ force = true }`.
-- Orphans: an intent whose run no longer lists the player as active (and no pending downed follow-up) is
-  removed after 3 s (leak guard).
-- Left in another bucket: when an intent is dropped while the live value is ours (a participant who left
-  because only the routing bucket moved, e.g. a qbx_core property), the bag stays as rule 1 says, and the 1 s
-  reconcile removes our value once they are back in bucket 0 with no new intent, hold or pending downed
-  follow-up. Otherwise sc-ambulance and sc-dispatch would stay muted for them after the run.
-- Backstop eligibility for shots: our intent is on, or an arrived active participant of an In-progress run;
-  the radius is 3D from the location start or `CP.Runs.anchor(run)` (current objective point). Person
-  down/dead: our intent only. An id of second s is skipped only when an earlier clear of it ran at s + 2 or
-  later (within 15 s): a clear that ran sooner (the t + 1 id of the previous second's event) may have come
-  before that call existed, so the next event clears it again.
-- `foreignClearedAt` is recorded from the change handler's view of the old value (FiveM calls the handler
-  before the value is set), so an arena exit counts even when this module never saw the foreign value
-  (e.g. Crimson-Police restarted while the player was in a match).
-
-##### CP.Downed
-- **EMS on duty**: one `client:requestEMS` per downed participant (SPEC, ARCHITECTURE §5.15), with one
-  exception: our flag was not on when they went down (e.g. down before reaching the start) AND metadata
-  `inlaststand` was true at detection. sc-ambulance's client sends its own EMSDownAlert on entering last
-  stand unless the flag suppresses it, so a second request would give EMS two calls. An unflagged
-  participant detected as `isdead` without last stand (sc-ambulance sends no death alert with
-  DisableDefaultAlerts) still gets our request, so EMS is always called.
-- `run.stats.downs + 1` is done only when `CP.Runs.removeParticipant` did not already count the down
-  (the engine does), so a down is never counted twice.
-- The pick-up re-checks EMS after the delay: EMS that came on duty meanwhile gets the EMS path instead.
-- Timings: the revive follows `client:pickup` after 1.5 s (fade-out); the flag is removed on
-  `server:pickupDone` or 30 s after the revive; the client waits up to 20 s for the revive.
-- Client "revived" = metadata isdead / inlaststand both false AND the ped not dead; no metadata at all
-  (`CP.Qbx.getPlayerData()` is `{}` after a logout / character switch) is never "revived": the pick-up
-  aborts (fade in, no teleport). A server cancel after `client:pickup` went out is sent as
-  `client:pickupCancel`.
-- **Every participant downed** (what I rely on): `CP.Runs.removeParticipant` ends a run that has no active
-  participant left and reports the state as `failed` when the last one left with a failed result (the
-  engine does this). As a guard, if a down removed the last active participant and the run is still open
-  5 s later, `CP.Downed` calls `CP.Runs.endRun(run, 'failed', 'mission_failed')`.
-
-### 13.25 Units and Cross-Department Missions
-
-Files: `Crimson-Police/modules/units/{server,client}.lua`, `Crimson-Police/modules/operations/{server,client}.lua`,
-`Crimson-Police/web/src/officer/screens/Unit.tsx` (+ `Unit.css`), `Crimson-Police/web/src/supervisor/screens/CrossDept.tsx`,
-`Crimson-Police/web/src/supervisor/components/OperationPanel.tsx` (+ `OperationPanel.css`),
-`Crimson-Police/web/src/officer/components/ReadyCheckBanner.tsx` (+ `.css`), `Crimson-Police/web/src/types/teams.ts`, `Crimson-Police/web/src/mocks/teams.mock.ts`,
-`Crimson-Police/locales/parts/teams.json`, `tests/teams_spec.lua`. Each Lua file's header lists its public API.
-
-#### Registered names
-
-| Kind | Name | Payload → reply |
-|---|---|---|
-| action | `server:unitInvite` | `targetSrc` or `{ targetSrc }` → `{ unitId, expiresIn }` |
-| action | `server:unitRespond` | `{ accepted, unitId }` or a bare boolean (newest invite) → `{ unitId, accepted }` |
-| action | `server:unitLeave` | — → `{ left = true, abandoned = bool }` |
-| callback | `getUnit` | → UnitView + extras (below) |
-| action | `server:unitKick` / `server:unitPromote` | `{ targetSrc }` → `{ kicked }` / `{ leader }` (leader; unit not locked) |
-| action | `server:unitDisband` | — → `{ disbanded = true }` (leader; unit not locked) |
-| action | `server:unitCancelInvite` | `{ targetSrc }` → `{ cancelled }` (inviter or leader; unit not locked) |
-| action | `server:unitReady` | `{ accepted }` or a bare boolean → `{ accepted }` (member of a unit with a pending check; the key mapping sends it without a reply id) |
-| client event | `crimson-police:client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName }` or nil to clear (every member but the leader) |
-| key mapping | `crimsonpolice_ready` | Config.Tablet.readyKey: answers a pending ready check with Ready |
-| action | `server:leaveOperation` | — → `{ left = true }` (joined or waitlisted, before the start) |
-| action | `server:sup:opRemoveJoiner` / `server:admin:opRemoveJoiner` | `{ src, reason }` (1–200 chars) → `{ removed }` (launchCrossDept; audited `opRemoveJoiner`) |
-| action | `server:sup:opLaunch` / `server:admin:opLaunch` | `{ missionId }` → `{ id }` |
-| action | `server:sup:opStart` / `server:admin:opStart` | — → `{ runId, participants }` |
-| action | `server:sup:opRelaunch` / `server:admin:opRelaunch` | — → `{ id }` |
-| action | `server:sup:opCancel` / `server:admin:opCancel` | `{ reason }` (1–200 chars) → `{ id }` |
-| action | `server:joinOperation` | `operationId` or `{ operationId }` (nil = the active one) → `{ id, joined, max }` |
-| callback | `sup:getOperation` | → OperationView (below) |
-| client event | `crimson-police:client:operation` | `(state, missionLabel, extra = { id, relaunched })` |
-| push | `unit` | `{ unitId|false, invited?, readyCheck? }` to every member and invitee; `board` to members |
-| push | `operation`, `board` | `{ id|false, status|false }` to every online department member (`operation` also to admins) |
-
-Every `server:sup:op*` / `server:admin:op*` handler calls `CP.Permissions.can(src, 'launchCrossDept')` first; the
-`admin` ones also require `CP.Access.isAdmin(src)`. `sup:getOperation` checks the same permission. Officer paths
-(`getUnit`, unit actions, `server:joinOperation`) call `CP.Access.getOfficer(src)`.
-
-#### Response shapes defined here (web types: `src/types/teams.ts`)
-
-**UnitView extras** (`getUnit`): `me` (viewer src), `maxSize`, `inviteTtl` (120), `canInvite`,
-`inviteBlocked` (`unit.blocked_on_run` | `unit.blocked_locked` | `unit.blocked_full` | nil), `onRun`,
-`unit.size`, `unit.pending = { { src, name, callsign, departmentShort, expiresIn } }`, `members[].available`,
-`invites[].size`, `invitable[].inUnit`. `invitable` is only filled while `canInvite`.
-Also: `unit.canManage` (the viewer leads and the unit is not locked), `unit.readyCheck =
-{ typeLabel, expiresIn, ready = { src }, waiting = { src }, waitingForMe }` (nil when none), `members[].avatar`
-(CP.Profile.avatarFor when loaded, else initials in the level's frame colour), `members[].level = { n, badge }`,
-`invitable[].distanceBand` (0..3 from Config.Units.nearbyBands, server-side ped coordinates only),
-`invitable[].lastPartner`, `pendingSent = { { src, name, expiresIn } }` (invites the viewer sent),
-`sizeFit = { [type] = { now, plusOne } }` (CP.Draw.pool counts at the unit's size and one bigger, counts only),
-`operation` (CP.Operations.officerCard: `{ id, missionLabel, status, joined, max, waitlistPosition, joinEndsIn,
-canLeave }` for a joiner or a waitlisted officer). `inviteBlocked` may be `unit.blocked_policy`.
-
-**OperationView** (`sup:getOperation`):
-```
-{ operation = nil | { id, missionId, missionLabel, missionType, missionTypeLabel, difficulty,
-    launcher, launcherCallsign, launcherDepartment, launchedAt, status = 'joining'|'running'|'waiting',
-    runState = 'accepted'|'in_progress'|nil, runId,
-    participants = { { src, name, callsign, departmentShort, department, status = 'joined'|'active'|'left'|'waiting', arrived } },
-    departments = { { short, count } }, joined, max, min, joinEndsIn, idleCancelIn, tier, tierExpected, remaining,
-    waitingReason = 'failed'|'abandoned'|'not_enough'|'no_location'|'start_failed'|nil, attempt,
-    canStart, startBlocked (sup.crossdept.start_blocked_* | nil), canRelaunch, canCancel },
-  cooldownLeft, cooldown, joinWindow, idleCancel, maxParticipants, crossBonus, enabled, canLaunch,
-  launchBlocked (err.* | nil), serverTime,
-  eligibleMissions = { { id, label, type, typeLabel, difficulty, minOfficers, maxOfficers } }  -- only with no operation }
-```
-
-**BoardData.operation** (`CP.Operations.boardCard`): the §9.4 fields plus `missionType`, `missionTypeLabel`,
-`description`, `min`, `runState`, `waitlist` (count), `waitlistPosition`, `waitlistOpen`. `joined` counts joiners
-(joining) or active participants (running). A viewer on the waitlist gets `joinBlocked = 'err.op_waitlisted'`; a
-full operation gives `err.op_full` only with `Config.CrossDept.waitlist = false`.
-
-**OperationView additions**: `operation.participants[].canRemove`, `operation.waitlist = { { src, name, callsign,
-departmentShort, position, canRemove } }`, `operation.waitlistEnabled`.
-
-#### Contract interpretations
-
-##### CP.Units
-- Units live in memory only (nothing to store; a restart drops them, as it drops runs).
-- A **forming unit** is the first inviter plus pending invites. `unitOf(leader)` returns it and `members` is `{ leader }`.
-  It dissolves silently when its last invite expires or is declined, and at `lock` (the leader goes solo).
-- **Any member may invite**, not only the leader (the spec: "any officer or supervisor can invite"). The cap is
-  `members + open invites < Config.Limits.maxUnitSize`, so an accepted invite always fits.
-- Invites expire after `INVITE_TTL = 120` s (constant in the file header). One open invite per (unit, target).
-  Joining a unit drops the other open invites to that officer. Accepting while in another (unlocked) unit moves
-  the officer (the old unit gets its normal leave handling).
-- Inviters in the arena are refused (`err.in_arena`, ARCHITECTURE §0 rule 14 gates invites). Invite targets must be
-  on-duty officers (`getOfficer`), not on a run, not in the arena, not in a full unit.
-  Accepting refuses in-arena players with `err.in_arena` (Crimson-Arena rule 5), players on a run, full and locked units.
-- **Leader succession**: `members` is kept in join order; when the leader leaves, `members[1]` (longest-standing)
-  leads. A unit left with one member dissolves. Invites of the unit stay open when the leader changes.
-- `lock(unit)` closes invites (pending ones are withdrawn with a toast). `unlock(unit)` accepts a unit table or id
-  and is **ignored while a member is still an active participant of a normal run** (no operationId, no test):
-  CP.Runs stores `run.unit = unitOf(leader)` for every non-test run, operation runs included, so an operation run
-  led by someone whose unit is locked for another run must not reopen it. Safety net: a unit locked for 30 s
-  (`LOCK_GRACE`) with nobody on a normal run is unlocked by the 2 s sweep.
-- `server:unitLeave` while the unit is locked and the leaver is on a normal run → `CP.Runs.removeParticipant(run, src, 'quit')`
-  (Abandoned, type cooldown), then the member leaves the unit. Leaving while on an operation/test run leaves that run alone.
-- `remove(src)` never touches runs. playerDropped / `CP.Qbx.onPlayerUnload` / `CP.Access.onLost` call it (runs
-  itself ends the run as disconnected / off_duty / job_change / suspended); invites to that player are cancelled.
-- The leave action calls `getOfficer` (rule 7) but still lets a player who no longer qualifies leave their unit.
-- The invite toast is `CP.Tablet.notify(target, 'info', 'unit.invite_received', …, { title = 'unit.invite_title' })`.
-  The invitee gets exactly one `unit` push for a new invite, carrying `invited = true`; the units client only adds a
-  frontend sound on it. The inviter's expiry toast names the invitee.
-
-##### Leader controls and the ready check (CP.Units, design 2.11)
-- `kick(src, target)`, `promote(src, target)`, `disband(src)`: the leader only, refused with `err.unit_locked` once a
-  type is accepted (the unit is locked from the accept to the run's end). `cancelInvite(src, target)`: the leader or
-  the member who sent it; the slot frees at once. A kick never touches runs or cooldowns; the kicked officer can't be
-  invited by that unit (its members at the kick and anyone who joins it later) for `Config.Units.kickReinvite` seconds
-  (`err.unit_kicked_recently`), and is left out of their invite list meanwhile; a kick from another unit adds its own block. Disband tells members who disbanded and withdraws open invites.
-- `Config.Units.invitePolicy = 'leader'`: a member's invite is refused (`err.unit_invite_leader_only`); the member's
-  view shows `unit.blocked_policy`.
-- `readyCheck(unit, typeKey, onReady, onCancel)` is called by CP.Draw.accept after the lock for units of 2+ (and for a
-  mission call's winning claim). It returns false only when no check is needed (no unit, or fewer than 2), so the
-  draw follows at once. The leader's accept counts as their answer; every other member gets `client:readyCheck`
-  (type only), a toast from the units client and the `unit` push with `readyCheck`. All accepted → `onReady()` once.
-  A decline (`err.unit_ready_declined`), the timeout (`Config.Units.readyTimeout`, checked by the 2 s sweep;
-  `err.unit_ready_timeout`), or a member leaving, going off duty, disconnecting, entering the arena or taking a real
-  call (`err.unit_ready_cancelled`) → `onCancel(reasonKey, srcs)` with the officers who did not answer; everyone asked
-  gets a `unit.ready.cancel_*` toast naming them. CP.Draw unlocks the unit on cancel; nobody gets a cooldown. A second
-  check for a unit with one pending gets `onCancel('err.busy')` at once, and `unlock` is ignored while a check is
-  pending (the check clears itself before `onReady` / `onCancel` run), so that caller can't reopen the unit. The lock
-  safety net (LOCK_GRACE) skips a unit with a pending check. An in-arena member answering Ready is refused
-  (`err.in_arena`) and cancels the check; the last Ready re-checks every member for the arena before `onReady`.
-- `lastPartners(src)`: the online officers of src's last ended run (the `run:ended` hook, test runs ignored,
-  remembered 900 s by citizenid).
-
-##### Waitlist and leaving an operation (CP.Operations, design 2.11)
-- `Config.CrossDept.waitlist` (default true): a join when every place is taken (or while someone waits) queues the
-  officer (`{ waitlisted = true, position }`). A place freed before the start (leave, a supervisor's remove, a drop,
-  unload or lost access) goes to the first on the list, re-checked like a join (officer, same citizenid, not on a run,
-  not in the arena, not on a real call); one who fails is skipped with a toast. The list closes at the start (toast).
-- `leave(src)` / `server:leaveOperation`: before the start only, no penalty; after it `err.op_leave_started` (the run's
-  own abandon applies). `removeJoiner(src, target, reason)` / `server:<scope>:opRemoveJoiner`: launchCrossDept, a
-  reason, before the start only (`err.op_remove_started`), audited as `opRemoveJoiner` (old = "name (citizenid)",
-  new = joined | waitlist).
-- `officerCard(src)`: the Unit screen card for a joiner or a waitlisted officer.
-
-##### CP.Operations
-- Status machine and board lock as in the file header. `isLocked()` is true for joining, running and waiting.
-- **Minimum to start** = max(`Config.CrossDept.minParticipants`, mission `minOfficers`), so a mission that needs 3 is
-  never started with 2. **Maximum** = `Config.CrossDept.maxParticipants` (ops take up to 8 whatever `maxOfficers` says).
-- **Start now** is allowed for whoever opened the current join window (launch or relaunch), any admin, or anyone
-  with the permission when that person is offline (the spec says "the launcher taps Start now"; nobody gets stuck).
-  At the join-window end the run starts by itself with enough participants, else the operation goes to `waiting`
-  (`not_enough`). A manual start that fails (too few, no location) keeps the window open.
-- At start every joiner is re-checked (officer, same citizenid, not on a run, not in the arena, not on a real call);
-  those who fail are dropped with a toast. The location comes from `CP.Draw.pickLocation(def, srcs, CP.U.rng(seed))`,
-  the run from `CP.Runs.create({ mission, locationIndex, missionType = def.type, members = officers (join order),
-  leaderSrc = first joiner, operationId, isBoss = false })`. Cooldowns, no-repeat, hourly cap, server cap and the
-  modifier are left to CP.Runs / CP.Events (they read `operationId`).
-- **Relaunch** is only possible in `waiting` (after a fail, everyone left, or a window that closed without a start).
-  It opens a new join window with an empty list and is **not** a new launch (the 30-min cooldown and `created_at`
-  stay). The launch cooldown counts from the last `created_at` (persisted).
-- **Idle auto-cancel** ("auto-cancels after 30 minutes with no run in progress"): the idle clock starts at the launch
-  and again when the operation's run ends, is cleared while a run exists, and is **not** reset by a relaunch. The
-  cancel fires in `waiting` once `Config.CrossDept.idleCancel` seconds have passed; an open join window is never cut
-  short (a relaunch 28 minutes after a fail still gets its full window; if no run starts, it is cancelled as soon as
-  the window closes).
-- **Join** re-checks the operation state after the checks that may yield (`CP.Calls.isOnCall` can query the
-  database), so two joins can never pass the cap together and a join can never land after Start now copied the list.
-- The cancel reason is 1–200 **characters** (UTF-8, like the UI's `maxLength`); control characters become spaces;
-  invalid UTF-8 is `err.invalid_payload`.
-- **Cancel** needs a reason (1–200 characters, shown to participants). The lock lifts at once; everyone still on the
-  run gets `CP.Runs.removeParticipant(run, src, 'cancelled')`. The auto-cancel reason is `sup.crossdept.reason_idle`
-  (audited as `opAutoCancel` by `'console'`).
-- `onRunEnded(run, state)`: `completed` → `completed` (final, lock lifts, `client:operation 'ended'`); anything
-  else → `waiting` (`failed`, or `abandoned` when every participant left). A run of another id is ignored. If a
-  running operation's run disappears without a report for 60 s, it is treated as failed.
-- Restart safety: at start `UPDATE cp_operations SET status = 'cancelled', ended_at = … WHERE status IN ('joining','running','waiting')`.
-- Launch requires `Config.CrossDept.enabled ~= false`, no active operation, the cooldown over, and an eligible
-  mission (`CP.Operations.eligible`: published and `CP.Missions.isEnabled`, `departments` empty, `maxOfficers >= 2`,
-  never `weekly_boss_kingpin`/`isBoss`). `launched_by` = the actor's citizenid (admins not on duty use their character's).
-- Notifications: `client:operation` (`launched` incl. relaunch with `extra.relaunched = true`, `started`, `ended`,
-  `cancelled`) to every on-duty officer (the operations client turns it into the toast); pushes `operation` + `board`
-  on every change (joins included); `CP.Tablet.notify` to participants (started / cancelled with reason / dropped at
-  start) and to everyone with `launchCrossDept` when the operation goes to `waiting`. `failed`/`abandoned` have no
-  `client:operation` state in the contract, so officers only get the board push.
-- Audit (`CP.Admin.audit(actor, role, 'operations', action, target, old, new, reason)`): `opLaunch` (new = mission id),
-  `opStart` (old = attempt, new = participants), `opRelaunch` (old = previous waiting reason, new = attempt),
-  `opCancel` / `opAutoCancel` (old = status, reason). Target `#<id> <missionId>`. Role `admin` for admins, else
-  `supervisor`; the automatic cancel uses actor and role `console`. Results without an actor (automatic start,
-  completed, failed, abandoned) go to `CP.Admin.webhook('operations', title, text, fields)` with Discord-style
-  fields `{ name, value, inline }`.
-- Every DB status write is queued in order on one worker thread (never blocks the state machine); the launch insert
-  is synchronous (it needs the id). Times are written with `FROM_UNIXTIME(os.time())`, read with `UNIX_TIMESTAMP`.
-
-##### Web
-- Both screens normalise the callback data first (`asArray` for every list, missing nil fields → `null`), because
-  Lua sends an empty list as `{}` and drops nil keys: `invites`, `invitable`, `unit.members`, `unit.pending`,
-  `operation.participants`, `operation.departments`, `eligibleMissions` are all empty in common states.
-- The locked banner says "leaving abandons your run" only while the viewer is still on the unit's run.
-- `OperationPanel` default export, props `{ scope: 'sup' | 'admin' }` (stable). It calls `sup:getOperation` for both
-  scopes and `server:<scope>:op*`. It never wraps itself in `<Screen>`.
-- With no operation active the panel shows a launch form (eligible missions + cooldown countdown); the Mission List
-  and Admin Missions screens may also launch with `server:<scope>:opLaunch { missionId }`.
-- Mocks: `?teams=leader|member|solo|invites|locked|lockedoff|long|full` (Unit) and
-  `?op=joining|running|waiting|none|cooldown|empty|fresh` (panel); add `&lua=1` to answer like Lua (empty lists as
-  `{}` objects, nil fields missing). `server:joinOperation` and `getMissionTypes` are **not** mocked here (the Mission Board slice owns them).
-
-#### Deviations / additions to the contract
-- `client:operation` carries an optional third argument `extra = { id, relaunched }`.
-- UnitView / BoardData.operation / OperationView carry the extra fields listed above (all optional in TS).
-- `CP.Units.view`, `CP.Operations.view`, `CP.Operations.cooldownLeft`, `CP.Operations.eligible` are public helpers
-  beyond §5.16/§5.17 (used by the callbacks and useful for the Mission List / admin screens).
-- Test DB: `tests/teams_spec.lua` runs its SQL on `<run database>_teams` (`CP_TEST_DB` + `_teams`), rebuilt from
-  `sql/migrations` and dropped at the end, so neither other specs nor a parallel run of this spec can interfere.
-
-### 13.26 Admin test mode
-
-Files: `modules/testing/server.lua`, `modules/testing/client.lua`, `web/src/admin/screens/Testing.tsx` (+ `.css`),
-`web/src/hud/TestControls.tsx` (+ `.css`), `web/src/hud/DebugOverlay.tsx` (+ `.css`), `web/src/types/testing.ts`,
-`web/src/mocks/testing.mock.ts`, `locales/parts/testing.json`, `tests/testing_spec.lua`.
-Each Lua file's header lists its public API; the TypeScript shapes are in `web/src/types/testing.ts`.
-
-#### Flow: invite first, then Start
-
-`CP.Runs.create` takes every member up front and has no "add participant" API, so nobody can join a
-test once it has started. The flow is therefore:
-
-1. The admin opens **Start a test** (Admin UI → Testing), picks mission, location (index or Random), tier
-   (Auto or Standard…Critical, default = the tier the mission's `maxOfficers` reaches) and the start route
-   (default `Config.Testing.useStartRoute`).
-2. Optional: select testers (callback `test:candidates`: online on-duty officers and admins) and
-   **Invite** (`server:test:invite { missionId, targets }`). Each invitee gets `client:testInvite`
-   (toast "… Press F7 to answer", the bound key) and answers either on the Admin UI Testing screen (banner) or,
-   anywhere, with the invitation prompt of the panel key (`hud/DebugOverlay.tsx`, NUI focus only while it is open) →
-   `server:testRespond { inviteId, accepted }`. The admin's dialog updates live (push `invites`).
-3. **Start** (`server:admin:startTest { …, testers = accepted srcs }`) re-validates every tester and calls
-   `CP.Runs.create`. Unanswered invitations are withdrawn.
-
-`/CrimsonPoliceAdmin test <missionId> [tier] [location]`: modules/admin parses it itself and calls
-`CP.Testing.start(src, { missionId, tier, location, useStartRoute = Config.Testing.useStartRoute, testers = {} })`
-(a solo test). `CP.Testing.command(src, args)` (same syntax) also takes the accepted invitations of that mission
-as testers; it is used only if modules/admin routes the subcommand to it (see requests).
-
-Invitations: one lobby per admin (one mission). Unanswered invitations expire after 120 s, accepted ones
-after 15 min without a start; inviting for another mission withdraws the old lobby (accepted testers are told).
-Seats: `Config.Testing.maxTesters - 1` (pending + accepted) besides the admin.
-
-#### Contract interpretations
-
-- **Admin participant record.** Admins need not be police. `CP.Access.getOfficer(src)` is used when the admin
-  is an on-duty officer (then the normal job/duty re-checks apply); otherwise the record is built from
-  `CP.Qbx.getInfo` with `department` = the department of the admin's active job if it belongs to one, else
-  the **first `Config.Departments` key in sorted order** (`CP.Access.departments()[1]`), rank = the job grade
-  name for a department job or `test.admin_rank`, and `job = nil` so `CP.Runs` marks the participant as a
-  non-officer (`isOfficer = false`) and skips duty/job re-checks. Invited admins get the same record.
-- **Tier.** A chosen tier becomes `test.forcedTier` (no rescale when someone leaves). "Auto"/omitted passes
-  `forcedTier = nil`: normal scaling by the number of testers, including rescaling. The recorded tier is the
-  forced tier, else the run's tier at the end.
-- **Location.** A chosen index that another run holds is refused (`err.test_location_busy`) so a test never
-  spawns on top of a live run; Random uses `CP.Draw.pickLocation(def, srcs, CP.U.rng(seed))` (reserved spots
-  and the player clearance skipped), falling back to a seeded pick of the unreserved spots. The run itself
-  reserves the location through `CP.Runs.create` → `CP.Draw.reserve`.
-- **Gates.** `testRun` permission, `Config.Testing.enabled`, `CP.Alerts.inArena` for the admin and every
-  tester (Crimson-Arena rule 5; also for inviting and for accepting), not already on a run, one test per admin
-  (`err.test_already_running`), 2 s between start attempts. Cooldowns, the hourly cap and the server caps are
-  never checked (and `CP.Runs` skips them for tests). The Cross-Department lock is skipped for admin tests
-  (`Testing.start` catalog tests and admin draft tests), but checked for a non-admin draft test:
-  `Testing.startDraft` refuses a supervisor (`builderEdit`) with `err.operation_locked` while
-  `CP.Operations.isLocked()` is true (Hard rules: admin test runs are the only exception).
-- **Any mission.** `CP.Missions.get(id)` whatever its status (built-in, custom, `Config.DisabledMissions`).
-  Archived custom missions are unregistered from `CP.Missions`, so they come from `CP.Builder.getArchived(id)`
-  (catalog: `CP.Builder.archivedDefs()`) when the builder offers them. It does not yet, so the fallback reads
-  (read-only) `SELECT id, published_version FROM cp_custom_missions WHERE status = 'archived'` and loads
-  `missions/custom/archived/<id>.lua` with `CP.Missions.parse` + `normalize` (`defHash` = hash of that file,
-  `version` = `published_version`, parsed once per file content). Archived missions are therefore in the
-  catalog and startable from the Admin UI.
-- **Controls** (`server:test:control`, only `run.test.adminSrc`): `skip` → `CP.Runs.testSkip`, `restart` →
-  `CP.Runs.testRestart` (both only In progress), `pause`/`resume` → `CP.Runs.pauseTimer`, `complete` →
-  `CP.Runs.endRun(run, 'completed', 'completed')`, `fail` → `CP.Runs.failRun(run, 'test.fail_forced')`
-  (= `endRun(run, 'failed', 'mission_failed')` with a failReason the HUD shows), **`end` →
-  `CP.Runs.failRun(run, 'test.ended_by_admin')`**: the `cancelled` end reason was not used because the run
-  client's end text for it is "the Cross-Department Mission was cancelled"; the result screen of an ended test
-  is irrelevant anyway and cleanup is identical. `teleport { target = 'start'|'objective' }` returns
-  `{ coords }` (start coords or `CP.Runs.anchor(run)`), refused for an in-arena admin (rule 13) and when
-  `Config.Testing.allowTeleport = false`; the client re-checks `LocalPlayer.state.crimsonArena` before
-  `SetEntityCoords` (the vehicle when driving) with a ground-z probe, and undoes only its own freeze: after an abort
-  for the arena flag the ped is left to Crimson-Arena (it freezes the placed ped for its countdown and lets it go
-  itself); a frozen vehicle is always let go. `debug { enabled? }` toggles the stream
-  (refused when `Config.Testing.debugOverlay = false`). Complete/fail/end are audited (`testControl`).
-- **Debug stream** (every 2 s while on, to the admin only): `client:test { controls = true, runId, debug }`,
-  `debug` = `TestDebugData` (objective, counts vs `Config.Limits.maxEntities`/`maxArmedAlive` read at call
-  time, armed alive = armed, not dead, not cuffed via `CP.Npc.isNeutralised` when present, spawn point /
-  waypoint / zone counts, start radius, AI host, timer) plus `geometry` (start, points, routes, zones) only
-  when the state or objective changed. Geometry: every location key except `label`, `start`, `medals`: vec3/vec4
-  → point, list of vectors or `{ coords }` → points (also a route when an objective names it in
-  `checkpoints`/`route`/`routes`/`fleeTo`), `{ points, loop }` → road route, list of lists → routes; zones =
-  presence (anchor + `presenceRange`), `safe`/`safeRadius`, `center`/`startRadius`, `blockTraffic` around the
-  start; the current checkpoint radius is attached to its points. Caps: 240 points, 16 routes, 1200 waypoints.
-  Crimson-Arena rule 8: nothing is sent while `CP.Alerts.inArena(admin)` (the test goes on for the testers), and the
-  first send afterwards carries the geometry again; the client also ignores a debug payload while its local value is
-  foreign (it only keeps the geometry), so a tick never brings the overlay back inside the arena.
-- **Debug data to the NUI** goes through `CP.Tablet.push('test', { controls, focused, key, debugOn, runId,
-  allowTeleport, debugOverlay, debug })` — the path the foundation's App already wires into
-  `<DebugOverlay debug>` — not through `CP.Tablet.hud({ debug })` (which would resend the whole HUD every 2 s).
-  DebugOverlay still reads `hud.debug` as a fallback. The panel sits at the left edge below the chat (30 vh). The
-  in-world markers are drawn by the Lua client (only within 250 m, only while within 600 m of the test area,
-  otherwise the loop sleeps 500 ms). `allowTeleport` / `debugOverlay` are `Config.Testing` read by the client at
-  push time; the HUD panel disables those buttons when they are off (the server refuses them anyway).
-- **HUD flag.** The run client already sets `testControls` at `client:start`; this client re-asserts it with
-  `CP.Tablet.hud({ testControls = true })` only while `CP.Runs.current().id` is the admin's run (it never
-  creates a HUD of its own), and again at `client:inProgress`.
-- **Panel focus.** `+crimsonpolice_testpanel` (default `Config.Testing.panelKey` = F7, a restart setting; F9 is
-  sc-multijob's menu key): with controls → `SetNuiFocus(true, true)` for the HUD panel; without → the invitation prompt, only while an invitation seen
-  through `client:testInvite` (or the prompt's last list) has not expired. With nothing to open the key does nothing
-  at all (no server call, no toast), so a key shared with another resource stays quiet. Never while a
-  Crimson-Police UI is open.
-  Released by the key/Escape in the NUI (client action `testPanel { open = false }`, on the key-up so the release
-  of the press that gave the focus does nothing), when the test ends or this player leaves the run, on a foreign
-  crimsonArena value, and on resource stop — only when this module took it. A key press within
-  `Config.Testing.panelKeyGuardMs` (300 ms) of letting go is ignored: FiveM hands a key still down when the
-  focus goes back to the game over as a new press. The pushed `key` is the bound key's text label, or `false`
-  for a mouse or pad button ('b_' label): the panel then lets go on Escape only and the invitation toast uses
-  `test.invite_toast_nokey`.
-  Safety net: DebugOverlay (always mounted) also releases on Escape when the Lua client reports a focus but no
-  HUD panel is on screen. After the HUD flag is set the client re-pushes the panel state (bound key, focus,
-  config) so a panel that mounted after the first push still shows the right key; the HUD panel also keeps the last
-  push at module level, so a panel that mounts again (Officer UI closed, Crimson-Arena over) shows it at once.
-- **Result screen.** Test runs keep going through `CP.Runs` settle, which returns the RunResult with
-  `test = true` (what the run would have earned) and writes nothing.
-- **Recording.** Only for a test that this admin (citizenid) actually ran in the last 6 h (a "waiting for a
-  result" entry created by `onRunEnded`); tier, testers, def_hash and version come from that test, not the
-  payload (`err.test_not_run` otherwise; the optional payload tier must match). The Admin UI sends the entry's `key`
-  (its run id), which picks exactly that test; without a key the newest entry of that mission, location (and tier)
-  is taken. The entry is claimed by identity after the permission check (which may yield), so a double click
-  records it once. One record per test.
-  `cp_mission_tests` gets `def_hash` = the mission's `defHash` at test start, `mission_version` for custom
-  missions/drafts. Notes are trimmed and clipped to 255 bytes on a UTF-8 boundary (fits VARCHAR(255) whatever
-  the connection charset). Audited (`recordTest` / `recordDraftTest`, category `audit`) and posted with
-  `CP.Admin.webhook('builder', title, description, fields)`.
-- **Catalog "Changed since test".** The last row per (mission, location) (`MAX(id)`) is "changed" when its
-  `def_hash` differs from the mission's current `defHash`, when it has no `def_hash` (rows from before
-  migration 002), or (custom missions) when its `mission_version` differs from the current version.
-- **Drafts.** `startDraft(src, def, opts)` accepts `builderEdit` (or `testRun`); a definition that already has
-  the loader fields (what `server:builder:test` passes) is used as it is, otherwise it is normalised with
-  `CP.Missions.normalize(def, { source = 'custom', version = def.version, status = 'draft' })`; it starts with
-  `test.draft = true`. Recording a draft result (`server:admin:recordTest` or its alias `server:test:record`,
-  permission `builderEdit`/`testRun`) writes `cp_mission_tests` too and calls
-  `CP.Builder.onDraftTested(missionId, version, tierName, passed, src, defHash)` (defHash: the tested
-  definition's, so a pass only counts for that content). `test:state` (own lobby, test and results only) is
-  open to `testRun` or `builderEdit`, so a Supervisor UI builder screen can list the draft tests waiting for
-  a result.
-- **The admin leaves.** When the admin who started a test disconnects, the test ends for everyone
-  (`failRun(run, 'test.ended_admin_left')`); their "waiting for a result" entries are kept by citizenid.
-- **Audit of starts**: `CP.Admin.audit(src, role, 'audit', 'testStart'|'testDraft', '<missionId>#<loc>', nil,
-  '<tier> x<testers>[ route]', nil)`.
-
-#### Response shapes (defined here)
-
-- `admin:getTests` → `TestsView { missions: TestMissionRow[], totals, tiers, config, serverTime }`;
-  `TestMissionRow { id, label, type, typeLabel, source, status, disabled, isBoss, version|false, minOfficers,
-  maxOfficers, maxTier, defHash, editedInCode, locations: TestLocationRow[], summary }`;
-  `TestLocationRow { index, label, reserved, active, status: passed|failed|untested|changed, last: false |
-  { id, result, tier, testers, note|false, testedBy, testedByName, testedAt, version|false, changed, tests } }`.
-- `test:state` → `TestState { lobby: TestLobby, active: TestActive|false, pending: TestPendingRecord[],
-  invites: TestInvite[], serverTime }`.
-- `test:candidates` → `TestCandidate[] { src, name, callsign|false, rank|false, departmentShort|false,
-  role: officer|admin, admin, onRun, inArena, invite: status|false }`.
-- `test:pendingInvites` → `TestInvite[] { inviteId, missionId, missionLabel, from, fromCallsign|false, expiresIn }`.
-- `server:test:invite` → `{ lobby, skipped: { src, error }[] }`; `server:admin:startTest` → `{ runId, missionId,
-  locationIndex, tier, testers }`; `server:admin:recordTest` → `{ id, missionId, location, tier, result, draft }`;
-  `server:test:control` → `{ control, … }` (`paused`, `coords`/`target`, `debug`, `objectiveIndex`).
-- `client:test { controls, runId, debug = false | TestDebugData (+ geometry) }`,
-  `client:testInvite { inviteId, missionLabel, from, expiresIn }`.
-- NUI push `test` from the Lua client: `TestPush { controls, focused, key, debugOn, runId, debug?, prompt? }`;
-  server pushes `test { state = true }` and `invites { test = true }` (screen refetch triggers).
-- Check spawn points (ARCHITECTURE 5.27): `server:test:spawnPoints {}` → `{ missions: { id, label, source,
-  locations: { index, label }[] }[] }`; `{ missionId }` → the same with that one; `{ missionId, location }` →
-  `SpawnCheckLocation { missionId, missionLabel, location, locationLabel, start: { x, y, z, r }, points:
-  SpawnCheckPoint[] }`, `SpawnCheckPoint { id, key, i, kind: ped|vehicle|prop|marker|path, as: ped|vehicle|prop,
-  wall, model?, obj|false, block|false, x, y, z, h?, above: [lo, hi], dStart?, dPrevious?, near?: ('start' |
-  'previous')[] }`; `server:test:spawnCheckReport` → `{ missionId, location, checked, bad }`. NUI push
-  `spawnCheck { state: started|location|point|done|stopped|failed, progress?: { mission, missions, location,
-  locations, point, points }, missionId?, missionLabel?, location?, locationLabel?, points?, result?:
-  SpawnCheckPoint & { status, groundZ?, dz?, roofZ?, interior?, seen? }, totals?: { points, bad, locations },
-  error? }`.
-- Check spawn points in Admin UI -> Testing: `admin:getTests` `config.spawnCheck: { enabled, teleport,
-  routes }`; `server:test:spawnPoints { missionId, location, point }` → `{ missionId, location, point:
-  SpawnCheckPoint }` ("Teleport here"); client actions `spawnCheck { missionId?, location? }` → `{ started,
-  missions, locations }`, `spawnCheckStop` → `{ stopping }`, `teleport { target: 'point', missionId, location,
-  point }` → `{ target: 'point', point }`.
-- Lua `false` stands for "no value" in every shape (a Lua table cannot hold nil); lists may arrive as `{}`.
+Shell (layouts):
+- `TabletFrame.tsx`: `mergeAppearance` applies the appearance (department, midnight, high_contrast, colourblind) and a
+  personal accent that is one of the department's (primary colour, logo and watermark stay the department's); the size
+  is `Prefs.uiScale` clamped to `Config.Profile.uiScale` and the viewport (`clampUiScale`, `tabletScale`).
+- `Header.tsx`: the Avatar and "Lv n" next to the callsign; the bell (`NotificationBell.tsx`: the last 20 toasts,
+  unseen count), also in the Admin header. `Sidebar.tsx` live dot; `navBadges.ts` `useNavCounts()` (getNavCounts + push
+  `nav`, again every 5 minutes) and `navBadge(key, counts)`.
+- `OfficerLayout` mounts the ReadyCheckBanner above every screen but Unit and refreshes the session on a `profile`
+  push. Both tablet layouts call `setMoneyFormat(session.config.format)` (`format.ts`: `formatMoney` follows
+  `Config.Format`, `fmtPlain`, dates through the locale's `_meta.date_locale`, en-GB); `data.ts normalizeSession`
+  keeps the session's config values.
+- ResultScreen: level bar and level-up, XP pending, the mission-call line, the decision ledger, people and items, each
+  only when present (`?result=parity` in browser mode).
+- Mocks: `?board=normal|unit|member|locked|busy|oncall|boss|bossused|operation|opjoined|oprunning|opwaiting|opclosed|
+  empty|error|edge` (`&oncall=1`), `?runv=none|accepted|offroute|progress|test|log|silence|boss|untracked|edge|live`,
+  `?result=live|live_open`, `?uiScale=0.85`, `?look=<appearance>`, `?accent=%23rrggbb` (`edge` answers the way Lua's
+  JSON arrives). Accepting in the mock starts a simulated run.

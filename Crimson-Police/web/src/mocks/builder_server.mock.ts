@@ -1,4 +1,4 @@
-// Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/ARCHITECTURE.md §13.7):
+// Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/ARCHITECTURE.md §5.28):
 
 // callbacks builder:list / builder:get / builder:config and every server:builder:* action, with an
 // in-memory store so create → save → test → publish → archive → restore → rollback can be clicked

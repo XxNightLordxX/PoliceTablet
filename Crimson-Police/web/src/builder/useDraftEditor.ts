@@ -1,4 +1,4 @@
-// One open mission in the Mission Builder (docs/ARCHITECTURE.md §13.7.2–§13.7.6).
+// One open mission in the Mission Builder (docs/ARCHITECTURE.md §5.28.2–§5.28.6).
 
 //   builder:get { id }            → the record; an editable custom mission is locked with server:builder:lock
 //   server:builder:autosave       → every Config.Builder.autosaveSeconds while the lock is mine and the draft

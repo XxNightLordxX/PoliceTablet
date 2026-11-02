@@ -3079,7 +3079,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 | `Crimson-Police/` | The FiveM resource. Its `README.md` is a short install note |
 | `Crimson-Police/items/README.md`, `logos/README.md`, `saves/README.md`, `web/README.md` | Short notes for each folder, pointing here |
 | `docs/SPEC.md` | The product spec: every rule and feature (its Hard rules win over everything), with a copy of `config/config.lua` |
-| `docs/ARCHITECTURE.md` | Code structure: module APIs, the run model, the block interface, events, storage, the NUI protocol, the web UI developer guide (§12) and the notes of each part of the code (§13) |
+| `docs/ARCHITECTURE.md` | Code structure: module APIs, the run model, the block interface, events, storage, the NUI protocol, the web UI developer guide (§12) and the notes of each part of the code (§5) |
 | `docs/INTEGRATIONS.md` | Checked facts about the other resources (qbx_core, sc-*, Renewed-Banking ...) and the rules for running alongside Crimson-Arena |
 | `docs/TESTING.md` | How to set up a machine, run the checks and read a failure, CI, and what to update with each change |
 | `docs/IN_GAME_CHECKLIST.md` | What to check in game, one section per feature |

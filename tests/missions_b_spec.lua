@@ -127,7 +127,7 @@ local FIELDS = {
         'finds',
         'together',
     },
-    -- the parity-plus blocks (docs/ARCHITECTURE.md §13.18)
+    -- the parity-plus blocks (docs/ARCHITECTURE.md §7.4)
     process_scene = { 'scene', 'coroner', 'bodies', 'roles', 'tag', 'bag', 'release', 'aliveBonus' },
     skill_check = { 'targets', 'checks', 'missPenalty', 'failAfter', 'target', 'explosion' },
     hostile_waves = {

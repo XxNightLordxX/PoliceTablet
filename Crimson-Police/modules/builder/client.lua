@@ -1,6 +1,6 @@
--- CP.Builder (client): the Mission Builder's in-world tools. Protocol: docs/ARCHITECTURE.md §13.7.6 (client
+-- CP.Builder (client): the Mission Builder's in-world tools. Protocol: docs/ARCHITECTURE.md §5.28.6 (client
 -- actions, results, overlays); shapes of the overlays and of the fields this client adds:
--- web/src/types/builder_client.ts; notes: docs/ARCHITECTURE.md §13.6.
+-- web/src/types/builder_client.ts; notes: docs/ARCHITECTURE.md §5.28.7.
 
 -- Owns
 --   * the placement tool. The tablet closes (CP.Tablet.close) into placement mode: a LOCAL, non-networked

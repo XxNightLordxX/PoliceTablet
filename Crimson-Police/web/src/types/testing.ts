@@ -1,4 +1,4 @@
-// Admin test mode shapes (modules/testing/server.lua, docs/ARCHITECTURE.md §13.26). Lua sends `false` for "no
+// Admin test mode shapes (modules/testing/server.lua, docs/ARCHITECTURE.md §5.27). Lua sends `false` for "no
 // value" (a Lua table cannot hold nil) and may encode an empty list as {}: read every list through asList().
 
 // (). Check spawn points: SpawnCheckPoint, SpawnCheckResult,

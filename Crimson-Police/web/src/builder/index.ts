@@ -3,7 +3,7 @@
 //   BuilderWorkspace  mission list + editor (the whole builder)
 //   MissionList       drafts, tested, published and archived custom missions with status, version and lock
 //   BuilderEditor     the step editor of one mission
-// Protocol: docs/ARCHITECTURE.md §13.7 · notes: docs/ARCHITECTURE.md §13.6.
+// Protocol: docs/ARCHITECTURE.md §5.28 · notes: docs/ARCHITECTURE.md §5.28.7.
 
 import './Builder.css';
 

@@ -27,7 +27,7 @@
 --   whether the start goes (the start circle here, then CP.Route.follow(runId, true)) or stays as his guide
 --   (CP.Route.follow(runId, false)); CP.Markers routes once CP.Route says he follows the action.
 --
--- Contract interpretations (docs/ARCHITECTURE.md §13.13)
+-- Contract interpretations (docs/ARCHITECTURE.md §5.10)
 --   * client:start begins the start route with CP.Route.begin(runId, startCoords, { startRoute, radius })
 --     (a test run with the route off gets a waypoint only); CP.Route.stop() runs when this player arrives
 --     and at the end.

@@ -1185,7 +1185,7 @@ local function WatchTruck(ctx, st, dt)
         Advance(ctx, st, c)
         TriggerWaves(ctx, st, c)
         -- 2D, like the waypoints: the destination is a point on the road map, and a route's z (recorded
-        -- or estimated) must not shrink the arrival circle (docs/ARCHITECTURE.md §13.17). Only on the final
+        -- or estimated) must not shrink the arrival circle (docs/ARCHITECTURE.md §5.6). Only on the final
         -- stretch: a route may pass its destination earlier (the other carriageway, a road under a bridge).
         if tr.wp >= #st.points and U.dist2d(c, st.points[#st.points]) <= ctx.obj.arrival then
             tr.arrived = true

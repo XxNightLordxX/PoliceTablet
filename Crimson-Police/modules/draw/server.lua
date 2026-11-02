@@ -39,7 +39,7 @@
 --       Then CP.Units.lock(unit), the draw, CP.Runs.create (the unit is unlocked again on failure).
 -- Internal (same slice): CP.Draw._eligibility(def, officers, size?, now?) -> ok, why, untilTs, officer
 --
--- Contract interpretations (details in docs/ARCHITECTURE.md §13.12)
+-- Contract interpretations (details in docs/ARCHITECTURE.md §5.6)
 --   * history = distinct missions of the type with state completed/abandoned (failed rows and the Weekly
 --     Boss never count); a unit whose histories cover the whole pool relaxes to avoidLast, then to "not the
 --     unit's most recent mission", then the whole pool; no fallback to avoided missions for locations
@@ -1827,7 +1827,7 @@ local function AcceptStart(src, typeKey, opts, note)
     -- Invites close now: the draw depends on the unit's size and every member's cooldowns.
     if unit and CP.Units and CP.Units.lock then Safe(CP.Units.lock, unit) end
     -- The checks above may yield (database lookups): an invite accepted meanwhile would put an officer in
-    -- the locked unit who is not on the run and was never checked (docs/ARCHITECTURE.md §13.25). The unit must still
+    -- the locked unit who is not on the run and was never checked (docs/ARCHITECTURE.md §5.16). The unit must still
     -- be exactly the members that were checked; otherwise the leader tries again.
     if unit then
         local now2 = UnitMembers(src)

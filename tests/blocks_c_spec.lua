@@ -3614,7 +3614,7 @@ do -- search host (Q13): a witness on its phone is left with the officer whose g
 end
 
 -- ============================================================================
---             PURSUIT PARITY OPTIONS (docs/ARCHITECTURE.md §13.18)
+--              PURSUIT PARITY OPTIONS (docs/ARCHITECTURE.md §7.4)
 -- ============================================================================
 -- Responses, observe (pace / follow), stop without cause, spawn offset, drive-by and ram, removed cars.
 

@@ -69,7 +69,7 @@
 --   events sent  client:testInvite { inviteId, missionLabel, from, expiresIn } ·
 --                client:test { controls, runId, debug = false|DebugData }
 --   pushes   'test' { state = true } (the admin's test state changed) · 'invites' { test = true }
--- Response shapes: docs/ARCHITECTURE.md §13.26 and web/src/types/testing.ts.
+-- Response shapes: docs/ARCHITECTURE.md §5.27 and web/src/types/testing.ts.
 
 CP.Testing = CP.Testing or {}
 local Testing = CP.Testing

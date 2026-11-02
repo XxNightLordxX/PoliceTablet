@@ -6091,7 +6091,7 @@ Phase 4 · Mission Builder
 
 Go live after Phase 2, when units, the full catalog and the Supervisor and Admin UIs (needed to review flagged runs) are in. Steps 6–8 enforce Hard rules 15–18, so they are never skipped or postponed. Phases 3 and 4 ship once the live server has run for 2 weeks with fewer than 2 disputes a week, their checks pass and command staff sign off.
 
-Phase 5 · Mission calls, custody and the newer features (English only; docs/ARCHITECTURE.md §13 has how each part reads the contracts)
+Phase 5 · Mission calls, custody and the newer features (English only; docs/ARCHITECTURE.md §5 has how each part reads the contracts)
 
 | Step | Folders and files | Done when |
 |---|---|---|

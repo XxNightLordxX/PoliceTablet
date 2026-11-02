@@ -2,7 +2,7 @@
 
 -- guardrails, test runs of drafts, publishing (Lua export), archive/restore, rollback and the loading and
 -- reloading of custom mission files. The full protocol (definition shape, payloads, results, client
--- placement/recording results) is docs/ARCHITECTURE.md §13.7; TS shapes web/src/types/builder_server.ts.
+-- placement/recording results) is docs/ARCHITECTURE.md §5.28; TS shapes web/src/types/builder_server.ts.
 --
 -- Owns
 --   * cp_custom_missions rows: drafts (draft_definition, builder units), published copies
@@ -31,7 +31,7 @@
 --   CP.Builder.shippedHash(id) -> hash|nil                     the same file's hash for the list views: the file
 --                                                              is read each call, parsed only when its text changed
 --   CP.Builder.slug(label) -> string
--- Net (docs/ARCHITECTURE.md §13.7.3/§13.7.4)
+-- Net (docs/ARCHITECTURE.md §5.28.3/§5.28.4)
 --   callbacks  builder:list · builder:get { id } · builder:config
 --   actions    server:builder:create { type, label? } or { template, label? } · duplicate { id } · lock { id } · unlock { id } ·
 --              save { id, definition } · autosave { id, definition } · validate { id, definition? } ·

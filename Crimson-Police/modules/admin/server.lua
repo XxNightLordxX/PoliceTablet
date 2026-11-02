@@ -74,7 +74,7 @@
 --     server:admin:voidRun       { rowId } | { runUuid }, reason         voidAnyRun
 --     server:admin:awardPoints   { citizenid, points, reason }           manualAward -> CP.Scoring.manualAward
 --     server:admin:suspend       { citizenid, days, reason }             suspend -> CP.Access.suspend (audited)
---   callbacks (shapes in docs/ARCHITECTURE.md §13.20 and web/src/types/oversight.ts)
+--   callbacks (shapes in docs/ARCHITECTURE.md §5.25 and web/src/types/oversight.ts)
 --     getMissionList             viewMissionList -> MissionListData
 --     admin:getMissions          admin -> MissionListData, each mission + { filePath, editedInCode, defHash, status,
 --                                disabledInConfig }
@@ -87,7 +87,7 @@
 --     admin:getPermissions       -> { supervisor = { { action, enabled } }, adminOnly, always, teleport }
 --     admin:getAudit             { category, action, actor, from, to, page } -> AuditPage
 --     admin:exportAudit          same filters -> { csv, rows, truncated }
---     admin:getStuckPayments     admin -> { payments = CP.Cash.stuckPayments() (StuckPayment list, docs/ARCHITECTURE.md §13.11),
+--     admin:getStuckPayments     admin -> { payments = CP.Cash.stuckPayments() (StuckPayment list, docs/ARCHITECTURE.md §5.18),
 --                                serverTime }   rows left 'paying' for a manual Renewed-Banking check
 
 CP.Admin = CP.Admin or {}
@@ -2428,7 +2428,7 @@ local function CooldownNow(def)
     return math.floor(base * (ok and tonumber(scale) or 1))
 end
 
--- MissionListData (docs/ARCHITECTURE.md §13.20). adminExtras adds what the Admin UI Missions screen lists besides
+-- MissionListData (docs/ARCHITECTURE.md §5.25). adminExtras adds what the Admin UI Missions screen lists besides
 -- (SPEC Interfaces: "version, Lua file path, 'edited in code' flag"): filePath, editedInCode, defHash, status,
 -- disabledInConfig (Config.DisabledMissions).
 local function MissionListData(src, adminExtras)

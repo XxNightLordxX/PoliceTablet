@@ -217,11 +217,11 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/builder/admin/QuickEditPanel.tsx`: Quick edit of a built-in mission (MissionTweaks), shown in the mission's drawer (Admin UI -> Missions): cooldown, time limit and start timeout in minutes, and the NPC models, cars and weapons by their plain names, without JSON.
 - `Crimson-Police/web/src/builder/admin/VersionsDialog.tsx`: Versions of a custom mission or an edited built-in: roll back to any kept version (with a short diff against the published one), and Load saved draft (the draft a hand edit of the file overwrote).
 - `Crimson-Police/web/src/builder/admin/index.ts`: Admin-only pieces of the Mission Builder and Admin UI → Missions (full admin control, ARCHITECTURE §8.4.2).
-- `Crimson-Police/web/src/builder/applyResult.ts`: Writes a builder client result (docs/ARCHITECTURE.md §13.7.6) into the
+- `Crimson-Police/web/src/builder/applyResult.ts`: Writes a builder client result (docs/ARCHITECTURE.md §5.28.6) into the
 - `Crimson-Police/web/src/builder/blockBasics.ts`: Block settings: the basics open, the rest folded under "More settings" (Config.Builder.foldAdvanced), without React: whether the builder folds, and the shootout's plain Difficulty (Easy, Normal, Hard), which sets accuracy, armour and health inside the ranges the server sends (Config.Blocks.hostile_waves).
 - `Crimson-Police/web/src/builder/blockPanels.walk.ts`: Block settings and Details with Config.Builder.foldAdvanced against the browser mocks (node walk.mjs, a gate step): the shootout's four basics open, every other setting under a closed "More settings", Easy/Normal/Hard inside the server's ranges, and folding off draws every setting open as before.
 - `Crimson-Police/web/src/builder/controls.tsx`: Form controls of the Mission Builder: a NumberInput that shows its min, max and default and refuses values outside them, minute inputs for second values, option pickers from the config lists, chip multi-pickers, the star picker and inline error notes.
-- `Crimson-Police/web/src/builder/defUtils.ts`: Helpers for the builder definition (docs/ARCHITECTURE.md §13.7.1): Lua lists that arrive as {} normalised to arrays, immutable path updates, error lookup by path, vectors and routes.
+- `Crimson-Police/web/src/builder/defUtils.ts`: Helpers for the builder definition (docs/ARCHITECTURE.md §5.28.1): Lua lists that arrive as {} normalised to arrays, immutable path updates, error lookup by path, vectors and routes.
 - `Crimson-Police/web/src/builder/index.ts`: Src/builder · the Mission Builder component library (Supervisor UI → Mission Builder, Admin UI → Missions).
 - `Crimson-Police/web/src/builder/pointList.ts`: The point list under the location map: one row per stored point (the start, then every point of every key in spec order), and the edits its buttons make.
 - `Crimson-Police/web/src/builder/quickMission.ts`: The New mission wizard (Config.Builder.quickWizard) without React: its steps, what a location still misses, what "Fill the points for me" fills, the name it proposes and the check list.
@@ -237,7 +237,7 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/builder/steps/common.tsx`: Props shared by the Mission Builder steps and small shared pieces.
 - `Crimson-Police/web/src/builder/store.ts`: Module-level memory of the Mission Builder.
 - `Crimson-Police/web/src/builder/useBuilderConfig.ts`: builder:config (Config.Blocks ranges, allowed lists, limits and the caller's builder permissions), fetched once per open UI and shared by every builder component.
-- `Crimson-Police/web/src/builder/useDraftEditor.ts`: One open mission in the Mission Builder (docs/ARCHITECTURE.md §13.7.2–§13.7.6).
+- `Crimson-Police/web/src/builder/useDraftEditor.ts`: One open mission in the Mission Builder (docs/ARCHITECTURE.md §5.28.2–§5.28.6).
 - `Crimson-Police/web/src/criminal/CriminalTablet.tsx`: The criminal tablet: a burner-phone style tablet for players who play real suspects, nothing like the
 - `Crimson-Police/web/src/criminal/criminal.walk.ts`: The criminal tablet against the browser mocks (node walk.mjs, a gate step): the view normalised, the landing screen and badges, joining, a job accepted into Active, giving up, and the refusals as error keys.
 - `Crimson-Police/web/src/criminal/model.ts`: The criminal tablet's logic without React: normalising the server's view, the sidebar with its badges and the texts that depend on the view. criminal.walk.ts checks it against the mocks.
@@ -281,7 +281,7 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/mocks/admin_system.mock.ts`: Browser mocks for full admin control, System: storage, backups, webhooks, problems, integrations, departments added in game, desks and Support (the shapes of modules/sysadmin).
 - `Crimson-Police/web/src/mocks/boards.mock.ts`: Browser mocks for the boards slice (Leaderboard, Department Challenge, Profile & History, Admin Seasons &
 - `Crimson-Police/web/src/mocks/builder_client.mock.ts`: Browser mocks for the builder client slice (modules/builder/client.lua and the builder screens).
-- `Crimson-Police/web/src/mocks/builder_server.mock.ts`: Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/ARCHITECTURE.md §13.7):
+- `Crimson-Police/web/src/mocks/builder_server.mock.ts`: Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/ARCHITECTURE.md §5.28):
 - `Crimson-Police/web/src/mocks/core.mock.ts`: Core browser mocks: sessions for the three UIs (with the officer's look, level and picture), the locale after 'ready', the pinned run (fallback), logo reports, the sidebar badge counts, Config health and the tablet access view.
 - `Crimson-Police/web/src/mocks/criminal.mock.ts`: Browser mocks of the criminal tablet: crimtab:get and server:crimtab:act over one volunteer, with a job to answer. ?ui=crimtab opens it on load.
 - `Crimson-Police/web/src/mocks/custody.mock.ts`: Browser mocks of the custody slice: a Contact panel on the Active Mission screen and the HUD contact card (?contact=1), server:contactDecide (a case-failing choice asks for the confirm first) and contactAction.
@@ -397,10 +397,10 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/types/admin_system.ts`: Full admin control, System (modules/sysadmin): storage, backups, webhooks, problems, integrations, departments added in game, Support (docs/ARCHITECTURE.md §9.5, "Admin control: system").
 - `Crimson-Police/web/src/types/boards.ts`: Shapes of the boards slice (modules/leaderboard, modules/challenge).
 - `Crimson-Police/web/src/types/builder_client.ts`: Shapes of the builder client slice: the in-world tool overlays sent by
-- `Crimson-Police/web/src/types/builder_server.ts`: Mission Builder protocol shapes (docs/ARCHITECTURE.md §13.7).
+- `Crimson-Police/web/src/types/builder_server.ts`: Mission Builder protocol shapes (docs/ARCHITECTURE.md §5.28).
 - `Crimson-Police/web/src/types/criminal.ts`: The criminal tablet (modules/crimtab): what crimtab:get and server:crimtab:act answer.
 - `Crimson-Police/web/src/types/custody.ts`: Shapes of the Contact panel (ActiveMissionView.contact, built by CP.Custody.view for a field_contact objective).
-- `Crimson-Police/web/src/types/economy.ts`: Response shapes of the economy slice's supervisor/admin callbacks and actions (modules/payouts/server.lua; documented in docs/ARCHITECTURE.md §13.11).
+- `Crimson-Police/web/src/types/economy.ts`: Response shapes of the economy slice's supervisor/admin callbacks and actions (modules/payouts/server.lua; documented in docs/ARCHITECTURE.md §5.18).
 - `Crimson-Police/web/src/types/fieldTraining.ts`: Shapes of field training (modules/fieldtraining, Config.FieldTraining).
 - `Crimson-Police/web/src/types/missioncalls.ts`: Shapes of the Dispatch screen (mission calls): getMissionCalls and push topic 'calls', the supervisor panel and the admin area coverage matrix.
 - `Crimson-Police/web/src/types/options.ts`: Shapes of My options: the officer options (callback getOptions, action server:options:set) and My keys (client action getKeyLabels).
@@ -409,8 +409,8 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/types/rewards.ts`: Shapes of the optional item rewards: the Rewards locker on Home and Admin UI → Leaderboards → Item rewards.
 - `Crimson-Police/web/src/types/run_ui.ts`: Response shapes of the run_ui slice (Mission Board and Active Mission screens,
 - `Crimson-Police/web/src/types/settings.ts`: Admin UI → Settings and the mission switches: the shapes modules/settings/server.lua sends.
-- `Crimson-Police/web/src/types/teams.ts`: Response shapes of units and operations (modules/units, modules/operations; docs/ARCHITECTURE.md §13.25).
-- `Crimson-Police/web/src/types/testing.ts`: Admin test mode shapes (modules/testing/server.lua, docs/ARCHITECTURE.md §13.26).
+- `Crimson-Police/web/src/types/teams.ts`: Response shapes of units and operations (modules/units, modules/operations; docs/ARCHITECTURE.md §5.16).
+- `Crimson-Police/web/src/types/testing.ts`: Admin test mode shapes (modules/testing/server.lua, docs/ARCHITECTURE.md §5.27).
 - `Crimson-Police/web/src/vite-env.d.ts`: / <reference types="vite/client" />
 - `tests/access_spec.lua`: Tablet access and the UI shell: the ways and their switches, mission desks, requireItem, the sidebar badge counts and their 'nav' push, Config health, and the client's desk zones, desk pose and item and distance watchers.
 - `tests/admin_backup_spec.lua`: Full admin control, System → Backups: a backup holds every table and the resource files, keep N never prunes the newest or the latest automatic one, and a restore moves money forward only (paid stays paid, given stays given, money rows made after the backup are kept), keeps the audit log and the money switches, and raises no id twice.

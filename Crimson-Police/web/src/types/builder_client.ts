@@ -1,7 +1,7 @@
 // Shapes of the builder client slice: the in-world tool overlays sent by
 
 // modules/builder/client.lua (CP.Tablet.overlay kinds 'placement' | 'recording' | 'testdrive'), the fields the
-// builder client and screens add to the client protocol of docs/ARCHITECTURE.md §13.7.6, and the editor's
+// builder client and screens add to the client protocol of docs/ARCHITECTURE.md §5.28.6, and the editor's
 // UI-side helper types (steps, point specs). The server shapes are in ./builder_server.ts.
 
 import type { MissionListData, MissionListEntry } from './oversight';

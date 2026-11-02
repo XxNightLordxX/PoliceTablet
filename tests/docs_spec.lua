@@ -309,6 +309,29 @@ H.eq(notes:find('```', 1, true), nil, 'FILE_NOTES quotes no headers')
 H.eq(long, 0, 'every FILE_NOTES line is one sentence')
 H.ok(#notes < 150000, ('FILE_NOTES stays small (%d bytes)'):format(#notes))
 
+-- ARCHITECTURE: one place per module (no second "module notes" part), no build-history narration, every section it
+-- names exists, and it stays well under its old 899 KB
+local arch = ReadRepo('docs/ARCHITECTURE.md') or ''
+H.ok(#arch > 100000 and #arch < 560000, ('ARCHITECTURE stays small (%d bytes)'):format(#arch))
+H.eq(arch:find('\n## 13.', 1, true), nil, 'ARCHITECTURE has no separate module notes part')
+for _, phrase in ipairs({ 'owner request of', 'as before', 'Contract interpretations', 'this slice' }) do
+    H.eq(arch:find(phrase, 1, true), nil, 'ARCHITECTURE has no history phrase: ' .. phrase)
+end
+local heads = {}
+for num in arch:gmatch('\n#+ (%d[%d%.]*)[ .]') do heads[(num:gsub('%.$', ''))] = true end
+local unknown = {}
+for num in (arch .. ' '):gmatch('§ ?(%d[%d%.]*)') do
+    num = num:gsub('%.$', '')
+    if not heads[num] then unknown[#unknown + 1] = num end
+end
+H.eq(table.concat(unknown, ' '), '', 'every ARCHITECTURE section it names exists')
+for _, rel in ipairs(files) do
+    local s = ReadRepo(rel:gsub('^%./', '')) or ''
+    H.eq(s:find('ARCHITECTURE.md ' .. '§13', 1, true), nil, rel .. ': names no removed ARCHITECTURE section 13')
+end
+H.eq((ReadRepo('docs/TESTING.md') or ''):find('before the ' .. 'speed-up', 1, true), nil,
+    'TESTING has no old timing story')
+
 -- step FX1: a disconnect on the Weekly Boss costs its mission cooldown and that week's attempt, never the type cooldown
 -- (modules/draw skips the type cooldown for the boss); every SPEC line about the disconnect cooldown says so
 for line in spec:gmatch('[^\n]+') do

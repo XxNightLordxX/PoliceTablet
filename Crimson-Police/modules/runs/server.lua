@@ -66,7 +66,7 @@
 --   Config.Limits.corpseCleanup), host liveness, HUD refresh. Config.AntiCheat.jobRecheck s: CP.Access.recheck. 60 s: orphan item sweeps
 --   and cache pruning.
 --
--- Contract interpretations (details in docs/ARCHITECTURE.md §13.13)
+-- Contract interpretations (details in docs/ARCHITECTURE.md §5.10)
 --   * ctx.award/penalize accept opts.points, a per-occurrence value hint kept in run.score.values[id]
 --     (blocks pass it for ids whose value comes from block settings, e.g. hostage_hit).
 --   * ctx.hud({ detail, value, max }) belongs to that objective's HUD entry; other keys (message, ...)
@@ -1373,7 +1373,7 @@ local function RefreshHud(run, force)
     local ok, key = pcall(json.encode, list)
     if not ok then key = tostring(GetGameTimer()) end
     -- A new (or closed) tablet log point is pushed at once, not with the throttled progress push, so the
-    -- Active Mission log panel moves on right away (docs/ARCHITECTURE.md §13.23).
+    -- Active Mission log panel moves on right away (docs/ARCHITECTURE.md §12.8).
     local lk = LogKey(run)
     local logChanged = lk ~= (run.logKey or '')
     run.logKey = lk
@@ -3372,7 +3372,7 @@ local function StopObjectives(run)
 end
 
 -- Only a normal run locked a unit (CP.Draw's accept): test and operation runs never unlock one (an
--- operation's first joiner may be in a unit that is locked for another run; docs/ARCHITECTURE.md §13.25).
+-- operation's first joiner may be in a unit that is locked for another run; docs/ARCHITECTURE.md §5.16).
 local function UnlockUnit(run)
     if run.test or run.operationId or not run.unit then return end
     Call('Units', 'unlock', run.unit)

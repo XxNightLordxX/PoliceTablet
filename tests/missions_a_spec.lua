@@ -179,7 +179,7 @@ local FIELDS = {
         ramSpeed = true,
         ramPenaltyId = true,
         neverShoots = true,
-        -- parity-plus (docs/ARCHITECTURE.md §13.18)
+        -- parity-plus (docs/ARCHITECTURE.md §7.4)
         responses = { yield = true, flee = true, fight = true },
         handoff = true,
         profileSet = true,

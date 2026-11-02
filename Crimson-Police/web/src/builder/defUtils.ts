@@ -1,4 +1,4 @@
-// Helpers for the builder definition (docs/ARCHITECTURE.md §13.7.1): Lua lists that arrive as {} normalised to
+// Helpers for the builder definition (docs/ARCHITECTURE.md §5.28.1): Lua lists that arrive as {} normalised to
 // arrays, immutable path updates, error lookup by path, vectors and routes.
 
 import { asArray } from '../shared/data';
