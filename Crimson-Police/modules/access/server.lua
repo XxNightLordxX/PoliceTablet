@@ -589,8 +589,9 @@ function A.explain(src, via)
     return out
 end
 
-function A.isSupervisor(src)
-    local officer = A.getOfficer(src)
+-- officer: getOfficer(src) when the caller already has it (CP.Permissions.can, step FX1), so it is looked up once.
+function A.isSupervisor(src, officer)
+    if type(officer) ~= 'table' or officer.src ~= ToSrc(src) then officer = A.getOfficer(src) end
     return officer ~= nil and officer.isSupervisor == true
 end
 

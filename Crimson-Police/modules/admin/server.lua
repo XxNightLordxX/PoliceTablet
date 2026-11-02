@@ -2175,7 +2175,7 @@ end
 
 CP.Net.action('server:sup:forceRecall', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-    return Admin.forceRecall(src, payload.runId, payload.src, payload.reason)
+    return Admin.withLiveRuns(src, Admin.forceRecall(src, payload.runId, payload.src, payload.reason))
 end, { rate = 3 })
 
 -- Step WF2: a supervisor's decision answers with his fresh Review Queue (data.queue), so the screen shows the row gone
@@ -2188,6 +2188,7 @@ function Admin.withReviewQueue(src, ok, data)
     end
     local okQ, queue = pcall(Admin.reviewQueueFor, src)
     if okQ and type(queue) == 'table' then out.queue = queue end
+    pcall(Admin.shareReviewQueue, src)
     return true, out
 end
 
@@ -2197,7 +2198,9 @@ end, { rate = 3 })
 
 CP.Net.action('server:admin:reviewFlagged', function(src, payload)
     if not IsAdmin(src) then return false, 'err.no_permission' end
-    return ReviewAction(src, payload)
+    local ok, data = ReviewAction(src, payload)
+    if ok then pcall(Admin.shareReviewQueue, src) end
+    return ok, data
 end, { rate = 3 })
 
 CP.Net.action('server:admin:voidRun', function(src, payload)
@@ -2210,8 +2213,11 @@ CP.Net.action('server:admin:voidRun', function(src, payload)
         target = Int(target, 1, 2147483647)
         if not target then return false, 'err.invalid_row' end
     end
-    return Admin.voidRun(src, target, payload.reason,
+    local ok, data = Admin.voidRun(src, target, payload.reason,
         { kind = payload.kind, confirm = payload.confirm, goalRowIds = payload.goalRowIds })
+    -- step FX1: the reply carries the run's detail and the officer's views (CP.Corrections.withViews)
+    if Has('Corrections', 'withViews') then return CP.Corrections.withViews(src, payload, ok, data) end
+    return ok, data
 end, { rate = 3 })
 
 -- Leaderboards → Flagged: approve every flagged row of one run (the held cash of all of them is released).
@@ -2425,7 +2431,9 @@ local function ViewerDepartment(src)
     return officer and officer.department or nil, citizenid
 end
 
-CP.Net.callback('sup:getLiveRuns', function(src)
+-- Supervisor UI -> Live Missions (sup:getLiveRuns): nil and an error key when src may not see it. Also the view the
+-- recall and "+ minutes" replies carry (step FX1), so the screen needs no second request.
+function Admin.liveRunsFor(src)
     local okP, eP = Can(src, 'viewMissionList')
     if not okP then return nil, eP end
     if not Has('Runs', 'all') then return nil, 'err.module_unavailable' end
@@ -2459,6 +2467,22 @@ CP.Net.callback('sup:getLiveRuns', function(src)
     end
     local _, addTime = Call('LiveCtl', 'supTimeView', src)
     return { runs = out, serverTime = os.time(), canRecall = canRecall, addTime = addTime }
+end
+
+-- Step FX1: a Live Missions action's reply carries the fresh view (data.view); one that cannot be built is left out.
+function Admin.withLiveRuns(src, ok, data)
+    if not ok then return ok, data end
+    local out = {}
+    if type(data) == 'table' then
+        for k, v in pairs(data) do out[k] = v end
+    end
+    local okV, view = pcall(Admin.liveRunsFor, src)
+    if okV and type(view) == 'table' then out.view = view end
+    return true, out
+end
+
+CP.Net.callback('sup:getLiveRuns', function(src)
+    return Admin.liveRunsFor(src)
 end, { rate = 3 })
 
 -- Flag events recorded by CP.AntiCheat.flag (cp_audit 'runFlagged') and staff notes by CP.AntiCheat.note
@@ -2614,9 +2638,48 @@ function Admin.reviewQueueFor(src)
     return { flagged = flagged, disputes = disputes, canReview = canReview, canHandle = canHandle }
 end
 
+-- Config.Tablet.supervisorReviewLive (step FX1): who has the Review Queue open (src -> os.time() of his last
+-- sup:getReviewQueue; the screen asks every 30 s while open). Closing the tablet or leaving forgets him.
+local reviewWatch = {}
+local REVIEW_WATCH_S = 75
+
+local function ReviewLiveOn()
+    local tab = Config.Tablet
+    return type(tab) == 'table' and tab.supervisorReviewLive == true
+end
+
+-- After src decided a flagged run or a dispute: every other supervisor with the Review Queue open gets his own
+-- updated queue at once (push 'reviewQueue'), of src's department only (an admin without one: every department).
+-- Returns how many got it; 0 with the switch off.
+function Admin.shareReviewQueue(src)
+    if not ReviewLiveOn() or next(reviewWatch) == nil then return 0 end
+    local dept = ViewerDepartment(src)
+    local now, n = os.time(), 0
+    for viewer, at in pairs(reviewWatch) do
+        if now - at > REVIEW_WATCH_S then
+            reviewWatch[viewer] = nil
+        elseif viewer ~= tonumber(src) and (dept == nil or ViewerDepartment(viewer) == dept) then
+            local okQ, queue = pcall(Admin.reviewQueueFor, viewer)
+            if okQ and type(queue) == 'table' and Has('Tablet', 'push') then
+                CP.Tablet.push(viewer, 'reviewQueue', queue)
+                n = n + 1
+            end
+        end
+    end
+    return n
+end
+Admin._reviewWatch = function() return reviewWatch end
+
 CP.Net.callback('sup:getReviewQueue', function(src)
-    return Admin.reviewQueueFor(src)
+    local queue, err = Admin.reviewQueueFor(src)
+    if queue and ReviewLiveOn() and tonumber(src) and tonumber(src) > 0 then reviewWatch[tonumber(src)] = os.time() end
+    return queue, err
 end, { rate = 3 })
+
+AddEventHandler('playerDropped', function() reviewWatch[tonumber(source)] = nil end)
+if CP.Hooks and CP.Hooks.on then
+    CP.Hooks.on('tablet:closed', function(src) reviewWatch[tonumber(src)] = nil end)
+end
 
 local function AdminOnly(src)
     return Can(src, 'openAdmin')
@@ -2812,11 +2875,9 @@ local function WeekStartTs()
     return os.time() - 7 * 86400
 end
 
-CP.Net.callback('admin:getOfficer', function(src, args)
-    local okP, eP = AdminOnly(src)
-    if not okP then return nil, eP end
-    local cid = type(args) == 'table' and Admin.resolveCitizenId(args.citizenid) or nil
-    if not cid then return nil, 'err.unknown_officer' end
+-- Admin UI -> Officers: one officer's detail (admin:getOfficer). The caller checked the admin and the citizenid. Also
+-- the view a correction's reply carries (step FX1), so the screen needs no second request.
+function Admin.officerDetail(src, cid)
     local o = Single([[SELECT citizenid, callsign, rank_label, display_name, department, xp, streak_days,
         UNIX_TIMESTAMP(suspended_until) AS suspended_ts, board_excluded, UNIX_TIMESTAMP(retired_at) AS retired_ts,
         retire_batch FROM cp_officers WHERE citizenid = ?]], { cid })
@@ -3010,6 +3071,14 @@ CP.Net.callback('admin:getOfficer', function(src, args)
         known = o ~= nil,
         maxAward = MAX_AWARD,
     }
+end
+
+CP.Net.callback('admin:getOfficer', function(src, args)
+    local okP, eP = AdminOnly(src)
+    if not okP then return nil, eP end
+    local cid = type(args) == 'table' and Admin.resolveCitizenId(args.citizenid) or nil
+    if not cid then return nil, 'err.unknown_officer' end
+    return Admin.officerDetail(src, cid)
 end, { rate = 4 })
 
 local function OnDutyCounts()

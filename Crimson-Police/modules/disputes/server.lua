@@ -746,7 +746,11 @@ end, { rate = 3 })
 
 CP.Net.action('server:admin:handleDispute', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-    return D.handle(src, payload.disputeId, payload.decision, payload.reason, payload.awardPoints, { adminOnly = true })
+    local ok, data = D.handle(src, payload.disputeId, payload.decision, payload.reason, payload.awardPoints,
+        { adminOnly = true })
+    -- step FX1: the supervisors with the Review Queue open see it at once (Config.Tablet.supervisorReviewLive)
+    if ok and Has('Admin', 'shareReviewQueue') then pcall(CP.Admin.shareReviewQueue, src) end
+    return ok, data
 end, { rate = 3 })
 
 CP.Net.callback('admin:getDisputes', function(src)

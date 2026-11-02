@@ -5074,7 +5074,10 @@ applyReplyView(data, key, set, refetch) applies it, or asks again when an older 
 Queue (server:sup:reviewFlagged and server:sup:handleDispute answer with data.queue) and Dispatch
 (server:declineMissionCall answers with data.view). Walk: replyView.walk.ts (with lastUsed.ts).
 the Admin System screen's Backups (backupNow, restoreBackup, deleteBackup) and Storage (storageCopy,
-setStorageMode, useStoreAgain) panels apply data.view the same way.
+setStorageMode, useStoreAgain) panels apply data.view the same way. So do (step FX1) the supervisor's Mission calls
+panel and Live Missions (data.view), the Clear cooldown dialog (data.view), the department report's activity dialog
+(data.activity, asked with activityOf), the Admin run dialog with the run list and the officer detail (data.view,
+data.runs, data.officer, asked with views) and Settings -> Reset all (data.view).
 ```
 
 ## Crimson-Police/web/src/shared/replyView.walk.ts
@@ -5084,6 +5087,14 @@ Smoother workflows against the browser mocks (node walk.mjs, a gate step): Appro
 Queue and Decline on Dispatch answer with the screen's fresh view, so the screen needs no second request; a reply
 without it asks again. The supervisor dialogs open with the values last used only while
 Config.Tablet.supervisorRemember is on.
+```
+
+## Crimson-Police/web/src/shared/replyViewFx1.walk.ts
+
+```text
+Step FX1 against the browser mocks (node walk.mjs, a gate step): Admin System -> Storage, the supervisor's Mission
+calls (post, withdraw), Live Missions ("+ minutes"), Clear cooldown, Give points from the activity dialog (with
+activityOf only) and Settings -> Reset all each answer with their screen's fresh view.
 ```
 
 ## Crimson-Police/web/src/shared/rowWindow.ts

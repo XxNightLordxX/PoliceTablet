@@ -1468,7 +1468,8 @@ CP.Net.callback('sup:getDeptReport', function(src, args)
     return C.deptReport(dept)
 end)
 
-CP.Net.callback('sup:getOfficerActivity', function(src, args)
+-- Department report -> an officer's activity (sup:getOfficerActivity): nil and an error key when src may not see it.
+function C.supActivity(src, args)
     local ok, permErr = CP.Permissions.can(src, 'viewMissionList')
     if not ok then return nil, permErr or 'err.no_permission' end
     if type(args) ~= 'table' then return nil, 'err.invalid_payload' end
@@ -1491,6 +1492,26 @@ CP.Net.callback('sup:getOfficerActivity', function(src, args)
     -- Give points (step P22, Config.MissionControls.controls.awardPoints): { min, max, perDay, usedToday, confirmAbove }
     view.awardPoints = select(2, Call('SupAwards', 'supView', src, args.citizenid))
     return view
+end
+
+-- Step FX1: a supervisor action taken from that dialog (commend, revoke, mission ban, give points) sends
+-- activityOf = the officer's citizenid, and its reply carries his fresh activity (data.activity), so the dialog needs
+-- no second request. Left out when it cannot be built (the dialog asks again).
+function C.withActivity(src, payload, ok, data)
+    if not ok then return ok, data end
+    local cid = type(payload) == 'table' and payload.activityOf or nil
+    if not ValidCitizenId(cid) then return ok, data end
+    local out = {}
+    if type(data) == 'table' then
+        for k, v in pairs(data) do out[k] = v end
+    end
+    local okV, view = pcall(C.supActivity, src, { citizenid = cid })
+    if okV and type(view) == 'table' then out.activity = view end
+    return true, out
+end
+
+CP.Net.callback('sup:getOfficerActivity', function(src, args)
+    return C.supActivity(src, args)
 end)
 
 -- ============================================================================

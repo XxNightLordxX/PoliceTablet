@@ -169,6 +169,7 @@ CP.Tablet = {
         return #srcs
     end,
     openAdmin = function(src) Record('openAdmin', src); return true end,
+    push = function(src, topic, data) Record('push', src, topic, data); return true end,
 }
 local function LastNotify(src)
     for i = #notifies, 1, -1 do if notifies[i].src == src then return notifies[i] end end
@@ -852,6 +853,41 @@ H.eq(LastCall('onRowVoided')[1], rowB, 'scoring void hook')
 ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowB, decision = 'void', reason = 'again' })
 H.eq(res, 'err.already_voided', 'cannot void twice')
 H.eq(Cb('sup:getReviewQueue', 2).ok, true, 'the supervisor\'s review queue')
+
+-- step FX1, Config.Tablet.supervisorReviewLive: a decision pushes the updated queue to the other supervisors of that
+-- department who have it open (each his own queue); shipped off, nobody is pushed
+do
+    local function Pushes()
+        local out = {}
+        for _, c in ipairs(calls) do
+            if c.name == 'push' and c.args[2] == 'reviewQueue' then out[#out + 1] = c.args end
+        end
+        return out
+    end
+    H.eq(Config.Tablet.supervisorReviewLive, false, 'FX1: the live Review Queue ships off')
+    H.eq(Cb('sup:getReviewQueue', 7).ok, true, 'FX1: the second SAST supervisor opens the queue')
+    local before = #Pushes()
+    CP.Admin.withReviewQueue(2, true, { rowId = rowB })
+    H.eq(#Pushes(), before, 'FX1: off: nobody else gets the queue (as before)')
+    H.eq(CP.Admin.shareReviewQueue(2), 0, 'FX1: off: shareReviewQueue sends nothing')
+    Config.Tablet.supervisorReviewLive = true
+    for _, src in ipairs({ 2, 7, 4 }) do Cb('sup:getReviewQueue', src) end
+    before = #Pushes()
+    local okW, reply = CP.Admin.withReviewQueue(2, true, { rowId = rowB })
+    H.ok(okW and type(reply.queue) == 'table', 'FX1: on: the decider still gets his own queue in the reply')
+    local got = {}
+    for i = before + 1, #Pushes() do got[Pushes()[i][1]] = Pushes()[i][3] end
+    H.ok(type(got[7]) == 'table' and type(got[7].flagged) == 'table',
+        'FX1: on: the other SAST supervisor gets his queue')
+    H.eq(got[2], nil, 'FX1: ...not the decider himself')
+    H.eq(got[4], nil, 'FX1: ...nor a supervisor of another department')
+    H.fire('playerDropped', 7, 'Exiting')
+    H.eq(CP.Admin.shareReviewQueue(2), 0, 'FX1: a supervisor who left is forgotten')
+    Cb('sup:getReviewQueue', 7)
+    H.time = H.time + 120
+    H.eq(CP.Admin.shareReviewQueue(2), 0, 'FX1: a queue not asked for in 75 s counts as closed')
+    Config.Tablet.supervisorReviewLive = false
+end
 H.eq(SecurityLines(2), supLines, 'a supervisor\'s review flow (queue, approve, void, refusals) leaves no security line')
 
 -- an admin-only key asked by a player who is not an admin: the same refusal, and one line a minute
@@ -969,6 +1005,9 @@ ok, res = Act('server:sup:forceRecall', 2, { runId = 'nope', src = 6 })
 H.eq(res, 'err.invalid_run', 'unknown run')
 ok, res = Act('server:sup:forceRecall', 2, { runId = 'run-1', src = 6, reason = 'Needed on a real call' })
 H.eq(ok, true, 'supervisor force recalls')
+-- step FX1: the reply carries the fresh Live Missions view, so the screen needs no second request
+H.ok(type(res) == 'table' and type(res.view) == 'table' and type(res.view.runs) == 'table',
+    'FX1: the recall reply carries Live Missions')
 local rp = LastCall('removeParticipant')
 H.eq(rp[3], 'force_recall', 'end reason force_recall')
 H.eq(rp[4].notify, 'admin.notice.force_recalled', 'recalled officer told')

@@ -3715,6 +3715,24 @@ read, and one spec that runs both features through the whole real server side.
   server:admin:storageCopy, server:admin:setStorageMode and server:admin:useStoreAgain with data.view
   (Sys.storageView(), the view of admin:getStorage, which allows one read in 5 seconds). The System screen applies it
   through shared/replyView.ts and asks again only when it is missing.
+- Replies that carry their screen's view, the rest: server:sup|admin:mcWithdraw, mcPage and mcCreate answer with
+  data.view (MC.supView, the view of sup:getMissionCalls); server:sup:forceRecall and server:sup:addRunTime with
+  data.view (CP.Admin.liveRunsFor, the view of sup:getLiveRuns, through CP.Admin.withLiveRuns);
+  server:sup:clearCooldowns with data.view (CP.LiveCtl.supCooldownsView, the view of sup:getOfficerCooldowns);
+  server:sup:commend, revokeCommendation, missionBan, liftMissionBan and awardPoints, sent with activityOf (the
+  officer's citizenid, from the department report's activity dialog), with data.activity (CP.Challenge.supActivity,
+  the view of sup:getOfficerActivity, through CP.Challenge.withActivity); server:admin:voidRun, restoreRun,
+  setVoidKind and flagRow, sent with views = { rowId, archived, citizenid, runs, officer }, with data.view (the run's
+  detail, admin:getRun), data.runs (admin:getOfficerRuns with the list's own filters) and data.officer
+  (CP.Admin.officerDetail, admin:getOfficer), through CP.Corrections.withViews; server:admin:resetAllSettings with
+  data.view (Settings.all()). Each screen applies it and asks again only when it is missing.
+- Config.Tablet.supervisorReviewLive (shipped false): CP.Admin.shareReviewQueue(src) runs after every decision of
+  server:sup:reviewFlagged, server:sup:handleDispute, server:admin:reviewFlagged and server:admin:handleDispute and
+  pushes 'reviewQueue' (that supervisor's own CP.Admin.reviewQueueFor) to every other supervisor of the decider's
+  department (an admin without one: every department) who asked sup:getReviewQueue in the last 75 s; leaving or
+  closing the tablet forgets him.
+- CP.Permissions.can with a department in ctx looks the officer up once (CP.Access.getOfficer) and passes it to
+  CP.Access.isSupervisor(src, officer) and CP.Permissions.granted(src, cap, officer).
 
 ### 5.48 CP.Options — modules/options (S; officer options)
 
@@ -5025,7 +5043,7 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.l
 | `notify` | `notification = { id, kind, title?, text, duration }` | Crimson-Police toast |
 | `hud` | `hud = HudState \| null` | mission HUD (full state) |
 | `result` | `result = RunResult` | result screen |
-| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `options` (own officer options changed, `{ values }`), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `missionControls` (a department's supervisors and the admins: a Mission control changed, `{ department, key }`, §5.49), `spawnCheck` (the admin's spawn point check, §5.27); `unit` gains `readyCheck`, `run` gains `contact` |
+| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `options` (own officer options changed, `{ values }`), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `missionControls` (a department's supervisors and the admins: a Mission control changed, `{ department, key }`, §5.49), `spawnCheck` (the admin's spawn point check, §5.27), `reviewQueue` (Config.Tablet.supervisorReviewLive: another supervisor or an admin decided a flagged run or a dispute; the viewer's own ReviewQueue, only while his Review Queue is open); `unit` gains `readyCheck`, `run` gains `contact` |
 | `overlay` | `overlay = null \| { kind: 'placement'\|'recording'\|'testdrive'\|'fade', ... }` | full-screen/HUD overlays |
 | `theme` | `theme`, `locale?`, `prefs?`, `options?` | the department theme for the HUD (login, duty, job, unload, and a change of the options `hudLook` / `textSize`), with the officer's look (`prefs` { appearance, accent }, `options` { hudLook, textSize }; absent without an officer session); only the reply to `ready` carries `locale` (`CP.Locale.all()`), the NUI's one copy of the text |
 | `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names at once) |

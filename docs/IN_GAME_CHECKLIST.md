@@ -386,5 +386,17 @@ names the change it came with.
   the reply carries the list). Restore one after typing RESTORE: the list shows the automatic backup at once.
 - [ ] Admin UI -> System -> Storage: Copy all data to the other storage, then at once Copy again or Switch storage:
   the panel shows the new state at once and never says "too many requests" (the reply carries the view).
+- [ ] Supervisor UI: post, page (with a pushed mission) and withdraw a mission call; Recall and "+ minutes" on Live
+  Missions; Give points, Mission ban, a commendation and Clear cooldown from Department Report: each list changes at
+  once with no reload flicker (the reply carries the view). Admin UI -> Officers: Void or Restore a run in the run
+  dialog: the run, the run list and the officer's totals change at once; Settings -> Reset all: the screen shows the
+  config.lua values at once. (FX1)
+- [ ] `Config.Tablet.supervisorReviewLive = true`: two SAST supervisors open the Review Queue; one approves a flagged
+  run: it leaves the other's list at once. A FIB supervisor's list does not change. Shipped `false`: the other list
+  changes at its next refresh (within 30 seconds). (FX1)
+- [ ] Quit and rejoin: a suspect of a live crime quits and comes back within two minutes: he is still on the case card
+  and can be cuffed; a volunteer quits and comes back while engaged: his criminal tablet shows the case again, no
+  strike; a rookie quits mid-run: the run goes on for his trainer and does not count; a trainer quits and comes back
+  before the sign-off: Sign off still works. (FX1)
 - [ ] Errors read with a next step: delete the newest backup ("Delete an older backup instead."), void a run that is
   already voided ("Use Restore on it to undo the void."), import a file that is not a settings export.

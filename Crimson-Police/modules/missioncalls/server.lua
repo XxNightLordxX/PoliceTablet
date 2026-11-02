@@ -2421,13 +2421,27 @@ local function StaffArea(payload)
     return true, area
 end
 
+-- Step FX1: a staff action's reply carries the panel's fresh view (data.view, sup:getMissionCalls), so the screen
+-- needs no second request. A view that cannot be built leaves the reply as it was (the screen asks again).
+local function WithView(src, ok, data)
+    if not ok then return ok, data end
+    local out = {}
+    if type(data) == 'table' then
+        for k, v in pairs(data) do out[k] = v end
+    end
+    local okV, view = pcall(MC.supView, src)
+    if okV and type(view) == 'table' then out.view = view end
+    return true, out
+end
+MC._withView = WithView
+
 for _, scope in ipairs({ 'sup', 'admin' }) do
     local adminOnly = scope == 'admin'
     CP.Net.action(('server:%s:mcWithdraw'):format(scope), function(src, payload)
         local ok, e = StaffAllowed(src, adminOnly)
         if not ok then return false, e end
         if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-        return MC.withdraw(src, payload.callId, payload.reason)
+        return WithView(src, MC.withdraw(src, payload.callId, payload.reason))
     end, { rate = 2 })
     CP.Net.action(('server:%s:mcPage'):format(scope), function(src, payload)
         local ok, e = StaffAllowed(src, adminOnly)
@@ -2437,7 +2451,7 @@ for _, scope in ipairs({ 'sup', 'admin' }) do
         if not okA then return false, 'err.mc_unknown_area' end
         local missionId = payload.missionId
         if missionId ~= nil and type(missionId) ~= 'string' then return false, 'err.invalid_payload' end
-        return MC.page(src, payload.type, area, payload.leaderSrc, { missionId = missionId })
+        return WithView(src, MC.page(src, payload.type, area, payload.leaderSrc, { missionId = missionId }))
     end, { rate = 2 })
     CP.Net.action(('server:%s:mcCreate'):format(scope), function(src, payload)
         local ok, e = StaffAllowed(src, adminOnly)
@@ -2450,9 +2464,9 @@ for _, scope in ipairs({ 'sup', 'admin' }) do
             local reason, errR
             if CP.AdminKit and CP.AdminKit.reason then reason, errR = CP.AdminKit.reason(payload.reason) end
             if not reason then return false, errR or 'err.reason_required' end
-            return MC.create(src, payload.type, area, { skipWait = true, reason = reason })
+            return WithView(src, MC.create(src, payload.type, area, { skipWait = true, reason = reason }))
         end
-        return MC.create(src, payload.type, area)
+        return WithView(src, MC.create(src, payload.type, area))
     end, { rate = 2 })
 end
 

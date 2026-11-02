@@ -389,7 +389,8 @@ registerMock('action', 'server:admin:resetAllSettings', (): SettingsReply => {
                     x.changed = false;
                     out.push(x);
                 }
-    return reply(out);
+    // like the server (step FX1), Reset all answers with the whole view
+    return { ...reply(out), view: data };
 });
 
 registerMock('request', 'admin:getSettingsHistory', (): SettingsHistory => ({

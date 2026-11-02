@@ -70,9 +70,22 @@ H.eq(#W.audits('missionBan'), 0, 'nothing refused is audited')
 --                             BAN, EXPIRY, STORAGE
 -- ============================================================================
 
+-- step FX1: from the department report's activity dialog (activityOf) the reply carries his fresh activity
+local asked = {}
+CP.Challenge = {
+    withActivity = function(src, payload, okA, data)
+        asked[#asked + 1] = { src = src, of = payload.activityOf }
+        if okA and payload.activityOf then data.activity = { officer = { citizenid = payload.activityOf } } end
+        return okA, data
+    end,
+}
 local before = os.time()
 local res
-ok, res = Ban(2, 'OFF00007', 2)
+ok, res = W.act('server:sup:missionBan', 2,
+    { citizenid = 'OFF00007', hours = 2, reason = 'Ignored an order', activityOf = 'OFF00007' })
+H.ok(ok and res.activity and res.activity.officer.citizenid == 'OFF00007', 'FX1: the ban reply carries his activity')
+H.ok(asked[1] and asked[1].src == 2 and asked[1].of == 'OFF00007', 'FX1: ...asked for the supervisor')
+CP.Challenge = nil
 H.ok(ok and res['until'] >= before + 7200, 'a SAST officer banned for 2 hours')
 local ban = MB.get('OFF00007')
 H.ok(

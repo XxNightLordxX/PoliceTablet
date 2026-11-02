@@ -23,6 +23,7 @@ import { DecisionsBlock, PeopleBlock } from '../../../hud/Debrief';
 import { fmtDateTime, formatNumber } from '../../../shared/format';
 import { useRequest } from '../../../shared/hooks';
 import { hasKey, t } from '../../../shared/i18n';
+import { applyReplyView } from '../../../shared/replyView';
 import type { OfficerRunRow, OfficerRunsPage, RunDetail, VoidKind } from '../../../types/admin_officers';
 import { DateRangeField, Pager, useAdminAction, type DateRange } from '../kit';
 import './OfficerTools.css';
@@ -35,18 +36,30 @@ type RunTool =
 
 const cashLabel = (s: string) => (hasKey(`result.cash_status.${s}`) ? t(`result.cash_status.${s}`) : s);
 
+// The views the parent screen shows besides the run (step FX1): the reply of a change carries them (data.runs,
+// data.officer) and onChanged gets that reply, so the parent applies them and asks again only when one is missing.
+export interface RunDialogViews {
+    citizenid: string;
+    // the run list's own filters (admin:getOfficerRuns)
+    runs?: Record<string, unknown>;
+    // the officer's detail (admin:getOfficer)
+    officer?: boolean;
+}
+
 export function RunDialog({
     rowId,
     archived,
     onClose,
     onChanged,
+    views,
 }: {
     rowId: number | null;
     archived?: boolean;
     onClose: () => void;
-    onChanged?: () => void;
+    onChanged?: (reply: unknown) => void;
+    views?: RunDialogViews;
 }) {
-    const { data, loading, error, refetch } = useRequest<RunDetail>(
+    const { data, loading, error, refetch, setData } = useRequest<RunDetail>(
         'admin:getRun',
         { rowId, archived: !!archived },
         { skip: rowId === null },
@@ -59,6 +72,7 @@ export function RunDialog({
 
     const apply = async (reason: string, typed: string) => {
         if (!r || !tool) return;
+        const want = { rowId: r.id, archived: r.archived, ...views };
         let res;
         if (tool.kind === 'void') {
             res = await run(
@@ -70,32 +84,34 @@ export function RunDialog({
                     goalRowIds: tool.goals ? r.goalRewards.map(g => g.rowId) : undefined,
                     confirm: typed || undefined,
                     reason,
+                    views: want,
                 },
                 { requestId: false, success: 'admin.officers.voided_toast' },
             );
         } else if (tool.kind === 'restore') {
             res = await run(
                 'server:admin:restoreRun',
-                { rowId: r.id, archived: r.archived, liftSuspension: tool.lift, reason },
+                { rowId: r.id, archived: r.archived, liftSuspension: tool.lift, reason, views: want },
                 { requestId: false, success: 'ui.admin_officers.run.restored' },
             );
         } else if (tool.kind === 'setKind') {
             res = await run(
                 'server:admin:setVoidKind',
-                { rowId: r.id, kind: tool.to, liftSuspension: tool.lift, reason },
+                { rowId: r.id, kind: tool.to, liftSuspension: tool.lift, reason, views: want },
                 { requestId: false, success: 'ui.admin_officers.done' },
             );
         } else {
             res = await run(
                 'server:admin:flagRow',
-                { rowId: r.id, reason },
+                { rowId: r.id, reason, views: want },
                 { requestId: false, success: 'ui.admin_officers.run.flagged' },
             );
         }
         setTool(null);
+        // step FX1: the reply carries the run's detail (an older server: ask for it)
         if (res.ok) {
-            void refetch();
-            onChanged?.();
+            applyReplyView<RunDetail>(res.data, 'view', setData, () => void refetch());
+            onChanged?.(res.data);
         }
     };
 
@@ -348,7 +364,7 @@ export function OfficerRuns({ citizenid }: { citizenid: string }) {
         kind: only === 'strike' || only === 'correction' ? only : undefined,
         includeArchive: archive,
     };
-    const { data, loading, error, refetch } = useRequest<OfficerRunsPage>('admin:getOfficerRuns', args);
+    const { data, loading, error, refetch, setData } = useRequest<OfficerRunsPage>('admin:getOfficerRuns', args);
     const rows = data?.runs ?? [];
 
     const columns: TableColumn<OfficerRunRow>[] = [
@@ -468,7 +484,8 @@ export function OfficerRuns({ citizenid }: { citizenid: string }) {
                 rowId={open ? open.id : null}
                 archived={open?.archived}
                 onClose={() => setOpen(null)}
-                onChanged={() => void refetch()}
+                views={{ citizenid, runs: args }}
+                onChanged={reply => applyReplyView<OfficerRunsPage>(reply, 'runs', setData, () => void refetch())}
             />
         </div>
     );

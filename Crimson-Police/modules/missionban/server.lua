@@ -215,6 +215,14 @@ end
 
 local function OfficerTarget(payload) return { citizenid = Cid(payload.citizenid) } end
 
+-- Step FX1: from the department report's activity dialog the reply carries his fresh activity (CP.Challenge).
+local function WithActivity(ctx, data)
+    if CP.Challenge and CP.Challenge.withActivity then
+        return CP.Challenge.withActivity(ctx.src, ctx.payload, true, data)
+    end
+    return true, data
+end
+
 -- { citizenid, hours, reason }: an officer of his own department with a lower grade, never himself, for min to max
 -- hours; a supervisor at most Config.MissionControls.missionBanPerDay a day. Admins skip the department and grade
 -- rules (the self rule stays).
@@ -261,7 +269,7 @@ Kit.supAction('server:sup:missionBan', 'missionControls', function(ctx)
     ctx.audit('missionBan', cid, old and tostring(old['until']) or nil, tostring(ban['until']), { category = 'flags' })
     ctx.notify(cid, 'warning', 'sup.notice.mission_banned', { hours = hours, name = ban.name })
     PushBoard(cid)
-    return true, { citizenid = cid, ['until'] = ban['until'] }
+    return WithActivity(ctx, { citizenid = cid, ['until'] = ban['until'] })
 end, {
     reason = true,
     oneAtATime = true,            -- the per-day cap is read before a yield (step Z5)
@@ -286,7 +294,7 @@ local function Lift(ctx, adminOnly)
     ctx.audit('missionBanLift', cid, tostring(ban['until']), nil, { category = 'flags' })
     ctx.notify(cid, 'info', 'sup.notice.mission_ban_lifted', {})
     PushBoard(cid)
-    return true, { citizenid = cid }
+    return WithActivity(ctx, { citizenid = cid })
 end
 
 Kit.supAction('server:sup:liftMissionBan', 'missionControls', function(ctx) return Lift(ctx, false) end, {

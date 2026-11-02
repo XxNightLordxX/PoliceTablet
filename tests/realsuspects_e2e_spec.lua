@@ -131,9 +131,10 @@ _G.GetPlayerTokens = function() return {} end
 _G.GetNumPlayerTokens = function() return 0 end
 _G.GetPlayerToken = function() return nil end
 _G.GetPlayerEndpoint = function(src) return '10.0.0.' .. tostring(src) end
+local offline = {}      -- src -> true while that player is disconnected (section 7)
 _G.GetPlayers = function()
     local out = {}
-    for src in pairs(H.players) do out[#out + 1] = tostring(src) end
+    for src in pairs(H.players) do if not offline[src] then out[#out + 1] = tostring(src) end end
     table.sort(out)
     return out
 end
@@ -169,7 +170,7 @@ local function AddPlayer(src, cid, first, last, job, grade)
 end
 local function QbxPlayer(src)
     local pd = PD[tonumber(src)]
-    if not pd then return nil end
+    if not pd or offline[tonumber(src)] then return nil end
     return { PlayerData = pd, Functions = {
         AddMoney = function() return true end,
     } }
@@ -177,12 +178,12 @@ end
 H.exportsMock.qbx_core = {
     GetPlayer = function(src) return QbxPlayer(src) end,
     GetPlayerByCitizenId = function(cid)
-        for src, pd in pairs(PD) do if pd.citizenid == cid then return QbxPlayer(src) end end
+        for src, pd in pairs(PD) do if pd.citizenid == cid and not offline[src] then return QbxPlayer(src) end end
         return nil
     end,
     GetQBPlayers = function()
         local out = {}
-        for src in pairs(PD) do out[src] = QbxPlayer(src) end
+        for src in pairs(PD) do if not offline[src] then out[src] = QbxPlayer(src) end end
         return out
     end,
     GetJobs = function()
@@ -911,6 +912,102 @@ do
     local rows = H.sql([[SELECT id FROM cp_mission_runs WHERE citizenid = ? AND mission_type = 'manual_award']],
         { CID[12] })
     H.eq(#rows, 1, 'strike: giving up pays nothing (still the one escape payment)')
+    def.locations = savedLocations
+    Config.DisabledMissions = {}
+end
+
+-- ============================================================================
+--                7. THE VOLUNTEER QUITS AND COMES BACK MID-CASE
+-- ============================================================================
+-- Step FX1. A CASE BY THE CRIMINAL TABLET, A DROP AND A RECONNECT WITHIN THE GRACE, AN OFFICER DROP.
+-- README 9.16: a suspect who comes back within Config.RealSuspects.disconnectGrace stays in the case.
+
+-- A player quits (FXServer's playerDropped) and later joins again with the same character (Qbox's player loaded).
+local function Drop(src)
+    offline[src] = true
+    H.fire('playerDropped', src, 'Exiting')
+    Secs(2)
+end
+local function Reconnect(src)
+    offline[src] = nil
+    TriggerEvent('QBCore:Server:PlayerLoaded', QbxPlayer(src))
+    Secs(2)
+end
+
+do
+    Config.DisabledMissions = { 'manhunt', 'suspicious_activity' }
+    local def = CP.Missions.get('warrant_service')
+    local savedLocations = def.locations
+    def.locations = { def.locations[1] }
+    Place(12, vec3(-300.0, 6100.0, 31.0))
+    Place(1, vec3(-200.0, 6000.0, 31.0))
+    Place(2, vec3(-202.0, 6000.0, 31.0))
+    local view = Cb('crimtab:get', 12) or {}
+    if not (view.status and view.status.listed) then
+        Act('server:crimtab:act', 12, { what = 'join', roles = { 'runner' } })
+    end
+    ClearCooldowns()
+    local ok, data = Act('server:acceptType', 1, { missionType = 'investigation', realSuspect = true })
+    H.eq(ok, true, 'drop: the unit takes an Investigation: ' .. tostring(data))
+    H.fire('crimson-police:server:unitReady', 2, { accepted = true })
+    Secs(3)
+    local run = Runs.getBySrc(1)
+    view = Cb('crimtab:get', 12) or {}
+    local job = view.jobs and view.jobs[1]
+    H.ok(job ~= nil, 'drop: the job reaches his tablet')
+    Act('server:crimtab:act', 12, { what = 'answer', token = job and job.token, yes = true })
+    Secs(2)
+    view = Cb('crimtab:get', 12) or {}
+    local meet = view.active and view.active.meet
+    if meet then Place(12, vec3(meet.x + 1.0, meet.y, meet.z)) end
+    Secs(3)
+    local start = run and run.location.start.coords or vec3(0.0, 0.0, 0.0)
+    Place(1, start)
+    Place(2, vec3(start.x + 2.0, start.y, start.z))
+    Secs(3)
+    if meet then
+        Place(1, vec3(meet.x + 3.0, meet.y, meet.z))
+        Place(2, vec3(meet.x + 5.0, meet.y, meet.z))
+    end
+    Secs(3)
+    H.eq((CP.Volunteers.matchOf(CID[12]) or {}).phase, 'engaged', 'drop: officers reached him: engaged')
+    local strikes = #(view.strikes or {})
+
+    -- he quits mid-case and joins again 30 s later: still the suspect of the case, no new strike
+    Drop(12)
+    H.eq(run and run.state, 'in_progress', 'drop: the case goes on while he is away')
+    H.eq((CP.Volunteers.matchOf(CID[12]) or {}).phase, 'engaged', 'drop: ...his match is kept within the grace')
+    Secs(30)
+    Reconnect(12)
+    if meet then Place(12, vec3(meet.x + 1.0, meet.y, meet.z)) end
+    Secs(3)
+    view = Cb('crimtab:get', 12) or {}
+    H.eq(view.active and view.active.phase, 'engaged', 'drop: back, his criminal tablet shows the case on Active')
+    H.eq(#(view.strikes or {}), strikes, 'drop: ...and no strike for the reconnect')
+    local _, rec = CP.Opponents.byCid(CID[12])
+    H.eq(rec and rec.src, 12, 'drop: the case has him again under his id')
+
+    -- Ben (the partner) quits: the case goes on for Ada, who cuffs the volunteer
+    Drop(2)
+    H.eq(Runs.getBySrc(2), nil, 'drop: the partner is off the case')
+    H.eq(Runs.getBySrc(1), run, 'drop: the leader is still on it')
+    if meet then Place(1, vec3(meet.x + 2.0, meet.y, meet.z)) end
+    Secs(1)
+    H.fire('police:server:CuffPlayer', 1, 12, false)
+    Meta(12, 'ishandcuffed', true)
+    Secs(Config.RealSuspects.custodyHoldSeconds + 3)
+    _, rec = CP.Opponents.byCid(CID[12])
+    H.eq(rec and rec.state, 'detained', 'drop: the volunteer, back, is detained by the leader')
+    Reconnect(2)
+    H.eq(Runs.getBySrc(2), nil, 'drop: the partner, back, is on no run')
+    if run and run.state ~= 'ended' then Act('server:abandon', 1, run.id) end
+    Secs(3)
+    H.eq(run and run.state, 'ended', 'drop: the mission ends')
+    view = Cb('crimtab:get', 12) or {}
+    H.eq(view.history and view.history[1] and view.history[1].outcome, 'detained',
+        'drop: his History shows the case detained')
+    H.eq(view.active, nil, 'drop: Active is empty again')
+    Meta(12, 'ishandcuffed', false)
     def.locations = savedLocations
     Config.DisabledMissions = {}
 end

@@ -17,12 +17,15 @@ export function MissionBanDialog({
     state,
     onClose,
     onDone,
+    activity,
 }: {
     officer: { citizenid: string; name: string } | null;
     control: MissionBanControl | null;
     state: MissionBanState | null;
     onClose: () => void;
-    onDone: () => void;
+    // reply: the action's reply (with activity = true it carries the officer's fresh activity, step FX1)
+    onDone: (reply: unknown) => void;
+    activity?: boolean;
 }) {
     const { run, busy } = useAction();
     // Config.Tablet.supervisorRemember (step WF2): a new ban opens with the hours and reason last used
@@ -47,20 +50,21 @@ export function MissionBanDialog({
 
     const submit = async () => {
         if (!officer || blocked) return;
+        const activityOf = activity ? officer.citizenid : undefined;
         const res = lifting
             ? await run(
                   'server:sup:liftMissionBan',
-                  { citizenid: officer.citizenid, reason: reason.trim() },
+                  { citizenid: officer.citizenid, reason: reason.trim(), activityOf },
                   { success: 'sup.ban.lifted' },
               )
             : await run(
                   'server:sup:missionBan',
-                  { citizenid: officer.citizenid, hours, reason: reason.trim() },
+                  { citizenid: officer.citizenid, hours, reason: reason.trim(), activityOf },
                   { success: 'sup.ban.set' },
               );
         if (!res.ok) return;
         if (!lifting) keepLastUsed('ban', remember, { number: hours ?? undefined, reason });
-        onDone();
+        onDone(res.data);
         onClose();
     };
 

@@ -25,6 +25,7 @@ import {
 import { cx } from '../../shared/cx';
 import { formatDateTime, formatDuration, formatMoney, formatNumber } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
+import { applyReplyView } from '../../shared/replyView';
 import { t } from '../../shared/i18n';
 import { useCan, useSession } from '../../shared/session';
 import {
@@ -64,7 +65,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     const [revoking, setRevoking] = useState<Commendation | null>(null);
     const [revokeReason, setRevokeReason] = useState('');
     const { run: act, busy } = useAction();
-    const { data, loading, error, refetch } = useRequest<OfficerActivity>(
+    const { data, loading, error, refetch, setData } = useRequest<OfficerActivity>(
         'sup:getOfficerActivity',
         { citizenid: officer?.citizenid },
         { skip: !officer },
@@ -72,19 +73,22 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     const current = data && data.officer?.citizenid === officer?.citizenid ? data : null;
     const runs = asList(current?.runs);
     const commendations = asList(current?.commendations);
+    // step FX1: an action's reply carries the officer's fresh activity (an older server: ask for it)
+    const applyReply = (reply: unknown) =>
+        applyReplyView<OfficerActivity>(reply, 'activity', setData, () => void refetch());
 
     // Revoke: only the issuer's own commendations (the server checks it too), with a reason.
     async function revoke() {
         if (!revoking || revokeReason.trim() === '') return;
         const res = await act(
             'server:sup:revokeCommendation',
-            { id: revoking.id, reason: revokeReason.trim() },
+            { id: revoking.id, reason: revokeReason.trim(), activityOf: officer?.citizenid },
             { success: 'profile.commend.revoked_toast' },
         );
         if (!res.ok) return;
         setRevoking(null);
         setRevokeReason('');
-        void refetch();
+        applyReply(res.data);
     }
     const columns: TableColumn<ActivityRun>[] = [
         {
@@ -201,13 +205,15 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                 control={current?.missionBan ?? null}
                 state={current?.missionBanState ?? null}
                 onClose={() => setBanning(false)}
-                onDone={() => void refetch()}
+                activity
+                onDone={applyReply}
             />
             <AwardPointsDialog
                 officer={awarding && officer ? { citizenid: officer.citizenid, name: officer.name } : null}
                 control={current?.awardPoints ?? null}
                 onClose={() => setAwarding(false)}
-                onDone={() => void refetch()}
+                activity
+                onDone={applyReply}
             />
             <ClearCooldownDialog
                 officer={clearing && officer ? { citizenid: officer.citizenid, name: officer.name } : null}
@@ -218,7 +224,8 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                 onClose={() => setCommending(false)}
                 officer={officer ? { citizenid: officer.citizenid, name: officer.name } : null}
                 scope="sup"
-                onDone={() => void refetch()}
+                activity
+                onDone={applyReply}
                 runs={runs
                     .filter(r => !!r.runUuid && r.state === 'completed')
                     .map(r => ({

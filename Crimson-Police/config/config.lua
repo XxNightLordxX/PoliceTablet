@@ -122,6 +122,10 @@ Config.Tablet = {
     -- last used on this tablet (kept until Crimson-Police restarts or the player reconnects), so a second award or ban
     -- in a row needs no typing; false = they open empty (as before). The server checks every value again
     supervisorRemember = false,
+    -- true = when a supervisor or an admin decides a flagged run or a dispute, the other supervisors of that
+    -- department who have the Review Queue open see the updated queue at once; false = they see it at their next
+    -- refresh, within 30 seconds (as before)
+    supervisorReviewLive = false,
     -- Mission desks: ox_target boxes that open the Officer UI. The coordinates are placeholders near the
     -- base-game stations, 2 m or more from sc-police's duty points: check them on your MLO.
     -- departments = nil lets every department use a desk; prop = a laptop only that player sees, or false.

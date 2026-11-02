@@ -153,8 +153,9 @@ local function GrantOf(cap)
 end
 
 -- True when an extra grant names this player for that power: his citizenid, his department with his grade, or his
--- Qbox gang with its grade. Nothing else (the supervisor rule, the switches) is checked here.
-function P.granted(src, cap)
+-- Qbox gang with its grade. Nothing else (the supervisor rule, the switches) is checked here. officer: his
+-- CP.Access.getOfficer when the caller has it (P.can, step FX1), so it is not looked up again.
+function P.granted(src, cap, officer)
     local n = math.tointeger(tonumber(src))
     if not n or n <= 0 or not P.isGrantable(cap) then return false end
     local g = GrantOf(cap)
@@ -167,7 +168,7 @@ function P.granted(src, cap)
         end
     end
     if type(g.departments) == 'table' and CP.Access and CP.Access.getOfficer then
-        local officer = CP.Access.getOfficer(n)
+        if type(officer) ~= 'table' then officer = CP.Access.getOfficer(n) end
         if type(officer) == 'table' and type(officer.department) == 'string'
             and P.gradeGrant(officer, g.departments[officer.department]) then
             return true
@@ -275,13 +276,18 @@ function P.can(src, action, ctx, known)
         if not SUPERVISOR_ALWAYS[action] and SupervisorConfig()[action] ~= true then
             return false, 'err.no_permission'
         end
-        -- a supervisor by grade, or a player an extra grant names for this power
-        if not CP.Access.isSupervisor(n) and not P.granted(n, action) then return false, 'err.no_permission' end
-        if ctx and (ctx.department ~= nil or ctx.departments ~= nil) then
-            local officer = CP.Access.getOfficer(n)
+        -- a supervisor by grade, or a player an extra grant names for this power. A department check needs his
+        -- officer record too: it is looked up once and passed on (step FX1)
+        local officer = nil
+        local deptCheck = ctx and (ctx.department ~= nil or ctx.departments ~= nil)
+        if deptCheck then
+            officer = CP.Access.getOfficer(n)
             if not officer then return false, 'err.no_permission' end
-            if not InDepartments(officer.department, ctx) then return false, 'err.other_department' end
         end
+        if not CP.Access.isSupervisor(n, officer) and not P.granted(n, action, officer) then
+            return false, 'err.no_permission'
+        end
+        if deptCheck and not InDepartments(officer.department, ctx) then return false, 'err.other_department' end
     end
 
     if ctx and ctx.runUuid ~= nil and REVIEW_ACTIONS[action] then

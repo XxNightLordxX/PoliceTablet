@@ -13,6 +13,7 @@ import {
     Textarea,
 } from '../../shared/components';
 import { useAction, useRequest } from '../../shared/hooks';
+import { applyReplyView } from '../../shared/replyView';
 import { t } from '../../shared/i18n';
 import { asList, type OfficerCooldowns } from '../../types/boards';
 import { useOptionalSession } from '../../shared/session';
@@ -54,7 +55,7 @@ export function ClearCooldownDialog({
     officer: { citizenid: string; name: string } | null;
     onClose: () => void;
 }) {
-    const { data, loading, error, refetch } = useRequest<OfficerCooldowns>(
+    const { data, loading, error, refetch, setData } = useRequest<OfficerCooldowns>(
         'sup:getOfficerCooldowns',
         { citizenid: officer?.citizenid },
         { skip: !officer },
@@ -85,8 +86,10 @@ export function ClearCooldownDialog({
             { citizenid: officer.citizenid, scope: target.scope, key: target.key, reason: reason.trim() },
             { success: 'sup.cd.cleared' },
         );
-        if (res.ok) keepLastUsed('cooldown', remember, { reason });
-        if (res.ok) void refetch();
+        if (!res.ok) return;
+        keepLastUsed('cooldown', remember, { reason });
+        // step FX1: the reply carries the fresh list (an older server: ask for it)
+        applyReplyView<OfficerCooldowns>(res.data, 'view', setData, () => void refetch());
     };
 
     let body;

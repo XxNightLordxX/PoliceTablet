@@ -366,8 +366,18 @@ do
     H.sql([[UPDATE cp_mission_runs SET void_kind = 'strike' WHERE id = ?]], { rid })
     H.sql([[INSERT INTO cp_disputes (run_id, citizenid, reason, status, goes_to, created_at)
         VALUES (?, 'OFF00006', 'not me', 'open', 'supervisor', NOW())]], { rid })
-    local ok, e = Act('server:admin:restoreRun', 1, { rowId = rid, reason = 'wrong void' })
+    -- step FX1: the run dialog asks for its views; the reply carries the run, the run list and the officer
+    local ok, e = Act('server:admin:restoreRun', 1, {
+        rowId = rid,
+        reason = 'wrong void',
+        views = { rowId = rid, citizenid = 'OFF00006', runs = { page = 1, size = 25 }, officer = true },
+    })
     H.ok(ok == true, 'restore run: ' .. tostring(e))
+    H.ok(type(e) == 'table' and type(e.view) == 'table' and e.view.id == rid and e.view.voided == false,
+        'FX1: the reply carries the run\'s detail, restored')
+    H.ok(type(e) == 'table' and type(e.runs) == 'table' and type(e.runs.runs) == 'table', 'FX1: ...the run list')
+    H.ok(type(e) == 'table' and type(e.officer) == 'table' and e.officer.citizenid == 'OFF00006',
+        'FX1: ...and the officer\'s detail')
     local r = One('SELECT voided, cash_status FROM cp_mission_runs WHERE id = ?', { rid })
     H.eq(H.bit(r.voided), 0, 'the row counts again')
     H.ok(r.cash_status ~= 'held', 'held cash is released: ' .. tostring(r.cash_status))
@@ -375,6 +385,8 @@ do
     H.eq(d.status, 'approved', 'the open dispute is closed as approved')
     ok, e = Act('server:admin:restoreRun', 1, { rowId = rid, reason = 'again' })
     H.ok(not ok and e == 'err.not_voided', 'a second restore is refused (K)')
+    ok, e = Act('server:admin:flagRow', 1, { rowId = rid, reason = 'look again' })
+    H.ok(ok == true and type(e) == 'table' and e.view == nil, 'FX1: no views asked: the reply is as before')
 
     -- forfeited cash stays forfeited
     local fid = W.row({ citizenid = 'OFF00006', points = 30, cash = 100, cashStatus = 'forfeited', voided = true })

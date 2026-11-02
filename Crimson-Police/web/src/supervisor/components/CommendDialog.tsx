@@ -15,13 +15,15 @@ export interface CommendDialogProps {
     scope: 'sup' | 'admin';
     // runs the officer took part in that the commendation may be for (optional)
     runs?: { runUuid: string; label: string }[];
-    onDone?: () => void;
+    // reply: the action's reply (with activity = true it carries the officer's fresh activity, step FX1)
+    onDone?: (reply: unknown) => void;
+    activity?: boolean;
 }
 
 const CITATION_MIN = 10;
 const CITATION_MAX = 255;
 
-export function CommendDialog({ open, onClose, officer, scope, runs, onDone }: CommendDialogProps) {
+export function CommendDialog({ open, onClose, officer, scope, runs, onDone, activity }: CommendDialogProps) {
     const session = useSession();
     const kinds = Array.isArray(session.config?.commendationKinds) ? session.config.commendationKinds : [];
     const [kind, setKind] = useState<string>(kinds[0] ?? '');
@@ -43,11 +45,17 @@ export function CommendDialog({ open, onClose, officer, scope, runs, onDone }: C
         if (!officer || !valid) return;
         const res = await run(
             scope === 'admin' ? 'server:admin:commend' : 'server:sup:commend',
-            { citizenid: officer.citizenid, kind, citation: citation.trim(), runUuid: runUuid || undefined },
+            {
+                citizenid: officer.citizenid,
+                kind,
+                citation: citation.trim(),
+                runUuid: runUuid || undefined,
+                activityOf: activity && scope === 'sup' ? officer.citizenid : undefined,
+            },
             { success: 'profile.commend.sent', successVars: { name: officer.name } },
         );
         if (!res.ok) return;
-        onDone?.();
+        onDone?.(res.data);
         onClose();
     }
 

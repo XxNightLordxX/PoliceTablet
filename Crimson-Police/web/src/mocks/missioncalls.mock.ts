@@ -191,7 +191,7 @@ registerMock('action', 'server:declineMissionCall', (payload: { callId?: number 
     return { view: view() };
 });
 
-registerMock('request', 'sup:getMissionCalls', (): SupCallsView => {
+const supCallsView = (): SupCallsView => {
     const v = view();
     return {
         open: v.calls.filter(c => c.status !== 'claimed'),
@@ -234,19 +234,21 @@ registerMock('request', 'sup:getMissionCalls', (): SupCallsView => {
             },
         ],
     };
-});
+};
+registerMock('request', 'sup:getMissionCalls', supCallsView);
 
+// like the server (step FX1), each staff action's reply carries the panel's fresh view
 for (const scope of ['sup', 'admin']) {
     registerMock('action', `server:${scope}:mcWithdraw`, (payload: { callId?: number; reason?: string }) => {
         if (!payload?.reason) throw new Error('err.reason_required');
         state.calls = state.calls.filter(c => c.call.id !== Number(payload.callId));
-        return true;
+        return { view: supCallsView() };
     });
     registerMock('action', `server:${scope}:mcCreate`, (payload: { type?: string; area?: string | null }) => {
         const id = Math.max(0, ...state.calls.map(c => c.call.id)) + 1;
         const area = AREAS.find(a => a.key === payload?.area) ?? null;
         state.calls.push({ postedAt: nowS(), offer: 180, call: base(id, { area, staff: true, rapidPoints: 0 }) });
-        return { id, code: `MC-04${20 + id}` };
+        return { id, code: `MC-04${20 + id}`, view: supCallsView() };
     });
     registerMock('action', `server:${scope}:mcPage`, (payload: { leaderSrc?: number; missionId?: string }) => {
         if (!payload?.leaderSrc) throw new Error('err.mc_page_target');
@@ -256,7 +258,7 @@ for (const scope of ['sup', 'admin']) {
             offer: 180,
             call: base(id, { paged: true, pushed: !!payload.missionId, staff: true, rapidPoints: 0 }),
         });
-        return { id, code: `MC-04${20 + id}` };
+        return { id, code: `MC-04${20 + id}`, view: supCallsView() };
     });
 }
 

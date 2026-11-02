@@ -15,11 +15,14 @@ export function AwardPointsDialog({
     control,
     onClose,
     onDone,
+    activity,
 }: {
     officer: { citizenid: string; name: string } | null;
     control: AwardPointsControl | null;
     onClose: () => void;
-    onDone: () => void;
+    // reply: the action's reply (with activity = true it carries the officer's fresh activity, step FX1)
+    onDone: (reply: unknown) => void;
+    activity?: boolean;
 }) {
     const { run, busy } = useAction();
     // Config.Tablet.supervisorRemember (step WF2): open with the points and reason last given
@@ -57,12 +60,13 @@ export function AwardPointsDialog({
                 points,
                 reason: reason.trim(),
                 confirm: needsConfirm ? confirm.trim() : undefined,
+                activityOf: activity ? officer.citizenid : undefined,
             },
             { success: 'sup.award.done' },
         );
         if (!res.ok) return;
         keepLastUsed('award', remember, { number: points ?? undefined, reason });
-        onDone();
+        onDone(res.data);
         onClose();
     };
 

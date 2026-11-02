@@ -23,6 +23,7 @@ import {
 import { asArray } from '../../shared/data';
 import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
+import { applyReplyView } from '../../shared/replyView';
 import { t } from '../../shared/i18n';
 import { useCan, useSession } from '../../shared/session';
 import type { LiveParticipant, LiveRunEx, LiveRunsData, SupAddTime } from '../../types/oversight';
@@ -248,7 +249,7 @@ function RunCard({
 export default function SupLiveMissions() {
     const session = useSession();
     const can = useCan();
-    const { data, loading, error, refetch } = useRequest<LiveRunsData>(
+    const { data, loading, error, refetch, setData } = useRequest<LiveRunsData>(
         'sup:getLiveRuns',
         {},
         { pollMs: 10000, pushTopic: 'operation' },
@@ -272,6 +273,8 @@ export default function SupLiveMissions() {
     const reload = async () => {
         await refetch();
     };
+    // step FX1: an action's reply carries the fresh view (an older server: ask for it)
+    const applyReply = (reply: unknown) => applyReplyView<LiveRunsData>(reply, 'view', setData, () => void reload());
 
     const confirmRecall = async (reason: string) => {
         if (!target) return;
@@ -281,7 +284,7 @@ export default function SupLiveMissions() {
             { success: 'sup.live.recalled', successVars: { name: target.p.name } },
         );
         setTarget(null);
-        if (res.ok) void reload();
+        if (res.ok) applyReply(res.data);
     };
 
     const confirmAddTime = async (minutes: number, reason: string) => {
@@ -293,7 +296,7 @@ export default function SupLiveMissions() {
         );
         if (res.ok) {
             setTimeRun(null);
-            void reload();
+            applyReply(res.data);
         }
     };
 

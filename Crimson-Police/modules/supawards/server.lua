@@ -208,6 +208,10 @@ Kit.supAction('server:sup:awardPoints', 'missionControls', function(ctx)
         CP.err(TAG, 'awardPoints failed: %s', tostring(res[2]))
         return false, 'err.internal'
     end
+    -- step FX1: from the department report's activity dialog the reply carries his fresh activity
+    if CP.Challenge and CP.Challenge.withActivity then
+        return CP.Challenge.withActivity(ctx.src, ctx.payload, res[2], res[3])
+    end
     return table.unpack(res, 2, res.n)
 end, {
     reason = true,

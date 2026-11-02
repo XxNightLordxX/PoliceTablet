@@ -6812,6 +6812,7 @@
   "sysadmin.ui.step.suspended": "Not suspended in Crimson-Police",
   "sysadmin.ui.step.suspended_dispatch": "Not suspended in SC-Dispatch",
   "sysadmin.ui.step.way": "The way ({via}) is on and the item is there",
+  "sysadmin.ui.storage_subtitle": "Where Crimson-Police keeps its data (the database or the saves folder), how much it holds and its upgrades.",
   "sysadmin.ui.storage_title": "Storage",
   "sysadmin.ui.subtitle": "Where Crimson-Police keeps its data, backups, Discord webhooks, recent problems and the other resources.",
   "sysadmin.ui.support_offline": "The player is offline.",

@@ -21,6 +21,7 @@ import type { TableColumn } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { fmtDateTime, formatDuration } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
+import { applyReplyView } from '../../shared/replyView';
 import { t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
@@ -187,7 +188,11 @@ function StaffDialog({
 // ============================================================================
 
 export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' }) {
-    const { data, loading, error, refetch } = useRequest<SupCallsView>('sup:getMissionCalls', {}, { pollMs: POLL_MS });
+    const { data, loading, error, refetch, setData } = useRequest<SupCallsView>(
+        'sup:getMissionCalls',
+        {},
+        { pollMs: POLL_MS },
+    );
     const { run, busy } = useAction();
     const [withdrawing, setWithdrawing] = useState<MissionCall | null>(null);
     const [staff, setStaff] = useState<Staff>(null);
@@ -204,6 +209,10 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
         await refetch();
         setStamp(s => s + 1);
     };
+    // step FX1: an action's reply carries the panel's fresh view (an older server: ask for it)
+    const applyReply = (reply: unknown) => {
+        if (applyReplyView<SupCallsView>(reply, 'view', setData, () => void reload())) setStamp(s => s + 1);
+    };
 
     const withdraw = async (reason: string) => {
         if (!withdrawing) return;
@@ -213,7 +222,7 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
             { success: 'mc.staff.withdrawn', successVars: { code: withdrawing.code } },
         );
         setWithdrawing(null);
-        if (res.ok) void reload();
+        if (res.ok) applyReply(res.data);
     };
 
     const submit = async (payload: StaffPayload) => {
@@ -224,7 +233,7 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
         });
         if (res.ok) {
             setStaff(null);
-            void reload();
+            applyReply(res.data);
         } else if (!page && scope === 'admin') {
             if (res.error === 'err.mc_staff_cooldown') setEarly({ type: payload.type, area: payload.area });
             else toast('error', t(res.error ?? 'err.internal'));
@@ -241,7 +250,7 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
         setEarly(null);
         if (res.ok) {
             setStaff(null);
-            void reload();
+            applyReply(res.data);
         }
     };
 

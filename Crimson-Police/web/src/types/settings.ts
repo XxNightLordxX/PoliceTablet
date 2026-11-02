@@ -166,6 +166,8 @@ export interface SettingsReply {
     settings: SettingView[];
     health: ConfigHealthItem[];
     pending: number;
+    // Reset all (step FX1): the whole Settings view after the reset
+    view?: SettingsData;
 }
 
 // One cp_settings_history row: the full old and new values (oldSaved = false: config.lua's value).

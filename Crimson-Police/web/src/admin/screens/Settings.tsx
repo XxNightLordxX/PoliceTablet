@@ -29,6 +29,7 @@ import { asArray } from '../../shared/data';
 import { request } from '../../shared/nui';
 import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
+import { applyReplyView } from '../../shared/replyView';
 import { useGrowingLimit, useWindowRows } from '../../shared/rowWindow';
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigate, useNavigation } from '../../shared/navigation';
@@ -1294,7 +1295,8 @@ export default function AdminSettings() {
         );
         if (res.ok) {
             if (res.data?.health) health.setData(asArray(res.data.health));
-            void refetch();
+            // step FX1: the reply carries the whole view (an older server: ask for it)
+            applyReplyView<SettingsData>(res.data, 'view', setData, () => void refetch());
         }
         setConfirm(null);
     };

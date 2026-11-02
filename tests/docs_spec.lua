@@ -257,4 +257,13 @@ for path in notes:gmatch('\n## (%S+)\n') do
 end
 H.ok(sections > 200, ('FILE_NOTES has a section per long-headed file (%d)'):format(sections))
 
+-- step FX1: a disconnect on the Weekly Boss costs its mission cooldown and that week's attempt, never the type cooldown
+-- (modules/draw skips the type cooldown for the boss); every SPEC line about the disconnect cooldown says so
+for line in spec:gmatch('[^\n]+') do
+    local lower = line:lower()
+    if lower:find('disconnect', 1, true) and lower:find('type cooldown', 1, true) then
+        H.ok(line:find('Weekly Boss', 1, true) ~= nil, 'SPEC names the Weekly Boss exception: ' .. line:sub(1, 70))
+    end
+end
+
 return H

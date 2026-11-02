@@ -36,6 +36,7 @@ import { asArray } from '../../shared/data';
 import { fmtDateTime, formatDateTime, formatNumber } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import { applyReplyView } from '../../shared/replyView';
 import type {
     DisputeView,
     OfficerDetail,
@@ -314,7 +315,7 @@ interface SuspendState {
 type DetailTab = 'overview' | 'runs' | 'corrections';
 
 function Detail({ citizenid }: { citizenid: string }) {
-    const { data: o, loading, error, refetch } = useRequest<OfficerDetail>('admin:getOfficer', { citizenid });
+    const { data: o, loading, error, refetch, setData } = useRequest<OfficerDetail>('admin:getOfficer', { citizenid });
     const [tab, setTab] = useState<DetailTab>('overview');
     const [runOpen, setRunOpen] = useState<OfficerRun | null>(null);
     const { run, busy } = useAction();
@@ -922,7 +923,8 @@ function Detail({ citizenid }: { citizenid: string }) {
             <RunDialog
                 rowId={runOpen ? runOpen.id : null}
                 onClose={() => setRunOpen(null)}
-                onChanged={() => void refetch()}
+                views={{ citizenid: o.citizenid, officer: true }}
+                onChanged={reply => applyReplyView<OfficerDetail>(reply, 'officer', setData, () => void refetch())}
             />
 
             <Dialog

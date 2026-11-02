@@ -1223,6 +1223,35 @@ local function LiftSuspension(ctx, citizenid)
     return false
 end
 
+-- Step FX1: a correction's reply carries the views the screen shows, so it needs no second request. payload.views =
+-- { rowId, archived, citizenid, runs = the run list's own filters, officer = true }: data.view the run's detail
+-- (admin:getRun), data.runs that officer's run list (admin:getOfficerRuns), data.officer his detail (admin:getOfficer).
+-- A view that cannot be built is left out, and the screen asks for it again.
+function Corr.withViews(src, payload, ok, data)
+    if not ok then return ok, data end
+    local v = type(payload) == 'table' and payload.views or nil
+    if type(v) ~= 'table' then return ok, data end
+    local out = {}
+    if type(data) == 'table' then
+        for k, x in pairs(data) do out[k] = x end
+    end
+    local rowId = Int(v.rowId, 1, 2147483647)
+    if rowId then
+        local okD, detail = pcall(Corr.runDetail, src, rowId, v.archived == true)
+        if okD and type(detail) == 'table' then out.view = detail end
+    end
+    local cid = ValidCid(v.citizenid) and v.citizenid or nil
+    if cid and type(v.runs) == 'table' then
+        local okR, runs = pcall(Corr.officerRuns, cid, v.runs)
+        if okR and type(runs) == 'table' then out.runs = runs end
+    end
+    if cid and v.officer == true then
+        local okO, detail = Call('Admin', 'officerDetail', src, cid)
+        if okO and type(detail) == 'table' then out.officer = detail end
+    end
+    return true, out
+end
+
 if Kit and Kit.action then
     -- ---- READS -------------------------------------------------------------
 
@@ -1531,7 +1560,7 @@ if Kit and Kit.action then
         ctx.audit('restoreRun', ('#%s %s'):format(tostring(row.id), tostring(row.citizenid)), 'voided', 'restored',
             { category = 'flags' })
         Invalidate(row.citizenid, 'restoreRun', row.mission_id)
-        return true, info
+        return Corr.withViews(ctx.src, p, true, info)
     end, { reason = true, self = SelfRow })
 
     Kit.action('server:admin:setVoidKind', 'restoreRun', function(ctx)
@@ -1541,7 +1570,9 @@ if Kit and Kit.action then
         if not row then return false, 'err.row_not_found' end
         if not U.truthy(row.voided) then return false, 'err.not_voided' end
         local old = row.void_kind or 'strike'
-        if old == p.kind then return true, { rowId = math.floor(Num(row.id, 0)), kind = old } end
+        if old == p.kind then
+            return Corr.withViews(ctx.src, p, true, { rowId = math.floor(Num(row.id, 0)), kind = old })
+        end
         local okK, errK = Kit.cas([[UPDATE cp_mission_runs SET void_kind = ? WHERE id = ? AND voided = 1
             AND COALESCE(void_kind, 'strike') = ?]], { p.kind, math.floor(Num(row.id, 0)), old })
         if not okK then return false, errK end
@@ -1552,7 +1583,8 @@ if Kit and Kit.action then
         ctx.audit('voidKindSet', ('#%s %s'):format(tostring(row.id), tostring(row.citizenid)), old, p.kind,
             { category = 'flags' })
         Invalidate(row.citizenid, 'voidKind')
-        return true, { rowId = math.floor(Num(row.id, 0)), kind = p.kind, liftedSuspension = lifted }
+        return Corr.withViews(ctx.src, p, true,
+            { rowId = math.floor(Num(row.id, 0)), kind = p.kind, liftedSuspension = lifted })
     end, { reason = true, self = SelfRow })
 
     -- Flag a run by hand: its XP is held until a review approves it; paid cash stays paid.
@@ -1570,7 +1602,7 @@ if Kit and Kit.action then
         Kit.notify(row.citizenid, 'warning', 'admin.notice.run_flagged',
             { mission = Has('Admin', 'missionLabel') and CP.Admin.missionLabel(row.mission_id) or row.mission_id })
         Invalidate(row.citizenid, 'flag')
-        return true, { rowId = math.floor(Num(row.id, 0)) }
+        return Corr.withViews(ctx.src, ctx.payload, true, { rowId = math.floor(Num(row.id, 0)) })
     end, { reason = true, self = SelfRow })
 
     -- ---- BADGES ------------------------------------------------------------

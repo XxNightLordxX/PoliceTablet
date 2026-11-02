@@ -341,6 +341,11 @@ do
         'supervisorControlsCard: its config.lua comment is its description')
     H.eq(E('Tablet.supervisorRemember').default, false, 'the supervisor dialogs ship opening empty (WF2)')
     H.eq(E('Tablet.supervisorRemember').kind, 'boolean', 'supervisorRemember is a switch')
+    -- step FX1: the live Review Queue, shipped off, described by its config.lua comment
+    H.eq(E('Tablet.supervisorReviewLive').default, false, 'the live Review Queue ships off (FX1)')
+    H.eq(E('Tablet.supervisorReviewLive').kind, 'boolean', 'supervisorReviewLive is a switch')
+    H.ok((E('Tablet.supervisorReviewLive').desc or ''):find('Review Queue open', 1, true) ~= nil,
+        'supervisorReviewLive: its config.lua comment is its description')
     H.ok((E('Tablet.supervisorRemember').desc or ''):find('last used on this tablet', 1, true) ~= nil,
         'supervisorRemember: its config.lua comment is its description')
     H.ok(not Check('Tablet.supervisorLanding', 'payouts'), 'another landing is refused')
@@ -1723,8 +1728,11 @@ do
     H.ok(ok and Row('Limits.maxUnitSize') == nil, 'an ignored setting can be reset')
 
     -- reset all
-    local okAll = S.resetAll(1)
+    -- through the Admin UI's own action: step FX1, the reply carries the whole Settings view (no second request)
+    local okAll, dAll = Act('server:admin:resetAllSettings', 1, {})
     H.ok(okAll, 'reset all')
+    H.ok(type(dAll) == 'table' and type(dAll.view) == 'table' and type(dAll.view.sections) == 'table',
+        'FX1: the Reset all reply carries the Settings view')
     H.eq(#H.sql('SELECT setting_key FROM cp_settings'), 0, 'no saved setting is left')
     H.eq(Config.Units.nearbyBands[3], 3000, 'Config is config.lua again')
     H.eq(LastAudit().action, 'settingsResetAll', 'audited once')

@@ -1069,6 +1069,16 @@ do
     H.eq(Cb('sup:getOfficerActivity', 21, { citizenid = 'NOBODY' }).error, 'err.unknown_officer', 'unknown officer')
     H.eq(Cb('sup:getOfficerActivity', 21, { citizenid = 'a b' }).error, 'err.invalid_citizenid', 'bad citizenid')
     H.eq(Cb('sup:getOfficerActivity', 21, nil).error, 'err.invalid_payload', 'bad args')
+    -- step FX1: an action from the activity dialog (activityOf) answers with his fresh activity; any other none
+    local okW, reply = CP.Challenge.withActivity(21, { activityOf = 'S2' }, true, { citizenid = 'S2' })
+    H.ok(okW and reply.citizenid == 'S2' and reply.activity and reply.activity.officer.name == 'Sam Two',
+        'FX1: the reply carries his activity and keeps its own fields')
+    local _, plain = CP.Challenge.withActivity(21, { citizenid = 'S2' }, true, { citizenid = 'S2' })
+    H.eq(plain.activity, nil, 'FX1: no activityOf: the reply is as before')
+    local _, other = CP.Challenge.withActivity(21, { activityOf = 'F1' }, true, {})
+    H.eq(other.activity, nil, 'FX1: another department\'s officer: no activity')
+    H.eq(select(2, CP.Challenge.withActivity(21, { activityOf = 'S2' }, false, 'err.x')), 'err.x',
+        'FX1: a refused action keeps its error')
 end
 
 -- the weekly reset through CP.Schedule: week 3 closes, week 4 gets its bounty

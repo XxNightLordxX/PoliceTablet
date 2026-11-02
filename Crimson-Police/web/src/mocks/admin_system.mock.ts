@@ -40,7 +40,7 @@ const backups: BackupView[] = [
     },
 ];
 
-registerMock('request', 'admin:getStorage', (): StorageView => ({
+const storageView = (): StorageView => ({
     mode: 'files',
     folder: 'saves',
     tables: [
@@ -62,11 +62,17 @@ registerMock('request', 'admin:getStorage', (): StorageView => ({
     state: 'active',
     runsGoing: 0,
     backups: backups.length,
-}));
+});
+registerMock('request', 'admin:getStorage', storageView);
 
-registerMock('action', 'server:admin:storageCopy', () => ({ message: 'admin.cmd.storage_copied', restart: false }));
-registerMock('action', 'server:admin:setStorageMode', () => ({ mode: 'database', restart: true }));
-registerMock('action', 'server:admin:useStoreAgain', () => ({ state: 'active' }));
+// like the server (step WF3), each Storage action's reply carries the fresh Storage view
+registerMock('action', 'server:admin:storageCopy', () => ({
+    message: 'admin.cmd.storage_copied',
+    restart: false,
+    view: storageView(),
+}));
+registerMock('action', 'server:admin:setStorageMode', () => ({ mode: 'database', restart: true, view: storageView() }));
+registerMock('action', 'server:admin:useStoreAgain', () => ({ state: 'active', view: storageView() }));
 
 const backupsView = (): BackupsData => ({
     backups: [...backups].reverse(),

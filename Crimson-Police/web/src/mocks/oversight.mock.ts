@@ -318,12 +318,14 @@ if (EDGE) {
 // "+ minutes" (step P7): offered in the default mock, stateful per run (the server's caps)
 const supAddTime = { min: 1, max: 5, maxSeconds: 300, perDay: 10, usedToday: 0 };
 
-registerMock('request', 'sup:getLiveRuns', (): LiveRunsData => ({
+const liveRunsView = (): LiveRunsData => ({
     runs: emptyIf(liveRuns.filter(r => r.participants.some(p => p.status === 'active'))),
     serverTime: now(),
     canRecall: true,
     addTime: EMPTY ? null : { ...supAddTime },
-}));
+});
+registerMock('request', 'sup:getLiveRuns', liveRunsView);
+// like the server (step FX1), "+ minutes" and Recall answer with the fresh Live Missions view
 registerMock('action', 'server:sup:addRunTime', (p: { runId?: string; minutes?: number; reason?: string }) => {
     const run = liveRuns.find(r => r.runId === p?.runId);
     if (!run || run.state !== 'in_progress') throw new Error('err.invalid_run');
@@ -337,7 +339,7 @@ registerMock('action', 'server:sup:addRunTime', (p: { runId?: string; minutes?: 
     run.timeAdded = total;
     run.remaining = (run.remaining ?? 0) + minutes * 60;
     supAddTime.usedToday += 1;
-    return { runId: run.runId, timeAdded: total };
+    return { runId: run.runId, timeAdded: total, view: liveRunsView() };
 });
 registerMock('action', 'server:sup:forceRecall', (p: { runId: string; src: number }) => {
     const run = liveRuns.find(r => r.runId === p?.runId);
@@ -345,7 +347,7 @@ registerMock('action', 'server:sup:forceRecall', (p: { runId: string; src: numbe
     if (!run) throw new Error('err.invalid_run');
     if (!part || part.status !== 'active') throw new Error('err.not_participant');
     part.status = 'left';
-    return { runId: run.runId, src: part.src };
+    return { runId: run.runId, src: part.src, view: liveRunsView() };
 });
 
 // ============================================================================
@@ -1084,21 +1086,26 @@ registerMock('action', 'server:admin:suspend', (p: { citizenid: string; days: nu
     ];
     return { citizenid: o.citizenid, days, untilTs: o.suspendedUntil };
 });
-registerMock('action', 'server:admin:voidRun', (p: { rowId?: number; runUuid?: string; reason: string }) => {
-    if (!p?.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
-    for (const d of Object.values(officerDetails)) {
-        const r = d.runs.find(x => x.id === p.rowId);
-        if (r) {
-            if (r.voided) throw new Error('err.already_voided');
-            r.voided = true;
-            d.stats.voided += 1;
-            return { voided: 1 };
+registerMock(
+    'action',
+    'server:admin:voidRun',
+    (p: { rowId?: number; runUuid?: string; reason: string; views?: { officer?: boolean } }) => {
+        if (!p?.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+        for (const d of Object.values(officerDetails)) {
+            const r = d.runs.find(x => x.id === p.rowId);
+            if (r) {
+                if (r.voided) throw new Error('err.already_voided');
+                r.voided = true;
+                d.stats.voided += 1;
+                // like the server (step FX1), the reply carries the officer's detail when the screen shows it
+                return p.views?.officer ? { voided: 1, officer: d } : { voided: 1 };
+            }
         }
-    }
-    // A row from another screen's mock data (e.g. Admin Leaderboards): accept it.
-    if (!p.rowId && !p.runUuid) throw new Error('err.invalid_payload');
-    return { voided: 1 };
-});
+        // A row from another screen's mock data (e.g. Admin Leaderboards): accept it.
+        if (!p.rowId && !p.runUuid) throw new Error('err.invalid_payload');
+        return { voided: 1 };
+    },
+);
 registerMock('action', 'server:admin:awardPoints', (p: { citizenid: string; points: number; reason: string }) => {
     if (!p?.reason) throw new Error('err.reason_required');
     if (!(Number(p.points) >= 1)) throw new Error('err.invalid_points');

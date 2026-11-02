@@ -22,7 +22,7 @@ import {
 import { DecisionsBlock, PeopleBlock } from '../../hud/Debrief';
 import { asArray } from '../../shared/data';
 import { formatDateTime, formatDuration } from '../../shared/format';
-import { useAction, useRequest } from '../../shared/hooks';
+import { useAction, usePush, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { applyReplyView } from '../../shared/replyView';
 import { toast } from '../../shared/toast';
@@ -222,6 +222,10 @@ export default function SupReviewQueue() {
         {},
         { pollMs: 30000 },
     );
+    // Config.Tablet.supervisorReviewLive (step FX1): another supervisor's decision pushes this viewer's fresh queue
+    usePush<ReviewQueueData | null>('reviewQueue', q => {
+        if (q && typeof q === 'object') setData(q);
+    });
     const { run, busy } = useAction();
     const canReview = can('reviewFlagged') && data?.canReview !== false;
     const canHandle = can('handleDisputes') && data?.canHandle !== false;

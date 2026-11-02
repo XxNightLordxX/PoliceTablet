@@ -1067,6 +1067,84 @@ do
 end
 
 -- ============================================================================
+--           8B. A SUPERVISOR PUSHES A MISSION, THEN ADDS TIME TO IT
+-- ============================================================================
+-- Step FX1. THE PAGE WITH A MISSION, THE ACCEPT, "+ MINUTES", EACH REPLY WITH ITS SCREEN'S VIEW; A RESTART.
+-- Docs (SPEC Hard rules, Mission choice): a pushed mission is offered only to that unit, which may accept it; README
+-- Mission controls: "+ minutes" adds the admin's min to max minutes to a running mission of his department.
+
+do
+    for _, src in ipairs({ 1, 6 }) do
+        local ok, err = Act('server:admin:clearCooldowns', 5,
+            { citizenid = CID[src], scope = 'all', reason = 'FX1 push', requestId = RequestId() })
+        H.eq(ok, true, ('push: the admin clears the cooldowns of %s: %s'):format(CID[src], tostring(err)))
+    end
+    Place(1, vec3(400.0, -980.0, 30.0))
+    Place(6, vec3(402.0, -980.0, 30.0))
+    FormUnit(1, 6)
+
+    -- the Page dialog offers the missions; the push names one, its reply carries the panel (step FX1)
+    local view = Cb('sup:getMissionCalls', 3)
+    H.ok(view and view.push and #(view.push.missions or {}) > 0, 'push: the Page dialog lists the missions to push')
+    local ok, data = Act('server:sup:mcPage', 3, { type = 'patrol', leaderSrc = 1, missionId = 'traffic_enforcement' })
+    H.eq(ok, true, 'push: the supervisor pushes Traffic Enforcement to the unit: ' .. tostring(data))
+    local panel = type(data) == 'table' and data.view or nil
+    H.ok(type(panel) == 'table' and type(panel.open) == 'table', 'push: the reply carries the panel view (FX1)')
+    local listed = false
+    for _, c in ipairs(panel and panel.open or {}) do if c.id == data.id then listed = c.pushed == true end end
+    H.ok(listed, 'push: ...the pushed call in it')
+    local card
+    for _, c in ipairs((CP.MissionCalls.list(1) or {}).calls or {}) do if c.id == data.id then card = c end end
+    H.ok(card and card.pushed and card.missionLabel ~= nil, 'push: the paged leader sees the mission on Dispatch')
+    local other
+    for _, c in ipairs((CP.MissionCalls.list(7) or {}).calls or {}) do if c.id == data.id then other = c end end
+    H.eq(other, nil, 'push: another officer never sees it')
+    ok, data = Act('server:claimMissionCall', 1, { callId = card and card.id })
+    H.eq(ok, true, 'push: the unit accepts it: ' .. tostring(data))
+    Secs(2)
+    local run = Runs.getBySrc(1)
+    H.eq(run and run.missionId, 'traffic_enforcement', 'push: the pushed mission, no draw')
+    H.eq(Runs.getBySrc(6), run, 'push: the partner is on it')
+    H.eq(Count([[SELECT COUNT(*) AS n FROM cp_audit WHERE action = 'mcPush']]), 1, 'push: audited once')
+
+    -- "+ minutes" on the running mission: the run gets the time, the reply carries Live Missions (step FX1)
+    if run then
+        Arrive(run, 1)
+        Arrive(run, 6)
+        local live = Cb('sup:getLiveRuns', 3)
+        local add = live and live.addTime
+        H.ok(add ~= nil and add.min >= 1, 'live: the supervisor is offered "+ minutes"')
+        local before = tonumber(run.timeAdded) or 0
+        local mark = #H.events
+        ok, data = Act('server:sup:addRunTime', 3,
+            { runId = run.id, minutes = add and add.min or 1, reason = 'Long drive', requestId = RequestId() })
+        H.eq(ok, true, 'live: the supervisor adds minutes: ' .. tostring(data))
+        local added = (add and add.min or 1) * 60
+        H.eq((tonumber(run.timeAdded) or 0) - before, added, 'live: the run has the minutes')
+        local lv = type(data) == 'table' and data.view or nil
+        local shown
+        for _, r in ipairs(lv and lv.runs or {}) do if r.runId == run.id then shown = r end end
+        H.eq(shown and shown.timeAdded, before + added, 'live: the reply carries Live Missions with the time (FX1)')
+        H.eq(lv and lv.addTime and lv.addTime.usedToday, (add and add.usedToday or 0) + 1,
+            'live: ...and today\'s use counted')
+        H.ok(Toasts(1, mark)['sup.notice.time_added'], 'live: the unit is told')
+        H.eq(Count([[SELECT COUNT(*) AS n FROM cp_audit WHERE action = 'runTimeAdd']]), 1, 'live: audited once')
+        ok, data = Act('server:sup:addRunTime', 7,
+            { runId = run.id, minutes = 1, reason = 'Not a supervisor', requestId = RequestId() })
+        H.eq(ok, false, 'live: an officer cannot add time (' .. tostring(data) .. ')')
+
+        -- a restart ends the run (no row); the push is not offered again
+        Restart()
+        H.eq(Runs.getBySrc(1), nil, 'restart: the pushed run is gone')
+        local again
+        for _, c in ipairs((CP.MissionCalls.list(1) or {}).calls or {}) do if c.pushed then again = c end end
+        H.eq(again, nil, 'restart: no pushed call is left on Dispatch')
+    end
+    CP.Units.remove(1, { reason = 'left', silent = true })
+    CP.Units.remove(6, { reason = 'left', silent = true })
+end
+
+-- ============================================================================
 --                                9. CORRECTIONS
 -- ============================================================================
 -- GIVE POINTS, VOID A RUN, A RESTART, RESTORE IT.

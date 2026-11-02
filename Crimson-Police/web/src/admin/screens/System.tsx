@@ -159,6 +159,7 @@ function StoragePanel() {
             {data.maintenance?.restart ? <Note tone="warning">{t('ui.maintenance.restart')}</Note> : null}
             <Card
                 title={t('sysadmin.ui.storage_title')}
+                subtitle={t('sysadmin.ui.storage_subtitle')}
                 icon="server"
                 actions={
                     <IconButton

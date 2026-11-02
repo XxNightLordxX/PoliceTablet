@@ -4300,7 +4300,13 @@ CP.Net.action('server:admin:resetAllSettings', function(src)
     local ok, err = AdminOnly(src)
     if not ok then return false, err end
     if not CP.Net.rateOk(src, 'settings:resetAll', 1, 5000) then return false, 'err.rate_limited' end
-    return Settings.resetAll(src)
+    local okR, data = Settings.resetAll(src)
+    -- step FX1: the reply carries the whole Settings view (data.view), so the screen needs no second request
+    if okR and type(data) == 'table' then
+        local okV, view = pcall(Settings.all)
+        if okV and type(view) == 'table' then data.view = view end
+    end
+    return okR, data
 end, { rate = 2 })
 
 CP.Net.action('server:admin:setMissionEnabled', function(src, payload)

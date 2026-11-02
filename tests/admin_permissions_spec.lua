@@ -35,8 +35,9 @@ CP.Access = {
         }
     end,
 }
-CP.Access.isSupervisor = function(src)
-    local o = CP.Access.getOfficer(src)
+-- as the real one: the officer record when the caller has it (step FX1), else a lookup
+CP.Access.isSupervisor = function(src, officer)
+    local o = type(officer) == 'table' and officer.src == src and officer or CP.Access.getOfficer(src)
     return o ~= nil and o.isSupervisor == true
 end
 CP.Qbx = {
@@ -294,6 +295,31 @@ do
     Config.Permissions.supervisor.missionControls = false
     H.ok(not DC.canChange(2, 'g1_wait'), 'the master switch off: no')
     Config.Permissions = U.deepcopy(keepPerms)
+end
+
+-- ============================================================================
+--            STEP FX1: A DEPARTMENT CHECK LOOKS THE OFFICER UP ONCE
+-- ============================================================================
+
+do
+    local realGet, n = CP.Access.getOfficer, 0
+    CP.Access.getOfficer = function(src)
+        n = n + 1
+        return realGet(src)
+    end
+    H.eq(P.can(1, 'viewMissionList', { department = 'sast' }), true, 'FX1: a supervisor of his department may')
+    H.eq(n, 1, 'FX1: ...with one officer lookup, passed on to the supervisor and grant checks')
+    n = 0
+    local ok, err = P.can(1, 'viewMissionList', { department = 'fib' })
+    H.ok(ok == false and err == 'err.other_department', 'FX1: another department is still refused')
+    H.eq(n, 1, 'FX1: ...also with one lookup')
+    n = 0
+    ok, err = P.can(2, 'viewMissionList', { department = 'sast' })
+    H.ok(ok == false and err == 'err.no_permission', 'FX1: an officer who is no supervisor is still refused')
+    n = 0
+    H.eq(P.can(1, 'viewMissionList'), true, 'FX1: without a department the supervisor check still looks him up')
+    H.eq(n, 1, 'FX1: ...once')
+    CP.Access.getOfficer = realGet
 end
 
 return H

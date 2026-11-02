@@ -1372,6 +1372,10 @@ local function SupAction(permission, fn)
     return function(src, payload)
         local ok, errKey = CP.Permissions.can(src, permission)
         if not ok then return false, errKey or 'err.no_permission' end
+        -- step FX1: from the department report's activity dialog the reply carries his fresh activity
+        if Has('Challenge', 'withActivity') then
+            return CP.Challenge.withActivity(src, payload, fn(src, 'supervisor', payload))
+        end
         return fn(src, 'supervisor', payload)
     end
 end

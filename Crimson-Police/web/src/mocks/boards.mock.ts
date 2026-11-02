@@ -1189,7 +1189,7 @@ reg('request', 'sup:getDeptReport', () => {
     return report;
 });
 
-reg('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) => {
+const activityView = (args: { citizenid?: string } | null) => {
     const o = args?.citizenid ? byCid(args.citizenid) : undefined;
     if (!o) throw new Error('err.unknown_officer');
     const me = viewer();
@@ -1273,7 +1273,11 @@ reg('request', 'sup:getOfficerActivity', (args: { citizenid?: string } | null) =
                 : { min: 1, max: 50, perDay: 100, usedToday: mockAwarded, confirmAbove: 500 },
     };
     return activity;
-});
+};
+reg('request', 'sup:getOfficerActivity', activityView);
+// like the server (step FX1): an action sent with activityOf answers with that officer's fresh activity
+const withActivity = <T extends object>(p: { activityOf?: string } | null, out: T): T & { activity?: unknown } =>
+    p?.activityOf ? { ...out, activity: activityView({ citizenid: p.activityOf }) } : out;
 
 // ============================================================================
 //                 CLEAR COOLDOWN (DEPARTMENT REPORT, STEP P7)
@@ -1286,40 +1290,48 @@ const supClears: { citizenid: string; scope: string; key: string }[] = [];
 // step P11: the mission bans set in this mock session
 const mockBans: Record<string, MissionBanState> = {};
 
-reg('action', 'server:sup:missionBan', (p: { citizenid?: string; hours?: number; reason?: string }) => {
-    if (!p?.citizenid || !byCid(p.citizenid)) throw new Error('err.unknown_officer');
-    if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
-    const hours = Number(p.hours);
-    if (!Number.isInteger(hours) || hours < 1 || hours > 24) throw new Error('err.mission_ban_hours');
-    if (Object.keys(mockBans).length >= 3) throw new Error('err.mission_ban_used');
-    const me = viewer();
-    mockBans[p.citizenid] = { until: now() + hours * 3600, by: `${me.rank} ${me.name}`, reason: p.reason };
-    return { citizenid: p.citizenid, until: mockBans[p.citizenid].until };
-});
+reg(
+    'action',
+    'server:sup:missionBan',
+    (p: { citizenid?: string; hours?: number; reason?: string; activityOf?: string }) => {
+        if (!p?.citizenid || !byCid(p.citizenid)) throw new Error('err.unknown_officer');
+        if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+        const hours = Number(p.hours);
+        if (!Number.isInteger(hours) || hours < 1 || hours > 24) throw new Error('err.mission_ban_hours');
+        if (Object.keys(mockBans).length >= 3) throw new Error('err.mission_ban_used');
+        const me = viewer();
+        mockBans[p.citizenid] = { until: now() + hours * 3600, by: `${me.rank} ${me.name}`, reason: p.reason };
+        return withActivity(p, { citizenid: p.citizenid, until: mockBans[p.citizenid].until });
+    },
+);
 
 // step P22: the points the viewer gave in this mock session (Give points, 1-50 an award, 100 a day)
 let mockAwarded = 0;
 
-reg('action', 'server:sup:awardPoints', (p: { citizenid?: string; points?: number; reason?: string }) => {
-    if (!p?.citizenid || !byCid(p.citizenid)) throw new Error('err.unknown_officer');
-    if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
-    const points = Number(p.points);
-    if (!Number.isInteger(points) || points < 1 || points > 50) throw new Error('err.award_points_range');
-    if (mockAwarded + points > 100) throw new Error('err.award_daily_limit');
-    mockAwarded += points;
-    return { citizenid: p.citizenid, points, rowId: 9000 + mockAwarded };
-});
+reg(
+    'action',
+    'server:sup:awardPoints',
+    (p: { citizenid?: string; points?: number; reason?: string; activityOf?: string }) => {
+        if (!p?.citizenid || !byCid(p.citizenid)) throw new Error('err.unknown_officer');
+        if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+        const points = Number(p.points);
+        if (!Number.isInteger(points) || points < 1 || points > 50) throw new Error('err.award_points_range');
+        if (mockAwarded + points > 100) throw new Error('err.award_daily_limit');
+        mockAwarded += points;
+        return withActivity(p, { citizenid: p.citizenid, points, rowId: 9000 + mockAwarded });
+    },
+);
 
-reg('action', 'server:sup:liftMissionBan', (p: { citizenid?: string; reason?: string }) => {
+reg('action', 'server:sup:liftMissionBan', (p: { citizenid?: string; reason?: string; activityOf?: string }) => {
     if (!p?.citizenid || !mockBans[p.citizenid]) throw new Error('err.mission_ban_none');
     if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
     delete mockBans[p.citizenid];
-    return { citizenid: p.citizenid };
+    return withActivity(p, { citizenid: p.citizenid });
 });
 const cleared = (cid: string, scope: string, key: string) =>
     supClears.some(c => c.citizenid === cid && c.scope === scope && c.key === key);
 
-reg('request', 'sup:getOfficerCooldowns', (args: { citizenid?: string } | null) => {
+const cooldownsView = (args: { citizenid?: string } | null) => {
     const o = args?.citizenid ? byCid(args.citizenid) : undefined;
     if (!o) throw new Error('err.unknown_officer');
     const t0 = now();
@@ -1337,7 +1349,8 @@ reg('request', 'sup:getOfficerCooldowns', (args: { citizenid?: string } | null) 
         serverTime: t0,
     };
     return view;
-});
+};
+reg('request', 'sup:getOfficerCooldowns', cooldownsView);
 
 reg(
     'action',
@@ -1349,7 +1362,12 @@ reg(
         if (supClears.filter(c => c.citizenid === p.citizenid).length >= 3) throw new Error('err.live_clear_limit');
         if (supClears.length >= 5) throw new Error('err.sup_clear_used');
         supClears.push({ citizenid: p.citizenid, scope: p.scope, key: String(p.key ?? '') });
-        return { used: supClears.filter(c => c.citizenid === p.citizenid).length, max: 3 };
+        // like the server (step FX1), the reply carries the dialog's fresh list
+        return {
+            used: supClears.filter(c => c.citizenid === p.citizenid).length,
+            max: 3,
+            view: cooldownsView({ citizenid: p.citizenid }),
+        };
     },
 );
 

@@ -27,6 +27,7 @@ end
 -- H.boot puts its own natives back on every start, so Natives() runs after each boot.
 
 local ents, nextHandle, nextNet = {}, 9000, 20000
+local offline = {}        -- src -> true while that player is disconnected (section 5)
 local netToEnt = {}
 local bags = {}
 local invoking = nil      -- the resource that calls an export or sends an event (Crimson-Contracts)
@@ -116,7 +117,7 @@ local function Natives()
     end
     _G.GetPlayers = function()
         local out = {}
-        for src in pairs(H.players) do out[#out + 1] = tostring(src) end
+        for src in pairs(H.players) do if not offline[src] then out[#out + 1] = tostring(src) end end
         table.sort(out)
         return out
     end
@@ -164,7 +165,7 @@ local function AddPlayer(src, cid, first, last, job, grade, admin)
 end
 local function QbxPlayer(src)
     local pd = PD[tonumber(src)]
-    if not pd then return nil end
+    if not pd or offline[tonumber(src)] then return nil end
     return {
         PlayerData = pd,
         Functions = {
@@ -183,12 +184,12 @@ end
 H.exportsMock.qbx_core = {
     GetPlayer = function(src) return QbxPlayer(src) end,
     GetPlayerByCitizenId = function(cid)
-        for src, pd in pairs(PD) do if pd.citizenid == cid then return QbxPlayer(src) end end
+        for src, pd in pairs(PD) do if pd.citizenid == cid and not offline[src] then return QbxPlayer(src) end end
         return nil
     end,
     GetQBPlayers = function()
         local out = {}
-        for src in pairs(PD) do out[src] = QbxPlayer(src) end
+        for src in pairs(PD) do if not offline[src] then out[src] = QbxPlayer(src) end end
         return out
     end,
     GetJobs = function()
@@ -239,10 +240,13 @@ AddPlayer(4, 'LFE2ESU4', 'Fay', 'Chief', 'sast', 3)        -- the supervisor who
 AddPlayer(5, 'LFE2EAD5', 'Ann', 'Admin', 'unemployed', 0, true)
 AddPlayer(6, 'LFE2EOF6', 'Cleo', 'Trooper', 'sast', 1)     -- the backup who joins and talks a suspect down
 AddPlayer(7, 'LFE2ERK7', 'Rex', 'Rookie', 'sast', 0)       -- the rookie
+AddPlayer(8, 'LFE2ERK8', 'Ivy', 'Rookie', 'sast', 0)       -- the second rookie (section 5)
 AddPlayer(9, 'LFE2ECR9', 'Cal', 'Crook', 'unemployed', 0)  -- crew member A of the first crime
 AddPlayer(10, 'LFE2EC10', 'Dee', 'Crook', 'unemployed', 0) -- crew member B of the first crime
 AddPlayer(11, 'LFE2EC11', 'Eve', 'Crook', 'unemployed', 0) -- crew of the crime the restart ends
 AddPlayer(12, 'LFE2EC12', 'Gus', 'Crook', 'unemployed', 0)
+AddPlayer(13, 'LFE2EC13', 'Hal', 'Crook', 'unemployed', 0) -- the crew of section 5 (a quit and rejoin)
+AddPlayer(14, 'LFE2EC14', 'Joy', 'Crook', 'unemployed', 0)
 local CID = {}
 for src, pd in pairs(PD) do CID[src] = pd.citizenid end
 
@@ -911,6 +915,146 @@ do
     H.eq(#H.sql('SELECT badge_id FROM cp_badges WHERE citizenid = ?', { CID[7] }), 1, 'fto: one badge')
     H.eq(#Rows('mission_id = ?', { 'reward_ftoSignOff' }), 1, 'fto: one sign-off payment row')
     H.eq(#Rows('mission_id = ?', { 'reward_ftoComplete' }), 1, 'fto: one finished-training payment row')
+end
+
+-- ============================================================================
+--             5. A PLAYER QUITS AND COMES BACK IN THE MIDDLE OF IT
+-- ============================================================================
+-- Step FX1. A LIVE CRIME: A SUSPECT AND AN OFFICER DROP; FIELD TRAINING: THE ROOKIE MID-RUN, THE TRAINER BEFORE THE
+-- SIGN-OFF. README 9.16 and 6.11: a suspect who comes back within Config.RealSuspects.disconnectGrace stays in the
+-- case; an officer who quits leaves the run with his own result while it goes on for the rest; the training is saved.
+
+-- A player quits (FXServer's playerDropped) and later joins again with the same character (Qbox's player loaded).
+local function Drop(src)
+    offline[src] = true
+    H.fire('playerDropped', src, 'Exiting')
+    Secs(2)
+end
+local function Reconnect(src)
+    offline[src] = nil
+    TriggerEvent('QBCore:Server:PlayerLoaded', QbxPlayer(src))
+    Secs(2)
+end
+-- Staff clear all of an officer's cooldowns (Admin UI -> Live -> anti-farm, one of his clears a day), so he may play
+-- Gang Shootout again.
+local function ClearCooldowns(cid)
+    local ok, err = CP.LiveCtl.clearCooldowns(cid, 'all')
+    H.eq(ok, true, 'staff clear the cooldowns of ' .. cid .. ': ' .. tostring(err))
+end
+
+do
+    FormUnit(1, 2)
+    Secs(2)
+    Report(5, { 13, 14 })
+    H.eq(CP.MissionCalls.liveCount(), 1, 'drop: a crime posts a LIVE call')
+    local run = ClaimAndSecure(1, 2)
+    local case = CP.Opponents.caseOf(run)
+    local hal = case and case.suspects[CID[13]]
+
+    -- Hal quits and joins again within disconnectGrace: he is still a suspect of the case, and can be detained
+    Drop(13)
+    H.ok(run.state ~= 'ended', 'drop: the case goes on while a suspect is away')
+    H.ok(hal and hal.state ~= 'left', 'drop: Hal is not out of the case within the grace')
+    Secs(30)
+    Reconnect(13)
+    Place(13, vec3(CRIME_AT.x + 12.0, CRIME_AT.y + 3.0, CRIME_AT.z))
+    Secs(3)
+    H.ok(hal and hal.src == 13, 'drop: Hal is back in the case under her id')
+    Cuff(1, 13)
+    H.eq(hal and hal.state, 'detained', 'drop: Hal, back, is detained')
+
+    -- Ben (the partner) quits mid-case: he leaves with his own result, the case goes on for Ada
+    Drop(2)
+    H.eq(Runs.getBySrc(2), nil, 'drop: the partner is off the case')
+    H.eq(Runs.getBySrc(1), run, 'drop: the leader is still on it')
+    H.ok(run.state ~= 'ended', 'drop: the case goes on')
+    local benRows = Rows('run_uuid = ? AND citizenid = ?', { run.id, CID[2] })
+    H.eq(#benRows, 1, 'drop: the partner has his own row at once')
+    H.ok(benRows[1] and benRows[1].cash_status ~= 'paid', 'drop: ...no cash for quitting')
+
+    -- he joins again: he can open the tablet, is on no run, and is not put back on the case
+    Reconnect(2)
+    local session, why = Cb('getSession', 2, { ui = 'officer' })
+    H.ok(session ~= nil, 'drop: the partner opens the tablet again: ' .. tostring(why))
+    H.eq(Runs.getBySrc(2), nil, 'drop: ...and is on no run')
+
+    -- Ada ends the case: one row each, Ben's never written twice, Ada paid once
+    Place(1, vec3(CRIME_AT.x + 5.0, CRIME_AT.y, CRIME_AT.z))
+    Objective(1, run, 1, { type = 'end_case' })
+    Secs(5)
+    H.eq(run.state, 'ended', 'drop: End case ends it')
+    H.eq(#Rows('run_uuid = ? AND citizenid = ?', { run.id, CID[2] }), 1,
+        'drop: the partner\'s row is not written again')
+    local ada = Rows('run_uuid = ? AND citizenid = ?', { run.id, CID[1] })
+    H.eq(ada[1] and ada[1].state, 'completed', 'drop: the leader completed the case')
+    H.eq(ada[1] and ada[1].cash_status, 'paid', 'drop: ...and is paid')
+    H.eq(CP.Opponents.active(), false, 'drop: no case is left open')
+    CP.Units.remove(1, { reason = 'left', silent = true })
+    CP.Units.remove(2, { reason = 'left', silent = true })
+end
+
+do
+    -- a second rookie opens the tablet once, then is paired with the same trainer
+    local session, why = Cb('getSession', 8, { ui = 'officer' })
+    H.ok(session ~= nil, 'fto drop: the second rookie opens the Officer UI: ' .. tostring(why))
+    local ok, data = Act('server:sup:ftoPair', 4, { rookie = CID[8], trainer = CID[3] })
+    H.eq(ok, true, 'fto drop: the supervisor pairs the second rookie: ' .. tostring(data))
+    ClearCooldowns(CID[3])
+
+    -- the rookie quits mid-run: the run goes on for the trainer, the run does not count for the rookie
+    FormUnit(3, 8)
+    local run = StartShootout(3, 8)
+    Drop(8)
+    H.eq(Runs.getBySrc(8), nil, 'fto drop: the rookie is off the run')
+    H.eq(Runs.getBySrc(3), run, 'fto drop: the trainer is still on it')
+    Reconnect(8)
+    local mine = Training(8)
+    H.ok(mine and mine.training ~= nil, 'fto drop: back, the rookie is still in field training')
+    H.eq((TaskOf(mine and mine.training, 'tactical') or {}).runs, 0, 'fto drop: the run he left did not count')
+    if run then
+        Place(3, run.location.start.coords)
+        ClearHostiles(run, 3)
+        SecureScene(run, 3)
+        H.eq(run.state, 'ended', 'fto drop: the trainer finishes the run alone')
+    end
+    Secs(3)
+    mine = Training(8)
+    H.eq((TaskOf(mine and mine.training, 'tactical') or {}).runs, 0, 'fto drop: still 0 of 1')
+    CP.Units.remove(3, { reason = 'left', silent = true })
+
+    -- together again to the end: ready; the trainer quits and joins again before the sign-off, nothing is lost
+    for _, src in ipairs({ 3, 8 }) do ClearCooldowns(CID[src]) end
+    FormUnit(3, 8)
+    run = StartShootout(3, 8)
+    if run then
+        Place(3, run.location.start.coords)
+        Place(8, run.location.start.coords)
+        ClearHostiles(run, 3)
+        Place(8, run.location.scene)
+        SecureScene(run, 3)
+        H.eq(run.state, 'ended', 'fto drop: the second run completed')
+    end
+    Secs(3)
+    CP.Units.remove(3, { reason = 'left', silent = true })
+    CP.Units.remove(8, { reason = 'left', silent = true })
+    mine = Training(8)
+    H.eq((TaskOf(mine and mine.training, 'tactical') or {}).ready, true, 'fto drop: ready to sign off')
+    Drop(3)
+    Reconnect(3)
+    local trainer = Training(3)
+    local found = nil
+    for _, r in ipairs(trainer and trainer.rookies or {}) do
+        if r.rookie and r.rookie.citizenid == CID[8] then found = r end
+    end
+    H.ok(found ~= nil and (TaskOf(found, 'tactical') or {}).ready == true,
+        'fto drop: back, the trainer still sees it ready')
+    local mark = #H.events
+    ok, data = Act('server:fto:signOff', 3, { rookie = CID[8], task = 'tactical' })
+    H.eq(ok, true, 'fto drop: the trainer signs it off after his reconnect: ' .. tostring(data))
+    Secs(3)
+    H.ok(Toasts(8, mark)['fto.toast.done'], 'fto drop: the rookie is told his training is done')
+    mine = Training(8)
+    H.ok(mine and mine.training and (mine.training.doneAt or 0) > 0, 'fto drop: the training reads done')
 end
 
 return H

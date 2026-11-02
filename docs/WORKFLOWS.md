@@ -136,9 +136,11 @@ challenge gives SAST points from its completed runs. Result: **Pass**.
 How it works: a LIVE call is a crime in progress. A unit claims it, secures the scene, other officers can join as
 backup, suspects are detained, talked down or booked, and End case closes it; each officer's row records his part.
 
-Spec: tests/live_fto_e2e_spec.lua (2, 3), tests/realsuspects_e2e_spec.lua (2, 4). Covers: LIVE call, claim, scene
+Spec: tests/live_fto_e2e_spec.lua (2, 3, 5), tests/realsuspects_e2e_spec.lua (2, 4). Covers: LIVE call, claim, scene
 secured, a backup joins, detain, book, talk-down with its money and item, End case, the rows; **restart** mid-case
-(case and run end with no row, closed cases kept). Result: **Pass**.
+(case and run end with no row, closed cases kept); a suspect **drops** and reconnects within the grace (still in the
+case, detained), the partner **drops** (his own row at once, no cash, the case goes on, back on no run). Result:
+**Pass**.
 
 Steps: The case card is pushed to every officer on it.
 
@@ -192,9 +194,16 @@ How it works: Supervisor UI -> Mission controls lists the controls an admin swit
 the board, calls, officers, department), each with one line saying what it does. The supervisor sets a value inside
 the admin's limits or resets it to config.lua; a cooldown clear needs a reason.
 
-Spec: tests/workflows_full_spec.lua (8), tests/workflows_e2e_spec.lua (5). Covers: Every control switched on by the
-admin, every number and choice control of SAST set inside its bounds, **restart** (each kept), each reset to
-config.lua; the hourly cap and its bounds; a cooldown clear. Result: **Pass**.
+Spec: tests/workflows_full_spec.lua (8, 8B), tests/workflows_e2e_spec.lua (5). Covers: Every control switched on by
+the admin, every number and choice control of SAST set inside its bounds, **restart** (each kept), each reset to
+config.lua; the hourly cap and its bounds; a cooldown clear; pushMission (the Page dialog's missions, the push to a
+unit, only that unit sees it, its accept with no draw, audited) and "+ minutes" (addRunTime on the running pushed
+mission, the unit told, audited, an officer refused), then a **restart** (the run and the push gone). Result:
+**Pass**.
+
+Steps: Posting, paging, pushing or withdrawing a mission call, Recall and "+ minutes" on Live Missions were answered
+and then the screen asked again; now the reply carries the fresh panel or Live Missions view (before: 2 requests;
+after: 1).
 
 ### Supervisor actions and awards (Department Report)
 
@@ -206,7 +215,9 @@ Spec: tests/workflows_full_spec.lua (8), tests/workflows_e2e_spec.lua (5). Cover
 **restart** keeps it, lifted), abandon with the type cooldown, a department notice; Give points with its money and
 item, a commendation. Result: **Pass**.
 
-Steps: With `Config.Tablet.supervisorRemember = true` the Give points, Mission ban and Clear cooldown dialogs
+Steps: Give points, Mission ban (set or lift), a commendation (give or revoke) and Clear cooldown were answered and
+then the dialog asked again; now the reply carries the officer's fresh activity or cooldown list (before: 2 requests;
+after: 1). With `Config.Tablet.supervisorRemember = true` the Give points, Mission ban and Clear cooldown dialogs
 open with the points, hours and reason last used on that tablet, so a second award or ban in a row is open + submit
 (before: open, type 2 fields, submit; after: open, submit). Shipped `false`: they open empty, as before. An empty
 reason now reads "Enter a reason in the Reason box first".
@@ -221,7 +232,9 @@ Spec: tests/workflows_e2e_spec.lua (6). Covers: A flagged run held, approved (ca
 disputed and restored. Result: **Pass**.
 
 Steps: A decision was answered and then the queue was asked for again; now the reply carries the fresh queue
-and the row leaves at once (before: 2 requests; after: 1).
+and the row leaves at once (before: 2 requests; after: 1). With `Config.Tablet.supervisorReviewLive = true` the other
+supervisors of that department who have the Review Queue open get their updated queue at once (tests/oversight_spec.lua),
+so two supervisors never work the same row; shipped `false` (they see it at their next refresh, within 30 seconds).
 
 ### Mission Builder
 
@@ -242,8 +255,10 @@ How it works: a supervisor pairs a rookie with a trainer. Their runs together co
 signs off each task, and at the end the rookie gets his badge and the trainer his bonus. The record survives a
 restart.
 
-Spec: tests/live_fto_e2e_spec.lua (4). Covers: Pair, a counted run, sign-off, badge, trainer bonus, both payments;
-**restart**: the training record stays. Result: **Pass**.
+Spec: tests/live_fto_e2e_spec.lua (4, 5). Covers: Pair, a counted run, sign-off, badge, trainer bonus, both payments;
+**restart**: the training record stays; the rookie **drops** mid-run (off the run, the run goes on for the trainer
+and does not count; back, still in training) and the trainer **drops** before the sign-off (back, the task still
+ready, signed off, done). Result: **Pass**.
 
 ## Criminal
 
@@ -253,8 +268,10 @@ How it works: a player (not police) opens the criminal tablet with `/crimsonheat
 a suspect he gets a pop-up; on yes he is engaged, the officers come for him, and the volunteer ends with the cuff or
 his time. Backing out after the free seconds is a strike.
 
-Spec: tests/realsuspects_e2e_spec.lua (3, 5, 6). Covers: `/crimsonheat` and the criminal tablet, the pop-up, the yes,
-engaged, the knock, the cuff, volunteerEnded, a strike after the free seconds. Result: **Pass**.
+Spec: tests/realsuspects_e2e_spec.lua (3, 5, 6, 7). Covers: `/crimsonheat` and the criminal tablet, the pop-up, the
+yes, engaged, the knock, the cuff, volunteerEnded, a strike after the free seconds; the volunteer **drops** while
+engaged and reconnects within the grace (his tablet shows the case again, no strike), the partner **drops** (the
+case goes on), the volunteer is detained and History shows it. Result: **Pass**.
 
 Steps: Every criminal tablet action (save roles, renew, stop, the pop-up answer) already
 answers with the fresh view in one request, and the free Give up runs out on its own on the page (no polling). Stop
@@ -273,7 +290,7 @@ refused, item rewards toggled on, the Rewards pools edited, an extra grant (miss
 cap, a season started; **restart**: every change kept. Result: **Pass**.
 
 Steps: A Setting's save reply carries the changed setting and the screen
-applies it (no second fetch); the typed ENABLE stays on the money tools (risky). The common Settings errors now say what to do next (for example "That is
+applies it (no second fetch); Reset all's reply carries the whole Settings view (before: 2 requests; after: 1); the typed ENABLE stays on the money tools (risky). The common Settings errors now say what to do next (for example "That is
 not valid JSON. Check the brackets, quotes and commas.", "This is not a Crimson-Police settings export. Paste a file
 made by Export in Settings.").
 
@@ -286,7 +303,8 @@ Spec: tests/workflows_full_spec.lua (9), tests/admin_control_e2e_spec.lua (1). C
 down), **restart** (still voided), restore (XP back, cash never taken back); retire and unretire. Result: **Pass**.
 
 Steps: Each correction needs its reason and is audited, so the dialog stays
-(its rules require it). Its errors now say what to do next (for example "That run is already voided. Use Restore on it
+(its rules require it). Void, Restore, Change kind and Flag were answered and then the run, the run list and the
+officer were asked for again; now the reply carries all three (before: 3 to 4 requests; after: 1). Its errors now say what to do next (for example "That run is already voided. Use Restore on it
 to undo the void.", "That is over your daily adjustment limit. Give fewer points, or try again tomorrow.").
 
 ### Backups and restore

@@ -118,6 +118,7 @@
   "sysadmin.ui.tab.departments": "Departments",
   "sysadmin.ui.tab.desks": "Desks",
   "sysadmin.ui.storage_title": "Storage",
+  "sysadmin.ui.storage_subtitle": "Where Crimson-Police keeps its data (the database or the saves folder), how much it holds and its upgrades.",
   "sysadmin.ui.mode": "Mode",
   "sysadmin.ui.mode_files": "Saves folder (database off)",
   "sysadmin.ui.mode_database": "Database (MySQL/MariaDB)",
