@@ -196,6 +196,16 @@ function CP.Perf.ms(ms)
     return math.floor(ms * CP.Perf.scale() + 0.5)
 end
 
+---@param rangeSq number a per-frame marker loop's own draw distance, squared (metres squared)
+---@return number rangeSq that distance, or less when Config.Performance.markerRange caps it (0 = never capped)
+function CP.Perf.rangeSq(rangeSq)
+    local p = type(Config) == 'table' and Config.Performance or nil
+    local m = type(p) == 'table' and tonumber(p.markerRange) or nil
+    if not m or m ~= m or m <= 0 then return rangeSq end
+    local cap = m * m
+    return cap < rangeSq and cap or rangeSq
+end
+
 -- ============================================================================
 --                                    HOOKS
 -- ============================================================================

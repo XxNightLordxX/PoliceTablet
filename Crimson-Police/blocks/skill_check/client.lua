@@ -363,11 +363,12 @@ local function Loop(ctx, st)
         while st.alive and st.token == token do
             local sleep = CP.Perf.ms(MARKER_FAR_MS)
             local pos = GetEntityCoords(cache.ped)
+            local rangeSq = CP.Perf.rangeSq(MARKER_DISTANCE_SQ)
             for _, t in ipairs((st.data and st.data.targets) or NONE) do
                 if t.status == 'armed' or t.status == 'setback' then
                     local c = t.coords
                     local dx, dy, dz = pos.x - c.x, pos.y - c.y, pos.z - c.z
-                    if dx * dx + dy * dy + dz * dz < MARKER_DISTANCE_SQ then
+                    if dx * dx + dy * dy + dz * dz < rangeSq then
                         sleep = 0
                         DrawMarker(2, c.x, c.y, c.z + 0.8, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.25, 0.25, 0.25, 220, 40,
                             50, 170, true, true, 2, false, nil, nil, false)

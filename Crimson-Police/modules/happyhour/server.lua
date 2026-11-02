@@ -213,24 +213,45 @@ function HH._tick()
     last = now
 end
 
+-- The end check runs only while a happy hour may be on (step LP3: it woke every 30 s all day): at start (a happy
+-- hour from before a restart), when one starts and when Settings re-reads the controls. Each pass is TICK_MS apart
+-- as before; once no happy hour runs, the loop ends until the next of those.
+local ticking = false
+
+local function Arm()
+    if ticking then return end
+    ticking = true
+    CreateThread(function()
+        -- a failed start (a migration, the saves folder): end quietly, as the other loops do
+        if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then
+            ticking = false
+            return
+        end
+        while true do
+            Wait(CP.Perf.ms(TICK_MS))
+            local ok, err = pcall(HH._tick)
+            if not ok then CP.err(TAG, 'check failed: %s', tostring(err)) end
+            if ok and last == 0 then break end
+        end
+        ticking = false
+    end)
+end
+HH._arm = Arm
+
 if CP.Hooks and CP.Hooks.on then
     CP.Hooks.on('deptControls:changed', function(e)
         if type(e) ~= 'table' or e.key ~= KEY then return end
         local s = HH.state(nil)
         last = s and s.endsAt or 0
         HH.pushAll()
+        if last ~= 0 then Arm() end
     end)
+    -- Settings may make the controls be read again (DC.clearCache): one pass sees a happy hour that is on
+    CP.Hooks.on('settings:changed', function() Arm() end)
 end
 
-CreateThread(function()
-    -- a failed start (a migration, the saves folder): end quietly, as the other loops do
-    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
-    while true do
-        Wait(CP.Perf.ms(TICK_MS))
-        local ok, err = pcall(HH._tick)
-        if not ok then CP.err(TAG, 'check failed: %s', tostring(err)) end
-    end
-end)
+Arm()
 
 -- Test hooks (not part of the contract).
 HH._reset = function() last = nil end
+HH._ticking = function() return ticking end

@@ -229,11 +229,12 @@ local function MarkerLoop(S)
             local pos = GetEntityCoords(cache.ped)
             local px, py, pz = pos.x, pos.y, pos.z
             local drew = false
+            local rangeSq = CP.Perf.rangeSq(MARKER_RANGE_SQ)
             for _, cl in pairs(S.clues) do
                 if cl.status == 'pending' then
                     -- squared distance: no vector per clue and frame
                     local dx, dy, dz = px - cl.x, py - cl.y, pz - cl.z
-                    if dx * dx + dy * dy + dz * dz <= MARKER_RANGE_SQ then
+                    if dx * dx + dy * dy + dz * dz <= rangeSq then
                         DrawMarker(2, cl.x + 0.0, cl.y + 0.0, cl.z + 1.0, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.3, 0.3, 0.3,
                             240, 200, 40, 180, true, true, 2, false, nil, nil, false)
                         drew = true

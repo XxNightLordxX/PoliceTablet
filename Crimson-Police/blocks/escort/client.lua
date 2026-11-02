@@ -304,7 +304,7 @@ local function MarkerLoop(S)
             local r = RouteOf(S)
             local p = r.points[#r.points]
             local arrival = tonumber(S.ctx.obj.arrival) or 20.0
-            if p and U.distSq(GetEntityCoords(cache.ped), p) <= MARKER_RANGE_SQ then
+            if p and U.distSq(GetEntityCoords(cache.ped), p) <= CP.Perf.rangeSq(MARKER_RANGE_SQ) then
                 DrawMarker(1, p.x, p.y, p.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, arrival * 2.0, arrival * 2.0, 1.5, 60,
                     140, 240, 70, false, false, 2, false, nil, nil, false)
                 Wait(0)

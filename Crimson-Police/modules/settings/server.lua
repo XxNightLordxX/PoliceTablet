@@ -858,6 +858,7 @@ local RANGES = {
     -- the least time between two tablet updates of one kind to one player, and the size of a background answer
     ['Performance.pushGapMs'] = { 0, 2000 },
     ['Performance.latentAboveBytes'] = { 0, 10000000 },
+    ['Performance.markerRange'] = { 0, 150 },
     -- how hard mission NPCs fight back (Config.NpcCombat): lower = easier
     ['NpcCombat.ammo'] = { 1, 9999 },
     ['NpcCombat.accuracyScale'] = { 0, 1 },

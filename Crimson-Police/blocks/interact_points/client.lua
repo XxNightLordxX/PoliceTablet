@@ -346,11 +346,12 @@ local function Loop(ctx, st)
             local sleep = CP.Perf.ms(MARKER_FAR_MS)
             local pts = (st.data and st.data.points) or NONE
             local pos = GetEntityCoords(cache.ped)
+            local rangeSq = CP.Perf.rangeSq(MARKER_DISTANCE_SQ)
             for _, p in ipairs(pts) do
                 if p.status == 'pending' or p.status == 'followup' then
                     local c = p.coords
                     local dx, dy, dz = pos.x - c.x, pos.y - c.y, pos.z - c.z
-                    if dx * dx + dy * dy + dz * dz < MARKER_DISTANCE_SQ then
+                    if dx * dx + dy * dy + dz * dz < rangeSq then
                         sleep = 0
                         local r, g, b = 240, 200, 60
                         if p.status == 'followup' then r, g, b = 220, 60, 60 end

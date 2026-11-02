@@ -230,6 +230,47 @@ do
     H.time = ended
 end
 
+-- ============================================================================
+--               4. THE END CHECK SLEEPS WHILE NO HAPPY HOUR RUNS
+-- ============================================================================
+-- Step LP3.
+-- It woke every 30 s all day; now only while one may be on, at the same 30 s pace, and it still hears the end.
+
+do
+    local wakes = 0
+    local realWait = _G.Wait
+    _G.Wait = function(ms)
+        local info = debug.getinfo(2, 'S')
+        if info.short_src:find('happyhour/server.lua', 1, true) then wakes = wakes + 1 end
+        return realWait(ms)
+    end
+    H.advance(2 * 60 * 1000, 5000)
+    wakes = 0
+    H.advance(10 * 60 * 1000, 5000)
+    H.eq(wakes, 0, 'no happy hour: the end check does not wake (was 20 times in 10 minutes)')
+    H.eq(HH._ticking(), false, 'no loop runs')
+    local at = H.time
+    local ok, err = Start(1, { minutes = 10 }, 'lp3')
+    H.ok(ok == true, 'an admin starts one: ' .. tostring(err))
+    H.eq(HH._ticking(), true, 'starting one starts the check')
+    H.advance(2 * 60 * 1000, 5000)
+    H.ok(wakes >= 3 and wakes <= 5, ('every 30 s while it runs (%d wakes in 2 minutes)'):format(wakes))
+    local before = #changed
+    H.time = at + 601
+    H.advance(31000, 1000)
+    H.ok(#changed == before + 1 and changed[#changed].expired == true, 'the loop hears its end')
+    H.eq(HH._ticking(), false, 'and stops')
+    wakes = 0
+    H.advance(10 * 60 * 1000, 5000)
+    H.eq(wakes, 0, 'over: no wake again')
+    CP.Hooks.fire('settings:changed', { 'MissionControls.controls.happyHour.on' })
+    H.eq(HH._ticking(), true, 'a Settings change looks once')
+    H.advance(31000, 1000)
+    H.eq(HH._ticking(), false, 'nothing on: it stops after that pass')
+    _G.Wait = realWait
+    H.time = ended
+end
+
 H.sql('DELETE FROM cp_dept_controls')
 H.sql('DELETE FROM cp_mission_runs')
 H.sql('DELETE FROM cp_audit')

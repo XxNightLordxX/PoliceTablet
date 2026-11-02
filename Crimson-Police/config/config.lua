@@ -2401,6 +2401,10 @@ Config.Performance = {
     -- Config.Limits.exportBps, so the rest of the tablet keeps answering; 0 = only the Admin UI exports, as
     -- before; 0-10000000
     latentAboveBytes = 0,
+    -- Metres: the objective markers that draw every frame (escort, suspect, scene, rescue, clue, point and device
+    -- markers) draw only within this distance, so a far marker costs nothing; 0 = each marker's own distance (30-150
+    -- m), as before; the checkpoint course keeps its own (it times your pass through each checkpoint); 0-150
+    markerRange = 0,
 }
 
 -- ============================================================================

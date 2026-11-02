@@ -1,4 +1,4 @@
-# Loops and timers (steps LP1, LP2, OP1, OP2, OP3)
+# Loops and timers (steps LP1, LP2, OP1, OP2, OP3, LP3)
 
 Every repeating loop of Crimson-Police: where it is, what it does, when it runs, its interval and why that interval.
 "before -> after" shows the step LP2 change (owner, after LP1: "Try to fix the loops make it occur less often"); a
@@ -130,15 +130,44 @@ officer's runs are paged on the server (`Config.AdminUi.pageSize`); the Mission 
 `useMemo` and holds tens of rows. Specs: tests/fixtures/npc/target_check.lua (g), tests/access_spec.lua (desk),
 tests/server_cost_spec.lua (ace checks), tests/foundation_spec.lua (017), web/src/shared/rowWindow.walk.ts.
 
+## Every loop, second pass (step LP3)
+
+Owner: "redo the optimization of the entire script redo the entire optimization of all loops". LP1/LP2 (when loops
+run), OP1-OP3 (what a pass costs) were kept; LP3 went through every row below and every `CreateThread`,
+`SetTimeout`, `while true`, `setInterval`, `setTimeout` and `requestAnimationFrame` of the code, asking: can it be
+event-driven, can two loops on the same data merge, does it stop with its feature, is its far wait scaled, is a
+per-frame radius as small as it can be. Numbers are from the harness, before -> after:
+
+| What | Measure | Before -> after |
+| --- | --- | --- |
+| the Officer UI open for a minute, `requireItem` on (tests/loops_spec.lua) | tablet threads / wakes | 3 / 118 -> 2 / 88 (the downed, desk and item checks are one watcher: 60 + 30 item checks folded into its 60 passes; the animation keeper is the other thread; same timing: downed and desk every 1 s, item every 2 s) |
+| an idle server with no happy hour, 10 minutes (tests/happy_hour_spec.lua) | happy hour loop wakes | 20 -> 0 (the end check runs only while one may be on; while one runs it still checks every 30 s and hears the end) |
+| `Config.Performance.markerRange = 10`, a skill check device 20 m away (tests/loop_pace_spec.lua) | per-frame passes in 6 s | every frame -> none (the loop sleeps at its 1.5 s far wait); shipped `0` = every marker at its own distance, as before |
+
+Checked and kept:
+- Event-driven already: the crimsonArena, cp and arena bag handlers, the Qbox job, duty, load and unload hooks, the
+  ox_target zones and options of a block (added on start, removed on stop), the unit invite cue and ready check, the
+  mission call pop-ups, the HUD pushes. The admin push queue and the spawn asks loops run only while they hold work.
+- Polls with no event to replace them: being down (the death and last stand screens have no event shared by every
+  ambulance script), the tablet item (ox_inventory sends no count change to other resources), the last game input of
+  Auto-Ready (only control reads see it; it runs only while the option is on), the walk-away distance at a desk (a
+  zone exit would need a second ox_lib zone per desk for the same 1 s answer).
+- Not merged: the tablet's animation keeper has its own token (the prop lives across a reopen); the criminal
+  tablet's downed watch belongs to another UI with its own token; the block loops each draw their own objective and
+  end with it.
+- Deadlines stay exact: the server deadline ticks (run engine, route, custody, NPC, live crime) keep 1 s; the unit
+  ready check keeps its timer at the deadline (Z4); the checkpoint course keeps its own 150 m view distance, because
+  inside it the same pass samples your pass through the checkpoint, so `markerRange` does not apply to it.
+- Start-up waits (the client actions of custody, runs and testing waiting for `CP.Tablet.registerClientAction`, the
+  settings list, the mission definitions) find what they wait for on their first pass in a normal start and end.
+
 ## Client loops
 
 | File | What it does | When it runs | Interval | Why |
 | --- | --- | --- | --- | --- |
 | modules/options/client.lua | Auto-Ready input watcher (last game input) | only while the officer option `autoReady` is on | 250 ms | reads the last input time; ends when the option is off |
 | modules/tablet/client.lua | tablet prop and animation kept | tablet open | 1000 -> 2000 ms, scaled | other scripts clear tasks rarely |
-| modules/tablet/client.lua | desk distance watch | tablet open at a desk | 500 -> 1000 ms, scaled | closes within a second of walking away |
-| modules/tablet/client.lua | tablet item watch | tablet open, `requireItem` on | 1000 -> 2000 ms, scaled | the server checks again |
-| modules/tablet/client.lua | downed watch | tablet open | 500 -> 1000 ms, scaled | focus released soon after the death screen comes up |
+| modules/tablet/client.lua | open tablet watcher (LP3: one thread, was three): downed, desk distance, tablet item | tablet open; the desk check at a desk, the item check with `requireItem` on (not at a desk) | 1000 ms a pass, scaled: downed and desk every pass, item every 2000 ms | focus released soon after the death screen comes up; closes within a second of walking away; the server checks the item again |
 | modules/tablet/client.lua | Escape guard (pause menu) | `pauseGuardMs` after a close | per frame, one thread | a disabled control is read every frame |
 | modules/crimtab/client.lua | Escape guard (pause menu) | `pauseGuardMs` after a close | per frame, one thread, extended | a disabled control is read every frame |
 | modules/markers/client.lua | objective pointer: streaming, nearest target, line | while there is something on the map | 1000 -> 2000 ms, scaled | ends by itself once cleared |
@@ -153,9 +182,9 @@ tests/server_cost_spec.lua (ace checks), tests/foundation_spec.lua (017), web/sr
 | modules/testing/client.lua | test area debug drawing | Testing debug on, within 600 m | per frame near, 500 -> 1000 ms far (scaled) | drawn lines need every frame |
 | modules/testing/client.lua | panel focus watch | panel focused | 250 ms | ends on blur |
 | modules/builder/client.lua | placement, recording, drive test | a Builder tool open (admin only) | per frame | draws and reads controls |
-| blocks/escort, flee_arrest, process_scene, protect_rescue marker loops | objective markers | objective current | per frame in range, 750 -> 1500 ms far (scaled) | markers need every frame in range |
-| blocks/search_area/client.lua | clue markers | objective current | per frame in 150 m, 750 -> 1500 ms far (scaled) | no allocation per frame |
-| blocks/skill_check, interact_points | markers and HUD line | objective current | per frame in range, 500 -> 1500 ms far (scaled) | far away, a new HUD message shows up to 1.5 s later |
+| blocks/escort, flee_arrest, process_scene, protect_rescue marker loops | objective markers | objective current | per frame in range (capped by `markerRange`, LP3), 750 -> 1500 ms far (scaled) | markers need every frame in range |
+| blocks/search_area/client.lua | clue markers | objective current | per frame in 150 m (capped by `markerRange`, LP3), 750 -> 1500 ms far (scaled) | no allocation per frame |
+| blocks/skill_check, interact_points | markers and HUD line | objective current | per frame in range (capped by `markerRange`, LP3), 500 -> 1500 ms far (scaled) | far away, a new HUD message shows up to 1.5 s later |
 | blocks/flee_arrest, search_area, pursuit, field_contact | suspect AI and reports | objective live | 250 ms near, 1000 -> 2000 ms far (scaled) | reaction time near, cheap far |
 | blocks/protect_rescue, escort, hostile_waves | host AI and blips | objective live | 500 -> 1000 ms, scaled (250 ms while control is asked) | AI retasks are not frame critical |
 | blocks/checkpoint_route/client.lua | course markers and contact sampling | course on | per frame near, 100 ms while the course runs, 500 -> 1000 ms else (scaled) | contact sampling deadline |
@@ -186,7 +215,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/downed/server.lua | downed checks | always | `Config.Downed.checkEvery` s (min 0.5) | owner setting |
 | modules/admin/server.lua | admin push queue | while queued | 50 ms sent, 250 ms else | ends when empty |
 | modules/schedule/server.lua | daily jobs | always | 30 -> 60 s | minute precision |
-| modules/happyhour/server.lua | happy hour end | always | 15 -> 30 s, scaled | the screens hear the end then |
+| modules/happyhour/server.lua | happy hour end | while a happy hour may be on (LP3: was always): armed at start, by a start and by a Settings change; ends after a pass that sees none | 15 -> 30 s, scaled | the screens hear the end then |
 | modules/challenge/server.lua | planned-end reminders | always | 60 s | |
 | modules/calls/server.lua | prune | always | 60 s | |
 | modules/draw/server.lua | housekeeping | always | 60 s | |

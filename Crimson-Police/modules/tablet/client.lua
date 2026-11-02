@@ -24,15 +24,16 @@ local NULLABLE_HUD = { modifier = true, timer = true, route = true, message = tr
 local KEY_MAPPING = 'crimsonpolice_tablet'
 local DISPATCH_MAPPING = 'crimsonpolice_dispatch'
 local DESK_OPTION = 'crimson-police:desk'
-local DESK_TARGET_DISTANCE = 2.0     -- metres: how close ox_target offers "Open Crimson-Police" at a desk
-local DESK_WATCH_MS = 1000           -- how often the desk distance is checked while the tablet is open there
-local ITEM_WATCH_MS = 2000           -- how often the tablet item is looked for while requireItem is on
-local DOWN_WATCH_MS = 1000           -- how often a downed officer is looked for while the tablet is open
-local ANIM_WATCH_MS = 2000           -- how often the tablet animation is checked (other scripts clear tasks)
-local OPEN_ACK_MS = 6000             -- the NUI confirms it shows the UI within this, or the focus is released
-local SETTINGS_WAIT_MS = 10000       -- the start waits this long at most for the settings changed in game
-local PAUSE_CONTROL = 200            -- INPUT_FRONTEND_PAUSE_ALTERNATE (Escape)
-local PAUSE_GUARD_MS = 300           -- when Config.Tablet.pauseGuardMs is missing from an older config.lua
+local DESK_TARGET_DISTANCE = 2.0  -- metres: how close ox_target offers "Open Crimson-Police" at a desk
+local DESK_WATCH_MS = 1000        -- how often the desk distance is checked while the tablet is open there
+local ITEM_WATCH_MS = 2000        -- how often the tablet item is looked for while requireItem is on
+local DOWN_WATCH_MS = 1000        -- how often a downed officer is looked for while the tablet is open
+local WATCH_SLACK_MS = 50         -- a watcher pass this early still counts (Wait returns about on time)
+local ANIM_WATCH_MS = 2000        -- how often the tablet animation is checked (other scripts clear tasks)
+local OPEN_ACK_MS = 6000          -- the NUI confirms it shows the UI within this, or the focus is released
+local SETTINGS_WAIT_MS = 10000    -- the start waits this long at most for the settings changed in game
+local PAUSE_CONTROL = 200         -- INPUT_FRONTEND_PAUSE_ALTERNATE (Escape)
+local PAUSE_GUARD_MS = 300        -- when Config.Tablet.pauseGuardMs is missing from an older config.lua
 
 -- Tablet prop and animation (held in the hand the animation uses; offsets tuned for this clip).
 local ANIM_DICT = 'amb@code_human_in_bus_passenger_idles@female@tablet@base'
@@ -1150,20 +1151,13 @@ local function DeskGap(desk, c)
     return math.sqrt(gx * gx + gy * gy + gz * gz)
 end
 
-local function WatchDesk(token)
+-- The tablet item to look for while this tablet is open (requireItem on, not at a desk, not the Admin UI), else nil.
+local function WatchedItem()
     local t = Config.Tablet or {}
-    local desk = type(t.desks) == 'table' and t.desks[state.desk or -1] or nil
-    if type(desk) ~= 'table' or not desk.coords then return end
-    StartDeskPose()
-    local limit = DeskDistance()
-    while token == state.openToken and state.open do
-        if DeskGap(desk, GetEntityCoords(PlayerPedId())) > limit then
-            CP.log(TAG, 'walked away from desk %s: closing the tablet', tostring(state.desk))
-            T.close()
-            return
-        end
-        Wait(CP.Perf.ms(DESK_WATCH_MS))
-    end
+    if state.via == 'desk' or state.ui == 'admin' then return nil end
+    local item = type(t.item) == 'string' and t.item ~= '' and t.item or nil
+    if not item or type(t.access) ~= 'table' or t.access.requireItem ~= true then return nil end
+    return item
 end
 
 local function ClientItemCount(item)
@@ -1172,30 +1166,45 @@ local function ClientItemCount(item)
     return ok and tonumber(res) or nil
 end
 
--- requireItem: the item left the inventory while the tablet is open. The server checks again and closes it.
-local function WatchItem(token)
+-- One watcher while the tablet is open (step LP3: was three threads on the same token): every DOWN_WATCH_MS the
+-- officer going down closes the Officer or Supervisor UI (they open it again once revived), at a desk every
+-- DESK_WATCH_MS walking away closes it, and with requireItem on every ITEM_WATCH_MS the item leaving the inventory
+-- is reported (the server checks again and closes it). Ends with the open (openToken).
+local function Watch(token)
     local t = Config.Tablet or {}
-    local item = type(t.item) == 'string' and t.item ~= '' and t.item or nil
-    if not item or type(t.access) ~= 'table' or t.access.requireItem ~= true then return end
-    local reported = false
-    while token == state.openToken and state.open do
-        Wait(CP.Perf.ms(ITEM_WATCH_MS))
-        if token ~= state.openToken or not state.open or state.via == 'desk' then return end
-        local n = ClientItemCount(item)
-        if n ~= nil and n <= 0 then
-            if not reported then
-                reported = true
-                TriggerServerEvent(CP.e('server:tabletItemGone'))
-            end
-        else
-            reported = false
-        end
+    local desk = state.via == 'desk' and type(t.desks) == 'table' and t.desks[state.desk or -1] or nil
+    if type(desk) ~= 'table' or not desk.coords then desk = nil end
+    local limit = nil
+    if desk then
+        StartDeskPose()
+        limit = DeskDistance()
     end
-end
-
--- The officer went down with the Officer or Supervisor UI open: it closes (they open it again once revived).
-local function WatchDown(token)
+    local item = WatchedItem()
+    local reported = false
+    local nextItemAt = item and GetGameTimer() + CP.Perf.ms(ITEM_WATCH_MS) or nil
+    local nextDeskAt = 0
     while token == state.openToken and state.open do
+        local now = GetGameTimer()
+        if desk and now >= nextDeskAt - WATCH_SLACK_MS then
+            nextDeskAt = now + CP.Perf.ms(DESK_WATCH_MS)
+            if DeskGap(desk, GetEntityCoords(cache.ped or PlayerPedId())) > limit then
+                CP.log(TAG, 'walked away from desk %s: closing the tablet', tostring(state.desk))
+                T.close()
+                return
+            end
+        end
+        if nextItemAt and now >= nextItemAt - WATCH_SLACK_MS and state.via ~= 'desk' then
+            nextItemAt = now + CP.Perf.ms(ITEM_WATCH_MS)
+            local n = ClientItemCount(item)
+            if n ~= nil and n <= 0 then
+                if not reported then
+                    reported = true
+                    TriggerServerEvent(CP.e('server:tabletItemGone'))
+                end
+            else
+                reported = false
+            end
+        end
         Wait(CP.Perf.ms(DOWN_WATCH_MS))
         if token ~= state.openToken or not state.open then return end
         if state.ui ~= 'admin' and PlayerDown() then
@@ -1209,12 +1218,7 @@ end
 StartWatchers = function()
     state.openToken = state.openToken + 1
     local token = state.openToken
-    if state.via == 'desk' then
-        CreateThread(function() WatchDesk(token) end)
-    elseif state.ui ~= 'admin' then
-        CreateThread(function() WatchItem(token) end)
-    end
-    CreateThread(function() WatchDown(token) end)
+    CreateThread(function() Watch(token) end)
 end
 
 -- A NUI that never shows the UI (its page crashed or never loaded) must not keep the focus: with the cursor on an

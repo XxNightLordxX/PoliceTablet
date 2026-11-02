@@ -188,4 +188,56 @@ H.advance(50, 50)
 H.eq(select(2, From('modules/crimtab/client.lua')), 1, 'a later close starts a new guard')
 H.advance(2000, 50)
 
+-- ============================================================================
+--                        OPEN TABLET: ONE WATCHER (LP3)
+-- ============================================================================
+-- The open tablet's walk-away, item and downed checks share one thread (they were three on the same open); the
+-- animation keeper is the other one. A minute with requireItem on: the downed check every 1 s, the item every 2 s.
+
+do
+    local T = CP.Tablet
+    local keepAccess = Config.Tablet.access
+    local keepItem = Config.Tablet.item
+    Config.Tablet.access, Config.Tablet.item = { requireItem = true }, 'tablet'
+    local keepState = _G.GetResourceState
+    _G.GetResourceState = function(name) if name == 'ox_inventory' then return 'started' end return keepState(name) end
+    local asked = 0
+    H.exportsMock = H.exportsMock or {}
+    local keepInv = H.exportsMock.ox_inventory
+    H.exportsMock.ox_inventory = {
+        Search = function() asked = asked + 1; return 1 end,
+    }
+    local keepReq = CP.Net.request
+    CP.Net.request = function(name)
+        if name == 'getSession' then return { ok = true, data = Session({}) } end
+        return { ok = false, error = 'err.internal' }
+    end
+    H.ok(T.open('officer', { via = 'command' }), 'the Officer UI opens')
+    H.advance(100, 50)
+    waits = {}
+    H.advance(60000, 250)
+    -- the paced waits only (the prop's model and animation loads wait 10 ms at a time once)
+    local n, threads = 0, {}
+    for _, w in ipairs(waits) do
+        if w.file == 'modules/tablet/client.lua' and w.ms >= 1000 then
+            n = n + 1
+            threads[w.co] = true
+        end
+    end
+    local count = 0
+    for _ in pairs(threads) do count = count + 1 end
+    H.eq(count, 2, 'open a minute: the watcher and the animation keeper, two threads (was three watchers)')
+    H.ok(n <= 92, ('open a minute: %d tablet wakes (was 118: three watchers and the animation)'):format(n))
+    H.ok(asked >= 29 and asked <= 31, ('the item is still looked for every 2 s (%d asks)'):format(asked))
+    T.close()
+    H.advance(3000, 250)
+    waits = {}
+    H.advance(10000, 250)
+    H.eq((From('modules/tablet/client.lua')), 0, 'closed: the watcher has ended')
+    H.exportsMock.ox_inventory = keepInv
+    CP.Net.request = keepReq
+    _G.GetResourceState = keepState
+    Config.Tablet.access, Config.Tablet.item = keepAccess, keepItem
+end
+
 return H

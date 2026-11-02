@@ -1073,6 +1073,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Performance.loopScale` | How often the background loops wake while idle or far away (`1.0`: the shipped pace in `docs/LOOPS.md`; `2` = half as often, up to `4`). Markers near you still draw every frame and run timers keep their own pace. See **Performance** below |
 | `Config.Performance.pushGapMs` | The least time between two tablet updates of the same kind to one player (`0`: each sent at once, as before; up to `2000` ms). With `250`-`500`, a burst of updates (a run's progress, a unit change, the board) reaches the tablet as one, a moment later. See **Performance** below |
 | `Config.Performance.latentAboveBytes` | Tablet answers bigger than this many bytes (boards, mission lists, admin lists) come in the background at `Config.Limits.exportBps`, like the Admin UI exports, so the rest of the tablet keeps answering while one loads (`0`: only the exports, as before) |
+| `Config.Performance.markerRange` | Metres within which the objective markers that draw every frame (escort, suspect, scene, rescue, clue, point and device markers) draw (`0`: each marker's own distance, 30-150 m, as before; up to `150`). A smaller value (try `60`) means a far marker costs nothing until you come closer. The checkpoint course keeps its own distance |
 
 **Performance**
 
@@ -1109,6 +1110,12 @@ every look, an admin or supervisor action checks the admin permission once, and 
 whole table. Settings no longer redraws every row while you type in its search box. One new switch, off as shipped:
 `Config.AdminUi.windowRows` draws only the rows in view of a long scrolling list (try it if the Leaderboards board or
 a Settings search feels slow on a big server).
+
+Step LP3 was a second pass over every loop (numbers in `docs/LOOPS.md` under **Every loop, second pass**): the open
+tablet's walk-away, item and downed checks share one loop instead of three (same timing), and the server's happy hour
+end check sleeps while no happy hour runs instead of waking every 30 s all day (it still checks every 30 s while one
+runs). One new switch, off as shipped: `Config.Performance.markerRange` caps how far away the per-frame objective
+markers draw (try `60` if resmon is high while you drive towards an objective).
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.

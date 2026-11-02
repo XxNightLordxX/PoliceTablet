@@ -563,6 +563,12 @@ do
     Err('Performance.pushGapMs', 2500, 'err.setting_range', 'a push gap above 2 s')
     Err('Performance.pushGapMs', 12.5, 'err.setting_whole', 'a fraction of a millisecond')
     Err('Performance.latentAboveBytes', -1, 'err.setting_range', 'a negative size')
+    -- the marker draw distance cap (step LP3): metres, shipped 0 = each marker's own distance
+    H.eq(Config.Performance.markerRange, 0, 'markerRange ships 0 (every marker at its own distance, as before)')
+    ok, v = Check('Performance.markerRange', 60)
+    H.ok(ok and v == 60, 'a marker range of 60 m is kept')
+    Err('Performance.markerRange', 200, 'err.setting_range', 'a marker range above the farthest marker (150 m)')
+    Err('Performance.markerRange', -5, 'err.setting_range', 'a negative marker range')
     Err('Scoring.common.heavyDamage', 5, 'err.setting_positive', 'a penalty stays a penalty')
     H.ok((Check('NpcDifficulty.custom.accuracyAdd', -5)), 'NPC difficulty adds may go either way')
     -- the twists officers choose (PLAN M8b): a switch, a points share and a cash multiplier each, and the two caps

@@ -212,7 +212,7 @@ local function MarkerLoop(S)
     CreateThread(function()
         while S.alive and S.current and not S.knocked do
             local d = S.door
-            if U.distSq(GetEntityCoords(cache.ped), d) <= MARKER_RANGE_SQ then
+            if U.distSq(GetEntityCoords(cache.ped), d) <= CP.Perf.rangeSq(MARKER_RANGE_SQ) then
                 DrawMarker(0, d.x, d.y, d.z + 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, 0.35, 0.35, 240, 200, 40, 180,
                     true, true, 2, false, nil, nil, false)
                 Wait(0)

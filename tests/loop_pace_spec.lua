@@ -207,6 +207,96 @@ do
 end
 
 -- ============================================================================
+--                             MARKER DRAW DISTANCE
+-- ============================================================================
+-- Config.Performance.markerRange, LP3.
+-- Shipped 0: every per-frame marker loop keeps its own distance. A cap makes a marker farther than it sleep at the
+-- far wait instead of drawing every frame.
+
+H.eq(Config.Performance.markerRange, 0, 'markerRange ships 0 (each marker its own distance)')
+H.eq(CP.Perf.rangeSq(150.0 * 150.0), 22500.0, 'shipped: a marker\'s own distance')
+Config.Performance.markerRange = 50
+H.eq(CP.Perf.rangeSq(150.0 * 150.0), 2500, 'a 50 m cap on a 150 m marker')
+H.eq(CP.Perf.rangeSq(30.0 * 30.0), 900.0, 'never farther than the marker\'s own distance')
+Config.Performance.markerRange = 'far'
+H.eq(CP.Perf.rangeSq(900.0), 900.0, 'not a number: no cap')
+Config.Performance.markerRange = 0
+for _, rel in ipairs({
+    'blocks/escort/client.lua',
+    'blocks/flee_arrest/client.lua',
+    'blocks/process_scene/client.lua',
+    'blocks/protect_rescue/client.lua',
+    'blocks/search_area/client.lua',
+    'blocks/interact_points/client.lua',
+    'blocks/skill_check/client.lua',
+}) do
+    H.ok(Read(rel):find('CP.Perf.rangeSq(', 1, true) ~= nil, rel .. ': its in-range distance goes through the cap')
+end
+H.ok(Read('blocks/checkpoint_route/client.lua'):find('CP.Perf.rangeSq', 1, true) == nil,
+    'the checkpoint course keeps its own distance (it samples the pass through a checkpoint in range)')
+
+do
+    _G.cache = _G.cache or {}
+    _G.cache.ped = 77
+    local me = vec3(0.0, 0.0, 30.0)
+    _G.GetEntityCoords = function() return me end
+    local drawn = 0
+    local keepDraw = _G.DrawMarker
+    _G.DrawMarker = function() drawn = drawn + 1 end
+    local keepTarget = H.exportsMock.ox_target
+    local zoneN = 0
+    H.exportsMock.ox_target = {
+        addSphereZone = function() zoneN = zoneN + 1; return zoneN end,
+        removeZone = function() end,
+    }
+    local keepMarkers = CP.Markers
+    CP.Markers = CP.Markers
+        or {
+            adopt = function() return nil end,
+            hidden = function() return false end,
+            release = function() end,
+            style = function() return {} end,
+        }
+    H.load('blocks/skill_check/client.lua')
+    local SC = CP.Blocks.get('skill_check')
+    local ctx = {
+        runId = 'run-lp3sc',
+        index = 1,
+        obj = {},
+        state = {},
+        report = function() end,
+        hudDetail = function() end,
+    }
+    SC.prepare(ctx)
+    SC.start(ctx)
+    SC.update(ctx, { kind = 'state', targets = { { status = 'armed', coords = { x = 0.0, y = 20.0, z = 30.0 } } } })
+    H.advance(1000, 250)
+    waits, drawn = {}, 0
+    H.advance(3000, 50)
+    local frame = 0
+    for _, ms in ipairs(WaitsOf('blocks/skill_check/client.lua')) do if ms == 0 then frame = frame + 1 end end
+    H.ok(frame > 0 and drawn > 0, ('shipped, a device 20 m away: drawn every frame (%d frames)'):format(frame))
+    Config.Performance.markerRange = 10
+    H.advance(1000, 50)
+    waits, drawn = {}, 0
+    H.advance(6000, 50)
+    frame = 0
+    local far = 0
+    for _, ms in ipairs(WaitsOf('blocks/skill_check/client.lua')) do
+        if ms == 0 then frame = frame + 1 elseif ms == 1500 then far = far + 1 end
+    end
+    H.eq(frame, 0, 'markerRange 10: the device 20 m away is not drawn every frame')
+    H.eq(drawn, 0, 'and not drawn')
+    H.ok(far >= 3 and far <= 5, ('the loop sleeps at the far wait (%d passes in 6 s)'):format(far))
+    Config.Performance.markerRange = 0
+    SC.stop(ctx)
+    H.advance(3000, 250)
+    _G.DrawMarker = keepDraw
+    H.exportsMock.ox_target = keepTarget
+    CP.Markers = keepMarkers
+end
+
+-- ============================================================================
 --                                 NUI POLLING
 -- ============================================================================
 

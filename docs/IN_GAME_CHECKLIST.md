@@ -306,6 +306,12 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   check is answered for you. (Z4)
 - [ ] Settings → Performance → loopScale `4`: a checkpoint route without medals (Beat Patrol), drive fast at a
   checkpoint from far away: it counts on the first pass. On foot far away resmon stays as before. Back to `1`. (Z4)
+- [ ] Tablet open at a desk: walk away, it closes within about a second; open it from the item with
+  `requireItem` on, drop the item: it closes within a few seconds; open it and get downed: it closes. (LP3)
+- [ ] A supervisor starts a 1-minute happy hour: about a minute later (within 30 s) the screens show it ended and
+  cooldowns count again. Restart the resource during one: it still ends. (LP3)
+- [ ] Settings → Performance → markerRange `30`: drive at an escort or flee objective: its marker appears only within
+  30 m; resmon while far away is lower. Back to `0`: markers at their own distance again. (LP3)
 - [ ] EVOC course: put the course car in a garage (or `/dv`) mid-course and take another car: no "vehicle
   undriveable" fail and no contact from a stranger car. (Z4)
 - [ ] Volunteer search: say yes, let an officer drive up to you within the first minute, then press Cancel this
