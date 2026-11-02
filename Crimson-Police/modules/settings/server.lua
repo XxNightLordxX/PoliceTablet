@@ -1364,7 +1364,10 @@ local function ParseKeys(toks)
     return keys
 end
 
-local function IsRule(text) return text:match('^%s*=+%s*$') ~= nil and #text >= 20 end
+-- What the comments of config.lua say: banner rules, legends and the descriptions a key inherits.
+local Comments = {}
+
+function Comments.isRule(text) return text:match('^%s*=+%s*$') ~= nil and #text >= 20 end
 
 -- A commented-out entry (-- text = '#ffffff', -- bcso = {, -- },): never part of a description.
 local function IsCode(text)
@@ -1376,7 +1379,25 @@ local function IsCode(text)
         or rest:match('^[%w_%.%-]+%s*$') ~= nil
 end
 
--- { [path] = { line, desc, file, section } } and the section titles in order, from one config file.
+-- "field: text" lines in a table's comment are its legend: they describe the fields under it that have no comment of
+-- their own (Bonuses' kind and value, each marker's sprite and scale). The lines after one, up to the next, go on
+-- with it, so a legend belongs at the end of the comment.
+function Comments.legend(lines)
+    local legend, cur = nil, nil
+    for _, l in ipairs(lines) do
+        local name, text = l:match('^([%a_][%w_]*):%s+(.+)$')
+        if name then
+            legend = legend or {}
+            cur = name
+            legend[name] = text
+        elseif cur then
+            legend[cur] = legend[cur] .. ' ' .. l
+        end
+    end
+    return legend
+end
+
+-- { [path] = { line, desc, legend, lineDesc, file, section } } and the section titles in order, from one config file.
 local function ReadFile(file, meta, sections)
     local src = LoadResourceFile(CP.resource, file.path)
     if type(src) ~= 'string' or src == '' then
@@ -1390,7 +1411,8 @@ local function ReadFile(file, meta, sections)
     for l in pairs(comments) do if l > maxLine then maxLine = l end end
     for l = 1, maxLine do
         local a, b, c = comments[l], comments[l + 1], comments[l + 2]
-        if a and b and c and a.own and b.own and c.own and IsRule(a.text) and IsRule(c.text) and not IsRule(b.text) then
+        if a and b and c and a.own and b.own and c.own and Comments.isRule(a.text) and Comments.isRule(c.text)
+            and not Comments.isRule(b.text) then
             banners[#banners + 1] = { line = l, title = U.trim(b.text) }
             banner[l], banner[l + 1], banner[l + 2] = true, true, true
         end
@@ -1400,7 +1422,7 @@ local function ReadFile(file, meta, sections)
     for _, k in ipairs(keys) do
         if not firstOnLine[k.line] then firstOnLine[k.line] = k end
     end
-    local sectionOf = {}
+    local sectionOf, lineDesc = {}, {}
     local function sectionAt(line)
         local title = nil
         for _, b in ipairs(banners) do
@@ -1443,9 +1465,19 @@ local function ReadFile(file, meta, sections)
             sections.order[#sections.order + 1] = sec.key
         end
         local desc = table.concat(lines, ' '):gsub('%s+', ' ')
+        local first = firstOnLine[k.line] == k
+        if first then lineDesc[k.line] = desc end
         if not meta[k.path] then
             sections.n = sections.n + 1
-            meta[k.path] = { order = sections.n, desc = desc, file = file.name, section = sec.key }
+            meta[k.path] = {
+                order = sections.n,
+                desc = desc,
+                legend = Comments.legend(lines),
+                -- a field of a one-line table ({ kind = 'add', value = 25 }) shares that line's comment
+                lineDesc = not first and lineDesc[k.line] or nil,
+                file = file.name,
+                section = sec.key,
+            }
         end
     end
 end
@@ -2724,6 +2756,18 @@ local function IsLeaf(path, v)
     return false
 end
 
+-- A key with no comment of its own: the legend of the nearest table above it that names it, else its line's comment.
+function Comments.inherited(meta, path)
+    local parts = Segments(path)
+    local field = parts[#parts]
+    for i = #parts - 1, 1, -1 do
+        local m = meta[table.concat(parts, '.', 1, i)]
+        if m and m.legend and m.legend[field] then return m.legend[field] end
+    end
+    local m = meta[path]
+    return m and m.lineDesc or ''
+end
+
 local function BuildSchema()
     local meta = {}
     local sections = { byKey = {}, order = {}, n = 0 }
@@ -2739,6 +2783,7 @@ local function BuildSchema()
         local lk, dk = 'settings.label.' .. path, 'settings.desc.' .. path
         e.label = CP.Locale.has(lk) and CP.L(lk) or Label(e.key)
         e.desc = CP.Locale.has(dk) and CP.L(dk) or (m and m.desc or '')
+        if e.desc == '' then e.desc = Comments.inherited(meta, path) end
         local hk = 'settings.help.' .. path
         e.help = CP.Locale.has(hk) and CP.L(hk) or nil
         if e.desc == '' and e.help then

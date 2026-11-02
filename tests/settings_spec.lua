@@ -217,6 +217,35 @@ do
     }) do
         H.ok(E(p).desc ~= nil and E(p).desc ~= '', p .. ': has a description')
     end
+    -- G8: every key of config.lua and blocks.lua has a description, nested entries too. A field without a comment
+    -- of its own reads the legend ("field: text" lines) of the nearest table above it, else its line's comment.
+    local bare = {}
+    for _, e in ipairs(sc.list) do
+        if (e.desc or '') == '' then bare[#bare + 1] = e.path end
+    end
+    table.sort(bare)
+    H.eq(#bare, 0, 'every setting has a description; without one: ' .. table.concat(bare, ', ', 1, math.min(#bare, 12)))
+    H.eq(E('Bonuses.lab_fire.value').desc,
+        'the points (kind \'points\') or the share of P (kind \'pct\'); a negative value is a penalty',
+        'a bonus field reads the Bonuses legend')
+    H.ok(E('Bonuses.correct_disposition.engineOnly').desc:find('loader refuses it in a mission file', 1, true) ~= nil,
+        'a legend entry goes on over the lines after it')
+    H.eq(E('Markers.kinds.clue.scale').desc, 'the blip\'s size (1.0 = normal, 0.5 = half)',
+        'a marker field: its legend')
+    H.eq(E('Departments.fib.supervisorGrade').desc, 'Qbox grade number: this grade and up are supervisors',
+        'the second department reads the Departments legend')
+    H.ok(E('Departments.sast.theme.personalAccents').desc:find('accents an officer may pick', 1, true) == 1,
+        'a key\'s own comment wins over the legend')
+    H.ok(E('MissionTypes.tactical.payout').desc:find('cp_type_payouts', 1, true) ~= nil,
+        'the mission type legend, continued over two lines')
+    H.eq(E('Custody.profileSets.traffic.driver.armed').desc, E('Custody.profileSets.scene.person.armed').desc,
+        'the nearest legend (profileSets) describes every truth')
+    H.ok(E('Custody.demeanour.armed.hostile').desc:find('draws a weapon', 1, true) ~= nil, 'demeanour: its own legend')
+    H.eq(E('Rewards.tierChance.heavy').desc,
+        'added to the chance at each scaling tier (0-1; tiers as in Config.Scaling)',
+        'a field of a one-line table shares that line\'s comment')
+    H.eq(E('Blocks.pursuit.style.options').desc, 'the choices a builder may pick from', 'blocks: options')
+    H.eq(E('Blocks.details.timeLimit').desc, 'seconds a run has after it moves to In progress', 'blocks: a range')
     local cfgText = ''
     local cf = io.open('Crimson-Police/config/config.lua', 'r')
     if cf then
@@ -235,6 +264,21 @@ do
         local pos = cfgText:find('PART ' .. i .. ' · ' .. part, 1, true)
         H.ok(pos ~= nil and pos > last, ('config.lua part %d is %s, in order'):format(i, part))
         last = pos or last
+    end
+    -- G8: a table of contents at the top names the six parts, and every part says what is usually changed in it
+    local contents = cfgText:find('-- CONTENTS: six parts', 1, true)
+    H.ok(contents ~= nil and contents < (cfgText:find('Config = {}', 1, true) or 0), 'config.lua opens with CONTENTS')
+    for i, part in ipairs({
+        'GENERAL',
+        'NPC MISSIONS',
+        'PLAYER VS POLICE',
+        'POLICE TEAMWORK',
+        'ECONOMY AND REWARDS',
+        'SYSTEM',
+    }) do
+        H.ok(cfgText:find('--   PART ' .. i .. ' ' .. part, 1, true) ~= nil, ('the contents list part %d'):format(i))
+        local head = cfgText:match('PART ' .. i .. ' · ' .. part .. '\n(.-)%-%- #+\n') or ''
+        H.ok(head:find('Usually changed here:', 1, true) ~= nil, ('part %d says what is usually changed'):format(i))
     end
     -- a part header is not a section banner: no section is named after one
     for _, k in ipairs(keys) do H.ok(not k:match('^part_'), k .. ': not a part header') end
@@ -545,8 +589,13 @@ do
     for _, sec in ipairs(S._schema().sections) do
         for _, g in ipairs(sec.groups) do if g.path == 'NpcDifficulty.custom' then fleeGroup = g end end
     end
-    H.ok(((fleeGroup or {}).desc or ''):find('fleeMult: how long runners keep running', 1, true) ~= nil,
-        'the NpcDifficulty custom group says what fleeMult does')
+    H.ok(((fleeGroup or {}).desc or ''):find('the values used when preset = \'custom\'', 1, true) ~= nil,
+        'the NpcDifficulty custom group says what it is for')
+    -- G8: the fleeMult line is now the NpcDifficulty legend, so every preset's fleeMult reads it too
+    H.eq(E('NpcDifficulty.custom.fleeMult').desc, 'how long runners keep running (Config.Flee): 1.2 = 20 % longer',
+        'custom fleeMult: from the legend')
+    H.eq(E('NpcDifficulty.presets.hard.fleeMult').desc, E('NpcDifficulty.custom.fleeMult').desc,
+        'a preset\'s fleeMult reads the same legend')
     H.ok((Check('Flee.sprintSeconds', 15)), 'a 15 s sprint')
     Err('Flee.sprintSeconds', 0, 'err.setting_range', 'a sprint of at least 1 s')
     Err('Flee.jogSeconds', 121, 'err.setting_range', 'at most 120 s')

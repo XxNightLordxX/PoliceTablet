@@ -2827,11 +2827,30 @@ Not built, by the owner's decision: an in-game admin list, root or limited admin
 
 ## Config
 
-Every threshold in this spec is a value in config/config.lua, in config/blocks.lua for Mission Builder settings, or, for per-mission values, in that mission's file, so the server owner can tune the system without touching code. If this document and the config disagree, the config wins. The listing below is config/config.lua exactly as this build ships it (English only: Config.Locale stays 'en'). It is laid out like the Admin UI in six parts (General, NPC missions, Player vs police, Police teamwork, Economy and rewards, System); each block keeps its own banner, which names its Settings section, and the Settings All view lists the sections in the file's order.
+Every threshold in this spec is a value in config/config.lua, in config/blocks.lua for Mission Builder settings, or, for per-mission values, in that mission's file, so the server owner can tune the system without touching code. If this document and the config disagree, the config wins. The listing below is config/config.lua exactly as this build ships it (English only: Config.Locale stays 'en'). It is laid out like the Admin UI in six parts (General, NPC missions, Player vs police, Police teamwork, Economy and rewards, System); each block keeps its own banner, which names its Settings section, and the Settings All view lists the sections in the file's order. It opens with a CONTENTS comment listing the parts and their blocks, and each part heading ends with a "Usually changed here:" line. Every key of config.lua and blocks.lua has a description in Settings (step G8, checked by tests/settings_spec.lua): the comment lines right above it and the comment after it on its line; a key with neither reads the legend of the nearest table above it (comment lines of the form "field: text", each going on over the lines after it up to the next), else the comment of its line (a field of a one-line table such as { kind = 'points', value = 10 }). A settings.desc.<path> locale key still wins over all of these.
 
 -- Every Crimson-Police setting. If this file and the spec disagree, this file wins.
 -- You never have to edit this file: an admin can change every setting in game (Admin UI → Settings). A change made
 -- there is saved over the value here and survives restarts; Reset puts this file's value back.
+
+-- CONTENTS: six parts, laid out like the Admin UI. Each block below has a banner with its name, which is also its
+-- section in Admin UI -> Settings -> All settings. Every key has a comment with its unit and the values it takes;
+-- in a list of entries that all have the same fields (Bonuses, map markers, departments), a line "field: text"
+-- above the list explains that field for every entry.
+--   PART 1 GENERAL              Debug, Storage (database or saves folder), Formats, Tablet and commands, Permissions,
+--                               Admin control, Departments, Names
+--   PART 2 NPC MISSIONS         Mission types, Difficulty, Scaling by participants, Spawning, Suspect behaviour,
+--                               Route to the start, Map markers, Random draw, Dispatch (mission calls), Real calls,
+--                               Alert suppression, Downed participants, Police actions and custody, Decisions,
+--                               Special events, Built-in mission tweaks, Mission Builder
+--   PART 3 PLAYER VS POLICE     Real suspects, Live crimes, Volunteer suspects, Criminal tablet
+--   PART 4 POLICE TEAMWORK      Units, Cross-department missions, Mission controls, Field training, Leaderboard,
+--                               Department challenge, Officer profile (and My options, commendations)
+--   PART 5 ECONOMY AND REWARDS  Cash, Payout editing, Disputes, Scoring, XP levels and goals, Bonuses and penalties,
+--                               Item rewards, Feature rewards
+--   PART 6 SYSTEM               Run limits, Anti-exploit, Time, Admin test mode, Retention, Backups (webhooks are
+--                               server.cfg convars, listed at the end)
+-- Mission Builder ranges (what a builder may pick for each block) are in config/blocks.lua.
 
 Config = {}
 
@@ -2839,10 +2858,12 @@ Config = {}
 --                               PART 1 · GENERAL
 -- Debug lines, the language, where data is saved, the tablet and its commands, the admins and the
 -- Admin UI, what supervisors and admins may do, the departments and the names admins give.
+-- Usually changed here: Database (before the first start), the tablet keys and desks, and your departments' jobs
+-- and supervisor grades.
 -- ############################################################################
 
 Config.Debug = true              -- true = each module prints tagged debug lines
-Config.Locale = 'en'
+Config.Locale = 'en'             -- the language of every text: 'en' (English) only
 
 -- ============================================================================
 --                                   STORAGE
@@ -3062,19 +3083,40 @@ Config.AdminControl = {
 -- Every entry is used automatically for access, the tablet name, colours and
 -- logo watermark, leaderboards, the department challenge, unit invites and the
 -- Mission Builder. Add a block, put its logo in logos/, restart. No code or SQL changes.
+-- Usually changed here: jobs and supervisorGrade (they decide who uses the tablet and who supervises). Each has:
+-- label: the full name, shown in the tablet header
+-- enabled: false = turned off: nobody new joins, history and pay stay
+-- short: the tag on boards, units and badges
+-- jobs: the Qbox job names of this department (as in sc-police / sc-dispatch)
+-- supervisorGrade: Qbox grade number: this grade and up are supervisors
+-- societyAccount: its Renewed-Banking account, only used when Config.Cash.source = 'society'
+-- primary: tablet colour (hex) of the header, buttons, active tab and progress bars
+-- accent: tablet colour (hex) of highlights, badges and focus outlines
+-- background: tablet colour (hex) of the body
+-- surface: tablet colour (hex) of cards, tables and dialogs
+-- text: tablet text colour (hex); optional, picked automatically for contrast when left out
+-- file: the logo's file in logos/ (or use url)
+-- url: an https:// link to the logo instead of a file (optional)
+-- watermark: true = draw the logo behind every screen
+-- opacity: how solid the watermark is, 0.0 to 0.25
+-- size: the watermark's size, as a share of the tablet height (0.05-1)
+-- grayscale: true = the logo is drawn in grey
+-- personalAccents: the accents an officer may pick for their own tablet (see sast below)
+-- missionControls: this department's own Mission controls (optional; see Config.MissionControls)
+-- officerOptions: this department's own My options choices (optional; see Config.OfficerOptions)
 Config.Departments = {
     sast = {
-        label = 'San Andreas State Troopers',        -- shown in the tablet header
-        enabled = true,                              -- false = turned off: nobody new joins, history and pay stay
-        short = 'SAST',                              -- tag on boards, units and badges
-        jobs = { 'sast' },                           -- Qbox job names (as in sc-police / sc-dispatch)
-        supervisorGrade = 3,                         -- Qbox grade number: this grade and up are supervisors
-        societyAccount = 'sast',                     -- only used when Config.Cash.source = 'society'
+        label = 'San Andreas State Troopers',
+        enabled = true,
+        short = 'SAST',
+        jobs = { 'sast' },
+        supervisorGrade = 3,
+        societyAccount = 'sast',
         theme = {
-            primary = '#1f4e8c',     -- header, buttons, active tab, progress bars
-            accent = '#f2c230',      -- highlights, badges, focus outlines
-            background = '#0d1522',  -- tablet body
-            surface = '#152235',     -- cards, tables, dialogs
+            primary = '#1f4e8c',
+            accent = '#f2c230',
+            background = '#0d1522',
+            surface = '#152235',
             -- text    = '#ffffff',   -- optional; picked automatically for contrast when left out
             -- accents an officer may pick for their own tablet: a 6-digit hex colour, or { colour, level }
             -- to unlock it at that level. Leave it out to offer none. Primary, logo and watermark never change.
@@ -3087,10 +3129,10 @@ Config.Departments = {
             },
         },
         logo = {
-            file = 'sast.png',  -- file in logos/ (or use url = 'https://...')
-            watermark = true,   -- draw the logo behind every screen
-            opacity = 0.08,     -- 0.0 to 0.25
-            size = 0.6,         -- share of the tablet height
+            file = 'sast.png',
+            watermark = true,
+            opacity = 0.08,
+            size = 0.6,
             grayscale = false,
         },
     },
@@ -3139,13 +3181,16 @@ Config.Labels = {
 -- Missions against NPCs: mission types, stars, the team size, where people appear and how they act,
 -- the route and the map, the draw, mission calls, real calls and alerts, custody, events, the
 -- built-in mission tweaks and the Mission Builder.
+-- Usually changed here: the mission types' payouts, MissionCalls (how often calls come) and NpcDifficulty.
 -- ############################################################################
 
 -- ============================================================================
 --                                MISSION TYPES
 -- ============================================================================
--- points: leaderboard points, config only (never editable in-game).
--- payout: default base cash payout. Supervisors and admins change it in-game;
+-- The four mission types every mission belongs to. Usually changed here: payout (or in game, Admin UI -> Payouts).
+-- label: the type's name on the tablet
+-- points: leaderboard points for a finished run, config only (never editable in-game).
+-- payout: default base cash payout in dollars. Supervisors and admins change it in-game;
 -- admin-set values are stored permanently in cp_type_payouts.
 -- dailyLimit: completed runs of this type per officer per day; nil = no limit.
 Config.MissionTypes = {
@@ -3187,7 +3232,8 @@ Config.CrossDepartmentPoints = 1.10    -- points multiplier when 2+ departments 
 
 -- When the team shrinks mid-run (see When someone leaves mid-run)
 Config.Rescale = {
-    enabled = true,                                              -- NPCs not yet spawned use the tier for the team that's left
+    -- NPCs not yet spawned use the tier for the team that's left
+    enabled = true,
     keepPayTierFor = { 'real_call', 'force_recall', 'downed' },  -- leave reasons that keep the points and cash tier
 }
 
@@ -3335,10 +3381,15 @@ Config.Npc = {
     feintAfter = 5,                  -- ...and nobody aiming for this many seconds
 }
 
--- How NPCs feel. It never changes points or cash.
+-- How NPCs feel. It never changes points or cash. Each preset (and custom) has:
+-- accuracyAdd: added to armed NPCs' accuracy (0-100 scale; -8 = a little worse aim)
+-- armourAdd: armour points added to armed NPCs (0 = none)
+-- healthMult: × NPC health (1.15 = 15 % more)
+-- surrenderMult: × how readily an NPC gives up (1.3 = gives up more easily, 0.7 = holds out longer)
+-- fleeMult: how long runners keep running (Config.Flee): 1.2 = 20 % longer
 Config.NpcDifficulty = {
     preset = 'normal',               -- 'easy' | 'normal' | 'hard' | 'custom'
-    -- fleeMult: how long runners keep running (Config.Flee): 1.2 = 20 % longer
+    -- the values used when preset = 'custom'
     custom = { accuracyAdd = 0, armourAdd = 0, healthMult = 1.0, surrenderMult = 1.0, fleeMult = 1.0 },
     presets = {
         easy = { accuracyAdd = -8, armourAdd = 0, healthMult = 0.85, surrenderMult = 1.3, fleeMult = 0.8 },
@@ -3477,6 +3528,14 @@ Config.Markers = {
     serviceVehicles = true,      -- true = a prisoner van or tow truck coming to you shows on the map
     -- How each kind of blip looks: sprite (blip id), colour id and size. Yellow = go here, red = enemy, orange =
     -- fleeing or needs a follow-up, blue = friendly, green = safe point
+    -- sprite: the blip's picture, by its blip id (docs.fivem.net/docs/game-references/blips/)
+    -- colour: the blip's colour id (5 = yellow, 1 = red, 17 = orange, 3 = blue, 2 = green)
+    -- scale: the blip's size (1.0 = normal, 0.5 = half)
+    -- nextScale: the size of the next checkpoint's blip
+    -- bossScale: the size of a boss's blip
+    -- surrenderedScale: the size of a suspect who gave up (the same near you and far away)
+    -- followUpColour: the colour id of a point to follow up
+    -- setbackColour: the colour id of a device that was set back
     kinds = {
         start = { sprite = 162, colour = 5, scale = 1.0 },                      -- the mission start
         checkpoint = { sprite = 1, colour = 5, scale = 1.0, nextScale = 0.7 },  -- a checkpoint (nextScale: the next)
@@ -3529,7 +3588,10 @@ Config.Draw = {
 Config.MissionCalls = {
     enabled = true,                  -- true = the server posts NPC mission calls to the tablet
     checkEvery = 10,                 -- seconds between server checks
-    types = {                        -- types that can be called: how often (weight) and priority (1 = highest)
+    -- Types that can be called: how often (weight) and priority (1 = highest)
+    -- weight: how often this type is called against the others (5 vs 2 = two and a half times as often; 0 = never)
+    -- priority: 1 = highest; a higher-priority call shows first on the board
+    types = {
         patrol = { weight = 5, priority = 3 },
         investigation = { weight = 3, priority = 2 },
         tactical = { weight = 2, priority = 1 },
@@ -3551,13 +3613,20 @@ Config.MissionCalls = {
     titles = { patrol = 8, investigation = 6, tactical = 6 },  -- flavour titles per type (mc.title.<type>.<n>)
     eligibilityCache = 10,                                     -- seconds an officer's cached eligibility may be reused
     recentShown = 5,                                           -- calls in the Recent calls list
-    reopen = { enabled = true, time = 120 },                   -- a claim dropped before anyone reached the start reopens once
+    -- A claim dropped before anyone reached the start reopens once
+    -- enabled: false = it never reopens
+    -- time: seconds the reopened call stays open
+    reopen = { enabled = true, time = 120 },
     -- +10% of P (points only) for reaching the start within distance ÷ speed (m/s) + grace (seconds)
     -- Server-posted calls only: paged and staff-created calls never earn it.
+    -- pctOfP: the bonus as a share of P (0.10 = +10 %)
+    -- speed: metres per second the target time allows for the distance
+    -- grace: seconds added to the target time
     rapidResponse = { pctOfP = 0.10, speed = 20.0, grace = 45 },
     pageTime = 30,                   -- seconds a paged call is offered only to the paged unit
-    staffCooldown = 120,             -- seconds between calls created by the same supervisor
-    -- the issuer's own unit can never be paged, and can't claim a call the issuer paged or created
+    -- seconds between calls created by the same supervisor (the issuer's own unit can never be paged, and can't claim
+    -- a call the issuer paged or created)
+    staffCooldown = 120,
     claimRate = 1500,                -- milliseconds between claim attempts per player
     realCallStrip = true,            -- show the read-only SC-Dispatch real-call count
     realCallCache = 15,              -- seconds
@@ -3581,9 +3650,10 @@ Config.MissionCalls = {
 
 Config.Calls = {
     npcCallPrefix = 'npccall-', -- SC-NPCPolice call ids start with this; those calls never end a run
-    ownRunCallPrefixes = { 'playerdown_', 'playerdead_', 'emsdown_', 'emshelp_', 'panic_' }, -- about a participant: not real calls for their partners
-    dodgeWindow = 60, -- un-marking responding within this many seconds makes it a normal abandon
-    respondingExpiry = 1200, -- seconds; a responding entry with no update expires (auto-cleared calls fire no event)
+    -- about a participant: not real calls for their partners
+    ownRunCallPrefixes = { 'playerdown_', 'playerdead_', 'emsdown_', 'emshelp_', 'panic_' },
+    dodgeWindow = 60,           -- un-marking responding within this many seconds makes it a normal abandon
+    respondingExpiry = 1200,    -- seconds; a responding entry with no update expires (auto-cleared calls fire no event)
 }
 
 -- ============================================================================
@@ -3592,7 +3662,9 @@ Config.Calls = {
 -- The flag is the crimsonArena state bag, which SC-Dispatch and SC-Ambulance
 -- already check; its name is fixed in those resources, so it is not configurable.
 Config.Alerts = {
-    backstopRadius = 300.0, -- clear a shots-fired call from a participant within this many metres of their mission (person-down and dead calls are cleared while the flag is on)
+    -- clear a shots-fired call from a participant within this many metres of their mission (person-down and dead
+    -- calls are cleared while the flag is on)
+    backstopRadius = 300.0,
     backstopDelay = 1,      -- seconds to wait for SC-Dispatch to create the call before clearing it
 }
 
@@ -3614,33 +3686,42 @@ Config.Downed = {
 -- ============================================================================
 -- See also Part 3 (Player vs police): a real suspect's cuffs and detain are timed in Config.RealSuspects.
 
+-- What officers do with the people and cars of a mission (talk, frisk, search, cite, arrest, impound) and the vans
+-- that come for them. Usually changed here: times (how long each action takes) and the chances.
+-- The prisoner van (transport), tow truck (tow) and coroner van (coroner) have:
+-- model: the vehicle model it comes in
+-- driver: the ped model that drives it
+-- spawnDistance: metres { nearest, furthest } from the scene where it appears
+-- leaveAfter: seconds after the objective that called it ends before it drives off
+-- bagProp: the body bag prop the coroner uses
+-- enabled: false = no tow truck comes; the car fades out instead
 Config.Custody = {
     times = {                        -- seconds each action's progress bar takes
-        talk = 4,
-        frisk = 4,
-        detain = 3,
-        searchPerson = 4,
-        lookInside = 2,
-        runPlate = 3,
-        inspect = 3,
-        orderOut = 2,
-        searchVehicle = 8,
-        warn = 2,
-        cite = 6,
-        release = 2,
-        impound = 10,
-        noAction = 1,
-        explain = 4,
-        escort = 1,
-        seat = 2,
-        handover = 4,
+        talk = 4,                    -- talk to a person and check their ID
+        frisk = 4,                   -- frisk a person
+        detain = 3,                  -- detain (cuff) a person
+        searchPerson = 4,            -- search a person
+        lookInside = 2,              -- look inside a car
+        runPlate = 3,                -- run a plate
+        inspect = 3,                 -- inspect a car
+        orderOut = 2,                -- order a person out of a car
+        searchVehicle = 8,           -- search a car
+        warn = 2,                    -- give a verbal warning
+        cite = 6,                    -- write a citation
+        release = 2,                 -- release a person
+        impound = 10,                -- impound a car
+        noAction = 1,                -- no action
+        explain = 4,                 -- explain the citation
+        escort = 1,                  -- start or stop escorting a person
+        seat = 2,                    -- place a person in a vehicle
+        handover = 4,                -- hand a person over to the prisoner van
     },
     reach = {                        -- metres, checked with server-side coordinates
-        person = 2.0,
-        frisk = 1.5,
-        vehicle = 3.0,
+        person = 2.0,                -- to act on a person on foot (every other action)
+        frisk = 1.5,                 -- to frisk a person
+        vehicle = 3.0,               -- to act on a car or a person seated in one
         plateFromVehicle = 20.0,     -- Run plate from the driver seat of any vehicle
-        seatVehicle = 5.0,
+        seatVehicle = 5.0,           -- to seat a person in a vehicle
         van = 20.0,                  -- Hand over moves escorted and seated people this close to the van
     },
     -- chance a person agrees to a vehicle search
@@ -3683,6 +3764,7 @@ Config.Custody = {
         spawnDistance = { 150.0, 250.0 },
     },
     offences = {                     -- what a citation can name (labels: locale custody.offence.<id>)
+        -- on a person or driver
         person = {
             'speeding',
             'reckless',
@@ -3694,9 +3776,22 @@ Config.Custody = {
             'possession_small',
             'equipment',
         },
-        vehicle = { 'expired_meter', 'no_permit', 'no_parking', 'hydrant', 'loading_zone' },
+        vehicle = { 'expired_meter', 'no_permit', 'no_parking', 'hydrant', 'loading_zone' },  -- on a parked car
     },
-    -- Hidden truths, as weights. A mission objective names the set (profileSet).
+    -- Hidden truths, as weights (how likely each is against the others; 0 = never). A mission objective names the
+    -- set (profileSet), then the person or car's role (person, driver, passenger, vehicle).
+    -- clean: nothing to find
+    -- minor: a small offence worth a citation
+    -- warrant: wanted on a warrant (arrest)
+    -- narcotics: carries drugs (arrest)
+    -- tools: carries burglary tools (arrest)
+    -- armed: carries an illegal weapon (arrest); the only truth that can turn hostile
+    -- suspended: drives on a suspended licence
+    -- intoxicated: drives drunk or high
+    -- evading: fleeing the police (arrest)
+    -- legal: a car with nothing wrong
+    -- stolen: a stolen car (impound)
+    -- violation: a parking violation (see parkingRules)
     profileSets = {
         scene = {
             person = { clean = 35, minor = 15, warrant = 15, narcotics = 15, tools = 12, armed = 8 },
@@ -3716,7 +3811,12 @@ Config.Custody = {
             vehicle = { stolen = 100 },
         },
     },
-    -- Demeanour weights by truth. Only armed people can be hostile.
+    -- Demeanour weights by truth (how likely each is against the others). Only armed people can be hostile.
+    -- compliant: does what officers say
+    -- nervous: complies, but shows it
+    -- evasive: avoids questions and stalls
+    -- runner: runs when officers come close
+    -- hostile: draws a weapon
     demeanour = {
         clean = { compliant = 80, nervous = 15, evasive = 5 },
         minor = { compliant = 60, nervous = 30, evasive = 10 },
@@ -3730,11 +3830,11 @@ Config.Custody = {
     },
     -- Parking: which spot rules make a violation ticket-level ('cite') or tow-level ('impound').
     parkingRules = {
-        metered = 'cite',
-        permit = 'cite',
-        no_parking = 'impound',
-        hydrant = 'impound',
-        loading = 'impound',
+        metered = 'cite',            -- an expired meter
+        permit = 'cite',             -- a permit-only spot
+        no_parking = 'impound',      -- a no-parking spot
+        hydrant = 'impound',         -- in front of a hydrant
+        loading = 'impound',         -- a loading zone
         free = false,                -- a free spot is legal, or the car is stolen
     },
 }
@@ -3758,6 +3858,8 @@ Config.Decisions = {
 --                                SPECIAL EVENTS
 -- ============================================================================
 
+-- Extra fun on top of the missions: the Type of the Day, twists officers choose and the Weekly Boss. Usually
+-- changed here: todMultiplier and the twists' points and cash.
 Config.Events = {
     typeOfTheDay = true,     -- true = one mission type a day earns the points multiplier below
     todMultiplier = 2.0,     -- points only
@@ -3766,6 +3868,11 @@ Config.Events = {
     modifierChance = 0,
     armoredArmour = 50,      -- Armored Hostiles: extra armour on armed NPCs
     timeCrunchCut = 0.25,    -- Time Crunch: share of the time limit removed
+    -- The Weekly Boss: one big mission on the days below
+    -- enabled: true = the Weekly Boss shows on the Mission Board on its days; false = never
+    -- days: the weekdays it is on, in lower case ('monday' to 'sunday'), the rest of the week it is off
+    -- points: leaderboard points for finishing it
+    -- payout: dollars for finishing it (until an admin sets a mission payout for it)
     weeklyBoss = { enabled = true, days = { 'friday', 'saturday', 'sunday' }, points = 500, payout = 2500 },
     -- Twists the officers may choose when they take a mission from the Mission Board or a mission call (the unit
     -- leader decides for the unit). Each chosen twist adds its own reward and they stack, up to twistMaxPoints and
@@ -3825,7 +3932,9 @@ Config.Builder = {
                                                -- point further away (left behind by a moved start) blocks
                                                -- publishing; routes, patrol checkpoints, escort ambush points and
                                                -- flee paths are exempt (50-2000)
-    bonusCap = { points = 50, share = 0.25 },  -- flat bonuses and penalties: at most 50 points; percentage ones: at most 25% of P
+    -- A builder's own bonuses and penalties: flat ones at most 50 points (points), percentage ones at most 25% of P
+    -- (share, 0-1)
+    bonusCap = { points = 50, share = 0.25 },
     requireTestToPublish = false,              -- true = supervisors may publish only a draft that passed a test
                                                -- (admins never need one); false = testing is optional for everyone
     supervisorItems = false,                   -- false = only admins may put items in a custom mission (items a run
@@ -3920,6 +4029,7 @@ Config.Builder = {
             'g_m_y_salvagoon_01',
             'g_m_m_chicold_01',
         },
+        -- base-game vehicle models a builder may give suspects and hostiles
         vehicles = {
             'sultan',
             'buffalo',
@@ -3934,7 +4044,8 @@ Config.Builder = {
             'rancherxl',
             'bison',
         },
-        escortVehicles = { 'stockade', 'stockade3' },
+        escortVehicles = { 'stockade', 'stockade3' },  -- vehicle models an Escort mission may protect
+        -- what a builder may have a person do at a point: clipboard, search, kneel, mechanic, notepad or photo
         animations = { 'clipboard', 'search', 'kneel', 'mechanic', 'notepad', 'photo' },
     },
     noBuildZones = {            -- no spawn point, marker or route waypoint inside these
@@ -3943,19 +4054,24 @@ Config.Builder = {
         { label = 'SASP HQ', coords = vec3(1560.38, 815.76, 76.21), radius = 80.0 },
         { label = 'Pillbox Hill Medical', coords = vec3(308.19, -595.35, 43.29), radius = 100.0 },
         { label = 'Paleto Bay Medical', coords = vec3(-254.54, 6331.78, 32.43), radius = 80.0 },
-        { label = 'Bolingbroke Penitentiary', coords = vec3(1691.5, 2578.5, 44.7), radius = 215.0 },  -- the whole prison, every tower
+        -- the whole prison, every tower
+        { label = 'Bolingbroke Penitentiary', coords = vec3(1691.5, 2578.5, 44.7), radius = 215.0 },
         { label = 'Fort Zancudo', coords = vec3(-2075.0, 3225.0, 33.0), radius = 320.0 },             -- the base: 4 circles
         { label = 'Fort Zancudo south-east', coords = vec3(-1875.0, 3050.0, 33.0), radius = 320.0 },
         { label = 'Fort Zancudo south-west', coords = vec3(-2300.0, 2950.0, 33.0), radius = 280.0 },
         { label = 'Fort Zancudo north-west', coords = vec3(-2250.0, 3300.0, 33.0), radius = 280.0 },
-        { label = 'Crimson-Arena Trailer Park', coords = vec3(2344.43, 2565.06, 46.67), radius = 160.0 }, -- live match boundary (up to 135 m) + push-back
-        { label = 'Crimson-Arena lobby', coords = vec3(-282.01, -2030.46, 30.15), radius = 60.0 }, -- where arena players return after a match
+        -- live match boundary (up to 135 m) + push-back
+        { label = 'Crimson-Arena Trailer Park', coords = vec3(2344.43, 2565.06, 46.67), radius = 160.0 },
+        -- where arena players return after a match
+        { label = 'Crimson-Arena lobby', coords = vec3(-282.01, -2030.46, 30.15), radius = 60.0 },
     },
 }
 
 -- ############################################################################
 --                          PART 3 · PLAYER VS POLICE
 -- Real players as suspects: the rules for every such case, live crimes and volunteer suspects.
+-- Usually changed here: LiveCrime.enabled, Volunteers.enabled and CriminalTablet.enabled (all ship off), once your
+-- server is ready for criminal players to take part.
 -- ############################################################################
 
 -- ============================================================================
@@ -4298,6 +4414,7 @@ Config.CriminalTablet = {
 --                           PART 4 · POLICE TEAMWORK
 -- Officers working together: units, Cross-Department Missions, supervisor mission controls, field
 -- training, leaderboards, the department challenge and officer profiles.
+-- Usually changed here: the unit size, which Mission controls supervisors get, and field training.
 -- ############################################################################
 
 -- ============================================================================
@@ -4674,6 +4791,7 @@ Config.OfficerOptions = {
 
 Config.Commendations = {
     enabled = true,                  -- true = supervisors may commend officers
+    -- the kinds a supervisor may pick (ids: rename them in Admin UI -> Settings -> Names, profile.commend.kind.<id>)
     kinds = { 'valor', 'lifesaving', 'teamwork', 'professionalism', 'leadership', 'investigation' },
     citation = { 10, 255 },          -- characters
     perSupervisorPerDay = 3,         -- commendations one supervisor may give per day
@@ -4686,6 +4804,8 @@ Config.Commendations = {
 -- ############################################################################
 --                         PART 5 · ECONOMY AND REWARDS
 -- Cash, payout changes, disputes, points, XP, badges, goals, bonuses and item rewards.
+-- Usually changed here: Cash (bank or cash, server or society money, the daily cap), bonus values and goals.
+-- Item rewards, feature rewards and the money tools all ship off.
 -- ############################################################################
 
 -- ============================================================================
@@ -4734,6 +4854,8 @@ Config.Disputes = {
 --                         SCORING, XP LEVELS AND GOALS
 -- ============================================================================
 
+-- How a run's points (P = the mission type's points) are worked out. Usually changed here: the streak and the common
+-- bonuses and penalties below.
 Config.Scoring = {
     scoreCap = 2.0,          -- × P
     streakStep = 0.05,       -- × points added per day of streak (0.05 = +5% a day)
@@ -4743,10 +4865,10 @@ Config.Scoring = {
     common = {
         fastShare = 0.75,        -- finished within this share of the time limit...
         fastBonus = 0.20,        -- ...earns this share of P
-        noDamage = 10,
-        firstRun = 15,
-        heavyDamage = -25,
-        pedestrianHit = -30,
+        noDamage = 10,           -- points when the vehicle stays above noDamageAbove
+        firstRun = 15,           -- points for an officer's first finished run since going on duty
+        heavyDamage = -25,       -- points (negative): the vehicle ended below heavyDamageBelow
+        pedestrianHit = -30,     -- points (negative) for each pedestrian hit with a vehicle
         lightsSiren = -10,       -- missions with quietPatrol = true only (Beat Patrol, Business Check,
                                  -- Illegal Parking Patrol), and only after arrival at the start
         shotSurrendered = -20,
@@ -4760,13 +4882,16 @@ Config.Scoring = {
 -- ============================================================================
 -- See also Part 3 (Player vs police): the rs_ penalties below are for real-suspect cases.
 
--- The standard list, and the only one the Mission Builder offers. kind 'points'
--- = flat points (each = per occurrence); kind 'pct' = a share of P. block = the
--- block the mission must contain (none = any mission). Ids with positive values go in a mission file's bonuses,
--- negative ones in its penalties; either may override the value with points or pctOfPoints.
--- Labels live in locales/en.json. Built-in missions may also use the extra
--- bonuses written on their mission cards. Decision grades are personal to the officer who decided.
--- engineOnly = true: awarded by the engine or a block's own setting (e.g. bestPoints); never listed by
+-- The standard list, and the only one the Mission Builder offers. Ids with positive values go in a mission file's
+-- bonuses, negative ones in its penalties; either may override the value with points or pctOfPoints. Labels live in
+-- locales/en.json (rename them in Admin UI -> Settings -> Names). Built-in missions may also use the extra bonuses
+-- written on their mission cards. Decision grades are personal to the officer who decided. Usually changed here:
+-- value. Every entry has:
+-- kind: 'points' = value is flat points; 'pct' = value is a share of P (0.10 = 10 %)
+-- value: the points (kind 'points') or the share of P (kind 'pct'); a negative value is a penalty
+-- each: true = counted per occurrence (each arrest, each wrong log); left out = once per run
+-- block: the block a mission must contain to use it (left out = any mission)
+-- engineOnly: true = awarded by the engine or a block's own setting (e.g. bestPoints); never listed by
 -- builder:config, and the loader refuses it in a mission file's bonuses or penalties.
 Config.Bonuses = {
     no_participant_downed = { kind = 'pct', value = 0.10 },
@@ -4774,13 +4899,15 @@ Config.Bonuses = {
     hostile_arrested = { kind = 'points', value = 5, each = true, block = 'hostile_waves' },
     suspect_alive = { kind = 'points', value = 15, block = 'flee_arrest' },
     no_hostage_hurt = { kind = 'points', value = 15, block = 'protect_rescue' },
-    vehicle_stopped_fast = { kind = 'points', value = 15, block = 'pursuit' },            -- stopped within 2 minutes of the start
-    truck_healthy = { kind = 'pct', value = 0.10, block = 'escort' },                     -- arrives above 50% health
-    clues_first = { kind = 'points', value = 10, block = 'search_area' },                 -- every clue checked before the first arrest
+    vehicle_stopped_fast = { kind = 'points', value = 15, block = 'pursuit' },  -- stopped within 2 min of the start
+    truck_healthy = { kind = 'pct', value = 0.10, block = 'escort' },           -- arrives above 50% health
+    -- every clue checked before the first arrest
+    clues_first = { kind = 'points', value = 10, block = 'search_area' },
     no_missed_checks = { kind = 'points', value = 15, block = 'skill_check' },
     correct_log = { kind = 'points', value = 5, each = true, block = 'interact_points' },
     wrong_log = { kind = 'points', value = -5, each = true, block = 'interact_points' },  -- penalty
-    hard_ram = { kind = 'points', value = -10, each = true, block = 'pursuit' },          -- penalty: ramming at over 100 km/h
+    -- penalty: ramming at over 100 km/h
+    hard_ram = { kind = 'points', value = -10, each = true, block = 'pursuit' },
     correct_disposition = { kind = 'points', value = 10, each = true, block = 'field_contact', engineOnly = true },
     procedure_complete = { kind = 'points', value = 10, block = 'field_contact' },        -- once per officer
     all_correct = { kind = 'points', value = 10, block = 'field_contact' },
@@ -4802,13 +4929,19 @@ Config.Bonuses = {
     cook_arrested = { kind = 'points', value = 10, each = true, block = 'flee_arrest' },
     stash_found_fast = { kind = 'points', value = 10, block = 'interact_points' },
     lieutenant_alive = { kind = 'points', value = 25, block = 'hostile_waves' },
-    rapid_response = { kind = 'pct', value = 0.10, engineOnly = true },                 -- claimed server-posted mission calls
-    rs_unarmed_shot = { kind = 'pct', value = -0.25, each = true, engineOnly = true },  -- penalty: shot a real suspect who was never armed
-    rs_ran_over = { kind = 'pct', value = -0.25, each = true, engineOnly = true },      -- penalty: ran a real suspect over on foot
+    -- claimed server-posted mission calls
+    rapid_response = { kind = 'pct', value = 0.10, engineOnly = true },
+    -- penalty: shot a real suspect who was never armed
+    rs_unarmed_shot = { kind = 'pct', value = -0.25, each = true, engineOnly = true },
+    -- penalty: ran a real suspect over on foot
+    rs_ran_over = { kind = 'pct', value = -0.25, each = true, engineOnly = true },
     live_scene = { kind = 'pct', value = 0.25, engineOnly = true },                     -- live case: secured the scene
-    live_detain = { kind = 'pct', value = 0.50, each = true, engineOnly = true },       -- live case: per suspect detained (x his share)
-    live_book = { kind = 'pct', value = 0.25, each = true, engineOnly = true },         -- live case: per suspect booked (x his share)
-    peaceful_arrest = { kind = 'pct', value = 0.15, each = true, engineOnly = true },   -- live case: per suspect detained after a surrender, no officer hit (x his share)
+    -- live case: per suspect detained (x his share)
+    live_detain = { kind = 'pct', value = 0.50, each = true, engineOnly = true },
+    -- live case: per suspect booked (x his share)
+    live_book = { kind = 'pct', value = 0.25, each = true, engineOnly = true },
+    -- live case: per suspect detained after a surrender, no officer hit (x his share)
+    peaceful_arrest = { kind = 'pct', value = 0.15, each = true, engineOnly = true },
 }
 
 -- Cosmetic badges only; never the Qbox rank. Each name is a band of numbered levels starting at level;
@@ -4840,11 +4973,15 @@ Config.Badges = {            -- achievement badge counts
     firstResponder = 25, -- mission calls answered with rapid response
 }
 
+-- Each officer gets one goal a day and one a week, drawn from the lists below; finishing it earns its points.
 -- A goal's stat is one of: arrests, citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok
 -- (Best or Acceptable), decisions_best. Stat goals count completed rows only.
 Config.Goals = {
-    dailyPoints = 50,
-    weeklyPoints = 200,
+    dailyPoints = 50,        -- points for finishing the daily goal
+    weeklyPoints = 200,      -- points for finishing the weekly goal
+    -- The goals a daily goal is drawn from: id (unique), label (shown to the officer), count (how many) and at most
+    -- one of type (a mission type), unit = true (unit runs), missionCall = true (answered calls), crossDepartment =
+    -- true (runs with 2+ departments) or stat (above); none of them = any completed mission
     daily = {
         { id = 'patrol_2', label = 'Complete 2 Patrol missions', type = 'patrol', count = 2 },
         { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 },
@@ -4852,7 +4989,7 @@ Config.Goals = {
         { id = 'calls_2', label = 'Answer 2 mission calls', missionCall = true, count = 2 },
         { id = 'arrests_2', label = 'Make 2 arrests', stat = 'arrests', count = 2 },
     },
-    weekly = {
+    weekly = {                   -- the goals a weekly goal is drawn from (the same fields as daily)
         { id = 'tactical_5', label = 'Complete 5 Tactical missions', type = 'tactical', count = 5 },
         { id = 'cross_2', label = 'Complete 2 cross-department runs', crossDepartment = true, count = 2 },
         { id = 'any_15', label = 'Complete 15 missions', count = 15 },
@@ -4873,7 +5010,7 @@ Config.Rewards = {
     dailyValueCap = 2000,            -- total value of those items per officer per day
     findBonus = 0.10,                -- each lawful evidence find adds this to the run's chance...
     findBonusMax = 0.30,             -- ...up to this much
-    -- added to the chance at each scaling tier
+    -- added to the chance at each scaling tier (0-1; tiers as in Config.Scaling)
     tierChance = { reinforced = 0.05, heavy = 0.10, major = 0.15, critical = 0.20 },
     byType = {                       -- chance per roll, rolls per run, and a weighted pool
         -- tactical = {
@@ -4891,7 +5028,12 @@ Config.Rewards = {
     -- matched case-insensitively (WEAPON_PISTOL is refused too)
     forbidden = { 'weapon_*', 'ammo-*', 'armour', 'bandage', 'money', 'black_money', 'cash' },
     useExamplePools = false,         -- true = use examplePools for any type byType leaves empty
-    examplePools = {                 -- example: safe values (default ox_inventory consumables)
+    -- Example: safe values (default ox_inventory consumables), by mission type
+    -- chance: 0-1, the chance of each roll to give an item
+    -- rolls: how many times a finished run rolls
+    -- pool: the items one roll picks from: item (ox_inventory name), count (a number or { min, max }), weight (how
+    -- likely against the others) and value (dollars, for dailyValueCap)
+    examplePools = {
         patrol = { chance = 0.15, rolls = 1, pool = { { item = 'water', count = { 1, 2 }, weight = 3, value = 20 } } },
         investigation = {
             chance = 0.20,
@@ -4975,6 +5117,7 @@ Config.FeatureRewards = {
 -- ############################################################################
 --                               PART 6 · SYSTEM
 -- Run limits, anti-exploit checks, the daily reset, admin test mode, retention, backups and webhooks.
+-- Usually changed here: Time.resetHour (when the day starts) and how long old data is kept (Retention).
 -- ############################################################################
 
 -- ============================================================================
@@ -5016,7 +5159,8 @@ Config.AntiCheat = {
     maxSpeed = 80.0,        -- m/s between objective events before a run is flagged
     presenceRadius = 150.0, -- runs with 2+ participants: fallback presence range for a block with none of its own...
     presenceShare = 0.70,   -- ...for this share of the run to earn points and cash
-    idleCheck = 180,        -- seconds after the run moves to In progress to remove participants who haven't reached the start
+    -- seconds after the run moves to In progress to remove participants who haven't reached the start
+    idleCheck = 180,
     jobRecheck = 10,        -- seconds between active-job and duty re-checks during a run
     outsideKillsToFlag = 1, -- kills of mission NPCs by players who aren't on the run that flag it for review
     voidsToSuspend = 3,     -- this many voided runs...
@@ -5114,60 +5258,65 @@ config/blocks.lua holds the range and default of every Mission Builder setting, 
 
 -- config/blocks.lua · Mission Builder ranges and defaults.
 
+-- What a builder may set for each block (one step of a mission) in the Mission Builder. A { min, max, default }
+-- triple is the range a builder may pick in and the value a new objective starts with; { min, max } has no default.
+-- Usually changed here: the ranges, to give builders more or less room. A pick from a list has:
+-- options: the choices a builder may pick from
+-- default: the value a new objective starts with (true or false for an on/off switch)
 Config.Blocks = {
     details = {                   -- the Details step, for every mission
         difficulty = { 1, 3, 2 },               -- stars
         officers = { 1, 4 },                    -- min and max officers the builder may set
-        timeLimit = { 120, 1200, 600 },
-        startTimeout = { 300, 900, 600 },
-        cooldown = { 300, 3600, 1200 },
+        timeLimit = { 120, 1200, 600 },         -- seconds a run has after it moves to In progress
+        startTimeout = { 300, 900, 600 },       -- seconds the officers have to reach the start
+        cooldown = { 300, 3600, 1200 },         -- seconds before an officer may take the mission again
         vehiclePenalties = { default = true },  -- false turns off the heavy vehicle-damage penalty
     },
 
     escort = {
-        vehicle = 'stockade',              -- default pick from Config.Builder.allowed.escortVehicles
-        speed = { 20, 120, 60 },
-        style = { options = { 'careful', 'normal', 'fast' }, default = 'normal' },  -- always lane-following
-        toughness = { 0.5, 3.0, 1.5 },                                              -- × vehicle health
-        stoppedFail = { 15, 120, 60 },
-        arrival = { 10, 50, 20 },
-        stops = { 0, 5, 0 },               -- stop points added with E while recording
-        stopWait = { 10, 60, 20 },         -- seconds at each stop; never counts toward stoppedFail
-        ambushPoints = { 1, 10, 5 },
-        ambushGap = 150.0,                 -- minimum metres between ambush points
-        ambushWaves = { 1, 5, 2 },
-        carsPerWave = { 1, 5, 2 },
-        perCar = { 1, 4, 2 },              -- attackers per car; weapons, accuracy and armour as hostile_waves
-        presenceRange = { 50, 800, 300 },  -- from the escorted vehicle
+        vehicle = 'stockade', -- default pick from Config.Builder.allowed.escortVehicles
+        speed = { 20, 120, 60 }, -- km/h the escorted vehicle drives at most
+        style = { options = { 'careful', 'normal', 'fast' }, default = 'normal' }, -- always lane-following
+        toughness = { 0.5, 3.0, 1.5 }, -- × vehicle health
+        stoppedFail = { 15, 120, 60 }, -- seconds the escorted vehicle may stand still before the case fails
+        arrival = { 10, 50, 20 }, -- metres from the destination that count as arrived
+        stops = { 0, 5, 0 }, -- stop points added with E while recording
+        stopWait = { 10, 60, 20 }, -- seconds at each stop; never counts toward stoppedFail
+        ambushPoints = { 1, 10, 5 }, -- ambush points along the route
+        ambushGap = 150.0, -- minimum metres between ambush points
+        ambushWaves = { 1, 5, 2 }, -- ambushes on one escort
+        carsPerWave = { 1, 5, 2 }, -- attacker cars in each ambush
+        perCar = { 1, 4, 2 }, -- attackers per car; weapons, accuracy and armour as hostile_waves
+        presenceRange = { 50, 800, 300 }, -- from the escorted vehicle
     },
 
     checkpoint_route = {
-        checkpoints = { 2, 20 },
-        use = { options = { 'all', 'random' }, default = 'all' },
-        radius = { 3, 20, 10 },
-        stopFor = { 0, 30, 10 },
-        vehicleRequired = { default = true },  -- a checkpoint only counts while driving a vehicle (any vehicle)
-        medals = { default = false },          -- when on: Gold, Silver and Bronze times in seconds
-        contactPenalty = { 0, 10, 2 },         -- seconds added per hit
-        presenceRange = { 50, 800, 300 },      -- from the next checkpoint or the nearest partner, whichever is closer
+        checkpoints = { 2, 20 },                                   -- checkpoints a builder may place
+        use = { options = { 'all', 'random' }, default = 'all' },  -- every checkpoint, or a random few
+        radius = { 3, 20, 10 },                                    -- metres: how close counts as at the checkpoint
+        stopFor = { 0, 30, 10 },                                   -- seconds to stay at each checkpoint (0 = drive through)
+        vehicleRequired = { default = true },                      -- a checkpoint only counts while driving a vehicle (any vehicle)
+        medals = { default = false },                              -- when on: Gold, Silver and Bronze times in seconds
+        contactPenalty = { 0, 10, 2 },                             -- seconds added per hit
+        presenceRange = { 50, 800, 300 },                          -- from the next checkpoint or the nearest partner, whichever is closer
     },
 
     protect_rescue = {
-        npcs = { 1, 6, 3 },
-        peds = { 'a_m_m_business_01', 'a_f_y_business_01' },
-        restrained = { default = true },
-        freeTime = { 1, 15, 6 },
-        hitPenalty = { 0, 100, 50 },
-        failIfDies = { default = true },
-        presenceRange = { 50, 800, 150 }, -- from the nearest NPC being protected
+        npcs = { 1, 6, 3 },                                   -- people to protect or rescue
+        peds = { 'a_m_m_business_01', 'a_f_y_business_01' },  -- their ped models
+        restrained = { default = true },                      -- they start tied up and must be freed
+        freeTime = { 1, 15, 6 },                              -- seconds to cut one person's restraints
+        hitPenalty = { 0, 100, 50 },                          -- points lost when an officer hits one of them (0 = none)
+        failIfDies = { default = true },                      -- the case fails when one of them dies
+        presenceRange = { 50, 800, 150 },                     -- from the nearest NPC being protected
     },
 
     search_area = {
-        startRadius = { 200, 1000, 600 },
-        clues = { 1, 5, 3 },
+        startRadius = { 200, 1000, 600 },  -- metres: the search circle at the start
+        clues = { 1, 5, 3 },               -- clues to find
         shrinkTo = { 300, 150, 50 },       -- circle radius after each clue
-        fugitives = { 1, 5, 1 },
-        runDistance = { 10, 60, 30 },
+        fugitives = { 1, 5, 1 },           -- people hiding in the area
+        runDistance = { 10, 60, 30 },      -- metres: a fugitive runs when an officer gets this close
         presenceRange = { 50, 800, 100 },  -- margin outside the current search circle (inside always counts)
     },
 }
@@ -5176,6 +5325,7 @@ Config.Blocks = {
 -- carry the settings the police actions, raids and tactical variants added.
 
 Config.Blocks.field_contact = {
+    -- parked = check parked cars; scene = people at a scene; stop = the car a pursuit stopped
     mode = { options = { 'parked', 'scene', 'stop' }, default = 'scene' },
     people = { 1, 4, 1 },               -- scene mode; stop mode takes them from the stop; parked has none
     cars = { 0, 6, 1 },                 -- parked: cars to check; scene: 0 or 1
@@ -5183,6 +5333,7 @@ Config.Blocks.field_contact = {
     profileSet = { options = { 'scene', 'traffic', 'parking', 'stolenCar' }, default = 'scene' },
     approach = { 10, 40, 25 },          -- metres: people react when the first participant is this close
     probableCause = { default = true }, -- a vehicle search needs probable cause or consent
+    -- cuff = an arrest ends with the cuffs; handover = it ends at the prisoner van
     custody = { options = { 'cuff', 'handover' }, default = 'handover' },
     returning = { 0, 100, 25 },         -- parked: chance a driver comes back (at most once per run)
     escapeFails = { default = true },   -- off: an escape costs missed_arrest instead of failing
@@ -5201,22 +5352,23 @@ Config.Blocks.process_scene = {
 }
 
 Config.Blocks.pursuit = {
-    mode = { options = { 'follow', 'stop' }, default = 'stop' },
-    vehicles = { 1, 5, 1 },
-    route = { options = { 'free', 'recorded' }, default = 'free' },
-    speed = { 40, 160, 120 },
-    style = { options = { 'cautious', 'reckless' }, default = 'reckless' },
-    suspects = { 1, 4, 1 },             -- per vehicle
-    footFlee = { 0, 100, 20 },          -- chance to flee on foot after the stop
-    holdDistance = { 50, 300, 150 },    -- Follow mode
-    lostDistance = { 150, 600, 250 },
-    lostSeconds = { 5, 30, 10 },
-    duration = { 60, 600, 180 },
-    presenceRange = { 50, 800, 400 },   -- from the nearest suspect vehicle, or suspect on foot
+    mode = { options = { 'follow', 'stop' }, default = 'stop' },             -- stop the car, or follow it unseen
+    vehicles = { 1, 5, 1 },                                                  -- suspect vehicles
+    route = { options = { 'free', 'recorded' }, default = 'free' },          -- flee freely, or along a recorded route
+    speed = { 40, 160, 120 },                                                -- km/h the suspect drives at most
+    style = { options = { 'cautious', 'reckless' }, default = 'reckless' },  -- how the suspect drives
+    suspects = { 1, 4, 1 },                                                  -- per vehicle
+    footFlee = { 0, 100, 20 },                                               -- chance to flee on foot after the stop
+    holdDistance = { 50, 300, 150 },                                         -- Follow mode
+    lostDistance = { 150, 600, 250 },                                        -- Follow mode: metres away that count as losing the car...
+    lostSeconds = { 5, 30, 10 },                                             -- ...for this many seconds
+    duration = { 60, 600, 180 },                                             -- Follow mode: seconds to keep following
+    presenceRange = { 50, 800, 400 },                                        -- from the nearest suspect vehicle, or suspect on foot
     -- rolled when the lights trigger fires; must add up to 100
     responses = { yield = 0, flee = 100, fight = 0 },
     -- contact: the next field_contact objective works the stopped car and its people
     handoff = { options = { 'arrest', 'contact' }, default = 'arrest' },
+    -- off = no observation; pace = pace the car to prove speeding; follow = follow it to prove a violation
     observe = { options = { 'off', 'pace', 'follow' }, default = 'off' },
     zoneSpeed = { 50, 130, 80 },        -- km/h: posted speed for observe = pace
     overMin = { 10, 60, 20 },           -- km/h over the posted speed: rolled between overMin...
@@ -5233,23 +5385,25 @@ Config.Blocks.pursuit = {
 }
 
 Config.Blocks.interact_points = {
-    points = { 1, 10 },
-    use = { options = { 'all', 'random' }, default = 'all' },
-    progress = { 1, 30, 5 },
-    label = 'Checking…',
-    animation = 'clipboard',            -- default pick from Config.Builder.allowed.animations
-    logResult = { default = false },
-    logChoices = { 2, 4, 2 },
-    presenceRange = { 50, 800, 150 },   -- from the nearest point not yet done
-    together = { 1, 4, 1 },             -- different officers who must finish points within the window (1 = off)
-    togetherWindow = { 3, 15, 6 },      -- seconds
-    soloProgress = { 3, 20, 8 },        -- seconds per point when together can't be met (one participant left)
+    points = { 1, 10 },                                        -- points to work
+    use = { options = { 'all', 'random' }, default = 'all' },  -- every point, or a random few
+    progress = { 1, 30, 5 },                                   -- seconds the progress bar takes at each point
+    label = 'Checking…',                                       -- the progress bar's text
+    animation = 'clipboard',                                   -- default pick from Config.Builder.allowed.animations
+    logResult = { default = false },                           -- officers log what they found at each point (graded)
+    logChoices = { 2, 4, 2 },                                  -- choices offered when logging a result
+    presenceRange = { 50, 800, 150 },                          -- from the nearest point not yet done
+    together = { 1, 4, 1 },                                    -- different officers who must finish points within the window (1 = off)
+    togetherWindow = { 3, 15, 6 },                             -- seconds
+    soloProgress = { 3, 20, 8 },                               -- seconds per point when together can't be met (one participant left)
+    -- what hidden finds are: device = a device to work next; seize = evidence to seize
     hiddenKind = { options = { 'device', 'seize' }, default = 'device' },
     finds = { 0, 100, 0 },              -- chance a plain point yields evidence
 }
 
 Config.Blocks.skill_check = {
-    checks = { 1, 8, 4 },
+    checks = { 1, 8, 4 },               -- skill checks in a row
+    -- how hard each check is (the default lists one per check)
     difficulty = { options = { 'easy', 'medium', 'hard' }, default = { 'easy', 'medium', 'medium', 'hard' } },
     missPenalty = { 0, 120, 30 },       -- seconds off the timer
     failAfter = { 1, 3, 2 },            -- misses in a row
@@ -5261,12 +5415,13 @@ Config.Blocks.skill_check = {
 }
 
 Config.Blocks.flee_arrest = {
-    suspects = { 1, 10, 1 },
+    suspects = { 1, 10, 1 },                                -- suspects to arrest
     responses = { surrender = 50, flee = 30, fight = 20 },  -- must add up to 100
-    armedChance = { 0, 100, 20 },
-    weapons = { 'WEAPON_PISTOL' },
-    escapeDistance = { 200, 800, 400 },
-    escapeSeconds = { 10, 60, 20 },
+    armedChance = { 0, 100, 20 },                           -- percent chance a suspect is armed
+    weapons = { 'WEAPON_PISTOL' },                          -- weapons an armed suspect may carry
+    escapeDistance = { 200, 800, 400 },                     -- metres from every officer that count as escaped...
+    escapeSeconds = { 10, 60, 20 },                         -- ...for this many seconds
+    -- what makes a suspect give up: aim (aimed at), stun (tased) or close (an officer stays close)
     givesUp = { options = { 'aim', 'stun', 'close' }, default = { 'aim', 'stun', 'close' } },
     aimDistance = { 5, 15, 10 },                            -- gives up when aimed at within this distance,
     closeDistance = 3.0,                                    -- ...or when a participant stays this close...
@@ -5276,29 +5431,32 @@ Config.Blocks.flee_arrest = {
         options = { 'rolled', 'compliant', 'nervous', 'evasive', 'runner', 'hostile' },
         default = 'rolled',                                 -- rolled: Config.Custody.demeanour
     },
-    feint = { 0, 50, 0 },                                   -- chance a surrendered unarmed suspect bolts
-    custody = { options = { 'cuff', 'handover' }, default = 'cuff' },
+    feint = { 0, 50, 0 },                                              -- chance a surrendered unarmed suspect bolts
+    custody = { options = { 'cuff', 'handover' }, default = 'cuff' },  -- end at the cuffs or at the prisoner van
 }
 
 Config.Blocks.hostile_waves = {
-    waves = { 1, 6, 3 },
-    perWave = { 1, 15, 7 },                            -- every armed NPC in the mission together: at most Config.Builder.maxHostiles
-    nextWaveAlive = { 0, 5, 2 },                       -- next wave when this many or fewer are alive...
-    nextWaveAfter = { 30, 300, 90 },                   -- ...or after this long
+    waves = { 1, 6, 3 },                                   -- waves of hostiles
+    -- every armed NPC in the mission together: at most Config.Builder.maxHostiles
+    perWave = { 1, 15, 7 },
+    nextWaveAlive = { 0, 5, 2 },                           -- next wave when this many or fewer are alive...
+    nextWaveAfter = { 30, 300, 90 },                       -- ...or after this long
     weapons = { 'WEAPON_PISTOL', 'WEAPON_COMBATPISTOL' },  -- default pick from Config.Builder.allowed.weapons
     accuracy = { 5, 60, 25 },                              -- what NPCs get is capped by Config.NpcCombat.accuracyMax
-    armour = { 0, 100, 0 },
-    health = { 100, 400, 200 },                        -- also the range for the boss
+    armour = { 0, 100, 0 },                                -- armour of each hostile
+    health = { 100, 400, 200 },                            -- also the range for the boss
+    -- hold = they stay in cover; balanced = some push; push = they advance on the officers
     behaviour = { options = { 'hold', 'balanced', 'push' }, default = 'balanced' },
-    surrender = { 0, 100, 30 },                        -- chance to surrender under 25% health
-    peds = { 'g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01' },
-    boss = { default = false },                        -- when on: model, health, armour and weapon from the ranges above
-    blockTraffic = { 0, 200, 120 },
-    spawnPointsPerHostile = 1.5,                       -- spawn points needed per hostile in the largest wave
-    presenceRange = { 50, 800, 150 },                  -- from the nearest living hostile
-    behaviourRoll = { default = false },               -- on: behaviour weights rolled per run instead of one behaviour
-    spawnSets = { 0, 4, 0 },                           -- named spawn sets per location (0 = off)
-    spawnSetsUsed = { 1, 3, 2 },                       -- sets used per run, shown as the intel line
+    surrender = { 0, 100, 30 },                                                              -- chance to surrender under 25% health
+    peds = { 'g_m_y_ballaeast_01', 'g_m_y_famca_01', 'g_m_y_mexgoon_01', 'g_m_y_lost_01' },  -- hostile ped models
+    -- when on: model, health, armour and weapon from the ranges above
+    boss = { default = false },
+    blockTraffic = { 0, 200, 120 },                        -- metres around the start kept free of traffic (0 = off)
+    spawnPointsPerHostile = 1.5,                           -- spawn points needed per hostile in the largest wave
+    presenceRange = { 50, 800, 150 },                      -- from the nearest living hostile
+    behaviourRoll = { default = false },                   -- on: behaviour weights rolled per run instead of one behaviour
+    spawnSets = { 0, 4, 0 },                               -- named spawn sets per location (0 = off)
+    spawnSetsUsed = { 1, 3, 2 },                           -- sets used per run, shown as the intel line
 }
 
 ## Example files

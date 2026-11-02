@@ -867,17 +867,23 @@ mistake, a red line says so when it starts (see [11.5](#115-config-and-departmen
 
 `config.lua` is laid out like the Admin UI, in six parts, each with a `PART n` heading in the file. Inside each part,
 every block keeps its own `====` banner, and Admin UI → **Settings** → **All settings** lists the sections in this
-same order. A block that matters to two parts has a `See also` line.
+same order. A block that matters to two parts has a `See also` line. The file opens with a **CONTENTS** list of the
+six parts and the blocks in each, and every part heading ends with a `Usually changed here:` line naming the settings
+owners change most. Every key has a note with its unit and the values it takes. In a list whose entries all have the
+same fields (the bonuses, the map marker kinds, the departments, the custody truths), lines such as
+`-- value: the points ...` above the list explain each field once for every entry, and Settings shows that line as the
+field's description.
 
 1. **General**: `Debug`, `Locale`, `Database`, `Format`, `Tablet` (with the admins, `AdminUi` and `AdminTheme`),
    `Permissions`, `AdminControl`, `Departments` and `Labels` (names).
 2. **NPC missions**: mission types, stars, team size scaling, spawning, NPC behaviour, the route, map markers, the
    draw, mission calls, real calls, alerts, downed officers, custody, decisions, events, built-in mission tweaks and
    the Mission Builder.
-3. **Player vs police**: `RealSuspects`, `LiveCrime` and `Volunteers`.
+3. **Player vs police**: `RealSuspects`, `LiveCrime`, `Volunteers` and `CriminalTablet`.
 4. **Police teamwork**: units, Cross-Department Missions, supervisor mission controls, field training, the
    leaderboard, the department challenge and officer profiles.
-5. **Economy and rewards**: cash, payout editing, disputes, scoring, XP, badges, goals, bonuses and item rewards.
+5. **Economy and rewards**: cash, payout editing, disputes, scoring, XP, badges, goals, bonuses, item rewards and
+   feature rewards.
 6. **System**: run limits (`Config.Limits`), anti-exploit, the daily reset, admin test mode, retention, backups and
    the webhook convars.
 
@@ -1075,7 +1081,8 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
   every setting. In Simple, the mission tweaks and disabled locations say "Change this per mission in Missions" with
   a button, instead of a JSON box. To open on every setting, set `Config.AdminUi.settingsView = 'all'`.
 - **All settings lists every setting**, grouped like the file (Tablet and commands, Departments, Mission types, Cash, ... and
-  the Mission Builder ranges of `blocks.lua`), with the note from `config.lua` as its description. Use the search box
+  the Mission Builder ranges of `blocks.lua`), with the note from `config.lua` as its description (every setting has
+  one; a field inside a list takes its `field: text` line from above the list). Use the search box
   (a name, a path like `Tablet.deskDistance`, or a word of the note), or the **Changed** and **Needs a server restart**
   filters.
 - **Grouped by who you play against** (`Config.AdminUi.groupByPlay`, on): Simple and All settings put the sections
