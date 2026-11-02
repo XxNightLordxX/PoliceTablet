@@ -2533,6 +2533,9 @@ action goes through `CP.AdminKit` (admins only, audited).
   (never the newest or the latest `prerestore`), `Backups.daily` on `CP.Schedule.onDailyJob` (waits for the busy lock,
   then the retention job runs). A part is encoded 1000 rows at a time with a `Wait(0)` between the pieces (LOOP_RULES
   11); the text is the same as one `json.encode` of every row (`[]` for none).
+  `index.json` and each manifest go through `CP.Storage.MemSQL.replaceFile` (`.tmp`, then a rename; plain `fs.write`
+  where it is missing); a failed index save fails the backup. A missing or unreadable `index.json` is rebuilt from the
+  `*.manifest.json` files (`fs.list`) and saved again, with one console line.
 - Restore: `previewRestore(name)` (tables replaced and kept, files, money rows; `err.backup_damaged` as below);
   `restore(src, name, reason)`: refuses while runs go; reads every part it will put back first (missing, not rows, or a
   row without a NOT NULL column that has no default -> `err.backup_damaged`, no lock); takes the busy lock and the

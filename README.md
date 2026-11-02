@@ -2392,7 +2392,9 @@ clean-up never archives a run whose money or item rewards are not finished, and 
   `Config.Database`.
 - **Backups**: **Back up now** saves every Crimson-Police table, your custom and edited missions, uploaded logos and
   the banned-words file in `saves/_backups/` (never sent to players). The last `Config.Backups.keep` (7) are kept;
-  `Config.Backups.daily = true` makes one at every daily reset. **Restore** shows what it replaces first, makes an
+  `Config.Backups.daily = true` makes one at every daily reset. The backup list (`index.json`) and each backup's
+  manifest are saved as a `.tmp` file first and then swapped in, so a full disk or a crash never empties the list; if
+  `index.json` is lost anyway, the list is rebuilt from the manifests (one console line). **Restore** shows what it replaces first, makes an
   automatic backup, and needs the typed word `RESTORE`; then restart Crimson-Police. A restore never takes money back:
   a payment made after the backup stays paid, a given item reward stays given, pay still owed to an officer (waiting
   for them to log in, held or unfunded) is kept even when the backup is older than it, a void or Restore run made since

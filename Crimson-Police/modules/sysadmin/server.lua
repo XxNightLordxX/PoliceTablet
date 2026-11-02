@@ -182,6 +182,22 @@ local function WriteJson(path, v)
     return okW and res == true, #text
 end
 
+-- WriteJson that never leaves the file half-written or empty: the storage engine's writer (<path>.tmp, then a rename
+-- over it), so a full disk or a crash keeps the old file. Falls back to the plain write where that writer is missing.
+local function ReplaceJson(path, v)
+    local M = CP.Storage and CP.Storage.MemSQL
+    local replace = type(M) == 'table' and M.replaceFile or nil
+    if type(replace) ~= 'function' then return WriteJson(path, v) end
+    local ok, text = pcall(json.encode, v)
+    if not ok then return false end
+    local okW, res, err = pcall(replace, path, text)
+    if not (okW and res == true) then
+        CP.err(TAG, 'cannot save %s: %s', path, tostring(okW and err or res))
+        return false
+    end
+    return true, #text
+end
+
 -- The rows of one table as JSON text, encoded BACKUP_PAGE rows at a time with a Wait(0) between the pieces, so a big
 -- table never holds the server thread for one long encode. The text is the same as json.encode(rows): the encoder
 -- writes an array with no spaces, and '[]' when there are no rows.
@@ -665,13 +681,9 @@ end
 
 local function BackupPath(file) return Root() .. '/' .. BACKUP_DIR .. '/' .. file end
 
-local function Index()
-    local list = ReadJson(BackupPath('index.json'))
-    if type(list) ~= 'table' then return {} end
-    local out = {}
-    for _, b in ipairs(list) do
-        if type(b) == 'table' and type(b.name) == 'string' then out[#out + 1] = b end
-    end
+local function SaveIndex(list) return ReplaceJson(BackupPath('index.json'), list) end
+
+local function SortIndex(out)
     table.sort(out, function(a, b)
         if Int(a.createdAt) ~= Int(b.createdAt) then return Int(a.createdAt) < Int(b.createdAt) end
         return a.name < b.name
@@ -679,7 +691,46 @@ local function Index()
     return out
 end
 
-local function SaveIndex(list) return WriteJson(BackupPath('index.json'), list) end
+-- The index lines read back from every <name>.manifest.json in the backup folder (index.json is missing or
+-- unreadable). nil when the folder cannot be listed.
+local function IndexFromManifests()
+    local fs = Fs()
+    local okL, names = pcall(function() return fs and fs.list and fs.list(Root() .. '/' .. BACKUP_DIR) end)
+    if not okL or type(names) ~= 'table' then return nil end
+    local out = {}
+    for _, file in ipairs(names) do
+        local name = type(file) == 'string' and file:match('^(.+)%.manifest%.json$') or nil
+        local m = name and ReadJson(BackupPath(file)) or nil
+        if type(m) == 'table' and m.name == name then
+            out[#out + 1] = {
+                name = name,
+                kind = m.kind,
+                createdAt = m.createdAt,
+                by = m.by,
+                rows = m.rows,
+                bytes = m.bytes,
+                files = type(m.files) == 'table' and #m.files or 0,
+            }
+        end
+    end
+    return SortIndex(out)
+end
+
+local function Index()
+    local list = ReadJson(BackupPath('index.json'))
+    if type(list) ~= 'table' then
+        local rebuilt = IndexFromManifests()
+        if not rebuilt or #rebuilt == 0 then return {} end
+        CP.log(TAG, 'backup index.json is missing or unreadable: rebuilt it from %d backup manifests', #rebuilt)
+        SaveIndex(rebuilt)
+        return rebuilt
+    end
+    local out = {}
+    for _, b in ipairs(list) do
+        if type(b) == 'table' and type(b.name) == 'string' then out[#out + 1] = b end
+    end
+    return SortIndex(out)
+end
 
 local function ValidName(name)
     return type(name) == 'string' and #name <= 64 and name:match('^%d%d%d%d%d%d%d%d%-%d%d%d%d%d%d%-[%a%d%-]+$') ~= nil
@@ -750,7 +801,7 @@ local function RemoveBackup(name)
     if fs then pcall(fs.remove, BackupPath(name .. '.manifest.json')) end
     local keep = {}
     for _, b in ipairs(Index()) do if b.name ~= name then keep[#keep + 1] = b end end
-    SaveIndex(keep)
+    if not SaveIndex(keep) then CP.err(TAG, 'backup %s: removed, but index.json was not updated', name) end
 end
 
 -- The newest backup and the latest automatic one made before a restore are never removed, nor the automatic backup
@@ -849,11 +900,13 @@ function Sys.backup(src, kind, opts)
             end
         end
     end
-    if not WriteJson(BackupPath(name .. '.manifest.json'), manifest) then
+    if not ReplaceJson(BackupPath(name .. '.manifest.json'), manifest) then
         RemoveBackup(name)
         return false, 'err.backup_write'
     end
-    local list = Index()
+    local list = {}
+    -- an index rebuilt from the manifests just now already holds this backup
+    for _, b in ipairs(Index()) do if b.name ~= name then list[#list + 1] = b end end
     list[#list + 1] = {
         name = name,
         kind = manifest.kind,
@@ -863,7 +916,10 @@ function Sys.backup(src, kind, opts)
         bytes = manifest.bytes,
         files = #manifest.files,
     }
-    SaveIndex(list)
+    if not SaveIndex(list) then
+        RemoveBackup(name)
+        return false, 'err.backup_write'
+    end
     Prune(type(opts) == 'table' and opts.keep or nil)
     CP.log(TAG, 'backup %s: %d rows, %d files', name, manifest.rows, #manifest.files)
     return true, list[#list]
@@ -2321,5 +2377,6 @@ end)
 
 -- Test hooks (not part of the contract).
 Sys._index = Index
+Sys._saveIndex = SaveIndex
 Sys._resetSchema = function() schemaCache = nil end
 Sys._uploads = function() return uploads end
