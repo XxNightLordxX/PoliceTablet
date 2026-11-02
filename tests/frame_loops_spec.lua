@@ -1,5 +1,6 @@
 -- Frame loops read cache.ped (skill check K19): every while loop that can wait 0 ms in the block clients, the run
--- client and the builder client reads the player's ped from ox_lib's cache, not PlayerPedId() each frame.
+-- client, the Testing debug drawing and the builder client reads the player's ped from ox_lib's cache, not
+-- PlayerPedId() each frame.
 
 local H = dofile('tests/harness.lua')
 
@@ -97,6 +98,8 @@ local FILES = {
     ['blocks/interact_points/client.lua'] = 1,
     ['blocks/checkpoint_route/client.lua'] = 1,
     ['modules/runs/client.lua'] = 1,
+    -- the Testing debug drawing (step LP1)
+    ['modules/testing/client.lua'] = 1,
     -- placement, recording, the drive test's approach, clear, drive and stop loops
     ['modules/builder/client.lua'] = 6,
 }

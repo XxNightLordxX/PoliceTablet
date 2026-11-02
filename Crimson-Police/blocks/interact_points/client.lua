@@ -9,6 +9,8 @@ local function Cue(name)
 end
 
 local MARKER_DISTANCE = 40.0
+local MARKER_DISTANCE_SQ = MARKER_DISTANCE * MARKER_DISTANCE
+local NONE = {}                 -- the marker loop's empty list (no new table each pass)
 local TARGET_DISTANCE = 2.5
 local EVENT_MS = 5000
 
@@ -341,13 +343,13 @@ local function Loop(ctx, st)
     CreateThread(function()
         while st.alive and st.token == token do
             local sleep = 500
-            local pts = (st.data and st.data.points) or {}
+            local pts = (st.data and st.data.points) or NONE
             local pos = GetEntityCoords(cache.ped)
             for _, p in ipairs(pts) do
                 if p.status == 'pending' or p.status == 'followup' then
                     local c = p.coords
                     local dx, dy, dz = pos.x - c.x, pos.y - c.y, pos.z - c.z
-                    if dx * dx + dy * dy + dz * dz < MARKER_DISTANCE * MARKER_DISTANCE then
+                    if dx * dx + dy * dy + dz * dz < MARKER_DISTANCE_SQ then
                         sleep = 0
                         local r, g, b = 240, 200, 60
                         if p.status == 'followup' then r, g, b = 220, 60, 60 end

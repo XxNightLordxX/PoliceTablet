@@ -285,3 +285,6 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Criminal tablet: say yes to a case and keep Active open: "Giving up now is free" switches to the strike text by itself once cancelGraceSeconds (60 s) have passed. (Z2)
 - [ ] Live crime with one officer: detain the suspect, then get downed (RealSuspects.downed = 'keep_earned'): the run ends Completed, and a second live case on the same suspect inside pairCooldownHours does not score again for that pair. (Z2)
 - [ ] FeatureRewards account = 'item': a row left in Paying is paid by Pay again as the money item (not "Qbox refused"); Clawback on such a row answers "This payment was a money item ..." and takes nothing. (Z2)
+- [ ] Auto-Ready allowed and on: join a unit, stand at the keys, the leader accepts a type: you are Ready at once. Turn Auto-Ready off in My options: the next ready check asks you; on again: answered after you move. (LP1)
+- [ ] Criminal tablet: close it with Escape twice in a row (open, Escape, open, Escape quickly): the pause menu never opens, and Escape opens it normally a second later. (LP1)
+- [ ] Search Area, Device Check, Interact Points: the markers show near each clue, device and point as before. Testing debug drawing still draws the test area. (LP1)

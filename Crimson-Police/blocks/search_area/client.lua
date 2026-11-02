@@ -9,6 +9,7 @@ local SLOW_MS = 1000
 local WATCH_RANGE = 40.0
 local REPORT_MS = 1500
 local MARKER_RANGE = 150.0
+local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local CLUE_RANGE = 2.5
 local SEARCH_ANIM = { dict = 'amb@prop_human_bum_bin@idle_b', clip = 'idle_d' }
 local TALK_ANIM = { dict = 'missfbi3_party_d', clip = 'stand_talk_loop_a_male1' }
@@ -225,13 +226,15 @@ local function MarkerLoop(S)
     CreateThread(function()
         while S.alive and S.current do
             local pos = GetEntityCoords(cache.ped)
+            local px, py, pz = pos.x, pos.y, pos.z
             local drew = false
             for _, cl in pairs(S.clues) do
                 if cl.status == 'pending' then
-                    local v = ClueVec(cl)
-                    if #(pos - v) <= MARKER_RANGE then
-                        DrawMarker(2, v.x, v.y, v.z + 1.0, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.3, 0.3, 0.3, 240, 200, 40,
-                            180, true, true, 2, false, nil, nil, false)
+                    -- squared distance: no vector per clue and frame
+                    local dx, dy, dz = px - cl.x, py - cl.y, pz - cl.z
+                    if dx * dx + dy * dy + dz * dz <= MARKER_RANGE_SQ then
+                        DrawMarker(2, cl.x + 0.0, cl.y + 0.0, cl.z + 1.0, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.3, 0.3, 0.3,
+                            240, 200, 40, 180, true, true, 2, false, nil, nil, false)
                         drew = true
                     end
                 end

@@ -9,12 +9,14 @@ local function Cue(name)
 end
 
 local MARKER_DISTANCE = 30.0
+local MARKER_DISTANCE_SQ = MARKER_DISTANCE * MARKER_DISTANCE
+local NONE = {}                 -- the marker loop's empty list (no new table each pass)
 local TARGET_RADIUS = 1.0
 local TARGET_DISTANCE = 2.5
 local EVENT_MS = 4000
-local LINE_MS = 250            -- the HUD line is checked this often while the markers draw every frame
+local LINE_MS = 250             -- the HUD line is checked this often while the markers draw every frame
 local KEYS = { 'w', 'a', 's', 'd' }
-local EXPLOSION_TYPE = 2       -- sticky bomb
+local EXPLOSION_TYPE = 2        -- sticky bomb
 local ANIM_DICT = 'amb@medic@standing@kneel@base'
 local ANIM_CLIP = 'base'
 
@@ -360,11 +362,11 @@ local function Loop(ctx, st)
         while st.alive and st.token == token do
             local sleep = 500
             local pos = GetEntityCoords(cache.ped)
-            for _, t in ipairs((st.data and st.data.targets) or {}) do
+            for _, t in ipairs((st.data and st.data.targets) or NONE) do
                 if t.status == 'armed' or t.status == 'setback' then
                     local c = t.coords
                     local dx, dy, dz = pos.x - c.x, pos.y - c.y, pos.z - c.z
-                    if dx * dx + dy * dy + dz * dz < MARKER_DISTANCE * MARKER_DISTANCE then
+                    if dx * dx + dy * dy + dz * dz < MARKER_DISTANCE_SQ then
                         sleep = 0
                         DrawMarker(2, c.x, c.y, c.z + 0.8, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.25, 0.25, 0.25, 220, 40,
                             50, 170, true, true, 2, false, nil, nil, false)

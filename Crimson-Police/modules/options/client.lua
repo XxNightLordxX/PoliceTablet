@@ -152,37 +152,53 @@ end
 --              AUTO-READY: is the officer at the keys (step O13)
 -- ============================================================================
 -- While autoReady is on, a light watcher notes the last game input (moving, looking, shooting, driving), so Auto-Ready
--- answers only for an officer at the keys. Off: nothing runs.
+-- answers only for an officer at the keys. Off: nothing runs. The watcher starts when the option turns on (the hook
+-- 'options:changed', a Settings change, or the first Auto-Ready question after a change no hook saw) and ends by
+-- itself once it is off; one watcher at a time.
 
 local INPUT_POLL_MS = 250
-local INPUT_IDLE_POLL_MS = 2000
 local INPUT_CONTROLS = { 21, 22, 24, 25, 30, 31, 32, 33, 34, 35, 44, 51, 59, 71, 72, 75 }
 local lastInputAt = nil
+local watching = false
 
 local function SawInput()
-    for _, c in ipairs(INPUT_CONTROLS) do
-        if IsControlPressed(0, c) then return true end
+    for i = 1, #INPUT_CONTROLS do
+        if IsControlPressed(0, INPUT_CONTROLS[i]) then return true end
     end
     return GetDisabledControlNormal(0, 1) ~= 0.0 or GetDisabledControlNormal(0, 2) ~= 0.0
 end
 
+-- Starts the input watcher when autoReady is on and none runs. true while one runs.
+function O.watchInput()
+    if watching then return true end
+    if O.get('autoReady') ~= true then
+        lastInputAt = nil
+        return false
+    end
+    watching = true
+    CreateThread(function()
+        while O.get('autoReady') == true do
+            if SawInput() then lastInputAt = GetGameTimer() end
+            Wait(INPUT_POLL_MS)
+        end
+        lastInputAt = nil
+        watching = false
+    end)
+    return true
+end
+
 -- true when the officer gave game input within the last ms (the watcher saw it).
 function O.activeWithin(ms)
+    O.watchInput()
     if not lastInputAt then return false end
     return GetGameTimer() - lastInputAt <= (tonumber(ms) or 0)
 end
 
-CreateThread(function()
-    while true do
-        if O.get('autoReady') == true then
-            if SawInput() then lastInputAt = GetGameTimer() end
-            Wait(INPUT_POLL_MS)
-        else
-            lastInputAt = nil
-            Wait(INPUT_IDLE_POLL_MS)
-        end
-    end
+CP.Hooks.on('options:changed', function(key)
+    if key == 'autoReady' then O.watchInput() end
 end)
+CP.Hooks.on('settings:changed', function() O.watchInput() end)
+CreateThread(function() O.watchInput() end)
 
 -- The push 'options' ({ values }): the officer's server options changed.
 RegisterNetEvent(CP.e('client:push'), function(topic, data)

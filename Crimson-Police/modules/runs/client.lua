@@ -289,7 +289,7 @@ local function StartTelemetry(run)
             Wait(1000)
             if current ~= run or token ~= myToken then break end
             tick = tick + 1
-            local ped = PlayerPedId()
+            local ped = cache.ped
             local veh = GetVehiclePedIsIn(ped, false)
             if veh ~= 0 and GetPedInVehicleSeat(veh, -1) == ped then
                 if tick % VEHICLE_EVERY == 0 and NetworkGetEntityIsNetworked(veh) then

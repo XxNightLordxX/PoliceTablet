@@ -2967,6 +2967,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 | `docs/WEB_UI.md` | The web UI developer guide |
 | `docs/STYLE.md` | The code style. `python3 tools/restyle.py` formats the tree, `--check` lists what isn't |
 | `docs/TESTING.md` | How to set up a machine, run the checks and read a failure |
+| `docs/LOOPS.md` | Every loop and timer: when it runs, its interval and why (step LP1) |
 | `docs/IN_GAME_CHECKLIST.md` | What to check in game after an update, one line per change |
 | `docs/PROCESS.md` | How work gets done (branches, the gate, reviews) |
 | `docs/FILE_NOTES.md` | The long file headers |

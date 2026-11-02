@@ -470,6 +470,8 @@ end
 local function Tick()
     local now = GetGameTimer()
     local _, runs = RunsCall('all')
+    -- idle server (no run, nothing tracked): nothing to check, no tables built
+    if (type(runs) ~= 'table' or runs[1] == nil) and next(states) == nil and next(stopped) == nil then return end
     local known = {}
     if type(runs) == 'table' then
         for _, run in ipairs(runs) do

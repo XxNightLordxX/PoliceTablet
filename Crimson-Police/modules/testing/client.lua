@@ -301,7 +301,7 @@ local function StartDrawing()
             if not g then
                 Wait(500)
             else
-                local pc = GetEntityCoords(PlayerPedId())
+                local pc = GetEntityCoords(cache.ped)
                 local now = GetGameTimer()
                 if now >= checkAt then
                     near = NearestDistance(g, pc.x, pc.y, pc.z) <= ACTIVE_RANGE

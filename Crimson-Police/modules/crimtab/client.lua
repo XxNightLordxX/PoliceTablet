@@ -28,16 +28,22 @@ end
 --                                 OPEN / CLOSE
 -- ============================================================================
 
--- The Escape that closed it must not also open the pause menu (Config.Tablet.pauseGuardMs).
+-- The Escape that closed it must not also open the pause menu (Config.Tablet.pauseGuardMs). One thread at a time: a
+-- second close only extends it.
+local pauseGuard = { untilMs = 0, running = false }
+
 local function GuardPause()
     local ms = math.min(1000, tonumber(Config.Tablet and Config.Tablet.pauseGuardMs) or 300)
     if ms <= 0 then return end
-    local untilMs = GetGameTimer() + ms
+    pauseGuard.untilMs = math.max(pauseGuard.untilMs, GetGameTimer() + ms)
+    if pauseGuard.running then return end
+    pauseGuard.running = true
     CreateThread(function()
-        while GetGameTimer() < untilMs do
+        while GetGameTimer() < pauseGuard.untilMs do
             DisableControlAction(0, PAUSE_CONTROL, true)
             Wait(0)
         end
+        pauseGuard.running = false
     end)
 end
 
@@ -174,3 +180,6 @@ AddEventHandler('onResourceStop', function(res)
         if CP.Tablet and CP.Tablet.panelFocus then CP.Tablet.panelFocus(OWNER, false) end
     end
 end)
+
+-- Test hooks (not part of the contract).
+C._guardPause = GuardPause
