@@ -187,6 +187,16 @@ Config.AdminUi = {
     -- starts, the open disputes, the flagged runs waiting for a review and the open player suspect cases, each a
     -- count that opens its screen; false = no such panel (Home as before). It only reads
     needsAttention = false,
+    -- true = Mission pay and Payments made become one Money screen with two tabs; old links, Home tiles and a
+    -- landing of 'payouts' open the right tab; false = two separate screens as before
+    moneyScreen = false,
+    -- Rows per page (10-200, e.g. 50) on the long Admin UI lists, each read a page at a time from the server:
+    -- Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases;
+    -- 0 = each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case)
+    pageSize = 0,
+    -- true = Payments made and Leaderboards each open with one request to the server (the totals and the flagged
+    -- runs come with the list) instead of two; false = two requests as before. The screens show the same
+    oneRequest = false,
 }
 
 -- ============================================================================

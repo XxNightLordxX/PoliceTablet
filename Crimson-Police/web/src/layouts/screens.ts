@@ -5,6 +5,7 @@ import type { ComponentType } from 'react';
 import type { IconName } from '../shared/components';
 import type { AdminScreenKey, OfficerScreenKey, ScreenKey, SupervisorScreenKey } from '../shared/navigation';
 import type { Session, UiKind } from '../shared/types';
+import { moneyScreenOn, resolveAdminKey } from './adminMoney';
 import { supervisorLanding, supervisorNavOf } from './supervisorNav';
 
 import Home from '../officer/screens/Home';
@@ -42,6 +43,7 @@ import AdminPayments from '../admin/screens/Payments';
 import AdminSystem from '../admin/screens/System';
 import AdminRealSuspects from '../admin/screens/RealSuspects';
 import AdminRewards from '../admin/screens/Rewards';
+import AdminMoney from '../admin/screens/Money';
 
 export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     key: K;
@@ -167,6 +169,18 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_payouts',
         icon: 'dollar',
         component: AdminPayouts,
+        // Config.AdminUi.moneyScreen (step H6): a tab of Money instead (the key stays an alias)
+        visible: s => !moneyScreenOn(s),
+        play: 'economy',
+        group: 'main',
+    },
+    {
+        // Money (step H6, Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs
+        key: 'admin_money',
+        titleKey: 'ui.screen.admin_money',
+        icon: 'dollar',
+        component: AdminMoney,
+        visible: s => moneyScreenOn(s),
         play: 'economy',
         group: 'main',
     },
@@ -185,6 +199,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_payments',
         icon: 'creditCard',
         component: AdminPayments,
+        visible: s => !moneyScreenOn(s),
         play: 'economy',
         group: 'more',
     },
@@ -309,7 +324,8 @@ export function defaultScreen(ui: UiKind): ScreenKey {
 // opens on Config.AdminUi.landing (Home, Payouts or Missions) and the Supervisor UI on Config.Tablet.supervisorLanding.
 export function landingScreen(ui: UiKind, session: Session | null, available: ScreenKey[]): ScreenKey {
     if (ui === 'admin' && session) {
-        const want = `admin_${adminLanding(session)}` as ScreenKey;
+        // a landing of 'payouts' opens Money's Mission pay tab while the Money screen is on (step H6)
+        const want = resolveAdminKey(`admin_${adminLanding(session)}` as ScreenKey, {}, session).key;
         if (available.includes(want)) return want;
     }
     // Config.Tablet.supervisorLanding (step G5): 'first' = as before

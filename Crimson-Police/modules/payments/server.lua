@@ -245,7 +245,9 @@ function Payments.list(args)
     args = type(args) == 'table' and args or {}
     local where, params = Where(args)
     if not where then return nil, params end
-    local size = Int(args.size, 1, PAGE_MAX) or 25
+    -- Config.AdminUi.pageSize (step H6) wins over the size the screen asks for; 0 = as before (25, at most 50)
+    local Kit = CP.AdminKit
+    local size = Kit and Kit.pageSize and Kit.pageSize() or Int(args.size, 1, PAGE_MAX) or 25
     local page = Int(args.page, 1) or 1
     Db()
     local total = math.floor(U.num(Scalar('SELECT COUNT(*) AS n FROM cp_mission_runs r WHERE ' .. where, params)))
@@ -267,7 +269,11 @@ function Payments.list(args)
     local out = {}
     for _, r in ipairs(rows) do out[#out + 1] = View(r) end
     local nextAt = CP.Cash and CP.Cash.nextForfeitureAt and CP.Cash.nextForfeitureAt() or nil
+    -- Config.AdminUi.oneRequest (step H6): the totals come with the list (the screen asks with withTotals)
+    local totals = nil
+    if args.withTotals == true and Kit and Kit.oneRequest and Kit.oneRequest() then totals = Payments.totals(args) end
     return {
+        totals = totals,
         rows = out,
         page = page,
         pages = pages,

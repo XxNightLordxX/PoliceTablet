@@ -205,6 +205,13 @@ do
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.needsAttention, false,
         'needsAttention: anything but true is off')
     Config.AdminUi.needsAttention = false
+    -- Config.AdminUi.moneyScreen and oneRequest (H6): shipped off, true only
+    local aui = Cb('getSession', 1, { via = 'export' }).data.config.adminUi
+    H.ok(aui.moneyScreen == false and aui.oneRequest == false, 'moneyScreen and oneRequest ship off')
+    Config.AdminUi.moneyScreen, Config.AdminUi.oneRequest = true, 'yes'
+    aui = Cb('getSession', 1, { via = 'export' }).data.config.adminUi
+    H.ok(aui.moneyScreen == true and aui.oneRequest == false, 'on: true; anything but true is off')
+    Config.AdminUi.moneyScreen, Config.AdminUi.oneRequest = false, false
     -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
     H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
     Config.LiveCrime.enabled = true

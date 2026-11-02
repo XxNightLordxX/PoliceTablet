@@ -42,6 +42,7 @@ export function navBadge(key: ScreenKey, c: NavCounts): { badge?: string; live?:
         case 'admin_officers':
             return { badge: countBadge((c.adminReview ?? 0) + (c.adminDisputes ?? 0)) };
         case 'admin_payments':
+        case 'admin_money':
             return { badge: countBadge(c.adminPayments ?? 0) };
         case 'admin_live':
             return { badge: countBadge(c.adminLive ?? 0) };

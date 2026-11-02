@@ -4251,6 +4251,14 @@ restore / rollback / breakLock / duplicate, server:admin:reloadMissions (summary
 { missionId }. Pushes 'builder' and 'operation' refresh the lists.
 ```
 
+## Crimson-Police/web/src/admin/screens/Money.tsx
+
+```text
+Admin UI · Money (screen key 'admin_money', step H6, Config.AdminUi.moneyScreen): Mission pay (admin/screens/Payouts)
+and Payments made (admin/screens/Payments) as two tabs of one screen, each the old screen itself with the same params.
+params.moneyTab ('pay' | 'payments') picks the tab; layouts/adminMoney.ts maps the old keys onto it.
+```
+
 ## Crimson-Police/web/src/admin/screens/Officers.tsx
 
 ```text
@@ -4651,6 +4659,15 @@ The tablet device: a 1280×800 screen in a rounded bezel, centred and scaled to 
 the space, grows on screens above 1080p), times the officer's tablet size. Themed with the department theme and
 the officer's look; dialogs render inside it (LayerRootContext) so they scale and theme with the tablet. The
 officer option textSize (step O5) sets --cp-fs-scale on it: large text in the whole tablet.
+```
+
+## Crimson-Police/web/src/layouts/adminMoney.ts
+
+```text
+The Money screen's keys (step H6, Config.AdminUi.moneyScreen): moneyScreenOn(session), resolveAdminKey (with the
+switch on, admin_payouts and admin_payments open admin_money on their tab, params kept; used by App's navigate, the
+'open' message and the Admin landing) and moneyTabOf(params). adminMoney.walk.ts checks it against the mocks, with
+oneRequest's totals on admin:getPayments.
 ```
 
 ## Crimson-Police/web/src/layouts/adminNav.ts
@@ -5340,6 +5357,15 @@ Admin UI -> Home's Needs attention panel (step H5): admin:getNeedsAttention answ
 refused starts, the open disputes, the flagged runs waiting for a review (one per run, the admin's own left out)
 and the open player suspect cases (only with the Player suspects screen), in one request; refused while
 Config.AdminUi.needsAttention is off (shipped) and for anyone but an admin.
+```
+
+## tests/admin_lists_spec.lua
+
+```text
+The long Admin UI lists (step H6): CP.AdminKit.pageSize (Config.AdminUi.pageSize, 0 = nil, 10-200), pageOf (one page
+of a list in memory) and oneRequest, and admin:getRsCases a page at a time. The SQL lists (audit, payments, an
+officer's runs, flagged runs with the board) have one case each in adminkit_spec, admin_economy_spec and
+admin_boards_spec.
 ```
 
 ## tests/admin_permissions_spec.lua

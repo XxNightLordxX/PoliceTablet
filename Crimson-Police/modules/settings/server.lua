@@ -668,6 +668,7 @@ local END_REASONS = {
 -- Known number ranges ({ min, max }); every other number keeps the sign of its config.lua value.
 local RANGES = {
     ['Time.resetHour'] = { 0, 23 },
+    ['AdminUi.pageSize'] = { 0, 200 },
     ['Tablet.pauseGuardMs'] = { 0, 1000 },
     ['Departments.*.logo.opacity'] = { 0, 0.25 },
     ['Departments.*.logo.size'] = { 0.05, 1 },

@@ -1,6 +1,6 @@
 // Admin UI · Leaderboards (screen key 'admin_leaderboards', callback admin:getBoards).
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     Badge,
     Button,
@@ -57,7 +57,7 @@ import { ItemRewardsPanel } from '../components/ItemRewardsPanel';
 import { BulkVoidDialog } from '../components/BulkVoidDialog';
 import { RecognitionPanel } from '../components/boards/RecognitionPanel';
 import { RunDialog } from '../components/officers/OfficerRuns';
-import { newRequestId } from '../components/kit';
+import { Pager, newRequestId } from '../components/kit';
 import { ReasonChips } from '../components/ReasonChips';
 import type { OfficerPoints } from '../../types/admin_officers';
 import { useAdminTitle } from '../../layouts/useAdminTitle';
@@ -286,8 +286,15 @@ export default function AdminLeaderboards() {
     const [bulk, setBulk] = useState(false);
     const [runRow, setRunRow] = useState<AdminRun | null>(null);
     const [approveRun, setApproveRun] = useState<{ row: FlaggedRow; rows: FlaggedRow[] } | null>(null);
-    const flaggedReq = useRequest<{ flagged: FlaggedRow[] }>('admin:getFlagged', {}, { pollMs: 60000 });
-    const flaggedRows = asList(flaggedReq.data?.flagged);
+    // Config.AdminUi.oneRequest (step H6): the flagged runs come with the board, so the screen opens with one request
+    const oneRequest = session.config?.adminUi?.oneRequest === true;
+    const flaggedReq = useRequest<{ flagged: FlaggedRow[] }>(
+        'admin:getFlagged',
+        {},
+        { pollMs: 60000, skip: oneRequest },
+    );
+    // Config.AdminUi.pageSize (step H6): the page of the open officer's runs (the server ignores it while 0)
+    const [runsPage, setRunsPage] = useState(1);
 
     const allTime = period === 'alltime';
     const eff = allTime ? 'overall' : filter;
@@ -301,10 +308,19 @@ export default function AdminLeaderboards() {
             ...(eff === 'department' ? { department } : {}),
         };
     }, [period, eff, department, metric, past]);
-    const { data, loading, error, refetch } = useRequest<AdminBoards>('admin:getBoards', args, { pollMs: 60000 });
+    const boardArgs = useMemo(() => (oneRequest ? { ...args, withFlagged: true } : args), [args, oneRequest]);
+    const { data, loading, error, refetch } = useRequest<AdminBoards>('admin:getBoards', boardArgs, {
+        pollMs: 60000,
+    });
+    const flaggedRows = asList(oneRequest ? data?.flagged : flaggedReq.data?.flagged);
+    // after a review: the board's refetch brings the flagged runs too while oneRequest is on
+    const refetchFlagged = () => {
+        if (!oneRequest) void flaggedReq.refetch();
+    };
+    useEffect(() => setRunsPage(1), [officer?.citizenid]);
     const runsReq = useRequest<AdminBoards>(
         'admin:getBoards',
-        { ...args, citizenid: officer?.citizenid },
+        { ...args, citizenid: officer?.citizenid, runsPage },
         { skip: !officer },
     );
 
@@ -390,7 +406,7 @@ export default function AdminLeaderboards() {
         );
         setReview(null);
         if (res.ok) {
-            void flaggedReq.refetch();
+            refetchFlagged();
             void refetch();
             if (officer) void runsReq.refetch();
         }
@@ -405,7 +421,7 @@ export default function AdminLeaderboards() {
         );
         setApproveRun(null);
         if (res.ok) {
-            void flaggedReq.refetch();
+            refetchFlagged();
             void refetch();
         }
     };
@@ -775,7 +791,7 @@ export default function AdminLeaderboards() {
                     <div className="boards-admin-side">
                         <FlaggedPanel
                             list={flaggedRows}
-                            loading={flaggedReq.loading}
+                            loading={oneRequest ? loading : flaggedReq.loading}
                             onDecide={(row, decision) => setReview({ row, decision })}
                             onApproveRun={(row, rows) => setApproveRun({ row, rows })}
                         />
@@ -821,6 +837,11 @@ export default function AdminLeaderboards() {
                         empty={t('admin.boards.runs_empty')}
                     />
                 )}
+                <Pager
+                    page={runsReq.data?.runsPage?.page ?? 1}
+                    pages={runsReq.data?.runsPage?.pages ?? 1}
+                    onPage={setRunsPage}
+                />
             </Dialog>
 
             <BulkVoidDialog

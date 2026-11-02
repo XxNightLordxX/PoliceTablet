@@ -1,6 +1,7 @@
 // Shapes of the boards slice (modules/leaderboard, modules/challenge).
 
 import type { Avatar, Board, BoardRow, ChallengeView, LevelInfo, Profile, ProfileRun } from '../shared/types';
+import type { FlaggedRow } from './oversight';
 import type { Commendation } from './profile';
 
 export type BoardPeriod = 'weekly' | 'monthly' | 'season' | 'alltime';
@@ -214,6 +215,13 @@ export interface AdminRun {
     createdTs: number;
 }
 
+// One page of a long Admin list (step H6, Config.AdminUi.pageSize).
+export interface ListPage {
+    page: number;
+    pages: number;
+    total: number;
+}
+
 // admin:getBoards({ period, filter, department, citizenid? })
 export interface AdminBoards {
     period: string;
@@ -230,6 +238,10 @@ export interface AdminBoards {
     season?: { id: number; name: string; active: boolean } | null;
     citizenid?: string;
     runs?: AdminRun[];
+    // Config.AdminUi.pageSize (step H6): runs holds one page of the officer's runs (asked for with runsPage)
+    runsPage?: ListPage | null;
+    // Config.AdminUi.oneRequest (step H6): the flagged runs, asked for with withFlagged
+    flagged?: FlaggedRow[];
     // full admin control: the past windows to pick from and every metric the board can be ranked by
     windows?: { weeks: PastWindow[]; months: PastWindow[] };
     metrics?: string[];

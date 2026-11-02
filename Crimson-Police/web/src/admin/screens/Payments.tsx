@@ -431,6 +431,7 @@ export default function AdminPayments() {
     const screenTitle = useAdminTitle('admin_payments');
     const session = useSession();
     const departments = session.config?.departments ?? [];
+    const oneRequest = session.config?.adminUi?.oneRequest === true;
     // Leaderboards → stuck payments links here with navigate('admin_payments', { status: 'paying' })
     const { params } = useNavigation();
     const [status, setStatus] = useState(typeof params.status === 'string' ? params.status : '');
@@ -459,17 +460,19 @@ export default function AdminPayments() {
         const f: Record<string, unknown> = { ...where, page, size: PAGE_SIZE };
         if (status) f.status = status;
         if (citizenid) f.citizenid = citizenid;
+        if (oneRequest) f.withTotals = true;
         return f;
-    }, [where, status, citizenid, page]);
+    }, [where, status, citizenid, page, oneRequest]);
 
     const { data, loading, error, refetch } = useRequest<PaymentsView>('admin:getPayments', filter, {
         pushTopic: 'payments',
     });
-    const totals = useRequest<PaymentTotals>('admin:getPaymentTotals', where);
-    const tot = totals.data;
+    // Config.AdminUi.oneRequest (step H6): the totals come with the list, so the screen opens with one request
+    const totals = useRequest<PaymentTotals>('admin:getPaymentTotals', where, { skip: oneRequest });
+    const tot = oneRequest ? (data?.totals ?? null) : totals.data;
     const reload = () => {
         void refetch();
-        void totals.refetch();
+        if (!oneRequest) void totals.refetch();
     };
     const pick =
         <T,>(set: (v: T) => void) =>

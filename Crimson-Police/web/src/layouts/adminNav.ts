@@ -26,6 +26,7 @@ export const ADMIN_GROUP_OF: Record<string, AdminGroup> = {
     admin_rewards: 'rewards',
     admin_permissions: 'permissions',
     admin_payments: 'economy',
+    admin_money: 'economy',
     admin_settings: 'system',
     admin_system: 'system',
     admin_audit: 'system',

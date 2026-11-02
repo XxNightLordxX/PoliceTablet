@@ -218,6 +218,13 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Mission controls: Department notices shows Post a notice and Running now (n); End asks for a second click. Department Report: Field training shows Pairings (n). (H4)
 - [ ] `Config.Tablet.supervisorControlsCard = true`: Department Report shows Your controls today; give 10 points to an officer, open Department Report again: the Give points row is up by 10; a control the admin switches off leaves the card. Shipped `false`: no card. (H4)
 
+## Admin screens merged and faster (H6)
+
+- [ ] Shipped config: the Admin UI sidebar still shows Payouts and Payments, every list pages as before. (H6)
+- [ ] `Config.AdminUi.moneyScreen` On in Settings, reopen the Admin UI: one Money screen with Mission pay and Payments made tabs; the Home Change pay tile opens Mission pay; Leaderboards → stuck payments opens Payments made filtered to Paying; the Payments badge sits on Money. (H6)
+- [ ] `Config.AdminUi.pageSize = 10`: Activity log, Payments made and Officers show 10 rows a page; an officer with more than 10 runs on Leaderboards shows a pager under his runs; Player suspects cases page by 10. (H6)
+- [ ] `Config.AdminUi.oneRequest` On: Payments made shows its totals cards and Leaderboards its flagged runs as before; with Config.Debug on, opening each screen logs one request. (H6)
+
 ## Admin Home Needs attention and plain titles (H5)
 
 - [ ] Shipped config: Admin UI Home looks as before (no Needs attention panel); every screen title is as before. (H5)

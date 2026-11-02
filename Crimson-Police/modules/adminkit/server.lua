@@ -105,6 +105,39 @@ function Kit.uuid() return U.uuid() end
 function Kit.validRequestId(v) return type(v) == 'string' and v:lower():match(REQUEST_ID_PATTERN) ~= nil end
 
 -- ============================================================================
+--                             LONG LISTS (STEP H6)
+-- ============================================================================
+
+-- Config.AdminUi.pageSize: rows per page of the long Admin UI lists, 10-200; nil while it is 0 or not a number
+-- (each list keeps its own page size, as before).
+---@return integer|nil
+function Kit.pageSize()
+    local n = tonumber(type(Config.AdminUi) == 'table' and Config.AdminUi.pageSize or nil)
+    if not n or n ~= n or n <= 0 then return nil end
+    return math.floor(math.max(10, math.min(200, n)))
+end
+
+-- One page of a list held in memory: its rows, the page (1 for anything odd, the last one past the end), the
+-- number of pages and the total.
+---@param list table
+---@param page any
+---@param size integer
+---@return table rows, integer page, integer pages, integer total
+function Kit.pageOf(list, page, size)
+    local total = #list
+    local pages = math.max(1, math.ceil(total / size))
+    local p = math.tointeger(tonumber(page)) or 1
+    p = math.max(1, math.min(pages, p))
+    local out = {}
+    for i = (p - 1) * size + 1, math.min(total, p * size) do out[#out + 1] = list[i] end
+    return out, p, pages, total
+end
+
+-- Config.AdminUi.oneRequest: a screen open asks for its list and its side data in one request.
+---@return boolean
+function Kit.oneRequest() return type(Config.AdminUi) == 'table' and Config.AdminUi.oneRequest == true end
+
+-- ============================================================================
 --                           R: REASON, T: TYPED WORD
 -- ============================================================================
 

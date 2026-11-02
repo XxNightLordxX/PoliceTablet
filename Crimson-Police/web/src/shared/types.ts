@@ -114,6 +114,9 @@ export interface Session {
             rewardsScreen?: boolean;
             // step H5: Home's Needs attention panel (Config.AdminUi.needsAttention)
             needsAttention?: boolean;
+            // step H6: one Money screen (Config.AdminUi.moneyScreen) and one request per screen open (oneRequest)
+            moneyScreen?: boolean;
+            oneRequest?: boolean;
         };
         // Config.RealSuspects.adminScreen (step V18): screen = the Admin UI shows Real suspects (true only while
         // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)

@@ -166,6 +166,9 @@ const CONFIG: Session['config'] = {
         needsAttention: typeof window !== 'undefined' && /[?&]needsAttention\b/.test(window.location.search),
         // ?rewardsScreen: the Rewards screen (Config.AdminUi.rewardsScreen = true, step H1)
         rewardsScreen: typeof window !== 'undefined' && /[?&]rewardsScreen\b/.test(window.location.search),
+        // ?moneyScreen, ?oneRequest: one Money screen and one request per screen open (step H6)
+        moneyScreen: typeof window !== 'undefined' && /[?&]moneyScreen\b/.test(window.location.search),
+        oneRequest: typeof window !== 'undefined' && /[?&]oneRequest\b/.test(window.location.search),
     },
     // ?rsOff: no Real suspects screen (Config.LiveCrime.enabled and Config.Volunteers.enabled both false)
     realSuspects: { screen: !(typeof window !== 'undefined' && /[?&]rsOff\b/.test(window.location.search)) },

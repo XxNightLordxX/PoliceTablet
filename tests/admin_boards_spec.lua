@@ -336,5 +336,31 @@ do
     H.ok(true, 'a Challenge setting change is handled')
 end
 
+-- ============================================================================
+--                                   STEP H6
+-- ============================================================================
+-- AN OFFICER'S RUNS A PAGE AT A TIME, FLAGGED RUNS WITH THE BOARD.
+
+do
+    W.officer('OFF00011', 'sast', 0)
+    for i = 1, 13 do W.row({ citizenid = 'OFF00011', points = 5, at = H.time - 7200 - i * 60 }) end
+    W.row({ citizenid = 'OFF00011', points = 5, at = H.time - 9000, flagged = true })
+    local args = { period = 'alltime', filter = 'overall', citizenid = 'OFF00011', runsPage = 2, withFlagged = true }
+    local d = W.data('admin:getBoards', 1, args)
+    H.ok(#d.runs == 14 and d.runsPage == nil, 'shipped (pageSize 0): every run at once, as before')
+    H.eq(d.flagged, nil, 'shipped (oneRequest off): the flagged runs stay a request of their own')
+    Config.AdminUi.pageSize = 10
+    Config.AdminUi.oneRequest = true
+    d = W.data('admin:getBoards', 1, args)
+    H.ok(d.runsPage and d.runsPage.page == 2 and d.runsPage.pages == 2 and d.runsPage.total == 14,
+        'pageSize 10: page 2 of 2, 14 runs')
+    H.eq(#d.runs, 4, 'page 2 holds the last 4 runs')
+    local alone = W.data('admin:getFlagged', 1, {})
+    H.ok(type(d.flagged) == 'table' and #d.flagged == #alone.flagged and #d.flagged >= 1,
+        'oneRequest: the flagged runs come with the board, the same as admin:getFlagged')
+    Config.AdminUi.pageSize = 0
+    Config.AdminUi.oneRequest = false
+end
+
 _G.print = W.realPrint or print
 return H

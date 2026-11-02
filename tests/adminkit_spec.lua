@@ -679,6 +679,12 @@ do
     H.ok(res and res.ok and res.data.total >= 1, 'filter by role')
     res = Cb('admin:getAudit', 1, { reason = '100%' })
     H.ok(res and res.ok and res.data.total == 0, 'a % in the reason search is a plain character')
+    -- step H6: Config.AdminUi.pageSize sets the rows per page (0 = 50 as before)
+    H.eq(Cb('admin:getAudit', 1, {}).data.pageSize, 50, 'shipped: 50 audit rows a page')
+    Config.AdminUi.pageSize = 10
+    res = Cb('admin:getAudit', 1, {})
+    H.ok(res.data.pageSize == 10 and #res.data.rows == math.min(10, res.data.total), 'pageSize 10: 10 rows a page')
+    Config.AdminUi.pageSize = 0
     local whs = Admin.webhooks()
     H.ok(whs[1].category == 'audit' and whs[1].state == 'on' and whs[1].discord == true, 'a Discord link: on')
     hooks.cp_webhook_board = 'https://discord.com.evil.example/api/webhooks/1/x'

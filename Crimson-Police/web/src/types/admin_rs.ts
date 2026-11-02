@@ -60,6 +60,8 @@ export interface RsCasesData {
     liveCrime: boolean;
     volunteers: boolean;
     cases: RsCaseLine[];
+    // Config.AdminUi.pageSize (step H6): cases holds one page (asked for with page)
+    casesPage?: { page: number; pages: number; total: number } | null;
     // the volunteers on the list now (V26; empty while volunteers are off)
     listed?: RsListedVolunteer[];
     // F2: the Volunteers tab offers Clear strikes (Config.Volunteers.staffClearStrikes)

@@ -1837,6 +1837,14 @@ to go back. The title inside each screen uses the same plain name (Running now, 
 what, ...). Only the layout changes: every screen keeps its permission and its links (the screen keys stay the same,
 so saved links and notifications still open the right screen), and a group with nothing you may see is not shown.
 
+**Money screen, long lists and faster screens** (step H6, each in Admin UI → **Settings**, each shipped as before):
+
+| Setting | Shipped | What it does |
+| --- | --- | --- |
+| `Config.AdminUi.moneyScreen` | `false` | **Mission pay** (Payouts) and **Payments made** (Payments) become one **Money** screen with two tabs. A Home tile, a Needs attention line, the Leaderboards stuck payments link or a landing of `'payouts'` opens the right tab. |
+| `Config.AdminUi.pageSize` | `0` | Rows per page (10-200, for example 50) on the Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases. The server sends one page at a time. `0` keeps each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case at once). The case filters on Player suspects work on the page shown. |
+| `Config.AdminUi.oneRequest` | `false` | Payments made gets its totals and Leaderboards gets its flagged runs in the same request as the list, so each screen opens with one request instead of two. The screens show the same data. |
+
 ### 9.4 The missions
 
 18 missions plus the Weekly Boss. "Officers" is the unit size the mission accepts.

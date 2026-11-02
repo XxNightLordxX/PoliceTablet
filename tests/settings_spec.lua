@@ -353,6 +353,18 @@ do
     H.eq(E('AdminUi.needsAttention').kind, 'boolean', 'needsAttention is a switch')
     H.ok((E('AdminUi.needsAttention').desc or ''):find('each a count that opens its screen', 1, true) ~= nil,
         'needsAttention: its config.lua comment is its description')
+    -- step H6: one Money screen, rows per page and one request per screen open, all shipped as before
+    H.eq(E('AdminUi.moneyScreen').default, false, 'the Admin UI ships with Payouts and Payments apart')
+    H.eq(E('AdminUi.moneyScreen').kind, 'boolean', 'moneyScreen is a switch')
+    H.ok((E('AdminUi.moneyScreen').desc or ''):find('one Money screen with two tabs', 1, true) ~= nil,
+        'moneyScreen: its config.lua comment is its description')
+    H.eq(E('AdminUi.pageSize').default, 0, 'pageSize ships 0: every list as before')
+    H.ok(E('AdminUi.pageSize').min == 0 and E('AdminUi.pageSize').max == 200, 'pageSize: 0 to 200')
+    H.ok((E('AdminUi.pageSize').desc or ''):find('Rows per page', 1, true) ~= nil,
+        'pageSize: its config.lua comment is its description')
+    H.eq(E('AdminUi.oneRequest').default, false, 'the screens ship with two requests as before')
+    H.ok((E('AdminUi.oneRequest').desc or ''):find('one request to the server', 1, true) ~= nil,
+        'oneRequest: its config.lua comment is its description')
     H.ok((E('AdminUi.plainLayout').desc or ''):find('each screen\'s title uses the same plain name', 1, true) ~= nil,
         'plainLayout: the description says the titles inside the screens follow')
     H.ok(E('FeatureRewards.suspect.byType') ~= nil, 'byType is one setting edited as a whole')

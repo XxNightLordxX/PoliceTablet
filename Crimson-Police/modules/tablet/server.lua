@@ -387,6 +387,9 @@ local function ExtraConfig(deptKey)
             rewardsScreen = aui.rewardsScreen == true,
             -- step H5: Home's Needs attention panel (admin:getNeedsAttention), shipped false = no panel
             needsAttention = aui.needsAttention == true,
+            -- step H6: one Money screen for Mission pay and Payments made, and one request per screen open
+            moneyScreen = aui.moneyScreen == true,
+            oneRequest = aui.oneRequest == true,
         },
         realSuspects = { screen = RealSuspectsScreen() },
         officerNav = OfficerNav(),

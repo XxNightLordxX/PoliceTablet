@@ -339,9 +339,9 @@ do
         local key, group = entry:match('key: \'([%w_]+)\''), entry:match('group: \'(%w+)\'')
         if key and groups[group or ''] then groups[group][#groups[group] + 1] = key end
     end
-    -- admin_rewards (H1) shows only with Config.AdminUi.rewardsScreen on (shipped off)
+    -- admin_rewards (H1) and admin_money (H6) show only with their Config.AdminUi switch on (shipped off)
     H.eq(table.concat(groups.main, ','),
-        'admin_home,admin_payouts,admin_rewards,admin_missions,admin_live,admin_officers,admin_settings',
+        'admin_home,admin_payouts,admin_money,admin_rewards,admin_missions,admin_live,admin_officers,admin_settings',
         'the everyday admin screens stay in the sidebar')
     H.eq(#groups.more, 9, 'the other nine fold under More (' .. table.concat(groups.more, ',') .. ')')
     local rs = admin:match('key: \'admin_rs\',(.-)}') or ''
@@ -373,7 +373,9 @@ do
     local admin = reg:match('ADMIN_SCREENS.-\n%];') or ''
     H.eq(admin:match('key: \'([%w_]+)\''), 'admin_home', 'Home is the first admin screen')
     Has(admin, 'visible: s => adminLanding(s) === \'home\'', 'Home shows only while landing is home')
-    Has(reg, 'const want = `admin_${adminLanding(session)}` as ScreenKey;', 'the Admin UI opens on the landing screen')
+    -- step H6: a landing of 'payouts' opens Money's Mission pay tab while the Money screen is on
+    Has(reg, 'const want = resolveAdminKey(`admin_${adminLanding(session)}` as ScreenKey, {}, session).key;',
+        'the Admin UI opens on the landing screen')
     local app = Read(WEB .. 'App.tsx')
     Has(app, 'ui ? currentScreen(ui, session, available, current) :', 'the App shows the current screen')
     Has(reg, 'return keep && current ? current.key : landingScreen(ui, session, available);',

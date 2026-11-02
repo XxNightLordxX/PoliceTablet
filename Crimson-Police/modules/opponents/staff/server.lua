@@ -397,6 +397,13 @@ if CP.AdminKit and CP.AdminKit.action then
 
     Kit.callback('admin:getRsCases', 'antiFarmOverride', function(ctx)
         local list = Opp.staffCases()
+        -- Config.AdminUi.pageSize (step H6): one page of the cases, { page, pages, total } as casesPage
+        local size, casesPage = Kit.pageSize and Kit.pageSize(), nil
+        if size and Kit.pageOf then
+            local p, pages, total
+            list, p, pages, total = Kit.pageOf(list, ctx.args.page, size)
+            casesPage = { page = p, pages = pages, total = total }
+        end
         for _, c in ipairs(list) do c.own = Kit.selfRun(ctx.src, c.runId) == true end
         local volunteersOn = type(Config.Volunteers) == 'table' and Config.Volunteers.enabled == true
         local listed = volunteersOn and CP.Volunteers and CP.Volunteers.staffList and CP.Volunteers.staffList() or {}
@@ -420,6 +427,7 @@ if CP.AdminKit and CP.AdminKit.action then
             liveCrime = type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true,
             volunteers = volunteersOn,
             cases = list,
+            casesPage = casesPage,
             -- the volunteers on the list now (V26; empty while volunteers are off)
             listed = listed,
             -- F2: the Volunteers tab offers Clear strikes (Config.Volunteers.staffClearStrikes)

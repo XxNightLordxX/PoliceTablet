@@ -2582,11 +2582,23 @@ local function AdminOnly(src)
     return Can(src, 'openAdmin')
 end
 
+-- Config.AdminUi.pageSize (step H6) through CP.AdminKit; nil = each list keeps its own page size
+local function PageSize()
+    local Kit = CP.AdminKit
+    return Kit and Kit.pageSize and Kit.pageSize() or nil
+end
+
+-- The flagged runs an admin reviews (his own runs left out): admin:getFlagged, and admin:getBoards with
+-- Config.AdminUi.oneRequest (step H6).
+function Admin.flaggedFor(src)
+    local _, citizenid = ViewerDepartment(src)
+    return Admin.flaggedRows(nil, citizenid or '')
+end
+
 CP.Net.callback('admin:getFlagged', function(src)
     local okP, eP = AdminOnly(src)
     if not okP then return nil, eP end
-    local _, citizenid = ViewerDepartment(src)
-    return { flagged = Admin.flaggedRows(nil, citizenid or '') }
+    return { flagged = Admin.flaggedFor(src) }
 end, { rate = 3 })
 
 -- ARCHITECTURE §8.3: payments left in 'paying' after a crash or a failed deposit (SPEC Cash payouts: "listed in
@@ -2662,15 +2674,17 @@ CP.Net.callback('admin:searchOfficers', function(src, args)
     end
     local whereSql = #where > 0 and (' WHERE ' .. table.concat(where, ' AND ')) or ''
     local total = math.floor(Num((Single('SELECT COUNT(*) AS n FROM cp_officers o' .. whereSql, params) or {}).n, 0))
-    local pages = math.max(1, math.ceil(total / SEARCH_LIMIT))
+    -- Config.AdminUi.pageSize (step H6): 0 = 25 officers a page, as before
+    local size = PageSize() or SEARCH_LIMIT
+    local pages = math.max(1, math.ceil(total / size))
     local page = math.min(pages, Int(args.page, 1, 100000) or 1)
     local rows = Query(
         ([[SELECT o.citizenid, o.callsign, o.rank_label, o.display_name, o.department, o.xp,
         UNIX_TIMESTAMP(o.suspended_until) AS suspended_ts, UNIX_TIMESTAMP(o.retired_at) AS retired_ts, o.board_excluded
         FROM cp_officers o%s ORDER BY o.display_name IS NULL, o.display_name, o.citizenid LIMIT %d OFFSET %d]]):format(
             whereSql,
-            SEARCH_LIMIT,
-            (page - 1) * SEARCH_LIMIT
+            size,
+            (page - 1) * size
         ),
         params
     )
@@ -3279,14 +3293,16 @@ CP.Net.callback('admin:getAudit', function(src, args)
         ('SELECT COUNT(*) AS n FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor WHERE %s'):format(where),
         params)
     local n = math.floor(Num(total and total.n, 0))
-    local pages = math.max(1, math.ceil(n / AUDIT_PAGE))
+    -- Config.AdminUi.pageSize (step H6): 0 = 50 rows a page, as before
+    local size = PageSize() or AUDIT_PAGE
+    local pages = math.max(1, math.ceil(n / size))
     local page = Int(type(args) == 'table' and args.page or 1, 1, 100000) or 1
     if page > pages then page = pages end
     local rows = Query(('%s WHERE %s ORDER BY a.created_at DESC, a.id DESC LIMIT %d OFFSET %d'):format(
         AUDIT_SELECT,
         where,
-        AUDIT_PAGE,
-        (page - 1) * AUDIT_PAGE
+        size,
+        (page - 1) * size
     ), params)
     if not rows then return nil, 'err.internal' end
     local out = {}
@@ -3295,7 +3311,7 @@ CP.Net.callback('admin:getAudit', function(src, args)
     for _, r in ipairs(Query('SELECT DISTINCT action FROM cp_audit ORDER BY action LIMIT 200') or {}) do
         actions[#actions + 1] = r.action
     end
-    return { rows = out, page = page, pages = pages, total = n, pageSize = AUDIT_PAGE, actions = actions }
+    return { rows = out, page = page, pages = pages, total = n, pageSize = size, actions = actions }
 end, { rate = 4 })
 
 local function CsvCell(v)

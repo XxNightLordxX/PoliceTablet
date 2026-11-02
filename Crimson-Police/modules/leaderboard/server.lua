@@ -1791,21 +1791,32 @@ SELECT r.id, r.run_uuid, r.mission_type, r.mission_id, r.state, r.end_reason, r.
 FROM cp_mission_runs r
 WHERE r.citizenid = ? AND %s
 ORDER BY r.created_at DESC, r.id DESC
-LIMIT ?]]
+LIMIT ? OFFSET ?]]
 
-local function AdminRuns(q, citizenid)
+-- An officer's runs in the board's window: the last 100, or with Config.AdminUi.pageSize (step H6) one page of them
+-- plus { page, pages, total } as the second value.
+local function AdminRuns(q, citizenid, page)
     local list = {}
     if q.period == 'season' and not q.seasonId then return list end
-    local rows
-    if q.period == 'alltime' then
-        rows = MySQL.query.await(ADMIN_RUNS_SQL:format('1 = 1'), { citizenid, ADMIN_RUNS }) or {}
-    else
-        local where, params = WhereFor(q)
-        local all = { citizenid }
+    local where, all = '1 = 1', { citizenid }
+    if q.period ~= 'alltime' then
+        local params
+        where, params = WhereFor(q)
         for _, p in ipairs(params) do all[#all + 1] = p end
-        all[#all + 1] = ADMIN_RUNS
-        rows = MySQL.query.await(ADMIN_RUNS_SQL:format(where), all) or {}
     end
+    local size = CP.AdminKit and CP.AdminKit.pageSize and CP.AdminKit.pageSize()
+    local paged = nil
+    if size then
+        local n = MySQL.scalar.await(
+            ('SELECT COUNT(*) AS n FROM cp_mission_runs r WHERE r.citizenid = ? AND %s'):format(where), all)
+        local total = math.max(0, Int(n))
+        local pages = math.max(1, math.ceil(total / size))
+        local p = math.max(1, math.min(pages, math.tointeger(tonumber(page)) or 1))
+        paged = { page = p, pages = pages, total = total }
+    end
+    all[#all + 1] = size or ADMIN_RUNS
+    all[#all + 1] = paged and (paged.page - 1) * size or 0
+    local rows = MySQL.query.await(ADMIN_RUNS_SQL:format(where), all) or {}
     for _, r in ipairs(rows) do
         list[#list + 1] = {
             id = Int(r.id),
@@ -1828,7 +1839,7 @@ local function AdminRuns(q, citizenid)
             createdTs = Int(r.created_ts),
         }
     end
-    return list
+    return list, paged
 end
 
 function LB.adminBoard(args)
@@ -1872,7 +1883,10 @@ function LB.adminBoard(args)
             'live_catches',
         },
     }
-    if cid then out.citizenid = cid; out.runs = AdminRuns(data.q, cid) end
+    if cid then
+        out.citizenid = cid
+        out.runs, out.runsPage = AdminRuns(data.q, cid, args.runsPage)
+    end
     return out
 end
 
@@ -1938,7 +1952,15 @@ CP.Net.callback('admin:getBoards', function(src, args)
         if not okB then return nil, 'err.no_permission' end
         if not CP.Net.rateOk(src, 'boards:past', 1, 2000) then return nil, 'err.rate_limited' end
     end
-    return LB.adminBoard(args)
+    local out, err = LB.adminBoard(args)
+    -- Config.AdminUi.oneRequest (step H6): the flagged runs come with the board (the screen asks with withFlagged)
+    local Kit = CP.AdminKit
+    local want = type(args) == 'table' and args.withFlagged == true
+    if out and want and Kit and Kit.oneRequest and Kit.oneRequest() and CP.Admin and CP.Admin.flaggedFor then
+        local okF, list = pcall(CP.Admin.flaggedFor, src)
+        out.flagged = okF and type(list) == 'table' and list or {}
+    end
+    return out, err
 end)
 
 -- ============================================================================

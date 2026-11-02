@@ -43,6 +43,7 @@ import type {
     RsSuspect,
     RsTool,
 } from '../../types/admin_rs';
+import { Pager } from '../components/kit';
 import { ReasonChips } from '../components/ReasonChips';
 import {
     RS_CLEAR_STRIKES_ACTION,
@@ -458,9 +459,12 @@ function CaseDrawer({
 function CasesTab({
     req: { data, loading, error, refetch },
     onOpen,
+    onPage,
 }: {
     req: UseRequestResult<RsCasesData>;
     onOpen: (runId: string) => void;
+    // Config.AdminUi.pageSize (step H6): another page of cases (the filter works on the page shown)
+    onPage: (page: number) => void;
 }) {
     const [filter, setFilter] = useState<RsCaseFilter>('all');
     const rows = filterCases(asArray(data?.cases), filter);
@@ -564,6 +568,7 @@ function CasesTab({
                     empty={t('rs.ui.cases_none')}
                 />
             )}
+            <Pager page={data?.casesPage?.page ?? 1} pages={data?.casesPage?.pages ?? 1} onPage={onPage} />
         </Card>
     );
 }
@@ -904,7 +909,8 @@ export default function RealSuspects() {
     const [openRun, setOpenRun] = useState<string | null>(null);
     const [tool, setTool] = useState<Partial<RsToolForm> | null>(null);
     const [version, setVersion] = useState(0);
-    const cases = useRequest<RsCasesData>('admin:getRsCases', {});
+    const [casesPage, setCasesPage] = useState(1);
+    const cases = useRequest<RsCasesData>('admin:getRsCases', { page: casesPage });
     const data = cases.data;
     return (
         <Screen title={screenTitle} subtitle={t('rs.ui.subtitle')}>
@@ -925,7 +931,7 @@ export default function RealSuspects() {
                 onChange={setTab}
             />
             {tab === 'cases' ? (
-                <CasesTab req={cases} onOpen={setOpenRun} />
+                <CasesTab req={cases} onOpen={setOpenRun} onPage={setCasesPage} />
             ) : tab === 'volunteers' ? (
                 <VolunteersTab req={cases} />
             ) : (

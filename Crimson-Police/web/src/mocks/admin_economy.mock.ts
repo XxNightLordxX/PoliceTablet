@@ -112,10 +112,14 @@ registerMock('request', 'admin:getPayments', (args: unknown): PaymentsView => {
         nextForfeitIn: 420,
         held: null,
         serverTime: now(),
+        // ?oneRequest (step H6): the totals come with the list
+        totals: a.withTotals === true ? totalsOf(a) : undefined,
     };
 });
 
-registerMock('request', 'admin:getPaymentTotals', (args: unknown): PaymentTotals => {
+registerMock('request', 'admin:getPaymentTotals', (args: unknown): PaymentTotals => totalsOf(args));
+
+function totalsOf(args: unknown): PaymentTotals {
     const list = filtered((args ?? {}) as Record<string, unknown>);
     const byStatus = {} as PaymentTotals['byStatus'];
     for (const s of ['held', 'pending', 'paying', 'paid', 'capped', 'unfunded', 'forfeited'] as CashStatus[]) {
@@ -142,7 +146,7 @@ registerMock('request', 'admin:getPaymentTotals', (args: unknown): PaymentTotals
     });
     const cut = list.reduce((n, r) => n + r.cut, 0);
     return { byStatus, departments, paidTotal, cut, cappedToday: 2, partial: false };
-});
+}
 
 registerMock('request', 'admin:exportPayments', (args: unknown) => {
     const list = filtered((args ?? {}) as Record<string, unknown>);
