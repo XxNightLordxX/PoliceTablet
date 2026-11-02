@@ -144,6 +144,20 @@ if IsDuplicityVersion() then
         return math.max(LATENT_MIN_BPS, math.floor(bps))
     end
 
+    -- Config.Performance.latentAboveBytes: a reply bigger than this (a board, a mission list, an admin list) goes as a
+    -- latent reply too, like an export (0 = off: only the callbacks with opts.latent). Its size is measured only while
+    -- this is on, by the same encoding FXServer sends it with (msgpack; JSON when msgpack is missing).
+    local function BigReply(data)
+        local p = Config.Performance
+        local limit = tonumber(type(p) == 'table' and p.latentAboveBytes or 0) or 0
+        if limit <= 0 or type(data) ~= 'table' then return false end
+        local pack = (type(msgpack) == 'table' and msgpack.pack) or (type(json) == 'table' and json.encode) or nil
+        if not pack then return false end
+        local ok, bytes = pcall(pack, data)
+        return ok and type(bytes) == 'string' and #bytes > limit
+    end
+    CP.Net._bigReply = BigReply
+
     -- opts: { rate = max calls per second (default 6), latent = true: a big reply (an export of up to 5000 rows) }
     -- handler(src, args) -> data | nil, errKey, details: a details table goes back with the error as its data (for
     -- example the line a pasted mission file is refused at).
@@ -170,7 +184,8 @@ if IsDuplicityVersion() then
             if data == nil and errKey then
                 return { ok = false, error = errKey, data = type(details) == 'table' and details or nil }
             end
-            if latent and (type(replyId) == 'string' or type(replyId) == 'number') and src and src > 0 then
+            if (latent or BigReply(data)) and (type(replyId) == 'string' or type(replyId) == 'number') and src
+                and src > 0 then
                 local bps = LatentBps()
                 if bps then
                     TriggerLatentClientEvent(RESULT_EVENT, src, bps, replyId, true, data)

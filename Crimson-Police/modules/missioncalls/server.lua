@@ -701,9 +701,10 @@ end
 -- The officer option callAlerts (My options -> Dispatch): 'favourites' = the set of his favourite types (a call of
 -- another type shows on Dispatch with no pop-up), nil = every call pops up ('all', no favourites picked, or no
 -- CP.Options).
-local function FavouriteAlerts(citizenid, deptKey)
+-- raw: the row's options text, read with calls_muted (nil: CP.Options reads it).
+local function FavouriteAlerts(citizenid, deptKey, raw)
     if not (CP.Options and CP.Options.effective) then return nil end
-    local ok, opts = pcall(CP.Options.effective, citizenid, deptKey)
+    local ok, opts = pcall(CP.Options.effective, citizenid, deptKey, raw)
     if not ok or type(opts) ~= 'table' or opts.callAlerts ~= 'favourites' then return nil end
     local set, any = {}, false
     for _, k in ipairs(type(opts.favouriteTypes) == 'table' and opts.favouriteTypes or {}) do
@@ -719,9 +720,14 @@ local function AlertsOf(citizenid, deptKey)
     local m = muted[citizenid]
     if m and now - m.at < MUTE_CACHE_S then return m end
     CP.Migrations.ready()
-    local ok, v = pcall(MySQL.scalar.await, 'SELECT calls_muted FROM cp_officers WHERE citizenid = ?', { citizenid })
-    local val = ok and CP.U.truthy(v) or false
-    m = { v = val, fav = not val and FavouriteAlerts(citizenid, deptKey) or nil, at = now }
+    -- one read for both: calls_muted and the options the callAlerts favourites come from (step OP2)
+    local ok, row = pcall(MySQL.single.await, 'SELECT calls_muted, options FROM cp_officers WHERE citizenid = ?',
+        { citizenid })
+    if not ok then row = nil end
+    local val = type(row) == 'table' and CP.U.truthy(row.calls_muted) or false
+    -- no row or no saved options: '' (nothing saved), so CP.Options does not read the row again
+    local raw = (type(row) == 'table' and row.options) or ''
+    m = { v = val, fav = not val and FavouriteAlerts(citizenid, deptKey, raw) or nil, at = now }
     muted[citizenid] = m
     return m
 end

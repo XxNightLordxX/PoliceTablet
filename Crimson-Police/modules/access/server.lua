@@ -332,21 +332,31 @@ CP.Net.rateExempt = A.isAdmin -- netRateResponse never warns about or drops an a
 --                                 SUSPENSIONS
 -- ============================================================================
 
+-- One read of the officer's row fills both caches (suspension and retirement): the tablet's officer check asks for
+-- both, so a refresh is one query instead of two (step OP2).
+local function ReadOfficerState(citizenid, now)
+    CP.Migrations.ready()
+    local ok, row = pcall(MySQL.single.await,
+        'SELECT UNIX_TIMESTAMP(suspended_until) AS until_ts, retired_at IS NOT NULL AS retired FROM cp_officers WHERE citizenid = ? LIMIT 1',
+        { citizenid })
+    if not ok then
+        CP.err(TAG, 'officer state lookup for %s failed: %s', citizenid, tostring(row))
+        return false
+    end
+    local untilTs = type(row) == 'table' and tonumber(row.until_ts) or nil
+    if untilTs and untilTs <= now then untilTs = nil end
+    suspensionCache[citizenid] = { untilTs = untilTs, at = now }
+    retiredCache[citizenid] = { retired = type(row) == 'table' and CP.U.truthy(row.retired) or false, at = now }
+    return true
+end
+
 function A.isSuspended(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return false, nil end
     local now = os.time()
     local c = suspensionCache[citizenid]
     if not c or now - c.at >= SUSPENSION_TTL then
-        CP.Migrations.ready()
-        local ok, row = pcall(MySQL.single.await,
-            'SELECT UNIX_TIMESTAMP(suspended_until) AS until_ts FROM cp_officers WHERE citizenid = ? AND suspended_until IS NOT NULL AND suspended_until > FROM_UNIXTIME(?) LIMIT 1',
-            { citizenid, now })
-        if not ok then
-            CP.err(TAG, 'suspension lookup for %s failed: %s', citizenid, tostring(row))
-            return false, nil
-        end
-        c = { untilTs = type(row) == 'table' and tonumber(row.until_ts) or nil, at = now }
-        suspensionCache[citizenid] = c
+        if not ReadOfficerState(citizenid, now) then return false, nil end
+        c = suspensionCache[citizenid]
     end
     if c.untilTs and c.untilTs > now then return true, c.untilTs end
     return false, nil
@@ -378,16 +388,8 @@ function A.isRetired(citizenid)
     local now = os.time()
     local c = retiredCache[citizenid]
     if not c or now - c.at >= SUSPENSION_TTL then
-        CP.Migrations.ready()
-        local ok, row = pcall(MySQL.single.await,
-            'SELECT 1 AS retired FROM cp_officers WHERE citizenid = ? AND retired_at IS NOT NULL LIMIT 1',
-            { citizenid })
-        if not ok then
-            CP.err(TAG, 'retired lookup for %s failed: %s', citizenid, tostring(row))
-            return false
-        end
-        c = { retired = type(row) == 'table', at = now }
-        retiredCache[citizenid] = c
+        if not ReadOfficerState(citizenid, now) then return false end
+        c = retiredCache[citizenid]
     end
     return c.retired
 end

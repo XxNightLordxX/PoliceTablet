@@ -1,3 +1,6 @@
+// Every stylesheet first, in its fixed order (styles/order.ts)
+
+import './styles/order';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { QuietBoundary } from './shared/components';

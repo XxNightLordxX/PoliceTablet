@@ -297,3 +297,20 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Foot chase with a tired runner (Config.Flee on): he jogs, then walks, and is let go when he surrenders or gets
   into a car, as before.
 - [ ] My options -> Sounds -> objective cues off: no cue plays; on again: the next cue plays.
+
+## Server cost and NUI (OP2)
+
+- [ ] Open the Admin UI the first time after a restart: Home shows within a moment, the sidebar at once; every other
+  screen opens as before, and every screen looks as it did (colours, spacing, buttons).
+- [ ] Supervisor UI → Mission Builder and `/crimtab` (criminal tablet): open and look as before.
+- [ ] Suspend an officer from the Admin UI: his tablet refuses him within 15 s, as before; unsuspend: it opens again.
+  Retire and unretire: the same.
+- [ ] Mute mission calls on your Profile: no call pop-up; pick favourite types in My options → Dispatch: only those
+  pop up.
+- [ ] An admin leaves mid logo upload (Departments → Upload a logo): whoever joins next with his id can upload at
+  once.
+- [ ] Settings → Performance → pushGapMs `250`: in a unit run the tablet's run bar and Unit screen still follow every
+  change (at most a quarter second later). Back to `0`.
+- [ ] Settings → Performance → latentAboveBytes `65536`: Leaderboard, Mission Board and the Admin lists still load
+  (a big one may take a moment longer); the rest of the tablet keeps answering meanwhile. Back to `0`.
+- [ ] Server resmon of Crimson-Police with officers on duty and no run: at or below what it showed before the update.

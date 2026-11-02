@@ -6,11 +6,10 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { AdminLayout } from './layouts/AdminLayout';
 import { OfficerLayout } from './layouts/OfficerLayout';
 import { SupervisorLayout } from './layouts/SupervisorLayout';
-import { CriminalTablet } from './criminal/CriminalTablet';
 import { landingOf, normalizeCrimView } from './criminal/model';
 import type { CrimScreen, CrimView } from './types/criminal';
 import { resolveAdminKey } from './layouts/adminMoney';
-import { currentScreen, defaultScreen, screensFor } from './layouts/screens';
+import { currentScreen, defaultScreen, preloadScreens, screensFor } from './layouts/screens';
 import { TABLET_H, TABLET_W, tabletScale } from './layouts/TabletFrame';
 import BuilderOverlay from './hud/BuilderOverlay';
 import DebugOverlay from './hud/DebugOverlay';
@@ -40,6 +39,9 @@ import type {
     Theme,
     UiKind,
 } from './shared/types';
+
+// The criminal tablet loads on first use (step OP2): officers never need it.
+const CriminalTablet = lazy(() => import('./criminal/CriminalTablet').then(m => ({ default: m.CriminalTablet })));
 
 // Browser dev mode only (never loaded inside FiveM).
 const DevPanel = isEnvBrowser() ? lazy(() => import('./mocks/DevPanel')) : null;
@@ -153,6 +155,7 @@ export default function App() {
             return;
         }
         const target: UiKind = m.ui ?? next.ui;
+        preloadScreens(target);
         setSession(next);
         setTabletShown(true);
         setUi(target);
@@ -218,6 +221,7 @@ export default function App() {
     }, []);
 
     const switchUi = useCallback(async (target: UiKind) => {
+        preloadScreens(target);
         setSwitching(true);
         const res = await fetchNui<Session>('switchUi', { ui: target });
         setSwitching(false);
@@ -421,13 +425,15 @@ export default function App() {
 
                         {crim && !uiOpen ? (
                             <QuietBoundary name="criminal tablet" resetKey={crim.screen} onError={closeCrim}>
-                                <CriminalTablet
-                                    view={crim.view}
-                                    screen={crim.screen}
-                                    onScreen={crimScreen}
-                                    onView={crimView}
-                                    onClose={closeCrim}
-                                />
+                                <Suspense fallback={null}>
+                                    <CriminalTablet
+                                        view={crim.view}
+                                        screen={crim.screen}
+                                        onScreen={crimScreen}
+                                        onView={crimView}
+                                        onClose={closeCrim}
+                                    />
+                                </Suspense>
                             </QuietBoundary>
                         ) : null}
 

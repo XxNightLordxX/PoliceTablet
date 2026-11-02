@@ -1,7 +1,7 @@
 // The screen registry: sidebar order, titles, icons and visibility. Screen files are replaced by their owners; this
 // registry (and the imports) never change.
 
-import type { ComponentType } from 'react';
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import type { IconName } from '../shared/components';
 import type { AdminScreenKey, OfficerScreenKey, ScreenKey, SupervisorScreenKey } from '../shared/navigation';
 import type { Session, UiKind } from '../shared/types';
@@ -23,34 +23,49 @@ import SupCrossDept from '../supervisor/screens/CrossDept';
 import SupLiveMissions from '../supervisor/screens/LiveMissions';
 import SupReviewQueue from '../supervisor/screens/ReviewQueue';
 import SupPayouts from '../supervisor/screens/Payouts';
-import SupBuilder from '../supervisor/screens/Builder';
 import SupDeptReport from '../supervisor/screens/DeptReport';
 import SupMissionControls from '../supervisor/screens/MissionControls';
 
-import AdminHome from '../admin/screens/Home';
-import AdminPayouts from '../admin/screens/Payouts';
-import AdminMissions from '../admin/screens/Missions';
-import AdminSeasons from '../admin/screens/Seasons';
-import AdminLeaderboards from '../admin/screens/Leaderboards';
-import AdminOfficers from '../admin/screens/Officers';
-import AdminDepartments from '../admin/screens/Departments';
-import AdminPermissions from '../admin/screens/Permissions';
-import AdminSettings from '../admin/screens/Settings';
-import AdminAudit from '../admin/screens/Audit';
-import AdminTesting from '../admin/screens/Testing';
-import AdminLive from '../admin/screens/Live';
-import AdminPayments from '../admin/screens/Payments';
-import AdminSystem from '../admin/screens/System';
-import AdminRealSuspects from '../admin/screens/RealSuspects';
-import AdminRewards from '../admin/screens/Rewards';
-import AdminMoney from '../admin/screens/Money';
+// The Admin UI screens and the Supervisor Mission Builder load on first use (step OP2): every player's NUI starts
+// without them (most players never open them). Opening that UI starts loading all of its screens at once
+// (preloadScreens), so a screen picked later is already there.
+type Loader = () => Promise<{ default: ComponentType }>;
+const LOADERS: Record<UiKind, Loader[]> = { officer: [], supervisor: [], admin: [] };
+function lazyScreen(ui: UiKind, load: Loader): LazyExoticComponent<ComponentType> {
+    LOADERS[ui].push(load);
+    return lazy(load);
+}
+
+// Start loading every screen of that UI that loads on first use (a load that fails is tried again on render).
+export function preloadScreens(ui: UiKind): void {
+    for (const load of LOADERS[ui]) void load().catch(() => undefined);
+}
+
+const SupBuilder = lazyScreen('supervisor', () => import('../supervisor/screens/Builder'));
+const AdminHome = lazyScreen('admin', () => import('../admin/screens/Home'));
+const AdminPayouts = lazyScreen('admin', () => import('../admin/screens/Payouts'));
+const AdminMissions = lazyScreen('admin', () => import('../admin/screens/Missions'));
+const AdminSeasons = lazyScreen('admin', () => import('../admin/screens/Seasons'));
+const AdminLeaderboards = lazyScreen('admin', () => import('../admin/screens/Leaderboards'));
+const AdminOfficers = lazyScreen('admin', () => import('../admin/screens/Officers'));
+const AdminDepartments = lazyScreen('admin', () => import('../admin/screens/Departments'));
+const AdminPermissions = lazyScreen('admin', () => import('../admin/screens/Permissions'));
+const AdminSettings = lazyScreen('admin', () => import('../admin/screens/Settings'));
+const AdminAudit = lazyScreen('admin', () => import('../admin/screens/Audit'));
+const AdminTesting = lazyScreen('admin', () => import('../admin/screens/Testing'));
+const AdminLive = lazyScreen('admin', () => import('../admin/screens/Live'));
+const AdminPayments = lazyScreen('admin', () => import('../admin/screens/Payments'));
+const AdminSystem = lazyScreen('admin', () => import('../admin/screens/System'));
+const AdminRealSuspects = lazyScreen('admin', () => import('../admin/screens/RealSuspects'));
+const AdminRewards = lazyScreen('admin', () => import('../admin/screens/Rewards'));
+const AdminMoney = lazyScreen('admin', () => import('../admin/screens/Money'));
 
 export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     key: K;
     // Locale key of the sidebar label and screen title: ui.screen.<key>.
     titleKey: string;
     icon: IconName;
-    component: ComponentType;
+    component: ComponentType | LazyExoticComponent<ComponentType>;
     // Hidden when this returns false (permissions from session.actions).
     visible?: (session: Session) => boolean;
     // Admin sidebar (Config.AdminUi.groupSidebar): 'main' items always show, 'more' items fold under More.

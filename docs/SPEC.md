@@ -5217,11 +5217,20 @@ Config.AntiCheat = {
 --                                 PERFORMANCE
 -- ============================================================================
 -- How often Crimson-Police's background loops wake (docs/LOOPS.md lists every one). Markers near you still draw
--- every frame and run deadlines keep their own timers; only the idle and far-away waits stretch.
+-- every frame and run deadlines keep their own timers; only the idle and far-away waits stretch. Also how often the
+-- tablet's updates go out and which answers come in the background (both off as shipped).
 Config.Performance = {
     -- Multiplies the idle/far wait of every Crimson-Police loop; 1 = the values in docs/LOOPS.md, 2 = half as
     -- often; 1-4
     loopScale = 1.0,
+    -- Milliseconds between two tablet updates of the same kind to one player (a run's progress, the board, the
+    -- unit): quicker ones are merged into one, sent when the wait is over; 0 = each sent at once, as before;
+    -- 250-500 cuts the traffic of busy runs; 0-2000
+    pushGapMs = 0,
+    -- Tablet answers bigger than this many bytes (boards, mission lists, admin lists) come in the background at
+    -- Config.Limits.exportBps, so the rest of the tablet keeps answering; 0 = only the Admin UI exports, as
+    -- before; 0-10000000
+    latentAboveBytes = 0,
 }
 
 -- ============================================================================

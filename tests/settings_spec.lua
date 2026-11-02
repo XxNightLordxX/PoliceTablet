@@ -550,6 +550,14 @@ do
     H.ok(ok and v == 2.5, 'a loop scale of 2.5 is kept')
     Err('Performance.loopScale', 0.5, 'err.setting_range', 'a loop scale under 1 (faster than shipped)')
     Err('Performance.loopScale', 5, 'err.setting_range', 'a loop scale above 4')
+    -- the push gap and the background answers (step OP2): whole numbers, shipped off
+    H.eq(Config.Performance.pushGapMs, 0, 'pushGapMs ships 0 (every update at once, as before)')
+    H.eq(Config.Performance.latentAboveBytes, 0, 'latentAboveBytes ships 0 (only the exports in the background)')
+    ok, v = Check('Performance.pushGapMs', 250)
+    H.ok(ok and v == 250, 'a push gap of 250 ms is kept')
+    Err('Performance.pushGapMs', 2500, 'err.setting_range', 'a push gap above 2 s')
+    Err('Performance.pushGapMs', 12.5, 'err.setting_whole', 'a fraction of a millisecond')
+    Err('Performance.latentAboveBytes', -1, 'err.setting_range', 'a negative size')
     Err('Scoring.common.heavyDamage', 5, 'err.setting_positive', 'a penalty stays a penalty')
     H.ok((Check('NpcDifficulty.custom.accuracyAdd', -5)), 'NPC difficulty adds may go either way')
     -- the twists officers choose (PLAN M8b): a switch, a points share and a cash multiplier each, and the two caps

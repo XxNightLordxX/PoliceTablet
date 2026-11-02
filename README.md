@@ -1071,6 +1071,8 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, `panelKey` (`'F7'`: the default test controls key, see [8.2](#82-keys)), `panelKeyGuardMs` (300 ms: the test controls key is ignored this long after the panel lets go, so the same press does not take it back; 0 = off), and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
 | `Config.Performance.loopScale` | How often the background loops wake while idle or far away (`1.0`: the shipped pace in `docs/LOOPS.md`; `2` = half as often, up to `4`). Markers near you still draw every frame and run timers keep their own pace. See **Performance** below |
+| `Config.Performance.pushGapMs` | The least time between two tablet updates of the same kind to one player (`0`: each sent at once, as before; up to `2000` ms). With `250`-`500`, a burst of updates (a run's progress, a unit change, the board) reaches the tablet as one, a moment later. See **Performance** below |
+| `Config.Performance.latentAboveBytes` | Tablet answers bigger than this many bytes (boards, mission lists, admin lists) come in the background at `Config.Limits.exportBps`, like the Admin UI exports, so the rest of the tablet keeps answering while one loads (`0`: only the exports, as before) |
 
 **Performance**
 
@@ -1089,6 +1091,15 @@ under **Resmon**): with no run and the tablet closed Crimson-Police calls no gam
 frame loop (a checkpoint course) calls about a quarter fewer natives a frame and builds no text or table per frame, a
 tired runner is held to his pace with about 40 % fewer natives, and the HUD sends one NUI message per change instead
 of one per server update. Nothing you see changes and there is nothing to configure.
+
+Step OP2 did the same for the server and the tablet page (numbers in `docs/LOOPS.md` under **Server cost and NUI**):
+an idle server with officers on duty sends about half the database queries it did (an officer's suspension and
+retirement are one read, a mission call's pop-up check reads the officer's row once), a logo upload of an admin who
+leaves is forgotten at once, and every player's tablet page loads less than half the script it did at start: the
+Admin UI screens, the Supervisor Mission Builder and the criminal tablet load when first opened (all of an Admin UI's
+screens start loading the moment it opens; the styles still load with the page, so nothing looks different). Two
+new switches, both off as shipped: `Config.Performance.pushGapMs` (try `250`) merges a burst of tablet updates into
+one per kind and player, and `Config.Performance.latentAboveBytes` (try `65536`) sends big answers in the background.
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.

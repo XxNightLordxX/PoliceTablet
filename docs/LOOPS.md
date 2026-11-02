@@ -1,4 +1,4 @@
-# Loops and timers (steps LP1, LP2, OP1)
+# Loops and timers (steps LP1, LP2, OP1, OP2)
 
 Every repeating loop of Crimson-Police: where it is, what it does, when it runs, its interval and why that interval.
 "before -> after" shows the step LP2 change (owner, after LP1: "Try to fix the loops make it occur less often"); a
@@ -57,6 +57,39 @@ Checked and kept: no client thread runs at idle (LP1); event and state bag handl
 fires; ox_target zones and options of a block are added on its start and removed on its stop; no client -> server
 event is sent per frame (telemetry: a vehicle sample every 5 s while driving, lights and siren and the first shot
 once); `ctx.hudDetail` lines are sent only when the text changes.
+
+## Server cost and NUI (step OP2)
+
+Same owner request as OP1, for the server, the network and the tablet page. `tests/server_cost_spec.lua` loads the
+real server side (the world of `tests/e2e_spec.lua`: 11 officers on duty, no run) and counts every MySQL call of two
+idle minutes after the caches are warm; `tests/nui_bundle_spec.lua` reads `web/dist`. Before -> after:
+
+| What | Measure | Before -> after |
+| --- | --- | --- |
+| idle server, 11 officers on duty, 120 s (calls rng fixed) | SQL calls | 133 -> 67 |
+| an officer's tablet check (`CP.Access.getOfficer`: suspended? retired?) when its 15 s cache runs out | SQL calls | 2 -> 1 (`ReadOfficerState` fills both caches) |
+| a mission call's pop-up check per officer (`calls_muted` and the callAlerts favourites), once per 30 s | SQL calls | 2 -> 1 (one row read; `CP.Options.effective` gets its options text) |
+| the script every player's NUI loads at start (`web/dist` entry) | bytes | 1 161 475 -> 549 545 (gzip 306 -> 154 KB) |
+| the stylesheet | bytes | 242 721 -> 242 721, byte for byte the same (`web/src/styles/order.ts`) |
+| an admin who leaves in the middle of a logo upload | memory | his chunks kept 60 s (and the next player with his id refused with "busy") -> forgotten on `playerDropped` |
+| `Config.Performance.pushGapMs = 300`, three pushes of one topic to one player at once | client events | 3 -> 2 (the first at once, the others merged and sent when the gap is over); shipped `0` = 3, as before |
+| `Config.Performance.latentAboveBytes = 2000`, a 200-row list answer to the tablet | reliable events | 1 big reliable reply -> a small reply plus a latent event at `Config.Limits.exportBps`; shipped `0` = as before |
+
+How the push gap merges (`modules/tablet/server.lua` `T.push`): per player and topic; the newer data wins, keys
+only the older table had stay (a hint such as `invited = true` is kept), and `run` and `options` (whole views) are
+never merged. A held push is sent by one `SetTimeout`, not a loop, and `playerDropped` forgets it.
+
+Lazy screens (`web/src/layouts/screens.ts` `lazyScreen`): the Admin UI screens and the Supervisor Mission Builder;
+`App.tsx` loads the criminal tablet the same way. Opening (or switching to) a UI starts loading all of its lazy
+screens at once (`preloadScreens`), and `ScreenHost` keeps the sidebar and header on screen while one loads.
+
+Checked and kept: the run engine's 1 s tick, the route, custody, NPC and live crime ticks send no SQL (they work on
+memory); boards, season points and Type of the Day are cached with invalidation (`CP.Leaderboard`), the no-repeat
+history and cooldowns of mission calls are read once per officer and type until a new row; the saves folder engine
+looks rows up by key (no table scan for `WHERE citizenid = ?`); every per-player table of the server modules is
+cleared on `playerDropped` or pruned by its sweep (`alerts` `wasInArena`, `npccombat` by the run's end); the App
+keeps the open tablet from re-rendering on HUD, toast and overlay updates (its layout element depends on the UI
+kind only), and every screen poll stops when the tablet closes.
 
 ## Client loops
 

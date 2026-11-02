@@ -46,6 +46,8 @@ local navWatch = {}            -- src -> os.time() of the last getNavCounts (nil
 local navPending = {}          -- src -> true while a 'nav' push is scheduled
 local runShown = {}            -- src -> true when the last 'run' push that scheduled a 'nav' push carried a run
 local runNavAt = {}            -- src -> os.time() of that 'run' push
+local pushHeld = {}            -- src -> { [topic] = { data } }: pushes held by Config.Performance.pushGapMs
+local pushSentAt = {}          -- src -> { [topic] = GetGameTimer() of the last push sent }
 local navExtra = {}            -- key -> { fn = fn(src, officer) -> number, adminOnly } (T.registerNavCount)
 local navExtraOrder = {}
 
@@ -750,13 +752,61 @@ local function RunNavDue(n, data)
     return true
 end
 
+-- Config.Performance.pushGapMs: the least time between two pushes of one topic to one player (0 = no wait).
+local function PushGapMs()
+    local p = Config.Performance
+    local ms = math.tointeger(math.floor(tonumber(type(p) == 'table' and p.pushGapMs or 0) or 0)) or 0
+    return math.max(0, math.min(ms, 2000))
+end
+
+-- Two pushes of one topic merged into one: the newer data wins; when both are tables, the keys only the older one
+-- has stay (a hint such as invited = true is not lost). 'run' and 'options' carry the whole view: the newer one only.
+local WHOLE_VIEW = { run = true, options = true }
+local function MergePush(topic, old, new)
+    if WHOLE_VIEW[topic] or type(old) ~= 'table' or type(new) ~= 'table' then return new end
+    local out = {}
+    for k, v in pairs(old) do out[k] = v end
+    for k, v in pairs(new) do out[k] = v end
+    return out
+end
+
+local function SendPush(n, topic, data)
+    local sent = pushSentAt[n]
+    if not sent then sent = {}; pushSentAt[n] = sent end
+    sent[topic] = GetGameTimer()
+    TriggerClientEvent(CP.e('client:push'), n, topic, CP.U.serialize(data))
+end
+
+-- The held push of that topic goes out (the player may have left meanwhile: playerDropped emptied pushHeld).
+local function FlushPush(n, topic)
+    local held = pushHeld[n]
+    local h = held and held[topic]
+    if not h then return end
+    held[topic] = nil
+    if next(held) == nil then pushHeld[n] = nil end
+    SendPush(n, topic, h.data)
+end
+
+-- A push to one player. With Config.Performance.pushGapMs on, a second push of the same topic within the gap is
+-- held and merged with any later one, then sent when the gap is over: one push per topic per gap at most.
 function T.push(src, topic, data)
     local n = ToSrc(src)
     if not n or type(topic) ~= 'string' or topic == '' then return false end
-    TriggerClientEvent(CP.e('client:push'), n, topic, CP.U.serialize(data))
+    local gap = PushGapMs()
+    local held = pushHeld[n] and pushHeld[n][topic]
+    if held then
+        held.data = MergePush(topic, held.data, data)
+    elseif gap > 0 and pushSentAt[n] and pushSentAt[n][topic] and GetGameTimer() - pushSentAt[n][topic] < gap then
+        pushHeld[n] = pushHeld[n] or {}
+        pushHeld[n][topic] = { data = data }
+        SetTimeout(math.max(0, pushSentAt[n][topic] + gap - GetGameTimer()), function() FlushPush(n, topic) end)
+    else
+        SendPush(n, topic, data)
+    end
     if NAV_TOPICS[topic] and (topic ~= 'run' or RunNavDue(n, data)) then ScheduleNav(n) end
     return true
 end
+T._pushHeld = function() return pushHeld end
 
 -- Every online admin (CP.Access.isAdmin), never anyone else: admin data stays with admins.
 local function OnlineAdmins()
@@ -1021,4 +1071,5 @@ AddEventHandler('playerDropped', function()
     local src = source
     lastWay[src], navCache[src], reviewCache[src], navWatch[src], navPending[src] = nil, nil, nil, nil, nil
     runShown[src], runNavAt[src] = nil, nil
+    pushHeld[src], pushSentAt[src] = nil, nil
 end)

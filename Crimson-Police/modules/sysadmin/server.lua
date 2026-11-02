@@ -1523,6 +1523,12 @@ local function DropStaleUploads()
     end
 end
 
+-- A player who leaves mid-upload: his chunks go at once (the next player with that id starts clean).
+AddEventHandler('playerDropped', function()
+    local src = tonumber(source)
+    if src then uploads[src] = nil end
+end)
+
 -- The settings an uploaded logos/<file> needs: logo.file points at it and a logo link goes (a link is shown before a
 -- file, so the upload would never show). An added department is one record setting. changes, true when a link goes.
 local function LogoChanges(key, file)

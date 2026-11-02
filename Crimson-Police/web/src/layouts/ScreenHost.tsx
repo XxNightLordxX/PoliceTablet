@@ -1,6 +1,7 @@
-// Renders the current screen inside an error boundary and resets the scroll on screen change.
+// Renders the current screen inside an error boundary and resets the scroll on screen change. A screen that loads on
+// first use (screens.ts) waits inside Suspense: the sidebar and header stay while it loads.
 
-import { useLayoutEffect, useRef } from 'react';
+import { Suspense, useLayoutEffect, useRef } from 'react';
 import { ErrorBoundary } from '../shared/components';
 import { useNavigation } from '../shared/navigation';
 import type { ScreenDef } from './screens';
@@ -19,7 +20,10 @@ export function ScreenHost({ screens, className }: { screens: ScreenDef[]; class
     return (
         <div ref={scroller} className={className ?? 'cp-main__scroll'}>
             <ErrorBoundary resetKey={def.key}>
-                <Comp key={def.key} />
+                {/* a screen that loads on first use (screens.ts lazyScreen) shows nothing for the moment it loads */}
+                <Suspense fallback={null}>
+                    <Comp key={def.key} />
+                </Suspense>
             </ErrorBoundary>
         </div>
     );

@@ -5098,6 +5098,16 @@ Colours must be 6-digit hex (#1f4e8c); anything else falls back per key to the C
 default (text falls back to the best contrast for the background, as CP.U.contrastText does).
 ```
 
+## Crimson-Police/web/src/styles/order.ts
+
+```text
+Every stylesheet of the NUI, in one fixed order, loaded with the page (step OP2). The Admin UI screens, the
+Supervisor Mission Builder and the criminal tablet load their code on first use (layouts/screens.ts), but their
+styles stay here: one CSS file in this order, so a rule wins over another exactly as it did before they were split
+off (and a screen never shows for a moment without its styles). A new stylesheet goes into this list too
+(tests/nui_bundle_spec.lua checks every src/**/*.css is listed), at the place its first import gave it.
+```
+
 ## Crimson-Police/web/src/supervisor/components/AwardPointsDialog.tsx
 
 ```text
@@ -6071,6 +6081,15 @@ added here.
 The npc slice writes no SQL, so this spec runs no queries.
 ```
 
+## tests/nui_bundle_spec.lua
+
+```text
+The NUI bundle (step OP2, docs/LOOPS.md "Server cost and NUI"): every player's NUI starts with the officer and
+supervisor screens only; the Admin UI screens, the Supervisor Mission Builder and the criminal tablet load on
+first use. Every stylesheet still loads with the page, in one fixed order (web/src/styles/order.ts), so the look
+is the same. Reads web/src and web/dist (tools/check_all.sh build checks dist matches the sources).
+```
+
 ## tests/opponents_conduct_spec.lua
 
 ```text
@@ -6326,6 +6345,15 @@ built-in mission file: nothing appears when the search starts; each clue appears
 activateRange (150 m) of it, 40 m or more from every officer or out of every officer's sight; each fugitive appears on
 his hiding spot once an officer is within 150 m of it, never within minDistance (40 m) of one (after waveDelayMax on
 another free hiding spot instead). enabled = false keeps the old timing: everything when the search starts.
+```
+
+## tests/server_cost_spec.lua
+
+```text
+Server cost (step OP2, docs/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
+online and no run, as tests/e2e_spec.lua sets it up (its world is loaded from that file, up to its HELPERS
+section, on a database of its own). Counted: the SQL the idle server sends in two minutes, the tablet pushes with
+Config.Performance.pushGapMs, and which callback answers go latent with Config.Performance.latentAboveBytes.
 ```
 
 ## tests/shadow/fuzz_agg.lua

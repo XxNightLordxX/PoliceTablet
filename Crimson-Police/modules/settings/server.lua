@@ -855,6 +855,9 @@ local RANGES = {
     ['Backups.keep'] = { 1, 100 },
     -- how much slower the idle and far loops run (Config.Performance): 1 = shipped pace, 4 = a quarter as often
     ['Performance.loopScale'] = { 1, 4 },
+    -- the least time between two tablet updates of one kind to one player, and the size of a background answer
+    ['Performance.pushGapMs'] = { 0, 2000 },
+    ['Performance.latentAboveBytes'] = { 0, 10000000 },
     -- how hard mission NPCs fight back (Config.NpcCombat): lower = easier
     ['NpcCombat.ammo'] = { 1, 9999 },
     ['NpcCombat.accuracyScale'] = { 0, 1 },

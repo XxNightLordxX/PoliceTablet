@@ -445,6 +445,15 @@ do
     ok, res = Act('server:admin:uploadLogo', 1,
         { department = 'fib', uploadId = 'old', index = 2, total = 2, data = enc:sub(half + 1) })
     H.ok(ok == false and res == 'err.upload_expired', 'a partial upload older than 60 s is dropped')
+    -- step OP2: an admin who leaves mid-upload leaves nothing behind (the next player with his id starts clean)
+    ok = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'gone', index = 1, total = 2, data = enc:sub(1, half) })
+    H.eq(ok, true, 'a half upload is kept')
+    H.fire('playerDropped', 1)
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'fresh', index = 1, total = 2, data = enc:sub(1, half) })
+    H.ok(ok == true and res.received == 1, 'after playerDropped a new upload starts: ' .. tostring(res))
+    H.fire('playerDropped', 1)
     H.eq(S.check('Departments.fib.logo.url', 'https://cdn.example.com/x.png'), true, 'an https link is a valid logo')
     local okU = S.check('Departments.fib.logo.url', 'https://x.example/a b.png')
     H.eq(okU, false, 'a link with a space is not')

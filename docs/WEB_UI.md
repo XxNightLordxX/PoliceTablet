@@ -67,6 +67,12 @@ Each screen is **one file** with a default export and no props. `layouts/screens
 order, title key, icon and visibility. The layouts and the sidebar read it, so a new screen is its file, its key in
 the `*ScreenKey` types of `shared/navigation.tsx` and one registry entry.
 
+Admin UI screens and the Supervisor Mission Builder are registered with `lazyScreen(ui, () => import(...))` (step
+OP2): their code is a chunk of its own, loaded when that UI opens (`preloadScreens`), so a player's NUI starts
+without it. A new Admin UI screen does the same. A new stylesheet is also listed in `styles/order.ts` (every
+stylesheet loads with the page, in that order; `tests/nui_bundle_spec.lua` checks the list and the size of the
+start-up script).
+
 1. **The screen file.** Keep the default export and no props:
 
    ```tsx
