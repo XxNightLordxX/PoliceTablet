@@ -72,6 +72,7 @@
   "crimtab.outcome.dropout_left": "Left the case (strike)",
   "crimtab.outcome.dropout_afk": "Caught while AFK (strike)",
   "crimtab.outcome.dropout_out_of_bounds": "Left the search area (strike)",
+  "crimtab.outcome.dropout_on_duty": "Went on police duty (strike)",
   "crimtab.rules.title": "The rules",
   "crimtab.rules.window": "You stay on the list for {minutes} minutes; renew it on Home.",
   "crimtab.rules.ask": "A job waits {seconds} seconds for your answer. Declining or not answering costs nothing.",

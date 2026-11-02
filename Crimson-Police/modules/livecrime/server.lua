@@ -861,6 +861,12 @@ function LC.joinCheck(run, src)
     if ActiveCount(run) >= MaxOfficers() then return false, 'err.live_join_full' end
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(src) or nil
     if type(info) ~= 'table' or type(info.citizenid) ~= 'string' then return false, 'err.member_unavailable' end
+    -- a leave is final for the character too: after a reconnect his new server id is not in the list
+    for _, p in pairs(type(run.participants) == 'table' and run.participants or {}) do
+        if type(p) == 'table' and p.citizenid == info.citizenid then
+            return false, p.status ~= 'active' and 'err.live_join_left' or 'err.live_join_already'
+        end
+    end
     return OfficerOk(crime, { src = src, citizenid = info.citizenid })
 end
 

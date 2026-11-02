@@ -251,7 +251,9 @@ end
 -- step G3: the feature rewards it asks for (CP.FeatureRewards, its own spec pays them)
 local frPaid = {}
 CP.FeatureRewards = {
-    payLater = function(feature, cid, opts) frPaid[#frPaid + 1] = { feature = feature, cid = cid, key = opts.key } end,
+    payLater = function(feature, cid, opts)
+        frPaid[#frPaid + 1] = { feature = feature, cid = cid, key = opts.key, uuidCid = opts.uuidCid }
+    end,
 }
 
 ok, err = FT.signOff(2, { rookie = 'FT_ROO04', task = 'patrol' })
@@ -282,6 +284,7 @@ H.ok(
         and frPaid[1].key == 'fto:FT_ROO04:patrol',
     'G3: the trainer is paid per sign-off, once per rookie and task'
 )
+H.eq(frPaid[1] and frPaid[1].uuidCid, 'FT_ROO04', 'Z1: the sign-off payment is keyed by the rookie, not the trainer')
 H.ok(
     frPaid[3] and frPaid[3].feature == 'ftoComplete' and frPaid[3].cid == 'FT_ROO04'
         and frPaid[3].key == 'fto:FT_ROO04:done',

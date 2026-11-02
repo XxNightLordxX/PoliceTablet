@@ -217,6 +217,7 @@
   "opp.line.volunteer_npc": "Suspect {label} dropped out: the NPC plays the suspect",
   "opp.line.volunteer_afk": "Suspect {label} was caught while AFK: his part is void",
   "opp.line.volunteer_out_of_bounds": "Suspect {label} stayed outside the search area: his part is void",
+  "opp.line.volunteer_on_duty": "Suspect {label} went on police duty mid-case: his part is void",
   "rs.ui.filter.live": "Live crimes",
   "rs.ui.filter.volunteer": "Volunteers",
   "rs.ui.vol.role": "Suspect played",

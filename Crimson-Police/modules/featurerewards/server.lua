@@ -149,9 +149,15 @@ local function SeasonId()
     return 0
 end
 
+-- cid nil: any player's row of that id (a payment keyed by someone else, opts.uuidCid).
 local function ExistingRow(runUuid, cid)
-    local ok, id = pcall(MySQL.scalar.await,
-        'SELECT id FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = ? LIMIT 1', { runUuid, cid })
+    local ok, id
+    if cid then
+        ok, id = pcall(MySQL.scalar.await,
+            'SELECT id FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = ? LIMIT 1', { runUuid, cid })
+    else
+        ok, id = pcall(MySQL.scalar.await, 'SELECT id FROM cp_mission_runs WHERE run_uuid = ? LIMIT 1', { runUuid })
+    end
     if not ok then
         CP.err(TAG, 'looking up payment %s failed: %s', runUuid, tostring(id))
         return false
@@ -228,7 +234,8 @@ end
 -- ============================================================================
 
 -- Pays one feature reward: feature (FR.FEATURES), citizenid, opts = { key (the case: required), outcome (suspect),
--- points (supAward), reason }. Must run in a thread (database calls).
+-- points (supAward), reason, uuidCid (the row id is keyed by this citizenid instead of the paid one, so the key pays
+-- once whoever is paid: ftoSignOff passes the rookie) }. Must run in a thread (database calls).
 -- -> { rowId, status, amount, items } | nil, why ('off', 'invalid', 'nothing', 'duplicate', 'busy', 'error').
 function FR.pay(feature, cid, opts)
     opts = type(opts) == 'table' and opts or {}
@@ -239,11 +246,12 @@ function FR.pay(feature, cid, opts)
     local items = FR.rollItems(feature, key, cid)
     if amount <= 0 and #items == 0 then return nil, 'nothing' end
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-    local runUuid = FR.uuidOf(feature, key, cid)
+    local uuidCid = ValidCid(opts.uuidCid) and opts.uuidCid or nil
+    local runUuid = FR.uuidOf(feature, key, uuidCid or cid)
     if busy[runUuid] then return nil, 'busy' end
     busy[runUuid] = true
     local ok, res, why = pcall(function()
-        local had = ExistingRow(runUuid, cid)
+        local had = ExistingRow(runUuid, not uuidCid and cid or nil)
         if had == false then return nil, 'error' end
         if had then return nil, 'duplicate' end
         local rowId = InsertRow(feature, cid, runUuid, amount, {
@@ -254,7 +262,18 @@ function FR.pay(feature, cid, opts)
         if not rowId then return nil, 'error' end
         Audit(feature, rowId, cid, amount, items, key)
         local status = 'none'
-        if amount > 0 and CP.Cash and CP.Cash.pay then status = CP.Cash.pay(rowId) or 'pending' end
+        if amount > 0 and CP.Cash and CP.Cash.pay then
+            status = CP.Cash.pay(rowId)
+            if not status then
+                -- not paid now (maintenance lock, left-behind store, in flight): 'pending' so the login, start and
+                -- end-of-maintenance sweeps pay it; they skip manual award rows still 'none'
+                status = 'pending'
+                local okP, errP = pcall(MySQL.update.await,
+                    [[UPDATE cp_mission_runs SET cash_status = 'pending' WHERE id = ? AND cash_status = 'none']],
+                    { rowId })
+                if not okP then CP.err(TAG, 'marking row %d pending failed: %s', rowId, tostring(errP)) end
+            end
+        end
         local given = 0
         if #items > 0 and CP.Rewards and CP.Rewards._grant then
             local list = {}

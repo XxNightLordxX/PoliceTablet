@@ -308,6 +308,14 @@ do
 
     Runs.removeParticipant(run, 8, 'quit')
     H.eq(select(2, Runs.addParticipant(run, 8)), 'err.live_join_left', 'a leave is final: no second join')
+    -- step Z1: he reconnects with a new server id; the leave is still final for his character
+    cidOf[18] = 'OF8'
+    Place(18, vec3(0.0, 31.0, 30.0))
+    H.eq(select(2, LC.joinCheck(run, 18)), 'err.live_join_left', 'a reconnect after a leave: no join offer')
+    H.eq(select(2, Runs.addParticipant(run, 18)), 'err.live_join_left', 'a reconnect after a leave: no second join')
+    H.eq(run.participants[18], nil, '...no second entry for his character')
+    H.players[18] = nil
+    cidOf[18] = nil
 
     selfFlags[9] = { flags = { 'rs_linked_accounts' }, match = { cid = 'SUS1', kinds = { 'ip' } } }
     Place(9, vec3(0.0, 40.0, 30.0))

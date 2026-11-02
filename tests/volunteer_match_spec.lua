@@ -27,8 +27,9 @@ local recs, opened, states, lines = {}, {}, {}, {}
 local srcOfCid = {}
 -- the V22b gates: caps, conduct flags, staff notes and pair rows
 local caps = { day = {}, suspended = {}, lastSuspect = {}, pair = {} }
-local linked = {}            -- [officer src] = true: shares only a connection or PC with the volunteer
+local linked = {}               -- [officer src] = true: shares only a connection or PC with the volunteer
 local notes, pairRows, closeOut = {}, {}, nil
+local selfBlockHook = nil       -- runs inside selfBlock: what happens while Fits yields
 CP.Opponents = {
     eligible = function(src)
         if eligibleWhy[src] then return false, eligibleWhy[src] end
@@ -60,6 +61,9 @@ CP.Opponents = {
         return true
     end,
     selfBlock = function(officer, list)
+        if selfBlockHook then
+            selfBlockHook()
+        end -- the yield of a cold-cache database read (step Z1)
         if linked[officer] then return false, nil, { 'rs_linked_accounts' }, { cid = list[1], kinds = { 'ip' } } end
         return selfBlocked[officer .. ':' .. list[1]] == true, nil, {}
     end,
@@ -787,6 +791,102 @@ do
     Config.FeatureRewards.suspect.enabled = false
     closeOut = nil
     H.eq(V.staffView('nope', nil), nil, 'no case: nothing for staff')
+end
+
+-- ============================================================================
+--                                   STEP Z1
+-- ============================================================================
+-- ON DUTY MID-CASE, CANCEL OFF THE LIST, A RUN THAT ENDS WHILE ASKING, HISTORY WITHOUT endEvent.
+
+do
+    for _, v in ipairs(V.list()) do V.stop(v.src) end
+
+    -- he goes on police duty after officers reached him: a dropout with a strike, like a cancel
+    Reset()
+    Civilian(40, 'VMZ00040')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(40, RUNNER), 'Z1: a volunteer joins')
+    local run = NewRun()
+    Answer(40, LastAsk(40), true)
+    H.step(0)
+    recs.VMZ00040.contactAt = H.clockMs
+    H.advance(1000, 1000)
+    recs.VMZ00040.state, recs.VMZ00040.voidWhy = 'void', 'on_duty'
+    H.advance(1000, 1000)
+    H.step(0)
+    H.eq(V.strikes('VMZ00040'), 1, 'Z1: going on police duty mid-case is a strike')
+    H.eq(LastNote(40), 'volunteer.case.on_duty', 'Z1: he is told why')
+    H.ok(Has(lines, 'volunteer_on_duty'), 'Z1: staff timeline: the on-duty line')
+    Finish(run, 'completed', 'completed')
+    V.stop(40)
+
+    -- volunteers are turned off while he plays: he can still give the case up
+    Reset()
+    Civilian(41, 'VMZ00041')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(41, RUNNER), 'Z1: another volunteer joins')
+    run = NewRun()
+    Answer(41, LastAsk(41), true)
+    H.step(0)
+    Config.Volunteers.enabled = false
+    V._sweep()
+    H.eq(V.cidBySrc(41), nil, 'Z1: volunteers off: he is off the list')
+    H.eq(V.cancelCase(99), false, 'Z1: another player cannot cancel it')
+    H.eq(V.cancelCase(41), true, 'Z1: he still cancels his case')
+    H.eq(LastNote(41), 'volunteer.case.cancelled', 'Z1: he is told it is cancelled')
+    Config.Volunteers.enabled = true
+    Finish(run, 'completed', 'completed')
+
+    -- the run ends while Fits yields: no stale hold, he is asked by the next run
+    Reset()
+    Civilian(42, 'VMZ00042')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(42, RUNNER), 'Z1: a third volunteer joins')
+    local pending = {}
+    selfBlockHook = function()
+        local r = pending.run
+        if r then
+            pending.run = nil
+            Finish(r, 'abandoned', 'cancelled')
+        end
+    end
+    runN = runN + 1
+    run = {
+        id = 'vm-run-' .. runN,
+        state = 'accepted',
+        mission = WARRANT,
+        locationIndex = 1,
+        location = WARRANT.locations[1],
+        volunteer = { mode = 'players_when_available', role = 'runner', obj = 2 },
+    }
+    pending.run = run
+    CP.Hooks.fire('run:created', run)
+    H.step(0)
+    selfBlockHook = nil
+    H.eq(LastAsk(42), nil, 'Z1: a run that ended while he was checked asks nobody')
+    run = NewRun()
+    H.ok(LastAsk(42) ~= nil, 'Z1: the next run asks him (no stale hold)')
+    Finish(run, 'completed', 'completed')
+
+    -- endEvent = false: the criminal tablet's History still gets the case
+    local recorded = {}
+    CP.CrimTab = {
+        record = function(payload) recorded[#recorded + 1] = payload return true end,
+    }
+    Config.Volunteers.endEvent = false
+    Reset()
+    for _, v in ipairs(V.list()) do V.stop(v.src) end
+    Civilian(43, 'VMZ00043')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(43, RUNNER), 'Z1: a fourth volunteer joins')
+    run = NewRun()
+    Answer(43, LastAsk(43), true)
+    H.step(0)
+    Finish(run, 'completed', 'completed')
+    H.eq(#recorded, 1, 'Z1: endEvent = false: History still records the case')
+    H.eq(recorded[1] and recorded[1].citizenid, 'VMZ00043', '...his own line')
+    Config.Volunteers.endEvent = true
+    CP.CrimTab = nil
 end
 
 -- ============================================================================

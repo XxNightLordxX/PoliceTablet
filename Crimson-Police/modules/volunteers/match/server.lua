@@ -9,9 +9,14 @@ local TAG = 'volunteers'
 local TICK_MS = 1000                                   -- the asking, travel and engagement check, only while a run has a match
 local LATE_MS = 2000                                   -- an answer this late after the pop-up closed still counts (lag)
 local CANCEL_PHASES = { travel = true, in_position = true, engaged = true }
-local STRIKE_WHY = { no_show = true, cancelled = true, left = true, afk = true, out_of_bounds = true }
+local STRIKE_WHY = { no_show = true, cancelled = true, left = true, afk = true, out_of_bounds = true, on_duty = true }
 -- a leave already has CP.Opponents' rs_combat_log note; each other dropout writes rs_volunteer_dropout and this line
-local NOTE_WHY = { no_show = 'no_show', cancelled = 'volunteer_cancel', out_of_bounds = 'volunteer_out_of_bounds' }
+local NOTE_WHY = {
+    no_show = 'no_show',
+    cancelled = 'volunteer_cancel',
+    out_of_bounds = 'volunteer_out_of_bounds',
+    on_duty = 'volunteer_on_duty',
+}
 -- What a volunteer case takes part in -> its Config.Volunteers switch (each shipped false)
 local COUNTS = {
     typeOfTheDay = 'typeOfTheDay',
@@ -242,6 +247,8 @@ local function AskNext(m)
         if not m.asked[cid] and not byCid[cid] then
             local src = SrcOf(cid)
             if src and Fits(m, cid, src) then
+                -- Fits may yield (selfBlock's database read): the run may have ended meanwhile
+                if m.run.state == 'ended' or matches[m.runId] ~= m then return end
                 m.asked[cid] = true
                 m.tries = m.tries + 1
                 counter = counter + 1
@@ -335,6 +342,8 @@ local function Watch(m, now)
     if not CANCEL_PHASES[m.phase] then return end
     local _, rec = Opp('byCid', m.cid)
     if not rec or rec.state == 'void' or rec.state == 'left' then
+        -- he went on police duty mid-case (CP.Opponents voided him): a dropout with a strike, like a cancel
+        if rec and rec.state == 'void' and rec.voidWhy == 'on_duty' then return Voided(m, 'on_duty', true) end
         local why = rec and rec.state == 'left' and 'left' or 'void'
         return Voided(m, why, why == 'left')
     end
@@ -597,8 +606,13 @@ end
 function V.cancelCase(src)
     src = ToSrc(src)
     local cid = src and V.cidBySrc and V.cidBySrc(src)
+    if src and not cid then
+        -- off the list (volunteers turned off, excluded) while his case goes on: his own character still cancels it
+        local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(src) or nil
+        cid = type(info) == 'table' and info.citizenid or nil
+    end
     local m = cid and byCid[cid] and matches[byCid[cid]] or nil
-    if not m or m.cid ~= cid or not CANCEL_PHASES[m.phase] then return false, 'no_case' end
+    if not m or m.cid ~= cid or m.src ~= src or not CANCEL_PHASES[m.phase] then return false, 'no_case' end
     local grace = math.floor(Num(Cfg().cancelGraceSeconds, 60, 0, 600)) * 1000
     local free = not m.engagedAt and GetGameTimer() - (m.yesAt or 0) <= grace
     Voided(m, 'cancelled', not free)
@@ -724,6 +738,20 @@ function V.sendEnded(m, run, state, reason)
     return ok
 end
 
+-- The criminal tablet's History line (CP.CrimTab.record) for a run a volunteer said yes to, whatever
+-- Config.Volunteers.endEvent says (that switch is only the event for other scripts); never a test run.
+function V.recordHistory(m, run, state, reason)
+    local C = CP.CrimTab
+    if not (C and C.record) or type(m) ~= 'table' or not m.yesAt or type(run) ~= 'table' or run.test then
+        return false
+    end
+    local payload = V.endPayload(m, run, state, reason)
+    if not payload then return false end
+    local ok, res = pcall(C.record, payload)
+    if not ok then CP.err(TAG, 'the History line of run %s failed: %s', tostring(m.runId), tostring(res)) end
+    return ok and res == true
+end
+
 -- The volunteer's own pay (Config.FeatureRewards.suspect, step G3): only for a case the server saw end fairly
 -- (CP.FeatureRewards.fairSuspect: officers reached him, no dropout, not AFK, a real outcome), never a test run.
 function V.payVolunteer(m, run, state, reason)
@@ -782,6 +810,7 @@ CP.Hooks.on('run:ended', function(run, state, reason)
             v.phase, v.why, v.engaged = m.phase, m.why, m.engagedAt ~= nil
         end
         V.sendEnded(m, run, state, reason)
+        V.recordHistory(m, run, state, reason)
         V.payVolunteer(m, run, state, reason)
     end
     if m.phase == 'asking' and m.token then

@@ -659,6 +659,7 @@ do
     TriggerEvent('QBCore:Server:SetDuty', src, true)
     H.eq(rec.state, 'void', '(i) a suspect on SAST duty mid-case: void')
     H.eq(#NotesOf(case, 'rs_went_on_duty'), 1, '(i) with the rs_went_on_duty note')
+    H.eq(rec.voidWhy, 'on_duty', '(i) Z1: the record keeps why it is void (a volunteer gets a strike)')
     H.eq(#Sent(run, 'opp_void', 'DUTY0001'), 1, '(i) opp_void dispatched')
     Opp.close(run)
 

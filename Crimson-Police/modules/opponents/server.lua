@@ -311,6 +311,7 @@ local function SetState(case, rec, state, why, opts)
     if state == 'detained' then rec.detainedAt = rec.detainedAt or now end
     if state == 'booked' then rec.bookedAt = rec.bookedAt or now end
     if state == 'cuffed' then rec.cuffedAt = now end
+    if state == 'void' then rec.voidWhy = why end
     Timeline(case, { what = 'state', label = rec.label, src = rec.src, state = state, prev = prev, why = why })
     CP.log(TAG, 'run %s suspect %s: %s -> %s (%s)', tostring(case.runId), rec.label, prev, state, tostring(why))
     Send(case, rec, opts.event or EVENT_OF[state], { prev = prev, by = opts.by, share = rec.share, why = why })

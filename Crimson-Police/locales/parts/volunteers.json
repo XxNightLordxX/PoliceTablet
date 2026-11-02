@@ -70,6 +70,7 @@
   "volunteer.case.afk": "You were caught while away from the keyboard: your part in the case is void.",
   "volunteer.case.out_warn": "You are outside the search area (the red circle on your map). Get back inside within {seconds} s or your part is void.",
   "volunteer.case.out_of_bounds": "You stayed outside the search area: your part in the case is void.",
+  "volunteer.case.on_duty": "You went on police duty during the case: your part is void and you get a strike.",
   "volunteer.menu.cancel": "Cancel this case",
   "volunteer.menu.cancel_detail": "You play: {role}",
   "volunteer.cancel.content": "Stop playing this suspect now? Right after your yes it is free; later, or once police reached you, it is a strike.",

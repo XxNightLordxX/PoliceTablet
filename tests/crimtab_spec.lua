@@ -290,7 +290,7 @@ do
     local _, err = Act(10, { what = 'cancel' })
     H.eq(err, 'volunteer.refused.no_case', 'nothing to give up: refused')
 
-    TriggerEvent(CP.e('server:volunteerEnded'), {
+    C.record({
         citizenid = 'CRT00010',
         missionType = 'investigation',
         role = 'runner',

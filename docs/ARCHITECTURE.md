@@ -4176,8 +4176,8 @@ A front end of CP.Volunteers (5.47) for players who play real suspects, behind `
   `criminalTablet` extra grant, CP.Permissions.granted)); `view(src)`; `replacesCommand(src)`; `record(payload)` /
   `historyOf(cid)` (memory, newest first, `historySize`). Callback `crimtab:get` -> the view; action
   `server:crimtab:act` `{ what = 'join' | 'renew' | 'roles' | 'stop' | 'answer' | 'cancel', roles, token, yes }` ->
-  the fresh view or a `volunteer.refused.*` / `err.crimtab_*` key. History lines come from the server-only
-  `server:volunteerEnded` event. `client:crimtabOpen` (the volunteer command with `replaceCommand`) and
+  the fresh view or a `volunteer.refused.*` / `err.crimtab_*` key. History lines come from `CP.Volunteers.recordHistory`
+  at the run's end (step Z1: also with `Config.Volunteers.endEvent = false`). `client:crimtabOpen` (the volunteer command with `replaceCommand`) and
   `client:crimtabClose` (duty or job change that ends access).
 - CP.Volunteers adds `strikeInfo(cid)`, `listingOf(src)`, `refusalKey(why)`, `askOf(cid)` (token, role,
   missionType, area = the location label, km, seconds, travelMinutes) and `caseOf(cid)` (phase, role, his own meet

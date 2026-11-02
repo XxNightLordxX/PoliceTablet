@@ -104,7 +104,7 @@ function C.historyOf(cid)
     return out
 end
 
--- A volunteer case ended (CP.Volunteers' server-only volunteerEnded payload): one line of his History.
+-- A volunteer case ended (CP.Volunteers' end payload, from CP.Volunteers.recordHistory): one line of his History.
 function C.record(payload)
     if type(payload) ~= 'table' or type(payload.citizenid) ~= 'string' or payload.citizenid == '' then return false end
     local list = history[payload.citizenid] or {}
@@ -257,10 +257,8 @@ end
 --                                    HOOKS
 -- ============================================================================
 
-AddEventHandler(CP.e('server:volunteerEnded'), function(payload)
-    local ok, err = pcall(C.record, payload)
-    if not ok then CP.err(TAG, 'the History line failed: %s', tostring(err)) end
-end)
+-- History is written by CP.Volunteers.recordHistory at the run's end (step Z1), not by the volunteerEnded event, so
+-- Config.Volunteers.endEvent = false keeps it.
 
 -- On police duty, or a police job without access: the open tablet closes (the client only acts while it is open).
 local function Recheck(src)

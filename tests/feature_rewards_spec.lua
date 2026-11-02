@@ -149,6 +149,22 @@ online[7] = nil
 res = FR.pay('suspect', 'FR_SUSPECT1', { key = 'run-fair-3', outcome = 'got_away' })
 H.eq(res and res.status, 'pending', 'offline: pending in the ledger')
 online[7] = 'FR_SUSPECT1'
+
+-- step Z1: a payment the maintenance lock holds is left 'pending', so the login sweep pays it later
+local oldMaint = CP.Maintenance
+CP.Maintenance = {
+    active = function() return 'backup' end,
+}
+local nHeld = #moneyCalls
+res = FR.pay('suspect', 'FR_SUSPECT1', { key = 'run-fair-held', outcome = 'got_away' })
+H.eq(res and res.status, 'pending', 'held by maintenance: pending')
+local heldRow = Row(FR.uuidOf('suspect', 'run-fair-held', 'FR_SUSPECT1'))[1]
+H.eq(heldRow and heldRow.cash_status, 'pending', 'held by maintenance: the row is pending, not none')
+H.eq(#moneyCalls, nHeld, 'held by maintenance: no money yet')
+CP.Maintenance = oldMaint
+CP.Cash.payPending(7)
+heldRow = Row(FR.uuidOf('suspect', 'run-fair-held', 'FR_SUSPECT1'))[1]
+H.eq(heldRow and heldRow.cash_status, 'paid', 'after the lock: the login sweep pays it')
 FC.suspect.enabled = false
 
 -- ============================================================================
@@ -174,6 +190,15 @@ H.eq(#FR.rollItems('surrender', 'k', 'FR_OFFICER1'), 0, 'chance 0: never')
 Config.Rewards.enabled = false
 FC.surrender.items = {}
 FC.surrender.enabled = false
+
+-- step Z1: a sign-off keyed by the rookie pays once per rookie and task, whoever the trainer is
+FC.ftoSignOff.enabled = true
+res = FR.pay('ftoSignOff', 'FR_OFFICER1', { key = 'fto:FR_ROOKIE1:patrol', uuidCid = 'FR_ROOKIE1' })
+H.ok(res and res.rowId, 'the first trainer\'s sign-off is paid')
+local again2, why2 = FR.pay('ftoSignOff', 'FR_SUSPECT1', { key = 'fto:FR_ROOKIE1:patrol', uuidCid = 'FR_ROOKIE1' })
+H.eq(again2, nil, 'a new trainer signing the same task again: nothing')
+H.eq(why2, 'duplicate', '...it is a duplicate')
+FC.ftoSignOff.enabled = false
 
 -- ============================================================================
 --                             SETTINGS: THE CHECKS

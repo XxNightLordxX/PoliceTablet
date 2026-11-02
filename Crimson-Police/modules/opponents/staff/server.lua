@@ -64,6 +64,7 @@ local LINE_KEYS = {
     volunteer_npc = true,
     volunteer_afk = true,            -- caught while AFK: his part is void (V23)
     volunteer_out_of_bounds = true,  -- a fugitive outside the search circle too long: void (V25)
+    volunteer_on_duty = true,        -- went on police duty mid-case: void with a strike (Z1)
     -- surrender and Talk them down in a live case (RP1)
     talk_down = true,
     talk_refused = true,

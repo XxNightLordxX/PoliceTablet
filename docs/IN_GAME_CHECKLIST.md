@@ -77,7 +77,7 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] The Admin sidebar shows the headings NPC missions, Police teamwork, Pay and rewards and Server (Player vs police while live crimes or volunteers are on); every screen still opens; groupByPlay = false brings the old order back. (AP1)
 - [ ] config.lua opens with PART 1 · GENERAL and its six parts follow the Admin UI; Settings -> All settings lists the sections in that order, with Run limits (Config.Limits) under Server; a mission desk still shows for its department after a department's jobs change in Settings. (AP2)
 - [ ] config.lua opens with CONTENTS (the six parts and their blocks) and every PART heading has a "Usually changed here:" line; Settings -> All settings shows a description on every setting, also Bonuses -> lab_fire -> value, Markers -> kinds -> clue -> scale, Departments -> fib -> jobs and a Builder range such as Blocks -> pursuit -> speed. The server behaves as before (no value changed). (G8)
-- [ ] Settings -> Features lists the features by section; turning "Runners tire" off asks nothing and shows Off at once; turning Live crimes on asks first; Cash for live cases still wants ENABLE; each change is in Settings -> History and the audit log; Settings opens that setting in All settings. (AP1)
+- [ ] Settings -> Features lists the features by section; turning "Runners tire" off asks nothing and shows Off at once; turning Live crimes on asks first; Cash for live cases switches on with one click; Cash.allowManualCash still wants ENABLE; each change is in Settings -> History and the audit log; Settings opens that setting in All settings. (AP1)
 - [ ] /CrimsonPoliceAdmin lands on Home with Live now and six tiles; each tile opens the right screen; Something wrong? lines open Missions, Permissions, System, Payments. Landing = 'payouts' in Settings: Payouts opens first. (A3)
 - [ ] Sidebar shows 5 items + More (8); a stuck payment shows its count on More while folded; More stays open after reopening; groupSidebar off gives one flat list. (A2)
 - [ ] Settings opens in Simple (about 25 plain settings, no Config paths); "All settings" shows everything by section; search "tweaks" shows Open Missions; settingsView = 'all' opens on All settings. (A7, A8)
@@ -264,3 +264,13 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Give points as an admin without a police job: Department Report offers Give points for any officer, and the officer's department switch and min / max apply (switch the control off for FIB only: refused for an FIB officer, given for a SAST one). (X11)
 - [ ] My options: tick a Favourite type and press that group's Reset within half a second: the option stays at its default after a few seconds and after reopening the tablet. (X11)
 - [ ] Failed start (for example the database user without CREATE): the console shows the failure lines once and no "happyhour: check failed: err.not_started" every 15 s afterwards. (X11)
+
+## Bug sweep fixes (Z1)
+
+- [ ] Feature rewards on (suspect): start an admin backup (maintenance lock) and let a volunteer case end fairly meanwhile: his row shows Pending in Payments made, and he is paid when the backup ends or at his next login (never lost as a duplicate). (Z1)
+- [ ] Live crimes with backup on: an officer joins a live case, quits the game and reconnects while it runs: he gets no join offer and "You left this live case and can't join it again"; Live shows one entry for him. (Z1)
+- [ ] Volunteers on: a volunteer with a police job plays a case, officers reach him, he goes on duty: he is told his part is void with a strike, the staff timeline shows "went on police duty mid-case", the criminal tablet History shows "Went on police duty (strike)". (Z1)
+- [ ] Volunteers on: while a volunteer plays a case, turn Volunteers off in Settings: his criminal tablet still gives the case up with Give up (no "no case"). (Z1)
+- [ ] Volunteers on: many quick runs while volunteers are asked; end one run right as it asks; the same volunteer is still asked by the next run (no restart needed). (Z1)
+- [ ] `Config.Volunteers.endEvent = false`: a volunteer plays a case to the end: his criminal tablet History still shows the case. (Z1)
+- [ ] Field training with ftoSignOff pay on: trainer A signs Patrol for rookie R and is paid; unpair R, pair him with trainer B (or pair a finished R again), B signs Patrol: B is not paid again for that task. (Z1)
