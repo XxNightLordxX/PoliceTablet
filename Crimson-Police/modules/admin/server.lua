@@ -2178,8 +2178,21 @@ CP.Net.action('server:sup:forceRecall', function(src, payload)
     return Admin.forceRecall(src, payload.runId, payload.src, payload.reason)
 end, { rate = 3 })
 
+-- Step WF2: a supervisor's decision answers with his fresh Review Queue (data.queue), so the screen shows the row gone
+-- without a second sup:getReviewQueue request. A queue that cannot be built leaves the reply as it was.
+function Admin.withReviewQueue(src, ok, data)
+    if not ok then return ok, data end
+    local out = {}
+    if type(data) == 'table' then
+        for k, v in pairs(data) do out[k] = v end
+    end
+    local okQ, queue = pcall(Admin.reviewQueueFor, src)
+    if okQ and type(queue) == 'table' then out.queue = queue end
+    return true, out
+end
+
 CP.Net.action('server:sup:reviewFlagged', function(src, payload)
-    return ReviewAction(src, payload)
+    return Admin.withReviewQueue(src, ReviewAction(src, payload))
 end, { rate = 3 })
 
 CP.Net.action('server:admin:reviewFlagged', function(src, payload)
@@ -2585,7 +2598,8 @@ function Admin.flaggedRows(dept, excludeCitizenid, admin)
     return out
 end
 
-CP.Net.callback('sup:getReviewQueue', function(src)
+-- The supervisor's Review Queue (flagged runs and the disputes he answers); nil and an error key when he may not see it.
+function Admin.reviewQueueFor(src)
     local canReview = Can(src, 'reviewFlagged')
     local canHandle = Can(src, 'handleDisputes')
     if not canReview and not canHandle then return nil, 'err.no_permission' end
@@ -2598,6 +2612,10 @@ CP.Net.callback('sup:getReviewQueue', function(src)
         if ok and type(list) == 'table' then disputes = list end
     end
     return { flagged = flagged, disputes = disputes, canReview = canReview, canHandle = canHandle }
+end
+
+CP.Net.callback('sup:getReviewQueue', function(src)
+    return Admin.reviewQueueFor(src)
 end, { rate = 3 })
 
 local function AdminOnly(src)

@@ -477,6 +477,7 @@ Grades start at 0.
 | `supervisorCompact` | `true` = a narrow strip of icons, each name on hover (the Review Queue count shows on its icon) |
 | `supervisorLanding` | The screen the Supervisor UI opens on: `'first'` (as before), `'report'`, `'review'` or `'live'`. A screen the supervisor may not see falls back to the first one. Once a screen is picked, the Supervisor UI keeps it until the player reconnects |
 | `supervisorControlsCard` | `true` = Department Report shows a **Your controls today** card: each Mission control the supervisor may use now, the value in use (config or changed), the admin's limits (min to max) and today's use against the per-day count (for example Give points 40 of 100 used, Mission ban 3 of 3 used). Read only; shipped `false` (no card) |
+| `supervisorRemember` | `true` = the supervisor dialogs **Give points**, **Mission ban** and **Clear cooldown** open with the points, hours and reason last used on that tablet (kept until Crimson-Police restarts or the player reconnects; a number outside the admin's current limits falls back to the minimum), so a second award or ban in a row needs no typing. The server checks every value again; shipped `false` (they open empty) |
 
 Only the layout changes: every screen keeps its permission, and a screen a supervisor may not see stays hidden (a
 heading with nothing under it is not shown). Each control keeps showing its admin limits where it is used (for
@@ -3020,7 +3021,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 | `docs/STYLE.md` | The code style. `python3 tools/restyle.py` formats the tree, `--check` lists what isn't |
 | `docs/TESTING.md` | How to set up a machine, run the checks and read a failure |
 | `docs/LOOPS.md` | Every loop and timer: when it runs, its interval and why (step LP1) |
-| `docs/WORKFLOWS.md` | Every officer, supervisor and admin workflow, the end-to-end spec that drives it and its result (step WF1) |
+| `docs/WORKFLOWS.md` | Every workflow by group (Officer, Supervisor, Field training, Criminal, Admin, System): how it works in plain English, the end-to-end spec that drives it, its result (step WF1) and what step WF2 made smoother |
 | `docs/IN_GAME_CHECKLIST.md` | What to check in game after an update, one line per change |
 | `docs/PROCESS.md` | How work gets done (branches, the gate, reviews) |
 | `docs/FILE_NOTES.md` | The long file headers |

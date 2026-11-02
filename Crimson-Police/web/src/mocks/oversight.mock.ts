@@ -605,12 +605,13 @@ if (EDGE) {
     disputes[0].reason = LONG_REASON;
 }
 
-registerMock('request', 'sup:getReviewQueue', (): ReviewQueueData => ({
+const reviewQueue = (): ReviewQueueData => ({
     flagged: emptyIf(flagged),
     disputes: emptyIf(disputes.filter(d => d.status === 'open' && d.goesTo === 'supervisor')),
     canReview: true,
     canHandle: true,
-}));
+});
+registerMock('request', 'sup:getReviewQueue', reviewQueue);
 registerMock('request', 'admin:getFlagged', () => ({ flagged: emptyIf(flagged) }));
 registerMock('request', 'admin:getDisputes', () => ({
     disputes: [...disputes, ...Object.values(officerDetails).flatMap(o => o.disputes)].filter(d => d.status === 'open'),
@@ -624,7 +625,11 @@ function reviewFlagged(p: { rowId: number; decision: string; reason: string }) {
     flagged.splice(i, 1);
     return { rowId: p.rowId };
 }
-registerMock('action', 'server:sup:reviewFlagged', reviewFlagged);
+// step WF2: the supervisor's decision answers with his fresh Review Queue
+registerMock('action', 'server:sup:reviewFlagged', (p: { rowId: number; decision: string; reason: string }) => ({
+    ...reviewFlagged(p),
+    queue: reviewQueue(),
+}));
 registerMock('action', 'server:admin:reviewFlagged', reviewFlagged);
 
 function handleDispute(p: { disputeId: number; decision: string; reason: string; awardPoints?: number }) {
@@ -641,7 +646,10 @@ function handleDispute(p: { disputeId: number; decision: string; reason: string;
     d.handledAt = now();
     return { disputeId: d.id, status: d.status };
 }
-registerMock('action', 'server:sup:handleDispute', handleDispute);
+registerMock('action', 'server:sup:handleDispute', (p: { disputeId: number; decision: string; reason: string }) => ({
+    ...handleDispute(p),
+    queue: reviewQueue(),
+}));
 registerMock('action', 'server:admin:handleDispute', handleDispute);
 
 // ============================================================================

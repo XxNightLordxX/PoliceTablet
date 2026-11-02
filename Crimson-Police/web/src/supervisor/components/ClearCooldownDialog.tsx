@@ -15,6 +15,8 @@ import {
 import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { asList, type OfficerCooldowns } from '../../types/boards';
+import { useOptionalSession } from '../../shared/session';
+import { keepLastUsed, lastUsed, rememberOn } from './lastUsed';
 
 interface Target {
     scope: 'type' | 'mission';
@@ -63,7 +65,9 @@ export function ClearCooldownDialog({
     useEffect(() => {
         if (data) setFetchKey(k => k + 1);
     }, [data]);
-    useEffect(() => setReason(''), [officer?.citizenid]);
+    // Config.Tablet.supervisorRemember (step WF2): open with the reason last used
+    const remember = rememberOn(useOptionalSession());
+    useEffect(() => setReason(lastUsed('cooldown', remember).reason ?? ''), [officer?.citizenid, remember]);
 
     const current = data && data.citizenid === officer?.citizenid ? data : null;
     const types = asList(current?.cooldowns?.types);
@@ -81,6 +85,7 @@ export function ClearCooldownDialog({
             { citizenid: officer.citizenid, scope: target.scope, key: target.key, reason: reason.trim() },
             { success: 'sup.cd.cleared' },
         );
+        if (res.ok) keepLastUsed('cooldown', remember, { reason });
         if (res.ok) void refetch();
     };
 

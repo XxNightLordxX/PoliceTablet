@@ -187,7 +187,8 @@ registerMock('action', 'server:declineMissionCall', (payload: { callId?: number 
     const m = state.calls.find(c => c.call.id === Number(payload?.callId));
     if (!m || !m.call.missionLabel) throw new Error('err.mc_not_open');
     state.calls = state.calls.filter(c => c !== m);
-    return true;
+    // step WF2: the reply carries the leader's fresh Dispatch view
+    return { view: view() };
 });
 
 registerMock('request', 'sup:getMissionCalls', (): SupCallsView => {

@@ -313,6 +313,8 @@ local function SupervisorNav()
         landing = SUP_LANDINGS[tab.supervisorLanding] and tab.supervisorLanding or 'first',
         -- Config.Tablet.supervisorControlsCard (step H4): the Department Report's 'Your controls today' card
         controlsCard = tab.supervisorControlsCard == true,
+        -- Config.Tablet.supervisorRemember (step WF2): the supervisor dialogs open with the values last used
+        remember = tab.supervisorRemember == true,
     }
 end
 

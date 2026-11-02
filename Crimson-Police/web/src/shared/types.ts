@@ -133,6 +133,8 @@ export interface Session {
             compact: boolean;
             landing: 'first' | 'report' | 'review' | 'live';
             controlsCard?: boolean;
+            // Config.Tablet.supervisorRemember (step WF2): the supervisor dialogs open with the values last used
+            remember?: boolean;
         };
         // true while this player may change at least one Mission control (CP.DeptControls.available)
         missionControls?: boolean;

@@ -166,6 +166,11 @@ do
     H.ok(sup.byTask == false and sup.compact == false, 'supervisorByTask and supervisorCompact ship off: one list')
     H.eq(sup.landing, 'first', 'supervisorLanding ships first: the Supervisor UI opens as before')
     H.eq(sup.controlsCard, false, 'supervisorControlsCard ships off: no Your controls today card (H4)')
+    H.eq(sup.remember, false, 'supervisorRemember ships off: the supervisor dialogs open empty (WF2)')
+    Config.Tablet.supervisorRemember = true
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav.remember, true,
+        'supervisorRemember on: the session asks the dialogs to remember (WF2)')
+    Config.Tablet.supervisorRemember = false
     Config.Tablet.supervisorByTask, Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding =
         true, true, 'review'
     Config.Tablet.supervisorControlsCard = true

@@ -818,6 +818,15 @@ Config.Permissions.supervisor.reviewFlagged = true
 
 ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowA, decision = 'approve', reason = 'Verified on camera' })
 H.eq(ok, true, 'supervisor approves a flagged run of their department')
+-- step WF2: the decision answers with the supervisor's fresh Review Queue (no second sup:getReviewQueue)
+H.ok(type(res) == 'table' and type(res.queue) == 'table' and type(res.queue.flagged) == 'table',
+    'WF2: the approve reply carries the Review Queue')
+local stillListed = false
+for _, r in ipairs(type(res) == 'table' and type(res.queue) == 'table' and res.queue.flagged or {}) do
+    if r.rowId == rowA then stillListed = true end
+end
+H.eq(stillListed, false, 'WF2: the approved run is gone from it')
+H.eq(type(res) == 'table' and res.rowId, rowA, 'WF2: the reply keeps its rowId')
 local ra = H.sql(
     'SELECT flagged, flag_reason, voided, LOWER(JSON_TYPE(JSON_EXTRACT(breakdown, "$.flagged"))) AS jf FROM cp_mission_runs WHERE id = ?',
     { rowA })[1]
@@ -1213,6 +1222,8 @@ H.eq(res, 'err.reason_required', 'reason required')
 ok, res = Act('server:sup:handleDispute', 2,
     { disputeId = disFlag, decision = 'approve', reason = 'Presence data was wrong' })
 H.eq(ok, true, 'supervisor approves a flagged-run dispute')
+H.ok(type(res) == 'table' and type(res.queue) == 'table' and type(res.queue.disputes) == 'table',
+    'WF2: the dispute reply carries the Review Queue')
 H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { dFlag })[1].flagged), 0,
     'run restored (flag cleared)')
 H.eq(LastCall('cashRelease')[1], dFlag, 'held cash released')

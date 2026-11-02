@@ -284,6 +284,20 @@ Config.MissionControls.pushMissionPerDay = 2
 H.eq(select(2, Page(9, 13, 'pm_patrol_b')), 'err.mc_push_used', 'pushMissionPerDay a supervisor a day')
 H.eq((Page(99, 13, 'pm_patrol_b')), true, 'admins any')
 H.eq(MC.supView(9).push.usedToday, 2, 'the dialog shows today\'s pushes')
+-- step WF2: Decline on Dispatch answers with the leader's fresh view, so the screen needs no second request
+local _, d3 = Page(99, 13, 'pm_patrol_b')
+H.ok(CardOf(13, d3.id) ~= nil, 'WF2: the paged unit sees the pushed call')
+H.clockMs = H.clockMs + 1100
+H.fire('crimson-police:server:declineMissionCall', 13, { callId = d3.id }, 'wf2-decline')
+local declined
+for i = #H.events, 1, -1 do
+    local e = H.events[i]
+    if e.name == 'crimson-police:client:actionResult' and e.args[1] == 'wf2-decline' then declined = e end
+end
+H.ok(declined and declined.args[2] == true, 'WF2: Decline is answered')
+local dview = declined and type(declined.args[3]) == 'table' and declined.args[3].view or nil
+H.ok(type(dview) == 'table' and type(dview.calls) == 'table', 'WF2: the reply carries the Dispatch view')
+H.eq(dview and Find(dview.calls, function(c) return c.id == d3.id end), nil, 'WF2: the declined call is gone from it')
 Config.MissionControls.pushMissionPerDay = 5
 Config.Permissions.supervisor.missionControls = master
 controls.pushMission.on = false

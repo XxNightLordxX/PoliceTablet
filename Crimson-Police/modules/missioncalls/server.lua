@@ -2377,7 +2377,11 @@ end, { rate = 4 })
 -- Decline a mission pushed to the unit (step P19): only the paged unit's leader.
 CP.Net.action('server:declineMissionCall', function(src, payload)
     if type(payload) ~= 'table' or not tonumber(payload.callId) then return false, 'err.invalid_payload' end
-    return MC.decline(src, payload.callId)
+    local ok, e = MC.decline(src, payload.callId)
+    if not ok then return ok, e end
+    -- step WF2: the reply carries the leader's fresh Dispatch view, so the card goes without a second request
+    local okV, view = pcall(MC.list, src)
+    return true, { view = okV and type(view) == 'table' and view or nil }
 end, { rate = 3 })
 
 CP.Net.action('server:claimMissionCall', function(src, payload)

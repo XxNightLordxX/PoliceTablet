@@ -738,7 +738,10 @@ CP.Net.action('server:sup:handleDispute', function(src, payload)
         local row = Single('SELECT goes_to FROM cp_disputes WHERE id = ?', { id })
         if row and row.goes_to == 'admin' then return false, 'err.no_permission' end
     end
-    return D.handle(src, id, payload.decision, payload.reason, payload.awardPoints)
+    local ok, data = D.handle(src, id, payload.decision, payload.reason, payload.awardPoints)
+    -- step WF2: the reply carries the supervisor's fresh Review Queue (CP.Admin.withReviewQueue)
+    if Has('Admin', 'withReviewQueue') then return CP.Admin.withReviewQueue(src, ok, data) end
+    return ok, data
 end, { rate = 3 })
 
 CP.Net.action('server:admin:handleDispute', function(src, payload)

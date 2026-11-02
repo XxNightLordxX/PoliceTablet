@@ -408,3 +408,15 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
   (WF1)
 - [ ] Play through docs/WORKFLOWS.md once on a test server with every switch on, with one `restart Crimson-Police`
   and one player quitting and coming back in the middle; each row's result matches. (WF1)
+
+## Smoother workflows (WF2)
+
+- [ ] Review Queue: Approve or Void a flagged run: the row leaves the list at once, with no reload flicker; the same
+  for answering a dispute. (Pure speed-up: the reply carries the new queue.)
+- [ ] Dispatch: Decline a pushed mission: the card leaves at once. Business Check: log a door on Active Mission: the
+  next door's buttons show as soon as the server takes the log (no fixed wait).
+- [ ] `Config.Tablet.supervisorRemember = true`: give 10 points with a reason, open Give points for another officer:
+  10 and the reason are filled in; the same for Mission ban (hours, reason) and Clear cooldown (reason). Restart
+  Crimson-Police: the dialogs open empty. Shipped `false`: they always open empty.
+- [ ] Errors read with a next step: claim a call another unit just took ("Pick another call on Dispatch"), invite
+  into a full unit ("Its leader can remove a member to make room"), submit a supervisor dialog with no reason.

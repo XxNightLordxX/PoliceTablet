@@ -24,6 +24,7 @@ import { t } from '../../shared/i18n';
 import { useRememberedFilter } from '../../shared/filters';
 import { useNavigate } from '../../shared/navigation';
 import { useFormatDistance, useOption } from '../../shared/options';
+import { applyReplyView } from '../../shared/replyView';
 import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { ClaimCallResult, DispatchView, MissionCall, RecentCall } from '../../types/missioncalls';
@@ -413,8 +414,13 @@ export default function Dispatch() {
 
     // a pushed mission (step P19): the leader turns it down; nobody else gets it
     const decline = async (call: MissionCall) => {
-        const res = await run('server:declineMissionCall', { callId: call.id }, { success: 'mc.card.declined' });
-        if (res.ok) void refetch();
+        const res = await run<{ view?: DispatchView }>(
+            'server:declineMissionCall',
+            { callId: call.id },
+            { success: 'mc.card.declined' },
+        );
+        // step WF2: the reply carries the fresh view (an older server: ask for it)
+        if (res.ok) applyReplyView<DispatchView>(res.data, 'view', setData, refresh);
     };
 
     const toggleMute = async (next: boolean) => {

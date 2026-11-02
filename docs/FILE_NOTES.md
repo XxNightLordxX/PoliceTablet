@@ -5066,6 +5066,15 @@ option comes from the session (session.options), refreshed by the push 'options'
 (session.config.officerOptions.defaults). OptionsProvider sits next to the session context in App.tsx.
 ```
 
+## Crimson-Police/web/src/shared/replyView.walk.ts
+
+```text
+Smoother workflows (step WF2) against the browser mocks (node walk.mjs, a gate step): Approve / Void on the Review
+Queue and Decline on Dispatch answer with the screen's fresh view, so the screen needs no second request; a reply
+without it asks again. The supervisor dialogs open with the values last used only while
+Config.Tablet.supervisorRemember is on.
+```
+
 ## Crimson-Police/web/src/shared/rowWindow.ts
 
 ```text
@@ -5182,6 +5191,15 @@ the push topic 'operation' and every 10 s. Shows the mission, launcher, status, 
 timers, participants by department, and Start now / Relaunch (after a fail) / Cancel (reason required).
 With no operation active it offers a launch form (missions open to every department that support 2+
 officers; never the Weekly Boss) with the server-wide launch cooldown.
+```
+
+## Crimson-Police/web/src/supervisor/components/lastUsed.ts
+
+```text
+Supervisor dialogs open with the values last used (step WF2, Config.Tablet.supervisorRemember): Give points (the
+points and the reason), Mission ban (the hours and the reason) and Clear cooldown (the reason). Kept in this page's
+memory only, so a restart of Crimson-Police or a reconnect starts empty again. Off (as shipped) = they open empty,
+as before. The server checks every value again.
 ```
 
 ## Crimson-Police/web/src/supervisor/screens/Builder.tsx
@@ -6663,4 +6681,29 @@ end-to-end specs leave out, driven start to finish on the REAL server side of Cr
 loaded as in game, database off: the saves folder, as shipped), every switch on through the Admin UI's own Settings,
 and a `restart Crimson-Police` and a player drop and reconnect in the middle. docs/WORKFLOWS.md lists every workflow
 with the spec that drives it. Only the other resources and the natives are stubs.
+```
+
+## Crimson-Police/web/src/shared/replyView.ts
+
+```text
+Step WF2 (smoother workflows): replyView(data, key) reads the fresh view an action reply carries and
+applyReplyView(data, key, set, refetch) applies it, or asks again when an older server sent none. Used by Review
+Queue (server:sup:reviewFlagged and server:sup:handleDispute answer with data.queue) and Dispatch
+(server:declineMissionCall answers with data.view). Walk: replyView.walk.ts (with lastUsed.ts).
+```
+
+## Crimson-Police/web/src/supervisor/components/lastUsed.ts
+
+```text
+Step WF2, Config.Tablet.supervisorRemember (session config.supervisorNav.remember, shipped false): the values of the
+last successful Give points (points, reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason),
+kept in the page's memory only; the dialogs open with them while the switch is on. startNumber() keeps a number
+inside the control's current min..max, else the minimum. The server checks every value again.
+```
+
+## tests/workflow_errors_spec.lua
+
+```text
+Step WF2 (easy to understand): the err.* texts the Officer and Supervisor workflows show say what went wrong and what
+to do next, in locales/en.json and in every locales/parts file that carries the key. Plain Lua.
 ```

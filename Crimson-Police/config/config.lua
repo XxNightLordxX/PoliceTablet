@@ -118,6 +118,10 @@ Config.Tablet = {
     -- its current value, the admin's limits (min and max) and today's use against the per-day count; false = no
     -- card (as before). Only shows what the server already checks
     supervisorControlsCard = false,
+    -- true = the supervisor dialogs Give points, Mission ban and Clear cooldown open with the points, hours and reason
+    -- last used on this tablet (kept until Crimson-Police restarts or the player reconnects), so a second award or ban
+    -- in a row needs no typing; false = they open empty (as before). The server checks every value again
+    supervisorRemember = false,
     -- Mission desks: ox_target boxes that open the Officer UI. The coordinates are placeholders near the
     -- base-game stations, 2 m or more from sc-police's duty points: check them on your MLO.
     -- departments = nil lets every department use a desk; prop = a laptop only that player sees, or false.

@@ -7,7 +7,9 @@ import { Button, Dialog, Field, NumberInput, Textarea } from '../../shared/compo
 import { formatDateTime } from '../../shared/format';
 import { useAction } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
+import { useOptionalSession } from '../../shared/session';
 import type { MissionBanControl, MissionBanState } from '../../types/boards';
+import { keepLastUsed, lastUsed, rememberOn, startNumber } from './lastUsed';
 
 export function MissionBanDialog({
     officer,
@@ -23,12 +25,17 @@ export function MissionBanDialog({
     onDone: () => void;
 }) {
     const { run, busy } = useAction();
+    // Config.Tablet.supervisorRemember (step WF2): a new ban opens with the hours and reason last used
+    const remember = rememberOn(useOptionalSession());
     const [hours, setHours] = useState<number | null>(control?.min ?? 1);
     const [reason, setReason] = useState('');
+    const liftOpen = !!state;
     useEffect(() => {
-        setReason('');
-        setHours(control?.min ?? 1);
-    }, [officer?.citizenid, control?.min]);
+        const last = liftOpen ? {} : lastUsed('ban', remember);
+        const min = control?.min ?? 1;
+        setReason(last.reason ?? '');
+        setHours(startNumber(last.number, min, control?.max, min));
+    }, [officer?.citizenid, control?.min, control?.max, remember, liftOpen]);
 
     const lifting = !!state;
     const used = control?.perDay !== undefined && (control.usedToday ?? 0) >= control.perDay;
@@ -52,6 +59,7 @@ export function MissionBanDialog({
                   { success: 'sup.ban.set' },
               );
         if (!res.ok) return;
+        if (!lifting) keepLastUsed('ban', remember, { number: hours ?? undefined, reason });
         onDone();
         onClose();
     };

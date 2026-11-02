@@ -339,6 +339,10 @@ do
     H.eq(E('Tablet.supervisorControlsCard').kind, 'boolean', 'supervisorControlsCard is a switch')
     H.ok((E('Tablet.supervisorControlsCard').desc or ''):find('Your controls today', 1, true) ~= nil,
         'supervisorControlsCard: its config.lua comment is its description')
+    H.eq(E('Tablet.supervisorRemember').default, false, 'the supervisor dialogs ship opening empty (WF2)')
+    H.eq(E('Tablet.supervisorRemember').kind, 'boolean', 'supervisorRemember is a switch')
+    H.ok((E('Tablet.supervisorRemember').desc or ''):find('last used on this tablet', 1, true) ~= nil,
+        'supervisorRemember: its config.lua comment is its description')
     H.ok(not Check('Tablet.supervisorLanding', 'payouts'), 'another landing is refused')
     H.eq(E('AdminUi.plainLayout').default, false, 'the Admin UI ships with its sidebar as before')
     H.eq(E('AdminUi.plainLayout').kind, 'boolean', 'plainLayout is a switch')

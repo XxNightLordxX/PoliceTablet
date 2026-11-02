@@ -19,8 +19,8 @@
   "err.builder_unknown_template": "That template is not offered. Pick one from the list.",
   "err.in_arena": "You can't take a mission while you are in the arena.",
   "err.internal": "Something went wrong. Please try again.",
-  "err.invalid_payload": "That request was not valid.",
-  "err.no_permission": "You don't have permission to do that.",
+  "err.invalid_payload": "That request was not valid. Close the tablet, open it again and retry.",
+  "err.no_permission": "You don't have permission to do that. Ask a supervisor or an admin if you think you should.",
   "err.rate_limited": "Too many requests. Wait a moment and try again.",
 
   "builder.block.checkpoint_route": "Checkpoint route",

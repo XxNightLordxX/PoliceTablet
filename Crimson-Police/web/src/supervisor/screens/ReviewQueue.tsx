@@ -24,6 +24,7 @@ import { asArray } from '../../shared/data';
 import { formatDateTime, formatDuration } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import { applyReplyView } from '../../shared/replyView';
 import { toast } from '../../shared/toast';
 import { useCan } from '../../shared/session';
 import type { DisputeView, FlaggedRow, ReviewQueueData, ReviewTab } from '../../types/oversight';
@@ -216,7 +217,11 @@ function DisputeDetail({ row }: { row: DisputeView }) {
 
 export default function SupReviewQueue() {
     const can = useCan();
-    const { data, loading, error, refetch } = useRequest<ReviewQueueData>('sup:getReviewQueue', {}, { pollMs: 30000 });
+    const { data, loading, error, refetch, setData } = useRequest<ReviewQueueData>(
+        'sup:getReviewQueue',
+        {},
+        { pollMs: 30000 },
+    );
     const { run, busy } = useAction();
     const canReview = can('reviewFlagged') && data?.canReview !== false;
     const canHandle = can('handleDisputes') && data?.canHandle !== false;
@@ -232,7 +237,7 @@ export default function SupReviewQueue() {
         if (!pending) return;
         let res;
         if (pending.kind === 'flag') {
-            const flagRes = await run<{ pending?: boolean }>('server:sup:reviewFlagged', {
+            const flagRes = await run<{ pending?: boolean; queue?: ReviewQueueData }>('server:sup:reviewFlagged', {
                 rowId: pending.row.rowId,
                 decision: pending.decision,
                 reason,
@@ -245,7 +250,7 @@ export default function SupReviewQueue() {
             }
             res = flagRes;
         } else {
-            res = await run(
+            res = await run<{ queue?: ReviewQueueData }>(
                 'server:sup:handleDispute',
                 { disputeId: pending.row.id, decision: pending.decision, reason },
                 {
@@ -256,7 +261,8 @@ export default function SupReviewQueue() {
         }
         setPending(null);
         setDetail(null);
-        if (res.ok) void refetch();
+        // step WF2: the reply carries the fresh queue (an older server: ask for it)
+        if (res.ok) applyReplyView<ReviewQueueData>(res.data, 'queue', setData, () => void refetch());
     };
 
     const flagActions = (r: FlaggedRow) => (

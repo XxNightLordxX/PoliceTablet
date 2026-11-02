@@ -3703,6 +3703,13 @@ read, and one spec that runs both features through the whole real server side.
 - tests/workflows_full_spec.lua (step WF1, files mode always): every workflow the specs above leave out, with a
   `restart Crimson-Police` and a player drop and reconnect in the middle; docs/WORKFLOWS.md is its table (workflow,
   spec file, steps covered, result) over every end-to-end spec.
+- Smoother workflows (step WF2): server:sup:reviewFlagged and server:sup:handleDispute answer with data.queue
+  (CP.Admin.reviewQueueFor, the view of sup:getReviewQueue, through CP.Admin.withReviewQueue) and
+  server:declineMissionCall with data.view (MC.list); the NUI applies it (shared/replyView.ts) and asks again only
+  when it is missing. Active Mission's tablet log relies on the immediate 'run' push of a new log point (no fixed wait).
+  Config.Tablet.supervisorRemember (shipped false) lets the supervisor dialogs open with the values last used
+  (supervisor/components/lastUsed.ts, page memory only). docs/WORKFLOWS.md is ordered by group (Officer, Supervisor,
+  Field training, Criminal, Admin, System) with a How it works paragraph per workflow.
 
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 

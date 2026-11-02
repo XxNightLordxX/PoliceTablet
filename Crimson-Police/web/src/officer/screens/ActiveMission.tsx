@@ -717,9 +717,10 @@ export default function ActiveMission() {
         setLogSending(choice);
         const res = await clientAction('logResult', payload);
         setLogSending(null);
+        // step WF2: no fixed wait and second getRun: the server pushes the next log point at once (topic 'run');
+        // a refused log keeps the point and its buttons come back after 6 s (above)
         if (res.ok) {
             setLoggedPoint(payload.point);
-            window.setTimeout(() => void refetch(), 600);
         } else {
             errorToast(res.error);
         }
