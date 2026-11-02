@@ -89,7 +89,7 @@
 --   builderCancel    {} -> { cancelled = boolean }
 --   builderWaypoint  { coords } -> { ok = true }   (GPS waypoint; refuses in the arena)
 --   builderShowMap   { points = { { kind = start|spawn|checkpoint, coords } } (1-300) } -> { shown = n }
---                    (B17: closes the tablet, temporary blips, opens the pause map; cleared on the next tablet open,
+--                    (closes the tablet, temporary blips, opens the pause map; cleared on the next tablet open,
 --                    a new show, unload, arena and resource stop; refuses in the arena)
 --   Immediate replies of the three tools: { started = true } or err.invalid_payload, err.in_arena,
 --   err.builder_busy, err.builder_dead, err.builder_on_run, err.builder_disabled, err.builder_bad_vehicle.
@@ -2305,7 +2305,7 @@ function B.cancel(reason)
 end
 
 -- ============================================================================
---                           TELEPORT TO A POINT (B8)
+--                             TELEPORT TO A POINT
 -- ============================================================================
 -- "Teleport" on the Locations step: the screen names the point ({ missionId, location, key, index }), the server
 -- checks who may (Config.Builder.teleport, admins or a Config.Permissions.builderTeleport grant), audits it and sends
@@ -2408,7 +2408,7 @@ do
 end
 
 -- ============================================================================
---                         SHOW ON THE PAUSE MAP (B17)
+--                            SHOW ON THE PAUSE MAP
 -- ============================================================================
 -- "Show on map" on the Locations step: { points = { { kind, coords }, ... } } with kind start, spawn or checkpoint.
 -- The tablet closes, every point gets a temporary blip and the pause map opens, so the owner sees where the

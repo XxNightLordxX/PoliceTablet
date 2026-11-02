@@ -1,6 +1,6 @@
--- CP.Opponents identity and pairs (server; critic C27, critic 2 #21-#23, #30): the self rule (nobody takes a
+-- CP.Opponents identity and pairs (server): the self rule (nobody takes a
 
--- CP.Opponents identity and pairs (server; critic C27, critic 2 #21-#23, #30): the self rule (nobody takes a
+-- CP.Opponents identity and pairs (server): the self rule (nobody takes a
 -- case against one of his own characters or accounts), the duty maps (job hops), and the pair ledger cp_pvp_pairs
 -- with its caps and the pair-repeat flag. Every cap is a memory lookup: the ledger is read at start and kept in
 -- memory, and writes go to the database in a thread. Identifiers are compared live and never stored, logged or sent.
@@ -281,7 +281,7 @@ local function LoadAdmin(now)
     return true
 end
 
--- Retention (critic 2 #23, LOOP_RULES 11): case and duty_off rows older than pairLedgerDays, one statement per kind,
+-- Retention: case and duty_off rows older than pairLedgerDays, one statement per kind,
 -- and admin rows whose until_at has passed. Once at start and once a day, in a thread.
 local function Prune(now)
     if not DbReady() then return end
@@ -308,7 +308,7 @@ local function Prune(now)
     if removed > 0 then CP.log(TAG, 'pair ledger clean-up removed %d row(s)', removed) end
 end
 
--- A longer window after a settings change: the older rows are read once (LOOP_RULES 11: in a thread).
+-- A longer window after a settings change: the older rows are read once (in a thread).
 local function Widen()
     local now = os.time()
     local from = now - Window()
@@ -324,7 +324,7 @@ end
 --                                THE SELF RULE
 -- ============================================================================
 
--- Two licenses of one player, strictly (critic 2 #22): an unknown (nil or '') license refuses. `known` is the set of
+-- Two licenses of one player, strictly: an unknown (nil or '') license refuses. `known` is the set of
 -- every license of a's player, read once per officer session (selfBlock's cache): then nothing is asked again.
 local function SameUserStrict(a, b, known)
     if type(a) ~= 'string' or a == '' or type(b) ~= 'string' or b == '' then return true end
@@ -334,8 +334,8 @@ local function SameUserStrict(a, b, known)
 end
 Opp.sameUserStrict = function(a, b) return SameUserStrict(a, b) end
 
--- Every character and every license of the officer's player, read once per session (critic 2 #21:
--- CP.Access.selfCitizenids runs a query per license); cleared at unload, character switch and drop.
+-- Every character and every license of the officer's player, read once per session
+-- (CP.Access.selfCitizenids runs a query per license); cleared at unload, character switch and drop.
 local function SelfOf(src, info)
     local hit = selfCache[src]
     if hit and hit.cid == (info and info.citizenid) then return hit end
@@ -490,7 +490,7 @@ end
 -- ============================================================================
 
 -- He left department duty (or a department job): lastPoliceAt, and a duty_off ledger row so a restart keeps it
--- (critic 2 #30; written only while a feature is on).
+-- (written only while a feature is on).
 local function LeftPolice(src, cid)
     dutyOf[src] = nil
     dutySince[cid] = nil
@@ -544,7 +544,7 @@ local function Gone(src)
 end
 
 -- os.time() his department duty began; START (the resource start) for one on duty since before it, or never seen
--- going on duty (critic: "anyone first seen on duty counts as since resource start").
+-- going on duty (anyone first seen on duty counts as on duty since the resource start).
 function Opp.dutySince(cid)
     if not ValidCid(cid) then return nil end
     return dutySince[cid] or START
@@ -697,7 +697,7 @@ local function AdminRow(kind, officer, suspect, seconds)
     return untilAt
 end
 
--- Admin writers (V17): until os.time() + days. -> true, until | false, 'invalid_citizenid' | 'invalid_days'.
+-- Admin writers: until os.time() + days. -> true, until | false, 'invalid_citizenid' | 'invalid_days'.
 function Opp.block(officerCid, suspectCid, days)
     if not ValidCid(officerCid) or not ValidCid(suspectCid) or officerCid == suspectCid then
         return false, 'invalid_citizenid'
@@ -727,14 +727,14 @@ function Opp.suspend(officerCid, days)
     return true, untilAt
 end
 
--- The rows a lift deletes: kind and the columns that name it (F2).
+-- The rows a lift deletes: kind and the columns that name it.
 local LIFT_SQL = {
     block = 'DELETE FROM cp_pvp_pairs WHERE kind = \'block\' AND officer_citizenid = ? AND suspect_citizenid = ?',
     exclude = 'DELETE FROM cp_pvp_pairs WHERE kind = \'exclude\' AND suspect_citizenid = ?',
     suspend = 'DELETE FROM cp_pvp_pairs WHERE kind = \'suspend\' AND officer_citizenid = ?',
 }
 
--- An admin lifts a running block, exclusion or suspension early (F2): it ends now in memory and its saved rows go,
+-- An admin lifts a running block, exclusion or suspension early: it ends now in memory and its saved rows go,
 -- so a restart does not bring it back. officer is the block's or suspension's officer, suspect the block's or
 -- exclusion's player. -> true, until (the end it had) | false, 'invalid_kind' | 'invalid_citizenid' | 'no_row'.
 function Opp.lift(kind, officer, suspect)
@@ -762,7 +762,7 @@ function Opp.lift(kind, officer, suspect)
 end
 
 -- ============================================================================
---                              STAFF READS (V17)
+--                                 STAFF READS
 -- ============================================================================
 
 local STATS_MAX = 200             -- pair statistics lines answered at most
@@ -878,7 +878,7 @@ local function PairCases(row, since)
     return Count(runs)
 end
 
--- The second warning sign of a pair repeat (C27), or nil: a detain within fastCatchSeconds of the case start, a
+-- The second warning sign of a pair repeat, or nil: a detain within fastCatchSeconds of the case start, a
 -- suspect never armed who moved less than 30 m after contact, or a case shorter than 3 minutes.
 local function SecondSign(case, rec)
     local fast = math.max(0, Num(Cfg().fastCatchSeconds, 60))

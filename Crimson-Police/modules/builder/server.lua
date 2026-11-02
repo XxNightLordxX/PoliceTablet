@@ -1663,7 +1663,7 @@ function B.armedTooClose(def, builtins)
 end
 
 -- ============================================================================
---                 THE BASELINE OF AN OVERRIDE (S30, BY VALUE)
+--                    THE BASELINE OF AN OVERRIDE (BY VALUE)
 -- ============================================================================
 -- An edited built-in is checked with the custom-mission rules, with the shipped file as a baseline: a model, weapon,
 -- vehicle or animation the shipped file uses is allowed; a value that stays at the shipped value (or a bonus that
@@ -2711,7 +2711,7 @@ end
 B.editBuiltinsOn = EditBuiltinsOn
 
 -- Override rows are for admins only (supervisors never, whatever builderEditAny says), and only while editBuiltins
--- is on (S4).
+-- is on.
 local function OverrideOk(actor)
     if not (actor and actor.isAdmin) or not EditBuiltinsOn() then return false end
     if actor.src == 0 then return true end
@@ -2860,7 +2860,7 @@ local function CarryOf(raw)
     }
 end
 
--- The shipped definition in builder units, the baseline an override is checked against (S30).
+-- The shipped definition in builder units, the baseline an override is checked against.
 local function BaselineOf(shipped)
     if not shipped then return nil end
     local b = B.sanitize(B.fromFileUnits(shipped.raw), shipped.raw.id)
@@ -3653,7 +3653,7 @@ function B.onDraftTested(missionId, version, tierName, passed, src, defHash)
 end
 
 -- ============================================================================
---                           TELEPORT TO A POINT (B8)
+--                             TELEPORT TO A POINT
 -- ============================================================================
 -- "Teleport" next to a location's start and each point of the point list. The screen sends which point
 -- ({ missionId, location, key, index }), never where: the server reads the stored point, audits the jump and sends
@@ -4361,7 +4361,7 @@ CP.Net.action('server:builder:publish', function(src, payload)
     end
     local errors = B.validate(draft, { publish = true, baseline = baseline, actor = actor })
     if #errors > 0 then return false, 'err.builder_invalid' end
-    -- testing is optional (O2): only an owner who switched Builder.requireTestToPublish on asks it of supervisors
+    -- testing is optional: only an owner who switched Builder.requireTestToPublish on asks it of supervisors
     if TestRequired(actor) and not row.draftTested then return false, 'err.builder_not_tested' end
     local version = row.draftVersion or ((row.publishedVersion or 0) + 1)
     if row.publishedVersion and version <= row.publishedVersion then version = row.publishedVersion + 1 end
@@ -4474,7 +4474,7 @@ CP.Net.action('server:builder:rollback', function(src, payload)
     local ov = row.overridesBuiltin
     local fromVersion, content
     if payload.version ~= nil then
-        -- any kept version (A11), not only the newest
+        -- any kept version, not only the newest
         local wanted = math.tointeger(tonumber(payload.version))
         if not wanted or wanted < 1 or wanted >= row.publishedVersion then return false, 'err.builder_no_backup' end
         content = ReadFile(BackupPathFor(row.id, wanted, ov))
@@ -4728,7 +4728,7 @@ local function RegisterAdminActions()
         return WriteFile(DeletedDir() .. OVR.DELETED_INDEX, json.encode(list))
     end
 
-    -- ---- BUILT-IN OVERRIDES (O1) -------------------------------------------
+    -- ---- BUILT-IN OVERRIDES ------------------------------------------------
 
     -- Open a built-in mission in the Builder: its override (made now from the shipped file when there is none).
     Kit.action('server:builder:editBuiltin', 'editBuiltins', function(ctx)
@@ -4939,7 +4939,7 @@ local function RegisterAdminActions()
         if not actor then return false, aerr end
         local row = FetchRow(p.id)
         if not row then return false, 'err.builder_unknown_mission' end
-        -- an override is the server's built-in mission: never anyone's own (S4)
+        -- an override is the server's built-in mission: never anyone's own
         if row.overridesBuiltin then return false, 'err.override_owner' end
         local known = MySQL.scalar.await('SELECT 1 AS known FROM cp_officers WHERE citizenid = ? LIMIT 1',
             { p.citizenid })
@@ -5127,7 +5127,7 @@ local function RegisterAdminActions()
             { id = row.id, version = version, record = RecordView(FetchRow(row.id), actor, PermSet(ctx.src, actor)) }
     end, { rate = 2, reason = 'optional', category = 'builder' })
 
-    -- Rollback picker: a short diff of a kept version against the published one (A11).
+    -- Rollback picker: a short diff of a kept version against the published one.
     CP.Net.callback('builder:versionDiff', function(src, args)
         local actor, perms = Begin(src)
         if not actor then return nil, perms end
@@ -5155,7 +5155,7 @@ local function RegisterAdminActions()
         }
     end, { rate = 4 })
 
-    -- ---- COPY AS LUA AND IMPORT (C13) --------------------------------------
+    -- ---- COPY AS LUA AND IMPORT --------------------------------------------
 
     Kit.callback('admin:exportMissionLua', 'missionAdmin', function(ctx)
         local id = ctx.args.id
@@ -5253,7 +5253,7 @@ local function RegisterAdminActions()
         return true, { id = id, record = RecordView(FetchRow(id), actor, PermSet(ctx.src, actor)) }
     end, { rate = 2, reason = true, category = 'builder' })
 
-    -- A test result an admin removed (C20) no longer counts for a draft: the draft is untested again when that result
+    -- A test result an admin removed no longer counts for a draft: the draft is untested again when that result
     -- was the pass of exactly this draft.
     function B.onTestHidden(missionId, defHash)
         if not ValidId(missionId) or type(defHash) ~= 'string' then return false end

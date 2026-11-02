@@ -181,7 +181,7 @@ local function ResolveRun(src, runRef)
     return nil, nil
 end
 
--- A case with a real suspect (run.realSuspect, V14 / V22) while Config.RealSuspects.officerAlerts is not 'silenced'
+-- A case with a real suspect (run.realSuspect: 'live' or 'volunteer') while Config.RealSuspects.officerAlerts is not 'silenced'
 -- (shipped 'normal'): its officers' own shots-fired, person-down and EMS calls go out like any officer's, so no flag
 -- and no backstop clear. 'silenced' = the NPC-mission rule (Hard rule 16). NPC runs: always false.
 local function AlertsGoOut(run)
@@ -335,7 +335,7 @@ function A.clear(src, opts)
     return false
 end
 
--- A run that became a case with a real suspect after its officers arrived (a volunteer who says yes then, V22):
+-- A run that became a case with a real suspect after its officers arrived (a volunteer who says yes then):
 -- every active participant's flag of ours goes, so his calls go out from now on. Nothing while
 -- Config.RealSuspects.officerAlerts is 'silenced' or the run has no real suspect. Returns how many were cleared.
 function A.releaseRun(run)

@@ -112,7 +112,7 @@ end
 -- ============================================================================
 --                STAFF NOTICES (SHARED WITH DEPARTMENT NOTICES)
 -- ============================================================================
--- The admin's staff notices and a supervisor's department notices (step P13, CP.DeptNotices) share cp_staff_notices
+-- The admin's staff notices and a supervisor's department notices (CP.DeptNotices) share cp_staff_notices
 -- and the Home Announcements card. A department notice is saved with by_actor 'sup:<citizenid>' and only its own
 -- department in departments; it never counts against the NOTICES_ACTIVE staff notices an admin may run.
 
@@ -739,7 +739,7 @@ local function FilterText(f)
 end
 
 -- ============================================================================
---                              RECORD MOVE (C14)
+--                                 RECORD MOVE
 -- ============================================================================
 -- A re-created character's history moves to the player's new citizenid as one batch: run rows (live and archived),
 -- the officer record, badges and overrides, commendations, disputes and unfinished item rewards. Rows keep their
@@ -1140,7 +1140,7 @@ function Corr.officerPoints(citizenid)
     }
 end
 
--- The one point-adjust path (step P22): Admin UI -> Give or take points and a supervisor's Give points (the
+-- The one point-adjust path: Admin UI -> Give or take points and a supervisor's Give points (the
 -- awardPoints Mission control, modules/supawards) both come here after their own guards. It keeps
 -- Config.AdminControl's rules (pointAdjust, the deduction floor, adjustDailyLimit per acting player), writes the signed
 -- row (Scoring.adjust: breakdown.by and the reason, shown in the officer's history) and audits it with ctx.audit (the
@@ -1223,7 +1223,7 @@ local function LiftSuspension(ctx, citizenid)
     return false
 end
 
--- Step FX1: a correction's reply carries the views the screen shows, so it needs no second request. payload.views =
+-- A correction's reply carries the views the screen shows, so it needs no second request. payload.views =
 -- { rowId, archived, citizenid, runs = the run list's own filters, officer = true }: data.view the run's detail
 -- (admin:getRun), data.runs that officer's run list (admin:getOfficerRuns), data.officer his detail (admin:getOfficer).
 -- A view that cannot be built is left out, and the screen asks for it again.

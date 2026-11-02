@@ -156,7 +156,7 @@ export function FlaggedPanel({
     list: FlaggedRow[];
     loading?: boolean;
     onDecide: (row: FlaggedRow, decision: 'approve' | 'void') => void;
-    // admins: approve every flagged row of the run at once (A10)
+    // admins: approve every flagged row of the run at once
     onApproveRun?: (row: FlaggedRow, rows: FlaggedRow[]) => void;
 }) {
     return (
@@ -295,14 +295,14 @@ export default function AdminLeaderboards() {
     const [bulk, setBulk] = useState(false);
     const [runRow, setRunRow] = useState<AdminRun | null>(null);
     const [approveRun, setApproveRun] = useState<{ row: FlaggedRow; rows: FlaggedRow[] } | null>(null);
-    // Config.AdminUi.oneRequest (step H6): the flagged runs come with the board, so the screen opens with one request
+    // Config.AdminUi.oneRequest: the flagged runs come with the board, so the screen opens with one request
     const oneRequest = session.config?.adminUi?.oneRequest === true;
     const flaggedReq = useRequest<{ flagged: FlaggedRow[] }>(
         'admin:getFlagged',
         {},
         { pollMs: 60000, skip: oneRequest },
     );
-    // Config.AdminUi.pageSize (step H6): the page of the open officer's runs (the server ignores it while 0)
+    // Config.AdminUi.pageSize: the page of the open officer's runs (the server ignores it while 0)
     const [runsPage, setRunsPage] = useState(1);
 
     const allTime = period === 'alltime';

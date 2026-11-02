@@ -568,7 +568,7 @@ interface MockRunState {
     cashBase: number;
     pointsBase: number;
     simulated: boolean;
-    // A live case's card (?runv=live, step V16); absent on any other run.
+    // A live case's card (?runv=live); absent on any other run.
     live?: ActiveMissionData['live'];
 }
 
@@ -757,7 +757,7 @@ function variantRun(kind: string): MockRunState | null {
         return r;
     }
     if (kind === 'live') {
-        // A live case (V16): the reported crime's card in its Secure step; the HUD line reads the same.
+        // A live case: the reported crime's card in its Secure step; the HUD line reads the same.
         const tp = findType('tactical') as MockType;
         const r = newRun(tp, missionOf('tactical', 'gang_shootout'), { partners: [me(), { ...MARIA }] });
         startRun(r, 1500);

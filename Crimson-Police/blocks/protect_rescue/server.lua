@@ -365,7 +365,7 @@ end
 -- ============================================================================
 --                          WHEN AND WHERE THEY APPEAR
 -- ============================================================================
--- Config.Spawning.hostagesAt (PLAN S15, owner request of 2026-10-19: "make it be progressive"): 'objective' = the
+-- Config.Spawning.hostagesAt: 'objective' = the
 -- hostages appear when their own objective starts, through the engine's spawn director (ctx.whenNear: an officer
 -- within activateRange; ctx.choosePoints at the indoor distance, minDistanceIndoor from every officer), and after
 -- hostagesWaitMax seconds of officers standing closer they appear on their points anyway (one warning; 0 = never);
@@ -753,7 +753,7 @@ local function OnEvent(ctx, src, ev)
         end
     elseif t == 'shot' or t == 'damaged' then
         if not p then return false, 'unknown_entity' end
-        -- server:objective refuses a client's shot / damaged and flags the sender (K1), so these come only
+        -- server:objective refuses a client's shot / damaged and flags the sender, so these come only
         -- from CP.Npc's dispatch. This branch stays as defence in depth: a client must never be able to
         -- cost the team hostage_hit or the no_hostage_hurt bonus. CP.Npc.onDamaged, which is server-only,
         -- reports every hit on a hostage (both events are always sent together with it), so while it is

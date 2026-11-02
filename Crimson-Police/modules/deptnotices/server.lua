@@ -109,7 +109,7 @@ local function ActorOf(src)
     return type(info) == 'table' and info.citizenid or ('player:%d'):format(src)
 end
 
--- Notices that player posted today (step H4, the 'Your controls today' card).
+-- Notices that player posted today (the 'Your controls today' card).
 function DN.usedToday(src) return Kit.dailyCount('deptNoticePost', { actor = ActorOf(src) }) end
 
 -- What the Supervisor UI's Department notices card shows: nil, errKey when that player may not post (the control is

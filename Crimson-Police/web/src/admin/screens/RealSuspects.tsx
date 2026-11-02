@@ -89,7 +89,7 @@ const STATE_TONE: Record<string, BadgeTone> = {
 const stateText = (s: string | null | undefined) => (s ? (hasKey(`opp.state.${s}`) ? t(`opp.state.${s}`) : s) : '-');
 const kindText = (k: string) => (hasKey(`rs.ui.kind.${k}`) ? t(`rs.ui.kind.${k}`) : k);
 const when = (ts: number | null | undefined) => (ts ? formatDateTime(ts) : '-');
-// a volunteer case's words (V26): the suspect he plays, the mode, the match phase and why he dropped out
+// a volunteer case's words: the suspect he plays, the mode, the match phase and why he dropped out
 const keyText = (prefix: string, v: string | null | undefined) =>
     v ? (hasKey(`${prefix}.${v}`) ? t(`${prefix}.${v}`) : v) : '-';
 const roleText = (r: string | null | undefined) => keyText('rs.ui.role', r);
@@ -472,7 +472,7 @@ function CasesTab({
 }: {
     req: UseRequestResult<RsCasesData>;
     onOpen: (runId: string) => void;
-    // Config.AdminUi.pageSize (step H6): another page of cases
+    // Config.AdminUi.pageSize: another page of cases
     onPage: (page: number) => void;
     // the filter is sent to the server (admin:getRsCases filter), so it covers every page, not only the one shown
     filter: RsCaseFilter;
@@ -749,7 +749,7 @@ function PairsTab({ onTool, version }: { onTool: (f: Partial<RsToolForm>) => voi
     );
 }
 
-// The volunteers on the list now (V26): who, the suspects they play, since and until when, their strikes and
+// The volunteers on the list now: who, the suspects they play, since and until when, their strikes and
 // whether a mission is asking them or they play one. Read-only: the tools stay on the other tabs.
 function ClearStrikesDialog({
     start,

@@ -18,7 +18,7 @@ function numberParam(name: string): number | null {
     return isFinite(n) ? n : null;
 }
 
-// ?openOn=home|active_on_run (step O9): the officer option the session carries; with active_on_run the dev panel's
+// ?openOn=home|active_on_run: the officer option the session carries; with active_on_run the dev panel's
 // run toggle (or ?readyCheck=1) picks the screen the next open lands on.
 const OPEN_ON = PARAMS.get('openOn');
 

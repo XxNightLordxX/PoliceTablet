@@ -114,12 +114,12 @@ end
 --   duration    optional fn(value) -> seconds: a timed control; DC.set makes the change end that long after it starts
 --   allow       optional fn({ role, src, dept, value, row }) -> errKey | nil, extra: one more rule before a change
 --   carry       optional fn({ role, dept, value, row }) -> the value saved: built from the change and the live row
---               (step P21: a pick that counts from the next weekly reset keeps the one that counts until then)
+--               (a pick that counts from the next weekly reset keeps the one that counts until then)
 --   overlays    optional { [other key] = fn(value, thisValue) -> value }: while this control has a live change, DC.get
 --               of the other key returns fn's value (the self rule of this change still applies)
 --   viewExtra   optional fn(dept) -> table: more fields for this control's row in DC.view
 --   usedToday   optional fn(src) -> number: that player's uses today, for a control whose viewExtra gives a perDay
---               (step H4: the Department Report's 'Your controls today' card, DC.mine)
+--               (the Department Report's 'Your controls today' card, DC.mine)
 --   bounded     false: the control has no min and max (the admin's card shows only its switch)
 --   flags       optional { name, ... }: more true / false fields its bounds may carry (readyCheck's canTurnOff)
 --   list        a 'choice' control: the bounds field with the names a supervisor may pick (difficulty: 'presets');
@@ -473,7 +473,7 @@ function DC.get(dept, key, officer)
 end
 
 -- True while a change of the control counts for the department: its on (the department's bounds) and the master
--- switch unless the control is outside it. A module that keeps its own record of a change reads this (step P18).
+-- switch unless the control is outside it. A module that keeps its own record of a change reads this.
 function DC.active(dept, key)
     local def = defs[key]
     if not def then return false end
@@ -874,7 +874,7 @@ local function DayUse(def, dept, n)
     return perDay, used
 end
 
--- DC.mine(src) (step H4, Config.Tablet.supervisorControlsCard): the controls that player may use now (DC.canChange),
+-- DC.mine(src) (Config.Tablet.supervisorControlsCard): the controls that player may use now (DC.canChange),
 -- each with its current value, the admin's limits and, for a supervisor, today's use of a control with a per-day count
 -- (admins have none). { controls = { { key, kind, value, configValue, min, max, changed, timeLeft, perDay, usedToday
 -- } } }, or nil, errKey. Read only.

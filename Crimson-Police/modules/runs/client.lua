@@ -106,7 +106,7 @@ local function ActiveSrcs(list)
     return out
 end
 
--- The HUD chip of the run's twists (CP.Twists, PLAN M8b): the first key, every label; false without a twist.
+-- The HUD chip of the run's twists (CP.Twists): the first key, every label; false without a twist.
 local function ModifierHud(holder)
     local list = CP.Twists.of(holder)
     if #list == 0 then return false end
@@ -488,7 +488,7 @@ RegisterNetEvent(CP.e('client:start'), function(runId, data)
     })
     ShowStartCircle(current, data.start)
     StartTelemetry(current)
-    -- npcCombat = false (a live run, V14): no Config.NpcCombat damage settings at all; missing = on, as before
+    -- npcCombat = false (a live run): no Config.NpcCombat damage settings at all; missing = on, as before
     if data.npcCombat ~= false then CombatStart(current) end
     ReportArea(current, 0, type(data.start) == 'table' and data.start.coords or nil)
     local start = type(data.start) == 'table' and data.start.coords or nil
@@ -628,7 +628,7 @@ RegisterNetEvent(CP.e('client:hostChanged'), function(runId, hostSrc)
 end)
 
 -- The run went In progress before this officer reached the start (the server's client:routeStatus 'action',
--- Config.Route.lateArriveRange, PLAN M11): he follows the action. When CP.Markers can draw his line to the objective,
+-- Config.Route.lateArriveRange): he follows the action. When CP.Markers can draw his line to the objective,
 -- the start goes first (its circle here, its waypoint and pin in CP.Route.follow, which also stops the route's sampling
 -- and reports); CP.Markers routes on its next check, once CP.Route says he follows the action. Under Radio Silence
 -- (no objective line) or with Config.Markers off he keeps the start's waypoint as his guide. status.secondsLeft: the

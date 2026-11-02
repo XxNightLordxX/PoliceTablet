@@ -276,14 +276,14 @@ result. On a good install the console shows lines like these (the order can diff
 [crimson-police] applied migration 001_initial.sql
 [crimson-police] applied migration 002_test_def_hash.sql
 ...
-[crimson-police] Crimson-Police saves folder at version 8
+[crimson-police] Crimson-Police saves folder at version 17
 [crimson-police] missions loaded: 19 built-in, 0 custom, 0 rejected
 [crimson-police] Start-up check: all 18 checks passed. Type CrimsonPoliceAdmin check in the server console to see them
 ```
 
 - With the database on, the first line reads `storage: MySQL/MariaDB through oxmysql`, the "first start" line is
-  not there, and the version line reads `Crimson-Police database at version 8`. On a database made by txAdmin's
-  recipe, the first start after this update also prints one `cp_... is utf8mb3_general_ci: switching it to utf8mb4
+  not there, and the version line reads `Crimson-Police database at version 17`. On a database made by txAdmin's
+  recipe, the first start also prints one `cp_... is utf8mb3_general_ci: switching it to utf8mb4
   (once)` line per table.
 - The `applied migration` lines only show on the first start and after an update. A migration is Crimson-Police
   creating or upgrading its own tables.
@@ -529,7 +529,7 @@ limits you set. They are **off on install** except the seven server-wide cooldow
 abandonCooldown, noRepeat, hourlyCap, dailyCap, happyHour, clearCooldown): nothing changes until you switch them on. You set them in Admin UI → **Permissions** → **Mission controls** (below); supervisors change them in
 Supervisor UI → **Mission controls** (below).
 
-- **Mission cooldowns** (on when you install, owner decision): any department's supervisor may change them, without
+- **Mission cooldowns** (on when you install): any department's supervisor may change them, without
   the master switch, and a change counts for **every department** (server-wide):
   - `cooldownScale = { on = true, min = 0, max = 2 }`: x every mission's cooldown, one number per mission type
     (`0.5` = half, `0` = no mission cooldown for that type, `2` = double). `min`/`max` may be 0-4.
@@ -1958,7 +1958,7 @@ so saved links and notifications still open the right screen), and a group with 
 | `Config.AdminUi.pageSize` | `0` | Rows per page (10-200, for example 50) on the Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases. The server sends one page at a time. `0` keeps each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case at once). The case filters on Player suspects work on the page shown. |
 | `Config.AdminUi.oneRequest` | `false` | Payments made gets its totals and Leaderboards gets its flagged runs in the same request as the list, so each screen opens with one request instead of two. The screens show the same data. |
 | `Config.AdminUi.windowRows` | `false` | A scrolling table of more than 100 rows (such as the Leaderboards board) draws only the rows in view and the next ones as you scroll, and the Settings search results start with 60 rows and add more as you reach the end. The rows and their order are the same; `false` draws every row at once. |
-| `Config.AdminUi.foldAdvanced` | `false` | The department and mission desk dialogs (Admin UI -> System) show their everyday fields open and fold the rest (colours, logo, officer options; box size, rotation, prop) under a **More options** button. The Supervisor UI's **Mission controls** folds the rarely changed controls in each group (abandon cooldown, no repeat, start, ready check, time limit, idle check, unit size, staff call wait, boards, review rules, the happy hour and twist multipliers) the same way; a control that is set always stays open. Each screen remembers on that computer whether More was left open, and so does the Mission Builder's **More settings** of a block. Only the layout changes; `false` shows everything open as before. |
+| `Config.AdminUi.foldAdvanced` | `false` | The department and mission desk dialogs (Admin UI -> System) show their everyday fields open and fold the rest (colours, logo, officer options; box size, rotation, prop) under a **More options** button, and so does **Void runs…** (Officers, Leaderboards, an operation's history: the mission id, Include awards and Strike; one you set stays open). The Supervisor UI's **Mission controls** folds the rarely changed controls in each group (abandon cooldown, no repeat, start, ready check, time limit, idle check, unit size, staff call wait, boards, review rules, the happy hour and twist multipliers) the same way; a control that is set always stays open. Each screen remembers on that computer whether More was left open, and so does the Mission Builder's **More settings** of a block. Only the layout changes; `false` shows everything open as before. |
 
 ### 9.4 The missions
 

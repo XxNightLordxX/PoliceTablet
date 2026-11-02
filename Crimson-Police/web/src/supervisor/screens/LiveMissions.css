@@ -130,7 +130,7 @@
     width: 0;
 }
 
-/* "+ minutes" (step P7) */
+/* "+ minutes" */
 .oversight-live-addtime {
     display: flex;
     align-items: center;

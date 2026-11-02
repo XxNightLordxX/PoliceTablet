@@ -72,7 +72,7 @@ local function ValidGoals(list)
 end
 
 -- ============================================================================
---                 DEPARTMENT GOALS (MISSION CONTROL, STEP P21)
+--                      DEPARTMENT GOALS (MISSION CONTROL)
 -- ============================================================================
 -- goals (Config.MissionControls.controls): per department, under the master switch, shipped off. A supervisor picks
 -- min to max of the admin's daily goals and of the admin's weekly goals (Config.Goals); his department's officers draw
@@ -215,7 +215,7 @@ local function DeptLists(citizenid, ts, dept)
     return ListsAt(v, WeekKeyOf(ts))
 end
 
--- The goal of 'kind' for citizenid in the period that contains ts: from his department's pick (step P21) when it
+-- The goal of 'kind' for citizenid in the period that contains ts: from his department's pick when it
 -- names goals that still exist, else from the admin's whole list. dept (optional): the officer's department.
 local function Pick(kind, citizenid, ts, dept)
     local list = ValidGoals(Config.Goals and Config.Goals[kind])
@@ -282,9 +282,9 @@ local function ProgressOf(goal, citizenid, start)
     if goal.unit == true then sql[#sql + 1] = 'AND participants >= 2' end
     if goal.crossDepartment == true then sql[#sql + 1] = 'AND departments_n >= 2' end
     if goal.missionCall == true then sql[#sql + 1] = 'AND mission_call_id IS NOT NULL' end
-    -- live-case rows count only with Config.LiveCrime.goals (V13, shipped false)
+    -- live-case rows count only with Config.LiveCrime.goals (shipped false)
     if CP.LiveCrime and CP.LiveCrime.rowFilter then sql[#sql + 1] = CP.LiveCrime.rowFilter('goals', '') end
-    -- and volunteer-case rows only with Config.Volunteers.goals (V22b, shipped false)
+    -- and volunteer-case rows only with Config.Volunteers.goals (shipped false)
     if CP.Volunteers and CP.Volunteers.rowFilter then sql[#sql + 1] = CP.Volunteers.rowFilter('goals', '') end
     local ok, n = pcall(MySQL.scalar.await, table.concat(sql, ' '), params)
     if not ok then
@@ -330,7 +330,7 @@ end
 --                                     API
 -- ============================================================================
 
--- department (optional): the officer's department when the caller knows it (step P21: his department's goals).
+-- department (optional): the officer's department when the caller knows it (his department's goals).
 function Goals.forOfficer(citizenid, department)
     if type(citizenid) ~= 'string' or citizenid == '' then return { daily = nil, weekly = nil } end
     Db()
@@ -431,7 +431,7 @@ if CP.Hooks and CP.Hooks.on then
 end
 
 -- ============================================================================
---                     THE GOALS MISSION CONTROL (STEP P21)
+--                          THE GOALS MISSION CONTROL
 -- ============================================================================
 
 local function GoalChoices(kind)

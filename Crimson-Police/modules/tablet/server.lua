@@ -323,7 +323,7 @@ local function AdminLanding(v)
     return LANDINGS[v] and v or 'home'
 end
 
--- Config.Tablet.sidebarOrder, activeFirst, compactSidebar (step G4): the Officer UI sidebar (anything unknown =
+-- Config.Tablet.sidebarOrder, activeFirst, compactSidebar: the Officer UI sidebar (anything unknown =
 -- 'classic', the order as before)
 local ORDERS = { classic = true, mostUsed = true }
 local function OfficerNav()
@@ -335,7 +335,7 @@ local function OfficerNav()
     }
 end
 
--- Config.Tablet.supervisorByTask, supervisorCompact, supervisorLanding (step G5): the Supervisor UI sidebar and the
+-- Config.Tablet.supervisorByTask, supervisorCompact, supervisorLanding: the Supervisor UI sidebar and the
 -- screen it opens on (anything unknown = 'first', as before)
 local SUP_LANDINGS = { first = true, report = true, review = true, live = true }
 local function SupervisorNav()
@@ -344,9 +344,9 @@ local function SupervisorNav()
         byTask = tab.supervisorByTask == true,
         compact = tab.supervisorCompact == true,
         landing = SUP_LANDINGS[tab.supervisorLanding] and tab.supervisorLanding or 'first',
-        -- Config.Tablet.supervisorControlsCard (step H4): the Department Report's 'Your controls today' card
+        -- Config.Tablet.supervisorControlsCard: the Department Report's 'Your controls today' card
         controlsCard = tab.supervisorControlsCard == true,
-        -- Config.Tablet.supervisorRemember (step WF2): the supervisor dialogs open with the values last used
+        -- Config.Tablet.supervisorRemember: the supervisor dialogs open with the values last used
         remember = tab.supervisorRemember == true,
     }
 end
@@ -364,7 +364,7 @@ local function ReasonChips(list)
     return out
 end
 
--- Config.RealSuspects.adminScreen: the Admin UI shows the Real suspects screen (V18) only while live crimes or
+-- Config.RealSuspects.adminScreen: the Admin UI shows the Real suspects screen only while live crimes or
 -- volunteers are on (the screen still checks the antiFarmOverride key; the server answers its data to admins only).
 local function RealSuspectsScreen()
     local rs = type(Config.RealSuspects) == 'table' and Config.RealSuspects or {}
@@ -385,7 +385,7 @@ local function ExtraConfig(deptKey)
     local metrics = {}
     local lb = Config.Leaderboard or {}
     local list = type(lb.metrics) == 'table' and lb.metrics or { 'points' }
-    -- step P14: the Rank by tabs the officer's department shows (its boards Mission control)
+    -- the Rank by tabs the officer's department shows (its boards Mission control)
     if CP.Leaderboard and CP.Leaderboard.boardMetrics then
         local ok, own = pcall(CP.Leaderboard.boardMetrics, deptKey)
         if ok and type(own) == 'table' then list = own end
@@ -418,16 +418,16 @@ local function ExtraConfig(deptKey)
             landing = AdminLanding(aui.landing),
             homeForms = aui.homeForms ~= false,
             reasonChips = ReasonChips(aui.reasonChips),
-            -- step G6: the plain layout (layouts/adminNav.ts), shipped false = as before
+            -- the plain layout (layouts/adminNav.ts), shipped false = as before
             plainLayout = aui.plainLayout == true,
-            -- step H1: the Rewards screen (admin/screens/Rewards.tsx), shipped false = no such screen
+            -- the Rewards screen (admin/screens/Rewards.tsx), shipped false = no such screen
             rewardsScreen = aui.rewardsScreen == true,
-            -- step H5: Home's Needs attention panel (admin:getNeedsAttention), shipped false = no panel
+            -- Home's Needs attention panel (admin:getNeedsAttention), shipped false = no panel
             needsAttention = aui.needsAttention == true,
-            -- step H6: one Money screen for Mission pay and Payments made, and one request per screen open
+            -- one Money screen for Mission pay and Payments made, and one request per screen open
             moneyScreen = aui.moneyScreen == true,
             oneRequest = aui.oneRequest == true,
-            -- step OP3: long lists draw only the rows in view (shared/components/Table, Settings search), shipped false
+            -- long lists draw only the rows in view (shared/components/Table, Settings search), shipped false
             windowRows = aui.windowRows == true,
             -- the More fold of the settings-heavy dialogs and the Mission controls (shared/components/MoreFold)
             foldAdvanced = aui.foldAdvanced == true,

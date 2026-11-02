@@ -113,7 +113,7 @@
     background: rgba(var(--cp-danger-rgb), 0.14);
 }
 
-/* a LIVE call (step V11): a real crime, always red */
+/* a LIVE call: a real crime, always red */
 .mc-card--live {
     border-color: rgba(var(--cp-danger-rgb), 0.6);
     box-shadow: inset 3px 0 0 var(--cp-danger);
@@ -151,7 +151,7 @@
     color: var(--cp-text);
 }
 
-/* a mission command pushed to this unit (step P19) */
+/* a mission command pushed to this unit */
 .mc-card__pushed {
     font-size: var(--cp-fs-sm);
     font-weight: 600;

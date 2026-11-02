@@ -18,7 +18,7 @@ export function typeKeys(v: OfficerOptionValue | undefined): string[] {
 }
 
 // cards: the server's order (getMissionTypes). Only the order and the fold change: every card keeps its own state.
-// A card command recommends (featured, step P10) comes right after the favourites; a card switched off for the
+// A card command recommends (featured) comes right after the favourites; a card switched off for the
 // department by command (offByCommand) never counts as the card left to accept.
 export function arrangeTypeCards<T extends { key: string; featured?: boolean; offByCommand?: boolean }>(
     cards: T[],

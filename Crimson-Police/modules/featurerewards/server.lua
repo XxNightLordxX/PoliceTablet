@@ -54,7 +54,7 @@ function FR.enabled(feature)
     return c ~= nil and c.enabled == true
 end
 
--- The suspect's money for one outcome key ('got_away' | 'caught'): his mission type's own amount in byType (step H1)
+-- The suspect's money for one outcome key ('got_away' | 'caught'): his mission type's own amount in byType
 -- when it is set, else the per-outcome default.
 local function SuspectMoney(c, key, missionType)
     local by = type(c.byType) == 'table' and type(missionType) == 'string' and c.byType[missionType] or nil
@@ -314,7 +314,7 @@ end
 
 -- A volunteer case ended (payload: CP.Volunteers' end payload; afk: his catch was while AFK). Fair = officers
 -- reached him, he did not drop out, was not AFK, the run was played to its end (completed or failed: an abandoned run
--- - officer quit, real call, admin cancel - pays nothing, step Z2) and his outcome was got_away, detained or booked.
+-- - officer quit, real call, admin cancel - pays nothing) and his outcome was got_away, detained or booked.
 function FR.fairSuspect(payload, afk)
     if type(payload) ~= 'table' or not ValidCid(payload.citizenid) then return false end
     if payload.dropout ~= nil or afk == true or payload.engaged ~= true then return false end
@@ -388,7 +388,7 @@ end
 
 local BY_TYPE_KEYS = { got_away = true, caught = true }
 
--- suspect.byType (step H1): { [mission type] = { got_away = dollars, caught = dollars } }, known types only.
+-- suspect.byType: { [mission type] = { got_away = dollars, caught = dollars } }, known types only.
 local function CheckByType(v)
     if type(v) ~= 'table' then return 'err.feature_reward_by_type' end
     local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}

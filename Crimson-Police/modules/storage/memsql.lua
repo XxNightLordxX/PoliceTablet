@@ -4573,7 +4573,7 @@ local function MakeCandidates(S, lookup, C)
     return function()
         local rows = t.rows
         -- M.scanMeter (nil in the game): a spec sets a table to count the rows each whole-table read hands over, by
-        -- table name (tests/foundation_spec.lua, step OP3)
+        -- table name (tests/foundation_spec.lua)
         local meter = M.scanMeter
         if meter then meter[t.name] = (meter[t.name] or 0) + #rows end
         return rows, #rows

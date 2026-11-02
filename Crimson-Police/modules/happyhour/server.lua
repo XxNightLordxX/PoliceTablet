@@ -5,7 +5,7 @@
 -- CP.HappyHour (server): the happy hour Mission control. A supervisor (or an admin) starts it for N minutes
 -- (inside the admin's min and max, Config.MissionControls.controls.happyHour): while it runs no mission has a
 -- cooldown for anyone on the server (cooldownScale 0 for every type) and, when ticked, the no-repeat rule is off.
--- The abandon type cooldown, the hourly and daily caps and the cash cap stay. Server-wide (owner decision: anything
+-- The abandon type cooldown, the hourly and daily caps and the cash cap stay. Server-wide (anything
 -- that changes cooldowns is), outside the master switch, Config.MissionControls.happyHourPerDay a day for
 -- supervisors, never for the supervisor who started it or a unit he is in (the self rule). It is one timed row of
 -- cp_dept_controls (expires_at), so a restart keeps the window; when it ends every cooldown is read against its real
@@ -107,7 +107,7 @@ end
 HH.register()
 
 -- ============================================================================
---                          HAPPY HOUR CASH (STEP P16)
+--                               HAPPY HOUR CASH
 -- ============================================================================
 -- happyHourCash (Config.MissionControls.controls): per department, under the master switch, shipped off with
 -- min = max = 1.0. x the cash of a completed run the department leads that was accepted while a happy hour ran; read
@@ -146,7 +146,7 @@ end
 HH.cashBonusFor = BonusFor
 
 -- ============================================================================
---                         HAPPY HOUR POINTS (STEP P20)
+--                              HAPPY HOUR POINTS
 -- ============================================================================
 -- happyHourPoints (Config.MissionControls.controls): per department, under the master switch, shipped off with
 -- min = max = 1.0. x the final points of a completed run the department leads that was accepted while a happy hour
@@ -227,7 +227,7 @@ function HH._tick()
     last = now
 end
 
--- The end check runs only while a happy hour may be on (step LP3: it woke every 30 s all day): at start (a happy
+-- The end check runs only while a happy hour may be on (it woke every 30 s all day): at start (a happy
 -- hour from before a restart), when one starts and when Settings re-reads the controls. Each pass is TICK_MS apart
 -- as before; once no happy hour runs, the loop ends until the next of those.
 local ticking = false

@@ -481,7 +481,7 @@ local function ToggleDebug(enabled)
 end
 
 -- ============================================================================
---               CHECK SPAWN POINTS (PLAN S7; ARCHITECTURE §5.27)
+--                   CHECK SPAWN POINTS (ARCHITECTURE §5.27)
 -- ============================================================================
 -- Admin UI -> Testing (Config.Testing.spawnCheck): this admin's own game visits every point of the missions asked for
 -- and judges each one with CP.Spawn.probe. Per location: the screen fades, he is frozen, unseen and unhurt at its

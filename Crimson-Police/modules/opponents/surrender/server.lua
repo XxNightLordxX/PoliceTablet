@@ -237,7 +237,7 @@ function Opp.peaceful(run, cid)
 end
 
 -- ============================================================================
---                         THE WATCH PASS (V4's onTick)
+--                         THE WATCH PASS (Opp.onTick)
 -- ============================================================================
 
 local function End(case, rec, why)

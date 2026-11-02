@@ -59,7 +59,7 @@ async function steps(): Promise<void> {
     ok((on.match(/>Reset</g) ?? []).length === 2, 'on: a Reset on each changed control');
     ok(on.includes('Server-wide') && on.includes('Outside the switch'), 'on: server-wide and outside the switch');
     ok((on.match(/Departments \(/g) ?? []).length === 1, 'on: only the per-department control has department rows');
-    // step P7: the two action controls, with the limits they are used with and no value line
+    // the two action controls, with the limits they are used with and no value line
     ok(on.includes('Clear an officer') && on.includes('5 a day per supervisor'), 'on: Clear cooldown and its limit');
     ok(on.includes('Add time to a live mission') && on.includes('At most 5 min per mission'), 'on: + minutes');
 

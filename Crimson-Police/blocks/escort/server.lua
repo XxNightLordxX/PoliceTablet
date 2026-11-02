@@ -1300,7 +1300,7 @@ end
 -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
 -- up mark on the map"): the truck at the server's position, so an officer too far away for his game still sees it
 -- (Config.Markers.farTargets), and the destination. Each officer's own game decides his GPS line: to the truck while
--- HE is farther than clearRadius from it (beyond), else to the destination (BLIPS_FINAL X17). Keyed by the truck's
+-- HE is farther than clearRadius from it (beyond), else to the destination. Keyed by the truck's
 -- net id and 'dest', the keys the client half hands its own two blips over with.
 local function Marker(ctx)
     local st = StateOf(ctx)

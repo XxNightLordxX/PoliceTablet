@@ -257,8 +257,8 @@ end)
 -- ============================================================================
 --                    SERVICE VEHICLE BLIPS (every officer)
 -- ============================================================================
--- A prisoner van or tow truck of this officer's run on his map (CP.Markers.service, Config.Markers.serviceVehicles,
--- PLAN M7): from its spawn until it drives off. The run's end (CP.Markers.clear) takes it off with the rest.
+-- A prisoner van or tow truck of this officer's run on his map (CP.Markers.service, Config.Markers.serviceVehicles):
+-- from its spawn until it drives off. The run's end (CP.Markers.clear) takes it off with the rest.
 
 local SERVICE_LOOKS = { prisonerVan = true, towTruck = true }
 

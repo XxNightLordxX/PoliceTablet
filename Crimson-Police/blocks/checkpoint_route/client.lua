@@ -194,7 +194,7 @@ end
 -- The GPS line to the current checkpoint is this block's own (its marker says route = 'block': on until the checkpoint
 -- is cleared), in Config.Markers.routeColour, and on only while CP.Markers.canRoute allows a Crimson line: not while
 -- this officer still drives to the start (a late partner keeps the start's line as his only one, and CP.Route samples
--- that line), not while he has a waypoint of his own, not under Radio Silence (BLIPS_FINAL R2). Checked when the
+-- that line), not while he has a waypoint of his own, not under Radio Silence. Checked when the
 -- checkpoint changes and once a second in the block's loop; the natives run only when the answer changes.
 local function LineOff(st)
     if st.routed and st.routeBlip and DoesBlipExist(st.routeBlip) then SetBlipRoute(st.routeBlip, false) end
@@ -216,7 +216,7 @@ local function SyncLine(ctx, st)
 end
 
 -- The blip handed to the objective pointer (CP.Markers.adopt) is taken back first and every line goes off before a
--- blip goes (BLIPS_FINAL R10).
+-- blip goes.
 local function ClearBlips(st)
     for key, blip in pairs(st.handed or {}) do CP.Markers.release(key, blip) end
     st.handed = {}
@@ -239,7 +239,7 @@ local function AddBlip(st, n, variant)
 end
 
 -- The current checkpoint's blip is the objective pointer (key 'cp<n>', the server's marker): CP.Markers draws no
--- second icon for it (BLIPS_FINAL R1). The next one is smaller (kinds.checkpoint.nextScale). Under Radio Silence
+-- second icon for it. The next one is smaller (kinds.checkpoint.nextScale). Under Radio Silence
 -- Config.Markers.radioSilence decides: 'area' keeps the current one without its line, 'none' neither.
 local function RefreshBlips(ctx, st)
     ClearBlips(st)

@@ -1,4 +1,4 @@
-/* Officer screen load states (step H2): the stale line under the header. */
+/* Officer screen load states: the stale line under the header. */
 .cp-screen-stale {
     display: flex;
     align-items: center;

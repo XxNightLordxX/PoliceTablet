@@ -131,7 +131,7 @@
     gap: 8px 16px;
 }
 
-/* Mission controls (step P4) */
+/* Mission controls */
 .oversight-mc-badges,
 .oversight-mc-bounds,
 .oversight-mc-state {
@@ -179,7 +179,7 @@
     border-top: 1px solid var(--cp-border);
 }
 
-/* Extra grants (step G1): one row per power, its editor under it */
+/* Extra grants: one row per power, its editor under it */
 .oversight-extra {
     list-style: none;
     margin: 0;

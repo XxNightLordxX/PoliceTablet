@@ -1,6 +1,6 @@
 // BulkVoidDialog: void every row an officer, a department, a type, a mission or an operation earned between two
 // dates, as one batch that Undo restores (admin:previewBulkVoid, server:admin:bulkVoid). Used by Officers (Void
-// runs…), Leaderboards (Void runs in this window…) and the Missions operation history (P2, with operationId).
+// runs…), Leaderboards (Void runs in this window…) and the Missions operation history (with operationId).
 
 import { useEffect, useState } from 'react';
 import {
@@ -10,6 +10,7 @@ import {
     Dialog,
     ErrorState,
     Field,
+    MoreFold,
     Select,
     TextInput,
     Textarea,
@@ -212,31 +213,35 @@ export function BulkVoidDialog({ open, onClose, initial: given, name, onDone }: 
                             options={(session.config?.missionTypes ?? []).map(m => ({ value: m.key, label: m.label }))}
                         />
                     </Field>
-                    <Field label={t('ui.admin_officers.bulk.mission')}>
-                        <TextInput
-                            value={missionId}
+                    {/* Config.AdminUi.foldAdvanced: the mission id, the awards and the strike fold under More; a set one
+                    never hides */}
+                    <MoreFold screen="bulk_void" count={3} forceOpen={!!missionId.trim() || includeAwards || strike}>
+                        <Field label={t('ui.admin_officers.bulk.mission')}>
+                            <TextInput
+                                value={missionId}
+                                onChange={v => {
+                                    setMissionId(v);
+                                    setPreview(null);
+                                }}
+                                maxLength={40}
+                                placeholder="beat_patrol"
+                            />
+                        </Field>
+                        <Checkbox
+                            checked={includeAwards}
                             onChange={v => {
-                                setMissionId(v);
+                                setIncludeAwards(v);
                                 setPreview(null);
                             }}
-                            maxLength={40}
-                            placeholder="beat_patrol"
+                            label={t('ui.admin_officers.bulk.include_awards')}
                         />
-                    </Field>
-                    <Checkbox
-                        checked={includeAwards}
-                        onChange={v => {
-                            setIncludeAwards(v);
-                            setPreview(null);
-                        }}
-                        label={t('ui.admin_officers.bulk.include_awards')}
-                    />
-                    <Toggle
-                        checked={strike}
-                        onChange={setStrike}
-                        label={t('ui.admin_officers.bulk.strike')}
-                        description={t('ui.admin_officers.bulk.strike_hint')}
-                    />
+                        <Toggle
+                            checked={strike}
+                            onChange={setStrike}
+                            label={t('ui.admin_officers.bulk.strike')}
+                            description={t('ui.admin_officers.bulk.strike_hint')}
+                        />
+                    </MoreFold>
                 </div>
                 {previewErr ? <ErrorState compact error={previewErr} onRetry={() => void doPreview()} /> : null}
                 {preview ? (

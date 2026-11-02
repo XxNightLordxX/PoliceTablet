@@ -171,7 +171,7 @@ local function ConfigPreset()
     return type(cfg.preset) == 'string' and cfg.preset or 'normal'
 end
 
--- The preset of a run: its department's difficulty (Mission controls, step P9) when a change applied at the accept
+-- The preset of a run: its department's difficulty (Mission controls) when a change applied at the accept
 -- (run.controls, kept for the whole run), else Config.NpcDifficulty.preset.
 local function PresetName(run)
     if type(run) == 'table' and type(run.controls) == 'table' and type(run.controlsChanged) == 'table'
@@ -196,7 +196,7 @@ local function Preset(run)
 end
 
 -- How NPCs feel under Config.NpcDifficulty (health, surrender and flee multipliers for the blocks); run: the run
--- (its department's difficulty, step P9). It never changes points or cash.
+-- (its department's difficulty). It never changes points or cash.
 function Scaling.feel(run)
     local p = Preset(run)
     return { healthMult = p.healthMult, surrenderMult = p.surrenderMult, fleeMult = p.fleeMult }
@@ -223,7 +223,7 @@ end
 Scaling._entryPath = EntryPath
 Scaling._isScalable = function(value) return type(value) == 'number' or IsNumberList(value) end
 
--- Difficulty (Mission controls, step P9): a supervisor picks one of the presets the admin lists for his department's
+-- Difficulty (Mission controls): a supervisor picks one of the presets the admin lists for his department's
 -- runs; read at the accept (scope 'run'). The Config.NpcCombat caps still apply on top; points and cash never move.
 function Scaling.registerControls()
     local dc = CP.DeptControls

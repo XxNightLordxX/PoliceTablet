@@ -451,7 +451,7 @@ function ObjectiveRow({ o, index, pending }: { o: RunObjective; index: number; p
     );
 }
 
-// footer: the Objective GPS row while the run is in progress (PLAN M10).
+// footer: the Objective GPS row while the run is in progress.
 function ObjectivesCard({ view, footer }: { view: ActiveMissionData; footer?: ReactNode }) {
     const objectives = asArray(view.objectives);
     const done = objectives.filter(o => o.done).length;
@@ -732,7 +732,7 @@ export default function ActiveMission() {
         setLogSending(choice);
         const res = await clientAction('logResult', payload);
         setLogSending(null);
-        // step WF2: no fixed wait and second getRun: the server pushes the next log point at once (topic 'run');
+        // no fixed wait and second getRun: the server pushes the next log point at once (topic 'run');
         // a refused log keeps the point and its buttons come back after 6 s (above)
         if (res.ok) {
             setLoggedPoint(payload.point);

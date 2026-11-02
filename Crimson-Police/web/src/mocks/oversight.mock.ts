@@ -315,7 +315,7 @@ if (EDGE) {
     liveRuns[1].operationId = 12;
 }
 
-// "+ minutes" (step P7): offered in the default mock, stateful per run (the server's caps)
+// "+ minutes": offered in the default mock, stateful per run (the server's caps)
 const supAddTime = { min: 1, max: 5, maxSeconds: 300, perDay: 10, usedToday: 0 };
 
 const liveRunsView = (): LiveRunsData => ({
@@ -325,7 +325,7 @@ const liveRunsView = (): LiveRunsData => ({
     addTime: EMPTY ? null : { ...supAddTime },
 });
 registerMock('request', 'sup:getLiveRuns', liveRunsView);
-// like the server (step FX1), "+ minutes" and Recall answer with the fresh Live Missions view
+// like the server, "+ minutes" and Recall answer with the fresh Live Missions view
 registerMock('action', 'server:sup:addRunTime', (p: { runId?: string; minutes?: number; reason?: string }) => {
     const run = liveRuns.find(r => r.runId === p?.runId);
     if (!run || run.state !== 'in_progress') throw new Error('err.invalid_run');
@@ -627,7 +627,7 @@ function reviewFlagged(p: { rowId: number; decision: string; reason: string }) {
     flagged.splice(i, 1);
     return { rowId: p.rowId };
 }
-// step WF2: the supervisor's decision answers with his fresh Review Queue
+// the supervisor's decision answers with his fresh Review Queue
 registerMock('action', 'server:sup:reviewFlagged', (p: { rowId: number; decision: string; reason: string }) => ({
     ...reviewFlagged(p),
     queue: reviewQueue(),
@@ -1097,7 +1097,7 @@ registerMock(
                 if (r.voided) throw new Error('err.already_voided');
                 r.voided = true;
                 d.stats.voided += 1;
-                // like the server (step FX1), the reply carries the officer's detail when the screen shows it
+                // like the server, the reply carries the officer's detail when the screen shows it
                 return p.views?.officer ? { voided: 1, officer: d } : { voided: 1 };
             }
         }
@@ -1332,7 +1332,7 @@ const mcSaved: Record<
           '*|hourlyCap': { value: 6, setBy: 'ADMIN001', setRole: 'admin', at: now() - 3 * H },
       };
 
-// happy hour (step P6): how many a supervisor started today in this mock session (once a day)
+// happy hour: how many a supervisor started today in this mock session (once a day)
 let hhStarted = 0;
 const hhCounts = () => ({ perDay: 1, usedToday: hhStarted });
 
@@ -1388,7 +1388,7 @@ registerMock('request', 'admin:getMissionControls', (): MissionControlsView => {
         mcState('*', 'hourlyCap', 'number', 8, bounds.hourlyCap, { integer: true, range: [1, 1000] }),
         mcState('*', 'dailyCap', 'number', 0, bounds.dailyCap, { integer: true, range: [0, 1000] }),
         mcState('*', 'happyHour', 'map', {}, bounds.happyHour, { integer: true, range: [1, 240], ...hhCounts() }),
-        // step P7: the two supervisor actions (no value; only the switch, bounds and the limits from Settings)
+        // the two supervisor actions (no value; only the switch, bounds and the limits from Settings)
         mcState('*', 'clearCooldown', 'action', {}, bounds.clearCooldown, { bounded: false, perDay: 5 }),
     ];
     const addRunTime = (key: string) =>
@@ -1441,7 +1441,7 @@ registerMock('action', 'server:admin:resetMissionControl', (p: { key?: string; d
 });
 
 // ============================================================================
-//                  MISSION CONTROLS (SUPERVISOR UI, STEP P5)
+//                       MISSION CONTROLS (SUPERVISOR UI)
 // ============================================================================
 // The supervisor's own department (SAST) and the server-wide controls; saving and Back to config are stateful
 // and start the change wait. ?oversight=empty: nothing switched on.
@@ -1504,7 +1504,7 @@ registerMock(
         const id = mcId(p.key);
         const row = mcSaved[id];
         if (row && now() - row.at < 300) throw new Error('err.control_wait');
-        // step P6: happy hour is a timed change, once a day for supervisors
+        // happy hour is a timed change, once a day for supervisors
         if (p.key === 'happyHour' && hhStarted >= 1) throw new Error('err.happy_hour_used');
         mcSaved[id] = { value: p.value ?? 0, setBy: 'ABC12345', setRole: 'supervisor', at: now() };
         if (p.key === 'happyHour') {
@@ -1717,7 +1717,7 @@ registerMock('request', 'admin:exportAudit', (f: AuditFilters): AuditExport => {
 // ============================================================================
 //                             YOUR CONTROLS TODAY
 // ============================================================================
-// DEPARTMENT REPORT, STEP H4, ?supControlsCard.
+// DEPARTMENT REPORT, ?supControlsCard.
 // A value control left as configured, one changed, and two actions with a day count (one used up).
 
 registerMock('request', 'sup:getMyControls', (): MyControlsView => ({

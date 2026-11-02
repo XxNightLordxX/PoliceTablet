@@ -108,34 +108,34 @@ export interface Session {
             landing?: 'home' | 'payouts' | 'missions';
             homeForms?: boolean;
             reasonChips?: string[];
-            // step G6: plain names, seven described groups, search and breadcrumb (layouts/adminNav; false = as before)
+            // plain names, seven described groups, search and breadcrumb (layouts/adminNav; false = as before)
             plainLayout?: boolean;
-            // step H1: the Rewards screen (admin/screens/Rewards.tsx; false = no such screen)
+            // the Rewards screen (admin/screens/Rewards.tsx; false = no such screen)
             rewardsScreen?: boolean;
-            // step H5: Home's Needs attention panel (Config.AdminUi.needsAttention)
+            // Home's Needs attention panel (Config.AdminUi.needsAttention)
             needsAttention?: boolean;
-            // step H6: one Money screen (Config.AdminUi.moneyScreen) and one request per screen open (oneRequest)
+            // one Money screen (Config.AdminUi.moneyScreen) and one request per screen open (oneRequest)
             moneyScreen?: boolean;
             oneRequest?: boolean;
-            // step OP3: long lists draw only the rows in view (Config.AdminUi.windowRows; false = every row)
+            // long lists draw only the rows in view (Config.AdminUi.windowRows; false = every row)
             windowRows?: boolean;
-            // FX2: the More fold of the settings-heavy dialogs and Mission controls (Config.AdminUi.foldAdvanced)
+            // the More fold of the settings-heavy dialogs and Mission controls (Config.AdminUi.foldAdvanced)
             foldAdvanced?: boolean;
         };
-        // Config.RealSuspects.adminScreen (step V18): screen = the Admin UI shows Real suspects (true only while
+        // Config.RealSuspects.adminScreen: screen = the Admin UI shows Real suspects (true only while
         // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)
         realSuspects?: { screen: boolean };
-        // Config.Tablet.sidebarOrder / activeFirst / compactSidebar (step G4): the Officer UI sidebar (layouts/officerNav)
+        // Config.Tablet.sidebarOrder / activeFirst / compactSidebar: the Officer UI sidebar (layouts/officerNav)
         officerNav?: { order: 'classic' | 'mostUsed'; activeFirst: boolean; compact: boolean };
-        // Config.Tablet.supervisorByTask / supervisorCompact / supervisorLanding (step G5): the Supervisor UI sidebar and
+        // Config.Tablet.supervisorByTask / supervisorCompact / supervisorLanding: the Supervisor UI sidebar and
         // the screen it opens on (layouts/supervisorNav)
-        // controlsCard: Config.Tablet.supervisorControlsCard (step H4), the Department Report's 'Your controls today'
+        // controlsCard: Config.Tablet.supervisorControlsCard, the Department Report's 'Your controls today'
         supervisorNav?: {
             byTask: boolean;
             compact: boolean;
             landing: 'first' | 'report' | 'review' | 'live';
             controlsCard?: boolean;
-            // Config.Tablet.supervisorRemember (step WF2): the supervisor dialogs open with the values last used
+            // Config.Tablet.supervisorRemember: the supervisor dialogs open with the values last used
             remember?: boolean;
         };
         // true while this player may change at least one Mission control (CP.DeptControls.available)
@@ -151,18 +151,18 @@ export interface Session {
     prefs?: Prefs;
     // the officer's own options saved on the server (CP.Options.effective): every server option, default or chosen
     options?: Record<string, OfficerOptionValue>;
-    // the officer option openOn 'active_on_run' (step O9): on a run, and a ready check waiting for this officer's answer
+    // the officer option openOn 'active_on_run': on a run, and a ready check waiting for this officer's answer
     opening?: { onRun: boolean; readyCheck: boolean };
     // how the tablet was opened: command, keybind, item, export, desk or dispatch (desk = its index)
     access?: { via: string; desk: number | null };
     // CP.Maintenance.view(): a storage copy or switch, a backup restore or a store left behind holds the lock
     maintenance?: MaintenanceView | null;
-    // a happy hour running now (CP.HappyHour.state, step P6); push 'happyHour' sends the new one (false = none)
+    // a happy hour running now (CP.HappyHour.state); push 'happyHour' sends the new one (false = none)
     happyHour?: HappyHourState | false | null;
     serverTime: number; // os.time() at session build
 }
 
-// CP.HappyHour.state: no mission cooldowns for anyone until endsAt (step P6).
+// CP.HappyHour.state: no mission cooldowns for anyone until endsAt.
 export interface HappyHourState {
     endsAt: number;
     // seconds left when it was sent
@@ -225,7 +225,7 @@ export interface TwistOffer {
     points: number;
     cash: number;
     some?: boolean;
-    // pre-ticked at the accept step by the leader's department (its twists Mission control, step P15)
+    // pre-ticked at the accept step by the leader's department (its twists Mission control)
     ticked?: boolean;
 }
 // The caps of stacked twists (Config.Events.twistMaxPoints, twistMaxCash).
@@ -451,13 +451,13 @@ export interface RunResult {
         cap?: number;
         scoreCap?: number;
         todMultiplier?: number;
-        // mBonus (step P20): the happy hour points bonus of a run accepted during a happy hour; absent = none
+        // mBonus: the happy hour points bonus of a run accepted during a happy hour; absent = none
         mBonus?: number;
-        // linesOnly (step V13): a live case scored by its lines only (Config.LiveCrime.linesOnly); P is only the
+        // linesOnly: a live case scored by its lines only (Config.LiveCrime.linesOnly); P is only the
         // base of their shares
         linesOnly?: boolean;
     };
-    // mBonus (step P16): the happy hour cash bonus of a run accepted during a happy hour; absent = none
+    // mBonus: the happy hour cash bonus of a run accepted during a happy hour; absent = none
     cash: { B: number; mTier: number; mMod: number; mBonus?: number; amount: number; status: string };
     flagged: null | { reason: string };
     // parity-plus sections (each shown only when present; older rows lack them)
@@ -467,7 +467,7 @@ export interface RunResult {
     stats?: RunStats;
     missionCall?: RunMissionCall | null;
     items?: RunItem[];
-    // A live case (step V16): each suspect's outcome by label once the case is over (Config.LiveCrime.resultOutcomes);
+    // A live case: each suspect's outcome by label once the case is over (Config.LiveCrime.resultOutcomes);
     // open = this officer left while it still ran.
     live?: RunLiveResult | null;
 }
@@ -519,7 +519,7 @@ export interface Notification {
     title?: string;
     text: string;
     duration: number; // ms; 0 or less = stays until dismissed
-    // step O6: a social toast during a run with the officer option quietRun on: only the bell lists it
+    // a social toast during a run with the officer option quietRun on: only the bell lists it
     bellOnly?: boolean;
 }
 
@@ -569,7 +569,7 @@ export interface NuiMessageMap {
     overlay: { type: 'overlay'; overlay: Overlay | null };
     // The officer's department theme for the HUD (login, duty, job, unload); only the reply to 'ready' carries the
     // whole locale (CP.Locale.all()), the NUI's one copy of the text.
-    // Step O5: the officer's look (prefs: appearance, accent) and his options hudLook and textSize go with it; both
+    // The officer's look (prefs: appearance, accent) and his options hudLook and textSize go with it; both
     // are absent without an officer session.
     theme: {
         type: 'theme';
@@ -582,7 +582,7 @@ export interface NuiMessageMap {
     locale: { type: 'locale'; locale: Record<string, string> };
     // this PC's 'local' officer options (modules/options/client.lua): on 'ready' and after every change
     localOptions: { type: 'localOptions'; options: Record<string, OfficerOptionValue> };
-    // the criminal tablet (step G2, modules/crimtab/client.lua): open with its view (and a screen), a fresh view, or
+    // the criminal tablet (modules/crimtab/client.lua): open with its view (and a screen), a fresh view, or
     // closed (open = false)
     crimtab: { type: 'crimtab'; open: boolean; view?: unknown; screen?: string | null };
 }

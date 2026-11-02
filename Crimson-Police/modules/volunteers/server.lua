@@ -20,7 +20,7 @@ local whoOf = {}        -- [citizenid] = the player key strikes are kept under (
 local strikesOf = {}    -- [who] = { os.time(), ... } strikes within strikeHours
 local blockedUntil = {} -- [who] = os.time() the strikes block ends
 local sweep = { on = false, token = 0 }
-local reserved = {} -- [holder: a run id or a pending accept's token] = citizenid of the volunteer it counts on (V21)
+local reserved = {} -- [holder: a run id or a pending accept's token] = citizenid of the volunteer it counts on
 local slotCache = setmetatable({}, { __mode = 'k' }) -- [mission definition] = { [location index] = slot | false }
 
 -- ============================================================================
@@ -97,7 +97,7 @@ local function BlockedAt(who, now)
 end
 
 -- ============================================================================
---                       SAVED STRIKES (F1, cp_pvp_pairs)
+--                         SAVED STRIKES (cp_pvp_pairs)
 -- ============================================================================
 -- Each strike is a vol_strike row and each strikes block a vol_block row of cp_pvp_pairs (the player key in
 -- suspect_license), written when it happens and read back once at the start, so a restart keeps them. Only while
@@ -223,7 +223,7 @@ local function Sweep()
         if not On() then
             End(cid, 'disabled')
         elseif now >= v.untilAt and not (V.matchOf and V.matchOf(cid)) then
-            End(cid, 'expired')  -- never while he plays a suspect (V22): the window ends after the case
+            End(cid, 'expired')  -- never while he plays a suspect: the window ends after the case
         elseif CP.Opponents and CP.Opponents.excluded and CP.Opponents.excluded(cid) then
             End(cid, 'excluded')
         elseif BlockedAt(v.who, now) then
@@ -368,7 +368,7 @@ end
 
 function V.isListed(cid) return listed[cid] ~= nil end
 
--- The citizenid of the listed volunteer at server id src, or nil (V22's answer and cancel).
+-- The citizenid of the listed volunteer at server id src, or nil (for the volunteer's answer and cancel).
 function V.cidBySrc(src)
     local n = ToSrc(src)
     return n and cidOf[n] or nil
@@ -396,7 +396,7 @@ function V.strikes(cid)
     return StrikeCount(whoOf[cid] or ('cid:' .. tostring(cid)), os.time())
 end
 
--- An admin clears this citizenid's player's strikes and strike block (F2): memory at once, the saved rows in a
+-- An admin clears this citizenid's player's strikes and strike block: memory at once, the saved rows in a
 -- thread. The player key is his license (the one he volunteered under, else Qbox's players table).
 -- -> true, { strikes, blockedUntil } | false, 'no_row'.
 function V.clearStrikes(cid)
@@ -434,7 +434,7 @@ function V.clearStrikes(cid)
     return true, { strikes = count, blockedUntil = blocked }
 end
 
--- His strikes and block for the criminal tablet's History (G2): { strikes = { expiresAt (os.time), ... } oldest first,
+-- His strikes and block for the criminal tablet's History: { strikes = { expiresAt (os.time), ... } oldest first,
 -- blockedUntil = os.time() or nil, strikeHours }. Every key of his player (license and citizenid), like clearStrikes.
 function V.strikeInfo(cid)
     local out = { strikes = {}, strikeHours = math.floor(Num(Cfg().strikeHours, 24, 1, 8760)) }
@@ -453,7 +453,7 @@ function V.strikeInfo(cid)
     return out
 end
 
--- What the criminal tablet's Home shows (G2): { listed, untilAt, roles = { role, ... }, windowMinutes, maxStrikes }.
+-- What the criminal tablet's Home shows: { listed, untilAt, roles = { role, ... }, windowMinutes, maxStrikes }.
 function V.listingOf(src)
     local n = ToSrc(src)
     local cid = n and cidOf[n]
@@ -472,11 +472,11 @@ V.endListing = End
 V._sweep = Sweep
 
 -- ============================================================================
---                   MODES, SLOTS AND AVAILABILITY (step V21)
+--                        MODES, SLOTS AND AVAILABILITY
 -- ============================================================================
 -- Who plays a mission's suspect a volunteer can play: Config.Volunteers.missionModes (by mission id), else modes (by
 -- mission type), else 'npc'. A mission can take a volunteer when one of its objectives' blocks offers a slot
--- (volunteerSlot, §7.3) at that location. Matching and the pop-up are V22; here CP.Draw only asks who is free.
+-- (volunteerSlot, §7.3) at that location. Matching and the pop-up are in modules/volunteers/match; here CP.Draw only asks who is free.
 
 local MODES = { npc = true, players_when_available = true, players_only = true }
 V.modes = { 'npc', 'players_when_available', 'players_only' }
@@ -617,7 +617,7 @@ function V.reserve(holder, def, index)
     return nil
 end
 
--- Holds this volunteer for holder (V22: the run that asks him), so nobody else asks or counts on him meanwhile.
+-- Holds this volunteer for holder (the run that asks him), so nobody else asks or counts on him meanwhile.
 function V.hold(holder, cid)
     if holder == nil or not listed[cid] then return false end
     reserved[holder] = cid
@@ -723,7 +723,7 @@ local function MenuOf(src, info)
             roles = RoleList(v.roles),
             strikes = strikes,
             maxStrikes = MaxStrikes(),
-            -- V22: the suspect he plays now (Cancel this case), never the run or where it is
+            -- the suspect he plays now (Cancel this case), never the run or where it is
             case = m and m.phase ~= 'asking' and { phase = m.phase, role = m.role } or nil,
         }
     end
@@ -760,13 +760,13 @@ local function Refused(src, why, untilAt)
     Note(src, 'error', key, vars)
 end
 
--- The volunteer.refused.* text of a refusal reason (the criminal tablet, G2), 'volunteer.refused.other' for any other.
+-- The volunteer.refused.* text of a refusal reason (the criminal tablet), 'volunteer.refused.other' for any other.
 function V.refusalKey(why) return REFUSAL[why] and ('volunteer.refused.' .. why) or 'volunteer.refused.other' end
 
 local ACTIONS = {
     open = function(src)
         if not On() then return Refused(src, 'off') end
-        -- Config.CriminalTablet.replaceCommand (G2): the criminal tablet instead of this menu, for a player who may use it
+        -- Config.CriminalTablet.replaceCommand: the criminal tablet instead of this menu, for a player who may use it
         if CP.CrimTab and CP.CrimTab.replacesCommand and CP.CrimTab.replacesCommand(src) then
             return TriggerClientEvent(CP.e('client:crimtabOpen'), src)
         end
@@ -796,7 +796,7 @@ local ACTIONS = {
     stop = function(src)
         if V.cancelCase then
             V.cancelCase(src)
-        end -- stopping while he plays a suspect cancels that case first (V22)
+        end -- stopping while he plays a suspect cancels that case first
         local ok, res = V.stop(src)
         if not ok then return Refused(src, res) end
     end,

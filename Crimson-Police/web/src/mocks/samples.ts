@@ -160,13 +160,13 @@ const CONFIG: Session['config'] = {
             typeof window !== 'undefined' && /[?&]noReasonChips\b/.test(window.location.search)
                 ? []
                 : ['Balance change', 'Event', 'Correction'],
-        // ?plainLayout: the Admin UI plain layout (Config.AdminUi.plainLayout = true, step G6)
+        // ?plainLayout: the Admin UI plain layout (Config.AdminUi.plainLayout = true)
         plainLayout: typeof window !== 'undefined' && /[?&]plainLayout\b/.test(window.location.search),
-        // ?needsAttention: Home's Needs attention panel (Config.AdminUi.needsAttention = true, step H5)
+        // ?needsAttention: Home's Needs attention panel (Config.AdminUi.needsAttention = true)
         needsAttention: typeof window !== 'undefined' && /[?&]needsAttention\b/.test(window.location.search),
-        // ?rewardsScreen: the Rewards screen (Config.AdminUi.rewardsScreen = true, step H1)
+        // ?rewardsScreen: the Rewards screen (Config.AdminUi.rewardsScreen = true)
         rewardsScreen: typeof window !== 'undefined' && /[?&]rewardsScreen\b/.test(window.location.search),
-        // ?moneyScreen, ?oneRequest: one Money screen and one request per screen open (step H6)
+        // ?moneyScreen, ?oneRequest: one Money screen and one request per screen open
         moneyScreen: typeof window !== 'undefined' && /[?&]moneyScreen\b/.test(window.location.search),
         oneRequest: typeof window !== 'undefined' && /[?&]oneRequest\b/.test(window.location.search),
     },
@@ -191,7 +191,7 @@ const CONFIG: Session['config'] = {
                     : null;
             return m ? (m[1] as 'report' | 'review' | 'live') : 'first';
         })(),
-        // ?supControlsCard: Config.Tablet.supervisorControlsCard = true (step H4)
+        // ?supControlsCard: Config.Tablet.supervisorControlsCard = true
         controlsCard: typeof window !== 'undefined' && /[?&]supControlsCard\b/.test(window.location.search),
     },
 };
@@ -310,7 +310,7 @@ export function sampleHud(kind: SampleHudKind = 'progress'): HudState {
 
 export type SampleResultKind = 'completed' | 'failed' | 'test' | 'flagged' | 'live' | 'live_open';
 
-// A live case's result card (RunResult.live, step V16): every outcome a suspect can have, or (live_open) the note of an
+// A live case's result card (RunResult.live): every outcome a suspect can have, or (live_open) the note of an
 // officer who left while the case still ran. ?result=live or ?result=live_open, or DevPanel → Result.
 function sampleLiveResult(open: boolean): RunResult {
     const base = sampleResult('completed');
@@ -340,7 +340,7 @@ function sampleLiveResult(open: boolean): RunResult {
     };
 }
 
-// The live case card on Active Mission (CP.LiveCrime.caseView, step V16), one per step: responding, securing the
+// The live case card on Active Mission (CP.LiveCrime.caseView), one per step: responding, securing the
 // scene (with its seconds) and detaining (with the last-reported points). The Gallery and ?runv=live show them.
 export const SAMPLE_LIVE_CASES: LiveCaseView[] = [
     { title: 'Shots at the lab', street: 'Seaview Rd', suspects: 2, host: true, phase: 'respond', reportsOn: true },

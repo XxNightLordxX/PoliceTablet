@@ -56,7 +56,7 @@ export interface AdminLiveRunsData {
     addMinutesMax: number;
     // seconds all additions to one run may add up to (Config.AdminControl.runTimeAddMax)
     runTimeAddMax: number;
-    // a happy hour running now (step P6), false when none: the chip with End now
+    // a happy hour running now, false when none: the chip with End now
     happyHour?: HappyHourState | false | null;
 }
 
@@ -161,12 +161,12 @@ export interface AdminOfficerRunState {
     boss: { enabled: boolean; used: number; extra: number; left: number; grantedThisWeek: boolean };
     freeAbandons: AdminFreeAbandon[];
     board?: AdminBoardView | null;
-    // step P11: a supervisor's mission ban in force (Lift ban here)
+    // a supervisor's mission ban in force (Lift ban here)
     missionBan?: MissionBanView | null;
     serverTime: number;
 }
 
-// A mission ban in force (step P11, CP.MissionBan.view): until = os.time() of its end, by = who set it
+// A mission ban in force (CP.MissionBan.view): until = os.time() of its end, by = who set it
 export interface MissionBanView {
     until: number;
     by: string;

@@ -480,7 +480,7 @@ end
 
 local function VCfg() return type(Config.Volunteers) == 'table' and Config.Volunteers or {} end
 
--- The NPC fugitives to make. A volunteer fugitive (V25, §7.3): none while volunteers are asked or the run ends for want
+-- The NPC fugitives to make. A volunteer fugitive (§7.3): none while volunteers are asked or the run ends for want
 -- of one; while he plays, the others only with Config.Volunteers.fugitiveNpcs (he takes one fugitive's place).
 local function FugTarget(ctx)
     local n = Int(ctx.obj.fugitives)
@@ -590,10 +590,9 @@ end
 -- ============================================================================
 --                          WHEN AND WHERE THEY APPEAR
 -- ============================================================================
--- The spawn director, Config.Spawning (PLAN S16, owner request of 2026-10-19: "make it be progressive", "make sure
--- they dont spawn around the player"). Before, every fugitive and clue appeared when the search started, 276-560 m from
--- the officers: beyond the 424 m a player's game simulates, and wherever an officer happened to stand later. With the
--- director on nothing appears when the search starts. Each fugitive has his hiding spot from the start (Slot: the
+-- The spawn director, Config.Spawning : fugitives and clues appear as officers come near, never right around
+-- a player. With the director off, every fugitive and clue appears when the search starts, 276-560 m from the
+-- officers (beyond the 424 m a player's game simulates). With the director on nothing appears when the search starts. Each fugitive has his hiding spot from the start (Slot: the
 -- circle shrinks towards it) and appears there once an officer is within activateRange of it (ctx.whenNear) and every
 -- officer is minDistance or more from it (ctx.choosePoints; never closer: no hardMin for him). An officer standing
 -- closer keeps him waiting; after waveDelayMax of that he hides on another free hiding spot inside the current circle
@@ -754,7 +753,7 @@ local function SpawnMissing(ctx, st)
 end
 
 -- ============================================================================
---                      THE VOLUNTEER FUGITIVE (V25, §7.3)
+--                        THE VOLUNTEER FUGITIVE (§7.3)
 -- ============================================================================
 -- One of the search's fugitives is the run's volunteer slot: a real player who hides inside the circle. The server
 -- decides everything from CP.Opponents' server-side record; officers never see where he is, only the circle, which
@@ -908,7 +907,7 @@ end
 -- Where the circle shrinks to: a volunteer fugitive while he plays (Vol.anchor), else a hidden fugitive (one still
 -- waiting for an officer to come near his hiding spot hides there), else a running one; nil when none is left.
 local function FugitiveAnchor(ctx, st)
-    -- a volunteer fugitive (V25): where the server last saw him, free (never sent: only the new circle is)
+    -- a volunteer fugitive: where the server last saw him, free (never sent: only the new circle is)
     local him = Vol.anchor(ctx, st)
     if him then return him end
     local hidden, running = {}, {}
@@ -1095,7 +1094,7 @@ local function Totals(ctx, st)
         total = total + 1
         if Neutralised(f) then done = done + 1 end
     end
-    -- a volunteer fugitive (V25) is one more, done once caught
+    -- a volunteer fugitive is one more, done once caught
     return done + Vol.done(st), math.max(total, FugTarget(ctx)) + Vol.extra(st)
 end
 
@@ -1146,7 +1145,7 @@ local function Snapshot(ctx, st)
         total = total,
         entered = st.entered == true,
         escaping = st.escaping,
-        -- V25: 'wait' while volunteers are asked, 'real' while one hides (the HUD's lines; never where he is)
+        -- 'wait' while volunteers are asked, 'real' while one hides (the HUD's lines; never where he is)
         volunteer = st.vol,
         volunteerDone = st.volDone == true or nil,
     }

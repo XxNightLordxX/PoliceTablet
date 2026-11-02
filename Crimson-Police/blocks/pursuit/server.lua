@@ -898,7 +898,7 @@ local function StateOf(ctx)
     return st
 end
 
--- A volunteer driver in his own car (V24, §7.3): no NPC car while volunteers are asked or the run ends for want of
+-- A volunteer driver in his own car (§7.3): no NPC car while volunteers are asked or the run ends for want of
 -- one; while he plays, the mission's other cars only with Config.Volunteers.driverNpcCars (he takes one car's place).
 local function VehTarget(ctx)
     local n = Int(ctx.obj.vehicles)
@@ -1729,7 +1729,7 @@ local function Totals(ctx, st)
     end
     local want = VehTarget(ctx) * OccTarget(ctx)
     for _, key in ipairs(st.vorder) do want = want - OccTarget(ctx) + st.vehicles[key].want end
-    -- a volunteer driver (V24) is one more suspect, done once caught
+    -- a volunteer driver is one more suspect, done once caught
     local extra = st.vol == 'real' and 1 or 0
     return done + (st.volDone and 1 or 0), math.max(total, want) + extra
 end
@@ -1799,7 +1799,7 @@ local function HandOff(ctx, st)
 end
 
 -- ============================================================================
---                       THE VOLUNTEER DRIVER (V24, §7.3)
+--                         THE VOLUNTEER DRIVER (§7.3)
 -- ============================================================================
 -- One table (this file is near Lua's 200 locals). The getaway or race driver of stop mode is the run's volunteer slot:
 -- a volunteer in his own car. Follow mode, a contact hand-off, an observe violator and a team objective offer none.
@@ -2450,7 +2450,7 @@ local function Snapshot(ctx, st)
         stopped = StoppedCount(st) + Vol.done(st),
         vtotal = math.max(VehTarget(ctx), st.counts.vehicles) + Vol.extra(st),
         escaping = st.escaping,
-        -- V24: 'wait' while volunteers are asked, 'real' while one drives (the HUD's lines; never where he is)
+        -- 'wait' while volunteers are asked, 'real' while one drives (the HUD's lines; never where he is)
         volunteer = st.vol,
         volunteerDone = st.volDone == true or nil,
     }
@@ -2523,7 +2523,7 @@ do
     end
 
     -- Every live car with a blip (the observe violator only once it passed) and every suspect the client half blips
-    -- (in kinds.fleeing while he runs on foot, else kinds.suspect, as the client half draws him: PLAN M7), each keyed
+    -- (in kinds.fleeing while he runs on foot, else kinds.suspect, as the client half draws him), each keyed
     -- by its net id (the client half hands its own blip of it over, CP.Markers.adopt), at the server's position. Before the flee with nothing to follow yet: a pin where to wait. After it: the list, empty while every
     -- car is stopped and nobody is out.
     function Marker(ctx)
@@ -2555,7 +2555,7 @@ do
                 label = CP.Lt('block.pursuit.blip_suspect'),
             }
         end
-        -- a volunteer driver (V24): his last-reported point, never where he is now
+        -- a volunteer driver: his last-reported point, never where he is now
         if st.volReport then
             targets[#targets + 1] = {
                 key = 'last:driver',
@@ -2831,7 +2831,7 @@ local function Presence(ctx, src, coords)
         end
     end
     if best == math.huge and st.vol == 'real' and not st.volDone then
-        -- a volunteer driver (V24): his last server position (server only, never sent)
+        -- a volunteer driver: his last server position (server only, never sent)
         local rec = Vol.rec(ctx)
         if rec and rec.lastCoords then best = U.dist(coords, rec.lastCoords) end
     end

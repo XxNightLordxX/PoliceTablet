@@ -40,7 +40,7 @@ import type {
     UiKind,
 } from './shared/types';
 
-// The criminal tablet loads on first use (step OP2): officers never need it.
+// The criminal tablet loads on first use: officers never need it.
 const CriminalTablet = lazy(() => import('./criminal/CriminalTablet').then(m => ({ default: m.CriminalTablet })));
 
 // Browser dev mode only (never loaded inside FiveM).
@@ -49,7 +49,7 @@ const DevPanel = isEnvBrowser() ? lazy(() => import('./mocks/DevPanel')) : null;
 const MAX_TOASTS = 5;
 let readySent = false;
 
-// The officer's look from the theme message (step O5): his prefs and the options hudLook and textSize.
+// The officer's look from the theme message: his prefs and the options hudLook and textSize.
 interface ThemeLook {
     prefs: Partial<Prefs> | null;
     options: Record<string, OfficerOptionValue> | null;
@@ -81,7 +81,7 @@ function AmbientLook({
     return null;
 }
 
-// The officer option toastTime (step O6): how long the toasts that carry no time of their own stay.
+// The officer option toastTime: how long the toasts that carry no time of their own stay.
 function ToastTimePref(): null {
     const time = useOption('toastTime');
     useLayoutEffect(() => setToastTime(time), [time]);
@@ -114,7 +114,7 @@ export default function App() {
     const [screens, setScreens] = useState<ScreenState>(initialScreens);
     const [switching, setSwitching] = useState(false);
     const [openSeq, setOpenSeq] = useState(0);
-    // the criminal tablet (step G2): its view and screen while open, else null
+    // the criminal tablet: its view and screen while open, else null
     const [crim, setCrim] = useState<{ view: CrimView; screen: CrimScreen } | null>(null);
     const hudScale = useHudScale();
     const viewport = useViewport();
@@ -277,7 +277,7 @@ export default function App() {
     const navigate = useCallback(
         (asked: ScreenKey, askedParams?: ScreenParams) => {
             if (!ui) return;
-            // Config.AdminUi.moneyScreen (step H6): Payouts and Payments open their tab of Money
+            // Config.AdminUi.moneyScreen: Payouts and Payments open their tab of Money
             const { key, params } =
                 ui === 'admin' ? resolveAdminKey(asked, askedParams, session) : { key: asked, params: askedParams };
             if (!available.includes(key)) {

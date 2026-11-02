@@ -138,7 +138,7 @@ local function WholeIn(v, lo, hi)
     return nil
 end
 
--- True only while CP.Opponents (V4) says a case is open; false while that module is missing.
+-- True only while CP.Opponents says a case is open; false while that module is missing.
 local function CaseOpen()
     local opp = CP.Opponents
     if not (opp and opp.active) then return false end

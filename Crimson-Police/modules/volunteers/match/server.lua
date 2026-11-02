@@ -1,8 +1,8 @@
--- CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer from V21) asks
+-- CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer, set at the draw) asks
 -- the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'),
 -- makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
 
--- CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer from V21) asks
+-- CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer, set at the draw) asks
 -- the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'),
 -- makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
 -- The server then follows him: in position, engaged (an officer within Config.RealSuspects.contactRange: the officers
@@ -145,9 +145,9 @@ end
 
 -- The run ends because nobody plays its suspect: Config.Volunteers.voidRun 'keep_earned' = completed with what was
 -- earned so far (run.keepEarned: CP.Scoring scores the lines only, no base points or end-of-run lines such as
--- fast_finish, and CP.Cash pays no mission cash, step Z2); 'cancelled' (shipped) = Abandoned with no cooldown, penalty
+-- fast_finish, and CP.Cash pays no mission cash); 'cancelled' (shipped) = Abandoned with no cooldown, penalty
 -- or pay. keep_earned needs a yes and a run In progress: a run that never started (nobody, or a no before any yes)
--- is always cancelled, so no Completed row, goal, cooldown or item comes of it (step Z5). In a thread: never from
+-- is always cancelled, so no Completed row, goal, cooldown or item comes of it. In a thread: never from
 -- inside a run hook.
 local function EndRun(m)
     local run = m.run
@@ -184,13 +184,13 @@ local function NoVolunteer(m, afterYes)
     EndRun(m)
 end
 
--- The volunteer who said yes drops out (why: no_show, cancelled, left, void, afk: caught while AFK, V23; out_of_bounds:
--- a fugitive who stayed outside the search circle, V25). A no-show, a cancel after cancelGraceSeconds, a leave, an AFK
+-- The volunteer who said yes drops out (why: no_show, cancelled, left, void, afk: caught while AFK; out_of_bounds:
+-- a fugitive who stayed outside the search circle). A no-show, a cancel after cancelGraceSeconds, a leave, an AFK
 -- catch and out_of_bounds are strikes. His suspect counts for nobody.
 local function Voided(m, why, strike)
     if m.phase == 'void' or m.phase == 'npc' or m.phase == 'over' then return end
     m.why = why
-    m.struck = strike == true and STRIKE_WHY[why] == true  -- a free cancel is no strike: History never says so (Z5)
+    m.struck = strike == true and STRIKE_WHY[why] == true  -- a free cancel is no strike: History never says so
     local _, rec = Opp('byCid', m.cid)
     if rec and rec.state ~= 'void' and rec.state ~= 'left' then
         Opp('setState', m.run, m.cid, 'void', { why = 'volunteer_' .. why })
@@ -242,7 +242,7 @@ local function FlagLinked(m, officer)
 end
 
 -- True when the run carries the officer-conduct flag rs_linked_accounts (an officer and the volunteer share a
--- connection or PC): the volunteer's own feature pay is never paid for it (step Z2).
+-- connection or PC): the volunteer's own feature pay is never paid for it.
 local function Linked(run)
     local AC = CP.AntiCheat
     if not (AC and AC.flaggedWith) then return false end
@@ -331,7 +331,7 @@ local function Accept(m)
     end
     local now = GetGameTimer()
     m.case = case
-    case.volunteer = { role = m.role, mode = m.mode }  -- what staff read once the match is gone (V26)
+    case.volunteer = { role = m.role, mode = m.mode }  -- what staff read once the match is gone
     m.phase, m.token, m.yesAt = 'travel', nil, now
     m.travelUntil = now + math.floor(Num(Cfg().travelSeconds, 300, 60, 1800)) * 1000
     m.run.realSuspect = 'volunteer'
@@ -391,7 +391,7 @@ local function Watch(m, now)
     end
     if m.leftByRule then return end
     if rec.src then m.src = rec.src end
-    -- step Z5: Config.RealSuspects.onLeave 'caught' or 'escaped' decided a free volunteer's leave (logged off past
+    -- Config.RealSuspects.onLeave 'caught' or 'escaped' decided a free volunteer's leave (logged off past
     -- the grace, switched character, entered an instance; CP.Opponents' rec.leaveRule): his case keeps that outcome
     -- for the officers, but for him it is a dropout with a strike and no pay, as a leave under 'left' is. A leave in
     -- cuffs (left_in_cuffs) never reaches the rule: it stays a catch.
@@ -456,7 +456,7 @@ StartTick = function()
 end
 
 -- ============================================================================
---                     THE GATES (V22b, ARCHITECTURE 5.47)
+--                        THE GATES (ARCHITECTURE 5.47)
 -- ============================================================================
 -- A run whose suspect a volunteer plays (run.realSuspect = 'volunteer', from his yes on) takes part in the Type of
 -- the Day, goals, the challenge, cash and item rewards only with Config.Volunteers' switch of that name (shipped
@@ -596,7 +596,7 @@ function V.matchOf(cid)
     return { phase = m.phase, role = m.role }
 end
 
--- The question he has open now, for the criminal tablet's Jobs (G2) -> nil or { token, role, missionType, area, km,
+-- The question he has open now, for the criminal tablet's Jobs -> nil or { token, role, missionType, area, km,
 -- seconds (left to answer), travelMinutes }. area: the location's label; never the run, an officer or a position.
 function V.askOf(cid)
     local m = cid and byCid[cid] and matches[byCid[cid]] or nil
@@ -616,7 +616,7 @@ function V.askOf(cid)
     }
 end
 
--- The suspect he plays now, for the criminal tablet's Active (G2) -> nil or { phase, role, meet = { x, y, z } (his
+-- The suspect he plays now, for the criminal tablet's Active -> nil or { phase, role, meet = { x, y, z } (his
 -- own meet point, already his waypoint), seconds (left to reach it while travelling), freeCancel (a cancel now is no
 -- strike), graceSeconds }.
 function V.caseOf(cid)
@@ -632,7 +632,7 @@ function V.caseOf(cid)
         seconds = m.phase == 'travel' and math.max(0, math.ceil(((m.travelUntil or now) - now) / 1000)) or nil,
         freeCancel = free,
         graceSeconds = grace,
-        -- seconds of the free Give up still left (step Z2: the tablet counts it down, it is not refetched at 0)
+        -- seconds of the free Give up still left (the tablet counts it down, it is not refetched at 0)
         graceLeft = free and math.max(0, math.floor(((m.yesAt or 0) + grace * 1000 - now) / 1000)) or 0,
     }
 end
@@ -674,7 +674,7 @@ function V.cancelCase(src)
         return false, 'no_case'
     end
     local _, rec = Opp('byCid', m.cid)
-    -- step Z5: a detain or booking is final (as for a leave, C25): nothing left to cancel, the arrest stands. In cuffs
+    -- a detain or booking is final (as for a leave): nothing left to cancel, the arrest stands. In cuffs
     -- he follows the leave rule: cuffed -> detained ('left_in_cuffs'), and the case goes on.
     if type(rec) == 'table' and (rec.state == 'detained' or rec.state == 'booked') then return false, 'no_case' end
     if type(rec) == 'table' and rec.state == 'cuffed' then
@@ -691,7 +691,7 @@ function V.cancelCase(src)
 end
 
 -- ============================================================================
---                  WHAT A BLOCK MAY TELL ITS VOLUNTEER (V25)
+--                     WHAT A BLOCK MAY TELL ITS VOLUNTEER
 -- ============================================================================
 -- Only while he plays (travel, in_position, engaged): a block never learns who he is, it names the run.
 
@@ -709,7 +709,7 @@ function V.caseNote(run, kind, key, vars)
     return true
 end
 
--- His own map circle (search_area's fugitive, V25): area = { x, y, z, r }, or nil to remove it.
+-- His own map circle (search_area's fugitive): area = { x, y, z, r }, or nil to remove it.
 function V.caseArea(run, area)
     local m = Playing(run)
     if not m then return false end
@@ -728,7 +728,7 @@ end
 -- ============================================================================
 --                     RESULTS FOR OTHER SCRIPTS AND STAFF
 -- ============================================================================
--- V26, ARCHITECTURE 5.47.
+-- ARCHITECTURE 5.47.
 -- The server-only event crimson-police:server:volunteerEnded when a run a volunteer said yes to ends
 -- (Config.Volunteers.endEvent, shipped true; volunteer cases exist only while enabled), and what the staff callbacks
 -- read of a volunteer case. Neither requires another resource, and nothing another script sends back is read.
@@ -788,7 +788,7 @@ function V.endPayload(m, run, state, reason)
         mode = m.mode,
         citizenid = m.cid,
         outcome = OUTCOMES[o] and o or 'got_away',
-        dropout = (STRIKE_WHY[m.why] and m.struck) and m.why or nil,  -- a free cancel is no dropout (Z5)
+        dropout = (STRIKE_WHY[m.why] and m.struck) and m.why or nil,  -- a free cancel is no dropout
         engaged = m.engagedAt ~= nil,
         result = type(state) == 'string' and state or 'ended',
         reason = type(reason) == 'string' and reason or nil,
@@ -823,7 +823,7 @@ function V.recordHistory(m, run, state, reason)
     return ok and res == true
 end
 
--- The volunteer's own pay (Config.FeatureRewards.suspect, step G3): only for a case the server saw end fairly
+-- The volunteer's own pay (Config.FeatureRewards.suspect): only for a case the server saw end fairly
 -- (CP.FeatureRewards.fairSuspect: officers reached him, no dropout, not AFK, a real outcome), never a test run.
 function V.payVolunteer(m, run, state, reason)
     local FR = CP.FeatureRewards
@@ -831,7 +831,7 @@ function V.payVolunteer(m, run, state, reason)
     if type(m) ~= 'table' or not m.yesAt or type(run) ~= 'table' or run.test then return false end
     local payload = V.endPayload(m, run, state, reason)
     if not payload then return false end
-    -- step Z2: an officer of the run shares a connection or PC with him (rs_linked_accounts, held for review): no pay
+    -- an officer of the run shares a connection or PC with him (rs_linked_accounts, held for review): no pay
     if Linked(run) then return false end
     local _, case = Opp('close', run)
     local rec = type(case) == 'table' and type(case.suspects) == 'table' and case.suspects[m.cid] or nil
@@ -870,7 +870,7 @@ CP.Hooks.on('participant:joined', function(run, src)
 end)
 
 -- The release: a pop-up still open closes, a volunteer who played the suspect is told he is free to go; a case
--- that opened (a yes came) writes its pair rows, keeps its last phase for staff and sends volunteerEnded (V26).
+-- that opened (a yes came) writes its pair rows, keeps its last phase for staff and sends volunteerEnded.
 CP.Hooks.on('run:ended', function(run, state, reason)
     local m = type(run) == 'table' and matches[run.id] or nil
     if not m then return end

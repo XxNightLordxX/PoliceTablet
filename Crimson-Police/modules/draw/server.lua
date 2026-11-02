@@ -132,7 +132,7 @@ local function OperationLocked()
     return locked == true
 end
 
--- A supervisor's mission ban in force for one of these officers (step P11, CP.MissionBan): officer, ban | nil.
+-- A supervisor's mission ban in force for one of these officers (CP.MissionBan): officer, ban | nil.
 local function BannedOf(officers, now)
     if not (CP.MissionBan and CP.MissionBan.first) then return nil end
     local _, o, ban = Safe(CP.MissionBan.first, officers, now)
@@ -140,7 +140,7 @@ local function BannedOf(officers, now)
     return o, ban
 end
 
--- except (optional, an exemptFor-shaped set): calls of the live case being claimed are ignored (V14).
+-- except (optional, an exemptFor-shaped set): calls of the live case being claimed are ignored.
 local function IsOnCall(src, except)
     if not (CP.Calls and CP.Calls.isOnCall) then return false end
     local _, onCall = Safe(CP.Calls.isOnCall, src, except and { except = except } or nil)
@@ -150,7 +150,7 @@ end
 -- ============================================================================
 --                             A LIVE CALL'S CLAIM
 -- ============================================================================
--- (step V14, ARCHITECTURE 5.46): live = { crimeKey } from CP.MissionCalls.
+-- (ARCHITECTURE 5.46): live = { crimeKey } from CP.MissionCalls.
 
 local function LiveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
 
@@ -172,7 +172,7 @@ local function LiveExcept(live, srcs)
     return type(set) == 'table' and set or nil
 end
 
--- The LIVE line of the ready check (Config.LiveCrime.caseCard, V16): the alert title, street and suspect count.
+-- The LIVE line of the ready check (Config.LiveCrime.caseCard): the alert title, street and suspect count.
 local function ReadyLine(live)
     if not (live and CP.LiveCrime and CP.LiveCrime.readyLine) then return nil end
     local _, line = Safe(CP.LiveCrime.readyLine, live)
@@ -246,7 +246,7 @@ end
 -- ============================================================================
 --                  NO-REPEAT RULE AND CAPS (MISSION CONTROLS)
 -- ============================================================================
--- Three server-wide Mission controls (Config.MissionControls.controls, owner decision: a cooldown change is for every
+-- Three server-wide Mission controls (Config.MissionControls.controls: a cooldown change is for every
 -- department and sits outside the master switch): noRepeat (false = the no-repeat rule is off), hourlyCap (completed
 -- runs per officer in the last hour) and dailyCap (per officer per day; 0 = no cap). Read for the officers a check is
 -- about (a unit's members), so the self rule keeps the config value for the supervisor who relaxed one and any unit
@@ -356,7 +356,7 @@ end
 -- ============================================================================
 --              BOARD CONTROLS (mission types off, featured type)
 -- ============================================================================
--- Step P10: two per-department Mission controls (under the master switch, off as shipped). types switches mission
+-- Two per-department Mission controls (under the master switch, off as shipped). types switches mission
 -- types or single missions off for the department: { [type] = false, missions = { [id] = false } }; it is a
 -- catalog switch like Config.DisabledMissions that stays until changed, never a timed pause. featuredType is one
 -- type key command recommends to the department ("Recommended by command" on its card, no points).
@@ -549,7 +549,7 @@ Draw._areaKeyOf = AreaKeyOf
 -- ============================================================================
 -- ok, why ('disabled'|'size'|'department'|'cooldown'), untilTs (cooldown), officer (who blocks it). off: the
 -- officers' OffOf when the caller has it (a mission command switched off for a member's department counts like
--- def.departments leaving that department out, step P10).
+-- def.departments leaving that department out).
 local function Eligibility(def, officers, size, now, off)
     now = now or os.time()
     size = size or #officers
@@ -596,7 +596,7 @@ local function HasLocationIn(def, area)
     return false
 end
 
--- The volunteer gate of one mission (CP.Volunteers.drawGate, step V21): true, or false and why. Only a mission in
+-- The volunteer gate of one mission (CP.Volunteers.drawGate): true, or false and why. Only a mission in
 -- mode 'players_only' is ever closed (no "Real suspect OK", no slot, nobody who fits is free).
 local function VolunteerGate(def, realOk)
     local V = CP.Volunteers
@@ -622,7 +622,7 @@ local function VolunteerCard(list)
 end
 
 -- opts.area: only missions with a location in that area (a mission call that named its area). opts.realSuspect: the
--- unit ticked "Real suspect OK" (V21): without it a 'players_only' mission (Config.Volunteers) is left out, with it
+-- unit ticked "Real suspect OK": without it a 'players_only' mission (Config.Volunteers) is left out, with it
 -- one is left out only while no volunteer who fits is free.
 function Draw.pool(missionType, members, opts)
     local area = type(opts) == 'table' and opts.area or nil
@@ -1198,7 +1198,7 @@ function Draw.draw(missionType, members, opts)
         for i in pairs(type(opts.avoid) == 'table' and opts.avoid or {}) do avoid[i] = true end
         local exclude = opts.exclude
         if VolunteerMode(def) == 'players_only' then
-            -- only a location whose suspect a volunteer can play (V21)
+            -- only a location whose suspect a volunteer can play
             local _, none = CP.Volunteers.slotRoles(def)
             exclude = {}
             for i in pairs(type(opts.exclude) == 'table' and opts.exclude or {}) do exclude[i] = true end
@@ -1218,7 +1218,7 @@ function Draw.draw(missionType, members, opts)
     return nil, 'err.no_location'
 end
 
--- A mission a supervisor pushed to a unit (step P19, the pushMission Mission control: the Mission choice Hard
+-- A mission a supervisor pushed to a unit (the pushMission Mission control: the Mission choice Hard
 -- rule's exception): the definition when these officers may play it now as a mission of typeKey, in area when one is
 -- named, else nil and the error key. Every rule of the draw's pool applies (enabled, unit size, departments, a
 -- mission switched off for a member's department, every member's mission cooldown, a location in the area); only
@@ -1236,7 +1236,7 @@ function Draw.checkMission(missionId, typeKey, members, area)
         return nil, why == 'disabled' and 'err.unknown_mission' or 'err.mc_push_not_eligible'
     end
     if area and not HasLocationIn(def, area) then return nil, 'err.mc_push_area' end
-    -- a pushed mission has no "Real suspect OK" step: one that plays only against a volunteer is never pushed (V21)
+    -- a pushed mission has no "Real suspect OK" step: one that plays only against a volunteer is never pushed
     if VolunteerMode(def) == 'players_only' then return nil, 'err.mc_push_volunteer' end
     return def
 end
@@ -1325,7 +1325,7 @@ local function HourlyBlocked(officers)
 end
 
 -- The twists the officers may choose for a type whose pool is list (CP.Events.twistOffer), {} without CP.Events.
--- dept (optional): the leader's department; its twists Mission control (step P15) narrows the offer and pre-ticks.
+-- dept (optional): the leader's department; its twists Mission control narrows the offer and pre-ticks.
 function Draw.twistOffer(key, list, dept)
     if not (CP.Events and CP.Events.twistOffer) then return {} end
     local ok, offer = Safe(CP.Events.twistOffer, key, list, dept)
@@ -1391,7 +1391,7 @@ function Draw.boardCards(src)
     end
 
     local now = os.time()
-    -- the viewer's department's pick for today wins (step P18), unless its setter is in the unit (the self rule)
+    -- the viewer's department's pick for today wins, unless its setter is in the unit (the self rule)
     local tod = nil
     if CP.Events and CP.Events.typeOfTheDay then
         local okT, key = Safe(CP.Events.typeOfTheDay, nil, viewer.department, officers)
@@ -1405,9 +1405,9 @@ function Draw.boardCards(src)
     local caps = Draw.limits(officers)
     local off = OffOf(officers)
     local featured = Draw.featuredFor(viewer.department)
-    -- the twists the accept step offers follow the leader's department (its twists Mission control, step P15)
+    -- the twists the accept step offers follow the leader's department (its twists Mission control)
     local leaderDept = LeaderDept(src, viewer, officers)
-    -- a mission ban of a member (step P11): every card locked until it ends; the board's banner says who set it
+    -- a mission ban of a member: every card locked until it ends; the board's banner says who set it
     local banWho, ban = BannedOf(officers, now)
     if ban then
         data.missionBan = {
@@ -1435,9 +1435,9 @@ function Draw.boardCards(src)
             typeOfTheDay = tod == key,
             -- the twists the leader may choose at the accept step (CP.Events.twistOffer)
             twists = Draw.twistOffer(key, list, leaderDept),
-            -- the type command recommends to the viewer's department (featuredType, step P10)
+            -- the type command recommends to the viewer's department (featuredType)
             featured = featured == key or nil,
-            -- V21: { required, available } when a mission of the pool may play a volunteer (the accept's tick)
+            -- { required, available } when a mission of the pool may play a volunteer (the accept's tick)
             realSuspect = VolunteerCard(list),
         }
         local cdUntil, cdWho = TypeCooldown(officers, key, now)
@@ -1452,7 +1452,7 @@ function Draw.boardCards(src)
                 ['until'] = data.missionBan['until'],
             }
         elseif offWho then
-            -- switched off for a member's department by command (the types Mission control, step P10)
+            -- switched off for a member's department by command (the types Mission control)
             card.locked = { reason = CP.L('board.locked_type_off', { type = label, dept = DeptShort(offWho) }) }
             card.offByCommand = true
         elseif cdUntil then
@@ -1531,7 +1531,7 @@ local function PedCoords(src)
     return GetEntityCoords(ped)
 end
 
--- The largest unit the leader's department may take out: its unitSize (Mission controls, step P9, CP.Units.maxSize),
+-- The largest unit the leader's department may take out: its unitSize (Mission controls, CP.Units.maxSize),
 -- never above Config.Limits.maxUnitSize.
 local function MaxUnit(dept)
     local cap = tonumber(Config.Limits and Config.Limits.maxUnitSize) or 4
@@ -1544,7 +1544,7 @@ end
 -- Every check of accepting a type, without changing anything: the context for the accept, or false and the
 -- error key the officer sees. A mission call claim runs exactly these (CP.MissionCalls). counts (optional):
 -- { lastHour = fn(citizenid), today = fn(citizenid, type) } in place of CP.Runs' counts (the calls' cache).
--- live (V14): a LIVE call's claim ({ crimeKey }): no server run caps, the type cooldown only with
+-- live: a LIVE call's claim ({ crimeKey }): no server run caps, the type cooldown only with
 -- Config.LiveCrime.typeCooldown, the Cross-Department lock only without Config.LiveCrime.duringOperation, the crime's
 -- own call is no "real call", and CP.LiveCrime.claimCheck (the crime and the real-suspect rules) on top.
 local function CheckAccept(src, typeKey, counts, live)
@@ -1602,7 +1602,7 @@ local function CheckAccept(src, typeKey, counts, live)
         end
     end
 
-    -- field training's ride-along rule (step T2, Config.FieldTraining.requireTrainerFor): a rookie needs his trainer
+    -- field training's ride-along rule (Config.FieldTraining.requireTrainerFor): a rookie needs his trainer
     if CP.FieldTraining and CP.FieldTraining.unitCheck then
         local okF, allowed, ftErr, rookie = Safe(CP.FieldTraining.unitCheck, officers, missionType)
         if okF and allowed == false then
@@ -1643,7 +1643,7 @@ local function CheckAccept(src, typeKey, counts, live)
 end
 
 -- The twists sent with an accept of typeKey by these officers, checked (CP.Events.checkTwists against the type's
--- pool for them and, with dept, the leader's department's twists Mission control, step P15): a clean list, or nil
+-- pool for them and, with dept, the leader's department's twists Mission control): a clean list, or nil
 -- and the error key. No twists: {} (and no pool lookup).
 function Draw.checkTwists(typeKey, officers, raw, dept, realOk)
     if raw == nil or (type(raw) == 'table' and next(raw) == nil) then return {} end
@@ -1655,7 +1655,7 @@ function Draw.checkTwists(typeKey, officers, raw, dept, realOk)
 end
 
 -- true, or false and the error key: whether src could accept typeKey right now (nothing is changed).
--- live (V14): the checks of a LIVE call's claim ({ crimeKey }, CheckAccept).
+-- live: the checks of a LIVE call's claim ({ crimeKey }, CheckAccept).
 function Draw.check(src, typeKey, counts, live)
     local ctx, errKey = CheckAccept(src, typeKey, counts, live)
     if not ctx then return false, errKey end
@@ -1687,7 +1687,7 @@ local function FinishAccept(src, typeKey, ctx, opts)
     end
     local def, index
     if ctx.live then
-        -- a live case (V14): no draw; the engine mission at the crime's reported place
+        -- a live case: no draw; the engine mission at the crime's reported place
         local crime = LiveCrimeOf(ctx.live)
         if not crime then return fail('err.live_case_gone') end
         local okL, allowed, liveErr = Safe(CP.LiveCrime.claimCheck, crime, officers)
@@ -1711,7 +1711,7 @@ local function FinishAccept(src, typeKey, ctx, opts)
             for _, m in ipairs(srcs) do near[#near + 1] = PedCoords(m) end
         end
         if opts.missionId ~= nil then
-            -- a pushed mission (step P19): that mission, never a draw; the location is still picked at random
+            -- a pushed mission: that mission, never a draw; the location is still picked at random
             local errM
             def, errM = Draw.checkMission(opts.missionId, ctx.missionType, officers, opts.area)
             if not def then return fail(errM) end
@@ -1742,8 +1742,8 @@ local function FinishAccept(src, typeKey, ctx, opts)
     end
     -- Provisional reservation so a concurrent accept can't take the spot before CP.Runs reserves it.
     local token = ('%s%d:%d'):format(PENDING_PREFIX, src, GetGameTimer())
-    -- V21: the volunteer side of the run. 'players_only' holds a volunteer who fits (no draw without one);
-    -- 'players_when_available' with "Real suspect OK" only marks the slot (V22 asks a volunteer, else the NPC)
+    -- the volunteer side of the run. 'players_only' holds a volunteer who fits (no draw without one);
+    -- 'players_when_available' with "Real suspect OK" only marks the slot (the match asks a volunteer, else the NPC plays)
     local volunteer, V = nil, CP.Volunteers
     local mode = (ctx.live or ctx.isBoss) and 'npc' or VolunteerMode(def)
     if mode ~= 'npc' and opts.realSuspect == true and V and V.slotOf then
@@ -1807,7 +1807,7 @@ end
 
 -- Accepting a type (the Mission Board, or a mission call that won its claim). opts: area, nearCoords,
 -- missionCall ({ id, code, area, staff }; the response target is set here from the drawn start), twists (the keys
--- the leader chose; checked here), missionId (a mission a supervisor pushed, step P19: that mission instead of a
+-- the leader chose; checked here), missionId (a mission a supervisor pushed: that mission instead of a
 -- draw, Draw.checkMission), onDone
 -- (called with ok, data|errKey, srcs only when a unit's ready check made the accept wait).
 -- Returns true, { runId } or true, { pending = true } while a unit of 2+ answers the ready check.
@@ -1816,7 +1816,7 @@ local function AcceptStart(src, typeKey, opts, note)
     if not ctx then return false, errKey end
     ctx.note = note
     local unit, srcs = ctx.unit, ctx.srcs
-    -- the twists the leader chose (PLAN M8b): each must be one the type offers these officers now; a live case has none
+    -- the twists the leader chose: each must be one the type offers these officers now; a live case has none
     local twists, twistErr = {}, nil
     if not ctx.live then
         twists, twistErr = Draw.checkTwists(typeKey, ctx.officers, opts.twists, ctx.leader.department, opts.realSuspect)
@@ -1849,7 +1849,7 @@ local function AcceptStart(src, typeKey, opts, note)
 
     -- ---- THE READY CHECK (CP.Units, units of 2+; without it the draw follows at once) ----
     local readyCheck = CP.Units and CP.Units.readyCheck
-    -- seconds to answer, 0 = none: the config, or the leader's department's ready check (Mission controls, P8)
+    -- seconds to answer, 0 = none: the config, or the leader's department's ready check (Mission controls)
     local readySecs = (Config.Units and Config.Units.readyCheck == false) and 0 or nil
     if CP.Runs and CP.Runs.readySeconds then
         local leaderOfficer = ctx.officers[1]
@@ -1960,7 +1960,7 @@ CP.Net.action('server:acceptType', function(src, payload)
         if inFlight[m] then return false, 'err.busy' end
     end
     for _, m in ipairs(srcs) do inFlight[m] = true end
-    -- V21: the leader ticked "Real suspect OK" (Config.Volunteers modes); anything but true is no
+    -- the leader ticked "Real suspect OK" (Config.Volunteers modes); anything but true is no
     local realSuspect = type(payload) == 'table' and payload.realSuspect == true or nil
     local okCall, ok, data = pcall(Accept, src, typeKey, { twists = twists, realSuspect = realSuspect })
     for _, m in ipairs(srcs) do inFlight[m] = nil end

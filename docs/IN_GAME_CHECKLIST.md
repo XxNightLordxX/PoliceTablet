@@ -336,7 +336,8 @@ names the change it came with.
 - [ ] Settings → Admin UI → windowRows On, reopen the Admin UI: Leaderboards with a long board scrolls smoothly and
   shows every officer in order; a Settings search for one letter adds rows as you scroll down. Back to Off.
 - [ ] Settings → Admin UI → foldAdvanced On, reopen the tablet: System → edit a department and a mission desk: the
-  colours, logo and box size sit under More options; Supervisor UI → Mission controls: noRepeat and the twist
+  colours, logo and box size sit under More options; Officers → Void runs…: the mission id, Include awards and Strike
+  sit under More (a ticked Strike keeps it open); Supervisor UI → Mission controls: noRepeat and the twist
   multipliers sit under More, a control you set stays open; open More, close and reopen the tablet: More is still
   open. Back to Off: every option open as before.
 - [ ] Read a few errors in the Admin UI, the Mission Builder and the criminal tablet: each says what went wrong and,

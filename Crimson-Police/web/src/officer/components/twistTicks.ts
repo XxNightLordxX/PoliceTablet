@@ -4,9 +4,9 @@
 import { asArray } from '../../shared/data';
 import type { TwistOffer } from '../../shared/types';
 
-// The keys ticked when the dialog opens, in the offered order. The officer's usual twists (My options, step O15) win
+// The keys ticked when the dialog opens, in the offered order. The officer's usual twists (My options) win
 // when he picked any: only the ones this card offers are ticked, so a twist the type or his department does not offer
-// is never sent. Else the ones his department pre-ticks (step P15), else none.
+// is never sent. Else the ones his department pre-ticks, else none.
 export function tickedTwists(offered?: TwistOffer[] | null, usual?: unknown): string[] {
     const list = asArray(offered as TwistOffer[] | undefined);
     const mine = asArray(usual as unknown[] | undefined).filter((k): k is string => typeof k === 'string');

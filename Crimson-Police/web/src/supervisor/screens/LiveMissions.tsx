@@ -43,7 +43,7 @@ function typeLabel(session: ReturnType<typeof useSession>, key: string): string 
     return asArray(session.config.missionTypes).find(m => m.key === key)?.label ?? key;
 }
 
-// "+ minutes" (step P7, Config.MissionControls.controls.addRunTime): minutes a click inside the admin's min and max,
+// "+ minutes" (Config.MissionControls.controls.addRunTime): minutes a click inside the admin's min and max,
 // a reason; the server keeps the run's total within addRunTimeMax (with an admin's additions) and the time limit the
 // fast-finish bonus is judged on.
 function AddTimeDialog({
@@ -277,7 +277,7 @@ export default function SupLiveMissions() {
     const reload = async () => {
         await refetch();
     };
-    // step FX1: an action's reply carries the fresh view (an older server: ask for it)
+    // an action's reply carries the fresh view (an older server: ask for it)
     const applyReply = (reply: unknown) => applyReplyView<LiveRunsData>(reply, 'view', setData, () => void reload());
 
     const confirmRecall = async (reason: string) => {

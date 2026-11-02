@@ -1,7 +1,7 @@
 -- CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
 
 -- CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
--- control Config.MissionControls.controls.awardPoints, owner decision 2026-10-19). Only through the admin's
+-- control Config.MissionControls.controls.awardPoints). Only through the admin's
 -- point-adjust path (CP.Corrections.adjust, Config.AdminControl), inside the admin's min and max per award and
 -- Config.MissionControls.awardPointsPerDay a day, never to one of his own characters, always with a reason and audited
 -- as 'supervisor'. The row is a manual award like an admin's, so the officer's history shows it the same way.
@@ -132,7 +132,7 @@ local function ActorOf(src)
     return type(info) == 'table' and info.citizenid or nil
 end
 
--- Points that player gave today (step H4, the 'Your controls today' card).
+-- Points that player gave today (the 'Your controls today' card).
 function SA.usedToday(src) return UsedToday(src, ActorOf(src)) end
 
 -- What the Department Report's officer dialog needs for Give points: nil when that player may not give this officer
@@ -194,7 +194,7 @@ local function Award(ctx, cid)
     end
     if not (CP.Corrections and CP.Corrections.adjust) then return false, 'err.module_unavailable' end
     local ok, res = CP.Corrections.adjust(ctx, cid, points)
-    -- Config.FeatureRewards.supAward (step G3): money for the awarded points, once per award row
+    -- Config.FeatureRewards.supAward: money for the awarded points, once per award row
     if ok == true and type(res) == 'table' and res.rowId and CP.FeatureRewards and CP.FeatureRewards.payLater then
         CP.FeatureRewards.payLater('supAward', cid, { key = ('sup:%s'):format(tostring(res.rowId)), points = points })
     end
@@ -214,7 +214,7 @@ Kit.supAction('server:sup:awardPoints', 'missionControls', function(ctx)
         CP.err(TAG, 'awardPoints failed: %s', tostring(res[2]))
         return false, 'err.internal'
     end
-    -- step FX1: from the department report's activity dialog the reply carries his fresh activity
+    -- from the department report's activity dialog the reply carries his fresh activity
     if CP.Challenge and CP.Challenge.withActivity then
         return CP.Challenge.withActivity(ctx.src, ctx.payload, res[2], res[3])
     end

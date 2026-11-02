@@ -274,7 +274,7 @@
     color: var(--cp-success);
 }
 
-/* The objective line under the objectives (PLAN M10) */
+/* The objective line under the objectives */
 .cp-hud__route.is-target > .cp-icon {
     color: var(--cp-warning);
 }

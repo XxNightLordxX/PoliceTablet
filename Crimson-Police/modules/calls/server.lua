@@ -343,7 +343,7 @@ end
 --                                  PUBLIC API
 -- ============================================================================
 
--- The calls that are part of a case with a real suspect and never "a real call" for its officers (critic C1, C15):
+-- The calls that are part of a case with a real suspect and never "a real call" for its officers:
 -- { exact = { [id] = true }, prefixes = { ... } }. exact: the case's own call (run.live.dispatchId, as sent and
 -- normalized); prefixes: '<prefix><src>_' for every participant and every suspect (CP.Opponents.caseOf: the server
 -- ids the watch keeps) with each Config.Calls.ownRunCallPrefixes entry plus 'shots_' (an officer's or a suspect's
@@ -388,7 +388,7 @@ function C.exemptFor(run)
     return out
 end
 
--- opts.except (an exemptFor-shaped set): those calls are ignored (a claim of the case they belong to, V14).
+-- opts.except (an exemptFor-shaped set): those calls are ignored (a claim of the case they belong to).
 function C.isOnCall(src, opts)
     src = ToSrc(src)
     if not src then return false end

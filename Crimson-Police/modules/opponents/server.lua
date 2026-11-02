@@ -41,7 +41,7 @@ local cases = {}                  -- [runId] = case
 local recOf = {}                  -- [citizenid] = { case, rec }: every suspect of an open case
 local crewOf = {}                 -- [crewKey] = { [citizenid] = true }: AFK samples before a case exists
 local srcOf = {}                  -- [citizenid] = server id, tracked citizenids only (load, unload and drop keep it)
-local cidOf = {}                  -- [server id] = citizenid, the same pairs: cleared at the drop (C9)
+local cidOf = {}                  -- [server id] = citizenid, the same pairs: cleared at the drop
 local afkOf = {}                  -- [citizenid] = { coords, cam, stillSince, nextAt, afk } (GetGameTimer ms)
 local closed = {}                 -- { runId, outcomes, case }, the last casesKept (oldest first)
 local tickHooks = {}
@@ -82,7 +82,7 @@ local function LogError(key, fmt, ...)
 end
 
 -- Citizenids from a list ({ 'A1', 'B2' }) or a map ({ [cid] = true }, Crimson-Contracts' { [cid] = src }: the value
--- is never read, C9), sorted, valid and unique.
+-- is never read), sorted, valid and unique.
 local function CidsOf(t)
     local out, seen = {}, {}
     if type(t) ~= 'table' then return out end
@@ -174,7 +174,7 @@ local function OnDeptDuty(job)
 end
 
 -- ============================================================================
---                           TRACKED CITIZENIDS (C9)
+--                              TRACKED CITIZENIDS
 -- ============================================================================
 
 local function InCrew(cid)
@@ -227,7 +227,7 @@ end
 -- ============================================================================
 
 -- Who a server id was when a line was written (a server id is given to someone else after a drop): a participant of
--- the case's run, a suspect, else Qbox's character. -> { cid, name } | nil. Staff only (V17).
+-- the case's run, a suspect, else Qbox's character. -> { cid, name } | nil. Staff only.
 local function WhoOf(case, src)
     local n = ToSrc(src)
     if not n then return nil end
@@ -288,7 +288,7 @@ function Opp.note(run, reason, detail, cid)
     return true
 end
 
--- A server-only objective event (K1: server:objective refuses every opp_* type from a client). Before In progress
+-- A server-only objective event (server:objective refuses every opp_* type from a client). Before In progress
 -- the state is only kept: the block reads Opp.view(run) when it starts.
 local function Send(case, rec, kind, extra)
     local run = case.run
@@ -326,7 +326,7 @@ end
 -- onLeave. 'caught' counts as a detain (by leave; an AFK suspect's share is 0, as for a cuff while AFK).
 local function ApplyOnLeave(case, rec, why)
     local mode = Cfg().onLeave
-    rec.leaveRule = mode == 'caught' and 'caught' or mode == 'escaped' and 'escaped' or 'left'  -- CP.Volunteers (Z5)
+    rec.leaveRule = mode == 'caught' and 'caught' or mode == 'escaped' and 'escaped' or 'left'  -- CP.Volunteers
     if mode == 'caught' then
         rec.byLeave = true
         if rec.share == nil then rec.share = rec.afk and 0 or 1 end
@@ -338,8 +338,8 @@ local function ApplyOnLeave(case, rec, why)
     end
 end
 
--- The leave is final (character switch at once, a disconnect after the grace): cuffed -> detained (C18), free -> the
--- onLeave rule, detained and booked keep their state (C25). Every leave writes the note, with or without contact.
+-- The leave is final (character switch at once, a disconnect after the grace): cuffed -> detained, free -> the
+-- onLeave rule, detained and booked keep their state. Every leave writes the note, with or without contact.
 local function FinishLeave(case, rec, how)
     local now = GetGameTimer()
     rec.dropAt = nil
@@ -376,7 +376,7 @@ local function OnLeft(src, how)
     end
 end
 
--- A routing bucket other than 0 (an apartment, another instance, Crimson-Arena) is leaving the server (critic 2 #14).
+-- A routing bucket other than 0 (an apartment, another instance, Crimson-Arena) is leaving the server.
 local function EnterInstance(case, rec, now)
     Timeline(case, { what = 'instance', label = rec.label, src = rec.src })
     if rec.state == 'cuffed' then
@@ -388,7 +388,7 @@ local function EnterInstance(case, rec, now)
     Opp.note(case.run, 'rs_evade_instance', ContactDetail(rec, now, false), rec.cid)
 end
 
--- Another script's crimsonArena flag in bucket 0 (C8): a note once, and he stays tracked (only a bucket voids).
+-- Another script's crimsonArena flag in bucket 0: a note once, and he stays tracked (only a bucket voids).
 local function CheckArenaFlag(src)
     local cid = cidOf[src]
     local hit = cid and recOf[cid]
@@ -527,7 +527,7 @@ local function TickSuspect(case, rec, parts, now, cfg)
         end
         rec.afk = Sample(rec.cid, src, coords, now)
     else
-        -- cuffed, detained or booked: sitting still in a cruiser is not AFK (C17); nor is lying down (rec.down, kept
+        -- cuffed, detained or booked: sitting still in a cruiser is not AFK; nor is lying down (rec.down, kept
         -- by the proof step) waiting for EMS or the respawn timer. rec.afk keeps its value
         rec.afkPaused = true
     end
@@ -650,7 +650,7 @@ end
 
 -- spec = { kind = 'live'|'volunteer', index, members = { [cid] = true } (or a list), scene, lostRule = { range,
 -- seconds }, meet }. Every src is resolved from the citizenid now (an event path); a suspect who is offline starts in
--- the disconnect-grace path (critic 2 #19). A citizenid that is a suspect of another case is left out.
+-- the disconnect-grace path. A citizenid that is a suspect of another case is left out.
 function Opp.open(run, spec)
     if type(run) ~= 'table' or type(run.id) ~= 'string' then return nil end
     if cases[run.id] then return cases[run.id] end
@@ -672,7 +672,7 @@ function Opp.open(run, spec)
         kind = spec.kind == 'volunteer' and 'volunteer' or 'live',
         index = math.tointeger(tonumber(spec.index) or 1) or 1,
         openedAt = os.time(),
-        openedMs = now,                -- GetGameTimer() at the open (V7's fast-catch sign reads it with detainedAt)
+        openedMs = now,                -- GetGameTimer() at the open (the fast-catch sign reads it with detainedAt)
         scene = spec.scene,
         lostRule = LostRule(spec.lostRule),
         meet = type(spec.meet) == 'table' and spec.meet or nil,
@@ -747,7 +747,7 @@ function Opp.close(run)
     -- cuffed -> detained) and the rs_combat_log note come before the outcome, so a suspect who logged off just before
     -- the case ended never reads as 'got_away' by the leave. No event goes out while closing.
     case.closing = true
-    -- Opp.onClose (V5's proof): a cuff release still waiting for its explanation is decided first
+    -- Opp.onClose: a cuff release still waiting for its explanation is decided first
     if type(Opp.onClose) == 'function' then
         local ok, err = pcall(Opp.onClose, case)
         if not ok then LogError('onClose', 'CP.Opponents.onClose failed: %s', tostring(err)) end
@@ -772,7 +772,7 @@ function Opp.close(run)
     closed[#closed + 1] = { runId = runId, outcomes = outcomes, case = case }
     while #closed > Kept() do table.remove(closed, 1) end
     CP.log(TAG, 'run %s: case closed', runId)
-    -- Opp.onClosed (F1, modules/opponents/saved): the closed case is saved so a restart keeps it
+    -- Opp.onClosed (modules/opponents/saved): the closed case is saved so a restart keeps it
     if type(Opp.onClosed) == 'function' then
         local ok, err = pcall(Opp.onClosed, case)
         if not ok then LogError('onClosed', 'CP.Opponents.onClosed failed: %s', tostring(err)) end
@@ -780,7 +780,7 @@ function Opp.close(run)
     return copy(outcomes), case
 end
 
--- Closed cases read back after a restart (F1, modules/opponents/saved), oldest first: each { case, outcomes }. They
+-- Closed cases read back after a restart (modules/opponents/saved), oldest first: each { case, outcomes }. They
 -- go before the cases closed since the start; a run id already kept is skipped, and casesKept still holds.
 function Opp.restoreClosed(list)
     if type(list) ~= 'table' then return 0 end
@@ -800,7 +800,7 @@ function Opp.restoreClosed(list)
     return #list
 end
 
--- Every case staff can read (V17): the open ones (newest first), then the kept closed ones (newest first).
+-- Every case staff can read: the open ones (newest first), then the kept closed ones (newest first).
 -- -> { { case, open = bool } }. The closed ones are saved (Config.RealSuspects.saveCases): a restart keeps them.
 function Opp.cases()
     local out = {}
@@ -922,7 +922,7 @@ function Opp.noteArmed(cid)
     return true
 end
 
--- A state change by a later step (proof, V5): the timeline and the server-only event. opts = { event, why, by }.
+-- A state change by a later step (proof): the timeline and the server-only event. opts = { event, why, by }.
 function Opp.setState(run, cid, state, opts)
     local case = Opp.caseOf(run)
     local rec = case and type(cid) == 'string' and case.suspects[cid] or nil
@@ -972,7 +972,7 @@ end
 -- ============================================================================
 
 -- AFK samples for citizenids that may become suspects (a crew whose contract started, a volunteer), before a case
--- exists (C17). The same key again adds to its list.
+-- exists. The same key again adds to its list.
 function Opp.sampleCrew(key, cids)
     if (type(key) ~= 'string' and type(key) ~= 'number') or key == '' then return false end
     local list = CidsOf(cids)
@@ -1019,7 +1019,7 @@ function Opp.eligible(src, opts)
     if Bucket(n) ~= 0 then return false, 'instance' end
     if CP.Alerts and CP.Alerts.foreignFlag and CP.Alerts.foreignFlag(n) then return false, 'arena_flag' end
     if OnDeptDuty(info.job) then return false, 'on_duty' end
-    -- Opp.lastPoliceAt (V7): os.time() of his last police duty, nil until that step
+    -- Opp.lastPoliceAt: os.time() of his last police duty, nil until that step
     local last = Opp.lastPoliceAt
     local at = type(last) == 'function' and last(cid) or (type(last) == 'table' and last[cid]) or nil
     if tonumber(at) and os.time() - tonumber(at) < Num(cfg.jobHopMinutes, 30) * 60 then return false, 'job_hop' end
@@ -1051,7 +1051,7 @@ end
 --                               EVENT-KEPT MAPS
 -- ============================================================================
 
--- A character loaded: a tracked citizenid gets his server id back (a rejoin), anyone else matches nothing (C9).
+-- A character loaded: a tracked citizenid gets his server id back (a rejoin), anyone else matches nothing.
 local function OnLoaded(src)
     src = ToSrc(src)
     if not src or not HasWork() then return end
@@ -1096,7 +1096,7 @@ local function OnMeta(src, key, old, new)
     end
 end
 
--- Department duty mid-case (critic 2 #19): void from free or cuffed, and a note.
+-- Department duty mid-case: void from free or cuffed, and a note.
 local function OnDuty(src, job)
     local cid = cidOf[src]
     local hit = cid and recOf[cid]

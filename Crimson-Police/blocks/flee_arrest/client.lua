@@ -117,7 +117,7 @@ end
 -- ============================================================================
 
 -- A blip handed to the objective pointer (CP.Markers) is taken back first, so its GPS line goes off before it goes
--- (BLIPS_FINAL R10).
+--.
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
@@ -136,7 +136,7 @@ end
 -- kinds.suspect (red; one who gave up at its surrenderedScale), restyled in place when that changes. Handed to the
 -- objective pointer under his net id, the key the server's pointer names him by: it IS the pointer (one icon, the GPS
 -- line on it), and CP.Markers shows the same look from the server's position once he is too far away for this game
--- (BLIPS_FINAL R1, R3, R7).
+--.
 local function EnsureBlip(S, netId, ent, state)
     -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
     if not S.alive then return end

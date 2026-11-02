@@ -56,7 +56,7 @@
     color: var(--cp-accent-text);
 }
 
-/* a live case's LIVE line (step V16): real players are the suspects */
+/* a live case's LIVE line: real players are the suspects */
 .ready-check__live {
     display: flex;
     align-items: center;

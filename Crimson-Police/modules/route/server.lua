@@ -142,9 +142,9 @@ end
 
 -- Whether leaving the start route ends this run (Hard rule 17), the one place that decides it: run.routeRequired once
 -- CP.Runs locked it at accept (it calls this before the lock). Before that: a test run always (its own Start route
--- switch decides whether there is a route at all); a live crime (run.live, V14) Config.LiveCrime.requireRoute == true
+-- switch decides whether there is a route at all); a live crime (run.live) Config.LiveCrime.requireRoute == true
 -- (shipped false: officers may leave the GPS route to chase); every other run (NPC missions and volunteer suspects)
--- Config.Route.required. Late joiners (V15) begin with the run's locked value.
+-- Config.Route.required. Late joiners begin with the run's locked value.
 function R.requiredFor(run)
     if type(run) == 'table' then
         if type(run.routeRequired) == 'boolean' then return run.routeRequired end
@@ -157,7 +157,7 @@ function R.requiredFor(run)
 end
 local RouteRequired = R.requiredFor
 
--- Config.Route.lateArriveRange in metres (0 = only the start counts, Hard rule 17 as before the owner's M11 decision).
+-- Config.Route.lateArriveRange in metres (0 = only the start counts, Hard rule 17).
 local function LateRange()
     local n = tonumber(Config.Route.lateArriveRange) or 0
     if n ~= n or n <= 0 then return 0 end
@@ -168,8 +168,8 @@ local function Participant(run, src)
     return type(run) == 'table' and type(run.participants) == 'table' and run.participants[src] or nil
 end
 
--- Config.Route.followActionSeconds: the time a late officer gets to reach the action once he follows it (PLAN M11,
--- R6). 0 = he keeps the start deadline he had (Config.Limits.startTimeout from his accept); 300 when the key is
+-- Config.Route.followActionSeconds: the time a late officer gets to reach the action once he follows it.
+-- 0 = he keeps the start deadline he had (Config.Limits.startTimeout from his accept); 300 when the key is
 -- missing from an older config.lua.
 local function FollowSeconds()
     local n = tonumber(Config.Route.followActionSeconds)
@@ -380,7 +380,7 @@ local function Arrive(run, src, st)
 end
 
 -- ============================================================================
---                           LATE OFFICERS (PLAN M11)
+--                                LATE OFFICERS
 -- ============================================================================
 -- The owner's decision (2026-10-19): once the run is In progress, an officer still on his way follows the action, not
 -- an empty start. From then on his route is not checked (no warning, no drift or report check, no off_route end,
@@ -388,7 +388,7 @@ end
 -- action (CP.Runs.actionPoints: the objective's anchor, its pointer's point or targets, anywhere inside its circle).
 -- His game is told once (client:routeStatus 'action'): it drops the start's waypoint, pin and circle, stops sampling
 -- and reporting, and only then lets CP.Markers draw the line to the objective. From then on he has
--- Config.Route.followActionSeconds to arrive (R6: CP.Runs.extendStart; never less than the start deadline he had), so
+-- Config.Route.followActionSeconds to arrive (CP.Runs.extendStart; never less than the start deadline he had), so
 -- a partner who left late is not removed by the start timeout while he chases the action.
 
 local function FollowAction(run, src, st)
@@ -461,7 +461,7 @@ local function CheckOne(run, src, st, now)
     local start = StartOf(run)
     if not start then return end
     local range = LateRange()
-    -- the run went In progress while he was on his way: from now on he follows the action (PLAN M11)
+    -- the run went In progress while he was on his way: from now on he follows the action
     local follow = st.mode ~= 'action' and range > 0 and run.state == 'in_progress'
     local coords = ServerCoords(src)
     if coords then
@@ -661,7 +661,7 @@ AddEventHandler('playerDropped', function()
     end
 end)
 
--- The tick runs only while there is a run or a tracked participant (step LP4: it woke every second all day): armed
+-- The tick runs only while there is a run or a tracked participant (it woke every second all day): armed
 -- at start, by a run created and by begin(); the pass that finds no run and nothing tracked ends it.
 ArmTick, R._ticking = CP.Perf.armed(TAG, 1000, Tick)
 if CP.Hooks and CP.Hooks.on then CP.Hooks.on('run:created', function() ArmTick() end) end

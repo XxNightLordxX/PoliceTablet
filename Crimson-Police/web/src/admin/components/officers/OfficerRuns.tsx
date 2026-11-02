@@ -36,7 +36,7 @@ type RunTool =
 
 const cashLabel = (s: string) => (hasKey(`result.cash_status.${s}`) ? t(`result.cash_status.${s}`) : s);
 
-// The views the parent screen shows besides the run (step FX1): the reply of a change carries them (data.runs,
+// The views the parent screen shows besides the run: the reply of a change carries them (data.runs,
 // data.officer) and onChanged gets that reply, so the parent applies them and asks again only when one is missing.
 export interface RunDialogViews {
     citizenid: string;
@@ -108,7 +108,7 @@ export function RunDialog({
             );
         }
         setTool(null);
-        // step FX1: the reply carries the run's detail (an older server: ask for it)
+        // the reply carries the run's detail (an older server: ask for it)
         if (res.ok) {
             applyReplyView<RunDetail>(res.data, 'view', setData, () => void refetch());
             onChanged?.(res.data);

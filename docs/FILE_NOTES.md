@@ -87,7 +87,7 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/modules/operations/client.lua`: CP.Operations (client): the Cross-Department Mission toast.
 - `Crimson-Police/modules/operations/server.lua`: CP.Operations (server): Cross-Department Missions, with leave before the start and the waitlist.
 - `Crimson-Police/modules/opponents/conduct/server.lua`: CP.Opponents conduct (server): how officers treat a real suspect, from server facts only.
-- `Crimson-Police/modules/opponents/pairs/server.lua`: CP.Opponents identity and pairs (server; critic C27, critic 2 #21-#23, #30): the self rule (nobody takes a
+- `Crimson-Police/modules/opponents/pairs/server.lua`: CP.Opponents identity and pairs (server): the self rule (nobody takes a
 - `Crimson-Police/modules/opponents/proof/server.lua`: CP.Opponents proof (server): the server facts that decide every detain and booking of a real suspect.
 - `Crimson-Police/modules/opponents/saved/server.lua`: CP.Opponents saved cases (server): each closed real-suspect case is saved in cp_pvp_cases while
 - `Crimson-Police/modules/opponents/server.lua`: CP.Opponents (server): the real-player suspects of a case (live crimes, volunteers), keyed by citizenid, and one 1 s watch on event-kept maps that runs only while something is tracked.
@@ -123,7 +123,7 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/modules/units/client.lua`: CP.Units (client): the invite cue, the ready check toast and the crimsonpolice_ready key mapping.
 - `Crimson-Police/modules/units/server.lua`: CP.Units (server): units of 2-4 officers from any department, leader controls and the ready check.
 - `Crimson-Police/modules/volunteers/client.lua`: CP.Volunteers (client): the volunteer command (Config.Volunteers.command, default /crimsonheat).
-- `Crimson-Police/modules/volunteers/match/server.lua`: CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer from V21) asks the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'), makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
+- `Crimson-Police/modules/volunteers/match/server.lua`: CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer, set at the draw) asks the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'), makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
 - `Crimson-Police/modules/volunteers/server.lua`: CP.Volunteers (server): the volunteer list behind Config.Volunteers.command (default /crimsonheat).
 - `Crimson-Police/shared/init.lua`: The CP namespace, logging, the block registry, the config load check and RegisterMission().
 - `Crimson-Police/shared/locale.lua`: Loads locales/<Config.Locale>.json (falls back to en.json).
@@ -349,7 +349,7 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/shared/i18n.tsx`: UI text (docs/ARCHITECTURE.md §10).
 - `Crimson-Police/web/src/shared/index.ts`: Src/shared · one import point for screen code: import { useRequest, useAction, t, useSession, useNavigate, Button, Card } from '../../shared';
 - `Crimson-Police/web/src/shared/keyHints.ts`: Key hints (officer option keyHints): the key bound to a Crimson-Police key mapping, named on the ready check banner ("or press K") and the contact HUD line.
-- `Crimson-Police/web/src/shared/moreFold.walk.ts`: The More fold (FX2, Config.AdminUi.foldAdvanced) against the browser mocks (node walk.mjs, a gate step): off, the options show open as before; on, they sit under More, closed at first, open as the viewer last left them (a blocked storage starts folded), and an option that is set never hides.
+- `Crimson-Police/web/src/shared/moreFold.walk.ts`: The More fold (Config.AdminUi.foldAdvanced) against the browser mocks (node walk.mjs, a gate step): off, the options show open as before; on, they sit under More, closed at first, open as the viewer last left them (a blocked storage starts folded), and an option that is set never hides.
 - `Crimson-Police/web/src/shared/navigation.tsx`: The state-based screen switch (no router).
 - `Crimson-Police/web/src/shared/nui.ts`: The NUI bridge (docs/ARCHITECTURE.md §9.1).
 - `Crimson-Police/web/src/shared/openOn.ts`: The screen an 'open' without a screen of its own lands on: the officer option openOn, saved with the

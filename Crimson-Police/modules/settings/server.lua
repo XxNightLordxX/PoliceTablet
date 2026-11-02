@@ -54,7 +54,7 @@ local MONEY_SWITCHES = {
     'Cash.allowManualCash',
     'Rewards.allowTakeBack',
     -- Live-case and volunteer-case pay (Config.LiveCrime.cash / items, Config.Volunteers.payCash / payRewards) and
-    -- Config.FeatureRewards are ordinary feature switches since step G3 (owner decision 2026-11-02): they ship off
+    -- Config.FeatureRewards are ordinary feature switches: they ship off
     -- and pay the amounts set in config.lua, without the typed word.
 }
 local MONEY_WORD = 'ENABLE'
@@ -518,7 +518,7 @@ Play.features = {
             'Rewards.dailyValueCap',
         },
     },
-    -- Config.FeatureRewards (step G3): each feature's money, account and items next to its switch, with the item
+    -- Config.FeatureRewards: each feature's money, account and items next to its switch, with the item
     -- switch they share
     {
         key = 'reward_suspect',
@@ -624,16 +624,16 @@ local OPEN = {
     'Rewards.levels',
     'Rewards.season',
     'LiveCrime.types',                  -- the crime keys are Crimson-Contracts' contract keys
-    'Volunteers.modes',                 -- mission type keys (V21)
-    'Volunteers.missionModes',          -- mission ids (V21)
-    'FeatureRewards.suspect.byType',    -- mission type keys (H1)
+    'Volunteers.modes',                 -- mission type keys
+    'Volunteers.missionModes',          -- mission ids
+    'FeatureRewards.suspect.byType',    -- mission type keys
     'Permissions.builderTeleport',      -- department keys
     'Permissions.grants',               -- power keys (Admin UI -> Permissions -> Extra grants)
     'MissionControls.grants',           -- department keys
     'MissionControls.controls',         -- control keys
-    'FieldTraining.trainerGrades',      -- department keys (T1)
-    'FieldTraining.tasks',              -- mission type keys (T1)
-    'FieldTraining.requireTrainerFor',  -- a list of mission type keys (T2)
+    'FieldTraining.trainerGrades',      -- department keys
+    'FieldTraining.tasks',              -- mission type keys
+    'FieldTraining.requireTrainerFor',  -- a list of mission type keys
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
@@ -793,20 +793,20 @@ local RANGES = {
     ['LiveCrime.deadCaseSeconds'] = { 5, 600 },
     ['LiveCrime.maxOfficers'] = { 1, 16 },
     ['LiveCrime.joinOfferSeconds'] = { 10, 120 },
-    -- volunteer suspects (Config.Volunteers, V20)
+    -- volunteer suspects (Config.Volunteers)
     ['Volunteers.windowMinutes'] = { 10, 240 },
     ['Volunteers.strikes'] = { 1, 10 },
     ['Volunteers.strikeHours'] = { 1, 168 },
     ['Volunteers.blockHours'] = { 1, 168 },
-    -- the matching (V22)
+    -- the matching
     ['Volunteers.askSeconds'] = { 10, 120 },
     ['Volunteers.askTries'] = { 1, 10 },
     ['Volunteers.travelSeconds'] = { 60, 1800 },
     ['Volunteers.meetRadius'] = { 5, 200 },
     ['Volunteers.cancelGraceSeconds'] = { 0, 600 },
-    ['Volunteers.driverReportEvery'] = { 0, 300 },   -- V24
-    ['Volunteers.fugitiveOutSeconds'] = { 0, 300 },  -- V25
-    ['CriminalTablet.historySize'] = { 1, 100 },     -- G2
+    ['Volunteers.driverReportEvery'] = { 0, 300 },   -- a volunteer driver's position reports
+    ['Volunteers.fugitiveOutSeconds'] = { 0, 300 },  -- a volunteer fugitive's time out of the area
+    ['CriminalTablet.historySize'] = { 1, 100 },     -- the criminal tablet's History
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -901,7 +901,7 @@ local RANGES = {
     ['Spawning.placeTimeoutMs'] = { 1000, 60000 },
     ['Spawning.retries'] = { 0, 5 },
     ['Blocks.pursuit.outsiderWarn'] = { 0, 120 },
-    -- G1: every limit, cap, cooldown and per-day count an admin edits in Settings has a sane range
+    -- every limit, cap, cooldown and per-day count an admin edits in Settings has a sane range
     ['MissionTypes.*.points'] = { 0, 10000 },
     ['MissionTypes.*.payout'] = { 0, 1000000 },
     ['Limits.corpseCleanup'] = { 5, 600 },
@@ -978,7 +978,7 @@ local RANGES = {
 local SIGNED = { 'NpcDifficulty.custom.*', 'NpcDifficulty.presets.*.*' }
 
 -- A value saved before the setting became a choice reads as its choice now (a saved true for the stun proof was
--- PF1's refusal, a false no check at all).
+-- a refusal, a false no check at all).
 local LEGACY = {
     ['AntiCheat.stunNeedsProof'] = { [true] = 'strict', [false] = 'off' },
 }
@@ -1666,30 +1666,30 @@ local KNOWN = {
     ['Markers.radioSilence'] = { tpl = Enum({ 'none', 'area', 'full' }), kind = 'enum' },
     ['AntiCheat.stunNeedsProof'] = { tpl = Enum({ 'flag', 'hold', 'strict', 'off' }), kind = 'enum' },
     ['RealSuspects.onLeave'] = { tpl = Enum({ 'void', 'caught', 'escaped' }), kind = 'enum' },
-    -- the NPC-mission rules for cases with a real suspect (V9): the rule for real players or the NPC rule
+    -- the NPC-mission rules for cases with a real suspect: the rule for real players or the NPC rule
     ['RealSuspects.officerAlerts'] = { tpl = Enum({ 'normal', 'silenced' }), kind = 'enum' },
     ['RealSuspects.routeEnds'] = { tpl = Enum({ 'first_contact', 'start' }), kind = 'enum' },
     ['RealSuspects.downed'] = { tpl = Enum({ 'keep_earned', 'failed' }), kind = 'enum' },
     ['RealSuspects.outsideCuff'] = { tpl = Enum({ 'assist', 'stopped' }), kind = 'enum' },
-    -- live crimes (V10): the scripts that may report a crime (resource names), and each crime's mission type or false
+    -- live crimes: the scripts that may report a crime (resource names), and each crime's mission type or false
     ['LiveCrime.sources'] = {
         tpl = ListOf(Text('^[%w_%-%.]+$', 64), { unique = true }),
         kind = 'list',
         item = 'string',
     },
     ['LiveCrime.types'] = { tpl = MapOf(Alts(FALSE, ID), '^[%w_%-]+$') },
-    -- V21: who plays a volunteer slot's suspect, per mission type and per mission
+    -- who plays a volunteer slot's suspect, per mission type and per mission
     ['Volunteers.modes'] = { tpl = MapOf(Enum({ 'npc', 'players_when_available', 'players_only' }), '^[%w_%-]+$') },
     ['Volunteers.missionModes'] = {
         tpl = MapOf(Enum({ 'npc', 'players_when_available', 'players_only' }), '^[%w_%-]+$'),
     },
-    -- V22: a volunteer who drops out, and how such a run ends
+    -- a volunteer who drops out, and how such a run ends
     ['Volunteers.onVoid'] = { tpl = Enum({ 'npc', 'end' }), kind = 'enum' },
     ['CriminalTablet.access'] = { tpl = Enum({ 'everyone', 'granted' }), kind = 'enum' },
     ['Volunteers.voidRun'] = { tpl = Enum({ 'cancelled', 'keep_earned' }), kind = 'enum' },
-    -- V13: which team sets a live case's tier
+    -- which team sets a live case's tier
     ['LiveCrime.tier'] = { tpl = Enum({ 'crew', 'officers' }), kind = 'enum' },
-    -- V19: who the export GetAvailablePolice counts
+    -- who the export GetAvailablePolice counts
     ['LiveCrime.availablePolice'] = { tpl = Enum({ 'idle', 'duty' }), kind = 'enum' },
     ['Spawning.onTimeout'] = { tpl = Enum({ 'unfreeze', 'delete' }), kind = 'enum' },
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
@@ -2273,7 +2273,7 @@ local function LiveTypes(map)
 end
 KNOWN['LiveCrime.types'].check = LiveTypes
 
--- Config.Volunteers.modes (V21): every key is a mission type of Config.MissionTypes.
+-- Config.Volunteers.modes: every key is a mission type of Config.MissionTypes.
 KNOWN['Volunteers.modes'].check = function(map)
     local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
     for k in pairs(map) do
@@ -2307,7 +2307,7 @@ KNOWN['MissionControls.grants'] = {
     check = GradeGrants('err.setting_grant_department', 'err.setting_grant_grant'),
 }
 
--- Config.FieldTraining (step H8): trainerGrades by department key of Config.Departments (a grade number) and tasks by
+-- Config.FieldTraining: trainerGrades by department key of Config.Departments (a grade number) and tasks by
 -- mission type key of Config.MissionTypes (missions to run, 0 = no task). Each is edited as a whole, so a key can be
 -- added or left out (before, the shipped keys were required and no other key was allowed).
 KNOWN['FieldTraining.trainerGrades'] = {
@@ -2366,7 +2366,7 @@ local function CheckControls(map, _, ctx)
     return (CP.DeptControls.checkConfig(map, ctx and ctx.boot))
 end
 -- canTurnOff: readyCheck's flag (supervisors may switch the ready check off), other flags a control registers;
--- presets: the Config.NpcDifficulty presets a supervisor may pick for difficulty (step P9)
+-- presets: the Config.NpcDifficulty presets a supervisor may pick for difficulty
 local CONTROLS_TPL = MapOf(Record({
     on = true,
     min = Num(-MAX_ABS, MAX_ABS),
@@ -4301,7 +4301,7 @@ CP.Net.action('server:admin:resetAllSettings', function(src)
     if not ok then return false, err end
     if not CP.Net.rateOk(src, 'settings:resetAll', 1, 5000) then return false, 'err.rate_limited' end
     local okR, data = Settings.resetAll(src)
-    -- step FX1: the reply carries the whole Settings view (data.view), so the screen needs no second request
+    -- the reply carries the whole Settings view (data.view), so the screen needs no second request
     if okR and type(data) == 'table' then
         local okV, view = pcall(Settings.all)
         if okV and type(view) == 'table' then data.view = view end

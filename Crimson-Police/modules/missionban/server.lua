@@ -162,7 +162,7 @@ MB.register = Register
 
 local function IsAdmin(src) return CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true end
 
--- Mission bans that player set today (step H4, the 'Your controls today' card).
+-- Mission bans that player set today (the 'Your controls today' card).
 function MB.usedToday(src)
     local _, info = Call('Qbx', 'getInfo', src)
     local actor = type(info) == 'table' and info.citizenid or nil
@@ -220,7 +220,7 @@ end
 
 local function OfficerTarget(payload) return { citizenid = Cid(payload.citizenid) } end
 
--- Step FX1: from the department report's activity dialog the reply carries his fresh activity (CP.Challenge).
+-- From the department report's activity dialog the reply carries his fresh activity (CP.Challenge).
 local function WithActivity(ctx, data)
     if CP.Challenge and CP.Challenge.withActivity then
         return CP.Challenge.withActivity(ctx.src, ctx.payload, true, data)
@@ -277,7 +277,7 @@ Kit.supAction('server:sup:missionBan', 'missionControls', function(ctx)
     return WithActivity(ctx, { citizenid = cid, ['until'] = ban['until'] })
 end, {
     reason = true,
-    oneAtATime = true,            -- the per-day cap is read before a yield (step Z5)
+    oneAtATime = true,            -- the per-day cap is read before a yield
     pushMine = 'missionControls', -- Your controls today shows the new count of today
     self = OfficerTarget,
     targetRate = { 1, 3000 },

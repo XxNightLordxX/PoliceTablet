@@ -43,11 +43,11 @@ end
 -- ============================================================================
 
 -- A person who runs is orange (kinds.fleeing), one who draws or gave up after running red (kinds.suspect), as the
--- server's pointer names them (BLIPS_FINAL R3).
+-- server's pointer names them.
 local PERSON_LOOK = { fleeing = 'fleeing', hostile = 'suspect', surrendered = 'suspect' }
 
 -- A blip handed to the objective pointer (CP.Markers) is taken back first, so its GPS line goes off before it goes
--- (BLIPS_FINAL R10).
+--.
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
@@ -60,7 +60,7 @@ end
 -- PERSON_LOOK for his state, one who gave up at kinds.suspect.surrenderedScale; restyled in place when that changes),
 -- handed to the objective pointer under his net id, the key the server's pointer names him by: it IS the pointer (one
 -- icon, the GPS line on it), and CP.Markers shows the same look from the server's position while he is too far away for
--- this game (BLIPS_FINAL R1, R7).
+-- this game.
 local function EnsureBlip(S, info, ent, state)
     if not S.alive then return end
     local look = info.kind == 'vehicle' and 'contactVehicle' or PERSON_LOOK[state] or 'contact'

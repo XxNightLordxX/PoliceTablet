@@ -37,7 +37,7 @@ export function AdminLayout() {
     const grouped = session.config?.adminUi?.groupSidebar !== false;
     // Config.AdminUi.groupByPlay: NPC missions, Player vs police, Police teamwork, then money and the server
     const byPlay = session.config?.adminUi?.groupByPlay !== false;
-    // Config.AdminUi.plainLayout (step G6): plain names, the seven groups, search and breadcrumb (false = as before)
+    // Config.AdminUi.plainLayout: plain names, the seven groups, search and breadcrumb (false = as before)
     const nav = adminNavOf(session);
     const [find, setFind] = useState('');
     const groupLabel = (g: string) => t(`ui.nav.admin_group.${g}`);

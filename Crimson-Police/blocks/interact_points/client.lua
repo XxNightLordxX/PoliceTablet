@@ -152,11 +152,11 @@ end
 
 -- st.blips[key] = { id = blip, at = where it is, look = what it shows }: key = a point's number, 'area' (a hidden
 -- search's centre) or 'circle' (its circle). A snapshot keeps every blip that still shows the same thing, so the GPS
--- line and the flash the objective pointer put on it survive (BLIPS_FINAL R8); a point whose status changed is
+-- line and the flash the objective pointer put on it survive; a point whose status changed is
 -- restyled in place.
 
 -- A blip handed to the objective pointer (CP.Markers.adopt) is taken back first, so its GPS line goes off before it
--- goes (BLIPS_FINAL R10).
+-- goes.
 local function DropBlip(st, key)
     local e = st.blips[key]
     if not e then return end
@@ -175,7 +175,7 @@ local function ClearBlips(st)
 end
 
 -- This block's blip of the pointer's target key (a point's number, or 'area' for a hidden search's centre) is the
--- pointer: CP.Markers puts the GPS line on it and draws no second icon (BLIPS_FINAL R1).
+-- pointer: CP.Markers puts the GPS line on it and draws no second icon.
 local function HandOver(st, key, blip)
     if CP.Markers.adopt(key, blip) then st.handed[key] = blip end
 end

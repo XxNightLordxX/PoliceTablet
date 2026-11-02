@@ -153,7 +153,7 @@ local SUSPECT_ROLES = {
 -- keys only the engine writes (place: CP.Spawn's placement ask, through Npc.setPlace)
 local BAG_PROTECTED = { run = true, obj = true, state = true, seq = true, taskSeq = true, place = true }
 
-local TICK_MS = 1000               -- death watcher / health poll / cuff reach sampling / flee clock (kept 1 s, LP2)
+local TICK_MS = 1000               -- death watcher / health poll / cuff reach sampling / flee clock (kept 1 s)
 local GONE_TICKS = 1               -- checks without the entity before it counts as dead (before the engine's
                                    -- own 2-check vanish rule, so onDeath listeners see those deaths too)
 local SURRENDER_GRACE_MS = 3000   -- a hit this soon after a surrender is a shot already in flight
@@ -497,7 +497,7 @@ local function FleeNum(key, range)
     return U.clamp(v, range[1], range[2])
 end
 
--- Config.NpcDifficulty's fleeMult (CP.Scaling.feel: the run's department difficulty, step P9), 1.0 without it.
+-- Config.NpcDifficulty's fleeMult (CP.Scaling.feel: the run's department difficulty), 1.0 without it.
 local function FleeMult(run)
     local feel = nil
     if CP.Scaling and CP.Scaling.feel then
@@ -1305,7 +1305,7 @@ function Npc.stunProof(netId)
 end
 
 -- A participant's 'stunned' report under Config.AntiCheat.stunNeedsProof (the four blocks call it at their stunned
--- branch): true when the person may give up. 'flag' (shipped) takes it as before PF1 and adds one staff note per
+-- branch): true when the person may give up. 'flag' (shipped) takes it and adds one staff note per
 -- officer and run when the server saw no fall; 'hold' does the same with a flag on that officer (his points wait
 -- for review); 'strict' refuses it (the block answers no_stun); 'off' takes every report with no check.
 function Npc.stunCheck(run, src, netId)
@@ -1484,7 +1484,7 @@ local function Tick()
         and next(shotAt) == nil and next(forceAt) == nil
 end
 
--- The watcher runs only while a run is live or a record is kept (step LP4: it woke every second all day): armed at
+-- The watcher runs only while a run is live or a record is kept (it woke every second all day): armed at
 -- start and by every run created; the pass that finds neither ends it.
 local ArmTick
 ArmTick, Npc._ticking = CP.Perf.armed(TAG, TICK_MS, Tick)

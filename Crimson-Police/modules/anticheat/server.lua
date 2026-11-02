@@ -260,7 +260,7 @@ function AC.flag(run, src, reason, detail)
     return true
 end
 
--- True when this run raised a flag of this reason, for any participant or the run itself (step Z2: the feature pay of
+-- True when this run raised a flag of this reason, for any participant or the run itself (the feature pay of
 -- a run with rs_linked_accounts waits for nobody's review, so it is not paid).
 ---@param run table
 ---@param reason string
@@ -588,7 +588,7 @@ function AC._idleCheck(nowTs)
     for _, run in ipairs(list) do
         if run.state == 'in_progress' and run.startedAt then
             local st = StateOf(run)
-            -- a department's stricter idle check (P8), locked at accept in run.controls
+            -- a department's stricter idle check, locked at accept in run.controls
             local own = type(run.controls) == 'table' and tonumber(run.controls.idleCheck) or nil
             local limit = (own and own > 0) and math.min(own, after) or after
             if not st.idleDone and nowTs - run.startedAt >= limit then

@@ -34,7 +34,7 @@ Defs.add('favouriteTypes', { kind = 'list', values = TypeKeys, default = {}, gro
 Defs.add('hiddenTypes', { kind = 'list', values = TypeKeys, default = {}, guard = NotAll, group = 'board', order = 20 })
 Defs.add('skipAcceptConfirm', { kind = 'bool', default = false, group = 'board', order = 30 })
 
--- My usual twists (step O15): the twists enabled in Config.Events.twists, in the tablet's order, asked at every call
+-- My usual twists: the twists enabled in Config.Events.twists, in the tablet's order, asked at every call
 -- (a twist switched off is dropped from a saved list). The accept step (Mission Board, mission call claim) starts with
 -- the ones offered for that card ticked; the server still checks the chosen list at the accept.
 local function TwistKeys()

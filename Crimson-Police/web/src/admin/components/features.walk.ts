@@ -51,7 +51,7 @@ async function steps(): Promise<void> {
     ok(live && toggleNeeds(live, true) === 'risky', 'turning live crimes on asks first');
     ok(cash && toggleNeeds(cash, true) === 'money', 'cash for live cases keeps the typed ENABLE');
     ok(cash && toggleNeeds(cash, false) === null, 'turning money off saves at once');
-    // step G1: each feature links its limits; a limit the data does not have is left out
+    // each feature links its limits; a limit the data does not have is left out
     ok(
         live?.limits.length === 1 && live.limits[0].path === 'Limits.maxUnitSize' && limitValue(live.limits[0]) === '6',
         'live crimes link the unit size with its value',

@@ -71,7 +71,7 @@ export function ClearCooldownDialog({
     useEffect(() => {
         if (data) setFetchKey(k => k + 1);
     }, [data]);
-    // Config.Tablet.supervisorRemember (step WF2): open with the reason last used
+    // Config.Tablet.supervisorRemember: open with the reason last used
     const remember = rememberOn(useOptionalSession());
     useEffect(() => setReason(lastUsed('cooldown', remember).reason ?? ''), [officer?.citizenid, remember]);
 
@@ -93,7 +93,7 @@ export function ClearCooldownDialog({
         );
         if (!res.ok) return;
         keepLastUsed('cooldown', remember, { reason });
-        // step FX1: the reply carries the fresh list (an older server: ask for it)
+        // the reply carries the fresh list (an older server: ask for it)
         applyReplyView<OfficerCooldowns>(res.data, 'view', setData, () => void refetch());
     };
 

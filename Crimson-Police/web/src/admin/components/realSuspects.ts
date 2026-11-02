@@ -28,7 +28,7 @@ export function validCid(v: unknown): v is string {
 }
 
 // The cases a filter shows: 'open' = still running, 'flagged' = with a conduct flag or a suspect note, 'live' /
-// 'volunteer' = that kind of case (V26).
+// 'volunteer' = that kind of case.
 export function filterCases(cases: RsCaseLine[], filter: RsCaseFilter): RsCaseLine[] {
     if (filter === 'open') return cases.filter(c => c.open);
     if (filter === 'live' || filter === 'volunteer') return cases.filter(c => c.kind === filter);
@@ -36,7 +36,7 @@ export function filterCases(cases: RsCaseLine[], filter: RsCaseFilter): RsCaseLi
     return cases;
 }
 
-// The lift action (F2) and the clear-strikes action.
+// The lift action and the clear-strikes action.
 export const RS_LIFT_ACTION = 'server:admin:rsLift';
 export const RS_CLEAR_STRIKES_ACTION = 'server:admin:rsClearStrikes';
 
@@ -97,7 +97,7 @@ export function toolRequest(
     return { ok: true, action: RS_TOOL_ACTION[form.tool], payload };
 }
 
-// The volunteers on the list, the ones playing or being asked first, then by who joined first (V26).
+// The volunteers on the list, the ones playing or being asked first, then by who joined first.
 export function sortListed(list: RsListedVolunteer[]): RsListedVolunteer[] {
     return [...list].sort((a, b) => {
         const pa = a.playing ? 0 : 1;
@@ -107,7 +107,7 @@ export function sortListed(list: RsListedVolunteer[]): RsListedVolunteer[] {
     });
 }
 
-// The name the server sent for a citizenid (F2: getRsPairs names, a map; an empty Lua table arrives as a list).
+// The name the server sent for a citizenid (getRsPairs names, a map; an empty Lua table arrives as a list).
 export function nameOf(names: unknown, cid: string | null | undefined): string | null {
     if (!cid || !names || typeof names !== 'object' || Array.isArray(names)) return null;
     const v = (names as Record<string, unknown>)[cid];
@@ -126,7 +126,7 @@ export function weaponText(line: RsLedgerLine): string {
     return line.weapon ? `#${line.weapon}` : '-';
 }
 
-// The payload that lifts one running row early (F2): its kind, the citizenids it names and the reason.
+// The payload that lifts one running row early: its kind, the citizenids it names and the reason.
 export function liftPayload(row: RsAdminRow, reason: string): Record<string, unknown> {
     const out: Record<string, unknown> = { kind: row.kind, reason: reason.trim() };
     if (row.kind !== 'exclude') out.officer = row.officer;

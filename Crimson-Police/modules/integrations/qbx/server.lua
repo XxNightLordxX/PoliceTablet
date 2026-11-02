@@ -496,7 +496,7 @@ local function CharName(ci)
     return name ~= '' and name or nil
 end
 
--- Character names for many citizenids at once (F2, staff screens): the loaded characters from the player cache (no
+-- Character names for many citizenids at once (staff screens): the loaded characters from the player cache (no
 -- export call per citizenid), the rest from Qbox's players table, one statement per NAMES_CHUNK. -> { [citizenid] =
 -- 'First Last' }; a citizenid with no name is left out.
 function Q.characterNames(cids)

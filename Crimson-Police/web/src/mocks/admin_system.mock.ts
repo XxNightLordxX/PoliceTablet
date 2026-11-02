@@ -65,7 +65,7 @@ const storageView = (): StorageView => ({
 });
 registerMock('request', 'admin:getStorage', storageView);
 
-// like the server (step WF3), each Storage action's reply carries the fresh Storage view
+// like the server, each Storage action's reply carries the fresh Storage view
 registerMock('action', 'server:admin:storageCopy', () => ({
     message: 'admin.cmd.storage_copied',
     restart: false,
@@ -96,7 +96,7 @@ registerMock('action', 'server:admin:backupNow', () => {
     for (const x of backups) x.protected = false;
     b.protected = true;
     backups.push(b);
-    // step WF3: the reply carries the fresh list, as the server's does
+    // the reply carries the fresh list, as the server's does
     return { ...b, view: backupsView() };
 });
 
@@ -133,7 +133,7 @@ registerMock('request', 'admin:getWebhooks', (): { webhooks: WebhookView[] } => 
     })),
 }));
 
-// admin:getNeedsAttention (step H5): Home's Needs attention panel (?needsAttention), two lines waiting
+// admin:getNeedsAttention: Home's Needs attention panel (?needsAttention), two lines waiting
 registerMock('request', 'admin:getNeedsAttention', (): NeedsAttentionData => ({
     problems: 2,
     refusedToday: 2,

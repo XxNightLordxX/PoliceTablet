@@ -21,7 +21,7 @@ export type UnitMemberView = BaseUnit['members'][number] & {
 // The pending ready check (the mission type only, never a mission). ready / waiting are member srcs.
 export interface ReadyCheckView {
     typeLabel: string;
-    // the twists the leader chose (PLAN M8b)
+    // the twists the leader chose
     twists?: { key: string; label: string }[];
     // Seconds left to answer (Config.Units.readyTimeout).
     expiresIn: number;
@@ -29,9 +29,9 @@ export interface ReadyCheckView {
     waiting: number[];
     // The viewer still has to answer.
     waitingForMe?: boolean;
-    // Auto-Ready answered Ready for the viewer: Not ready still shows (step O13).
+    // Auto-Ready answered Ready for the viewer: Not ready still shows.
     autoForMe?: boolean;
-    // A live case's LIVE line (Config.LiveCrime.readyCheck and caseCard, step V16).
+    // A live case's LIVE line (Config.LiveCrime.readyCheck and caseCard).
     live?: { title?: string | null; street?: string | null; suspects: number } | null;
 }
 

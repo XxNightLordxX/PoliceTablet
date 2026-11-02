@@ -59,11 +59,11 @@ export interface LiveRunEx extends Omit<LiveRun, 'participants'> {
     startedAt: number | null;
     isBoss: boolean;
     departments: string[];
-    // step P7: seconds admins and supervisors added so far; own = the viewer is or was on it (no + minutes)
+    // seconds admins and supervisors added so far; own = the viewer is or was on it (no + minutes)
     timeAdded?: number;
     own?: boolean;
 }
-// "+ minutes" for this supervisor (step P7, Config.MissionControls.controls.addRunTime): minutes per click, seconds
+// "+ minutes" for this supervisor (Config.MissionControls.controls.addRunTime): minutes per click, seconds
 // per run in all, additions a day and today's
 export interface SupAddTime {
     min: number;
@@ -111,7 +111,7 @@ export interface FlaggedRow {
     notes: FlagNote[];
     durationS: number;
     createdAt: number;
-    // step P14: the first Void waiting for a second supervisor of the department (its reviewRules Mission control)
+    // the first Void waiting for a second supervisor of the department (its reviewRules Mission control)
     voidPending?: { name?: string; at?: number } | null;
 }
 export interface FlagNote {
@@ -182,7 +182,7 @@ export interface OfficerSearchRow {
     excluded?: boolean;
     known?: boolean;
 }
-// admin:searchOfficers filters (A1); every one is optional
+// admin:searchOfficers filters; every one is optional
 export interface OfficerSearchFilters {
     department?: string;
     online?: boolean;
@@ -255,7 +255,7 @@ export interface OfficerDetail {
     cash: { total: number; week: number };
     stats: { runs: number; completed: number; failed: number; abandoned: number; flagged: number; voided: number };
     suspension: { suspended: boolean; untilTs: number | null; reason?: string | null };
-    // full admin control (P1): the live streak, the first-run bonus (null when offline), the SC-Dispatch suspension
+    // full admin control: the live streak, the first-run bonus (null when offline), the SC-Dispatch suspension
     // (view only), automatic-suspension strikes, retirement, the boards exclusion
     streak?: { days: number; multiplier: number; graceLeft: boolean; stored: number };
     firstRun?: boolean | null;
@@ -321,7 +321,7 @@ export interface PermissionsData {
     teleport?: { enabled: boolean; departments: TeleportDepartment[] };
     // Config.MissionControls.grants by department key (absent = every supervisor of that department)
     missionGrants?: Record<string, TeleportGrant>;
-    // Admin UI -> Permissions -> Extra grants (Config.Permissions.grants, step G1)
+    // Admin UI -> Permissions -> Extra grants (Config.Permissions.grants)
     extra?: ExtraGrantsData;
 }
 
@@ -349,10 +349,10 @@ export interface MissionControlBounds {
     on?: boolean;
     min?: number;
     max?: number;
-    // a registered flag (step P8: readyCheck's canTurnOff); a choice control's list (step P9: difficulty's presets)
+    // a registered flag (readyCheck's canTurnOff); a choice control's list (difficulty's presets)
     [flag: string]: boolean | number | string[] | undefined;
 }
-// the types control (step P10): the mission types switched off (false) and, under missions, single missions off
+// the types control: the mission types switched off (false) and, under missions, single missions off
 export interface TypeSwitches {
     [typeKey: string]: boolean | Record<string, boolean> | undefined;
     missions?: Record<string, boolean>;
@@ -363,36 +363,36 @@ export interface TypeSwitchMission {
     label: string;
     type: string;
 }
-// a string: a choice control's pick (step P9: difficulty; step P10: featuredType, a mission type key)
-// callLane (step P12): a department's own lane of mission calls; areas empty = every area.
+// a string: a choice control's pick (difficulty; featuredType: a mission type key)
+// callLane: a department's own lane of mission calls; areas empty = every area.
 export interface CallLaneValue {
     spawnEvery: [number, number];
     maxOpen: number;
     areas: string[];
     types: Record<string, number>;
 }
-// crossDept (step P13): join = false keeps the department out of Cross-Department Missions; places caps how many of
+// crossDept: join = false keeps the department out of Cross-Department Missions; places caps how many of
 // its officers take part in one (0 = no cap)
 export interface CrossDeptValue {
     join: boolean;
     places: number;
 }
-// boards (step P14): whether other departments see names (else callsigns only) and the Rank by tabs shown
+// boards: whether other departments see names (else callsigns only) and the Rank by tabs shown
 export interface BoardsValue {
     showToOthers: boolean;
     metrics: string[];
 }
-// reviewRules (step P14): a Void needs a second supervisor; flags of these kinds go to admins only
+// reviewRules: a Void needs a second supervisor; flags of these kinds go to admins only
 export interface ReviewRulesValue {
     secondVoid: boolean;
     adminOnlyKinds: string[];
 }
-// twists (step P15): the twists the department's leaders are offered at the accept step, and the pre-ticked ones
+// twists: the twists the department's leaders are offered at the accept step, and the pre-ticked ones
 export interface TwistsValue {
     offered: string[];
     ticked: string[];
 }
-// goals (step P21): the goal ids of each kind a department's officers draw from (none = every goal); the server adds
+// goals: the goal ids of each kind a department's officers draw from (none = every goal); the server adds
 // the week key the lists count from and the lists that count until then
 export interface GoalsValue {
     daily: string[];
@@ -416,8 +416,8 @@ export type MissionControlValue =
 // A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
 export interface MissionControlState {
     key: string;
-    // 'action' (step P7): a supervisor action with no value (clearCooldown, addRunTime): only its switch and bounds
-    // 'choice' (step P9): one name from the list the admin's bounds give (difficulty: a Config.NpcDifficulty preset)
+    // 'action': a supervisor action with no value (clearCooldown, addRunTime): only its switch and bounds
+    // 'choice': one name from the list the admin's bounds give (difficulty: a Config.NpcDifficulty preset)
     kind: 'number' | 'bool' | 'map' | 'action' | 'choice';
     scope: 'between' | 'run';
     serverWide: boolean;
@@ -444,49 +444,49 @@ export interface MissionControlState {
     range?: [number, number];
     // Config.Departments.<key>.missionControls[key] (never for a server-wide control)
     own?: MissionControlBounds;
-    // happyHour (step P6): Config.MissionControls.happyHourPerDay and how many started today; clearCooldown and
-    // addRunTime (step P7): uses a supervisor may make a day
+    // happyHour: Config.MissionControls.happyHourPerDay and how many started today; clearCooldown and
+    // addRunTime: uses a supervisor may make a day
     perDay?: number;
     usedToday?: number;
-    // addRunTime (step P7): seconds supervisors may add to one run in all
+    // addRunTime: seconds supervisors may add to one run in all
     maxSeconds?: number;
-    // the true / false bounds this control takes besides on (step P8: ['canTurnOff'] for readyCheck)
+    // the true / false bounds this control takes besides on (['canTurnOff'] for readyCheck)
     flags?: string[];
-    // readyCheck (step P8): the admin lets supervisors switch the ready check off (value 0)
+    // readyCheck: the admin lets supervisors switch the ready check off (value 0)
     canTurnOff?: boolean;
-    // a choice control (step P9): the bounds field holding its list ('presets'), the names that list offers this
+    // a choice control: the bounds field holding its list ('presets'), the names that list offers this
     // department now and every name it may hold
     list?: string;
     offered?: string[];
     choices?: string[];
-    // the types control (step P10): every mission it may switch off on its own
+    // the types control: every mission it may switch off on its own
     missions?: TypeSwitchMission[];
-    // callLane (step P12): the callable mission types (their server weight), the areas, the most open calls a lane
+    // callLane: the callable mission types (their server weight), the areas, the most open calls a lane
     // may have (Config.MissionControls.callLaneMaxOpen) and the highest weight
     laneTypes?: { key: string; label: string; weight: number }[];
     laneAreas?: { key: string; label: string }[];
     maxOpenCap?: number;
     weightMax?: number;
-    // crossDept (step P13): the most places a department may keep (Config.CrossDept.maxParticipants)
+    // crossDept: the most places a department may keep (Config.CrossDept.maxParticipants)
     placesMax?: number;
-    // boards (step P14): the Rank by tabs the server offers (Config.Leaderboard.metrics)
+    // boards: the Rank by tabs the server offers (Config.Leaderboard.metrics)
     metricsAll?: string[];
-    // reviewRules (step P14): the flag kinds a department may hand to admins
+    // reviewRules: the flag kinds a department may hand to admins
     flagKinds?: string[];
-    // twists (step P15): the twists the admin enabled (Config.Events.twists), with their labels
+    // twists: the twists the admin enabled (Config.Events.twists), with their labels
     twistsAll?: { key: string; label: string }[];
-    // typeOfTheDay (step P18): the day a pick made now counts on, the department's pick for today, the server's type
+    // typeOfTheDay: the day a pick made now counts on, the department's pick for today, the server's type
     todFor?: string;
     todToday?: string;
     todServer?: string;
-    // goals (step P21): the admin's goals of each kind, the week a pick made now counts from, the lists that count now
+    // goals: the admin's goals of each kind, the week a pick made now counts from, the lists that count now
     goalsAll?: { daily: { id: string; label: string }[]; weekly: { id: string; label: string }[] };
     goalsFrom?: string;
     goalsNow?: { daily: string[]; weekly: string[] };
-    // notices (step P13): characters a department notice may hold (Config.MissionControls.noticeMaxLength)
+    // notices: characters a department notice may hold (Config.MissionControls.noticeMaxLength)
     maxLength?: number;
 }
-// Supervisor UI · Department notices (step P13, sup:getDeptNotices): his department's notices still running.
+// Supervisor UI · Department notices (sup:getDeptNotices): his department's notices still running.
 export interface DeptNotice {
     id: number;
     text?: string;
@@ -504,7 +504,7 @@ export interface DeptNoticesView {
     maxDays: number;
     notices: DeptNotice[];
 }
-// sup:getMyControls (step H4, Config.Tablet.supervisorControlsCard): the controls this player may use now, for the
+// sup:getMyControls (Config.Tablet.supervisorControlsCard): the controls this player may use now, for the
 // Department Report's 'Your controls today' card. perDay / usedToday: supervisors only, for a control with a day count.
 export interface MyControl {
     key: string;

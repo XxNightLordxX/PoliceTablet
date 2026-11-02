@@ -2,9 +2,9 @@
 
 -- CP.Opponents conduct (server): how officers treat a real suspect, from server facts only. The armed
 -- definition, the damage ledger between a case's officers and its suspects, excessive force on a suspect in
--- custody or down (C7: a flag that holds the officer's points, never an automatic fail), the unarmed-shot and
+-- custody or down (a flag that holds the officer's points, never an automatic fail), the unarmed-shot and
 -- ran-over penalties, and the cash-seizure audit. Every flag here is an officer-conduct flag on the officer who fired,
--- drove or seized (critic 2 #12): only his points are held, never his partner's.
+-- drove or seized: only his points are held, never his partner's.
 
 CP.Opponents = CP.Opponents or {}
 local Opp = CP.Opponents
@@ -16,7 +16,7 @@ local MERGE_MS = 2000             -- the same shooter, victim and weapon again t
 local SEIZE_RANGE = 3.0           -- metres: a cash seizure from further away is not an arrest search (sc-police: 2.5)
 
 local DONE = { lost = true, left = true, void = true }
-local CUSTODY = { cuffed = true, detained = true }                  -- CP's own proven states (C7); see Restrained()
+local CUSTODY = { cuffed = true, detained = true }                  -- CP's own proven states; see Restrained()
 -- A cash seizure asks whether he was arrested (CP's proven states), not whether he is still cuffed: on purpose
 local SEIZE_OK = { cuffed = true, detained = true, booked = true }
 local STATE_KEY = {
@@ -113,7 +113,7 @@ end
 
 local function StateText(state) return CP.L(STATE_KEY[state] or 'opp.state.free') end
 
--- Still restrained: CP's own proven 'cuffed' or 'detained' state AND the event-kept cuffs mirror (C7 forbids raw
+-- Still restrained: CP's own proven 'cuffed' or 'detained' state AND the event-kept cuffs mirror (the rules forbid raw
 -- metadata on its own, not both together). 'detained' never goes back to 'free' (a self-uncuff, an escort of a downed
 -- suspect, a bobby pin after the hold), and a 'cuffed' rec whose cuffs came off (rec.freedAt) waits for its
 -- explanation: neither is restrained.
@@ -124,7 +124,7 @@ end
 
 -- In custody for excessive force: restrained, or detained and down for more than downGrace (sc-ambulance disables
 -- every control while he is down). A suspect who freed himself, was revived or was rescued is not: what he does then
--- can never hold an officer's points (critic 2 #12).
+-- can never hold an officer's points.
 local function InCustody(rec, now)
     if Restrained(rec) then return true end
     return rec.state == 'detained' and rec.down == true and rec.downAt ~= nil and now - rec.downAt > Ms('downGrace', 3)
@@ -165,7 +165,7 @@ local function Line(case, rec, what, extra)
 end
 
 -- ============================================================================
---                                  ARMED (C6)
+--                                    ARMED
 -- ============================================================================
 
 -- Armed: the server saw a weapon in his hand (kept armedMemory s), he hit someone of the case, or Crimson-Contracts
@@ -372,7 +372,7 @@ end)
 --                          CASH SEIZURES (sc-police)
 -- ============================================================================
 
--- 'seizeCash' (officerSrc, targetSrc), only while a case is open (V3). sc-police acts only for an on-duty 'leo' job
+-- 'seizeCash' (officerSrc, targetSrc), only while a case is open. sc-police acts only for an on-duty 'leo' job
 -- (anyone else's event is ignored here too), and it moves nothing when the target has no cash; whether this handler
 -- runs before or after its own is not known, so every record says "used Seize Cash" (an attempt). An attempt by an
 -- officer on a case, or any attempt on a suspect, is audited (the officer, whether the target is a suspect of his
@@ -433,7 +433,7 @@ local function OnSeize(officerSrc, targetSrc)
 end
 
 -- ============================================================================
---                         THE WATCH PASS (V4's onTick)
+--                         THE WATCH PASS (Opp.onTick)
 -- ============================================================================
 
 -- Once per case on every watch pass: the weapon in each tracked suspect's hand (GetPlayerPed and

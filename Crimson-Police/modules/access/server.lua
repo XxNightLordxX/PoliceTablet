@@ -391,7 +391,7 @@ CP.Net.rateExempt = A.isAdmin -- netRateResponse never warns about or drops an a
 -- ============================================================================
 
 -- One read of the officer's row fills both caches (suspension and retirement): the tablet's officer check asks for
--- both, so a refresh is one query instead of two (step OP2).
+-- both, so a refresh is one query instead of two.
 local function ReadOfficerState(citizenid, now)
     CP.Migrations.ready()
     local ok, row = pcall(MySQL.single.await,
@@ -647,7 +647,7 @@ function A.explain(src, via)
     return out
 end
 
--- officer: getOfficer(src) when the caller already has it (CP.Permissions.can, step FX1), so it is looked up once.
+-- officer: getOfficer(src) when the caller already has it (CP.Permissions.can), so it is looked up once.
 function A.isSupervisor(src, officer)
     if type(officer) ~= 'table' or officer.src ~= ToSrc(src) then officer = A.getOfficer(src) end
     return officer ~= nil and officer.isSupervisor == true

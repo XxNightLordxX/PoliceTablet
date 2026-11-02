@@ -62,18 +62,18 @@ local LINE_KEYS = {
     booking_too_short = true,
     booked_outside_station = true,
     pair_repeat = true,
-    -- a volunteer suspect (V22)
+    -- a volunteer suspect
     volunteer_yes = true,
     in_position = true,
     engaged = true,
     no_show = true,
     volunteer_cancel = true,
     volunteer_npc = true,
-    volunteer_afk = true,            -- caught while AFK: his part is void (V23)
-    volunteer_out_of_bounds = true,  -- a fugitive outside the search circle too long: void (V25)
-    volunteer_on_duty = true,        -- went on police duty mid-case: void with a strike (Z1)
-    volunteer_early_respawn = true,  -- respawned at a hospital before the death timer: void with a strike (Z2)
-    -- surrender and Talk them down in a live case (RP1)
+    volunteer_afk = true,            -- caught while AFK: his part is void
+    volunteer_out_of_bounds = true,  -- a fugitive outside the search circle too long: void
+    volunteer_on_duty = true,        -- went on police duty mid-case: void with a strike
+    volunteer_early_respawn = true,  -- respawned at a hospital before the death timer: void with a strike
+    -- surrender and Talk them down in a live case
     talk_down = true,
     talk_refused = true,
     surrendered = true,
@@ -218,7 +218,7 @@ end
 
 local NAMES_CHUNK = 100   -- citizenids per cp_officers statement
 
--- Character names for the citizenids a staff screen shows (F2, Config.RealSuspects.staffNames): one batched lookup
+-- Character names for the citizenids a staff screen shows (Config.RealSuspects.staffNames): one batched lookup
 -- per screen load, never a query per row. Online characters from the player cache, the rest from Qbox's players
 -- table (CP.Qbx.characterNames), then the officer names Crimson-Police keeps (cp_officers: the database or the saves
 -- folder). -> { [citizenid] = name }.
@@ -271,7 +271,7 @@ local function NamesOf(cids)
 end
 Opp.staffNames = NamesOf
 
--- A volunteer case's role, mode, phase, dropout and whether an officer reached him (CP.Volunteers.staffView, V26),
+-- A volunteer case's role, mode, phase, dropout and whether an officer reached him (CP.Volunteers.staffView),
 -- or nil for a live case.
 local function VolunteerOf(case)
     local V = CP.Volunteers
@@ -289,7 +289,7 @@ end
 -- ============================================================================
 
 -- One line per case: { runId, kind, open, openedAt, closedAt, missionId, suspects, detained, booked, flags, notes,
--- officers = { { citizenid, name } }, volunteer = { role, mode, phase, why, engaged } (a volunteer case, V26) }.
+-- officers = { { citizenid, name } }, volunteer = { role, mode, phase, why, engaged } (a volunteer case) }.
 function Opp.staffCases()
     local out = {}
     for _, c in ipairs(Opp.cases and Opp.cases() or {}) do
@@ -427,7 +427,7 @@ if CP.AdminKit and CP.AdminKit.action then
 
     Kit.callback('admin:getRsCases', 'antiFarmOverride', function(ctx)
         local list = FilterCases(Opp.staffCases(), ctx.args.filter)
-        -- Config.AdminUi.pageSize (step H6): one page of the cases, { page, pages, total } as casesPage
+        -- Config.AdminUi.pageSize: one page of the cases, { page, pages, total } as casesPage
         local size, casesPage = Kit.pageSize and Kit.pageSize(), nil
         if size and Kit.pageOf then
             local p, pages, total
@@ -437,7 +437,7 @@ if CP.AdminKit and CP.AdminKit.action then
         for _, c in ipairs(list) do c.own = Kit.selfRun(ctx.src, c.runId) == true end
         local volunteersOn = type(Config.Volunteers) == 'table' and Config.Volunteers.enabled == true
         local listed = volunteersOn and CP.Volunteers and CP.Volunteers.staffList and CP.Volunteers.staffList() or {}
-        -- F2: a name for every officer and volunteer the case line or the list has none for, in one lookup
+        -- a name for every officer and volunteer the case line or the list has none for, in one lookup
         local missing = {}
         for _, c in ipairs(list) do
             for _, o in ipairs(c.officers or {}) do
@@ -458,11 +458,11 @@ if CP.AdminKit and CP.AdminKit.action then
             volunteers = volunteersOn,
             cases = list,
             casesPage = casesPage,
-            -- the volunteers on the list now (V26; empty while volunteers are off)
+            -- the volunteers on the list now (empty while volunteers are off)
             listed = listed,
-            -- F2: the Volunteers tab offers Clear strikes (Config.Volunteers.staffClearStrikes)
+            -- the Volunteers tab offers Clear strikes (Config.Volunteers.staffClearStrikes)
             clearStrikes = volunteersOn and Config.Volunteers.staffClearStrikes ~= false,
-            -- F2: blocks, exclusions and suspensions can be lifted early (Config.RealSuspects.staffLift)
+            -- blocks, exclusions and suspensions can be lifted early (Config.RealSuspects.staffLift)
             lift = Cfg().staffLift ~= false,
             serverTime = os.time(),
         }
@@ -484,7 +484,7 @@ if CP.AdminKit and CP.AdminKit.action then
         local lines, from = {}, nil
         if Opp.pairStats then lines, from = Opp.pairStats(cid) end
         local admin = Opp.adminRows and Opp.adminRows() or {}
-        -- F2: the names of everyone the pairs and the running rows name, in one lookup
+        -- the names of everyone the pairs and the running rows name, in one lookup
         local cids = { cid }
         for _, l in ipairs(lines) do
             cids[#cids + 1] = l.officer
@@ -500,7 +500,7 @@ if CP.AdminKit and CP.AdminKit.action then
             from = from,
             admin = admin,
             names = NamesOf(cids),
-            -- F2: the running rows can be lifted early (Config.RealSuspects.staffLift)
+            -- the running rows can be lifted early (Config.RealSuspects.staffLift)
             lift = Cfg().staffLift ~= false,
             serverTime = os.time(),
         }
@@ -568,7 +568,7 @@ if CP.AdminKit and CP.AdminKit.action then
         self = function(p) return { citizenid = p.citizenid } end,
     })
 
-    -- F2: lift a running block, exclusion or suspension early (Config.RealSuspects.staffLift). Never one that names
+    -- lift a running block, exclusion or suspension early (Config.RealSuspects.staffLift). Never one that names
     -- the admin's own characters; a row that is not running (ended, already lifted, never there) is err.rs_no_row.
     local LIFT_KINDS = { block = true, exclude = true, suspend = true }
     Kit.action('server:admin:rsLift', 'antiFarmOverride', function(ctx)
@@ -592,7 +592,7 @@ if CP.AdminKit and CP.AdminKit.action then
         return true, { kind = p.kind, officer = officer, suspect = suspect }
     end, { reason = true })
 
-    -- F2: clear a volunteer's strikes and strike block (Config.Volunteers.staffClearStrikes), refused on the admin's
+    -- clear a volunteer's strikes and strike block (Config.Volunteers.staffClearStrikes), refused on the admin's
     -- own characters; nothing to clear is err.rs_no_strikes.
     Kit.action('server:admin:rsClearStrikes', 'antiFarmOverride', function(ctx)
         local p = ctx.payload

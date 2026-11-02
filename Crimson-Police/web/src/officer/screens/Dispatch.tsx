@@ -169,7 +169,7 @@ function CallCard({
     busy: boolean;
     blocked: boolean;
     onClaim: (call: MissionCall) => void;
-    // a mission command pushed to this unit (step P19): the leader may turn it down
+    // a mission command pushed to this unit: the leader may turn it down
     onDecline?: (call: MissionCall) => void;
     // claim in one click (My options): the twists go through the claim dialog, opened by this button
     onTwists?: (call: MissionCall) => void;
@@ -362,16 +362,16 @@ export default function Dispatch() {
         if (view && typeof view === 'object') setData(view);
     });
     const { run, busy } = useAction();
-    // My options -> Opening the tablet (step O9): with rememberFilters on, the filter of the last visit (this PC)
+    // My options -> Opening the tablet: with rememberFilters on, the filter of the last visit (this PC)
     const [filter, setFilter] = useRememberedFilter<Filter>('dispatch.filter', 'all', v =>
         FILTERS.includes(v as Filter),
     );
-    // My options -> Dispatch (step O9): Claim sends the claim at once; the dialog's lines are the footnote
+    // My options -> Dispatch: Claim sends the claim at once; the dialog's lines are the footnote
     const oneClick = useOption('skipClaimConfirm') === true;
     const [pending, setPending] = useState<MissionCall | null>(null);
-    // the twists the leader picked in the claim dialog (PLAN M8b); a new dialog starts with his
-    // usual twists (My options, step O15) where the call offers them, else the ones his department pre-ticks (step
-    // P15), else none
+    // the twists the leader picked in the claim dialog; a new dialog starts with his
+    // usual twists (My options) where the call offers them, else the ones his department pre-ticks, else
+    // none
     const [twists, setTwists] = useState<string[]>([]);
     const usualTwists = useRef<unknown>(undefined);
     usualTwists.current = useOption('usualTwists');
@@ -412,14 +412,14 @@ export default function Dispatch() {
         else setPending(call);
     };
 
-    // a pushed mission (step P19): the leader turns it down; nobody else gets it
+    // a pushed mission: the leader turns it down; nobody else gets it
     const decline = async (call: MissionCall) => {
         const res = await run<{ view?: DispatchView }>(
             'server:declineMissionCall',
             { callId: call.id },
             { success: 'mc.card.declined' },
         );
-        // step WF2: the reply carries the fresh view (an older server: ask for it)
+        // the reply carries the fresh view (an older server: ask for it)
         if (res.ok) applyReplyView<DispatchView>(res.data, 'view', setData, refresh);
     };
 

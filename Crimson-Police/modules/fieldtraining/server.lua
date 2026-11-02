@@ -306,7 +306,7 @@ if CP.Hooks and CP.Hooks.on then
 end
 
 -- ============================================================================
---                        THE RIDE-ALONG RULE (STEP T2)
+--                             THE RIDE-ALONG RULE
 -- ============================================================================
 
 -- CP.Draw's accept (the Mission Board and a mission call claim): a rookie in training may take a mission type of
@@ -328,7 +328,7 @@ function FT.unitCheck(officers, missionType)
     return true
 end
 
--- A live case's backup (CP.Runs.addParticipant, step F3): the same rule for the officer who joins late, with the
+-- A live case's backup (CP.Runs.addParticipant): the same rule for the officer who joins late, with the
 -- officers already on the case as his unit. unit = { citizenid, ... } (the active participants).
 -- -> true | false, 'err.fto_trainer_needed'. Reads nothing while the rule is empty or does not list missionType.
 function FT.joinCheck(cid, unit, missionType)
@@ -454,7 +454,7 @@ local function Finish(cid, record, name)
     return true
 end
 
--- trainerBonus (T2): a points row for the trainer (a manual_award row, mission id fto_bonus, shown in his history).
+-- trainerBonus: a points row for the trainer (a manual_award row, mission id fto_bonus, shown in his history).
 local function Bonus(trainerCid, rookieName, task)
     local n = FT.trainerBonus()
     if n <= 0 then return nil end
@@ -498,7 +498,7 @@ function FT.signOff(src, payload)
         if not WriteRecord(rookie, rec) then return false, 'err.internal' end
         Kit.notify(rookie, 'success', 'fto.toast.signed', { task = TaskLabel(task), name = st.signedName })
         Bonus(officer.citizenid, r.name or rookie, task)
-        -- Config.FeatureRewards (step G3): the trainer per sign-off, the rookie once his training is done; each once
+        -- Config.FeatureRewards: the trainer per sign-off, the rookie once his training is done; each once
         -- per rookie and task whatever pairing comes later (uuidCid: the row is keyed by the rookie, not the trainer)
         local FR = CP.FeatureRewards
         if FR and FR.payLater then

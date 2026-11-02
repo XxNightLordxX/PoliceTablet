@@ -1,4 +1,4 @@
-/* Admin UI → Rewards (step H1). Only --cp-* variables; classes prefixed rewards-screen. */
+/* Admin UI → Rewards. Only --cp-* variables; classes prefixed rewards-screen. */
 
 .rewards-screen__rows {
     display: flex;

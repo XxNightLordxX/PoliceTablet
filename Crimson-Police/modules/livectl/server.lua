@@ -323,7 +323,7 @@ local function Counts(citizenid)
     }
 end
 
--- The Mission Board as the officer sees it (C10): type cards and why each is locked. Never a mission id or name
+-- The Mission Board as the officer sees it: type cards and why each is locked. Never a mission id or name
 -- (Hard rule Mission choice): only the fields below leave this function.
 local function BoardView(src)
     local ok, data = Call('Draw', 'boardCards', src)
@@ -394,7 +394,7 @@ function LiveCtl.officerRunState(citizenid)
         },
         freeAbandons = FreeAbandons(citizenid),
         board = src and BoardView(src) or nil,
-        -- a supervisor's mission ban in force (step P11, CP.MissionBan): { until, by, reason }, lifted from here
+        -- a supervisor's mission ban in force (CP.MissionBan): { until, by, reason }, lifted from here
         missionBan = select(2, Call('MissionBan', 'view', citizenid)),
         serverTime = os.time(),
     }
@@ -649,7 +649,7 @@ Kit.action('server:admin:addRunTime', 'liveRuns', function(ctx)
     if not okA then return false, total end
     NotifyRun(run, 'admin.live.notice.time_added', { minutes = minutes })
     ctx.audit('runTimeAdd', run.id, tostring(total - minutes * 60), tostring(total), { category = 'operations' })
-    -- step FX1: the reply carries the fresh Live Missions view (data.view)
+    -- the reply carries the fresh Live Missions view (data.view)
     local reply = { runId = run.id, timeAdded = total }
     if Has('Admin', 'withLiveRuns') then return CP.Admin.withLiveRuns(ctx.src, true, reply) end
     return true, reply
@@ -798,9 +798,9 @@ end, { reason = true, category = 'audit' })
 -- ============================================================================
 --                                 SUPERVISORS
 -- ============================================================================
--- CLEAR ONE OFFICER'S COOLDOWN, ADD TIME (STEP P7).
+-- CLEAR ONE OFFICER'S COOLDOWN, ADD TIME.
 -- Two Mission controls of kind 'action' (CP.DeptControls): clearCooldown (Department Report) is a cooldown control,
--- so it is server-wide, outside the master switch and ships on (owner decision 2026-10-19: a supervisor may clear the
+-- so it is server-wide, outside the master switch and ships on (a supervisor may clear the
 -- cooldown of an officer of any department); addRunTime (Live Missions) is for runs of the supervisor's own
 -- department, under the master switch, and ships off. Admins keep their own tools (server:admin:clearCooldowns and
 -- server:admin:addRunTime); both share the per-officer clear count and the per-run time total with these.
@@ -973,7 +973,7 @@ Kit.supAction('server:sup:clearCooldowns', 'missionControls', function(ctx)
     ctx.audit('cooldownClear', cid, scope, U.clip(key, 64), { category = 'flags' })
     ctx.changed('cooldowns', cid)
     ctx.notify(cid, 'info', sup and 'sup.notice.cooldowns_cleared' or 'admin.live.notice.cooldowns_cleared', {})
-    -- step FX1: the reply carries the dialog's fresh list (data.view), so it needs no second request
+    -- the reply carries the dialog's fresh list (data.view), so it needs no second request
     local out = {}
     if type(res) == 'table' then
         for k, v in pairs(res) do out[k] = v end
@@ -983,7 +983,7 @@ Kit.supAction('server:sup:clearCooldowns', 'missionControls', function(ctx)
     return true, out
 end, {
     reason = true,
-    oneAtATime = true, -- the per-day cap is read before a yield (step Z5)
+    oneAtATime = true, -- the per-day cap is read before a yield
     self = OfficerTarget,
     targetRate = { 1, 3000 },
     category = 'flags',
@@ -1008,13 +1008,13 @@ Kit.supAction('server:sup:addRunTime', 'missionControls', function(ctx)
     if not okA then return false, total end
     NotifyRun(run, 'sup.notice.time_added', { minutes = minutes })
     ctx.audit('runTimeAdd', run.id, tostring(total - minutes * 60), tostring(total), { category = 'operations' })
-    -- step FX1: the reply carries the fresh Live Missions view (data.view)
+    -- the reply carries the fresh Live Missions view (data.view)
     local reply = { runId = run.id, timeAdded = total }
     if Has('Admin', 'withLiveRuns') then return CP.Admin.withLiveRuns(ctx.src, true, reply) end
     return true, reply
 end, {
     reason = true,
-    oneAtATime = true, -- the per-day cap is read before a yield (step Z5)
+    oneAtATime = true, -- the per-day cap is read before a yield
     self = RunTargets,
     category = 'operations',
     permission = function(src) return CanUse(src, TIME_KEY) end,

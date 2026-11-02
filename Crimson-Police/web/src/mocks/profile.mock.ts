@@ -202,9 +202,10 @@ for (const scope of ['sup', 'admin']) {
         return drop(i => i.kind === 'report' && i.id === p.id);
     });
     registerMock('action', `server:${scope}:clearProfile`, () => true);
-    registerMock('action', `server:${scope}:commend`, () => ({ id: 99 }));
-    registerMock('action', `server:${scope}:revokeCommendation`, () => true);
 }
+// the supervisor's Commend and Revoke are in boards.mock.ts (their replies carry the activity view)
+registerMock('action', 'server:admin:commend', () => ({ id: 99 }));
+registerMock('action', 'server:admin:revokeCommendation', () => true);
 
 // ============================================================================
 //                           ADMIN · OFFICER PROFILE

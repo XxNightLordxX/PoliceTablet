@@ -158,7 +158,7 @@ local function IsOnCall(src)
     return ok and v == true
 end
 
--- A supervisor's mission ban in force (step P11, CP.MissionBan): no joins until it ends.
+-- A supervisor's mission ban in force (CP.MissionBan): no joins until it ends.
 local function Banned(citizenid)
     local ok, ban = Call('MissionBan', 'get', citizenid)
     return ok and type(ban) == 'table'
@@ -170,7 +170,7 @@ local function BannedSrc(src)
 end
 
 -- ============================================================================
---                     CROSS-DEPARTMENT PARTICIPATION (P13)
+--                        CROSS-DEPARTMENT PARTICIPATION
 -- ============================================================================
 -- A department's crossDept Mission control: { join = false } keeps its officers out of Cross-Department Missions;
 -- places caps how many of them take part in one (0 = no cap, never above Config.CrossDept.maxParticipants). The
@@ -728,7 +728,7 @@ end
 --                     ACTIONS (permission already checked)
 -- ============================================================================
 
--- opts = { skipCooldown = true, reason }: an admin launching during the server-wide cooldown (A13, audited).
+-- opts = { skipCooldown = true, reason }: an admin launching during the server-wide cooldown (audited).
 local function DoLaunch(src, missionId, opts)
     opts = type(opts) == 'table' and opts or {}
     if not ready then return false, 'err.op_not_ready' end
@@ -1122,7 +1122,7 @@ function Ops.boardCard(src)
     local open = cur.status == 'joining' and not cur.joinClosed and cur.joinEndsAt ~= nil and cur.joinEndsAt > now
     -- joinBlocked (extra, docs/ARCHITECTURE.md §13.23): why this viewer cannot join, the error key Join would return.
     local joinBlocked = nil
-    -- step P13: his department opted out or its places are taken (the card still shows: the lock applies to all)
+    -- his department opted out or its places are taken (the card still shows: the lock applies to all)
     local deptErr = nil
     if open and src ~= nil and not mine and not position then deptErr = DeptRefuses(cur, (GetOfficer(src))) end
     if not open then
@@ -1442,7 +1442,7 @@ function Ops._tick()
 end
 
 -- ============================================================================
---                 OPERATION HISTORY (C6; ARCHITECTURE §8.4.2)
+--                   OPERATION HISTORY (ARCHITECTURE §8.4.2)
 -- ============================================================================
 -- Past Cross-Department Missions with their participants and points from the run rows (live and archived: the union
 -- sits in a derived table, as the saves folder engine needs). Read-only; admins only.

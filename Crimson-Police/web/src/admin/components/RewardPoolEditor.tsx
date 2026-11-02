@@ -27,7 +27,7 @@ const ENTRY_PATHS = ['Rewards.byType', 'Rewards.byMission'];
 const SPEC_PATHS = ['Rewards.medals', 'Rewards.goals', 'Rewards.levels', 'Rewards.season'];
 const BOSS_PATH = 'Rewards.weeklyBoss';
 
-// FeatureRewards.<feature>.items: a flat list of { item, count, chance, value } (step H1)
+// FeatureRewards.<feature>.items: a flat list of { item, count, chance, value }
 export function isFeatureItems(path: string): boolean {
     return /^FeatureRewards\.[A-Za-z]+\.items$/.test(path);
 }

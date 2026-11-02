@@ -77,7 +77,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     const current = data && data.officer?.citizenid === officer?.citizenid ? data : null;
     const runs = asList(current?.runs);
     const commendations = asList(current?.commendations);
-    // step FX1: an action's reply carries the officer's fresh activity (an older server: ask for it)
+    // an action's reply carries the officer's fresh activity (an older server: ask for it)
     const applyReply = (reply: unknown) =>
         applyReplyView<OfficerActivity>(reply, 'activity', setData, () => void refetch());
 
@@ -293,7 +293,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     );
 }
 
-// An officer an admin granted only field training (Config.Permissions.grants, step G1): the Field training panel alone.
+// An officer an admin granted only field training (Config.Permissions.grants): the Field training panel alone.
 function FieldTrainingOnly() {
     return (
         <Screen title={t('ui.screen.sup_report')} className="boards-report">

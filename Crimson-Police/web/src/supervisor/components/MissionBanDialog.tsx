@@ -27,12 +27,12 @@ export function MissionBanDialog({
     control: MissionBanControl | null;
     state: MissionBanState | null;
     onClose: () => void;
-    // reply: the action's reply (with activity = true it carries the officer's fresh activity, step FX1)
+    // reply: the action's reply (with activity = true it carries the officer's fresh activity)
     onDone: (reply: unknown) => void;
     activity?: boolean;
 }) {
     const { run, busy } = useAction();
-    // Config.Tablet.supervisorRemember (step WF2): a new ban opens with the hours and reason last used
+    // Config.Tablet.supervisorRemember: a new ban opens with the hours and reason last used
     const remember = rememberOn(useOptionalSession());
     const [hours, setHours] = useState<number | null>(control?.min ?? 1);
     const [reason, setReason] = useState('');

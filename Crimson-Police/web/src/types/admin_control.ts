@@ -77,7 +77,7 @@ export interface AdminNavCounts {
 // ============================================================================
 // A screen that shows another package's controls renders its slot; the owning package fills it in.
 
-// Officers → officer detail: OfficerRunControls (P3), OfficerSupport (P5).
+// Officers → officer detail: OfficerRunControls, OfficerSupport.
 export interface OfficerSlotProps {
     citizenid: string;
     online: boolean;
@@ -87,19 +87,19 @@ export interface OfficerSlotProps {
     onChanged?: () => void;
 }
 
-// Departments → each department card: DepartmentFunds (P4).
+// Departments → each department card: DepartmentFunds.
 export interface DepartmentSlotProps {
     department: string;
 }
 
-// Settings → Item rewards: RewardPoolEditor (P4). handlesRewardPool(path) says which settings it edits; the host
+// Settings → Item rewards: RewardPoolEditor. handlesRewardPool(path) says which settings it edits; the host
 // shows its own JSON editor for the rest.
 export interface RewardPoolSlotProps {
     path: string;
     value: unknown;
     disabled?: boolean;
     onSave: (value: unknown) => void | Promise<unknown>;
-    // Rewards.byType / byMission only (Admin UI -> Rewards, step H1): edit this one key; the save sends the whole map
+    // Rewards.byType / byMission only (Admin UI -> Rewards): edit this one key; the save sends the whole map
     // with it in place (an empty pool removes the key)
     only?: string;
 }

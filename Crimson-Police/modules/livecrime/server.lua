@@ -69,7 +69,7 @@ local function MissionTypeOf(key)
     return v
 end
 
--- The open run of this crime's case (V14 sets crime.runId when a unit claims it), or nil.
+-- The open run of this crime's case (crime.runId is set when a unit claims it), or nil.
 local function RunOf(crime)
     local run = crime.runId and CP.Runs and CP.Runs.get and CP.Runs.get(crime.runId) or nil
     if type(run) ~= 'table' or run.state == 'ended' then return nil end
@@ -122,7 +122,7 @@ local function Audit(action, crime, value, reason)
     end)
 end
 
--- The crime's LIVE call lapses if nobody has it yet (step V11).
+-- The crime's LIVE call lapses if nobody has it yet.
 local function EndCall(crime)
     local M = CP.MissionCalls
     if not (crime.callId and M and M.endLive) then return end
@@ -154,8 +154,8 @@ local function Find(res, data) return crimes[res .. ':' .. data.uid] end
 -- ============================================================================
 
 -- { [citizenid] = true } of the crew members who may be suspects now, and { [reason] = count } of the others. Each
--- one is found by his citizenid (an event path, so the qbx export is allowed here; C9), must pass
--- CP.Opponents.eligible with intake = true and stand within Config.LiveCrime.suspectRadius of the crime (C24).
+-- one is found by his citizenid (an event path, so the qbx export is allowed here), must pass
+-- CP.Opponents.eligible with intake = true and stand within Config.LiveCrime.suspectRadius of the crime.
 local function Suspects(crime)
     local radius = Num(Cfg().suspectRadius, 300.0)
     local suspects, why = {}, {}
@@ -218,19 +218,19 @@ function LC.onStarted(res, data)
         title = nil,
         street = nil,
         suspects = nil,
-        armed = {},             -- [citizenid] = os.time() of Crimson-Contracts' crewShot (C6; V14 copies it into the case)
+        armed = {},             -- [citizenid] = os.time() of Crimson-Contracts' crewShot (the claim copies it into the case)
         ended = false,
         outcome = nil,
     }
     crimes[crimeKey] = crime
     count = count + 1
-    -- an admin's /testcriminalcontract run: never a live crime (C16)
+    -- an admin's /testcriminalcontract run: never a live crime
     if crime.test then
         Audit('liveCrimeIgnored', crime, 'test', CP.L('livecrime.audit.ignored_test', Params(crime)))
         CP.log(TAG, 'crime %s (%s) is an admin test contract: ignored', crimeKey, crime.key)
         return false, 'test'
     end
-    -- AFK samples from the start of the contract (C17), only for a crime that can become a LIVE call
+    -- AFK samples from the start of the contract, only for a crime that can become a LIVE call
     if MissionTypeOf(crime.key) then crime.sampled = Opp('sampleCrew', crimeKey, Sorted(crime.members)) == true end
     CP.log(TAG, 'crime %s (%s) started with %d crew member(s)', crimeKey, crime.key, CP.U.count(crime.members))
     return true
@@ -300,7 +300,7 @@ function LC.onEnded(res, data)
     return true
 end
 
--- CP.Opponents finds him again itself when his character loads (V4); the case only gets a timeline line.
+-- CP.Opponents finds him again itself when his character loads; the case only gets a timeline line.
 function LC.onRejoined(res, data)
     local crime = Find(res, data)
     local cid = data.citizenid
@@ -315,7 +315,7 @@ function LC.onRejoined(res, data)
     return true
 end
 
--- Crimson-Contracts' proof that a crew member was armed (C6): on the suspect of a running case, or kept on the crime
+-- Crimson-Contracts' proof that a crew member was armed: on the suspect of a running case, or kept on the crime
 -- until its case opens. Crimson-Contracts sends one 'shot' per contract and one 'gun_kill' per guard a crew member
 -- shot dead; CP.Opponents' own weapon checks cover every other shot in the case.
 function LC.onCrewShot(res, data)
@@ -333,7 +333,7 @@ end
 --                                     API
 -- ============================================================================
 
--- The red LIVE call on the Dispatch screen for a crime with suspects (step V11, CP.MissionCalls.postLive). A crime
+-- The red LIVE call on the Dispatch screen for a crime with suspects (CP.MissionCalls.postLive). A crime
 -- that cannot be posted (Config.LiveCrime.maxLiveRuns reached, mission calls off) gets the audit line
 -- liveCrimeIgnored with the reason; true when the call is up.
 function LC.post(crime)
@@ -356,7 +356,7 @@ end
 -- The record of a crime ('<resource>:<uid>'), or nil.
 function LC.get(crimeKey) return type(crimeKey) == 'string' and crimes[crimeKey] or nil end
 
--- The crime of a live run (run.live.crimeKey, V14), or nil.
+-- The crime of a live run (run.live.crimeKey), or nil.
 function LC.crimeOf(run)
     local live = type(run) == 'table' and run.live or nil
     return type(live) == 'table' and LC.get(live.crimeKey) or nil
@@ -376,15 +376,15 @@ function LC.inCrew(cid)
 end
 
 -- ============================================================================
---                       SCORING (V13, ARCHITECTURE 5.46)
+--                         SCORING (ARCHITECTURE 5.46)
 -- ============================================================================
 -- The rules CP.Scoring, CP.Cash, CP.Rewards, CP.Goals and CP.Challenge ask about a live run. They read the run
 -- itself (never Config.LiveCrime.enabled), so a case that is running when the owner turns live crimes off still
 -- ends by the rules it started with.
 
-LC.MISSION_ID = 'live_crime'      -- the engine mission of a live case (V14), its rows' mission_id
+LC.MISSION_ID = 'live_crime'      -- the engine mission of a live case, its rows' mission_id
 
--- Whether a run is a live case (run.live from V14, or run.realSuspect = 'live').
+-- Whether a run is a live case (run.live set at the claim, or run.realSuspect = 'live').
 function LC.isLive(run)
     if type(run) ~= 'table' then return false end
     return type(run.live) == 'table' or run.realSuspect == 'live'
@@ -436,7 +436,7 @@ function LC.rowFilter(what, alias)
 end
 
 -- ============================================================================
---               THE CLAIM AND THE CASE (V14, ARCHITECTURE 5.46)
+--                  THE CLAIM AND THE CASE (ARCHITECTURE 5.46)
 -- ============================================================================
 -- A unit that claims a LIVE call gets no draw: CP.Draw's live path runs LC.claimCheck, builds the run from
 -- LC.missionFor(crime) (the engine-only live_crime mission at the crime's reported place) and CP.Runs.create opts.live;
@@ -511,7 +511,7 @@ function LC.missionFor(crime)
     return d, 1
 end
 
--- The officer rules of a claim and of a late join (V15) for o = { src, citizenid }: not in the crew, not suspended from
+-- The officer rules of a claim and of a late join for o = { src, citizenid }: not in the crew, not suspended from
 -- these cases, not a suspect within jobHopMinutes, not one of the suspects on another character or account, no admin
 -- pair block and no pair cooldown with any suspect. -> true | false, err.
 local function OfficerOk(crime, o)
@@ -570,7 +570,7 @@ function LC.liveOf(crime)
 end
 
 -- ============================================================================
---                THE OFFICERS' TABLET (V16, ARCHITECTURE 5.46)
+--                   THE OFFICERS' TABLET (ARCHITECTURE 5.46)
 -- ============================================================================
 -- What the officers' screens show of a live case: the LIVE line of the ready check, the Active Mission case card
 -- and the outcomes on the result card. Labels and counts only: never a citizenid, a server id, a position or (while
@@ -650,7 +650,7 @@ function LC.resultView(run)
 end
 
 -- An officer who shares only a connection or PC with a suspect (CP.Opponents.selfBlock's flags) gets the
--- officer-conduct flag rs_linked_accounts (his own points only): at the open, and at a late join (V15).
+-- officer-conduct flag rs_linked_accounts (his own points only): at the open, and at a late join.
 local function FlagLinked(run, case, crime, src)
     local blocked, _, flags, match = Opp('selfBlock', src, crime.suspects)
     if blocked == true or type(flags) ~= 'table' then return end
@@ -663,7 +663,7 @@ local function FlagLinked(run, case, crime, src)
 end
 
 -- run:created of a live run: the crime remembers it, the case opens for its suspects (the crime's coords are the
--- scene), Crimson-Contracts' crew shots mark those suspects armed (C6), and an officer who shares a connection or PC
+-- scene), Crimson-Contracts' crew shots mark those suspects armed, and an officer who shares a connection or PC
 -- with a suspect gets the officer-conduct flag rs_linked_accounts (his own points only). A case that cannot open
 -- (every suspect in another case meanwhile) ends the run as cancelled: no cooldown, no penalty.
 local function Opened(run)
@@ -725,7 +725,7 @@ local function Closed(run, state, reason)
 end
 
 -- ============================================================================
---              RESULTS FOR OTHER SCRIPTS (V19, ARCHITECTURE 5.46)
+--                RESULTS FOR OTHER SCRIPTS (ARCHITECTURE 5.46)
 -- ============================================================================
 -- The server-only event crimson-police:server:liveCrimeEnded when a live case ends (Config.LiveCrime.endEvent,
 -- shipped true; live cases exist only while enabled), and the read-only export GetAvailablePolice
@@ -812,7 +812,7 @@ exports('GetAvailablePolice', function()
 end)
 
 -- ============================================================================
---                BACKUP JOINS THE CASE (V15, ARCHITECTURE 5.46)
+--                  BACKUP JOINS THE CASE (ARCHITECTURE 5.46)
 -- ============================================================================
 -- An on-duty officer on no mission who marks himself responding to the crime's own SC-Dispatch call, reaches the
 -- scene (sceneRadius, a scan every SCAN_MS on CP.Opponents' watch pass) or cuffs a suspect from outside the case
@@ -971,8 +971,8 @@ local function Joined(run, src)
     end
 end
 
--- CP.Opponents' proof (the cuff pair, ARCHITECTURE 5.46, step F3): a participant of a live case put cuffs on someone,
--- a suspect or not (C5: the line never says which). A staff line in the case timeline, at most one per officer every
+-- CP.Opponents' proof (the cuff pair, ARCHITECTURE 5.46): a participant of a live case put cuffs on someone,
+-- a suspect or not (the line never says which). A staff line in the case timeline, at most one per officer every
 -- CUFF_LINE_MS so that a cuff spam does not push the older lines out.
 local CUFF_LINE_MS = 10000
 local cuffLineAt = {}             -- [runId] = { [src] = GetGameTimer() of his last line }

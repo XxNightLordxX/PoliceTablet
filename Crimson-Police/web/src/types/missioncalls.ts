@@ -27,13 +27,13 @@ export interface MissionCall {
     typeOfTheDay: boolean;
     redispatched: boolean;
     paged: boolean;
-    // a mission command pushed to a unit (step P19); missionLabel only for the paged unit itself
+    // a mission command pushed to a unit; missionLabel only for the paged unit itself
     pushed?: boolean;
     missionLabel?: string | null;
-    // a department lane's call (step P12): only that department's officers see it ("SAST call")
+    // a department lane's call: only that department's officers see it ("SAST call")
     department?: string | null;
     departmentShort?: string | null;
-    // a LIVE call (step V11): a real crime reported by Crimson-Contracts; liveTitle and liveStreet are the alert's
+    // a LIVE call: a real crime reported by Crimson-Contracts; liveTitle and liveStreet are the alert's
     // own text, suspects how many crew members are suspects (never where they are)
     live?: boolean;
     liveTitle?: string | null;
@@ -79,7 +79,7 @@ export interface PageableUnit {
     size: number;
 }
 
-// A department's own call lane (step P12, the callLane Mission control) as the staff panel lists it.
+// A department's own call lane (the callLane Mission control) as the staff panel lists it.
 export interface CallLaneView {
     department: string;
     departmentShort: string;
@@ -104,7 +104,7 @@ export interface SupCallsView {
     units?: PageableUnit[];
     // the lanes the viewer may see: his department's (admins: every one)
     lanes?: CallLaneView[];
-    // pushing a chosen mission when paging (step P19, the pushMission Mission control); absent when not allowed
+    // pushing a chosen mission when paging (the pushMission Mission control); absent when not allowed
     push?: PushView | null;
     today: {
         code: string;

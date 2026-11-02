@@ -26,7 +26,7 @@ import SupPayouts from '../supervisor/screens/Payouts';
 import SupDeptReport from '../supervisor/screens/DeptReport';
 import SupMissionControls from '../supervisor/screens/MissionControls';
 
-// The Admin UI screens and the Supervisor Mission Builder load on first use (step OP2): every player's NUI starts
+// The Admin UI screens and the Supervisor Mission Builder load on first use: every player's NUI starts
 // without them (most players never open them). Opening that UI starts loading all of its screens at once
 // (preloadScreens), so a screen picked later is already there.
 type Loader = () => Promise<{ default: ComponentType }>;
@@ -106,8 +106,8 @@ export const OFFICER_SCREENS: ScreenDef<OfficerScreenKey>[] = [
 ];
 
 export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
-    // viewMissionList: every supervisor's; an officer with only an admin's extra grant (Config.Permissions.grants, step
-    // G1) sees just the screens of his powers
+    // viewMissionList: every supervisor's; an officer with only an admin's extra grant (Config.Permissions.grants)
+    // sees just the screens of his powers
     {
         key: 'sup_missions',
         titleKey: 'ui.screen.sup_missions',
@@ -184,13 +184,13 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_payouts',
         icon: 'dollar',
         component: AdminPayouts,
-        // Config.AdminUi.moneyScreen (step H6): a tab of Money instead (the key stays an alias)
+        // Config.AdminUi.moneyScreen: a tab of Money instead (the key stays an alias)
         visible: s => !moneyScreenOn(s),
         play: 'economy',
         group: 'main',
     },
     {
-        // Money (step H6, Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs
+        // Money (Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs
         key: 'admin_money',
         titleKey: 'ui.screen.admin_money',
         icon: 'dollar',
@@ -200,7 +200,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         group: 'main',
     },
     {
-        // Rewards (step H1, Config.AdminUi.rewardsScreen): every feature that pays, its money, account and items
+        // Rewards (Config.AdminUi.rewardsScreen): every feature that pays, its money, account and items
         key: 'admin_rewards',
         titleKey: 'ui.screen.admin_rewards',
         icon: 'gift',
@@ -283,7 +283,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         group: 'main',
     },
     {
-        // Real suspects (step V18): while live crimes or volunteers are on (Config.RealSuspects.adminScreen)
+        // Real suspects: while live crimes or volunteers are on (Config.RealSuspects.adminScreen)
         key: 'admin_rs',
         titleKey: 'ui.screen.admin_rs',
         icon: 'shield',
@@ -339,17 +339,17 @@ export function defaultScreen(ui: UiKind): ScreenKey {
 // opens on Config.AdminUi.landing (Home, Payouts or Missions) and the Supervisor UI on Config.Tablet.supervisorLanding.
 export function landingScreen(ui: UiKind, session: Session | null, available: ScreenKey[]): ScreenKey {
     if (ui === 'admin' && session) {
-        // a landing of 'payouts' opens Money's Mission pay tab while the Money screen is on (step H6)
+        // a landing of 'payouts' opens Money's Mission pay tab while the Money screen is on
         const want = resolveAdminKey(`admin_${adminLanding(session)}` as ScreenKey, {}, session).key;
         if (available.includes(want)) return want;
     }
-    // Config.Tablet.supervisorLanding (step G5): 'first' = as before
+    // Config.Tablet.supervisorLanding: 'first' = as before
     if (ui === 'supervisor') return supervisorLanding(supervisorNavOf(session), available) ?? 'home';
     return available[0] ?? 'home';
 }
 
 // The screen a UI shows: the remembered one while it is shown, else the landing. The Supervisor UI opens on its landing
-// (Config.Tablet.supervisorLanding, step G5) until a screen is picked; with 'first' that is the same screen as before.
+// (Config.Tablet.supervisorLanding) until a screen is picked; with 'first' that is the same screen as before.
 export function currentScreen(
     ui: UiKind,
     session: Session | null,

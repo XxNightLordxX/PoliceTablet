@@ -58,7 +58,7 @@ end)
 
 local AUTO_READY_INPUT_MS = 60000   -- Auto-Ready answers only after game input within this long
 
--- Auto-Ready (My options -> Unit, step O13): on, not in the pause menu and at the keys. The server still checks the
+-- Auto-Ready (My options -> Unit): on, not in the pause menu and at the keys. The server still checks the
 -- department, the option and the distance to the leader; an answer it does not count leaves the banner asking.
 function Units.autoReadyNow()
     if not (CP.Options and CP.Options.get and CP.Options.get('autoReady') == true) then return false end
@@ -74,7 +74,7 @@ RegisterNetEvent(CP.e('client:readyCheck'), function(data)
     local label = type(data.typeLabel) == 'string' and data.typeLabel:sub(1, LABEL_MAX) or ''
     local seconds = math.max(1, math.floor(tonumber(data.expiresIn) or 20))
     local leader = type(data.leaderName) == 'string' and data.leaderName:sub(1, LABEL_MAX) or '?'
-    -- the twists the leader chose (PLAN M8b): named in the toast
+    -- the twists the leader chose: named in the toast
     local names = {}
     for _, t in ipairs(type(data.twists) == 'table' and data.twists or {}) do
         if type(t) == 'table' and type(t.label) == 'string' and #names < 3 then
@@ -86,7 +86,7 @@ RegisterNetEvent(CP.e('client:readyCheck'), function(data)
     if Units.autoReadyNow() then TriggerServerEvent(CP.e('server:unitReady'), { accepted = true, auto = true }) end
     if not (CP.Tablet and CP.Tablet.notify) then return end
     local vars = { type = label, leader = leader, seconds = seconds, twists = table.concat(names, ', ') }
-    -- a live case (V16): the LIVE line names the reported crime and its suspect count, as a red toast
+    -- a live case: the LIVE line names the reported crime and its suspect count, as a red toast
     local live = type(data.live) == 'table' and data.live or nil
     if live then
         vars.title = type(live.title) == 'string' and live.title:sub(1, LABEL_MAX) or label

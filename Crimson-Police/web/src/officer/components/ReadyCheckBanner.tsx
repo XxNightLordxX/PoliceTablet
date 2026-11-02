@@ -33,7 +33,7 @@ export function ReadyCheckBanner({ check, onAnswered }: ReadyCheckBannerProps) {
     const ready = asList(current.ready);
     const waiting = asList(current.waiting);
     const total = ready.length + waiting.length;
-    // the twists the leader chose (PLAN M8b)
+    // the twists the leader chose
     const twistNames = (Array.isArray(current.twists) ? current.twists : [])
         .map(tw => tw?.label)
         .filter(Boolean)

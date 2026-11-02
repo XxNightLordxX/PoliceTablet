@@ -16,10 +16,10 @@ local COUNT_RECHECK_S = 60           -- an hourly or daily count at its cap is r
 local AREA_SPREAD = 0.25             -- base weight of an area when a call is posted (plus the idle units near it)
 local HOUR_S = 3600
 local DAY_S = 86400
-local LANE_KEY = 'callLane'          -- the Mission control of a department's own call lane (step P12)
-local WAIT_KEY = 'staffCallWait'     -- the Mission control of a department's wait between staff calls (step P12)
+local LANE_KEY = 'callLane'          -- the Mission control of a department's own call lane
+local WAIT_KEY = 'staffCallWait'     -- the Mission control of a department's wait between staff calls
 local LANE_WEIGHT_MAX = 10           -- the highest weight a lane gives one mission type
-local PUSH_KEY = 'pushMission'       -- the Mission control of a mission a supervisor pushes to a unit (step P19)
+local PUSH_KEY = 'pushMission'       -- the Mission control of a mission a supervisor pushes to a unit
 
 -- End reasons of a claimed run that reopen the call when nobody had reached the start (SPEC Dispatch).
 local REDISPATCH = {
@@ -46,9 +46,9 @@ local staffLast = {}   -- staffLast[issuer] = os.time() of the last call that is
 local coverage = nil   -- { at, index } (areaIndex cache)
 local codeDay, codeSeq = nil, 0
 local nextPostAt = 0
-local laneNext = {}    -- laneNext[department] = os.time() its lane may post its next call (step P12)
+local laneNext = {}    -- laneNext[department] = os.time() its lane may post its next call
 local tempId = 0
-local liveSeq = 0      -- the number of the last LIVE call (step V11): LIVE-001, LIVE-002, ...
+local liveSeq = 0      -- the number of the last LIVE call: LIVE-001, LIVE-002, ...
 local claimSeq = 0
 local dirty = false
 local rng = nil
@@ -387,7 +387,7 @@ local function BuildTypeState(unit, missionType)
     pool = type(pool) == 'table' and pool or {}
     st.board = #pool
     -- the twists the leader may choose when claiming (the board's own offer for the type, CP.Draw.twistOffer, for the
-    -- leader's department: its twists Mission control, step P15)
+    -- leader's department: its twists Mission control)
     local leaderDept
     for _, o in ipairs(unit.officers or {}) do
         if o.src == unit.leader then leaderDept = o.department end
@@ -509,7 +509,7 @@ end
 -- The call's own rules for a unit (after every accept check): nil, or the error key and whether it is only
 -- the priority window ('priority').
 local function CallRule(call, unit, dist, now)
-    -- a department lane's call (step P12): only a unit of that department, never the unit of the one who set the lane
+    -- a department lane's call: only a unit of that department, never the unit of the one who set the lane
     if call.department then
         for _, o in ipairs(unit.officers or {}) do
             if o.department ~= call.department then return 'err.mc_other_department' end
@@ -523,7 +523,7 @@ local function CallRule(call, unit, dist, now)
         if call.excluded[cid] then return 'err.mc_excluded' end
     end
     if call.staff and call.issuerCid and Contains(unit.cids, call.issuerCid) then return 'err.mc_own_call' end
-    -- a pushed mission (step P19) stays the paged unit's for as long as the call is open
+    -- a pushed mission stays the paged unit's for as long as the call is open
     if call.missionId and not Contains(unit.cids, call.pagedCid) then return 'err.mc_paged' end
     if call.pagedCid and now < (call.pagedUntil or 0) and not Contains(unit.cids, call.pagedCid) then
         return 'err.mc_paged'
@@ -540,7 +540,7 @@ local function LiveOn() return type(Config.LiveCrime) == 'table' and Config.Live
 local function ClaimCheck(src, call, now)
     local officer, e = GetOfficer(src)
     if not officer then return false, e or 'err.not_police' end
-    -- a LIVE call (step V14): the live checks of CP.Draw and CP.LiveCrime.claimCheck, no draw and no pool
+    -- a LIVE call: the live checks of CP.Draw and CP.LiveCrime.claimCheck, no draw and no pool
     local live = call.live and { crimeKey = call.live.crimeKey } or nil
     local okD, allowed, errKey = Call('Draw', 'check', src, call.type, nil, live)
     if not okD then return false, 'err.internal' end
@@ -588,7 +588,7 @@ end
 -- ============================================================================
 
 -- The screen's own pushes are coalesced: a burst of changes (a claim window) is one push, sent 1 s after the first
--- change by one SetTimeout (step LP4: a loop woke every second all day to look at the flag).
+-- change by one SetTimeout (a loop woke every second all day to look at the flag).
 local MarkDirty
 do
     local held = false
@@ -634,7 +634,7 @@ end
 
 -- A new call: the row, the record and the toasts. opts: staff, issuer (citizenid or 'console'), issuerCid,
 -- pagedSrc, pagedCid, pageTime, priorityUntil, units (idle units for the toasts), department and laneSetBy (a
--- department lane's call, step P12), missionId and issuerSrc (a mission pushed to the paged unit, step P19).
+-- department lane's call), missionId and issuerSrc (a mission pushed to the paged unit).
 local function NewCall(missionType, area, opts)
     opts = opts or {}
     local cfg = Cfg()
@@ -735,7 +735,7 @@ local function AlertsOf(citizenid, deptKey)
     local m = muted[citizenid]
     if m and now - m.at < MUTE_CACHE_S then return m end
     CP.Migrations.ready()
-    -- one read for both: calls_muted and the options the callAlerts favourites come from (step OP2)
+    -- one read for both: calls_muted and the options the callAlerts favourites come from
     local ok, row = pcall(MySQL.single.await, 'SELECT calls_muted, options FROM cp_officers WHERE citizenid = ?',
         { citizenid })
     if not ok then row = nil end
@@ -787,7 +787,7 @@ local function ToastPageEnded(units, now)
 end
 
 -- The open calls (open or claiming). lane: nil = every call, false = the server's own and staff calls only, a
--- department key = that department's lane calls only (step P12). LIVE calls (step V11) never count here: they have
+-- department key = that department's lane calls only. LIVE calls never count here: they have
 -- their own cap, Config.LiveCrime.maxLiveRuns.
 local function OpenCalls(lane)
     local out = {}
@@ -854,7 +854,7 @@ local function WeightedPick(items, weightOf)
     return items[#items]
 end
 
--- The areas a call may name: Config.MissionCalls.areas, or only those a department lane picked (step P12).
+-- The areas a call may name: Config.MissionCalls.areas, or only those a department lane picked.
 local function LaneAreas(lane)
     local all = Cfg().areas or {}
     local picked = lane and type(lane.areas) == 'table' and #lane.areas > 0 and lane.areas or nil
@@ -868,7 +868,7 @@ end
 
 -- A posted call: a weighted type that an idle unit could claim (not at its run cap), and an area weighted towards
 -- the idle units that no open call of that type already names. lane: nil = the server's own call; a department
--- lane (step P12) = { department, types = { [type] = weight }, areas, setBy }: its types, weights and areas, and
+-- lane = { department, types = { [type] = weight }, areas, setBy }: its types, weights and areas, and
 -- only the units given (that department's).
 local function PostCall(units, now, lane)
     local cfg = Cfg()
@@ -954,7 +954,7 @@ local function PostCall(units, now, lane)
 end
 
 -- ============================================================================
---                    DEPARTMENT LANES AND STAFF WAIT (P12)
+--                       DEPARTMENT LANES AND STAFF WAIT
 -- ============================================================================
 -- A department's supervisor may give it its own lane of mission calls next to the server's (the callLane Mission
 -- control): { spawnEvery = { lo, hi }, maxOpen, areas = { key, ... }, types = { [type] = weight } }. The lane posts on
@@ -1124,7 +1124,7 @@ function MC.registerControls()
         -- a shorter wait relaxes the rule (the self rule keeps the config wait for the one who set it)
         relaxes = function(v, configValue) return tonumber(v) ~= nil and v < (tonumber(configValue) or 0) end,
     })
-    -- step P19: a staff action with no saved value (the Mission choice Hard rule's push exception)
+    -- a staff action with no saved value (the Mission choice Hard rule's push exception)
     dc.register(PUSH_KEY, {
         kind = 'action',
         bounded = false,
@@ -1150,7 +1150,7 @@ local function Lapse(call, now)
     MarkDirty()
 end
 
--- A pushed mission's issuer (step P19), while the same character is still on that player id.
+-- A pushed mission's issuer, while the same character is still on that player id.
 local function NotifyIssuer(call, key, vars)
     local src = ToSrc(call.issuerSrc)
     if not src or not call.issuerCid then return end
@@ -1174,7 +1174,7 @@ local function Withdraw(call, reason, now)
     MarkDirty()
 end
 
--- A LIVE call (step V11) is a real crime: it stays until it lapses or its crime ends.
+-- A LIVE call is a real crime: it stays until it lapses or its crime ends.
 local function WithdrawAll(reason)
     local now = os.time()
     for _, call in pairs(calls) do
@@ -1244,8 +1244,8 @@ local function OnRunEnded(run, state, endReason)
     end
     local cfg = Cfg()
     local reopenOn = not (cfg.reopen and cfg.reopen.enabled == false)
-    -- a pushed mission (step P19) is never offered again: it was that unit's alone; nor a LIVE call (its crime's
-    -- case ran, V14)
+    -- a pushed mission is never offered again: it was that unit's alone; nor a LIVE call (its crime's
+    -- case ran)
     if not arrived and REDISPATCH[endReason] and reopenOn and not call.reopened and not call.missionId
         and not call.live then
         NoteFinished(call, 'reopened', now)
@@ -1326,7 +1326,7 @@ local function Accepted(call, c, ok, data)
             WHERE id = ? AND status = 'claimed']], { call.id })
     end
     if call.missionId then
-        -- a pushed mission was that unit's alone: it ends here (step P19)
+        -- a pushed mission was that unit's alone: it ends here
         call.queue, call.window = nil, nil
         Withdraw(call, errKey, now)
         NotifyIssuer(call, 'mc.toast.push_ended', { code = call.code })
@@ -1378,7 +1378,7 @@ TryNext = function(call)
                     area = c.area,
                     twists = c.twists,
                     missionId = call.missionId,
-                    -- a LIVE call (step V14): the crime's case, no draw; it never earns rapid response (staff)
+                    -- a LIVE call: the crime's case, no draw; it never earns rapid response (staff)
                     live = call.live and { crimeKey = call.live.crimeKey } or nil,
                     missionCall = {
                         id = call.id > 0 and call.id or nil,
@@ -1426,7 +1426,7 @@ local function Resolve(call)
 end
 MC._resolve = Resolve
 
--- twists (optional): the twist keys the leader chose for the run (checked like the Mission Board's, PLAN M8b).
+-- twists (optional): the twist keys the leader chose for the run (checked like the Mission Board's).
 function MC.claim(src, callId, twists)
     src = ToSrc(src)
     local cfg = Cfg()
@@ -1439,7 +1439,7 @@ function MC.claim(src, callId, twists)
     end
     local call = calls[math.tointeger(tonumber(callId) or 0)]
     if not call or not VISIBLE[call.status] or call.status == 'lapsed' then return false, 'err.mc_gone' end
-    -- a LIVE call (step V14): only while live crimes are on; it has no twists
+    -- a LIVE call: only while live crimes are on; it has no twists
     if call.live then
         if LiveOn() ~= true then return false, 'err.live_case_off' end
         twists = nil
@@ -1524,7 +1524,7 @@ local function ParseArea(area)
     return false
 end
 
--- opts = { skipWait = true, reason }: an admin posting during the wait between staff calls (C20; the wait still
+-- opts = { skipWait = true, reason }: an admin posting during the wait between staff calls (the wait still
 -- applies to supervisors). The call is drawn at random like any other.
 function MC.create(src, typeKey, area, opts)
     opts = type(opts) == 'table' and opts or {}
@@ -1536,7 +1536,7 @@ function MC.create(src, typeKey, area, opts)
     local issuer, issuerCid = StaffIssuer(src)
     local now = os.time()
     local last = staffLast[issuer]
-    -- the wait between two staff calls: config, or the issuer's department's staffCallWait (step P12)
+    -- the wait between two staff calls: config, or the issuer's department's staffCallWait
     local wait = StaffWait(ToSrc(src) and GetOfficer(src) or nil)
     local waiting = last and now - last < wait
     if waiting and not opts.skipWait then return false, 'err.mc_staff_cooldown' end
@@ -1560,7 +1560,7 @@ local function PushPerDay()
 end
 MC.pushPerDay = PushPerDay
 
--- May src push a chosen mission (step P19, the pushMission Mission control) to a unit led by an officer of dept?
+-- May src push a chosen mission (the pushMission Mission control) to a unit led by an officer of dept?
 -- A supervisor only to his own department; an admin to any department the control is on for (dept nil: any one).
 -- ok, errKey, role, department.
 local function CanPush(src, dept)
@@ -1587,7 +1587,7 @@ local function PushesToday(issuer)
     if not okK then return nil end
     return tonumber(n)
 end
--- That player's pushes today (step H4, the 'Your controls today' card).
+-- That player's pushes today (the 'Your controls today' card).
 MC.pushesToday = function(src) return PushesToday((StaffIssuer(src))) end
 
 -- The checks of a push before the call is posted: nil, or the error key. role and dept come from CanPush.
@@ -1608,7 +1608,7 @@ local function PushCheck(src, role, dept, missionId, typeKey, areaKey, unit, iss
     return nil
 end
 
--- opts.missionId (step P19): push that mission to the unit instead of a random one; the pushMission Mission control,
+-- opts.missionId: push that mission to the unit instead of a random one; the pushMission Mission control,
 -- at most Config.MissionControls.pushMissionPerDay a supervisor a day, a unit of his own department.
 function MC.page(src, typeKey, area, leaderSrc, opts)
     opts = type(opts) == 'table' and opts or {}
@@ -1667,7 +1667,7 @@ function MC.page(src, typeKey, area, leaderSrc, opts)
     return true, { id = call.id, code = call.code }
 end
 
--- The paged unit's leader turns a pushed mission down (step P19): the call ends, nobody else gets it.
+-- The paged unit's leader turns a pushed mission down: the call ends, nobody else gets it.
 function MC.decline(src, callId)
     src = ToSrc(src)
     if not src then return false, 'err.not_in_game' end
@@ -1736,15 +1736,15 @@ local function DeptShort(dept)
     return d.short or dept
 end
 
--- A department lane's call (step P12) is shown only to that department's officers (staff: admins see every one); a
--- pushed mission (step P19) only to the paged unit (unitCids: the viewer's unit's citizenids).
+-- A department lane's call is shown only to that department's officers (staff: admins see every one); a
+-- pushed mission only to the paged unit (unitCids: the viewer's unit's citizenids).
 local function Shown(call, officer, unitCids)
     if call.missionId and not Contains(unitCids or {}, call.pagedCid) then return false end
     if not call.department then return true end
     return type(officer) == 'table' and officer.department == call.department
 end
 
--- The red LIVE card (step V11): a real crime, no draw and no pay range; its distance is to the crime's reported
+-- The red LIVE card: a real crime, no draw and no pay range; its distance is to the crime's reported
 -- place, never to a suspect.
 local function LiveCard(call, v)
     local now = v.now
@@ -1801,7 +1801,7 @@ local function Card(call, v, tod)
     local pool = EffectivePool(st, area)
     local size = #v.unit.srcs
     local rr = cfg.rapidResponse or {}
-    -- a pushed mission (step P19): its own area and that one mission; only the paged unit learns its name
+    -- a pushed mission: its own area and that one mission; only the paged unit learns its name
     local pushedTo = call.missionId ~= nil and Contains(v.unit.cids, call.pagedCid)
     local pushErr = nil
     if call.missionId then
@@ -1923,7 +1923,7 @@ end
 function MC.list(src)
     local v = Viewer(src)
     if not v then return nil end
-    -- the officer's department's pick for today (step P18), as the scoring reads it
+    -- the officer's department's pick for today, as the scoring reads it
     local _, tod = Call('Events', 'typeOfTheDay', nil, v.officer.department, v.officer)
     local cards = {}
     for _, call in pairs(calls) do
@@ -1962,7 +1962,7 @@ function MC.claimableCount(src)
     if not v or not v.isLeader then return 0 end
     local n = 0
     for _, call in pairs(calls) do
-        -- LIVE calls (step V11) are not claimable before step V14
+        -- LIVE calls are claimed through CP.LiveCrime, never from this list
         if call.status == 'open' and not call.window and not call.live and Shown(call, v.officer, v.unit.cids) then
             local card = Card(call, v, nil)
             if card.status == 'ready' then n = n + 1 end
@@ -2067,7 +2067,7 @@ local function LaneViews(dept, now)
     return out
 end
 
--- What the Page dialog needs to push a chosen mission (step P19): nil when src may not push, else the missions of
+-- What the Page dialog needs to push a chosen mission: nil when src may not push, else the missions of
 -- the callable types ({ id, label, type }), and for a supervisor his department, perDay and usedToday.
 local function PushView(src)
     local ok, _, role, dept = CanPush(src, nil)
@@ -2201,11 +2201,11 @@ function MC.stats(citizenid)
 end
 
 -- ============================================================================
---                            LIVE CALLS (step V11)
+--                                  LIVE CALLS
 -- ============================================================================
 -- A crime CP.LiveCrime reported with suspects (Config.LiveCrime) becomes a red LIVE call: memory only (no
 -- cp_mission_calls row, a negative id), priority 1, no draw. It lapses after Config.LiveCrime.offerTime or when its
--- crime ends, and Config.LiveCrime.maxLiveRuns caps the LIVE calls and live cases at once. Its claim (step V14) opens
+-- crime ends, and Config.LiveCrime.maxLiveRuns caps the LIVE calls and live cases at once. Its claim opens
 -- the crime's live case: CP.Draw's live path, no draw; a claimed LIVE call closes with its case, never re-dispatched.
 
 local function LiveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
@@ -2322,7 +2322,7 @@ function MC._tick()
         local per = math.max(1, Num(cfg.unitsPerCall, 2))
         target = math.min(math.floor(Num(cfg.maxOpen, 4)), math.max(1, math.ceil(#units / per)))
     end
-    -- the server's own flow counts its own calls; every call, lane calls too, counts against maxOpen (step P12)
+    -- the server's own flow counts its own calls; every call, lane calls too, counts against maxOpen
     local cap = math.floor(Num(cfg.maxOpen, 4))
     if #OpenCalls(false) < target and #OpenCalls() < cap and now >= nextPostAt then
         if PostCall(units, now) then
@@ -2378,12 +2378,12 @@ CP.Net.callback('getMissionCalls', function(src)
     return MC.list(src)
 end, { rate = 4 })
 
--- Decline a mission pushed to the unit (step P19): only the paged unit's leader.
+-- Decline a mission pushed to the unit: only the paged unit's leader.
 CP.Net.action('server:declineMissionCall', function(src, payload)
     if type(payload) ~= 'table' or not tonumber(payload.callId) then return false, 'err.invalid_payload' end
     local ok, e = MC.decline(src, payload.callId)
     if not ok then return ok, e end
-    -- step WF2: the reply carries the leader's fresh Dispatch view, so the card goes without a second request
+    -- the reply carries the leader's fresh Dispatch view, so the card goes without a second request
     local okV, view = pcall(MC.list, src)
     return true, { view = okV and type(view) == 'table' and view or nil }
 end, { rate = 3 })
@@ -2421,7 +2421,7 @@ local function StaffArea(payload)
     return true, area
 end
 
--- Step FX1: a staff action's reply carries the panel's fresh view (data.view, sup:getMissionCalls), so the screen
+-- A staff action's reply carries the panel's fresh view (data.view, sup:getMissionCalls), so the screen
 -- needs no second request. A view that cannot be built leaves the reply as it was (the screen asks again).
 local function WithView(src, ok, data)
     if not ok then return ok, data end
@@ -2498,7 +2498,7 @@ CP.Net.callback('admin:getAreaCoverage', function(src)
 end, { rate = 2 })
 
 -- ============================================================================
---                  DISPATCH HISTORY (C7; ARCHITECTURE §8.4.2)
+--                    DISPATCH HISTORY (ARCHITECTURE §8.4.2)
 -- ============================================================================
 -- Past mission calls (cp_mission_calls keeps Config.Retention.missionCallDays of them): issuer, paged unit, claimed
 -- by, outcome, response time, withdraw reason. Read-only, paged; admins only.

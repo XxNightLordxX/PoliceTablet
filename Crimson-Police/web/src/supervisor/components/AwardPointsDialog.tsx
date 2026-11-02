@@ -24,12 +24,12 @@ export function AwardPointsDialog({
     officer: { citizenid: string; name: string } | null;
     control: AwardPointsControl | null;
     onClose: () => void;
-    // reply: the action's reply (with activity = true it carries the officer's fresh activity, step FX1)
+    // reply: the action's reply (with activity = true it carries the officer's fresh activity)
     onDone: (reply: unknown) => void;
     activity?: boolean;
 }) {
     const { run, busy } = useAction();
-    // Config.Tablet.supervisorRemember (step WF2): open with the points and reason last given
+    // Config.Tablet.supervisorRemember: open with the points and reason last given
     const remember = rememberOn(useOptionalSession());
     const [points, setPoints] = useState<number | null>(control?.min ?? 1);
     const [reason, setReason] = useState('');

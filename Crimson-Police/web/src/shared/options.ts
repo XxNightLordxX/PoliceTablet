@@ -62,7 +62,7 @@ export function optionValueText(key: string, value: unknown): string {
     return value === null || value === undefined ? '-' : String(value);
 }
 
-// The text size factor of the officer option textSize (step O5): 'large' = 1.15, anything else 1. It is the CSS
+// The text size factor of the officer option textSize: 'large' = 1.15, anything else 1. It is the CSS
 // variable --cp-fs-scale on the tablet and the HUD column (styles/base.css).
 export function textScaleOf(v: unknown): number {
     return v === 'large' ? 1.15 : 1;

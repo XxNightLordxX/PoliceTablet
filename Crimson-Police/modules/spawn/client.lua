@@ -16,7 +16,7 @@
 -- under a low roof or the floor above: the one under it when that is the smaller move), then answers ok, snap
 -- (put on the ground: a person 1 m over it, a vehicle by its model's size, an object on it, when that moves it at most
 -- snapWithin), underground, floating, no_ground, in_water or in_wall (the Builder's capsule for a person or a vehicle).
--- The placer (Config.Spawning.place; the server's ask is S10): its own handler of the cp bag. A bag with
+-- The placer (Config.Spawning.place; the server asks through the bag): its own handler of the cp bag. A bag with
 -- place = { x, y, z, h, kind, token } of this player's run, a token not taken yet: the game that controls the entity
 -- (or, when that is a bystander's or nobody's, the participant nearest to the point) takes control, freezes it, keeps
 -- its collision loaded, probes the server's point (ignoring the entity), and on ok or snap moves it straight up or down
@@ -156,8 +156,8 @@ end)
 -- ============================================================================
 --                                 GROUND PROBE
 -- ============================================================================
--- Whether a point of a mission is fit to put a person, a vehicle or an object on (owner request of 2026-10-19: "i
--- do not want them spawning in the ground"). A library: the Check spawn points tool and the placer use it.
+-- Whether a point of a mission is fit to put a person, a vehicle or an object on (nothing
+-- may spawn in the ground). A library: the Check spawn points tool and the placer use it.
 
 local SHAPE_FLAGS = 1 + 2 + 16 -- a wall is the map, a vehicle or an object (the Builder's placement probe)
 local SHAPE_OPTIONS = 7 -- glass, see-through and no-collision parts are no wall
@@ -493,8 +493,8 @@ end)
 -- ============================================================================
 --                                    PLACER
 -- ============================================================================
--- A new mission entity can wait frozen where the server made it until a game near it has put it on the ground (PLAN
--- S9; owner request of 2026-10-19: "i do not want them spawning in the ground"). The server asks through the entity's
+-- A new mission entity can wait frozen where the server made it until a game near it has put it on the ground (so
+-- nothing spawns half in the ground). The server asks through the entity's
 -- cp bag: place = { x, y, z, h, kind, token, from? } (Config.Spawning.place; modules/spawn/server.lua writes it).
 -- The game of a participant of that run places it: the one that controls the entity, or, when no participant's game
 -- does, the participant's nearest to the point (it asks for control). It checks the server's point with Spawn.probe,

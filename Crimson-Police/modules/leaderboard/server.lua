@@ -439,7 +439,7 @@ end
 -- ============================================================================
 -- Rank by (Config.Leaderboard.metrics): points (the default; XP on the All-time tab), missions (completed runs),
 -- arrests, impounds, citations, rescues, calls (completed runs claimed from a mission call) and judgement
--- (Best dispositions as a share of all dispositions) and live_catches (suspects detained in live cases, V13; shipped
+-- (Best dispositions as a share of all dispositions) and live_catches (suspects detained in live cases; shipped
 -- off the list). Ratios are worked out here, never in SQL.
 
 local METRICS = {
@@ -466,7 +466,7 @@ local function MetricList()
 end
 
 -- ============================================================================
---                      DEPARTMENT BOARD VISIBILITY (P14)
+--                         DEPARTMENT BOARD VISIBILITY
 -- ============================================================================
 -- A department's boards Mission control: { showToOthers = false } shows its officers to other departments by
 -- callsign only (boards, profiles and Home's top 3); metrics = the Rank by tabs its own officers see (points always).
@@ -876,7 +876,7 @@ local function ParseBoardArgs(args, defaultDept, admin)
     if not ValidFilter(filter) then return nil, 'err.invalid_filter' end
     local metric = args.metric
     if metric == nil or metric == '' then metric = 'points' end
-    -- an officer: the Rank by tabs his department shows (step P14); an admin: every metric
+    -- an officer: the Rank by tabs his department shows; an admin: every metric
     local shown = admin and METRICS[metric] == true or metric == 'points'
     if not admin then
         for _, m in ipairs(LB.boardMetrics(defaultDept)) do shown = shown or m == metric end
@@ -994,7 +994,7 @@ local function NoticeFor(n, dept)
     return false
 end
 
--- A top 3 as a viewer of dept sees it (step P14): an officer whose department shows callsigns only to other
+-- A top 3 as a viewer of dept sees it: an officer whose department shows callsigns only to other
 -- departments is named by his callsign (dept nil = the admin preview, names as they are).
 local function ForViewer(a, dept)
     if dept == nil or type(a.entries) ~= 'table' or not a.textKey then return a end
@@ -1732,7 +1732,7 @@ function LB.profile(viewer, target, opts)
     local hideName = U.truthy(orow.hide_name)
     local xp = Int(orow.xp)
     local dept = own and viewer.department or NonEmpty(orow.department)
-    -- step P14: his department shows other departments his callsign only (the name and picture stay hidden)
+    -- his department shows other departments his callsign only (the name and picture stay hidden)
     local shownHidden = hideName or (not own and not staff and LB.hidesNamesFrom(dept, viewer.department))
     if shownHidden and not hideName then orow.hide_name = 1 end
     local e = { name = NonEmpty(orow.display_name), callsign = NonEmpty(orow.callsign), hideName = shownHidden }
@@ -1853,7 +1853,7 @@ WHERE r.citizenid = ? AND %s
 ORDER BY r.created_at DESC, r.id DESC
 LIMIT ? OFFSET ?]]
 
--- An officer's runs in the board's window: the last 100, or with Config.AdminUi.pageSize (step H6) one page of them
+-- An officer's runs in the board's window: the last 100, or with Config.AdminUi.pageSize one page of them
 -- plus { page, pages, total } as the second value.
 local function AdminRuns(q, citizenid, page)
     local list = {}
@@ -2013,7 +2013,7 @@ CP.Net.callback('admin:getBoards', function(src, args)
         if not CP.Net.rateOk(src, 'boards:past', 1, 2000) then return nil, 'err.rate_limited' end
     end
     local out, err = LB.adminBoard(args)
-    -- Config.AdminUi.oneRequest (step H6): the flagged runs come with the board (the screen asks with withFlagged)
+    -- Config.AdminUi.oneRequest: the flagged runs come with the board (the screen asks with withFlagged)
     local Kit = CP.AdminKit
     local want = type(args) == 'table' and args.withFlagged == true
     if out and want and Kit and Kit.oneRequest and Kit.oneRequest() and CP.Admin and CP.Admin.flaggedFor then

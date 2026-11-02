@@ -621,7 +621,7 @@ function PerMissionNote() {
     );
 }
 
-// memo (step OP3): typing in the search box or a save elsewhere does not draw every row again; save and reset from
+// memo: typing in the search box or a save elsewhere does not draw every row again; save and reset from
 // useSettingSave keep their identity across renders.
 export const SettingRow = memo(function SettingRow({
     s,
@@ -1141,7 +1141,7 @@ export function useSettingSave(onReply: (reply: SettingsReply | undefined) => vo
         );
         if (res.ok) onReply(res.data);
     };
-    // the same two functions on every render (step OP3: SettingRow is memoized), always calling the newest code
+    // the same two functions on every render (SettingRow is memoized), always calling the newest code
     const latest = useRef({ saveNow, resetNow });
     latest.current = { saveNow, resetNow };
     const save = useCallback((s: SettingView, p: SavePayload) => latest.current.saveNow(s, p), []);
@@ -1250,7 +1250,7 @@ export default function AdminSettings() {
     );
     const q = query.trim().toLowerCase();
     const searching = q !== '' || filter !== 'all';
-    // Config.AdminUi.windowRows (step OP3): the search results start with the first rows and add more as the end
+    // Config.AdminUi.windowRows: the search results start with the first rows and add more as the end
     // comes into view; off = every match at once, as before. The matches are worked out once per search, not per draw.
     const windowRows = useWindowRows();
     const hits = useMemo(
@@ -1295,7 +1295,7 @@ export default function AdminSettings() {
         );
         if (res.ok) {
             if (res.data?.health) health.setData(asArray(res.data.health));
-            // step FX1: the reply carries the whole view (an older server: ask for it)
+            // the reply carries the whole view (an older server: ask for it)
             applyReplyView<SettingsData>(res.data, 'view', setData, () => void refetch());
         }
         setConfirm(null);

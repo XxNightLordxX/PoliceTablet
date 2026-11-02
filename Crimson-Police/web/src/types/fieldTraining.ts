@@ -20,7 +20,7 @@ export interface FtoView {
     signed: number;
     total: number;
     tasks: FtoTask[];
-    // step T2: the mission types this rookie may take only with his trainer in the unit (labels; his own view)
+    // the mission types this rookie may take only with his trainer in the unit (labels; his own view)
     needsTrainer?: string[];
 }
 
@@ -28,7 +28,7 @@ export interface FtoView {
 export interface FtoMine {
     training?: FtoView | null;
     rookies: FtoView[];
-    // step T2: points the trainer gets per signed task (Config.FieldTraining.trainerBonus; 0 = none)
+    // points the trainer gets per signed task (Config.FieldTraining.trainerBonus; 0 = none)
     trainerBonus?: number;
 }
 

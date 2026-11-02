@@ -87,7 +87,7 @@ local function FmtMoney(n)
 end
 
 local function TierRow(run)
-    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew', V13)
+    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew')
     if CP.LiveCrime and CP.LiveCrime.tierRow then
         local ok, row = pcall(CP.LiveCrime.tierRow, run)
         if ok and type(row) == 'table' then return row end
@@ -173,7 +173,7 @@ local function RoundMoney(x)
     return math.floor(x + 0.5 + 1e-7)
 end
 
--- The happy hour cash bonus a run carries (run.controls.cashBonus, fixed at the accept, step P16): x the cash, 1.0 =
+-- The happy hour cash bonus a run carries (run.controls.cashBonus, fixed at the accept): x the cash, 1.0 =
 -- none. Never on test runs, Cross-Department runs or the Weekly Boss.
 function Cash.bonusOf(run)
     if type(run) ~= 'table' or run.test or run.operationId or run.isBoss then return 1.0 end
@@ -187,15 +187,15 @@ function Cash.compute(run, p)
         return 0, { B = 0, mTier = 1.0, mMod = 1.0, amount = 0, status = 'none' }
     end
     local B = math.max(0, math.floor(Num(run.cashBase, 0) + 0.5))
-    -- a live case pays nothing unless the owner turned on Config.LiveCrime.cash (a money switch, V13)
+    -- a live case pays nothing unless the owner turned on Config.LiveCrime.cash (a money switch)
     if CP.LiveCrime and CP.LiveCrime.counts and CP.LiveCrime.counts(run, 'cash') == false then B = 0 end
-    -- a volunteer case pays nothing unless the owner turned on Config.Volunteers.payCash (a money switch, V22b)
+    -- a volunteer case pays nothing unless the owner turned on Config.Volunteers.payCash (a money switch)
     if CP.Volunteers and CP.Volunteers.counts and CP.Volunteers.counts(run, 'cash') == false then B = 0 end
     -- a volunteer case ended early by Config.Volunteers.voidRun = 'keep_earned': only the points earned so far, no
-    -- mission cash (step Z2)
+    -- mission cash
     if run.keepEarned == true then B = 0 end
     local mTier = Num(TierRow(run).cash, 1.0)
-    -- the run's twists (CP.Twists): their cash multipliers multiply (each x the department's twist cash, step P16), up
+    -- the run's twists (CP.Twists): their cash multipliers multiply (each x the department's twist cash), up
     -- to Config.Events.twistMaxCash
     local mMod = CP.Twists.bonus(CP.Twists.of(run), CP.Twists.scaleOf(run)).cash
     local mBonus = Cash.bonusOf(run)
@@ -207,7 +207,7 @@ function Cash.compute(run, p)
     local status = 'none'
     if p.result == 'completed' and flagged and not run.test then status = 'held' end
     local cb = { B = B, mTier = mTier, mMod = mMod, amount = amount, status = status }
-    -- the happy hour cash bonus (step P16): on the breakdown only when there is one (the result card shows it)
+    -- the happy hour cash bonus: on the breakdown only when there is one (the result card shows it)
     if mBonus ~= 1.0 then cb.mBonus = mBonus end
     return amount, cb
 end
@@ -442,7 +442,7 @@ PayClaimed = function(row, rowId, cid, src, progress)
     end
     local charName = info.name or cid
 
-    -- a feature reward row (CP.FeatureRewards, step G3) names its own account ('bank', 'cash' or 'item' with a money
+    -- a feature reward row (CP.FeatureRewards) names its own account ('bank', 'cash' or 'item' with a money
     -- item) and may always be new money (a suspect has no department account)
     local cashBd = type(bd.cash) == 'table' and bd.cash or {}
     local society = Config.Cash and Config.Cash.source == 'society' and cashBd.source ~= 'server'
@@ -849,7 +849,7 @@ local function PayAgainLocked(row, bd, rowId, amount, needWithdraw)
     local moneyAccount = c.account or (Config.Cash and Config.Cash.account) or 'bank'
     local okMoney, why = false, nil
     if moneyAccount == 'item' then
-        -- a feature reward paid as a money item (step Z2): the item again, never a Qbox account named 'item'
+        -- a feature reward paid as a money item: the item again, never a Qbox account named 'item'
         local FR = CP.FeatureRewards
         if FR and FR.giveMoneyItem and type(c.moneyItem) == 'string' and c.moneyItem ~= '' then
             okMoney, why = FR.giveMoneyItem(src, c.moneyItem, amount)
@@ -1079,7 +1079,7 @@ function Cash.clawback(rowId, amount, audit)
     local left = math.floor(CP.U.num(row.cash_paid)) - math.floor(CP.U.num(row.cash_reclaimed))
     if not n or n < 1 then return false, 'err.invalid_amount' end
     if n > left then return false, 'err.clawback_too_much' end
-    -- a feature reward paid as a money item (account 'item'): Qbox has no such account to take it from (step Z2)
+    -- a feature reward paid as a money item (account 'item'): Qbox has no such account to take it from
     if CashOf(bd).account == 'item' then return false, 'err.clawback_item' end
     if not OnlineOf(row.citizenid) then return false, 'err.officer_offline' end
     local claimed = Update([[

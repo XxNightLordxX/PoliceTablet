@@ -132,7 +132,7 @@ const state: { calls: MockCall[]; recent: RecentCall[]; onRun: boolean } = {
             }),
         },
         {
-            // step P19: a mission command pushed to this unit (only the paged unit sees its name)
+            // a mission command pushed to this unit (only the paged unit sees its name)
             postedAt: t - 15,
             offer: 180,
             call: base(6, {
@@ -182,12 +182,12 @@ registerMock('action', 'server:claimMissionCall', (payload: { callId?: number })
     return { pending: true, code: m.call.code };
 });
 
-// A mission command pushed to this unit (step P19): only the paged unit's leader declines it.
+// A mission command pushed to this unit: only the paged unit's leader declines it.
 registerMock('action', 'server:declineMissionCall', (payload: { callId?: number }) => {
     const m = state.calls.find(c => c.call.id === Number(payload?.callId));
     if (!m || !m.call.missionLabel) throw new Error('err.mc_not_open');
     state.calls = state.calls.filter(c => c !== m);
-    // step WF2: the reply carries the leader's fresh Dispatch view
+    // the reply carries the leader's fresh Dispatch view
     return { view: view() };
 });
 
@@ -237,7 +237,7 @@ const supCallsView = (): SupCallsView => {
 };
 registerMock('request', 'sup:getMissionCalls', supCallsView);
 
-// like the server (step FX1), each staff action's reply carries the panel's fresh view
+// like the server, each staff action's reply carries the panel's fresh view
 for (const scope of ['sup', 'admin']) {
     registerMock('action', `server:${scope}:mcWithdraw`, (payload: { callId?: number; reason?: string }) => {
         if (!payload?.reason) throw new Error('err.reason_required');

@@ -67,7 +67,7 @@ export function FtoProgress({ view }: { view: FtoView }) {
     );
 }
 
-// How many tasks of the trainer's rookies are ready for Sign off (step H3: shown next to "My rookies").
+// How many tasks of the trainer's rookies are ready for Sign off (shown next to "My rookies").
 export function readyToSign(rookies: FtoView[]): number {
     let n = 0;
     for (const v of rookies) for (const task of asList(v.tasks)) if (task.ready && !task.signed) n += 1;

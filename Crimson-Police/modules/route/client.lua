@@ -157,10 +157,10 @@ end
 -- ============================================================================
 --                             THE START ON THE MAP
 -- ============================================================================
--- The named "Mission start" pin (Config.Markers.kinds.start, a yellow map pin, PLAN M9). With Config.Markers.startBlip
+-- The named "Mission start" pin (Config.Markers.kinds.start, a yellow map pin). With Config.Markers.startBlip
 -- (shipped true) it stays from begin until arrival or the end of the run; false = only while the route is sampled.
 -- Its GPS line is on while the route is sampled (the blip route is read first, SLOT_TYPES) and after that only while
--- the waypoint we set is gone, so the start always keeps a line and never two of ours (BLIPS_FINAL R2).
+-- the waypoint we set is gone, so the start always keeps a line and never two of ours.
 
 local function KeepStartBlip()
     return not (type(Config.Markers) == 'table' and Config.Markers.startBlip == false)
@@ -401,9 +401,9 @@ local function MarkArrived()
 end
 
 -- The run went In progress before this officer reached the start (the server's client:routeStatus 'action',
--- Config.Route.lateArriveRange, PLAN M11): his route is no longer checked, so the sampling, the reports and a
+-- Config.Route.lateArriveRange): his route is no longer checked, so the sampling, the reports and a
 -- Recalculate still waiting stop here (the token changes). dropStart (CP.Markers can draw the line to the objective):
--- the start's waypoint and pin go first, so the objective's line is his one line (BLIPS_FINAL M11; the start circle
+-- the start's waypoint and pin go first, so the objective's line is his one line (the start circle
 -- is CP.Runs'). Without it (no objective line under Radio Silence, or Config.Markers off) the start's waypoint stays
 -- his guide: the start still counts as arrival. secondsLeft: the time he has to arrive (the server's deadline,
 -- Config.Route.followActionSeconds); the HUD counts it down and shows it in the last 2 minutes.

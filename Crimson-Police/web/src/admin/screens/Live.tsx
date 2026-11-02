@@ -417,7 +417,7 @@ export default function AdminLive() {
     const [unitDialog, setUnitDialog] = useState<UnitDialog | null>(null);
     const [minutes, setMinutes] = useState<number | null>(5);
     const [fetchKey, setFetchKey] = useState(0);
-    // happy hour (step P6): the chip with End now
+    // happy hour: the chip with End now
     const [hhEnding, setHhEnding] = useState(false);
     usePush('happyHour', () => void runsReq.refetch());
     const happyHour = runsReq.data?.happyHour || null;

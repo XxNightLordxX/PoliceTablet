@@ -372,7 +372,7 @@ local function Views(rows, viewerCitizenid, dropOwn)
 end
 
 -- A flagged (not voided) row whose flag kind the row's department hands to admins only (Config.MissionControls
--- reviewRules.adminOnlyKinds, step P14), seen by someone who is neither the console nor an admin.
+-- reviewRules.adminOnlyKinds), seen by someone who is neither the console nor an admin.
 local function AdminOnlyFlag(src, r)
     if tonumber(src) == 0 or IsAdmin(src) or U.truthy(r.voided) or r.goes_to == 'admin' then return false end
     local ok, only = Call('ReviewRules', 'adminOnly', r.department, r.flag_reason)
@@ -395,7 +395,7 @@ function D.forSupervisor(src)
     sql = sql .. (' ORDER BY d.created_at, d.id LIMIT %d'):format(LIST_LIMIT)
     local rows = Query(sql, params) or {}
     if not IsAdmin(src) then
-        -- step Z2: a flag kind the department's reviewRules gives to admins only is not his to answer
+        -- a flag kind the department's reviewRules gives to admins only is not his to answer
         local kept = {}
         for _, r in ipairs(rows) do
             if not AdminOnlyFlag(src, r) then kept[#kept + 1] = r end
@@ -706,7 +706,7 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
     if not okR then return false, 'err.internal' end
     if not allowed then return false, eR or 'err.own_run' end
     if InLiveRun(CitizenOf(src), d.run_uuid) then return false, 'err.own_run' end
-    -- step Z2: the same admin-only flag kinds Admin.approveFlagged refuses a supervisor (skipPermission skips them)
+    -- the same admin-only flag kinds Admin.approveFlagged refuses a supervisor (skipPermission skips them)
     if kind == 'flagged' and AdminOnlyFlag(src, d) then return false, 'err.review_admin_only' end
 
     local points
@@ -784,7 +784,7 @@ CP.Net.action('server:sup:handleDispute', function(src, payload)
         if row and row.goes_to == 'admin' then return false, 'err.no_permission' end
     end
     local ok, data = D.handle(src, id, payload.decision, payload.reason, payload.awardPoints)
-    -- step WF2: the reply carries the supervisor's fresh Review Queue (CP.Admin.withReviewQueue)
+    -- the reply carries the supervisor's fresh Review Queue (CP.Admin.withReviewQueue)
     if Has('Admin', 'withReviewQueue') then return CP.Admin.withReviewQueue(src, ok, data) end
     return ok, data
 end, { rate = 3 })
@@ -793,7 +793,7 @@ CP.Net.action('server:admin:handleDispute', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     local ok, data = D.handle(src, payload.disputeId, payload.decision, payload.reason, payload.awardPoints,
         { adminOnly = true })
-    -- step FX1: the supervisors with the Review Queue open see it at once (Config.Tablet.supervisorReviewLive)
+    -- the supervisors with the Review Queue open see it at once (Config.Tablet.supervisorReviewLive)
     if ok and Has('Admin', 'shareReviewQueue') then pcall(CP.Admin.shareReviewQueue, src) end
     return ok, data
 end, { rate = 3 })

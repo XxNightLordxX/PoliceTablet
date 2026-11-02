@@ -170,13 +170,13 @@ local function LiveCall(fn, run, ...)
 end
 
 -- Only the lines earned score (no base points, no end-of-run lines): a live case with Config.LiveCrime.linesOnly, or a
--- volunteer case ended early by Config.Volunteers.voidRun = 'keep_earned' (run.keepEarned, step Z2).
+-- volunteer case ended early by Config.Volunteers.voidRun = 'keep_earned' (run.keepEarned).
 local function LinesOnly(run)
     return run.keepEarned == true or LiveCall('linesOnly', run) == true
 end
 
 local function TierRow(run)
-    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew', V13)
+    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew')
     local live = LiveCall('tierRow', run)
     if live then return live end
     local t = run.payTier
@@ -541,7 +541,7 @@ end
 
 local function CountOf(run, p, id)
     local shared = run.score and run.score.shared and Num(run.score.shared[id], 0) or 0
-    -- a late joiner of a live case (V15): the shared lines recorded before he joined are not his
+    -- a late joiner of a live case: the shared lines recorded before he joined are not his
     if type(p.sharedBefore) == 'table' then shared = math.max(0, shared - Num(p.sharedBefore[id], 0)) end
     local personal = p.score and Num(p.score[id], 0) or 0
     -- whole occurrences, or a weighted part (CP.Runs.award opts.weight) to two decimals
@@ -636,7 +636,7 @@ local function ScoreLines(run, p, P, opts)
         end
         if per then
             if END_EVALUATED[id] then
-                -- an end-of-run line: never for a lines-only run, which never reached its end (step Z5)
+                -- an end-of-run line: never for a lines-only run, which never reached its end
                 local earned = not linesOnly
                     and (
                         (id == 'no_participant_downed' and Num(stats.downs, 0) == 0)
@@ -704,7 +704,7 @@ local function ScoreLines(run, p, P, opts)
     local duration = DurationOf(run, opts)
     -- Process the scene stops the fast-completion clock (CP.Runs.pauseFastClock)
     if opts.fastDurationS ~= nil then duration = math.min(duration, Num(opts.fastDurationS, duration)) end
-    -- a run whose department scaled its time limit (P8) is judged on the unscaled limit, so points never move
+    -- a run whose department scaled its time limit is judged on the unscaled limit, so points never move
     local limit = Num(run.fastBaseLimit, Num(run.timeLimit, Num(mission.timeLimit, 0)))
     local fastShare = Num(common.fastShare, 0.75)
     if not (run.flags and run.flags.medals) and limit > 0 and duration <= fastShare * limit then
@@ -712,8 +712,8 @@ local function ScoreLines(run, p, P, opts)
             + AddLine(bonuses, penalties, 'fast_finish', Num(common.fastBonus, 0) * P, 1, false, false,
                 { pct = math.floor(fastShare * 100 + 0.5) })
     end
-    -- one line per twist of the run (CP.Twists): each adds its share of P (x the department's twist points, step
-    -- P20), together at most Config.Events.twistMaxPoints
+    -- one line per twist of the run (CP.Twists): each adds its share of P (x the department's twist points),
+    -- together at most Config.Events.twistMaxPoints
     for _, line in ipairs(CP.Twists.bonus(CP.Twists.of(run), nil, CP.Twists.pointsScaleOf(run)).lines) do
         total = total
             + AddLine(bonuses, penalties, 'modifier', line.points * P, 1, false, false,
@@ -752,7 +752,7 @@ local function EmptyBreakdown(P)
     }
 end
 
--- The happy hour points bonus a run carries (run.controls.pointsBonus, fixed at the accept, step P20): x the final
+-- The happy hour points bonus a run carries (run.controls.pointsBonus, fixed at the accept): x the final
 -- points, 1.0 = none. Never on test runs, Cross-Department runs or the Weekly Boss.
 function Scoring.bonusOf(run)
     if type(run) ~= 'table' or run.test or run.operationId or run.isBoss then return 1.0 end
@@ -779,7 +779,7 @@ function Scoring.compute(run, p, result, opts)
     if result ~= 'completed' then return out end
 
     local bonuses, penalties, total = ScoreLines(run, p, P, opts)
-    -- a live case with Config.LiveCrime.linesOnly: the lines only, P stays the base of their shares (V13)
+    -- a live case with Config.LiveCrime.linesOnly: the lines only, P stays the base of their shares
     local linesOnly = LinesOnly(run)
     local subtotal = linesOnly and total or P + total
     local mTeam = Num(TierRow(run).points, 1.0)
@@ -802,17 +802,17 @@ function Scoring.compute(run, p, result, opts)
     local value = math.max(0, math.min(cap, raw))
     local final = math.floor(value + 1e-9)
     local tod = false
-    -- a live or volunteer case only with its typeOfTheDay switch (Config.LiveCrime V13, Config.Volunteers V22b)
+    -- a live or volunteer case only with its typeOfTheDay switch (Config.LiveCrime, Config.Volunteers)
     local todOk = LiveCall('counts', run, 'typeOfTheDay') ~= false
         and not (CP.Volunteers and CP.Volunteers.counts and CP.Volunteers.counts(run, 'typeOfTheDay') == false)
     if CP.Events and CP.Events.typeOfTheDay and todOk then
-        -- the officer's department's pick for today (step P18); the server's type when the setter is in the run
+        -- the officer's department's pick for today; the server's type when the setter is in the run
         local okT, key = pcall(CP.Events.typeOfTheDay, nil, p.department, run.participants or { p })
         tod = okT and key ~= nil and key == run.missionType
     end
     local todMultiplier = Num(Config.Events and Config.Events.todMultiplier, 2.0)
     if tod then final = math.floor(final * todMultiplier + 1e-9) end
-    -- the happy hour points bonus (step P20), after the cap like the Type of the Day
+    -- the happy hour points bonus, after the cap like the Type of the Day
     local mBonus = Scoring.bonusOf(run)
     if mBonus ~= 1.0 then final = math.floor(final * mBonus + 1e-9) end
 
@@ -1151,7 +1151,7 @@ function Scoring.recheckBadges(citizenid)
     return CheckBadges(citizenid, true)
 end
 
--- The field training badge (Config.FieldTraining.badge, step F3) while field training is on, else nil. Its sign-offs
+-- The field training badge (Config.FieldTraining.badge) while field training is on, else nil. Its sign-offs
 -- give it (CP.FieldTraining); an admin may grant or revoke it like an achievement.
 local function FieldTrainingBadge()
     local FT = CP.FieldTraining

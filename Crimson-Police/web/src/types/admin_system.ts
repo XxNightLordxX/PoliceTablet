@@ -48,7 +48,7 @@ export interface StorageCopyReply {
     vars?: Record<string, unknown>;
     money?: { updated: number; inserted: number } | null;
     restart?: boolean;
-    // step WF3: the fresh Storage view, so the panel needs no second request
+    // the fresh Storage view, so the panel needs no second request
     view?: StorageView;
 }
 
@@ -117,7 +117,7 @@ export interface ProblemsData {
     tags: string[];
 }
 
-// admin:getNeedsAttention (step H5, Config.AdminUi.needsAttention): Home's Needs attention panel in one answer.
+// admin:getNeedsAttention (Config.AdminUi.needsAttention): Home's Needs attention panel in one answer.
 export interface NeedsAttentionData {
     problems: number;
     refusedToday: number;

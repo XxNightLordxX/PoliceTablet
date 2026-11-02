@@ -8,6 +8,7 @@
 
 import { registerMock, type MockFn, type MockKind } from '../shared/nui';
 import type { FtoView } from '../types/fieldTraining';
+import type { Commendation } from '../types/profile';
 import type { Avatar, LevelInfo, RunResult } from '../shared/types';
 import type {
     ActivityRun,
@@ -1232,8 +1233,11 @@ const activityView = (args: { citizenid?: string } | null) => {
         },
         week: { key: sqlTime(weekStart()).slice(0, 10), startsAt: weekStart() },
         runs,
-        // one commendation the viewer gave (Revoke offered) and one from an admin
+        // the ones given in this mock session, one the viewer gave (Revoke offered) and one from an admin; active
+        // only, newest first, like the server
         commendations: [
+            ...(mockCommends[o.citizenid] ?? []),
+
             {
                 id: 9001,
                 kind: 'teamwork',
@@ -1256,10 +1260,10 @@ const activityView = (args: { citizenid?: string } | null) => {
                 revoked: false,
                 mine: false,
             },
-        ],
-        // step P7: Clear cooldown offered (never on the viewer's own character)
+        ].filter(c => !mockRevoked.has(c.id)),
+        // Clear cooldown offered (never on the viewer's own character)
         cooldownClear: o.citizenid === me.citizenid ? null : { perDay: 5, usedToday: supClears.length },
-        // step P11: Mission ban offered (never on the viewer's own character), the ban in force
+        // Mission ban offered (never on the viewer's own character), the ban in force
         missionBan:
             o.citizenid === me.citizenid
                 ? null
@@ -1272,7 +1276,7 @@ const activityView = (args: { citizenid?: string } | null) => {
                       canLift: !!mockBans[o.citizenid],
                   },
         missionBanState: mockBans[o.citizenid] ?? null,
-        // step P22: Give points offered (never on the viewer's own character)
+        // Give points offered (never on the viewer's own character)
         awardPoints:
             o.citizenid === me.citizenid
                 ? null
@@ -1281,19 +1285,61 @@ const activityView = (args: { citizenid?: string } | null) => {
     return activity;
 };
 reg('request', 'sup:getOfficerActivity', activityView);
-// like the server (step FX1): an action sent with activityOf answers with that officer's fresh activity
+// like the server: an action sent with activityOf answers with that officer's fresh activity
 const withActivity = <T extends object>(p: { activityOf?: string } | null, out: T): T & { activity?: unknown } =>
     p?.activityOf ? { ...out, activity: activityView({ citizenid: p.activityOf }) } : out;
 
 // ============================================================================
-//                 CLEAR COOLDOWN (DEPARTMENT REPORT, STEP P7)
+//                    COMMEND AND REVOKE (DEPARTMENT REPORT)
+// ============================================================================
+// The supervisor's Commend and Revoke, like the server: sent with activityOf (the activity dialog) the reply carries
+// the officer's fresh activity, the new commendation in it or the revoked one gone.
+
+const mockCommends: Record<string, Commendation[]> = {};
+const mockRevoked = new Set<number>();
+let mockCommendId = 9100;
+
+reg(
+    'action',
+    'server:sup:commend',
+    (p: { citizenid?: string; kind?: string; citation?: string; runUuid?: string; activityOf?: string }) => {
+        if (!p?.citizenid || !byCid(p.citizenid)) throw new Error('err.unknown_officer');
+        if (!p.kind) throw new Error('err.commend_kind');
+        if (!p.citation || !String(p.citation).trim()) throw new Error('err.reason_required');
+        const me = viewer();
+        mockCommendId += 1;
+        const c: Commendation = {
+            id: mockCommendId,
+            kind: p.kind,
+            citation: String(p.citation).trim(),
+            by: me.name,
+            byRank: me.rank,
+            at: now(),
+            runUuid: p.runUuid ?? null,
+            revoked: false,
+            mine: true,
+        };
+        mockCommends[p.citizenid] = [c, ...(mockCommends[p.citizenid] ?? [])];
+        return withActivity(p, { id: c.id });
+    },
+);
+
+reg('action', 'server:sup:revokeCommendation', (p: { id?: number; reason?: string; activityOf?: string }) => {
+    if (typeof p?.id !== 'number') throw new Error('err.commend_not_found');
+    if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+    mockRevoked.add(p.id);
+    return withActivity(p, {});
+});
+
+// ============================================================================
+//                      CLEAR COOLDOWN (DEPARTMENT REPORT)
 // ============================================================================
 // Every officer has a Patrol type cooldown and one mission cooldown until cleared; the officer's clears a day (3, all
 // staff) and the supervisor's (5) are counted in this mock session.
 
 const supClears: { citizenid: string; scope: string; key: string }[] = [];
 
-// step P11: the mission bans set in this mock session
+// the mission bans set in this mock session
 const mockBans: Record<string, MissionBanState> = {};
 
 reg(
@@ -1311,7 +1357,7 @@ reg(
     },
 );
 
-// step P22: the points the viewer gave in this mock session (Give points, 1-50 an award, 100 a day)
+// the points the viewer gave in this mock session (Give points, 1-50 an award, 100 a day)
 let mockAwarded = 0;
 
 reg(
@@ -1368,7 +1414,7 @@ reg(
         if (supClears.filter(c => c.citizenid === p.citizenid).length >= 3) throw new Error('err.live_clear_limit');
         if (supClears.length >= 5) throw new Error('err.sup_clear_used');
         supClears.push({ citizenid: p.citizenid, scope: p.scope, key: String(p.key ?? '') });
-        // like the server (step FX1), the reply carries the dialog's fresh list
+        // like the server, the reply carries the dialog's fresh list
         return {
             used: supClears.filter(c => c.citizenid === p.citizenid).length,
             max: 3,
@@ -1377,7 +1423,7 @@ reg(
     },
 );
 
-// Field training (step T1): one rookie in training with a ready task, signed off and paired in memory.
+// Field training: one rookie in training with a ready task, signed off and paired in memory.
 const mockFto: FtoView = {
     rookie: { citizenid: 'CPS20003', name: 'Sam Rookie' },
     trainer: { citizenid: 'CPS10001', name: 'Alex Mercer' },

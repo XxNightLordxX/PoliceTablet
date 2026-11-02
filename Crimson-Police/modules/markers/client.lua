@@ -36,14 +36,14 @@ local SILENT_SHOWS = {
     towTruck = true,
 }
 -- Kinds an objective has several of (Business Check's doors, Bomb Disposal's devices): under Radio Silence 'area' the
--- block draws none of its own, and CP.Markers shows only this officer's nearest from the server's pointer (BLIPS_FINAL
--- section 3: "only the nearest pending point").
+-- block draws none of its own, and CP.Markers shows only this officer's nearest from the server's pointer (only the
+-- nearest pending point).
 local NEAREST_ONLY = { point = true, device = true }
 -- What every mode shows: the drive to the start and the service vehicles coming to the officer.
 local ALWAYS_SHOWN = { start = true, prisonerVan = true, towTruck = true }
 local SERVICE_LABELS = { prisonerVan = 'markers.prisoner_van', towTruck = 'markers.tow_truck' }
 local FIELDS = { 'adoptKey', 'look', 'variant', 'label', 'number', 'coords', 'radius', 'netId', 'moving', 'beyond' }
--- Colour-blind map colours (My options -> Map -> colourblindMap, step O14): each blip's role and its colour id, never
+-- Colour-blind map colours (My options -> Map -> colourblindMap): each blip's role and its colour id, never
 -- red (1) or green (2). A kind not listed is an objective; a follow-up or set-back variant is a target.
 local COLOURBLIND = { start = 5, objective = 5, target = 17, hostile = 27, friendly = 3, area = 0 }
 local KIND_ROLE = {
@@ -163,8 +163,8 @@ end
 
 local function MyPos() return GetEntityCoords(PlayerPedId()) end
 
--- True while this officer still drives to the start (CP.Route, §5.12): the start keeps his only line (R2). Not once he
--- follows the action (a late partner, CP.Route.follow, PLAN M11): CP.Route has dropped the start's line by then.
+-- True while this officer still drives to the start (CP.Route, §5.12): the start keeps his only line. Not once he
+-- follows the action (a late partner, CP.Route.follow): CP.Route has dropped the start's line by then.
 local function Driving()
     local r = CP.Route and CP.Route.current and CP.Route.current()
     return r ~= nil and not r.arrived and not r.action
@@ -180,7 +180,7 @@ local function Mode()
     return MODES[m] and m or 'area'
 end
 
--- Radio Silence hides kind for ctx's run (BLIPS_FINAL R9). block: asked for a block's own blip, which under 'area'
+-- Radio Silence hides kind for ctx's run. block: asked for a block's own blip, which under 'area'
 -- also hides a NEAREST_ONLY kind (CP.Markers shows the nearest itself) and the 'next' variant (a second checkpoint).
 local function Hides(ctx, kind, variant, block)
     if not Silent(ctx) or ALWAYS_SHOWN[kind] then return false end
@@ -219,7 +219,7 @@ local function RouteOn(blip)
     end
 end
 
--- Every blip leaves through here: its line goes off first (BLIPS_FINAL R10).
+-- Every blip leaves through here: its line goes off first.
 local function Remove(blip)
     if not blip then return end
     if blip == routeBlip then RouteOff() end
@@ -262,7 +262,7 @@ local function LabelOf(el)
         or CP.L('markers.objective')
 end
 
--- A new pointer blip: above the detail blips, flashing once (SET_BLIP_FLASH_TIMER, BLIPS_FINAL R5). carry: a block
+-- A new pointer blip: above the detail blips, flashing once (SET_BLIP_FLASH_TIMER). carry: a block
 -- just handed over its own blip for a target ours showed, so the block's blip flashes for the rest of that one flash
 -- (a block draws its blips from its first snapshot, right after the pointer came up).
 local function Emphasise(el, blip, carry)
@@ -330,7 +330,7 @@ local function LastKnown(el, on)
 end
 
 -- What this element shows now: the block's own blip when it handed one over, else our blip on the entity while this
--- game streams it, else our blip at the server's position (BLIPS_FINAL R1, R7).
+-- game streams it, else our blip at the server's position.
 local function Place(el)
     local cfg = Cfg()
     local hide
@@ -441,7 +441,7 @@ end
 -- ============================================================================
 --                        THE HUD LINE AND OBJECTIVE GPS
 -- ============================================================================
--- The HUD names what the pointer leads to and how far it is (Config.Markers.hudLine, PLAN M10): only what the map
+-- The HUD names what the pointer leads to and how far it is (Config.Markers.hudLine): only what the map
 -- shows (Radio Silence included), never while the officer still drives to the start, sent only when it changes.
 
 local function SendHud(target)
@@ -614,7 +614,7 @@ local function Build(m)
     return list
 end
 
--- Keep what stays (its blip, line and flash), move what moved, drop what went (BLIPS_FINAL R8).
+-- Keep what stays (its blip, line and flash), move what moved, drop what went.
 local function Reconcile(list)
     local keep = {}
     for _, n in ipairs(list) do keep[n.id] = n end
@@ -769,13 +769,12 @@ end
 -- for ctx's run (the current pointer's when ctx is nil); every block asks this before it draws a blip or a line.
 -- 'none' hides everything but the start and service vehicles; 'area' keeps the objective's circle or its one point
 -- without a line: no blips on people or cars, no second checkpoint (variant 'next'), and no points or devices of the
--- block's own (CP.Markers shows the nearest one itself); 'full' hides nothing (Config.Markers.radioSilence, BLIPS_FINAL
--- R9).
+-- block's own (CP.Markers shows the nearest one itself); 'full' hides nothing (Config.Markers.radioSilence).
 function M.hidden(ctx, kind, variant) return Hides(ctx, kind, variant, true) end
 
 -- May a Crimson-Police GPS line show now? Not while the drive to the start is on (CP.Route samples the start's line
 -- from the blip route first), not while the officer has a waypoint (his own, or the one Objective GPS set), not under
--- Radio Silence, not when Config.Markers says no (BLIPS_FINAL R2: one line per officer), not when the officer's
+-- Radio Silence, not when Config.Markers says no (one line per officer), not when the officer's
 -- objectiveGps is 'waypoint' or 'off' (My options -> Map). The start's own line does not ask.
 function M.canRoute(ctx)
     local cfg = Cfg()
@@ -788,13 +787,13 @@ end
 
 -- Can this officer get a GPS line to the objective at all for ctx's run (Config.Markers on with its line, and Radio
 -- Silence not hiding lines, and the officer's objectiveGps not 'off')? A late partner's game asks before it drops the
--- start's line for the objective's (PLAN M11); without it he keeps the start's waypoint.
+-- start's line for the objective's; without it he keeps the start's waypoint.
 function M.leads(ctx)
     local cfg = Cfg()
     return cfg.enabled ~= false and cfg.route ~= false and not M.hidden(ctx, 'route') and GpsMode() ~= 'off'
 end
 
--- Objective GPS (the Active Mission screen's button, Config.Markers.objectiveGps, PLAN M10): a map waypoint on what
+-- Objective GPS (the Active Mission screen's button, Config.Markers.objectiveGps): a map waypoint on what
 -- the pointer leads to. The waypoint is then the officer's one line (M.canRoute), follows a moving objective while it
 -- stays ours and goes with the objective. Refused while he still drives to the start (the start keeps his line) and
 -- while Radio Silence hides the objective's line. Returns ok, { label } | errKey.
@@ -809,7 +808,7 @@ function M.objectiveGps()
     if not p then return false, 'err.objective_gps_none' end
     SetNewWaypoint(p.x + 0.0, p.y + 0.0)
     gps = { runId = cur.runId, index = cur.index, x = p.x, y = p.y }
-    RouteOff() -- the waypoint is his line now, at once (BLIPS_FINAL R2)
+    RouteOff() -- the waypoint is his line now, at once
     local label = LabelOf(el)
     if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify('info', CP.L('markers.gps_set', { label = label })) end
     return true, { label = label }

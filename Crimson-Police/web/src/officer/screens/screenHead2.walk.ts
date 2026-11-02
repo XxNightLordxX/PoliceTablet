@@ -74,7 +74,7 @@ function steps(): void {
         ok(!src.includes('<LoadingBlock') && !src.includes('<ErrorState'), `${key}: no own loading or error block`);
     }
 
-    // Challenge (R1): the same head and load states; its contributors dialog keeps its own compact error line
+    // Challenge: the same head and load states; its contributors dialog keeps its own compact error line
     ok(challengeSrc.includes('OFFICER_HEADS.challenge.title'), 'challenge: title from OFFICER_HEADS');
     ok(challengeSrc.includes('OFFICER_HEADS.challenge.help'), 'challenge: help from OFFICER_HEADS');
     ok(challengeSrc.includes('<ScreenStatus') && !challengeSrc.includes('<LoadingBlock'), 'challenge: ScreenStatus');

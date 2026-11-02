@@ -89,7 +89,7 @@ end
 -- What a set of twists adds together: points (a share of P: the shares add up), cash (a multiplier: the
 -- multipliers multiply), both stopped at the caps, and lines (each twist's share of the points after the cap, in
 -- ORDER: the result card's bonus lines). scale (optional): { [twist] = x its cash } (a department's twistCash
--- Mission control, step P16); pscale (optional): { [twist] = x its points share } (twistPoints, step P20). The caps
+-- Mission control); pscale (optional): { [twist] = x its points share } (twistPoints). The caps
 -- still apply.
 function Twists.bonus(list, scale, pscale)
     local caps = Twists.caps()
@@ -114,8 +114,8 @@ local function ControlMap(run, key)
     return type(c) == 'table' and c or nil
 end
 
--- The twist cash scale a run carries (run.controls.twistCash, step P16), or nil.
+-- The twist cash scale a run carries (run.controls.twistCash), or nil.
 function Twists.scaleOf(run) return ControlMap(run, 'twistCash') end
 
--- The twist points scale a run carries (run.controls.twistPoints, step P20), or nil.
+-- The twist points scale a run carries (run.controls.twistPoints), or nil.
 function Twists.pointsScaleOf(run) return ControlMap(run, 'twistPoints') end

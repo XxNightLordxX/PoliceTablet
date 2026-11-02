@@ -190,7 +190,7 @@ end
 
 -- A hostile's red dot (Config.Markers.kinds.hostile, a boss at bossScale), drawn by CP.Markers.style so it follows
 -- Config.Markers.shortRange (shipped false: it shows at the radar edge). A detail blip: the fight's circle is the
--- objective pointer (CP.Markers, PLAN M5), so it is never handed over and carries no GPS line.
+-- objective pointer (CP.Markers), so it is never handed over and carries no GPS line.
 local function EnsureBlip(S, netId, ent, boss)
     -- a loop pass resumed after the cleanup (it waited in ctx.control) draws nothing
     if not S.alive then return end

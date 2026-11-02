@@ -927,7 +927,7 @@ function Missions.isEnabled(id)
 end
 
 -- ============================================================================
---                          ENGINE MISSIONS (step V14)
+--                               ENGINE MISSIONS
 -- ============================================================================
 -- A mission the engine builds itself (CP.LiveCrime's live_crime, ARCHITECTURE 5.46) lives in a registry of its own,
 -- never in defs: it is never listed, drawn, sent with client:missions, shown on a board or opened in the Mission
@@ -1444,7 +1444,7 @@ local STATS_CACHE_S = 60          -- seconds a mission stats answer is kept per 
 local STATS_RANGE_MAX = 366 * 86400
 local statsCache = {}
 
--- The last load (start or reload): loaded, rejected with reasons, warning texts, the Builder's file sync (C4).
+-- The last load (start or reload): loaded, rejected with reasons, warning texts, the Builder's file sync.
 function Missions.loadSummary()
     if not lastSummary then return nil end
     return PlainSummary(lastSummary)
@@ -1485,7 +1485,7 @@ end
 Missions._health = MissionsHealth
 
 -- ============================================================================
---                     QUICK EDIT OF A BUILT-IN (#30, #31)
+--                           QUICK EDIT OF A BUILT-IN
 -- ============================================================================
 
 local function BuiltinOnly(id)
@@ -1632,7 +1632,7 @@ Kit.action('server:admin:setMissionTweak', 'openAdmin', function(ctx)
 end, { rate = 2, reason = 'optional' })
 
 -- ============================================================================
---                      TRIAL OF LOAD-TIME SETTINGS (A14)
+--                         TRIAL OF LOAD-TIME SETTINGS
 -- ============================================================================
 -- Every mission run through the loader with a settings patch on Config (put back before this returns; nothing here
 -- yields): the missions that would not load. patch = { { path, value } | { path, none = true } }.
@@ -1715,7 +1715,7 @@ Kit.callback('admin:trialMissions', 'openAdmin', function(ctx)
 end, { rate = 2 })
 
 -- ============================================================================
---                 LOCATION SWITCHES THAT NO LONGER MATCH (O3)
+--                    LOCATION SWITCHES THAT NO LONGER MATCH
 -- ============================================================================
 -- A switch is saved by the location's label (or number): after an edit renames or removes a location, the entries
 -- that match nothing are listed with Remap.
@@ -1794,7 +1794,7 @@ Kit.action('server:admin:remapLocationSwitches', 'openAdmin', function(ctx)
 end, { rate = 2, reason = 'optional' })
 
 -- ============================================================================
---                              MISSION STATS (C8)
+--                                MISSION STATS
 -- ============================================================================
 -- Live + archived rows (one per officer per run) counted and summed in SQL, rates and averages in Lua (files mode:
 -- no /, AVG or HAVING).

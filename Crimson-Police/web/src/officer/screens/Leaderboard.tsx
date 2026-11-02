@@ -144,7 +144,7 @@ export default function Leaderboard() {
     const myDept = session.officer?.department ?? '';
     const myCid = session.officer?.citizenid ?? '';
     const metrics = asList(session.config?.leaderboardMetrics);
-    // My options -> Opening the tablet (step O9): with rememberFilters on, the choices of the last visit (this PC)
+    // My options -> Opening the tablet: with rememberFilters on, the choices of the last visit (this PC)
     const [period, setPeriod] = useRememberedFilter<BoardPeriod>('leaderboard.period', 'weekly', v =>
         BOARD_PERIODS.includes(v as BoardPeriod),
     );

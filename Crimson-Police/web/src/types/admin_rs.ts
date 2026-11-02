@@ -18,7 +18,7 @@ export interface RsOfficer extends RsPerson {
     status?: string | null;
 }
 
-// A volunteer case's part (V26, CP.Volunteers.staffView): the suspect he plays, the mode, the match phase, why he
+// A volunteer case's part (CP.Volunteers.staffView): the suspect he plays, the mode, the match phase, why he
 // dropped out (a void) and whether an officer reached him. Never a server id or a position.
 export interface RsVolunteerInfo {
     role: string;
@@ -28,7 +28,7 @@ export interface RsVolunteerInfo {
     engaged?: boolean;
 }
 
-// One volunteer on the list now (V26, CP.Volunteers.staffList); playing = the phase of the run he is asked for or
+// One volunteer on the list now (CP.Volunteers.staffList); playing = the phase of the run he is asked for or
 // plays.
 export interface RsListedVolunteer {
     citizenid: string;
@@ -54,7 +54,7 @@ export interface RsCaseLine {
     flags: number;
     notes: number;
     officers: RsOfficer[];
-    // a volunteer case (V26): what he plays and how far the match got
+    // a volunteer case: what he plays and how far the match got
     volunteer?: RsVolunteerInfo | null;
     // a case of one of the admin's own characters or accounts: it can't be opened (err.own_run)
     own?: boolean;
@@ -65,13 +65,13 @@ export interface RsCasesData {
     liveCrime: boolean;
     volunteers: boolean;
     cases: RsCaseLine[];
-    // Config.AdminUi.pageSize (step H6): cases holds one page (asked for with page)
+    // Config.AdminUi.pageSize: cases holds one page (asked for with page)
     casesPage?: { page: number; pages: number; total: number } | null;
-    // the volunteers on the list now (V26; empty while volunteers are off)
+    // the volunteers on the list now (empty while volunteers are off)
     listed?: RsListedVolunteer[];
-    // F2: the Volunteers tab offers Clear strikes (Config.Volunteers.staffClearStrikes)
+    // the Volunteers tab offers Clear strikes (Config.Volunteers.staffClearStrikes)
     clearStrikes?: boolean;
-    // F2: blocks, exclusions and suspensions can be lifted early (Config.RealSuspects.staffLift)
+    // blocks, exclusions and suspensions can be lifted early (Config.RealSuspects.staffLift)
     lift?: boolean;
     serverTime: number;
 }
@@ -117,7 +117,7 @@ export interface RsLedgerLine {
     officer?: RsOfficer | null;
     label?: string | null;
     weapon?: number | null;
-    // F2: the weapon's name (Config.RealSuspects.weaponNames), absent for a weapon not in shared/weapons.lua
+    // the weapon's name (Config.RealSuspects.weaponNames), absent for a weapon not in shared/weapons.lua
     weaponName?: string | null;
     n: number;
     willKill: boolean;
@@ -160,10 +160,10 @@ export interface RsPairsData {
     // os.time() of the oldest ledger row read at start (nil = none)
     from?: number | null;
     admin: RsAdminRow[];
-    // F2: character names by citizen ID for the pairs and the running rows (Config.RealSuspects.staffNames; an empty
+    // character names by citizen ID for the pairs and the running rows (Config.RealSuspects.staffNames; an empty
     // list when there are none)
     names?: Record<string, string> | unknown[] | null;
-    // F2: the running rows can be lifted early (Config.RealSuspects.staffLift)
+    // the running rows can be lifted early (Config.RealSuspects.staffLift)
     lift?: boolean;
     serverTime: number;
     citizenid?: string;

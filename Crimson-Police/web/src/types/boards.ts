@@ -219,7 +219,7 @@ export interface AdminRun {
     createdTs: number;
 }
 
-// One page of a long Admin list (step H6, Config.AdminUi.pageSize).
+// One page of a long Admin list (Config.AdminUi.pageSize).
 export interface ListPage {
     page: number;
     pages: number;
@@ -242,9 +242,9 @@ export interface AdminBoards {
     season?: { id: number; name: string; active: boolean } | null;
     citizenid?: string;
     runs?: AdminRun[];
-    // Config.AdminUi.pageSize (step H6): runs holds one page of the officer's runs (asked for with runsPage)
+    // Config.AdminUi.pageSize: runs holds one page of the officer's runs (asked for with runsPage)
     runsPage?: ListPage | null;
-    // Config.AdminUi.oneRequest (step H6): the flagged runs, asked for with withFlagged
+    // Config.AdminUi.oneRequest: the flagged runs, asked for with withFlagged
     flagged?: FlaggedRow[];
     // full admin control: the past windows to pick from and every metric the board can be ranked by
     windows?: { weeks: PastWindow[]; months: PastWindow[] };
@@ -341,18 +341,18 @@ export interface ReportOfficer {
     decisionsBest?: number;
     decisionsBad?: number;
     calls?: number;
-    // step P11: a supervisor's mission ban in force
+    // a supervisor's mission ban in force
     missionBan?: MissionBanState | null;
 }
 
-// A mission ban in force (step P11): until = os.time() of its end, by = who set it ("Sgt Doe")
+// A mission ban in force: until = os.time() of its end, by = who set it ("Sgt Doe")
 export interface MissionBanState {
     until: number;
     by: string;
     reason?: string | null;
 }
 
-// step P11: what the viewer may do about this officer's mission ban (nil = nothing)
+// what the viewer may do about this officer's mission ban (nil = nothing)
 export interface MissionBanControl {
     min: number;
     max: number;
@@ -362,7 +362,7 @@ export interface MissionBanControl {
     canLift?: boolean;
 }
 
-// step P22: Give points for this viewer (nil = not offered); perDay / usedToday in points (admins: none)
+// Give points for this viewer (nil = not offered); perDay / usedToday in points (admins: none)
 export interface AwardPointsControl {
     min: number;
     max: number;
@@ -412,16 +412,16 @@ export interface OfficerActivity {
     runs: ActivityRun[];
     // active commendations, newest first (mine = the viewer issued it)
     commendations?: Commendation[];
-    // step P7: the viewer may clear this officer's cooldowns (admins: no counts)
+    // the viewer may clear this officer's cooldowns (admins: no counts)
     cooldownClear?: { perDay?: number; usedToday?: number } | null;
-    // step P11: Mission ban for this viewer (nil = not offered) and the ban in force
+    // Mission ban for this viewer (nil = not offered) and the ban in force
     missionBan?: MissionBanControl | null;
     missionBanState?: MissionBanState | null;
-    // step P22: Give points (the awardPoints Mission control)
+    // Give points (the awardPoints Mission control)
     awardPoints?: AwardPointsControl | null;
 }
 
-// sup:getOfficerCooldowns (step P7): the officer's cooldowns for Clear cooldown
+// sup:getOfficerCooldowns: the officer's cooldowns for Clear cooldown
 export interface OfficerCooldowns {
     citizenid: string;
     online: boolean;

@@ -94,7 +94,7 @@ async function steps(): Promise<void> {
         ok(!!v && !v.calls.some(c => c.id === pushed.id), 'the declined call is gone from it');
     }
 
-    // step WF3, Admin UI -> System -> Backups: Backup now and Delete answer with the fresh list
+    // Admin UI -> System -> Backups: Backup now and Delete answer with the fresh list
     const made = await action('server:admin:backupNow', {});
     const name = made.ok && made.data ? (made.data as { name?: string }).name : undefined;
     const list = replyView<BackupsData>(made.data, 'view');

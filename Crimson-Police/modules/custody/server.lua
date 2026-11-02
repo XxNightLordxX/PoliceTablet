@@ -14,7 +14,7 @@ local SERVICE_EVENT = 'crimson-police:client:serviceVehicle'
 local SERVICE_BLIP_EVENT = 'crimson-police:client:serviceBlip'
 local ROAD_CALLBACK = 'crimson-police:client:roadPoint'
 
-local TICK_MS = 1000               -- kept at 1 s (LP2): each service vehicle step (road point, drive, park)
+local TICK_MS = 1000               -- kept at 1 s: each service vehicle step (road point, drive, park)
 local REACH_SLACK_M = 1.0          -- position lag allowed around every reach
 local DWELL_SLACK_MS = 2000        -- a sampled action must have been in reach for its time minus this
 local SAMPLED_FROM_S = 3           -- actions this long or longer are sampled every second
@@ -1271,7 +1271,7 @@ end
 -- the officer who impounded it): the car fades out and counts as impounded. A van is placed at its parking point,
 -- but only while no player is within serviceClearance of it; else on a road point beside the scene that the driving
 -- client gives and the server checks (RoadRing), else it waits (asked again every 3 s, the parking point checked
--- every second). It is made frozen and waits there until an officer's game has put it on the ground (S10).
+-- every second). It is made frozen and waits there until an officer's game has put it on the ground.
 local function Fallback(run, s, t)
     if s.kind == 'tow' then
         if s.target then FadeCar(run, s, s.target) end
@@ -2140,7 +2140,7 @@ end
 -- ============================================================================
 --                         THE SERVICE VEHICLES' BLIPS
 -- ============================================================================
--- A prisoner van or tow truck shows on the map of every officer on the run (CP.Markers.service, PLAN M7,
+-- A prisoner van or tow truck shows on the map of every officer on the run (CP.Markers.service,
 -- Config.Markers.serviceVehicles) from its spawn until it drives off. The coroner van stays unmarked (it serves a
 -- scene the officers are already at). Sent when its status changes, never on a timer: the client follows the vehicle
 -- itself once it streams in, and shows it at the position sent until then.
@@ -2211,7 +2211,7 @@ function Custody._tick()
     end
 end
 
--- The tick runs only while a run has a custody book (step LP4: it woke every second all day); a book armed it
+-- The tick runs only while a run has a custody book (it woke every second all day); a book armed it
 -- (BookOf), and the pass that drops the last one ends it.
 ArmTick, Custody._ticking = CP.Perf.armed(TAG, TICK_MS, function()
     Custody._tick()

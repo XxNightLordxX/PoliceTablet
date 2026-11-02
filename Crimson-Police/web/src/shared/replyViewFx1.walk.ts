@@ -2,9 +2,9 @@
 // actions whose replies carry the screen's fresh view (Mission calls, Live Missions, Clear cooldown, the activity
 // dialog, Reset all, Admin System -> Storage), so the screen needs no second request.
 
-// Step FX1 against the browser mocks (node walk.mjs, a gate step): Admin System -> Storage, the supervisor's Mission
-// calls (post, withdraw), Live Missions ("+ minutes"), Clear cooldown, Give points from the activity dialog (with
-// activityOf only) and Settings -> Reset all each answer with their screen's fresh view.
+// Against the browser mocks (node walk.mjs, a gate step): Admin System -> Storage, the supervisor's Mission calls
+// (post, withdraw), Live Missions ("+ minutes"), Clear cooldown, Give points, Commend and Revoke from the activity
+// dialog (with activityOf only) and Settings -> Reset all each answer with their screen's fresh view.
 
 import '../mocks/admin_system.mock';
 import '../mocks/missioncalls.mock';
@@ -83,6 +83,22 @@ async function steps(): Promise<void> {
         const res = await action('server:sup:awardPoints', { ...award, activityOf: officer.citizenid });
         const a = replyView<OfficerActivity>(res.data, 'activity');
         ok(res.ok && !!a && a.officer?.citizenid === officer.citizenid, 'from the dialog: his fresh activity');
+
+        // Commend from the dialog: his fresh activity with the new commendation; Revoke: the activity without it
+        const commend = { citizenid: officer.citizenid, kind: 'teamwork', citation: 'Held the line at the bank job.' };
+        const plainC = await action('server:sup:commend', commend);
+        ok(plainC.ok && !replyView(plainC.data, 'activity'), 'Commend from another screen: no activity in the reply');
+        const given = await action('server:sup:commend', { ...commend, activityOf: officer.citizenid });
+        const cid = given.ok && given.data ? (given.data as { id?: number }).id : undefined;
+        const ga = replyView<OfficerActivity>(given.data, 'activity');
+        ok(given.ok && !!ga && (ga.commendations ?? []).some(c => c.id === cid), 'Commend: the activity lists it');
+        const rv = await action('server:sup:revokeCommendation', {
+            id: cid,
+            reason: 'Wrong officer',
+            activityOf: officer.citizenid,
+        });
+        const ra = replyView<OfficerActivity>(rv.data, 'activity');
+        ok(rv.ok && !!ra && !(ra.commendations ?? []).some(c => c.id === cid), 'Revoke: the activity without it');
     }
 
     // Admin UI -> Settings -> Reset all: the reply carries the whole Settings view

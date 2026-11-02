@@ -224,7 +224,7 @@ export function LoadResultBanner() {
 }
 
 // ============================================================================
-//                            OPERATION HISTORY (C6)
+//                              OPERATION HISTORY
 // ============================================================================
 
 const OP_STATUSES = ['', 'completed', 'cancelled', 'running', 'waiting', 'joining'];
@@ -234,7 +234,7 @@ export function OperationHistory() {
     const [status, setStatus] = useState('');
     const [page, setPage] = useState(1);
     const [open, setOpen] = useState<OperationHistoryRow | null>(null);
-    // Void this operation's rows: the bulk void dialog of Officers (P1) with the operation as the fixed filter
+    // Void this operation's rows: the bulk void dialog of Officers with the operation as the fixed filter
     const [voiding, setVoiding] = useState<OperationHistoryRow | null>(null);
     const args = { ...rangeArgs(range), status: status || undefined, page };
     const data = useRequest<Paged<OperationHistoryRow>>('admin:getOperations', args);
@@ -377,7 +377,7 @@ export function OperationHistory() {
 }
 
 // ============================================================================
-//                            DISPATCH HISTORY (C7)
+//                               DISPATCH HISTORY
 // ============================================================================
 
 const CALL_OUTCOMES = ['', 'completed', 'failed', 'abandoned', 'reopened', 'lapsed', 'withdrawn', 'open', 'claimed'];
@@ -485,7 +485,7 @@ export function DispatchHistory() {
 }
 
 // ============================================================================
-//                              MISSION STATS (C8)
+//                                MISSION STATS
 // ============================================================================
 
 type StatsBy = 'missions' | 'types';

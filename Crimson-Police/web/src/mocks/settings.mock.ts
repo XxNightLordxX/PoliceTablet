@@ -213,7 +213,7 @@ const data: SettingsData = {
                 },
             ],
         },
-        // Admin UI -> Rewards (step H1, ?rewardsScreen): what each feature pays, its account and items
+        // Admin UI -> Rewards (?rewardsScreen): what each feature pays, its account and items
         {
             key: 'feature_rewards',
             title: 'Feature rewards',
@@ -275,7 +275,7 @@ const data: SettingsData = {
     // Settings -> Features (modules/settings Play.features); Spawning.enabled is not in this list, so it is left out
     features: [
         { key: 'spawning', play: 'npc', path: 'Spawning.enabled', risky: true },
-        // limits (step G1): LiveCrime.maxLiveRuns is not in this list either, so only the unit size is linked
+        // limits: LiveCrime.maxLiveRuns is not in this list either, so only the unit size is linked
         {
             key: 'live_crimes',
             play: 'pvp',
@@ -389,7 +389,7 @@ registerMock('action', 'server:admin:resetAllSettings', (): SettingsReply => {
                     x.changed = false;
                     out.push(x);
                 }
-    // like the server (step FX1), Reset all answers with the whole view
+    // like the server, Reset all answers with the whole view
     return { ...reply(out), view: data };
 });
 

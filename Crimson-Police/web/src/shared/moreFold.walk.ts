@@ -1,8 +1,8 @@
-// The More fold (FX2, Config.AdminUi.foldAdvanced) against the browser mocks (node walk.mjs, a gate step): off, the
+// The More fold (Config.AdminUi.foldAdvanced) against the browser mocks (node walk.mjs, a gate step): off, the
 // options show open as before; on, they sit under More, closed at first, open as the viewer last left them (a
 // blocked storage starts folded), and an option that is set never hides.
 
-// Step FX2 against the browser mocks (node walk.mjs, a gate step): the More fold off (open, no button), on (closed,
+// Against the browser mocks (node walk.mjs, a gate step): the More fold off (open, no button), on (closed,
 // the count), forceOpen, the open state remembered per screen and a blocked storage; which Mission controls fold and
 // that a set one never does.
 

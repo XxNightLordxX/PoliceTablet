@@ -176,8 +176,7 @@ end
 --                                    BLIPS
 -- ============================================================================
 
--- The objective pointer (CP.Markers) gets the blip back first, so its GPS line goes off before it goes (BLIPS_FINAL
--- R10).
+-- The objective pointer (CP.Markers) gets the blip back first, so its GPS line goes off before it goes.
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
@@ -190,7 +189,7 @@ end
 -- suspect; variant 'surrendered': kinds.suspect.surrenderedScale for one who gave up), restyled in place when that
 -- changes, handed to the objective pointer under the net id the server's pointer names it by: it IS the pointer (one
 -- icon, the GPS line on it), and CP.Markers shows the same look from the server's position once the entity is too far
--- away for this game (BLIPS_FINAL R1, R3, R7).
+-- away for this game.
 local function EnsureBlip(S, k, ent, net, kind, labelKey, variant)
     -- never a blip drawn after the cleanup
     if not S.alive then return end
@@ -396,7 +395,7 @@ local function ApplyPed(S, net, ped)
     return true, true
 end
 
--- Config.Debug (F8): what this host's game has of each car, once per change. A car it does not have is out of
+-- Config.Debug: what this host's game has of each car, once per change. A car it does not have is out of
 -- its OneSync range: nobody drives it and nobody sees it on the map.
 local function NoteHost(S, netId, veh, owned)
     if not Config.Debug then return end
@@ -591,7 +590,7 @@ local function HudText(S, myPos)
         })
     end
     if d.escaping then return CP.L('block.pursuit.hud_escaping', { seconds = d.escaping }) end
-    -- a volunteer drives the suspect car (V24): nothing to find until he is out, then his last-reported point
+    -- a volunteer drives the suspect car: nothing to find until he is out, then his last-reported point
     if d.volunteer == 'wait' then return CP.L('block.pursuit.hud_volunteer_wait') end
     if d.volunteer == 'real' and not d.volunteerDone and (d.stopped or 0) >= (d.vtotal or 0) - 1 then
         return CP.L('block.pursuit.hud_volunteer')

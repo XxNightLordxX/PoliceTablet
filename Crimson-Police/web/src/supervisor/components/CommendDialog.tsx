@@ -15,7 +15,7 @@ export interface CommendDialogProps {
     scope: 'sup' | 'admin';
     // runs the officer took part in that the commendation may be for (optional)
     runs?: { runUuid: string; label: string }[];
-    // reply: the action's reply (with activity = true it carries the officer's fresh activity, step FX1)
+    // reply: the action's reply (with activity = true it carries the officer's fresh activity)
     onDone?: (reply: unknown) => void;
     activity?: boolean;
 }

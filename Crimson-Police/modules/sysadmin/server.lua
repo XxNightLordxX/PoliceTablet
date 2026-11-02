@@ -1806,7 +1806,7 @@ end
 --                            STORAGE, BACKUPS (NET)
 -- ============================================================================
 
--- Step WF3 (smoother workflows): a Storage or Backups action replies with the panel's fresh view under data.view, so the
+-- A Storage or Backups action replies with the panel's fresh view under data.view, so the
 -- Admin UI needs no second request after it (admin:getStorage allows one read in 5 seconds).
 local function WithView(res, view)
     local out = {}

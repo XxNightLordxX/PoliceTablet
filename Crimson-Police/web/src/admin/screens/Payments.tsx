@@ -467,7 +467,7 @@ export default function AdminPayments() {
     const { data, loading, error, refetch } = useRequest<PaymentsView>('admin:getPayments', filter, {
         pushTopic: 'payments',
     });
-    // Config.AdminUi.oneRequest (step H6): the totals come with the list, so the screen opens with one request
+    // Config.AdminUi.oneRequest: the totals come with the list, so the screen opens with one request
     const totals = useRequest<PaymentTotals>('admin:getPaymentTotals', where, { skip: oneRequest });
     const tot = oneRequest ? (data?.totals ?? null) : totals.data;
     const reload = () => {

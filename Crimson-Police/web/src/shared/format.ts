@@ -57,7 +57,7 @@ export function formatDuration(seconds: number | null | undefined): string {
     return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
-// The officer option distanceUnits (step O10): 'metric' (as before) or 'imperial'.
+// The officer option distanceUnits: 'metric' (as before) or 'imperial'.
 export type DistanceUnits = 'metric' | 'imperial';
 
 const METRES_PER_MILE = 1609.344;
@@ -87,7 +87,7 @@ export function formatDateTime(value: number | string | null | undefined): strin
     return dtf('dt', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(d);
 }
 
-// os.time() seconds -> "18:40" (today's clock time, for an end later today: a mission ban, step P11).
+// os.time() seconds -> "18:40" (today's clock time, for an end later today: a mission ban).
 export function formatClock(value: number | null | undefined): string {
     if (value === null || value === undefined || !Number.isFinite(value)) return '';
     return dtf('time', { hour: '2-digit', minute: '2-digit' }).format(new Date(value * 1000));

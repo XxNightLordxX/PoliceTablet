@@ -73,7 +73,7 @@ for _, a in ipairs(ADMIN_ONLY_LIST) do ADMIN_ONLY[a] = true end
 local SUPERVISOR_ALWAYS = { viewMissionList = true, fieldTraining = true }
 
 -- Powers an extra grant may give besides the supervisor switches (Config.Permissions.grants): the builder Teleport
--- button, field training pairing and the criminal tablet (G2, read by CP.CrimTab while Config.CriminalTablet.access
+-- button, field training pairing and the criminal tablet (read by CP.CrimTab while Config.CriminalTablet.access
 -- is 'granted'). viewMissionList (the department report and the live list) is never granted.
 local EXTRA_POWERS_LIST = { 'builderTeleport', 'fieldTraining', 'criminalTablet' }
 local EXTRA_POWERS = {}
@@ -119,7 +119,7 @@ function P.gradeGrant(officer, grant)
     return false
 end
 
--- A row of that run for that citizenid, live or archived. asSuspect (the self rule over suspects, V17): a real
+-- A row of that run for that citizenid, live or archived. asSuspect (the self rule over suspects): a real
 -- suspect of that run's case counts too (CP.Opponents.suspectOfRun: memory, then cp_pvp_pairs).
 function P.tookPart(citizenid, runUuid, asSuspect)
     if type(citizenid) ~= 'string' or citizenid == '' or not ValidRunUuid(runUuid) then return false end
@@ -183,7 +183,7 @@ end
 
 -- True when an extra grant names this player for that power: his citizenid, his department with his grade, or his
 -- Qbox gang with its grade. Nothing else (the supervisor rule, the switches) is checked here. officer: his
--- CP.Access.getOfficer when the caller has it (P.can, step FX1), so it is not looked up again.
+-- CP.Access.getOfficer when the caller has it (P.can), so it is not looked up again.
 function P.granted(src, cap, officer)
     local n = math.tointeger(tonumber(src))
     if not n or n <= 0 or not P.isGrantable(cap) then return false end
@@ -286,7 +286,7 @@ function P.probe(src, name)
         name)
 end
 
--- known (internal, step OP3): { admin = boolean } when the caller has just asked CP.Access.isAdmin for this player
+-- known (internal): { admin = boolean } when the caller has just asked CP.Access.isAdmin for this player
 -- (CP.AdminKit's guards), so the ace checks are not made twice for one request.
 function P.can(src, action, ctx, known)
     if type(action) ~= 'string' or action == '' then return false, 'err.no_permission' end
@@ -306,7 +306,7 @@ function P.can(src, action, ctx, known)
             return false, 'err.no_permission'
         end
         -- a supervisor by grade, or a player an extra grant names for this power. A department check needs his
-        -- officer record too: it is looked up once and passed on (step FX1)
+        -- officer record too: it is looked up once and passed on
         local officer = nil
         local deptCheck = ctx and (ctx.department ~= nil or ctx.departments ~= nil)
         if deptCheck then

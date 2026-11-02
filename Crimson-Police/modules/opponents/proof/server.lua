@@ -5,7 +5,7 @@
 -- CP.Opponents proof (server): the server facts that decide every detain and booking of a real suspect. The
 -- sc-police cuff pair and the custody hold, getting free during the hold (an officer's uncuff, a friend's bobby pin,
 -- sc-police's cuff-break game, or a self-uncuff), downs, bookings matched in either order, and the hospital rules.
--- The facts come from the CP.ScPolice / CP.Ambulance listeners and the metadata mirror (V4's Opp.onMeta), so
+-- The facts come from the CP.ScPolice / CP.Ambulance listeners and the metadata mirror (Opp.onMeta), so
 -- nothing here runs while no case is open. A suspect's own acts are staff notes (Opp.note): nothing here sets
 -- run.flagged or p.flagged.
 
@@ -15,7 +15,7 @@ local TAG = 'opponents'
 
 local EVIDENCE_MS = 5000          -- an officer uncuff, a bobby pin or a cuff-break this close to the cuffs coming off
 local SETTLE_MS = 2000            -- sc-police sends its cuff-break alert just after the uncuffed state: wait this long
-local BREAK_MIN_MS = 2000         -- a break-free this soon after the cuff is not sc-police's minigame (critic 2 #30)
+local BREAK_MIN_MS = 2000         -- a break-free this soon after the cuff is not sc-police's minigame
 local BOOK_PAIR_MS = 10000        -- the jail event and the injail change pair within this, in either order
 local RESCUE_TICKS = 2            -- watch passes a friend must stand within rescueRange before his bobby pin result
 local UP_GRACE_MS = 5000          -- a respawn this soon after getting up still counts the time he was down
@@ -204,9 +204,8 @@ end
 --                           THE CUFF PAIR (METADATA)
 -- ============================================================================
 
--- Cuffed by officerSrc (why 'cuff_pair', or 'outside_assist' for an officer outside the case, V15). The share is 0
--- when he was AFK by his samples (and a note: critic 2 #15), neutralisedShare when he was down (whoever downed him:
--- C28) or after a hospital respawn with officers in contact (C26), else 1.
+-- Cuffed by officerSrc (why 'cuff_pair', or 'outside_assist' for an officer outside the case). The share is 0
+-- when he was AFK by his samples (and a note), neutralisedShare when he was down (whoever downed him) or after a hospital respawn with officers in contact, else 1.
 local function Cuffed(case, rec, officerSrc, why)
     rec.outsideCuff = nil
     rec.caughtBy = { officerSrc }
@@ -226,7 +225,7 @@ local function Cuffed(case, rec, officerSrc, why)
     end
 end
 
--- An on-duty officer outside the case cuffed him (critic C11, V15; Config.RealSuspects.outsideCuff): 'assist'
+-- An on-duty officer outside the case cuffed him (Config.RealSuspects.outsideCuff): 'assist'
 -- (shipped) = the case's cuff while an active participant is within contactRange of the suspect, else stopped;
 -- 'stopped' = always stopped (state void, counts for nobody, the note rs_outside_cuff), like an outside jail. In a
 -- live case the outsider is then asked to join it (CP.LiveCrime.offer, Config.LiveCrime.backup).
@@ -290,11 +289,11 @@ local function DownChange(case, rec, now)
 end
 
 -- ============================================================================
---                         BOOKINGS (EITHER ORDER, C19)
+--                           BOOKINGS (EITHER ORDER)
 -- ============================================================================
 
--- The jail event and the last injail 0 -> above 0 change within BOOK_PAIR_MS, whichever came second (critic 2 #5:
--- sc-police writes injail inside its own JailPlayer handler and qbx fires onSetMetaData at once).
+-- The jail event and the last injail 0 -> above 0 change within BOOK_PAIR_MS, whichever came second
+-- (sc-police writes injail inside its own JailPlayer handler and qbx fires onSetMetaData at once).
 local function TryBook(case, rec, now)
     local run, cfg = case.run, Cfg()
     local o = rec.outsideJail
@@ -325,7 +324,7 @@ local function TryBook(case, rec, now)
 end
 
 -- ============================================================================
---                            THE METADATA HOOK (V4)
+--                              THE METADATA HOOK
 -- ============================================================================
 
 -- CP.Opponents' mirror changed (old ~= new). Ignored in a bucket other than 0, whose cuffs and downs Crimson-Arena
@@ -359,7 +358,7 @@ function Opp.onClose(case)
 end
 
 -- ============================================================================
---                    SC-POLICE AND SC-AMBULANCE FACTS (V3)
+--                       SC-POLICE AND SC-AMBULANCE FACTS
 -- ============================================================================
 
 -- A cuff attempt on a suspect, kept only when it can be true. Nothing here may yield: sc-police has already sent
@@ -389,7 +388,7 @@ local function CuffSuspect(officerSrc, targetSrc)
 end
 
 -- 'cuff' (officerSrc, targetSrc): the attempt on a suspect first, then every attempt by a participant of a live run,
--- on anyone, gets the same hint (C5).
+-- on anyone, gets the same hint.
 local function OnCuff(officerSrc, targetSrc)
     CuffSuspect(officerSrc, targetSrc)
     local own = CP.Runs and CP.Runs.getBySrc and CP.Runs.getBySrc(officerSrc) or nil
@@ -432,7 +431,7 @@ local function OnCuffBreak(suspectSrc)
 end
 
 -- 'bobbyPin' (pickerSrc, success). sc-police drops a result with no pending attempt, but this handler still sees the
--- raw success, so the checks are CP's own (critic 2 #6): not the suspect, not cuffed or down himself, and near him
+-- raw success, so the checks are CP's own: not the suspect, not cuffed or down himself, and near him
 -- on RESCUE_TICKS watch passes before the result. The nearest such cuffed suspect is the one he picked.
 local function OnBobbyPin(pickerSrc, success)
     if success ~= true then return end
@@ -513,7 +512,7 @@ local function OnJail(officerSrc, targetSrc, jailTimeRaw)
 end
 
 -- 'respawn' (src, hospitalIndex): not down, or down for less than earlyRespawnSeconds -> void (free or cuffed) and
--- a note; else spawn protection, unless officers were in contact at the down and are again now (C26).
+-- a note; else spawn protection, unless officers were in contact at the down and are again now.
 local function OnRespawn(src)
     local case, rec = Opp.bySrc(src)
     if not rec or DONE[rec.state] then return end
@@ -550,7 +549,7 @@ local function OnRespawn(src)
 end
 
 -- ============================================================================
---                         THE WATCH PASS (V4's onTick)
+--                         THE WATCH PASS (Opp.onTick)
 -- ============================================================================
 
 -- The online players' server coords, once per pass and only when a suspect is cuffed (CP.Qbx's event-kept list:

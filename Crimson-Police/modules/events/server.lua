@@ -297,7 +297,7 @@ local function ServerTypeOfTheDay(dayKey)
 end
 
 -- ============================================================================
---                    DEPARTMENT TYPE OF THE DAY (STEP P18)
+--                          DEPARTMENT TYPE OF THE DAY
 -- ============================================================================
 -- typeOfTheDay (Config.MissionControls.controls): per department, under the master switch, shipped off. A supervisor
 -- picks one mission type for TOMORROW (never today, so nobody times it to a run he is about to take), at most once a
@@ -498,7 +498,7 @@ end
 -- ============================================================================
 --                  THE DEPARTMENT'S TWISTS (MISSION CONTROL)
 -- ============================================================================
--- The twists Mission control (step P15, per department, under the master switch, off as shipped): which of the
+-- The twists Mission control (per department, under the master switch, off as shipped): which of the
 -- twists the admin enabled in Config.Events.twists the department's leaders are offered at the accept step, and
 -- which of them start ticked. Its value: { offered = { key, ... }, ticked = { key, ... } } (ticked within offered).
 
@@ -603,7 +603,7 @@ end
 Events.registerTwistControl()
 
 -- ============================================================================
---                            TWIST CASH (STEP P16)
+--                                  TWIST CASH
 -- ============================================================================
 -- twistCash (Config.MissionControls.controls): per department, under the master switch, shipped off with
 -- min = max = 1.0. { [twist] = x its cash } on runs the department leads, inside the admin's min and max; read at the
@@ -642,7 +642,7 @@ local function EnabledTwistLabels()
     return list
 end
 
--- A per-twist multiplier control (twistCash, step P16; twistPoints, step P20): { [twist] = x } inside the bounds.
+-- A per-twist multiplier control (twistCash; twistPoints): { [twist] = x } inside the bounds.
 local function RegisterTwistScale(key)
     local dc = CP.DeptControls
     if not (dc and dc.register) then return false end
@@ -675,7 +675,7 @@ end
 function Events.registerTwistCashControl() return RegisterTwistScale(TWIST_CASH_KEY) end
 Events.registerTwistCashControl()
 
--- twistPoints (step P20): per department, under the master switch, shipped off with min = max = 1.0. { [twist] = x
+-- twistPoints: per department, under the master switch, shipped off with min = max = 1.0. { [twist] = x
 -- its points share } on runs the department leads, read at the accept (run.controls.twistPoints); the chosen twists
 -- together still stop at Config.Events.twistMaxPoints (CP.Twists.bonus); completed runs only (the twist lines are
 -- scored only then); never on test runs, Cross-Department runs or the Weekly Boss.
@@ -694,22 +694,22 @@ end
 -- The department's twist cash: { [twist] = x its cash }, or nil (no department, no Mission controls).
 function Events.deptTwistCash(dept) return DeptMap(dept, TWIST_CASH_KEY) end
 
--- The department's twist points (step P20): { [twist] = x its points share }, or nil.
+-- The department's twist points: { [twist] = x its points share }, or nil.
 function Events.deptTwistPoints(dept) return DeptMap(dept, TWIST_POINTS_KEY) end
 
 -- The twists the officers may choose for a mission type whose pool for them is list (mission defs): every enabled
 -- twist that fits at least one mission of the pool. The mission is drawn after the accept (Hard rule: Mission
 -- choice), so a twist that fits only some of them is marked some = true: it is dropped, without its reward, when
 -- the drawn mission is not one of them. None for the Weekly Boss.
--- dept (optional): the leader's department; its twists Mission control (step P15) narrows the offer to the twists it
+-- dept (optional): the leader's department; its twists Mission control narrows the offer to the twists it
 -- offers and marks the ones it pre-ticks (ticked = true).
 -- { { key, label, desc, points, cash, some, ticked } } in CP.Twists.ORDER.
 function Events.twistOffer(missionType, list, dept)
     local out = {}
     if missionType == BOSS_KEY or type(list) ~= 'table' or #list == 0 then return out end
     local own = Events.deptTwists(dept)
-    local scale = Events.deptTwistCash(dept)     -- the department's twist cash (step P16): the bonus shown
-    local pscale = Events.deptTwistPoints(dept)  -- and its twist points (step P20)
+    local scale = Events.deptTwistCash(dept)     -- the department's twist cash: the bonus shown
+    local pscale = Events.deptTwistPoints(dept)  -- and its twist points
     for _, key in ipairs(CP.Twists.ORDER) do
         local c = CP.Twists.cfg(key)
         if c.enabled and (not own or own.offered[key]) then
@@ -735,7 +735,7 @@ end
 
 -- The twists the tablet sent with an accept, checked: a clean list in CP.Twists.ORDER, or nil and the error key.
 -- raw: nil, or a list of twist keys; every one must be offered for this type now (Events.twistOffer) and, with dept
--- (the leader's department), by that department (its twists Mission control, step P15: err.twist_department).
+-- (the leader's department), by that department (its twists Mission control: err.twist_department).
 function Events.checkTwists(raw, missionType, list, dept)
     if raw == nil then return {} end
     if type(raw) ~= 'table' then return nil, 'err.invalid_payload' end

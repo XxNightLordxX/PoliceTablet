@@ -112,7 +112,7 @@ registerMock('request', 'admin:getPayments', (args: unknown): PaymentsView => {
         nextForfeitIn: 420,
         held: null,
         serverTime: now(),
-        // ?oneRequest (step H6): the totals come with the list
+        // ?oneRequest: the totals come with the list
         totals: a.withTotals === true ? totalsOf(a) : undefined,
     };
 });

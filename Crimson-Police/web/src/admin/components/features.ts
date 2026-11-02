@@ -11,7 +11,7 @@ export interface FeatureRow {
     f: FeatureEntry;
     s: SettingView;
     on: boolean;
-    // the feature's limits that the data has (step G1), in the server's order
+    // the feature's limits that the data has, in the server's order
     limits: SettingView[];
 }
 

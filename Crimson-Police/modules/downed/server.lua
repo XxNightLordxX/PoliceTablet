@@ -160,7 +160,7 @@ local function NearestDropOff(src)
     return best
 end
 
--- A case with a real suspect (run.realSuspect, V14 / V22) and Config.RealSuspects.downed ~= 'failed' (shipped
+-- A case with a real suspect (run.realSuspect: 'live' or 'volunteer') and Config.RealSuspects.downed ~= 'failed' (shipped
 -- 'keep_earned'): a live officer leaves with 'downed_case' (result completed, the lines he earned so far), a
 -- volunteer-suspect officer with 'downed_kept' (result failed, today's failed credit); neither starts a type
 -- cooldown. 'failed' and every NPC run: 'downed' (Hard rule 18).
@@ -444,7 +444,7 @@ local function Tick()
     return #work == 0 and next(entries) == nil and next(runs) == nil
 end
 
--- The check runs only while a run is live or an entry is kept (step LP4: it woke every checkEvery seconds all day):
+-- The check runs only while a run is live or an entry is kept (it woke every checkEvery seconds all day):
 -- armed at start, by a run created and by a new entry; the pass that finds neither ends it.
 D._arm, D._ticking = CP.Perf.armed(TAG, function()
     local every = tonumber(Config.Downed.checkEvery) or 2

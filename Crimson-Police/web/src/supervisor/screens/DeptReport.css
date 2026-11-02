@@ -159,7 +159,7 @@
     color: var(--cp-subtle);
 }
 
-/* Clear cooldown (step P7): the officer's cooldowns, one row each */
+/* Clear cooldown: the officer's cooldowns, one row each */
 .sup-cd-note {
     margin: 0 0 8px;
     color: var(--cp-muted);

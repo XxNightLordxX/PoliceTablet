@@ -131,7 +131,7 @@ function NpcCombat.dropFor(run, src, why)
 end
 
 -- An NPC run whose officers keep the protection until a real player shoots one (playerHitDropsProtection): not a
--- test, no real suspect (V14's live runs, V22's volunteer runs drop it their own way), the settings started.
+-- test, no real suspect (live cases; volunteer cases drop it their own way), the settings started.
 local function NpcRun(run)
     return run.state ~= 'ended' and run.test == nil and run.realSuspect == nil and run.npcCombat ~= false
 end

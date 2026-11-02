@@ -924,7 +924,7 @@ export function OfficerTools({ o, onChanged }: { o: OfficerDetail; onChanged: ()
     );
 }
 
-// Commendations: put a revoked one back, or correct a citation (A5). Both need a reason and are audited.
+// Commendations: put a revoked one back, or correct a citation. Both need a reason and are audited.
 export function CommendationTools({
     commendations,
     onChanged,

@@ -105,7 +105,7 @@ function Kit.uuid() return U.uuid() end
 function Kit.validRequestId(v) return type(v) == 'string' and v:lower():match(REQUEST_ID_PATTERN) ~= nil end
 
 -- ============================================================================
---                             LONG LISTS (STEP H6)
+--                                  LONG LISTS
 -- ============================================================================
 
 -- Config.AdminUi.pageSize: rows per page of the long Admin UI lists, 10-200; nil while it is 0 or not a number
@@ -237,7 +237,7 @@ function Kit.isSelf(src, citizenid, strict)
 end
 
 -- true when any of src's characters took part in runUuid (live or archived rows), is on it now, or was a real
--- suspect of its case (V17: CP.Permissions.tookPart's asSuspect).
+-- suspect of its case (CP.Permissions.tookPart's asSuspect).
 function Kit.selfRun(src, runUuid)
     local n = ToSrc(src) or 0
     if n == 0 or type(runUuid) ~= 'string' or runUuid == '' then return false end
@@ -754,7 +754,7 @@ local function Guard(entry, src, payload)
     -- M
     if not opts.maintenance and Maint.active() then return false, 'err.maintenance' end
     -- P (Kit.supAction): admins, and supervisors with the key for the department the action is about
-    -- the ace checks once per request (step OP3): the answer goes on to CP.Permissions.can
+    -- the ace checks once per request: the answer goes on to CP.Permissions.can
     if entry.supervisor then
         local admin = (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n)) and true or false
         local okP, errP = SupPermission(entry, n, p, admin)
@@ -862,7 +862,7 @@ local function Run(entry, src, payload)
     end
     if not okG then return false, ctx end
     -- opts.oneAtATime: one call per actor at a time, so a per-day cap read before a yield (Kit.dailyCount) cannot be
-    -- passed by two requests sent at once (step Z5); the lock covers the handler and its audit row
+    -- passed by two requests sent at once; the lock covers the handler and its audit row
     local lockKey = entry.opts.oneAtATime and (entry.name .. '|' .. tostring(ctx.actor)) or nil
     if lockKey then
         if inFlight[lockKey] then return Refuse(ctx, 'err.busy') end

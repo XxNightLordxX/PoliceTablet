@@ -205,7 +205,7 @@ local function Line(ctx, st, id, ev)
     st.lines[id][ev.cid] = weight
     if weight > 0 then
         ctx.award(id, { weight = weight })
-        -- one live catch per suspect detained, for every active participant (the live_catches Rank by tab, V13)
+        -- one live catch per suspect detained, for every active participant (the live_catches Rank by tab)
         if id == 'live_detain' and CP.Runs and CP.Runs.noteStat then
             CP.Runs.noteStat(ctx.run, nil, 'live_catches', 1)
         end
@@ -213,7 +213,7 @@ local function Line(ctx, st, id, ev)
     return true
 end
 
--- Config.FeatureRewards.surrender (step G3): the officer who talked the suspect down (an officer of this run, never
+-- Config.FeatureRewards.surrender: the officer who talked the suspect down (an officer of this run, never
 -- the suspect), once per run and suspect. A suspect who gave himself up by his own command pays nobody.
 local function PayTalkDown(run, suspectCid, by)
     local FR = CP.FeatureRewards
@@ -223,7 +223,7 @@ local function PayTalkDown(run, suspectCid, by)
     local p = run.participants[by]
     local cid = type(p) == 'table' and p.citizenid or nil
     if type(cid) ~= 'string' or cid == suspectCid then return false end
-    -- step Z2: an officer of the run shares a connection or PC with a suspect (rs_linked_accounts): no pay
+    -- an officer of the run shares a connection or PC with a suspect (rs_linked_accounts): no pay
     local AC = CP.AntiCheat
     if AC and AC.flaggedWith then
         local okF, linked = pcall(AC.flaggedWith, run, 'rs_linked_accounts')
@@ -232,7 +232,7 @@ local function PayTalkDown(run, suspectCid, by)
     return FR.payLater('surrender', cid, { key = ('%s:%s'):format(tostring(run.id), suspectCid) })
 end
 
--- A detain of a suspect who surrendered and was not hit since (CP.Opponents.peaceful, step RP1): the shared
+-- A detain of a suspect who surrendered and was not hit since (CP.Opponents.peaceful): the shared
 -- peaceful_arrest line, weighted by his share, and a timeline line naming who talked him down.
 local function Peaceful(ctx, st, ev)
     if type(ev.cid) ~= 'string' or st.lines.peaceful_arrest[ev.cid] ~= nil then return end
@@ -316,7 +316,7 @@ local function Marker(ctx)
     return { kind = 'targets', route = false, targets = targets }
 end
 
--- The officers' case card (Active Mission, V16): the phase, the secure seconds and when the last-reported points were
+-- The officers' case card (Active Mission): the phase, the secure seconds and when the last-reported points were
 -- taken, with their labels only. Never a suspect's state or a position: it reads the same as the HUD and the map.
 local function CaseView(ctx)
     local st = StateOf(ctx)

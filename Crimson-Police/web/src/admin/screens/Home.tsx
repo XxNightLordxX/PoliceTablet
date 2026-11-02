@@ -245,7 +245,7 @@ function LiveNow() {
     );
 }
 
-// Needs attention (step H5, Config.AdminUi.needsAttention): what is waiting for an admin, from one batched request
+// Needs attention (Config.AdminUi.needsAttention): what is waiting for an admin, from one batched request
 // (admin:getNeedsAttention), each line a count that opens its screen.
 function NeedsAttention() {
     const navigate = useNavigate();
@@ -297,7 +297,7 @@ export default function AdminHome() {
     // Config.AdminUi.homeForms: the quick forms on the tiles (false = the tiles only open the screen)
     const adminUi = useSession().config?.adminUi;
     const forms = adminUi?.homeForms !== false;
-    // Config.AdminUi.needsAttention (step H5): the Needs attention panel on top (false = Home as before)
+    // Config.AdminUi.needsAttention: the Needs attention panel on top (false = Home as before)
     const attention = adminUi?.needsAttention === true;
     return (
         <Screen title={screenTitle} subtitle={t('admin.home.subtitle')} className="admin-home-screen">

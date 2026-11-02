@@ -379,7 +379,7 @@ export default function Challenge() {
     const mine = asList(data?.departments).find(d => d.key === myDept);
     const season = data?.season ?? null;
 
-    // the shared load states (step H3): loading, error, empty and stale, as on the other officer screens
+    // the shared load states: loading, error, empty and stale, as on the other officer screens
     const state = screenStateOf(!!data, loading, error);
     let content: ReactNode;
     if (!data) content = null;

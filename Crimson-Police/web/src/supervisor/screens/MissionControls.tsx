@@ -119,7 +119,7 @@ function fit(c: MissionControlState, n: number): number {
 //                                EDITOR BY KIND
 // ============================================================================
 
-// The types control (step P10): a switch per mission type and, folded under it, per mission. Only what is off is
+// The types control: a switch per mission type and, folded under it, per mission. Only what is off is
 // sent ({ [type]: false, missions: { [id]: false } }); switching back on removes the entry.
 function TypeSwitchesEditor({
     c,
@@ -185,7 +185,7 @@ function TypeSwitchesEditor({
     );
 }
 
-// The callLane control (step P12): the gap range, how many open at once, area chips and a weight per type. A
+// The callLane control: the gap range, how many open at once, area chips and a weight per type. A
 // department with no lane starts from the admin's whole gap range, one open call and the server's own weights.
 function laneOf(c: MissionControlState, draft: MissionControlValue): CallLaneValue {
     const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<CallLaneValue>) : {};
@@ -273,7 +273,7 @@ function CallLaneEditor({
     );
 }
 
-// The crossDept control (step P13): whether the department's officers join Cross-Department Missions and how many
+// The crossDept control: whether the department's officers join Cross-Department Missions and how many
 // places they may take in one (0 = no cap).
 function crossOf(draft: MissionControlValue): CrossDeptValue {
     const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<CrossDeptValue>) : {};
@@ -312,7 +312,7 @@ function CrossDeptEditor({
     );
 }
 
-// A list of names picked with one switch each (steps P14 boards and reviewRules); fixed names stay on.
+// A list of names picked with one switch each (boards and reviewRules); fixed names stay on.
 function PickList({
     names,
     picked,
@@ -349,7 +349,7 @@ function asStrings(v: unknown): string[] {
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 }
 
-// The boards control (step P14): names or callsigns for other departments, and the Rank by tabs shown.
+// The boards control: names or callsigns for other departments, and the Rank by tabs shown.
 function BoardsEditor({
     c,
     draft,
@@ -385,7 +385,7 @@ function BoardsEditor({
     );
 }
 
-// The reviewRules control (step P14): a second supervisor per Void, and the flag kinds only admins review.
+// The reviewRules control: a second supervisor per Void, and the flag kinds only admins review.
 function ReviewRulesEditor({
     c,
     draft,
@@ -419,7 +419,7 @@ function ReviewRulesEditor({
     );
 }
 
-// The twists control (step P15): the twists the department's leaders are offered, and the ones that start ticked.
+// The twists control: the twists the department's leaders are offered, and the ones that start ticked.
 function TwistsEditor({
     c,
     draft,
@@ -460,7 +460,7 @@ function TwistsEditor({
     );
 }
 
-// The goals control (step P21): which of the admin's daily and weekly goals the department's officers draw from.
+// The goals control: which of the admin's daily and weekly goals the department's officers draw from.
 function GoalsEditor({
     c,
     draft,
@@ -555,7 +555,7 @@ function Editor({
     if (c.key === 'reviewRules') {
         return <ReviewRulesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
     }
-    // a choice control (step P9: difficulty; step P10: featuredType): the names the admin offers
+    // a choice control (difficulty; featuredType): the names the admin offers
     if (c.kind === 'choice') {
         const offered = asArray<string>(c.offered);
         return (
@@ -580,7 +580,7 @@ function Editor({
     if (c.kind === 'map') {
         const map = asMap(draft);
         const typeLabel = (k: string) =>
-            // twistCash / twistPoints (steps P16, P20): one slider per enabled twist, by its name
+            // twistCash / twistPoints: one slider per enabled twist, by its name
             (Array.isArray(c.twistsAll) ? c.twistsAll.find(x => x.key === k)?.label : undefined) ??
             asArray(session.config?.missionTypes).find(m => m.key === k)?.label ??
             k;
@@ -613,7 +613,7 @@ function Editor({
             onChange={n => onChange(n)}
         />
     );
-    // readyCheck (step P8): 0 = no ready check, offered only while the admin allows it (canTurnOff)
+    // readyCheck: 0 = no ready check, offered only while the admin allows it (canTurnOff)
     if (c.canTurnOff === true) {
         return (
             <div className="sup-mc-sliders">
@@ -637,7 +637,7 @@ function Editor({
 type Pending =
     { kind: 'set'; c: MissionControlState; value: MissionControlValue } | { kind: 'reset'; c: MissionControlState };
 
-// Happy hour (step P6): minutes and the no-repeat box, Start; while it runs the countdown and End now.
+// Happy hour: minutes and the no-repeat box, Start; while it runs the countdown and End now.
 function HappyHourRow({
     c,
     busy,
@@ -792,7 +792,7 @@ function PlainRow({
                     </div>
                     {desc ? <p className="sup-mc-row__desc">{desc}</p> : null}
                     {c.key === 'typeOfTheDay' && c.todFor ? (
-                        // step P18: the type that counts today and the day a pick made now counts on
+                        // the type that counts today and the day a pick made now counts on
                         <p className="sup-mc-row__desc">
                             {t('sup.tod.today', {
                                 type: text('typeOfTheDay', c.todToday ?? c.todServer ?? null),
@@ -801,7 +801,7 @@ function PlainRow({
                         </p>
                     ) : null}
                     {c.key === 'goals' && c.goalsFrom ? (
-                        // step P21: what counts this week and the week a pick made now counts from
+                        // what counts this week and the week a pick made now counts from
                         <p className="sup-mc-row__desc">
                             {t('sup.goals.from', { now: text('goals', c.goalsNow ?? null), day: c.goalsFrom })}
                         </p>
@@ -958,14 +958,14 @@ export default function MissionControls() {
     const fold = useFoldAdvanced();
     const dept = asArray(data?.departments)[0];
     const deptShort = dept?.short ?? session.officer?.departmentShort ?? '';
-    // only the controls an admin switched on; an action control (step P7) is used from its own screen
+    // only the controls an admin switched on; an action control is used from its own screen
     const controls = [...asArray(data?.serverWide), ...asArray(dept?.controls)].filter(
         c => c.active && c.kind !== 'action',
     );
     const groups = GROUPS.map(g => ({ key: g, rows: controls.filter(c => groupOf(c) === g) })).filter(
         g => g.rows.length > 0,
     );
-    // Department notices (step P13): an action control with its own card
+    // Department notices: an action control with its own card
     const notices = asArray(dept?.controls).some(c => c.key === 'notices' && c.active);
 
     const confirm = async (reason: string) => {

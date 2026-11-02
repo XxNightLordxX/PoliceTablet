@@ -229,7 +229,7 @@ export default function SupReviewQueue() {
         {},
         { pollMs: 30000 },
     );
-    // Config.Tablet.supervisorReviewLive (step FX1): another supervisor's decision pushes this viewer's fresh queue
+    // Config.Tablet.supervisorReviewLive: another supervisor's decision pushes this viewer's fresh queue
     usePush<ReviewQueueData | null>('reviewQueue', q => {
         if (q && typeof q === 'object') setData(q);
     });
@@ -253,7 +253,7 @@ export default function SupReviewQueue() {
                 decision: pending.decision,
                 reason,
             });
-            // step P14: the department wants a second supervisor's Void (the first only marks the row pending)
+            // the department wants a second supervisor's Void (the first only marks the row pending)
             if (flagRes.ok) {
                 const waits = flagRes.data?.pending === true;
                 const key = pending.decision === 'approve' ? 'sup.review.approved' : 'sup.review.voided';
@@ -272,7 +272,7 @@ export default function SupReviewQueue() {
         }
         setPending(null);
         setDetail(null);
-        // step WF2: the reply carries the fresh queue (an older server: ask for it)
+        // the reply carries the fresh queue (an older server: ask for it)
         if (res.ok) applyReplyView<ReviewQueueData>(res.data, 'queue', setData, () => void refetch());
     };
 
@@ -436,7 +436,7 @@ export default function SupReviewQueue() {
     ];
     const current: TabKey = tabs.some(x => x.key === tab) ? tab : (tabs[0]?.key ?? 'flagged');
 
-    // the shared load states (step H4): spinner, error with Retry, nothing sent, or the stale line over the last list
+    // the shared load states: spinner, error with Retry, nothing sent, or the stale line over the last list
     const loadState = screenStateOf(!!data, loading, error);
     let body;
     if (current === 'profiles') body = <ProfilesReview />;

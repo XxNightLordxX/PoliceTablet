@@ -21,11 +21,11 @@ import type { ContactView } from './custody';
 
 // A mission type card (BoardCard §9.4). `locked.until` is a Unix timestamp (os.time) of the cooldown end.
 export type TypeCard = BoardCard & {
-    // step P10: the type the viewer's department command recommends (featuredType): a badge, right after favourites
+    // the type the viewer's department command recommends (featuredType): a badge, right after favourites
     featured?: boolean;
-    // step P10: switched off for a department of the unit by command (the types Mission control); locked says so
+    // switched off for a department of the unit by command (the types Mission control); locked says so
     offByCommand?: boolean;
-    // step V21: a mission of the pool may be played against a volunteer suspect (Config.Volunteers modes): the
+    // a mission of the pool may be played against a volunteer suspect (Config.Volunteers modes): the
     // accept dialog offers "Real suspect OK"; required = every mission needs it; available = volunteers free now
     realSuspect?: { required?: boolean; available?: number } | null;
 };
@@ -55,14 +55,14 @@ export interface MissionBoardData extends Omit<BoardData, 'operation'> {
     todMultiplier?: number;
     // the caps of stacked twists, for the accept step's bonus line (each card lists its own twists)
     twistMax?: TwistCaps;
-    // a happy hour running now (step P6), false when none
+    // a happy hour running now, false when none
     happyHour?: HappyHourState | false | null;
-    // step P11: a mission ban in force for the viewer or (name) a member of his unit; every card is locked until then
+    // a mission ban in force for the viewer or (name) a member of his unit; every card is locked until then
     missionBan?: { until: number; by: string; reason?: string | null; name?: string | null } | null;
 }
 
 // Reply of server:acceptType (payload: the type key, or { missionType, twists, realSuspect }; realSuspect = true when
-// the leader ticked "Real suspect OK", step V21).
+// the leader ticked "Real suspect OK").
 export interface AcceptTypeResult {
     runId: string;
     // the twists the run got (the chosen ones that fit the drawn mission)
@@ -106,7 +106,7 @@ export interface ActiveMissionData extends ActiveMissionView {
     // The Objective GPS button is on (Config.Markers.objectiveGps; the officer's game refuses it while he drives to the
     // start or Radio Silence hides the objective's line).
     objectiveGps?: boolean;
-    // A live case's card (CP.LiveCrime.caseView, Config.LiveCrime.caseCard, step V16); absent for any other run.
+    // A live case's card (CP.LiveCrime.caseView, Config.LiveCrime.caseCard); absent for any other run.
     live?: LiveCaseView | null;
 }
 

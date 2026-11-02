@@ -588,7 +588,7 @@
     color: var(--cp-muted);
 }
 
-/* step V21: "Real suspect OK" in the accept dialog of a type that may play a volunteer suspect */
+/* "Real suspect OK" in the accept dialog of a type that may play a volunteer suspect */
 .run_ui-confirm__real {
     padding: 8px 10px;
     border-radius: var(--cp-radius-sm);

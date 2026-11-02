@@ -85,7 +85,7 @@ const cases: RsCaseLine[] = [
     },
 ];
 
-// the volunteer list (V26, CP.Volunteers.staffList)
+// the volunteer list (CP.Volunteers.staffList)
 const listed: RsListedVolunteer[] = [
     {
         citizenid: 'VOL00001',
@@ -264,7 +264,7 @@ const adminRows: RsAdminRow[] = [
     { kind: 'exclude', suspect: 'CRIM0042', untilAt: nowS() + 29 * 86400 },
 ];
 
-// the character names the server sends with the pairs (F2, one lookup per screen load)
+// the character names the server sends with the pairs (one lookup per screen load)
 const NAMES: Record<string, string> = {
     ABC12345: 'Maria Lopez',
     SAST0031: 'Tom Reed',
@@ -364,7 +364,7 @@ for (const [name, kind] of [
     });
 }
 
-// F2: lift a running row early (Opp.lift), and clear a volunteer's strikes (CP.Volunteers.clearStrikes)
+// lift a running row early (Opp.lift), and clear a volunteer's strikes (CP.Volunteers.clearStrikes)
 registerMock(
     'action',
     'server:admin:rsLift',

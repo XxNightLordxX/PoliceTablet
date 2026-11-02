@@ -350,7 +350,7 @@ end
 -- yielding, and each bag read is a msgpack decode, so the options of one pass share each entity's bag (bags[e],
 -- false for none) and the CanAct answer (act). Everything else (the contact key, the cuff flow, the stun handler,
 -- the host AI and the governor) reads the bag itself. A table, not locals: this file is at Lua's 200 locals.
--- Step OP3: the run, the player's own state (dead, in a vehicle) and each entity's exists / networked check are read
+-- The run, the player's own state (dead, in a vehicle) and each entity's exists / networked check are read
 -- once per frame too, and the bag table is emptied in place instead of a new one each frame. had[k] = true once k was
 -- read this frame (run, dead, car: their answer may be nil or false).
 
@@ -778,7 +778,7 @@ local function IsCurrent(ped, token)
     return a ~= nil and a.token == token and DoesEntityExist(ped)
 end
 
--- A ped that waits for its placement (its cp bag asks for one: CP.Spawn.holds, PLAN S9) stays frozen, so this game,
+-- A ped that waits for its placement (its cp bag asks for one: CP.Spawn.holds) stays frozen, so this game,
 -- maybe with no ground loaded where he stands, never drops him through the map: the game that puts him on the ground
 -- lets him go. a.held: the host loop lets him go here once the wait is over.
 local function Held(ped)

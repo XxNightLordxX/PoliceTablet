@@ -54,23 +54,23 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
     const session = useOptionalSession();
     const typeLabel = (k: string) =>
         asArray(session?.config?.missionTypes).find(m => m.key === k)?.label ??
-        // twistCash / twistPoints (steps P16, P20): a twist's name
+        // twistCash / twistPoints: a twist's name
         (hasKey(`modifier.${k}`) ? t(`modifier.${k}`) : k);
     return (key, v) => {
-        // callLane (step P12): the gap and how many may be open; none = no lane
+        // callLane: the gap and how many may be open; none = no lane
         if (key === 'callLane') {
             const lane = v && typeof v === 'object' && !Array.isArray(v) ? (v as CallLaneValue) : null;
             if (!lane || !Array.isArray(lane.spawnEvery)) return t('mc.value.callLane_none');
             return t('mc.value.callLane', { lo: lane.spawnEvery[0], hi: lane.spawnEvery[1], max: lane.maxOpen });
         }
-        // crossDept (step P13): out, or joining with a cap on places (0 = no cap)
+        // crossDept: out, or joining with a cap on places (0 = no cap)
         if (key === 'crossDept') {
             const cd = v && typeof v === 'object' && !Array.isArray(v) ? (v as CrossDeptValue) : null;
             if (cd && cd.join === false) return t('mc.value.crossDept_out');
             if (cd && cd.places > 0) return t('mc.value.crossDept_places', { n: cd.places });
             return t('mc.value.crossDept_open');
         }
-        // boards and reviewRules (step P14)
+        // boards and reviewRules
         if (key === 'boards') {
             const b = v && typeof v === 'object' && !Array.isArray(v) ? (v as Partial<BoardsValue>) : {};
             const shown = b.showToOthers === false ? t('mc.value.boards_callsigns') : t('mc.value.boards_names');
@@ -84,7 +84,7 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
                 n: Array.isArray(r.adminOnlyKinds) ? r.adminOnlyKinds.length : 0,
             });
         }
-        // twists (step P15): how many twists the department offers and how many start ticked
+        // twists: how many twists the department offers and how many start ticked
         if (key === 'twists') {
             const w = v && typeof v === 'object' && !Array.isArray(v) ? (v as Partial<TwistsValue>) : {};
             return t('mc.value.twists', {
@@ -92,7 +92,7 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
                 ticked: Array.isArray(w.ticked) ? w.ticked.length : 0,
             });
         }
-        // goals (step P21): how many goals of each kind the department picked (none = every goal)
+        // goals: how many goals of each kind the department picked (none = every goal)
         if (key === 'goals') {
             const g = v && typeof v === 'object' && !Array.isArray(v) ? (v as Partial<GoalsValue>) : {};
             const part = (ids: unknown) =>
@@ -103,11 +103,11 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
         }
         if (v === undefined || v === null) return '-';
         if (typeof v === 'boolean') return v ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off');
-        // featuredType (step P10) and typeOfTheDay (step P18): the type's label
+        // featuredType and typeOfTheDay: the type's label
         if (typeof v === 'string' && (key === 'featuredType' || key === 'typeOfTheDay')) return typeLabel(v);
-        // a choice control (step P9: difficulty): the preset's name
+        // a choice control (difficulty): the preset's name
         if (typeof v === 'string') return hasKey(`mc.value.preset.${v}`) ? t(`mc.value.preset.${v}`) : v;
-        // types (step P10): the types switched off and how many single missions
+        // types: the types switched off and how many single missions
         if (key === 'types') {
             const sw = asMap<unknown>(v);
             const types = Object.keys(sw).filter(k => k !== 'missions' && sw[k] === false);
@@ -119,11 +119,11 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
         }
         const one = (n: number) =>
             hasKey(`mc.unit.${key}`) ? t(`mc.unit.${key}`, { n: formatFactor(n) }) : formatFactor(n);
-        // readyCheck (step P8): 0 = no ready check
+        // readyCheck: 0 = no ready check
         if (typeof v === 'number' && v === 0 && key === 'readyCheck') return t('admin.perms.mc.value_off');
         if (typeof v === 'number') return one(v);
         if (key === 'happyHour') {
-            // { minutes, noRepeat } while one runs (step P6); {} = none
+            // { minutes, noRepeat } while one runs; {} = none
             const hh = asMap<number>(v);
             if (!hh.minutes) return t('admin.perms.mc.value_off');
             return t(hh.noRepeat ? 'mc.value.happyHour_norepeat' : 'mc.value.happyHour', { n: hh.minutes });
@@ -189,7 +189,7 @@ function BoundsFields({
     onSave: (next: MissionControlBounds) => void;
 }) {
     const numeric = control.kind !== 'bool' && control.kind !== 'choice' && control.bounded !== false;
-    // a choice control (step P9): the names supervisors may pick, a box for each
+    // a choice control: the names supervisors may pick, a box for each
     const listField = control.kind === 'choice' ? control.list : undefined;
     const choiceNames = asArray<string>(control.choices);
     const savedList = (): string[] => {
@@ -200,7 +200,7 @@ function BoundsFields({
     const [on, setOn] = useState<boolean | undefined>(bounds.on);
     const [min, setMin] = useState<number | null>(bounds.min ?? null);
     const [max, setMax] = useState<number | null>(bounds.max ?? null);
-    // more true / false bounds a control registers (step P8: readyCheck's canTurnOff)
+    // more true / false bounds a control registers (readyCheck's canTurnOff)
     const flagNames = asArray<string>(control.flags);
     const [flags, setFlags] = useState<Record<string, boolean>>(() =>
         Object.fromEntries(flagNames.map(f => [f, bounds[f] === true])),
@@ -303,7 +303,7 @@ function BoundsFields({
     );
 }
 
-// An action control (step P7): the limits it is used with, set in Settings (Mission controls).
+// An action control: the limits it is used with, set in Settings (Mission controls).
 function ActionLimits({ control }: { control: MissionControlState }) {
     const parts: string[] = [];
     if (control.perDay !== undefined) parts.push(t('admin.perms.mc.per_day', { n: control.perDay }));

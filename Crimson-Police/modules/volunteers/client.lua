@@ -5,9 +5,9 @@
 local MENU_ID = 'crimson_police_volunteer'
 local registered = nil   -- the command name once registered (RegisterCommand cannot be undone: restart to change)
 local busy = false       -- a dialog is open
-local ask = nil          -- the server's open question (V22): { token, closed }
+local ask = nil          -- the server's open question: { token, closed }
 local waypoint = false   -- this script set the meet point as the map waypoint
-local area = nil         -- his play area's radius blip (search_area's fugitive, V25)
+local area = nil         -- his play area's radius blip (search_area's fugitive)
 
 local function Send(action, data) TriggerServerEvent(CP.e('server:volunteer'), action, data) end
 
@@ -48,7 +48,7 @@ local function Start(state)
     if roles then Send('join', { roles = roles }) end
 end
 
--- V22: Cancel this case, first in the menu while he plays a suspect (a strike after the grace).
+-- Cancel this case, first in the menu while he plays a suspect (a strike after the grace).
 local function CancelOption(case)
     return {
         title = CP.L('volunteer.menu.cancel'),
@@ -131,11 +131,11 @@ RegisterNetEvent(CP.e('client:volunteerNote'), function(kind, key, vars)
 end)
 
 -- ============================================================================
---                       THE QUESTION AND THE CASE (V22)
+--                          THE QUESTION AND THE CASE
 -- ============================================================================
 
 -- The yes/no pop-up: closed by the server (another answer came, the run ended) or after its seconds. Only a click
--- answers; the server checks the token and the time again. While the criminal tablet is open (G2) its Jobs screen
+-- answers; the server checks the token and the time again. While the criminal tablet is open its Jobs screen
 -- asks instead, and the pop-up shows only if the tablet closes with the question still open.
 local function ShowAsk(mine, info, seconds)
     CreateThread(function()
@@ -237,7 +237,7 @@ RegisterNetEvent(CP.e('client:volunteerCase'), function(state)
     if state.phase == 'over' then ClearArea() end
 end)
 
--- The area he must stay in (V25: the search circle of a fugitive he plays): a radius blip on his own map, redrawn
+-- The area he must stay in (the search circle of a fugitive he plays): a radius blip on his own map, redrawn
 -- each time the circle shrinks; nil removes it. Only the server sends it, only while he plays.
 RegisterNetEvent(CP.e('client:volunteerArea'), function(a)
     ClearArea()

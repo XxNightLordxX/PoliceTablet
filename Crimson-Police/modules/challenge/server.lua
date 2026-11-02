@@ -472,8 +472,8 @@ local function EmptyWeek()
 end
 
 -- Every aggregate the standings, bounties and contributor lists need, cached per season.
--- Live-case rows count for the challenge and the bounty only with Config.LiveCrime.challenge (V13, shipped false),
--- volunteer-case rows only with Config.Volunteers.challenge (V22b, shipped false).
+-- Live-case rows count for the challenge and the bounty only with Config.LiveCrime.challenge (shipped false),
+-- volunteer-case rows only with Config.Volunteers.challenge (shipped false).
 local function LiveFilter()
     local sql = ''
     if CP.LiveCrime and CP.LiveCrime.rowFilter then sql = CP.LiveCrime.rowFilter('challenge', 'r.') end
@@ -1382,7 +1382,7 @@ function C.deptReport(dept)
             decisionsBest = Int(r.decisions_best),
             decisionsBad = Int(r.decisions_bad),
             calls = Int(r.calls),
-            -- a supervisor's mission ban in force (step P11): { until, by, reason }
+            -- a supervisor's mission ban in force: { until, by, reason }
             missionBan = Has('MissionBan', 'view') and CP.MissionBan.view(tostring(r.citizenid)) or nil,
         }
     end
@@ -1552,19 +1552,19 @@ function C.supActivity(src, args)
     local viewer = CP.Access.getOfficer(src)
     local okList, list = Call('Profile', 'commendations', args.citizenid, { viewer = viewer and viewer.citizenid })
     view.commendations = okList and type(list) == 'table' and list or {}
-    -- Clear cooldown (step P7, Config.MissionControls.controls.clearCooldown): { perDay, usedToday } when allowed
+    -- Clear cooldown (Config.MissionControls.controls.clearCooldown): { perDay, usedToday } when allowed
     local _, clear = Call('LiveCtl', 'supClearView', src, args.citizenid)
     view.cooldownClear = clear
-    -- Mission ban (step P11, Config.MissionControls.controls.missionBan): { min, max, perDay, usedToday, ban, canLift }
+    -- Mission ban (Config.MissionControls.controls.missionBan): { min, max, perDay, usedToday, ban, canLift }
     local _, ban = Call('MissionBan', 'supView', src, args.citizenid)
     view.missionBan = ban
     view.missionBanState = select(2, Call('MissionBan', 'view', args.citizenid))
-    -- Give points (step P22, Config.MissionControls.controls.awardPoints): { min, max, perDay, usedToday, confirmAbove }
+    -- Give points (Config.MissionControls.controls.awardPoints): { min, max, perDay, usedToday, confirmAbove }
     view.awardPoints = select(2, Call('SupAwards', 'supView', src, args.citizenid))
     return view
 end
 
--- Step FX1: a supervisor action taken from that dialog (commend, revoke, mission ban, give points) sends
+-- A supervisor action taken from that dialog (commend, revoke, mission ban, give points) sends
 -- activityOf = the officer's citizenid, and its reply carries his fresh activity (data.activity), so the dialog needs
 -- no second request. Left out when it cannot be built (the dialog asks again).
 function C.withActivity(src, payload, ok, data)

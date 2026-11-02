@@ -312,7 +312,7 @@ local function Usable(name)
     return bad[name:lower()] == nil
 end
 
--- For other modules (CP.FeatureRewards, step G3): may this item be given now (not forbidden, not refused by the last
+-- For other modules (CP.FeatureRewards): may this item be given now (not forbidden, not refused by the last
 -- check)? And is it an ox_inventory item: true | false | nil (ox_inventory is not running: unknown)?
 function Rewards.usable(name) return Usable(name) end
 
@@ -322,7 +322,7 @@ function Rewards.itemKnown(name)
     return ItemDef(name) ~= nil
 end
 
--- Config health lines ({ level, text }), for CP.ConfigHealth (WP8) and the admin view.
+-- Config health lines ({ level, text }), for CP.ConfigHealth and the admin view.
 function Rewards.health()
     EnsureChecked()
     local cfg, out = Cfg(), {}
@@ -688,9 +688,9 @@ local function OnRowSettled(run, p, rowId, row, result)
     if type(run) ~= 'table' or type(p) ~= 'table' or type(row) ~= 'table' then return end
     rowId = ToId(rowId)
     if not rowId or run.test or row.state ~= 'completed' then return end
-    -- a live case rolls no items unless the owner turned on Config.LiveCrime.items (a money switch, V13)
+    -- a live case rolls no items unless the owner turned on Config.LiveCrime.items (a money switch)
     if CP.LiveCrime and CP.LiveCrime.counts and CP.LiveCrime.counts(run, 'items') == false then return end
-    -- a volunteer case rolls none unless the owner turned on Config.Volunteers.payRewards (a money switch, V22b)
+    -- a volunteer case rolls none unless the owner turned on Config.Volunteers.payRewards (a money switch)
     if CP.Volunteers and CP.Volunteers.counts and CP.Volunteers.counts(run, 'items') == false then return end
     local cid = row.citizenid
     if not ValidCitizenId(cid) or PresenceFailed(run, p) then return end

@@ -57,8 +57,8 @@ local function Dollars(n)
     return (out:gsub('^,', ''))
 end
 
--- What Pay volunteer suspects (Config.FeatureRewards.suspect, step G3) pays for a fair case of missionType (its byType
--- amounts, step H1), as the Jobs card's Reward line; nil while it is off (the card says Crimson-Police pays nothing).
+-- What Pay volunteer suspects (Config.FeatureRewards.suspect) pays for a fair case of missionType (its byType
+-- amounts), as the Jobs card's Reward line; nil while it is off (the card says Crimson-Police pays nothing).
 function C.rewardText(missionType)
     local FR = CP.FeatureRewards
     if not (FR and FR.enabled and FR.enabled('suspect')) then return nil end
@@ -262,7 +262,7 @@ end
 --                                    HOOKS
 -- ============================================================================
 
--- History is written by CP.Volunteers.recordHistory at the run's end (step Z1), not by the volunteerEnded event, so
+-- History is written by CP.Volunteers.recordHistory at the run's end, not by the volunteerEnded event, so
 -- Config.Volunteers.endEvent = false keeps it.
 
 -- On police duty, or a police job without access: the open tablet closes (the client only acts while it is open).

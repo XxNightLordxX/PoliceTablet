@@ -257,7 +257,7 @@ export interface TestPush {
 }
 
 // ============================================================================
-//             CHECK SPAWN POINTS (PLAN S7, S8; ARCHITECTURE §5.27)
+//                   CHECK SPAWN POINTS (ARCHITECTURE §5.27)
 // ============================================================================
 // Client action 'spawnCheck' { missionId?, location? } starts it, 'spawnCheckStop' ends it after the point being
 // checked, 'teleport' { target: 'point', missionId, location, point } puts the admin on the ground at one point.

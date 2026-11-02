@@ -134,15 +134,15 @@ const SCHEMA: OptionDef[] = [
 
 const defaults = Object.fromEntries(SCHEMA.map(d => [d.key, d.default])) as Record<string, OfficerOptionValue>;
 const server: Record<string, OfficerOptionValue> = {};
-// Mission Board (step O8): ?fav=tactical,patrol ?hide=training ?oneClick=1
+// Mission Board: ?fav=tactical,patrol ?hide=training ?oneClick=1
 const listParam = (name: string) => (PARAMS.get(name) ?? '').split(',').filter(Boolean);
 if (listParam('fav').length) server.favouriteTypes = listParam('fav');
 if (listParam('hide').length) server.hiddenTypes = listParam('hide');
 if (PARAMS.get('oneClick') === '1') server.skipAcceptConfirm = true;
-// My usual twists (step O15): ?usual=time_crunch,armored_hostiles
+// My usual twists: ?usual=time_crunch,armored_hostiles
 if (listParam('usual').length) server.usualTwists = listParam('usual');
 if (PARAMS.get('oneClickClaim') === '1') server.skipClaimConfirm = true;
-// During a mission (step O10): ?abandonConfirm=0 (Abandon pressed twice) ?oneClickRecalc=1 ?units=imperial (with
+// During a mission: ?abandonConfirm=0 (Abandon pressed twice) ?oneClickRecalc=1 ?units=imperial (with
 // ?hud=progress: miles on the HUD)
 if (PARAMS.get('abandonConfirm') === '0') server.abandonConfirm = false;
 if (PARAMS.get('oneClickRecalc') === '1') server.skipRecalcConfirm = true;
@@ -213,7 +213,7 @@ registerMock('action', 'server:options:set', (patch: Record<string, OfficerOptio
 registerMock('client', 'getLocalOptions', () => ({ options: { ...local } }));
 
 registerMock('client', 'setLocalOption', (p: { key?: string; value?: OfficerOptionValue } | null) => {
-    // the remembered filters (step O9): a 'local' list that is not a row of My options
+    // the remembered filters: a 'local' list that is not a row of My options
     if (p?.key === 'filters' && Array.isArray(p.value)) {
         local.filters = p.value;
         emitDebug('localOptions', { options: { ...local } });
@@ -242,7 +242,7 @@ registerMock('client', 'getKeyLabels', (): { keys: KeyLabel[] } => {
     };
 });
 
-// step O11: the keys the hints name (the ready key K, the Dispatch key F6; the contact key is not bound here).
+// the keys the hints name (the ready key K, the Dispatch key F6; the contact key is not bound here).
 registerMock('client', 'getKeyHints', (): { keys: Record<string, string> } => {
     if (local.keyHints === false) return { keys: {} };
     return { keys: { tablet: 'F5', dispatch: 'F6', ready: 'K' } };

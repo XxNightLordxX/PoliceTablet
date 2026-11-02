@@ -65,12 +65,12 @@ async function steps(): Promise<void> {
     ok(all.shown.length === 1 && all.shown[0]?.key === cards[0]?.key, 'all hidden: the first card stays');
     ok(all.folded.length === cards.length - 1, '...the others folded');
 
-    // step P10: the type command recommends comes right after the favourites
+    // the type command recommends comes right after the favourites
     const feat = cards.map(c => ({ ...c, featured: c.key === 'investigation' }));
     const withFav = arrangeTypeCards(feat, ['tactical'], []);
     ok(withFav.shown[0]?.key === 'tactical' && withFav.shown[1]?.key === 'investigation', 'featured: after favourites');
     ok(arrangeTypeCards(feat, [], []).shown[0]?.key === 'investigation', 'featured: first with no favourites');
-    // step P10: the one shown type switched off by command is not the card left to accept: a hidden one on comes back
+    // the one shown type switched off by command is not the card left to accept: a hidden one on comes back
     const offs = cards.map(c => ({ ...c, offByCommand: c.key === 'patrol' }));
     const lastOff = arrangeTypeCards(
         offs,

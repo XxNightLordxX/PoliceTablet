@@ -294,7 +294,7 @@ const state: AdminOfficerRunState = {
         serverTime: nowS(),
         unitSize: 1,
     },
-    // step P11: a supervisor's mission ban in force (Lift ban)
+    // a supervisor's mission ban in force (Lift ban)
     missionBan: { until: nowS() + 2 * 3600, by: 'Sergeant Sam Super', reason: 'Ignored a supervisor order on scene' },
     serverTime: nowS(),
 };

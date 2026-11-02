@@ -65,7 +65,7 @@ async function steps(): Promise<void> {
         'With flags keeps cases with flags or notes',
     );
     ok(filterCases(cases, 'all').length === cases.length, 'All keeps every case');
-    // volunteer cases (V26): their own filter, the part he played, and the volunteer list
+    // volunteer cases: their own filter, the part he played, and the volunteer list
     const vols = filterCases(cases, 'volunteer');
     ok(vols.length === 2 && vols.every(c => c.kind === 'volunteer'), 'the Volunteers filter keeps volunteer cases');
     ok(
@@ -91,7 +91,7 @@ async function steps(): Promise<void> {
     ok(data.ledger.length === 2, 'and its damage ledger');
     ok(!JSON.stringify(data).includes('coords'), 'and no position');
     ok(ledgerSuspect(data.ledger[0], data.suspects)?.citizenid === 'CRIM0001', 'a ledger line names its suspect');
-    // F2: the weapon by name, the raw hash only for a weapon the server has no name for
+    // the weapon by name, the raw hash only for a weapon the server has no name for
     ok(weaponText(data.ledger[0]) === 'Pistol', 'the ledger names the weapon');
     ok(weaponText({ ...data.ledger[0], weaponName: null }) === '#453432689', 'an unknown weapon reads as its hash');
     ok(weaponText({ ...data.ledger[0], weaponName: null, weapon: null }) === '-', 'no weapon reads -');
@@ -153,14 +153,14 @@ async function steps(): Promise<void> {
     ok(mine.length === 2 && mine.some(r => r.kind === 'block'), 'his admin rows: the block and the exclusion');
     ok(rowsFor(pairs.data?.admin ?? [], 'NOBODY').length === 0, "nobody else's");
 
-    // F2: names next to citizen IDs, from the one lookup the server sends with the pairs
+    // names next to citizen IDs, from the one lookup the server sends with the pairs
     const all = await request<RsPairsData>('admin:getRsPairs', {});
     const names = all.data?.names;
     ok(cidText('ABC12345', names) === 'Maria Lopez (ABC12345)', 'a pair line reads "Name (CITIZENID)"');
     ok(cidText('CRIM0042', names) === 'CRIM0042' && cidText(null, names) === '-', 'or the citizenid alone, or -');
     ok(nameOf([], 'ABC12345') === null, 'an empty Lua table (a list) is no names');
 
-    // F2: lift a running row early, with a reason; a row that is not running any more is refused
+    // lift a running row early, with a reason; a row that is not running any more is refused
     ok(all.data?.lift === true, 'the server offers Lift');
     const row = (all.data?.admin ?? []).find(r => r.kind === 'exclude' && r.suspect === 'CRIM0042');
     ok(row !== undefined, 'the exclusion is running');
@@ -183,7 +183,7 @@ async function steps(): Promise<void> {
         'a pair block names both',
     );
 
-    // F2: clear a volunteer's strikes, with a reason
+    // clear a volunteer's strikes, with a reason
     const cl = await request<RsCasesData>('admin:getRsCases', {});
     ok(cl.data?.clearStrikes === true, 'the server offers Clear strikes');
     ok(

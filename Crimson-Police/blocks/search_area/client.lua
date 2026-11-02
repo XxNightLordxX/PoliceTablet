@@ -104,7 +104,7 @@ end
 -- ============================================================================
 
 -- A blip handed to the objective pointer (CP.Markers) is taken back first, so its GPS line goes off before it goes
--- (BLIPS_FINAL R10).
+--.
 local function Gone(b)
     if b.key then CP.Markers.release(b.key, b.id) end
     if DoesBlipExist(b.id) then RemoveBlip(b.id) end
@@ -153,7 +153,7 @@ end
 -- A fugitive's blip in its Config.Markers.kinds look: kinds.fleeing (orange) while he runs, kinds.suspect at its
 -- surrenderedScale (as flee_arrest) once he gave up, restyled in place when that changes. Handed to the objective
 -- pointer under his net id: it IS the pointer, and CP.Markers shows the same look from the server's position once he is
--- too far away for this game (BLIPS_FINAL R1, R3, R7).
+-- too far away for this game.
 local function EnsureFugitiveBlip(S, netId, ent, state)
     local k = 'f' .. tostring(netId)
     local look = state == 'fleeing' and 'fleeing' or 'suspect'
@@ -352,7 +352,7 @@ local function HudText(S, close)
     local d = S.data
     if d.escaping then return CP.L('block.search_area.hud_escaping', { seconds = d.escaping }) end
     if close then return CP.L('block.search_area.hint_close') end
-    -- a volunteer hides as the fugitive (V25): nothing to find until he said yes; never where he is
+    -- a volunteer hides as the fugitive: nothing to find until he said yes; never where he is
     if d.volunteer == 'wait' then return CP.L('block.search_area.hud_volunteer_wait') end
     if not d.entered then return CP.L('block.search_area.hud_enter') end
     local r = d.circle and math.floor(d.circle.r + 0.5) or 0

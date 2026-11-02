@@ -265,14 +265,14 @@
     }
 }
 
-/* happy hour (step P6): the chip with End now */
+/* happy hour: the chip with End now */
 .admin-live-hh {
     display: inline-flex;
     align-items: center;
     gap: 6px;
 }
 
-/* Today & cooldowns: a supervisor's mission ban in force (step P11), with Lift ban */
+/* Today & cooldowns: a supervisor's mission ban in force, with Lift ban */
 .admin-runctl-ban {
     display: flex;
     align-items: center;

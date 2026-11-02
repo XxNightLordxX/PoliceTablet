@@ -143,7 +143,7 @@ function O.sound(group, name, set, p3)
     return true
 end
 
--- The key hints (option keyHints, step O11): the key mappings the NUI may name, by the name it asks for.
+-- The key hints (option keyHints): the key mappings the NUI may name, by the name it asks for.
 O.KEY_HINTS = {
     tablet = 'crimsonpolice_tablet',
     dispatch = 'crimsonpolice_dispatch',
@@ -162,7 +162,7 @@ function O.keyHint(cmd)
 end
 
 -- ============================================================================
---              AUTO-READY: is the officer at the keys (step O13)
+--                    AUTO-READY: is the officer at the keys
 -- ============================================================================
 -- While autoReady is on, a light watcher notes the last game input (moving, looking, shooting, driving), so Auto-Ready
 -- answers only for an officer at the keys. Off: nothing runs. The watcher starts when the option turns on (the hook

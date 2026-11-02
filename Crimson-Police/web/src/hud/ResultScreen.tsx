@@ -22,7 +22,7 @@ import { DecisionsBlock, PeopleBlock } from './Debrief';
 
 export const RESULT_SECONDS = 25;
 
-// The seconds the card stays for the officer option resultTime (step O6; Lua already keeps it inside the bounds).
+// The seconds the card stays for the officer option resultTime (Lua already keeps it inside the bounds).
 export function resultSecondsOf(v: unknown): number {
     return typeof v === 'number' && Number.isFinite(v) && v >= 5 && v <= 120 ? v : RESULT_SECONDS;
 }
@@ -106,7 +106,7 @@ function MissionCallBlock({ call }: { call: RunMissionCall }) {
     );
 }
 
-// A live case (step V16): each suspect's outcome by label, or a note when this officer left while it still ran.
+// A live case: each suspect's outcome by label, or a note when this officer left while it still ran.
 const LIVE_TONE: Record<string, 'plus' | 'minus' | undefined> = { detained: 'plus', booked: 'plus', got_away: 'minus' };
 
 function LiveBlock({ live }: { live: RunLiveResult }) {

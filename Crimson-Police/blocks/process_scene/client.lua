@@ -179,7 +179,7 @@ local function Cleanup(S)
     S.current = false
     if S.busy and lib.progressActive and lib.progressActive() then lib.cancelProgress() end
     DropTargets(S)
-    -- the objective pointer takes the scene blip back first, so its GPS line goes off before it goes (BLIPS_FINAL R10)
+    -- the objective pointer takes the scene blip back first, so its GPS line goes off before it goes
     if S.handed then
         CP.Markers.release(SCENE_KEY, S.handed)
         S.handed = nil
@@ -209,7 +209,7 @@ CP.Blocks.register(BLOCK, {
         if S.scene and not S.blip and not CP.Markers.hidden(ctx, 'scene') then
             -- Config.Markers.kinds.scene (a yellow map pin, never 310: the skull and crossbones), never short range;
             -- handed to the objective pointer as 'scene' (the server's marker): CP.Markers puts the GPS line on it
-            -- and draws no second icon (BLIPS_FINAL R1)
+            -- and draws no second icon
             S.blip = AddBlipForCoord(S.scene.x, S.scene.y, S.scene.z)
             CP.Markers.style(S.blip, 'scene', CP.L('block.process_scene.blip'))
             if CP.Markers.adopt(SCENE_KEY, S.blip) then S.handed = S.blip end

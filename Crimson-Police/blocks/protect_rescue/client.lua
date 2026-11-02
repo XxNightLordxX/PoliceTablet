@@ -87,7 +87,7 @@ end
 -- ============================================================================
 
 -- A blip handed to the objective pointer (CP.Markers) is taken back first, so its GPS line goes off before it goes
--- (BLIPS_FINAL R10).
+--.
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
@@ -99,7 +99,7 @@ end
 -- Each hostage's blip (kinds.hostage) and the safe point's (kinds.safePoint) are handed to the objective pointer under
 -- the keys the server's pointer names them by (the hostage's net id, 'safe'): the block's blip IS the pointer, one icon
 -- with the GPS line on it, and CP.Markers shows the same look from the server's position while a hostage is too far
--- away for this game (BLIPS_FINAL R1, R7).
+-- away for this game.
 local function EnsureEntityBlip(S, netId, ent)
     local b = S.blips[netId]
     if b and b.ent == ent and DoesBlipExist(b.id) then return end

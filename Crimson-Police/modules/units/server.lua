@@ -103,7 +103,7 @@ local function CeilSize()
     return n
 end
 
--- The largest unit a department's leader may have: its unitSize (Mission controls, step P9) when a supervisor set
+-- The largest unit a department's leader may have: its unitSize (Mission controls) when a supervisor set
 -- one, never above Config.Limits.maxUnitSize. dept: the leader's department (nil = the server's cap).
 local function MaxSize(dept)
     local n = CeilSize()
@@ -122,7 +122,7 @@ local function LeaderDept(unit)
     return type(info) == 'table' and info.department or nil
 end
 
--- Unit size (Mission controls, step P9): a supervisor sets the largest unit his department's leaders may lead,
+-- Unit size (Mission controls): a supervisor sets the largest unit his department's leaders may lead,
 -- 2 to Config.Limits.maxUnitSize (never above it, so never a relaxed rule); read by invites, joins and the accept.
 function Units.registerControls()
     local dc = CP.DeptControls
@@ -608,7 +608,7 @@ end
 -- or entered the arena. extra (optional): { twists = { { key, label } } } the leader chose, shown to the members;
 -- crossDepartment = true: a Cross-Department join, where Auto-Ready never answers.
 -- timeout = seconds to answer (else Config.Units.readyTimeout). live = { title, street, suspects }: a live case's
--- LIVE line (CP.LiveCrime.readyLine, V16).
+-- LIVE line (CP.LiveCrime.readyLine).
 -- Returns false when no check is needed (the draw follows at once).
 function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
     local unit = Resolve(ref)
@@ -618,7 +618,7 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
         return true
     end
     local now = os.time()
-    -- extra.timeout: the leader's department's ready check (CP.Runs.readySeconds, Mission controls, P8)
+    -- extra.timeout: the leader's department's ready check (CP.Runs.readySeconds, Mission controls)
     local own = type(extra) == 'table' and math.tointeger(tonumber(extra.timeout)) or nil
     local timeout = math.max(1, (own and own > 0) and own or CfgSeconds('readyTimeout', 20))
     local check = {
@@ -633,9 +633,9 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
         onCancel = onCancel,
         done = false,
         twists = {},
-        -- a Cross-Department join never takes an automatic Ready (Auto-Ready, step O13)
+        -- a Cross-Department join never takes an automatic Ready (Auto-Ready)
         noAuto = type(extra) == 'table' and extra.crossDepartment == true,
-        -- a live case's ready check (V16): { title, street, suspects }, shown as the LIVE line
+        -- a live case's ready check: { title, street, suspects }, shown as the LIVE line
         live = type(extra) == 'table' and type(extra.live) == 'table' and extra.live or nil,
     }
     for _, t in ipairs(type(extra) == 'table' and type(extra.twists) == 'table' and extra.twists or {}) do
@@ -669,7 +669,7 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
     return true
 end
 
--- Auto-Ready (officer option autoReady, step O13): metres from the leader within which an automatic answer counts.
+-- Auto-Ready (officer option autoReady): metres from the leader within which an automatic answer counts.
 local AUTO_RANGE_MIN, AUTO_RANGE_MAX, AUTO_RANGE_DEFAULT = 10, 1000, 150
 
 local function AutoRange()
@@ -1615,7 +1615,7 @@ CreateThread(function()
     Units._arm()
 end)
 
--- The sweep runs only while a unit exists (step LP4: it woke every 5 s all day): a new unit arms it, and the pass
+-- The sweep runs only while a unit exists (it woke every 5 s all day): a new unit arms it, and the pass
 -- that finds no unit and no ready check ends it.
 Units._arm, Units._ticking = CP.Perf.armed(TAG, function() return CP.Perf.ms(SWEEP_MS) end, function()
     Units._sweep()

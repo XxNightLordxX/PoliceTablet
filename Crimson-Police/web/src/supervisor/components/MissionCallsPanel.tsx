@@ -68,7 +68,7 @@ function StaffDialog({
 }: {
     staff: Staff;
     units: PageableUnit[];
-    // step P19: pushing a chosen mission when paging (absent: the mission is drawn at random)
+    // pushing a chosen mission when paging (absent: the mission is drawn at random)
     push: PushView | null;
     busy: boolean;
     onClose: () => void;
@@ -209,7 +209,7 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
         await refetch();
         setStamp(s => s + 1);
     };
-    // step FX1: an action's reply carries the panel's fresh view (an older server: ask for it)
+    // an action's reply carries the panel's fresh view (an older server: ask for it)
     const applyReply = (reply: unknown) => {
         if (applyReplyView<SupCallsView>(reply, 'view', setData, () => void reload())) setStamp(s => s + 1);
     };

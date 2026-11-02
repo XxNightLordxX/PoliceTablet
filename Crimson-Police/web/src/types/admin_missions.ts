@@ -56,7 +56,7 @@ export interface VersionDiff {
 }
 
 // ============================================================================
-//                             THE LOAD RESULT (C4)
+//                               THE LOAD RESULT
 // ============================================================================
 
 export interface LoadFailure {
@@ -93,7 +93,7 @@ export interface MissionLoadSummary {
 }
 
 // ============================================================================
-//                            QUICK EDIT (#30, #31)
+//                                  QUICK EDIT
 // ============================================================================
 
 export interface TweakObjective {
@@ -130,7 +130,7 @@ export interface MissionTweakView {
 }
 
 // ============================================================================
-//                      SWITCHES THAT NO LONGER MATCH (O3)
+//                        SWITCHES THAT NO LONGER MATCH
 // ============================================================================
 
 export interface SwitchRemapMission {
@@ -145,7 +145,7 @@ export interface SwitchRemapData {
 }
 
 // ============================================================================
-//                        HISTORY AND STATS (C6, C7, C8)
+//                              HISTORY AND STATS
 // ============================================================================
 
 export interface OperationParticipant {
@@ -232,7 +232,7 @@ export interface MissionStatsData {
 }
 
 // ============================================================================
-//                       DELETE, IMPORT, COPY (#35, C13)
+//                             DELETE, IMPORT, COPY
 // ============================================================================
 
 export interface DeletedMission {
@@ -268,7 +268,7 @@ export interface MissionLuaExport {
 }
 
 // ============================================================================
-//                           TEST RESULTS (#45, C20)
+//                                 TEST RESULTS
 // ============================================================================
 
 export interface TestHistoryResult {

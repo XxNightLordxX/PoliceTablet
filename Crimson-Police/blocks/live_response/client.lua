@@ -7,7 +7,7 @@
 
 local BLOCK = 'live_response'
 local RADIAL_ID = 'crimson-police:live_end_case'
-local TALK_ID = 'crimson-police:live_talk_down'   -- Talk them down (step RP1), for every officer of the case
+local TALK_ID = 'crimson-police:live_talk_down'   -- Talk them down, for every officer of the case
 
 local active = nil   -- { ctx, radial, talk } of the current objective on this client
 

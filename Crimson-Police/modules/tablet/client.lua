@@ -84,7 +84,7 @@ local TAG = 'tablet'
 
 local UIS = { officer = true, supervisor = true, admin = true }
 local KINDS = { info = true, success = true, warning = true, error = true }
--- How long a toast stays (ms) for the officer option toastTime (step O6); web/src/shared/toast.ts holds the same table.
+-- How long a toast stays (ms) for the officer option toastTime; web/src/shared/toast.ts holds the same table.
 local TOAST_MS = {
     short = { info = 3000, success = 3000, warning = 5000, error = 5000 },
     normal = { info = 5000, success = 5000, warning = 7000, error = 7000 },
@@ -657,7 +657,7 @@ local function IsDepartmentJob(jobName) return DepartmentOfJob(jobName) ~= nil e
 
 -- withLocale (only the NUI's 'ready'): the whole locale goes with it, the NUI's one copy of the text until a
 -- Config.Labels change sends it again ('locale'). Login, duty, job and unload send the theme alone.
--- The officer's look goes with it (step O5): prefs (appearance, accent) and the options hudLook and textSize, so the
+-- The officer's look goes with it: prefs (appearance, accent) and the options hudLook and textSize, so the
 -- HUD, the result card and the toasts follow them before the tablet first opens. nil without an officer session.
 local function AmbientLook()
     local cur = CP.Access and CP.Access.current and CP.Access.current() or nil
@@ -1034,7 +1034,7 @@ end
 
 -- The desk's canInteract asks while the eye rests on a desk (every ox_target pass): the player's department is read
 -- from Qbox (an export call) at most once a second, and again at once after a job, duty, login or logout event or a
--- settings change (step OP3). The server checks again on every open.
+-- settings change. The server checks again on every open.
 local DESK_DEPT_MS = 1000
 local deskDept = { at = nil, key = nil }
 
@@ -1244,7 +1244,7 @@ local function ClientItemCount(item)
     return ok and tonumber(res) or nil
 end
 
--- One watcher while the tablet is open (step LP3: was three threads on the same token): every DOWN_WATCH_MS the
+-- One watcher while the tablet is open (was three threads on the same token): every DOWN_WATCH_MS the
 -- officer going down closes the Officer or Supervisor UI (they open it again once revived), at a desk every
 -- DESK_WATCH_MS walking away closes it, and with requireItem on every ITEM_WATCH_MS the item leaving the inventory
 -- is reported (the server checks again and closes it). Ends with the open (openToken).

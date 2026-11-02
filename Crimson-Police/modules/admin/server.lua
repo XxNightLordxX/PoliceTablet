@@ -387,7 +387,7 @@ function Admin.missionLabel(missionId)
     if missionId == 'manual_cash' then return CP.L('admin.mission.manual_cash') end
     if missionId == 'goal' then return CP.L('admin.mission.goal') end
     if missionId == 'fto_bonus' then return CP.L('admin.mission.fto_bonus') end
-    -- Config.FeatureRewards rows (step G3)
+    -- Config.FeatureRewards rows
     if type(missionId) == 'string' and CP.Locale and CP.Locale.has and missionId:match('^reward_%a+$')
         and CP.Locale.has('admin.mission.' .. missionId) then
         return CP.L('admin.mission.' .. missionId)
@@ -835,7 +835,7 @@ local function ReleaseHeld(row)
     if row.cash_status == 'held' then Call('Cash', 'release', row.id) end
 end
 
--- Step P14: a flag of a kind the row's department hands to admins (its reviewRules Mission control); admins and
+-- A flag of a kind the row's department hands to admins (its reviewRules Mission control); admins and
 -- the console are never bound by it.
 local function AdminOnlyRow(src, row)
     if tonumber(src) == 0 or IsAdmin(src) then return false end
@@ -922,7 +922,7 @@ function Admin.voidFlagged(src, rowId, reason)
     if AdminOnlyRow(src, row) then return false, 'err.review_admin_only' end
     local okOwn, eOwn = OwnRunCheck(src, row.run_uuid)
     if not okOwn then return false, eOwn end
-    -- step P14: the row's department wants two supervisors for a Void (admins void at once)
+    -- the row's department wants two supervisors for a Void (admins void at once)
     if tonumber(src) ~= 0 and not IsAdmin(src) and Has('ReviewRules', 'voidStep') then
         local officer = CP.Access and CP.Access.getOfficer and CP.Access.getOfficer(src) or nil
         local okS, step, errS = Call('ReviewRules', 'voidStep', officer, row)
@@ -2267,7 +2267,7 @@ CP.Net.action('server:sup:forceRecall', function(src, payload)
     return Admin.withLiveRuns(src, Admin.forceRecall(src, payload.runId, payload.src, payload.reason))
 end, { rate = 3 })
 
--- Step WF2: a supervisor's decision answers with his fresh Review Queue (data.queue), so the screen shows the row gone
+-- A supervisor's decision answers with his fresh Review Queue (data.queue), so the screen shows the row gone
 -- without a second sup:getReviewQueue request. A queue that cannot be built leaves the reply as it was.
 function Admin.withReviewQueue(src, ok, data)
     if not ok then return ok, data end
@@ -2304,7 +2304,7 @@ CP.Net.action('server:admin:voidRun', function(src, payload)
     end
     local ok, data = Admin.voidRun(src, target, payload.reason,
         { kind = payload.kind, confirm = payload.confirm, goalRowIds = payload.goalRowIds })
-    -- step FX1: the reply carries the run's detail and the officer's views (CP.Corrections.withViews)
+    -- the reply carries the run's detail and the officer's views (CP.Corrections.withViews)
     if Has('Corrections', 'withViews') then return CP.Corrections.withViews(src, payload, ok, data) end
     return ok, data
 end, { rate = 3 })
@@ -2521,7 +2521,7 @@ local function ViewerDepartment(src)
 end
 
 -- Supervisor UI -> Live Missions (sup:getLiveRuns): nil and an error key when src may not see it. Also the view the
--- recall and "+ minutes" replies carry (step FX1), so the screen needs no second request.
+-- recall and "+ minutes" replies carry, so the screen needs no second request.
 function Admin.liveRunsFor(src)
     local okP, eP = Can(src, 'viewMissionList')
     if not okP then return nil, eP end
@@ -2547,7 +2547,7 @@ function Admin.liveRunsFor(src)
                 local shorts = {}
                 for _, d in ipairs(RunDeptList(run)) do shorts[#shorts + 1] = DeptShort(d) end
                 s.departments = shorts
-                -- "+ minutes" (step P7): what was added so far, and never on the viewer's own run
+                -- "+ minutes": what was added so far, and never on the viewer's own run
                 s.timeAdded = math.floor(tonumber(run.timeAdded) or 0)
                 s.own = not run.test and select(2, Call('AdminKit', 'selfRun', src, run.id)) == true or false
                 out[#out + 1] = s
@@ -2558,7 +2558,7 @@ function Admin.liveRunsFor(src)
     return { runs = out, serverTime = os.time(), canRecall = canRecall, addTime = addTime }
 end
 
--- Step FX1: a Live Missions action's reply carries the fresh view (data.view); one that cannot be built is left out.
+-- A Live Missions action's reply carries the fresh view (data.view); one that cannot be built is left out.
 function Admin.withLiveRuns(src, ok, data)
     if not ok then return ok, data end
     local out = {}
@@ -2587,7 +2587,7 @@ local function FlagEvents(uuids)
             marks[#marks + 1] = '?'
         end
         i = i + 100
-        -- target IN first (step OP3): the saves folder engine looks rows up by the first indexed IN list it meets
+        -- target IN first: the saves folder engine looks rows up by the first indexed IN list it meets
         -- (idx_audit_target, migration 017), not every flag row of the log
         local rows = Query(
             ('SELECT action, target, old_value, new_value, reason FROM cp_audit WHERE target IN (%s) AND category = \'flags\' AND action IN (\'runFlagged\', \'runNoted\') ORDER BY id'):format(
@@ -2635,7 +2635,7 @@ function Admin.flaggedCount(excludeCitizenid)
     return n
 end
 
--- admin: an admin's queue (step P14: rows his department hands to admins stay in it).
+-- admin: an admin's queue (rows his department hands to admins stay in it).
 function Admin.flaggedRows(dept, excludeCitizenid, admin)
     local sql, params = FLAGGED_SQL, {}
     if dept then
@@ -2649,7 +2649,7 @@ function Admin.flaggedRows(dept, excludeCitizenid, admin)
     sql = sql .. (' ORDER BY r.created_at DESC, r.id DESC LIMIT %d'):format(FLAGGED_LIMIT)
     local rows = {}
     for _, r in ipairs(Query(sql, params) or {}) do
-        -- A run the viewer is still on (their own row is not written yet) is their own run too. Step P14: a flag
+        -- A run the viewer is still on (their own row is not written yet) is their own run too. A flag
         -- kind the row's department hands to admins is not in a supervisor's queue.
         local adminOnly = false
         if dept and not admin then
@@ -2704,7 +2704,7 @@ function Admin.flaggedRows(dept, excludeCitizenid, admin)
             notes = notes,
             durationS = math.floor(Num(r.duration_s, 0)),
             createdAt = math.floor(Num(r.created_ts, 0)),
-            -- step P14: the first Void waiting for a second supervisor of the department ({ name, at })
+            -- the first Void waiting for a second supervisor of the department ({ name, at })
             voidPending = select(2, Call('ReviewRules', 'pendingOf', math.tointeger(tonumber(r.id)))),
         }
     end
@@ -2727,7 +2727,7 @@ function Admin.reviewQueueFor(src)
     return { flagged = flagged, disputes = disputes, canReview = canReview, canHandle = canHandle }
 end
 
--- Config.Tablet.supervisorReviewLive (step FX1): who has the Review Queue open (src -> os.time() of his last
+-- Config.Tablet.supervisorReviewLive: who has the Review Queue open (src -> os.time() of his last
 -- sup:getReviewQueue; the screen asks every 30 s while open). Closing the tablet or leaving forgets him.
 local reviewWatch = {}
 local REVIEW_WATCH_S = 75
@@ -2774,14 +2774,14 @@ local function AdminOnly(src)
     return Can(src, 'openAdmin')
 end
 
--- Config.AdminUi.pageSize (step H6) through CP.AdminKit; nil = each list keeps its own page size
+-- Config.AdminUi.pageSize through CP.AdminKit; nil = each list keeps its own page size
 local function PageSize()
     local Kit = CP.AdminKit
     return Kit and Kit.pageSize and Kit.pageSize() or nil
 end
 
 -- The flagged runs an admin reviews (his own runs left out): admin:getFlagged, and admin:getBoards with
--- Config.AdminUi.oneRequest (step H6).
+-- Config.AdminUi.oneRequest.
 function Admin.flaggedFor(src)
     local _, citizenid = ViewerDepartment(src)
     return Admin.flaggedRows(nil, citizenid or '')
@@ -2832,7 +2832,7 @@ local SEARCH_FILTERS = {
     flagged = 'EXISTS (SELECT 1 FROM cp_mission_runs r WHERE r.citizenid = o.citizenid AND r.flagged = 1 AND r.voided = 0)',
 }
 
--- Officers search (A1): name, callsign or citizenid, the filters above plus department and online, and pages of 25.
+-- Officers search: name, callsign or citizenid, the filters above plus department and online, and pages of 25.
 -- An online officer who has no Crimson-Police row yet is found by their exact citizenid.
 CP.Net.callback('admin:searchOfficers', function(src, args)
     local okP, eP = AdminOnly(src)
@@ -2866,7 +2866,7 @@ CP.Net.callback('admin:searchOfficers', function(src, args)
     end
     local whereSql = #where > 0 and (' WHERE ' .. table.concat(where, ' AND ')) or ''
     local total = math.floor(Num((Single('SELECT COUNT(*) AS n FROM cp_officers o' .. whereSql, params) or {}).n, 0))
-    -- Config.AdminUi.pageSize (step H6): 0 = 25 officers a page, as before
+    -- Config.AdminUi.pageSize: 0 = 25 officers a page, as before
     local size = PageSize() or SEARCH_LIMIT
     local pages = math.max(1, math.ceil(total / size))
     local page = math.min(pages, Int(args.page, 1, 100000) or 1)
@@ -2965,7 +2965,7 @@ local function WeekStartTs()
 end
 
 -- Admin UI -> Officers: one officer's detail (admin:getOfficer). The caller checked the admin and the citizenid. Also
--- the view a correction's reply carries (step FX1), so the screen needs no second request.
+-- the view a correction's reply carries, so the screen needs no second request.
 function Admin.officerDetail(src, cid)
     local o = Single([[SELECT citizenid, callsign, rank_label, display_name, department, xp, streak_days,
         UNIX_TIMESTAMP(suspended_until) AS suspended_ts, board_excluded, UNIX_TIMESTAMP(retired_at) AS retired_ts,
@@ -3491,7 +3491,7 @@ CP.Net.callback('admin:getAudit', function(src, args)
         ('SELECT COUNT(*) AS n FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor WHERE %s'):format(where),
         params)
     local n = math.floor(Num(total and total.n, 0))
-    -- Config.AdminUi.pageSize (step H6): 0 = 50 rows a page, as before
+    -- Config.AdminUi.pageSize: 0 = 50 rows a page, as before
     local size = PageSize() or AUDIT_PAGE
     local pages = math.max(1, math.ceil(n / size))
     local page = Int(type(args) == 'table' and args.page or 1, 1, 100000) or 1

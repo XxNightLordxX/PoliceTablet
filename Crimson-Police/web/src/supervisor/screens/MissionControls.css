@@ -1,4 +1,4 @@
-/* Supervisor UI · Mission controls (step P5). Only --cp-* variables. */
+/* Supervisor UI · Mission controls. Only --cp-* variables. */
 
 .sup-mc-note {
     display: flex;
@@ -54,7 +54,7 @@
     gap: 6px;
 }
 
-/* the types control (step P10): a switch per type, its missions folded under it */
+/* the types control: a switch per type, its missions folded under it */
 .sup-mc-types {
     display: flex;
     flex-direction: column;
@@ -111,7 +111,7 @@
     font-size: var(--cp-fs-sm);
 }
 
-/* the call lane (step P12): the areas a lane may name, as chips */
+/* the call lane: the areas a lane may name, as chips */
 .sup-mc-chips {
     display: flex;
     flex-wrap: wrap;
@@ -139,7 +139,7 @@
     cursor: default;
 }
 
-/* Department notices (step P13): the post form and the notices still running */
+/* Department notices: the post form and the notices still running */
 .sup-mc-notices {
     display: flex;
     flex-direction: column;
@@ -170,7 +170,7 @@
     overflow-wrap: anywhere;
 }
 
-/* step P14: a switch per name (Rank by tabs, flag kinds) */
+/* a switch per name (Rank by tabs, flag kinds) */
 .sup-mc-picks {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

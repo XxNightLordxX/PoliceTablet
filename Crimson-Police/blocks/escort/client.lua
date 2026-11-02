@@ -118,7 +118,7 @@ end
 -- ============================================================================
 
 -- A blip handed to the objective pointer (CP.Markers) is taken back first, so its GPS line goes off before it goes
--- (BLIPS_FINAL R10).
+--.
 local function DropBlip(S, k)
     local b = S.blips[k]
     if not b then return end
@@ -129,7 +129,7 @@ end
 
 -- A blip in its Config.Markers.kinds look. key: the server's pointer names this target so (the truck's net id, 'dest'
 -- for the destination): the blip is handed over and IS the pointer, one icon with the GPS line on it, and CP.Markers
--- shows the same look from the server's position while the truck is too far away for this game (BLIPS_FINAL R1, R7).
+-- shows the same look from the server's position while the truck is too far away for this game.
 -- Each officer's line goes to the truck while he is farther than clearRadius from it, else to the destination.
 local function Keep(S, k, id, ent, key)
     S.blips[k] = { id = id, ent = ent, key = key }

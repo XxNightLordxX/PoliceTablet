@@ -561,7 +561,7 @@
     }
 }
 
-/* Settings -> Features: the limits of a feature under its row (step G1) */
+/* Settings -> Features: the limits of a feature under its row */
 .settings-feature__limits {
     grid-column: 1 / -1;
     display: flex;

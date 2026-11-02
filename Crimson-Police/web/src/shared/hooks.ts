@@ -105,7 +105,7 @@ export function useRequest<T = unknown>(
         void refetch();
     });
 
-    // A screen polls at most every POLL_MIN_MS (step LP2); server pushes still refresh it at once.
+    // A screen polls at most every POLL_MIN_MS; server pushes still refresh it at once.
     const asked = opts.pollMs ?? 0;
     const pollMs = asked > 0 ? Math.max(asked, POLL_MIN_MS) : 0;
     useEffect(() => {
@@ -175,7 +175,7 @@ export interface CountdownOptions {
     onDone?: () => void;
 }
 
-// The wait until the countdown's next whole second (step LP4: one wake a second at the step, was a 200 ms poll):
+// The wait until the countdown's next whole second (one wake a second at the step, was a 200 ms poll):
 // `elapsedMs` since the countdown started; 1-1000 ms, plus a few ms so the step lands just after the boundary.
 export const COUNTDOWN_SLACK_MS = 5;
 export function countdownWaitMs(elapsedMs: number): number {

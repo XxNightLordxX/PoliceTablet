@@ -36,7 +36,7 @@ export interface TableProps<R> {
     dense?: boolean;
     // Extra row(s) pinned under the body, e.g. "your row" on a leaderboard.
     footer?: ReactNode;
-    // Draw only the rows in view (Config.AdminUi.windowRows, step OP3); only with maxHeight and more than 100 rows.
+    // Draw only the rows in view (Config.AdminUi.windowRows); only with maxHeight and more than 100 rows.
     // Left out: the open UI's setting.
     windowRows?: boolean;
     className?: string;

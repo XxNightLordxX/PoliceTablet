@@ -118,7 +118,7 @@ function StoragePanel() {
     const files = data.mode === 'files';
     const migrations = data.migrations;
     const blocked = busy || data.runsGoing > 0;
-    // step WF3: the reply carries the fresh Storage view (data.view); an older server's reply asks again
+    // the reply carries the fresh Storage view (data.view); an older server's reply asks again
     const fresh = (reply: unknown) => applyReplyView<StorageView>(reply, 'view', setData, () => void refetch());
 
     const doCopy = async (typed: string) => {
@@ -332,7 +332,7 @@ function StoragePanel() {
 function BackupsPanel() {
     const { data, loading, error, refetch, setData } = useRequest<BackupsData>('admin:getBackups', {});
     const { run, busy } = useAdminAction();
-    // step WF3: the reply carries the fresh Backups list (data.view); an older server's reply asks again
+    // the reply carries the fresh Backups list (data.view); an older server's reply asks again
     const fresh = (reply: unknown) => applyReplyView<BackupsData>(reply, 'view', setData, () => void refetch());
     const [preview, setPreview] = useState<RestorePreview | null>(null);
     const [confirmRestore, setConfirmRestore] = useState(false);

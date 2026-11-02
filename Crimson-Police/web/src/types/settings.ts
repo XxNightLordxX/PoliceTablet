@@ -166,7 +166,7 @@ export interface SettingsReply {
     settings: SettingView[];
     health: ConfigHealthItem[];
     pending: number;
-    // Reset all (step FX1): the whole Settings view after the reset
+    // Reset all: the whole Settings view after the reset
     view?: SettingsData;
 }
 

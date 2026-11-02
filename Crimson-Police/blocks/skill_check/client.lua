@@ -138,11 +138,11 @@ end
 
 -- st.blips[i] = { id = blip, at = where it is, variant = its look }: one per device still to work (armed, set back,
 -- or waiting to be tried again), handed to the objective pointer as 'd<i>' (the server's marker): CP.Markers puts the
--- GPS line on it and draws no second icon (BLIPS_FINAL R1). A snapshot keeps every blip that still shows the same
--- device, so the line and the flash on it survive (R8); a device set back is restyled in place.
+-- GPS line on it and draws no second icon. A snapshot keeps every blip that still shows the same
+-- device, so the line and the flash on it survive; a device set back is restyled in place.
 local SHOWN = { armed = true, setback = true, cooldown = true }
 
--- A blip handed over is taken back first, so its GPS line goes off before it goes (BLIPS_FINAL R10).
+-- A blip handed over is taken back first, so its GPS line goes off before it goes.
 local function DropBlip(st, i)
     local e = st.blips[i]
     if not e then return end

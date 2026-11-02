@@ -27,7 +27,7 @@ local warnedAt = {}               -- [what] = os.time() of its last warning
 --                                   HELPERS
 -- ============================================================================
 
--- Read on every event, so turning it on in Admin UI → Settings needs no restart (C29).
+-- Read on every event, so turning it on in Admin UI → Settings needs no restart.
 local function On() return type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true end
 
 local function WarnOnce(what, fmt, ...)
@@ -76,7 +76,7 @@ local function Coords(v)
     return vec3(v.x + 0.0, v.y + 0.0, v.z + 0.0)
 end
 
--- { [citizenid] = true } from Crimson-Contracts' { [citizenid] = server id }: the server ids are never read (C9).
+-- { [citizenid] = true } from Crimson-Contracts' { [citizenid] = server id }: the server ids are never read.
 local function Members(v)
     if type(v) ~= 'table' then return nil end
     local out, n = {}, 0

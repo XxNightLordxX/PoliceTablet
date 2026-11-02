@@ -210,7 +210,7 @@ function CP.Perf.rangeSq(rangeSq)
     return cap < rangeSq and cap or rangeSq
 end
 
--- A tick that runs only while it has work (step LP4): arm() starts it unless it runs (a second arm() is a no-op);
+-- A tick that runs only while it has work: arm() starts it unless it runs (a second arm() is a no-op);
 -- each pass waits ms, then calls pass(); a pass that returns true (nothing left to watch) ends the loop until the
 -- next arm(). A failing pass is logged and the loop goes on.
 ---@param tag string the log tag

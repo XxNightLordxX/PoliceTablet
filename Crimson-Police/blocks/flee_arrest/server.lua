@@ -1437,7 +1437,7 @@ local function BagCuffed(p)
 end
 
 -- ============================================================================
---                    THE VOLUNTEER AT THE DOOR (V23, §7.3)
+--                       THE VOLUNTEER AT THE DOOR (§7.3)
 -- ============================================================================
 
 -- The wanted person of door mode is the run's volunteer slot: a volunteer runner who waits at the suspect point.
@@ -1945,7 +1945,7 @@ local function Marker(ctx)
     for _, p in pairs(st.peds) do
         if not Neutralised(p) and PedCoords(p) then out[#out + 1] = p end
     end
-    -- the door stays the pointer while a volunteer may play the wanted person: never where a real player is (V23)
+    -- the door stays the pointer while a volunteer may play the wanted person: never where a real player is
     if st.mode == 'door' and (not st.knocked or (st.vol and #out == 0)) then
         local door = PointList(ctx.location, ctx.obj.door)[1]
         if not door then return nil end

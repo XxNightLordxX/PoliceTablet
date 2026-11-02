@@ -1773,7 +1773,7 @@ function Testing.list()
             useStartRoute = c.useStartRoute == true,
             allowTeleport = c.allowTeleport ~= false,
             debugOverlay = c.debugOverlay ~= false,
-            -- Check spawn points (S8: the button, its scope and the "Teleport here" button of a result)
+            -- Check spawn points (the button, its scope and the "Teleport here" button of a result)
             spawnCheck = {
                 enabled = c.enabled ~= false and sc.enabled ~= false,
                 teleport = sc.teleport ~= false,
@@ -1899,7 +1899,7 @@ function Testing.state(src)
 end
 
 -- ============================================================================
---               CHECK SPAWN POINTS (PLAN S7; ARCHITECTURE §5.27)
+--                   CHECK SPAWN POINTS (ARCHITECTURE §5.27)
 -- ============================================================================
 -- The owner's request of 2026-10-19: "Double check all coordinates etc for every ped". The server lists every point
 -- of one location of a mission with what appears there (each block's pointKinds) and how far over the ground it
@@ -2315,9 +2315,9 @@ CP.Net.action('server:test:spawnCheckReport', function(src, payload)
 end, { rate = 4 })
 
 -- ============================================================================
---              FULL ADMIN CONTROL (C20, #45; ARCHITECTURE §8.4.2)
+--                   FULL ADMIN CONTROL (ARCHITECTURE §8.4.2)
 -- ============================================================================
--- Testing is optional (O2): these marks and removals are information for the admins; nothing blocks, hides or nags
+-- Testing is optional: these marks and removals are information for the admins; nothing blocks, hides or nags
 -- because a mission or location is untested. A spec that loads this file without modules/adminkit has none of them.
 
 do
@@ -2465,7 +2465,7 @@ AddEventHandler('playerDropped', function()
     end
 end)
 
--- The upkeep runs only while a test, an invitation or a result waiting for its admin is kept (step LP4: it woke every
+-- The upkeep runs only while a test, an invitation or a result waiting for its admin is kept (it woke every
 -- 2 s all day): armed at start (results from before a restart) and by each of those; the pass that finds none ends
 -- it.
 do

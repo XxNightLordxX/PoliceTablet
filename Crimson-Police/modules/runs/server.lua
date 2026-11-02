@@ -320,7 +320,7 @@ local function limits() return Config.Limits or {} end
 -- Mission controls (Config.MissionControls.controls): the server-wide cooldown changes supervisors may make. A cooldown
 -- entry keeps when it started and both are applied when it is read, so a change, its end or a reset counts at once.
 local Cd = { SCALE = 'cooldownScale', ABANDON = 'abandonCooldown' }
--- A live case (V14, CP.LiveCrime) on Cd too (the file is at Lua's 200 locals): its mission id and Config.LiveCrime.
+-- A live case (CP.LiveCrime) on Cd too (the file is at Lua's 200 locals): its mission id and Config.LiveCrime.
 Cd.LIVE_ID = 'live_crime'
 function Cd.liveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
 
@@ -648,7 +648,7 @@ function Runs.adjustTimer(run, seconds)
     if not run.timer.running then
         local before = run.timeLimit
         run.timeLimit = math.max(0, math.floor(run.timer.remaining))
-        -- a scaled run (P8): the unscaled limit the fast-finish bonus uses moves by the same seconds
+        -- a scaled run: the unscaled limit the fast-finish bonus uses moves by the same seconds
         if run.fastBaseLimit then
             run.fastBaseLimit = math.max(0, run.fastBaseLimit + (run.timeLimit - Num(before, run.timeLimit)))
         end
@@ -762,7 +762,7 @@ local function GetCtx(run, i)
             return Runs.choosePoints(run, candidates, n, o2)
         end
         ctx.whenNear = function(point, range) return Runs.whenNear(run, point, range) end
-        -- V22: this objective's volunteer suspect (CP.Volunteers.matchView): nil unless it is the run's volunteer
+        -- this objective's volunteer suspect (CP.Volunteers.matchView): nil unless it is the run's volunteer
         -- slot, else { role, mode, phase, meet, label, real, engaged } (never who he is or where he is now)
         ctx.volunteer = function()
             local V = CP.Volunteers
@@ -808,7 +808,7 @@ end
 --                       SPAWN DIRECTOR (Config.Spawning)
 -- ============================================================================
 -- Which of a block's spawn points may be used now, and whether an officer is near enough for an objective's people
--- to appear (owner request of 2026-10-19: "make sure they dont spawn around the player make it be progressive").
+-- to appear (people appear as officers come near, never right around a player).
 -- Every distance is measured on the map (2D). Blocks reach both through ctx.choosePoints and ctx.whenNear. The
 -- director's memory of a run is run.spawning[objective] = { clocks = { [wave] = os.time() of the first ask },
 -- said = { [console line] = true } }; it goes with the run.
@@ -2598,7 +2598,7 @@ function Runs._forgetOfficer(citizenid)
     end
 end
 
--- The two server-wide cooldown controls (Config.MissionControls.controls; outside the master switch, owner decision):
+-- The two server-wide cooldown controls (Config.MissionControls.controls; outside the master switch):
 -- cooldownScale x every mission's cooldown, per mission type (0 = none), abandonCooldown the abandon (type) cooldown.
 function Cd.scaleCheck(value, bounds)
     if type(value) ~= 'table' then return nil, 'err.control_value' end
@@ -2643,7 +2643,7 @@ function Runs.registerControls()
 end
 
 -- ============================================================================
---                    IN A RUN: PER-DEPARTMENT CONTROLS (P8)
+--                      IN A RUN: PER-DEPARTMENT CONTROLS
 -- ============================================================================
 -- Four Mission controls of scope 'run' (Config.MissionControls.controls), per department, under the master switch,
 -- shipped off. Read for the leader (and his unit, for the self rule) when the run is accepted and kept in
@@ -2773,7 +2773,7 @@ function Cd.rc.apply(run, leaderOfficer, officers)
     end
     run.controls = type(controls) == 'table' and controls or {}
     run.controlsChanged = type(changed) == 'table' and changed or {}
-    -- cash (step P16) and points (step P20) bonuses: never on Cross-Department runs or the Weekly Boss; the happy
+    -- cash and points bonuses: never on Cross-Department runs or the Weekly Boss; the happy
     -- hour bonuses are fixed now
     if run.operationId or run.isBoss then
         run.controls.twistCash, run.controls.happyHourCash = nil, nil
@@ -3218,7 +3218,7 @@ local function Settle(run, p, result, endReason, others)
     cash.status = status
 
     local payTier = run.payTier or TierByName(run.expectedTier)
-    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew', V13)
+    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew')
     local okL, liveTier = Call('LiveCrime', 'tierRow', run)
     if okL and type(liveTier) == 'table' then payTier = liveTier end
     local rr = {
@@ -3245,10 +3245,10 @@ local function Settle(run, p, result, endReason, others)
         progress = nil,
         items = {},
     }
-    -- a live case: each suspect's outcome by label once it is over (Config.LiveCrime.resultOutcomes, V16)
+    -- a live case: each suspect's outcome by label once it is over (Config.LiveCrime.resultOutcomes)
     local okLv, liveView = Call('LiveCrime', 'resultView', run)
     if okLv and type(liveView) == 'table' then rr.live = liveView end
-    -- a volunteer case (V22b): goals and the challenge leave its row out by this breakdown key unless switched on
+    -- a volunteer case: goals and the challenge leave its row out by this breakdown key unless switched on
     if run.realSuspect == 'volunteer' then rr.realSuspect = 'volunteer' end
     rr.stats.lethal = nil   -- private: the officer's own clean-arrest rate only, never on the result screen
     if isTest then return nil, rr end
@@ -3294,7 +3294,7 @@ local function Settle(run, p, result, endReason, others)
     }
     local stats = StatsOf(run, p)
     for _, k in ipairs(STAT_KEYS) do row[k] = Int(stats[k], 0, 32767) end
-    -- suspects detained in a live case (V13, the live_catches Rank by tab); never on the result card
+    -- suspects detained in a live case (the live_catches Rank by tab); never on the result card
     row.live_catches = Int(p.stats and p.stats.live_catches, 0, 32767)
     local rowId = InsertRow(row)
     p.rowId = rowId
@@ -3496,7 +3496,7 @@ local function BasePoints(mission, missionType, isBoss)
     return Num(t and t.points, 0) * stars
 end
 
--- opts.live of a live case (V14, CP.LiveCrime.liveOf): a clean copy, or nil. No server id or citizenid is kept.
+-- opts.live of a live case (CP.LiveCrime.liveOf): a clean copy, or nil. No server id or citizenid is kept.
 function Cd.liveOpts(v)
     if type(v) ~= 'table' or type(v.crimeKey) ~= 'string' or v.crimeKey == '' then return nil end
     local function Text(t, n) return type(t) == 'string' and U.clip(t, n) or nil end
@@ -3510,7 +3510,7 @@ function Cd.liveOpts(v)
 end
 
 -- A participant record for officer o (CP.Access.getOfficer's shape) joining run at now (the accept, or a late join of
--- a live case, V15). first: Scoring.isFirstRunSinceDuty's answer.
+-- a live case). first: Scoring.isFirstRunSinceDuty's answer.
 function Runs._newParticipant(run, o, now, first)
     return {
         src = ToSrc(o.src),
@@ -3577,7 +3577,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
             officers[#officers + 1] = o
         end
     end
-    -- a live case (opts.live, V14) is capped by Config.LiveCrime.maxLiveRuns, never by the server run caps
+    -- a live case (opts.live) is capped by Config.LiveCrime.maxLiveRuns, never by the server run caps
     local live = Cd.liveOpts(opts.live)
     if not test and not opts.operationId and not live then
         local ok, errKey = Runs.capsOk(missionType)
@@ -3636,17 +3636,17 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         decisions = {},
         arrested = {},
         missionCall = nil,
-        -- false (opts.npcCombat = false, V14's live runs): no participant's game starts the Config.NpcCombat settings
+        -- false (opts.npcCombat = false, a live case): no participant's game starts the Config.NpcCombat settings
         npcCombat = opts.npcCombat ~= false,
     }
-    -- A live case (V14, CP.LiveCrime): run.live = { crimeKey, dispatchId, title, street, suspects } and a real suspect
+    -- A live case (CP.LiveCrime): run.live = { crimeKey, dispatchId, title, street, suspects } and a real suspect
     -- of kind 'live' (CP.Calls, CP.Alerts, CP.Downed and CP.Route read run.realSuspect)
     if live then
         run.live = live
         run.realSuspect = 'live'
     end
-    -- V21: a mission whose suspect a volunteer may play (CP.Draw, Config.Volunteers modes, "Real suspect OK"):
-    -- { mode, role, obj } only; who plays him is CP.Volunteers' (memory, never on the run). V22 matches on it
+    -- a mission whose suspect a volunteer may play (CP.Draw, Config.Volunteers modes, "Real suspect OK"):
+    -- { mode, role, obj } only; who plays him is CP.Volunteers' (memory, never on the run). The match runs on it
     -- (modules/volunteers/match) and sets run.realSuspect = 'volunteer' once a volunteer says yes.
     local vol = type(opts.volunteer) == 'table' and opts.volunteer or nil
     if vol and not live and not test and type(vol.mode) == 'string' and type(vol.role) == 'string' then
@@ -3654,7 +3654,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     end
     -- Hard rule 17's switch, locked at accept: whether leaving the start route ends the run. CP.Route.requiredFor
     -- decides (a test run follows its own Start route switch, test.useStartRoute: on = with the route rules; a live
-    -- crime Config.LiveCrime.requireRoute; every other run Config.Route.required); V14 sets run.live above this line.
+    -- crime Config.LiveCrime.requireRoute; every other run Config.Route.required); run.live is set above this line.
     do
         local okR, required = Call('Route', 'requiredFor', run)
         if not (okR and type(required) == 'boolean') then
@@ -3663,7 +3663,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         end
         run.routeRequired = required
     end
-    -- Mission controls of scope 'run' (P8), read for the leader and his unit now and locked for the run
+    -- Mission controls of scope 'run', read for the leader and his unit now and locked for the run
     do
         local leaderOfficer = officers[1]
         for _, o in ipairs(officers) do
@@ -3807,7 +3807,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         timeLimit = run.timeLimit,
     }
     if not run.npcCombat then data.npcCombat = false end
-    -- a live case keeps what its clients got at the start: a late joiner gets the same (Runs.addParticipant, V15)
+    -- a live case keeps what its clients got at the start: a late joiner gets the same (Runs.addParticipant)
     if run.live then run.clientStart = data end
     -- a chosen twist the drawn mission has no use for (no armed NPCs, no time limit) was dropped without its reward
     local droppedText = nil
@@ -3853,7 +3853,7 @@ function Runs.create(opts)
 end
 
 -- ============================================================================
---                       A LATE JOIN OF A LIVE CASE (V15)
+--                          A LATE JOIN OF A LIVE CASE
 -- ============================================================================
 
 -- Backup joins a live case (run.live) that already runs: the officer who said yes to CP.LiveCrime's join pop-up.
@@ -3894,7 +3894,7 @@ function Runs.addParticipant(run, src, opts)
     local okE, set = Call('Calls', 'exemptFor', run)
     local okC, onCall = Call('Calls', 'isOnCall', src, okE and type(set) == 'table' and { except = set } or nil)
     if okC and onCall == true then return nil, 'err.on_call' end
-    -- field training's ride-along rule (step F3): a rookie joins as backup only where his trainer is on the case
+    -- field training's ride-along rule: a rookie joins as backup only where his trainer is on the case
     local unit = {}
     for _, q in pairs(run.participants) do
         if q.status == 'active' and type(q.citizenid) == 'string' then unit[#unit + 1] = q.citizenid end
@@ -4034,7 +4034,7 @@ local function StartRun(run)
     })
     CP.log(TAG, 'run %s in progress at tier %s (%d participant(s))', run.id, tostring(TierName(tier)), #active)
     -- A block places its people when its objective starts (start) or ahead of it (stage), never in prepare, which
-    -- runs for every objective now (PLAN S15: "make it be progressive"). One warning per block (until the resource
+    -- runs for every objective now ("make it be progressive"). One warning per block (until the resource
     -- restarts) when its prepare made entities anyway, unless its spawnsInPrepare(ctx) says an owner setting asked
     -- for it (Hostage Rescue with Config.Spawning.hostagesAt = 'runStart').
     local function Made(i)
@@ -4095,7 +4095,7 @@ function Runs.markArrived(run, src)
     if not first then PushRun(run) end
 end
 
--- A late officer who follows the action (CP.Route, PLAN M11) gets seconds from now to reach it
+-- A late officer who follows the action (CP.Route) gets seconds from now to reach it
 -- (Config.Route.followActionSeconds), never less time than the start deadline he already had. Returns his deadline
 -- (os.time), nil when he is not an active participant still on his way.
 function Runs.extendStart(run, src, seconds)
@@ -4252,7 +4252,7 @@ function Runs.penalize(run, id, opts) return Record(run, id, opts, 'penalty') en
 -- ============================================================================
 
 local STAT_SET = Set(STAT_KEYS)
--- live_catches (V13): a row column only (cp_mission_runs, 014), noted by the live_response block
+-- live_catches: a row column only (cp_mission_runs, 014), noted by the live_response block
 STAT_SET.live_catches = true
 
 local function AddStat(p, key, n)
@@ -4457,7 +4457,7 @@ function Runs.removeParticipant(run, src, endReason, opts)
         run.state = 'ended'
         run.endedAt = os.time()
         run.endReason = endReason
-        -- step Z2: a last officer who leaves with a completed result (downed_case keeps what was earned) ends the
+        -- a last officer who leaves with a completed result (downed_case keeps what was earned) ends the
         -- run completed, so a live case's pair rows are scored (pairCooldownHours, maxCatchesPerSuspectDay)
         run.endState = (result == 'completed' or result == 'failed') and result or 'abandoned'
         CleanupRun(run)
@@ -4699,12 +4699,12 @@ local function ExpectedFor(run, p)
     local cap = Num(Config.Scoring and Config.Scoring.scoreCap, 2.0) * P
     local pts = math.min(cap, (P + modPts) * Num(tier and tier.points, 1.0) * mCross)
     if ev.typeOfTheDay ~= false then
-        -- the viewer's department's pick for today (step P18), as the scoring reads it
+        -- the viewer's department's pick for today, as the scoring reads it
         local dept = type(p) == 'table' and p.department or nil
         local ok, tod = Call('Events', 'typeOfTheDay', nil, dept, run.participants)
         if ok and tod ~= nil and tod == run.missionType then pts = pts * Num(ev.todMultiplier, 2.0) end
     end
-    -- the happy hour points bonus (step P20)
+    -- the happy hour points bonus
     if Has('Scoring', 'bonusOf') then pts = pts * CP.Scoring.bonusOf(run) end
     local mBonus = Has('Cash', 'bonusOf') and CP.Cash.bonusOf(run) or 1.0
     local cash = U.round(Num(run.cashBase, 0) * Num(tier and tier.cash, 1.0) * bonus.cash * mBonus)
@@ -4769,7 +4769,7 @@ function Runs.view(run, src)
     local objectives = HudObjectives(run, true)
     if CP.Locale and CP.Locale.resolveAll then objectives = CP.Locale.resolveAll(objectives) end
     -- What Radio Silence hides on this run's maps (Config.Markers.radioSilence; an unknown value counts as 'area', as
-    -- in CP.Markers), so the Active Mission notice says it; nil without Radio Silence (PLAN M8).
+    -- in CP.Markers), so the Active Mission notice says it; nil without Radio Silence.
     local silenceMode = nil
     local radioSilence = CP.Twists.has(run, 'radio_silence')
     local modifierView, twistsView = ModifierView(run)
@@ -4777,10 +4777,10 @@ function Runs.view(run, src)
         silenceMode = type(Config.Markers) == 'table' and Config.Markers.radioSilence or nil
         if silenceMode ~= 'none' and silenceMode ~= 'full' then silenceMode = 'area' end
     end
-    -- The Objective GPS button (Config.Markers.objectiveGps, PLAN M10); the officer's game decides when it can set one.
+    -- The Objective GPS button (Config.Markers.objectiveGps); the officer's game decides when it can set one.
     local markers = type(Config.Markers) == 'table' and Config.Markers or {}
     local objectiveGps = markers.enabled ~= false and markers.objectiveGps ~= false
-    -- a live case's card (Config.LiveCrime.caseCard, V16): steps, suspect count, last-reported time; nil otherwise
+    -- a live case's card (Config.LiveCrime.caseCard): steps, suspect count, last-reported time; nil otherwise
     local okLive, liveCase = Call('LiveCrime', 'caseView', run, src)
     if not (okLive and type(liveCase) == 'table') then liveCase = nil end
     return {
@@ -4963,7 +4963,7 @@ do
 end
 
 -- ============================================================================
---                 OBJECTIVE POINTER (Config.Markers, PLAN M2)
+--                      OBJECTIVE POINTER (Config.Markers)
 -- ============================================================================
 -- The current objective on every participant's map (modules/markers, docs/ARCHITECTURE.md §5.44; the owner: "ensure
 -- all objectives as they come up mark on the map"). The block's marker(ctx) hook gives it when the block has one
@@ -5115,7 +5115,7 @@ do
         local obj = o.obj or {}
         local okA, c, netId = pcall(Runs.anchor, run)
         if not okA then return nil end
-        -- the objective's own name, else "Objective" (BLIPS_FINAL section 3)
+        -- the objective's own name, else "Objective"
         local label = (type(obj.label) == 'string' and obj.label ~= '') and ObjectiveLabel(run, i)
             or CP.Lt('markers.objective')
         if netId then
@@ -5162,7 +5162,7 @@ do
     end
 
     -- Where the action is now, for an officer still on his way once the run is In progress (CP.Route, Config.Route.
-    -- lateArriveRange, PLAN M11): the current objective's anchor and what its pointer shows on the map (its point or
+    -- lateArriveRange): the current objective's anchor and what its pointer shows on the map (its point or
     -- circle, every target), as { { coords = vector3, radius = metres for a circle } }; empty before In progress.
     -- The pointer is the one last sent (run.markerSent), so no block hook runs for it.
     function Runs.actionPoints(run)
@@ -5643,7 +5643,7 @@ local function ArenaExitSweeps()
     end
 end
 
--- One engine thread (step LP4: the 1 s tick and the job recheck were two loops over the same runs, both awake all
+-- One engine thread (the 1 s tick and the job recheck were two loops over the same runs, both awake all
 -- day): every pass (1 s) the run deadlines and HUD timers, every 5th the arena exit sweeps, every jobRecheck seconds
 -- the job and duty re-check. It runs only while a run or an orphaned item is kept: a run created or an orphan arms
 -- it, and the pass that finds neither ends it.

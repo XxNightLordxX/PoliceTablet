@@ -131,6 +131,50 @@ for _, rel in ipairs(files) do
     end
 end
 
+-- no build history in the resource's code comments either: no step or plan ids, review notes or design file names
+-- (the migrations and the SPEC-copied config/blocks.lua are left as they are; (F7) is a key)
+local CODE_STEP = { FX = true }
+for kind in pairs(STEP) do CODE_STEP[kind] = true end
+local codeHits = {}
+for _, rel in ipairs(files) do
+    local path = rel:gsub('^%./', '')
+    local lua, web = path:match('%.lua$'), path:match('%.tsx?$')
+    if path:match('^Crimson%-Police/') and (lua or web) and not path:match('/migrations/')
+        and path ~= 'Crimson-Police/config/blocks.lua' then
+        local n = 0
+        for ln in ((ReadRepo(path) or '') .. '\n'):gmatch('(.-)\n') do
+            n = n + 1
+            local at = lua and ln:find('--', 1, true) or (web and (ln:find('^%s*//') or ln:find('[^:]//')))
+            local c = at and ln:sub(at) or ''
+            local bad = c:find('BLIPS_FINAL', 1, true) or c:find('%f[%a]critic%f[%A]') or c:find('PLAN %u+%d')
+            for word, id in c:gmatch('(%a+) (%u+%d+)') do
+                if (word == 'step' or word == 'Step' or word == 'steps' or word == 'STEP')
+                    and CODE_STEP[id:match('^%u+')] then
+                    bad = true
+                end
+            end
+            for id in c:gmatch('%((%u+%d+%l?)[%),;]') do
+                local kind = id:match('^%u+')
+                if CODE_STEP[kind] and kind ~= 'F' then bad = true end
+            end
+            if bad then codeHits[#codeHits + 1] = path .. ':' .. n end
+        end
+    end
+end
+H.eq(table.concat(codeHits, ', '), '', 'no step or plan ids in the code comments')
+
+-- the README's console example names the newest migration's version
+local newest = 0
+for _, name in ipairs(Lines('ls "' .. REPO .. 'Crimson-Police/sql/migrations"')) do
+    local num = name:match('^(%d+)_.*%.sql$')
+    if num and tonumber(num) > newest then newest = tonumber(num) end
+end
+H.ok(
+    newest > 0 and Has(readme, ('saves folder at version %d\n'):format(newest))
+        and Has(readme, ('`Crimson-Police database at version %d`'):format(newest)),
+    'README: the console example shows version ' .. newest
+)
+
 -- ============================================================================
 --                   README: CONTENTS, COMMANDS, CONFIG KEYS
 -- ============================================================================

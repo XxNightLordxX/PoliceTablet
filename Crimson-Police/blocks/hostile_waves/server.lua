@@ -620,7 +620,7 @@ local function Behaviour(ctx, st)
     return st.behaviour or (type(ctx.obj.behaviour) == 'string' and ctx.obj.behaviour) or 'balanced'
 end
 
--- Config.NpcDifficulty feel (the run's department difficulty, step P9): health and surrender only; never points,
+-- Config.NpcDifficulty feel (the run's department difficulty): health and surrender only; never points,
 -- cash or counts.
 local function Feel(ctx)
     if CP.Scaling and CP.Scaling.feel then return CP.Scaling.feel(ctx and ctx.run) end
