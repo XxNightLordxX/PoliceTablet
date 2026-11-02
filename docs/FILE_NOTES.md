@@ -6587,3 +6587,15 @@ no-show, Cancel this case, the release, the NPC fallback and the endings (Config
 'players_only'), ctx.volunteer()'s view, and (V26) the volunteerEnded event and the staff view. Plain Lua with
 stubs.
 ```
+
+## tests/workflows_e2e_spec.lua
+
+```text
+End-to-end workflows, part 2 (step H7): officers and supervisors on the REAL server side of Crimson-Police, every
+server file loaded as in game, database off (the saves folder, as shipped), every switch these workflows touch
+turned on by the admin through the Admin UI's own Settings action. Only the other resources and natives are stubs.
+1. The admin turns it on. 2. An officer's NPC mission: accept, run, result, payout with money and items.
+3. A SAST + FIB unit (cross-department) run. 4. A mission call: created by a supervisor, claimed, run, paid.
+5. Supervisor controls and awards (a control, a cooldown clear, Give points with its default money and items).
+6. Review, void and dispute.
+```

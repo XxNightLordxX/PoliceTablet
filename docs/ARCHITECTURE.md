@@ -3684,6 +3684,10 @@ read, and one spec that runs both features through the whole real server side.
   live catch) and the staff timeline; a volunteer from `/crimsonheat` to the pop-up, the yes, in position, engaged,
   the knock, the cuff that completes Warrant Service's first step, volunteerEnded, the staff timeline and Stop.
   tests/realsuspects_docs_spec.lua keeps the README section, its config key paths, the checklist and the SOP in step.
+- tests/workflows_e2e_spec.lua (step H7, files mode always): the officer and supervisor workflows on the same real
+  server side with the switches on: an NPC mission from accept to the paid row and its item, a SAST + FIB unit run,
+  a mission call from a supervisor's create to the claim and the pay, a cooldown clear, a Mission control, Give points
+  with its feature money and item, a commendation, and review, void and dispute releasing held cash and items.
 
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 

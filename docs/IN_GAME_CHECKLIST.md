@@ -212,6 +212,14 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] The Ballas member gets on the list from Home; a unit accepts Investigation with Real suspect OK: Jobs shows the job with its Reward line "$1,500 if you get away, $500 if you are caught" and no position. Accept, travel, the unit reaches him (Active: giving up is no longer free), he runs and the unit gives the mission up: he is paid $1,500 cash once, History shows "got away" and no strike. (G7)
 - [ ] Live control → anti-farm → Clear cooldowns for both officers, and Settings → Real suspects: Job hop minutes and Suspect cooldown 0: the same unit and volunteer play again at once. He accepts, the unit waits at the start, after 60 s he presses Give up: one strike in History, Active empty, nothing paid. (G7)
 
+## Every workflow end to end, part 2: officers and supervisors (H7)
+
+- [ ] Settings: Item rewards On with a Patrol pool, Mission controls On, Give points On, Your controls today On, Give points money On. An officer plays Beat Patrol to the end: the result screen shows $250 and the item; the bank and the inventory get them once. (H7)
+- [ ] A SAST trooper and an FIB agent in one unit play Gang Shootout: each row is Reinforced with two departments, each is paid $920 and gets the item. (H7)
+- [ ] A sergeant creates a Patrol call on Dispatch; a trooper claims it, a second trooper is refused; the run pays as a normal Patrol. (H7)
+- [ ] The sergeant clears a trooper's Beat Patrol cooldown (he can take it again), sets the hourly cap inside the admin's bounds (Your controls today shows it), gives 20 points ($100 and the item once; an FIB sergeant and his own character are refused) and commends him. (H7)
+- [ ] A flagged run keeps its cash and items until a supervisor of its department approves it; a voided run keeps them until the officer's dispute is approved. (H7)
+
 ## Supervisor screens inside (H4)
 
 - [ ] Mission controls and Review Queue show their name, subtitle and one help line; each Mission controls group card has its own line under the title. (H4)
