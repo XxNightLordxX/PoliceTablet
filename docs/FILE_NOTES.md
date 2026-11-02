@@ -4943,6 +4943,15 @@ dialog as before; off, the first press arms the button ("Click again to abandon"
 armed abandons. Walk: abandonPress.walk.ts.
 ```
 
+## Crimson-Police/web/src/officer/screens/screenHead.ts
+
+```text
+Officer screens tidy, part 1 (step H2): OFFICER_HEADS gives Home, Mission Board, Active Mission and Dispatch their
+title and one line of help (locale keys); screenStateOf(hasData, loading, error) gives the load state (loading,
+error, empty, stale, ready) that officer/components/ScreenStatus.tsx draws the same way on every screen. Display
+only: no request, action or rule changes. Walk: screenHead.walk.ts.
+```
+
 ## Crimson-Police/web/src/shared/components/MaintenanceBanner.tsx
 
 ```text

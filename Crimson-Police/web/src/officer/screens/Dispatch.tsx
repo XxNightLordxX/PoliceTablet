@@ -9,9 +9,7 @@ import {
     ConfirmDialog,
     Countdown,
     EmptyState,
-    ErrorState,
     Icon,
-    LoadingBlock,
     MoneyRange,
     Points,
     Screen,
@@ -30,6 +28,8 @@ import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { ClaimCallResult, DispatchView, MissionCall, RecentCall } from '../../types/missioncalls';
 import { TwistPicker, tickedTwists } from '../components/TwistPicker';
+import { ScreenStatus } from '../components/ScreenStatus';
+import { OFFICER_HEADS, screenStateOf } from './screenHead';
 import './Dispatch.css';
 
 const POLL_MS = 15000;
@@ -427,15 +427,14 @@ export default function Dispatch() {
 
     return (
         <Screen
-            title={t('ui.screen.dispatch')}
-            subtitle={t('mc.subtitle')}
+            title={t(OFFICER_HEADS.dispatch.title)}
+            subtitle={t(OFFICER_HEADS.dispatch.help)}
             className="mc-screen"
             actions={
                 <Toggle checked={muted} onChange={v => void toggleMute(v)} label={t('mc.mute.label')} disabled={busy} />
             }
         >
-            {!data && loading ? <LoadingBlock /> : null}
-            {!data && !loading && error ? <ErrorState error={error} onRetry={refresh} /> : null}
+            <ScreenStatus state={screenStateOf(!!data, loading, error)} error={error} onRetry={refresh} />
             {data ? (
                 <>
                     {real ? (

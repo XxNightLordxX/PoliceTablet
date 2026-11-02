@@ -1709,6 +1709,11 @@ result card after each mission.
 
 The same screens show in every order; one an owner switched off (Dispatch, My options) stays hidden.
 
+Home, Mission Board, Active Mission and Dispatch share one header: the screen name, then one line saying what the
+screen is for (Home also greets the officer). While a screen loads it shows a spinner; if the first load fails, the
+error with Retry; if the server sends nothing, "Nothing to show yet" with Retry; if a later refresh fails, a small
+"Could not refresh" line with Retry over what was loaded last. Display only: nothing an officer can do changes.
+
 **How a mission goes.** The officer (or unit leader) picks a type. The server draws a random mission of that type
 (no list, no reroll). Everyone gets a GPS route to the start and must follow it: 30 seconds off the route ends
 their run as Abandoned (with `Config.Route.required = false` the route is only a guide and leaving it ends

@@ -295,6 +295,12 @@
     color: var(--cp-muted);
 }
 
+.cp-screen__help {
+    margin-top: 2px;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
 .cp-screen__actions {
     display: flex;
     gap: 8px;

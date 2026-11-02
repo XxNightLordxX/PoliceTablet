@@ -206,7 +206,7 @@ Avoid `color-mix()`, CSS nesting and `:has()` (FiveM's CEF may be older).
 | `Button` | `variant` primary\|secondary\|ghost\|danger, `size` sm\|md, `loading`, `icon`, `iconRight`, `block`, button attrs |
 | `IconButton` | `icon`, `label` (required, aria + tooltip), `variant`, `size`, `loading` |
 | `Card` | `title`, `subtitle`, `icon`, `actions` (header slot), `footer`, `padding` none\|sm\|md\|lg, `highlight` primary\|accent\|success\|warning\|danger, `muted`, `onClick` (becomes keyboard-clickable) |
-| `Screen` | `title`, `subtitle`, `actions` — standard page wrapper for every screen |
+| `Screen` | `title`, `subtitle`, `help` (one muted line under the subtitle), `actions` — standard page wrapper for every screen |
 | `Section` | `title`, `description`, `actions` |
 | `Grid` / `Stack` / `Row` / `Spacer` / `Divider` / `KeyValue` | `Grid cols={3}\|"2fr 1fr"`, `min={220}` (auto-fill), `gap` (4px steps); `Stack direction gap align justify wrap grow` |
 | `Badge` | `tone` neutral\|primary\|accent\|success\|warning\|danger\|grey\|bronze\|silver\|gold\|platinum, `variant` soft\|solid\|outline, `size`, `icon`, `dot` |

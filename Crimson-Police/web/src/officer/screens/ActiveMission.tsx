@@ -8,9 +8,7 @@ import {
     ConfirmDialog,
     Countdown,
     EmptyState,
-    ErrorState,
     Icon,
-    LoadingBlock,
     Money,
     Points,
     Screen,
@@ -44,6 +42,8 @@ import { ContactPanel } from '../components/ContactPanel';
 import { LiveCaseCard } from '../components/LiveCaseCard';
 import { ABANDON_ARM_MS, abandonPress } from './abandonPress';
 import { IntelLine, MissionCallLine } from '../components/RunNotices';
+import { ScreenStatus } from '../components/ScreenStatus';
+import { OFFICER_HEADS } from './screenHead';
 import './MissionBoard.css';
 import './ActiveMission.css';
 
@@ -744,9 +744,15 @@ export default function ActiveMission() {
 
     if (!view) {
         return (
-            <Screen title={t('ui.screen.active')} className="run_ui-active">
-                {!loadedOnce ? <LoadingBlock /> : null}
-                {loadedOnce && error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
+            <Screen
+                title={t(OFFICER_HEADS.active.title)}
+                subtitle={t(OFFICER_HEADS.active.help)}
+                className="run_ui-active"
+            >
+                {!loadedOnce ? <ScreenStatus state="loading" onRetry={() => void refetch()} /> : null}
+                {loadedOnce && error ? (
+                    <ScreenStatus state="error" error={error} onRetry={() => void refetch()} />
+                ) : null}
                 {loadedOnce && !error ? (
                     <Card padding="lg" className="run_ui-empty">
                         <EmptyState
@@ -802,7 +808,7 @@ export default function ActiveMission() {
 
     return (
         <Screen
-            title={t('ui.screen.active')}
+            title={t(OFFICER_HEADS.active.title)}
             subtitle={view.state === 'in_progress' ? t('run.subtitle_in_progress') : t('run.subtitle_accepted')}
             className="run_ui-active"
             actions={

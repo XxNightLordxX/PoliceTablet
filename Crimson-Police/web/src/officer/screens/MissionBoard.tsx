@@ -8,9 +8,7 @@ import {
     ConfirmDialog,
     Countdown,
     EmptyState,
-    ErrorState,
     Icon,
-    LoadingBlock,
     MoneyRange,
     Points,
     ProgressBar,
@@ -40,6 +38,8 @@ import type { BoardCallsInfo } from '../../types/missioncalls';
 import { HappyHourBanner } from '../components/HappyHourBanner';
 import { CallsOpenLink, DailyLimitBadge, readyCheckSentText } from '../components/MissionCallsLink';
 import { TwistPicker, tickedTwists } from '../components/TwistPicker';
+import { ScreenStatus } from '../components/ScreenStatus';
+import { OFFICER_HEADS, screenStateOf } from './screenHead';
 import { arrangeTypeCards, typeKeys } from './boardOrder';
 import './MissionBoard.css';
 
@@ -882,12 +882,11 @@ export default function MissionBoard() {
 
     return (
         <Screen
-            title={t('ui.screen.board')}
+            title={t(OFFICER_HEADS.board.title)}
             subtitle={operation ? t('board.subtitle_operation') : t('board.subtitle')}
             className="run_ui-board"
         >
-            {!data && loading ? <LoadingBlock /> : null}
-            {!data && !loading && error ? <ErrorState error={error} onRetry={refresh} /> : null}
+            <ScreenStatus state={screenStateOf(!!data, loading, error)} error={error} onRetry={refresh} />
 
             {data ? (
                 <>

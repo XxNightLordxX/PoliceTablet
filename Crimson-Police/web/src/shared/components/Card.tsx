@@ -115,6 +115,8 @@ export function Section({ title, description, actions, children, className }: Se
 export interface ScreenProps {
     title?: ReactNode;
     subtitle?: ReactNode;
+    // One line of help under the subtitle (muted, smaller).
+    help?: ReactNode;
     // Right side of the title row.
     actions?: ReactNode;
     children?: ReactNode;
@@ -122,7 +124,7 @@ export interface ScreenProps {
 }
 
 // Standard screen wrapper: page title row, then content with the screen's vertical rhythm.
-export function Screen({ title, subtitle, actions, children, className }: ScreenProps) {
+export function Screen({ title, subtitle, help, actions, children, className }: ScreenProps) {
     return (
         <div className={cx('cp-screen', className)}>
             {title || actions ? (
@@ -130,6 +132,7 @@ export function Screen({ title, subtitle, actions, children, className }: Screen
                     <div className="cp-screen__titles">
                         {title ? <h2 className="cp-screen__title">{title}</h2> : null}
                         {subtitle ? <p className="cp-screen__subtitle">{subtitle}</p> : null}
+                        {help ? <p className="cp-screen__help">{help}</p> : null}
                     </div>
                     {actions ? <div className="cp-screen__actions">{actions}</div> : null}
                 </header>

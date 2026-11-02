@@ -6,10 +6,8 @@ import {
     Button,
     Card,
     EmptyState,
-    ErrorState,
     Grid,
     Icon,
-    LoadingBlock,
     ProgressBar,
     Screen,
     XpBadge,
@@ -27,6 +25,8 @@ import type { HomeStreak, HomeTypeOfTheDay } from '../../types/economy';
 import type { HomeExtras } from '../../types/profile';
 import { HappyHourBanner } from '../components/HappyHourBanner';
 import { RewardsLocker } from '../components/RewardsLocker';
+import { ScreenStatus } from '../components/ScreenStatus';
+import { OFFICER_HEADS, screenStateOf } from './screenHead';
 import './Home.css';
 
 // getHome plus the parity-plus extras (modules/scoring homeData: missionsToday, the home:extras hook).
@@ -367,8 +367,9 @@ export default function Home() {
 
     return (
         <Screen
-            title={t('ui.screen.home')}
+            title={t(OFFICER_HEADS.home.title)}
             subtitle={firstName ? t('officer.home.greeting', { name: firstName }) : undefined}
+            help={t(OFFICER_HEADS.home.help)}
             actions={
                 <Button variant="primary" icon="list" onClick={openBoard}>
                     {t('officer.home.open_board')}
@@ -377,8 +378,7 @@ export default function Home() {
             className="economy-home"
         >
             <HappyHourBanner />
-            {!data && loading ? <LoadingBlock /> : null}
-            {!data && !loading && error ? <ErrorState error={error} onRetry={() => void refetch()} /> : null}
+            <ScreenStatus state={screenStateOf(!!data, loading, error)} error={error} onRetry={() => void refetch()} />
             {data ? (
                 <>
                     {data.champions ? <ChampionsBanner champions={data.champions} /> : null}
