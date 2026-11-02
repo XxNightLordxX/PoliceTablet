@@ -220,6 +220,13 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] The sergeant clears a trooper's Beat Patrol cooldown (he can take it again), sets the hourly cap inside the admin's bounds (Your controls today shows it), gives 20 points ($100 and the item once; an FIB sergeant and his own character are refused) and commends him. (H7)
 - [ ] A flagged run keeps its cash and items until a supervisor of its department approves it; a voided run keeps them until the officer's dispute is approved. (H7)
 
+## Every workflow end to end, part 3: live crime, surrender, field training, restarts (H8)
+
+- [ ] Settings: Live crimes On, Live-case cash On, Item rewards On, Pay talk-downs On with water x1, Field training On, Tasks `{ "tactical": 1 }` (saved: leaving the other types out is allowed now), Trainer bonus 10, Pay field training sign-offs and Pay finished field training On. (H8)
+- [ ] A crew of two does a Warehouse Burglary: the LIVE card shows "2 suspects"; a unit claims it, secures the scene; a third officer reaching the scene gets "Join the live case?" and joins. Cuff A 30 s (detained), book him at Mission Row for 10 months (booked). The third officer gets "close enough to talk down", Talk them down, B says Yes, cuff him 30 s: Peaceful arrest, and that officer gets $300 and the water once. End case: three rows, each paid the Investigation pay once. Admin UI → Real suspects lists the case; its timeline has joined, talk down, surrendered, peaceful arrest and end case. (H8)
+- [ ] Claim a second crime, get a suspect to surrender, then `restart Crimson-Police` before anyone cuffs him: no officer is on a case, no row, no pay, no cooldown, no LIVE call; Settings changes are kept; the first case is still on Real suspects with its timeline; `/surrender` says he is not wanted. Form the unit again: the next crime posts a LIVE call and pays as usual. (H8)
+- [ ] Field training: an officer cannot pair; a sergeant pairs a cadet with a trainer. Start Gang Shootout as their unit and restart: the run did not count and the pairing is kept. Play it again to the end: the trainer gets the "ready" toast. Restart again: Profile → Field training still shows the task ready. Another supervisor cannot sign off; the trainer can: the cadet gets the Field Training badge, the trainer $250 and 10 points, the cadet $1000. A further restart pays nothing twice. (H8)
+
 ## Supervisor screens inside (H4)
 
 - [ ] Mission controls and Review Queue show their name, subtitle and one help line; each Mission controls group card has its own line under the title. (H4)

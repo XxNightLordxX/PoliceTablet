@@ -1488,7 +1488,9 @@ Admin UI → Settings → Police → Field training).
 1. Set who may train: `Config.FieldTraining.trainerGrades`, the lowest Qbox grade of a trainer per department
    (`{ sast = 2, fib = 2 }` shipped; a department you leave out uses its `supervisorGrade`).
 2. Set the sign-off tasks: `Config.FieldTraining.tasks`, how many completed missions of each type the rookie must run
-   with his trainer (`{ patrol = 3, investigation = 2, tactical = 1 }` shipped).
+   with his trainer (`{ patrol = 3, investigation = 2, tactical = 1 }` shipped). In Settings both lists are edited as
+   a whole: you may leave a type (or department) out or add one, for example `{ "tactical": 1 }` for one Tactical
+   run only; a key that is not a mission type (or department) is refused.
 3. `rookiesPerTrainer` (2) caps the rookies one trainer has at once; `badge` (`field_training`) is the badge a rookie
    gets at the end. While field training is on, an admin can also grant or revoke it in **Admin UI → Officers →
    Badges** like the other badges.
@@ -2610,6 +2612,7 @@ For staff:
 | Nobody is ever asked to play a suspect | Every mode is `'npc'`, the unit did not tick **Real suspect OK**, or no volunteer fits (listed for that suspect, not AFK, not down, no recent case with one of the officers) |
 | A cuff did not count | The officer must be on the case and within `Config.RealSuspects.cuffRange` (3.5 m), and the cuffs must hold `custodyHoldSeconds` (30 s). The timeline shows each cuff and why it did not count |
 | `/surrender` or **Talk them down** does nothing | `Config.LiveCrime.enabled` or `Config.RealSuspects.surrender.enabled` is `false`, the player is not a free suspect of a live case (volunteer cases have no surrender), no officer of the case is within `surrenderRange` (50 m), or the officer is not within `talkRange` (15 m) of a free suspect. A new command name needs a restart |
+| A live case vanished after `restart Crimson-Police` | A restart ends every open case and its run: no row, no points, no pay, no cooldown, and the LIVE calls are gone too (a surrender in progress ends with it). The unit has to be formed again. Closed cases, their timelines, payments, blocks, strikes and your Settings changes are kept. The crime script's next crime makes a new LIVE call |
 | The Real suspects screen is missing | Both features are off, the admin has no `antiFarmOverride` key, or `Config.RealSuspects.adminScreen = false` |
 
 #### 9.16.5 The criminal tablet

@@ -2299,6 +2299,30 @@ KNOWN['MissionControls.grants'] = {
     check = GradeGrants('err.setting_grant_department', 'err.setting_grant_grant'),
 }
 
+-- Config.FieldTraining (step H8): trainerGrades by department key of Config.Departments (a grade number) and tasks by
+-- mission type key of Config.MissionTypes (missions to run, 0 = no task). Each is edited as a whole, so a key can be
+-- added or left out (before, the shipped keys were required and no other key was allowed).
+KNOWN['FieldTraining.trainerGrades'] = {
+    tpl = MapOf(GRADE, '^[%w_%-]+$'),
+    check = function(map, _, ctx)
+        local deps = type(Config.Departments) == 'table' and Config.Departments or {}
+        for key in pairs(map) do
+            if not (ctx and ctx.boot) and type(deps[key]) ~= 'table' then return 'err.setting_fto_department' end
+        end
+        return nil
+    end,
+}
+KNOWN['FieldTraining.tasks'] = {
+    tpl = MapOf(Num(0, 100, true), '^[%w_%-]+$'),
+    check = function(map, _, ctx)
+        local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
+        for key in pairs(map) do
+            if not (ctx and ctx.boot) and type(types[key]) ~= 'table' then return 'err.setting_fto_type' end
+        end
+        return nil
+    end,
+}
+
 -- Config.Permissions.grants (Admin UI -> Permissions -> Extra grants): by power key (CP.Permissions.isGrantable: a
 -- supervisor switch, builderTeleport or fieldTraining; never an admin-only action), each with departments (department
 -- key -> { minGrade } or { grades }), gangs (Qbox gang name -> the same) and citizenids (a list).

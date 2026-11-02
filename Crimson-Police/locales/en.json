@@ -3957,6 +3957,8 @@
   "err.setting_extra_grant_department": "Each department of an extra grant needs a department key of Config.Departments (such as sast).",
   "err.setting_extra_grant_grade": "Each department or gang of an extra grant needs either minGrade (that grade and up) or grades (only those), not both.",
   "err.setting_extra_grant_power": "An extra grant must name a supervisor power, builderTeleport, fieldTraining or criminalTablet. Admin-only actions can never be granted.",
+  "err.setting_fto_department": "Each trainer grade needs a department key of Config.Departments (such as sast).",
+  "err.setting_fto_type": "Each task needs a mission type in Config.MissionTypes (such as patrol or tactical).",
   "err.setting_grant_department": "Each Mission controls grant needs a department key of Config.Departments (such as sast).",
   "err.setting_grant_grant": "Each Mission controls grant needs either minGrade (that grade and up) or grades (only those), not both.",
   "err.setting_json": "That is not valid JSON.",

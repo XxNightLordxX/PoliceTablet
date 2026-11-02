@@ -5919,6 +5919,16 @@ here (its rows, bounds and self rule are covered by mission_controls_spec and co
 checks what CP.Draw registers and that the draw, the accept checks and the board read the values.
 ```
 
+## tests/live_fto_e2e_spec.lua
+
+```text
+End-to-end workflows, part 3 (step H8): live crime, surrender and field training on the REAL server side of
+Crimson-Police, every server file loaded as in game, database off (the saves folder, as shipped), every switch these
+workflows touch turned on by the admin through the Admin UI's own Settings action. Each workflow also meets a
+resource restart in its middle (H.restart, then every server file loaded again from the same saves folder), and
+what survives is what README 9.16.4 and 6.11 say. Only the other resources and the natives are stubs.
+```
+
 ## tests/live_response_spec.lua
 
 ```text

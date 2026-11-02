@@ -3,6 +3,8 @@
   "err.fto_off": "Field training is switched off on this server.",
   "err.fto_same_officer": "The trainer and the rookie must be two different officers.",
   "err.fto_trainer_offline": "The trainer must be online and on duty to be paired.",
+  "err.setting_fto_department": "Each trainer grade needs a department key of Config.Departments (such as sast).",
+  "err.setting_fto_type": "Each task needs a mission type in Config.MissionTypes (such as patrol or tactical).",
   "err.fto_trainer_grade": "That officer's grade is below the trainer grade of the department.",
   "err.fto_already_paired": "That rookie already has a trainer.",
   "err.fto_trainer_in_training": "That officer is in field training himself and can't train yet.",

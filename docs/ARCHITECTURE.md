@@ -3688,6 +3688,12 @@ read, and one spec that runs both features through the whole real server side.
   server side with the switches on: an NPC mission from accept to the paid row and its item, a SAST + FIB unit run,
   a mission call from a supervisor's create to the claim and the pay, a cooldown clear, a Mission control, Give points
   with its feature money and item, a commendation, and review, void and dispute releasing held cash and items.
+- tests/live_fto_e2e_spec.lua (step H8, files mode always): a live crime from the LIVE call to the paid rows (claim,
+  a backup's join, detain, booking, a talk-down with its feature money and item, End case, the staff screen), field
+  training (pair, a counted run, sign-off, badge, trainer bonus, both payments), and `restart Crimson-Police` in the
+  middle of each (Restart(): onResourceStop, H.restart, every server file loaded again from the same saves folder):
+  an open case, its surrender and an unfinished run end with no row, pay or cooldown; the settings, closed cases,
+  payments and the training record stay.
 
 ### 5.48 CP.Options — modules/options (S; officer options, step O1)
 
