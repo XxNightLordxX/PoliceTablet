@@ -326,6 +326,14 @@ local function Views(rows, viewerCitizenid, dropOwn)
     return out
 end
 
+-- A flagged (not voided) row whose flag kind the row's department hands to admins only (Config.MissionControls
+-- reviewRules.adminOnlyKinds, step P14), seen by someone who is neither the console nor an admin.
+local function AdminOnlyFlag(src, r)
+    if tonumber(src) == 0 or IsAdmin(src) or U.truthy(r.voided) or r.goes_to == 'admin' then return false end
+    local ok, only = Call('ReviewRules', 'adminOnly', r.department, r.flag_reason)
+    return ok and only == true
+end
+
 function D.forSupervisor(src)
     local officer = CP.Access and CP.Access.getOfficer and CP.Access.getOfficer(src) or nil
     local dept = officer and officer.department or nil
@@ -340,7 +348,16 @@ function D.forSupervisor(src)
     sql = sql .. ' AND r.run_uuid NOT IN (SELECT y.run_uuid FROM cp_mission_runs y WHERE y.citizenid = ?)'
     params[#params + 1] = citizenid
     sql = sql .. (' ORDER BY d.created_at, d.id LIMIT %d'):format(LIST_LIMIT)
-    return Views(Query(sql, params) or {}, citizenid ~= '' and citizenid or nil, true)
+    local rows = Query(sql, params) or {}
+    if not IsAdmin(src) then
+        -- step Z2: a flag kind the department's reviewRules gives to admins only is not his to answer
+        local kept = {}
+        for _, r in ipairs(rows) do
+            if not AdminOnlyFlag(src, r) then kept[#kept + 1] = r end
+        end
+        rows = kept
+    end
+    return Views(rows, citizenid ~= '' and citizenid or nil, true)
 end
 
 function D.forAdmin(excludeCitizenid)
@@ -546,7 +563,7 @@ end
 -- ============================================================================
 
 local LOAD_SQL = [[SELECT d.id, d.run_id, d.citizenid, d.goes_to, d.status,
-  r.run_uuid, r.mission_id, r.mission_type, r.state, r.flagged, r.voided, r.cash_status
+  r.run_uuid, r.department, r.mission_id, r.mission_type, r.state, r.flagged, r.voided, r.flag_reason, r.cash_status
   FROM cp_disputes d JOIN cp_mission_runs r ON r.id = d.run_id WHERE d.id = ?]]
 
 local RESTORE_SQL = [[UPDATE cp_mission_runs SET voided = 0, flagged = 0, void_kind = NULL, void_batch = NULL,
@@ -644,6 +661,8 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
     if not okR then return false, 'err.internal' end
     if not allowed then return false, eR or 'err.own_run' end
     if InLiveRun(CitizenOf(src), d.run_uuid) then return false, 'err.own_run' end
+    -- step Z2: the same admin-only flag kinds Admin.approveFlagged refuses a supervisor (skipPermission skips them)
+    if kind == 'flagged' and AdminOnlyFlag(src, d) then return false, 'err.review_admin_only' end
 
     local points
     if decision == 'approve' and kind == 'failed' then

@@ -96,8 +96,15 @@ H.eq(FR.money('supAward', { points = 100000 }), FC.supAward.maxMoney, 'supAward:
 --                          A FAIR CASE (THE SUSPECT)
 -- ============================================================================
 
-local fair = { citizenid = 'FR_SUSPECT1', outcome = 'got_away', engaged = true }
+local fair = { citizenid = 'FR_SUSPECT1', outcome = 'got_away', engaged = true, result = 'failed' }
 H.eq(FR.fairSuspect(fair, false), true, 'officers reached him and he escaped: fair')
+-- step Z2: an abandoned run (officer quit, real call, admin cancel) pays the volunteer nothing
+H.eq(FR.fairSuspect({ citizenid = 'X1', outcome = 'got_away', engaged = true, result = 'abandoned' }), false,
+    'Z2: an abandoned run: no pay')
+H.eq(FR.fairSuspect({ citizenid = 'X1', outcome = 'got_away', engaged = true, result = 'ended' }), false,
+    'Z2: a run with no result: no pay')
+H.eq(FR.fairSuspect({ citizenid = 'X1', outcome = 'booked', engaged = true, result = 'completed' }), true,
+    'Z2: a completed run where he was booked: fair')
 H.eq(FR.fairSuspect({ citizenid = 'X1', outcome = 'got_away', engaged = false }), false, 'never reached: no pay')
 H.eq(FR.fairSuspect({ citizenid = 'X1', outcome = 'booked', engaged = true, dropout = 'left' }), false,
     'a dropout: no pay')
@@ -231,7 +238,7 @@ FC.suspect.byType = { tactical = { got_away = 3100 } }
 local nTyped = #moneyCalls
 H.eq(FR.suspectEnded(
     'run-typed-1',
-    { citizenid = 'FR_SUSPECT1', outcome = 'got_away', engaged = true, missionType = 'tactical' },
+    { citizenid = 'FR_SUSPECT1', outcome = 'got_away', engaged = true, missionType = 'tactical', result = 'failed' },
     false
 ), true, 'a fair tactical case is paid')
 H.advance(100)

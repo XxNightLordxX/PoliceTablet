@@ -1171,6 +1171,33 @@ H.eq(rq.ok, true, 'review queue')
 H.eq(#rq.data.disputes, 3, 'queue carries the disputes')
 H.eq(Cb('admin:getDisputes', 1).data.disputes[1].id ~= nil, true, 'admin:getDisputes')
 
+-- step Z2: a flag kind the department's reviewRules gives to admins only is not a supervisor's through a dispute
+do
+    local savedRR = CP.ReviewRules
+    CP.ReviewRules = {
+        adminOnly = function(dept, kind) return dept == 'sast' and kind == 'presence' end,
+        clear = function() end,
+    }
+    local seen = false
+    for _, v in ipairs(Co(CP.Disputes.forSupervisor, 2)) do
+        if v.id == disFlag then seen = true end
+    end
+    H.eq(seen, false, 'Z2: an admin-only flag kind is left out of the supervisor\'s disputes')
+    local inAdmin = false
+    for _, v in ipairs(Co(CP.Disputes.forSupervisor, 1)) do
+        if v.id == disFlag then inAdmin = true end
+    end
+    H.eq(inAdmin, true, 'Z2: an admin still sees it')
+    local okZ, resZ = Act('server:sup:handleDispute', 2,
+        { disputeId = disFlag, decision = 'approve', reason = 'Presence data was wrong' })
+    H.eq(okZ and 'ok' or resZ, 'err.review_admin_only', 'Z2: a supervisor cannot approve it through the dispute')
+    H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { dFlag })[1].flagged), 1,
+        'Z2: the flag stays')
+    H.eq(H.sql('SELECT status FROM cp_disputes WHERE id = ?', { disFlag })[1].status, 'open',
+        'Z2: the dispute stays open')
+    CP.ReviewRules = savedRR
+end
+
 -- answering
 ok, res = Act('server:sup:handleDispute', 2,
     { disputeId = disFail, decision = 'approve', reason = 'x', awardPoints = 10 })

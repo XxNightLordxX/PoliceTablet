@@ -9,7 +9,17 @@ local TAG = 'volunteers'
 local TICK_MS = 1000                                   -- the asking, travel and engagement check, only while a run has a match
 local LATE_MS = 2000                                   -- an answer this late after the pop-up closed still counts (lag)
 local CANCEL_PHASES = { travel = true, in_position = true, engaged = true }
-local STRIKE_WHY = { no_show = true, cancelled = true, left = true, afk = true, out_of_bounds = true, on_duty = true }
+local STRIKE_WHY = {
+    no_show = true,
+    cancelled = true,
+    left = true,
+    afk = true,
+    out_of_bounds = true,
+    on_duty = true,
+    early_respawn = true,
+}
+-- a dropout whose staff note CP.Opponents already wrote (rs_afk_catch, rs_early_respawn): only the timeline line
+local LINE_WHY = { afk = 'volunteer_afk', early_respawn = 'volunteer_early_respawn' }
 -- a leave already has CP.Opponents' rs_combat_log note; each other dropout writes rs_volunteer_dropout and this line
 local NOTE_WHY = {
     no_show = 'no_show',
@@ -121,8 +131,9 @@ local function Forget(m)
 end
 
 -- The run ends because nobody plays its suspect: Config.Volunteers.voidRun 'keep_earned' = completed with what was
--- earned so far; 'cancelled' (shipped) = Abandoned with no cooldown, penalty or pay. In a thread: never from inside a
--- run hook.
+-- earned so far (run.keepEarned: CP.Scoring scores the lines only, no base points or end-of-run lines such as
+-- fast_finish, and CP.Cash pays no mission cash, step Z2); 'cancelled' (shipped) = Abandoned with no cooldown, penalty
+-- or pay. In a thread: never from inside a run hook.
 local function EndRun(m)
     local run = m.run
     local how = Cfg().voidRun == 'keep_earned' and 'keep_earned' or 'cancelled'
@@ -131,6 +142,7 @@ local function EndRun(m)
     SetTimeout(0, function()
         if run.state == 'ended' or not CP.Runs then return end
         if how == 'keep_earned' and CP.Runs.endRun then
+            run.keepEarned = true
             CP.Runs.endRun(run, 'completed', 'completed')
         elseif CP.Runs.cancelRun then
             CP.Runs.cancelRun(run, 'cancelled')
@@ -169,8 +181,8 @@ local function Voided(m, why, strike)
     if NOTE_WHY[why] then
         Line(m, NOTE_WHY[why])
         Opp('note', m.run, 'rs_volunteer_dropout', ('%s: %s'):format(rec and rec.label or '?', why), m.cid)
-    elseif why == 'afk' then
-        Line(m, 'volunteer_afk')  -- CP.Opponents' proof already wrote the rs_afk_catch note
+    elseif LINE_WHY[why] then
+        Line(m, LINE_WHY[why])
     end
     if strike and STRIKE_WHY[why] and V.strike then V.strike(m.cid, why) end
     Note(m.src, 'warning', 'volunteer.case.' .. why)
@@ -210,6 +222,15 @@ local function FlagLinked(m, officer)
     for _, reason in ipairs(flags) do
         if CP.AntiCheat and CP.AntiCheat.flag then pcall(CP.AntiCheat.flag, m.run, officer, reason, detail) end
     end
+end
+
+-- True when the run carries the officer-conduct flag rs_linked_accounts (an officer and the volunteer share a
+-- connection or PC): the volunteer's own feature pay is never paid for it (step Z2).
+local function Linked(run)
+    local AC = CP.AntiCheat
+    if not (AC and AC.flaggedWith) then return false end
+    local ok, v = pcall(AC.flaggedWith, run, 'rs_linked_accounts')
+    return ok and v == true
 end
 
 local function Candidates(m)
@@ -344,6 +365,10 @@ local function Watch(m, now)
     if not rec or rec.state == 'void' or rec.state == 'left' then
         -- he went on police duty mid-case (CP.Opponents voided him): a dropout with a strike, like a cancel
         if rec and rec.state == 'void' and rec.voidWhy == 'on_duty' then return Voided(m, 'on_duty', true) end
+        -- he respawned at a hospital before the death timer ran out (CP.Opponents' proof voided him): a strike too
+        if rec and rec.state == 'void' and rec.voidWhy == 'early_respawn' then
+            return Voided(m, 'early_respawn', true)
+        end
         local why = rec and rec.state == 'left' and 'left' or 'void'
         return Voided(m, why, why == 'left')
     end
@@ -569,13 +594,16 @@ function V.caseOf(cid)
     if not m or m.cid ~= cid or not CANCEL_PHASES[m.phase] then return nil end
     local now = GetGameTimer()
     local grace = math.floor(Num(Cfg().cancelGraceSeconds, 60, 0, 600))
+    local free = not m.engagedAt and now - (m.yesAt or 0) <= grace * 1000
     return {
         phase = m.phase,
         role = m.role,
         meet = Plain(m.meet),
         seconds = m.phase == 'travel' and math.max(0, math.ceil(((m.travelUntil or now) - now) / 1000)) or nil,
-        freeCancel = not m.engagedAt and now - (m.yesAt or 0) <= grace * 1000,
+        freeCancel = free,
         graceSeconds = grace,
+        -- seconds of the free Give up still left (step Z2: the tablet counts it down, it is not refetched at 0)
+        graceLeft = free and math.max(0, math.floor(((m.yesAt or 0) + grace * 1000 - now) / 1000)) or 0,
     }
 end
 
@@ -760,6 +788,8 @@ function V.payVolunteer(m, run, state, reason)
     if type(m) ~= 'table' or not m.yesAt or type(run) ~= 'table' or run.test then return false end
     local payload = V.endPayload(m, run, state, reason)
     if not payload then return false end
+    -- step Z2: an officer of the run shares a connection or PC with him (rs_linked_accounts, held for review): no pay
+    if Linked(run) then return false end
     local _, case = Opp('close', run)
     local rec = type(case) == 'table' and type(case.suspects) == 'table' and case.suspects[m.cid] or nil
     local afk = type(rec) == 'table' and (rec.afk == true or tonumber(rec.share) == 0) or false

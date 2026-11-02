@@ -212,6 +212,12 @@ local function PayTalkDown(run, suspectCid, by)
     local p = run.participants[by]
     local cid = type(p) == 'table' and p.citizenid or nil
     if type(cid) ~= 'string' or cid == suspectCid then return false end
+    -- step Z2: an officer of the run shares a connection or PC with a suspect (rs_linked_accounts): no pay
+    local AC = CP.AntiCheat
+    if AC and AC.flaggedWith then
+        local okF, linked = pcall(AC.flaggedWith, run, 'rs_linked_accounts')
+        if okF and linked == true then return false end
+    end
     return FR.payLater('surrender', cid, { key = ('%s:%s'):format(tostring(run.id), suspectCid) })
 end
 

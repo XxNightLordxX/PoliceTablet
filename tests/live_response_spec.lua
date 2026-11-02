@@ -200,6 +200,21 @@ do
     H.eq(p[1].opts.src, nil, 'shared by the unit')
     local pl = entries[#entries]
     H.ok(pl and pl.what == 'peaceful_arrest' and pl.by == 2 and pl.label == 'B', 'the timeline names officer 2')
+    -- step Z2: a run with rs_linked_accounts (an officer shares a connection or PC with a suspect) pays no talk-down
+    do
+        local savedAC, paidZ = CP.AntiCheat, {}
+        CP.AntiCheat = {
+            flaggedWith = function(_, reason) return reason == 'rs_linked_accounts' end,
+        }
+        CP.FeatureRewards = {
+            enabled = function(f) return f == 'surrender' end,
+            payLater = function(feature, cid) paidZ[#paidZ + 1] = { feature = feature, cid = cid } return true end,
+        }
+        peaceful.CZ = 2
+        B.onEvent(ctx, nil, { type = 'opp_detained', cid = 'CZ', label = 'Z', share = 1 })
+        H.eq(#paidZ, 0, 'Z2: a linked-accounts run pays no talk-down')
+        CP.AntiCheat, CP.FeatureRewards = savedAC, nil
+    end
     CP.Opponents.peaceful, CP.Opponents.timeline = nil, plainTimeline
     local ok, why = B.onEvent(ctx, 2, { type = 'end_case' })
     H.ok(ok == false and why == 'not_host', 'End case: only the unit leader')

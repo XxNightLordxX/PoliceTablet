@@ -274,3 +274,14 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Volunteers on: many quick runs while volunteers are asked; end one run right as it asks; the same volunteer is still asked by the next run (no restart needed). (Z1)
 - [ ] `Config.Volunteers.endEvent = false`: a volunteer plays a case to the end: his criminal tablet History still shows the case. (Z1)
 - [ ] Field training with ftoSignOff pay on: trainer A signs Patrol for rookie R and is paid; unpair R, pair him with trainer B (or pair a finished R again), B signs Patrol: B is not paid again for that task. (Z1)
+
+## Bug sweep fixes (Z2)
+
+- [ ] Review rules: set SAST's reviewRules adminOnlyKinds to rs_linked_accounts; a SAST row flagged with it and disputed by its officer does not show in a SAST supervisor's Disputes, and Approve through the dispute answers "The department hands this kind of flag to admins only"; an admin still approves it. (Z2)
+- [ ] Feature rewards on (suspect): a volunteer is reached by officers, then the officer quits (or takes a real call, or an admin cancels the run): the volunteer gets no suspect pay and Payments made shows no row for him. (Z2)
+- [ ] Feature rewards on (suspect and surrender): an officer and a volunteer on the same PC or connection (identityMatch.flag): the officer's row is flagged rs_linked_accounts, and neither the volunteer's suspect pay nor a talk-down pay is made for that run. (Z2)
+- [ ] Config.Volunteers.voidRun = 'keep_earned': an engaged volunteer gives up right after contact: the officers' result shows only the lines earned (no base points, no Fast finish, no mission cash). (Z2)
+- [ ] Volunteers on: an engaged volunteer is downed and respawns at a hospital before the death timer: he gets a strike and "You respawned at a hospital before the death timer ran out", the staff timeline shows the early-respawn line, and his criminal tablet History shows "Respawned before the death timer (strike)". (Z2)
+- [ ] Criminal tablet: say yes to a case and keep Active open: "Giving up now is free" switches to the strike text by itself once cancelGraceSeconds (60 s) have passed. (Z2)
+- [ ] Live crime with one officer: detain the suspect, then get downed (RealSuspects.downed = 'keep_earned'): the run ends Completed, and a second live case on the same suspect inside pairCooldownHours does not score again for that pair. (Z2)
+- [ ] FeatureRewards account = 'item': a row left in Paying is paid by Pay again as the money item (not "Qbox refused"); Clawback on such a row answers "This payment was a money item ..." and takes nothing. (Z2)

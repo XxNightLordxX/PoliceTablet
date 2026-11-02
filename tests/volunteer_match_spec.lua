@@ -462,6 +462,7 @@ do
     H.step(0)
     H.eq(V.strikes('VMA00001'), 0, 'three strikes blocked him: the count started again')
     H.eq(ended[1] and ended[1].state, 'completed', 'after contact a leave ends the run; keep_earned = completed')
+    H.eq(run.keepEarned, true, 'Z2: keep_earned marks the run so only the lines earned so far score')
     Config.Volunteers.voidRun = 'cancelled'
 end
 
@@ -764,6 +765,41 @@ do
         'G3: a fair case (reached, no dropout, not AFK) pays the volunteer once, keyed by the run'
     )
 
+    -- step Z2: an abandoned run (officer quit, real call, admin cancel) pays the volunteer nothing
+    Reset()
+    run = NewRun()
+    run.participants = { [1] = { citizenid = 'OFR00001' } }
+    Answer(30, LastAsk(30), true)
+    H.step(0)
+    recs.VMR00030.contactAt = H.clockMs
+    H.advance(1000, 1000)
+    H.step(0)
+    closeOut = {
+        { VMR00030 = 'got_away' },
+        { kind = 'volunteer', order = { 'VMR00030' }, suspects = { VMR00030 = { contactAt = 1, share = 1 } } },
+    }
+    Finish(run, 'abandoned', 'cancelled')
+    H.eq(#frPaid, 1, 'Z2: an abandoned run pays the volunteer nothing')
+
+    -- step Z2: an officer who shares a connection or PC with him (rs_linked_accounts): no pay either
+    Reset()
+    run = NewRun()
+    run.participants = { [1] = { citizenid = 'OFR00001' } }
+    local linkedRun = run.id
+    CP.AntiCheat.flaggedWith = function(r, reason) return reason == 'rs_linked_accounts' and r.id == linkedRun end
+    Answer(30, LastAsk(30), true)
+    H.step(0)
+    recs.VMR00030.contactAt = H.clockMs
+    H.advance(1000, 1000)
+    H.step(0)
+    closeOut = {
+        { VMR00030 = 'detained' },
+        { kind = 'volunteer', order = { 'VMR00030' }, suspects = { VMR00030 = { contactAt = 1, share = 1 } } },
+    }
+    Finish(run, 'completed', 'completed')
+    H.eq(#frPaid, 1, 'Z2: a linked-accounts run pays the volunteer nothing')
+    CP.AntiCheat.flaggedWith = nil
+
     -- a no-show: the event says why he dropped out; endEvent = false sends nothing
     Reset()
     run = NewRun()
@@ -819,6 +855,25 @@ do
     H.ok(Has(lines, 'volunteer_on_duty'), 'Z1: staff timeline: the on-duty line')
     Finish(run, 'completed', 'completed')
     V.stop(40)
+
+    -- step Z2: he respawns at a hospital before the death timer (CP.Opponents' proof voids him): a strike too
+    Reset()
+    Civilian(43, 'VMZ00043')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(43, RUNNER), 'Z2: a volunteer joins')
+    run = NewRun()
+    Answer(43, LastAsk(43), true)
+    H.step(0)
+    recs.VMZ00043.contactAt = H.clockMs
+    H.advance(1000, 1000)
+    recs.VMZ00043.state, recs.VMZ00043.voidWhy = 'void', 'early_respawn'
+    H.advance(1000, 1000)
+    H.step(0)
+    H.eq(V.strikes('VMZ00043'), 1, 'Z2: an early respawn mid-case is a strike')
+    H.eq(LastNote(43), 'volunteer.case.early_respawn', 'Z2: he is told why')
+    H.ok(Has(lines, 'volunteer_early_respawn'), 'Z2: staff timeline: the early-respawn line')
+    Finish(run, 'completed', 'completed')
+    V.stop(43)
 
     -- volunteers are turned off while he plays: he can still give the case up
     Reset()

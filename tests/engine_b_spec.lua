@@ -2589,6 +2589,22 @@ Runs.removeParticipant(DC, 6, 'downed_kept', { keepFlag = true })
 H.eq(DC.participants[6].result, 'failed', 'downed_kept: result failed (today\'s failed credit)')
 H.eq(Runs.cooldowns('CIT6').types.investigation, cd6, 'downed_kept: no type cooldown')
 H.eq(DC.stats.downs, 2, 'downed_kept counts as a down')
+H.eq(DC.endState, 'failed', 'the last officer out with downed_kept: the run ends failed')
+
+-- step Z2: the last officer out with downed_case (result completed) ends the run completed, not abandoned
+H.reset()
+local DZ = Runs.create({
+    mission = mission,
+    locationIndex = 1,
+    missionType = 'investigation',
+    members = { O[1] },
+    leaderSrc = 1,
+})
+local dzEnded
+CP.Hooks.on('run:ended', function(r, state) if r == DZ then dzEnded = state end end)
+Runs.removeParticipant(DZ, 1, 'downed_case', { keepFlag = true })
+H.eq(DZ.endState, 'completed', 'Z2: the last officer out with downed_case: the run ends completed')
+H.eq(dzEnded, 'completed', 'Z2: run:ended says completed')
 
 -- ============================================================================
 --               RESOURCE STOP: entities deleted, nothing written

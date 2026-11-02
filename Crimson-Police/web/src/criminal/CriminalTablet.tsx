@@ -287,6 +287,8 @@ function Jobs({
 
 function Active({ active, busy, run }: { active: CrimActive | null; busy: boolean; run: Run }) {
     const left = useCountdown(active?.seconds ?? null, { resetKey: active?.phase });
+    // the free Give up runs out on its own: no event refetches the view then (step Z2)
+    const graceLeft = useCountdown(active?.graceLeft ?? null, { resetKey: active?.phase });
     const [confirm, setConfirm] = useState(false);
     if (!active) {
         return (
@@ -314,7 +316,9 @@ function Active({ active, busy, run }: { active: CrimActive | null; busy: boolea
                 <li>{t('crimtab.active.rule_log')}</li>
             </ul>
             <p className="crim-muted">
-                {active.freeCancel ? t('crimtab.active.cancel_free') : t('crimtab.active.cancel_strike')}
+                {active.freeCancel && (graceLeft === null || graceLeft > 0)
+                    ? t('crimtab.active.cancel_free')
+                    : t('crimtab.active.cancel_strike')}
             </p>
             <div className="crim-actions">
                 <button

@@ -125,6 +125,12 @@ local function LiveCall(fn, run, ...)
     return nil
 end
 
+-- Only the lines earned score (no base points, no end-of-run lines): a live case with Config.LiveCrime.linesOnly, or a
+-- volunteer case ended early by Config.Volunteers.voidRun = 'keep_earned' (run.keepEarned, step Z2).
+local function LinesOnly(run)
+    return run.keepEarned == true or LiveCall('linesOnly', run) == true
+end
+
 local function TierRow(run)
     -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew', V13)
     local live = LiveCall('tierRow', run)
@@ -566,7 +572,7 @@ local function ScoreLines(run, p, P, opts)
     local bonuses, penalties = {}, {}
     local total = 0
     local mission = run.mission or {}
-    local linesOnly = LiveCall('linesOnly', run) == true
+    local linesOnly = LinesOnly(run)
     local common = CommonCfg()
     local listed, order = ListedEntries(mission)
     local stats = run.stats or {}
@@ -726,7 +732,7 @@ function Scoring.compute(run, p, result, opts)
 
     local bonuses, penalties, total = ScoreLines(run, p, P, opts)
     -- a live case with Config.LiveCrime.linesOnly: the lines only, P stays the base of their shares (V13)
-    local linesOnly = LiveCall('linesOnly', run) == true
+    local linesOnly = LinesOnly(run)
     local subtotal = linesOnly and total or P + total
     local mTeam = Num(TierRow(run).points, 1.0)
     local nDepts = Num(opts.departments, nil) or DepartmentsOf(run, p)

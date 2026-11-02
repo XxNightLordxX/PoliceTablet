@@ -1545,7 +1545,8 @@ Config.Volunteers = {
     -- 'players_only' mission, and any mission once officers reached him, always ends
     onVoid = 'npc',
     -- How such a mission ends: 'cancelled' = Abandoned with no cooldown, penalty or pay; 'keep_earned' = Completed
-    -- with what the officers earned so far
+    -- with what the officers earned so far (the points of their lines only: no base points, end-of-run bonuses or
+    -- mission cash)
     voidRun = 'cancelled',
     -- A volunteer who is caught while AFK (he did not move for a while, Config.RealSuspects): true = his part is
     -- void (a strike, and the mission ends as in voidRun); false = the catch counts like any other catch

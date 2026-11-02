@@ -240,6 +240,11 @@ do
     H.eq(other.participants[3].flagged and other.participants[3].flagged.reason, 'stun_unproven', 'the flag holds')
     H.eq(AC.note(other, 6, 'speed'), true, 'a note')
     H.eq(AC.flag(other, 6, 'speed'), true, 'and a flag of the same reason for the same officer')
+    -- step Z2: flaggedWith reads the run's flags (a note never counts)
+    H.eq(AC.flaggedWith(other, 'speed'), true, 'Z2: flaggedWith sees a flag of that reason')
+    H.eq(AC.flaggedWith(other, 'rs_linked_accounts'), false, 'Z2: and nothing for another reason')
+    H.eq(AC.note(other, 3, 'rs_note_only'), true, 'a note')
+    H.eq(AC.flaggedWith(other, 'rs_note_only'), false, 'Z2: a note is not a flag')
 end
 
 -- a test run only logs a note

@@ -306,10 +306,12 @@ end
 -- ============================================================================
 
 -- A volunteer case ended (payload: CP.Volunteers' end payload; afk: his catch was while AFK). Fair = officers
--- reached him, he did not drop out, was not AFK and his outcome was got_away, detained or booked.
+-- reached him, he did not drop out, was not AFK, the run was played to its end (completed or failed: an abandoned run
+-- - officer quit, real call, admin cancel - pays nothing, step Z2) and his outcome was got_away, detained or booked.
 function FR.fairSuspect(payload, afk)
     if type(payload) ~= 'table' or not ValidCid(payload.citizenid) then return false end
     if payload.dropout ~= nil or afk == true or payload.engaged ~= true then return false end
+    if payload.result ~= 'completed' and payload.result ~= 'failed' then return false end
     local o = payload.outcome
     return o == 'got_away' or o == 'detained' or o == 'booked'
 end

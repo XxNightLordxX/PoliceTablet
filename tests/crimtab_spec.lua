@@ -271,6 +271,8 @@ do
     H.ok(view.active and view.active.meet and view.active.meet.x == 1000.0, '...his own meet point')
     H.eq(view.active and view.active.seconds, 299, '...the time left to get there')
     H.eq(view.active and view.active.freeCancel, true, '...giving up is free right after the yes')
+    H.ok(view.active and view.active.graceLeft and view.active.graceLeft > 55 and view.active.graceLeft <= 60,
+        'Z2: ...for the grace seconds still left (the tablet counts them down)')
 end
 
 -- ============================================================================
@@ -281,6 +283,7 @@ do
     H.clockMs = H.clockMs + 61000
     local view = Get(10).data
     H.eq(view.active.freeCancel, false, 'after the grace: a strike')
+    H.eq(view.active.graceLeft, 0, 'Z2: no grace left')
     local ok = Act(10, { what = 'cancel' })
     H.ok(ok, 'give up')
     view = Get(10).data

@@ -832,12 +832,17 @@ do
     Secs(3)
     H.eq(tabRun.state, 'ended', 'crimtab: the mission ends')
 
-    -- paid once: one feature reward row of $1,500 cash for his escape, never twice
+    -- step Z2: the unit gave the mission up, so the run ended abandoned: the volunteer is not paid for it
     local rows = H.sql([[SELECT mission_id, cash_base, run_uuid FROM cp_mission_runs WHERE citizenid = ?
+        AND mission_type = 'manual_award']], { CID[12] })
+    H.eq(#rows, 0, 'crimtab: an abandoned run pays the volunteer nothing (Z2)')
+    -- a case that ends fairly pays once: one feature reward row of $1,500 cash for his escape, never twice
+    local first = CP.FeatureRewards.pay('suspect', CID[12], { key = tostring(tabRun.id), outcome = 'got_away' })
+    H.ok(first ~= nil and first.amount == 1500, 'crimtab: ...$1,500 for getting away')
+    rows = H.sql([[SELECT mission_id, cash_base, run_uuid FROM cp_mission_runs WHERE citizenid = ?
         AND mission_type = 'manual_award']], { CID[12] })
     H.eq(#rows, 1, 'crimtab: one payment row for the volunteer')
     H.eq(rows[1] and rows[1].mission_id, 'reward_suspect', 'crimtab: ...the volunteer suspect reward')
-    H.eq(tonumber(rows[1] and rows[1].cash_base), 1500, 'crimtab: ...$1,500 for getting away')
     local again = CP.FeatureRewards.pay('suspect', CID[12], { key = tostring(tabRun.id), outcome = 'got_away' })
     H.eq(again, nil, 'crimtab: the same case never pays twice')
 

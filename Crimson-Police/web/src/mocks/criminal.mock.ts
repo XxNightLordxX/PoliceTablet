@@ -97,6 +97,7 @@ registerMock(
                         seconds: 300,
                         freeCancel: true,
                         graceSeconds: 60,
+                        graceLeft: 60,
                     };
                 break;
             }

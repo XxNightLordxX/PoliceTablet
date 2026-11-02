@@ -555,6 +555,30 @@ do
     ok = Act('server:admin:resolvePayment', 1, { rowId = id4, outcome = 'paid', reason = 'x', requestId = Rid() })
     H.eq(ok, true, 'once the lock is free it goes ahead')
 
+    -- step Z2: a feature reward paid as a money item: Pay again gives the item, never a Qbox account named 'item'
+    Reset()
+    local itemGiven, savedFR = {}, CP.FeatureRewards
+    CP.FeatureRewards = {
+        giveMoneyItem = function(src, item, amount)
+            itemGiven[#itemGiven + 1] = { src = src, item = item, amount = amount }
+            return true
+        end,
+    }
+    local idItem = Row({
+        status = 'paying',
+        owed = 150,
+        cash = { step = 'claimed', source = 'server', account = 'item', moneyItem = 'black_money', payAmount = 150 },
+    })
+    ok, e = Act('server:admin:resolvePayment', 1,
+        { rowId = idItem, outcome = 'payAgain', checked = true, reason = 'x', confirm = '150', requestId = Rid() })
+    H.ok(
+        ok == true and #itemGiven == 1 and itemGiven[1].item == 'black_money' and itemGiven[1].amount == 150
+            and #calls.add == 0,
+        'Z2: Pay again of a money-item row gives the item again'
+    )
+    H.eq(RowOf(idItem).cash_status, 'paid', 'Z2: and the row is paid')
+    CP.FeatureRewards = savedFR
+
     -- an old row without markers while the source is society: Pay again can't know what happened
     Config.Cash.source = 'society'
     local id6 = Row({ status = 'paying', owed = 100 })
@@ -802,6 +826,17 @@ do
         { rowId = id2, amount = 100, reason = 'x', confirm = '100', requestId = Rid() })
     H.ok(not ok and e == 'err.clawback_refused' and RowOf(id2).cash_reclaimed == 0, 'RemoveMoney failed: taken back')
     removeResult = true
+    -- step Z2: a feature reward paid as a money item cannot be taken back from a Qbox account
+    local idItem = Row({
+        status = 'paid',
+        owed = 200,
+        paid = 200,
+        cash = { source = 'server', account = 'item', moneyItem = 'black_money' },
+    })
+    ok, e = Act('server:admin:clawback', 1,
+        { rowId = idItem, amount = 100, reason = 'x', confirm = '100', requestId = Rid() })
+    H.ok(not ok and e == 'err.clawback_item' and RowOf(idItem).cash_reclaimed == 0,
+        'Z2: a money-item row is refused up front, nothing claimed')
     local sast2 = bank.balance.sast
     ok = Act('server:admin:clawback', 1,
         { rowId = id2, amount = 100, reason = 'x', confirm = '100', requestId = Rid() })

@@ -41,6 +41,7 @@
   "err.audit_failed": "The audit log could not be written, so nothing was done.",
   "err.balance_low": "The balance is too low for this.",
   "err.clawback_refused": "Qbox refused to take the money. Nothing was taken.",
+  "err.clawback_item": "This payment was a money item. Take it back from the inventory instead; nothing was taken.",
   "err.clawback_too_much": "That is more than was paid (minus what was taken back before).",
   "err.money_tool_off": "This money tool is turned off. An admin can turn it on in Settings (type ENABLE).",
   "err.check_first": "Tick \"I checked: the money did not arrive\" first.",

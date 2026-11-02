@@ -3602,7 +3602,8 @@ run with `run.volunteer` (so never while `enabled` is off or every mode is `'npc
   and the mode is not `'players_only'` (timeline `volunteer_npc`), else the run ends; after the engagement it always
   ends. The end (toast `volunteer.officer.void_end`): `voidRun = 'cancelled'` (shipped) `CP.Runs.cancelRun(run,
   'cancelled')` (Abandoned, no cooldown, penalty or pay); `'keep_earned'` `CP.Runs.endRun(run, 'completed',
-  'completed')`. `run.realSuspect` stays once a yes came.
+  'completed')` with `run.keepEarned = true` (step Z2: CP.Scoring scores the lines only, no base points or end-of-run
+  lines, and CP.Cash pays no mission cash). `run.realSuspect` stays once a yes came.
 - Release (`run:ended`): an open question closes; a volunteer who played gets `volunteer.case.released` and
   `client:volunteerCase { phase = 'over' }`; the hold goes.
 - Blocks: `ctx.volunteer()` (CP.Runs' ctx, `V.matchView(run, index)`): nil unless the objective is the run's volunteer

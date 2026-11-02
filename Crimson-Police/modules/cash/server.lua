@@ -156,6 +156,9 @@ function Cash.compute(run, p)
     if CP.LiveCrime and CP.LiveCrime.counts and CP.LiveCrime.counts(run, 'cash') == false then B = 0 end
     -- a volunteer case pays nothing unless the owner turned on Config.Volunteers.payCash (a money switch, V22b)
     if CP.Volunteers and CP.Volunteers.counts and CP.Volunteers.counts(run, 'cash') == false then B = 0 end
+    -- a volunteer case ended early by Config.Volunteers.voidRun = 'keep_earned': only the points earned so far, no
+    -- mission cash (step Z2)
+    if run.keepEarned == true then B = 0 end
     local mTier = Num(TierRow(run).cash, 1.0)
     -- the run's twists (CP.Twists): their cash multipliers multiply (each x the department's twist cash, step P16), up
     -- to Config.Events.twistMaxCash
@@ -810,7 +813,15 @@ local function PayAgainLocked(row, bd, rowId, amount, needWithdraw)
     end
     local moneyAccount = c.account or (Config.Cash and Config.Cash.account) or 'bank'
     local okMoney, why = false, nil
-    if CP.Qbx.addMoney then okMoney, why = CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission') end
+    if moneyAccount == 'item' then
+        -- a feature reward paid as a money item (step Z2): the item again, never a Qbox account named 'item'
+        local FR = CP.FeatureRewards
+        if FR and FR.giveMoneyItem and type(c.moneyItem) == 'string' and c.moneyItem ~= '' then
+            okMoney, why = FR.giveMoneyItem(src, c.moneyItem, amount)
+        end
+    elseif CP.Qbx.addMoney then
+        okMoney, why = CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission')
+    end
     if not okMoney and why == 'error' then
         CP.err(TAG, 'row %d: Pay again raised in AddMoney; it stays paying for a manual check (transaction %s)', rowId,
             transId)
@@ -1033,6 +1044,8 @@ function Cash.clawback(rowId, amount, audit)
     local left = math.floor(CP.U.num(row.cash_paid)) - math.floor(CP.U.num(row.cash_reclaimed))
     if not n or n < 1 then return false, 'err.invalid_amount' end
     if n > left then return false, 'err.clawback_too_much' end
+    -- a feature reward paid as a money item (account 'item'): Qbox has no such account to take it from (step Z2)
+    if CashOf(bd).account == 'item' then return false, 'err.clawback_item' end
     if not OnlineOf(row.citizenid) then return false, 'err.officer_offline' end
     local claimed = Update([[
         UPDATE cp_mission_runs SET cash_reclaimed = cash_reclaimed + ?

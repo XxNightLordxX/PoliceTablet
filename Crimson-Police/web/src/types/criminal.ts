@@ -33,6 +33,7 @@ export interface CrimActive {
     seconds?: number | null; // left to reach the meet point while travelling
     freeCancel: boolean;
     graceSeconds: number;
+    graceLeft?: number | null; // seconds the free Give up still lasts (0 once it is a strike)
 }
 
 export interface CrimHistoryRow {
@@ -40,7 +41,7 @@ export interface CrimHistoryRow {
     missionType?: string | null;
     role?: CrimRole | string | null;
     outcome?: string | null; // detained | booked | got_away | left | void | stopped
-    dropout?: string | null; // no_show | cancelled | left | afk | out_of_bounds
+    dropout?: string | null; // no_show | cancelled | left | afk | out_of_bounds | on_duty | early_respawn
     result?: string | null;
 }
 

@@ -161,6 +161,16 @@ do
     b = CP.Scoring.compute(m, mp, 'completed', { durationS = 60, departments = 1 })
     H.eq(b.tod, true, 'a mission keeps the Type of the Day')
     H.ok(b.subtotal >= 200 and b.linesOnly == nil, 'a mission keeps its base points')
+
+    -- step Z2: a volunteer case ended early by Config.Volunteers.voidRun = 'keep_earned' (run.keepEarned) scores
+    -- what was earned so far: the lines only, no base points, no end-of-run lines, no mission cash
+    H.ok((CP.Cash.compute(m, mp)) > 0, 'Z2: a completed mission pays its cash')
+    m.keepEarned = true
+    b = CP.Scoring.compute(m, mp, 'completed', { durationS = 60, departments = 1 })
+    H.eq(b.linesOnly, true, 'Z2: keep_earned scores the lines only')
+    H.ok(b.subtotal < 200, 'Z2: no base points')
+    H.ok(not Has(b.bonuses, 'fast_finish'), 'Z2: no fast_finish for a run that ended early')
+    H.eq((CP.Cash.compute(m, mp)), 0, 'Z2: no mission cash')
 end
 
 -- ============================================================================

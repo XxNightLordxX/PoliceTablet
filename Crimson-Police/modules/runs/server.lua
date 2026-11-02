@@ -4315,7 +4315,9 @@ function Runs.removeParticipant(run, src, endReason, opts)
         run.state = 'ended'
         run.endedAt = os.time()
         run.endReason = endReason
-        run.endState = result == 'failed' and 'failed' or 'abandoned'
+        -- step Z2: a last officer who leaves with a completed result (downed_case keeps what was earned) ends the
+        -- run completed, so a live case's pair rows are scored (pairCooldownHours, maxCatchesPerSuspectDay)
+        run.endState = (result == 'completed' or result == 'failed') and result or 'abandoned'
         CleanupRun(run)
     else
         if run.host == src then MigrateHost(run, 'left') end

@@ -211,6 +211,22 @@ function AC.flag(run, src, reason, detail)
     return true
 end
 
+-- True when this run raised a flag of this reason, for any participant or the run itself (step Z2: the feature pay of
+-- a run with rs_linked_accounts waits for nobody's review, so it is not paid).
+---@param run table
+---@param reason string
+---@return boolean
+function AC.flaggedWith(run, reason)
+    if type(run) ~= 'table' or run.id == nil or type(reason) ~= 'string' or reason == '' then return false end
+    local st = state[run.id]
+    if not st then return false end
+    local prefix = reason .. '|'
+    for key in pairs(st.recorded) do
+        if key:sub(1, #prefix) == prefix then return true end
+    end
+    return false
+end
+
 -- A staff note: something a suspect did himself, or a fact staff should check, about one participant (src) or the
 -- case (src nil). Audited (runNoted) and shown in the Review run detail, but it never sets p.flagged or
 -- run.flagged, so nobody's points or items are held for it. Once per reason and participant per run (its own
