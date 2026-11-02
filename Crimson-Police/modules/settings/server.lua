@@ -280,47 +280,235 @@ end
 
 -- Admin UI -> Settings -> Features: every feature an owner can turn on or off, with the section of play it belongs
 -- to and the one setting that switches it (the same setting as in the list, saved and audited the same way; a
--- money switch still needs the typed ENABLE). Name: settings.feature.<key>. risky = the toggle asks first.
+-- money switch still needs the typed ENABLE). Name: settings.feature.<key>. risky = the toggle asks first. limits =
+-- the settings that bound the feature (per-day counts, caps, cooldowns, pay): the Features tab links each one.
 -- Every switch here is read when it is used, so a change works at once. Mission blocks have no switch of their own:
 -- a mission or one of its locations is switched in Admin UI -> Missions.
 Play.features = {
-    { key = 'spawning', play = 'npc', path = 'Spawning.enabled', risky = true },
+    {
+        key = 'spawning',
+        play = 'npc',
+        path = 'Spawning.enabled',
+        risky = true,
+        limits = {
+            'Limits.maxArmedAlive',
+            'Limits.maxEntities',
+            'Limits.maxConcurrentRuns',
+            'Limits.maxConcurrentTactical',
+        },
+    },
     { key = 'npc_combat', play = 'npc', path = 'NpcCombat.enabled' },
     { key = 'flee', play = 'npc', path = 'Flee.enabled' },
     { key = 'tell_hints', play = 'npc', path = 'Npc.tellHints' },
     { key = 'rescale', play = 'npc', path = 'Rescale.enabled' },
     { key = 'markers', play = 'npc', path = 'Markers.enabled' },
     { key = 'route', play = 'npc', path = 'Route.required', risky = true },
-    { key = 'mission_calls', play = 'npc', path = 'MissionCalls.enabled', risky = true },
-    { key = 'mission_calls_reopen', play = 'npc', path = 'MissionCalls.reopen.enabled' },
+    {
+        key = 'mission_calls',
+        play = 'npc',
+        path = 'MissionCalls.enabled',
+        risky = true,
+        limits = {
+            'MissionCalls.maxOpen',
+            'MissionCalls.offerTime',
+            'MissionCalls.unitsPerCall',
+            'MissionCalls.staffCooldown',
+            'MissionCalls.pageTime',
+        },
+    },
+    {
+        key = 'mission_calls_reopen',
+        play = 'npc',
+        path = 'MissionCalls.reopen.enabled',
+        limits = {
+            'MissionCalls.reopen.time',
+        },
+    },
     { key = 'type_of_the_day', play = 'npc', path = 'Events.typeOfTheDay' },
-    { key = 'weekly_boss', play = 'npc', path = 'Events.weeklyBoss.enabled' },
+    {
+        key = 'weekly_boss',
+        play = 'npc',
+        path = 'Events.weeklyBoss.enabled',
+        limits = {
+            'Events.weeklyBoss.points',
+            'Events.weeklyBoss.payout',
+        },
+    },
     { key = 'twist_armored', play = 'npc', path = 'Events.twists.armored_hostiles.enabled' },
     { key = 'twist_radio', play = 'npc', path = 'Events.twists.radio_silence.enabled' },
     { key = 'twist_time', play = 'npc', path = 'Events.twists.time_crunch.enabled' },
     { key = 'tow', play = 'npc', path = 'Custody.tow.enabled' },
     { key = 'debrief', play = 'npc', path = 'Decisions.debrief' },
-    { key = 'builder', play = 'npc', path = 'Builder.enabled' },
-    { key = 'live_crimes', play = 'pvp', path = 'LiveCrime.enabled', risky = true },
-    { key = 'volunteers', play = 'pvp', path = 'Volunteers.enabled', risky = true },
-    { key = 'surrender', play = 'pvp', path = 'RealSuspects.surrender.enabled' },
-    { key = 'rs_screen', play = 'pvp', path = 'RealSuspects.adminScreen' },
-    { key = 'live_cash', play = 'pvp', path = 'LiveCrime.cash' },
-    { key = 'live_items', play = 'pvp', path = 'LiveCrime.items' },
-    { key = 'volunteer_cash', play = 'pvp', path = 'Volunteers.payCash' },
-    { key = 'volunteer_items', play = 'pvp', path = 'Volunteers.payRewards' },
-    { key = 'cross_dept', play = 'team', path = 'CrossDept.enabled' },
-    { key = 'ready_check', play = 'team', path = 'Units.readyCheck' },
-    { key = 'mission_controls', play = 'team', path = 'Permissions.supervisor.missionControls', risky = true },
-    { key = 'field_training', play = 'team', path = 'FieldTraining.enabled', risky = true },
-    { key = 'commendations', play = 'team', path = 'Commendations.enabled' },
-    { key = 'challenge', play = 'team', path = 'Challenge.enabled' },
+    {
+        key = 'builder',
+        play = 'npc',
+        path = 'Builder.enabled',
+        limits = {
+            'Builder.maxHostiles',
+            'Builder.maxBlocks',
+            'Builder.minLocations',
+            'Builder.editLockMinutes',
+            'Builder.bonusCap.points',
+            'Builder.bonusCap.share',
+        },
+    },
+    {
+        key = 'live_crimes',
+        play = 'pvp',
+        path = 'LiveCrime.enabled',
+        risky = true,
+        limits = {
+            'LiveCrime.maxLiveRuns',
+            'LiveCrime.maxOfficers',
+            'LiveCrime.offerTime',
+            'LiveCrime.caseTime',
+        },
+    },
+    {
+        key = 'volunteers',
+        play = 'pvp',
+        path = 'Volunteers.enabled',
+        risky = true,
+        limits = {
+            'Volunteers.windowMinutes',
+            'Volunteers.strikes',
+            'Volunteers.strikeHours',
+            'Volunteers.blockHours',
+            'Volunteers.askTries',
+        },
+    },
+    {
+        key = 'surrender',
+        play = 'pvp',
+        path = 'RealSuspects.surrender.enabled',
+        limits = {
+            'RealSuspects.surrender.talkCooldown',
+            'RealSuspects.surrender.holdSeconds',
+        },
+    },
+    {
+        key = 'rs_screen',
+        play = 'pvp',
+        path = 'RealSuspects.adminScreen',
+        limits = {
+            'RealSuspects.maxCatchesPerSuspectDay',
+            'RealSuspects.pairCooldownHours',
+            'RealSuspects.suspectCooldownMinutes',
+            'RealSuspects.pairFlag.count',
+        },
+    },
+    { key = 'live_cash', play = 'pvp', path = 'LiveCrime.cash', limits = { 'Cash.dailyCap' } },
+    {
+        key = 'live_items',
+        play = 'pvp',
+        path = 'LiveCrime.items',
+        limits = {
+            'Rewards.dailyItemCap',
+            'Rewards.dailyValueCap',
+        },
+    },
+    { key = 'volunteer_cash', play = 'pvp', path = 'Volunteers.payCash', limits = { 'Cash.dailyCap' } },
+    {
+        key = 'volunteer_items',
+        play = 'pvp',
+        path = 'Volunteers.payRewards',
+        limits = {
+            'Rewards.dailyItemCap',
+            'Rewards.dailyValueCap',
+        },
+    },
+    {
+        key = 'cross_dept',
+        play = 'team',
+        path = 'CrossDept.enabled',
+        limits = {
+            'CrossDept.minParticipants',
+            'CrossDept.maxParticipants',
+            'CrossDept.joinWindow',
+            'CrossDept.cooldown',
+            'CrossDept.idleCancel',
+        },
+    },
+    {
+        key = 'ready_check',
+        play = 'team',
+        path = 'Units.readyCheck',
+        limits = {
+            'Units.readyTimeout',
+            'Limits.maxUnitSize',
+        },
+    },
+    {
+        key = 'mission_controls',
+        play = 'team',
+        path = 'Permissions.supervisor.missionControls',
+        risky = true,
+        limits = {
+            'MissionControls.changeWait',
+            'MissionControls.happyHourPerDay',
+            'MissionControls.clearCooldownPerDay',
+            'MissionControls.addRunTimePerDay',
+            'MissionControls.addRunTimeMax',
+            'MissionControls.missionBanPerDay',
+            'MissionControls.noticesPerDay',
+            'MissionControls.pushMissionPerDay',
+            'MissionControls.awardPointsPerDay',
+            'MissionControls.callLaneMaxOpen',
+            'AdminControl.cooldownClearsPerDay',
+        },
+    },
+    {
+        key = 'field_training',
+        play = 'team',
+        path = 'FieldTraining.enabled',
+        risky = true,
+        limits = {
+            'FieldTraining.rookiesPerTrainer',
+            'FieldTraining.trainerBonus',
+            'FieldTraining.trainerGrades',
+            'FieldTraining.tasks',
+        },
+    },
+    {
+        key = 'commendations',
+        play = 'team',
+        path = 'Commendations.enabled',
+        limits = {
+            'Commendations.perSupervisorPerDay',
+            'Commendations.sameKindCooldownDays',
+        },
+    },
+    {
+        key = 'challenge',
+        play = 'team',
+        path = 'Challenge.enabled',
+        limits = {
+            'Challenge.minRunsActive',
+            'Challenge.bountyBonus',
+        },
+    },
     { key = 'announce_weekly', play = 'team', path = 'Leaderboard.announceWeekly' },
     { key = 'announce_monthly', play = 'team', path = 'Leaderboard.announceMonthly' },
     { key = 'officer_options', play = 'team', path = 'OfficerOptions.enabled' },
-    { key = 'avatar_urls', play = 'team', path = 'Profile.avatarUrls.enabled' },
-    { key = 'item_rewards', play = 'economy', path = 'Rewards.enabled', risky = true },
-    { key = 'testing', play = 'system', path = 'Testing.enabled' },
+    {
+        key = 'avatar_urls',
+        play = 'team',
+        path = 'Profile.avatarUrls.enabled',
+        limits = {
+            'Profile.avatarUrls.perDay',
+        },
+    },
+    {
+        key = 'item_rewards',
+        play = 'economy',
+        path = 'Rewards.enabled',
+        risky = true,
+        limits = {
+            'Rewards.dailyItemCap',
+            'Rewards.dailyValueCap',
+        },
+    },
+    { key = 'testing', play = 'system', path = 'Testing.enabled', limits = { 'Testing.maxTesters' } },
     { key = 'spawn_check', play = 'system', path = 'Testing.spawnCheck.enabled' },
     { key = 'daily_backup', play = 'system', path = 'Backups.daily' },
 }
@@ -369,6 +557,7 @@ local OPEN = {
     'Volunteers.modes',                 -- mission type keys (V21)
     'Volunteers.missionModes',          -- mission ids (V21)
     'Permissions.builderTeleport',      -- department keys
+    'Permissions.grants',               -- power keys (Admin UI -> Permissions -> Extra grants)
     'MissionControls.grants',           -- department keys
     'MissionControls.controls',         -- control keys
     'FieldTraining.trainerGrades',      -- department keys (T1)
@@ -633,6 +822,68 @@ local RANGES = {
     ['Spawning.placeTimeoutMs'] = { 1000, 60000 },
     ['Spawning.retries'] = { 0, 5 },
     ['Blocks.pursuit.outsiderWarn'] = { 0, 120 },
+    -- G1: every limit, cap, cooldown and per-day count an admin edits in Settings has a sane range
+    ['MissionTypes.*.points'] = { 0, 10000 },
+    ['MissionTypes.*.payout'] = { 0, 1000000 },
+    ['Limits.corpseCleanup'] = { 5, 600 },
+    ['Limits.maxCompletionsHour'] = { 1, 100 },
+    ['Limits.maxCompletionsDay'] = { 0, 500 },
+    ['Limits.abandonCooldown'] = { 0, 7200 },
+    ['Limits.startTimeout'] = { 60, 3600 },
+    ['AntiCheat.maxSpeed'] = { 10, 500 },
+    ['AntiCheat.presenceRadius'] = { 10, 2000 },
+    ['AntiCheat.idleCheck'] = { 30, 3600 },
+    ['AntiCheat.jobRecheck'] = { 1, 120 },
+    ['AntiCheat.outsideKillsToFlag'] = { 1, 100 },
+    ['AntiCheat.voidsToSuspend'] = { 1, 100 },
+    ['AntiCheat.voidWindowDays'] = { 1, 365 },
+    ['AntiCheat.suspendDays'] = { 1, 365 },
+    ['Draw.avoidLast'] = { 0, 10 },
+    ['Draw.avoidLastLarge'] = { 0, 10 },
+    ['Draw.largePool'] = { 1, 100 },
+    ['Draw.avoidLastLocations'] = { 0, 10 },
+    ['Draw.locationFreshness'] = { 0, 86400 },
+    ['Route.maxRecalcs'] = { 0, 10 },
+    ['MissionCalls.unitsPerCall'] = { 1, 16 },
+    ['MissionCalls.maxOpen'] = { 1, 50 },
+    ['MissionCalls.offerTime'] = { 10, 3600 },
+    ['MissionCalls.pageTime'] = { 5, 600 },
+    ['MissionCalls.staffCooldown'] = { 0, 3600 },
+    ['MissionCalls.reopen.time'] = { 10, 3600 },
+    ['Events.weeklyBoss.points'] = { 0, 10000 },
+    ['Events.weeklyBoss.payout'] = { 0, 1000000 },
+    ['Builder.maxHostiles'] = { 1, 100 },
+    ['Builder.maxBlocks'] = { 1, 20 },
+    ['Builder.minLocations'] = { 1, 20 },
+    ['Builder.minLocationsOverride'] = { 1, 20 },
+    ['Builder.editLockMinutes'] = { 1, 1440 },
+    ['Builder.bonusCap.points'] = { 0, 1000 },
+    ['Builder.bonusCap.share'] = { 0, 1 },
+    ['Builder.defaultTeam.*'] = { 1, 16 },
+    ['Units.readyTimeout'] = { 5, 120 },
+    ['Units.kickReinvite'] = { 0, 3600 },
+    ['CrossDept.joinWindow'] = { 30, 3600 },
+    ['CrossDept.idleCancel'] = { 60, 86400 },
+    ['CrossDept.cooldown'] = { 0, 86400 },
+    ['Leaderboard.minRunsToRank'] = { 0, 100 },
+    ['Leaderboard.seasonWeeks'] = { 1, 52 },
+    ['Challenge.minRunsActive'] = { 0, 100 },
+    ['Challenge.bountyBonus'] = { 0, 1 },
+    ['Profile.editCooldown'] = { 0, 86400 },
+    ['Profile.reports.perDay'] = { 0, 50 },
+    ['Profile.avatarUrls.perDay'] = { 0, 50 },
+    ['Commendations.perSupervisorPerDay'] = { 0, 50 },
+    ['Commendations.sameKindCooldownDays'] = { 0, 365 },
+    ['Commendations.announceDays'] = { 0, 90 },
+    ['Cash.dailyCap'] = { 0, 100000000 },
+    ['Payouts.supervisorCooldown'] = { 0, 86400 },
+    ['Disputes.windowHours'] = { 1, 720 },
+    ['Scoring.streakStep'] = { 0, 1 },
+    ['Scoring.streakMax'] = { 0, 5 },
+    ['Goals.dailyPoints'] = { 0, 10000 },
+    ['Goals.weeklyPoints'] = { 0, 100000 },
+    ['Rewards.dailyItemCap'] = { 0, 1000 },
+    ['Rewards.dailyValueCap'] = { 0, 10000000 },
     -- Mission Builder: how far outside the start circle armed spawn points stay (Config.Builder.spawnMargin)
     ['Builder.spawnMargin'] = { 0, 150 },
     -- Mission Builder: how far outside the start circle a location's points may be (Config.Builder.maxPointFromStart)
@@ -1934,6 +2185,34 @@ KNOWN['MissionControls.grants'] = {
     check = GradeGrants('err.setting_grant_department', 'err.setting_grant_grant'),
 }
 
+-- Config.Permissions.grants (Admin UI -> Permissions -> Extra grants): by power key (CP.Permissions.isGrantable: a
+-- supervisor switch, builderTeleport or fieldTraining; never an admin-only action), each with departments (department
+-- key -> { minGrade } or { grades }), gangs (Qbox gang name -> the same) and citizenids (a list).
+do
+    local GRANTEES_TPL = MapOf(Record({
+        departments = GRANTS_TPL,
+        gangs = MapOf(Record({ minGrade = GRADE, grades = ListOf(GRADE, { min = 1, max = 101, unique = true }) }),
+            '^[%w_%-]+$'),
+        citizenids = ListOf(Text('^%w+$', 16), { max = 200, unique = true }),
+    }), '^%a[%w_]*$')
+    local CheckDeptGrants = GradeGrants('err.setting_extra_grant_department', 'err.setting_extra_grant_grade')
+    local function CheckGrantees(map, path, ctx)
+        local P = CP.Permissions
+        for cap, g in pairs(map) do
+            if not (ctx and ctx.boot) and P and P.isGrantable and not P.isGrantable(cap) then
+                return 'err.setting_extra_grant_power'
+            end
+            local err = g.departments and CheckDeptGrants(g.departments, path, ctx)
+            if err then return err end
+            for _, gg in pairs(g.gangs or {}) do
+                if (gg.minGrade == nil) == (gg.grades == nil) then return 'err.setting_extra_grant_grade' end
+            end
+        end
+        return nil
+    end
+    KNOWN['Permissions.grants'] = { tpl = GRANTEES_TPL, check = CheckGrantees }
+end
+
 -- Config.MissionControls.controls (and a department's missionControls): { <control> = { on, min, max, flags } }, registered
 -- controls only (CP.DeptControls.checkConfig).
 local function CheckControls(map, _, ctx)
@@ -2965,7 +3244,17 @@ function Settings.features()
     local out = {}
     for _, f in ipairs(Play.features) do
         if Schema().byPath[f.path] then
-            out[#out + 1] = { key = f.key, play = f.play, path = f.path, risky = f.risky or nil }
+            local limits = {}
+            for _, lp in ipairs(f.limits or {}) do
+                if Schema().byPath[lp] then limits[#limits + 1] = lp end
+            end
+            out[#out + 1] = {
+                key = f.key,
+                play = f.play,
+                path = f.path,
+                risky = f.risky or nil,
+                limits = #limits > 0 and limits or nil,
+            }
         end
     end
     return out

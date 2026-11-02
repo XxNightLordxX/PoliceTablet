@@ -40,8 +40,14 @@ local ADMIN_ONLY_LIST = {
 local ADMIN_ONLY = {}
 for _, a in ipairs(ADMIN_ONLY_LIST) do ADMIN_ONLY[a] = true end
 
--- Actions supervisors always have (no Config.Permissions switch).
-local SUPERVISOR_ALWAYS = { viewMissionList = true }
+-- Actions supervisors always have (no Config.Permissions switch). fieldTraining: pair and unpair field training.
+local SUPERVISOR_ALWAYS = { viewMissionList = true, fieldTraining = true }
+
+-- Powers an extra grant may give besides the supervisor switches (Config.Permissions.grants): the builder Teleport
+-- button and field training pairing. viewMissionList (the department report and the live list) is never granted.
+local EXTRA_POWERS_LIST = { 'builderTeleport', 'fieldTraining' }
+local EXTRA_POWERS = {}
+for _, a in ipairs(EXTRA_POWERS_LIST) do EXTRA_POWERS[a] = true end
 
 -- Review actions: never on a run the reviewer took part in.
 local REVIEW_ACTIONS = { reviewFlagged = true, handleDisputes = true, handleFailedDispute = true, voidAnyRun = true }
@@ -106,6 +112,81 @@ function P.tookPart(citizenid, runUuid, asSuspect)
         if res ~= nil then return true end
     end
     return false
+end
+
+-- ============================================================================
+--                   EXTRA GRANTS (Config.Permissions.grants)
+-- ============================================================================
+-- Admin UI -> Permissions -> Extra grants: a power for players who are not supervisors, by department and grade,
+-- Qbox gang and grade, or single citizenid. Read at every call. Admins never come from here (Config.AdminAce and
+-- Config.QboxAdmins only) and an admin-only action is never grantable.
+
+-- Whether a power may be granted: a key of Config.Permissions.supervisor (on or off) or an extra power, never an
+-- admin-only action.
+function P.isGrantable(cap)
+    if type(cap) ~= 'string' or cap == '' or ADMIN_ONLY[cap] then return false end
+    if EXTRA_POWERS[cap] then return true end
+    return type(SupervisorConfig()[cap]) == 'boolean'
+end
+
+-- Every grantable power, the supervisor switches first (config.lua order is lost in a table: sorted), then the extras.
+function P.grantableKeys()
+    local out = {}
+    for k, v in pairs(SupervisorConfig()) do
+        if type(k) == 'string' and type(v) == 'boolean' and not ADMIN_ONLY[k] and not EXTRA_POWERS[k] then
+            out[#out + 1] = k
+        end
+    end
+    table.sort(out)
+    for _, k in ipairs(EXTRA_POWERS_LIST) do out[#out + 1] = k end
+    return out
+end
+
+local function GrantOf(cap)
+    local perms = Config.Permissions
+    local all = type(perms) == 'table' and perms.grants or nil
+    local g = type(all) == 'table' and all[cap] or nil
+    return type(g) == 'table' and g or nil
+end
+
+-- True when an extra grant names this player for that power: his citizenid, his department with his grade, or his
+-- Qbox gang with its grade. Nothing else (the supervisor rule, the switches) is checked here.
+function P.granted(src, cap)
+    local n = math.tointeger(tonumber(src))
+    if not n or n <= 0 or not P.isGrantable(cap) then return false end
+    local g = GrantOf(cap)
+    if not g then return false end
+    local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
+    if type(info) ~= 'table' then return false end
+    if type(g.citizenids) == 'table' and type(info.citizenid) == 'string' then
+        for _, cid in ipairs(g.citizenids) do
+            if cid == info.citizenid then return true end
+        end
+    end
+    if type(g.departments) == 'table' and CP.Access and CP.Access.getOfficer then
+        local officer = CP.Access.getOfficer(n)
+        if type(officer) == 'table' and type(officer.department) == 'string'
+            and P.gradeGrant(officer, g.departments[officer.department]) then
+            return true
+        end
+    end
+    local gang = info.gang
+    if type(g.gangs) == 'table' and type(gang) == 'table' and type(gang.name) == 'string' then
+        if P.gradeGrant({ gradeLevel = gang.gradeLevel }, g.gangs[gang.name]) then return true end
+    end
+    return false
+end
+
+-- The powers extra grants give this player (sorted); {} for most players.
+function P.grantedFor(src)
+    local out = {}
+    local perms = Config.Permissions
+    local all = type(perms) == 'table' and perms.grants or nil
+    if type(all) ~= 'table' or next(all) == nil then return out end
+    for _, cap in ipairs(P.grantableKeys()) do
+        if all[cap] ~= nil and P.granted(src, cap) then out[#out + 1] = cap end
+    end
+    return out
 end
 
 -- Whether an action is admin-only (supervisors never pass it).
@@ -186,7 +267,8 @@ function P.can(src, action, ctx)
         if not SUPERVISOR_ALWAYS[action] and SupervisorConfig()[action] ~= true then
             return false, 'err.no_permission'
         end
-        if not CP.Access.isSupervisor(n) then return false, 'err.no_permission' end
+        -- a supervisor by grade, or a player an extra grant names for this power
+        if not CP.Access.isSupervisor(n) and not P.granted(n, action) then return false, 'err.no_permission' end
         if ctx and (ctx.department ~= nil or ctx.departments ~= nil) then
             local officer = CP.Access.getOfficer(n)
             if not officer then return false, 'err.no_permission' end
@@ -208,7 +290,8 @@ function P.actionsFor(src)
     if not n or n < 0 or not CP.Access then return out end
     local sup = SupervisorConfig()
     if CP.Access.isAdmin(n) then
-        local set = { viewMissionList = true }
+        local set = {}
+        for a in pairs(SUPERVISOR_ALWAYS) do set[a] = true end
         for _, a in ipairs(ADMIN_ONLY_LIST) do set[a] = true end
         for a in pairs(sup) do
             if type(a) == 'string' then set[a] = true end
@@ -219,6 +302,11 @@ function P.actionsFor(src)
             if type(a) == 'string' and v == true and not ADMIN_ONLY[a] then out[#out + 1] = a end
         end
         for a in pairs(SUPERVISOR_ALWAYS) do out[#out + 1] = a end
+    else
+        -- extra grants: the granted supervisor powers that are switched on, and the granted extra powers
+        for _, a in ipairs(P.grantedFor(n)) do
+            if sup[a] == true or SUPERVISOR_ALWAYS[a] or EXTRA_POWERS[a] then out[#out + 1] = a end
+        end
     end
     table.sort(out)
     return out

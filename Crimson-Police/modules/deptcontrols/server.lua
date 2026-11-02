@@ -496,6 +496,13 @@ end
 --                                   WRITING
 -- ============================================================================
 
+-- An extra grant of the Mission controls for a player who is not a supervisor (Admin UI -> Permissions -> Extra
+-- grants; CP.Permissions.granted reads Config.Permissions.grants at every call).
+local function Granted(n)
+    return CP.Permissions ~= nil and CP.Permissions.granted ~= nil
+        and CP.Permissions.granted(n, 'missionControls') == true
+end
+
 -- Who may change a control of a department: admins any (bounds still apply); a supervisor only his own department
 -- (any for a server-wide control), with the master switch (unless the control is outside it), his department's grant
 -- in Config.MissionControls.grants and the control switched on. Returns ok, errKey, role, the department used.
@@ -518,7 +525,9 @@ function DC.canChange(src, key, dept)
         return true, nil, n == 0 and 'console' or 'admin', dept
     end
     local officer = CP.Access.getOfficer(n)
-    if not officer or officer.isSupervisor ~= true then return false, 'err.no_permission' end
+    -- a supervisor, or an officer an admin granted the Mission controls (Config.Permissions.grants.missionControls)
+    local granted = officer ~= nil and officer.isSupervisor ~= true and Granted(n)
+    if not officer or (officer.isSupervisor ~= true and not granted) then return false, 'err.no_permission' end
     if def.master then
         local ok, err = CP.Permissions.can(n, 'missionControls', { department = officer.department })
         if not ok then return false, err or 'err.no_permission' end
@@ -532,7 +541,9 @@ function DC.canChange(src, key, dept)
     end
     local grants = type(Cfg().grants) == 'table' and Cfg().grants or {}
     local grant = grants[officer.department]
-    if grant ~= nil and not (CP.Permissions.gradeGrant and CP.Permissions.gradeGrant(officer, grant)) then
+    -- the department's grade rule is for supervisors: an extra grant names the officer himself
+    if not granted and grant ~= nil
+        and not (CP.Permissions.gradeGrant and CP.Permissions.gradeGrant(officer, grant)) then
         return false, 'err.no_permission'
     end
     if not Active(def, BoundsOf(def, dept)) then return false, 'err.control_off' end
@@ -808,7 +819,7 @@ function DC.view(src)
         table.sort(depts)
     else
         local officer = CP.Access.getOfficer(n)
-        if not officer or officer.isSupervisor ~= true then return nil, 'err.no_permission' end
+        if not officer or (officer.isSupervisor ~= true and not Granted(n)) then return nil, 'err.no_permission' end
         local outside = false
         for _, key in ipairs(order) do
             local def = defs[key]

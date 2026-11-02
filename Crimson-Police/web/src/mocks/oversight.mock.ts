@@ -1232,7 +1232,42 @@ registerMock('request', 'admin:getPermissions', (): PermissionsData =>
                   'testRun',
                   'openAdmin',
               ],
-              always: ['viewMissionList'],
+              always: ['viewMissionList', 'fieldTraining'],
+              extra: {
+                  powers: [
+                      'breakEditLock',
+                      'builderArchive',
+                      'builderEdit',
+                      'builderEditAny',
+                      'builderPublish',
+                      'builderRollback',
+                      'forceRecall',
+                      'handleDisputes',
+                      'issueCommendation',
+                      'launchCrossDept',
+                      'missionCalls',
+                      'missionControls',
+                      'reviewFlagged',
+                      'reviewProfiles',
+                      'setTypePayout',
+                      'builderTeleport',
+                      'fieldTraining',
+                  ].map(key => ({ key, on: !['breakEditLock', 'builderEditAny', 'builderRollback'].includes(key) })),
+                  grants: {
+                      reviewFlagged: { departments: { sast: { minGrade: 2 } }, citizenids: ['ABC12345'] },
+                      builderTeleport: { gangs: { ballas: { minGrade: 3 } } },
+                  },
+                  gangs: [
+                      {
+                          key: 'ballas',
+                          label: 'Ballas',
+                          grades: ['Recruit', 'Enforcer', 'Shot Caller', 'Boss'].map((name, level) => ({
+                              level,
+                              name,
+                          })),
+                      },
+                  ],
+              },
               teleport: {
                   enabled: true,
                   departments: [

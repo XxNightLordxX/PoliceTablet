@@ -321,6 +321,23 @@ export interface PermissionsData {
     teleport?: { enabled: boolean; departments: TeleportDepartment[] };
     // Config.MissionControls.grants by department key (absent = every supervisor of that department)
     missionGrants?: Record<string, TeleportGrant>;
+    // Admin UI -> Permissions -> Extra grants (Config.Permissions.grants, step G1)
+    extra?: ExtraGrantsData;
+}
+
+// One power's extra grant: departments and Qbox gangs from a grade (or these grades), and single citizenids.
+export interface PowerGrant {
+    departments?: Record<string, TeleportGrant>;
+    gangs?: Record<string, TeleportGrant>;
+    citizenids?: string[];
+}
+export interface ExtraGrantsData {
+    // every grantable power; on = its supervisor switch is on (an extra power is always on)
+    powers: { key: string; on: boolean }[];
+    // Config.Permissions.grants as saved (absent = none)
+    grants?: Record<string, PowerGrant>;
+    // Qbox's gangs with their grades, for the gang pickers
+    gangs: { key: string; label: string; grades: { level: number; name?: string }[] }[];
 }
 
 // ============================================================================

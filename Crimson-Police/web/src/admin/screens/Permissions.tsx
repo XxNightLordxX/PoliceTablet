@@ -1,4 +1,5 @@
-// Admin UI · Permissions (screen key 'admin_permissions'): supervisor powers, admin-only actions and Config health.
+// Admin UI · Permissions (screen key 'admin_permissions'): supervisor powers, extra grants to people who are not
+// supervisors, admin-only actions and Config health.
 
 import {
     Badge,
@@ -21,6 +22,7 @@ import { hasKey, t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import type { ConfigHealthItem } from '../../shared/types';
 import { copyLine } from '../components/copyText';
+import { ExtraGrantsCard } from '../components/ExtraGrantsCard';
 import { GradeGrantRow } from '../components/GradeGrantRow';
 import { MissionControlsCard } from '../components/MissionControlsCard';
 import type { PermissionsData, TeleportDepartment, TeleportGrant } from '../../types/oversight';
@@ -266,6 +268,13 @@ export default function AdminPermissions() {
                 />
                 {data?.teleport ? (
                     <TeleportCard data={data.teleport} busy={busy} onSave={(d, g) => void saveTeleport(d, g)} />
+                ) : null}
+                {data?.extra ? (
+                    <ExtraGrantsCard
+                        data={data.extra}
+                        departments={asArray(data.teleport?.departments)}
+                        onSaved={() => void refetch()}
+                    />
                 ) : null}
                 <Grid cols="1fr 1fr" gap={4} align="start">
                     <Card title={t('admin.perms.always')} icon="checkCircle" subtitle={t('admin.perms.always_text')}>

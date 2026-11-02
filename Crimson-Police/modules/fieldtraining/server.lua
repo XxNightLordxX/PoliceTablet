@@ -344,12 +344,13 @@ local function DeptLabel(dept)
     return type(d) == 'table' and (d.short or d.label) or dept
 end
 
--- Admins always; a supervisor only for his own department (CP.Permissions, viewMissionList is every supervisor's).
+-- Admins always; a supervisor only for his own department (CP.Permissions, fieldTraining is every supervisor's), and
+-- an officer an admin granted fieldTraining (Config.Permissions.grants), for his own department too.
 local function CanManage(src, dept)
     if not FT.enabled() then return false, 'err.fto_off' end
     if type(dept) ~= 'string' then return false, 'err.unknown_officer' end
     if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    return CP.Permissions.can(src, 'viewMissionList', { department = dept })
+    return CP.Permissions.can(src, 'fieldTraining', { department = dept })
 end
 
 local function RookiePermission(src, payload)
@@ -412,12 +413,12 @@ end
 
 local function RookieTarget(payload) return { citizenid = Cid(payload.rookie) } end
 
-Kit.supAction('server:sup:ftoPair', 'viewMissionList', Pair, {
+Kit.supAction('server:sup:ftoPair', 'fieldTraining', Pair, {
     self = RookieTarget,
     permission = RookiePermission,
     reason = 'optional',
 })
-Kit.supAction('server:sup:ftoUnpair', 'viewMissionList', Unpair, {
+Kit.supAction('server:sup:ftoUnpair', 'fieldTraining', Unpair, {
     self = RookieTarget,
     permission = RookiePermission,
     reason = 'optional',

@@ -532,10 +532,14 @@ local function BuildSession(src, ui, args)
     if not CP.Access then return nil, 'err.internal' end
     local isAdmin = CP.Access.isAdmin(src)
     local officer, officerErr = CP.Access.getOfficer(src)
+    -- an officer an admin granted a supervisor power (Config.Permissions.grants) opens the Supervisor UI too, with
+    -- only the screens of his powers; the supervisor role itself stays the job grade (SPEC Roles)
+    local granted = officer ~= nil and officer.isSupervisor ~= true and not isAdmin and CP.Permissions ~= nil
+        and CP.Permissions.actionsFor ~= nil and #CP.Permissions.actionsFor(src) > 0
     local roles = {
         officer = officer ~= nil,
-        -- Supervisor is the job grade only (SPEC Roles); admins use the Admin UI.
-        supervisor = officer ~= nil and officer.isSupervisor == true,
+        -- Supervisor is the job grade only (SPEC Roles), or an extra grant; admins use the Admin UI.
+        supervisor = officer ~= nil and (officer.isSupervisor == true or granted),
         admin = isAdmin,
     }
     if ui == 'officer' then

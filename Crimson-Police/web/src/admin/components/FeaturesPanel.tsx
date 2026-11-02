@@ -1,12 +1,10 @@
 // Admin UI -> Settings -> Features: one card per section of play (NPC missions, Player vs police, Police teamwork,
-// pay, server) listing each feature, whether it is on, a switch that saves the same setting as the list (audited; a
-// risky one asks first, a money one still needs the typed ENABLE) and a link to the setting in All settings.
 
 import { useState } from 'react';
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Icon, Toggle } from '../../shared/components';
 import { t } from '../../shared/i18n';
 import type { SettingsData, SettingView } from '../../types/settings';
-import { featureSections, toggleNeeds, type FeatureRow } from './features';
+import { featureSections, limitValue, toggleNeeds, type FeatureRow } from './features';
 
 export function FeaturesPanel({
     data,
@@ -87,6 +85,22 @@ export function FeaturesPanel({
                                 >
                                     {t('settings.features.open')}
                                 </Button>
+                                {row.limits.length ? (
+                                    <div className="settings-feature__limits">
+                                        <span>{t('settings.features.limits')}</span>
+                                        {row.limits.map(l => (
+                                            <Button
+                                                key={l.path}
+                                                size="sm"
+                                                variant="secondary"
+                                                title={t('settings.features.limit_open', { path: `Config.${l.path}` })}
+                                                onClick={() => onOpen(l.path)}
+                                            >
+                                                {`${l.label}: ${limitValue(l)}`}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                ) : null}
                             </div>
                         ))}
                     </div>

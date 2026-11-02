@@ -70,7 +70,7 @@ local ADMIN_ONLY = {
     'recordMove',
     'cleanup',
 }
-local SUPERVISOR_ALWAYS = { 'viewMissionList' }
+local SUPERVISOR_ALWAYS = { 'viewMissionList', 'fieldTraining' }
 -- Config.Permissions.supervisor in the spec's order (the Permissions screen lists them this way).
 local SUPERVISOR_ORDER = {
     'setTypePayout',
@@ -3094,6 +3094,46 @@ local function TeleportGrants()
     return { enabled = builder.enabled ~= false and builder.teleport ~= false, departments = deps }
 end
 
+-- Admin UI -> Permissions -> Extra grants: every grantable power (on = its supervisor switch, or always for the
+-- extra powers), Config.Permissions.grants as saved, and Qbox's gangs with their grades for the pickers.
+local function GangList()
+    local okG, gangs = pcall(function() return CP.Qbx and CP.Qbx.getGangs and CP.Qbx.getGangs() or nil end)
+    local out = {}
+    for name, g in pairs(okG and type(gangs) == 'table' and gangs or {}) do
+        if type(name) == 'string' and name ~= 'none' and type(g) == 'table' then
+            local grades = {}
+            for k, gr in pairs(type(g.grades) == 'table' and g.grades or {}) do
+                local level = math.tointeger(tonumber(k))
+                if level and level >= 0 and level <= 100 then
+                    grades[#grades + 1] = {
+                        level = level,
+                        name = type(gr) == 'table' and type(gr.name) == 'string' and gr.name or nil,
+                    }
+                end
+            end
+            table.sort(grades, function(a, b) return a.level < b.level end)
+            out[#out + 1] = { key = name, label = type(g.label) == 'string' and g.label or name, grades = grades }
+        end
+    end
+    table.sort(out, function(a, b) return a.key < b.key end)
+    return out
+end
+
+local function ExtraGrants()
+    local P = CP.Permissions
+    local sup = Config.Permissions and Config.Permissions.supervisor or {}
+    local powers = {}
+    for _, k in ipairs(P and P.grantableKeys and P.grantableKeys() or {}) do
+        powers[#powers + 1] = { key = k, on = type(sup[k]) ~= 'boolean' or sup[k] == true }
+    end
+    local grants = Config.Permissions and Config.Permissions.grants
+    return {
+        powers = powers,
+        grants = type(grants) == 'table' and next(grants) ~= nil and U.deepcopy(grants) or nil,
+        gangs = GangList(),
+    }
+end
+
 CP.Net.callback('admin:getPermissions', function(src)
     local okP, eP = AdminOnly(src)
     if not okP then return nil, eP end
@@ -3121,6 +3161,7 @@ CP.Net.callback('admin:getPermissions', function(src)
         always = SUPERVISOR_ALWAYS,
         teleport = TeleportGrants(),
         missionGrants = MissionGrants(),
+        extra = ExtraGrants(),
     }
 end, { rate = 3 })
 

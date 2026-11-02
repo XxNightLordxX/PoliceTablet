@@ -4059,6 +4059,15 @@ web/dist was not rebuilt after a source change (the shipped UI must be the revie
 algorithms identical: files sorted by their path relative to Crimson-Police/ (posix), hashed as path \0 bytes \0.
 ```
 
+## Crimson-Police/web/src/admin/components/FeaturesPanel.tsx
+
+```text
+Admin UI -> Settings -> Features: one card per section of play (NPC missions, Player vs police, Police teamwork,
+pay, server) listing each feature, whether it is on, a switch that saves the same setting as the list (audited; a
+risky one asks first, a money one still needs the typed ENABLE), a link to the setting in All settings and one
+button per limit of the feature (its caps, cooldowns and per-day counts; step G1) that opens that setting.
+```
+
 ## Crimson-Police/web/src/admin/components/HomeForms.tsx
 
 ```text
@@ -5173,6 +5182,16 @@ Admin UI split by play, step AP1 (the owner: "ensure the admin panel separates n
 and cop cop stuff and every feature is able to be turned on and off etc edited"): Config.AdminUi.groupByPlay folds
 the Settings sections into NPC missions, Player vs police and Police teamwork, and Settings -> Features lists every
 feature switch with its section and the setting it writes.
+```
+
+## tests/admin_permissions_spec.lua
+
+```text
+Admin full control, step G1 (the owner: "ensure the admin menu can have full control over every feature limit stuff
+give broader permission"): every limit, cap, cooldown and per-day count has a sane range in Admin UI -> Settings and
+the Features tab links each feature to its limits; Config.Permissions.grants (Admin UI -> Permissions -> Extra
+grants) gives one power to a department from a grade, a Qbox gang from a grade or one citizenid, read live by
+CP.Permissions.granted at every check. Shipped (grants = {}): today's rules exactly.
 ```
 
 ## tests/backup_restore_spec.lua

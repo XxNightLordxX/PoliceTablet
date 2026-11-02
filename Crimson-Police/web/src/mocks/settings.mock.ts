@@ -219,7 +219,14 @@ const data: SettingsData = {
     // Settings -> Features (modules/settings Play.features); Spawning.enabled is not in this list, so it is left out
     features: [
         { key: 'spawning', play: 'npc', path: 'Spawning.enabled', risky: true },
-        { key: 'live_crimes', play: 'pvp', path: 'LiveCrime.enabled', risky: true },
+        // limits (step G1): LiveCrime.maxLiveRuns is not in this list either, so only the unit size is linked
+        {
+            key: 'live_crimes',
+            play: 'pvp',
+            path: 'LiveCrime.enabled',
+            risky: true,
+            limits: ['Limits.maxUnitSize', 'LiveCrime.maxLiveRuns'],
+        },
         { key: 'live_cash', play: 'pvp', path: 'LiveCrime.cash' },
     ],
     view: typeof window !== 'undefined' && /[?&]settingsView=all\b/.test(window.location.search) ? 'all' : 'simple',

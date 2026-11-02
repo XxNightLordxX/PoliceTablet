@@ -157,6 +157,8 @@ export interface FeatureEntry {
     path: string;
     // the toggle asks first (it changes what players get at once)
     risky?: boolean;
+    // the settings that bound the feature (per-day counts, caps, cooldowns, pay), linked under it
+    limits?: string[];
 }
 
 // The reply of every change: the changed settings, the Config health run right after it.

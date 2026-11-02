@@ -157,6 +157,14 @@ Config.Permissions = {
     -- (that grade or higher) or grades (only those grades). For example sast = { minGrade = 4 } or
     -- the list form bcso = { grades = { 3, 5 } }. Empty = admins only.
     builderTeleport = {},
+    -- Extra grants (Admin UI -> Permissions -> Extra grants): a power for people who are not supervisors, by power key
+    -- (a key of supervisor above, builderTeleport, or fieldTraining = pair and unpair field training). Each power may
+    -- name departments from a grade, e.g. departments = { sast = { minGrade = 3 } } (or { grades = { 3, 5 } }), Qbox
+    -- gangs the same way, e.g. gangs = { ballas = { minGrade = 2 } }, and single characters by their citizenid, e.g.
+    -- the list citizenids = { 'ABC12345' }. A power switched off above stays off for everyone, an admin-only action
+    -- can never be granted and admins still come only from AdminAce and QboxAdmins. Empty = only supervisors (and the
+    -- builderTeleport grades), as before
+    grants = {},
     -- Always admin-only, whatever is set above: single-mission payouts, clearing
     -- admin payouts, manual awards (apart from the awardPoints Mission control), disputes
     -- about failed runs, voiding any run, seasons, the bounty override, suspensions, reloading

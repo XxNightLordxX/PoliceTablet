@@ -811,6 +811,19 @@ Full admin control, System (P5):
 - `gradeGrant(officer, grant) -> boolean` — a grade grant `{ minGrade = N }` (that grade and up) or `{ grades = { ... } }`
   (only those) against `officer.gradeLevel`; `Config.Permissions.builderTeleport` (B8) and
   `Config.MissionControls.grants` (P1) use it.
+- Extra grants (G1, `Config.Permissions.grants`, Admin UI -> Permissions -> Extra grants): `{ [power] = { departments
+  = { [dept] = gradeGrant }, gangs = { [gang] = gradeGrant }, citizenids = { cid, ... } } }`, saved and audited as the
+  setting `Permissions.grants` (cp_settings or the saves folder), read at every call. `isGrantable(power)` (a key of
+  `Config.Permissions.supervisor`, on or off, or the extra powers `builderTeleport` and `fieldTraining`; never an
+  admin-only key, never `viewMissionList`), `grantableKeys()`, `granted(src, power)` (his citizenid, his department
+  with his grade via `getOfficer`, or his Qbox gang with its grade via `CP.Qbx.getInfo(src).gang`), `grantedFor(src)`.
+  `can`: a non-admin passes a supervisor action as a supervisor by grade or with `granted(src, action)`; the switch,
+  the department check and the review self rule stay. `fieldTraining` joins `viewMissionList` as every supervisor's.
+  `actionsFor` of a granted officer lists his granted powers that are switched on; the tablet then opens the
+  Supervisor UI for him (`roles.supervisor`) with only those screens. Users: `CP.DeptControls.canChange` and its view
+  (a `missionControls` grant passes the supervisor rule and skips `Config.MissionControls.grants`),
+  `CP.Builder.canTeleport` (`builderTeleport`), field training pairing (`fieldTraining`). Admins never come from a
+  grant (`Config.AdminAce` / `Config.QboxAdmins` only). Shipped `{}`: today's rules exactly.
 
 ### 5.4 CP.Tablet — modules/tablet (owns the NUI)
 Server:
@@ -4109,8 +4122,8 @@ in training. Every read-change-write of one record runs under a per-rookie lock 
   in active training counts one run towards the task of `run.missionType` (never above its count) when his trainer is
   a participant of the same run with `result = 'completed'`; the trainer is toasted when the count is reached.
 - `server:sup:ftoPair { rookie, trainer }` and `server:sup:ftoUnpair { rookie }` (`Kit.supAction`, key
-  viewMissionList, `opts.permission`: the feature on and `CP.Permissions.can(src, 'viewMissionList', { department =
-  the rookie's department })`; S on the rookie, non-strict). Pair: trainer online (`CP.Access.getOfficer`), same
+  fieldTraining (G1: every supervisor's, grantable), `opts.permission`: the feature on and `CP.Permissions.can(src,
+  'fieldTraining', { department = the rookie's department })`; S on the rookie, non-strict). Pair: trainer online (`CP.Access.getOfficer`), same
   department, grade at or above `FT.trainerGrade`, the rookie not in training, the trainer not in training himself and
   under `rookiesPerTrainer`; audited `ftoPair` (target the rookie, new the trainer), both toasted. Unpair clears the
   record; audited `ftoUnpair`.

@@ -11,6 +11,8 @@ export interface FeatureRow {
     f: FeatureEntry;
     s: SettingView;
     on: boolean;
+    // the feature's limits that the data has (step G1), in the server's order
+    limits: SettingView[];
 }
 
 export interface FeatureSection {
@@ -37,7 +39,11 @@ export function featureSections(data: SettingsData | null | undefined): FeatureS
             .filter(f => f.play === play)
             .flatMap(f => {
                 const s = byPath.get(f.path);
-                return s ? [{ f, s, on: s.value === true }] : [];
+                const limits = asArray(f.limits).flatMap(p => {
+                    const l = byPath.get(p);
+                    return l ? [l] : [];
+                });
+                return s ? [{ f, s, on: s.value === true, limits }] : [];
             });
         return { play, rows, on: rows.filter(r => r.on).length };
     }).filter(sec => sec.rows.length > 0);
@@ -49,4 +55,13 @@ export function toggleNeeds(row: FeatureRow, next: boolean): 'money' | 'risky' |
     if (row.s.money && next) return 'money';
     if (row.f.risky) return 'risky';
     return null;
+}
+
+// A limit's value on its button: a number, text or switch as is, a list or map as its size, nothing as a dash.
+export function limitValue(s: SettingView): string {
+    const v = s.value;
+    if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') return String(v);
+    if (Array.isArray(v)) return `[${v.length}]`;
+    if (v && typeof v === 'object') return `{${Object.keys(v).length}}`;
+    return '–';
 }

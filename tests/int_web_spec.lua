@@ -319,7 +319,9 @@ do
     local reg = Read(WEB .. 'layouts/screens.ts') or ''
     local block = reg:match('key: \'sup_live\',(.-)}') or ''
     H.ok(block:find('titleKey', 1, true) ~= nil, 'the registry lists Live Missions')
-    H.ok(block:find('visible', 1, true) == nil, 'Live Missions stays visible when forceRecall is off')
+    -- G1: shown with viewMissionList (every supervisor's), never tied to forceRecall
+    H.ok(block:find('forceRecall', 1, true) == nil and block:find('has(s, \'viewMissionList\')', 1, true) ~= nil,
+        'Live Missions stays visible when forceRecall is off')
     local live = Read(WEB .. 'supervisor/screens/LiveMissions.tsx')
     Has(live, 'const canRecall = !!data?.canRecall && can(\'forceRecall\');', 'the recall buttons follow forceRecall')
 end

@@ -133,7 +133,7 @@ Each term below means exactly this everywhere in the spec.
 | Theme | A department's tablet colours |
 | Watermark | The department logo drawn faintly behind every Officer and Supervisor UI screen |
 | End reason | How one participant's run ended, stored as end_reason (for example quit, off_route, real_call or downed); the full list is in Mission lifecycle |
-| Permissions | Config.Permissions: which supervisor actions are switched on. Admins can always do every admin action |
+| Permissions | Config.Permissions: which supervisor actions are switched on, and extra grants of a power to people who are not supervisors (a department from a grade, a Qbox gang from a grade, or one citizenid). Admins can always do every admin action; admins never come from a grant |
 | Server run cap | The most runs that can be active server-wide at once: 12, of which at most 4 Tactical. Cross-Department Missions don't count |
 | Daily reset | The hour (Config.Time.resetHour, 00:00 server time by default) when Type of the Day, daily goals, streak days and the daily cash cap roll over |
 | Test run | A run started in Admin test mode, or the Mission Builder's test run of a draft: any mission, location and tier, with nothing saved or paid |
@@ -302,7 +302,7 @@ Admin UI — a separate full-screen panel for server admins, covering every depa
 | Leaderboards | Every board and period, cash paid per officer, and any payment left in paying after a crash | Void runs, award points |
 | Officers | Search any officer: rank, callsign, history, badges, cash earned, suspensions, disputes about failed runs | Suspend, unsuspend, answer a dispute (manual award or dismiss) |
 | Departments | Each department in Config.Departments: name, jobs, colours, logo thumbnail, member count, society balance (only when Config.Cash.source = 'society') | Preview a department's tablet theme (read-only) |
-| Permissions | Config.Permissions: which supervisor actions are switched on; Config health | Switch a supervisor action on or off (a setting saved over config.lua) |
+| Permissions | Config.Permissions: which supervisor actions are switched on; extra grants; Config health | Switch a supervisor action on or off; give a power to departments from a grade, Qbox gangs from a grade or single citizenids (Extra grants). Both are settings saved over config.lua and audited |
 | Settings | Every setting of config/config.lua and config/blocks.lua by section, with its comment from the file, the value in use, the config.lua value, "changed" and "after restart" badges, Config health, and the history of changes made in game | Change any setting (the server checks it), reset one or all (see Settings changed in game) |
 | Audit Log | Every supervisor and admin action, filterable | Export |
 | Testing | Every mission and each of its locations with its last test result (Passed, Failed, Not tested or Changed since test), the tier, who tested it and when | Start a test run (mission, location, tier, start route on or off), invite testers, record a result |
@@ -2982,6 +2982,14 @@ Config.Permissions = {
     -- (that grade or higher) or grades (only those grades). For example sast = { minGrade = 4 } or
     -- the list form bcso = { grades = { 3, 5 } }. Empty = admins only.
     builderTeleport = {},
+    -- Extra grants (Admin UI -> Permissions -> Extra grants): a power for people who are not supervisors, by power key
+    -- (a key of supervisor above, builderTeleport, or fieldTraining = pair and unpair field training). Each power may
+    -- name departments from a grade, e.g. departments = { sast = { minGrade = 3 } } (or { grades = { 3, 5 } }), Qbox
+    -- gangs the same way, e.g. gangs = { ballas = { minGrade = 2 } }, and single characters by their citizenid, e.g.
+    -- the list citizenids = { 'ABC12345' }. A power switched off above stays off for everyone, an admin-only action
+    -- can never be granted and admins still come only from AdminAce and QboxAdmins. Empty = only supervisors (and the
+    -- builderTeleport grades), as before
+    grants = {},
     -- Always admin-only, whatever is set above: single-mission payouts, clearing
     -- admin payouts, manual awards (apart from the awardPoints Mission control), disputes
     -- about failed runs, voiding any run, seasons, the bounty override, suspensions, reloading

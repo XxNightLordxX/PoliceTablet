@@ -87,7 +87,15 @@ export const OFFICER_SCREENS: ScreenDef<OfficerScreenKey>[] = [
 ];
 
 export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
-    { key: 'sup_missions', titleKey: 'ui.screen.sup_missions', icon: 'list', component: SupMissionList },
+    // viewMissionList: every supervisor's; an officer with only an admin's extra grant (Config.Permissions.grants, step
+    // G1) sees just the screens of his powers
+    {
+        key: 'sup_missions',
+        titleKey: 'ui.screen.sup_missions',
+        icon: 'list',
+        component: SupMissionList,
+        visible: s => has(s, 'viewMissionList'),
+    },
     {
         key: 'sup_crossdept',
         titleKey: 'ui.screen.sup_crossdept',
@@ -100,6 +108,7 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
         titleKey: 'ui.screen.sup_live',
         icon: 'activity',
         component: SupLiveMissions,
+        visible: s => has(s, 'viewMissionList'),
     },
     {
         key: 'sup_controls',
@@ -129,7 +138,14 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
         component: SupBuilder,
         visible: s => has(s, 'builderEdit'),
     },
-    { key: 'sup_report', titleKey: 'ui.screen.sup_report', icon: 'barChart', component: SupDeptReport },
+    {
+        key: 'sup_report',
+        titleKey: 'ui.screen.sup_report',
+        icon: 'barChart',
+        component: SupDeptReport,
+        // fieldTraining alone: the screen shows only its Field training panel
+        visible: s => has(s, 'viewMissionList', 'fieldTraining'),
+    },
 ];
 
 // Config.AdminUi.landing: 'home' (or a session without it) shows Home; 'payouts' or 'missions' hide it.

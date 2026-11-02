@@ -116,6 +116,7 @@ local function CopyInfo(info)
     local job = {}
     for k, v in pairs(info.job) do job[k] = v end
     out.job = job
+    if type(info.gang) == 'table' then out.gang = { name = info.gang.name, gradeLevel = info.gang.gradeLevel } end
     return out
 end
 
@@ -152,6 +153,10 @@ local function ReadInfo(n)
     local md = type(pd.metadata) == 'table' and pd.metadata or {}
     local job = NormJob(pd.job)
     jobOf[n] = job.name
+    -- the Qbox gang and its grade (Config.Permissions.grants may name gangs); 'none' = in no gang
+    local g = type(pd.gang) == 'table' and pd.gang or {}
+    local gGrade = type(g.grade) == 'table' and tonumber(g.grade.level) or tonumber(g.grade) or 0
+    local gang = { name = Str(g.name) and g.name ~= '' and g.name or 'none', gradeLevel = math.floor(gGrade) }
     return {
         src = n,
         citizenid = pd.citizenid,
@@ -160,6 +165,7 @@ local function ReadInfo(n)
         firstname = first,
         lastname = last,
         job = job,
+        gang = gang,
         callsign = NormCallsign(md.callsign),
         metadata = md,
         isDead = md.isdead == true,
@@ -262,6 +268,17 @@ function Q.getJobs()
     end
     if type(jobs) ~= 'table' then return {} end
     return jobs
+end
+
+-- Qbox's gangs (exports.qbx_core:GetGangs): { [name] = { label, grades = { [level] = { name } } } }; {} when it fails.
+function Q.getGangs()
+    if not Started() then return {} end
+    local ok, gangs = pcall(function() return exports.qbx_core:GetGangs() end)
+    if not ok then
+        LogError('GetGangs', 'exports.qbx_core:GetGangs failed: %s', tostring(gangs))
+        return {}
+    end
+    return type(gangs) == 'table' and gangs or {}
 end
 
 function Q.addMoney(src, account, amount, reason)

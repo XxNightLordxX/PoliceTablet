@@ -178,3 +178,62 @@
     padding-top: 12px;
     border-top: 1px solid var(--cp-border);
 }
+
+/* Extra grants (step G1): one row per power, its editor under it */
+.oversight-extra {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.oversight-extra__row {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--cp-border);
+}
+
+.oversight-extra__row:last-child {
+    border-bottom: 0;
+}
+
+.oversight-extra__head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.oversight-extra__editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: var(--cp-radius);
+    background: var(--cp-surface-2);
+}
+
+.oversight-extra__editor h4 {
+    margin: 6px 0 0;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-text);
+}
+
+.oversight-extra__cids,
+.oversight-extra__add {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.oversight-extra__add .cp-input {
+    max-width: 260px;
+}
+
+@media (max-width: 720px) {
+    .oversight-extra__head {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+}

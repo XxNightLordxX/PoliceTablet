@@ -281,7 +281,21 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     );
 }
 
+// An officer an admin granted only field training (Config.Permissions.grants, step G1): the Field training panel alone.
+function FieldTrainingOnly() {
+    return (
+        <Screen title={t('ui.screen.sup_report')} className="boards-report">
+            <FieldTrainingPanel />
+        </Screen>
+    );
+}
+
 export default function DeptReport() {
+    const can = useCan();
+    return can('viewMissionList') ? <FullDeptReport /> : <FieldTrainingOnly />;
+}
+
+function FullDeptReport() {
     const session = useSession();
     const { data, loading, error, refetch } = useRequest<DeptReportData>('sup:getDeptReport', {}, { pollMs: 60000 });
     const [open, setOpen] = useState<ReportOfficer | null>(null);

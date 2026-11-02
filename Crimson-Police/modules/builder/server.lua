@@ -3617,6 +3617,10 @@ do
     function B.canTeleport(src)
         if CfgB().teleport == false or src == 0 then return false end
         if CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true then return true end
+        -- an extra grant (Admin UI -> Permissions -> Extra grants: department and grade, gang or citizenid)
+        if CP.Permissions and CP.Permissions.granted and CP.Permissions.granted(src, 'builderTeleport') then
+            return true
+        end
         local grants = Config.Permissions and Config.Permissions.builderTeleport
         local officer = CP.Access and CP.Access.getOfficer and CP.Access.getOfficer(src)
         if type(grants) ~= 'table' or type(officer) ~= 'table' then return false end

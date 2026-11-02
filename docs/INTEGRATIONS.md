@@ -436,6 +436,12 @@ function GetQBPlayers() return QBX.Players end
 exports('GetQBPlayers', GetQBPlayers)
 ```
 
+### exports.qbx_core:GetGangs() and PlayerData.gang (server)
+
+- **Spec claim:** Admin UI -> Permissions -> Extra grants may name Qbox gangs from a grade (step G1)
+- **Evidence:** src/Renewed-Banking/.../server/framework.lua (GetGangs on qbx); ref/qbx_core/server/groups.lua (GetGangs); ref/qbx_core/types.lua (PlayerData.gang)
+- **Implication:** Same shape as GetJobs: gangs[gangName] = { label, grades = { [0] = { name, isboss? }, ... } }, with a gang named 'none' for players in no gang. PlayerData.gang = { name, label, isboss, grade = { name, level } }. CP.Qbx.getInfo(src).gang = { name, gradeLevel } ('none' when missing); CP.Qbx.getGangs() wraps the export in a pcall ({} on failure). Read only: Crimson-Police never sets a gang.
+
 ### exports.qbx_core:GetJobs() (server and client)
 
 - **Spec claim:** Job labels and grade names for the UIs

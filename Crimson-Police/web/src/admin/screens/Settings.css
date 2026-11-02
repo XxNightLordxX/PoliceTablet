@@ -560,3 +560,14 @@
         grid-template-columns: minmax(0, 1fr) auto;
     }
 }
+
+/* Settings -> Features: the limits of a feature under its row (step G1) */
+.settings-feature__limits {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}

@@ -753,6 +753,15 @@ Supervisor UI → **Mission controls** (below).
   on a run or while down, and writes `builderTeleport` in the audit log. `Config.Builder.teleport = false` removes
   the button for everyone.
 
+- **Extra grants: a power for people who are not supervisors.** Admin UI → **Permissions** → **Extra grants** lists
+  every supervisor power (review, disputes, Mission controls, builder, mission calls, commendations and the rest), plus
+  **Builder teleport** and **Field training** (pair and unpair). Click **Edit** on one and give it to a department
+  from a grade (or only some grades), to a Qbox gang from a grade, or to one character by citizen ID. Each change
+  saves the setting `Config.Permissions.grants`, is checked by the server and is in the audit log; it works at once.
+  An officer with a grant gets the **Supervisor UI** button with only the screens of his powers, always for his own
+  department. A power switched off above stays off for everyone, admin-only actions can never be granted, and admins
+  still come only from server.cfg and `Config.AdminAce` / `Config.QboxAdmins`. Shipped empty: only supervisors.
+
 ### 4.6 Things only admins can do
 
 **What admins can do now.** Everything below is a button in `/CrimsonPoliceAdmin`, needs a reason, and goes into the
@@ -1064,7 +1073,11 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
   the same setting as the list (audited, Reset puts `config.lua`'s value back) and works at once. Risky ones (safe
   spawning, the GPS route, mission calls, live crimes, volunteers, Mission controls, field training, item rewards)
   ask first; the money switches (cash and items for live and volunteer cases) still need the typed **ENABLE**.
-  Mission blocks have no switch of their own: turn a mission or one of its locations off in **Missions**.
+  Mission blocks have no switch of their own: turn a mission or one of its locations off in **Missions**. Under a
+  feature, **Limits** shows a button for each of its caps, cooldowns and per-day counts with its value now (for
+  example Mission controls: bans, notices and points a day; field training: rookies per trainer; item rewards: the
+  daily caps); a click opens that setting. Every limit, cap and cooldown in `config.lua` has an allowed range in
+  Settings, so a typo (a day cap of 50000) is refused.
 - **Clicking a section in the list** shows that section from its top, even when the page was scrolled far down. A
   few settings whose names would read alike have their own plain names (for example **Default tablet key** and
   **Players may open the tablet with a key**); they come from `settings.label.<path>` in `locales/parts/settings.json`.
@@ -1663,7 +1676,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | **Officers** | Search officers: history, suspend or unsuspend, disputes about failed runs, profile moderation, commendations, service record |
 | **Departments** | Each department's jobs, colours, logo, desks, member count and (with society payouts) account balance |
 | **Missions** (switches) | Turn any mission, or single locations of it, on or off ([5.8](#58-turn-missions-and-locations-on-or-off)) |
-| **Permissions** | What supervisors may do (a switch for each), **Mission controls** (each control's switch, limits, current value and Reset; [4.4](#44-what-supervisors-may-do)), and **Config health**: the start-up check, with a **Check again** button |
+| **Permissions** | What supervisors may do (a switch for each), **Extra grants** (a power for departments from a grade, Qbox gangs from a grade or single citizen IDs; [4.5](#45-mission-builder-permissions)), **Mission controls** (each control's switch, limits, current value and Reset; [4.4](#44-what-supervisors-may-do)), and **Config health**: the start-up check, with a **Check again** button |
 | **Live** | Every live run and unit, with the controls to recall, end, add time or split a unit, and the **Refused** tab: mission starts the server refused and why ([9.15.3](#9153-live-runs-units-and-anti-farm)) |
 | **Settings** | Every setting of `config.lua` and `blocks.lua`, changed in game, with a change history ([5.7](#57-change-any-setting-in-game-the-settings-screen)) |
 | **System** | Storage, backups, the webhook states, recent console problems, the other resources and the nightly clean-up ([9.15.5](#9155-system-departments-and-settings)) |

@@ -5,7 +5,7 @@ import { ADMIN_SCREENS, PLAY_SECTIONS } from '../../layouts/screens';
 import { inSections } from '../../layouts/Sidebar';
 import { action, request } from '../../shared/nui';
 import type { SettingsData } from '../../types/settings';
-import { featureSections, toggleNeeds } from './features';
+import { featureSections, limitValue, toggleNeeds } from './features';
 
 const failures: string[] = [];
 let passed = 0;
@@ -46,6 +46,13 @@ async function steps(): Promise<void> {
     ok(live && toggleNeeds(live, true) === 'risky', 'turning live crimes on asks first');
     ok(cash && toggleNeeds(cash, true) === 'money', 'cash for live cases keeps the typed ENABLE');
     ok(cash && toggleNeeds(cash, false) === null, 'turning money off saves at once');
+    // step G1: each feature links its limits; a limit the data does not have is left out
+    ok(
+        live?.limits.length === 1 && live.limits[0].path === 'Limits.maxUnitSize' && limitValue(live.limits[0]) === '6',
+        'live crimes link the unit size with its value',
+    );
+    ok(cash?.limits.length === 0, 'a feature with no limits links none');
+    ok(limitValue({ ...live!.limits[0], value: { a: 1, b: 2 } }) === '{2}', 'a map limit shows its size');
 
     // the toggle writes the same setting as the list
     const set = await action('server:admin:setSetting', { path: 'LiveCrime.enabled', value: true });
