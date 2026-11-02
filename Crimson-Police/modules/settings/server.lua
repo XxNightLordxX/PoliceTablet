@@ -187,6 +187,7 @@ local GROUPS = {
             'mission_controls',
             'run_limits',
             'anti_exploit',
+            'performance',
             'time',
             'retention',
             'backups',
@@ -258,6 +259,7 @@ Play.groups = {
             'admin_control',
             'run_limits',
             'anti_exploit',
+            'performance',
             'time',
             'retention',
             'backups',
@@ -851,6 +853,8 @@ local RANGES = {
     ['Cash.manualDailyLimit'] = { 0, 10000000 },
     ['Cash.lowBalanceWarn'] = { 0, 100000000 },
     ['Backups.keep'] = { 1, 100 },
+    -- how much slower the idle and far loops run (Config.Performance): 1 = shipped pace, 4 = a quarter as often
+    ['Performance.loopScale'] = { 1, 4 },
     -- how hard mission NPCs fight back (Config.NpcCombat): lower = easier
     ['NpcCombat.ammo'] = { 1, 9999 },
     ['NpcCombat.accuracyScale'] = { 0, 1 },

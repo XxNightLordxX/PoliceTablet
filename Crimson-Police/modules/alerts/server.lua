@@ -4,11 +4,12 @@
 CP.Alerts = CP.Alerts or {}
 local A = CP.Alerts
 local TAG = 'alerts'
+local RECONCILE_MS = 2000       -- how often a lost crimsonArena flag is looked for (times the loop scale)
 local BAG_KEY = 'crimsonArena'
 local OURS = 'crimson-police'
-local REASSERT_GAP_MS = 250       -- at most one re-assert per src per 250 ms
-local ORPHAN_GRACE_MS = 3000      -- an intent whose run no longer wants it is dropped after this long
-local RECENT_CLEAR_S = 15         -- a backstop id is cleared once within this window
+local REASSERT_GAP_MS = 250     -- at most one re-assert per src per 250 ms
+local ORPHAN_GRACE_MS = 3000    -- an intent whose run no longer wants it is dropped after this long
+local RECENT_CLEAR_S = 15       -- a backstop id is cleared once within this window
 
 local wanted = {}                 -- wanted[src] = { runId, setAt, logged }
 local holds = {}                  -- holds[src] = true while CP.Downed keeps a downed participant's flag
@@ -674,7 +675,7 @@ CreateThread(function()
         CP.err(TAG, 'modules/integrations/sc_dispatch is missing: the alert backstop is off')
     end
     while true do
-        Wait(1000)
+        Wait(CP.Perf.ms(RECONCILE_MS))
         local ok, err = pcall(Reconcile)
         if not ok then CP.err(TAG, 'reconcile failed: %s', tostring(err)) end
     end

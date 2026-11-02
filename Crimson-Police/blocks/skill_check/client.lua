@@ -10,6 +10,7 @@ end
 
 local MARKER_DISTANCE = 30.0
 local MARKER_DISTANCE_SQ = MARKER_DISTANCE * MARKER_DISTANCE
+local MARKER_FAR_MS = 1500      -- the marker loop's pace while too far away to draw (per frame in range)
 local NONE = {}                 -- the marker loop's empty list (no new table each pass)
 local TARGET_RADIUS = 1.0
 local TARGET_DISTANCE = 2.5
@@ -360,7 +361,7 @@ local function Loop(ctx, st)
     local token = st.token
     CreateThread(function()
         while st.alive and st.token == token do
-            local sleep = 500
+            local sleep = CP.Perf.ms(MARKER_FAR_MS)
             local pos = GetEntityCoords(cache.ped)
             for _, t in ipairs((st.data and st.data.targets) or NONE) do
                 if t.status == 'armed' or t.status == 'setback' then

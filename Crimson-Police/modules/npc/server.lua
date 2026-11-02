@@ -56,7 +56,7 @@ local SUSPECT_ROLES = {
 -- keys only the engine writes (place: CP.Spawn's placement ask, through Npc.setPlace)
 local BAG_PROTECTED = { run = true, obj = true, state = true, seq = true, taskSeq = true, place = true }
 
-local TICK_MS = 1000               -- death watcher / health poll / cuff reach sampling
+local TICK_MS = 1000               -- death watcher / health poll / cuff reach sampling / flee clock (kept 1 s, LP2)
 local GONE_TICKS = 1               -- checks without the entity before it counts as dead (before the engine's
                                    -- own 2-check vanish rule, so onDeath listeners see those deaths too)
 local SURRENDER_GRACE_MS = 3000   -- a hit this soon after a surrender is a shot already in flight

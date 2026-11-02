@@ -14,7 +14,7 @@ local SERVICE_EVENT = 'crimson-police:client:serviceVehicle'
 local SERVICE_BLIP_EVENT = 'crimson-police:client:serviceBlip'
 local ROAD_CALLBACK = 'crimson-police:client:roadPoint'
 
-local TICK_MS = 1000
+local TICK_MS = 1000               -- kept at 1 s (LP2): each service vehicle step (road point, drive, park)
 local REACH_SLACK_M = 1.0          -- position lag allowed around every reach
 local DWELL_SLACK_MS = 2000        -- a sampled action must have been in reach for its time minus this
 local SAMPLED_FROM_S = 3           -- actions this long or longer are sampled every second

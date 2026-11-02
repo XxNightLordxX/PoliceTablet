@@ -316,7 +316,7 @@ do
     H.eq(menu and menu.case and menu.case.role, 'runner', 'his menu offers Cancel this case')
 
     H.players[10].coords = vec3(1010.0, 5.0, 30.0)
-    H.advance(1000, 1000)
+    H.advance(2000, 1000) -- one match pass (TICK_MS 2 s since step LP2)
     H.eq(V.matchView(run, 2).phase, 'in_position', 'within meetRadius: in position')
     H.eq(LastNote(10), 'volunteer.case.in_position', 'he is told')
     H.ok(Has(lines, 'in_position'), 'staff timeline: in position')
@@ -326,7 +326,7 @@ do
     H.eq(V.strikes('VMA00001'), 0, 'in position: no no-show however long the officers take')
 
     recs.VMA00001.contactAt = H.clockMs
-    H.advance(1000, 1000)
+    H.advance(2000, 1000) -- one match pass (TICK_MS 2 s since step LP2)
     H.eq(V.matchView(run, 2).phase, 'engaged', 'first contact: engaged')
     H.eq(#dropped, 2, 'both officers lose the NPC-combat protection')
     H.eq(dropped[1] and dropped[1].why, 'volunteer', 'through CP.NpcCombat.dropFor')
@@ -358,7 +358,7 @@ do
     Answer(10, LastAsk(10), true)
     H.step(0)
     recs.VMA00001.contactAt = H.clockMs
-    H.advance(1000, 1000)
+    H.advance(2000, 1000) -- one match pass (TICK_MS 2 s since step LP2)
     H.eq(V.matchView(run, 2).phase, 'engaged', 'engaged')
     H.eq(#dropped, 0, 'npcCombat = true: the officers keep the protection')
     Config.RealSuspects.npcCombat = false
@@ -456,9 +456,9 @@ do
     Answer(10, LastAsk(10), true)
     H.step(0)
     recs.VMA00001.contactAt = H.clockMs
-    H.advance(1000, 1000)
+    H.advance(2000, 1000)       -- one match pass (TICK_MS 2 s since step LP2)
     recs.VMA00001.state = 'left'
-    H.advance(1000, 1000)
+    H.advance(2000, 1000)       -- one match pass (TICK_MS 2 s since step LP2)
     H.step(0)
     H.eq(V.strikes('VMA00001'), 0, 'three strikes blocked him: the count started again')
     H.eq(ended[1] and ended[1].state, 'completed', 'after contact a leave ends the run; keep_earned = completed')
@@ -574,7 +574,7 @@ do
     linked[2] = nil
 
     -- no-show: a staff note besides the strike
-    H.advance(301000, 1000)
+    H.advance(302000, 1000) -- the travel time and one match pass (2 s)
     H.step(0)
     H.eq(notes[1] and notes[1].reason, 'rs_volunteer_dropout', 'a no-show is a staff note')
     H.eq(notes[1] and notes[1].cid, 'VMG00001', 'about him')
@@ -622,9 +622,9 @@ do
         Answer(20, LastAsk(20), true)
         H.step(0)
         recs.VMA00020.contactAt = H.clockMs
-        H.advance(1000, 1000)
+        H.advance(2000, 1000)   -- one match pass (TICK_MS 2 s since step LP2)
         recs.VMA00020.state, recs.VMA00020.share = 'detained', share
-        H.advance(1000, 1000)
+        H.advance(2000, 1000)   -- one match pass (TICK_MS 2 s since step LP2)
         H.step(0)
         return run
     end
@@ -732,7 +732,7 @@ do
     H.eq(view and view.phase, 'travel', 'staff see the live phase while he plays')
     H.eq(view and view.mode, 'players_when_available', '...and the mode')
     recs.VMR00030.contactAt = H.clockMs
-    H.advance(1000, 1000)
+    H.advance(2000, 1000) -- one match pass (TICK_MS 2 s since step LP2)
     H.step(0)
     H.eq(V.staffView(run.id, case).engaged, true, 'staff see officers reached him')
     closeOut = {
@@ -772,7 +772,7 @@ do
     Answer(30, LastAsk(30), true)
     H.step(0)
     recs.VMR00030.contactAt = H.clockMs
-    H.advance(1000, 1000)
+    H.advance(2000, 1000) -- one match pass (TICK_MS 2 s since step LP2)
     H.step(0)
     closeOut = {
         { VMR00030 = 'got_away' },
@@ -790,7 +790,7 @@ do
     Answer(30, LastAsk(30), true)
     H.step(0)
     recs.VMR00030.contactAt = H.clockMs
-    H.advance(1000, 1000)
+    H.advance(2000, 1000) -- one match pass (TICK_MS 2 s since step LP2)
     H.step(0)
     closeOut = {
         { VMR00030 = 'detained' },
@@ -846,9 +846,9 @@ do
     Answer(40, LastAsk(40), true)
     H.step(0)
     recs.VMZ00040.contactAt = H.clockMs
-    H.advance(1000, 1000)
+    H.advance(2000, 1000)       -- one match pass (TICK_MS 2 s since step LP2)
     recs.VMZ00040.state, recs.VMZ00040.voidWhy = 'void', 'on_duty'
-    H.advance(1000, 1000)
+    H.advance(2000, 1000)       -- one match pass (TICK_MS 2 s since step LP2)
     H.step(0)
     H.eq(V.strikes('VMZ00040'), 1, 'Z1: going on police duty mid-case is a strike')
     H.eq(LastNote(40), 'volunteer.case.on_duty', 'Z1: he is told why')
@@ -865,9 +865,9 @@ do
     Answer(43, LastAsk(43), true)
     H.step(0)
     recs.VMZ00043.contactAt = H.clockMs
-    H.advance(1000, 1000)
+    H.advance(2000, 1000)       -- one match pass (TICK_MS 2 s since step LP2)
     recs.VMZ00043.state, recs.VMZ00043.voidWhy = 'void', 'early_respawn'
-    H.advance(1000, 1000)
+    H.advance(2000, 1000)       -- one match pass (TICK_MS 2 s since step LP2)
     H.step(0)
     H.eq(V.strikes('VMZ00043'), 1, 'Z2: an early respawn mid-case is a strike')
     H.eq(LastNote(43), 'volunteer.case.early_respawn', 'Z2: he is told why')

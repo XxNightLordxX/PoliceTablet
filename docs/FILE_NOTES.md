@@ -2688,7 +2688,7 @@ softer (SetAiWeaponDamageModifier and SetAiMeleeWeaponDamageModifier: every AI h
 NPCs' included), the officer takes no extra headshot damage (SetPedSuffersCriticalHits, again after a respawn), and,
 when officerDefense is not 1.0, less damage from every weapon (SetPlayerWeaponDefenseModifier). modules/runs starts
 it at client:start and stops it at every run end; everything goes back to what it was before the run. While the run
-lasts, its 1 s watcher sets the AI damage values again every second (reassertAiDamage, read on every pass): another
+lasts, its 2 s watcher sets the AI damage values again every pass (reassertAiDamage, read on every pass): another
 script, such as Crimson-Contracts' guard scaling, may reset the one value the whole game shares. Start data with
 npcCombat = false (V14's live runs) starts nothing. client:npcCombatDrop (the server's dropFor) turns the headshot
 flag and the defense modifier back to their pre-run values for the rest of that run; the AI damage values stay.
@@ -3298,7 +3298,7 @@ modules/schedule/server.lua · CP.Schedule: server-time calendar, reset boundari
 Owns
   * the reset-adjusted calendar: every "day" starts at Config.Time.resetHour (server local time),
     every week at that hour on Config.Leaderboard.weekStartsOn, every month at that hour on the 1st
-  * the boundary listeners (daily, weekly, monthly) other modules subscribe to; checked every 30 s
+  * the boundary listeners (daily, weekly, monthly) other modules subscribe to; checked every 60 s
     and fired once when a boundary passes, never just because the resource started
   * the retention job (Config.Retention) run at each daily reset (plus one catch-up run shortly after
     start, see docs/notes/engine_a.md): cp_mission_runs rows older than runArchiveMonths are copied

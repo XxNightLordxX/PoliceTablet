@@ -908,7 +908,7 @@ local ok, found = pcall(db.scalar.await, 'SELECT 1 FROM player_vehicles WHERE pl
 
 - **Spec claim:** requireItem, the handcuffs check, the evidence item and the optional item rewards use ox_inventory's standard exports
 - **Evidence:** the argument order of the entry above (AddItem / RemoveItem / Search); ox_inventory is not in the uploads, so these are its documented exports
-- **Implication:** every call is inside pcall after `GetResourceState('ox_inventory') == 'started'`, read as `ok and res`. Server: `Search(src, 'count', name)` (the tablet item with requireItem, a failed lookup counting as no item only while requireItem is on; Config.Custody.handcuffsItem for Detain and Cuff suspect, never used or taken), `Search(src, 'slots', name, metadata)` then `RemoveItem(src, name, count, nil, slot)` (mission items), `CanCarryItem(src, name, count)` before `AddItem(src, name, count, { cpReward = <row id> })` (item rewards: never `cpItem`, so the mission-item sweep leaves them alone), `CanCarryItem(src, name, count, { cpRun, cpItem = true })` before `AddItem(src, name, count, { cpRun, cpItem = true })` (mission items and the evidence item: AddItem checks free slots only, never weight, so an officer with no room, `false` or `nil`, gets the `run.item_no_room` toast and the run starts without that item), `Items(name)` (the start-up check of configured items; a missing item is turned off and shown in Config health). Client: `exports.ox_inventory:Search('count', item)` every second while the tablet is open with requireItem. The item snippet in items/ox_inventory_items.lua is pasted by the owner; Crimson-Police never edits ox_inventory.
+- **Implication:** every call is inside pcall after `GetResourceState('ox_inventory') == 'started'`, read as `ok and res`. Server: `Search(src, 'count', name)` (the tablet item with requireItem, a failed lookup counting as no item only while requireItem is on; Config.Custody.handcuffsItem for Detain and Cuff suspect, never used or taken), `Search(src, 'slots', name, metadata)` then `RemoveItem(src, name, count, nil, slot)` (mission items), `CanCarryItem(src, name, count)` before `AddItem(src, name, count, { cpReward = <row id> })` (item rewards: never `cpItem`, so the mission-item sweep leaves them alone), `CanCarryItem(src, name, count, { cpRun, cpItem = true })` before `AddItem(src, name, count, { cpRun, cpItem = true })` (mission items and the evidence item: AddItem checks free slots only, never weight, so an officer with no room, `false` or `nil`, gets the `run.item_no_room` toast and the run starts without that item), `Items(name)` (the start-up check of configured items; a missing item is turned off and shown in Config health). Client: `exports.ox_inventory:Search('count', item)` every 2 s while the tablet is open with requireItem. The item snippet in items/ox_inventory_items.lua is pasted by the owner; Crimson-Police never edits ox_inventory.
 
 ## sc-dispatch
 
@@ -1442,7 +1442,7 @@ RegisterNetEvent('sc-dispatch:client:AssignedToCall', function(info)
 
 ### mdt_dispatch real-call count for the Dispatch screen (read-only, parity-plus)
 
-- **Spec claim:** The Dispatch screen shows a read-only strip "SC-Dispatch: n active real calls (m Priority 1)", NPC calls excluded, refreshed every 15 s, hidden on error
+- **Spec claim:** The Dispatch screen shows a read-only strip "SC-Dispatch: n active real calls (m Priority 1)", NPC calls excluded, refreshed every 20 s, hidden on error
 - **Evidence:** sql/schema-qbox.sql:171-184 (`priority INT DEFAULT 2`, `active TINYINT(1)`); server/main.lua:416-421 (unique_id added at runtime); the NPC call id format in the sc-npcpolice section
 - **Implication:** CP.Dispatch.realCallSummary() runs `SELECT priority, COUNT(*) AS n FROM mdt_dispatch WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority` with Config.Calls.npcCallPrefix LIKE-escaped plus `%` (the saves folder engine has no LEFT(); with the database off the statement still goes to the real oxmysql), in pcall, cached Config.MissionCalls.realCallCache seconds. An error (for example unique_id not yet added) returns nil and the strip is hidden. It lists no calls and gates nothing. Mission calls themselves are never written to mdt_dispatch and never create a notification.
 
@@ -2873,7 +2873,7 @@ VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it
 
 - **Spec claim:** Crimson-Contracts sets the one AI weapon damage value a game has (SetAiWeaponDamageModifier) while
   one of its guards is near; Crimson-Police sets the same value for the whole run (Config.NpcCombat.aiDamage, again
-  every second with reassertAiDamage). The two must never set it against each other.
+  every 2 s with reassertAiDamage). The two must never set it against each other.
 - **Evidence:** crimson-contracts/client.lua:656-679 (e20316f, "Guard damage scaling"): `onCrimsonPoliceRun()` is
   true when `LocalPlayer.state.crimsonPoliceRun == true` (exactly true) or `LocalPlayer.state.crimsonArena` is a table
   with `source == 'crimson-police'`; while it is true, `setDamageScaled` neither sets nor resets the value (with

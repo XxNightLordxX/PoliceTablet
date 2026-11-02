@@ -23,10 +23,13 @@ export function usePush<T = unknown>(topic: string | null | undefined, handler: 
 //                                  useRequest
 // ============================================================================
 
+// The shortest screen poll (useRequest pollMs): a smaller pollMs polls this often.
+export const POLL_MIN_MS = 20000;
+
 export interface UseRequestOptions {
     // Refetch whenever a `push` message with this topic arrives.
     pushTopic?: string;
-    // Refetch every N ms while mounted.
+    // Refetch every N ms while mounted (at least POLL_MIN_MS).
     pollMs?: number;
     // Do not fetch (e.g. until a selection exists).
     skip?: boolean;
@@ -92,9 +95,11 @@ export function useRequest<T = unknown>(
         void refetch();
     });
 
-    const pollMs = opts.pollMs ?? 0;
+    // A screen polls at most every POLL_MIN_MS (step LP2); server pushes still refresh it at once.
+    const asked = opts.pollMs ?? 0;
+    const pollMs = asked > 0 ? Math.max(asked, POLL_MIN_MS) : 0;
     useEffect(() => {
-        if (skip || !pollMs || pollMs < 250) return;
+        if (skip || !pollMs) return;
         const id = setInterval(() => void refetch(), pollMs);
         return () => clearInterval(id);
     }, [refetch, pollMs, skip]);

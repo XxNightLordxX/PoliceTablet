@@ -12,6 +12,7 @@ local VIEW_DISTANCE = 150.0      -- markers are drawn only this close to the cur
 local STOP_SPEED = 1.5           -- m/s: slower than this counts as stopped
 local RETRY_MS = 2500            -- re-report a checkpoint the server has not confirmed yet
 local SAMPLE_MS = 100            -- contact sampling interval while the course runs
+local IDLE_MS = 1000             -- the loop's pace away from the next checkpoint while the course is not running
 local CONTACT_GAP_MS = 1500      -- at most one contact report per window
 local SPEED_DROP_HIT = 2.0       -- m/s lost in one sample together with the collision flag
 local SPEED_DROP_CRASH = 6.0     -- m/s lost in one sample on its own
@@ -323,7 +324,7 @@ local function Loop(ctx, st)
     local token = st.token
     CreateThread(function()
         while st.alive and st.token == token do
-            local sleep = 500
+            local sleep = CP.Perf.ms(IDLE_MS)
             local t = GetGameTimer()
             local d = st.data
             if d and not d.finished and d.current and st.points[d.current] then

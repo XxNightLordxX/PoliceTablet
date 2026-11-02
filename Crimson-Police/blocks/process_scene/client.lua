@@ -10,6 +10,7 @@ local CORONER_OPTION = 'crimson-police:coroner'
 local REACH = 2.5
 local VAN_REACH = 6.0
 local MARKER_RANGE = 120.0
+local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 local SCENE_KEY = 'scene'        -- the scene blip's key in the objective pointer (the server's marker)
 local ANIMS = {
     tag = { scenario = 'WORLD_HUMAN_PAPARAZZI' },
@@ -165,7 +166,7 @@ local function MarkerLoop(S)
                     false, false, 2, false, nil, nil, false)
                 Wait(0)
             else
-                Wait(750)
+                Wait(CP.Perf.ms(MARKER_FAR_MS))
             end
         end
         S.drawing = false

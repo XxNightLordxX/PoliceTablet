@@ -2269,7 +2269,7 @@ do
     IPc.update(ic, snap)
     H.ok(removedZones[1] == true, 'main zone removed after the check')
     H.eq(zones[5].options[1].label, 'Secure door', 'follow-up zone added')
-    Steps(6)
+    Steps(16) -- 1.6 s: one far pass of the marker loop (MARKER_FAR_MS 1.5 s)
     H.ok(tostring(LastLine(ic)):find('Secure door', 1, true) ~= nil, 'follow-up hint: ' .. tostring(LastLine(ic)))
     zones[5].options[1].onSelect()
     H.eq(ic.reports[2] and ic.reports[2].type, 'followup', 'follow-up reported')
@@ -2279,7 +2279,7 @@ do
     snap.log = { point = 1, choices = { { id = 'secure', label = 'Secure' } } }
     IPc.update(ic, snap)
     ic.state.transient = nil
-    Steps(6)
+    Steps(16) -- 1.6 s: one far pass of the marker loop (MARKER_FAR_MS 1.5 s)
     H.ok(tostring(LastLine(ic)):find('tablet', 1, true) ~= nil, 'log hint on the HUD: ' .. tostring(LastLine(ic)))
     IPc.hostChanged(ic, false)
     IPc.stop(ic)
@@ -2306,7 +2306,7 @@ do
     s2.points[2].found = true
     s2.found = 1
     IPc.update(bc, s2)
-    Steps(6)
+    Steps(16) -- 1.6 s: one far pass of the marker loop (MARKER_FAR_MS 1.5 s)
     H.ok(tostring(LastLine(bc)):find('found', 1, true) ~= nil, 'device found message: ' .. tostring(LastLine(bc)))
     IPc.stop(bc)
 
@@ -2593,7 +2593,7 @@ do
         SCc.prepare(kq)
         SCc.start(kq)
         SCc.update(kq, Devices('armed'))
-        Frames(40)
+        Frames(100) -- past the first far pass (MARKER_FAR_MS 1.5 s) into the frame loop
         built = {}
         Frames(120)
         local scChecks = Base()

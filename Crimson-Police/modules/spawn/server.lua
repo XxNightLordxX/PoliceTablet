@@ -9,7 +9,7 @@ local TAG = 'spawn'
 
 local PLACED_EVENT = 'server:spawnPlaced'
 local CHECKING_EVENT = 'server:spawnChecking'
-local TICK_MS = 500         -- the open asks are checked this often (who simulates it, officers near, the time)
+local TICK_MS = 1000        -- the open asks are checked this often (who simulates it, officers near, the time)
 local Z_SLACK = 2.0         -- metres an ok point may sit off where it is put (a vehicle up to 1.7 m), over snapWithin
 local OCCUPIED_M = 1.0      -- metres (on the map): another point is never one an entity of the run stands on
 local ALT_MAX = 8           -- other points kept per entity

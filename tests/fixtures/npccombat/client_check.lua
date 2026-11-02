@@ -69,9 +69,10 @@ H.eq(W.flags[100][2], true, 'no headshot multiplier on the officer (SetPedSuffer
 H.eq(W.defense[0], 0.9, 'officerDefense 1.0 = off: the player\'s defense modifier is left alone')
 H.eq(W.typeErrors, 0, 'every native got the argument types the game reads')
 
--- a respawn (sc-ambulance) or a skin change gives the officer a new ped: the flag goes on it within a second
+-- a respawn (sc-ambulance) or a skin change gives the officer a new ped: the flag goes on it within one watcher pass
+-- (WATCH_MS, 2 s since step LP2)
 ME.ped = 101
-H.advance(1100)
+H.advance(2100)
 H.eq(W.flags[101] and W.flags[101][2], true, 'the new ped takes no headshot multiplier either')
 
 -- a setting changed in game mid-run applies at once
@@ -92,16 +93,16 @@ CP.Hooks.fire('settings:changed')
 H.eq(W.aiDamage, 0.5, 'aiDamage back to 0.5')
 
 -- another script that shares the one AI damage value of the game (Crimson-Contracts' guard scaling) resets it
--- mid-run: the run's value is on again within a second
+-- mid-run: the run's value is on again within one watcher pass (2 s)
 ResetAiWeaponDamageModifier()
 H.eq(W.aiDamage, 1.0, 'another script reset the shared AI damage value')
-H.advance(1100)
-H.eq(W.aiDamage, 0.5, 'the run\'s AI damage is on again within a second')
+H.advance(2100)
+H.eq(W.aiDamage, 0.5, 'the run\'s AI damage is on again within a pass')
 ResetAiMeleeWeaponDamageModifier()
-H.advance(1100)
+H.advance(2100)
 H.eq(W.aiMelee, 0.5, 'and the melee value too')
 
--- the cost: at most the two AI natives a second while the run lasts, nothing else
+-- the cost: at most the two AI natives a watcher pass (2 s) while the run lasts, nothing else
 local function CountCalls(fromIndex)
     local byName, n = {}, 0
     for i = fromIndex + 1, #W.calls do
@@ -114,9 +115,9 @@ end
 local before = #W.calls
 H.advance(10000)
 local n, byName = CountCalls(before)
-H.ok(n <= 20 and (byName.SetAiWeaponDamageModifier or 0) <= 10 and (byName.SetAiMeleeWeaponDamageModifier or 0) <= 10,
-    ('at most two natives a second while the run lasts (%d in 10 s)'):format(n))
-H.ok((byName.SetAiWeaponDamageModifier or 0) >= 9, 'the bullet value goes on every second')
+H.ok(n <= 10 and (byName.SetAiWeaponDamageModifier or 0) <= 5 and (byName.SetAiMeleeWeaponDamageModifier or 0) <= 5,
+    ('at most two natives a pass while the run lasts (%d in 10 s)'):format(n))
+H.ok((byName.SetAiWeaponDamageModifier or 0) >= 4, 'the bullet value goes on every pass')
 
 -- Config.NpcCombat.reassertAiDamage = false: the old behaviour (set at the start and after a respawn only), read on
 -- every pass of the watcher
@@ -124,23 +125,23 @@ H.eq(NC.reassertAiDamage, true, 'reassertAiDamage ships true (config.lua)')
 NC.reassertAiDamage = false
 ResetAiWeaponDamageModifier()
 before = #W.calls
-H.advance(1100)
-H.eq(W.aiDamage, 1.0, 'reassertAiDamage off: another script\'s reset is still there after 1.1 s')
-H.advance(1900)
-H.eq(W.aiDamage, 1.0, 'reassertAiDamage off: and after 3 s')
+H.advance(2100)
+H.eq(W.aiDamage, 1.0, 'reassertAiDamage off: another script\'s reset is still there after 2.1 s')
+H.advance(3900)
+H.eq(W.aiDamage, 1.0, 'reassertAiDamage off: and after 6 s')
 H.eq(CountCalls(before), 0, 'reassertAiDamage off: the watcher sets nothing while the ped stays the same')
 NC.reassertAiDamage = true
-H.advance(1100)
-H.eq(W.aiDamage, 0.5, 'reassertAiDamage on again: the run\'s value is back within a second')
+H.advance(2100)
+H.eq(W.aiDamage, 0.5, 'reassertAiDamage on again: the run\'s value is back within a pass')
 -- a config.lua from before the key had its name (PF2 called it holdAiDamage): its false still counts while
 -- reassertAiDamage is missing
 NC.reassertAiDamage = nil
 NC.holdAiDamage = false
 ResetAiWeaponDamageModifier()
-H.advance(1100)
+H.advance(2100)
 H.eq(W.aiDamage, 1.0, 'the old name holdAiDamage = false (new key missing): the reset stays')
 NC.holdAiDamage = nil
-H.advance(1100)
+H.advance(2100)
 H.eq(W.aiDamage, 0.5, 'neither key: on (missing = true)')
 NC.reassertAiDamage = true
 

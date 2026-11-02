@@ -4,7 +4,7 @@ CP.Schedule = CP.Schedule or {}
 local Schedule = CP.Schedule
 
 local TAG = 'schedule'
-local CHECK_EVERY_MS = 30000
+local CHECK_EVERY_MS = 60000
 local RETENTION_CATCHUP_DELAY_MS = 120000
 local SETTINGS_WAIT_MS = 15000               -- the first check waits this long at most for the settings changed in game
 local IDLE_WAIT_MS = 60000                   -- the clean-up waits this long at most for an admin's bulk job to end

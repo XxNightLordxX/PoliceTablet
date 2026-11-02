@@ -545,6 +545,11 @@ do
     Err('Limits.maxUnitSize', 4.5, 'err.setting_whole', 'a fraction for a whole-number setting')
     Err('Limits.maxUnitSize', 17, 'err.setting_range', 'above the known range (1 to 16)')
     Err('Time.resetHour', 24, 'err.setting_range', 'an hour past 23')
+    -- the loop pace (Config.Performance.loopScale, step LP2): 1 to 4, fractions allowed
+    ok, v = Check('Performance.loopScale', 2.5)
+    H.ok(ok and v == 2.5, 'a loop scale of 2.5 is kept')
+    Err('Performance.loopScale', 0.5, 'err.setting_range', 'a loop scale under 1 (faster than shipped)')
+    Err('Performance.loopScale', 5, 'err.setting_range', 'a loop scale above 4')
     Err('Scoring.common.heavyDamage', 5, 'err.setting_positive', 'a penalty stays a penalty')
     H.ok((Check('NpcDifficulty.custom.accuracyAdd', -5)), 'NPC difficulty adds may go either way')
     -- the twists officers choose (PLAN M8b): a switch, a points share and a cash multiplier each, and the two caps

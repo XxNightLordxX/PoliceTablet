@@ -6,8 +6,8 @@ local TAG = 'operations'
 
 local BOSS_ID = 'weekly_boss_kingpin'
 local REASON_MAX = 200
-local TICK_ACTIVE_MS = 1000
-local TICK_IDLE_MS = 5000
+local TICK_ACTIVE_MS = 2000      -- an operation is joining, running or waiting
+local TICK_IDLE_MS = 10000       -- no operation (scaled by Config.Performance.loopScale)
 local RUN_MISSING_GRACE = 60     -- seconds a running operation's run may be missing before it counts as ended
 local ACTIVE = { joining = true, running = true, waiting = true }
 
@@ -1507,7 +1507,7 @@ CreateThread(function()
     if CP.Qbx and CP.Qbx.onPlayerUnload then CP.Qbx.onPlayerUnload(RemoveJoiner) end
     if CP.Access and CP.Access.onLost then CP.Access.onLost(function(src) RemoveJoiner(src) end) end
     while true do
-        Wait(op and TICK_ACTIVE_MS or TICK_IDLE_MS)
+        Wait(op and TICK_ACTIVE_MS or CP.Perf.ms(TICK_IDLE_MS))
         local okT, errT = pcall(Ops._tick)
         if not okT then CP.err(TAG, 'tick failed: %s', tostring(errT)) end
     end

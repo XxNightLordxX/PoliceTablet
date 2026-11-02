@@ -979,7 +979,7 @@ do
     H.eq(CP.Alerts.has(24), false, 'nothing recorded')
     H.eq(CP.Alerts.clear(24), false, 'clear leaves a foreign value')
     H.eq((Bag(24) or {}).matchId, 'm24', 'foreign value not cleared')
-    RunFor(1000)
+    RunFor(2000) -- one reconcile pass (RECONCILE_MS 2 s since step LP2)
     H.eq(RemovedFor(24)[1] and RemovedFor(24)[1].reason, 'quit',
         'an active participant with a foreign value leaves as quit')
     H.eq((Bag(24) or {}).matchId, 'm24', 'still not touched')
@@ -1021,7 +1021,7 @@ do
     H.eq(CP.Alerts.inArena(27), true, 'bucket ~= 0 = in arena')
     H.eq(CP.Alerts.foreignFlag(27), false, 'no foreign flag though')
     H.eq(CP.Alerts.set(27, r), false, 'set refuses in another bucket')
-    RunFor(1000)
+    RunFor(2000) -- one reconcile pass (2 s)
     H.eq(RemovedFor(27)[1] and RemovedFor(27)[1].reason, 'quit', 'bucket change mid-run -> quit')
     buckets[27] = nil
 
@@ -1075,8 +1075,8 @@ do
     -- an intent that outlived its run is removed
     local r2 = NewRun('r-al-2', { srcs = { 30 }, arrived = true, state = 'in_progress' })
     CP.Alerts.set(30, r2)
-    r2.state = 'ended'                         -- the engine forgot to clear it
-    RunFor(5000)
+    r2.state = 'ended'          -- the engine forgot to clear it
+    RunFor(7000)                -- first seen within a 2 s pass, then ORPHAN_GRACE_MS
     H.eq(Bag(30), nil, 'orphaned flag removed')
     H.eq(CP.Alerts.has(30), false, 'orphaned intent removed')
 end
@@ -1704,7 +1704,7 @@ do
     RunFor(2000)
     H.ok(OURS(Bag(91)), 'stale: kept while held')
     CP.Alerts.hold(91, false)
-    RunFor(1000)
+    RunFor(2000) -- one reconcile pass (2 s)
     H.eq(Bag(91), nil, 'stale: removed once the hold is released')
 
     -- Crimson-Arena places them: its value is never removed, not even back in bucket 0

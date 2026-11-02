@@ -5,7 +5,7 @@ local Units = CP.Units
 local TAG = 'units'
 
 local INVITE_TTL = 120        -- seconds an invite stays open before it expires
-local SWEEP_MS = 2000         -- invite expiry / lock safety-net sweep
+local SWEEP_MS = 5000         -- invite expiry / lock safety-net sweep
 local LOCK_GRACE = 30         -- seconds a lock is kept without any member on a run before the sweep lifts it
 local INVITE_TOAST_MS = 10000
 local PARTNER_MEMORY = 900    -- seconds the partners of an officer's last run are remembered
@@ -1541,7 +1541,7 @@ CreateThread(function()
     end
     if CP.Hooks and CP.Hooks.on then CP.Hooks.on('run:ended', function(run) NoteRun(run) end) end
     while true do
-        Wait(SWEEP_MS)
+        Wait(CP.Perf.ms(SWEEP_MS))
         local ok, err = pcall(Units._sweep)
         if not ok then CP.err(TAG, 'sweep failed: %s', tostring(err)) end
     end

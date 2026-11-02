@@ -3,11 +3,11 @@
 local BLOCK = 'hostile_waves'
 local U = CP.U
 
-local LOOP_MS = 500          -- AI / blip refresh while current
-local HINT_RANGE = 20.0      -- metres: "cuff them" hint for a surrendered hostile this close
-local CONTROL_MS = 250       -- control request timeout per hostile
-local TRAFFIC_Z = 100.0      -- half height of the SetRoadsInArea box
-local HOLD_POLL_MS = 500     -- how often a held traffic block checks that its run is still going
+local LOOP_MS = 1000            -- AI / blip refresh while current
+local HINT_RANGE = 20.0         -- metres: "cuff them" hint for a surrendered hostile this close
+local CONTROL_MS = 250          -- control request timeout per hostile
+local TRAFFIC_Z = 100.0         -- half height of the SetRoadsInArea box
+local HOLD_POLL_MS = 500        -- how often a held traffic block checks that its run is still going
 
 local active = {}            -- [runId:index] = S
 local held = {}              -- [runId] = { traffic, ... } kept after the objective stopped (later objectives)
@@ -281,7 +281,7 @@ local function Loop(S)
                 -- the HUD line belongs to the current objective: an awake staged crew leaves it alone
                 if S.current then SetHint(S, hint and CP.L('block.hostile_waves.hint_cuff') or nil) end
             end
-            Wait(LOOP_MS)
+            Wait(CP.Perf.ms(LOOP_MS))
         end
         S.looping = false
     end)

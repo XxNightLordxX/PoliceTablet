@@ -575,7 +575,7 @@ end
 -- ============================================================================
 
 do
-    -- the next daily reset (CP.Schedule's own 30 s check fires the daily listeners below)
+    -- the next daily reset (CP.Schedule's own 60 s check fires the daily listeners below)
     H.time = CP.Schedule.dayStart(H.time) + DAY + 60
     local now = H.time
     H.sql('DELETE FROM cp_pvp_pairs')
@@ -607,7 +607,7 @@ do
             now - 3 * DAY,
         })
     H.eq(Config.RealSuspects.pairLedgerDays, 30, 'pairLedgerDays ships 30')
-    H.advance(31000, 1000)
+    H.advance(61000, 1000)
     local left = {}
     for _, r in ipairs(H.sql('SELECT kind, run_uuid FROM cp_pvp_pairs ORDER BY id')) do
         left[#left + 1] = r.kind .. (r.run_uuid and (':' .. r.run_uuid) or '')

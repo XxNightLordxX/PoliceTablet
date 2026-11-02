@@ -6,10 +6,11 @@ local AC = CP.AntiCheat
 local U = CP.U
 local TAG = 'anticheat'
 
-local EVENT_RATE = 10            -- objective events per src per second
-local DUP_WINDOW_MS = 1000       -- identical evidence within this window is a duplicate
-local MIN_SPEED_DT = 1.0         -- seconds: the speed check never divides by less
+local EVENT_RATE = 10           -- objective events per src per second
+local DUP_WINDOW_MS = 1000      -- identical evidence within this window is a duplicate
+local MIN_SPEED_DT = 1.0        -- seconds: the speed check never divides by less
 local PRESENCE_EVERY_MS = 5000
+local TICK_MS = 2000            -- buckets and idle checks (seconds); presence sampling every PRESENCE_EVERY_MS
 local SIGNATURE_MAX = 512
 
 local state = {}                 -- runId -> { idleDone, kills, killers = { [src] = { name, n } }, recorded = { [key] = true }, noted = { [key] = true }, recent = { [src] = { [sig] = ms } } }
@@ -639,7 +640,7 @@ end
 
 CreateThread(function()
     while true do
-        Wait(1000)
+        Wait(TICK_MS)
         local now = GetGameTimer()
         local ok, err = pcall(AC._trackBuckets)
         if not ok then CP.err(TAG, 'bucket tracking failed: %s', tostring(err)) end

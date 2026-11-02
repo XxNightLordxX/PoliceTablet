@@ -211,13 +211,15 @@ H.ok(Runs.control(500, 100), 'control as host')
 H.reset()
 me.veh = 500
 me.siren = true
-H.advance(5000)
+H.advance(6000) -- the first vehicle sample is due after 5 s; the 2 s telemetry pass sends it at 6 s
 local tel = ServerEvents('crimson-police:server:telemetry')
 local kinds = {}
 for _, e in ipairs(tel) do kinds[e.args[2]] = (kinds[e.args[2]] or 0) + 1 end
 H.eq(kinds.lights_siren, 1, 'lights and siren once on a quietPatrol mission')
 H.ok((kinds.vehicle or 0) >= 1, 'vehicle netId while driving')
-H.eq(tel[#tel].args[3].netId ~= nil, true, 'telemetry data')
+local vehicleData = nil
+for _, e in ipairs(tel) do if e.args[2] == 'vehicle' then vehicleData = e.args[3] end end
+H.eq(vehicleData and vehicleData.netId ~= nil, true, 'telemetry data: the vehicle sample names its net id')
 me.armed, me.shooting = true, true
 H.advance(1000)
 me.armed, me.shooting = false, false

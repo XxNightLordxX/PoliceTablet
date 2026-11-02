@@ -3,12 +3,13 @@
 local BLOCK = 'escort'
 local U = CP.U
 
-local LOOP_MS = 500
+local LOOP_MS = 1000
 local CONTROL_MS = 250
 local RETASK_MS = 12000
 local STUCK_MPS = 1.0
 local STOP_RANGE = 4.0
 local MARKER_RANGE = 150.0
+local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 
 local active = {}
 
@@ -307,7 +308,7 @@ local function MarkerLoop(S)
                     140, 240, 70, false, false, 2, false, nil, nil, false)
                 Wait(0)
             else
-                Wait(750)
+                Wait(CP.Perf.ms(MARKER_FAR_MS))
             end
         end
         S.drawing = false
@@ -357,7 +358,7 @@ local function Loop(S)
                 end
                 SetHint(S, HudText(S, truck))
             end
-            Wait(LOOP_MS)
+            Wait(CP.Perf.ms(LOOP_MS))
         end
         S.looping = false
     end)

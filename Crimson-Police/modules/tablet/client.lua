@@ -25,9 +25,10 @@ local KEY_MAPPING = 'crimsonpolice_tablet'
 local DISPATCH_MAPPING = 'crimsonpolice_dispatch'
 local DESK_OPTION = 'crimson-police:desk'
 local DESK_TARGET_DISTANCE = 2.0     -- metres: how close ox_target offers "Open Crimson-Police" at a desk
-local DESK_WATCH_MS = 500            -- how often the desk distance is checked while the tablet is open there
-local ITEM_WATCH_MS = 1000           -- how often the tablet item is looked for while requireItem is on
-local DOWN_WATCH_MS = 500            -- how often a downed officer is looked for while the tablet is open
+local DESK_WATCH_MS = 1000           -- how often the desk distance is checked while the tablet is open there
+local ITEM_WATCH_MS = 2000           -- how often the tablet item is looked for while requireItem is on
+local DOWN_WATCH_MS = 1000           -- how often a downed officer is looked for while the tablet is open
+local ANIM_WATCH_MS = 2000           -- how often the tablet animation is checked (other scripts clear tasks)
 local OPEN_ACK_MS = 6000             -- the NUI confirms it shows the UI within this, or the focus is released
 local SETTINGS_WAIT_MS = 10000       -- the start waits this long at most for the settings changed in game
 local PAUSE_CONTROL = 200            -- INPUT_FRONTEND_PAUSE_ALTERNATE (Escape)
@@ -366,7 +367,7 @@ local function StartProp()
         end
         -- Vehicles, ragdolls and other scripts clear tasks: keep the animation while the UI is open.
         while token == state.propToken and WantsProp() do
-            Wait(1000)
+            Wait(CP.Perf.ms(ANIM_WATCH_MS))
             if token ~= state.propToken or not WantsProp() then break end
             local p = PlayerPedId()
             if state.animLoaded and not IsEntityDead(p) and not IsEntityPlayingAnim(p, ANIM_DICT, ANIM_CLIP, 3) then
@@ -1109,7 +1110,7 @@ local function WatchDesk(token)
             T.close()
             return
         end
-        Wait(DESK_WATCH_MS)
+        Wait(CP.Perf.ms(DESK_WATCH_MS))
     end
 end
 
@@ -1126,7 +1127,7 @@ local function WatchItem(token)
     if not item or type(t.access) ~= 'table' or t.access.requireItem ~= true then return end
     local reported = false
     while token == state.openToken and state.open do
-        Wait(ITEM_WATCH_MS)
+        Wait(CP.Perf.ms(ITEM_WATCH_MS))
         if token ~= state.openToken or not state.open or state.via == 'desk' then return end
         local n = ClientItemCount(item)
         if n ~= nil and n <= 0 then
@@ -1143,7 +1144,7 @@ end
 -- The officer went down with the Officer or Supervisor UI open: it closes (they open it again once revived).
 local function WatchDown(token)
     while token == state.openToken and state.open do
-        Wait(DOWN_WATCH_MS)
+        Wait(CP.Perf.ms(DOWN_WATCH_MS))
         if token ~= state.openToken or not state.open then return end
         if state.ui ~= 'admin' and PlayerDown() then
             CP.log(TAG, 'the officer went down: closing the tablet')

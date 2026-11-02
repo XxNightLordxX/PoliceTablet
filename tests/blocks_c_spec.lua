@@ -2590,6 +2590,9 @@ do
     end
 end
 
+-- one far pass of the host loops (SLOW_MS) and of CP.Markers (TICK_MS), 2 s each since step LP2
+local FAR_PASS = 2000
+
 local function ClientCtx(runId, obj, loc)
     local c = {
         runId = runId,
@@ -2665,34 +2668,34 @@ do -- pursuit host: a loop route is tasked once, not re-tasked every pass while 
         vehicles = { { netId = vehNet, index = 1, state = 'fleeing', occupants = { drvNet } } },
         suspects = { { netId = drvNet, vehicle = vehNet, seat = -1, state = 'driving' } },
     })
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(CountTasks(drv, 'driveRoute'), 1, 'pursuit client: the racer gets its route')
     local t1 = LastTask(drv, 'driveRoute')
     H.near(t1.args.speed, 30.0, 1e-6, 'pursuit client: speed passed in m/s')
     H.eq(t1.args.loop, true, 'pursuit client: loop route')
     H.eq(CountOf(CL.applied, drv), 1, 'pursuit client: CP.Npc.apply once')
-    for _ = 1, 3 do H.step(1000) end
+    for _ = 1, 3 do H.step(FAR_PASS) end
     H.eq(CountTasks(drv, 'driveRoute'), 1, 'pursuit client: no forced re-task while the car is still at the lap end')
     ents[veh].coords = vec3(200.0, 0.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(CountTasks(drv, 'driveRoute'), 1, 'pursuit client: under way, still one task')
     ents[veh].coords = vec3(10.0, 0.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(CountTasks(drv, 'driveRoute'), 2, 'pursuit client: back at the lap end: one new lap')
     H.eq(LastTask(drv, 'driveRoute').args.force, true, 'pursuit client: the new lap is forced')
-    H.step(1000)
-    H.step(1000)
+    H.step(FAR_PASS)
+    H.step(FAR_PASS)
     H.eq(CountTasks(drv, 'driveRoute'), 2, 'pursuit client: ... and only one')
 
     -- control lost to another client and regained: config re-applied and the drive re-tasked
     ents[drv].owned = false
-    H.step(1000)
+    H.step(FAR_PASS)
     H.step(250) -- asked for in that pass, picked up by the next one 250 ms later
     H.eq(CountOf(CL.applied, drv), 2, 'pursuit client: re-applied after control came back')
     H.eq(CountTasks(drv, 'driveRoute'), 3, 'pursuit client: re-tasked after control came back')
     ents[veh].owned, ents[veh].controllable = false, false
     local before = #CL.tasks
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(#CL.tasks, before, 'pursuit client: nothing is tasked without control of the car')
     ents[veh].controllable = nil
     H.step(250) -- asked for again: the car comes back with the next pass
@@ -2708,20 +2711,22 @@ do -- pursuit host: a loop route is tasked once, not re-tasked every pass while 
     })
     ents[drv].bag = { state = 'stopped', cfg = {} }
     local first = #CL.leaves
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(#CL.leaves, first + 1, 'pursuit client: stopped suspect told to leave the car')
     H.eq(CL.leaves[#CL.leaves].flag, 256, 'pursuit client: a normal exit first')
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(#CL.leaves, first + 1, 'pursuit client: no repeat within the retry interval')
-    for _ = 1, 5 do H.step(1000) end
+    for _ = 1, 3 do
+        H.step(FAR_PASS)
+    end -- 6 s: two retries (EXIT_RETRY_MS 2.5 s, checked each 2 s pass)
     H.eq(#CL.leaves, first + 3, 'pursuit client: the exit is retried while the suspect is still seated')
     H.eq(CL.leaves[#CL.leaves].flag, 16, 'pursuit client: the third attempt warps the suspect out')
     ents[drv].inVehicle = 0
     local n = #CL.leaves
-    for _ = 1, 4 do H.step(1000) end
+    for _ = 1, 4 do H.step(FAR_PASS) end
     H.eq(#CL.leaves, n, 'pursuit client: no more exits once out')
     PC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
 end
 
 do -- pursuit host: an open route that is done stays done when control comes back or the host changes
@@ -2747,18 +2752,18 @@ do -- pursuit host: an open route that is done stays done when control comes bac
     PC.prepare(cctx)
     PC.start(cctx)
     PC.update(cctx, Snap(nil))
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(CountTasks(drv, 'driveRoute'), 1, 'open route client: the car gets its route')
     ents[veh].coords = vec3(200.0, 3000.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     ents[veh].coords = vec3(395.0, 3000.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(CountTasks(drv, 'flee'), 1, 'open route client: a free flee at the end of the route')
     ents[veh].coords = vec3(650.0, 3000.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     -- another client owned the car and its driver for a while
     ents[veh].owned, ents[drv].owned = false, false
-    H.step(1000)
+    H.step(FAR_PASS)
     H.step(250) -- asked for in that pass, regained with the next one
     H.eq(CountTasks(drv, 'driveRoute'), 1, 'open route client: control regained: not sent back to the route')
     H.eq(CountTasks(drv, 'flee'), 2, 'open route client: control regained: the free flee again')
@@ -2766,7 +2771,7 @@ do -- pursuit host: an open route that is done stays done when control comes bac
     PC.hostChanged(cctx, true)
     PC.update(cctx, Snap(true))
     ents[veh].coords = vec3(210.0, 3040.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(CountTasks(drv, 'driveRoute'), 1, 'open route client: a new host keeps the free flee')
     H.eq(CountTasks(drv, 'flee'), 3, 'open route client: a new host tasks the free flee')
     -- a new car under the same net id (test restart) follows its route again
@@ -2775,13 +2780,14 @@ do -- pursuit host: an open route that is done stays done when control comes bac
     ents[veh2].speed, ents[veh2].owned = 20.0, true
     ents[drv].inVehicle = veh2
     PC.update(cctx, Snap(nil))
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(CountTasks(drv, 'driveRoute'), 2, 'open route client: a new car under the same net id gets its route')
     PC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
 end
 
 do -- escort host: toughness from the cp bag, a new truck (test restart) is toughened again, control regained
+    -- each H.step(1000) is one pass of the escort host loop (LOOP_MS 1 s since step LP2)
     H.clockMs = 21000000
     local truck, truckNet = NewEnt('vehicle', routePts[1])
     local drv, drvNet = NewEnt('ped', routePts[1])
@@ -2812,17 +2818,17 @@ do -- escort host: toughness from the cp bag, a new truck (test restart) is toug
     EC.prepare(cctx)
     EC.start(cctx)
     EC.update(cctx, Snap(truckNet, drvNet))
-    H.step(500)
+    H.step(1000)
     H.eq(CL.maxHealth[#CL.maxHealth] and CL.maxHealth[#CL.maxHealth].hp, 2000,
         'escort client: toughness 2.0 from the cp bag cfg')
     local rep = CL.reports[#CL.reports]
     H.ok(rep and rep.type == 'toughened' and rep.netId == truckNet, 'escort client: toughened reported')
     H.eq(CountTasks(drv, 'driveRoute'), 1, 'escort client: the truck gets its route')
-    H.step(500)
-    H.step(500)
+    H.step(1000)
+    H.step(1000)
     H.eq(CountTasks(drv, 'driveRoute'), 1, 'escort client: no repeat while nothing changed')
     ents[drv].owned = false
-    H.step(500)
+    H.step(1000)
     H.eq(CountTasks(drv, 'driveRoute'), 2, 'escort client: re-tasked after control of the driver came back')
     -- a new truck with a new driver (test restart)
     local truck2, truck2Net = NewEnt('vehicle', routePts[1])
@@ -2832,13 +2838,13 @@ do -- escort host: toughness from the cp bag, a new truck (test restart) is toug
     ents[drv2].inVehicle = truck2
     local n = #CL.maxHealth
     EC.update(cctx, Snap(truck2Net, drv2Net))
-    H.step(500)
+    H.step(1000)
     H.eq(#CL.maxHealth, n + 1, 'escort client: the new truck is toughened too')
     H.eq(CL.maxHealth[#CL.maxHealth].hp, 1500, 'escort client: with its own toughness')
     H.eq(CL.reports[#CL.reports].netId, truck2Net, 'escort client: toughened reported for the new truck')
     H.eq(CountTasks(drv2, 'driveRoute'), 1, 'escort client: the new driver gets the route')
     EC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
 end
 
 do -- search_area: a clue check still running when the objective stops is cancelled; restarted clues re-zone
@@ -2876,18 +2882,18 @@ do -- search_area: a clue check still running when the objective stops is cancel
     SC.prepare(cctx)
     SC.start(cctx)
     SC.update(cctx, Snap(200.0))
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(#CL.zones, 1, 'search client: a target zone on the clue')
     H.eq(CL.zones[1].options[1].name, 'crimson-police:check_clue', 'search client: option name prefixed crimson-police')
     H.eq(CountTasks(fug, 'cower'), 1, 'search client: the hidden fugitive cowers')
     ents[fug].owned = false
-    H.step(1000)
+    H.step(FAR_PASS)
     H.step(250) -- asked for in that pass, picked up by the next one 250 ms later
     H.eq(CountTasks(fug, 'cower'), 2, 'search client: re-tasked after control of the fugitive came back')
     -- a restart moved clue 1: the old zone goes, a new one is made at the new spot
     SC.update(cctx, Snap(-200.0))
     H.ok(CL.removed[1] == true, 'search client: the old clue zone is removed')
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(#CL.zones, 2, 'search client: a new zone for the moved clue')
     H.eq(CL.zones[2].coords.x, -200.0, 'search client: at its new spot')
     H.eq(CL.zones[2].options[1].canInteract(), true, 'search client: a clue that is there can be checked')
@@ -2895,11 +2901,11 @@ do -- search_area: a clue check still running when the objective stops is cancel
     local early = Snap(-200.0)
     early.clues[1].netId = nil
     SC.update(cctx, early)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(#CL.zones, 3, 'search client: the clue still has its zone before it appears')
     H.eq(CL.zones[3].options[1].canInteract(), false, 'search client: a clue not there yet cannot be checked')
     SC.update(cctx, Snap(-200.0))
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(#CL.zones, 4, 'search client: a new zone once the clue appeared')
     H.eq(CL.zones[4].options[1].canInteract(), true, 'search client: once it is there it can be checked')
     -- K13: a clue check whose animation fails to load (ox_lib raises) leaves the clue checkable
@@ -3022,7 +3028,7 @@ do -- OneSync scope on the host: only what its game streams can be driven and bl
     PC.prepare(cctx)
     PC.start(cctx)
     PC.update(cctx, LastSend(ctx))
-    H.step(1000)
+    H.step(FAR_PASS)
     H.step(250) -- the host asked for the spawned cars and drivers in that pass and has them with the next one
     for i, d in ipairs(drivers) do
         H.eq(CountTasks(d.ent, 'driveRoute'), 1, ('scope: racer %d, 550+ m from the host, is driven'):format(i))
@@ -3037,17 +3043,17 @@ do -- OneSync scope on the host: only what its game streams can be driven and bl
 
     -- a racer on the far side of the loop, 721 m from the host, is still streamed and blipped
     ents[cars[1].ent].coords = vec3(0.0, 600.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(LiveBlips() - base, 3, 'scope: a racer 721 m away stays on the map')
     -- the host drives 2 km away: the racers leave its game, their blips go, and F8 says why
     ents[me].coords = vec3(2600.0, 200.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(LiveBlips() - base, 0, 'scope: out of range, no blip')
     local said
     for _, l in ipairs(logs) do if l:find('is not streamed to this game', 1, true) then said = l end end
     H.ok(said ~= nil, 'scope: Config.Debug says in F8 that the host\'s game does not have the car')
     PC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
     _G.NetworkDoesNetworkIdExist, _G.AddTextComponentSubstringPlayerName = saved.exists, saved.label
     CP.log, Config.Debug = saved.log, saved.debug
     _G.SetEntityDistanceCullingRadius, _G.SetEntityIgnoreRequestControlFilter = nil, nil
@@ -3093,11 +3099,11 @@ do -- escort HUD after the arrival: an attacker left far behind still has to be 
         attackers = { attNet },
         completed = false,
     })
-    H.step(500)
+    H.step(1000)
     H.eq(hud[#hud], CP.L('block.escort.hud_remaining', { count = 1 }),
         'escort HUD: arrived with an attacker 270 m back: neutralise the rest, not "0 within 100 m"')
     ents[att].coords = vec3(1150.0, 2695.0, 37.4)
-    H.step(500)
+    H.step(1000)
     H.eq(hud[#hud], 'Clear the area: 1 attackers within 100 m',
         'escort HUD: an attacker near the truck: clear the area (the radius in whole metres, not "100.0 m")')
     EC.stop(cctx)
@@ -3137,14 +3143,14 @@ do -- escort host: the objective stops while the loop waits for control; nothing
         attackers = {},
         completed = false,
     })
-    H.step(500)
+    H.step(1000)
     H.eq(LiveBlips() - base, 2, 'escort client: truck and destination blips')
     H.eq(type(hud[#hud]), 'string', 'escort client: a HUD line')
     ents[truck].owned, gate.slow = false, true -- another client took the truck: the next pass waits for control
-    H.step(500)
+    H.step(1000)
     EC.stop(cctx)                              -- ...and the objective stops meanwhile
     H.eq(LiveBlips() - base, 0, 'escort client: stop removes the blips')
-    for _ = 1, 4 do H.step(500) end
+    for _ = 1, 4 do H.step(1000) end
     H.eq(LiveBlips() - base, 0, 'escort client: the loop pass resumed after the cleanup draws no blip')
     H.eq(hud[#hud], false, 'escort client: ...and writes no HUD line')
 end
@@ -3183,15 +3189,15 @@ do -- search HUD: a lost clue is not left to check, so the HUD moves on to the f
     SC.prepare(cctx)
     SC.start(cctx)
     SC.update(cctx, Snap('pending'))
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(hud[#hud], CP.L('block.search_area.hud_search', { checked = 2, total = 3, radius = 150 }),
         'search HUD: one clue still to check')
     SC.update(cctx, Snap('lost'))
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(hud[#hud], CP.L('block.search_area.hud_find', { done = 0, total = 1, radius = 150 }),
         'search HUD: the witness lost, no clue left: find the fugitives')
     SC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
 end
 
 do -- search host: the objective stops while another client holds a fugitive; no blip after the cleanup
@@ -3219,13 +3225,13 @@ do -- search host: the objective stops while another client holds a fugitive; no
         total = 1,
         entered = true,
     })
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(LiveBlips() - base, 3, 'search client: circle, centre and fugitive blips')
     ents[fug].owned, gate.slow = false, true -- another client took the fugitive: the next pass asks for it (no wait)
-    H.step(1000)
+    H.step(FAR_PASS)
     SC.stop(cctx)                            -- ...and the objective stops before the hand-over
     H.eq(LiveBlips() - base, 0, 'search client: stop removes the blips')
-    for _ = 1, 4 do H.step(1000) end
+    for _ = 1, 4 do H.step(FAR_PASS) end
     H.eq(LiveBlips() - base, 0, 'search client: the loop pass resumed after the cleanup draws no blip')
     H.eq(hud[#hud], false, 'search client: ...and writes no HUD line')
 end
@@ -3258,15 +3264,15 @@ do -- pursuit host: the objective stops while another client holds the car; noth
         vtotal = 1,
     })
     local base = LiveBlips()
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(LiveBlips() - base, 1, 'pursuit client: a blip on the suspect car')
     H.eq(type(hud[#hud]), 'string', 'pursuit client: a HUD line')
     local tasks = #CL.tasks
     ents[veh].owned, gate.slow = false, true -- another client took the car: the next pass asks for it (no wait)
-    H.step(1000)
+    H.step(FAR_PASS)
     PC.stop(cctx)                            -- ...and the objective stops before the hand-over
     H.eq(LiveBlips() - base, 0, 'pursuit client: stop removes the blips')
-    for _ = 1, 4 do H.step(1000) end
+    for _ = 1, 4 do H.step(FAR_PASS) end
     H.eq(LiveBlips() - base, 0, 'pursuit client: the loop pass resumed after the cleanup draws no blip')
     H.eq(hud[#hud], false, 'pursuit client: ...and writes no HUD line')
     H.eq(#CL.tasks, tasks, 'pursuit client: ...and tasks nobody')
@@ -3305,7 +3311,7 @@ do -- pursuit host: an armed passenger's drive-by takes the ped's own accuracy, 
         stopped = 0,
         vtotal = 1,
     })
-    H.step(1000)
+    H.step(FAR_PASS)
     local db = CW.driveBys[#CW.driveBys]
     H.ok(db ~= nil and db.ped == gun and db.target == 100,
         'pursuit client: the armed passenger shoots at the named officer')
@@ -3319,7 +3325,7 @@ end
 
 do -- pursuit host (Q12): cars and suspects another officer's game owns are asked for once, never waited for
     H.clockMs = 24700000
-    local FAST, SLOW = 250, 1000
+    local FAST, SLOW = 250, 2000
     local me = PlayerPedId()
     local myPos = ents[me].coords
     ents[me].coords = vec3(9000.0, 9000.0, 30.0) -- far from both cars: a pass with nothing pending sleeps SLOW
@@ -3456,20 +3462,20 @@ do -- pursuit host (Q12): cars and suspects another officer's game owns are aske
     H.eq(Setups(), '2,2,2,2', 'q12 regained: DriverSetup once more per suspect')
     H.eq(Tasks(drivers), '2,2', 'q12 regained: each driver re-tasked once')
     H.eq(#calls.locked, locked + 2, 'q12 regained: each car set up again once')
-    for _ = 1, 3 do H.step(1000) end
+    for _ = 1, 3 do H.step(FAR_PASS) end
     H.eq(Counts(CL.applied, peds), '2,2,2,2', 'q12 regained: ...and not again on later passes')
     H.eq(Setups(), '2,2,2,2', 'q12 regained: DriverSetup not again')
     H.eq(Tasks(drivers), '2,2', 'q12 regained: no further re-task')
 
     PC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
     _G.NetworkRequestControlOfEntity, _G.SetDriverAbility, _G.Wait = saved.request, saved.ability, saved.wait
     ents[me].coords = myPos
 end
 
 do -- search host (Q13): a witness on its phone is left with the officer whose game owns it; nothing is waited for
     H.clockMs = 24900000
-    local FAST, SLOW = 250, 1000
+    local FAST, SLOW = 250, 2000
     local SCENARIO = 'WORLD_HUMAN_STAND_MOBILE'
     local me = PlayerPedId()
     local myPos = ents[me].coords
@@ -3602,7 +3608,7 @@ do -- search host (Q13): a witness on its phone is left with the officer whose g
     H.eq(CountTasks(fug, 'cower'), 2, 'q13 fugitive back: ...and not again on later passes')
 
     SC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
     _G.NetworkRequestControlOfEntity, _G.Wait = saved.request, saved.wait
     ents[me].coords = myPos
 end
@@ -3902,11 +3908,11 @@ do -- follow a reckless driver: within 60 m behind it for 8 s
     PC.prepare(cctx)
     PC.start(cctx)
     PC.update(cctx, snap)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(hud[#hud], CP.L('block.pursuit.hud_observe_follow', { behind = 60, seconds = 8 }),
         'pu parity client: follow the reckless driver within 60 m for 8 s')
     PC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.players[1].vehicle = nil
 end
 
@@ -4173,7 +4179,7 @@ do -- escort client: its truck and destination blips are the pointer; each offic
         attackers = {},
         completed = false,
     })
-    H.step(500)
+    H.step(1000)
     H.eq(LiveBlips() - base, 2, 'escort client: one icon each for the truck and the destination, no second pointer')
     local tb, tp = BlipOf(function(p) return p.ent == truck end)
     local db, dp = BlipOf(function(p) return p.ent == nil and p.sprite == 38 end)
@@ -4181,24 +4187,24 @@ do -- escort client: its truck and destination blips are the pointer; each offic
         'escort client: the truck blip in kinds.escort')
     H.ok(dp and dp.colour == 5 and dp.scale == 0.9 and dp.name == 'Destination',
         'escort client: the destination blip in kinds.destination')
-    H.step(1000)
+    H.step(FAR_PASS)                              -- one CP.Markers pass (TICK_MS 2 s) decides the line
     local r = RoutedBlips()
     H.ok(#r == 1 and r[1] == tb, 'escort client: 211 m from the truck: the line goes to the truck')
-    ents[me].coords = vec3(1100.0, 2700.0, 38.0) -- 74 m from the destination, 677 m from the truck
-    H.step(1000)
+    ents[me].coords = vec3(1100.0, 2700.0, 38.0)  -- 74 m from the destination, 677 m from the truck
+    H.step(FAR_PASS)                              -- one CP.Markers pass (TICK_MS 2 s) decides the line
     r = RoutedBlips()
     H.ok(#r == 1 and r[1] == tb,
         'escort client: far from the truck: still to the truck, though the destination is nearer')
-    ents[me].coords = vec3(423.1, 2780.0, 41.0) -- 91 m: within clearRadius, but the truck keeps it until 75 m
-    H.step(1000)
+    ents[me].coords = vec3(423.1, 2780.0, 41.0)  -- 91 m: within clearRadius, but the truck keeps it until 75 m
+    H.step(FAR_PASS)                             -- one CP.Markers pass (TICK_MS 2 s) decides the line
     r = RoutedBlips()
     H.ok(#r == 1 and r[1] == tb, 'escort client: 91 m from the truck: the line stays on it (no flicker at 100 m)')
-    ents[me].coords = vec3(423.1, 2750.0, 41.0) -- 61 m
-    H.step(1000)
+    ents[me].coords = vec3(423.1, 2750.0, 41.0)  -- 61 m
+    H.step(FAR_PASS)                             -- one CP.Markers pass (TICK_MS 2 s) decides the line
     r = RoutedBlips()
     H.ok(#r == 1 and r[1] == db, 'escort client: escorting it (61 m): the line goes to the destination')
-    ents[me].coords = vec3(423.1, 2780.0, 41.0) -- 91 m again
-    H.step(1000)
+    ents[me].coords = vec3(423.1, 2780.0, 41.0)  -- 91 m again
+    H.step(FAR_PASS)                             -- one CP.Markers pass (TICK_MS 2 s) decides the line
     r = RoutedBlips()
     H.ok(#r == 1 and r[1] == db, 'escort client: 91 m again: still the destination until past 100 m')
 
@@ -4206,7 +4212,7 @@ do -- escort client: its truck and destination blips are the pointer; each offic
     -- server's position and the line follows it
     ents[me].coords = vec3(300.0, 3500.0, 41.0)
     _G.NetworkDoesNetworkIdExist = function(n) return n ~= truckNet and exists(n) end
-    H.step(500)
+    H.step(1000)
     M.update('run-cl-m3-esc', 1, Pointer(900.0, 2689.0), cctx)
     H.step(1000)
     local cb, cp = BlipOf(function(p) return p.ent == nil and p.sprite == 67 end)
@@ -4224,7 +4230,7 @@ do -- escort client: its truck and destination blips are the pointer; each offic
     -- the objective stops: the pointer first, then the block removes its blips (each line off before)
     M.clear('run-cl-m3-esc', 1)
     EC.stop(cctx)
-    H.step(500)
+    H.step(1000)
     H.eq(LiveBlips() - base, 0, 'escort client: nothing left on the map')
     H.eq(BL.removedRouted, removedRouted, 'escort client: every line went off before its blip')
 end
@@ -4405,35 +4411,35 @@ do -- (PLAN M7) pursuit client: a suspect who runs on foot is orange (kinds.flee
         }
     end
     PC.update(cctx, Snap('fleeing'))
-    H.step(1000)
+    H.step(FAR_PASS)
     local sb, sp = BlipOf(function(p) return p.ent == ped end)
     H.eq(LiveBlips() - base, 1, 'pursuit client m7: one blip on the runner')
     H.ok(
         sp and sp.sprite == 1 and sp.colour == 17 and sp.scale == 0.8 and sp.name == CP.L('block.pursuit.blip_suspect'),
         'pursuit client m7: on foot and running: kinds.fleeing (orange 0.8)')
     ents[ped].bag.state = 'stopped'
-    H.step(1000)
+    H.step(FAR_PASS)
     H.ok(BL.live[sb] and sp.colour == 1 and sp.scale == 0.7,
         'pursuit client m7: he stops: the same blip, kinds.suspect')
     ents[ped].bag.state = 'surrendered'
     PC.update(cctx, Snap('surrendered'))
-    H.step(1000)
+    H.step(FAR_PASS)
     H.ok(BL.live[sb] and sp.colour == 1 and sp.scale == 0.6, 'pursuit client m7: he gives up: red, a size smaller')
     -- (R6) at kinds.suspect.surrenderedScale, the size CP.Markers gives him far away
     Config.Markers.kinds.suspect.surrenderedScale = 0.5
     ents[ped].bag.state = 'stopped'
-    H.step(1000)
+    H.step(FAR_PASS)
     H.ok(BL.live[sb] and sp.scale == 0.7, 'pursuit client m7: he stops again: kinds.suspect.scale')
     ents[ped].bag.state = 'surrendered'
-    H.step(1000)
+    H.step(FAR_PASS)
     H.ok(BL.live[sb] and sp.scale == 0.5, 'pursuit client m7: he gives up: at kinds.suspect.surrenderedScale')
     Config.Markers.kinds.suspect.surrenderedScale = 0.6
     ents[ped].bag.state = 'fleeing'
     PC.update(cctx, Snap('fleeing'))
-    H.step(1000)
+    H.step(FAR_PASS)
     H.ok(BL.live[sb] and sp.colour == 17 and sp.scale == 0.8, 'pursuit client m7: he runs again: orange again')
     PC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(LiveBlips() - base, 0, 'pursuit client m7: nothing left on the map')
 end
 
@@ -4486,7 +4492,7 @@ do
     -- the start message's pointer comes first (CP.Markers' own circle for a moment), the block's snapshot right after
     M.set(runId, 1, Area(0.0, 600), cctx)
     SC.update(cctx, Snap(0.0, 600, 0))
-    H.step(1000)
+    H.step(FAR_PASS)
     local cb, cp = BlipOf(function(p) return p.radius == nil and p.sprite == 162 end)
     local _, rp = BlipOf(function(p) return p.radius ~= nil end)
     local c1, p1 = BlipOf(function(p) return p.number == 1 end)
@@ -4505,15 +4511,15 @@ do
     local r = RoutedBlips()
     H.ok(#r == 1 and r[1] == cb, 'search client: outside: the line on the centre\'s own blip')
     ents[me].coords = vec3(0.0, -500.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(#RoutedBlips(), 0, 'search client: inside the circle: no line to its centre')
     ents[me].coords = vec3(0.0, -900.0, 30.0)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(RoutedBlips()[1], cb, 'search client: out again: the line is back')
     -- the circle shrinks (a clue lost): the new centre takes the line over, the old one goes with its line off
     M.update(runId, 1, Area(50.0, 300), cctx)
     SC.update(cctx, Snap(50.0, 300, 1))
-    H.step(1000)
+    H.step(FAR_PASS)
     local nb, np = BlipOf(function(p) return p.radius == nil and p.sprite == 162 end)
     local _, nr = BlipOf(function(p) return p.radius ~= nil end)
     H.ok(BL.live[cb] == nil and nb ~= cb and np.x == 50.0,
@@ -4527,7 +4533,7 @@ do
     ents[me].coords = vec3(150.0, -100.0, 30.0)
     M.update(runId, 1, { kind = 'targets', targets = { ClueT(1, 200.0, 0.0), ClueT(2, -200.0, 50.0) } }, cctx)
     SC.update(cctx, Snap(50.0, 300, 1, true))
-    H.step(1000)
+    H.step(FAR_PASS)
     r = RoutedBlips()
     H.ok(#r == 1 and r[1] == c1, 'search client: inside: the line on the nearest clue\'s own numbered blip')
     H.eq(LiveBlips() - base, 4, 'search client: no second icon for a clue')
@@ -4549,7 +4555,7 @@ do
         },
     }, cctx)
     SC.update(cctx, Snap(50.0, 300, 1, true, { { netId = fugNet, state = 'fleeing' } }))
-    H.step(1000)
+    H.step(FAR_PASS)
     local fb, fp = BlipOf(function(p) return p.ent == fug end)
     H.ok(
         fp and fp.sprite == 1 and fp.colour == 17 and fp.scale == 0.8
@@ -4559,20 +4565,20 @@ do
     r = RoutedBlips()
     H.ok(#r == 1 and r[1] == fb, 'search client: the line on his own blip')
     ents[fug].bag.state = 'surrendered'
-    H.step(1000)
+    H.step(FAR_PASS)
     H.ok(BL.live[fb] and fp.colour == 1 and fp.scale == 0.6, 'search client: he gave up: the same blip, red, 0.6')
     -- (R6) at kinds.suspect.surrenderedScale, the size CP.Markers gives him far away
     Config.Markers.kinds.suspect.surrenderedScale = 0.5
     ents[fug].bag.state = 'fleeing'
-    H.step(1000)
+    H.step(FAR_PASS)
     ents[fug].bag.state = 'surrendered'
-    H.step(1000)
+    H.step(FAR_PASS)
     H.ok(BL.live[fb] and fp.colour == 1 and fp.scale == 0.5, 'search client: he gave up: at its surrenderedScale')
     Config.Markers.kinds.suspect.surrenderedScale = 0.6
     H.eq(RoutedBlips()[1], fb, 'search client: ...and it keeps the line')
     M.clear(runId, 1)
     SC.stop(cctx)
-    H.step(1000)
+    H.step(FAR_PASS)
     H.eq(LiveBlips() - base, 0, 'search client: nothing left on the map')
     H.eq(BL.removedRouted, removedRouted, 'search client: every line went off before its blip')
 end

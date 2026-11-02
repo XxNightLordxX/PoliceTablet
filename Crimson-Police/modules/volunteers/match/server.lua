@@ -6,7 +6,7 @@ CP.Volunteers = CP.Volunteers or {}
 local V = CP.Volunteers
 local TAG = 'volunteers'
 
-local TICK_MS = 1000                                   -- the asking, travel and engagement check, only while a run has a match
+local TICK_MS = 2000                                   -- the asking, travel and engagement check, only while a run has a match
 local LATE_MS = 2000                                   -- an answer this late after the pop-up closed still counts (lag)
 local CANCEL_PHASES = { travel = true, in_position = true, engaged = true }
 local STRIKE_WHY = {

@@ -2549,7 +2549,8 @@ do
     local function TasksFor(e, action)
         return U.filter(tasks, function(t) return t.e == e and (action == nil or t.action == action) end)
     end
-    local function Steps(n, ms) for _ = 1, n do H.step(ms or 1000) end end
+    -- one far pass of the client loops (SLOW_MS and CP.Markers TICK_MS, 2 s each since step LP2)
+    local function Steps(n, ms) for _ = 1, n do H.step(ms or 2000) end end
     local stub = {
         PlayerPedId = function() return ME end,
         PlayerId = function() return 0 end,
@@ -2733,7 +2734,7 @@ do
     PRc.stop(kc)
 
     do -- protect_rescue host (Q13): hostages another officer's game owns are asked for once, never waited for
-        local CONTROL, LOOP = 250, 500
+        local CONTROL, LOOP = 250, 1000
         local qc = ClientCtx(U.deepcopy(PR.defaults({})), prLoc, { tag = 'pr-q13', index = 2 })
         AddEnt(7051, 75, vec3(2000.0, 2000.0, 20.0), { state = 'restrained', cfg = { group = 'neutral' } })
         AddEnt(7052, 76, vec3(2010.0, 2000.0, 20.0), { state = 'restrained', cfg = { group = 'neutral' } })

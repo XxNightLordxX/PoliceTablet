@@ -5,11 +5,12 @@ local U = CP.U
 
 local OPTION = 'crimson-police:check_clue'
 local FAST_MS = 250
-local SLOW_MS = 1000
+local SLOW_MS = 2000
 local WATCH_RANGE = 40.0
 local REPORT_MS = 1500
 local MARKER_RANGE = 150.0
 local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
+local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 local CLUE_RANGE = 2.5
 local SEARCH_ANIM = { dict = 'amb@prop_human_bum_bin@idle_b', clip = 'idle_d' }
 local TALK_ANIM = { dict = 'missfbi3_party_d', clip = 'stand_talk_loop_a_male1' }
@@ -239,7 +240,7 @@ local function MarkerLoop(S)
                     end
                 end
             end
-            Wait(drew and 0 or 750)
+            Wait(drew and 0 or CP.Perf.ms(MARKER_FAR_MS))
         end
         S.drawing = false
     end)
@@ -408,7 +409,7 @@ local function Loop(S)
                 if S.alive and S.current then SetHint(S, HudText(S, close)) end
             end
             -- a ped asked for this pass is checked again soon
-            Wait((fast or S.pending) and FAST_MS or SLOW_MS)
+            Wait((fast or S.pending) and FAST_MS or CP.Perf.ms(SLOW_MS))
         end
         S.looping = false
     end)

@@ -5,7 +5,7 @@ local V = CP.Volunteers
 local TAG = 'volunteers'
 
 local ROLES = { 'runner', 'driver', 'fugitive' }   -- the suspects a volunteer can play (§7.3 volunteerSlot roles)
-local SWEEP_MS = 15000                             -- the window and duty check, only while someone volunteers
+local SWEEP_MS = 30000                             -- the window and duty check, only while someone volunteers
 local AFK_KEY = 'volunteers'                       -- CP.Opponents.sampleCrew key: AFK samples of every volunteer
 
 local listed = {}       -- [citizenid] = { cid, src, who, name, roles = { [role] = true }, since, untilAt } (os.time)
@@ -235,7 +235,7 @@ local function StartSweep()
     local token = sweep.token
     CreateThread(function()
         while sweep.token == token and next(listed) ~= nil do
-            Wait(SWEEP_MS)
+            Wait(CP.Perf.ms(SWEEP_MS))
             if sweep.token ~= token then return end
             local ok, err = pcall(Sweep)
             if not ok then CP.err(TAG, 'the volunteer check failed: ' .. tostring(err)) end

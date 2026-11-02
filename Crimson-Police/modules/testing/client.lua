@@ -10,6 +10,7 @@ local DEFAULT_KEY = 'F7'        -- when Config.Testing.panelKey is missing from 
 local SETTINGS_WAIT_MS = 10000  -- the key waits this long at most for the settings changed in game
 local DRAW_RANGE = 250.0        -- markers further than this are not drawn
 local ACTIVE_RANGE = 600.0      -- draw every frame only while this close to the test area
+local DEBUG_FAR_MS = 1000       -- the debug drawing loop's pace while far from the test area (per frame near it)
 local LABEL_RANGE = 25.0        -- 3D labels for points this close
 local INVITE_TOAST_MS = 12000
 local INVITE_WAIT_S = 120       -- when an invitation event names no expiry
@@ -299,7 +300,7 @@ local function StartDrawing()
         while t == state.drawToken and state.debugOn do
             local g = state.geometry
             if not g then
-                Wait(500)
+                Wait(CP.Perf.ms(DEBUG_FAR_MS))
             else
                 local pc = GetEntityCoords(cache.ped)
                 local now = GetGameTimer()
@@ -311,7 +312,7 @@ local function StartDrawing()
                     DrawFrame(g, pc.x, pc.y, pc.z)
                     Wait(0)
                 else
-                    Wait(500)
+                    Wait(CP.Perf.ms(DEBUG_FAR_MS))
                 end
             end
         end

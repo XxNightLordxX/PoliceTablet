@@ -892,7 +892,7 @@ Parity-plus additions (WP1, WP8; docs/notes/access.md):
   (`Config.Tablet.dispatchKey`) opens on Dispatch; mission desks are ox_target box zones (`crimson-police:desk`)
   created once, shown only to an on-duty officer of an allowed department outside Crimson-Arena (display only),
   removed on resource stop and on a foreign arena flag; at a desk `Config.Tablet.deskScenario` plays and the tablet
-  closes beyond `Config.Tablet.deskDistance`; with requireItem the client checks the item every second while open.
+  closes beyond `Config.Tablet.deskDistance`; with requireItem the client checks the item every 2 s while open.
 
 Full admin control (P0 seams):
 - S `registerNavCount(key, fn(src, officer|nil) -> number, { adminOnly })`: a sidebar count another module owns.
@@ -912,7 +912,7 @@ All times are server local time; the "day" starts at `Config.Time.resetHour`.
 - `monthStart(ts?) -> ts` (1st of the month at resetHour)
 - `weekday(ts?) -> 'monday'..'sunday'` of the reset-adjusted day
 - `sqlTime(ts) -> 'YYYY-MM-DD HH:MM:SS'`
-- `onDaily(fn(dayKey))`, `onWeekly(fn(weekKey, prevWeekStartTs))`, `onMonthly(fn(monthStartTs))` — fired once when the boundary passes (checked every 30 s; never fired just because the resource started)
+- `onDaily(fn(dayKey))`, `onWeekly(fn(weekKey, prevWeekStartTs))`, `onMonthly(fn(monthStartTs))` — fired once when the boundary passes (checked every 60 s; never fired just because the resource started)
 - `onDailyJob(fn(dayKey))` — a long job for each daily reset (the daily backup): after the daily listeners, the jobs run
   one after another in one thread and the retention job runs when the last one has returned, so the reset listeners,
   the weekly and monthly ones and the next boundary check never wait for them (a reset that comes while the previous
@@ -2750,7 +2750,7 @@ What this officer's game can see of the points the server's spawn director may u
   (a server RPC: FXServer keeps it for the first game that takes an entity nobody simulates yet, ServerRPC.cpp),
   keeps the ask `{ x, y, z, h, kind, token }` (the file's point; the token unique per ask, a string) with up to 8
   other points from `opts.alt`, and returns it for the bag (§6.2). `CP.Spawn.waiting(runId) -> n` counts the
-  entities of a run that still wait. A check every 500 ms (a thread that runs while any ask is open): an ask whose
+  entities of a run that still wait. A check every 1 s (a thread that runs while any ask is open): an ask whose
   run ended, or whose entity is gone, dead or no longer the run's, is dropped; with place (or enabled) switched off in
   Settings every waiting entity is let go; the game that simulates it (`NetworkGetEntityOwner`: a player's server id,
   -1 = nobody) changed to one that is not an active participant's within `activateRange` (2D) of the point: frozen

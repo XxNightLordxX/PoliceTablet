@@ -5,7 +5,7 @@ CP.Markers = CP.Markers or {}
 local M = CP.Markers
 local TAG = 'markers'
 
-local TICK_MS = 1000                -- how often the pointer is checked: streaming, nearest target, line on or off
+local TICK_MS = 2000                -- how often the pointer is checked: streaming, nearest target, line on or off
 local SWITCH_SHARE = 0.75           -- the line moves to another target only when that one is 25 % closer
 local POINTER_PRIORITY = 12         -- drawn above the missions' detail blips
 local LAST_KNOWN_RADIUS = 200.0     -- metres: Radio Silence's last-known circle round a moving target
@@ -554,7 +554,7 @@ local function StartLoop()
     loopOn = true
     CreateThread(function()
         while HasWork() do
-            Wait(TICK_MS)
+            Wait(CP.Perf.ms(TICK_MS))
             if not HasWork() then break end
             local ok, err = pcall(Tick)
             if not ok then CP.err(TAG, 'marker check failed: %s', tostring(err)) end

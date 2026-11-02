@@ -95,7 +95,8 @@ local function Routed()
     for id, b in pairs(BL.all) do if b.live and b.route then out[#out + 1] = id end end
     return out
 end
-local function Tick(n) for _ = 1, n or 1 do H.step(1000) end end
+-- one pass of the pointer loop (TICK_MS, 2 s since step LP2)
+local function Tick(n) for _ = 1, n or 1 do H.step(2000) end end
 local defaults = {}
 for k, v in pairs(Config.Markers) do defaults[k] = v end
 local function Reset()
@@ -234,7 +235,7 @@ do
     H.eq(threads, 1, 'set, clear and set again: still the one loop')
     local checks = world.netChecks
     Tick(3)
-    H.eq(world.netChecks - checks, 3, 'one check of the one target a second')
+    H.eq(world.netChecks - checks, 3, 'one check of the one target a pass')
     M.clear()
     Tick(2)
     M.set('run-l', 4, target)

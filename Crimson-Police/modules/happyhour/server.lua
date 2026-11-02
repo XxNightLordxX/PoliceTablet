@@ -8,7 +8,7 @@ local HH = CP.HappyHour
 local TAG = 'happyhour'
 local KEY = 'happyHour'
 local WHERE = '*'            -- a server-wide control's row
-local TICK_MS = 15000        -- how often the end of a happy hour is looked for (the screens hear it then)
+local TICK_MS = 30000        -- how often the end of a happy hour is looked for (the screens hear it then)
 local MINUTES_RANGE = { 1, 240 }
 
 local last = nil             -- the end time of the happy hour the last tick saw (0 = none)
@@ -226,7 +226,7 @@ CreateThread(function()
     -- a failed start (a migration, the saves folder): end quietly, as the other loops do
     if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     while true do
-        Wait(TICK_MS)
+        Wait(CP.Perf.ms(TICK_MS))
         local ok, err = pcall(HH._tick)
         if not ok then CP.err(TAG, 'check failed: %s', tostring(err)) end
     end

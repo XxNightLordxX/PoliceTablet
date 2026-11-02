@@ -7,6 +7,8 @@ local TAG = 'runs'
 local END_HUD_MS = 12000          -- the ended HUD stays this long before it hides
 local MESSAGE_MS = 8000           -- HUD messages clear after this long
 local VEHICLE_EVERY = 5           -- seconds between vehicle telemetry samples while driving
+local TELEMETRY_MS = 2000         -- how often the run's vehicle, lights and siren are looked at
+local UNARMED_MS = 1000           -- how often an unarmed officer is checked for a weapon (armed: every frame)
 local ACTIONS = { prepare = true, start = true, update = true, stop = true, adopt = true }
 local RUN_OVER = joaat('WEAPON_RUN_OVER_BY_CAR')
 local RAMMED = joaat('WEAPON_RAMMED_BY_CAR')
@@ -282,17 +284,19 @@ end
 local function StartTelemetry(run)
     local myToken = token
     CreateThread(function()
-        local tick = 0
+        -- a vehicle sample once VEHICLE_EVERY seconds have passed (by the game clock, whatever the loop pace)
+        local nextVehicle = GetGameTimer() + VEHICLE_EVERY * 1000
         -- quietPatrol missions: lights and siren count only once the run is in progress (after arrival)
         local sirenCheck = type(run.mission) == 'table' and run.mission.quietPatrol == true
         while current == run and token == myToken do
-            Wait(1000)
+            Wait(CP.Perf.ms(TELEMETRY_MS))
             if current ~= run or token ~= myToken then break end
-            tick = tick + 1
             local ped = cache.ped
             local veh = GetVehiclePedIsIn(ped, false)
             if veh ~= 0 and GetPedInVehicleSeat(veh, -1) == ped then
-                if tick % VEHICLE_EVERY == 0 and NetworkGetEntityIsNetworked(veh) then
+                local now = GetGameTimer()
+                if now >= nextVehicle and NetworkGetEntityIsNetworked(veh) then
+                    nextVehicle = now + VEHICLE_EVERY * 1000
                     Runs.telemetry('vehicle', { netId = NetworkGetNetworkIdFromEntity(veh) })
                 end
                 if sirenCheck and not run.sentSiren and run.state == 'in_progress' and IsVehicleSirenOn(veh) then
@@ -312,7 +316,7 @@ local function StartTelemetry(run)
                     Runs.telemetry('weapon_fired', {})
                 end
             else
-                Wait(500)
+                Wait(CP.Perf.ms(UNARMED_MS))
             end
         end
     end)

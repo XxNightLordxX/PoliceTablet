@@ -52,10 +52,10 @@ local ARRESTS, BUSTED, CUFFED_DICT = 'random@arrests', 'random@arrests@busted', 
 local HANDS_UP_MS, KNEEL_MS, ENTER_MS, GETUP_MS, EXIT_MS = 4000, 500, 1000, 2500, 1200
 
 local UNARMED = joaat('WEAPON_UNARMED')
-local LOOP_MS = 500
+local LOOP_MS = 1000             -- how often the host's AI loop retasks the run's peds it owns
 local RETARGET_MS = 3000
 local SWITCH_SHARE = 0.6         -- switch combat target when another participant is this much closer
-local STUCK_TICKS = 4            -- loop ticks below STUCK_SPEED before a task is re-issued
+local STUCK_TICKS = 2            -- loop ticks below STUCK_SPEED before a task is re-issued (2 s at LOOP_MS)
 local STUCK_SPEED = 0.3
 local REISSUE_MS = 3000
 local REISSUE_VEH_MS = 8000
@@ -80,7 +80,7 @@ local AWAY = {
 -- A tired runner with no route whom this game's AI loop does not run (OneSync gave him to a partner's game, or the host
 -- lost him for LOST_CONTROL_MS) and who stands still this many combat governor passes (GOVERN_MS each) gets a flee task
 -- again from the game that owns him.
-local KEEP_STILL = 3
+local KEEP_STILL = 2
 -- TaskFollowNavMeshToCoord flags (natives.json eNavScriptFlags)
 local NAV = {
     default = 0,                 -- ENAV_DEFAULT
@@ -1312,7 +1312,7 @@ EnsureLoop = function()
                     end
                 end
             end
-            Wait(LOOP_MS)
+            Wait(CP.Perf.ms(LOOP_MS))
         end
         looping = false
     end)
@@ -1612,9 +1612,9 @@ end
 -- terms it holds a calm staged crew member calm (CalmBag), and it gives one flee task to a tired runner with no route
 -- whom this game's AI loop does not run and who stands still (KeepRunning); never to a ped the host's AI loop runs.
 
-local GOVERN_MS = 1000
-local governed = {}      -- [netId] = { entity, seq } of the last caps this game applied
-local stood = {}         -- [netId] = { entity, n }: governor passes a tired runner this game owns has stood still
+local GOVERN_MS = 2000          -- how often the combat caps and the tired runner governor run
+local governed = {}             -- [netId] = { entity, seq } of the last caps this game applied
+local stood = {}                -- [netId] = { entity, n }: governor passes a tired runner this game owns has stood still
 local governing = false
 
 local function ArmedBag(bag)
@@ -1702,7 +1702,7 @@ local function EnsureGovernor()
             if not run then break end
             local ok, err = pcall(GovernStep, run)
             if not ok then CP.warn(TAG, 'combat caps failed: %s', tostring(err)) end
-            Wait(GOVERN_MS)
+            Wait(CP.Perf.ms(GOVERN_MS))
         end
         governed, stood = {}, {}
         governing = false
@@ -2234,9 +2234,12 @@ local function CuffFlow(ent)
     local me = PlayerPedId()
     TaskTurnPedToFaceEntity(me, ent, FACE_MS)
     Wait(FACE_MS)
+    -- how often the cuff in progress checks the suspect is still there and surrendered (not a file local: the file
+    -- is near Lua's 200 locals)
+    local guardMs = 500
     CreateThread(function()
         while cuffing == state do
-            Wait(250)
+            Wait(CP.Perf.ms(guardMs))
             if cuffing ~= state then break end
             local b = DoesEntityExist(ent) and BagOf(ent) or nil
             local far = U.dist(GetEntityCoords(PlayerPedId()), GetEntityCoords(ent)) > range + 1.0

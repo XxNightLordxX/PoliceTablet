@@ -4,7 +4,7 @@ local BLOCK = 'pursuit'
 local U = CP.U
 
 local FAST_MS = 250
-local SLOW_MS = 1000
+local SLOW_MS = 2000
 local RAM_POLL_MS = 50
 local RAM_IDLE_MS = 500
 local RAM_WATCH = 50.0         -- fast ram polling within this range (at 500 ms a closing car covers 25 m)
@@ -699,7 +699,7 @@ local function Loop(S)
                 SetHint(S, HudText(S, myPos))
             end
             -- an entity asked for this pass is checked again soon
-            Wait((fast or S.pending) and FAST_MS or SLOW_MS)
+            Wait((fast or S.pending) and FAST_MS or CP.Perf.ms(SLOW_MS))
         end
         S.looping = false
     end)

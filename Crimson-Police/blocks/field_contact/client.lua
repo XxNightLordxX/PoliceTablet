@@ -5,7 +5,7 @@ local BLOCK = 'field_contact'
 local U = CP.U
 
 local FAST_MS = 250
-local SLOW_MS = 1000
+local SLOW_MS = 2000
 local WATCH_RANGE = 40.0
 local AIM_RANGE = 10.0
 local REPORT_MS = 1500
@@ -145,7 +145,7 @@ local function Loop(S)
                     SetHint(S, nil)
                 end
             end
-            Wait(fast and FAST_MS or SLOW_MS)
+            Wait(fast and FAST_MS or CP.Perf.ms(SLOW_MS))
         end
         S.looping = false
     end)

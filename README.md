@@ -1070,6 +1070,19 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days. `stunNeedsProof` (`'flag'`): a stun counts as before, and one the server did not see (the suspect did not fall) adds a note for staff in the Review run detail, so nobody's points are held. `'hold'` = the same, but that officer's points wait for review; `'strict'` = a fleeing person only gives up to a stun the server saw (a cheat menu cannot fake one); `'off'` = no check (the old way). A saved `true` from an earlier version reads as `'strict'`, `false` as `'off'`. `stunRecheck` (2 s, step R7): in `'flag'` and `'hold'` the note or flag waits this long and is dropped when the server saw the suspect fall by then (a real taser report often reaches the server before its copy of the suspect falls); 0 = decide at once. `adminProbeLines` (5): a player who is not an admin and sends a request only admins may send (the money, void and other Admin UI tools; no officer or supervisor screen sends one, so it is almost always a cheat menu) is refused as always, and a console line, kept in **System → Problems**, names him and the request (`player 7 (Name) sent admin-only server:admin:adjustPoints while not an admin`): once a minute per player and request, at most this many lines a minute per player (0 = no line) |
 | `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, `panelKey` (`'F7'`: the default test controls key, see [8.2](#82-keys)), `panelKeyGuardMs` (300 ms: the test controls key is ignored this long after the panel lets go, so the same press does not take it back; 0 = off), and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
+| `Config.Performance.loopScale` | How often the background loops wake while idle or far away (`1.0`: the shipped pace in `docs/LOOPS.md`; `2` = half as often, up to `4`). Markers near you still draw every frame and run timers keep their own pace. See **Performance** below |
+
+**Performance**
+
+Crimson-Police's loops wake as seldom as their feature allows (every loop is listed in `docs/LOOPS.md`). Since step
+LP2 they wake about half as often as before: the objective pointer and the run's vehicle check every 2 s, mission
+markers far away every 1.5 s (every frame once you are in range), the NPCs' AI every 1 s, the tablet's walk-away and
+downed checks every 1 s, the server's background checks every 2 s (unit invites 5 s, the daily boundary 60 s,
+the happy hour end 30 s), and the tablet's screens poll at most every 20 s (a server push still refreshes them at
+once). The run engine's 1 s tick (run deadlines and HUD timers) is unchanged. If resmon still shows Crimson-Police
+higher than you want while idle, raise `Config.Performance.loopScale` (Admin UI → Settings, section Performance):
+`2` halves every idle and far-away wake again, `4` is the slowest. A higher value makes far markers, the map pointer
+and the walk-away close react later (at `4`, up to 6-8 s), never the per-frame drawing near you.
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.
@@ -1196,7 +1209,7 @@ never changes points, cash or a mission's stars. Every value can be changed in g
 | `noCharge` | `true` | NPCs never charge at officers |
 | `aiDamage` | 0.5 | Damage of NPC bullets: 1.0 = normal GTA damage, 0.5 = half |
 | `aiMeleeDamage` | 0.5 | The same for NPC punches and melee weapons |
-| `reassertAiDamage` | `true` | Both values above go on again every second of a run, so another script that changes them (Crimson-Contracts' guards reset them when its guards are gone) cannot leave your officers' NPCs at full damage. `false` = they are set at the start of the run and after a respawn only (the old way). Its earlier name `holdAiDamage = false` still counts while this key is missing |
+| `reassertAiDamage` | `true` | Both values above go on again every 2 s of a run, so another script that changes them (Crimson-Contracts' guards reset them when its guards are gone) cannot leave your officers' NPCs at full damage. `false` = they are set at the start of the run and after a respawn only (the old way). Its earlier name `holdAiDamage = false` still counts while this key is missing |
 | `officerDefense` | 1.0 (off) | The damage officers on a run take from every weapon, players' shots too (0.5 = half). Leave it at 1.0 unless `aiDamage` alone is not enough |
 | `noCriticalHits` | `true` | Officers on a run take no extra headshot damage, from anyone: a headshot hurts like a body shot |
 | `cancelLethalHeadshots` | `true` | The server drops a hit from a mission NPC that would kill a healthy officer of its run in one shot (a headshot, a point-blank shotgun blast) |
@@ -1206,7 +1219,7 @@ never changes points, cash or a mission's stars. Every value can be changed in g
 Good to know:
 
 - Each officer's own game applies `aiDamage`, `aiMeleeDamage` and `noCriticalHits` while that officer is on a run,
-  and again after a respawn (`aiDamage` and `aiMeleeDamage` every second, with `reassertAiDamage`). `aiDamage` softens every NPC bullet his game works out during the run, so an NPC of
+  and again after a respawn (`aiDamage` and `aiMeleeDamage` every 2 s, with `reassertAiDamage`). `aiDamage` softens every NPC bullet his game works out during the run, so an NPC of
   another script next to him, or a mission NPC shooting a hostage, hits softer too.
 - `cancelLethalHeadshots` can only catch the hits the server hears about (an NPC that another officer's game moves).
   `noCriticalHits` covers the rest. Neither ever touches a player in Crimson-Arena. It never makes an officer

@@ -5,11 +5,12 @@ local U = CP.U
 
 local OPTION = 'crimson-police:knock'
 local FAST_MS = 250              -- loop while a suspect is within WATCH_RANGE
-local SLOW_MS = 1000
+local SLOW_MS = 2000
 local WATCH_RANGE = 40.0
 local REPORT_MS = 1500           -- the same report for the same suspect at most this often
 local CONTROL_MS = 250
 local MARKER_RANGE = 150.0
+local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 local KNOCK_RANGE = 2.5
 local KNOCK_ANIM = { dict = 'timetable@jimmy@doorknock@', clip = 'knockdoor_idle' }
 
@@ -215,7 +216,7 @@ local function MarkerLoop(S)
                     true, true, 2, false, nil, nil, false)
                 Wait(0)
             else
-                Wait(750)
+                Wait(CP.Perf.ms(MARKER_FAR_MS))
             end
         end
         S.drawing = false
@@ -354,7 +355,7 @@ local function Loop(S)
                     SetHint(S, nil)
                 end
             end
-            Wait(fast and FAST_MS or SLOW_MS)
+            Wait(fast and FAST_MS or CP.Perf.ms(SLOW_MS))
         end
         S.looping = false
     end)

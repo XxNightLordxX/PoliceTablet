@@ -4,7 +4,7 @@ CP.NpcCombat = CP.NpcCombat or {}
 local NpcCombat = CP.NpcCombat
 local TAG = 'npccombat'
 
-local WATCH_MS = 1000
+local WATCH_MS = 2000
 local NO_CRITICAL_HITS = 2       -- CPED_CONFIG_FLAG_NoCriticalHits: the flag SetPedSuffersCriticalHits(ped, false) sets
 
 local active = nil   -- { runId, ped, pedFlag, crit, ai, melee, defense, defenseSaved, dropped } while a run is live
@@ -99,7 +99,7 @@ function NpcCombat.start(runId)
     if not ok then CP.warn(TAG, 'combat settings of run %s failed: %s', tostring(runId), tostring(err)) end
     CreateThread(function()
         while active == a do
-            Wait(WATCH_MS)
+            Wait(CP.Perf.ms(WATCH_MS))
             if active ~= a then break end
             -- a respawn or a new model gives the officer a new ped: its headshot flag goes on again
             if PlayerPedId() ~= a.ped then

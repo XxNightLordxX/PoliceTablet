@@ -423,11 +423,11 @@ Npc.task(P3, 'flee', {})
 H.ok(not Called('TaskSmartFleePed'), 'a flee without points keeps the route')
 Move(P3, 10, 0, 0)
 W.ents[P3].speed = 5.0
-H.advance(600)
+H.advance(1100)
 H.ok(Called('TaskFollowNavMeshToCoord', function(a) return a[1] == P3 and a[2] == 20.0 end), 'next point when reached')
 Move(P3, 20, 0, 0)
 Clear()
-H.advance(600)
+H.advance(1100)
 H.ok(Called('TaskSmartFleePed', function(a) return a[1] == P3 and a[3] == 500.0 end),
     'end of the route: flee from participants')
 -- serialized points ({ x, y, z } tables from the server bag) work too
@@ -448,7 +448,7 @@ H.ok(Called('TaskFollowNavMeshToCoord', function(a) return a[1] == P3h and a[2] 
 Move(P3h, 4, 800, 0)
 W.ents[P3h].speed = 3.0
 Clear()
-H.advance(600)
+H.advance(1100)
 H.ok(not Called('TaskFollowNavMeshToCoord', function(a)
     return a[1] == P3h and a[3] == 801.0
 end), 'foot hairpin: no skip on the approach side')
@@ -471,15 +471,15 @@ H.near(drive and drive[6] or 0, 60 / 3.6, 1e-6, 'speed is m/s')
 H.eq(drive and drive[7], 786475, 'normal lane-following style')
 Move(6001, 95, 0, 0)
 Clear()
-H.advance(600)
+H.advance(1100)
 drive = LastOf('TaskVehicleDriveToCoordLongrange')
 H.ok(drive and drive[3] == 200.0, 'waypoint by waypoint')
 Move(6001, 230, 5, 0)
-H.advance(600)
+H.advance(1100)
 drive = LastOf('TaskVehicleDriveToCoordLongrange')
 H.ok(drive and drive[3] == 300.0, 'a waypoint passed close by (30 m) still counts')
 Move(6001, 299, 0, 0)
-H.advance(600)
+H.advance(1100)
 drive = LastOf('TaskVehicleDriveToCoordLongrange')
 H.ok(drive and drive[3] == 0.0, 'a loop route wraps to the first waypoint')
 -- a hairpin: the next point lies behind the vehicle, the current one far ahead: no skip
@@ -490,20 +490,20 @@ W.ents[P4h].vehicle = 6003
 Clear()
 Npc.task(P4h, 'driveRoute', { points = { vec3(0.0, 500.0, 0.0), vec3(100.0, 500.0, 0.0), vec3(0.0, 505.0, 0.0) } })
 Move(6003, 5, 500, 0)
-H.advance(600)
+H.advance(1100)
 drive = LastOf('TaskVehicleDriveToCoordLongrange')
 H.ok(drive and drive[3] == 100.0, 'hairpin: keeps driving to the far waypoint')
 -- still on the approach, inside 3x the arrive radius (20 m, 60 m): the turn point is not cut short
 Move(6003, 50, 500, 0)
 Clear()
-H.advance(600)
+H.advance(1100)
 H.ok(not Called('TaskVehicleDriveToCoordLongrange', function(a)
     return a[1] == P4h and a[4] == 505.0
 end), 'hairpin: no skip on the approach side within 3x the arrive radius')
 -- beyond the turn point along the leg it drives (overshot by 30 m): passed
 Move(6003, 130, 500, 0)
 Clear()
-H.advance(600)
+H.advance(1100)
 drive = LastOf('TaskVehicleDriveToCoordLongrange')
 H.ok(drive and drive[3] == 0.0 and drive[4] == 505.0, 'hairpin: overshooting the turn point counts as passed')
 Clear()
@@ -809,7 +809,7 @@ H.ok(not Called('TaskCombatPed', function(a) return a[1] == P12 end), 'not the h
 H.ok(Called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P12 and a[2] == false end),
     'not the host: drop-safe')
 -- OneSync gave this (non-host) game the ped: its combat governor applies the caps, never a task
-H.advance(1100)
+H.advance(2100)
 local c12 = CW.peds[P12] or { attrs = {} }
 H.eq(c12.accuracy, 18, 'not the host, owning the ped: accuracy capped (the combat governor)')
 H.eq(c12.pattern, SINGLE_SHOT, 'not the host: single-shot pattern')
@@ -820,13 +820,13 @@ H.ok(not Called('TaskCombatPed', function(a) return a[1] == P12 end), 'the gover
 H.eq(CW.typeErrors, 0, 'every combat native got the argument types the game reads')
 -- another game takes the ped and hands it back without its settings: capped again
 W.ents[P12].control = false
-H.advance(1100)
+H.advance(2100)
 CW.forget(P12)
 Clear()
-H.advance(1100)
+H.advance(2100)
 H.ok(not Called('SetPedAccuracy', function(a) return a[1] == P12 end), 'a ped another game owns is never touched')
 W.ents[P12].control = nil
-H.advance(1100)
+H.advance(2100)
 H.eq(CW.peds[P12] and CW.peds[P12].accuracy, 18, 'owned again: the caps go on again')
 H.ok(not (CW.peds[P9] and CW.peds[P9].shootRate), 'an unarmed fleeing ped gets no combat caps')
 -- a raid's staged crew member waiting calm before the breach (idle, unarmed): the game OneSync gave him to holds him
@@ -843,7 +843,7 @@ BagChange(P16, 826, {
     seq = 1,
     contact = { kind = 'person', actions = { 'talk' } },
 })
-H.advance(1100)
+H.advance(2100)
 local function CalmCalls(e)
     return #CallsOf('SetBlockingOfNonTemporaryEvents', function(a)
         return a[1] == e and a[2] == true
@@ -861,9 +861,9 @@ H.advance(2200)
 blk = CalmCalls(P15)
 H.eq(blk, 1, 'not again every second')
 W.ents[P15].control = false
-H.advance(1100)
+H.advance(2100)
 W.ents[P15].control = nil
-H.advance(1100)
+H.advance(2100)
 blk = CalmCalls(P15)
 H.eq(blk, 2, 'owned again after another game had him: held calm again')
 -- a non-participant (no run at all) still makes mission peds drop-safe
@@ -876,7 +876,7 @@ H.ok(Called('SetPedDropsWeaponsWhenDead', function(a) return a[1] == P12b and a[
     'non-participant client: drop-safe')
 H.ok(not Called('SetPedAccuracy'), 'non-participant client: nothing else')
 W.run = savedRun
-H.advance(600)
+H.advance(1100)
 -- becoming the host re-applies and re-tasks every known ped of the run
 Clear()
 W.run.isHost = true
@@ -939,7 +939,7 @@ do
     BagChange(R1, 840, rv)
     H.eq(GW.capNow(R1), 2.0, 'jog: the game that owns him caps him at a run at once (SetPedMaxMoveBlendRatio 2.0)')
     H.eq(GW.rateNow(R1), 0.95, 'jog: a little slower (SetPedMoveRateOverride, Config.Flee.jogRate)')
-    H.advance(600)
+    H.advance(1100)
     H.eq(TaskOf(R1).mbr, 2.0, 'jog: the host gives his leg again at a run')
     H.ok(Near(TaskOf(R1).y, 700.0), 'jog: to the same point of his route')
     local frames = Count('SetPedMaxMoveBlendRatio', R1)
@@ -959,20 +959,20 @@ do
     BagChange(R1, 840, rv)
     H.eq(GW.capNow(R1), 1.0, 'walk: capped at a walk')
     H.eq(GW.rateNow(R1), 0.85, 'walk: Config.Flee.walkRate')
-    H.advance(600)
+    H.advance(1100)
     H.eq(TaskOf(R1).mbr, 1.0, 'walk: his leg again at a walk')
     H.advance(500)
     H.eq(G(R1).clipset, 'move_injured_generic', 'walk: the winded walk')
     rv = U.deepcopy(rv)
     rv.gait, rv.seq = 'spent', 4
     BagChange(R1, 840, rv)
-    H.advance(600)
+    H.advance(1100)
     H.eq(GW.capNow(R1), 1.0, 'worn out: a walk')
     H.eq(TaskOf(R1).mbr, 1.0, 'worn out: the leg at a walk')
     H.eq(G(R1).clipset, 'move_injured_generic', 'worn out: winded')
     -- he walks on along his route...
     Move(R1, 0, 700, 0)
-    H.advance(600)
+    H.advance(1100)
     H.ok(Near(TaskOf(R1).y, 800.0) and TaskOf(R1).mbr == 1.0, 'the next point of his route, at his walk')
     -- ...and at its end a worn-out runner gets no smart flee (it has no speed): a leg straight away from the officers
     GW.safeCoord = function(x, y, z)
@@ -980,7 +980,7 @@ do
     end -- navmesh right where the leg ends
     Move(R1, 0, 800, 0)
     Clear()
-    H.advance(600)
+    H.advance(1100)
     H.ok(not Called('TaskSmartFleePed', function(a) return a[1] == R1 end), 'end of the route: no smart flee')
     local t = TaskOf(R1)
     H.eq(t.name, 'nav', 'end of the route: a navmesh leg instead')
@@ -1013,7 +1013,7 @@ do
     BagChange(R1, 840, rv)
     H.eq(G(R1).rate, 1.0, 'breath back: the normal move rate')
     H.eq(G(R1).clipset, nil, 'breath back: his own walk')
-    H.advance(600)
+    H.advance(1100)
     H.eq(TaskOf(R1).mbr, 3.0, 'breath back: the host gives his leg again at a sprint')
     rates = Count('SetPedMoveRateOverride', R1)
     H.advance(1000)
@@ -1031,7 +1031,7 @@ do
     v2 = U.deepcopy(v2)
     v2.gait, v2.seq = 'jog', 2
     BagChange(R2, 841, v2)
-    H.advance(600)
+    H.advance(1100)
     t = TaskOf(R2)
     H.eq(t.name, 'nav', 'jog without a route: navmesh legs instead of the smart flee (it has no speed)')
     H.eq(t.mbr, 2.0, 'at a run')
@@ -1041,7 +1041,7 @@ do
     -- at the end of the leg: the next one
     GW.safeCoord = function(x, y, z) return true, vector3(x, y, z) end
     Move(R2, 87, 51, 0)
-    H.advance(600)
+    H.advance(1100)
     t = TaskOf(R2)
     H.ok(X(t) > 120.0 and math.abs((t.y or 0.0) - 51.0) < 2.0, 'the next leg goes on straight away')
     -- an officer gets ahead of him: a new leg away from that officer
@@ -1071,7 +1071,7 @@ do
     v2 = U.deepcopy(v2)
     v2.gait, v2.seq = 'walk', 3
     BagChange(R2, 841, v2)
-    H.advance(600)
+    H.advance(1100)
     t = TaskOf(R2)
     H.eq(t.name, 'nav', 'at the shore: a navmesh leg')
     H.ok(type(t.x) == 'number' and t.x <= 105.0 and math.abs((t.y or 51.0) - 51.0) > 20.0,
@@ -1084,7 +1084,7 @@ do
     v2 = U.deepcopy(v2)
     v2.gait, v2.seq = 'jog', 4
     BagChange(R2, 841, v2)
-    H.advance(600)
+    H.advance(1100)
     H.eq(TaskOf(R2).name, 'smartFlee', 'no navmesh ahead anywhere: GTA\'s smart flee (never a point behind him)')
     H.eq(GW.capNow(R2), 2.0, 'held to his run')
     -- no navmesh near him at all
@@ -1092,13 +1092,13 @@ do
     v2 = U.deepcopy(v2)
     v2.gait, v2.seq = 'walk', 5
     BagChange(R2, 841, v2)
-    H.advance(600)
+    H.advance(1100)
     H.eq(TaskOf(R2).name, 'smartFlee', 'no navmesh found: GTA\'s smart flee, never a straight point into nowhere')
     -- breath back: the smart flee again
     v2 = U.deepcopy(v2)
     v2.gait, v2.seq = 'sprint', 6
     BagChange(R2, 841, v2)
-    H.advance(600)
+    H.advance(1100)
     H.eq(TaskOf(R2).name, 'smartFlee', 'breath back: GTA\'s smart flee again')
     H.eq(G(R2).rate, 1.0, 'and his normal move rate')
 
@@ -1122,7 +1122,7 @@ do
     H.eq(Count('SetPedMaxMoveBlendRatio', R3) - frames, 0, 'owned by another game: never touched here')
     -- and gives him back: held again within a second (the combat governor's loop)
     W.ents[R3].control = nil
-    H.advance(1100)
+    H.advance(2100)
     H.eq(GW.capNow(R3), 1.0, 'given back: held to his walk again')
     -- he gets his breath back while another game owns him, then comes back: his own pace back once
     W.ents[R3].control = false
@@ -1131,7 +1131,7 @@ do
     GW.peds[R3] = GW.peds[R3] or {}
     GW.peds[R3].clipset = 'move_injured_generic'   -- the other game's winded walk (the clip set is synced)
     W.ents[R3].control = nil
-    H.advance(1100)
+    H.advance(2100)
     H.eq(G(R3).clipset, nil, 'handed back with his breath back: the other game\'s winded walk is reset')
     H.eq(G(R3).rate, 1.0, 'and his move rate is normal')
     frames = Count('ResetPedMovementClipset', R3)
@@ -1213,7 +1213,7 @@ do
     H.advance(100)
     H.eq(G(R4).rate, 1.0, 'Config.Flee off: the normal move rate at once')
     H.eq(G(R4).clipset, nil, 'Config.Flee off: his own walk')
-    H.advance(600)
+    H.advance(1100)
     H.eq(TaskOf(R4).name, 'smartFlee', 'Config.Flee off: GTA\'s smart flee again (an old jog in his bag is ignored)')
     local R5 = AddPed(5044, 844, -110, 50, 0)
     BagChange(R5, 844, Runner(1, { gait = 'walk', cfg = { fleePoints = { { x = -110.0, y = 150.0, z = 0.0 } } } }))
@@ -1580,9 +1580,9 @@ do
         Npc.task(CS, 'cuffed', { instant = true, force = true })
         H.fire('crimson-police:client:contactAct', 1, { runId = 'run-1', netId = 870, behaviour = 'tell_then_draw' })
         BagChange(TR, 871, Runner(seq, 'jog'))
-        H.advance(600)
+        H.advance(1100)
         BagChange(TR, 871, Runner(seq + 1, 'walk'))
-        H.advance(600)
+        H.advance(1100)
     end
 
     Clear()

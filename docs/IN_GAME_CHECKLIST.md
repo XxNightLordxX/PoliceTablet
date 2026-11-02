@@ -263,7 +263,7 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Give points: a supervisor at 90 of 100 today double-clicks Give points 50 on two officers at once: one is given, the other says "Please wait a moment" or is refused by the daily limit; never 190 in a day. (X11)
 - [ ] Give points as an admin without a police job: Department Report offers Give points for any officer, and the officer's department switch and min / max apply (switch the control off for FIB only: refused for an FIB officer, given for a SAST one). (X11)
 - [ ] My options: tick a Favourite type and press that group's Reset within half a second: the option stays at its default after a few seconds and after reopening the tablet. (X11)
-- [ ] Failed start (for example the database user without CREATE): the console shows the failure lines once and no "happyhour: check failed: err.not_started" every 15 s afterwards. (X11)
+- [ ] Failed start (for example the database user without CREATE): the console shows the failure lines once and no "happyhour: check failed: err.not_started" every 30 s afterwards. (X11)
 
 ## Bug sweep fixes (Z1)
 

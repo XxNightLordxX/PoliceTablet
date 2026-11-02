@@ -4,10 +4,11 @@ local BLOCK = 'protect_rescue'
 local U = CP.U
 
 local OPTION = 'crimson-police:cut_restraints'
-local LOOP_MS = 500
+local LOOP_MS = 1000
 local RETASK_MS = 8000          -- re-issue "follow" to a walking hostage this often
 local CONTROL_MS = 250          -- the next pass after a hostage was asked for (the old wait for control)
 local MARKER_RANGE = 150.0
+local MARKER_FAR_MS = 1500      -- the marker loop's pace while too far away to draw (per frame in range)
 local FREE_ANIM = { dict = 'mp_arresting', clip = 'a_uncuff' }
 
 local active = {}
@@ -210,7 +211,7 @@ local function MarkerLoop(S)
                     false, false, 2, false, nil, nil, false)
                 Wait(0)
             else
-                Wait(750)
+                Wait(CP.Perf.ms(MARKER_FAR_MS))
             end
         end
         S.drawing = false
@@ -254,7 +255,7 @@ local function Loop(S)
                 end
             end
             -- a hostage asked for this pass is checked again soon
-            Wait(S.pending and CONTROL_MS or LOOP_MS)
+            Wait(S.pending and CONTROL_MS or CP.Perf.ms(LOOP_MS))
         end
         S.looping = false
     end)

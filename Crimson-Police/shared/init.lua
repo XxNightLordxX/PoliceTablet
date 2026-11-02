@@ -172,6 +172,31 @@ function CP.e(name)
 end
 
 -- ============================================================================
+--                                  LOOP PACE
+-- ============================================================================
+-- Config.Performance.loopScale (1-4) stretches the idle and far waits of every loop. Only those waits go through
+-- CP.Perf.ms: per-frame draws (Wait(0)), control reads and deadline ticks (run timeouts, HUD timers) never do.
+CP.Perf = CP.Perf or {}
+
+---@return number scale the loop scale, 1-4 (1 when missing or not a number)
+function CP.Perf.scale()
+    local p = type(Config) == 'table' and Config.Performance or nil
+    local s = type(p) == 'table' and tonumber(p.loopScale) or nil
+    if not s or s ~= s then return 1 end
+    if s < 1 then return 1 end
+    if s > 4 then return 4 end
+    return s
+end
+
+---@param ms number an idle or far wait in milliseconds
+---@return integer ms that wait times the loop scale
+function CP.Perf.ms(ms)
+    ms = tonumber(ms) or 0
+    if ms <= 0 then return 0 end
+    return math.floor(ms * CP.Perf.scale() + 0.5)
+end
+
+-- ============================================================================
 --                                    HOOKS
 -- ============================================================================
 -- In-resource events between modules (docs/notes/foundation.md lists them). fire() calls every listener in
@@ -333,6 +358,7 @@ local CONFIG_SECTIONS = {
     'Testing',
     'Retention',
     'Backups',
+    'Performance',
     'Labels',
     'Blocks',
 }

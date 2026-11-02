@@ -6,7 +6,7 @@ CP.Opponents = CP.Opponents or {}
 local Opp = CP.Opponents
 local TAG = 'opponents'
 
-local TICK_MS = 1000              -- the watch's pass
+local TICK_MS = 1000              -- the watch's pass (seconds deadlines: lost rule, disconnect grace, AFK)
 local STILL_METRES = 1.0          -- an AFK sample that moved less than this...
 local STILL_DEGREES = 2.0         -- ...and turned the camera less than this is "still"
 local TELEPORT_GAP_MS = 30000     -- at most one rs_teleport note per suspect this often

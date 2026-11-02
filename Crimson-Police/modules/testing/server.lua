@@ -5,13 +5,14 @@ local Testing = CP.Testing
 local U = CP.U
 local TAG = 'testing'
 
-local INVITE_TTL = 120            -- seconds an invitation waits for an answer
-local ACCEPTED_TTL = 900          -- seconds an accepted invitation waits for the start
-local INVITE_PURGE = 600          -- answered/expired invitations are forgotten after this long
-local PENDING_KEEP = 6 * 3600     -- ended tests waiting for a recorded result
-local PENDING_MAX = 10            -- per admin
+local INVITE_TTL = 120          -- seconds an invitation waits for an answer
+local ACCEPTED_TTL = 900        -- seconds an accepted invitation waits for the start
+local INVITE_PURGE = 600        -- answered/expired invitations are forgotten after this long
+local PENDING_KEEP = 6 * 3600   -- ended tests waiting for a recorded result
+local PENDING_MAX = 10          -- per admin
 local DEBUG_EVERY_MS = 2000
 local MAINTENANCE_EVERY_MS = 5000
+local BASE_TICK_MS = 2000       -- the base pass: debug stream every DEBUG_EVERY_MS, upkeep every MAINTENANCE_EVERY_MS
 local START_COOLDOWN_MS = 2000
 local NOTE_MAX = 255
 local MAX_POINTS = 240
@@ -2392,9 +2393,9 @@ end)
 CreateThread(function()
     local sinceDebug, sinceMaintenance = 0, 0
     while true do
-        Wait(1000)
-        sinceDebug = sinceDebug + 1000
-        sinceMaintenance = sinceMaintenance + 1000
+        Wait(BASE_TICK_MS)
+        sinceDebug = sinceDebug + BASE_TICK_MS
+        sinceMaintenance = sinceMaintenance + BASE_TICK_MS
         if sinceDebug >= DEBUG_EVERY_MS then
             sinceDebug = 0
             for runId, meta in pairs(tests) do

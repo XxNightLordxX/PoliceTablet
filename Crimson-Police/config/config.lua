@@ -615,7 +615,7 @@ Config.NpcCombat = {
     noCharge = true,                 -- NPCs never charge at officers
     aiDamage = 0.5,                  -- damage of NPC bullets (1.0 = normal GTA damage, 0.5 = half)
     aiMeleeDamage = 0.5,             -- damage of NPC punches and melee weapons (1.0 = normal)
-    reassertAiDamage = true,         -- true = the run's NPC damage value is set again every second (other scripts
+    reassertAiDamage = true,         -- true = the run's NPC damage value is set again every 2 s (other scripts
                                      -- such as Crimson-Contracts share it); false = set once at the start (the old way)
     officerDefense = 1.0,            -- damage officers on a run take from every weapon, players' too (1.0 = off)
     noCriticalHits = true,           -- officers on a run take no extra headshot damage (it hurts like a body shot)
@@ -2377,6 +2377,17 @@ Config.AntiCheat = {
     -- a console line, kept in Admin UI → System → Problems, names the player and the request: once a minute per
     -- player and request, at most this many lines a minute per player. 0 = refused without a line.
     adminProbeLines = 5,
+}
+
+-- ============================================================================
+--                                 PERFORMANCE
+-- ============================================================================
+-- How often Crimson-Police's background loops wake (docs/LOOPS.md lists every one). Markers near you still draw
+-- every frame and run deadlines keep their own timers; only the idle and far-away waits stretch.
+Config.Performance = {
+    -- Multiplies the idle/far wait of every Crimson-Police loop; 1 = the values in docs/LOOPS.md, 2 = half as
+    -- often; 1-4
+    loopScale = 1.0,
 }
 
 -- ============================================================================
