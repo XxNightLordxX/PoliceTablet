@@ -438,7 +438,7 @@ exports('GetQBPlayers', GetQBPlayers)
 
 ### exports.qbx_core:GetGangs() and PlayerData.gang (server)
 
-- **Spec claim:** Admin UI -> Permissions -> Extra grants may name Qbox gangs from a grade (step G1)
+- **Spec claim:** Admin UI -> Permissions -> Extra grants may name Qbox gangs from a grade
 - **Evidence:** src/Renewed-Banking/.../server/framework.lua (GetGangs on qbx); ref/qbx_core/server/groups.lua (GetGangs); ref/qbx_core/types.lua (PlayerData.gang)
 - **Implication:** Same shape as GetJobs: gangs[gangName] = { label, grades = { [0] = { name, isboss? }, ... } }, with a gang named 'none' for players in no gang. PlayerData.gang = { name, label, isboss, grade = { name, level } }. CP.Qbx.getInfo(src).gang = { name, gradeLevel } ('none' when missing); CP.Qbx.getGangs() wraps the export in a pcall ({} on failure). Read only: Crimson-Police never sets a gang.
 
@@ -2089,7 +2089,7 @@ Config.Billing = {
 Config.BillCost = Config.Billing.CheckInCost
 ```
 
-### hospital:server:RespawnAtHospital: a listen-only fact (real suspects, V3)
+### hospital:server:RespawnAtHospital: a listen-only fact (real suspects)
 
 - **Spec claim:** Crimson-Police learns that a player chose sc-ambulance's hospital respawn without triggering, cancelling or answering it
 - **Evidence:** server/main.lua:204 (`RegisterNetEvent('hospital:server:RespawnAtHospital', function(hospitalIndex)`: the bill, a bed, or a jail bed while `injail > 0`); client/main.lua:694-718 (the index of the nearest hospital in `Config.Locations.hospital`, 1 by default, sent by the dead player's own client)
@@ -2541,11 +2541,11 @@ RegisterNetEvent('police:server:Impound', function(plate, fullImpound, price, bo
 end)
 ```
 
-### Listen-only facts: cuffs, escorts, jails, bobby pins and cash seizures (real suspects, V3)
+### Listen-only facts: cuffs, escorts, jails, bobby pins and cash seizures (real suspects)
 
 - **Spec claim:** Crimson-Police learns what is done with sc-police's player cuffs, escorts, jail, bobby pins and cash seizures without editing, cancelling or answering any of it (police vs real criminal players, owner decision 2026-10-26: "Build all 3 but options in the config.lua")
 - **Evidence:** server/interactions.lua:24 (`police:server:CuffBreakAlert(officerId)`, sent by the suspect who broke free; client/interactions.lua:1070-1071 sends it only when it knows who cuffed him), :56 (`police:server:CuffPlayer(playerId, isSoftcuff)`, the client always sends `true`), :95 (`police:server:UncuffPlayer(playerId)`), :227-233 (`police:server:BobbyPinResult(success)` from the picker; sc-police ignores a result with no pending attempt), :277 (`police:server:EscortPlayer(playerId)`), :476 (`police:server:SeizeCash(playerId)`); server/commands.lua:248-264 (`police:server:JailPlayer(targetId, jailTime)`, which writes `injail` inside its own handler; client/interactions.lua:439 sends `tonumber(input[1])`). server/prison.lua:284 registers another `JailPlayer` handler, but prison.lua is not in sc-police's fxmanifest.
-- **Implication:** net events call every registered handler, so modules/integrations/sc_police registers a second handler for each of these seven events (like the Impound one above). Each one only reads: `local src = source` first; it returns at once while no `CP.ScPolice.on` listener of its kind exists or `CP.Opponents.active()` is not true (CP.Opponents is built in V4; until then the handlers do nothing), so with no case open it reads no native at all; then a rate limit of 6 a second per sender and kind (`CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)`, dropped without a log line); then the ids must be whole numbers 1..65535 (a bad one drops the event). The listeners get `'cuff'` (officerSrc, targetSrc, isSoftcuff == true), `'uncuff'` (officerSrc, targetSrc), `'cuffBreak'` (suspectSrc, officerSrc), `'escort'` (officerSrc, targetSrc), `'jail'` (officerSrc, targetSrc, jailTime as sent: the listener clamps it), `'bobbyPin'` (pickerSrc, success == true) and `'seizeCash'` (officerSrc, targetSrc), each inside pcall (at most one error line a minute per kind), inside the event and without yielding. A raw `BobbyPinResult(true)` with no pending attempt still reaches this handler, so a listener must not trust it on its own (design critic 2 #6). Crimson-Police never registers `police:server:SetHandcuffStatus` (it reads cuffs from the qbx `ishandcuffed` metadata only) and still never triggers any police:* event. Nothing consumes these facts until CP.Opponents (V4-V7).
+- **Implication:** net events call every registered handler, so modules/integrations/sc_police registers a second handler for each of these seven events (like the Impound one above). Each one only reads: `local src = source` first; it returns at once while no `CP.ScPolice.on` listener of its kind exists or `CP.Opponents.active()` is not true (CP.Opponents is built in V4; until then the handlers do nothing), so with no case open it reads no native at all; then a rate limit of 6 a second per sender and kind (`CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)`, dropped without a log line); then the ids must be whole numbers 1..65535 (a bad one drops the event). The listeners get `'cuff'` (officerSrc, targetSrc, isSoftcuff == true), `'uncuff'` (officerSrc, targetSrc), `'cuffBreak'` (suspectSrc, officerSrc), `'escort'` (officerSrc, targetSrc), `'jail'` (officerSrc, targetSrc, jailTime as sent: the listener clamps it), `'bobbyPin'` (pickerSrc, success == true) and `'seizeCash'` (officerSrc, targetSrc), each inside pcall (at most one error line a minute per kind), inside the event and without yielding. A raw `BobbyPinResult(true)` with no pending attempt still reaches this handler, so a listener must not trust it on its own (design critic 2 #6). Crimson-Police never registers `police:server:SetHandcuffStatus` (it reads cuffs from the qbx `ishandcuffed` metadata only) and still never triggers any police:* event. Nothing consumes these facts until CP.Opponents.
 
 ```lua
 RegisterNetEvent('police:server:CuffBreakAlert', function(officerId) ... end)          -- source = the suspect
@@ -2869,7 +2869,7 @@ end
 Checked against Crimson-Contracts' own repository (branch john.allday/awesome-noether-p5qdq2, commit e20316f, steps
 VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it.
 
-### crimsonPoliceRun player bag: Crimson-Contracts' guard damage scaling stands back (V8)
+### crimsonPoliceRun player bag: Crimson-Contracts' guard damage scaling stands back
 
 - **Spec claim:** Crimson-Contracts sets the one AI weapon damage value a game has (SetAiWeaponDamageModifier) while
   one of its guards is near; Crimson-Police sets the same value for the whole run (Config.NpcCombat.aiDamage, again
@@ -2888,7 +2888,7 @@ VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it
   `npcCombat = false` (V14's live runs) never sets it, so Crimson-Contracts scales its guards for those officers as
   for anyone else.
 
-### Lifecycle events: the live-crime intake (V10)
+### Lifecycle events: the live-crime intake
 
 - **Spec claim:** with `ContractsConfig.LifecycleEvents = true` Crimson-Contracts tells other server scripts when a
   contract starts, when its police alert goes out, when it ends, when a crew member rejoins and when a crew member was
@@ -2901,7 +2901,7 @@ VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it
   = server id }, leaderCitizenId, startedAt = os.time(), test = options.bypass == true }` after the crew got its start
   payloads. `sendDispatch`: `dispatchSent { id, uid, dispatchId, title = cfg.title, street = mission.location.label,
   coords }` only after `AddNotification` raised no error and only for a mission with a uid (never the ATM alert);
-  `dispatchId = 'crimson_contract_<id>_<os.time()>'` (60 characters at most, VC1). `cleanupMission`: `contractEnded {
+  `dispatchId = 'crimson_contract_<id>_<os.time()>'` (60 characters at most). `cleanupMission`: `contractEnded {
   id, uid, outcome, reason }` with `outcome` 'completed', 'failed' or 'cancelled' (also for a contract that could not be
   set up, with no contractStarted before it). `rejoin`: `memberRejoined { id, uid, citizenid, src }` only when the
   server id changed. `combatShot`: `crewShot { id, uid, citizenid, suppressed, trigger = 'shot' }` after the report

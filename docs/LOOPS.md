@@ -19,7 +19,7 @@ checked and kept. A value marked *scaled* is multiplied by `Config.Performance.l
 - **NUI polling** (`useRequest` `pollMs`): only on screens of the open tablet. The layout unmounts when the tablet
   closes, so every poll stops with it; screens with a server push (`pushTopic`) poll only as a safety net.
 - **Idle game**: with no run, the tablet closed and every feature off, no client thread of Crimson-Police wakes once
-  the start-up waits are over (tests/loops_spec.lua). On the server, every per-run tick sleeps with no run (LP4,
+  the start-up waits are over (tests/loops_spec.lua). On the server, every per-run tick sleeps with no run (
   tests/server_cost_spec.lua).
 - **Census**: every file with a thread, a `while true do` or a web timer has a row in "Loop census" below
   (tests/loop_census_spec.lua).
@@ -33,7 +33,7 @@ asked" pass, the run engine's 1 s tick (run deadlines, HUD timers) or a server d
 
 User-visible intervals stay config options with their unit (for example `Config.Route` `every`,
 `Config.Downed.checkEvery`, `Config.MissionCalls.checkEvery`, `Config.AntiCheat.jobRecheck`,
-`Config.Tablet.pauseGuardMs`). Step LP2 changed none of them.
+`Config.Tablet.pauseGuardMs`).
 
 ## Resmon
 
@@ -56,7 +56,7 @@ Also: the marker loops of escort, flee_arrest, process_scene and protect_rescue 
 (`CP.U.distSq`, no square root a frame); search_area's 250 ms suspect loop reads `cache.ped` and formats its circle
 key once per snapshot, not every pass.
 
-Checked and kept: no client thread runs at idle (LP1); event and state bag handlers cost nothing until their event
+Checked and kept: no client thread runs at idle; event and state bag handlers cost nothing until their event
 fires; ox_target zones and options of a block are added on its start and removed on its stop; no client -> server
 event is sent per frame (telemetry: a vehicle sample every 5 s while driving, lights and siren and the first shot
 once); `ctx.hudDetail` lines are sent only when the text changes.
@@ -82,7 +82,7 @@ How the push gap merges (`modules/tablet/server.lua` `T.push`): per player and t
 topic (`run`, `options`, `unit`, `calls`, `nav`, `missionControls`, ...) is replaced whole, so a field the newer push
 dropped (`readyCheck`, `activeRunId`) stays dropped; `unit` keeps only its `invited = true` hint. Only the hint
 topics (`board`, `rewards`, `invites`, `test`, `profile`, `payouts`) keep the keys the older table had. Event
-topics (`builder`: one `{ event, id }` per push) are never held (Z4). A held push is sent by one `SetTimeout`, not a
+topics (`builder`: one `{ event, id }` per push) are never held. A held push is sent by one `SetTimeout`, not a
 loop, and `playerDropped` forgets it.
 
 Lazy screens (`web/src/layouts/screens.ts` `lazyScreen`): the Admin UI screens and the Supervisor Mission Builder;
@@ -127,7 +127,7 @@ lists that are paged or summed on purpose (an Admin list ordered by date, a boar
 
 Checked and kept: `shared/net.lua` does one rate bucket, one start check and one maintenance check per request;
 `CP.Access.getOfficer` reads Qbox through the 1 s player info cache and the suspension and retirement through their
-15 s cache (OP2); the block ox_target options (flee_arrest, search_area, skill_check, interact_points,
+15 s cache; the block ox_target options (flee_arrest, search_area, skill_check, interact_points,
 protect_rescue, process_scene) read only their own Lua tables; the Activity log, Payments made, Officers and an
 officer's runs are paged on the server (`Config.AdminUi.pageSize`); the Mission Builder list is filtered in a
 `useMemo` and holds tens of rows. Specs: tests/fixtures/npc/target_check.lua (g), tests/access_spec.lua (desk),
@@ -159,7 +159,7 @@ Checked and kept:
   tablet's downed watch belongs to another UI with its own token; the block loops each draw their own objective and
   end with it.
 - Deadlines stay exact: the server deadline ticks (run engine, route, custody, NPC, live crime) keep 1 s; the unit
-  ready check keeps its timer at the deadline (Z4); the checkpoint course keeps its own 150 m view distance, because
+  ready check keeps its timer at the deadline; the checkpoint course keeps its own 150 m view distance, because
   inside it the same pass samples your pass through the checkpoint, so `markerRange` does not apply to it.
 - Start-up waits (the client actions of custody, runs and testing waiting for `CP.Tablet.registerClientAction`, the
   settings list, the mission definitions) find what they wait for on their first pass in a normal start and end.
@@ -211,7 +211,7 @@ thread would save a few wakes a minute and tie the modules' failures together.
 | --- | --- | --- | --- | --- | --- | --- |
 | options/client Auto-Ready input watcher | no event for game input | yes, option on | 250 ms catches a tap | yes, stops at the first pressed control | nothing else reads input | game input is only seen by control reads, and only while the option is on |
 | tablet/client prop and animation keeper | no event when another script clears a task | yes, tablet open | 2000 ms, scaled | yes | own token: the prop lives across a reopen | the cheapest check that keeps the animation |
-| tablet/client open tablet watcher | no shared death event across ambulance scripts; ox_inventory sends no count change | yes, tablet open | 1000 ms; item every 2000 ms | yes, cache.ped | merged (LP3: was three) | one thread, one wake a second while open |
+| tablet/client open tablet watcher | no shared death event across ambulance scripts; ox_inventory sends no count change | yes, tablet open | 1000 ms; item every 2000 ms | yes, cache.ped | merged | one thread, one wake a second while open |
 | tablet/client, crimtab/client Escape guard | no: a disabled control must be set every frame | yes, `pauseGuardMs` after a close | per frame (required) | yes, one native | one thread each, extended | the game re-enables the pause menu each frame |
 | crimtab/client downed watch | as the tablet watcher | yes, criminal tablet open | 1000 ms, scaled | yes | its own UI and token | as the officer tablet watcher |
 | markers/client objective pointer | no event for "the player moved" | yes, ends when cleared | 2000 ms, scaled | yes | the one pointer loop | a GPS line needs no faster update |
@@ -220,7 +220,7 @@ thread would save a few wakes a minute and tie the modules' failures together.
 | runs/client weapon fired | `IsPedShooting` has no event | yes, until the first shot | per frame armed, 1000 ms unarmed | yes | its frame cost only while armed | the shot is true for one frame |
 | npc/client AI of owned peds | no event for "stuck" | yes, while it owns any | 1000 ms, scaled | yes | one loop for every owned ped | retasks are not frame critical |
 | npc/client combat caps / governor | no event | yes, on a run | 2000 ms, scaled | yes | one loop for every run ped | ends with the run |
-| npc/client tired runner pace | no: the move rate override lasts one frame | yes, while a paced ped exists | per frame (required) | yes (OP1: 369 -> 221 natives) | one loop for every paced ped | the native must be called every frame |
+| npc/client tired runner pace | no: the move rate override lasts one frame | yes, while a paced ped exists | per frame (required) | yes (221 natives) | one loop for every paced ped | the native must be called every frame |
 | npc/client cuff progress guard | no event from the progress bar | yes, while cuffing | 500 ms, scaled | yes | one per cuff | ends with the bar |
 | npccombat/client damage re-apply | no event when another script resets it | yes, run live | 2000 ms, scaled | yes | one loop | `reassertAiDamage` |
 | testing/client debug drawing | no: drawn lines need every frame | yes, debug on, within 600 m | per frame near, 1000 ms far | yes, cache.ped | one loop | lines vanish after one frame |
@@ -230,29 +230,29 @@ thread would save a few wakes a minute and tie the modules' failures together.
 | blocks suspect AI (flee_arrest, search_area, pursuit, field_contact) | no event for distance | yes, objective live | 250 ms near, 2000 ms far | yes | one per objective | reaction time near, cheap far |
 | blocks host AI (protect_rescue, escort, hostile_waves, pursuit ram) | no event | yes, objective live | 1000 ms, 250 ms while control is asked | yes | one per objective | AI retasks are not frame critical |
 | blocks/checkpoint_route course | no: contact sampling | yes, course on | per frame near, 100 ms running | yes | markers and sampling in one pass | the sampling deadline |
-| runs/server engine thread | no event for time | yes, a run or an orphan (LP4) | 1000 ms: second deadlines | yes | merged with the job recheck (LP4) | the run deadlines are in seconds |
+| runs/server engine thread | no event for time | yes, a run or an orphan | 1000 ms: second deadlines | yes | merged with the job recheck | the run deadlines are in seconds |
 | runs/server maintenance | no | caches of online players | 60 s | yes | its own tables | housekeeping once a minute |
-| route/server drive-to-start | no event for distance | yes, a run (LP4) | 1000 ms | yes, idle returns at once | its own states | the warning deadline is in seconds |
-| custody/server timers | no event for each service vehicle step | yes, a custody book (LP4) | 1000 ms | yes | its own books | each transport step is one pass |
-| npc/server watcher | no death event for server peds | yes, a live run (LP4) | 1000 ms | yes | its own records | the flee clock adds a second a pass |
-| downed/server checks | the meta change is the event; the poll is the safety net | yes, a run (LP4) | `checkEvery` | yes | its own entries | owner setting |
+| route/server drive-to-start | no event for distance | yes, a run | 1000 ms | yes, idle returns at once | its own states | the warning deadline is in seconds |
+| custody/server timers | no event for each service vehicle step | yes, a custody book | 1000 ms | yes | its own books | each transport step is one pass |
+| npc/server watcher | no death event for server peds | yes, a live run | 1000 ms | yes | its own records | the flee clock adds a second a pass |
+| downed/server checks | the meta change is the event; the poll is the safety net | yes, a run | `checkEvery` | yes | its own entries | owner setting |
 | opponents/server live crime watch | no | yes, a case or crew tracked | 1000 ms | yes | the live crime scan runs on its tick (`onTick`) | second deadlines |
 | alerts/server flag reconcile | no: a lost flag sends no event | players online | 2000 ms, scaled | yes | its own flags | a lost flag back within 2 s |
 | anticheat/server buckets, idle, presence | no | players online | 1000 ms, presence 5 s | yes | presence on the same pass | its rules count seconds |
 | operations/server | no | adaptive | 2000 ms active, 10000 ms idle | yes | one loop | the join window is minutes |
 | spawn/server open asks | no | yes, asks open | 1000 ms | yes | one loop | placement timeouts are seconds |
-| units/server sweep | no: an invite expiry is checked on accept too | yes, a unit (LP4) | 5000 ms, scaled; ready check on its own timer | yes | one loop | invites last 120 s |
+| units/server sweep | no: an invite expiry is checked on accept too | yes, a unit | 5000 ms, scaled; ready check on its own timer | yes | one loop | invites last 120 s |
 | volunteers/server, volunteers/match | no | yes, someone volunteers / a match | 30 s / 2000 ms | yes | one each | minutes-long windows |
 | missioncalls/server posting | no: calls are posted over time | always (feature on) | `checkEvery` | yes | posting and expiry in one pass | owner setting |
-| missioncalls/server push | converted to a timer (LP4) | yes, a change | 1 s after the first change | yes | one push per burst | the coalescing window |
-| testing/server upkeep | no | yes, a test (LP4) | 2000 ms, debug 2 s, upkeep 5 s | yes | debug and upkeep in one pass | the debug stream rate |
+| missioncalls/server push | converted to a timer | yes, a change | 1 s after the first change | yes | one push per burst | the coalescing window |
+| testing/server upkeep | no | yes, a test | 2000 ms, debug 2 s, upkeep 5 s | yes | debug and upkeep in one pass | the debug stream rate |
 | admin/server push queue | no | yes, while queued | 50 ms sent, 250 ms else | yes | one queue | ends when empty |
-| happyhour/server end | no event when time runs out | yes (LP3) | 30 s | yes | one loop | the screens hear the end then |
+| happyhour/server end | no event when time runs out | yes | 30 s | yes | one loop | the screens hear the end then |
 | schedule, challenge, calls, draw (server) | no | always | 60 s | yes | one per module | minute precision |
 | cash, rewards forfeit sweeps (server) | no | always | 10 min | yes | one each | the forfeit window is days |
 | web `useRequest` polls | pushes refresh at once; the poll is the safety net | yes, screen mounted | 20-60 s | yes | one per screen | the safety net only |
 | web nav badges | the `nav` push does the rest | yes, tablet open | 5 min | yes | one per layout | the safety net only |
-| web `useCountdown` | no event for time | yes, countdown shows | one timer per whole second (LP4) | yes | one per countdown | one wake per shown second |
+| web `useCountdown` | no event for time | yes, countdown shows | one timer per whole second | yes | one per countdown | one wake per shown second |
 | web `useRowWindow` | on scroll (an event) | yes | one update per frame | yes | one per table | no timer |
 | web Builder autosave | no | yes, draft open | `autosaveSeconds` | yes | one per draft | owner setting |
 | web Testing clock tick | no | yes, screen open | 30 s | yes | one per screen | "time ago" text in minutes |
@@ -268,7 +268,7 @@ async callbacks, audit writes) run once. The census marks them.
 | --- | --- | --- | --- | --- |
 | modules/options/client.lua | Auto-Ready input watcher (last game input) | only while the officer option `autoReady` is on | 250 ms | reads the last input time; ends when the option is off |
 | modules/tablet/client.lua | tablet prop and animation kept | tablet open | 1000 -> 2000 ms, scaled | other scripts clear tasks rarely |
-| modules/tablet/client.lua | open tablet watcher (LP3: one thread, was three): downed, desk distance, tablet item | tablet open; the desk check at a desk, the item check with `requireItem` on (not at a desk) | 1000 ms a pass, scaled: downed and desk every pass, item every 2000 ms | focus released soon after the death screen comes up; closes within a second of walking away; the server checks the item again |
+| modules/tablet/client.lua | open tablet watcher (one thread): downed, desk distance, tablet item | tablet open; the desk check at a desk, the item check with `requireItem` on (not at a desk) | 1000 ms a pass, scaled: downed and desk every pass, item every 2000 ms | focus released soon after the death screen comes up; closes within a second of walking away; the server checks the item again |
 | modules/tablet/client.lua | Escape guard (pause menu) | `pauseGuardMs` after a close | per frame, one thread | a disabled control is read every frame |
 | modules/crimtab/client.lua | Escape guard (pause menu) | `pauseGuardMs` after a close | per frame, one thread, extended | a disabled control is read every frame |
 | modules/markers/client.lua | objective pointer: streaming, nearest target, line | while there is something on the map | 1000 -> 2000 ms, scaled | ends by itself once cleared |
@@ -283,9 +283,9 @@ async callbacks, audit writes) run once. The census marks them.
 | modules/testing/client.lua | test area debug drawing | Testing debug on, within 600 m | per frame near, 500 -> 1000 ms far (scaled) | drawn lines need every frame |
 | modules/testing/client.lua | panel focus watch | panel focused | 250 ms | ends on blur |
 | modules/builder/client.lua | placement, recording, drive test | a Builder tool open (admin only) | per frame | draws and reads controls |
-| blocks/escort, flee_arrest, process_scene, protect_rescue marker loops | objective markers | objective current | per frame in range (capped by `markerRange`, LP3), 750 -> 1500 ms far (scaled) | markers need every frame in range |
-| blocks/search_area/client.lua | clue markers | objective current | per frame in 150 m (capped by `markerRange`, LP3), 750 -> 1500 ms far (scaled) | no allocation per frame |
-| blocks/skill_check, interact_points | markers and HUD line | objective current | per frame in range (capped by `markerRange`, LP3), 500 -> 1500 ms far (scaled) | far away, a new HUD message shows up to 1.5 s later |
+| blocks/escort, flee_arrest, process_scene, protect_rescue marker loops | objective markers | objective current | per frame in range (capped by `markerRange`), 750 -> 1500 ms far (scaled) | markers need every frame in range |
+| blocks/search_area/client.lua | clue markers | objective current | per frame in 150 m (capped by `markerRange`), 750 -> 1500 ms far (scaled) | no allocation per frame |
+| blocks/skill_check, interact_points | markers and HUD line | objective current | per frame in range (capped by `markerRange`), 500 -> 1500 ms far (scaled) | far away, a new HUD message shows up to 1.5 s later |
 | blocks/flee_arrest, search_area, pursuit, field_contact | suspect AI and reports | objective live | 250 ms near, 1000 -> 2000 ms far (scaled) | reaction time near, cheap far |
 | blocks/protect_rescue, escort, hostile_waves | host AI and blips | objective live | 500 -> 1000 ms, scaled (250 ms while control is asked) | AI retasks are not frame critical |
 | blocks/checkpoint_route/client.lua | course markers and contact sampling | course on | per frame near, 100 ms while the course runs, 500 -> 1000 ms else (scaled) | contact sampling deadline |
@@ -297,26 +297,26 @@ list and mission definitions at start) all end at a deadline and are not loops o
 
 | File | What it does | When it runs | Interval | Why |
 | --- | --- | --- | --- | --- |
-| modules/runs/server.lua | engine thread (LP4: one thread, was two): run timeouts, arrivals, arena exit sweeps, job recheck | while a run or an orphaned item is kept (LP4: was always) | 1000 ms; arena sweeps every 5th pass; job recheck every `Config.AntiCheat.jobRecheck` passes | run deadlines and HUD timers are in seconds |
+| modules/runs/server.lua | engine thread (one thread): run timeouts, arrivals, arena exit sweeps, job recheck | while a run or an orphaned item is kept | 1000 ms; arena sweeps every 5th pass; job recheck every `Config.AntiCheat.jobRecheck` passes | run deadlines and HUD timers are in seconds |
 | modules/runs/server.lua | maintenance | always | 60 s | housekeeping |
-| modules/route/server.lua | drive-to-start safety net | while a run or a tracked participant exists (LP4: was always) | 1000 ms | the warning deadline is in seconds |
+| modules/route/server.lua | drive-to-start safety net | while a run or a tracked participant exists | 1000 ms | the warning deadline is in seconds |
 | modules/alerts/server.lua | crimsonArena flag reconcile | always | 1000 -> 2000 ms, scaled | a lost flag is restored within two seconds |
 | modules/anticheat/server.lua | buckets, idle, presence sampling | always | 1000 -> 2000 ms, presence 5 s (on the next pass) | idle and bucket rules count seconds |
-| modules/custody/server.lua | custody timers | while a run has a custody book (LP4: was always) | 1000 ms (kept) | each service vehicle step (road point ask, spawn, drive, park, leave) is one pass: 2 s would make every transport and coroner arrive seconds later |
-| modules/npc/server.lua | death watcher, health, cuff reach, flee clock | while a run is live or a ped record is kept (LP4: was always) | 1000 ms (kept) | the flee clock adds a second a pass (sprint, jog, walk), and a vanished ped must be seen before the engine's own 2-pass vanish rule |
+| modules/custody/server.lua | custody timers | while a run has a custody book | 1000 ms (kept) | each service vehicle step (road point ask, spawn, drive, park, leave) is one pass: 2 s would make every transport and coroner arrive seconds later |
+| modules/npc/server.lua | death watcher, health, cuff reach, flee clock | while a run is live or a ped record is kept | 1000 ms (kept) | the flee clock adds a second a pass (sprint, jog, walk), and a vanished ped must be seen before the engine's own 2-pass vanish rule |
 | modules/opponents/server.lua | live crime watch | while a case or crew is tracked | 1000 ms (kept) | second deadlines: the lost rule, the disconnect grace, AFK and the trail |
 | modules/operations/server.lua | operations | always | 1000 -> 2000 ms active, 5000 -> 10000 ms idle (scaled) | adaptive; the join window is minutes |
 | modules/spawn/server.lua | open spawn asks | while asks are open | 500 -> 1000 ms | placement timeouts are seconds |
-| modules/units/server.lua | invite expiry, lock safety net | while a unit exists (LP4: was always) | 2000 -> 5000 ms, scaled | invites last 120 s; accepting checks the expiry itself. A ready check has its own timer at the deadline, and Units.ready refuses an answer after it (Z4) |
+| modules/units/server.lua | invite expiry, lock safety net | while a unit exists | 2000 -> 5000 ms, scaled | invites last 120 s; accepting checks the expiry itself. A ready check has its own timer at the deadline, and Units.ready refuses an answer after it |
 | modules/volunteers/server.lua | volunteer window and duty | while someone volunteers | 15 -> 30 s, scaled | the window is minutes; its end is checked at the draw (`V.available`), so the sweep only tidies |
 | modules/volunteers/match/server.lua | asking, travel, engagement | while a run has a match | 1000 -> 2000 ms | the travel time is minutes |
 | modules/missioncalls/server.lua | call posting and expiry | always | `checkEvery` s | the feature is on all day |
-| modules/missioncalls/server.lua | coalesced screen push | a change (LP4: was a 1 s loop all day) | one `SetTimeout`, 1 s after the first change | a burst of changes is one push |
-| modules/testing/server.lua | debug stream, invites | while a test, an invitation or a waiting result is kept (LP4: was always) | 1000 -> 2000 ms base, debug 2 s, upkeep 5 s (on the next pass) | |
-| modules/downed/server.lua | downed checks | while a run is live or an entry is kept (LP4: was always) | `Config.Downed.checkEvery` s (min 0.5) | owner setting |
+| modules/missioncalls/server.lua | coalesced screen push | a change | one `SetTimeout`, 1 s after the first change | a burst of changes is one push |
+| modules/testing/server.lua | debug stream, invites | while a test, an invitation or a waiting result is kept | 1000 -> 2000 ms base, debug 2 s, upkeep 5 s (on the next pass) | |
+| modules/downed/server.lua | downed checks | while a run is live or an entry is kept | `Config.Downed.checkEvery` s (min 0.5) | owner setting |
 | modules/admin/server.lua | admin push queue | while queued | 50 ms sent, 250 ms else | ends when empty |
 | modules/schedule/server.lua | daily jobs | always | 30 -> 60 s | minute precision |
-| modules/happyhour/server.lua | happy hour end | while a happy hour may be on (LP3: was always): armed at start, by a start and by a Settings change; ends after a pass that sees none | 15 -> 30 s, scaled | the screens hear the end then |
+| modules/happyhour/server.lua | happy hour end | while a happy hour may be on: armed at start, by a start and by a Settings change; ends after a pass that sees none | 15 -> 30 s, scaled | the screens hear the end then |
 | modules/challenge/server.lua | planned-end reminders | always | 60 s | |
 | modules/calls/server.lua | prune | always | 60 s | |
 | modules/draw/server.lua | housekeeping | always | 60 s | |
@@ -328,7 +328,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | --- | --- | --- | --- |
 | shared/hooks.ts `useRequest` | screen polls (`pollMs`) | the screen is mounted in the open tablet | 10 -> 20 s shortest (`POLL_MIN_MS`: a smaller `pollMs` polls every 20 s), up to 60 s per screen; pushes refresh at once |
 | layouts/navBadges.ts | sidebar counts re-ask | tablet open | 5 min (the `nav` push does the rest) |
-| shared/hooks.ts `useCountdown` | HUD countdowns | a countdown shows | one `setTimeout` at each whole second (LP4: was a 200 ms poll), ends at 0 |
+| shared/hooks.ts `useCountdown` | HUD countdowns | a countdown shows | one `setTimeout` at each whole second, ends at 0 |
 | shared/rowWindow.ts `useRowWindow` | the rows a windowed table draws | `Config.AdminUi.windowRows` on, a scrolling table of more than 100 rows | on scroll, one update per animation frame (no timer) |
 | builder/useDraftEditor.ts | autosave | an editable draft is open | `autosaveSeconds` |
 | admin/screens/Testing.tsx | clock tick | the screen is open | 30 s |
@@ -371,13 +371,13 @@ strings do not count.
 | `modules/crimtab/client.lua` | 6 | 0 | Escape guard, downed watch; one-shots |
 | `modules/crimtab/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/custody/client.lua` | 3 | 0 | bounded control and load waits; one-shots |
-| `modules/custody/server.lua` | 1 | 0 | one-shot; the custody tick is a `CP.Perf.armed` loop (LP4) |
+| `modules/custody/server.lua` | 1 | 0 | one-shot; the custody tick is a `CP.Perf.armed` loop |
 | `modules/disputes/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/downed/client.lua` | 1 | 0 | bounded waits |
-| `modules/downed/server.lua` | 3 | 0 | start-up hooks; the check is a `CP.Perf.armed` loop (LP4) |
+| `modules/downed/server.lua` | 3 | 0 | start-up hooks; the check is a `CP.Perf.armed` loop |
 | `modules/draw/server.lua` | 2 | 1 | holder housekeeping, 60 s; a one-shot |
 | `modules/featurerewards/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/happyhour/server.lua` | 1 | 1 | the end check, armed while one may run (LP3) |
+| `modules/happyhour/server.lua` | 1 | 1 | the end check, armed while one may run |
 | `modules/integrations/qbx/client.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/integrations/qbx/server.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/integrations/sc_dispatch/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -388,7 +388,7 @@ strings do not count.
 | `modules/markers/client.lua` | 2 | 0 | objective pointer; a start-up hook |
 | `modules/migrations/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/missionban/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/missioncalls/server.lua` | 2 | 1 | call posting, `checkEvery`; one-shots; the push is a `SetTimeout` (LP4) |
+| `modules/missioncalls/server.lua` | 2 | 1 | call posting, `checkEvery`; one-shots; the push is a `SetTimeout` |
 | `modules/missions/client.lua` | 1 | 0 | bounded definitions retry at start |
 | `modules/missions/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/npc/client.lua` | 19 | 1 | owned ped AI, pace, governor, cuff guard; bounded control waits; one-shots |
@@ -406,9 +406,9 @@ strings do not count.
 | `modules/profile/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/rewards/server.lua` | 5 | 1 | forfeit sweep, 10 min; one-shots |
 | `modules/route/client.lua` | 2 | 0 | drive-to-start report; a start-up hook |
-| `modules/route/server.lua` | 4 | 0 | one-shots; the tick is a `CP.Perf.armed` loop (LP4) |
+| `modules/route/server.lua` | 4 | 0 | one-shots; the tick is a `CP.Perf.armed` loop |
 | `modules/runs/client.lua` | 3 | 1 | telemetry, weapon fired; bounded entity wait |
-| `modules/runs/server.lua` | 6 | 1 | maintenance, 60 s; per-run tick threads; one-shots; the engine is a `CP.Perf.armed` loop (LP4) |
+| `modules/runs/server.lua` | 6 | 1 | maintenance, 60 s; per-run tick threads; one-shots; the engine is a `CP.Perf.armed` loop |
 | `modules/schedule/server.lua` | 3 | 1 | daily jobs, 60 s; one-shots |
 | `modules/scoring/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/settings/client.lua` | 1 | 0 | bounded settings wait at start |
@@ -422,11 +422,11 @@ strings do not count.
 | `modules/tablet/server.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/testing/client.lua` | 9 | 0 | debug drawing, focus watch; bounded waits; one-shots |
 | `modules/units/client.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/units/server.lua` | 1 | 0 | a start-up hook; the sweep is a `CP.Perf.armed` loop (LP4) |
+| `modules/units/server.lua` | 1 | 0 | a start-up hook; the sweep is a `CP.Perf.armed` loop |
 | `modules/volunteers/client.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/volunteers/match/server.lua` | 5 | 0 | match tick while a run has a match; one-shots |
 | `modules/volunteers/server.lua` | 7 | 0 | volunteer sweep while someone volunteers; one-shots |
-| `shared/init.lua` | 1 | 1 | `CP.Perf.armed`: the loop that runs only while it has work (LP4) |
+| `shared/init.lua` | 1 | 1 | `CP.Perf.armed`: the loop that runs only while it has work |
 | `shared/net.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `shared/utils.lua` | 0 | 5 | the config text parser, no Wait |
 
@@ -451,7 +451,7 @@ strings do not count.
 | `web/src/officer/screens/debouncedSave.ts` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/shared/components/QuietBoundary.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/shared/components/Toasts.tsx` | 2 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
-| `web/src/shared/hooks.ts` | 3 | 0 | `useRequest` poll, `useCountdown` (LP4: a timer per second) |
+| `web/src/shared/hooks.ts` | 3 | 0 | `useRequest` poll, `useCountdown` (a timer per second) |
 | `web/src/shared/nui.ts` | 4 | 0 | request timeout, retry delay, mock latency |
 | `web/src/shared/rowWindow.ts` | 0 | 1 | one frame per scroll burst |
 | `web/src/supervisor/components/DeptNoticesCard.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |

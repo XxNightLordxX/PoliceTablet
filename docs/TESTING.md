@@ -473,16 +473,16 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   natives.json's argument types and keeps each ped's task, cap, move rate and clip set: `capNow(ped)` /
   `rateNow(ped)` answer only what was set during the current frame (one `H.step`), a clip set loads `loadMs` after
   `RequestClipSet` and only when natives.json lists it (`RemoveClipSet` unloads it and counts in `released`), and
-  `safeCoord` is the spec's GetSafeCoordForPed. The npc client checks (tired runners, step F2) use it; with the old
+  `safeCoord` is the spec's GetSafeCoordForPed. The npc client checks (tired runners) use it; with the old
   module 87 checks fail (30 of them the `false` flags).
 - **Ground probe natives on a small map**: `H.groundNatives(onCall)` installs the natives of the ground probe
-  (CP.Spawn.probe, step S6: RequestCollisionAtCoord, HasCollisionLoadedAroundEntity, the interior pin and ready
+  (CP.Spawn.probe: RequestCollisionAtCoord, HasCollisionLoadedAroundEntity, the interior pin and ready
   natives, GetGroundZAndNormalFor_3dCoord, the water natives, StartShapeTestCapsule with GetShapeTestResult, the model
   natives) with natives.json's argument types, over a map the spec builds: the ground is found only once the
   collision has loaded (`collisionMs` after the first request, or never), an interior's floor only while it is
   ready (`readyMs` after a pin, or never), water heights, capsules that hit, take frames, never finish or do not
   start, and model sizes known only once the model is loaded. tests/spawn_ground_spec.lua uses it.
-- **Placer natives on a small game**: `H.placerNatives(onCall)` installs the natives of the placer (step S9: the
+- **Placer natives on a small game**: `H.placerNatives(onCall)` installs the natives of the placer (the
   player natives, NetworkDoesNetworkIdExist / NetworkGetEntityFromNetworkId, control and its owner, IsPedInAnyVehicle,
   IsEntityAttached, FreezeEntityPosition, SetEntityLoadCollisionFlag, SetEntityCoordsNoOffset,
   SetVehicleOnGroundProperly, PlaceObjectOnGroundProperly) with natives.json's argument types, over the players and
@@ -491,7 +491,7 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   over at `loseAt`. tests/spawn_placer_spec.lua uses it with H.groundNatives, and tests/spawn_placer_npc_spec.lua
   too, with modules/npc/client.lua loaded in the same game (its other natives recorded) so CP.Npc tasks a person while
   the placer checks his ground.
-- **The server's side of the placer** (step S10): tests/spawn_place_spec.lua runs modules/spawn/server.lua on the real
+- **The server's side of the placer**: tests/spawn_place_spec.lua runs modules/spawn/server.lua on the real
   engine (tests/fixtures/custody/world.lua) with FXServer's routing of the server RPC `FreezeEntityPosition`: sent to
   the game that simulates the entity (`NetworkGetEntityOwner`, a player's server id or -1), kept for the first game
   that takes an entity nobody simulates yet (ServerRPC.cpp), so a spec sees which game an entity is frozen on.
@@ -548,6 +548,8 @@ Run `tools/check_all.sh` once, right before the commit (its steps are listed at 
   A protocol name without its §8 or §9 entry is a finding.
 - **What an owner sees or sets** (install, a setting, a command, a console line) goes in the root `README.md`, and
   the folder README that covers it.
+- **No build history in the docs**: they describe what the code does now, not which step changed it. Step and plan
+  ids stay out of the prose (only `docs/IN_GAME_CHECKLIST.md` keeps its step tags); `tests/docs_spec.lua` checks it.
 - **Commit messages** say what changed and why. The only numbers in them come from the gate.
 
 ### Keeping the style applied

@@ -1,6 +1,6 @@
 # File notes
 
-The long headers that used to open each file, kept word for word. The owner's style (docs/STYLE.md)
+The long headers that used to open each file, kept in full. The owner's style (docs/STYLE.md)
 keeps a file header to a short summary; tools/restyle.py moved the rest here. Section names are file
 paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTURE.md.
 
@@ -156,7 +156,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     trigger when the truck is within AMBUSH_TRIGGER of the point (or has passed it). Attackers are
     hostile only to participants (CP.Npc 'hostile'). Spawns wait for the run caps (ctx.canSpawn) and are
     never cut; rescale drops planned waves not yet triggered and lowers counts still missing.
-    Where the truck and the ambush cars appear (PLAN S14, Config.Spawning): the truck on route[1] lifted
+    Where the truck and the ambush cars appear (Config.Spawning): the truck on route[1] lifted
     Config.Spawning.vehicleLift, only while no vehicle the server knows (GetAllVehicles) and no participant is
     within TRUCK_CLEAR (6 m) of it; meanwhile it waits (block.escort.msg_clear_start once, one console line), and
     after waveDelayMax it takes the first free one of TRUCK_SPOTS spots TRUCK_STEP apart along the route (one
@@ -254,7 +254,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     Two modes:
     - door (Warrant Service): the suspect waits inside at `suspect`, armed associates (count scales)
       come out at the knock on `associates.spawns` through the spawn director (Config.Spawning
-      .associatesAtKnock; PLAN S11, ARCHITECTURE 3.3). Participants use ox_target "Knock and announce" at the
+      .associatesAtKnock, ARCHITECTURE 3.3). Participants use ox_target "Knock and announce" at the
       `door` (knock.duration progress; 'knock_start' then 'knock', both checked with server-side
       distance and the elapsed time). The suspect's response is rolled with the objective rng when
       the objective starts and revealed at the knock (or when a door-mode NPC dies first):
@@ -288,7 +288,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     the 'hostile' state (fight response, associates after the knock, an armed inmate within
     fireWithin) puts it in CRIMSONPOLICE_HOSTILE through CP.Npc's combat task, so nobody opens fire
     before the knock or from beyond fireWithin.
-    Volunteer slot (V23, ARCHITECTURE 7.3): door mode offers volunteerSlot { role = 'runner', meet = the
+    Volunteer slot (ARCHITECTURE 7.3): door mode offers volunteerSlot { role = 'runner', meet = the
     suspect point }. ctx.volunteer() decides st.vol: 'wait' (asking: nobody at the door), 'real' (a volunteer
     plays him: no NPC suspect, done when CP.Opponents.view has him detained with a share or booked, lost fails),
     'void' (nothing spawns), nil (the NPC as before). No associate while st.vol is set unless
@@ -372,7 +372,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
       report per hostile whose health drops under surrender.belowHealth (boss: boss.surrender.belowHealth;
       the server also polls health itself, the report only makes the roll come sooner).
     The "Cuff suspect" target itself is CP.Npc's (enableCuff). No networked entity is created here.
-    A staged crew (stage = true, PLAN S4) is left alone while its objective is pending and calm (no task,
+    A staged crew (stage = true) is left alone while its objective is pending and calm (no task,
     no blip, no control asked: CP.Npc keeps them calm and unarmed). When the server's update says
     awake = true (the crew woke before the breach) the loop runs for it already (Live: current or awake):
     the host's CP.Npc.apply + combat task, the blips; the HUD line and the low_health reports stay the
@@ -402,7 +402,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     surrender roll (CP.Npc.rollSurrender with surrender.chance) when the host reports it and the
     server confirms the health; the server also polls the health of every hostile each tick, so a
     report that arrived before the damage synced (or never arrived) cannot cost the roll. Spawn
-    points come from the engine's spawn director (ctx.choosePoints, Config.Spawning, PLAN S2): wave 1
+    points come from the engine's spawn director (ctx.choosePoints, Config.Spawning): wave 1
     waits until an officer is within activateRange of the middle of the fight's points (ctx.whenNear);
     each call offers the fight's points (the rolled spawn sets, else spawns), shuffled with the
     objective rng, never one a living hostile (cuffed included, not a body) stands on (OCCUPIED_RADIUS),
@@ -421,7 +421,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
     tick without asking the director or the officers' games, its ws.waitMs clock starting again once there is
     room; counts are never cut for the caps) and rescale (only the NPCs still missing for the new ctx.obj counts are spawned).
     The client half blocks NPC traffic within blockTraffic metres of the start while the objective runs.
-    Staged ahead (stage = true, PLAN S4, Config.Spawning.stageAhead): the engine calls stage(ctx) once a
+    Staged ahead (stage = true, Config.Spawning.stageAhead): the engine calls stage(ctx) once a
     tick while the objective before runs; wave 1 is placed then (once ctx.whenNear, through the director
     with the objective's indoor flag, never relaxed: a probe clock { points = ws.points }, so the wave's own
     ws.waitMs starts with the fight), calm: ctx.spawnPed hidden = true (no weapon, armour or fight settings
@@ -579,7 +579,7 @@ paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTU
 ## Crimson-Police/blocks/live_response/client.lua
 
 ```text
-Objective block "live_response" (client half, step V12): the live_crime engine mission's objective. The server half
+Objective block "live_response" (client half): the live_crime engine mission's objective. The server half
 decides everything from server facts (CP.Opponents); this half only offers the unit leader "End case" in the ox_lib
 radial menu while the objective runs, with a confirm. The map pointer (the scene, then the last-reported points)
 is CP.Markers' own, from the server's marker.
@@ -588,7 +588,7 @@ is CP.Markers' own, from the server's marker.
 ## Crimson-Police/blocks/live_response/server.lua
 
 ```text
-Objective block "live_response" (server half, step V12): the engine-only objective of a live crime (the live_crime
+Objective block "live_response" (server half): the engine-only objective of a live crime (the live_crime
 engine mission, docs/ARCHITECTURE.md §5.46 and §7.3). The suspects are real players kept by CP.Opponents (§5.45);
 this block never touches them. Three phases: Respond (an officer reaches the reported scene or makes contact),
 Secure the scene (officers hold it for Config.LiveCrime.secureSeconds), and one open "Detain and book the suspects"
@@ -675,7 +675,7 @@ Config.LiveCrime.lastReportedEvery seconds (0 = never).
     { type = 'damaged', netId, attacker }  CP.Npc (CP.Runs.dispatch): a hostage took damage
     CP.Npc.onDamaged(run, netId, attackerSrc) is the damage channel: it is server-only and fires for
     every hit on a hostage. While it is listened to, 'shot' / 'damaged' are acknowledged without
-    effect. server:objective refuses both from a client and flags the sender (K1); this stays as
+    effect. server:objective refuses both from a client and flags the sender; this stays as
     defence in depth, so a client can never cost the team hostage_hit. Without onDamaged they count.
     One hit per hostage and attacker is counted per HIT_WINDOW_MS (one bullet, one penalty).
     no_hostage_hurt is recorded only once minSeconds has passed since the start (a completion
@@ -793,7 +793,7 @@ Config.LiveCrime.lastReportedEvery seconds (0 = never).
     each car's position, waypoint, speed, owner and nearest participant every TRACE_MS, and every
     spawn with its distance and culling radius. A race (stop mode on a loop) starting on arrival
     shows block.pursuit.msg_race_start.
-    Where the cars appear (PLAN S13, Config.Spawning): PlaceFor gives slot i (spawnOffset > spawns > spawn >
+    Where the cars appear (Config.Spawning): PlaceFor gives slot i (spawnOffset > spawns > spawn >
     ahead of the start > on the route > near the start; a slot past the objective's cars is a further slot of the
     same kind). A point of the road route itself (spawnOffset, a loop's waypoint, an open route's first point) is
     lifted Config.Spawning.vehicleLift over the road; the file's car points are used as written. A spawnOffset < 0
@@ -808,7 +808,7 @@ Config.LiveCrime.lastReportedEvery seconds (0 = never).
     'lights_near', checked with server coords), when any participant gets within FLEE_CLOSE, or when
     the car is hit. Rams of a suspect vehicle above ramSpeed km/h (0 = any contact) are penalised.
     Killing an unarmed, surrendered or cuffed suspect (a participant kill) fails the run.
-    Volunteer slot (V24, ARCHITECTURE 7.3; one local table Vol, the file is near Lua's 200 locals): stop mode with
+    Volunteer slot (ARCHITECTURE 7.3; one local table Vol, the file is near Lua's 200 locals): stop mode with
     no contact hand-off, no observe and no team offers volunteerSlot { role = 'driver', meet = the first car's point }
     (Street Race Bust). ctx.volunteer() decides st.vol: 'wait' (asking: no car, no trigger), 'real' (he drives his
     own car: no NPC car unless Config.Volunteers.driverNpcCars, then one fewer; he is one more car and suspect,
@@ -932,7 +932,7 @@ Config.LiveCrime.lastReportedEvery seconds (0 = never).
     picks the new centre with ctx.rng within 0.7 × the new radius of a fugitive still at large (nested in
     the old circle when possible), so the circle always contains a fugitive.
     `fugitives` (scales) unarmed fugitives hide at random hiding spots (distinct first; Slot(i)).
-    When they appear (Config.Spawning, PLAN S16; ARCHITECTURE §3.3 "search_area through the director"):
+    When they appear (Config.Spawning; ARCHITECTURE §3.3 "search_area through the director"):
     nothing when the search starts; a fugitive on his spot once an officer is within activateRange of it
     (ctx.whenNear) and every officer minDistance or more from it (ctx.choosePoints, never closer; after
     waveDelayMax of an officer standing closer, another free hiding spot in the circle an officer is
@@ -948,7 +948,7 @@ Config.LiveCrime.lastReportedEvery seconds (0 = never).
     escapes: the run fails. Killing a fugitive or the witness (a participant kill) fails the run.
     Done when every fugitive is neutralised (cuffed, or dead without a participant kill).
     clues_first is awarded once when every clue was checked before the first arrest.
-    Volunteer slot (V25, ARCHITECTURE 7.3; one local table Vol): volunteerSlot { role = 'fugitive', meet = the
+    Volunteer slot (ARCHITECTURE 7.3; one local table Vol): volunteerSlot { role = 'fugitive', meet = the
     location's first hiding spot } (Manhunt). ctx.volunteer() decides st.vol: 'wait' (asking: no fugitive, no
     completion), 'real' (a real player hides: no NPC fugitive unless Config.Volunteers.fugitiveNpcs, then one fewer;
     he is one more fugitive, done when CP.Opponents.view has him detained with a share or booked, one arrest; lost
@@ -1611,7 +1611,7 @@ Owns
   * cash per participant = round(B x M_tier x M_mod) (SPEC "Cash payouts"): B = run.cashBase, locked at
     accept by CP.Payouts.baseFor; M_tier = the run's points and cash tier (Config.Scaling cash); M_mod =
     Config.Events.modifierCash when the run rolled a modifier. Only Completed results pay; a participant
-    who failed the presence share (runs with 2+ participants) gets $0. Step P16: x M_bonus, the happy hour
+    who failed the presence share (runs with 2+ participants) gets $0. x M_bonus, the happy hour
     cash bonus fixed at the accept (Cash.bonusOf; never test, Cross-Department or boss runs), and M_mod uses
     the department's twistCash scale (CP.Twists.scaleOf); breakdown.cash.mBonus when it is not 1.
   * the claim-then-pay flow of one cp_mission_runs row (cash_status none/held/pending -> paying -> paid |
@@ -1724,7 +1724,7 @@ Test hooks: CP.Challenge._boot(), _weekIndex(season, ts), _weekWindow(season, n)
 ## Crimson-Police/modules/crimtab/client.lua
 
 ```text
-CP.CrimTab (client, step G2): opens and closes the criminal tablet (Config.CriminalTablet) and keeps it fresh. The
+CP.CrimTab (client): opens and closes the criminal tablet (Config.CriminalTablet) and keeps it fresh. The
 NUI asks the server for everything through the tablet's request and action endpoints (crimtab:get,
 server:crimtab:act); this side only takes the NUI focus (CP.Tablet.panelFocus, owner 'crimtab'), sends the view
 and refreshes it when the volunteer events say something changed. Nothing runs while it is closed.
@@ -1733,7 +1733,7 @@ and refreshes it when the volunteer events say something changed. Nothing runs w
 ## Crimson-Police/modules/crimtab/server.lua
 
 ```text
-CP.CrimTab (server, step G2): the criminal tablet for players who play real suspects (Config.CriminalTablet). It is
+CP.CrimTab (server): the criminal tablet for players who play real suspects (Config.CriminalTablet). It is
 a front end of CP.Volunteers: opting in and out, the question he has open (Jobs), the suspect he plays (Active),
 his past cases and strikes (History) and the rules. The server decides everything; the tablet never learns a run,
 an officer or anyone's live position.
@@ -1753,7 +1753,7 @@ read them with DC.get (callers use the Call('DeptControls', ...) pattern, so a m
 ## Crimson-Police/modules/deptnotices/server.lua
 
 ```text
-CP.DeptNotices (server): a supervisor's department notices (step P13, the Mission control notices). A supervisor
+CP.DeptNotices (server): a supervisor's department notices (the Mission control notices). A supervisor
 posts a short notice for his own department only; it shows on that department's Officer Home Announcements card
 next to the staff notices (cp_staff_notices, shared with CP.Corrections). Limits: Config.MissionControls
 noticeMaxLength characters, noticesPerDay a supervisor a day (admins any), at most CP.Corrections.NOTICES_ACTIVE
@@ -1922,7 +1922,7 @@ Public API (server)
       opts = { rng = CP.U.rng(...), participants = { src... } }; errKeys err.pool_empty,
       err.pool_cooldown, err.no_location
   CP.Draw.pickLocation(def, participantSrcs, rng, opts) -> index|nil     opts = { exclude = { [index] = true } }
-  CP.Draw.checkMission(missionId, typeKey, members, area) -> def | nil, errKey   (step P19: a mission
+  CP.Draw.checkMission(missionId, typeKey, members, area) -> def | nil, errKey   (a mission
       staff pushed to a unit; the pool's rules for that one mission, never the boss; Draw.accept's
       opts.missionId uses it instead of the draw, the location still picked at random)
   CP.Draw.reserve(runId, missionId, index) -> wasFree
@@ -1966,12 +1966,12 @@ Owns
   * Modifiers: the roll at accept (Config.Events.modifierChance, the run's seed): Armored Hostiles
     (Tactical only), Time Crunch, Radio Silence. Never for Cross-Department Missions, the Weekly Boss
     or test runs. The effects are applied by the engine (CP.Runs / CP.Scaling / blocks).
-  * The twists Mission control (step P15, Events.registerTwistControl): which enabled twists a
+  * The twists Mission control (Events.registerTwistControl): which enabled twists a
     department's leaders are offered at the accept step and which start ticked (Events.deptTwists;
     twistOffer and checkTwists take the leader's department).
-  * The twistCash Mission control (step P16, Events.registerTwistCashControl): x each twist's cash
+  * The twistCash Mission control (Events.registerTwistCashControl): x each twist's cash
     for the leader's department inside the admin's bounds (Events.deptTwistCash; twistOffer shows it).
-  * The typeOfTheDay Mission control (step P18, Events.registerDeptTodControl): a department's pick
+  * The typeOfTheDay Mission control (Events.registerDeptTodControl): a department's pick
     for the next day; Events.typeOfTheDay(dayKey, department, who) gives today's pick (read once a day
     from yesterday's last cp_audit change, Events.deptTypeOfTheDay) unless its setter is among who,
     else the server type (admin override, then the roll).
@@ -2005,7 +2005,7 @@ Contract interpretations (details in docs/ARCHITECTURE.md §13.12)
 ## Crimson-Police/modules/featurerewards/server.lua
 
 ```text
-CP.FeatureRewards (server, step G3): the money and items of the features outside a mission's own pay
+CP.FeatureRewards (server): the money and items of the features outside a mission's own pay
 (Config.FeatureRewards): the volunteer suspect, the officer who talked a suspect down, field training sign-offs and
 completion, and supervisor point awards. Each payment is one row of the payments ledger (cp_mission_runs, mission
 type manual_award, mission id reward_<feature>) paid by CP.Cash (audited, pending until login, the daily cap), and
@@ -2016,10 +2016,10 @@ run_uuid is made from the feature and the case key, so one case pays once whatev
 ## Crimson-Police/modules/fieldtraining/server.lua
 
 ```text
-CP.FieldTraining (server): field training (steps T1 and T2, Config.FieldTraining). A supervisor (or an admin) pairs a
+CP.FieldTraining (server): field training (Config.FieldTraining). A supervisor (or an admin) pairs a
 trainer with a rookie of the department; completed runs the two finish together count towards the sign-off tasks
-(per mission type); the trainer signs a task off once its count is reached (trainerBonus points to him, T2); every
-task signed off gives the badge. T2: the ride-along rule (requireTrainerFor, checked by CP.Draw's accept). F3: FT.joinCheck,
+(per mission type); the trainer signs a task off once its count is reached (trainerBonus points to him); every
+task signed off gives the badge. The ride-along rule (requireTrainerFor, checked by CP.Draw's accept). FT.joinCheck,
 the same rule for a live case backup (CP.Runs.addParticipant).
 The record lives on the rookie's officer row (cp_officers.field_training, migration 015), so the database and the
 saves folder keep it alike. Shipped off: no hook does anything and every action is refused.
@@ -2049,7 +2049,7 @@ Public API (docs/ARCHITECTURE.md §5.19)
   CP.Goals.onRunCompleted(citizenid)   (hook: a completed row was counted) -> inserts the goal rows earned
 Both query the database: call them from a thread.
 
-Step P21: the goals Mission control (Goals.registerControl). A supervisor picks which of the admin's daily and
+the goals Mission control (Goals.registerControl). A supervisor picks which of the admin's daily and
 weekly goals his department's officers draw from, counting from the next weekly reset (the saved value carries
 from and prev); forOfficer(citizenid, department) and Pick take the department; the setter keeps the whole lists.
 ```
@@ -2057,18 +2057,18 @@ from and prev); forOfficer(citizenid, department) and Pick take the department; 
 ## Crimson-Police/modules/happyhour/server.lua
 
 ```text
-CP.HappyHour (server): the happy hour Mission control (step P6). A supervisor (or an admin) starts it for N minutes
+CP.HappyHour (server): the happy hour Mission control. A supervisor (or an admin) starts it for N minutes
 (inside the admin's min and max, Config.MissionControls.controls.happyHour): while it runs no mission has a
 cooldown for anyone on the server (cooldownScale 0 for every type) and, when ticked, the no-repeat rule is off.
 The abandon type cooldown, the hourly and daily caps and the cash cap stay. Server-wide (owner decision: anything
 that changes cooldowns is), outside the master switch, Config.MissionControls.happyHourPerDay a day for
 supervisors, never for the supervisor who started it or a unit he is in (the self rule). It is one timed row of
 cp_dept_controls (expires_at), so a restart keeps the window; when it ends every cooldown is read against its real
-end time again (read-time cooldowns, step P2).
-Step P16: the happyHourCash control (per department, under the master switch, shipped off with min = max = 1.0):
+end time again (read-time cooldowns).
+the happyHourCash control (per department, under the master switch, shipped off with min = max = 1.0):
 HH.cashBonusFor gives a run accepted during a happy hour its department's cash multiplier (run.controls.cashBonus),
 never for the one who started the hour or a unit he is in.
-Step P20: happyHourPoints, the same for points: HH.pointsBonusFor fixes run.controls.pointsBonus at the accept
+happyHourPoints, the same for points: HH.pointsBonusFor fixes run.controls.pointsBonus at the accept
 (CP.Scoring.compute multiplies the final points by it).
 ```
 
@@ -2359,9 +2359,9 @@ Test hooks: CP.Leaderboard._weeklyJob(prevStartTs, curStartTs), CP.Leaderboard._
 ## Crimson-Police/modules/livecrime/client.lua
 
 ```text
-CP.LiveCrime (client, step V15): the pop-up that asks an officer to join a live case as backup. The server decides
+CP.LiveCrime (client): the pop-up that asks an officer to join a live case as backup. The server decides
 who is asked (a response to the crime's call, the scene, a cuff on a suspect) and checks the answer again; this
-side only shows the question and sends yes or no with the offer's token. Step RP1: the same for a suspect's
+side only shows the question and sends yes or no with the offer's token. The same for a suspect's
 surrender question (his own command, or an officer's Talk them down).
 ```
 
@@ -2386,7 +2386,7 @@ that did not finish).
 ## Crimson-Police/modules/missionban/server.lua
 
 ```text
-CP.MissionBan (server): a supervisor's temporary mission ban of one officer (step P11, the Mission control
+CP.MissionBan (server): a supervisor's temporary mission ban of one officer (the Mission control
 missionBan, kind 'action'). A banned officer keeps the tablet (it is not a suspension) but cannot accept from the
 Mission Board, claim a mission call or join a Cross-Department Mission until it ends; a run already going on is
 never ended. Saved in cp_officers.mission_ban (migration 012) and kept in memory for the accept checks.
@@ -2697,7 +2697,7 @@ flag and the defense modifier back to their pre-run values for the rest of that 
 ## Crimson-Police/modules/npccombat/server.lua
 
 ```text
-CP.NpcCombat (server, V8): the crimsonPoliceRun player bag (replicated, exactly true) of every officer whose
+CP.NpcCombat (server): the crimsonPoliceRun player bag (replicated, exactly true) of every officer whose
 client:start starts the run's NPC damage settings, cleared when he leaves, when the run ends and at resource stop,
 written only on a change; Crimson-Contracts' guard damage scaling leaves the shared AI damage value alone while it is
 true. dropFor(run, src) sends client:npcCombatDrop once per run and officer. A read-only weaponDamageEvent handler,
@@ -2800,7 +2800,7 @@ to every department member online (and 'operation' to online admins).
 ## Crimson-Police/modules/opponents/conduct/server.lua
 
 ```text
-CP.Opponents conduct (server, step V6): how officers treat a real suspect, from server facts only. The armed
+CP.Opponents conduct (server): how officers treat a real suspect, from server facts only. The armed
 definition (C6), the damage ledger between a case's officers and its suspects, excessive force on a suspect in
 custody or down (C7: a flag that holds the officer's points, never an automatic fail), the unarmed-shot and
 ran-over penalties, and the cash-seizure audit. Every flag here is an officer-conduct flag on the officer who fired,
@@ -2810,7 +2810,7 @@ drove or seized (critic 2 #12): only his points are held, never his partner's.
 ## Crimson-Police/modules/opponents/pairs/server.lua
 
 ```text
-CP.Opponents identity and pairs (server, step V7; critic C27, critic 2 #21-#23, #30): the self rule (nobody takes a
+CP.Opponents identity and pairs (server; critic C27, critic 2 #21-#23, #30): the self rule (nobody takes a
 case against one of his own characters or accounts), the duty maps (job hops), and the pair ledger cp_pvp_pairs
 with its caps and the pair-repeat flag. Every cap is a memory lookup: the ledger is read at start and kept in
 memory, and writes go to the database in a thread. Identifiers are compared live and never stored, logged or sent.
@@ -2819,10 +2819,10 @@ memory, and writes go to the database in a thread. Identifiers are compared live
 ## Crimson-Police/modules/opponents/proof/server.lua
 
 ```text
-CP.Opponents proof (server, step V5): the server facts that decide every detain and booking of a real suspect. The
+CP.Opponents proof (server): the server facts that decide every detain and booking of a real suspect. The
 sc-police cuff pair and the custody hold, getting free during the hold (an officer's uncuff, a friend's bobby pin,
 sc-police's cuff-break game, or a self-uncuff), downs, bookings matched in either order, and the hospital rules.
-The facts come from the CP.ScPolice / CP.Ambulance listeners (V3) and the metadata mirror (V4's Opp.onMeta), so
+The facts come from the CP.ScPolice / CP.Ambulance listeners and the metadata mirror (V4's Opp.onMeta), so
 nothing here runs while no case is open. A suspect's own acts are staff notes (Opp.note): nothing here sets
 run.flagged or p.flagged.
 ```
@@ -2830,7 +2830,7 @@ run.flagged or p.flagged.
 ## Crimson-Police/modules/opponents/saved/server.lua
 
 ```text
-CP.Opponents saved cases (server, step F1): each closed real-suspect case is saved in cp_pvp_cases while
+CP.Opponents saved cases (server): each closed real-suspect case is saved in cp_pvp_cases while
 Config.RealSuspects.saveCases is on and live crimes or volunteers are on, and the newest casesKept are read back at
 the start, so the Admin UI Real suspects screen keeps them over a restart. Only what staff read is saved (names,
 the timeline, the damage ledger, the volunteer's part): never a position. Written once per close, never per tick.
@@ -2839,7 +2839,7 @@ the timeline, the damage ledger, the volunteer's part): never a position. Writte
 ## Crimson-Police/modules/opponents/staff/server.lua
 
 ```text
-CP.Opponents staff (server, step V17): what admins read about real-suspect cases and the three admin tools. The
+CP.Opponents staff (server): what admins read about real-suspect cases and the three admin tools. The
 case data here (names, citizenids, the timeline, the damage ledger, the flags and notes) is server-only: it goes
 to an admin's Admin UI through these callbacks and never to an officer's tablet (Opp.view has no names). Reads
 read memory (open cases and the last Config.RealSuspects.casesKept closed ones, which modules/opponents/saved
@@ -2850,11 +2850,11 @@ Nothing here runs while nobody asks; the actions are refused while both features
 ## Crimson-Police/modules/opponents/surrender/server.lua
 
 ```text
-CP.Opponents surrender (server, step RP1): a real suspect of a live case gives himself up, by his own command or
+CP.Opponents surrender (server): a real suspect of a live case gives himself up, by his own command or
 when an officer of the case close to him uses Talk them down (the suspect always chooses). Config.RealSuspects
 .surrender, behind Config.LiveCrime.enabled. The server decides everything from its own positions and the case's
 states; the clients only show the question and send the answer with its token. A surrender is a mark on the
-suspect (rec.surrender), never a state: the cuff, the detain and the booking stay the proof's (V5). A surrendered
+suspect (rec.surrender), never a state: the cuff, the detain and the booking stay the proof's. A surrendered
 suspect detained with no officer hit on him since he gave up is a peaceful arrest (Opp.peaceful, read by the
 live_response block for the peaceful_arrest line), and the case timeline keeps who talked him down.
 ```
@@ -2955,7 +2955,7 @@ can, actionsFor, tookPart and canReviewRun may yield (database): call them from 
 ## Crimson-Police/modules/reviewrules/server.lua
 
 ```text
-CP.ReviewRules (server): a department's stricter review rules for flagged runs (step P14, the Mission control
+CP.ReviewRules (server): a department's stricter review rules for flagged runs (the Mission control
 reviewRules). { secondVoid = true }: a supervisor's Void of a flagged row of that department only marks it pending;
 a second supervisor of that department confirms it. { adminOnlyKinds = { kind, ... } }: flags of those kinds leave
 the supervisors' Review queue and only admins approve or void them. It never relaxes a rule (Config.AntiCheat's
@@ -2970,7 +2970,7 @@ modules/route/client.lua · CP.Route (client): the GPS route to the mission star
 server checks (docs/ARCHITECTURE.md §5.12, SPEC "Route to the start").
 
 Owns: the start waypoint, the named "Mission start" pin (Config.Markers.kinds.start; kept from begin until
-arrival or stop with Config.Markers.startBlip, PLAN M9; its blip route is read to sample GTA's GPS route and is
+arrival or stop with Config.Markers.startBlip; its blip route is read to sample GTA's GPS route and is
 on afterwards only while our waypoint is gone, so the start keeps one line), the fixed polyline sampled
 from it, the reports to server:routeStatus, the route part of the HUD (HudState.route) and the client
 actions setGps and recalcRoute (NUI 'client' endpoint, registered with CP.Tablet.registerClientAction).
@@ -2993,7 +2993,7 @@ Public API
                                                 (CP.Runs calls it on arrival and at the end). Never touches
                                                 the HUD (the run engine owns it).
   CP.Route.current() -> { runId, arrived, routeOn, action } | nil
-  CP.Route.follow(runId, dropStart) -> boolean  (PLAN M11) the run went In progress before this officer
+  CP.Route.follow(runId, dropStart) -> boolean  the run went In progress before this officer
       arrived (CP.Runs calls it on client:routeStatus 'action'): the sampling, the reports and a waiting
       Recalculate stop (new token), HUD route 'action', a toast. dropStart (CP.Markers.leads): the start
       pin and our start waypoint go first, then current().action lets CP.Markers route to the objective;
@@ -3048,14 +3048,14 @@ Every 1 s, with the SERVER-SIDE ped position:
     or goes (and after a granted recalculation) the run view is pushed to the tablet (push topic 'run').
   * drift: the straight-line distance to the start grows more than Config.Route.maxDrift past the closest
     it has been -> 'off_route', whatever the client reports.
-  * late partners (PLAN M11, Config.Route.lateArriveRange, 0 = off): once run.state == 'in_progress', a
+  * late partners (Config.Route.lateArriveRange, 0 = off): once run.state == 'in_progress', a
     participant who has not arrived switches once to mode 'action' (client:routeStatus 'action' + a 'run'
     push): no warning, report, drift or off_route check any more (with Config.Route.required on or off),
     reports and Recalculate are refused, status = { status = 'action', distance = metres to the action,
     secondsLeft = seconds until his start deadline }.
     He arrives (markArrived, as at the start) inside the start circle or within lateArriveRange of
     CP.Runs.actionPoints(run) (the objective's anchor, its pointer's point or targets, anywhere inside its
-    circle). On the switch (R6) CP.Runs.extendStart gives him Config.Route.followActionSeconds (300; 0 = none)
+    circle). On the switch CP.Runs.extendStart gives him Config.Route.followActionSeconds (300; 0 = none)
     from then on to arrive, never less than the start deadline he had.
   * in-arena participants (CP.Alerts.inArena) are not route-checked and cannot arrive (CP.Alerts removes
     them from the run); their reports are ignored.
@@ -3095,7 +3095,7 @@ where the officer is).
     { type = 'log', point, choice }) (Business Check tablet log)
   Events handled: client:start, client:inProgress, client:objective, client:hud, client:tierChanged,
     client:hostChanged, client:participants, client:runEnded (docs/ARCHITECTURE.md §8.1), and
-    client:routeStatus 'action' (PLAN M11, a late partner): CP.Markers.leads({ radioSilence }) decides
+    client:routeStatus 'action' (a late partner): CP.Markers.leads({ radioSilence }) decides
     whether the start goes (the start circle here, then CP.Route.follow(runId, true)) or stays as his guide
     (CP.Route.follow(runId, false)); CP.Markers routes once CP.Route says he follows the action.
 
@@ -3384,21 +3384,21 @@ compute, streak, the hooks, manualAward and badges query the database: call them
 ## Crimson-Police/modules/spawn/client.lua
 
 ```text
-CP.Spawn (client, PLAN S5): the line-of-sight half of the spawn director's "hidden points first"
+CP.Spawn (client): the line-of-sight half of the spawn director's "hidden points first"
 (Config.Spawning.preferHidden). The server's ask (ox_lib callback crimson-police:client:spawn:visible, { points, ms })
 is answered with one boolean per point (at most 32): false when every line from the officer's head bone and from the
 rendered camera to 1.0 m and 1.7 m above the point hits the map, a vehicle or an object (StartShapeTestLosProbe flags
 1 + 2 + 16, options 7, his car or ped ignored), true otherwise or when it cannot tell (a probe that did not start, an
 invalid or unfinished result within ms, an entry that is no point). At most 16 probes run at once; the ones still
 running at the end are read for 60 more frames so their handles are freed.
-CP.Spawn.probe(kind, x, y, z, h, model, opts) (PLAN S6, Config.Spawning.ground; the spawn point check of
-modules/testing/client.lua calls it, PLAN S7; opts.wall = false skips the wall probe): loads the
+CP.Spawn.probe(kind, x, y, z, h, model, opts) (Config.Spawning.ground; the spawn point check of
+modules/testing/client.lua calls it; opts.wall = false skips the wall probe): loads the
 collision at the point (collisionTimeoutMs) and a building's inside there (pinned until ready, interiorTimeoutMs;
 never ready = interior_not_loaded), finds the ground from 2 m and from 50 m over the point (and from just over it
 under a low roof or the floor above: the one under it when that is the smaller move), then answers ok, snap
 (put on the ground: a person 1 m over it, a vehicle by its model's size, an object on it, when that moves it at most
 snapWithin), underground, floating, no_ground, in_water or in_wall (the Builder's capsule for a person or a vehicle).
-The placer (PLAN S9, Config.Spawning.place; the server's ask is S10): its own handler of the cp bag. A bag with
+The placer (Config.Spawning.place; the server's ask is S10): its own handler of the cp bag. A bag with
 place = { x, y, z, h, kind, token } of this player's run, a token not taken yet: the game that controls the entity
 (or, when that is a bystander's or nobody's, the participant nearest to the point) takes control, freezes it, keeps
 its collision loaded, probes the server's point (ignoring the entity), and on ok or snap moves it straight up or down
@@ -3409,7 +3409,7 @@ is ('moved'). Told once per token with server:spawnPlaced (runId, { netId, token
 at most 4 placements at once (counted before control is asked for); lost control or the run's end: nothing told.
 CP.Spawn.holds(entity): true while its bag asks for a placement this game has not done; CP.Npc then never lets the
 person go (modules/npc/client.lua LetGo). ARCHITECTURE 5.43 lists every step and field.
-CP.Spawn.walkIn(car, ring, budgetMs) (PLAN S12, Config.Spawning.contactRing; the server's ask is the ox_lib callback
+CP.Spawn.walkIn(car, ring, budgetMs) (Config.Spawning.contactRing; the server's ask is the ox_lib callback
 crimson-police:client:spawn:walkIn, { car, ring, ms }, from blocks/field_contact/server.lua): where a returning driver
 or a thief appears for the car this officer deals with. Navmesh points (GetSafeCoordForPed, flags 4 + 8: not a
 building's inside, not water) round the car in the direction his camera looks and 25 / 50 / 75 degrees either side, at
@@ -3568,7 +3568,7 @@ names another one.
 ## Crimson-Police/modules/supawards/server.lua
 
 ```text
-CP.SupAwards (server): a supervisor gives points to an officer of his own department (step P22, the Mission
+CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
 control Config.MissionControls.controls.awardPoints, owner decision 2026-10-19). Only through the admin's
 point-adjust path (CP.Corrections.adjust, Config.AdminControl), inside the admin's min and max per award and
 Config.MissionControls.awardPointsPerDay a day, never to one of his own characters, always with a reason and audited
@@ -3637,7 +3637,7 @@ NUI callbacks (§9.1): ready, close, request { name, args } -> CP.Net.request, a
 actions, switchUi { ui } -> getSession for that UI; replies { ok = true, data = Session } and re-opens.
 close that closed an open UI (Escape's key-up, the close button) blocks the GTA pause key (control 200,
 DisableControlAction every frame) for Config.Tablet.pauseGuardMs (300; 0 = off): FiveM hands a key still
-down when the focus goes back to the game over as a new press. One thread; a second close extends it (K5).
+down when the focus goes back to the game over as a new press. One thread; a second close extends it.
 The UI closes on duty loss, on a switch away from the job it was opened with (or out of every
 department) and on character unload (the Admin UI only on unload).
 Crimson-Arena (docs/INTEGRATIONS.md, Crimson-Arena rule 8): while the local player carries a foreign crimsonArena
@@ -3720,7 +3720,7 @@ file, and that department's session carries no logo (no broken image in the NUI)
       and the HUD button take no focus while down, toast test.downed), on CrimsonPoliceState unstick
       (CP.Testing.releaseFocus) and on resource stop. It is never released unconditionally here.
       A key press within Config.Testing.panelKeyGuardMs (300 ms; 0 = off) of letting go is ignored: FiveM
-      hands a key still down when the focus goes back to the game over as a new press (K5).
+      hands a key still down when the focus goes back to the game over as a new press.
     * CP.Testing.releaseFocus()  lets go of the panel's or the prompt's focus (CP.Diag.unstick)
       CP.Testing.focusKind() -> 'controls'|'invites'|nil  while the panel or the prompt holds the focus
       (CP.Diag.state().testFocus: CrimsonPoliceState and Admin UI -> Officers -> Support show it as ours)
@@ -3741,12 +3741,12 @@ file, and that department's session carries no logo (no broken image in the NUI)
     teleport    { target = 'start'|'objective' } -> server returns coords; re-checks crimsonArena, then
                                                  SetEntityCoords (the vehicle when driving) with ground z
                 { target = 'point', missionId, location, point } -> "Teleport here" of a spawn check result
-                                                 (PLAN S8; no test run needed, refused while a check runs, on a
+                                                 (no test run needed, refused while a check runs, on a
                                                  run and in the arena): server:test:spawnPoints { ..., point }
                                                  gives the point's own coordinates, then the same move
     toggleDebug { enabled? }                  -> server:test:control { control = 'debug' }
     testPanel   { open = bool }               -> take / release the panel focus
-    spawnCheck  { missionId?, location? }     -> Check spawn points (PLAN S7, Config.Testing.spawnCheck): in a
+    spawnCheck  { missionId?, location? }     -> Check spawn points (Config.Testing.spawnCheck): in a
                                                  thread his own ped, frozen, unseen and unhurt, visits each
                                                  location's start (map loaded with NewLoadSceneStartSphere),
                                                  notes what it sees from there (CP.Spawn.visible), probes every
@@ -3816,9 +3816,9 @@ file, and that department's session carries no logo (no broken image in the NUI)
     CP.Testing.pendingInvites(src) -> { TestInvite, ... }
     CP.Testing.onRunEnded(run, state, endReason)               (hook from CP.Runs, test runs only)
     CP.Testing.spawnPoints(src, { missionId?, location?, point? }) -> data|nil, errKey
-        Check spawn points (PLAN S7): the missions and their locations, or one location's points with what is
+        Check spawn points: the missions and their locations, or one location's points with what is
         there (each block's pointKinds), how far over the ground each should be and the distance notes; built
-        from GeometryOf (the debug overlay's geometry without a run). ARCHITECTURE 5.27. With point (PLAN S8,
+        from GeometryOf (the debug overlay's geometry without a run). ARCHITECTURE 5.27. With point (
         "Teleport here", Config.Testing.spawnCheck.teleport): only that point { missionId, location, point },
         audited (testControl 'teleport <id>') and logged.
     CP.Testing.spawnCheckReport(src, { missionId, location, results }) -> ok, data|errKey
@@ -3922,16 +3922,16 @@ run is unlocked by the 2 s sweep (covers an engine that never called unlock).
 ## Crimson-Police/modules/volunteers/match/server.lua
 
 ```text
-CP.Volunteers matching (server, step V22): a run whose suspect a volunteer may play (run.volunteer from V21) asks
+CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer from V21) asks
 the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'),
 makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
 The server then follows him: in position, engaged (an officer within Config.RealSuspects.contactRange: the officers
 lose the NPC-combat protection), a no-show, his own Cancel this case, and the release when the run ends. Nobody who
 says yes, or a volunteer who drops out, gives the NPC back (players_when_available) or ends the run
 (Config.Volunteers.onVoid / voidRun; 'players_only' always ends). Blocks read it with ctx.volunteer().
-A block may also tell the volunteer who plays (V25): V.caseNote (a notification), V.caseArea (his own map circle,
+A block may also tell the volunteer who plays: V.caseNote (a notification), V.caseArea (his own map circle,
 client:volunteerArea) and V.outOfBounds (he broke its play-area rule: a void and a strike).
-Results (V26): the server-only event crimson-police:server:volunteerEnded when a run he said yes to ends
+Results: the server-only event crimson-police:server:volunteerEnded when a run he said yes to ends
 (Config.Volunteers.endEvent), and V.staffView / V.staffList for the Real suspects screen.
 Memory only; nothing runs while Config.Volunteers.enabled is off or every mode is 'npc'.
 ```
@@ -3939,7 +3939,7 @@ Memory only; nothing runs while Config.Volunteers.enabled is off or every mode i
 ## Crimson-Police/modules/volunteers/server.lua
 
 ```text
-CP.Volunteers (server, step V20): the volunteer list behind Config.Volunteers.command (default /crimsonheat). A
+CP.Volunteers (server): the volunteer list behind Config.Volunteers.command (default /crimsonheat). A
 player who is not on police duty agrees to the rules, picks the suspects he will play and stays on the list for
 Config.Volunteers.windowMinutes; he renews, changes his picks or stops from the same command. The server decides
 everything: who may volunteer (CP.Opponents.eligible, an admin's exclusion, strikes), when the window ends and why.
@@ -4032,7 +4032,7 @@ layouts/TabletFrame.tsx, hud/HudColumn.tsx); Config.OfficerOptions holds the all
 ## Crimson-Police/shared/options_map.lua
 
 ```text
-The map officer options (My options -> Map, step O14): how Objective GPS leads to each objective (saved with the
+The map officer options (My options -> Map): how Objective GPS leads to each objective (saved with the
 character: the GPS line as before, a map waypoint, or nothing), the HUD's objective direction line and colour-blind
 map colours (both kept on this PC). modules/markers/client.lua reads them; they only hide or recolour, never show
 more than the run allows (Radio Silence still wins).
@@ -4045,7 +4045,7 @@ The pop-up officer options (My options -> Pop-ups, kept on this PC): how long no
 long the result card stays (resultTime, seconds) and fewer pop-ups during a mission (quietRun: unit invites,
 commendations, rewards and profile news go only to the bell while a run is on; route, custody, run messages,
 warnings and errors always show). The NUI applies the first two (web/src/shared/toast.ts, hud/ResultScreen.tsx);
-CP.Tablet.notify (client) applies quietRun. Key hints (keyHints, step O11, on by default) name the bound key on the
+CP.Tablet.notify (client) applies quietRun. Key hints (keyHints, on by default) name the bound key on the
 ready check banner, a new mission call and the contact HUD line (CP.Options.keyHint, web/src/shared/keyHints.ts).
 Config.OfficerOptions holds the allow, defaults and bounds.
 ```
@@ -4072,7 +4072,7 @@ plays a tone only while its option is on. Config.OfficerOptions holds the allow 
 
 ```text
 The unit officer option (My options -> Unit, saved with the character): Auto-Ready answers the unit ready check for
-the officer (step O13). The client sends the answer only while the officer is at the keys; the server counts it only
+the officer. The client sends the answer only while the officer is at the keys; the server counts it only
 while the department allows it, the officer turned it on and stands within Config.OfficerOptions.autoReadyRange of
 the leader (CP.Units). Ships locked (allow false) and off.
 ```
@@ -4094,7 +4094,7 @@ algorithms identical: files sorted by their path relative to Crimson-Police/ (po
 Admin UI -> Settings -> Features: one card per section of play (NPC missions, Player vs police, Police teamwork,
 pay, server) listing each feature, whether it is on, a switch that saves the same setting as the list (audited; a
 risky one asks first, a money one still needs the typed ENABLE), a link to the setting in All settings and one
-button per limit of the feature (its caps, cooldowns and per-day counts; step G1) that opens that setting.
+button per limit of the feature (its caps, cooldowns and per-day counts) that opens that setting.
 ```
 
 ## Crimson-Police/web/src/admin/components/HomeForms.tsx
@@ -4111,7 +4111,7 @@ sends the same action as its full screen (the server checks everything again):
 ## Crimson-Police/web/src/admin/components/MissionControlsCard.tsx
 
 ```text
-Admin UI · Permissions · Mission controls (step P4): one row per registered control (CP.DeptControls): the admin
+Admin UI · Permissions · Mission controls: one row per registered control (CP.DeptControls): the admin
 switch and the min / max a supervisor may pick (Config.MissionControls.controls), what applies now with who set it
 and a Reset, each department's own limits (Config.Departments.<key>.missionControls, not for a server-wide control)
 and who may use them (Config.MissionControls.grants). The master switch stays the 'missionControls' table row.
@@ -4132,7 +4132,7 @@ resetMissionSwitches, setMissionPayout, setMissionTweak); the actions it lists a
 Slot: Settings → Item rewards: a structured editor for the reward pools (item picker without forbidden items,
 chance 0–1, rolls 0–10, count 1–100, weight above 0, value 0 or more) with the server's verdict and the expected
 items and value per run at each tier. The server checks every value again (the raw editor gets the same answers).
-Step H1: also the items list of a feature reward (FeatureRewards.<feature>.items: item, count, chance per payment,
+also the items list of a feature reward (FeatureRewards.<feature>.items: item, count, chance per payment,
 value), and one key of Rewards.byType (prop only) for the Admin UI Rewards screen.
 ```
 
@@ -4140,7 +4140,7 @@ value), and one key of Rewards.byType (prop only) for the Admin UI Rewards scree
 
 ```text
 
-Admin UI · Testing · Check spawn points (PLAN S8). Scope: all missions, one mission or one location (a location
+Admin UI · Testing · Check spawn points. Scope: all missions, one mission or one location (a location
 row opens it with that location). Start / Stop (client actions spawnCheck, spawnCheckStop: the Lua testing client
 does the check, ARCHITECTURE 5.27), the progress "Mission 7/19, location 3/6, point 12/40" with a bar over the
 planned locations, points checked / to look at / locations, and the results: mission and point id, what is there,
@@ -4154,7 +4154,7 @@ server refused are listed under "Locations not checked". Start is disabled while
 ## Crimson-Police/web/src/admin/components/features.walk.ts
 
 ```text
-Admin UI split by play (step AP1) walked against the browser mocks (node walk.mjs, a gate step): the sidebar lists
+Admin UI split by play walked against the browser mocks (node walk.mjs, a gate step): the sidebar lists
 the admin screens under NPC missions, Player vs police, Police teamwork, then money and the server, and Settings ->
 Features lists each feature switch by section with the setting it writes (a risky one asks first, a money one
 keeps its typed ENABLE).
@@ -4171,7 +4171,7 @@ suspect's money by mission type (typeAmount, withTypeAmount). Pure helpers; walk
 
 ```text
 
-Module memory of the admin's spawn point check (PLAN S8): a window 'message' listener at module level takes
+Module memory of the admin's spawn point check: a window 'message' listener at module level takes
 every push of topic 'spawnCheck' (started, location, point, done, stopped, failed; modules/testing/client.lua
 PushCheck), so the results stay while the tablet or the dialog is closed. useSpawnCheck() (useSyncExternalStore)
 -> SpawnCheckView { status idle|running|done|stopped|failed, scope, planned, progress, current, reached, rows
@@ -4211,7 +4211,7 @@ Admin UI · Home (screen key 'admin_home', Config.AdminUi.landing = 'home'): the
 screens of the common jobs (navigate with params where the screen takes them) and a Live now strip shows the runs
 of the Live screen. Every number comes from a request another screen already makes. With Config.AdminUi.homeForms
 on, four tiles hold a quick form (admin/components/HomeForms) that does the job right there; Open still opens the
-full screen. With Config.AdminUi.needsAttention on (step H5), a Needs attention panel on top reads
+full screen. With Config.AdminUi.needsAttention on, a Needs attention panel on top reads
 admin:getNeedsAttention (modules/adminhome) once a minute; its lines come from admin/components/needsAttention.ts.
 ```
 
@@ -4254,7 +4254,7 @@ restore / rollback / breakLock / duplicate, server:admin:reloadMissions (summary
 ## Crimson-Police/web/src/admin/screens/Money.tsx
 
 ```text
-Admin UI · Money (screen key 'admin_money', step H6, Config.AdminUi.moneyScreen): Mission pay (admin/screens/Payouts)
+Admin UI · Money (screen key 'admin_money', Config.AdminUi.moneyScreen): Mission pay (admin/screens/Payouts)
 and Payments made (admin/screens/Payments) as two tabs of one screen, each the old screen itself with the same params.
 params.moneyTab ('pay' | 'payments') picks the tab; layouts/adminMoney.ts maps the old keys onto it.
 ```
@@ -4304,7 +4304,7 @@ Data: callback admin:getPermissions (modules/admin).
 ## Crimson-Police/web/src/admin/screens/RealSuspects.tsx
 
 ```text
-Admin UI · Real suspects (screen key 'admin_rs', step V18): the live-crime and volunteer cases for staff. Shown
+Admin UI · Real suspects (screen key 'admin_rs'): the live-crime and volunteer cases for staff. Shown
 while Config.LiveCrime.enabled or Config.Volunteers.enabled is on (Config.RealSuspects.adminScreen), to admins with
 the antiFarmOverride key. Cases: every open case and the last Config.RealSuspects.casesKept closed ones; a case
 opens its suspects, flag lines, timeline and damage ledger (admin:getRsCase; never a position, and never a case of
@@ -4315,7 +4315,7 @@ the three tools (block a pair, exclude a suspect, suspend an officer), each with
 ## Crimson-Police/web/src/admin/screens/Rewards.tsx
 
 ```text
-Admin UI · Rewards (screen key 'admin_rewards', step H1, Config.AdminUi.rewardsScreen): every feature that pays on
+Admin UI · Rewards (screen key 'admin_rewards', Config.AdminUi.rewardsScreen): every feature that pays on
 one page. Each row shows its switch, its money and how it is paid, and its items (the RewardPoolEditor item picker,
 checked against ox_inventory by the server); the Item rewards switch sits on top with a one-click turn on. Every
 change saves through the Settings save flow (server:admin:setSetting: checked, audited, pushed as 'settings').
@@ -4346,7 +4346,7 @@ Actions: server:test:invite { missionId, targets } · server:test:cancelInvites 
       · server:admin:recordTest { missionId, location, tier, result, note }.
 Client actions (Lua testing client): testControl { control } · teleport { target } · toggleDebug { enabled }.
 Pushes: 'test' { state: true } and 'invites' refetch the state (debug pushes from the Lua client are ignored).
-Check spawn points (PLAN S8, shown while config.spawnCheck.enabled): the header button and a per-location item
+Check spawn points (shown while config.spawnCheck.enabled): the header button and a per-location item
       in each mission group open SpawnCheckDialog (admin/components); a check keeps running while the dialog or
       the tablet is closed (the header button then reads "Checking spawn points…").
 Flow: invite first, then Start — the start dialog invites testers, shows who accepted, and starts with them.
@@ -4542,7 +4542,7 @@ The unsaved draft is kept in the module store (store.ts), so closing the tablet 
 ## Crimson-Police/web/src/criminal/CriminalTablet.tsx
 
 ```text
-The criminal tablet (step G2): a burner-phone style tablet for players who play real suspects, nothing like the
+The criminal tablet: a burner-phone style tablet for players who play real suspects, nothing like the
 police tablet. Home (volunteer on or off), Jobs (the question he has open), Active (the suspect he plays), History
 (past cases and strikes) and Rules. Every button goes through server:crimtab:act; the server checks everything and
 answers the fresh view.
@@ -4635,7 +4635,7 @@ Text keys: locales/parts/testing.json (test.*).
 ```text
 Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
 Config.AdminTheme), no watermark, sidebar with the admin-only badges (everyday screens, the rest under
-More), the maintenance banner. Config.AdminUi.plainLayout (step G6): plain names, seven described groups, the rare
+More), the maintenance banner. Config.AdminUi.plainLayout: plain names, seven described groups, the rare
 tools under More, a search box over the screens and the settings, and a breadcrumb over the screen.
 ```
 
@@ -4658,13 +4658,13 @@ the Admin UI plain layout, Config.AdminUi.plainLayout).
 The tablet device: a 1280×800 screen in a rounded bezel, centred and scaled to fit the viewport (never larger than
 the space, grows on screens above 1080p), times the officer's tablet size. Themed with the department theme and
 the officer's look; dialogs render inside it (LayerRootContext) so they scale and theme with the tablet. The
-officer option textSize (step O5) sets --cp-fs-scale on it: large text in the whole tablet.
+officer option textSize sets --cp-fs-scale on it: large text in the whole tablet.
 ```
 
 ## Crimson-Police/web/src/layouts/adminMoney.ts
 
 ```text
-The Money screen's keys (step H6, Config.AdminUi.moneyScreen): moneyScreenOn(session), resolveAdminKey (with the
+The Money screen's keys (Config.AdminUi.moneyScreen): moneyScreenOn(session), resolveAdminKey (with the
 switch on, admin_payouts and admin_payments open admin_money on their tab, params kept; used by App's navigate, the
 'open' message and the Admin landing) and moneyTabOf(params). adminMoney.walk.ts checks it against the mocks, with
 oneRequest's totals on admin:getPayments.
@@ -4673,7 +4673,7 @@ oneRequest's totals on admin:getPayments.
 ## Crimson-Police/web/src/layouts/adminNav.ts
 
 ```text
-The Admin UI plain layout (step G6, Config.AdminUi.plainLayout): plain screen names, the sidebar under seven groups
+The Admin UI plain layout (Config.AdminUi.plainLayout): plain screen names, the sidebar under seven groups
 (NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy, System) each with a one-line
 description, the rarely used tools under More, a search box over the screens (and the settings), and a breadcrumb.
 Only the layout changes: the same screens show, a hidden one stays hidden, screen keys and links stay the same.
@@ -4682,7 +4682,7 @@ Only the layout changes: the same screens show, a hidden one stays hidden, scree
 ## Crimson-Police/web/src/layouts/supervisorNav.ts
 
 ```text
-The Supervisor UI sidebar and landing (step G5): supervisorNavOf reads the session's config.supervisorNav
+The Supervisor UI sidebar and landing: supervisorNavOf reads the session's config.supervisorNav
 (Config.Tablet.supervisorByTask, supervisorCompact, supervisorLanding; anything unknown = as before),
 supervisorTaskOf gives a screen its task heading (People, Missions, Rewards, Review) while grouped, and
 supervisorLanding picks the screen it opens on (the first one when the landing is not shown).
@@ -4779,7 +4779,7 @@ Browser mocks of My options: getOptions, server:options:set, the options of this
 setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
 ?hudSide=left&hudCompact=1&hudScale=1.2&reduceMotion=1 start the HUD options of this PC (with ?hud=progress);
 ?hudLook=1&textSize=large (with ?look=colourblind and ?hud=progress) the Easier to read options of the character.
-Pop-ups (step O6): ?toastTime=short|long, ?resultTime=10 (with ?result=parity: the card closes after 10 s).
+Pop-ups: ?toastTime=short|long, ?resultTime=10 (with ?result=parity: the card closes after 10 s).
 Board: ?fav=tactical&hide=training&oneClick=1.
 Dispatch: ?oneClickClaim=1 (Claim takes a call at once), ?rememberFilters=1. Open on: ?openOn= (core.mock.ts).
 ```
@@ -4827,14 +4827,14 @@ URL shortcuts (with ?ui=admin&screen=admin_testing for the screen, ?hud=test for
   testinvite=0  no invitation banner for me    testempty=1  an empty test log (everything "Not tested")
   testlong=1    edge cases: very long mission/location/player names and notes, a mission without locations
   testlua=1     Lua-shaped replies: empty lists sent as {} objects, false for missing values
-Check spawn points (PLAN S8): client actions spawnCheck / spawnCheckStop / teleport { target: 'point' } and a short
+Check spawn points: client actions spawnCheck / spawnCheckStop / teleport { target: 'point' } and a short
 fake run of 'spawnCheck' pushes (four missions with "All missions", a few bad points, Pursuit Sim #2 refused).
 ```
 
 ## Crimson-Police/web/src/officer/components/FieldTrainingCard.tsx
 
 ```text
-Profile · Field training (steps T1 and T2, Config.FieldTraining): the officer's own training as a rookie (tasks,
+Profile · Field training (Config.FieldTraining): the officer's own training as a rookie (tasks,
 progress, trainer, sign-off notes and the ride-along types) and, as a trainer, his rookies with a Sign off button on
 every task whose count is reached (and the trainer bonus, when there is one). The server checks every rule again (only
 the rookie's own trainer, only a task that is ready and not signed yet). Nothing shows while the feature is off.
@@ -4956,7 +4956,7 @@ accepts a mission type and stay closed while the unit's run is active.
 ## Crimson-Police/web/src/officer/screens/abandonPress.ts
 
 ```text
-What a press of Abandon on Active Mission does (officer option abandonConfirm, step O10): with the option on, the
+What a press of Abandon on Active Mission does (officer option abandonConfirm): with the option on, the
 dialog as before; off, the first press arms the button ("Click again to abandon") for 3 s and a second press while
 armed abandons. Walk: abandonPress.walk.ts.
 ```
@@ -4964,7 +4964,7 @@ armed abandons. Walk: abandonPress.walk.ts.
 ## Crimson-Police/web/src/officer/screens/screenHead.ts
 
 ```text
-Officer UI screen heads and load states (steps H2 and H3, R1): every officer screen (part 1: Home, Mission Board,
+Officer UI screen heads and load states: every officer screen (part 1: Home, Mission Board,
 Active Mission, Dispatch; part 2: Unit, Profile, Leaderboard, My options, Challenge) shows the same header (title,
 then one line of help) and the same loading, error, empty and stale lines. Pure functions, checked by
 screenHead.walk.ts.
@@ -4994,7 +4994,7 @@ src/shared/hooks.ts · data hooks for screens.
     a key that gives the game its input back acts on its key-up, and only for a key-down this page saw itself
     (FiveM hands a key still down when the NUI focus goes back over as a new press). FiveM's CEF sets no
     repeat flag, so a second key-down within 150 ms of the arming one marks a press made before the page
-    listened: its key-up does nothing. Used by App (Escape), TestControls and DebugOverlay (K5).
+    listened: its key-up does nothing. Used by App (Escape), TestControls and DebugOverlay.
 ```
 
 ## Crimson-Police/web/src/shared/i18n.tsx
@@ -5017,7 +5017,7 @@ result card and toasts stay readable even before the first session arrives. Sess
 ## Crimson-Police/web/src/shared/keyHints.ts
 
 ```text
-useKeyHint(name) (step O11): the label of the key bound to the ready, contact, tablet or Dispatch key mapping, from
+useKeyHint(name): the label of the key bound to the ready, contact, tablet or Dispatch key mapping, from
 the client action getKeyHints, or null when the officer turned Key hints off on this PC or the key is not bound
 with a text label. ReadyCheckBanner says "Or press K."; the contact HUD line names the contact key.
 ```
@@ -5051,7 +5051,7 @@ messages. Every call resolves (never rejects) to { ok, data?, error? } where err
 ## Crimson-Police/web/src/shared/openOn.ts
 
 ```text
-The screen an 'open' without a screen of its own lands on (step O9): the officer option openOn, saved with the
+The screen an 'open' without a screen of its own lands on: the officer option openOn, saved with the
 character. 'last' (as before) keeps the screen the tablet was closed on; 'home' opens Home; 'active_on_run' opens
 Unit while the unit's ready check waits for the officer's answer, Active Mission while he is on a run, else the
 last screen. Only the Officer UI: the Supervisor and Admin UIs keep their screens.
@@ -5069,18 +5069,18 @@ option comes from the session (session.options), refreshed by the push 'options'
 ## Crimson-Police/web/src/shared/replyView.ts
 
 ```text
-Step WF2 (smoother workflows): replyView(data, key) reads the fresh view an action reply carries and
+(smoother workflows): replyView(data, key) reads the fresh view an action reply carries and
 applyReplyView(data, key, set, refetch) applies it, or asks again when an older server sent none. Used by Review
 Queue (server:sup:reviewFlagged and server:sup:handleDispute answer with data.queue) and Dispatch
 (server:declineMissionCall answers with data.view). Walk: replyView.walk.ts (with lastUsed.ts).
-Step WF3: the Admin System screen's Backups (backupNow, restoreBackup, deleteBackup) and Storage (storageCopy,
+the Admin System screen's Backups (backupNow, restoreBackup, deleteBackup) and Storage (storageCopy,
 setStorageMode, useStoreAgain) panels apply data.view the same way.
 ```
 
 ## Crimson-Police/web/src/shared/replyView.walk.ts
 
 ```text
-Smoother workflows (step WF2) against the browser mocks (node walk.mjs, a gate step): Approve / Void on the Review
+Smoother workflows against the browser mocks (node walk.mjs, a gate step): Approve / Void on the Review
 Queue and Decline on Dispatch answer with the screen's fresh view, so the screen needs no second request; a reply
 without it asks again. The supervisor dialogs open with the values last used only while
 Config.Tablet.supervisorRemember is on.
@@ -5089,7 +5089,7 @@ Config.Tablet.supervisorRemember is on.
 ## Crimson-Police/web/src/shared/rowWindow.ts
 
 ```text
-Windowed lists (step OP3, Config.AdminUi.windowRows, shipped false): rowWindow() works out the rows of a scroll
+Windowed lists (Config.AdminUi.windowRows, shipped false): rowWindow() works out the rows of a scroll
 position (more than 100 rows, 12 above and below the view, spacers for the rest); useRowWindow() is the Table's scroll
 handler (one update per animation frame) and measures the first drawn row; useGrowingLimit() lets the Settings search
 results start with 60 rows and add 60 each time an IntersectionObserver sees the end within 600 px.
@@ -5126,7 +5126,7 @@ default (text falls back to the best contrast for the background, as CP.U.contra
 ## Crimson-Police/web/src/styles/order.ts
 
 ```text
-Every stylesheet of the NUI, in one fixed order, loaded with the page (step OP2). The Admin UI screens, the
+Every stylesheet of the NUI, in one fixed order, loaded with the page. The Admin UI screens, the
 Supervisor Mission Builder and the criminal tablet load their code on first use (layouts/screens.ts), but their
 styles stay here: one CSS file in this order, so a rule wins over another exactly as it did before they were split
 off (and a screen never shows for a moment without its styles). A new stylesheet goes into this list too
@@ -5136,7 +5136,7 @@ off (and a screen never shows for a moment without its styles). A new stylesheet
 ## Crimson-Police/web/src/supervisor/components/AwardPointsDialog.tsx
 
 ```text
-Supervisor UI · Department Report · Give points (step P22): points (the admin's min to max), a reason and, at or
+Supervisor UI · Department Report · Give points: points (the admin's min to max), a reason and, at or
 above AdminControl.adjustConfirmAbove, the officer's citizenid typed. The server checks every rule again (own
 department, never himself, the supervisor's points a day, Config.AdminControl).
 ```
@@ -5144,7 +5144,7 @@ department, never himself, the supervisor's points a day, Config.AdminControl).
 ## Crimson-Police/web/src/supervisor/components/ClearCooldownDialog.tsx
 
 ```text
-Supervisor UI · Department Report · Clear cooldown (step P7, Config.MissionControls.controls.clearCooldown): the
+Supervisor UI · Department Report · Clear cooldown (Config.MissionControls.controls.clearCooldown): the
 officer's current type and mission cooldowns (sup:getOfficerCooldowns), each with Clear; a reason is required.
 The server refuses the supervisor's own character, an officer on a run, the officer's daily clears (all staff) and
 the supervisor's own clears a day.
@@ -5153,25 +5153,25 @@ the supervisor's own clears a day.
 ## Crimson-Police/web/src/supervisor/components/DeptNoticesCard.tsx
 
 ```text
-Supervisor UI · Mission controls · Department notices (step P13, the notices Mission control): post a short notice
+Supervisor UI · Mission controls · Department notices (the notices Mission control): post a short notice
 for the supervisor's own department (it shows on that department's Officer Home Announcements card only) and end
-one that is still running. Server: sup:getDeptNotices, server:sup:postNotice, server:sup:endNotice. Step H4: the
+one that is still running. Server: sup:getDeptNotices, server:sup:postNotice, server:sup:endNotice. the
 card is split by task (Post a notice, Running now), shows the stale line when a refresh fails; End takes two clicks.
 ```
 
 ## Crimson-Police/web/src/supervisor/components/FieldTrainingPanel.tsx
 
 ```text
-Supervisor UI · Department Report · Field training (step T1, Config.FieldTraining): every pairing of the department
+Supervisor UI · Department Report · Field training (Config.FieldTraining): every pairing of the department
 with its progress, Pair trainer (a rookie of the department and an online trainer at or above the trainer grade) and
-End training (two clicks). The server checks every rule again. Nothing shows while the feature is off. Step H4: a
+End training (two clicks). The server checks every rule again. Nothing shows while the feature is off. a
 Pairings heading with the count, and the stale line when a refresh fails.
 ```
 
 ## Crimson-Police/web/src/supervisor/components/MissionBanDialog.tsx
 
 ```text
-Supervisor UI · Department Report · Mission ban (step P11): hours (the admin's min to max) and a reason, or Lift for
+Supervisor UI · Department Report · Mission ban: hours (the admin's min to max) and a reason, or Lift for
 the ban the viewer set. The server checks every rule again (own department, a lower grade, never himself, the
 officer online, the supervisor's bans a day).
 ```
@@ -5179,7 +5179,7 @@ officer online, the supervisor's bans a day).
 ## Crimson-Police/web/src/supervisor/components/MyControlsCard.tsx
 
 ```text
-Supervisor UI · Department Report · Your controls today (step H4, Config.Tablet.supervisorControlsCard, session
+Supervisor UI · Department Report · Your controls today (Config.Tablet.supervisorControlsCard, session
 config.supervisorNav.controlsCard): sup:getMyControls (CP.DeptControls.mine, live on push 'missionControls') lists
 each control this player may use now with the value in use, the admin's min and max and today's use against the
 per-day count (a control's usedToday function). Read only. Rows: myControls.ts (myControlRow, myControlRows: the
@@ -5207,7 +5207,7 @@ officers; never the Weekly Boss) with the server-wide launch cooldown.
 ## Crimson-Police/web/src/supervisor/components/lastUsed.ts
 
 ```text
-Step WF2, Config.Tablet.supervisorRemember (session config.supervisorNav.remember, shipped false): the values of the
+Config.Tablet.supervisorRemember (session config.supervisorNav.remember, shipped false): the values of the
 last successful Give points (points, reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason),
 kept in the page's memory only; the dialogs open with them while the switch is on. startNumber() keeps a number
 inside the control's current min..max, else the minimum. The server checks every value again.
@@ -5259,11 +5259,11 @@ Data: callback sup:getLiveRuns (modules/admin, polled every 10 s) · action serv
 ## Crimson-Police/web/src/supervisor/screens/MissionControls.tsx
 
 ```text
-Supervisor UI · Mission controls (screen key 'sup_controls', title key 'ui.screen.sup_controls', step P5): the
+Supervisor UI · Mission controls (screen key 'sup_controls', title key 'ui.screen.sup_controls'): the
 controls an admin switched on (sup:getMissionControls), grouped, each with the config value, the value in use, an
 editor by kind, Back to config, who changed it and when, and the change-wait countdown. Every save asks for a
 reason (server:sup:setMissionControl / server:sup:resetMissionControl). Live: push 'missionControls'.
-Step H4: header and load states from supHead.ts (SUP_HEADS) and officer ScreenStatus; each group card has a help
+header and load states from supHead.ts (SUP_HEADS) and officer ScreenStatus; each group card has a help
 line (SUP_GROUP_HELP, sup.controls.group_help.<group>). Review Queue uses the same. Walk: supHead.walk.ts.
 ```
 
@@ -5306,7 +5306,7 @@ server:sup:handleDispute { disputeId, decision, reason } (modules/admin, modules
 ## Crimson-Police/web/src/supervisor/screens/supHead.walk.ts
 
 ```text
-Supervisor screens inside (step H4) against the browser mocks (node walk.mjs, a gate step): Mission controls and
+Supervisor screens inside against the browser mocks (node walk.mjs, a gate step): Mission controls and
 Review Queue use the shared header and load states, each Mission controls group says what it is for, Notices and
 Field training are split by task with the stale line, the risky actions still ask first, and the Department
 Report's 'Your controls today' rows (myControls.ts) show value, limits and today's use.
@@ -5315,7 +5315,7 @@ Report's 'Your controls today' rows (myControls.ts) show value, limits and today
 ## Crimson-Police/web/src/types/admin_rs.ts
 
 ```text
-Admin UI · Real suspects (screen key 'admin_rs', step V18): what modules/opponents/staff/server.lua (V17) answers.
+Admin UI · Real suspects (screen key 'admin_rs'): what modules/opponents/staff/server.lua answers.
 Callbacks (antiFarmOverride key): admin:getRsCases, admin:getRsCase { runUuid }, admin:getRsPairs { citizenid? }.
 Actions (a reason, 1-3650 days): server:admin:rsBlockPair { officer, suspect, days, reason },
 server:admin:rsExclude / server:admin:rsSuspend { citizenid, days, reason }.
@@ -5380,7 +5380,7 @@ sends (or may send) on top of them. Every extra field is optional: the screens w
 
 src/types/testing.ts · Admin test mode shapes (modules/testing/server.lua, docs/ARCHITECTURE.md §13.26).
 Lua sends `false` for "no value" (a Lua table cannot hold nil) and may encode an empty list as {}:
-read every list through asList(). Check spawn points (PLAN S7, S8): SpawnCheckPoint, SpawnCheckResult,
+read every list through asList(). Check spawn points: SpawnCheckPoint, SpawnCheckResult,
 SpawnCheckProgress, SpawnCheckTotals, SpawnCheckPush (push 'spawnCheck'), SpawnCheckScope, and
 TestsView.config.spawnCheck { enabled, teleport, routes }.
 ```
@@ -5388,7 +5388,7 @@ TestsView.config.spawnCheck { enabled, teleport, routes }.
 ## tests/admin_features_spec.lua
 
 ```text
-Admin UI split by play, step AP1 (the owner: "ensure the admin panel separates npc stuff and player player stuff
+Admin UI split by play (the owner: "ensure the admin panel separates npc stuff and player player stuff
 and cop cop stuff and every feature is able to be turned on and off etc edited"): Config.AdminUi.groupByPlay folds
 the Settings sections into NPC missions, Player vs police and Police teamwork, and Settings -> Features lists every
 feature switch with its section and the setting it writes.
@@ -5397,7 +5397,7 @@ feature switch with its section and the setting it writes.
 ## tests/admin_home_spec.lua
 
 ```text
-Admin UI -> Home's Needs attention panel (step H5): admin:getNeedsAttention answers the Problems lines, today's
+Admin UI -> Home's Needs attention panel: admin:getNeedsAttention answers the Problems lines, today's
 refused starts, the open disputes, the flagged runs waiting for a review (one per run, the admin's own left out)
 and the open player suspect cases (only with the Player suspects screen), in one request; refused while
 Config.AdminUi.needsAttention is off (shipped) and for anyone but an admin.
@@ -5406,7 +5406,7 @@ Config.AdminUi.needsAttention is off (shipped) and for anyone but an admin.
 ## tests/admin_lists_spec.lua
 
 ```text
-The long Admin UI lists (step H6): CP.AdminKit.pageSize (Config.AdminUi.pageSize, 0 = nil, 10-200), pageOf (one page
+The long Admin UI lists: CP.AdminKit.pageSize (Config.AdminUi.pageSize, 0 = nil, 10-200), pageOf (one page
 of a list in memory) and oneRequest, and admin:getRsCases a page at a time. The SQL lists (audit, payments, an
 officer's runs, flagged runs with the board) have one case each in adminkit_spec, admin_economy_spec and
 admin_boards_spec.
@@ -5415,7 +5415,7 @@ admin_boards_spec.
 ## tests/admin_permissions_spec.lua
 
 ```text
-Admin full control, step G1 (the owner: "ensure the admin menu can have full control over every feature limit stuff
+Admin full control (the owner: "ensure the admin menu can have full control over every feature limit stuff
 give broader permission"): every limit, cap, cooldown and per-day count has a sane range in Admin UI -> Settings and
 the Features tab links each feature to its limits; Config.Permissions.grants (Admin UI -> Permissions -> Extra
 grants) gives one power to a department from a grade, a Qbox gang from a grade or one citizenid, read live by
@@ -5439,7 +5439,7 @@ folder), MariaDB's strict mode refuses NULL in a NOT NULL column (the files engi
 ## tests/board_review_rules_spec.lua
 
 ```text
-Department leaderboard visibility and stricter review rules (step P14): the boards Mission control (names or
+Department leaderboard visibility and stricter review rules: the boards Mission control (names or
 callsigns for other departments, the Rank by tabs a department's officers see) and reviewRules (a Void needs a
 second supervisor of the department; flags of the picked kinds go to admins only). Plain Lua with stubs: a stub
 CP.DeptControls holds the values, CP.Admin.getRow and the permission checks are stubbed, no database is read.
@@ -5448,7 +5448,7 @@ CP.DeptControls holds the values, CP.Admin.getRow and the permission checks are 
 ## tests/board_types_spec.lua
 
 ```text
-Mission Board controls (step P10): types switches mission types or single missions off for a department, featuredType
+Mission Board controls: types switches mission types or single missions off for a department, featuredType
 recommends one type to its officers. CP.DeptControls is a stub (rows, bounds and the choice kind are covered by
 mission_controls_spec): this spec checks what CP.Draw registers, the accept check, the draw pool and the board cards.
 ```
@@ -5495,7 +5495,7 @@ the end, whatever happens. The spec uses its own database (<run database>_builde
 ## tests/cash_bonus_spec.lua
 
 ```text
-Cash bonuses inside admin bounds (step P16): happyHourCash (x the cash of a run a department leads that was
+Cash bonuses inside admin bounds: happyHourCash (x the cash of a run a department leads that was
 accepted while a happy hour ran, fixed at the accept) and twistCash (x each twist's cash for the leader's
 department, still under Config.Events.twistMaxCash). Paid only on a completed run, never on test runs,
 Cross-Department runs or the Weekly Boss. Plain Lua: stubbed controls, no database.
@@ -5504,7 +5504,7 @@ Cross-Department runs or the Weekly Boss. Plain Lua: stubbed controls, no databa
 ## tests/cooldown_controls_spec.lua
 
 ```text
-Mission cooldowns as Mission controls (step P2): cooldownScale (x every mission's cooldown, per mission type) and
+Mission cooldowns as Mission controls: cooldownScale (x every mission's cooldown, per mission type) and
 abandonCooldown (the abandon type cooldown), both server-wide and outside the master switch. Runs.cooldowns works
 the end out when it is read from { at, secs, type } entries, so a change, a reset or the admin switch counts at once,
 the self rule holds for the setter and any unit he is in, and a restart (rebuild from the rows) gives the same.
@@ -5513,7 +5513,7 @@ the self rule holds for the setter and any unit he is in, and a restart (rebuild
 ## tests/crimtab_spec.lua
 
 ```text
-The criminal tablet (step G2): CP.CrimTab on the server over CP.Volunteers. Shipped off; who may use it (never on
+The criminal tablet: CP.CrimTab on the server over CP.Volunteers. Shipped off; who may use it (never on
 police duty, access 'everyone' or 'granted' through the criminalTablet extra grant); opting in and out; the job
 he is asked (no run, officer or position); Accept into Active; giving up; History and strikes; the volunteer
 command opening it (replaceCommand); closing on duty. Plain Lua with stubs.
@@ -5522,7 +5522,7 @@ command opening it (replaceCommand); closing on duty. Plain Lua with stubs.
 ## tests/custody_clearance_spec.lua
 
 ```text
-Service vehicles never appear on top of the officers (Config.Custody.serviceClearance, PLAN S17) on the real engine,
+Service vehicles never appear on top of the officers (Config.Custody.serviceClearance) on the real engine,
 CP.Custody and the real placement module (tests/fixtures/custody/world.lua + modules/spawn/server.lua): after
 serviceTimeout a prisoner van or coroner van whose parking point an officer stands on comes to a road point beside
 the scene (asked of the driving client, checked by the server) or waits until the officer steps away; a late van is
@@ -5535,7 +5535,7 @@ with a raw server SetEntityCoords at the file's height.
 ## tests/dept_goals_spec.lua
 
 ```text
-A department's goals (step P21): a supervisor picks which of the admin's daily and weekly goals his department's
+A department's goals: a supervisor picks which of the admin's daily and weekly goals his department's
 officers draw from, counting from the next weekly reset; a second change in a week waits for the week after; the
 points stay the admin's; FIB officers and the setter keep the whole lists. Plain Lua: stubbed controls, schedule
 and SQL, no database.
@@ -5544,7 +5544,7 @@ and SQL, no database.
 ## tests/dept_tod_spec.lua
 
 ```text
-A department's Type of the Day (step P18): a supervisor picks one mission type for tomorrow; that day his
+A department's Type of the Day: a supervisor picks one mission type for tomorrow; that day his
 department's officers earn the Type of the Day points on it instead of the server's type, other departments keep
 the server's, and the setter (or a unit he is in) keeps the server's too. Plain stubs: CP.DeptControls answers the
 switch and the self rule, MySQL.single.await answers the cp_audit row of yesterday's pick. No database.
@@ -5553,7 +5553,7 @@ switch and the self rule, MySQL.single.await answers the cp_audit row of yesterd
 ## tests/dept_twists_spec.lua
 
 ```text
-The twists a department offers and pre-ticks (step P15): the twists Mission control narrows the accept step's offer
+The twists a department offers and pre-ticks: the twists Mission control narrows the accept step's offer
 to the leader's department's twists, marks the pre-ticked ones and refuses another (err.twist_department). Plain Lua
 with a stub CP.DeptControls; no database is read.
 ```
@@ -5561,7 +5561,7 @@ with a stub CP.DeptControls; no database is read.
 ## tests/difficulty_unit_spec.lua
 
 ```text
-Difficulty and unit size (step P9): two per-department Mission controls. difficulty picks one of the presets the
+Difficulty and unit size: two per-department Mission controls. difficulty picks one of the presets the
 admin lists (Config.NpcDifficulty) for runs the department leads, read at the accept; unitSize caps the units its
 leaders may lead, never above Config.Limits.maxUnitSize.
 ```
@@ -5569,7 +5569,7 @@ leaders may lead, never above Config.Limits.maxUnitSize.
 ## tests/docs_restart_spec.lua
 
 ```text
-The docs against the code (step C14): README 11.9 and the run engine's FILE_NOTES entry say what an ox_inventory
+The docs against the code: README 11.9 and the run engine's FILE_NOTES entry say what an ox_inventory
 restart does (the swapItems hook dropped and registered again 1 s later, as runs/server.lua's onResourceStart
 handler does), and the README option rows give the unit of each number. Reads files only; no stubs, no database.
 ```
@@ -5636,7 +5636,7 @@ reset cp_test cannot interfere.
 ## tests/escort_director_spec.lua
 
 ```text
-Armored Truck Escort through the spawn director (Config.Spawning, PLAN S14) on the real engine, the real block and
+Armored Truck Escort through the spawn director (Config.Spawning) on the real engine, the real block and
 the placement module: the truck is never made inside a parked car or on an officer (it waits, then takes a free
 spot further along the route), the truck and the ambush cars sit vehicleLift over the road (each car at the
 route's height where it stands), and an ambush car never appears next to an officer (a lead car included), on
@@ -5649,7 +5649,7 @@ warning and the escort completes.
 ## tests/failed_start_spec.lua
 
 ```text
-A start that fails (FIXPLAN S5: F43-F47, F18, F20, F21). FXServer refuses StopResource on the calling resource
+A start that fails. FXServer refuses StopResource on the calling resource
 (citizen-server-impl ServerResources.cpp STOP_RESOURCE: name == the current resource -> false, Resource::Stop()
 never called; the same in build 35245's binary), so Crimson-Police stays started after a failed start. It must
 then be in an explicit failed state: every request answered err.not_started at once (nothing parks, nothing reads or
@@ -5664,7 +5664,7 @@ database user without the CREATE right.
 ## tests/feature_rewards_spec.lua
 
 ```text
-Feature rewards (step G3, Config.FeatureRewards): money and items for the volunteer suspect, the officer who talks a
+Feature rewards (Config.FeatureRewards): money and items for the volunteer suspect, the officer who talks a
 suspect down, field training sign-offs and completion, and supervisor point awards. Every feature ships off with
 a money amount ready; a payment is one ledger row paid once per case (CP.Cash), its items are run rewards of that
 row (CP.Rewards), and a suspect is paid only for a case the server saw end fairly.
@@ -5673,7 +5673,7 @@ row (CP.Rewards), and a suspect is paid only for a case the server saw end fairl
 ## tests/field_contact_director_spec.lua
 
 ```text
-field_contact through the spawn director (Config.Spawning, PLAN S12) on the real engine, the real block and the
+field_contact through the spawn director (Config.Spawning) on the real engine, the real block and the
 real placement module: a scene and each parked car appear once an officer is near them (activateRange) and not on
 top of them (approach + sceneOutside); the returning driver and the thief appear contactRing (25-40 m) from the car on
 the footpath point the game of the officer at the car picks, or round the car and never near an officer when that
@@ -5742,10 +5742,10 @@ answers must stay the same now that they come and go with the run.
 ## tests/flee_arrest_director_spec.lua
 
 ```text
-flee_arrest through the spawn director (Config.Spawning, PLAN S11) on the real engine, the real block and the
+flee_arrest through the spawn director (Config.Spawning) on the real engine, the real block and the
 built-in mission files: a warrant's associates appear at the knock, away from and never behind the officer at the
 door; scatter suspects each get a point of their own, never on another person; the surrendering suspect is put
-on the ground at the door step (CP.Spawn.again). PLAN S21: with the shipped files and the officer at the start,
+on the ground at the door step (CP.Spawn.again). With the shipped files and the officer at the start,
 every hideout's runners, every lab's cooks and the south-west fence's inmates (as many as the list has points, at
 least the largest team's count) all come out at once, each on a point of his own and on the escape route that starts
 nearest him (Config.Flee.nearestRoute); the short-list cases run on lists cut to their pre-S21 size. Drug Lab #1 with
@@ -5758,7 +5758,7 @@ once the officer moves off.
 ## tests/happy_hour_spec.lua
 
 ```text
-Happy hour (step P6): a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
+Happy hour: a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
 for anyone on the server (server-wide, owner decision), the no-repeat rule off when ticked; the abandon type cooldown
 stays; the setter and a unit with him in it keep their cooldowns; once a day for supervisors; an admin ends it;
 a restart keeps the window; when it ends every cooldown is read against its real end time again.
@@ -5814,7 +5814,7 @@ H.debug.sethook into a local).
 ## tests/hostile_waves_director_spec.lua
 
 ```text
-hostile_waves through the spawn director (Config.Spawning, PLAN S2) on the real engine (tests/fixtures/custody/world.lua:
+hostile_waves through the spawn director (Config.Spawning) on the real engine (tests/fixtures/custody/world.lua:
 runs, npc, scaling, scoring), the real blocks and the real loader's built-in missions, every ped the engine creates
 recorded with the nearest officer at that moment. Gang Shootout's Terminal yard: in from the far side 2 m from
 spawns[7] only the 3 points 40 m in front appear, 2 more 20 m away after waveDelayMax (one warning), spawns[14] behind
@@ -5824,7 +5824,7 @@ start, the fight completes. Hostage Rescue (indoor: 15 m, all 4 at once; outdoor
 the breach entries (indoor). leaveOutAfter: a yard whose every point he stands within 12 m of leaves wave 2 out at 45 s,
 not while a hostile stands, never with 0; standing on the points before the fight only makes it wait (afterSeconds
 then counts from wave 1's first hostile). The Kingpin on his own spot, on another point when his is 39.7 m away, left
-out (no checklist line) when nothing is far enough after his wave fell; with hidden points first (PLAN S5, a run started
+out (no checklist line) when nothing is far enough after his wave fell; with hidden points first (a run started
 in a thread) the wave's hostile on the point the officer's game cannot see and the Kingpin still on his own spot,
 although it is seen. Ring copies of a wave larger than the list are checked like points;
 enabled = false spawns as before; indoor is validated. No SQL.
@@ -5833,7 +5833,7 @@ enabled = false spawns as before; indoor is validated. No SQL.
 ## tests/hostile_waves_stage_spec.lua
 
 ```text
-The raids' crew staged ahead (hostile_waves stage = true, PLAN S4) on the real engine, the real blocks and the real
+The raids' crew staged ahead (hostile_waves stage = true) on the real engine, the real blocks and the real
 built-in mission files: while the officers stack up and breach (objective 1), the crew of the fight (objective 2) is
 already in place, calm and unarmed, placed by the spawn director away from the officers; they wake (armed, hostile)
 when the fight starts, or earlier when one of them is hurt or killed, or an officer walks up to one of them away from
@@ -5947,7 +5947,7 @@ changed or relies on:
   * lists from Lua ({} for an empty table): the touched screens wrap them (asArray / asList);
   * theme: primary/accent text colours reach WCAG AA (4.5:1) on the surface, checked with a Lua port of
     web/src/shared/theme.ts on the configured department themes (FIB's navy primary was 3.2:1);
-  * Check spawn points (PLAN S8): the push topic spawnCheck and every state modules/testing/client.lua pushes
+  * Check spawn points: the push topic spawnCheck and every state modules/testing/client.lua pushes
     are handled by admin/components/spawnCheckStore.ts at module level, with the fields the Lua sends; the
     client actions spawnCheck, spawnCheckStop and teleport { target: 'point' } are the ones the Lua registers;
     the button, the location item and Teleport here follow admin:getTests config.spawnCheck; the report uses
@@ -5957,7 +5957,7 @@ changed or relies on:
 ## tests/limit_controls_spec.lua
 
 ```text
-The no-repeat rule, the hourly cap and the daily cap as Mission controls (step P3): noRepeat, hourlyCap and
+The no-repeat rule, the hourly cap and the daily cap as Mission controls: noRepeat, hourlyCap and
 dailyCap, server-wide (owner decision: a cooldown change counts for every department). CP.DeptControls is a stub
 here (its rows, bounds and self rule are covered by mission_controls_spec and cooldown_controls_spec): this spec
 checks what CP.Draw registers and that the draw, the accept checks and the board read the values.
@@ -5966,7 +5966,7 @@ checks what CP.Draw registers and that the draw, the accept checks and the board
 ## tests/live_fto_e2e_spec.lua
 
 ```text
-End-to-end workflows, part 3 (step H8): live crime, surrender and field training on the REAL server side of
+End-to-end workflows, part 3: live crime, surrender and field training on the REAL server side of
 Crimson-Police, every server file loaded as in game, database off (the saves folder, as shipped), every switch these
 workflows touch turned on by the admin through the Admin UI's own Settings action. Each workflow also meets a
 resource restart in its middle (H.restart, then every server file loaded again from the same saves folder), and
@@ -5976,7 +5976,7 @@ what survives is what README 9.16.4 and 6.11 say. Only the other resources and t
 ## tests/live_response_spec.lua
 
 ```text
-The live_response block (step V12): the engine-only objective of a live crime. Its three phases (Respond, Secure
+The live_response block: the engine-only objective of a live crime. Its three phases (Respond, Secure
 the scene, one open Detain and book), a HUD and checklist that never change with one suspect's state, the
 weighted detain and booking lines (CP.Runs.award opts.weight, read to two decimals by scoring), End case, the time
 limit, the dead-case end, presence and the last-reported points; the mission loader and the Mission Builder refuse
@@ -5986,7 +5986,7 @@ the block. Plain Lua with a stubbed CP.Opponents: no database.
 ## tests/live_scoring_spec.lua
 
 ```text
-Live scoring (step V13): a live case scores only its weighted live_* lines (Config.LiveCrime.linesOnly), its tier
+Live scoring: a live case scores only its weighted live_* lines (Config.LiveCrime.linesOnly), its tier
 comes from the crew (Config.LiveCrime.tier), and the Type of the Day, goals, challenge, cash and item switches keep
 it out of each of those until the owner turns them on. Every live-case detain is a live catch on the row and a
 Rank by tab. Plain Lua with stubs (no SQL); the 014 column is checked by foundation_spec.
@@ -5995,7 +5995,7 @@ Rank by tab. Plain Lua with stubs (no SQL); the 014 column is checked by foundat
 ## tests/live_surrender_spec.lua
 
 ```text
-Surrender and Talk them down in a live case (step RP1, modules/opponents/surrender): the suspect's own command, an
+Surrender and Talk them down in a live case (modules/opponents/surrender): the suspect's own command, an
 officer's Talk them down within talkRange, the suspect's yes or no, the server's distance, case and state checks,
 the lapse rules, the officers' prompt, Opp.peaceful and the staff timeline lines. All off while
 Config.LiveCrime.enabled is false.
@@ -6004,7 +6004,7 @@ Config.LiveCrime.enabled is false.
 ## tests/live_tablet_spec.lua
 
 ```text
-The officers' tablet for a live case (step V16): the LIVE line of the ready check (CP.LiveCrime.readyLine), the
+The officers' tablet for a live case: the LIVE line of the ready check (CP.LiveCrime.readyLine), the
 Active Mission case card (CP.LiveCrime.caseView through CP.Runs.view, the live_response block's caseView) and the
 outcomes on the result card (CP.LiveCrime.resultView in the RunResult). Labels and counts only: never a citizenid,
 a server id, a position or one suspect's state while the case runs. Plain Lua with stubs.
@@ -6013,7 +6013,7 @@ a server id, a position or one suspect's state while the case runs. Plain Lua wi
 ## tests/loop_census_spec.lua
 
 ```text
-Loop census (step LP4, docs/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
+Loop census (docs/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
 (CreateThread) or runs a `while true do`, and every web/src file that sets a timer (setTimeout, setInterval) or asks
 for an animation frame, has a census row in docs/LOOPS.md with the same counts. A new loop, or a removed one, fails
 here until its row is written (and its five questions answered in the tables above the census).
@@ -6055,7 +6055,7 @@ folder removed at the end.
 ## tests/mission_ban_spec.lua
 
 ```text
-Mission ban (step P11): a supervisor bars one officer of his department (a lower grade, never himself) from taking
+Mission ban: a supervisor bars one officer of his department (a lower grade, never himself) from taking
 missions for some hours, with a reason; the one who set it and admins lift it. Real missionban, livectl,
 deptcontrols, adminkit, admin, access and permissions (tests/fixtures/admin_live_world.lua). The accept, call
 claim and Cross-Department join checks are in board_types_spec, missioncalls_spec and teams_spec.
@@ -6128,7 +6128,7 @@ The npc slice writes no SQL, so this spec runs no queries.
 ## tests/nui_bundle_spec.lua
 
 ```text
-The NUI bundle (step OP2, docs/LOOPS.md "Server cost and NUI"): every player's NUI starts with the officer and
+The NUI bundle (docs/LOOPS.md "Server cost and NUI"): every player's NUI starts with the officer and
 supervisor screens only; the Admin UI screens, the Supervisor Mission Builder and the criminal tablet load on
 first use. Every stylesheet still loads with the page, in one fixed order (web/src/styles/order.ts), so the look
 is the same. Reads web/src and web/dist (tools/check_all.sh build checks dist matches the sources).
@@ -6137,7 +6137,7 @@ is the same. Reads web/src and web/dist (tools/check_all.sh build checks dist ma
 ## tests/opponents_conduct_spec.lua
 
 ```text
-CP.Opponents conduct (step V6): the armed definition (C6), the damage ledger between a case's officers and its
+CP.Opponents conduct: the armed definition (C6), the damage ledger between a case's officers and its
 suspects, excessive force on a suspect in CP's proven custody who is still restrained, or down after downGrace (C7:
 a flag on the officer who fired, never an automatic fail; a suspect free of his cuffs again holds nobody), the
 unarmed-shot and ran-over penalties, and the cash-seizure audit (only an on-duty 'leo' is a seizure). Every flag here
@@ -6147,7 +6147,7 @@ holds only the officer who fired, drove or seized.
 ## tests/opponents_pairs_spec.lua
 
 ```text
-CP.Opponents identity and pairs (step V7): the self rule (characters, licenses, linked accounts), the duty maps,
+CP.Opponents identity and pairs: the self rule (characters, licenses, linked accounts), the duty maps,
 the pair ledger cp_pvp_pairs (caps, restart, retention) and the pair-repeat flag, against the real qbx, access,
 schedule, anticheat and opponents modules (qbx_core's exports and events mocked, Qbox's players and users tables as
 qbx_core 1.24.0 stores them).
@@ -6156,7 +6156,7 @@ qbx_core 1.24.0 stores them).
 ## tests/opponents_proof_spec.lua
 
 ```text
-CP.Opponents proof (step V5): the sc-police cuff pair and custody hold, getting free during the hold (release,
+CP.Opponents proof: the sc-police cuff pair and custody hold, getting free during the hold (release,
 bobby-pin rescue, cuff-break, self-uncuff), downs and the neutralised share, an AFK catch scoring 0, bookings in
 either order with booking zones, and the hospital rules. Real: modules/integrations/qbx, access, anticheat,
 integrations/sc_police and sc_ambulance (the V3 handlers, fired as net events), opponents and opponents/proof;
@@ -6166,7 +6166,7 @@ qbx_core's exports and its onSetMetaData event are mocked like FXServer sends th
 ## tests/opponents_staff_spec.lua
 
 ```text
-CP.Opponents staff (step V17): the server-only case data admins read (names fixed when a line is written, the
+CP.Opponents staff: the server-only case data admins read (names fixed when a line is written, the
 timeline as lines, the flag lines, the ledger), Config.RealSuspects.casesKept, the admin callbacks and the three
 tools (block a pair, exclude a player, suspend an officer), and the self rule over suspects (P.tookPart). Plain
 Lua with stubs: qbx_core's exports, CP.AdminKit and the pair writers are mocked; nothing reads the database.
@@ -6185,7 +6185,7 @@ records its calls. Every SQL statement of the three modules runs here against Ma
 ## tests/points_bonus_spec.lua
 
 ```text
-Points bonuses inside admin bounds (step P20): happyHourPoints (x the final points of a completed run a department
+Points bonuses inside admin bounds: happyHourPoints (x the final points of a completed run a department
 leads that was accepted while a happy hour ran, fixed at the accept, never for its starter) and twistPoints (x each
 twist's points share, still under Config.Events.twistMaxPoints). Never on failed runs, test runs, Cross-Department
 runs or the Weekly Boss; the accept step shows the raised share. Plain Lua: stubbed controls, no database.
@@ -6194,7 +6194,7 @@ runs or the Weekly Boss; the accept step shows the raised share. Plain Lua: stub
 ## tests/protect_rescue_director_spec.lua
 
 ```text
-Hostage Rescue's hostages through the spawn director (Config.Spawning.hostagesAt, PLAN S15) on the real engine, the
+Hostage Rescue's hostages through the spawn director (Config.Spawning.hostagesAt) on the real engine, the
 real blocks and the built-in mission file: they appear when their own objective starts (after the fight), not at
 run start, never within minDistanceIndoor (15 m) of an officer, and after hostagesWaitMax on their spots anyway.
 'runStart' keeps the old timing. The engine warns once about a block that makes entities in prepare.
@@ -6203,7 +6203,7 @@ run start, never within minDistanceIndoor (15 m) of an officer, and after hostag
 ## tests/pursuit_director_spec.lua
 
 ```text
-pursuit cars through the spawn director (Config.Spawning, PLAN S13) on the real engine, the real block and the
+pursuit cars through the spawn director (Config.Spawning) on the real engine, the real block and the
 placement module: road clearance (vehicleLift), the second violator up the road from the officers
 (secondViolatorUpstream), every car's point through the director (minDistance, after waveDelayMax hardMin), the
 placer's other slots, and never a car on a player's position.
@@ -6212,7 +6212,7 @@ placer's other slots, and never a car on a player's position.
 ## tests/push_mission_spec.lua
 
 ```text
-A mission a supervisor pushes to a unit (step P19, the pushMission Mission control): shipped off nothing moves; on,
+A mission a supervisor pushes to a unit (the pushMission Mission control): shipped off nothing moves; on,
 the push is refused for his own unit, another department, another type, the wrong unit size, a mission with no start
 in the area and a member's mission cooldown; a push names the mission in the audit, only the paged unit gets the
 toast and sees the call (with the mission's name), even after the page time, and its accept starts that mission
@@ -6238,7 +6238,7 @@ Real: integrations/qbx.
 ## tests/realsuspects_docs_spec.lua
 
 ```text
-Step V27: the owner docs for real suspects stay in step with the code. README 9.16 (owner checklist, the rules
+the owner docs for real suspects stay in step with the code. README 9.16 (owner checklist, the rules
 for cases with real suspects, fairness, troubleshooting) is in the contents, /crimsonheat is in the command list,
 the go-live checklist points to it, every Config.LiveCrime / Config.Volunteers / Config.RealSuspects key path the
 section names exists, the in-game checklist has a check for every step V11-V27 and SPEC's SOP has the rules.
@@ -6247,7 +6247,7 @@ section names exists, the in-game checklist has a check for every step V11-V27 a
 ## tests/realsuspects_e2e_spec.lua
 
 ```text
-End-to-end scenarios for real suspects (step V27) on the REAL server side of Crimson-Police: every server file
+End-to-end scenarios for real suspects on the REAL server side of Crimson-Police: every server file
 loaded as in game, database off (the saves folder, as shipped), only the other resources and the natives stubbed.
 1. As shipped (Config.LiveCrime.enabled and Config.Volunteers.enabled false): a reported crime, /crimsonheat and
    the Mission Board change nothing.
@@ -6263,7 +6263,7 @@ volunteer is asked first and can say no, and staff read each case's timeline.
 ## tests/resmon_spec.lua
 
 ```text
-Client resmon (step OP1, docs/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
+Client resmon (docs/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
 each native counted when a Crimson-Police file calls it. The idle game calls none; the busiest frame loop of a run
 (the checkpoint course: two markers, the inside and contact checks) calls few per frame and builds no string; the
 HUD sends one NUI message per change; a 'local' officer option decodes this PC's KVP only when it changed. The tired
@@ -6312,7 +6312,7 @@ For hunting order, clock and time zone effects (docs/TESTING.md):
 ## tests/run_controls_spec.lua
 
 ```text
-In a run (step P8): four per-department Mission controls of scope 'run' read for the leader at the accept and
+In a run: four per-department Mission controls of scope 'run' read for the leader at the accept and
 locked in run.controls: startTimeout, readyCheck, timeLimit (x the mission's limit, the fast-finish bonus keeps
 the unscaled one) and idleCheck (stricter only). Real runs, deptcontrols and anticheat
 (tests/fixtures/admin_live_world.lua).
@@ -6375,7 +6375,7 @@ No database is used.
 ## tests/saved_cases_spec.lua
 
 ```text
-Step F1: real-suspect data survives a restart. A closed case (its suspects, officers, timeline and damage ledger)
+real-suspect data survives a restart. A closed case (its suspects, officers, timeline and damage ledger)
 is saved in cp_pvp_cases and read back for the Admin UI after a restart; volunteer strikes and strike blocks are
 cp_pvp_pairs rows read back too. Config.RealSuspects.saveCases / Config.Volunteers.saveStrikes = false keep
 them in memory only.
@@ -6384,7 +6384,7 @@ them in memory only.
 ## tests/search_area_director_spec.lua
 
 ```text
-Manhunt through the spawn director (Config.Spawning, PLAN S16) on the real engine, the real search_area block and the
+Manhunt through the spawn director (Config.Spawning) on the real engine, the real search_area block and the
 built-in mission file: nothing appears when the search starts; each clue appears once an officer is within
 activateRange (150 m) of it, 40 m or more from every officer or out of every officer's sight; each fugitive appears on
 his hiding spot once an officer is within 150 m of it, never within minDistance (40 m) of one (after waveDelayMax on
@@ -6394,11 +6394,11 @@ another free hiding spot instead). enabled = false keeps the old timing: everyth
 ## tests/server_cost_spec.lua
 
 ```text
-Server cost (step OP2, docs/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
+Server cost (docs/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
 online and no run, as tests/e2e_spec.lua sets it up (its world is loaded from that file, up to its HELPERS
 section, on a database of its own). Counted: the SQL the idle server sends in two minutes, the tablet pushes with
 Config.Performance.pushGapMs, and which callback answers go latent with Config.Performance.latentAboveBytes.
-Step OP3: the IsPlayerAceAllowed calls of one admin action, one admin read and one supervisor action through
+the IsPlayerAceAllowed calls of one admin action, one admin read and one supervisor action through
 CP.AdminKit (the guard asks isAdmin once and hands it to CP.Permissions.can).
 ```
 
@@ -6458,10 +6458,10 @@ month or day ('0000-00-00', 0, 300, '2026-00-01', and any bad date with IGNORE).
 ## tests/spawn_check_spec.lua
 
 ```text
-Check spawn points (PLAN S7; modules/testing server and client, each block's pointKinds): the server lists every
+Check spawn points (modules/testing server and client, each block's pointKinds): the server lists every
 point of a mission's location with what appears there, from the REAL blocks on the REAL built-in mission files; the
 admin's own game visits the points, judges each with CP.Spawn.probe and reports back; bad points get one console
-line each (and a line in Admin UI -> System -> Problems). PLAN S8: "Teleport here" (spawnPoints with a point id:
+line each (and a line in Admin UI -> System -> Problems). "Teleport here" (spawnPoints with a point id:
 the file's coordinates, audited, Config.Testing.spawnCheck.teleport; the client action teleport { target = 'point' }
 without a test run, its refusals and the Crimson-Arena re-check) and a skipped location's push with the mission name.
 ```
@@ -6469,7 +6469,7 @@ without a test run, its refusals and the Crimson-Arena re-check) and a skipped l
 ## tests/spawn_client_spec.lua
 
 ```text
-CP.Spawn.visible and its ox_lib callback (modules/spawn/client.lua, PLAN S5) against a stubbed game: an asynchronous
+CP.Spawn.visible and its ox_lib callback (modules/spawn/client.lua) against a stubbed game: an asynchronous
 shape test pool (handles polled each frame, pending, done, invalid, failed starts, the hit BOOL as 1 or true), the
 head bone, the rendered camera and the car. A 2 m wall: in front seen, close behind hidden, far behind the camera
 sees over, down a slope hidden; four probes per point (two eyes, chest and head height) with the flags, options and
@@ -6480,7 +6480,7 @@ entries seen; no eyes seen; at most 32 points and 16 probes at once; the budget 
 ## tests/spawn_director_spec.lua
 
 ```text
-The spawn director (Config.Spawning, PLAN S1) on a real test run of the engine: three officers placed through the
+The spawn director (Config.Spawning) on a real test run of the engine: three officers placed through the
 harness's ped coords, a recording block that keeps its ctx. ctx.choosePoints / Runs.choosePoints: the 40 m rule (30 m
 skipped, 40 and 45 m kept, height not counted, the ped moving), the indoor 15 m (opts.indoor and a point's own indoor
 flag), "behind" seen from each officer's own line to the scene (one who came round the far side keeps the point in front
@@ -6496,7 +6496,7 @@ read live, its own range, 2D, a vector4, no point. The console lines are checked
 ## tests/spawn_ground_spec.lua
 
 ```text
-CP.Spawn.probe (modules/spawn/client.lua, PLAN S6) on the small map of H.groundNatives, whose natives check their
+CP.Spawn.probe (modules/spawn/client.lua) on the small map of H.groundNatives, whose natives check their
 argument types: a person 1 m over the ground ok (whole-number coordinates sent as decimals, the collision asked for
 around his ped, his capsule); 0.52 m under put on it; 2 m under the ground under the ground or put on it as
 snapWithin says; 5 m under found from 50 m up; floating and put down; ranges read live (a bad range: the default); a
@@ -6513,7 +6513,7 @@ capsule, the ground still judged); bad input.
 ## tests/spawn_hidden_spec.lua
 
 ```text
-Hidden points first (Config.Spawning.preferHidden, losTimeoutMs; PLAN S5) on a real test run of the engine with three
+Hidden points first (Config.Spawning.preferHidden, losTimeoutMs) on a real test run of the engine with three
 officers and a fake lib.callback.await per officer's game (an answer and a delay each). Hidden from both asked games
 first, then the block's order; who is asked (within activateRange of the scene, else the nearest; Cara 5 km away is
 not); the args (points as { x, y, z }, ms = losTimeoutMs - 250); only exactly false hides; no ask when every good
@@ -6526,7 +6526,7 @@ points wins; a first = true point (the boss's own spot) stays ahead. No SQL.
 ## tests/spawn_lint_spec.lua
 
 ```text
-Spawn lint for the built-in missions (PLAN S22) on the definitions the real loader makes from the shipped files, with
+Spawn lint for the built-in missions on the definitions the real loader makes from the shipped files, with
 the real blocks (pointKinds, defaults), CP.Scaling and CP.Builder.armedTooClose (no built-in point trusted): no two
 spawn points of one location within 1.5 m (flat); every list has a point per person, car or item the largest team
 brings (highest scaled count over minOfficers-maxOfficers, scaling max applied; spawnSets: the use smallest sets);
@@ -6541,7 +6541,7 @@ matcher. No SQL.
 ## tests/spawn_place_spec.lua
 
 ```text
-The server's side of the placer (Config.Spawning.place, PLAN S10; modules/spawn/server.lua) on the real engine
+The server's side of the placer (Config.Spawning.place; modules/spawn/server.lua) on the real engine
 (tests/fixtures/custody/world.lua: runs, npc, scaling, scoring): every new mission entity is frozen, its cp bag asks
 for a placement, the answer of an officer's game is taken or refused, a bad point moves it to another point, no
 answer in time lets it go (or removes it). FREEZE_ENTITY_POSITION is the server RPC FXServer sends to the game that
@@ -6552,7 +6552,7 @@ NETWORK_GET_ENTITY_OWNER answers that player's server id or -1. No SQL (test run
 ## tests/spawn_placer_spec.lua
 
 ```text
-The placer (modules/spawn/client.lua, PLAN S9) on H.placerNatives (players, network ids, control that comes after a
+The placer (modules/spawn/client.lua) on H.placerNatives (players, network ids, control that comes after a
 request or never or is taken over, freeze and coordinates kept only on an entity this game controls) over the ground
 map of H.groundNatives, both checking argument types: a person 1 m over the ground put on it at the server's x, y
 (frozen first, moved, let go, tasks kept, collision kept loaded, the probe around him ignoring him), told once per
@@ -6571,7 +6571,7 @@ four placed at once; one 12 m from its point (placed and let go before): told 'm
 ## tests/spawn_walkin_spec.lua
 
 ```text
-CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/spawn/client.lua; PLAN S12):
+CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/spawn/client.lua):
 where a returning driver or a thief appears for the car this officer deals with: a footpath point the game's navmesh
 gives (GetSafeCoordForPed, never a building's inside or water) contactRing metres from the car, 25 m or more from
 him, in front of him (where his camera looks), the ones he cannot see first, at a standing person's height.
@@ -6580,7 +6580,7 @@ him, in front of him (where his camera looks), the ones he cannot see first, at 
 ## tests/stage_ahead_spec.lua
 
 ```text
-Stage ahead (Config.Spawning.stageAhead, PLAN S3) on the real engine (tests/fixtures/custody/world.lua: runs, npc,
+Stage ahead (Config.Spawning.stageAhead) on the real engine (tests/fixtures/custody/world.lua: runs, npc,
 scaling, scoring) with probe blocks that record every hook call: the shipped value; objective 2's stage hook called
 once a tick while objective 1 runs (dt, ctx.staged false then true, never objective 3), its ped owned by objective 2
 (ownerOf, entitiesFor, the caps), one console line; its start gets ctx.staged and the same ctx.state, the ped still
@@ -6644,7 +6644,7 @@ another resource's table: it stays on MariaDB and is read through the real oxmys
 ## tests/sup_award_points_spec.lua
 
 ```text
-A supervisor gives points (step P22, the awardPoints Mission control, owner decision 2026-10-19): only through the
+A supervisor gives points (the awardPoints Mission control, owner decision 2026-10-19): only through the
 admin's point-adjust path (CP.Corrections.adjust), inside the admin's min and max and awardPointsPerDay, to an
 officer of his own department, never to a character of his own license, with a reason, audited as 'supervisor'.
 Plain stubs (no database): the real AdminKit, DeptControls, Corrections and SupAwards; MySQL, Scoring and the
@@ -6666,7 +6666,7 @@ so neither other specs nor a parallel run of this spec can interfere.
 ## tests/twists_spec.lua
 
 ```text
-Twists the officers choose at accept (PLAN M8b): CP.Twists (shared: the run's list, the stacked bonus and its caps)
+Twists the officers choose at accept: CP.Twists (shared: the run's list, the stacked bonus and its caps)
 and CP.Events (which twists fit a mission, the offer per type, the check of a chosen list, the random roll that
 ships off). The engine, the board, the claim and the screens are covered in int_engine_spec, missioncalls_spec,
 economy_spec, teams_spec and the engine_b client fixture.
@@ -6675,17 +6675,17 @@ economy_spec, teams_spec and the engine_b client fixture.
 ## tests/volunteer_match_spec.lua
 
 ```text
-Volunteer matching (step V22): the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
+Volunteer matching: the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
 on a yes (run.realSuspect = 'volunteer'), travel and in position, engagement (the officers' protection drop), a
 no-show, Cancel this case, the release, the NPC fallback and the endings (Config.Volunteers.onVoid / voidRun,
-'players_only'), ctx.volunteer()'s view, and (V26) the volunteerEnded event and the staff view. Plain Lua with
+'players_only'), ctx.volunteer()'s view, and the volunteerEnded event and the staff view. Plain Lua with
 stubs.
 ```
 
 ## tests/workflow_errors_spec.lua
 
 ```text
-Easy to understand (steps WF2 and WF3, docs/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
+Easy to understand (docs/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
 the common workflows (accept, unit, Dispatch, the run, Review Queue, the supervisor dialogs; Backups, Storage copy,
 Corrections, Settings) says what went wrong and what to do next, in the merged locales/en.json and in every
 locales/parts file that carries the key. Plain Lua, no stubs.
@@ -6694,7 +6694,7 @@ locales/parts file that carries the key. Plain Lua, no stubs.
 ## tests/workflows_e2e_spec.lua
 
 ```text
-End-to-end workflows, part 2 (step H7): officers and supervisors on the REAL server side of Crimson-Police, every
+End-to-end workflows, part 2: officers and supervisors on the REAL server side of Crimson-Police, every
 server file loaded as in game, database off (the saves folder, as shipped), every switch these workflows touch
 turned on by the admin through the Admin UI's own Settings action. Only the other resources and natives are stubs.
 1. The admin turns it on. 2. An officer's NPC mission: accept, run, result, payout with money and items.
@@ -6706,7 +6706,7 @@ turned on by the admin through the Admin UI's own Settings action. Only the othe
 ## tests/workflows_full_spec.lua
 
 ```text
-Full workflow testing, step WF1 (the owner: "do a full workflow testing of everything"): every workflow the other
+Full workflow testing (the owner: "do a full workflow testing of everything"): every workflow the other
 end-to-end specs leave out, driven start to finish on the REAL server side of Crimson-Police (every server file
 loaded as in game, database off: the saves folder, as shipped), every switch on through the Admin UI's own Settings,
 and a `restart Crimson-Police` and a player drop and reconnect in the middle. docs/WORKFLOWS.md lists every workflow

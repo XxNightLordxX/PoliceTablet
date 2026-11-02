@@ -1731,7 +1731,7 @@ def css_banner_pass(lines):
 
 NOTES_INTRO = """# File notes
 
-The long headers that used to open each file, kept word for word. The owner's style (docs/STYLE.md)
+The long headers that used to open each file, kept in full. The owner's style (docs/STYLE.md)
 keeps a file header to a short summary; tools/restyle.py moved the rest here. Section names are file
 paths. Anything here that is also in docs/ARCHITECTURE.md is owned by ARCHITECTURE.md.
 """

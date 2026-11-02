@@ -107,6 +107,27 @@ for _, rel in ipairs(files) do
     end
 end
 
+-- no build history: no step or plan ids in the documents' prose (the in-game checklist keeps its step tags, which
+-- tests/realsuspects_docs_spec.lua reads; Crimson-Arena's rule numbers C1..C27 are rules, not steps, and (F7) is a key)
+local STEP = {}
+for kind in ('K L M N O P V RP T AP F G H Z LP OP R WF S VC DOC'):gmatch('%S+') do STEP[kind] = true end
+for _, rel in ipairs(files) do
+    if rel:match('%.md$') and not rel:match('IN_GAME_CHECKLIST%.md$') then
+        local s = (ReadRepo(rel:gsub('^%./', '')) or ''):gsub('every step V11%-V27', '')
+        local hits = {}
+        for word, id in s:gmatch('(%a+) (%u+%d+)') do
+            if (word == 'step' or word == 'Step' or word == 'steps' or word == 'PLAN') and STEP[id:match('^%u+')] then
+                hits[#hits + 1] = word .. ' ' .. id
+            end
+        end
+        for id in s:gmatch('%((%u+%d+%l?)[%),]') do
+            local kind = id:match('^%u+')
+            if STEP[kind] and kind ~= 'F' then hits[#hits + 1] = '(' .. id .. ')' end
+        end
+        H.eq(table.concat(hits, ', '), '', rel:gsub('^%./', '') .. ': no step or plan ids in its prose')
+    end
+end
+
 -- ============================================================================
 --                   README: CONTENTS, COMMANDS, CONFIG KEYS
 -- ============================================================================
