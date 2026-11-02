@@ -272,6 +272,209 @@ do
 end
 
 -- ============================================================================
+--                                    3c. F2
+-- ============================================================================
+-- LIFT EARLY, CLEAR STRIKES, NAMES AND WEAPON NAMES.
+
+do
+    local function Act(name, payload)
+        return acts[name].fn({
+            src = 9,
+            payload = payload,
+            actor = 'admin',
+            audit = function(...) audits[#audits + 1] = { ... } end,
+        })
+    end
+    -- lift: an admin action with a reason, audited, refused on an unknown row and on his own characters
+    local lifted = {}
+    Opp.lift = function(kind, officer, suspect)
+        lifted[#lifted + 1] = { kind, officer, suspect }
+        if suspect == 'GONE0001' then return false, 'no_row' end
+        return true, os.time() + 86400
+    end
+    H.ok(
+        acts['server:admin:rsLift'] and acts['server:admin:rsLift'].key == 'antiFarmOverride'
+            and acts['server:admin:rsLift'].opts.reason == true,
+        'rsLift: an admin action with a reason'
+    )
+    local ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'CRIM0001' })
+    H.ok(ok == false and e == 'err.rs_off', 'lift is refused while both features are off')
+    Config.LiveCrime.enabled = true
+    local nAudit = #audits
+    ok = Act('server:admin:rsLift', { kind = 'block', officer = 'OFF00001', suspect = 'CRIM0001' })
+    H.ok(ok == true and lifted[1][1] == 'block' and lifted[1][2] == 'OFF00001' and lifted[1][3] == 'CRIM0001',
+        'a pair block is lifted')
+    H.eq(audits[nAudit + 1] and audits[nAudit + 1][1], 'rsLift', 'and audited')
+    ok = Act('server:admin:rsLift', { kind = 'suspend', officer = 'OFF00001', suspect = 'CRIM0001' })
+    H.ok(ok == true and lifted[2][2] == 'OFF00001' and lifted[2][3] == nil, 'a suspension names only the officer')
+    ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'GONE0001' })
+    H.ok(ok == false and e == 'err.rs_no_row', 'a row that is not running: err.rs_no_row')
+    ok, e = Act('server:admin:rsLift', { kind = 'ban', suspect = 'CRIM0001' })
+    H.ok(ok == false and e == 'err.rs_no_row', 'an unknown kind: err.rs_no_row')
+    ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'bad id!' })
+    H.ok(ok == false and e == 'err.invalid_citizenid', 'a bad citizenid')
+    selfCids.CRIM0001 = true
+    ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'CRIM0001' })
+    H.ok(ok == false and e == 'err.self_target', 'never one of the admin\'s own characters')
+    selfCids.CRIM0001 = nil
+    H.eq(Config.RealSuspects.staffLift, true, 'staffLift ships true')
+    Config.RealSuspects.staffLift = false
+    ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'CRIM0001' })
+    H.ok(ok == false and e == 'err.rs_lift_off', 'staffLift = false: lifting is refused')
+    H.eq(cbs['admin:getRsPairs'].fn({ src = 9, args = {} }).lift, false, 'and the screen offers no Lift')
+    Config.RealSuspects.staffLift = true
+    Config.LiveCrime.enabled = false
+
+    -- clear strikes: volunteers on, a reason, audited, nothing to clear refused
+    local cleared = {}
+    CP.Volunteers = {
+        clearStrikes = function(cid)
+            cleared[#cleared + 1] = cid
+            if cid == 'VOL00009' then return false, 'no_row' end
+            return true, { strikes = 2 }
+        end,
+        staffList = function() return { { citizenid = 'OFF00001', roles = { 'runner' }, strikes = 2 } } end,
+    }
+    ok, e = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00001' })
+    H.ok(ok == false and e == 'err.rs_off' and #cleared == 0, 'clear strikes is refused while volunteers are off')
+    Config.Volunteers.enabled = true
+    H.eq(Config.Volunteers.staffClearStrikes, true, 'staffClearStrikes ships true')
+    H.ok(acts['server:admin:rsClearStrikes'].opts.reason == true, 'rsClearStrikes needs a reason')
+    nAudit = #audits
+    ok = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00001' })
+    H.ok(ok == true and cleared[1] == 'VOL00001', 'a volunteer\'s strikes are cleared')
+    H.eq(audits[nAudit + 1] and audits[nAudit + 1][1], 'rsClearStrikes', 'and audited')
+    ok, e = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00009' })
+    H.ok(ok == false and e == 'err.rs_no_strikes', 'nothing to clear: err.rs_no_strikes')
+    H.eq(acts['server:admin:rsClearStrikes'].opts.self({ citizenid = 'VOL00001' }).citizenid, 'VOL00001',
+        'the self rule runs on the citizenid')
+    local list = cbs['admin:getRsCases'].fn({ src = 9, args = {} })
+    H.eq(list.clearStrikes, true, 'the Volunteers tab offers Clear strikes')
+    H.eq(list.listed[1].name, 'Ada Test', 'a listed volunteer with no name gets his character name')
+    Config.Volunteers.staffClearStrikes = false
+    ok, e = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00001' })
+    H.ok(ok == false and e == 'err.rs_clear_off', 'staffClearStrikes = false: refused')
+    Config.Volunteers.staffClearStrikes = true
+    Config.Volunteers.enabled = false
+    CP.Volunteers = nil
+
+    -- names: one batched lookup per screen load (online from the cache, offline from Qbox's players table, then
+    -- cp_officers), never a query per row
+    H.sql('DROP TABLE IF EXISTS players')
+    H.sql([[CREATE TABLE players (citizenid varchar(50) NOT NULL, license varchar(255) NOT NULL,
+        charinfo longtext DEFAULT NULL, PRIMARY KEY (citizenid))]])
+    H.sql([[INSERT INTO players (citizenid, license, charinfo) VALUES ('OFFL0001', 'license:l1', ?),
+        ('OFFL0002', 'license:l2', ?)]],
+        { '{"firstname":"Lee","lastname":"Long"}', '{"firstname":"Mo","lastname":"Moss"}' })
+    H.sql('DELETE FROM cp_officers WHERE citizenid = \'OFFC0001\'')
+    H.sql('INSERT INTO cp_officers (citizenid, department, display_name) VALUES (\'OFFC0001\', \'sast\', \'Cee Kay\')')
+    Opp.pairStats = function()
+        local out = {}
+        for i = 1, 30 do
+            out[i] = {
+                officer = i % 2 == 0 and 'OFF00001' or 'OFFC0001',
+                suspect = i % 3 == 0 and 'OFFL0001' or 'OFFL0002',
+                cases = 1,
+                scored = 0,
+                lastAt = os.time(),
+                kinds = { 'live' },
+            }
+        end
+        return out, nil
+    end
+    Opp.adminRows = function() return { { kind = 'exclude', suspect = 'NONAME01', untilAt = os.time() + 60 } } end
+    local counted = {}
+    local function Wrap(db)
+        if type(db) ~= 'table' or type(db.query) ~= 'table' then return nil end
+        local real = db.query.await
+        db.query.await = function(sql, ...)
+            counted[#counted + 1] = sql
+            return real(sql, ...)
+        end
+        return function() db.query.await = real end
+    end
+    local undoA = Wrap(MySQL)
+    local undoB = CP.Storage and CP.Storage.realMySQL ~= MySQL and Wrap(CP.Storage.realMySQL) or nil
+    local data = cbs['admin:getRsPairs'].fn({ src = 9, args = {} })
+    if undoA then undoA() end
+    if undoB then undoB() end
+    local players, officers = 0, 0
+    for _, sql in ipairs(counted) do
+        if sql:find('FROM players', 1, true) then players = players + 1 end
+        if sql:find('FROM cp_officers', 1, true) then officers = officers + 1 end
+    end
+    H.eq(data.names.OFF00001, 'Ada Test', 'an online character: his name from the cache')
+    H.eq(data.names.OFFL0001, 'Lee Long', 'an offline character: his name from Qbox\'s players table')
+    H.eq(data.names.OFFL0002, 'Mo Moss', 'every offline one')
+    H.eq(data.names.OFFC0001, 'Cee Kay', 'else the officer name Crimson-Police keeps')
+    H.eq(data.names.NONAME01, nil, 'a citizenid with no name stays a citizenid')
+    H.eq(players, 1, '30 pair lines: one players-table statement')
+    H.eq(officers, 1, 'and one cp_officers statement')
+    H.eq(data.lift, true, 'the running rows can be lifted (staffLift ships true)')
+    H.eq(Config.RealSuspects.staffNames, true, 'staffNames ships true')
+    Config.RealSuspects.staffNames = false
+    data = cbs['admin:getRsPairs'].fn({ src = 9, args = {} })
+    H.eq(next(data.names), nil, 'staffNames = false: citizen IDs only')
+    Config.RealSuspects.staffNames = true
+    Opp.pairStats, Opp.adminRows = nil, nil
+    H.sql('DROP TABLE IF EXISTS players')
+    H.sql('DELETE FROM cp_officers WHERE citizenid = \'OFFC0001\'')
+
+    -- weapon names: the common GTA weapons by their real hash (signed or unsigned), the hash for the rest
+    local fake = _G.joaat
+    _G.joaat = function(name)
+        local h = 0
+        name = tostring(name):lower()
+        for i = 1, #name do
+            h = (h + name:byte(i)) & 0xFFFFFFFF
+            h = (h + (h << 10)) & 0xFFFFFFFF
+            h = h ~ (h >> 6)
+        end
+        h = (h + (h << 3)) & 0xFFFFFFFF
+        h = h ~ (h >> 11)
+        return (h + (h << 15)) & 0xFFFFFFFF
+    end
+    H.load('shared/weapons.lua')
+    _G.joaat = fake
+    local W = CP.Weapons
+    H.eq(W.label(453432689), 'Pistol', 'WEAPON_PISTOL by its hash')
+    H.eq(W.label(1593441988), 'Combat Pistol', 'WEAPON_COMBATPISTOL')
+    H.eq(W.label(-1569615261), 'Fists', 'a signed hash reads the same (WEAPON_UNARMED)')
+    H.eq(W.label(12345), nil, 'an unknown hash has no name')
+    H.eq(W.text(12345), '#12345', 'and reads as its hash')
+    local R5 = NewRun('run-0005', { { src = 1, cid = 'OFF00001', name = 'Ada Test' } })
+    local case = Opp.open(R5, { kind = 'live', members = { 'CRIM0001' } })
+    case.ledger[#case.ledger + 1] = {
+        t = os.time(),
+        dir = 'officer',
+        from = 1,
+        to = 2,
+        cid = 'CRIM0001',
+        label = case.suspects.CRIM0001.label,
+        weapon = 1593441988,
+        n = 1,
+    }
+    case.ledger[#case.ledger + 1] = {
+        t = os.time(),
+        dir = 'officer',
+        from = 1,
+        to = 2,
+        cid = 'CRIM0001',
+        label = case.suspects.CRIM0001.label,
+        weapon = 777,
+        n = 1,
+    }
+    local view = Opp.staffCase('run-0005')
+    H.eq(view.ledger[1].weaponName, 'Combat Pistol', 'the damage ledger names the weapon')
+    H.ok(view.ledger[2].weaponName == nil and view.ledger[2].weapon == 777, 'an unknown weapon keeps its hash')
+    H.eq(Config.RealSuspects.weaponNames, true, 'weaponNames ships true')
+    Config.RealSuspects.weaponNames = false
+    H.eq(Opp.staffCase('run-0005').ledger[1].weaponName, nil, 'weaponNames = false: the raw hash only')
+    Config.RealSuspects.weaponNames = true
+    Opp.close(R5)
+end
+
+-- ============================================================================
 --                 4. THE SELF RULE OVER SUSPECTS (P.tookPart)
 -- ============================================================================
 

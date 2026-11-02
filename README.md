@@ -2378,7 +2378,9 @@ Both:
 - ☐ Share the rules in [9.16.2](#9162-rules-for-cases-with-real-suspects) with your officers and your players
   (Discord, the server rules page) before you turn anything on.
 - ☐ Tell your staff where the case timeline is (Admin UI → **Real suspects**) and what the three tools do: **Block
-  pair**, **Exclude** and **Suspend** (each needs a number of days and a reason, and is in the audit log).
+  pair**, **Exclude** and **Suspend** (each needs a number of days and a reason, and is in the audit log). **Lift**
+  ends one early and **Clear strikes** (Volunteers tab) clears a volunteer's strikes and strike block, each with a
+  reason in the audit log (`Config.RealSuspects.staffLift`, `Config.Volunteers.staffClearStrikes`).
 - ☐ Play one case of each kind on the test server with the in-game checklist (`docs/IN_GAME_CHECKLIST.md`, section
   Real suspects) and watch resmon: idle must stay at 0.02 ms or less.
 
@@ -3182,7 +3184,12 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   **Suspend** and **Block pair** buttons that fill the tool form. A case of your own characters is greyed and can't be
   opened. **Pairs and blocks** shows the pair statistics (type a citizen ID to see only that player, with his
   exclusion and suspension) and the running blocks, exclusions and suspensions; **Block, exclude or suspend** opens
-  the form (citizen IDs, days, a reason; a longer one replaces a shorter one and none can be lifted early).
+  the form (citizen IDs, days, a reason; a longer one replaces a shorter one). Step F2: **Lift** on a running block,
+  exclusion or suspension ends it now (a reason, in the audit log; a restart does not bring it back;
+  `Config.RealSuspects.staffLift = false` removes the button). Pair statistics, the running rows and the case lists
+  show character names next to citizen IDs (`staffNames`; one lookup per screen load: online players, then Qbox's
+  players table, then the officer names Crimson-Police keeps), and the damage ledger names the weapon (Combat
+  Pistol) instead of its hash (`weaponNames`; a weapon it does not know still shows the hash).
   Volunteering (step V20, `Config.Volunteers`): with `enabled = true` a player who is not on police duty types
   **/crimsonheat** (`command`; restart to rename it), agrees to the rules in an ox_lib alert and ticks the suspects he
   will play (the wanted person who runs, the getaway or race driver in his own car, the fugitive in a search area). He
@@ -3271,7 +3278,9 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
   the mode, where the match got to (on his way, in position, officers reached him, the NPC took over) with why he
   dropped out, and whether officers reached him. A new **Volunteers** tab lists who is on the volunteer list now:
   the suspects each plays, since and until when, his strikes, and whether a mission is asking him or he plays one
-  (read-only, memory only).
+  (memory only). Step F2: **Clear strikes** on a row (or by citizen ID, for a player whose strike block took him off
+  the list) clears his strikes and strike block with a reason in the audit log
+  (`Config.Volunteers.staffClearStrikes`).
   Docs and checks (step V27): README 9.16 gathers what an owner and his players need in one place: the owner
   checklist for turning each feature on, the rules to paste into the server rules (officers, suspects and staff),
   what the server does for fairness (no points for hurting players, no live position, consent and opt-out, the

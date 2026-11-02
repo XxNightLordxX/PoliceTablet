@@ -94,6 +94,8 @@ local function ValidRunId(v)
     return type(v) == 'string' and #v > 0 and #v <= 36 and v:match('^[%w%-]+$') ~= nil
 end
 
+local function Cfg() return Config.RealSuspects or {} end
+
 local function FeatureOn()
     return (type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true)
         or (type(Config.Volunteers) == 'table' and Config.Volunteers.enabled == true)
@@ -205,6 +207,61 @@ local function Officers(case)
     return out
 end
 
+local NAMES_CHUNK = 100   -- citizenids per cp_officers statement
+
+-- Character names for the citizenids a staff screen shows (F2, Config.RealSuspects.staffNames): one batched lookup
+-- per screen load, never a query per row. Online characters from the player cache, the rest from Qbox's players
+-- table (CP.Qbx.characterNames), then the officer names Crimson-Police keeps (cp_officers: the database or the saves
+-- folder). -> { [citizenid] = name }.
+local function NamesOf(cids)
+    local out = {}
+    if Cfg().staffNames == false then return out end
+    local want, list = {}, {}
+    for _, cid in ipairs(cids) do
+        if ValidCid(cid) and not want[cid] then
+            want[cid] = true
+            list[#list + 1] = cid
+        end
+    end
+    if #list == 0 then return out end
+    if CP.Qbx and CP.Qbx.characterNames then
+        local ok, names = pcall(CP.Qbx.characterNames, list)
+        if ok and type(names) == 'table' then
+            for cid, name in pairs(names) do
+                if want[cid] and type(name) == 'string' and name ~= '' then out[cid] = name end
+            end
+        elseif not ok then
+            CP.err(TAG, 'CP.Qbx.characterNames failed: %s', tostring(names))
+        end
+    end
+    local rest = {}
+    for _, cid in ipairs(list) do
+        if not out[cid] then rest[#rest + 1] = cid end
+    end
+    for first = 1, #rest, NAMES_CHUNK do
+        local chunk, marks = {}, {}
+        for i = first, math.min(#rest, first + NAMES_CHUNK - 1) do
+            chunk[#chunk + 1] = rest[i]
+            marks[#marks + 1] = '?'
+        end
+        local ok, rows = pcall(MySQL.query.await,
+            ('SELECT citizenid, display_name FROM cp_officers WHERE citizenid IN ' .. '(%s)'):format(
+                table.concat(marks, ', ')
+            ), chunk)
+        if not ok then
+            CP.err(TAG, 'reading officer names failed: %s', tostring(rows))
+            break
+        end
+        for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+            if type(r.display_name) == 'string' and r.display_name ~= '' and want[r.citizenid] then
+                out[r.citizenid] = r.display_name
+            end
+        end
+    end
+    return out
+end
+Opp.staffNames = NamesOf
+
 -- A volunteer case's role, mode, phase, dropout and whether an officer reached him (CP.Volunteers.staffView, V26),
 -- or nil for a live case.
 local function VolunteerOf(case)
@@ -292,6 +349,7 @@ function Opp.staffCase(runId)
             officer = Officer(case, officerSrc),
             label = e.label,
             weapon = e.weapon,
+            weaponName = Cfg().weaponNames ~= false and CP.Weapons and CP.Weapons.label(e.weapon) or nil,
             n = e.n,
             willKill = e.willKill == true,
             state = e.state,
@@ -341,13 +399,33 @@ if CP.AdminKit and CP.AdminKit.action then
         local list = Opp.staffCases()
         for _, c in ipairs(list) do c.own = Kit.selfRun(ctx.src, c.runId) == true end
         local volunteersOn = type(Config.Volunteers) == 'table' and Config.Volunteers.enabled == true
+        local listed = volunteersOn and CP.Volunteers and CP.Volunteers.staffList and CP.Volunteers.staffList() or {}
+        -- F2: a name for every officer and volunteer the case line or the list has none for, in one lookup
+        local missing = {}
+        for _, c in ipairs(list) do
+            for _, o in ipairs(c.officers or {}) do
+                if not o.name then missing[#missing + 1] = o.citizenid end
+            end
+        end
+        for _, v in ipairs(listed) do
+            if not v.name then missing[#missing + 1] = v.citizenid end
+        end
+        local names = NamesOf(missing)
+        for _, c in ipairs(list) do
+            for _, o in ipairs(c.officers or {}) do o.name = o.name or names[o.citizenid] end
+        end
+        for _, v in ipairs(listed) do v.name = v.name or names[v.citizenid] end
         return {
             enabled = FeatureOn(),
             liveCrime = type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true,
             volunteers = volunteersOn,
             cases = list,
             -- the volunteers on the list now (V26; empty while volunteers are off)
-            listed = volunteersOn and CP.Volunteers and CP.Volunteers.staffList and CP.Volunteers.staffList() or {},
+            listed = listed,
+            -- F2: the Volunteers tab offers Clear strikes (Config.Volunteers.staffClearStrikes)
+            clearStrikes = volunteersOn and Config.Volunteers.staffClearStrikes ~= false,
+            -- F2: blocks, exclusions and suspensions can be lifted early (Config.RealSuspects.staffLift)
+            lift = Cfg().staffLift ~= false,
             serverTime = os.time(),
         }
     end)
@@ -367,11 +445,25 @@ if CP.AdminKit and CP.AdminKit.action then
         if cid ~= nil and not ValidCid(cid) then return nil, 'err.invalid_citizenid' end
         local lines, from = {}, nil
         if Opp.pairStats then lines, from = Opp.pairStats(cid) end
+        local admin = Opp.adminRows and Opp.adminRows() or {}
+        -- F2: the names of everyone the pairs and the running rows name, in one lookup
+        local cids = { cid }
+        for _, l in ipairs(lines) do
+            cids[#cids + 1] = l.officer
+            cids[#cids + 1] = l.suspect
+        end
+        for _, r in ipairs(admin) do
+            cids[#cids + 1] = r.officer
+            cids[#cids + 1] = r.suspect
+        end
         local out = {
             enabled = FeatureOn(),
             pairs = lines,
             from = from,
-            admin = Opp.adminRows and Opp.adminRows() or {},
+            admin = admin,
+            names = NamesOf(cids),
+            -- F2: the running rows can be lifted early (Config.RealSuspects.staffLift)
+            lift = Cfg().staffLift ~= false,
             serverTime = os.time(),
         }
         if cid then
@@ -432,6 +524,51 @@ if CP.AdminKit and CP.AdminKit.action then
         if not ok then return false, res end
         ctx.audit('rsSuspend', p.citizenid, nil, ('%s days, until %d'):format(tostring(days), res))
         return true, { citizenid = p.citizenid, untilAt = res }
+    end, {
+        reason = true,
+        targetRate = { 1, 10000 },
+        self = function(p) return { citizenid = p.citizenid } end,
+    })
+
+    -- F2: lift a running block, exclusion or suspension early (Config.RealSuspects.staffLift). Never one that names
+    -- the admin's own characters; a row that is not running (ended, already lifted, never there) is err.rs_no_row.
+    local LIFT_KINDS = { block = true, exclude = true, suspend = true }
+    Kit.action('server:admin:rsLift', 'antiFarmOverride', function(ctx)
+        local p = ctx.payload
+        if Cfg().staffLift == false then return false, 'err.rs_lift_off' end
+        if not FeatureOn() then return false, 'err.rs_off' end
+        if not LIFT_KINDS[p.kind] then return false, 'err.rs_no_row' end
+        local officer = p.kind ~= 'exclude' and p.officer or nil
+        local suspect = p.kind ~= 'suspend' and p.suspect or nil
+        if (p.kind ~= 'exclude' and not ValidCid(officer)) or (p.kind ~= 'suspend' and not ValidCid(suspect)) then
+            return false, 'err.invalid_citizenid'
+        end
+        for _, cid in ipairs({ officer or false, suspect or false }) do
+            if cid and Kit.isSelf(ctx.src, cid) then return false, 'err.self_target' end
+        end
+        local ok, res = Opp.lift(p.kind, officer, suspect)
+        if not ok then return false, res == 'invalid_citizenid' and 'err.invalid_citizenid' or 'err.rs_no_row' end
+        ctx.audit('rsLift', officer or suspect, nil, ('%s lifted early%s (it ran until %d)'):format(p.kind,
+            (officer and suspect) and (', suspect ' .. suspect) or '', res))
+        CP.log(TAG, 'admin %s lifted the %s of %s early', tostring(ctx.actor), p.kind, tostring(officer or suspect))
+        return true, { kind = p.kind, officer = officer, suspect = suspect }
+    end, { reason = true })
+
+    -- F2: clear a volunteer's strikes and strike block (Config.Volunteers.staffClearStrikes), refused on the admin's
+    -- own characters; nothing to clear is err.rs_no_strikes.
+    Kit.action('server:admin:rsClearStrikes', 'antiFarmOverride', function(ctx)
+        local p = ctx.payload
+        local vc = type(Config.Volunteers) == 'table' and Config.Volunteers or {}
+        if vc.enabled ~= true then return false, 'err.rs_off' end
+        if vc.staffClearStrikes == false then return false, 'err.rs_clear_off' end
+        if not ValidCid(p.citizenid) then return false, 'err.invalid_citizenid' end
+        local V = CP.Volunteers
+        if not (V and V.clearStrikes) then return false, 'err.rs_no_strikes' end
+        local ok, res = V.clearStrikes(p.citizenid)
+        if not ok then return false, 'err.rs_no_strikes' end
+        ctx.audit('rsClearStrikes', p.citizenid, nil, ('%d strike(s) cleared%s'):format(res.strikes or 0,
+            res.blockedUntil and (', block until ' .. res.blockedUntil .. ' lifted') or ''))
+        return true, { citizenid = p.citizenid, strikes = res.strikes, blockedUntil = res.blockedUntil }
     end, {
         reason = true,
         targetRate = { 1, 10000 },

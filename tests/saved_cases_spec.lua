@@ -157,6 +157,21 @@ do
     local ok, why = V.check(2)
     H.ok(ok == false and why == 'blocked', 'a strikes block holds after a restart')
     H.eq(V.strikes('VOL00002'), 0, 'the strikes that led to the block are gone')
+
+    -- F2: staff clear a player's strikes and strike block; the saved rows go too, so a restart keeps them cleared
+    local okC, res = V.clearStrikes('VOL00002')
+    H.ok(okC == true and res.blockedUntil ~= nil, 'clearStrikes lifts the strikes block')
+    H.eq((V.check(2)), true, 'he can volunteer again at once')
+    okC, res = V.clearStrikes('VOL00001')
+    H.ok(okC == true and res.strikes == 1, 'clearStrikes clears a strike')
+    H.eq(V.strikes('VOL00001'), 0, 'his strikes read 0')
+    local none, why2 = V.clearStrikes('VOL00009')
+    H.ok(none == false and why2 == 'no_row', 'nothing to clear is refused')
+    H.advance(1000)
+    H.restart()
+    V = BootVolunteers()
+    H.eq((V.check(2)), true, 'the cleared block does not come back after a restart')
+    H.eq(V.strikes('VOL00001'), 0, 'nor the cleared strike')
 end
 
 H.sql('DELETE FROM cp_pvp_cases')

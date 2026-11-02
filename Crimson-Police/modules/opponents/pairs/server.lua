@@ -722,6 +722,40 @@ function Opp.suspend(officerCid, days)
     return true, untilAt
 end
 
+-- The rows a lift deletes: kind and the columns that name it (F2).
+local LIFT_SQL = {
+    block = 'DELETE FROM cp_pvp_pairs WHERE kind = \'block\' AND officer_citizenid = ? AND suspect_citizenid = ?',
+    exclude = 'DELETE FROM cp_pvp_pairs WHERE kind = \'exclude\' AND suspect_citizenid = ?',
+    suspend = 'DELETE FROM cp_pvp_pairs WHERE kind = \'suspend\' AND officer_citizenid = ?',
+}
+
+-- An admin lifts a running block, exclusion or suspension early (F2): it ends now in memory and its saved rows go,
+-- so a restart does not bring it back. officer is the block's or suspension's officer, suspect the block's or
+-- exclusion's player. -> true, until (the end it had) | false, 'invalid_kind' | 'invalid_citizenid' | 'no_row'.
+function Opp.lift(kind, officer, suspect)
+    if not LIFT_SQL[kind] then return false, 'invalid_kind' end
+    local map, key, params
+    if kind == 'block' then
+        if not ValidCid(officer) or not ValidCid(suspect) then return false, 'invalid_citizenid' end
+        map, key, params = blocks, officer .. '|' .. suspect, { officer, suspect }
+    elseif kind == 'exclude' then
+        if not ValidCid(suspect) then return false, 'invalid_citizenid' end
+        map, key, params = excludes, suspect, { suspect }
+    else
+        if not ValidCid(officer) then return false, 'invalid_citizenid' end
+        map, key, params = suspends, officer, { officer }
+    end
+    local untilAt = map[key]
+    if not untilAt or untilAt <= os.time() then return false, 'no_row' end
+    map[key] = nil
+    CreateThread(function()
+        if not DbReady() then return end
+        local ok, err = pcall(MySQL.update.await, LIFT_SQL[kind], params)
+        if not ok then LogError('lift', 'lifting a %s in the pair ledger failed: %s', kind, tostring(err)) end
+    end)
+    return true, untilAt
+end
+
 -- ============================================================================
 --                              STAFF READS (V17)
 -- ============================================================================

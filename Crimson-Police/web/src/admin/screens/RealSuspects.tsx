@@ -5,6 +5,7 @@ import {
     Badge,
     Button,
     Card,
+    ConfirmDialog,
     Dialog,
     EmptyState,
     ErrorState,
@@ -44,16 +45,21 @@ import type {
 } from '../../types/admin_rs';
 import { ReasonChips } from '../components/ReasonChips';
 import {
+    RS_CLEAR_STRIKES_ACTION,
     RS_DAYS_MAX,
+    RS_LIFT_ACTION,
     RS_REASON_MAX,
+    cidText,
     filterCases,
     ledgerSuspect,
+    liftPayload,
     personText,
     rowsFor,
     sinceOpen,
     sortListed,
     toolRequest,
     validCid,
+    weaponText,
     type RsCaseFilter,
     type RsToolForm,
 } from '../components/realSuspects';
@@ -88,10 +94,12 @@ const EMPTY_FORM: RsToolForm = { tool: 'block', officer: '', suspect: '', citize
 
 function ToolDialog({
     start,
+    canLift,
     onClose,
     onDone,
 }: {
     start: Partial<RsToolForm> | null;
+    canLift: boolean;
     onClose: () => void;
     onDone: () => void;
 }) {
@@ -168,7 +176,7 @@ function ToolDialog({
                     />
                     <ReasonChips value={form.reason} onChange={reason => set({ reason })} disabled={busy} />
                 </Field>
-                <p className="rs-tool__note">{t('rs.ui.tool.no_lift')}</p>
+                <p className="rs-tool__note">{t(canLift ? 'rs.ui.tool.lift_note' : 'rs.ui.tool.no_lift')}</p>
                 {error ? (
                     <p className="rs-tool__error" role="alert">
                         {t(error)}
@@ -304,7 +312,7 @@ function LedgerTable({ ledger, suspects }: { ledger: RsLedgerLine[]; suspects: R
                 return s ? `${s.label}: ${personText(s)}` : (l.label ?? '-');
             },
         },
-        { key: 'weapon', header: t('rs.ui.col.weapon'), render: l => (l.weapon ? `#${l.weapon}` : '-') },
+        { key: 'weapon', header: t('rs.ui.col.weapon'), render: l => weaponText(l) },
         { key: 'n', header: t('rs.ui.col.hits'), numeric: true, render: l => l.n },
         {
             key: 'rules',
@@ -484,7 +492,7 @@ function CasesTab({
             header: t('rs.ui.col.officers'),
             render: c =>
                 asArray(c.officers)
-                    .map(o => o.name || o.citizenid)
+                    .map(o => personText(o))
                     .join(', ') || '-',
         },
         {
@@ -572,9 +580,20 @@ function PairsTab({ onTool, version }: { onTool: (f: Partial<RsToolForm>) => voi
     const { data, loading, error, refetch } = useRequest<RsPairsData>('admin:getRsPairs', args);
     const pairs = asArray(data?.pairs);
     const admin = asArray(data?.admin);
+    const names = data?.names;
+    const [lifting, setLifting] = useState<RsAdminRow | null>(null);
+    const { run, busy } = useAction();
+    const doLift = async (reason: string) => {
+        if (!lifting) return;
+        const res = await run(RS_LIFT_ACTION, liftPayload(lifting, reason), { success: 'rs.ui.lift_done' });
+        if (res.ok) {
+            setLifting(null);
+            void refetch();
+        }
+    };
     const pairCols: TableColumn<RsPairLine>[] = [
-        { key: 'officer', header: t('rs.ui.col.officer'), render: p => p.officer },
-        { key: 'suspect', header: t('rs.ui.col.suspect'), render: p => p.suspect },
+        { key: 'officer', header: t('rs.ui.col.officer'), render: p => cidText(p.officer, names) },
+        { key: 'suspect', header: t('rs.ui.col.suspect'), render: p => cidText(p.suspect, names) },
         { key: 'cases', header: t('rs.ui.col.cases'), numeric: true, render: p => p.cases },
         { key: 'scored', header: t('rs.ui.col.scored'), numeric: true, render: p => p.scored },
         { key: 'last', header: t('rs.ui.col.last'), render: p => when(p.lastAt) },
@@ -606,10 +625,22 @@ function PairsTab({ onTool, version }: { onTool: (f: Partial<RsToolForm>) => voi
                 </Badge>
             ),
         },
-        { key: 'officer', header: t('rs.ui.col.officer'), render: r => r.officer || '-' },
-        { key: 'suspect', header: t('rs.ui.col.suspect'), render: r => r.suspect || '-' },
+        { key: 'officer', header: t('rs.ui.col.officer'), render: r => cidText(r.officer, names) },
+        { key: 'suspect', header: t('rs.ui.col.suspect'), render: r => cidText(r.suspect, names) },
         { key: 'until', header: t('rs.ui.col.until'), render: r => when(r.untilAt) },
     ];
+    if (data?.lift) {
+        adminCols.push({
+            key: 'lift',
+            header: '',
+            align: 'right',
+            render: r => (
+                <Button size="sm" variant="ghost" icon="undo" onClick={() => setLifting(r)}>
+                    {t('rs.ui.lift')}
+                </Button>
+            ),
+        });
+    }
     const mine = cid && data?.citizenid === cid ? rowsFor(admin, cid) : null;
     return (
         <>
@@ -661,7 +692,12 @@ function PairsTab({ onTool, version }: { onTool: (f: Partial<RsToolForm>) => voi
                     />
                 )}
             </Card>
-            <Card title={t('rs.ui.admin_rows')} subtitle={t('rs.ui.admin_rows_sub')} icon="lock" padding="none">
+            <Card
+                title={t('rs.ui.admin_rows')}
+                subtitle={t(data?.lift ? 'rs.ui.admin_rows_sub_lift' : 'rs.ui.admin_rows_sub')}
+                icon="lock"
+                padding="none"
+            >
                 <Table
                     dense
                     columns={adminCols}
@@ -670,14 +706,121 @@ function PairsTab({ onTool, version }: { onTool: (f: Partial<RsToolForm>) => voi
                     empty={t('rs.ui.admin_rows_none')}
                 />
             </Card>
+            <ConfirmDialog
+                open={lifting !== null}
+                title={t('rs.ui.lift_title')}
+                message={
+                    lifting
+                        ? t('rs.ui.lift_message', {
+                              what: t(`rs.ui.tool.name.${lifting.kind}`),
+                              who: [lifting.officer, lifting.suspect]
+                                  .filter((c): c is string => !!c)
+                                  .map(c => cidText(c, names))
+                                  .join(' / '),
+                              until: when(lifting.untilAt),
+                          })
+                        : null
+                }
+                confirmLabel={t('rs.ui.lift')}
+                tone="danger"
+                reason={{ required: true, maxLength: RS_REASON_MAX }}
+                onConfirm={doLift}
+                onCancel={() => setLifting(null)}
+                busy={busy}
+            />
         </>
     );
 }
 
 // The volunteers on the list now (V26): who, the suspects they play, since and until when, their strikes and
 // whether a mission is asking them or they play one. Read-only: the tools stay on the other tabs.
+function ClearStrikesDialog({
+    start,
+    onClose,
+    onDone,
+}: {
+    start: string | null;
+    onClose: () => void;
+    onDone: () => void;
+}) {
+    const [cid, setCid] = useState(start ?? '');
+    const [reason, setReason] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const { run, busy } = useAction();
+    const submit = async () => {
+        const c = cid.trim();
+        if (!validCid(c)) {
+            setError('err.invalid_citizenid');
+            return;
+        }
+        if (reason.trim() === '') {
+            setError('rs.ui.tool.need_reason');
+            return;
+        }
+        const res = await run(
+            RS_CLEAR_STRIKES_ACTION,
+            { citizenid: c, reason: reason.trim() },
+            { success: 'rs.ui.clear_done' },
+        );
+        if (res.ok) {
+            onDone();
+            onClose();
+        }
+    };
+    return (
+        <Dialog
+            open={start !== null}
+            onClose={onClose}
+            title={t('rs.ui.clear_title')}
+            description={t('rs.ui.clear_message', { who: cid.trim() || '-' })}
+            footer={
+                <>
+                    <Button variant="secondary" onClick={onClose} disabled={busy}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button variant="danger" icon="undo" loading={busy} onClick={() => void submit()}>
+                        {t('rs.ui.clear_strikes')}
+                    </Button>
+                </>
+            }
+        >
+            <div className="rs-tool">
+                <Field label={t('rs.ui.suspect_cid')} required>
+                    <TextInput
+                        value={cid}
+                        onChange={v => {
+                            setError(null);
+                            setCid(v);
+                        }}
+                        maxLength={50}
+                    />
+                </Field>
+                <Field label={t('rs.ui.tool.reason')} required>
+                    <Textarea
+                        value={reason}
+                        onChange={v => {
+                            setError(null);
+                            setReason(v);
+                        }}
+                        maxLength={RS_REASON_MAX}
+                        rows={2}
+                    />
+                    <ReasonChips value={reason} onChange={setReason} disabled={busy} />
+                </Field>
+                {error ? (
+                    <p className="rs-tool__error" role="alert">
+                        {t(error)}
+                    </p>
+                ) : null}
+            </div>
+        </Dialog>
+    );
+}
+
 function VolunteersTab({ req: { data, loading, error, refetch } }: { req: UseRequestResult<RsCasesData> }) {
     const rows = sortListed(asArray(data?.listed));
+    const [clearing, setClearing] = useState<string | null>(null);
+    const canClear = data?.clearStrikes === true;
     const columns: TableColumn<RsListedVolunteer>[] = [
         { key: 'who', header: t('rs.ui.col.volunteer'), render: v => personText(v) },
         { key: 'roles', header: t('rs.ui.col.roles'), render: v => asArray(v.roles).map(roleText).join(', ') || '-' },
@@ -697,6 +840,19 @@ function VolunteersTab({ req: { data, loading, error, refetch } }: { req: UseReq
                 ),
         },
     ];
+    if (canClear) {
+        columns.push({
+            key: 'clear',
+            header: '',
+            align: 'right',
+            render: v =>
+                v.strikes ? (
+                    <Button size="sm" variant="ghost" icon="undo" onClick={() => setClearing(v.citizenid)}>
+                        {t('rs.ui.clear_strikes')}
+                    </Button>
+                ) : null,
+        });
+    }
     return (
         <Card
             title={t('rs.ui.volunteers')}
@@ -704,14 +860,21 @@ function VolunteersTab({ req: { data, loading, error, refetch } }: { req: UseReq
             icon="user"
             padding="none"
             actions={
-                <IconButton
-                    icon="refresh"
-                    size="sm"
-                    variant="secondary"
-                    label={t('rs.ui.refresh')}
-                    loading={loading && !!data}
-                    onClick={() => void refetch()}
-                />
+                <Row>
+                    {canClear ? (
+                        <Button size="sm" icon="undo" onClick={() => setClearing('')}>
+                            {t('rs.ui.clear_cid')}
+                        </Button>
+                    ) : null}
+                    <IconButton
+                        icon="refresh"
+                        size="sm"
+                        variant="secondary"
+                        label={t('rs.ui.refresh')}
+                        loading={loading && !!data}
+                        onClick={() => void refetch()}
+                    />
+                </Row>
             }
         >
             {loading && !data ? (
@@ -727,6 +890,9 @@ function VolunteersTab({ req: { data, loading, error, refetch } }: { req: UseReq
                     empty={data?.volunteers ? t('rs.ui.volunteers_none') : t('rs.ui.volunteers_off')}
                 />
             )}
+            {clearing !== null ? (
+                <ClearStrikesDialog start={clearing} onClose={() => setClearing(null)} onDone={() => void refetch()} />
+            ) : null}
         </Card>
     );
 }
@@ -765,7 +931,12 @@ export default function RealSuspects() {
             )}
             <CaseDrawer runId={openRun} onClose={() => setOpenRun(null)} onTool={setTool} />
             {tool !== null ? (
-                <ToolDialog start={tool} onClose={() => setTool(null)} onDone={() => setVersion(v => v + 1)} />
+                <ToolDialog
+                    start={tool}
+                    canLift={data?.lift === true}
+                    onClose={() => setTool(null)}
+                    onDone={() => setVersion(v => v + 1)}
+                />
             ) : null}
         </Screen>
     );

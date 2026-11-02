@@ -216,6 +216,7 @@ function caseData(line: RsCaseLine): RsCaseData {
                       officer: officers[0],
                       label: 'A',
                       weapon: 453432689,
+                      weaponName: 'Pistol',
                       n: 2,
                       willKill: false,
                       down: false,
@@ -263,6 +264,14 @@ const adminRows: RsAdminRow[] = [
     { kind: 'exclude', suspect: 'CRIM0042', untilAt: nowS() + 29 * 86400 },
 ];
 
+// the character names the server sends with the pairs (F2, one lookup per screen load)
+const NAMES: Record<string, string> = {
+    ABC12345: 'Maria Lopez',
+    SAST0031: 'Tom Reed',
+    CRIM0001: 'Vince Carter',
+    CRIM0003: 'Ned Price',
+};
+
 function needReason(p: { reason?: string }) {
     if (!p.reason || !p.reason.trim()) throw new Error('err.reason_required');
 }
@@ -287,6 +296,8 @@ registerMock('request', 'admin:getRsCases', (): RsCasesData => ({
     volunteers: !rsOff(),
     cases: rsOff() ? [] : cases.map(c => ({ ...c, own: c.runId === OWN_RUN })),
     listed: rsOff() ? [] : listed,
+    clearStrikes: !rsOff(),
+    lift: true,
     serverTime: nowS(),
 }));
 
@@ -308,6 +319,8 @@ registerMock('request', 'admin:getRsPairs', (args: { citizenid?: string }): RsPa
         pairs: cid ? pairs.filter(p => p.officer === cid || p.suspect === cid) : pairs,
         from: now - 30 * 86400,
         admin: running,
+        names: NAMES,
+        lift: true,
         serverTime: now,
     };
     if (cid) {
@@ -350,3 +363,37 @@ for (const [name, kind] of [
         return { citizenid: p.citizenid, untilAt };
     });
 }
+
+// F2: lift a running row early (Opp.lift), and clear a volunteer's strikes (CP.Volunteers.clearStrikes)
+registerMock(
+    'action',
+    'server:admin:rsLift',
+    (p: { kind?: string; officer?: string; suspect?: string; reason?: string }) => {
+        if (rsOff()) throw new Error('err.rs_off');
+        needReason(p);
+        if (p.officer === 'ADM00001' || p.suspect === 'ADM00001') throw new Error('err.self_target');
+        const now = nowS();
+        const i = adminRows.findIndex(
+            r =>
+                r.kind === p.kind &&
+                r.untilAt > now &&
+                (r.kind === 'exclude' || r.officer === p.officer) &&
+                (r.kind === 'suspend' || r.suspect === p.suspect),
+        );
+        if (i < 0) throw new Error('err.rs_no_row');
+        adminRows.splice(i, 1);
+        return { kind: p.kind, officer: p.officer, suspect: p.suspect };
+    },
+);
+
+registerMock('action', 'server:admin:rsClearStrikes', (p: { citizenid?: string; reason?: string }) => {
+    if (rsOff()) throw new Error('err.rs_off');
+    if (!CID.test(p.citizenid ?? '')) throw new Error('err.invalid_citizenid');
+    needReason(p);
+    if (p.citizenid === 'ADM00001') throw new Error('err.self_target');
+    const v = listed.find(l => l.citizenid === p.citizenid);
+    if (!v || !v.strikes) throw new Error('err.rs_no_strikes');
+    const strikes = v.strikes;
+    v.strikes = 0;
+    return { citizenid: p.citizenid, strikes };
+});

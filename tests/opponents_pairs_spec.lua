@@ -542,7 +542,23 @@ do
     for _, l in ipairs(stats) do H.ok(l.officer == A or l.suspect == A, 'V17 pairStats: only his pairs') end
     H.eq(#Opp.pairStats('bad cid'), 0, 'V17 pairStats: a bad citizenid answers nothing')
 
+    -- F2: an admin lifts one early: it ends at once, and its saved row goes too
+    H.ok(Opp.block(A, E, 5) and Opp.exclude(E, 5), 'a block and an exclusion to lift')
+    local okL, was = Opp.lift('block', A, E)
+    H.ok(okL == true and was == H.time + 5 * DAY, 'Opp.lift ends the block (answering the end it had)')
+    H.eq((Opp.pairOk(A, E)), true, 'the pair may score again at once')
+    H.ok(Opp.lift('exclude', nil, E) and not Opp.excluded(E), 'an exclusion is lifted')
+    H.eq(select(2, Opp.lift('exclude', nil, E)), 'no_row', 'lifting it again: nothing running')
+    H.eq(select(2, Opp.lift('suspend', A)), 'no_row', 'an officer with no suspension: nothing running')
+    H.eq(select(2, Opp.lift('ban', A)), 'invalid_kind', 'only a block, an exclusion or a suspension')
+    H.eq(select(2, Opp.lift('block', A, 'bad cid')), 'invalid_citizenid', 'a bad citizenid is refused')
+    for _, l in ipairs(Opp.adminRows()) do
+        H.ok(l.suspect ~= E, 'a lifted row is not among the running ones')
+    end
+
     Opp = Restart(false)
+    H.eq((Opp.pairOk(A, E)), true, 'a lifted block does not come back after a restart')
+    H.ok(not Opp.excluded(E), 'nor a lifted exclusion')
     H.eq((Opp.pairOk(A, C)), false, 'the block holds after a restart')
     H.ok(Opp.excluded(C) and Opp.suspended(D), 'and so do the exclusion and the suspension')
     H.time = H.time + DAY + 1

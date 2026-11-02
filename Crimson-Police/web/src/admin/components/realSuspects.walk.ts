@@ -7,7 +7,21 @@ import { ADMIN_SCREENS } from '../../layouts/screens';
 import { action, request } from '../../shared/nui';
 import type { Session } from '../../shared/types';
 import type { RsCaseData, RsCasesData, RsPairsData } from '../../types/admin_rs';
-import { filterCases, ledgerSuspect, personText, rowsFor, sinceOpen, sortListed, toolRequest } from './realSuspects';
+import {
+    RS_CLEAR_STRIKES_ACTION,
+    RS_LIFT_ACTION,
+    cidText,
+    filterCases,
+    ledgerSuspect,
+    liftPayload,
+    nameOf,
+    personText,
+    rowsFor,
+    sinceOpen,
+    sortListed,
+    toolRequest,
+    weaponText,
+} from './realSuspects';
 
 const failures: string[] = [];
 let passed = 0;
@@ -77,6 +91,10 @@ async function steps(): Promise<void> {
     ok(data.ledger.length === 2, 'and its damage ledger');
     ok(!JSON.stringify(data).includes('coords'), 'and no position');
     ok(ledgerSuspect(data.ledger[0], data.suspects)?.citizenid === 'CRIM0001', 'a ledger line names its suspect');
+    // F2: the weapon by name, the raw hash only for a weapon the server has no name for
+    ok(weaponText(data.ledger[0]) === 'Pistol', 'the ledger names the weapon');
+    ok(weaponText({ ...data.ledger[0], weaponName: null }) === '#453432689', 'an unknown weapon reads as its hash');
+    ok(weaponText({ ...data.ledger[0], weaponName: null, weapon: null }) === '-', 'no weapon reads -');
     ok(personText(data.suspects[0]) === 'Vince Carter (CRIM0001)', 'a person reads "Name (CITIZENID)"');
     ok(personText({ citizenid: 'X1' }) === 'X1' && personText(null) === '-', 'or the citizenid alone, or -');
     ok(sinceOpen(95) === '+1:35' && sinceOpen(null) === '-', 'times read from the case open');
@@ -134,6 +152,48 @@ async function steps(): Promise<void> {
     const mine = rowsFor(pairs.data?.admin ?? [], 'CRIM0001');
     ok(mine.length === 2 && mine.some(r => r.kind === 'block'), 'his admin rows: the block and the exclusion');
     ok(rowsFor(pairs.data?.admin ?? [], 'NOBODY').length === 0, "nobody else's");
+
+    // F2: names next to citizen IDs, from the one lookup the server sends with the pairs
+    const all = await request<RsPairsData>('admin:getRsPairs', {});
+    const names = all.data?.names;
+    ok(cidText('ABC12345', names) === 'Maria Lopez (ABC12345)', 'a pair line reads "Name (CITIZENID)"');
+    ok(cidText('CRIM0042', names) === 'CRIM0042' && cidText(null, names) === '-', 'or the citizenid alone, or -');
+    ok(nameOf([], 'ABC12345') === null, 'an empty Lua table (a list) is no names');
+
+    // F2: lift a running row early, with a reason; a row that is not running any more is refused
+    ok(all.data?.lift === true, 'the server offers Lift');
+    const row = (all.data?.admin ?? []).find(r => r.kind === 'exclude' && r.suspect === 'CRIM0042');
+    ok(row !== undefined, 'the exclusion is running');
+    if (row) {
+        const payload = liftPayload(row, '  Appeal accepted ');
+        ok(
+            JSON.stringify(payload) === '{"kind":"exclude","reason":"Appeal accepted","suspect":"CRIM0042"}',
+            'a lift sends the kind, the citizenid it names and the trimmed reason',
+        );
+        ok((await refused(action(RS_LIFT_ACTION, { ...payload, reason: ' ' }))) !== '', 'a lift needs a reason');
+        ok((await action(RS_LIFT_ACTION, payload)).ok, 'the exclusion is lifted');
+        const after = await request<RsPairsData>('admin:getRsPairs', {});
+        ok(!(after.data?.admin ?? []).some(r => r.kind === 'exclude' && r.suspect === 'CRIM0042'), 'and is gone');
+        ok((await refused(action(RS_LIFT_ACTION, payload))) === 'err.rs_no_row', 'lifting it again: not running');
+    }
+    const blockRow = { kind: 'block' as const, officer: 'ABC12345', suspect: 'CRIM0009', untilAt: 0 };
+    ok(
+        JSON.stringify(liftPayload(blockRow, 'x')) ===
+            '{"kind":"block","reason":"x","officer":"ABC12345","suspect":"CRIM0009"}',
+        'a pair block names both',
+    );
+
+    // F2: clear a volunteer's strikes, with a reason
+    const cl = await request<RsCasesData>('admin:getRsCases', {});
+    ok(cl.data?.clearStrikes === true, 'the server offers Clear strikes');
+    ok(
+        (await refused(action(RS_CLEAR_STRIKES_ACTION, { citizenid: 'VOL00002', reason: 'Lag' }))) ===
+            'err.rs_no_strikes',
+        'a volunteer with no strikes: nothing to clear',
+    );
+    ok((await action(RS_CLEAR_STRIKES_ACTION, { citizenid: 'VOL00001', reason: 'Lag' })).ok, 'his strikes clear');
+    const cl2 = await request<RsCasesData>('admin:getRsCases', {});
+    ok((cl2.data?.listed ?? []).find(v => v.citizenid === 'VOL00001')?.strikes === 0, 'and read 0');
 }
 
 export async function walk(): Promise<{ passed: number; failures: string[] }> {

@@ -3092,6 +3092,7 @@ function H.boot(opts)
     H.load('shared/options_map.lua')
     H.load('shared/twists.lua')
     H.load('shared/utils.lua')
+    H.load('shared/weapons.lua')
     if H.storage == 'files' and server and not H.filesMySQL then
         -- a spec run on its own (no tests/run.lua) starts from an empty saves folder: build the tables
         local fh = io.open(H.savesDir() .. '/_tables.json', 'r')

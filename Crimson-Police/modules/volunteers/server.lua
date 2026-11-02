@@ -390,6 +390,44 @@ function V.strikes(cid)
     return StrikeCount(whoOf[cid] or ('cid:' .. tostring(cid)), os.time())
 end
 
+-- An admin clears this citizenid's player's strikes and strike block (F2): memory at once, the saved rows in a
+-- thread. The player key is his license (the one he volunteered under, else Qbox's players table).
+-- -> true, { strikes, blockedUntil } | false, 'no_row'.
+function V.clearStrikes(cid)
+    if type(cid) ~= 'string' or cid == '' then return false, 'no_row' end
+    local keys, seen = {}, {}
+    local function add(who)
+        if type(who) == 'string' and who ~= '' and not seen[who] then
+            seen[who] = true
+            keys[#keys + 1] = who
+        end
+    end
+    add(whoOf[cid])
+    if not whoOf[cid] and CP.Qbx and CP.Qbx.licenseOf then add(CP.Qbx.licenseOf(cid)) end
+    add('cid:' .. cid)
+    local now, count, blocked = os.time(), 0, nil
+    for _, who in ipairs(keys) do
+        count = count + StrikeCount(who, now)
+        local untilAt = BlockedAt(who, now)
+        if untilAt and untilAt > (blocked or 0) then blocked = untilAt end
+    end
+    if count == 0 and not blocked then return false, 'no_row' end
+    for _, who in ipairs(keys) do
+        strikesOf[who], blockedUntil[who] = nil, nil
+    end
+    CreateThread(function()
+        if not DbReady() then return end
+        for _, who in ipairs(keys) do
+            local ok, err = pcall(MySQL.update.await,
+                'DELETE FROM cp_pvp_pairs WHERE kind IN (\'vol_strike\', \'vol_block\') AND suspect_license = ?',
+                { who })
+            if not ok then CP.err(TAG, 'clearing the saved strikes of %s failed: %s', cid, tostring(err)) end
+        end
+    end)
+    CP.log(TAG, 'strikes of %s cleared (%d strike(s)%s)', cid, count, blocked and ', a block' or '')
+    return true, { strikes = count, blockedUntil = blocked }
+end
+
 V.roles = ROLES
 V.endListing = End
 V._sweep = Sweep

@@ -3213,8 +3213,23 @@ tablet: `Opp.view` has no names), and the three admin tools. Nothing runs until 
   `server:admin:rsBlockPair` (`{ officer, suspect, days, reason }`), `server:admin:rsExclude` / `rsSuspend`
   (`{ citizenid, days, reason }`): 0 < days <= 3650, a reason, refused for the admin's own characters
   (`err.self_target`) and while both features are off (`err.rs_off`), one per target per 10 s, audited
-  (`rsBlockPair`, `rsExclude`, `rsSuspend`). They call `Opp.block` / `exclude` / `suspend` (a longer one wins; there
-  is no lift yet: a row runs to its until_at). The Admin UI screen is V18.
+  (`rsBlockPair`, `rsExclude`, `rsSuspend`). They call `Opp.block` / `exclude` / `suspend` (a longer one wins). The
+  Admin UI screen is V18.
+- Staff tools (step F2): `server:admin:rsLift` (`{ kind, officer?, suspect?, reason }`, Config.RealSuspects.staffLift)
+  calls `Opp.lift(kind, officer, suspect)`: the row ends in memory at once and its cp_pvp_pairs rows are deleted in a
+  thread (a restart does not bring it back); a row that is not running is `err.rs_no_row`, the admin's own characters
+  `err.self_target`, audited `rsLift`. `server:admin:rsClearStrikes` (`{ citizenid, reason }`, volunteers on and
+  Config.Volunteers.staffClearStrikes) calls `CP.Volunteers.clearStrikes(cid)`: his strikes and strike block under
+  his player key (the license he volunteered under, else Qbox's players table, and `cid:<citizenid>`) go, with their
+  vol_strike / vol_block rows; nothing to clear is `err.rs_no_strikes`, audited `rsClearStrikes`. Names
+  (Config.RealSuspects.staffNames): admin:getRsPairs answers `names = { [citizenid] = name }` for every citizenid its
+  pairs and admin rows name, and admin:getRsCases fills a missing officer or volunteer name, each from one batched
+  lookup per call (`Opp.staffNames`: loaded characters from CP.Qbx's player cache, then `CP.Qbx.characterNames`, one
+  `players` statement per 100 citizenids, then one `cp_officers` statement for the rest); never a query per row.
+  Weapon names (Config.RealSuspects.weaponNames): each damage-ledger line carries `weaponName` from
+  `CP.Weapons.label` (shared/weapons.lua: the common GTA weapon names hashed once at load; signed and unsigned
+  hashes read the same); an unknown hash has none and the screen shows `#<hash>`. Both callbacks also answer `lift`,
+  and getRsCases `clearStrikes`, so the screen shows the buttons only when the server allows them.
 - Admin UI screen (V18, web/src/admin/screens/RealSuspects.tsx, screen key `admin_rs`, under More): shown when the
   session has `antiFarmOverride` and `Session.config.realSuspects.screen` (modules/tablet: true while
   Config.LiveCrime.enabled or Config.Volunteers.enabled is on and Config.RealSuspects.adminScreen is not false; read
@@ -4692,6 +4707,7 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `server:admin:postNotice` / `removeNotice` | action | officerRecords | `{ text, departments?, expiresAt, reason }` / `{ id, reason }` | 1 per 60 s per admin; ≤ 5 running |
 | `admin:getRsCases`, `admin:getRsCase`, `admin:getRsPairs` | callbacks | antiFarmOverride | `{}` / `{ runUuid }` / `{ citizenid? }` | modules/opponents/staff (V17); server-only case data, refused for the admin's own case |
 | `server:admin:rsBlockPair`, `rsExclude`, `rsSuspend` | actions | antiFarmOverride | `{ officer, suspect, days, reason }` / `{ citizenid, days, reason }` | V17; 0 < days <= 3650, never his own characters, `err.rs_off` while both features are off |
+| `server:admin:rsLift`, `rsClearStrikes` | actions | antiFarmOverride | `{ kind, officer?, suspect?, reason }` / `{ citizenid, reason }` | F2; never his own characters, `err.rs_no_row` / `err.rs_no_strikes` when nothing is running |
 | `admin:getOfficerLook`, `server:admin:resetLook`, `clearProfileCooldown` | callback / actions | officerRecords | `{ citizenid, reason }` | modules/profile; cooldown clear 1 per 60 s per officer |
 | `admin:getBannedWords`, `admin:testBannedWords`, `server:admin:setBannedWords` | callbacks / action | officerRecords | `{ add, remove, reason }` | ≤ 5000 words, ≤ 64 characters; old file kept as `.bak`; live reload |
 | `server:admin:unrevokeCommendation`, `editCitation` | action | officerRecords | `{ id, reason, citation? }` | K on the old value |

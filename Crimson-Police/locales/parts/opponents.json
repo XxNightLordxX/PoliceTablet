@@ -257,5 +257,22 @@
   "opp.line.talk_refused": "Suspect {label} said no to the Talk them down of {by}",
   "opp.line.surrendered": "Suspect {label} surrendered (talked down by: {by})",
   "opp.line.surrender_ended": "Suspect {label} stopped surrendering ({why})",
-  "opp.line.peaceful_arrest": "Peaceful arrest of suspect {label} (talked down by: {by})"
+  "opp.line.peaceful_arrest": "Peaceful arrest of suspect {label} (talked down by: {by})",
+  "err.rs_no_row": "That block, exclusion or suspension is not running any more (it ended or was already lifted).",
+  "err.rs_no_strikes": "That player has no strikes and no strike block right now.",
+  "err.rs_lift_off": "Lifting early is off (Config.RealSuspects.staffLift).",
+  "err.rs_clear_off": "Clearing strikes is off (Config.Volunteers.staffClearStrikes).",
+  "admin.action.rsLift": "Real suspects: block, exclusion or suspension lifted early",
+  "admin.action.rsClearStrikes": "Real suspects: volunteer strikes cleared",
+  "rs.ui.admin_rows_sub_lift": "Running now, the latest end first. Lift ends one now (with a reason, in the audit log).",
+  "rs.ui.lift": "Lift",
+  "rs.ui.lift_title": "Lift early",
+  "rs.ui.lift_message": "End this {what} now: {who}. It was set to run until {until}.",
+  "rs.ui.lift_done": "Lifted",
+  "rs.ui.tool.lift_note": "A longer block, exclusion or suspension replaces a shorter one; staff can lift one early under Blocks, exclusions and suspensions. Every one is in the audit log.",
+  "rs.ui.clear_strikes": "Clear strikes",
+  "rs.ui.clear_title": "Clear strikes",
+  "rs.ui.clear_message": "Clear the strikes and any strike block of {who}. He can volunteer again at once.",
+  "rs.ui.clear_cid": "Clear strikes by citizen ID",
+  "rs.ui.clear_done": "Strikes cleared"
 }

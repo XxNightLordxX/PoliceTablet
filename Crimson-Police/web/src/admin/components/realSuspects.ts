@@ -36,6 +36,10 @@ export function filterCases(cases: RsCaseLine[], filter: RsCaseFilter): RsCaseLi
     return cases;
 }
 
+// The lift action (F2) and the clear-strikes action.
+export const RS_LIFT_ACTION = 'server:admin:rsLift';
+export const RS_CLEAR_STRIKES_ACTION = 'server:admin:rsClearStrikes';
+
 // "Name (CITIZENID)", the citizenid alone, or '-'.
 export function personText(p: RsPerson | null | undefined): string {
     if (!p || !p.citizenid) return '-';
@@ -101,4 +105,31 @@ export function sortListed(list: RsListedVolunteer[]): RsListedVolunteer[] {
         if (pa !== pb) return pa - pb;
         return (a.since || 0) - (b.since || 0);
     });
+}
+
+// The name the server sent for a citizenid (F2: getRsPairs names, a map; an empty Lua table arrives as a list).
+export function nameOf(names: unknown, cid: string | null | undefined): string | null {
+    if (!cid || !names || typeof names !== 'object' || Array.isArray(names)) return null;
+    const v = (names as Record<string, unknown>)[cid];
+    return typeof v === 'string' && v !== '' ? v : null;
+}
+
+// A citizenid with its name when the server knows one: "Name (CITIZENID)", the citizenid alone, or '-'.
+export function cidText(cid: string | null | undefined, names: unknown): string {
+    if (!cid) return '-';
+    return personText({ citizenid: cid, name: nameOf(names, cid) });
+}
+
+// What a damage-ledger line names as the weapon: its name, else the raw hash ("#453432689"), else '-'.
+export function weaponText(line: RsLedgerLine): string {
+    if (line.weaponName) return line.weaponName;
+    return line.weapon ? `#${line.weapon}` : '-';
+}
+
+// The payload that lifts one running row early (F2): its kind, the citizenids it names and the reason.
+export function liftPayload(row: RsAdminRow, reason: string): Record<string, unknown> {
+    const out: Record<string, unknown> = { kind: row.kind, reason: reason.trim() };
+    if (row.kind !== 'exclude') out.officer = row.officer;
+    if (row.kind !== 'suspend') out.suspect = row.suspect;
+    return out;
 }

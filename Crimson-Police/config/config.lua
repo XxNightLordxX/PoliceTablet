@@ -1157,6 +1157,14 @@ Config.RealSuspects = {
     -- volunteers are on: the cases, each case's timeline and damage ledger, pair statistics and the block, exclude
     -- and suspend tools; false = no screen (the cases are still kept)
     adminScreen = true,
+    -- true = admins can lift a pair block, an exclusion or a suspension early from that screen (with a reason, in
+    -- the audit log); false = each one runs to its end date
+    staffLift = true,
+    -- true = pair statistics, the running blocks and the case lists on that screen show character names next to
+    -- citizen IDs (one name lookup per screen load); false = citizen IDs only
+    staffNames = true,
+    -- true = the damage ledger on that screen names the weapon (Combat Pistol); false = the raw weapon hash
+    weaponNames = true,
     -- Proof the server checks before anything scores:
     cuffPairWindow = 10,             -- seconds between the officer's sc-police cuff and the suspect's cuffed state
     cuffRange = 3.5,                 -- metres between them at the cuff (sc-police allows 2.5; the rest is lag)
@@ -1330,6 +1338,9 @@ Config.Volunteers = {
     -- true = strikes and strike blocks are saved (the database or the saves folder), so a restart keeps them; false =
     -- memory only, a restart clears them. The volunteer list is never saved: after a restart a player volunteers again
     saveStrikes = true,
+    -- true = admins can clear a player's strikes and strike block from the Real suspects Volunteers tab (with a
+    -- reason, in the audit log); false = they run out on their own
+    staffClearStrikes = true,
     -- Who plays the suspect of a mission a volunteer can play, per mission type: 'npc' = always the NPC (as today);
     -- 'players_when_available' = when the unit ticks "Real suspect OK" on the Mission Board and a volunteer who
     -- fits is online, he is asked to play the suspect, else the NPC plays him; 'players_only' = the type's missions

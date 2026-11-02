@@ -120,6 +120,7 @@ do
         ['Volunteers.strikeHours'] = { 24, false },
         ['Volunteers.blockHours'] = { 24, false },
         ['Volunteers.saveStrikes'] = { true, false },
+        ['Volunteers.staffClearStrikes'] = { true, false },   -- F2
     }) do
         local e = S.entry(path) or {}
         H.eq(e.default, want[1], path .. ' ships ' .. tostring(want[1]))
@@ -199,6 +200,9 @@ do
         casesKept = 16,
         saveCases = true,
         adminScreen = true,
+        staffLift = true,     -- F2
+        staffNames = true,    -- F2
+        weaponNames = true,   -- F2
     }) do
         local e = S.entry('RealSuspects.' .. path) or {}
         H.eq(e.default, value, 'RealSuspects.' .. path .. ' ships ' .. tostring(value))
@@ -229,6 +233,13 @@ do
             .. 'newest ones; open cases are always there',
         saveCases = 'true = the kept closed cases are saved (the database or the saves folder), so a restart keeps '
             .. 'them (none older than pairLedgerDays); false = memory only, a restart starts the list again',
+        -- F2: the staff tools
+        staffLift = 'true = admins can lift a pair block, an exclusion or a suspension early from that screen (with '
+            .. 'a reason, in the audit log); false = each one runs to its end date',
+        staffNames = 'true = pair statistics, the running blocks and the case lists on that screen show character '
+            .. 'names next to citizen IDs (one name lookup per screen load); false = citizen IDs only',
+        weaponNames = 'true = the damage ledger on that screen names the weapon (Combat Pistol); false = the raw '
+            .. 'weapon hash',
         -- V5: the proof
         cuffPairWindow = 'Proof the server checks before anything scores: seconds between the officer\'s sc-police '
             .. 'cuff and the suspect\'s cuffed state',

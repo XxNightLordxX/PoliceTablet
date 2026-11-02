@@ -62,6 +62,10 @@ export interface RsCasesData {
     cases: RsCaseLine[];
     // the volunteers on the list now (V26; empty while volunteers are off)
     listed?: RsListedVolunteer[];
+    // F2: the Volunteers tab offers Clear strikes (Config.Volunteers.staffClearStrikes)
+    clearStrikes?: boolean;
+    // F2: blocks, exclusions and suspensions can be lifted early (Config.RealSuspects.staffLift)
+    lift?: boolean;
     serverTime: number;
 }
 
@@ -106,6 +110,8 @@ export interface RsLedgerLine {
     officer?: RsOfficer | null;
     label?: string | null;
     weapon?: number | null;
+    // F2: the weapon's name (Config.RealSuspects.weaponNames), absent for a weapon not in shared/weapons.lua
+    weaponName?: string | null;
     n: number;
     willKill: boolean;
     state?: RsState | null;
@@ -147,6 +153,11 @@ export interface RsPairsData {
     // os.time() of the oldest ledger row read at start (nil = none)
     from?: number | null;
     admin: RsAdminRow[];
+    // F2: character names by citizen ID for the pairs and the running rows (Config.RealSuspects.staffNames; an empty
+    // list when there are none)
+    names?: Record<string, string> | unknown[] | null;
+    // F2: the running rows can be lifted early (Config.RealSuspects.staffLift)
+    lift?: boolean;
     serverTime: number;
     citizenid?: string;
     excludedUntil?: number | null;

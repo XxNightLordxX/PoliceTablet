@@ -405,6 +405,67 @@ function Q.characterExists(citizenid)
     return type(row) == 'table'
 end
 
+local NAMES_MAX = 500           -- citizenids one characterNames call looks up at most
+local NAMES_CHUNK = 100         -- citizenids per players-table statement
+
+local function CharName(ci)
+    if type(ci) == 'string' then
+        local ok, t = pcall(json.decode, ci)
+        ci = ok and t or nil
+    end
+    if type(ci) ~= 'table' then return nil end
+    local first = Str(ci.firstname) and CP.U.trim(ci.firstname) or ''
+    local last = Str(ci.lastname) and CP.U.trim(ci.lastname) or ''
+    local name = CP.U.trim(first .. ' ' .. last)
+    return name ~= '' and name or nil
+end
+
+-- Character names for many citizenids at once (F2, staff screens): the loaded characters from the player cache (no
+-- export call per citizenid), the rest from Qbox's players table, one statement per NAMES_CHUNK. -> { [citizenid] =
+-- 'First Last' }; a citizenid with no name is left out.
+function Q.characterNames(cids)
+    local out, want, n = {}, {}, 0
+    for _, cid in ipairs(type(cids) == 'table' and cids or {}) do
+        if ValidCid(cid) and not want[cid] and n < NAMES_MAX then
+            want[cid] = true
+            n = n + 1
+        end
+    end
+    if n == 0 then return out end
+    for _, src in ipairs(Q.getOnlinePlayers()) do
+        local info = Q.getInfo(src)
+        if info and want[info.citizenid] and type(info.name) == 'string' and info.name ~= '' then
+            out[info.citizenid] = info.name
+            want[info.citizenid] = nil
+            n = n - 1
+        end
+    end
+    local db = n > 0 and QboxDb() or nil
+    if not db then return out end
+    local rest = {}
+    for cid in pairs(want) do rest[#rest + 1] = cid end
+    table.sort(rest)
+    for first = 1, #rest, NAMES_CHUNK do
+        local chunk, marks = {}, {}
+        for i = first, math.min(#rest, first + NAMES_CHUNK - 1) do
+            chunk[#chunk + 1] = rest[i]
+            marks[#marks + 1] = '?'
+        end
+        local ok, rows = pcall(db.query.await,
+            ('SELECT citizenid, charinfo FROM players WHERE citizenid IN (%s)'):format(table.concat(marks, ', ')),
+            chunk)
+        if not ok then
+            LogError('characterNames', 'players name lookup failed: %s', tostring(rows))
+            return out
+        end
+        for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+            local name = type(r.citizenid) == 'string' and CharName(r.charinfo) or nil
+            if name then out[r.citizenid] = name end
+        end
+    end
+    return out
+end
+
 -- Every citizenid Qbox has for one license (a player's characters).
 function Q.citizenidsOfLicense(license)
     if type(license) ~= 'string' or license == '' or #license > 64 then return {} end
