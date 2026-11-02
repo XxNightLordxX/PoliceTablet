@@ -436,7 +436,7 @@ export default function AdminAudit() {
                             title={filtered ? t('admin.audit.empty_filtered') : t('admin.audit.empty')}
                         />
                     }
-                    aria-label={t('ui.screen.admin_audit')}
+                    aria-label={screenTitle}
                 />
             )}
 

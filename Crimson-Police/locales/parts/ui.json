@@ -66,6 +66,7 @@
   "ui.help.unit": "Invite officers, answer invites and see who is ready before the leader starts a run.",
   "ui.help.profile": "Open a run in the history to see its details and points.",
   "ui.help.leaderboard": "Pick a period and a filter; open an officer to see their profile.",
+  "ui.help.challenge": "Your department against the others this season; open a department to see who scored.",
   "ui.state.empty_title": "Nothing to show yet",
   "ui.state.empty_text": "The server sent no data for this screen. Try again in a moment.",
   "ui.state.stale": "Could not refresh. Showing what was loaded last.",

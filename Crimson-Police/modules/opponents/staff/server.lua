@@ -394,11 +394,32 @@ local function Answer(ok, untilOrErr)
     return true, untilOrErr
 end
 
+-- The cases a filter of the Cases tab keeps (as the web's filterCases): 'open' = still running, 'flagged' = with a
+-- conduct flag or a suspect note, 'live' / 'volunteer' = that kind of case; anything else keeps every case. Run on
+-- the server before paging (Config.AdminUi.pageSize), so a filter covers every case, not only the page shown.
+local CASE_FILTERS = { open = true, flagged = true, live = true, volunteer = true }
+local function FilterCases(list, filter)
+    if not CASE_FILTERS[filter] then return list end
+    local out = {}
+    for _, c in ipairs(list) do
+        local keep
+        if filter == 'open' then
+            keep = c.open == true
+        elseif filter == 'flagged' then
+            keep = (tonumber(c.flags) or 0) + (tonumber(c.notes) or 0) > 0
+        else
+            keep = c.kind == filter
+        end
+        if keep then out[#out + 1] = c end
+    end
+    return out
+end
+
 if CP.AdminKit and CP.AdminKit.action then
     local Kit = CP.AdminKit
 
     Kit.callback('admin:getRsCases', 'antiFarmOverride', function(ctx)
-        local list = Opp.staffCases()
+        local list = FilterCases(Opp.staffCases(), ctx.args.filter)
         -- Config.AdminUi.pageSize (step H6): one page of the cases, { page, pages, total } as casesPage
         local size, casesPage = Kit.pageSize and Kit.pageSize(), nil
         if size and Kit.pageOf then

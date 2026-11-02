@@ -761,7 +761,7 @@ export default function AdminPayments() {
                         rows={data.rows}
                         dense
                         empty={<EmptyState compact icon="creditCard" title={t('payments.empty')} />}
-                        aria-label={t('ui.screen.admin_payments')}
+                        aria-label={screenTitle}
                     />
                     <div className="payments-admin__foot">
                         <span className="payments-admin__soft">

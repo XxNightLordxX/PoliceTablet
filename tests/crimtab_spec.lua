@@ -345,4 +345,23 @@ do
     H.eq(#ClientEvents('client:crimtabClose', 10), 0, 'a civilian is left alone')
 end
 
+do -- Config health: Config.CriminalTablet.item names a real ox_inventory item (nothing listed while off or unset)
+    local C = CP.CrimTab
+    local was, wasItem, wasMock = Config.CriminalTablet.enabled, Config.CriminalTablet.item, H.exportsMock.ox_inventory
+    H.exportsMock.ox_inventory = {
+        Items = function(name) return name == 'burner_phone' and { label = 'Burner' } or nil end,
+    }
+    Config.CriminalTablet.enabled, Config.CriminalTablet.item = true, false
+    H.eq(#C._itemHealth(), 0, 'no item set: no line')
+    Config.CriminalTablet.item = 'burner_phone'
+    local l = C._itemHealth()[1]
+    H.ok(l and l.level == 'ok' and l.text:find('burner_phone', 1, true) ~= nil, 'a real item: one ok line')
+    Config.CriminalTablet.item = 'no_such_item'
+    l = C._itemHealth()[1]
+    H.ok(l and l.level == 'warn' and l.fix == 'CriminalTablet.item', 'an unknown item: a warning with its fix')
+    Config.CriminalTablet.enabled = false
+    H.eq(#C._itemHealth(), 0, 'the tablet off: no line')
+    Config.CriminalTablet.enabled, Config.CriminalTablet.item, H.exportsMock.ox_inventory = was, wasItem, wasMock
+end
+
 return H

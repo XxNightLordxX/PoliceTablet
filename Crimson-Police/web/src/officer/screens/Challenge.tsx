@@ -10,7 +10,7 @@ import {
     ErrorState,
     Grid,
     Icon,
-    LoadingBlock,
+    IconButton,
     Screen,
     Table,
     type TableColumn,
@@ -30,6 +30,8 @@ import {
     type DeptContributors,
 } from '../../types/boards';
 import { CallsignText, RankCell } from './Leaderboard';
+import { ScreenStatus } from '../components/ScreenStatus';
+import { OFFICER_HEADS, screenStateOf } from './screenHead';
 import './Challenge.css';
 
 // "3d 4h" / "5h 12m" / "8m" until the week closes.
@@ -372,10 +374,11 @@ export default function Challenge() {
     const mine = asList(data?.departments).find(d => d.key === myDept);
     const season = data?.season ?? null;
 
+    // the shared load states (step H3): loading, error, empty and stale, as on the other officer screens
+    const state = screenStateOf(!!data, loading, error);
     let content: ReactNode;
-    if (!data && loading) content = <LoadingBlock text={t('challenge.loading')} />;
-    else if (!data && error) content = <ErrorState error={error} onRetry={() => void refetch()} />;
-    else if (data && data.enabled === false)
+    if (!data) content = null;
+    else if (data.enabled === false)
         content = <EmptyState icon="flag" title={t('challenge.disabled_title')} text={t('challenge.disabled_text')} />;
     else if (!season)
         content = (
@@ -440,14 +443,30 @@ export default function Challenge() {
 
     return (
         <Screen
-            title={t('ui.screen.challenge')}
+            title={t(OFFICER_HEADS.challenge.title)}
             subtitle={
                 season
                     ? t('challenge.subtitle', { name: season.name, n: season.weeksLeft })
                     : t('challenge.subtitle_none')
             }
+            help={t(OFFICER_HEADS.challenge.help)}
+            actions={
+                <IconButton
+                    icon="refresh"
+                    label={t('challenge.refresh')}
+                    size="sm"
+                    loading={loading && !!data}
+                    onClick={() => void refetch()}
+                />
+            }
             className="boards-challenge"
         >
+            <ScreenStatus
+                state={state}
+                error={error}
+                loadingText={t('challenge.loading')}
+                onRetry={() => void refetch()}
+            />
             {content}
             <ContributorsDialog dept={selected} onClose={() => setSelected(null)} />
         </Screen>

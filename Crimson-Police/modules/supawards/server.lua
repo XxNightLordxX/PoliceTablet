@@ -211,6 +211,7 @@ Kit.supAction('server:sup:awardPoints', 'missionControls', function(ctx)
     return table.unpack(res, 2, res.n)
 end, {
     reason = true,
+    pushMine = 'missionControls', -- Your controls today shows the new count of today
     self = OfficerTarget,
     targetRate = { 1, 10000 },
     confirm = Confirm,

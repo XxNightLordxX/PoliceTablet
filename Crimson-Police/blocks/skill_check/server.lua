@@ -119,7 +119,10 @@ local function Sync(ctx, st)
     local added = false
     for _, d in ipairs(devs) do
         if type(d) == 'table' and d.netId and not have[d.netId] and IsVec(d.coords) then
-            st.targets[#st.targets + 1] = NewTarget(d.coords, d.netId, d)
+            local t = NewTarget(d.coords, d.netId, d)
+            local rec = type(ctx.run.entities) == 'table' and ctx.run.entities[d.netId] or nil
+            t.entity = rec and rec.entity or nil
+            st.targets[#st.targets + 1] = t
             have[d.netId] = true
             added = true
         end
@@ -127,23 +130,33 @@ local function Sync(ctx, st)
     return added
 end
 
-local function EntityGone(netId)
-    if not netId then return true end
-    local ent = NetworkGetEntityFromNetworkId(netId)
-    return not ent or ent == 0 or not DoesEntityExist(ent)
+-- The device prop's entity, or nil when it is gone. Only the very handle stored for the device counts: a net id
+-- OneSync gave to another entity after the prop was removed is never read as the device (t.coords is used instead).
+local function DeviceEntity(ctx, t)
+    if not t.netId then return nil end
+    local want = t.entity
+    if not want then
+        local rec = ctx.run and type(ctx.run.entities) == 'table' and ctx.run.entities[t.netId]
+        want = rec and rec.entity or nil
+        t.entity = want
+    end
+    local ent = NetworkGetEntityFromNetworkId(t.netId)
+    if not ent or ent == 0 or not DoesEntityExist(ent) then return nil end
+    if want and ent ~= want then return nil end
+    return ent
 end
 
 -- Re-create the prop of every armed shared device whose entity is gone. Returns true when it spawned any.
 local function RestoreLoop(ctx, st)
     local changed = false
     for _, t in ipairs(st.targets) do
-        if t.shared and t.status == 'armed' and (t.spawnFails or 0) < SPAWN_TRIES and EntityGone(t.netId) then
+        if t.shared and t.status == 'armed' and (t.spawnFails or 0) < SPAWN_TRIES and not DeviceEntity(ctx, t) then
             if not ctx.canSpawn(1, false) then
                 break
             end -- cap reached: wait, retried next tick
             local coords = t.coords
             if t.heading then coords = vector4(t.coords.x, t.coords.y, t.coords.z, t.heading + 0.0) end
-            local _, netId = ctx.spawnObject({
+            local ent, netId = ctx.spawnObject({
                 model = t.model or DEVICE_PROP,
                 coords = coords,
                 role = 'device',
@@ -152,6 +165,7 @@ local function RestoreLoop(ctx, st)
             })
             if netId then
                 t.netId = netId
+                t.entity = ent
                 changed = true
             else
                 t.spawnFails = (t.spawnFails or 0) + 1
@@ -181,11 +195,9 @@ local function RestoreProps(ctx, st)
     return changed
 end
 
-local function TargetCoords(t)
-    if t.netId then
-        local ent = NetworkGetEntityFromNetworkId(t.netId)
-        if ent and ent ~= 0 and DoesEntityExist(ent) then return GetEntityCoords(ent) end
-    end
+local function TargetCoords(ctx, t)
+    local ent = DeviceEntity(ctx, t)
+    if ent then return GetEntityCoords(ent) end
     return t.coords
 end
 
@@ -220,7 +232,7 @@ local function SendExplode(ctx, st, i, by)
     ctx.send({
         kind = 'explode',
         target = i,
-        coords = Plain(TargetCoords(t)),
+        coords = Plain(TargetCoords(ctx, t)),
         by = by,
         effect = ctx.obj.explosion ~= false,
     })
@@ -267,7 +279,7 @@ Setback = function(ctx, st, i, src)
     t.recoverNear = {}
     st.setbacks = (st.setbacks or 0) + 1
     if type(sb.penalty) == 'string' and sb.penalty ~= '' then ctx.penalize(sb.penalty, { count = 1, src = src }) end
-    ctx.send({ kind = 'setback', target = i, coords = Plain(TargetCoords(t)), by = src })
+    ctx.send({ kind = 'setback', target = i, coords = Plain(TargetCoords(ctx, t)), by = src })
     ctx.hud({
         message = { text = CP.L('block.skill_check.msg_setback', { action = SetbackLabel(ctx) }), kind = 'warning' },
     })
@@ -288,7 +300,7 @@ local function OnRecover(ctx, st, src, ev)
     if not t then return false, 'bad_target' end
     if t.status ~= 'setback' then return false, 'wrong_state' end
     local c = ctx.coords(src)
-    if not c or CP.U.dist(c, TargetCoords(t)) > REACH then return false, 'too_far' end
+    if not c or CP.U.dist(c, TargetCoords(ctx, t)) > REACH then return false, 'too_far' end
     local need = (tonumber(SetbackCfg(ctx).duration) or 10000) / 1000 - 1.5
     local since = t.recoverNear and t.recoverNear[src]
     if need > 0 and (not since or (Now() - since) / 1000 < need) then return false, 'too_quick' end
@@ -312,7 +324,7 @@ local function TickSetbacks(ctx, st)
     for _, t in ipairs(st.targets) do
         if t.status == 'setback' then
             t.recoverNear = t.recoverNear or {}
-            local tc = TargetCoords(t)
+            local tc = TargetCoords(ctx, t)
             for _, src in ipairs(ctx.participants() or {}) do
                 local c = ctx.coords(src)
                 if c and CP.U.dist(c, tc) <= REACH then
@@ -342,7 +354,7 @@ local function OnCheck(ctx, st, src, ev)
     if k ~= t.next then return false, 'wrong_index' end
     if type(ev.success) ~= 'boolean' then return false, 'bad_result' end
     local c = ctx.coords(src)
-    if not c or CP.U.dist(c, TargetCoords(t)) > REACH then return false, 'too_far' end
+    if not c or CP.U.dist(c, TargetCoords(ctx, t)) > REACH then return false, 'too_far' end
     local tm = Now()
     if t.worker and t.worker ~= src and tm - (t.lastAt or 0) < LOCK_MS then return false, 'busy' end
     if t.worker == src and t.lastAt and tm - t.lastAt < MIN_ROUND_MS then return false, 'too_quick' end
@@ -631,7 +643,7 @@ CP.Blocks.register(BLOCK, {
                     key = 'd' .. i,
                     index = i,
                     number = i,
-                    coords = TargetCoords(t),
+                    coords = TargetCoords(ctx, t),
                     look = 'device',
                     variant = t.status == 'setback' and 'setback' or nil,
                     label = label,
@@ -648,7 +660,7 @@ CP.Blocks.register(BLOCK, {
         local best
         for _, t in ipairs(st.targets) do
             if t.status == 'armed' then
-                local d = CP.U.dist(coords, TargetCoords(t))
+                local d = CP.U.dist(coords, TargetCoords(ctx, t))
                 if t.worker == src then return d end
                 if not best or d < best then best = d end
             end

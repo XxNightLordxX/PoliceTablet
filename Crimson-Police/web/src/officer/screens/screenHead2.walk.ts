@@ -15,6 +15,7 @@ import { readyToSign } from '../components/FieldTrainingCard';
 import { LiveCaseCard, stepIndex } from '../components/LiveCaseCard';
 import { ScreenStatus } from '../components/ScreenStatus';
 import type { FtoTask, FtoView } from '../../types/fieldTraining';
+import challengeSrc from './Challenge.tsx?raw';
 import leaderboardSrc from './Leaderboard.tsx?raw';
 import optionsSrc from './MyOptions.tsx?raw';
 import profileSrc from './Profile.tsx?raw';
@@ -72,6 +73,12 @@ function steps(): void {
         ok(src.includes('<ScreenStatus'), `${key}: ScreenStatus for its load states`);
         ok(!src.includes('<LoadingBlock') && !src.includes('<ErrorState'), `${key}: no own loading or error block`);
     }
+
+    // Challenge (R1): the same head and load states; its contributors dialog keeps its own compact error line
+    ok(challengeSrc.includes('OFFICER_HEADS.challenge.title'), 'challenge: title from OFFICER_HEADS');
+    ok(challengeSrc.includes('OFFICER_HEADS.challenge.help'), 'challenge: help from OFFICER_HEADS');
+    ok(challengeSrc.includes('<ScreenStatus') && !challengeSrc.includes('<LoadingBlock'), 'challenge: ScreenStatus');
+    ok(typeof locale['ui.help.challenge'] === 'string' && locale['ui.help.challenge'].length <= 120, 'challenge: help');
 
     // the loading line keeps the screen's own text (Profile, Leaderboard)
     const loading = renderToStaticMarkup(

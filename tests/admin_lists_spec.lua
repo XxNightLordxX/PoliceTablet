@@ -67,7 +67,14 @@ do
     Kit.callback = realCallback
     Opp.staffCases = function()
         local out = {}
-        for i = 1, 12 do out[i] = { runId = ('run-%04d'):format(i), officers = {} } end
+        for i = 1, 12 do
+            out[i] = {
+                runId = ('run-%04d'):format(i),
+                officers = {},
+                open = i > 9,
+                kind = i % 2 == 0 and 'live' or 'volunteer',
+            }
+        end
         return out
     end
     local fn = cbs['admin:getRsCases'] and cbs['admin:getRsCases'].fn
@@ -80,6 +87,12 @@ do
         H.ok(#d.cases == 2 and d.cases[1].runId == 'run-0011', 'pageSize 10: page 2 holds the last two cases')
         H.ok(d.casesPage and d.casesPage.page == 2 and d.casesPage.pages == 2 and d.casesPage.total == 12,
             'casesPage: page 2 of 2, 12 cases')
+        -- a filter covers every case, not only the page shown: the three open cases are runs 10 to 12
+        d = fn({ src = 1, args = { page = 1, filter = 'open' } })
+        H.ok(#d.cases == 3 and d.cases[1].runId == 'run-0010' and d.casesPage.total == 3,
+            'pageSize 10, filter open: the open cases from every page')
+        d = fn({ src = 1, args = { filter = 'bogus' } })
+        H.ok(d.casesPage.total == 12, 'an unknown filter keeps every case')
         Config.AdminUi.pageSize = 0
     end
 end

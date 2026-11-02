@@ -1449,11 +1449,13 @@ local function DefuseCtx(opts)
     local obj = SC.defaults({ block = 'skill_check', checks = opts.checks })
     local ctx = FakeCtx({ obj = obj, location = {}, index = 2, srcs = { 1, 2 } })
     ctx.run.shared.devices = {}
+    if opts.entities then ctx.run.entities = {} end
     for i = 1, (opts.devices or 2) do
         local netId = 800 + i
         local c = vec3(i * 10.0, 4000.0, 5.0)
         props[netId * 10] = { netId = netId, coords = c }
         byNet[netId] = netId * 10
+        if opts.entities then ctx.run.entities[netId] = { entity = netId * 10, kind = 'object' } end
         ctx.run.shared.devices[i] = { netId = netId, coords = c, model = opts.model, heading = opts.heading }
     end
     SC.prepare(ctx)
@@ -1626,6 +1628,21 @@ do -- device props deleted when the search objective ended are re-created (cap r
     SC.start(c3)
     SC.tick(c3, 1)
     H.eq(#c3.calls.spawn, 0, 'location targets spawn nothing')
+end
+
+do -- a recycled net id (the device prop was removed, OneSync gave its id to another entity) is no device
+    local ctx, st = DefuseCtx({ devices = 1, entities = true })
+    props[7777] = { netId = 801, coords = vec3(500.0, 500.0, 5.0) }
+    byNet[801] = 7777
+    ctx.capOk = false
+    SC.tick(ctx, 1)
+    At(1, vec3(10.0, 4000.0, 5.0))
+    H.eq(Round(ctx, 1, 1, 1, true), true, 'the device is worked at its own coords, not at the other entity')
+    ctx.capOk = true
+    SC.tick(ctx, 1)
+    H.eq(#ctx.calls.spawn, 1, 'the gone device prop is re-created')
+    H.eq(st.targets[1].entity, ctx.calls.spawn[1].netId * 10, 'the target keeps the new prop handle')
+    props[7777] = nil
 end
 
 do -- start (objective 1 completed from a net event) and a tick re-create a gone prop once

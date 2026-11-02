@@ -399,6 +399,9 @@ do
     H.eq(#Audits('runNoted', 'run-stun-wait'), 0, 'wait: no note yet')
     H.advance(2100)
     H.eq(#Audits('runNoted', 'run-stun-wait'), 1, 'wait: one note once the fall is still unseen 2 s later')
+    H.eq((Audits('runNoted', 'run-stun-wait')[1] or {}).reason,
+        'Objective 1, person 5003: the server saw no fall within 3 s of the report',
+        'wait: the detail names the real window (1 s proof plus the 2 s re-check)')
 end
 
 return H

@@ -264,6 +264,7 @@ Kit.supAction('server:sup:missionBan', 'missionControls', function(ctx)
     return true, { citizenid = cid, ['until'] = ban['until'] }
 end, {
     reason = true,
+    pushMine = 'missionControls', -- Your controls today shows the new count of today
     self = OfficerTarget,
     targetRate = { 1, 3000 },
     category = 'flags',

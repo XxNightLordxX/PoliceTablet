@@ -786,7 +786,7 @@ export default function AdminLeaderboards() {
                                     ? t('leaderboard.empty_text', { n: board?.minRuns ?? 3 })
                                     : t('admin.boards.unranked_empty')
                         }
-                        aria-label={t('ui.screen.admin_leaderboards')}
+                        aria-label={screenTitle}
                     />
                     <div className="boards-admin-side">
                         <FlaggedPanel

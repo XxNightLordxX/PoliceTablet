@@ -884,7 +884,7 @@ export default function AdminMissions() {
                             rowClassName={r => (r.loadError ? 'is-muted' : undefined)}
                             onRowClick={r => setDrawerOf(r.id)}
                             empty={t('admin.missions.none')}
-                            aria-label={t('ui.screen.admin_missions')}
+                            aria-label={screenTitle}
                         />
                     </>
                 )

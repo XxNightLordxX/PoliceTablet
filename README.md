@@ -1820,8 +1820,9 @@ refused), Config health warnings, System problems, stuck payments and **Refused 
 **Needs attention** (`Config.AdminUi.needsAttention`, Admin UI → **Settings**, shipped `false` = no such panel) puts a
 panel on top of Home with what is waiting for you, each line a count that opens its screen: **Problems** (System →
 Problems), **Refused starts today** (Live → Refused), **Open disputes** (Officers → Disputes), **Flagged runs waiting
-for review** (Leaderboards, one per run, your own left out) and **Open player suspect cases** (Real suspects; only
-while you have that screen). It loads in one request and refreshes every minute; it only reads.
+for review** (Leaderboards, one per run, your own left out, every one counted) and **Open player suspect cases** (Real
+suspects; only while you have that screen). It loads in one request and refreshes every minute; it only reads. While
+it is on, **Something wrong?** leaves out its Problems and Refused starts lines, so nothing shows twice.
 
 To open the
 panel straight on Payouts or Missions instead (with no Home), set `Config.AdminUi.landing = 'payouts'` or
@@ -2655,7 +2656,8 @@ keeps its pop-up menu. It runs on volunteers, so `Config.Volunteers.enabled` mus
 
 - **Open it** with `/crimtab` (`command`, restart to rename it) or an ox_inventory item: paste the
   `crimson_criminal_tablet` entry of `items/ox_inventory_items.lua` into ox_inventory and set
-  `Config.CriminalTablet.item = 'crimson_criminal_tablet'` (shipped `false`: no item). With
+  `Config.CriminalTablet.item = 'crimson_criminal_tablet'` (shipped `false`: no item). Admin UI → Permissions →
+  **Config health** (and one console line at start) warns when that item is not an ox_inventory item. With
   `replaceCommand = true`, `/crimsonheat` opens the tablet instead of its menu for a player who may use it.
 - **Who may use it**: `access = 'everyone'` (shipped) lets every player whose job is not a police job of
   `Config.Departments` use it. `access = 'granted'` lets only the players named by the **Criminal tablet** extra

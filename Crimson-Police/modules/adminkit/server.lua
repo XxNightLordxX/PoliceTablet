@@ -706,6 +706,8 @@ end
 --   opts.self          fn(payload, ctx) -> { citizenid?, runUuid?, strict? }: the admin's own records are refused
 --   opts.audit         an audit action written after success when fn wrote none; opts.category its webhook
 --   opts.maintenance   true: allowed during a maintenance lock (status reads, ending the lock)
+--   opts.pushMine      a push topic sent to the acting player only after success (once the audit row is written), so
+--                      his own screens that count today's use (Your controls today) read the new count
 -- fn(ctx) -> ok, data | false, errKey. ctx = { src, payload, name, reason, requestId, actor, role, target, old, new,
 -- audit(action, target, old, new, aopts), consume(token, kind, ids), changed(kind, citizenid, missionId),
 -- notify(citizenid, kind, key, vars) }.
@@ -864,6 +866,11 @@ local function Run(entry, src, payload)
     end
     if ok and entry.opts.audit and not ctx.audited then
         ctx.audit(entry.opts.audit, ctx.target, ctx.old, ctx.new)
+    end
+    local topic = entry.opts.pushMine
+    if ok and type(topic) == 'string' and ctx.src ~= 0 and CP.Tablet and CP.Tablet.push then
+        local okP, errP = pcall(CP.Tablet.push, ctx.src, topic, { mine = true })
+        if not okP then CP.err(TAG, '%s: its push failed: %s', entry.name, tostring(errP)) end
     end
     if ctx.claimed then Kit.finishRequest(ctx.requestId, ok, data) end
     return ok, data

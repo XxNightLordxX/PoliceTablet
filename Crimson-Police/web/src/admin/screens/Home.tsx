@@ -15,7 +15,7 @@ import { MissionSwitchForm, PayForm, PointsForm, QuickSettingsForm } from '../co
 import type { AdminLiveRunsData, AdminRefusalsData } from '../../types/admin_live';
 import type { MissionLoadSummary } from '../../types/admin_missions';
 import type { NeedsAttentionData, ProblemsData } from '../../types/admin_system';
-import { attentionLines, attentionWaiting } from '../components/needsAttention';
+import { attentionLines, attentionWaiting, wrongCheckKeys } from '../components/needsAttention';
 import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Home.css';
 
@@ -96,13 +96,14 @@ interface CheckLine {
 }
 
 // Something wrong?: the last mission load, Config health, System problems, stuck payments and the refused mission
-// starts of today (Live -> Refused), each a link.
-function SomethingWrong() {
+// starts of today (Live -> Refused), each a link. With the Needs attention panel on (attention), its Problems and
+// Refused starts lines are left out here (the panel shows them), and their two requests are not sent.
+function SomethingWrong({ attention }: { attention: boolean }) {
     const navigate = useNavigate();
     const load = useRequest<MissionLoadSummary>('admin:getMissionLoad', {}, { pushTopic: 'builder', pollMs: 60000 });
     const health = useRequest<ConfigHealthItem[]>('admin:getConfigHealth', {});
-    const problems = useRequest<ProblemsData>('admin:getProblems', {});
-    const refusals = useRequest<AdminRefusalsData>('admin:getRefusals', {}, { pollMs: 60000 });
+    const problems = useRequest<ProblemsData>('admin:getProblems', {}, { skip: attention });
+    const refusals = useRequest<AdminRefusalsData>('admin:getRefusals', {}, { pollMs: 60000, skip: attention });
     const counts = useNavCounts();
     const refused = load.data ? asArray(load.data.failed).length + asArray(load.data.overrideFailed).length : 0;
     const unhealthy = asArray(health.data).filter(i => i.level !== 'ok').length;
@@ -110,7 +111,7 @@ function SomethingWrong() {
     const stuck = counts.adminPayments ?? 0;
     const refusedToday = refusals.data?.today ?? 0;
     const dash = t('admin.home.unknown');
-    const lines: CheckLine[] = [
+    const all: CheckLine[] = [
         {
             key: 'load',
             label: t('admin.home.check_load'),
@@ -150,6 +151,8 @@ function SomethingWrong() {
             params: { tab: 'refused' },
         },
     ];
+    const keep = wrongCheckKeys(attention);
+    const lines = all.filter(l => keep.includes(l.key));
     const anyBad = lines.some(l => l.bad);
     return (
         <Card className="admin-home-tile" padding="md" highlight={anyBad ? 'warning' : undefined}>
@@ -358,7 +361,7 @@ export default function AdminHome() {
                         placeholder={t('admin.home.settings_placeholder')}
                     />
                 )}
-                <SomethingWrong />
+                <SomethingWrong attention={attention} />
             </div>
         </Screen>
     );

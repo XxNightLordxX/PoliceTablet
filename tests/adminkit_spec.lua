@@ -426,6 +426,7 @@ end, {
     reason = true,
     requestId = true,
     department = function(p) return p.department end,
+    pushMine = 'missionControls',
 })
 
 do
@@ -441,8 +442,13 @@ do
     H.ok(ok == false and data == 'err.reason_required', 'the reason guard runs')
     ok, data = Act('server:sup:kitSup', 2, { reason = 'r', department = 'sast' })
     H.ok(ok == false and data == 'err.request_id', 'the request id guard runs')
+    local pushed = {}
+    local realPush = CP.Tablet.push
+    CP.Tablet.push = function(src, topic) pushed[#pushed + 1] = ('%s:%s'):format(src, topic) end
     ok, data = Act('server:sup:kitSup', 2, { requestId = Rid(40), reason = 'r', department = 'sast' })
+    CP.Tablet.push = realPush
     H.ok(ok == true and data.role == 'supervisor', 'his own department: done, as supervisor')
+    H.eq(table.concat(pushed, ','), '2:missionControls', 'pushMine: only the acting supervisor gets the topic')
     H.eq(SupRole(), 'supervisor', 'the audit row has the role supervisor')
     local again = Act('server:sup:kitSup', 2, { requestId = Rid(40), reason = 'r', department = 'sast' })
     H.ok(again == true and supActed == 1, 'a repeated request id acts once')

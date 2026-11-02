@@ -263,8 +263,12 @@ function AC.stunMode()
 end
 
 -- The note ('flag') or flag ('hold') on an officer whose stun report the server did not see.
+-- The window named in the detail is the real one: the 1 s proof window plus Config.AntiCheat.stunRecheck.
 local function StunVerdict(run, src, netId, objective, mode)
-    local detail = CP.L('admin.anticheat.stun_detail', { objective = objective, netId = netId })
+    local recheck = math.max(0, tonumber(Cfg().stunRecheck) or 0)
+    local seconds = recheck + 1
+    if seconds == math.floor(seconds) then seconds = math.tointeger(seconds) end
+    local detail = CP.L('admin.anticheat.stun_detail', { objective = objective, netId = netId, seconds = seconds })
     if mode == 'hold' then
         AC.flag(run, src, 'stun_unproven', detail)
     else

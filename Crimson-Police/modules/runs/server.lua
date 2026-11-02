@@ -5204,6 +5204,7 @@ local function RecordVehicle(p, veh, netId)
     local body = Num(GetVehicleBodyHealth(veh), 1000.0)
     local v = p.vehicle
     v.lastNetId = netId
+    v.lastEnt = veh -- the handle: a net id OneSync later gives to another entity is never read as this car
     v.seen = true
     if engine < v.engine then v.engine = engine end
     if body < v.body then v.body = body end

@@ -702,7 +702,7 @@ export default function AdminPayouts() {
             }
             className="economy-admin-payouts"
         >
-            <Tabs items={tabs} value={tab} onChange={setTab} aria-label={t('ui.screen.admin_payouts')} />
+            <Tabs items={tabs} value={tab} onChange={setTab} aria-label={screenTitle} />
 
             {data && (data.outOfRange ?? 0) > 0 ? (
                 <Card highlight="warning" padding="sm">

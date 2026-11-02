@@ -55,3 +55,10 @@ export function attentionLines(data: NeedsAttentionData | null | undefined): Att
 export function attentionWaiting(lines: AttentionLine[]): number {
     return lines.filter(l => l.n > 0).length;
 }
+
+// The lines of Home's Something wrong? tile, in order. With the Needs attention panel on, Problems and Refused starts
+// are on the panel already, so the tile leaves them out (they would show twice).
+export function wrongCheckKeys(attention: boolean): string[] {
+    const all = ['load', 'health', 'problems', 'payments', 'refused'];
+    return attention ? all.filter(k => k !== 'problems' && k !== 'refused') : all;
+}

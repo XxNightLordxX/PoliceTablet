@@ -1,8 +1,7 @@
-// Officer UI screen heads and load states (steps H2 and H3): every officer screen (part 1: Home, Mission Board, Active
-// Mission, Dispatch; part 2: Unit, Profile, Leaderboard, My options) shows the same header (title, then one line of help) and the same loading, error, empty and
-// stale lines. Pure functions, checked by screenHead.walk.ts.
+// Officer UI screen heads and load states (steps H2 and H3, R1): every officer screen (part 1: Home, Mission Board,
 
-export type OfficerHeadKey = 'home' | 'board' | 'active' | 'dispatch' | 'unit' | 'profile' | 'leaderboard' | 'options';
+export type OfficerHeadKey =
+    'home' | 'board' | 'active' | 'dispatch' | 'unit' | 'profile' | 'leaderboard' | 'options' | 'challenge';
 
 // title: the screen name key; help: the one line under it (locale keys).
 export interface OfficerHead {
@@ -19,6 +18,7 @@ export const OFFICER_HEADS: Record<OfficerHeadKey, OfficerHead> = {
     profile: { title: 'ui.screen.profile', help: 'ui.help.profile' },
     leaderboard: { title: 'ui.screen.leaderboard', help: 'ui.help.leaderboard' },
     options: { title: 'ui.screen.options', help: 'options.subtitle' },
+    challenge: { title: 'ui.screen.challenge', help: 'ui.help.challenge' },
 };
 
 // loading: first fetch running; error: first fetch failed; empty: the reply had no data and no error;

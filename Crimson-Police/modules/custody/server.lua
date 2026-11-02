@@ -1713,6 +1713,8 @@ local function OfficerVehicle(run, src)
     if not netId then return nil end
     local ent = NetworkGetEntityFromNetworkId(netId)
     if not Exists(ent) then return nil end
+    -- only the car the participant last drove: a recycled net id naming another entity is no officer vehicle
+    if p.vehicle.lastEnt and ent ~= p.vehicle.lastEnt then return nil end
     return ent, netId
 end
 

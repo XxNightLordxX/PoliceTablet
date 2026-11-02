@@ -2487,6 +2487,26 @@ local FLAGGED_SQL = [[SELECT r.id, r.run_uuid, r.citizenid, r.department, r.miss
   LEFT JOIN cp_officers o ON o.citizenid = r.citizenid
   WHERE r.flagged = 1 AND r.voided = 0]]
 
+-- How many runs wait in an admin's flagged queue (Home's Needs attention): every department, the viewer's own runs
+-- (also the one he is still on) left out, as on Leaderboards -> Flagged runs. Only the run ids are read, with no
+-- FLAGGED_LIMIT cap, so a count over 200 is the real one. The saves folder engine has no COUNT(DISTINCT ...), so the
+-- distinct ids are counted here.
+---@param excludeCitizenid string|nil
+---@return integer
+function Admin.flaggedCount(excludeCitizenid)
+    local sql = 'SELECT DISTINCT r.run_uuid FROM cp_mission_runs r WHERE r.flagged = 1 AND r.voided = 0'
+    local params = {}
+    if excludeCitizenid then
+        sql = sql .. ' AND r.run_uuid NOT IN (SELECT m.run_uuid FROM cp_mission_runs m WHERE m.citizenid = ?)'
+        params[1] = excludeCitizenid
+    end
+    local n = 0
+    for _, r in ipairs(Query(sql, params) or {}) do
+        if not InLiveRun(excludeCitizenid, r.run_uuid) then n = n + 1 end
+    end
+    return n
+end
+
 -- admin: an admin's queue (step P14: rows his department hands to admins stay in it).
 function Admin.flaggedRows(dept, excludeCitizenid, admin)
     local sql, params = FLAGGED_SQL, {}

@@ -4964,14 +4964,10 @@ armed abandons. Walk: abandonPress.walk.ts.
 ## Crimson-Police/web/src/officer/screens/screenHead.ts
 
 ```text
-Officer screens tidy, part 1 (step H2): OFFICER_HEADS gives Home, Mission Board, Active Mission and Dispatch their
-title and one line of help (locale keys); screenStateOf(hasData, loading, error) gives the load state (loading,
-error, empty, stale, ready) that officer/components/ScreenStatus.tsx draws the same way on every screen. Display
-only: no request, action or rule changes. Walk: screenHead.walk.ts.
-Part 2 (step H3): Unit, Profile, Leaderboard and My options join OFFICER_HEADS (ui.help.unit, ui.help.profile,
-ui.help.leaderboard; My options keeps options.subtitle); ScreenStatus takes a loadingText for the line under the
-spinner; FieldTrainingCard.readyToSign counts the rookies' tasks ready to sign; LiveCaseCard shows "Step n of 3" and
-marks the current step (aria-current). Walk: screenHead2.walk.ts.
+Officer UI screen heads and load states (steps H2 and H3, R1): every officer screen (part 1: Home, Mission Board,
+Active Mission, Dispatch; part 2: Unit, Profile, Leaderboard, My options, Challenge) shows the same header (title,
+then one line of help) and the same loading, error, empty and stale lines. Pure functions, checked by
+screenHead.walk.ts.
 ```
 
 ## Crimson-Police/web/src/shared/components/MaintenanceBanner.tsx

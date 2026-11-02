@@ -310,7 +310,7 @@
   "admin.anticheat.outside_detail": "Killed by: {names} ({kills} kills)",
   "admin.anticheat.auto_suspend_reason": "{count} voided runs in {days} days",
   "admin.anticheat.presence_detail": "Within the presence range for {share}% of the run (needs {need}%)",
-  "admin.anticheat.stun_detail": "Objective {objective}, person {netId}: the server saw no fall within 1 s of the report",
+  "admin.anticheat.stun_detail": "Objective {objective}, person {netId}: the server saw no fall within {seconds} s of the report",
   "admin.webhook.audit_desc": "Crimson-Police · {category}",
   "admin.webhook.dispute_filed": "Dispute filed: {mission}",
   "admin.webhook.dispute_filed_desc": "Goes to {goes_to}",

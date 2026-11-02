@@ -715,6 +715,10 @@ do
     run.participants[1].vehicle.lastNetId = 29002
     local pc = W.at(run, p.netId)
     cruiser.coords = vec3(pc.x + 3.0, pc.y, pc.z)
+    run.participants[1].vehicle.lastEnt = cruiser.handle + 1  -- the car he drove is gone; its net id was recycled
+    W.act(1, run, p.netId, 'seat')
+    H.eq(p.state, 'escorted', 'a recycled net id naming another entity is not the officer\'s car')
+    run.participants[1].vehicle.lastEnt = cruiser.handle
     W.act(1, run, p.netId, 'seat')
     H.eq(p.state, 'seated', 'Place in vehicle: the rear seat of the officer\'s car')
     H.eq(cruiser.seats[1], run.entities[p.netId].entity, 'rear left seat')

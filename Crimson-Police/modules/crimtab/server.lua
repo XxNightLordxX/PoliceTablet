@@ -268,6 +268,29 @@ local function Recheck(src)
 end
 C._recheck = Recheck
 
+-- Config health (Admin UI -> Permissions, and one console line at start when it is not ok): the item that opens the
+-- criminal tablet (Config.CriminalTablet.item) is a real ox_inventory item. Nothing is listed while the tablet is
+-- off or has no item.
+local function ItemHealth()
+    local item = Cfg().item
+    if not On() or type(item) ~= 'string' or item == '' then return {} end
+    if GetResourceState('ox_inventory') ~= 'started' then
+        return { { level = 'warn', text = CP.L('health.crimtab.no_inventory', { item = item }) } }
+    end
+    local ok, def = pcall(function() return exports.ox_inventory:Items(item) end)
+    if not ok or def == nil then
+        return {
+            { level = 'warn', text = CP.L('health.crimtab.missing', { item = item }), fix = 'CriminalTablet.item' },
+        }
+    end
+    return { { level = 'ok', text = CP.L('health.crimtab.ok', { item = item }) } }
+end
+C._itemHealth = ItemHealth
+
+CreateThread(function()
+    if CP.ConfigHealth and CP.ConfigHealth.register then CP.ConfigHealth.register('crimtab', ItemHealth) end
+end)
+
 CreateThread(function()
     Wait(0)
     local Q = CP.Qbx

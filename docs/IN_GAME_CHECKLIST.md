@@ -336,3 +336,18 @@ Covers every in-game check in 74800bb..HEAD (M3-M11, R6, R7, V1-V27, RP1, K7-K23
 - [ ] Settings → Performance → latentAboveBytes `65536`: Leaderboard, Mission Board and the Admin lists still load
   (a big one may take a moment longer); the rest of the tablet keeps answering meanwhile. Back to `0`.
 - [ ] Server resmon of Crimson-Police with officers on duty and no run: at or below what it showed before the update.
+
+## Known leftovers fixed (R1)
+
+- [ ] `Config.AdminUi.needsAttention` On: Home's Something wrong? shows Last mission load, Config health and stuck
+  payments only (Problems and Refused starts are on the Needs attention panel); Off: all five lines as before. (R1)
+- [ ] `Config.Tablet.supervisorControlsCard` On: a sergeant gives points or sets a Mission ban; Your controls today
+  shows the new count of today at once, without reopening Department Report. (R1)
+- [ ] `Config.AdminUi.pageSize` 10 with more than 10 player suspect cases: Real suspects -> Cases -> Open lists the
+  open cases from every page (the pager counts only those). (R1)
+- [ ] `Config.CriminalTablet.enabled` true and `item = 'no_such_item'`: Permissions -> Config health shows a warning and
+  the console prints one line at start; a real item shows an ok line. (R1)
+- [ ] Officer tablet -> Department Challenge: the same header (title, one line of help, a refresh button) and the same
+  loading and error lines as the other officer screens. (R1)
+- [ ] Defuse a device in a search-then-defuse mission after its prop was removed: the prop comes back at the device's
+  own spot and the device is worked there, never at another object. (R1)

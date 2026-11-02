@@ -460,13 +460,17 @@ function CasesTab({
     req: { data, loading, error, refetch },
     onOpen,
     onPage,
+    filter,
+    onFilter,
 }: {
     req: UseRequestResult<RsCasesData>;
     onOpen: (runId: string) => void;
-    // Config.AdminUi.pageSize (step H6): another page of cases (the filter works on the page shown)
+    // Config.AdminUi.pageSize (step H6): another page of cases
     onPage: (page: number) => void;
+    // the filter is sent to the server (admin:getRsCases filter), so it covers every page, not only the one shown
+    filter: RsCaseFilter;
+    onFilter: (f: RsCaseFilter) => void;
 }) {
-    const [filter, setFilter] = useState<RsCaseFilter>('all');
     const rows = filterCases(asArray(data?.cases), filter);
     const columns: TableColumn<RsCaseLine>[] = [
         { key: 'opened', header: t('rs.ui.col.opened'), render: c => when(c.openedAt) },
@@ -539,7 +543,7 @@ function CasesTab({
                             { key: 'volunteer', label: t('rs.ui.filter.volunteer') },
                         ]}
                         value={filter}
-                        onChange={setFilter}
+                        onChange={onFilter}
                     />
                     <IconButton
                         icon="refresh"
@@ -910,7 +914,8 @@ export default function RealSuspects() {
     const [tool, setTool] = useState<Partial<RsToolForm> | null>(null);
     const [version, setVersion] = useState(0);
     const [casesPage, setCasesPage] = useState(1);
-    const cases = useRequest<RsCasesData>('admin:getRsCases', { page: casesPage });
+    const [caseFilter, setCaseFilter] = useState<RsCaseFilter>('all');
+    const cases = useRequest<RsCasesData>('admin:getRsCases', { page: casesPage, filter: caseFilter });
     const data = cases.data;
     return (
         <Screen title={screenTitle} subtitle={t('rs.ui.subtitle')}>
@@ -921,7 +926,7 @@ export default function RealSuspects() {
                 </div>
             ) : null}
             <Tabs<Tab>
-                aria-label={t('ui.screen.admin_rs')}
+                aria-label={screenTitle}
                 items={[
                     { key: 'cases', label: t('rs.ui.cases'), icon: 'activity' },
                     { key: 'pairs', label: t('rs.ui.pairs_tab'), icon: 'users' },
@@ -931,7 +936,16 @@ export default function RealSuspects() {
                 onChange={setTab}
             />
             {tab === 'cases' ? (
-                <CasesTab req={cases} onOpen={setOpenRun} onPage={setCasesPage} />
+                <CasesTab
+                    req={cases}
+                    onOpen={setOpenRun}
+                    onPage={setCasesPage}
+                    filter={caseFilter}
+                    onFilter={f => {
+                        setCaseFilter(f);
+                        setCasesPage(1);
+                    }}
+                />
             ) : tab === 'volunteers' ? (
                 <VolunteersTab req={cases} />
             ) : (

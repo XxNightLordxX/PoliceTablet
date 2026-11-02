@@ -105,6 +105,7 @@
   "leaderboard.window.alltime": "Lifetime XP of every officer",
   "leaderboard.updated": "Updated {time}",
   "leaderboard.refresh": "Refresh",
+  "challenge.refresh": "Refresh",
   "leaderboard.refresh_hint": "Boards refresh every minute",
   "leaderboard.loading": "Loading the board…",
   "leaderboard.col.rank": "#",

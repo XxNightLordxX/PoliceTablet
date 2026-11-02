@@ -39,13 +39,11 @@ CP.Disputes = {
 }
 local flaggedAsked
 CP.Admin = {
-    flaggedRows = function(dept, cid)
-        flaggedAsked = { dept = dept, cid = cid }
-        return {
-            { rowId = 1, runUuid = 'run-a' },
-            { rowId = 2, runUuid = 'run-a' },
-            { rowId = 3, runUuid = 'run-b' },
-        }
+    -- the real count (Admin.flaggedCount), never the capped queue rows (Admin.flaggedRows stops at 200)
+    flaggedRows = function() return { { rowId = 1, runUuid = 'run-a' } } end,
+    flaggedCount = function(cid)
+        flaggedAsked = { cid = cid }
+        return 250
     end,
 }
 CP.Opponents = {
@@ -86,8 +84,7 @@ do -- one request answers every line
     H.ok(data.problems >= 1, 'the problem line counts')
     H.ok(data.refusedToday >= 1, 'a refused start of today counts')
     H.eq(data.disputes, 2, 'the open disputes')
-    H.eq(data.flagged, 2, 'flagged: one per run (two rows of run-a count once)')
-    H.eq(flaggedAsked.dept, nil, 'flagged: every department')
+    H.eq(data.flagged, 250, 'flagged: the full count, past the 200 rows the queue card shows')
     H.eq(flaggedAsked.cid, 'ADM00001', 'flagged: the admin\'s own runs left out')
     H.eq(data.rsCases, 2, 'the open player suspect cases only')
 
@@ -105,7 +102,7 @@ do -- one request answers every line
     -- a module that fails counts 0, the others still answer
     CP.Disputes.openCount = function() error('boom') end
     local again = Cb('admin:getNeedsAttention', 1)
-    H.ok(again ~= nil and again.disputes == 0 and again.flagged == 2, 'a failing count is 0, the rest answers')
+    H.ok(again ~= nil and again.disputes == 0 and again.flagged == 250, 'a failing count is 0, the rest answers')
     CP.Disputes.openCount = function() return openDisputes end
 end
 

@@ -6,7 +6,7 @@ import { adminNavOf, adminTitleKey } from '../../layouts/adminNav';
 import { request } from '../../shared/nui';
 import type { Session } from '../../shared/types';
 import type { NeedsAttentionData } from '../../types/admin_system';
-import { attentionLines, attentionWaiting } from './needsAttention';
+import { attentionLines, attentionWaiting, wrongCheckKeys } from './needsAttention';
 
 const failures: string[] = [];
 let passed = 0;
@@ -33,6 +33,10 @@ async function steps(): Promise<void> {
     ok(noRs.length === 4 && !noRs.some(l => l.key === 'rs'), 'no Player suspects screen: four lines');
     ok(noRs[0]?.n === 0 && noRs[1]?.n === 1 && noRs[2]?.n === 0, 'counts are whole and never below 0');
     ok(attentionWaiting(noRs) === 1 && attentionLines(undefined).length === 0, 'waiting count; no answer, no lines');
+
+    // Something wrong?: with the panel on, Problems and Refused starts show only on the panel
+    ok(wrongCheckKeys(false).join(',') === 'load,health,problems,payments,refused', 'tile as before without the panel');
+    ok(wrongCheckKeys(true).join(',') === 'load,health,payments', 'panel on: no Problems or Refused twice');
 
     // the title inside a screen: the plain name in the plain layout, else the screen's own name
     const plain = adminNavOf({ config: { adminUi: { plainLayout: true } } } as unknown as Session);

@@ -615,7 +615,7 @@ export default function AdminLive() {
                 ]}
                 value={tab}
                 onChange={setTab}
-                aria-label={t('ui.screen.admin_live')}
+                aria-label={screenTitle}
             />
             {body}
             <ConfirmDialog

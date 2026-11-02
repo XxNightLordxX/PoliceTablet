@@ -50,21 +50,11 @@ local function RefusedToday()
 end
 
 -- The flagged runs an admin still has to approve or void (Leaderboards -> Flagged runs): one per run, the admin's
--- own runs left out as on that card.
+-- own runs left out as on that card. CP.Admin.flaggedCount counts them all (the card's rows stop at 200).
 local function FlaggedRuns(src)
     local okI, info = Call('Qbx', 'getInfo', src)
     local cid = okI and type(info) == 'table' and type(info.citizenid) == 'string' and info.citizenid or ''
-    local ok, rows = Call('Admin', 'flaggedRows', nil, cid)
-    if not ok or type(rows) ~= 'table' then return 0 end
-    local seen, n = {}, 0
-    for _, r in ipairs(rows) do
-        local id = r.runUuid or r.rowId
-        if id ~= nil and not seen[id] then
-            seen[id] = true
-            n = n + 1
-        end
-    end
-    return n
+    return Count(Call('Admin', 'flaggedCount', cid))
 end
 
 -- The open real-suspect cases, or nil when the admin has no Player suspects screen (no antiFarmOverride key, or live

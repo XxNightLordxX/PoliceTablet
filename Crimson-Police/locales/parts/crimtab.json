@@ -90,5 +90,8 @@
   "err.crimtab_blocked": "Too many strikes: Home shows when you can get on the list again.",
   "err.crimtab_job_gone": "That job is gone: the question closed or someone else was asked.",
   "err.crimtab_busy": "Close the other screen first.",
-  "err.crimtab_closed": "The criminal tablet closed: you can no longer use it."
+  "err.crimtab_closed": "The criminal tablet closed: you can no longer use it.",
+  "health.crimtab.ok": "The criminal tablet item {item} exists in ox_inventory",
+  "health.crimtab.missing": "{item} (Config.CriminalTablet.item) is not an ox_inventory item: the criminal tablet cannot be opened with it. Paste its entry from items/ox_inventory_items.lua into ox_inventory, or set the item to false",
+  "health.crimtab.no_inventory": "ox_inventory is not running: the criminal tablet item {item} cannot be checked or used"
 }
