@@ -889,6 +889,12 @@ do
     Cb('sup:getReviewQueue', 7)
     H.time = H.time + 120
     H.eq(CP.Admin.shareReviewQueue(2), 0, 'FX1: a queue not asked for in 75 s counts as closed')
+    -- Z8B: an admin who is also an FIB officer decides a SAST row: the SAST supervisor still gets his queue
+    AddPlayer(8, 'ADM00008', 'Al Fed', 'fib', 3, true, true)
+    Cb('sup:getReviewQueue', 7)
+    H.eq(CP.Admin.shareReviewQueue(8), 1, 'Z8B: an admin\'s decision reaches every department\'s open queue')
+    H.eq(CP.Admin.shareReviewQueue(4, 'sast'), 1, 'Z8B: the row\'s department, when given, decides who gets it')
+    infos[8], H.players[8] = nil, nil
     Config.Tablet.supervisorReviewLive = false
 end
 H.eq(SecurityLines(2), supLines, 'a supervisor\'s review flow (queue, approve, void, refusals) leaves no security line')

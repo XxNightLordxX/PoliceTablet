@@ -1881,6 +1881,11 @@ local function AcceptStart(src, typeKey, opts, note)
                         UnlockUnit(unit)
                         return done(false, own and 'err.on_call' or 'err.member_on_call')
                     end
+                    -- a mission ban set while the check waited
+                    if BannedOf({ o }, os.time()) then
+                        UnlockUnit(unit)
+                        return done(false, own and 'err.mission_banned' or 'err.member_mission_banned')
+                    end
                 end
                 if LockStops(ctx.live) then
                     UnlockUnit(unit)

@@ -292,6 +292,25 @@ Config.MissionControls.pushMissionPerDay = 2
 H.eq(select(2, Page(9, 13, 'pm_patrol_b')), 'err.mc_push_used', 'pushMissionPerDay a supervisor a day')
 H.eq((Page(99, 13, 'pm_patrol_b')), true, 'admins any')
 H.eq(MC.supView(9).push.usedToday, 2, 'the dialog shows today\'s pushes')
+-- Z8B: two pushes sent at once while the per-day count's query waits: the second is refused (err.busy), so both
+-- can never pass a count of one left
+do
+    Config.MissionControls.pushMissionPerDay = 3
+    local realCount = CP.AdminKit.dailyCount
+    CP.AdminKit.dailyCount = function(action, opts)
+        Wait(50)
+        return realCount(action, opts)
+    end
+    local first, second
+    CreateThread(function() first = table.pack(Page(9, 13, 'pm_patrol_b')) end)
+    CreateThread(function() second = table.pack(Page(9, 13, 'pm_patrol_b')) end)
+    H.advance(200, 50)
+    CP.AdminKit.dailyCount = realCount
+    H.eq(second and second[2], 'err.busy', 'Z8B: a second push while the first is checked waits its turn')
+    H.eq(first and first[1], true, 'Z8B: the first push goes out')
+    H.eq(MC.supView(9).push.usedToday, 3, 'Z8B: one push counted')
+    Config.MissionControls.pushMissionPerDay = 2
+end
 -- step WF2: Decline on Dispatch answers with the leader's fresh view, so the screen needs no second request
 local _, d3 = Page(99, 13, 'pm_patrol_b')
 H.ok(CardOf(13, d3.id) ~= nil, 'WF2: the paged unit sees the pushed call')

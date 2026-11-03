@@ -213,4 +213,31 @@ RR._reset()
 ok, data = Admin.voidFlagged(2, 10, 'Off')
 H.ok(ok == true and (data or {}).pending == nil, 'with the config value one supervisor\'s Void voids at once')
 
+-- Z8B: approving a flagged row whose pay waits as 'pending' releases it now (as disputes do), not at the next login
+do
+    local released = {}
+    CP.Cash = {
+        release = function(id) released[#released + 1] = id end,
+    }
+    CP.Scoring.onRowApproved = function() end
+    rows[14] = {
+        id = 14,
+        run_uuid = 'run-14',
+        citizenid = 'OFF00006',
+        department = 'sast',
+        mission_type = 'traffic',
+        mission_id = 'stop',
+        flagged = true,
+        voided = false,
+        flag_reason = 'too_fast',
+        cash_status = 'pending',
+        state = 'completed',
+    }
+    _G.MySQL.update.await = function() return 1 end
+    ok = Admin.approveFlagged(1, 14, 'Checked')
+    H.eq(ok, true, 'Z8B: the pending flagged row is approved')
+    H.eq(released[1], 14, 'Z8B: and its pending pay is released at once')
+    CP.Cash = nil
+end
+
 return H

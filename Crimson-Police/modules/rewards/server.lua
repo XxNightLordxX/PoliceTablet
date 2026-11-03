@@ -731,10 +731,11 @@ local function OnRowSettled(run, p, rowId, row, result)
     if type(result) == 'table' then result.items = ItemsView(rowId, false) end
 end
 
--- row:approved: held rewards of the row become pending and are given.
+-- row:approved: held rewards of the row become pending and are given. With item rewards off they still become
+-- pending (nothing else would release them later) and are given on a login once rewards are on again.
 local function OnRowApproved(rowId)
     rowId = ToId(rowId)
-    if not rowId or not Enabled() then return end
+    if not rowId then return end
     Db()
     local rows = Query('SELECT DISTINCT citizenid FROM cp_item_rewards WHERE row_id = ? AND status = \'held\'',
         { rowId })
@@ -742,13 +743,14 @@ local function OnRowApproved(rowId)
         { rowId })
     if not n or n < 1 then return end
     for _, r in ipairs(rows or {}) do
-        Rewards.deliver(r.citizenid)
+        if Enabled() then Rewards.deliver(r.citizenid) end
         Push(r.citizenid)
     end
     SyncBreakdown(rowId)
 end
 
--- row:voided: rewards not given yet wait (held) for the dispute window, like held cash.
+-- row:voided: rewards not given yet wait (held) for the dispute window, like held cash. An admin's Flag for review
+-- (CP.Corrections) holds them the same way until the Review Queue decides.
 local function OnRowVoided(rowId)
     rowId = ToId(rowId)
     if not rowId then return end
@@ -762,6 +764,8 @@ local function OnRowVoided(rowId)
         SyncBreakdown(rowId)
     end
 end
+
+Rewards.holdRow = OnRowVoided
 
 -- row:forfeited: the dispute window closed on a voided row.
 local function OnRowForfeited(rowId)

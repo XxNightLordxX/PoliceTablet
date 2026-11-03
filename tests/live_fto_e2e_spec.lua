@@ -688,10 +688,7 @@ do
     H.eq(recB.state, 'detained', 'talk: B is detained')
     H.eq(st.lines.peaceful_arrest[CID[10]], 1, 'talk: the Peaceful arrest line counts')
     Secs(3)
-    local n, amount = Paid(CID[6])
-    H.eq(n, 1, 'talk: the backup is paid for the talk-down once')
-    H.eq(amount, Config.FeatureRewards.surrender.money, 'talk: ...$300')
-    H.eq(ItemsGiven(6, 'water'), 1, 'talk: ...and gets the water')
+    H.eq((Paid(CID[6])), 0, 'talk: Z8B: nothing is paid at the detain (the talk-down pays when the case ends)')
 
     -- the leader ends the case from the radial menu
     mark = #H.events
@@ -704,6 +701,10 @@ do
     H.eq(ended.suspects and ended.suspects[CID[10]], 'detained', 'end: ...and B detained')
     H.eq(ended.officers, 3, 'end: ...by three officers')
     H.eq(CP.MissionCalls.liveCount(), 0, 'end: no LIVE call left')
+    Secs(3)
+    local talkN = #Rows('mission_id = ? AND citizenid = ?', { 'reward_surrender', CID[6] })
+    H.eq(talkN, 1, 'talk: the backup is paid for the talk-down once, at the end')
+    H.eq(ItemsGiven(6, 'water'), 1, 'talk: ...and gets the water')
 
     -- payouts: Config.LiveCrime.cash on, so each row pays the Investigation payout once
     Secs(3)

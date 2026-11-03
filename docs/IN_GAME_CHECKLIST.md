@@ -445,3 +445,27 @@ names the change it came with.
   Start now: he is removed at the start with the toast, and is not on the run. (Z8)
 - [ ] Admin UI -> Audit -> Save to server with saves/exports read-only: the save fails with the write error and no
   success toast. (Z8)
+- [ ] Admin UI -> Live -> End run on a normal run: the officers' toast says the run was cancelled, not the
+  Cross-Department Mission. (Z8B)
+- [ ] A unit of two with the ready check: mission-ban the second member before he answers, then Ready: the start is
+  refused with the member-banned toast and the unit is free again. (Z8B)
+- [ ] Approve a flagged run whose pay shows Pending: it pays at once, not at the officer's next login. (Z8B)
+- [ ] Item rewards: approve a held run while `Config.Rewards.enabled = false`, turn rewards on again: the items come
+  at the next login. (Z8B)
+- [ ] Bulk void a paid run whose items were forfeited after the dispute window, then Undo: the items come back.
+  Flag a run by hand (Admin UI): its pending items show Held. (Z8B)
+- [ ] `Config.FeatureRewards.surrender.enabled = true`: a talk-down is paid when the case ends, never on an abandoned
+  or cancelled case or for a flagged officer. (Z8B)
+- [ ] Admin UI -> System -> Storage copy while a run is going: the toast names the run count, no `{count}`. (Z8B)
+- [ ] Process the scene: destroy the coroner van once it is called: Release to coroner moves to the scene marker.
+  (Z8B)
+- [ ] `Config.Tablet.supervisorReviewLive = true`: an admin who is also an FIB officer approves a SAST flagged run:
+  a SAST supervisor with the Review Queue open sees it go. A non-supervisor granted reviewFlagged sees the Review
+  badge count. (Z8B)
+- [ ] Push a mission twice at once (double click) with one push left today: only one goes out. A SAST supervisor
+  cannot withdraw an FIB lane call. The 'Your controls today' card counts a started happy hour. (Z8B)
+- [ ] `Config.LiveCrime.enabled = true`: a crew of two where one suspect already scored maxCatchesPerSuspectDay
+  today: catching him adds no detain line, catching the other one does. (Z8B)
+- [ ] Two runs ask for a volunteer at the same moment: he gets one pop-up only. (Z8B)
+- [ ] Change `Config.Custody.reach.plateFromVehicle`, `Config.Commendations.sameKindCooldownDays` or
+  `Config.Profile.reports.reasonMax`: the matching refusal names the new value. (Z8B)

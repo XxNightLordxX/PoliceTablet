@@ -1929,4 +1929,17 @@ do
     CP.Units.readyCheck = nil
 end
 
+-- Z8B: another department's lane call (hidden from his panel) is not his to withdraw
+do
+    Reset()
+    AddPlayer(9, CENTRE.downtown, { sup = true })
+    local lane = NewCall('patrol', 'downtown')
+    lane.department = 'fib'
+    local okL, eL = Act('server:sup:mcWithdraw', 9, { callId = lane.id, reason = 'not mine' })
+    H.ok(okL == false and eL == 'err.mc_withdraw_department', 'Z8B: a SAST supervisor cannot withdraw an FIB call')
+    lane.department = 'sast'
+    H.eq((Act('server:sup:mcWithdraw', 9, { callId = lane.id, reason = 'mine' })), true,
+        'Z8B: his own department\'s lane call he can')
+end
+
 return H

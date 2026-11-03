@@ -1608,6 +1608,9 @@ local function PushCheck(src, role, dept, missionId, typeKey, areaKey, unit, iss
     return nil
 end
 
+local pushBusy = {}   -- issuer -> true while his push is checked and posted
+local PostPage
+
 -- opts.missionId: push that mission to the unit instead of a random one; the pushMission Mission control,
 -- at most Config.MissionControls.pushMissionPerDay a supervisor a day, a unit of his own department.
 function MC.page(src, typeKey, area, leaderSrc, opts)
@@ -1638,17 +1641,34 @@ function MC.page(src, typeKey, area, leaderSrc, opts)
     if ToSrc(src) and (Contains(unit.srcs, ToSrc(src)) or (issuerCid and Contains(unit.cids, issuerCid))) then
         return false, 'err.mc_page_self'
     end
-    if push then
+    if not push then return PostPage(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, nil) end
+    -- one push per issuer at a time: the per-day count is read through a yielding query, so two pushes sent at
+    -- once could both pass it; the lock covers the check and the audit row that counts it
+    if pushBusy[issuer] then return false, 'err.busy' end
+    pushBusy[issuer] = true
+    local res = table.pack(pcall(function()
         local errP = PushCheck(src, role, dept, opts.missionId, typeKey, areaKey, unit, issuer)
         if errP then return false, errP end
+        return PostPage(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, opts.missionId)
+    end))
+    pushBusy[issuer] = nil
+    if not res[1] then
+        CP.err(TAG, 'the push of %s failed: %s', tostring(opts.missionId), tostring(res[2]))
+        return false, 'err.internal'
     end
+    return res[2], res[3]
+end
+
+-- The page itself, after its checks: the call, the unit's toast and the audit row (mcPush names the mission).
+PostPage = function(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, missionId)
+    local push = missionId ~= nil
     local call = NewCall(typeKey, areaKey, {
         staff = true,
         issuer = issuer,
         issuerCid = issuerCid,
         issuerSrc = ToSrc(src),
         pagedCid = leaderO.citizenid,
-        missionId = push and opts.missionId or nil,
+        missionId = missionId,
     })
     local payload = ToastPayload(call)
     payload.paged = true
@@ -1682,9 +1702,18 @@ function MC.decline(src, callId)
     return true
 end
 
+-- A supervisor withdraws only the calls his Dispatch panel shows: every department's lane but other departments'
+-- (MC.supView); an admin or the console any call.
 function MC.withdraw(src, id, reason)
     local call = calls[math.tointeger(tonumber(id) or 0)]
     if not call or call.status ~= 'open' or call.window then return false, 'err.mc_not_open' end
+    if call.department and ToSrc(src) then
+        local _, admin = Call('Access', 'isAdmin', src)
+        local o = admin ~= true and GetOfficer(src) or nil
+        if admin ~= true and not (o and o.department == call.department) then
+            return false, 'err.mc_withdraw_department'
+        end
+    end
     if type(reason) ~= 'string' or CP.U.trim(reason) == '' then return false, 'err.reason_required' end
     reason = CP.U.clip(CP.U.trim(reason), 255)
     Withdraw(call, reason, os.time())

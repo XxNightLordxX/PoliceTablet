@@ -2024,6 +2024,26 @@ do
         { mission = mission, locationIndex = 1, missionType = 'tactical', members = { O8 }, leaderSrc = 8 })
     H.eq(why, 'err.on_call', 'the leader on a real call: refused')
     CP.Calls = nil
+    -- Z8B: a mission ban set during the accept's lookups refuses the start in Runs.create itself
+    CP.MissionBan = {
+        first = function(list)
+            for _, o in ipairs(list) do
+                if o.src == 8 then return o, { ['until'] = os.time() + 60 } end
+            end
+        end,
+    }
+    nr, why = Runs.create({
+        mission = mission,
+        locationIndex = 1,
+        missionType = 'tactical',
+        members = { O7, O8 },
+        leaderSrc = 7,
+    })
+    H.eq(why, 'err.member_mission_banned', 'Z8B: a banned member: refused')
+    nr, why = Runs.create(
+        { mission = mission, locationIndex = 1, missionType = 'tactical', members = { O8 }, leaderSrc = 8 })
+    H.eq(why, 'err.mission_banned', 'Z8B: a banned leader: refused')
+    CP.MissionBan = nil
 
     -- a member who disconnects while Runs.create waits on a lookup is never registered: the playerDropped
     -- handler ran before the run existed, so nothing else would remove them

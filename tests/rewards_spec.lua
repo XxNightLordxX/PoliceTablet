@@ -353,6 +353,17 @@ do
     CP.Hooks.fire('officer:loaded', 12)
     H.eq(Rows('CID2')[1].status, 'given', 'given on officer:loaded')
 
+    -- Z8B: approved while item rewards are off: still held -> pending (no later sweep would move it)
+    local rowE = Settle('FLOW-E', 'CID1', { src = 11, flagged = { reason = 'idle' } })
+    Config.Rewards.enabled = false
+    CP.Hooks.fire('row:approved', rowE)
+    Config.Rewards.enabled = true
+    local e
+    for _, r in ipairs(Rows('CID1')) do
+        if tonumber(r.row_id) == tonumber(rowE) then e = r end
+    end
+    H.eq(e and e.status, 'pending', 'Z8B: approved with rewards off: the held items become pending')
+
     -- flagged -> voided -> forfeited
     local rowC = Settle('FLOW-C', 'CID3', { src = 13, flagged = { reason = 'idle' } })
     CP.Hooks.fire('row:voided', rowC)

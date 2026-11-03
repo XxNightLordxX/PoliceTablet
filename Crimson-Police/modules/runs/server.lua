@@ -3744,6 +3744,11 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
                 return nil, (src == leader) and 'err.on_call' or 'err.member_on_call'
             end
         end
+        -- a mission ban set during the accept (after the board's and the ready check's own checks)
+        local okB, bo, ban = Call('MissionBan', 'first', officers, os.time())
+        if okB and type(bo) == 'table' and type(ban) == 'table' then
+            return nil, (ToSrc(bo.src) == leader) and 'err.mission_banned' or 'err.member_mission_banned'
+        end
     end
 
     -- The lookups above may yield (database, other modules). Re-check, with no yield until the run is

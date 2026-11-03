@@ -145,7 +145,7 @@ local function AddRelease(S)
             S.targets[ent] = { CORONER_OPTION }
             exports.ox_target:addLocalEntity(ent, { ReleaseOption(S) })
         end
-    elseif not S.coroner and S.scene and not S.zone then
+    elseif (not S.coroner or (S.van and S.van.status == 'gone')) and S.scene and not S.zone then
         S.zone = exports.ox_target:addSphereZone({
             coords = S.scene,
             radius = 2.0,

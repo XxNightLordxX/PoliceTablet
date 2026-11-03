@@ -362,4 +362,11 @@ for line in spec:gmatch('[^\n]+') do
     end
 end
 
+-- Z8B: Sys.storageCopy ends the lock (Maint.finish) for a copy into the store not in use and for a refusal before
+-- any write, so the SPEC's maintenance lock line names that exception to "until the owner restarts"
+do
+    local lockLine = spec:match('\n%- Maintenance lock:[^\n]+') or ''
+    H.ok(lockLine:find('store not in use', 1, true) ~= nil, 'Z8B: SPEC: a copy into the other store ends the lock')
+end
+
 return H

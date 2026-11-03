@@ -831,8 +831,9 @@ end
 
 Admin.ownRunCheck = OwnRunCheck
 
+-- 'pending' too, as disputes do: a flagged row's pay can wait as pending (an approved row then pays at once)
 local function ReleaseHeld(row)
-    if row.cash_status == 'held' then Call('Cash', 'release', row.id) end
+    if row.cash_status == 'held' or row.cash_status == 'pending' then Call('Cash', 'release', row.id) end
 end
 
 -- A flag of a kind the row's department hands to admins (its reviewRules Mission control); admins and
@@ -2320,6 +2321,7 @@ CP.Net.action('server:admin:voidRun', function(src, payload)
     local ok, data = Admin.voidRun(src, target, payload.reason,
         { kind = payload.kind, confirm = payload.confirm, goalRowIds = payload.goalRowIds })
     -- the reply carries the run's detail and the officer's views (CP.Corrections.withViews)
+    if ok then pcall(Admin.shareReviewQueue, src) end
     if Has('Corrections', 'withViews') then return CP.Corrections.withViews(src, payload, ok, data) end
     return ok, data
 end, { rate = 3 })
@@ -2343,6 +2345,7 @@ CP.Net.action('server:admin:approveRun', function(src, payload)
         if Admin.approveFlagged(src, r.id, reason) then n = n + 1 end
     end
     if n == 0 then return false, 'err.conflict' end
+    pcall(Admin.shareReviewQueue, src)
     return true, { approved = n, runUuid = payload.runUuid }
 end, { rate = 2 })
 
@@ -2753,11 +2756,12 @@ local function ReviewLiveOn()
 end
 
 -- After src decided a flagged run or a dispute: every other supervisor with the Review Queue open gets his own
--- updated queue at once (push 'reviewQueue'), of src's department only (an admin without one: every department).
+-- updated queue at once (push 'reviewQueue'), of dept only: the row's department when given, else a supervisor's own
+-- (he decides only his department's rows); an admin (any department's rows) or the console: every department.
 -- Returns how many got it; 0 with the switch off.
-function Admin.shareReviewQueue(src)
+function Admin.shareReviewQueue(src, dept)
     if not ReviewLiveOn() or next(reviewWatch) == nil then return 0 end
-    local dept = ViewerDepartment(src)
+    if dept == nil and tonumber(src) ~= 0 and not IsAdmin(src) then dept = ViewerDepartment(src) end
     local now, n = os.time(), 0
     for viewer, at in pairs(reviewWatch) do
         if now - at > REVIEW_WATCH_S then

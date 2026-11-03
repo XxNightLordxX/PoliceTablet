@@ -918,8 +918,9 @@ local function Can(src, action)
     return ok and yes == true
 end
 
+-- Every officer: a review power can be granted below supervisor grade (CP.Permissions decides each one).
 local function ReviewCount(src, officer)
-    if not officer or not officer.isSupervisor then return 0 end
+    if not officer then return 0 end
     local now = os.time()
     local c = reviewCache[src]
     if c and now - c.at < REVIEW_CACHE_S then return c.n end

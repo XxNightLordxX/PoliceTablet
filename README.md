@@ -1630,7 +1630,7 @@ Features → Money** (no typed word needed). Each row there shows its money, acc
 | Feature | Who is paid | Default money |
 | --- | --- | --- |
 | `suspect` | the volunteer who played a suspect (see the rules below) | escaped $1500, caught $500 (`money.got_away`, `money.caught`); `byType` sets other amounts per mission type |
-| `surrender` | the officer who talked a live-case suspect down (once per suspect) | $300 |
+| `surrender` | the officer who talked a live-case suspect down (once per suspect, paid when the case ends played out: not abandoned, cancelled or flagged) | $300 |
 | `ftoSignOff` | the trainer, for each task he signs off (once per rookie and task) | $250 |
 | `ftoComplete` | the rookie, when his training is done (once) | $1000 |
 | `supAward` | the officer a supervisor gave points (Give points) | $5 a point, at most $2500 (`maxMoney`) |
@@ -2718,7 +2718,7 @@ For staff:
   first, every time, and can stop or cancel from his `/crimsonheat` menu. Players in a hospital, the arena or
   another instance, on police duty or AFK are never picked.
 - **Caps against farming.** A suspect is worth points `Config.RealSuspects.maxCatchesPerSuspectDay` (2) times a
-  day, the same officer and suspect meet again for points only after `pairCooldownHours` (24), and accounts that
+  day (in a crew, one already at the cap when the case opens gives no line; the others still do), the same officer and suspect meet again for points only after `pairCooldownHours` (24), and accounts that
   share a connection or PC are flagged.
 - **Staff see everything.** Every case keeps a timeline, the damage ledger and the flags on the Real suspects
   screen (the last `Config.RealSuspects.casesKept`, 16, closed ones; saved, so a restart keeps them).

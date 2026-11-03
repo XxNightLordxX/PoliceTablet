@@ -1891,7 +1891,11 @@ Kit.action('server:admin:storageCopy', 'storageAdmin', function(ctx)
     end
     local force = p.force == true
     local ok, key, vars, extra = Sys.storageCopy(ctx.src, direction, force)
-    if not ok then return false, key or 'err.refused' end
+    -- an action's refusal carries a key only: a message with values ({count}, {table}, {error}) goes as its text
+    if not ok then
+        if type(key) == 'string' and type(vars) == 'table' and next(vars) ~= nil then return false, CP.L(key, vars) end
+        return false, key or 'err.refused'
+    end
     ctx.audit('storageCopy', direction, force and 'force' or nil, vars and ('%s rows'):format(tostring(vars.rows)))
     return true,
         WithView({ message = key, vars = vars, money = extra.money, restart = extra.restart }, Sys.storageView())

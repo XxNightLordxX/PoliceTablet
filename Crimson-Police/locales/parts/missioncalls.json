@@ -190,6 +190,7 @@
   "err.mc_push_not_eligible": "This unit can't play that mission right now. Pick another mission.",
   "err.mc_push_area": "That mission has no start in the area you picked. Pick another mission or area.",
   "err.mc_push_used": "You pushed your missions for today. Page the unit with a random mission instead.",
+  "err.mc_withdraw_department": "That call is another department's. Only its own supervisors or an admin can withdraw it.",
   "err.mc_push_department": "You can push a mission only to a unit of your own department. Pick a unit of your department.",
   "mc.toast.pushed": "Command pushed you a mission: {code} · {mission} ({type}) · {area}. Accept or decline it on Dispatch.",
   "mc.toast.push_ended": "{code}: the unit's pushed mission did not start.",

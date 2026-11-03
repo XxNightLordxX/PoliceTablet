@@ -1862,13 +1862,13 @@ end
 --                         BEGIN AND FINISH (net event)
 -- ============================================================================
 
-local function Refuse(src, key, why)
+local function Refuse(src, key, why, vars)
     CP.log(TAG, 'action by %s refused: %s', tostring(src), why or key)
-    if key then Notify(src, 'error', key) end
+    if key then Notify(src, 'error', key, vars) end
     return false, key
 end
 
--- Checks shared by both halves. Returns run, book, contact or false, errKey.
+-- Checks shared by both halves. Returns run, book, contact or false, errKey, vars (the error text's values).
 local function Resolve(src, runId, netId, action, extra)
     if type(runId) ~= 'string' or #runId == 0 or #runId > MAX_RUNID then return false, 'err.npc_invalid' end
     if type(action) ~= 'string' or not ACTIONS[action] then return false, 'err.npc_invalid' end
@@ -1884,7 +1884,11 @@ local function Resolve(src, runId, netId, action, extra)
     local c
     if action == 'runPlateFromVehicle' then
         c = CarInFront(run, b, src)
-        if not c then return false, 'err.custody_no_car_ahead' end
+        if not c then
+            local range = Num((Cfg().reach or {}).plateFromVehicle, 20.0)
+            if range == math.floor(range) then range = math.floor(range) end
+            return false, 'err.custody_no_car_ahead', { range = range }
+        end
     elseif action == 'seat' or action == 'handover' then
         c = b.contacts[ToInt(tonumber(netId), 1, MAX_NETID) or -1]
         if not c then
@@ -1930,7 +1934,7 @@ end
 
 function Custody.begin(src, runId, netId, action, extra)
     local run, b, c = Resolve(src, runId, netId, action, extra)
-    if not run then return Refuse(src, b, 'resolve') end
+    if not run then return Refuse(src, b, 'resolve', c) end
     local ok, why = StateOk(run, b, c, action, src)
     if not ok then return Refuse(src, why, 'state ' .. tostring(c.state)) end
     if not InReach(run, c, action, src) then return Refuse(src, 'err.npc_too_far', 'reach at begin') end
@@ -1946,7 +1950,7 @@ end
 function Custody.finish(src, runId, netId, action, extra)
     extra = type(extra) == 'table' and extra or {}
     local run, b, c = Resolve(src, runId, netId, action, extra)
-    if not run then return Refuse(src, b, 'resolve') end
+    if not run then return Refuse(src, b, 'resolve', c) end
     local bg = b.begins[src]
     b.begins[src] = nil
     if not bg or bg.netId ~= c.netId or bg.action ~= action then

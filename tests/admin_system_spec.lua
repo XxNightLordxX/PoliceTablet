@@ -935,6 +935,11 @@ do
     CP.Admin.command(0, { 'storage', 'copy', liveDir })
     H.eq(#seen, n, 'Z8: another maintenance lock refuses the console copy')
     Maint.finish('restore')
+    -- Z8B: the Admin UI's refusal with values shows them, never the raw {placeholders}
+    answer = { false, 'admin.cmd.storage_runs_active', { count = 2 }, false }
+    local okU, errU = Act('server:admin:storageCopy', 1, { direction = otherDir, requestId = Rid(81) })
+    H.ok(okU == false and type(errU) == 'string' and errU:find('2', 1, true) and not errU:find('{', 1, true),
+        'Z8B: the storage copy refusal is filled from its values: ' .. tostring(errU))
     CP.Admin.storageCopy, Sys.moneySnapshot, Sys.moneyReapply = realCopy, realSnap, realReapply
 end
 

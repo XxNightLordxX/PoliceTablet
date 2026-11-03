@@ -394,6 +394,25 @@ do
     H.eq(results[1][2], 'err.ready_declined', 'declined: reason key')
     H.eq(unit.locked, false, 'declined: the unit is unlocked')
     H.eq(#created, n0 + 1, 'declined: no run')
+    -- Z8B: a mission ban set while the check waited refuses the start after it
+    unit.locked = false
+    results = {}
+    D.accept(4, 'patrol', {
+        onDone = function(o, d) results[#results + 1] = { o, d } end,
+    })
+    local oldBan = CP.MissionBan
+    CP.MissionBan = {
+        first = function(list)
+            for _, o in ipairs(list) do
+                if o.src == 5 then return o, { ['until'] = os.time() + 60, name = 'Sup' } end
+            end
+        end,
+    }
+    pendingCb.onReady()
+    CP.MissionBan = oldBan
+    H.eq(results[1] and results[1][2], 'err.member_mission_banned', 'Z8B: a ban during the ready check refuses')
+    H.eq(#created, n0 + 1, 'Z8B: banned during the check: no run')
+    H.eq(unit.locked, false, 'Z8B: banned during the check: the unit is unlocked')
     CP.Units.readyCheck = nil
     units = {}
 

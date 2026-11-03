@@ -651,6 +651,13 @@ do
     myCar.heading = 180.0
     W.act(1, run, 0, 'runPlateFromVehicle')
     H.eq(Facts(behind), 'stolen', 'turned round, the car now in front is run')
+    -- Z8B: no car in front: the refusal names the configured range (reach.plateFromVehicle), not a fixed 20 m
+    myCar.heading = 90.0
+    W.notes = {}
+    W.act(1, run, 0, 'runPlateFromVehicle')
+    local noCar
+    for _, n in ipairs(W.notes) do if n.key == 'err.custody_no_car_ahead' then noCar = n end end
+    H.ok(noCar and noCar.vars and noCar.vars.range == 20, 'Z8B: no car ahead: the range comes from the config')
     myCar.seats[-1] = nil
     H.players[1].vehicle = nil
     Runs.endRun(run, 'completed', 'completed')

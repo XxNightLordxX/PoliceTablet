@@ -532,6 +532,12 @@ local function OfficerOk(crime, o)
     return true
 end
 
+-- Whether this suspect already scored Config.RealSuspects.maxCatchesPerSuspectDay cases today (worth no points).
+function LC.suspectCapped(cid)
+    local perDay = math.floor(Num(RS().maxCatchesPerSuspectDay, 2))
+    return Num(Opp('suspectDayCount', cid), 0) >= perDay
+end
+
 -- Whether these officers may take this crime's case -> true | false, err (checked at the claim and again at the
 -- accept; memory only: CP.Opponents' caps never query the database). officers = { { src, citizenid } }.
 function LC.claimCheck(crime, officers)
@@ -542,11 +548,10 @@ function LC.claimCheck(crime, officers)
     if RunOf(crime) then return false, 'err.mc_taken_by' end
     local suspects = Sorted(crime.suspects)
     local open, worth = 0, 0
-    local perDay = math.floor(Num(RS().maxCatchesPerSuspectDay, 2))
     for _, cid in ipairs(suspects) do
         if not Opp('byCid', cid) then
             open = open + 1
-            if Num(Opp('suspectDayCount', cid), 0) < perDay then worth = worth + 1 end
+            if not LC.suspectCapped(cid) then worth = worth + 1 end
         end
     end
     if open == 0 then return false, 'err.live_case_gone' end
@@ -685,6 +690,11 @@ local function Opened(run)
     for cid in pairs(crime.armed or {}) do
         if case.suspects and case.suspects[cid] then Opp('noteArmed', cid) end
     end
+    -- a suspect at maxCatchesPerSuspectDay when the case opens is worth no line (live_response) and no scored pair
+    run.liveCapped = {}
+    for cid in pairs(case.suspects or {}) do
+        if LC.suspectCapped(cid) then run.liveCapped[cid] = true end
+    end
     for src, p in pairs(run.participants or {}) do
         FlagLinked(run, case, crime, src)
         if p.citizenid then Opp('timeline', run, { what = 'officer', label = p.callsign or p.name }) end
@@ -712,7 +722,7 @@ local function Closed(run, state, reason)
                 rows[#rows + 1] = {
                     officer = p.citizenid,
                     suspect = cid,
-                    scored = state == 'completed' and caught,
+                    scored = state == 'completed' and caught and not (run.liveCapped and run.liveCapped[cid]),
                     outcome = arrived and out or 'gone',
                 }
             end

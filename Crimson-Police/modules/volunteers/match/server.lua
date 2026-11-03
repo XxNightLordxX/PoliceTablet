@@ -273,6 +273,11 @@ local function SrcOf(cid)
     return nil
 end
 
+-- He is no longer this match's volunteer: forgotten only while byCid still names this run (another match may hold him).
+local function Free(m, cid)
+    if cid and byCid[cid] == m.runId then byCid[cid] = nil end
+end
+
 -- The next volunteer who fits gets the pop-up; none left (or askTries asked) = NoVolunteer.
 local function AskNext(m)
     m.phase, m.cid, m.src, m.token, m.deadline = 'asking', nil, nil, nil, nil
@@ -286,8 +291,9 @@ local function AskNext(m)
         if m.tries >= tries then break end
         if not m.asked[cid] and not byCid[cid] then
             local src = SrcOf(cid)
-            if src and Fits(m, cid, src) then
-                -- Fits may yield (selfBlock's database read): the run may have ended meanwhile
+            -- Fits may yield (selfBlock's database read): another match may have asked him meanwhile
+            if src and Fits(m, cid, src) and not byCid[cid] then
+                -- ...and the run may have ended meanwhile
                 if m.run.state == 'ended' or matches[m.runId] ~= m then return end
                 m.asked[cid] = true
                 m.tries = m.tries + 1
@@ -328,13 +334,13 @@ local function Accept(m)
     if not ok or m.run.state == 'ended' or matches[m.runId] ~= m then
         Note(src, 'error', 'volunteer.ask.not_now')
         CP.log(TAG, 'run %s: %s said yes but can no longer play it (%s)', m.runId, cid, tostring(why))
-        byCid[cid] = nil
+        Free(m, cid)
         return AskNext(m)
     end
     local case = Opp('open', m.run, { kind = 'volunteer', index = m.obj, members = { cid }, meet = m.meet })
     if type(case) ~= 'table' then
         Note(src, 'error', 'volunteer.ask.not_now')
-        byCid[cid] = nil
+        Free(m, cid)
         return AskNext(m)
     end
     local now = GetGameTimer()
@@ -382,7 +388,7 @@ local function Watch(m, now)
         end -- token nil: his yes is being checked (Accept)
         if now > m.deadline + LATE_MS or not (V.isListed and V.isListed(m.cid)) then
             TriggerClientEvent(CP.e('client:volunteerAskClose'), m.src, m.token)
-            byCid[m.cid] = nil
+            Free(m, m.cid)
             AskNext(m)
         end
         return

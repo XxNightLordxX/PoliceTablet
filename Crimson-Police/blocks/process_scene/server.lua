@@ -208,10 +208,12 @@ local function VanPoint(ctx, st)
     return EntCoords(ctx, veh)
 end
 
--- Where src must stand for a step: the body, or the van (the scene marker when the van is off).
+-- Where src must stand for a step: the body, or the van (the scene marker when the van is off or gone: destroyed
+-- or left, so the objective never waits for a van that will not come back).
 local function TargetOf(ctx, st, kind, netId)
     if kind == 'release' then
-        if ctx.obj.coroner == false or not st.service then return ScenePoint(ctx), VAN_REACH end
+        local gone = st.service and CP.Custody.serviceStatus(st.service) == 'gone'
+        if ctx.obj.coroner == false or not st.service or gone then return ScenePoint(ctx), VAN_REACH end
         return VanPoint(ctx, st), VAN_REACH
     end
     local b = st.bodies[netId]

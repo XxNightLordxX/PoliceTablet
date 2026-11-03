@@ -174,6 +174,16 @@ do
     B.onEvent(ctx, nil, { type = 'opp_booked', cid = 'CA', label = 'A', share = 0.5 })
     H.eq(Lines(ctx, 'live_book')[1].opts.weight, 0.5, 'the booking line carries the same share')
     H.eq(#Lines(ctx, 'peaceful_arrest'), 0, 'no surrender module answer: no peaceful arrest line')
+    -- Z8B: a suspect at maxCatchesPerSuspectDay when the case opened (CP.LiveCrime run.liveCapped) scores no line
+    do
+        local c8 = Ctx()
+        c8.run.liveCapped = { CA = true }
+        B.prepare(c8)
+        B.start(c8)
+        B.onEvent(c8, nil, { type = 'opp_detained', cid = 'CA', label = 'A', share = 1 })
+        B.onEvent(c8, nil, { type = 'opp_detained', cid = 'CB', label = 'B', share = 1 })
+        H.eq(#Lines(c8, 'live_detain'), 1, 'Z8B: the capped suspect gives no detain line, the other one does')
+    end
 
     -- RP1: a detain CP.Opponents.peaceful calls peaceful scores the shared peaceful_arrest line (x his share) once,
     -- and the staff timeline names who talked him down
@@ -197,8 +207,32 @@ do
     ctx.run.participants = { [1] = { citizenid = 'LR_OFF1' }, [2] = { citizenid = 'LR_OFF2' } }
     B.onEvent(ctx, nil, { type = 'opp_detained', cid = 'CB', label = 'B', share = 0.5 })
     B.onEvent(ctx, nil, { type = 'opp_detained', cid = 'CB', label = 'B', share = 0.5 })
+    H.eq(#frPaid, 0, 'Z8B: nothing is paid at the detain')
+    CP.Hooks.fire('run:ended', ctx.run, 'completed', 'completed')
     H.ok(#frPaid == 1 and frPaid[1].feature == 'surrender' and frPaid[1].cid == 'LR_OFF2' and frPaid[1].key == 'LR1:CB',
-        'G3: the officer who talked him down is paid once per run and suspect')
+        'G3: the officer who talked him down is paid once per run and suspect, at the run\'s end')
+    -- Z8B: an abandoned (cancelled, voided) run, a flagged run and a flagged officer pay no talk-down
+    for _, case8 in ipairs({
+        { state = 'abandoned', why = 'an abandoned run' },
+        { state = 'completed', runFlag = true, why = 'a flagged run' },
+        { state = 'completed', pFlag = true, why = 'a flagged officer' },
+    }) do
+        frPaid = {}
+        local run8 = {
+            id = 'LR8',
+            flagged = case8.runFlag and { reason = 'x' } or nil,
+            participants = { [2] = { citizenid = 'LR_OFF2', flagged = case8.pFlag and { reason = 'x' } or nil } },
+        }
+        B.onEvent({
+            run = run8,
+            state = {},
+            award = function() return true end,
+            hud = ctx.hud,
+        }, nil, { type = 'opp_detained', cid = 'CB', label = 'B', share = 1 })
+        H.eq(run8.talkDowns and run8.talkDowns.CB, 2, 'Z8B: the talk-down is noted (' .. case8.why .. ')')
+        CP.Hooks.fire('run:ended', run8, case8.state, 'x')
+        H.eq(#frPaid, 0, 'Z8B: ' .. case8.why .. ' pays no talk-down')
+    end
     CP.FeatureRewards = nil
     local p = Lines(ctx, 'peaceful_arrest')
     H.eq(#p, 1, 'a peaceful detain: one peaceful_arrest line per suspect')
@@ -218,6 +252,7 @@ do
         }
         peaceful.CZ = 2
         B.onEvent(ctx, nil, { type = 'opp_detained', cid = 'CZ', label = 'Z', share = 1 })
+        CP.Hooks.fire('run:ended', ctx.run, 'completed', 'completed')
         H.eq(#paidZ, 0, 'Z2: a linked-accounts run pays no talk-down')
         CP.AntiCheat, CP.FeatureRewards = savedAC, nil
     end

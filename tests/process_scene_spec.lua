@@ -208,6 +208,31 @@ do
 end
 
 do
+    -- Z8B: the coroner van is gone (destroyed or left): the release moves to the scene marker
+    local run = W.start({ 1 }, Mission(1))
+    W.tick(1)
+    Kill(run, W.hostiles[1])
+    W.roadPoint = function(_, args)
+        return { coords = { x = args.near.x + 180.0, y = args.near.y, z = args.near.z }, heading = 0.0 }
+    end
+    Runs.objectiveComplete(run, 1)
+    local st = State(run)
+    local body = st.order[1]
+    local bc = W.at(run, body)
+    W.place(1, bc.x + 1.0, bc.y, bc.z)
+    Step(1, run, 'tag', body, 5200)
+    Step(1, run, 'bag', body, 6200)
+    local van = nil
+    for _, s in ipairs(CP.Custody._servicesOf(run)) do if s.kind == 'coroner' then van = s end end
+    H.ok(van ~= nil, 'Z8B: the coroner van was called')
+    if van then van.status = 'gone' end
+    W.place(1, SCENE.x + 2.0, SCENE.y, SCENE.z)
+    Step(1, run, 'release', nil, 8200)
+    H.eq(st.released, true, 'Z8B: van gone: released at the scene marker')
+    W.roadPoint = nil
+end
+
+do
     -- the run ends mid-scene: bodies and bags are all removed
     local run = W.start({ 1 }, Mission(2, { coroner = false }))
     W.tick(1)

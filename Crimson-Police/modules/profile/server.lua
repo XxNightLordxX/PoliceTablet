@@ -564,7 +564,8 @@ function Profile.report(src, citizenid, reason, note)
     if note ~= nil then
         text = CleanText(note, false)
         if not text then return false, 'err.invalid_payload' end
-        if CharLen(text) > math.max(1, Int(ReportCfg().reasonMax or 140)) then return false, 'err.report_too_long' end
+        local max = math.max(1, Int(ReportCfg().reasonMax or 140))
+        if CharLen(text) > max then return false, 'err.report_too_long', { max = max } end
         if text == '' then text = nil end
     end
     Db()
@@ -732,7 +733,7 @@ function Profile.commend(src, role, payload)
         local recent = MySQL.scalar.await([[SELECT COUNT(*) AS n FROM cp_commendations
             WHERE citizenid = ? AND kind = ? AND revoked = 0 AND created_at >= FROM_UNIXTIME(?)]],
             { cid, kind, Now() - cooldown })
-        if Int(recent) > 0 then return false, 'err.commend_recent' end
+        if Int(recent) > 0 then return false, 'err.commend_recent', { days = cooldown // DAY_S } end
     end
     local id = MySQL.insert.await([[INSERT INTO cp_commendations
         (citizenid, kind, citation, run_uuid, department, issued_by, issuer_role, created_at)
@@ -1362,9 +1363,15 @@ CP.Net.action('server:profile:set', function(src, payload)
     return Profile.set(officer, payload)
 end, { rate = 2 })
 
+-- An action's refusal carries a key only: one with values (a limit from the config) goes as its filled text.
+local function Filled(ok, data, vars)
+    if not ok and type(data) == 'string' and type(vars) == 'table' then return false, CP.L(data, vars) end
+    return ok, data
+end
+
 CP.Net.action('server:profile:report', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-    return Profile.report(src, payload.citizenid, payload.reason, payload.note)
+    return Filled(Profile.report(src, payload.citizenid, payload.reason, payload.note))
 end, { rate = 1 })
 
 -- Supervisor handlers check the permission first (ARCHITECTURE §0.7), then the payload.
@@ -1374,9 +1381,9 @@ local function SupAction(permission, fn)
         if not ok then return false, errKey or 'err.no_permission' end
         -- from the department report's activity dialog the reply carries his fresh activity
         if Has('Challenge', 'withActivity') then
-            return CP.Challenge.withActivity(src, payload, fn(src, 'supervisor', payload))
+            return CP.Challenge.withActivity(src, payload, Filled(fn(src, 'supervisor', payload)))
         end
-        return fn(src, 'supervisor', payload)
+        return Filled(fn(src, 'supervisor', payload))
     end
 end
 
@@ -1384,7 +1391,7 @@ local function AdminAction(fn)
     return function(src, payload)
         local ok, errKey = CP.Permissions.can(src, 'openAdmin')
         if not ok then return false, errKey or 'err.no_permission' end
-        return fn(src, 'admin', payload)
+        return Filled(fn(src, 'admin', payload))
     end
 end
 

@@ -427,6 +427,13 @@ do
     H.eq(Counts(1).invites, 3, 'CP.Units.invitesFor wins when it exists')
     local c2 = Counts(2)
     H.eq(c2.review, 0, 'no Review Queue count for an officer who is not a supervisor')
+    -- Z8B: an officer below supervisor grade with a granted review power gets the count
+    local realCan = CP.Permissions.can
+    CP.Permissions.can = function(src, action) return src == 2 and action == 'reviewFlagged' or realCan(src, action) end
+    H.time = H.time + 60
+    H.eq(Counts(2).review, 2, 'Z8B: a granted reviewFlagged counts the flagged rows for a non-supervisor')
+    CP.Permissions.can = realCan
+    H.time = H.time + 60
     H.eq(c2.onRun, false, 'and not on a run')
     H.eq(Counts(7).calls, 0, 'not an officer: everything 0')
 

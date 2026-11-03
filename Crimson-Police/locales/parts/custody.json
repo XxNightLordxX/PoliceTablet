@@ -194,7 +194,7 @@
   "err.cancelled": "You cancelled that action. Nothing was changed.",
   "err.custody_action": "That action is not available here. Check the mission objective for what to do next.",
   "err.custody_decided": "That contact already has a decision. Nothing was changed.",
-  "err.custody_no_car_ahead": "There is no contact car within 20 m in front of your vehicle. Pull up behind it and try again.",
+  "err.custody_no_car_ahead": "There is no contact car within {range} m in front of your vehicle. Pull up behind it and try again.",
   "err.custody_no_handcuffs": "You need handcuffs for that. Get handcuffs and try again.",
   "err.custody_no_transport": "Stand at the rear doors of the prisoner transport.",
   "err.custody_no_vehicle": "Stand next to a vehicle you drove on this mission.",

@@ -198,10 +198,17 @@ local function Tick(ctx, dt)
     end
 end
 
+-- A suspect who already scored maxCatchesPerSuspectDay cases today when the case opened (CP.LiveCrime): no line.
+local function Capped(ctx, cid)
+    local capped = type(ctx.run) == 'table' and ctx.run.liveCapped or nil
+    return type(capped) == 'table' and capped[cid] == true
+end
+
 -- A detain or a booking: the shared line once per suspect, weighted by his share (0 = an AFK catch: no line).
 local function Line(ctx, st, id, ev)
     if type(ev.cid) ~= 'string' or st.lines[id][ev.cid] ~= nil then return true end
     local weight = U.clamp(Num(ev.share, 1), 0, 1)
+    if Capped(ctx, ev.cid) then weight = 0 end
     st.lines[id][ev.cid] = weight
     if weight > 0 then
         ctx.award(id, { weight = weight })
@@ -214,7 +221,8 @@ local function Line(ctx, st, id, ev)
 end
 
 -- Config.FeatureRewards.surrender: the officer who talked the suspect down (an officer of this run, never
--- the suspect), once per run and suspect. A suspect who gave himself up by his own command pays nobody.
+-- the suspect), once per run and suspect. A suspect who gave himself up by his own command pays nobody. The detain
+-- only notes it (NoteTalkDown); the pay waits for the run's end (PayTalkDowns).
 local function PayTalkDown(run, suspectCid, by)
     local FR = CP.FeatureRewards
     if not (FR and FR.enabled and FR.enabled('surrender')) or type(run) ~= 'table' or run.test then return false end
@@ -223,6 +231,8 @@ local function PayTalkDown(run, suspectCid, by)
     local p = run.participants[by]
     local cid = type(p) == 'table' and p.citizenid or nil
     if type(cid) ~= 'string' or cid == suspectCid then return false end
+    -- a flagged officer (held for review) or one who abandoned the run: no pay
+    if p.flagged ~= nil or p.result == 'abandoned' then return false end
     -- an officer of the run shares a connection or PC with a suspect (rs_linked_accounts): no pay
     local AC = CP.AntiCheat
     if AC and AC.flaggedWith then
@@ -232,6 +242,25 @@ local function PayTalkDown(run, suspectCid, by)
     return FR.payLater('surrender', cid, { key = ('%s:%s'):format(tostring(run.id), suspectCid) })
 end
 
+local function NoteTalkDown(run, suspectCid, by)
+    by = math.tointeger(tonumber(by))
+    if type(run) ~= 'table' or run.test or type(suspectCid) ~= 'string' or not by or by <= 0 then return false end
+    run.talkDowns = run.talkDowns or {}
+    if run.talkDowns[suspectCid] == nil then run.talkDowns[suspectCid] = by end
+    return true
+end
+
+-- run:ended: the noted talk-downs pay only when the case was played to its end (completed or failed, never an
+-- abandoned, cancelled or voided run) and the run is not flagged.
+local function PayTalkDowns(run, state)
+    if type(run) ~= 'table' or type(run.talkDowns) ~= 'table' then return end
+    local downs = run.talkDowns
+    run.talkDowns = nil
+    if (state ~= 'completed' and state ~= 'failed') or run.flagged ~= nil then return end
+    for suspectCid, by in pairs(downs) do PayTalkDown(run, suspectCid, by) end
+end
+CP.Hooks.on('run:ended', PayTalkDowns)
+
 -- A detain of a suspect who surrendered and was not hit since (CP.Opponents.peaceful): the shared
 -- peaceful_arrest line, weighted by his share, and a timeline line naming who talked him down.
 local function Peaceful(ctx, st, ev)
@@ -240,11 +269,11 @@ local function Peaceful(ctx, st, ev)
     if not (O and O.peaceful) then return end
     local ok, by = O.peaceful(ctx.run, ev.cid)
     local weight = U.clamp(Num(ev.share, 1), 0, 1)
-    if not ok or weight <= 0 then return end
+    if not ok or weight <= 0 or Capped(ctx, ev.cid) then return end
     st.lines.peaceful_arrest[ev.cid] = weight
     ctx.award('peaceful_arrest', { weight = weight })
     if O.timeline then O.timeline(ctx.run, { what = 'peaceful_arrest', label = ev.label, by = by }) end
-    PayTalkDown(ctx.run, ev.cid, by)
+    NoteTalkDown(ctx.run, ev.cid, by)
 end
 
 local function OnEvent(ctx, src, ev)

@@ -262,6 +262,21 @@ do
     H.eq(gone, 0, 'an officer reached the scene: no row is gone')
     H.eq(opp.pairFlags, 1, 'then the pair-repeat check')
 
+    -- Z8B: a suspect already at maxCatchesPerSuspectDay in a mixed crew: noted at the open, never a scored pair
+    opp.dayCount = { A = 2 }
+    local runC = Run('V14-C')
+    CP.Hooks.fire('run:created', runC)
+    H.ok(runC.liveCapped and runC.liveCapped.A == true and not runC.liveCapped.B, 'Z8B: the capped suspect is noted')
+    opp.closeOutcomes = { A = 'booked', B = 'booked' }
+    CP.Hooks.fire('run:ended', runC, 'completed', 'completed')
+    local scoredA, scoredB = 0, 0
+    for _, r in ipairs(opp.rows) do
+        if r.scored and r.suspect == 'A' then scoredA = scoredA + 1 end
+        if r.scored and r.suspect == 'B' then scoredB = scoredB + 1 end
+    end
+    H.ok(scoredA == 0 and scoredB == 2, 'Z8B: the capped suspect scores no pair, the other does')
+    opp.dayCount = {}
+
     -- nobody arrived: every row is gone (never counted by the caps)
     local run2 = Run('V14-2')
     run2.participants[1].arrived = false

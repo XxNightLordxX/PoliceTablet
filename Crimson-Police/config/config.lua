@@ -2295,7 +2295,7 @@ Config.FeatureRewards = {
         items = {},                  -- items for a fair case (see the list shape above)
     },
     -- The officer who talked a live-case suspect down (Talk them down), paid once per suspect when the peaceful
-    -- arrest counts (the suspect was not AFK)
+    -- arrest counts (the suspect was not AFK), at the end of a case played out (not abandoned, cancelled or flagged)
     surrender = {
         enabled = false,             -- true = the officer who talked a suspect down is paid
         account = 'bank',            -- 'bank' | 'cash' | 'item'

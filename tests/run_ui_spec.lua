@@ -178,6 +178,9 @@ do
     for _, reason in ipairs({ 'quit', 'completed' }) do
         H.ok(all['run.ended_' .. reason] ~= nil, 'run.ended_' .. reason .. ' exists (mock result toast)')
     end
+    -- Z8B: 'cancelled' also ends admin End run, End test and a voided volunteer case, so the toast is generic
+    H.ok(all['run.ended_cancelled'] and not all['run.ended_cancelled']:find('Cross%-Department'),
+        'run.ended_cancelled does not name only the Cross-Department Mission')
     for _, mod in ipairs({ 'armored_hostiles', 'time_crunch', 'radio_silence' }) do
         H.ok(all['modifier.' .. mod] ~= nil, 'modifier label exists: ' .. mod)
     end

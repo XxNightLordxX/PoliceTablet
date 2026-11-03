@@ -1,7 +1,7 @@
 -- CP.Profile (modules/profile): bio, pictures, look, call mute, profile reports, moderation and commendations.
 
 local H = dofile('tests/harness.lua')
-H.boot({ side = 'server' })
+H.boot({ side = 'server', realLocale = true })
 Config.Debug = true   -- run every CP.log format string too
 
 local realPrint = print
@@ -367,8 +367,11 @@ do
         'an officer cannot report themselves')
     H.eq(select(2, Act('server:profile:report', 12, { citizenid = 'P1', reason = 'rude' })), 'err.invalid_payload',
         'a reason from the list')
-    H.eq(select(2, Act('server:profile:report', 12, { citizenid = 'P1', reason = 'bio', note = ('x'):rep(141) })),
-        'err.report_too_long', 'the note is at most 140 characters')
+    -- Z8B: the refusal names the configured length (reports.reasonMax), filled in, never a fixed 140
+    local tooLong = select(2,
+        Act('server:profile:report', 12, { citizenid = 'P1', reason = 'bio', note = ('x'):rep(141) }))
+    H.eq(tooLong, CP.L('err.report_too_long', { max = 140 }), 'the note is at most 140 characters')
+    H.ok(tooLong:find('140', 1, true) and not tooLong:find('{', 1, true), 'Z8B: the length comes from the config')
     local ok = Act('server:profile:report', 12, { citizenid = 'P1', reason = 'bio', note = 'Rude bio' })
     H.eq(ok, true, 'a report is sent')
     H.eq(audits[#audits].action, 'profileReport', 'report audited')
@@ -465,7 +468,7 @@ do
     H.eq(H.sql('SELECT issuer_role, department FROM cp_commendations WHERE id = ?', { res.id })[1].issuer_role,
         'supervisor', 'issuer role')
     H.eq(select(2, Act('server:sup:commend', 21, { citizenid = 'P2', kind = 'valor', citation = good })),
-        'err.commend_recent', 'same officer, same kind within 7 days')
+        CP.L('err.commend_recent', { days = 7 }), 'same officer, same kind within 7 days (Z8B: the days filled in)')
     H.eq(Act('server:sup:commend', 21, { citizenid = 'P2', kind = 'teamwork', citation = good }), true, 'another kind')
     H.eq(Act('server:sup:commend', 21, { citizenid = 'P1', kind = 'teamwork', citation = good }), true, 'a third one')
     H.eq(select(2, Act('server:sup:commend', 21, { citizenid = 'P1', kind = 'valor', citation = good })),

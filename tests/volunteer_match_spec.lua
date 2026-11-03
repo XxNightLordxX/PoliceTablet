@@ -989,6 +989,34 @@ do
     CP.CrimTab = nil
 end
 
+-- Z8B: another run asks the volunteer while this run's Fits yields: this run does not ask him too (one hold each)
+do
+    Reset()
+    for _, v in ipairs(V.list()) do V.stop(v.src) end
+    Civilian(61, 'VMZ00061')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(61, RUNNER), 'Z8B: one volunteer joins')
+    local runB
+    selfBlockHook = function()
+        selfBlockHook = nil
+        runN = runN + 1
+        runB = {
+            id = 'vm-run-' .. runN,
+            state = 'accepted',
+            mission = WARRANT,
+            locationIndex = 1,
+            location = WARRANT.locations[1],
+            volunteer = { mode = 'players_when_available', role = 'runner', obj = 2 },
+        }
+        V.match(runB)   -- its asking runs now, inside run A's yield
+    end
+    local runA = NewRun()
+    selfBlockHook = nil
+    H.eq(#ClientEvents('client:volunteerAsk', 61), 1, 'Z8B: he is asked once, by the run that held him first')
+    if runB then Finish(runB, 'completed', 'completed') end
+    Finish(runA, 'completed', 'completed')
+end
+
 -- Z7: a yes whose check yields past the answer window: the match does not move on to the next volunteer meanwhile
 do
     Reset()

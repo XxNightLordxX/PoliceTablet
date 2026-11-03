@@ -102,6 +102,8 @@ function HH.register()
             end,
         },
         viewExtra = function() return { perDay = HH.perDay(), usedToday = HH.usedToday() } end,
+        -- the 'Your controls today' card (DC.mine): the count Allow checks (happy hours started today)
+        usedToday = function() return HH.usedToday() end,
     })
 end
 HH.register()

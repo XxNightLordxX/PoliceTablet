@@ -57,4 +57,40 @@ do
     H.eq(Status(item), 'held', 'a flagged row\'s forfeited items come back held, not pending')
 end
 
+do
+    -- Z8B: a paid row voided by a batch whose items ForfeitRows forfeited gets them back on the batch Undo
+    local paid = W.row({
+        citizenid = 'OFF00071',
+        points = 60,
+        cash = 100,
+        cashPaid = 100,
+        cashStatus = 'paid',
+        at = H.time - 2500,
+    })
+    local filter = { citizenid = 'OFF00071', allTime = true }
+    local pv = Data('admin:previewBulkVoid', 1, { filter = filter })
+    local ok, e = Act('server:admin:bulkVoid', 1, {
+        filter = filter,
+        reason = 'Bugged',
+        confirm = pv and pv.confirmWord,
+        previewToken = pv and pv.previewToken,
+        requestId = Rid(),
+    })
+    H.ok(ok == true and W.drain(), 'Z8B: the second bulk void runs: ' .. tostring(e))
+    local item = Item(paid, 'forfeited')
+    ok, e = Act('server:admin:restoreBatch', 1, { batchId = e and e.jobId, reason = 'Undo', requestId = Rid() })
+    H.ok(ok == true and W.drain(), 'Z8B: the second batch is restored: ' .. tostring(e))
+    H.ok(Status(item) == 'pending' or Status(item) == 'given',
+        'Z8B: the paid row\'s forfeited items come back: ' .. tostring(Status(item)))
+end
+
+do
+    -- Z8B: an admin's Flag for review holds the row's pending item rewards until the Review Queue decides
+    local row = W.row({ citizenid = 'OFF00071', points = 60, at = H.time - 2000 })
+    local item = Item(row, 'pending')
+    local ok, e = Act('server:admin:flagRow', 1, { rowId = row, reason = 'look again', requestId = Rid() })
+    H.ok(ok == true, 'Z8B: the row is flagged by hand: ' .. tostring(e))
+    H.eq(Status(item), 'held', 'Z8B: its pending item reward is held')
+end
+
 return H

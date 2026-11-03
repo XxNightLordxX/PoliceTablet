@@ -662,7 +662,9 @@ local function RestoreBatch(job, keys)
                     -- held item rewards of the rows that are not flagged are given again (CP.Rewards listens to
                     -- row:approved); Rewards.undoForfeit keeps a flagged row's items held
                     FireRows('row:approved', approved)
-                    FireRows('row:forfeitUndone', unforfeit)
+                    -- every restored row: ForfeitRows also forfeits the items of a paid or no-cash voided row
+                    -- (Rewards.undoForfeit changes nothing on a row without forfeited items)
+                    FireRows('row:forfeitUndone', restore)
                     for _, id in ipairs(unforfeit) do release[#release + 1] = id end
                     for _, id in ipairs(release) do Call('Cash', 'release', id) end
                 end
@@ -1600,6 +1602,8 @@ if Kit and Kit.action then
             { math.floor(Num(row.id, 0)) })
         if not okK then return false, errK end
         Call('Scoring', 'onRowFlagged', row.id)
+        -- its item rewards not given yet wait (held) for the Review Queue, as on a run flagged at its end
+        Call('Rewards', 'holdRow', row.id)
         ctx.audit('flagManual', ('#%s %s'):format(tostring(row.id), tostring(row.citizenid)), row.state, 'flagged',
             { category = 'flags' })
         Kit.notify(row.citizenid, 'warning', 'admin.notice.run_flagged',
