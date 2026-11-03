@@ -595,6 +595,8 @@ do
     H.eq(#acFlags, 1, 'one officer-conduct flag')
     H.eq(acFlags[1] and acFlags[1].src, 2, 'on the officer who shares a connection or PC')
     H.eq(acFlags[1] and acFlags[1].reason, 'rs_linked_accounts', 'rs_linked_accounts (his points wait for review)')
+    H.ok(tostring(acFlags[1] and acFlags[1].detail):find('shared ip', 1, true) ~= nil,
+        'Z7: the flag detail lists the shared kinds: ' .. tostring(acFlags[1] and acFlags[1].detail))
     linked[2] = nil
 
     -- no-show: a staff note besides the strike
@@ -968,6 +970,38 @@ do
     CP.CrimTab = nil
 end
 
+-- Z7: a yes whose check yields past the answer window: the match does not move on to the next volunteer meanwhile
+do
+    Reset()
+    for _, v in ipairs(V.list()) do V.stop(v.src) end
+    Civilian(58, 'VMZ00058')
+    Civilian(59, 'VMZ00059')
+    H.clockMs = H.clockMs + 2000
+    H.ok(V.join(58, RUNNER) and V.join(59, RUNNER), 'Z7: two volunteers join')
+    local run = NewRun()
+    local first, other = 58, 59
+    if not LastAsk(58) then first, other = 59, 58 end
+    local token = LastAsk(first)
+    H.ok(token ~= nil, 'Z7: one of them is asked')
+    selfBlockHook = function()
+        selfBlockHook = nil
+        H.clockMs = H.clockMs + 600000
+        V._matchTick()
+    end
+    local nOpened = #opened
+    Answer(first, token, true)
+    H.step(0)
+    H.step(0)
+    selfBlockHook = nil
+    H.eq(LastAsk(other), nil, 'Z7: the second volunteer is not asked while the yes is checked')
+    H.eq(#opened, nOpened + 1, 'Z7: the case opens once')
+    local spec = opened[#opened] and opened[#opened].spec
+    H.eq(spec and spec.members[1], first == 58 and 'VMZ00058' or 'VMZ00059', 'Z7: for the volunteer who said yes')
+    H.advance(4000, 1000)
+    H.eq(run.realSuspect, 'volunteer', 'Z7: he keeps the case (no NPC take-over)')
+    Finish(run, 'completed', 'completed')
+end
+
 -- ============================================================================
 --                    STEP Z5: CATCHES, LEAVES, keep_earned
 -- ============================================================================
@@ -1039,6 +1073,24 @@ do
     H.advance(2000, 1000)
     H.eq(V.strikes('VMZ00053'), 1, 'Z5: a leave under onLeave caught is a strike')
     Finish(run, 'completed', 'completed')
+
+    -- Z7: a leave settled in the same call that ends the run (Watch never sees it) is still a dropout
+    run = Fresh(56, 'VMZ00056')
+    recs.VMZ00056.state, recs.VMZ00056.leaveRule = 'lost', 'escaped'
+    recorded = {}
+    closeOut = { {}, { suspects = recs } }  -- the case Opp.close made final (a second call answers it again)
+    Finish(run, 'failed', 'objective_failed')
+    H.eq(V.strikes('VMZ00056'), 1, 'Z7: a leave that ends the run is a strike')
+    H.eq(recorded[1] and recorded[1].dropout, 'left', 'Z7: History: left the case, never a clean got away')
+    -- shipped onLeave 'void': a drop within the grace made final by the case close
+    run = Fresh(57, 'VMZ00057')
+    recorded = {}
+    recs.VMZ00057.state, recs.VMZ00057.leaveRule = 'left', 'left'
+    closeOut = { {}, { suspects = recs } }
+    Finish(run, 'completed', 'completed')
+    H.eq(V.strikes('VMZ00057'), 1, 'Z7: a drop made final at the close is a strike')
+    H.eq(recorded[1] and recorded[1].dropout, 'left', 'Z7: History: left the case')
+    closeOut = nil
 
     -- a free cancel in the grace: History never says Gave up (strike)
     Reset()

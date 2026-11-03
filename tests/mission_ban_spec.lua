@@ -187,6 +187,23 @@ H.eq(ok, true, 'an admin lifts it')
 MC.controls.missionBan.on = false
 Config.Permissions.supervisor.missionControls = false
 
+-- Z7: an admin on duty in another department works with the target's department switch and hours, not his own
+do
+    Config.Permissions.supervisor.missionControls = true
+    local savedS, savedF = Config.Departments.sast.missionControls, Config.Departments.fib.missionControls
+    Config.Departments.sast.missionControls = { missionBan = { on = true, min = 1, max = 24 } }
+    Config.Departments.fib.missionControls = { missionBan = { on = false, min = 1, max = 4 } }
+    local v = MB.supView(3, 'OFF00007')
+    H.ok(v ~= nil and v.max == 24, 'Z7: the FIB admin is offered the SAST officer\'s ban with SAST hours')
+    H.clockMs = H.clockMs + 4000
+    local okA, errA = Ban(3, 'OFF00007', 10)
+    H.ok(okA == true, 'Z7: and bans him for 10 hours (above FIB\'s max): ' .. tostring(errA))
+    H.clockMs = H.clockMs + 4000
+    W.act('server:admin:liftMissionBan', 1, { citizenid = 'OFF00007', reason = 'x' })
+    Config.Departments.sast.missionControls, Config.Departments.fib.missionControls = savedS, savedF
+    Config.Permissions.supervisor.missionControls = false
+end
+
 -- step Z5: Clear cooldown and Add run time (Config.MissionControls per-day caps) take the same one-at-a-time lock
 do
     local f = io.open('Crimson-Police/modules/livectl/server.lua', 'r')

@@ -1099,8 +1099,8 @@ Performance; all as shipped change nothing):
 - `Config.Performance.markerRange` (try `60`): caps how far away the per-frame objective markers draw.
 - `Config.Performance.pushGapMs` (try `250`): merges a burst of tablet updates into one per kind and player.
 - `Config.Performance.latentAboveBytes` (try `65536`): sends big answers in the background.
-- `Config.AdminUi.windowRows`: draws only the rows in view of a long scrolling list (try it if the Leaderboards board
-  or a Settings search feels slow on a big server).
+- `Config.AdminUi.windowRows`: draws only the rows in view of a long scrolling list in every tablet UI (try it if the
+  Leaderboards board or a Settings search feels slow on a big server).
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.
@@ -1957,7 +1957,7 @@ so saved links and notifications still open the right screen), and a group with 
 | `Config.AdminUi.moneyScreen` | `false` | **Mission pay** (Payouts) and **Payments made** (Payments) become one **Money** screen with two tabs. A Home tile, a Needs attention line, the Leaderboards stuck payments link or a landing of `'payouts'` opens the right tab. |
 | `Config.AdminUi.pageSize` | `0` | Rows per page (10-200, for example 50) on the Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases. The server sends one page at a time. `0` keeps each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case at once). The case filters on Player suspects work on the page shown. |
 | `Config.AdminUi.oneRequest` | `false` | Payments made gets its totals and Leaderboards gets its flagged runs in the same request as the list, so each screen opens with one request instead of two. The screens show the same data. |
-| `Config.AdminUi.windowRows` | `false` | A scrolling table of more than 100 rows (such as the Leaderboards board) draws only the rows in view and the next ones as you scroll, and the Settings search results start with 60 rows and add more as you reach the end. The rows and their order are the same; `false` draws every row at once. |
+| `Config.AdminUi.windowRows` | `false` | In every tablet UI, a scrolling table of more than 100 rows (such as the Admin UI's Leaderboards board, the officer Leaderboard or the supervisor Department Report) draws only the rows in view and the next ones as you scroll, and the Settings search results start with 60 rows and add more as you reach the end. The rows and their order are the same; `false` draws every row at once. |
 | `Config.AdminUi.foldAdvanced` | `false` | The department and mission desk dialogs (Admin UI -> System) show their everyday fields open and fold the rest (colours, logo, officer options; box size, rotation, prop) under a **More options** button, and so does **Void runs…** (Officers, Leaderboards, an operation's history: the mission id, Include awards and Strike; one you set stays open). The Supervisor UI's **Mission controls** folds the rarely changed controls in each group (abandon cooldown, no repeat, start, ready check, time limit, idle check, unit size, staff call wait, boards, review rules, the happy hour and twist multipliers) the same way; a control that is set always stays open. Each screen remembers on that computer whether More was left open, and so does the Mission Builder's **More settings** of a block. Only the layout changes; `false` shows everything open as before. |
 
 ### 9.4 The missions

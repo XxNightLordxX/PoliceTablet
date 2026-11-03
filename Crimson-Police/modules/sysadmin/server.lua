@@ -844,6 +844,14 @@ local function Prune(keepName)
     return removed
 end
 
+-- A backup that failed half way: every part and file copy it wrote (and the one being written) is removed, since
+-- no manifest points to them yet and RemoveBackup finds files only through the manifest.
+local function Cleanup(fs, manifest, extra)
+    for _, part in ipairs(manifest.parts) do pcall(fs.remove, BackupPath(part)) end
+    for _, f in ipairs(manifest.files) do pcall(fs.remove, BackupPath(f.file)) end
+    if extra then pcall(fs.remove, BackupPath(extra)) end
+end
+
 -- One backup of every table and file now. kind: 'manual', 'daily' or 'prerestore'. opts.keep: a backup keep N does not
 -- remove this time (the one a restore puts back next). ok, BackupView | false, errKey.
 function Sys.backup(src, kind, opts)
@@ -879,6 +887,7 @@ function Sys.backup(src, kind, opts)
                 local part = ('%s.t.%s.json'):format(name, tname)
                 local okW, bytes = WriteRows(BackupPath(part), rows)
                 if not okW then
+                    Cleanup(fs, manifest, part)
                     RemoveBackup(name)
                     return false, 'err.backup_write'
                 end
@@ -893,14 +902,20 @@ function Sys.backup(src, kind, opts)
         local data = LoadResourceFile(CP.resource, path)
         if type(data) == 'string' and data ~= '' then
             local file = ('%s.f%d.bin'):format(name, i)
-            local okW = pcall(fs.write, BackupPath(file), data)
-            if okW then
-                manifest.files[#manifest.files + 1] = { path = path, file = file, bytes = #data }
-                manifest.bytes = manifest.bytes + #data
+            -- FS.write answers nil, err on a failed or cut short copy (it does not raise)
+            local okP, res = pcall(fs.write, BackupPath(file), data)
+            if not (okP and res == true) then
+                CP.err(TAG, 'backup %s: copying %s failed: %s', name, path, tostring(res))
+                Cleanup(fs, manifest, file)
+                RemoveBackup(name)
+                return false, 'err.backup_write'
             end
+            manifest.files[#manifest.files + 1] = { path = path, file = file, bytes = #data }
+            manifest.bytes = manifest.bytes + #data
         end
     end
     if not ReplaceJson(BackupPath(name .. '.manifest.json'), manifest) then
+        Cleanup(fs, manifest)
         RemoveBackup(name)
         return false, 'err.backup_write'
     end

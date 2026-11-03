@@ -3798,6 +3798,18 @@ do
         ('an answer found in the older generation is moved back and outlives the next swap (%d, %d parses)'):format(p1,
             p2))
     H.ok(p3 == 1 and r3 == '2', 'one not read again is dropped with its generation (memory stays bounded)')
+    -- Z7: jsonCacheEntries = 0 keeps none: what was kept before the change is no longer used and is dropped
+    JM.cap = 0
+    local p4, r4 = Parses(function()
+        local r
+        for _ = 1, 300 do r = X('{"a":1}') end
+        return r
+    end)
+    H.ok(p4 >= 1 and r4 == '1',
+        'Z7: cap 0: an answer kept before is no longer served from the memo (within 256 lookups)')
+    JM.cap = 4
+    local p5 = Parses(function() return X('{"a":1}') end)
+    H.eq(p5, 1, 'Z7: and the memo was emptied (nothing kept comes back once it is on again)')
 
     d:exec(
         'CREATE TABLE cp_j (id INT AUTO_INCREMENT PRIMARY KEY, citizenid VARCHAR(16) NOT NULL, breakdown JSON NULL, INDEX idx_cid (citizenid))')

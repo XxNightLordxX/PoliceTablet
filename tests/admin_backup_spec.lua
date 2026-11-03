@@ -438,4 +438,35 @@ do
     H.eq(Part('cp_empty_test'), '[]', 'a table with no rows is []')
 end
 
+-- Z7: a file copy or a table part that fails (FS.write answers nil, err: a full disk) fails the backup, and every
+-- part and file copy it already wrote is removed (no manifest points to them yet)
+do
+    local fs = CP.Storage.MemSQL.fs
+    local realWrite = fs.write
+    local dir = GetResourcePath() .. '/saves/_backups'
+    local function Names()
+        local out = {}
+        for _, n in ipairs(fs.list(dir) or {}) do out[#out + 1] = n end
+        table.sort(out)
+        return table.concat(out, '|')
+    end
+    files['missions/custom/my_mission.lua'] = 'return { id = "my_mission", version = 1 }'
+    for _, failOn in ipairs({ '%.f%d+%.bin$', '%.t%.cp_audit%.json$' }) do
+        local before = Names()
+        fs.write = function(path, data)
+            if path:find(failOn) then
+                realWrite(path, data:sub(1, 3))  -- cut short
+                return nil, 'No space left on device'
+            end
+            return realWrite(path, data)
+        end
+        H.time = H.time + 2
+        local ok, e = Sys.backup(1, 'manual')
+        fs.write = realWrite
+        H.ok(ok == false and e == 'err.backup_write',
+            'Z7: a failed write fails the backup (' .. failOn .. '): ' .. tostring(e))
+        H.eq(Names(), before, 'Z7: no part or file copy of the failed backup is left behind (' .. failOn .. ')')
+    end
+end
+
 return H

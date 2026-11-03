@@ -139,10 +139,10 @@ end
 
 local function DC() return CP.DeptControls end
 
-local function CanUse(src)
+local function CanUse(src, dept)
     local dc = DC()
     if not (dc and dc.canChange) then return false, 'err.module_unavailable' end
-    return dc.canChange(src, KEY, nil)
+    return dc.canChange(src, KEY, dept)
 end
 
 local function Register()
@@ -161,6 +161,30 @@ Register()
 MB.register = Register
 
 local function IsAdmin(src) return CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true end
+
+-- The officer's department: his Qbox job while online, else cp_officers.department.
+local function DeptOf(citizenid)
+    local okS, src = Call('Qbx', 'getByCitizenId', citizenid)
+    src = okS and math.tointeger(tonumber(src) or 0) or 0
+    if src and src > 0 then
+        local _, info = Call('Qbx', 'getInfo', src)
+        if type(info) == 'table' and type(info.job) == 'table' then
+            local _, dept = Call('Access', 'departmentForJob', info.job.name)
+            if type(dept) == 'string' then return dept end
+        end
+    end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local ok, d = pcall(MySQL.scalar.await, 'SELECT department FROM cp_officers WHERE citizenid = ? LIMIT 1',
+        { citizenid })
+    if ok and type(d) == 'string' and d ~= '' then return d end
+    return nil
+end
+
+-- CanUse for one officer: an admin works in the officer's department (its switch and hours), not his own.
+local function CanUseFor(src, cid)
+    local d = cid and IsAdmin(src) and DeptOf(cid) or nil
+    return CanUse(src, d)
+end
 
 -- Mission bans that player set today (the 'Your controls today' card).
 function MB.usedToday(src)
@@ -194,7 +218,7 @@ end
 function MB.supView(src, citizenid)
     local n = math.tointeger(tonumber(src) or 0)
     if not n or n <= 0 then return nil end
-    local ok, _, _, dept = CanUse(n)
+    local ok, _, _, dept = CanUseFor(n, Cid(citizenid))
     if not ok or Kit.isSelf(n, citizenid) ~= false then return nil end
     local admin = IsAdmin(n)
     local lo, hi = HoursRange(dept)
@@ -234,7 +258,7 @@ end
 Kit.supAction('server:sup:missionBan', 'missionControls', function(ctx)
     local cid = Cid(ctx.payload.citizenid)
     if not cid then return false, 'err.invalid_payload' end
-    local _, _, _, dept = CanUse(ctx.src)
+    local _, _, _, dept = CanUseFor(ctx.src, cid)
     local lo, hi = HoursRange(dept)
     local hours = math.tointeger(tonumber(ctx.payload.hours) or 0)
     if not lo or not hours or hours < lo or hours > hi then return false, 'err.mission_ban_hours' end
@@ -282,7 +306,7 @@ end, {
     self = OfficerTarget,
     targetRate = { 1, 3000 },
     category = 'flags',
-    permission = function(src) return CanUse(src) end,
+    permission = function(src, payload) return CanUseFor(src, type(payload) == 'table' and Cid(payload.citizenid)) end,
 })
 
 -- Lifts a ban in force early: the supervisor who set it, or an admin.
@@ -307,7 +331,7 @@ Kit.supAction('server:sup:liftMissionBan', 'missionControls', function(ctx) retu
     self = OfficerTarget,
     targetRate = { 1, 3000 },
     category = 'flags',
-    permission = function(src) return CanUse(src) end,
+    permission = function(src, payload) return CanUseFor(src, type(payload) == 'table' and Cid(payload.citizenid)) end,
 })
 
 -- ============================================================================

@@ -407,3 +407,20 @@ names the change it came with.
   before the sign-off: Sign off still works. (FX1)
 - [ ] Errors read with a next step: delete the newest backup ("Delete an older backup instead."), void a run that is
   already voided ("Use Restore on it to undo the void."), import a file that is not a settings export.
+- [ ] `Config.Rewards.enabled = true`: a flagged run with held item rewards is voided by Void runs, then the batch is
+  restored: the items stay held while the run is in the Review Queue and come only once a supervisor approves it. (Z7)
+- [ ] Real suspects with `onLeave = 'escaped'`: an engaged volunteer in a flee-and-arrest logs out and the run fails at
+  once: his criminal tablet History shows "Left the case", he gets a strike and no feature pay. Shipped `'void'`: a
+  volunteer who disconnects just before the run ends gets the same strike. (Z7)
+- [ ] Two volunteers listed: the first says yes just as his window runs out: he gets the case and the second
+  volunteer is not asked. The rs_linked_accounts flag detail names what is shared (for example "shared ip"). (Z7)
+- [ ] Admin UI -> System -> Backups with a folder that cannot be written (or a full disk): Backup now fails with the
+  write error and leaves no new files in saves/_backups. (Z7)
+- [ ] `allowManualCash = true`: a manual cash payment sent during a maintenance lock shows Pending, and the officer is
+  paid when the lock ends or at his next login. (Z7)
+- [ ] `Config.Cash.dailyCap > 0`, society mode: Pay the rest on a capped suspect reward paid as a money item gives the
+  money item and takes nothing from a department account. (Z7)
+- [ ] An admin on duty as FIB opens the SAST Department Report while only SAST has Mission ban on: the button shows
+  with SAST's hour range, and the ban works. (Z7)
+- [ ] Files mode, Settings -> Database -> jsonCacheEntries 0: resmon memory drops after the next badge check and the
+  lookups still answer the same. (Z7)

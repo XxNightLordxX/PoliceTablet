@@ -87,12 +87,12 @@ end
 local function Opp(fn, ...)
     local O = CP.Opponents
     if not (O and type(O[fn]) == 'function') then return nil end
-    local ok, a, b, c = pcall(O[fn], ...)
-    if not ok then
-        CP.err(TAG, 'CP.Opponents.%s failed: %s', fn, tostring(a))
+    local r = table.pack(pcall(O[fn], ...))
+    if not r[1] then
+        CP.err(TAG, 'CP.Opponents.%s failed: %s', fn, tostring(r[2]))
         return nil
     end
-    return a, b, c
+    return table.unpack(r, 2, r.n)
 end
 
 local function ActiveSrcs(run)
@@ -317,6 +317,12 @@ end
 local function Accept(m)
     local cid, src = m.cid, m.src
     local ok, why = Fits(m, cid, src)
+    -- Fits may yield: the match may have moved past him meanwhile (it asks the next volunteer itself then)
+    if m.cid ~= cid or m.phase ~= 'asking' then
+        Note(src, 'error', 'volunteer.ask.not_now')
+        CP.log(TAG, 'run %s: %s said yes after the match moved on', m.runId, cid)
+        return
+    end
     if not ok or m.run.state == 'ended' or matches[m.runId] ~= m then
         Note(src, 'error', 'volunteer.ask.not_now')
         CP.log(TAG, 'run %s: %s said yes but can no longer play it (%s)', m.runId, cid, tostring(why))
@@ -369,7 +375,9 @@ end
 
 local function Watch(m, now)
     if m.phase == 'asking' then
-        if not m.cid then return end
+        if not m.cid or m.token == nil then
+            return
+        end -- token nil: his yes is being checked (Accept)
         if now > m.deadline + LATE_MS or not (V.isListed and V.isListed(m.cid)) then
             TriggerClientEvent(CP.e('client:volunteerAskClose'), m.src, m.token)
             byCid[m.cid] = nil
@@ -869,6 +877,20 @@ CP.Hooks.on('participant:joined', function(run, src)
     if CP.NpcCombat and CP.NpcCombat.dropFor then pcall(CP.NpcCombat.dropFor, run, src, 'volunteer') end
 end)
 
+-- A free volunteer whose leave was settled in the same call that ended the run (an onLeave 'escaped' leave that
+-- failed the objective, or a drop within the grace that Opp.close made final): Watch never saw it, so the dropout
+-- with a strike and no pay is applied here, before the pair rows, History and pay read m.why.
+local function LateLeave(m, run)
+    if m.why ~= nil or m.leftByRule or not CANCEL_PHASES[m.phase] then return end
+    local _, case = Opp('close', run)
+    local rec = type(case) == 'table' and type(case.suspects) == 'table' and case.suspects[m.cid] or nil
+    if not (type(rec) == 'table' and rec.leaveRule) then return end
+    if rec.state ~= 'lost' and rec.state ~= 'detained' and rec.state ~= 'left' then return end
+    m.leftByRule, m.why, m.struck = true, 'left', true
+    if V.strike then V.strike(m.cid, 'left') end
+    CP.log(TAG, 'run %s: %s left the case as it ended (onLeave %s)', m.runId, m.cid, tostring(rec.leaveRule))
+end
+
 -- The release: a pop-up still open closes, a volunteer who played the suspect is told he is free to go; a case
 -- that opened (a yes came) writes its pair rows, keeps its last phase for staff and sends volunteerEnded.
 CP.Hooks.on('run:ended', function(run, state, reason)
@@ -876,6 +898,8 @@ CP.Hooks.on('run:ended', function(run, state, reason)
     if not m then return end
     matches[run.id] = nil
     if m.yesAt then
+        local okL, errL = pcall(LateLeave, m, run)
+        if not okL then CP.err(TAG, 'the leave check of run %s failed: %s', m.runId, tostring(errL)) end
         local ok, err = pcall(RecordPairs, m, run, state)
         if not ok then CP.err(TAG, 'the pair rows of run %s failed: %s', m.runId, tostring(err)) end
         if type(m.case) == 'table' and type(m.case.volunteer) == 'table' then

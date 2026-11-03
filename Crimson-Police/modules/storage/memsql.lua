@@ -1290,9 +1290,15 @@ do
         cap = tonumber(cap) or 100000
         return math.floor(cap / 2)
     end
+    -- Config.Database.jsonCacheEntries 0 (or 1): keep none, and drop what was kept before the change. A lookup
+    -- reads the size once every 256 lookups (a miss reads it at once), so the hot path stays one table read.
+    local getsLeft = 0
+    local function DropAll()
+        if next(JCUR) ~= nil or next(JPREV) ~= nil then JCUR, JPREV, jmemoN = {}, {}, 0 end
+    end
     JmemoPut = function(fnKey, path, text, value)
         local half = Half()
-        if half < 1 then return end
+        if half < 1 then return DropAll() end
         if jmemoN >= half then
             JPREV, JCUR, jmemoN = JCUR, {}, 0
             JM.swaps = JM.swaps + 1
@@ -1304,6 +1310,11 @@ do
         byPath[text] = value
     end
     JmemoGet = function(fnKey, path, text)
+        getsLeft = getsLeft - 1
+        if getsLeft < 0 then
+            getsLeft = 255
+            if Half() < 1 then return DropAll() end
+        end
         local key = fnKey .. path
         local byPath = JCUR[key]
         local v = byPath and byPath[text]

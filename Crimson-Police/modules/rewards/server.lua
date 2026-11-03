@@ -1233,9 +1233,9 @@ function Rewards.undoForfeit(rowId)
     rowId = ToId(rowId)
     if not rowId then return 0 end
     Db()
-    local run = Query('SELECT voided FROM cp_mission_runs WHERE id = ?', { rowId })
+    local run = Query('SELECT voided, flagged FROM cp_mission_runs WHERE id = ?', { rowId })
     if not run or not run[1] then return 0 end
-    local status = U.truthy(run[1].voided) and 'held' or 'pending'
+    local status = (U.truthy(run[1].voided) or U.truthy(run[1].flagged)) and 'held' or 'pending'
     local rows = Query([[SELECT id, citizenid FROM cp_item_rewards WHERE row_id = ? AND status = 'forfeited'
         ORDER BY id]], { rowId }) or {}
     local n, cids = 0, {}

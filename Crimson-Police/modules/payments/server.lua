@@ -1066,7 +1066,15 @@ Kit.action('server:admin:manualCash', 'payments', function(ctx)
         Update('DELETE FROM cp_mission_runs WHERE id = ? AND cash_status = \'none\'', { id })
         return false, 'err.audit_failed'
     end
-    local status = CP.Cash.pay(id) or 'pending'
+    local status = CP.Cash.pay(id)
+    if not status then
+        -- not paid now (maintenance lock, lock wait, in flight): 'pending' so the login, start and end-of-maintenance
+        -- sweeps pay it; they skip manual award rows still 'none'
+        status = 'pending'
+        Update([[UPDATE cp_mission_runs SET cash_status = 'pending',
+            breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.cash.status', 'pending'), breakdown)
+            WHERE id = ? AND cash_status = 'none']], { id })
+    end
     Touched(ctx, p.citizenid)
     return true, { id = id, status = status, amount = amount }
 end, {

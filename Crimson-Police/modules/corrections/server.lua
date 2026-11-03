@@ -617,10 +617,12 @@ local function RestoreBatch(job, keys)
             )
             if not rows then return false, 'select failed' end
             if #rows > 0 then
-                local restore, unforfeit, release = {}, {}, {}
+                local restore, unforfeit, release, approved = {}, {}, {}, {}
                 for _, r in ipairs(rows) do
                     local id = math.floor(Num(r.id, 0))
                     restore[#restore + 1] = id
+                    -- a row still flagged waits for the Review Queue: its held item rewards stay held
+                    if not U.truthy(r.flagged) then approved[#approved + 1] = id end
                     if t == 'L' and r.cash_status == 'forfeited' and math.floor(Num(r.cash_paid, 0)) == 0
                         and (r.before_void == 'held' or r.before_void == 'pending') then
                         unforfeit[#unforfeit + 1] = id
@@ -657,8 +659,9 @@ local function RestoreBatch(job, keys)
                 BatchAudit(job, 'restoreRow', rows, 'restored')
                 if t == 'L' then
                     FireRows('row:restored', restore)
-                    -- held item rewards of the rows are given again (CP.Rewards listens to row:approved)
-                    FireRows('row:approved', restore)
+                    -- held item rewards of the rows that are not flagged are given again (CP.Rewards listens to
+                    -- row:approved); Rewards.undoForfeit keeps a flagged row's items held
+                    FireRows('row:approved', approved)
                     FireRows('row:forfeitUndone', unforfeit)
                     for _, id in ipairs(unforfeit) do release[#release + 1] = id end
                     for _, id in ipairs(release) do Call('Cash', 'release', id) end

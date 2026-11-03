@@ -722,6 +722,31 @@ do
     addResult = false
     ok, e = Act('server:admin:payCapRest', 1, { rowId = id2, reason = 'x', confirm = '300', requestId = Rid() })
     H.ok(not ok and e == 'err.payment_refused' and RowOf(id2).bd.cash.restPaid == nil, 'refused by Qbox: claim undone')
+    -- Z7: a feature reward row (source 'server', paid as a money item): new money as a money item, even in society
+    -- mode, never a department withdraw nor a Qbox account named 'item'
+    Reset()
+    Config.Cash.source = 'society'
+    local itemGiven, savedFR = {}, CP.FeatureRewards
+    CP.FeatureRewards = {
+        giveMoneyItem = function(src, item, amount)
+            itemGiven[#itemGiven + 1] = { src = src, item = item, amount = amount }
+            return true
+        end,
+    }
+    local id3 = Row({
+        status = 'capped',
+        owed = 400,
+        paid = 100,
+        type = 'feature_reward',
+        cash = { source = 'server', account = 'item', moneyItem = 'black_money' },
+    })
+    ok, e = Act('server:admin:payCapRest', 1, { rowId = id3, reason = 'x', confirm = '300', requestId = Rid() })
+    CP.FeatureRewards = savedFR
+    Config.Cash.source = 'server'
+    H.ok(ok == true, 'Z7: the rest of a money item row is paid: ' .. tostring(e))
+    H.ok(#itemGiven == 1 and itemGiven[1].item == 'black_money' and itemGiven[1].amount == 300, 'Z7: as the money item')
+    H.eq(#Logged('withdraw'), 0, 'Z7: and never from a department account')
+    H.eq(#calls.add, 0, 'Z7: no Qbox AddMoney call')
     Config.Cash.allowCapTopUp = false
 end
 
@@ -911,6 +936,13 @@ do
     ok, e = Act('server:admin:manualCash', 1, { citizenid = 'NOBODY99', amount = 10, reason = 'x', requestId = Rid() })
     H.eq(e, 'err.unknown_officer', 'only an officer Crimson-Police knows')
     H.ok(LastAudit('manualCash') ~= nil, 'audited')
+    -- Z7: a payment Cash.pay does not take now (it answers nil) is marked pending, so a sweep pays it later
+    local realPay = Cash.pay
+    Cash.pay = function() return nil end
+    ok, e = Act('server:admin:manualCash', 3, { citizenid = 'OFF00007', amount = 20, reason = 'x', requestId = Rid() })
+    Cash.pay = realPay
+    H.ok(ok == true and e.status == 'pending', 'Z7: the admin is told pending')
+    H.eq(ok and RowOf(e.id).cash_status, 'pending', 'Z7: and the row is pending, not left at none')
     Config.Cash.dailyCap = 0
     Config.Cash.allowManualCash = false
 end

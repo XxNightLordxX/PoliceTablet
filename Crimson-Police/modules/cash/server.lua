@@ -939,7 +939,9 @@ local function CapRestLocked(row, bd, rowId, rest)
     end
     local dept = DeptOf(row.department)
     local account = dept and dept.societyAccount
-    local society = Config.Cash and Config.Cash.source == 'society'
+    local c = CashOf(bd)
+    -- a feature reward row names its own source ('server': new money, never a department account) and account
+    local society = Config.Cash and Config.Cash.source == 'society' and c.source ~= 'server'
     local deptLabel = dept and dept.label or tostring(row.department)
     local label = MissionLabel(row, bd)
     local message = CP.L('cash.bank_message', { mission = label })
@@ -952,9 +954,17 @@ local function CapRestLocked(row, bd, rowId, rest)
             return false, 'err.unfunded_now'
         end
     end
-    local moneyAccount = CashOf(bd).account or (Config.Cash and Config.Cash.account) or 'bank'
+    local moneyAccount = c.account or (Config.Cash and Config.Cash.account) or 'bank'
     local okMoney, why = false, nil
-    if CP.Qbx.addMoney then okMoney, why = CP.Qbx.addMoney(src, moneyAccount, rest, 'crimson-police-mission') end
+    if moneyAccount == 'item' then
+        -- a feature reward paid as a money item: the item, never a Qbox account named 'item'
+        local FR = CP.FeatureRewards
+        if FR and FR.giveMoneyItem and type(c.moneyItem) == 'string' and c.moneyItem ~= '' then
+            okMoney, why = FR.giveMoneyItem(src, c.moneyItem, rest)
+        end
+    elseif CP.Qbx.addMoney then
+        okMoney, why = CP.Qbx.addMoney(src, moneyAccount, rest, 'crimson-police-mission')
+    end
     if not okMoney and why == 'error' then
         CP.err(TAG, 'row %d: paying the capped rest raised in AddMoney; its marker stays paying (transaction %s)',
             rowId, transId)
