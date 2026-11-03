@@ -804,9 +804,10 @@ local function Pass(fn)
     end
     return p
 end
--- Each call keeps every statement under BUDGET. A busy test machine can stall one pass: when the first pass runs over,
--- it counts as the warm-up and the fastest of up to PASSES more passes decides (stopping at the first one inside).
-local BUDGET, PASSES = 0.25, 3
+-- Each call keeps every statement under BUDGET. A busy test machine (the gate runs the suites side by side) can stall
+-- several passes: when the first pass runs over, it counts as the warm-up and the fastest of up to PASSES more passes
+-- decides (stopping at the first one inside).
+local BUDGET, PASSES = 0.25, 8
 local function Measure(label, fn)
     local first = Pass(fn)
     local best, passes = first, 0

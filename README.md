@@ -2644,7 +2644,9 @@ Both:
 - ☐ Tell your staff where the case timeline is (Admin UI → **Real suspects**) and what the three tools do: **Block
   pair**, **Exclude** and **Suspend** (each needs a number of days and a reason, and is in the audit log). **Lift**
   ends one early and **Clear strikes** (Volunteers tab) clears a volunteer's strikes and strike block, each with a
-  reason in the audit log (`Config.RealSuspects.staffLift`, `Config.Volunteers.staffClearStrikes`).
+  reason in the audit log (`Config.RealSuspects.staffLift`, `Config.Volunteers.staffClearStrikes`). The screen shows
+  character names next to citizen IDs (`Config.RealSuspects.staffNames`) and weapon names in the damage ledger
+  (`Config.RealSuspects.weaponNames`); both ship on.
 - ☐ Play one case of each kind on the test server with the in-game checklist (`docs/IN_GAME_CHECKLIST.md`, section
   Real suspects) and watch resmon: idle must stay at 0.02 ms or less.
 
