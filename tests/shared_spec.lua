@@ -1,4 +1,5 @@
--- tests/shared_spec.lua · the shared layer, the migrations splitter and the harness itself.
+-- The shared layer, the migrations splitter and the harness itself.
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 
@@ -9,6 +10,14 @@ H.eq(U.round(2.5), 3, 'round 2.5')
 H.eq(U.round(2.49), 2, 'round 2.49')
 H.eq(U.round(1.25 * 7), 9, 'reinforced 7 hostiles -> 9')
 H.eq(U.round(1.5 * 7), 11, 'heavy 7 -> 10.5 -> 11')
+-- a true half that floating point stores just below .5 still rounds up (the same as CP.Cash pays)
+H.ok(350 * 1.15 < 402.5, 'precondition: 350 x 1.15 is stored below 402.5')
+H.eq(U.round(350 * 1.15), 403, '$350 x 1.15 = $402.50 -> $403')
+H.eq(U.round(250 * 1.15), 288, '$250 x 1.15 = $287.50 -> $288')
+H.eq(U.round(250 * 1.30), 325, 'exact amounts unchanged')
+H.eq(U.round(402.4999), 402, 'a real x.4999 still rounds down')
+H.eq(U.round(-2.5), -2, 'negative half rounds up (towards +inf)')
+H.eq(U.round(0), 0, 'round 0')
 
 -- deterministic rng
 local a, b = U.rng(42), U.rng(42)
@@ -23,6 +32,43 @@ H.eq(#sample, 5, 'sample size')
 -- hashing is stable
 H.eq(U.hash('2026-09-28'), U.hash('2026-09-28'), 'hash stable')
 H.ok(U.hash('a') ~= U.hash('b'), 'hash differs')
+
+-- run ids: the unix time and a counter come first, so a restart never repeats the ids of an earlier start
+do
+    local savedCp, savedTime = CP, os.time
+    -- one server start: a fresh copy of shared/utils.lua whose generator is forced to the same state every time
+    local function Start(now)
+        CP = {}
+        H.load('shared/utils.lua')
+        local fresh = CP.U
+        local realRng = fresh.rng
+        fresh.rng = function() return realRng(12345) end
+        os.time = function(t) if t then return savedTime(t) end return now end
+        local ids = {}
+        for i = 1, 1000 do ids[i] = fresh.uuid() end
+        os.time = savedTime
+        return ids
+    end
+    local first, second = Start(1000), Start(2000)
+    CP = savedCp
+    local seen, repeats = {}, 0
+    for _, id in ipairs(first) do seen[id] = true end
+    for _, id in ipairs(second) do if seen[id] then repeats = repeats + 1 end end
+    H.eq(repeats, 0, 'two starts with the same generator state share no id')
+    local count = 0
+    for _ in pairs(seen) do count = count + 1 end
+    H.eq(count, 1000, '1000 ids in one second are all distinct')
+    local bad = 0
+    for _, list in ipairs({ first, second }) do
+        for _, id in ipairs(list) do
+            local shape = #id == 36 and id:match('^%x%x%x%x%x%x%x%x%-%x%x%x%x%-4%x%x%x%-[89ab]%x%x%x%-%x+$')
+            if not shape or #id:match('%-(%x+)$') ~= 12 then bad = bad + 1 end
+        end
+    end
+    H.eq(bad, 0, 'every id keeps the 36-character v4 shape')
+    H.eq(first[1]:sub(1, 13), '000003e8-0001', 'the time part, then the counter')
+    H.eq(second[1000]:sub(1, 13), '000007d0-03e8', 'the counter counts every id of the start')
+end
 
 -- paths
 local t = { objectives = { { waves = { 7, 7, 6 } } } }
@@ -44,6 +90,14 @@ H.ok(not U.isHexColour('#12345'), 'bad hex')
 H.ok(U.truthy(true) and U.truthy(1) and not U.truthy(0) and not U.truthy(nil), 'truthy')
 H.eq(U.jsonField('{"a":1}').a, 1, 'jsonField string')
 H.eq(U.clip('abcdef', 3), 'abc', 'clip')
+-- clip never ends inside a UTF-8 character: MariaDB strict mode (utf8mb4) refuses the whole row (error 1366)
+local longLabel = ('a'):rep(62) .. '— rear lot'
+H.eq(U.clip(longLabel, 64), ('a'):rep(62), 'an em-dash cut at byte 64 is dropped whole')
+H.ok(utf8.len(U.clip(longLabel, 64)) ~= nil, 'clip keeps valid UTF-8')
+H.eq(U.clip('José', 4), 'Jos', 'a cut 2-byte letter is dropped')
+H.eq(U.clip('José', 5), 'José', 'a whole 2-byte letter is kept')
+H.eq(U.clip('ab😀', 5), 'ab', 'a cut 4-byte character is dropped')
+H.eq(U.clip('ab😀', 6), 'ab😀', 'a whole 4-byte character is kept')
 
 -- locale interpolation (unknown key returns the key)
 H.eq(CP.L('no.such.key'), 'no.such.key', 'unknown key')
@@ -57,11 +111,85 @@ for _, s in ipairs(stmts) do H.ok(not s:find('%-%-'), 'no comments left in state
 
 -- the harness talks to MariaDB
 H.sql('DELETE FROM cp_officers')
-MySQL.insert.await('INSERT INTO cp_officers (citizenid, callsign, department) VALUES (?, ?, ?)', { 'T1', "O'Neil", 'sast' })
-H.eq(MySQL.scalar.await('SELECT callsign FROM cp_officers WHERE citizenid = ?', { 'T1' }), "O'Neil", 'quote escaping')
-H.eq(MySQL.update.await('UPDATE cp_officers SET xp = xp + ? WHERE citizenid = ?', { 5, 'T1' }), 1, 'update affected rows')
-local row = MySQL.single.await('SELECT xp, UNIX_TIMESTAMP(NOW()) AS now_ts FROM cp_officers WHERE citizenid = ?', { 'T1' })
+MySQL.insert.await('INSERT INTO cp_officers (citizenid, callsign, department) VALUES (?, ?, ?)',
+    { 'T1', 'O\'Neil', 'sast' })
+H.eq(MySQL.scalar.await('SELECT callsign FROM cp_officers WHERE citizenid = ?', { 'T1' }), 'O\'Neil', 'quote escaping')
+H.eq(MySQL.update.await('UPDATE cp_officers SET xp = xp + ? WHERE citizenid = ?', { 5, 'T1' }), 1,
+    'update affected rows')
+local row = MySQL.single.await('SELECT xp, UNIX_TIMESTAMP(NOW()) AS now_ts FROM cp_officers WHERE citizenid = ?',
+    { 'T1' })
 H.eq(row.xp, 5, 'single row')
 H.ok(row.now_ts > 1700000000, 'unix timestamp')
+MySQL.insert.await('INSERT INTO cp_officers (citizenid, display_name) VALUES (?, ?)', { 'T2', U.clip(longLabel, 64) })
+H.eq(MySQL.scalar.await('SELECT display_name FROM cp_officers WHERE citizenid = ?', { 'T2' }), ('a'):rep(62),
+    'a clipped non-ASCII text is stored')
+
+-- ============================================================================
+--                              CONFIG LOAD CHECK
+-- ============================================================================
+-- config/config.lua stopped at an error, or kept from an older version: one line says so before any module fails.
+
+do
+    H.eq(CP.configProblem(Config), nil, 'the shipped config.lua and blocks.lua are whole')
+    local level, text = CP.configProblem(nil)
+    H.eq(level, 'error', 'no Config at all: an error')
+    H.ok(
+        text:find('config/config.lua did not load', 1, true) ~= nil
+            and text:find('missing comma, quote or bracket', 1, true) ~= nil,
+        'saying where to look: ' .. text
+    )
+    -- every table section of config.lua and blocks.lua is checked
+    local sections = {}
+    for _, file in ipairs({ 'config/config.lua', 'config/blocks.lua' }) do
+        local f = assert(io.open(H.root .. file, 'r'))
+        for line in f:lines() do
+            local name = line:match('^Config%.(%w+)%s*=%s*{')
+            if name then sections[#sections + 1] = name end
+        end
+        f:close()
+    end
+    H.ok(#sections > 40, ('the table sections were read (%d)'):format(#sections))
+    for _, name in ipairs(sections) do
+        local cut = {}
+        for k, v in pairs(Config) do if k ~= name then cut[k] = v end end
+        local lvl, t = CP.configProblem(cut)
+        H.ok(lvl == 'warn' and t:find('Config.' .. name .. ' is missing', 1, true) ~= nil,
+            ('a config without Config.%s names it'):format(name))
+    end
+    -- config.lua stopped half way: the missing sections are named, the rest counted
+    local half = { Database = Config.Database, Tablet = Config.Tablet, Blocks = Config.Blocks }
+    local lvl, t = CP.configProblem(half)
+    H.eq(lvl, 'warn', 'a config cut short: a warning')
+    H.ok(
+        t:find(
+            'Config.Format, Config.AdminTheme, Config.AdminUi, Config.Permissions, Config.AdminControl, Config.MissionControls and ',
+            1, true)
+                ~= nil
+            and t:find(' more are missing', 1, true) ~= nil,
+        'the first six named, the rest counted: ' .. t
+    )
+    H.ok(t:find('copy the missing blocks from the config.lua of this version', 1, true) ~= nil, 'with the fix')
+    -- the scalars (Config.QboxAdmins and the like) are not sections: an older config.lua without them is fine
+    local noScalars = {}
+    for k, v in pairs(Config) do if type(v) == 'table' then noScalars[k] = v end end
+    H.eq(CP.configProblem(noScalars), nil, 'scalar settings are not required')
+
+    -- the server prints the line as shared/init.lua loads (config.lua and blocks.lua load just before it)
+    local lines = {}
+    local realPrint, realConfig = print, Config
+    _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
+    Config = nil
+    H.load('shared/init.lua')
+    Config = { Database = realConfig.Database }
+    H.load('shared/init.lua')
+    Config = realConfig
+    H.load('shared/init.lua')
+    _G.print = realPrint
+    H.eq(#lines, 2, 'one line for each broken config, none for a whole one')
+    H.ok(lines[1] and lines[1]:find('^1[crimson-police:config]^7 config/config.lua did not load', 1, true) ~= nil,
+        'no Config: red')
+    H.ok(lines[2] and lines[2]:find('^3[crimson-police:config]^7 Config.Format', 1, true) ~= nil,
+        'missing sections: yellow')
+end
 
 return H

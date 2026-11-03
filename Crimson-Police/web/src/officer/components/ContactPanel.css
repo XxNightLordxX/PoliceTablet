@@ -1,0 +1,122 @@
+/* Active Mission · Contact panel. Only --cp-* variables; every class is prefixed cp-contact. */
+
+.cp-contact__hud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.cp-contact__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cp-contact__entry {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius);
+    background: var(--cp-surface-2);
+}
+
+.cp-contact__entry.is-decided {
+    opacity: 0.72;
+}
+
+.cp-contact__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.cp-contact__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    color: var(--cp-text);
+}
+
+.cp-contact__badges {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.cp-contact__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cp-contact__fact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-text);
+}
+
+.cp-contact__fact.is-suppressed .cp-contact__fact-text {
+    text-decoration: line-through;
+    color: var(--cp-muted);
+}
+
+.cp-contact__fact-tags {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cp-contact__fact-by {
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
+
+.cp-contact__empty {
+    margin: 0;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+.cp-contact__open {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-muted);
+}
+
+.cp-contact__decided {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-success);
+}
+
+.cp-contact__actions,
+.cp-contact__choices {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.cp-contact__choices .cp-select {
+    min-width: 180px;
+}

@@ -246,7 +246,7 @@ TriggerEvent('QBCore:Server:OnPlayerUnload', source)
 
 ### Other findings
 
-- The qbx_core source was NOT among the uploaded resources. Every qbx_core behaviour above (event names, argument order, the defaultDuty reset, RemovePlayerFromJob not firing OnJobUpdate) was checked against upstream Qbox-project/qbx_core main v1.24.0 (commit f0553b6, 2026-09-26), cloned to /tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/ref/qbx_core. The installed version may differ, so the handlers should be defensive, and the 10-second jobRecheck plus the per-objective recheck must stay as the authoritative backstop.
+- The qbx_core source was NOT among the uploaded resources. Every qbx_core behaviour above (event names, argument order, the defaultDuty reset, RemovePlayerFromJob not firing OnJobUpdate) was checked against upstream Qbox-project/qbx_core main v1.24.0 (commit f0553b6, 2026-09-26). The installed version may differ, so the handlers should be defensive, and the 10-second jobRecheck plus the per-objective recheck must stay as the authoritative backstop.
 - Spec gap: the Appendix's qbx_core table lists no server event for job switches. Add 'Event QBCore:Server:OnJobUpdate (src, job): server: a switched active job removes the officer as Abandoned (job_change)' and 'Event qbx_core:server:onGroupUpdate (src, groupName, grade|nil): server: re-check the active job, since removing the active job changes it to unemployed without OnJobUpdate'.
 - Security: QBCore:Server:OnJobUpdate, QBCore:Server:SetDuty, qbx_core:server:onGroupUpdate, QBCore:Server:OnPlayerUnload, QBCore:Server:PlayerLoaded and QBCore:Player:SetPlayerData are server-local events (TriggerEvent). Register them only with AddEventHandler. Net-event safety is per resource, so if Crimson-Police used RegisterNetEvent for any of them, a client could send a spoofed event, e.g. faking off duty to get a free abandon, or faking job data.
 - Event ordering on a switch (server side): QBCore:Player:SetPlayerData(PlayerData), then QBCore:Server:OnJobUpdate(src, job). No SetDuty event fires even though onduty is reset to job.defaultDuty. On a duty toggle: QBCore:Server:SetDuty(src, onduty), then QBCore:Player:SetPlayerData. PlayerData is already updated before either event fires.
@@ -263,7 +263,7 @@ TriggerEvent('QBCore:Server:OnPlayerUnload', source)
 
 - **Spec claim:** exports.qbx_core:GetPlayer(src) returns the Qbox player object: PlayerData.citizenid, charinfo.firstname and lastname, job.name, job.label, job.grade.level, job.grade.name, job.onduty, job.type, metadata.callsign, metadata.isdead, metadata.inlaststand
 - **Evidence:** src/sc-multijob/sc-multijob/server/server.lua:1-3,16,34,44,53; src/sc-npcpolice/sc-npcpolice/server/sv_main.lua:18-21,28-33; src/sc-ambulance/sc-ambulance/server/framework.lua:16-22; src/Renewed-Banking/Renewed-Banking/server/framework.lua:56-64,78-92; ref/qbx_core/server/functions.lua:86-94; ref/qbx_core/types.lua:35-43
-- **Implication:** Call exports.qbx_core:GetPlayer(src) with the numeric server id (a non-numeric string is treated as an identifier such as license, not a citizenid). It returns nil for a player who has not loaded a character or has logged out, so nil-check every call. All fields live under player.PlayerData.*, for example player.PlayerData.job.name, not player.job.name. An export returns a marshalled snapshot, so do not cache the player object: call GetPlayer again for every check (duty, job, downed poll, payouts).
+- **Implication:** Call exports.qbx_core:GetPlayer(src) with the numeric server id (a non-numeric string is treated as an identifier such as license, not a citizenid). It returns nil for a player who has not loaded a character or has logged out, so nil-check every call. All fields live under player.PlayerData.*, for example player.PlayerData.job.name, not player.job.name. An export returns a marshalled snapshot, so do not cache the player object: call GetPlayer again for every check (duty, job, downed poll, payouts). CP.Qbx.getPlayer (the object, used for money Functions) is never cached. CP.Qbx.getInfo (the fields Crimson-Police reads) is reused for at most Config.Limits.playerInfoCacheMs (1 s) and dropped at once by every change event: qbx_core's UpdatePlayerData sends QBCore:Player:SetPlayerData after every change of PlayerData, and SetDuty, OnJobUpdate, onGroupUpdate, onSetMetaData, PlayerLoaded, OnPlayerUnload and playerDropped clear it too.
 
 ```lua
 local function getPlayer(src)
@@ -395,6 +395,27 @@ if target then
 -- impl: if player and player.PlayerData.citizenid == citizenid then return player end  (exact == match)
 ```
 
+### exports.qbx_core:GetMetadata(src, key) (server)
+
+- **Spec claim:** The downed check (CP.Qbx.isDowned): metadata.isdead, then metadata.inlaststand
+- **Evidence:** ref/qbx_core/server/player.lua:28-30 (resolvePlayer), 1233-1257 (GetMetadata, exported); qbx_core 1.24.0
+- **Implication:** It returns only the one value, so the downed poll (every Config.Downed.checkEvery s per active participant) never copies the whole Player across the export boundary. Pass a NUMBER: a string is read as a citizenid, and for an offline citizenid qbx_core loads the character from its players table (GetOfflinePlayer). A key with a dot reads one nested level. On a Qbox without this export the call raises: CP.Qbx.isDowned then reads exports.qbx_core:GetPlayer(src) instead until qbx_core starts again.
+
+```lua
+local function resolvePlayer(identifier)
+    return type(identifier) == 'string' and (GetPlayerByCitizenId(identifier) or GetOfflinePlayer(identifier)) or GetPlayer(identifier)
+end
+...
+function GetMetadata(identifier, metadata)
+    if type(metadata) ~= 'string' then return end
+    local player = resolvePlayer(identifier)
+    if not player then return end
+    ...
+    return player.PlayerData.metadata[metadata]
+end
+exports('GetMetadata', GetMetadata)
+```
+
 ### exports.qbx_core:GetQBPlayers()
 
 - **Spec claim:** Every online player, e.g. to notify on-duty officers of a Cross-Department launch (a Qbox export, despite its name)
@@ -414,6 +435,12 @@ end
 function GetQBPlayers() return QBX.Players end
 exports('GetQBPlayers', GetQBPlayers)
 ```
+
+### exports.qbx_core:GetGangs() and PlayerData.gang (server)
+
+- **Spec claim:** Admin UI -> Permissions -> Extra grants may name Qbox gangs from a grade
+- **Evidence:** src/Renewed-Banking/.../server/framework.lua (GetGangs on qbx); ref/qbx_core/server/groups.lua (GetGangs); ref/qbx_core/types.lua (PlayerData.gang)
+- **Implication:** Same shape as GetJobs: gangs[gangName] = { label, grades = { [0] = { name, isboss? }, ... } }, with a gang named 'none' for players in no gang. PlayerData.gang = { name, label, isboss, grade = { name, level } }. CP.Qbx.getInfo(src).gang = { name, gradeLevel } ('none' when missing); CP.Qbx.getGangs() wraps the export in a pcall ({} on failure). Read only: Crimson-Police never sets a gang.
 
 ### exports.qbx_core:GetJobs() (server and client)
 
@@ -846,7 +873,7 @@ TriggerClientEvent('QBCore:Notify', source, message, type)
 
 ### Other findings
 
-- A real qbx_core source (v1.24.0) is at /tmp/claude-0/-home-user-PoliceTablet/c9b2f5e1-32ec-5436-a1db-2a78c5b9aa69/scratchpad/ref/qbx_core. I used it to verify every event payload and ordering; the uploaded SC resources alone do not show them. Key files: server/player.lua, server/functions.lua, server/events.lua, client/events.lua, client/groups.lua, types.lua.
+- The real qbx_core source (v1.24.0, upstream) was used to verify every event payload and ordering; the uploaded SC resources alone do not show them. Key files: server/player.lua, server/functions.lua, server/events.lua, client/events.lua, client/groups.lua, types.lua.
 - qbx_core fires the QBCore:* events itself, confirming the spec: QBCore:Server:SetDuty and QBCore:Client:SetDuty (player.lua:205-206), QBCore:Server:OnJobUpdate and QBCore:Client:OnJobUpdate (player.lua:266-267, 1026-1027), QBCore:Server:PlayerLoaded (player.lua:979), and QBCore:Client:OnPlayerUnload and QBCore:Server:OnPlayerUnload (player.lua:749-750). Server-side ones use TriggerEvent, so register them with AddEventHandler only. Client-side ones use TriggerClientEvent, so use RegisterNetEvent. QBCore:Client:OnPlayerLoaded is a client-local TriggerEvent (client/character.lua:280).
 - NAME TRAP: 'QBCore:Server:OnPlayerLoaded' (with 'On') is a client-to-server NET event and spoofable (server/events.lua:189). 'QBCore:Server:PlayerLoaded' (no 'On') is the trusted server-local event whose argument is the player object. Only use the latter for pending payouts.
 - Duty gaps: SetJobDuty is the ONLY path that fires QBCore:Server:SetDuty. Job switches (SetPlayerPrimaryJob), promotions through AddPlayerToJob on the primary job, and job removal (RemovePlayerFromJob) change job.onduty without SetDuty: onduty resets to job.defaultDuty, which is true for police jobs. Add AddEventHandler('QBCore:Server:OnJobUpdate', function(src, job)) and AddEventHandler('qbx_core:server:onGroupUpdate', function(src, groupName, grade)) as immediate triggers for the job recheck, in addition to the 10 s Config.AntiCheat.jobRecheck.
@@ -866,6 +893,22 @@ TriggerClientEvent('QBCore:Notify', source, message, type)
 - The uploads show no server-side QBCore:Server:OnPlayerUnload handler, but qbx_core fires it on character logout (player.lua:750), and GetPlayer(src) still works inside it. playerDropped fires no unload event, and qbx_core clears QBX.Players[src] in its own playerDropped handler. Cache src -> citizenid yourself for drop handling.
 - qbx_core:server:onSetMetaData has argument order (key, oldValue, newValue, source), with source LAST (player.lua:1212). The client version is (key, oldValue, newValue). It could replace or augment the 2 s downed poll.
 - No files were modified. git status in /home/user/PoliceTablet shows only pre-existing untracked Crimson-Police/, docs/ and tests/.
+
+### qbx_core player_vehicles: the mission plate check (read-only)
+
+- **Spec claim:** Every mission vehicle gets a plate in the reserved pattern (Config.Custody.plates) that no player owns, checked read-only against player_vehicles
+- **Evidence:** src/sc-police/sc-police/server/vehicle.lua:5-8 (`IsVehicleOwned`: `SELECT plate FROM player_vehicles WHERE plate = ?`), :313-329 (the impound handler updates player_vehicles by plate alone)
+- **Implication:** sc-police's `/imp` reaches a player's own car whenever a mission car carries a plate that is in player_vehicles, so CP.Qbx.plateOwned(plate) runs `SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1` through the real oxmysql (CP.Storage.realMySQL when the database is off), inside pcall, never joined with a cp_ table. A plate a player owns is rerolled (5 tries); on an error the reserved pattern alone is used and the error is logged once. Crimson-Police never writes player_vehicles.
+
+```lua
+local ok, found = pcall(db.scalar.await, 'SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1', { plate })
+```
+
+### ox_inventory calls of the tablet item, handcuffs, evidence and item rewards (standard API)
+
+- **Spec claim:** requireItem, the handcuffs check, the evidence item and the optional item rewards use ox_inventory's standard exports
+- **Evidence:** the argument order of the entry above (AddItem / RemoveItem / Search); ox_inventory is not in the uploads, so these are its documented exports
+- **Implication:** every call is inside pcall after `GetResourceState('ox_inventory') == 'started'`, read as `ok and res`. Server: `Search(src, 'count', name)` (the tablet item with requireItem, a failed lookup counting as no item only while requireItem is on; Config.Custody.handcuffsItem for Detain and Cuff suspect, never used or taken), `Search(src, 'slots', name, metadata)` then `RemoveItem(src, name, count, nil, slot)` (mission items), `CanCarryItem(src, name, count)` before `AddItem(src, name, count, { cpReward = <row id> })` (item rewards: never `cpItem`, so the mission-item sweep leaves them alone), `CanCarryItem(src, name, count, { cpRun, cpItem = true })` before `AddItem(src, name, count, { cpRun, cpItem = true })` (mission items and the evidence item: AddItem checks free slots only, never weight, so an officer with no room, `false` or `nil`, gets the `run.item_no_room` toast and the run starts without that item), `Items(name)` (the start-up check of configured items; a missing item is turned off and shown in Config health). Client: `exports.ox_inventory:Search('count', item)` every 2 s while the tablet is open with requireItem. The item snippet in items/ox_inventory_items.lua is pasted by the owner; Crimson-Police never edits ox_inventory.
 
 ## sc-dispatch
 
@@ -1396,6 +1439,23 @@ RegisterNetEvent('sc-dispatch:client:AssignedToCall', function(info)
 - INFO: the bridges/ folder (ps-dispatch, cd_dispatch, etc.) contains optional separate resources that call AddNotification without a unique_id and without any crimsonArena check. If a server installs them, calls from other scripts get numeric row ids and are not suppressed by the flag.
 - INFO: sc-dispatch server code uses `exports['qb-core']:GetCoreObject()` (Qbox qb-core compat) and aliases `local StateBagPlayer = Player` because handlers shadow `Player`. In Crimson-Police, never name a local `Player` in a scope that also calls Player(src).state.
 - INFO: in the F10 panel the respond toggle key is WaypointKey = 'G' (config.lua:55). Pressing it again un-marks responding and sends ToggleResponding(callId, false), which is the path the 60-second dodge rule must catch.
+
+### mdt_dispatch real-call count for the Dispatch screen (read-only)
+
+- **Spec claim:** The Dispatch screen shows a read-only strip "SC-Dispatch: n active real calls (m Priority 1)", NPC calls excluded, refreshed every 20 s, hidden on error
+- **Evidence:** sql/schema-qbox.sql:171-184 (`priority INT DEFAULT 2`, `active TINYINT(1)`); server/main.lua:416-421 (unique_id added at runtime); the NPC call id format in the sc-npcpolice section
+- **Implication:** CP.Dispatch.realCallSummary() runs `SELECT priority, COUNT(*) AS n FROM mdt_dispatch WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority` with Config.Calls.npcCallPrefix LIKE-escaped plus `%` (the saves folder engine has no LEFT(); with the database off the statement still goes to the real oxmysql), in pcall, cached Config.MissionCalls.realCallCache seconds. An error (for example unique_id not yet added) returns nil and the strip is hidden. It lists no calls and gates nothing. Mission calls themselves are never written to mdt_dispatch and never create a notification.
+
+```lua
+SELECT priority, COUNT(*) AS n FROM mdt_dispatch
+WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority   -- { 'npccall-%' }
+```
+
+### employee_incidents: MDT commendations on the profile (read-only, optional)
+
+- **Spec claim:** With Config.Profile.showMdtCommendations (off by default) SC-Dispatch MDT commendations are shown read-only, tagged "MDT"
+- **Evidence:** sql/schema-qbox.sql:298-310 (`employee_incidents`: citizenid, job, type ENUM('reprimand','warning','commendation','note'), title, issued_by, created_at); server/main.lua:4305 (sc-dispatch's own read), :4317 (manual entries), :4522-4526 (a promotion writes a 'commendation' row titled "Promoted to ...")
+- **Implication:** CP.Dispatch.mdtCommendations(citizenid) runs `SELECT title, issued_by, UNIX_TIMESTAMP(created_at) AS ts FROM employee_incidents WHERE citizenid = ? AND type = 'commendation' ORDER BY created_at DESC LIMIT 10` in pcall (nil on error: the MDT tag is hidden). Promotions appear as commendations because sc-dispatch writes them that way. Never write the table.
 
 ## sc-npcpolice
 
@@ -2029,6 +2089,12 @@ Config.Billing = {
 Config.BillCost = Config.Billing.CheckInCost
 ```
 
+### hospital:server:RespawnAtHospital: a listen-only fact (real suspects)
+
+- **Spec claim:** Crimson-Police learns that a player chose sc-ambulance's hospital respawn without triggering, cancelling or answering it
+- **Evidence:** server/main.lua:204 (`RegisterNetEvent('hospital:server:RespawnAtHospital', function(hospitalIndex)`: the bill, a bed, or a jail bed while `injail > 0`); client/main.lua:694-718 (the index of the nearest hospital in `Config.Locations.hospital`, 1 by default, sent by the dead player's own client)
+- **Implication:** modules/integrations/sc_ambulance registers a second handler that only reads. It returns at once while no `CP.Ambulance.on('respawn', fn)` listener exists or `CP.Opponents.active()` is not true (no native read), rate-limits 6 a second per sender (`'scp:respawn'`, dropped without a log line), drops an index that is not a whole number 1..255, and calls each listener with (src, hospitalIndex) inside pcall (one error line a minute). Crimson-Police still never triggers this event or `hospital:server:RevivePlayer`, and registers no handler for RevivePlayer.
+
 ### qbx_medical compatibility exports are NOT loaded
 
 - **Spec claim:** Spec uses only GetDoctorCount + hospital:client:Revive
@@ -2456,6 +2522,41 @@ RegisterNetEvent('QBCore:Client:SetDuty', function(duty)
 - Station keys in Config.Stations are 'MRPD', 'BCSO' and 'SASP' (config.lua:938, 986, 1020); FIB is separate in Config.FIBStation. There is no Paleto, Vespucci or Davis station, so the spec's four duty locations are the full set.
 - Unverified outside this source (qbx_core not provided): qbx_core's QBCore:ToggleDuty handler and Player.Functions.SetJobDuty fire TriggerEvent('QBCore:Server:SetDuty', src, onduty) and TriggerClientEvent('QBCore:Client:SetDuty', src, onduty), and the default metadata.callsign is 'NO CALLSIGN'. Check these against the server's qbx_core copy.
 
+### police:server:Impound: no job or distance check, owned plates written, the car deleted everywhere
+
+- **Spec claim:** A second, read-only handler for police:server:Impound closes the /imp exploit on mission vehicles
+- **Evidence:** server/vehicle.lua:313-329 (the handler: `IsVehicleOwned(plate)` then `UPDATE player_vehicles SET state = ...` by plate, then `TriggerClientEvent('police:client:DeleteVehicle', -1, netId)`); server/commands.lua:496-515 (`/depot` and `/imp` check job type leo and duty, then `police:client:ImpoundVehicle`); client/interactions.lua:92-110 (the target is `QBCore.Functions.GetClosestVehicle(coords)`, no distance limit), :130 and :146 (the 5 s progress bar, then `TriggerServerEvent('police:server:Impound', plate, fullImpound, price or 0, body, engine, fuel, netId)`)
+- **Implication:** the net event checks neither the sender's job nor the distance, and any client can send it; it deletes the car on every client and, when the plate is in player_vehicles, changes that player's vehicle row. Crimson-Police registers a second handler (net events call every handler) in modules/integrations/sc_police: it only reads the 7th argument (netId), and when that is a vehicle of a live run it records the sender, the netId and the sender's server-side distance with `CP.Runs.noteExternalRemoval(netId, src, 'sc_impound', dist)`. It never triggers, cancels or answers any police:* event. The engine then decides when the car vanishes: a participant's removal fails the objective and flags the run `sc_impound` (never an Impound disposition); anyone else's, or a vanish with nothing recorded, ends the run as `vehicle_removed_external` (not counted, no cooldown) and audits the sender. Mission plates are kept out of player_vehicles (qbx_core section), so the handler's UPDATE never reaches a player's car.
+
+```lua
+RegisterNetEvent('police:server:Impound', function(plate, fullImpound, price, body, engine, fuel, netId)
+    local src = source
+    price = price and price or 0
+    if IsVehicleOwned(plate) then
+        ... MySQL.query('UPDATE player_vehicles SET state = ?, ... WHERE plate = ?', ...)
+    end
+    if netId then
+        TriggerClientEvent('police:client:DeleteVehicle', -1, netId)
+    end
+end)
+```
+
+### Listen-only facts: cuffs, escorts, jails, bobby pins and cash seizures (real suspects)
+
+- **Spec claim:** Crimson-Police learns what is done with sc-police's player cuffs, escorts, jail, bobby pins and cash seizures without editing, cancelling or answering any of it (police vs real criminal players, owner decision 2026-10-26: "Build all 3 but options in the config.lua")
+- **Evidence:** server/interactions.lua:24 (`police:server:CuffBreakAlert(officerId)`, sent by the suspect who broke free; client/interactions.lua:1070-1071 sends it only when it knows who cuffed him), :56 (`police:server:CuffPlayer(playerId, isSoftcuff)`, the client always sends `true`), :95 (`police:server:UncuffPlayer(playerId)`), :227-233 (`police:server:BobbyPinResult(success)` from the picker; sc-police ignores a result with no pending attempt), :277 (`police:server:EscortPlayer(playerId)`), :476 (`police:server:SeizeCash(playerId)`); server/commands.lua:248-264 (`police:server:JailPlayer(targetId, jailTime)`, which writes `injail` inside its own handler; client/interactions.lua:439 sends `tonumber(input[1])`). server/prison.lua:284 registers another `JailPlayer` handler, but prison.lua is not in sc-police's fxmanifest.
+- **Implication:** net events call every registered handler, so modules/integrations/sc_police registers a second handler for each of these seven events (like the Impound one above). Each one only reads: `local src = source` first; it returns at once while no `CP.ScPolice.on` listener of its kind exists or `CP.Opponents.active()` is not true (CP.Opponents is built in V4; until then the handlers do nothing), so with no case open it reads no native at all; then a rate limit of 6 a second per sender and kind (`CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)`, dropped without a log line); then the ids must be whole numbers 1..65535 (a bad one drops the event). The listeners get `'cuff'` (officerSrc, targetSrc, isSoftcuff == true), `'uncuff'` (officerSrc, targetSrc), `'cuffBreak'` (suspectSrc, officerSrc), `'escort'` (officerSrc, targetSrc), `'jail'` (officerSrc, targetSrc, jailTime as sent: the listener clamps it), `'bobbyPin'` (pickerSrc, success == true) and `'seizeCash'` (officerSrc, targetSrc), each inside pcall (at most one error line a minute per kind), inside the event and without yielding. A raw `BobbyPinResult(true)` with no pending attempt still reaches this handler, so a listener must not trust it on its own (design critic 2 #6). Crimson-Police never registers `police:server:SetHandcuffStatus` (it reads cuffs from the qbx `ishandcuffed` metadata only) and still never triggers any police:* event. Nothing consumes these facts until CP.Opponents.
+
+```lua
+RegisterNetEvent('police:server:CuffBreakAlert', function(officerId) ... end)          -- source = the suspect
+RegisterNetEvent('police:server:CuffPlayer', function(playerId, isSoftcuff) ... end)   -- source = the officer
+RegisterNetEvent('police:server:UncuffPlayer', function(playerId) ... end)
+RegisterNetEvent('police:server:BobbyPinResult', function(success) ... end)            -- source = the picker
+RegisterNetEvent('police:server:EscortPlayer', function(playerId) ... end)
+RegisterNetEvent('police:server:SeizeCash', function(playerId) ... end)
+RegisterNetEvent('police:server:JailPlayer', function(targetId, jailTime) ... end)    -- server/commands.lua
+```
+
 ## Renewed-Banking v2.1.4
 
 ### handleTransaction: parameter order
@@ -2762,3 +2863,186 @@ end
 - RB provides 'qb-management' and 'esx_society' (fxmanifest.lua:36-37), and on qbx it registers qb-management compatibility exports (GetAccount, AddMoney, RemoveMoney, GetGangAccount, AddGangMoney, RemoveGangMoney; framework.lua:26-31). Crimson-Police must not use those names; use only exports['Renewed-Banking'].
 - RB's fxmanifest declares dependency 'ox_inventory' and requires '@ox_lib/init.lua' and '@oxmysql/lib/MySQL.lua'. These are all already in Crimson-Police's allowed stack, so there is no conflict.
 - No ban, anti-cheat or kick triggers exist in Renewed-Banking's server code. Its only net events (issueDebitCard, createNewAccount, getPlayerAccounts, member management, deleteAccount, changeAccountName) and lib callbacks (deposit, withdraw, transfer, initalizeBanking, hasValidDebitCard) are player-UI flows. Crimson-Police must never trigger them: they are client-originated and not part of the integration.
+
+## Crimson-Contracts
+
+Checked against Crimson-Contracts' own repository (branch john.allday/awesome-noether-p5qdq2, commit e20316f, steps
+VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it.
+
+### crimsonPoliceRun player bag: Crimson-Contracts' guard damage scaling stands back
+
+- **Spec claim:** Crimson-Contracts sets the one AI weapon damage value a game has (SetAiWeaponDamageModifier) while
+  one of its guards is near; Crimson-Police sets the same value for the whole run (Config.NpcCombat.aiDamage, again
+  every 2 s with reassertAiDamage). The two must never set it against each other.
+- **Evidence:** crimson-contracts/client.lua:656-679 (e20316f, "Guard damage scaling"): `onCrimsonPoliceRun()` is
+  true when `LocalPlayer.state.crimsonPoliceRun == true` (exactly true) or `LocalPlayer.state.crimsonArena` is a table
+  with `source == 'crimson-police'`; while it is true, `setDamageScaled` neither sets nor resets the value (with
+  `ContractsConfig.Enemies.reassertDamage ~= false`) and keeps `damageApplied`, so it sets or resets the value again
+  once the flag is gone.
+- **Implication:** Crimson-Police (modules/npccombat/server.lua) sets `Player(src).state:set('crimsonPoliceRun', true,
+  true)` (replicated: the check is client-side) for every participant whose `client:start` starts CP.NpcCombat, from
+  that moment (before arrival, when there is no `crimsonArena` flag yet, and on a volunteer run after
+  `CP.Alerts.releaseRun`), and sets it to nil when he leaves the run (any reason, a disconnect included), when the run
+  ends and when Crimson-Police stops. It is written only on a change. The value is a plain boolean: it is not the
+  `crimsonArena` table that sc-dispatch indexes, so no other script reads it. A run whose start data says
+  `npcCombat = false` (V14's live runs) never sets it, so Crimson-Contracts scales its guards for those officers as
+  for anyone else.
+
+### Lifecycle events: the live-crime intake
+
+- **Spec claim:** with `ContractsConfig.LifecycleEvents = true` Crimson-Contracts tells other server scripts when a
+  contract starts, when its police alert goes out, when it ends, when a crew member rejoins and when a crew member was
+  armed; players cannot send or fake these events, and the payloads name crew members by citizenid.
+- **Evidence:** crimson-contracts/server.lua (e20316f): `lifecycle(name, payload)` returns unless
+  `ContractsConfig.LifecycleEvents == true` and sends `pcall(TriggerEvent, 'crimson-contracts:server:' .. name,
+  payload)` (a server TriggerEvent never leaves the server, so `GetInvokingResource()` in a listener is
+  `'crimson-contracts'`, its folder name). `startContract`: `mission.uid = ('%d_%d'):format(id, os.time())`, then
+  `contractStarted { id, uid, key, label, locationLabel, coords = { x, y, z } (the objective), members = { [citizenid]
+  = server id }, leaderCitizenId, startedAt = os.time(), test = options.bypass == true }` after the crew got its start
+  payloads. `sendDispatch`: `dispatchSent { id, uid, dispatchId, title = cfg.title, street = mission.location.label,
+  coords }` only after `AddNotification` raised no error and only for a mission with a uid (never the ATM alert);
+  `dispatchId = 'crimson_contract_<id>_<os.time()>'` (60 characters at most). `cleanupMission`: `contractEnded {
+  id, uid, outcome, reason }` with `outcome` 'completed', 'failed' or 'cancelled' (also for a contract that could not be
+  set up, with no contractStarted before it). `rejoin`: `memberRejoined { id, uid, citizenid, src }` only when the
+  server id changed. `combatShot`: `crewShot { id, uid, citizenid, suppressed, trigger = 'shot' }` after the report
+  that made the contract's one police roll (later reports are answered without that check, so at most one 'shot' per
+  contract). `guardDown`: `crewShot { ..., trigger = 'gun_kill' }` once per guard, only when `GetPedSourceOfDeath` (on
+  the server) names a player in the crew and the guard died by gun; an unknown killer sends nothing. Contract numbers
+  (`id`) start again at 1 after a restart of Crimson-Contracts; `uid` stays unique. The ATM robbery
+  (`ContractsConfig.ATM.activityKey = 'atm_robbery'`) sends none of these.
+- **Implication:** modules/integrations/crimson_contracts/server.lua registers the five handlers with
+  `AddEventHandler` at start, always, and each returns at once unless `Config.LiveCrime.enabled == true`; then
+  `GetInvokingResource()` must be in `Config.LiveCrime.sources` (shipped `{ 'crimson-contracts' }`, the folder name:
+  a renamed folder must be renamed there too). Crime records are keyed `'<resource>:<uid>'`, never by `id`. The server
+  ids in `members` and memberRejoined's `src` are hints that may be stale and are never read: members are found with
+  `exports.qbx_core:GetPlayerByCitizenId` when the alert arrives (C9). A crew member who fires after the roll and kills
+  no guard is not reported, so Crimson-Police's own weapon checks (§5.45 conduct) decide whether he was armed in a case.
+  Nothing here calls Crimson-Contracts or needs it to be running.
+
+## Crimson-Arena
+
+Crimson-Arena (`Crimson-Arena`, a Qbox PvP arena) runs on the same server. It was analysed file by file
+(its source is not part of this repo). These rules are **mandatory** for every Crimson-Police module;
+they refine ARCHITECTURE §0.14. Crimson-Arena is never edited, called (no exports, no events) or read
+(no stashes, no tables).
+
+### What Crimson-Arena does that matters
+
+- Writes `Player(src).state.crimsonArena = { active = true, matchId = '<id>' }` (replicated, **no
+  `source` field**) when a fighter is placed in a match and, within 1 s, for every spectator. It
+  **overwrites without reading** the old value, and on exit/abort it **sets the key to nil
+  unconditionally** — including for lobby members it never flagged (admin stop/wipe, resource stop,
+  countdown overrun).
+- On placement it sends `hospital:client:Revive`, forces `isdead/inlaststand = false`, moves the player
+  into routing bucket **4210+**, teleports them into the arena, and stashes + clears their whole
+  inventory (ox_inventory stash `crimson_arena_<citizenid>`); on exit it clears the inventory again
+  (keeping money) and hands the stash back. It removes items named `armour`, `bandage`, `ammo-*` from
+  players it believes owe them.
+- Lobby members carry **no flag and stay in bucket 0 until placed**, so they cannot be detected in advance.
+- Cancels `explosionEvent`s inside a live Trailer Park match (sphere 135 m around 2344.43, 2565.06, 46.67)
+  and pushes certain players out of its keep-out zones every 250 ms; match players reappear at the lobby
+  return point (-282.01, -2030.46, 30.15).
+- Calls `SetNuiFocus(false, false)` unconditionally when it places a player; disables all controls
+  while spectating (key mappings still fire).
+- Never reads the bag itself; its own exports read a private table.
+
+### Rules for Crimson-Police
+
+Definitions: a value is **foreign** when `type(v) == 'table' and v.active == true and v.source ~= 'crimson-police'`.
+`CP.Alerts.foreignFlag(src)` returns true for a foreign value. `CP.Alerts.inArena(src)` returns
+`foreignFlag(src) or GetPlayerRoutingBucket(src) ~= 0`. Use `inArena` for every gate below.
+
+1. **Foreign flag or other bucket mid-run → leave the run.** CP.Alerts registers
+   `AddStateBagChangeHandler('crimsonArena', nil, h)` (server; `src = GetPlayerFromStateBagName(bagName)`;
+   the handler only queues work with `SetTimeout(0, ...)`, never yields and never writes the bag inside
+   itself), and the runs 1 s tick re-checks `CP.Alerts.inArena(src)` for every active participant
+   (accepted or in progress, tests and operations included). When true: `CP.Runs.removeParticipant(run, src, 'quit')`
+   with the notification `run.left_for_arena`, drop src from CP.Alerts' intent table **without touching the bag**,
+   `CP.Route.stop`, cancel any pending CP.Downed pick-up/EMS request, host succession if needed.
+2. **Our flag wiped by Crimson-Arena → re-assert it.** CP.Alerts keeps `wanted[src] = { runId, setAt }`
+   (only `set` adds, `clear`/removeParticipant/resource stop remove). When the change handler or a 1 s
+   reconcile sees the value is nil while `wanted[src]` exists (participant still active, or downed with
+   keepFlag and a pick-up pending), re-write `{ active = true, source = 'crimson-police' }` on the next tick
+   (at most once per 250 ms per src; log the first per src per run). Never re-write over a foreign value.
+   `has(src)` = `wanted[src] ~= nil`. An incoming nil never means "our run ended".
+3. **Downed pick-up/EMS re-checks.** Immediately before `client:pickup`, `CP.Ambulance.revive` and
+   `client:requestEMS`, the server re-checks `CP.Qbx.isDowned(src)`, `not CP.Alerts.inArena(src)`; if any
+   check fails, cancel that pick-up/EMS (the run result stays `downed`) and `CP.Alerts.clear(src)` (which
+   leaves foreign values alone). `CP.Ambulance.revive` refuses and logs for an in-arena src. The downed poll
+   skips in-arena srcs. Client `client:pickup` re-checks `LocalPlayer.state.crimsonArena` (abort if foreign)
+   before waiting for the revive and before `SetEntityCoords`; on abort always `DoScreenFadeIn` and clear
+   the overlay; detect "revived" by polling `not IsEntityDead(PlayerPedId())` and metadata isdead/inlaststand false.
+   After a foreign value changes to nil, CP.Alerts records `foreignClearedAt[src] = os.time()`; CP.Downed
+   delays `client:requestEMS` until 11 s after that (sc-ambulance drops EMS requests for 10 s after an arena exit).
+4. **Mission items are tagged and removed by metadata.** Give every mission item with metadata
+   `{ cpRun = run.id, cpItem = true }`. Remove by slot from the player's own inventory
+   (`exports.ox_inventory:Search(src, 'slots', name, { cpRun = run.id })` then `RemoveItem(src, name, count, nil, slot)`),
+   never by bare name. Keep an orphan list by citizenid for items not found; sweep orphans (items whose
+   `metadata.cpItem` is true and whose `cpRun` is not an active run) on `QBCore:Server:PlayerLoaded`, 10 s
+   after that player's value changes from foreign to nil, and every 60 s for listed citizenids. Never give
+   items to an in-arena src. Removal and sweeps keep the items back only while the player is in a routing
+   bucket other than 0 (a Crimson-Arena match, or any other instance such as an apartment); the crimsonArena
+   flag on its own, in bucket 0, does not keep them, because a client can write its own bag and a player in
+   bucket 0 holds his own inventory. While the flag is set in bucket 0 (an entry or exit in progress) a sweep
+   still runs but keeps the citizenid on the orphan list, so the sweep 10 s after the flag clears still runs.
+   The sweep looks for every mission item name and for `Config.Custody.evidenceItem`. Never touch stashes named
+   `crimson_arena_*`. Mission/Builder validation rejects item names `armour`, `bandage`, `ammo-*`,
+   `WEAPON_*`/`weapon_*`.
+5. **Gates.** `server:acceptType` (every member), `server:joinOperation`, `server:unitRespond` (accept),
+   `server:testRespond` (accept), `CP.Testing.start` (admin and testers) refuse with `err.in_arena` when
+   `CP.Alerts.inArena(src)`. The route arrival check also requires `not inArena(src)` before
+   `markArrived` / `CP.Alerts.set`.
+6. **Anti-cheat, route and telemetry ignore in-arena srcs.** `CP.AntiCheat.checkEvent`, `server:routeStatus`
+   and `server:telemetry` return false (`err.in_arena`) with no flag, penalty, drift or speed sample for an
+   in-arena src; the speed check discards the position pair across any tick where the src's bucket changed.
+   A whole-run speed/teleport flag is never raised because of such a src.
+7. **No-build zones.** `Config.Builder.noBuildZones` includes "Crimson-Arena Trailer Park"
+   (2344.43, 2565.06, 46.67, r 160) and "Crimson-Arena lobby" (-282.01, -2030.46, 30.15, r 60); the mission
+   loader and builder reject any point inside them. `CP.Draw.pickLocation`'s player clearance ignores
+   in-arena players.
+8. **Client UI.** The CP client registers
+   `AddStateBagChangeHandler('crimsonArena', ('player:%d'):format(GetPlayerServerId(PlayerId())), h)`; on a
+   foreign value: `CP.Tablet.close()` (delete prop, stop animation), `lib.cancelProgress()` if a CP progress
+   bar runs, hide the CP HUD and overlays. The command, keybind, tablet item and `OpenTablet` refuse
+   (toast `err.in_arena`) while the local value is foreign. Call `SetNuiFocus(false, false)` only when a CP
+   UI is open — never unconditionally. One exception: `CrimsonPoliceState unstick` (and the admin's Release
+   screen) ends with it, because FiveM keeps one NUI focus vote per resource (ResourceUIScripting.cpp
+   SET_NUI_FOCUS): it removes only Crimson-Police's own vote and never another resource's focus.
+   The tablet prop is non-networked (`CreateObject(..., false, false, false)`).
+9. **Alert backstop.** Capture src and `t = os.time()` at receipt; decide with `CP.Alerts.wanted[src]`
+   (intent), not the live bag. Clear `playerdown_/playerdead_` ids for t-1, t, t+1 with `{ 'police', 'ambulance' }`
+   and `shots_` ids within `backstopRadius` (server-side coords). Skip srcs whose value is foreign
+   (Crimson-Arena handles them). Never `CancelEvent()` shared events.
+10. **Global natives.** Never call `SetPlayerTeam`, `NetworkSetFriendlyFireOption` or `SetCanAttackFriendly`
+    on any player or player ped; never set routing buckets (`SetPlayerRoutingBucket`, `SetEntityRoutingBucket`,
+    `SetRoutingBucket*`).
+11. **weaponDamageEvent.** CP.Npc's handlers return early when `WasEventCanceled()` is true. Crimson-Police
+    never calls `CancelEvent` on `weaponDamageEvent`, `explosionEvent` or any sc-dispatch event, with one exception
+    the owner asked for (no one-shot kills by mission NPCs, `Config.NpcCombat.cancelLethalHeadshots`, 2026-10-19):
+    a `weaponDamageEvent` with `willKill` whose shooter (`parentGlobalId`) is an armed mission ped of a live
+    Crimson-Police run and whose every victim is an active participant of that run, in routing bucket 0, not
+    `inArena`, and with at least `Config.NpcCombat.lethalCancelAbove` of his health (a hurt officer can still go
+    down). A Crimson-Arena fighter, a player's shot, another resource's NPC and a hit on any NPC are never
+    cancelled. `tools/lint_fivem.py` FX09 lists that one call in its baseline.
+12. **Outlines.** If `SetEntityDrawOutline` is used, call `SetEntityDrawOutlineColor(r, g, b, a)` and
+    `SetEntityDrawOutlineShader(0)` right before every enable; never change the render technique.
+13. **Teleports.** Test-run teleport controls, `CP.Runs.anchor` moves and every Builder move refuse with
+    `err.in_arena` for an in-arena src; the client re-checks `LocalPlayer.state.crimsonArena` before `SetEntityCoords`.
+14. **Names.** Crimson-Arena uses `crimson_arena:*` events, `/arenaleave`, `/arenaconsole`, `/arenaadmin`,
+    ox_target `crimson_arena_lobby`, tables/stashes `crimson_arena_*`. Crimson-Police uses `crimson-police:*`,
+    `/CrimsonPolice`, `/CrimsonPoliceAdmin`, `crimsonpolice_*` key mappings, `crimson-police:*` target names,
+    `cp_*` tables. If Crimson-Police ever listens to `crimson_arena:dispatch:enter/exit`, use AddEventHandler only.
+15. **Mission calls, custody, profile and the other features.** Every way in gates on `CP.Alerts.inArena(src)` the same way:
+    - Police actions (`server:custody`, `server:contactDecide`) and process_scene steps are refused for an
+      in-arena participant; a person being escorted by an officer who enters the arena stops and waits where they are.
+      The service-vehicle driver (transport van, tow truck, coroner van) is never an in-arena src; the AI moves on.
+    - A mission-call claim runs every accept check, so it is refused with `err.in_arena`; the client drops a call
+      toast while its own value is foreign. A unit ready check is cancelled when a member enters the arena, and the
+      last Ready re-checks every member.
+    - `getSession` refuses every way into the tablet with `err.in_arena`; mission desks (ox_target box zones) are
+      removed on a foreign value and created again when it clears.
+    - Item rewards are never given in the arena: the reward waits in the Rewards locker and is retried 10 s after the
+      `arena:exited` hook, which CP.Alerts' 1 s reconcile fires once when `inArena(src)` turns false (flag cleared,
+      or the bucket back to 0). Rewards carry `cpReward` and never `cpItem`, so rule 4's sweep leaves them alone; the
+      optional evidence item carries `{ cpRun, cpItem = true }` and is removed with the other mission items. The
+      forbidden reward names include rule 4's `armour`, `bandage`, `ammo-*` and `weapon_*`, matched case-insensitively.

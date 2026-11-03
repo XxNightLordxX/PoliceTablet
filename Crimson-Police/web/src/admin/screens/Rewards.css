@@ -1,0 +1,79 @@
+/* Admin UI → Rewards. Only --cp-* variables; classes prefixed rewards-screen. */
+
+.rewards-screen__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.rewards-screen__row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius-sm);
+}
+
+.rewards-screen__row.is-off {
+    opacity: 0.75;
+}
+
+.rewards-screen__row-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rewards-screen__row-title {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.rewards-screen__row-body,
+.rewards-screen__bytype,
+.rewards-screen__items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.rewards-screen__money,
+.rewards-screen__bytype-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.rewards-screen__bytype-row > code {
+    min-width: 110px;
+}
+
+.rewards-screen__field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 160px;
+}
+
+.rewards-screen__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: var(--cp-fs-sm);
+}
+
+.rewards-screen__muted {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.rewards-screen__actions {
+    display: flex;
+    gap: 8px;
+}

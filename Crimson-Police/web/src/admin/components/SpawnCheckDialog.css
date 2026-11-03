@@ -1,0 +1,141 @@
+/* Admin UI · Testing · Check spawn points. Only --cp-* variables (admin theme). */
+
+.cp-dialog.spawncheck {
+    max-width: 1040px;
+}
+
+.spawncheck__setup {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.spawncheck__pick {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.spawncheck__notes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--cp-muted);
+}
+
+.spawncheck__notes span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.spawncheck__notes .is-warning {
+    color: var(--cp-warning);
+}
+
+.spawncheck__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.spawncheck__run {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--cp-border);
+}
+
+.spawncheck__state {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+}
+
+.spawncheck__where {
+    color: var(--cp-muted);
+}
+
+.spawncheck__error {
+    color: var(--cp-danger);
+}
+
+.spawncheck__stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.spawncheck__results,
+.spawncheck__skipped {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.spawncheck__results-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.spawncheck__results-title {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.spawncheck__table-wrap {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.spawncheck__table-wrap tr.is-bad td {
+    background: rgba(var(--cp-danger-rgb), 0.06);
+}
+
+.spawncheck__where {
+    max-width: 240px;
+}
+
+.spawncheck__mission {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.spawncheck__id {
+    display: block;
+    font-family: var(--cp-mono);
+    font-size: 12px;
+    color: var(--cp-muted);
+    white-space: nowrap;
+}
+
+.spawncheck__table-wrap td {
+    vertical-align: middle;
+}
+
+.spawncheck-notes {
+    font-size: 12px;
+    color: var(--cp-muted);
+}
+
+.spawncheck__more {
+    font-size: 12px;
+}
+
+.spawncheck__skipped ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+}

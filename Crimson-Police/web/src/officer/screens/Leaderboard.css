@@ -1,0 +1,211 @@
+/* Officer UI · Leaderboard (boards slice). Only --cp-* variables; classes prefixed boards-. */
+
+.boards-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.boards-filters {
+    align-items: center;
+    row-gap: 8px;
+}
+
+.boards-dept-select {
+    min-width: 110px;
+}
+
+.boards-metric-select {
+    min-width: 150px;
+}
+
+.boards-level {
+    flex: none;
+}
+
+.boards-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}
+
+/* ranks and medals */
+.boards-rank {
+    display: inline-flex;
+    min-width: 28px;
+    justify-content: center;
+    font-weight: 650;
+    color: var(--cp-muted);
+}
+
+.boards-rank--none {
+    color: var(--cp-subtle);
+}
+
+.boards-medal {
+    --m: var(--cp-xp-gold-rgb);
+    --m-solid: var(--cp-xp-gold);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px 3px 7px;
+    border-radius: var(--cp-radius-pill);
+    background: rgba(var(--m), 0.16);
+    border: 1px solid rgba(var(--m), 0.45);
+    color: var(--m-solid);
+    font-weight: 750;
+    font-size: var(--cp-fs-sm);
+}
+
+.boards-medal--2 {
+    --m: var(--cp-xp-silver-rgb);
+    --m-solid: var(--cp-xp-silver);
+}
+
+.boards-medal--3 {
+    --m: var(--cp-xp-bronze-rgb);
+    --m-solid: var(--cp-xp-bronze);
+}
+
+/* rows */
+.boards-officer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.boards-officer > * {
+    flex: none;
+}
+
+.boards-officer__name {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Tables whose one flexible column (officer / mission / season) takes the width the fixed columns leave:
+   a 64-character name or a long custom mission label is cut with an ellipsis (full text in the tooltip)
+   instead of pushing the numbers and row actions out of view. Every other column sets a width. */
+.boards-fixed .cp-table {
+    table-layout: fixed;
+}
+
+.boards-fixed .cp-table th,
+.boards-fixed .cp-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.boards-ellipsis {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.boards-muted {
+    color: var(--cp-subtle);
+}
+
+.boards-strong {
+    font-weight: 650;
+}
+
+.boards-struck {
+    text-decoration: line-through;
+    color: var(--cp-subtle);
+}
+
+.boards-row-chevron {
+    color: var(--cp-subtle);
+}
+
+/* a table that sits flush inside a padding="none" card */
+.boards-flat-table {
+    border: 0;
+    border-radius: 0 0 var(--cp-radius) var(--cp-radius);
+    background: transparent;
+}
+
+.boards-points {
+    font-weight: 700;
+}
+
+.boards-points small {
+    font-size: var(--cp-fs-xs);
+    font-weight: 600;
+    color: var(--cp-muted);
+}
+
+.boards-board tbody tr:nth-child(-n + 3) .boards-officer__name {
+    font-weight: 700;
+}
+
+.boards-board tbody tr:nth-child(1) .boards-points {
+    color: var(--cp-xp-gold);
+}
+
+/* the viewer's own row, pinned under the list (sticky at the bottom of the scroll area) */
+.boards-board tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--cp-surface-3);
+    border-top: 2px solid rgba(var(--cp-accent-rgb), 0.55);
+    cursor: pointer;
+}
+
+.boards-board tfoot tr:first-child td:first-child {
+    box-shadow: inset 3px 0 0 var(--cp-accent);
+}
+
+.boards-board tfoot tr.is-listed td {
+    background: var(--cp-surface-2);
+}
+
+.boards-pinned__label {
+    padding: 2px 7px;
+    border-radius: var(--cp-radius-xs);
+    background: rgba(var(--cp-accent-rgb), 0.16);
+    color: var(--cp-accent-text);
+    font-size: var(--cp-fs-xs);
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.boards-pinned__who {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.2;
+}
+
+.boards-unranked {
+    font-size: var(--cp-fs-xs);
+    font-weight: 600;
+    color: var(--cp-warning);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.boards-footnote {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: -8px;
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-subtle);
+}
