@@ -380,6 +380,7 @@
   "admin.cmd.storage_copy_mismatch": "{table}: {rows} rows copied, but the {target} now has {found}.",
   "admin.cmd.storage_copied": "Copied {tables} tables and {rows} rows from the {source} to the {target} in {seconds} s. Every id is kept.",
   "admin.cmd.storage_copy_failed": "The copy stopped at {table}: {error}. The {target} was emptied again and the {source} is unchanged. Fix the problem and run the copy again.",
+  "admin.cmd.storage_copy_failed_live": "The copy stopped at {table}: {error}. The {target} is the storage in use, so it was not emptied again: payments, runs and claims stay held. Restart Crimson-Police, then run the copy again with force.",
   "admin.cmd.storage_copy_error": "The copy failed: {error}",
   "admin.cmd.storage_next_restart": "Restart Crimson-Police now, so every feature loads the copied data.",
   "admin.cmd.storage_next_files": "To use the saves folder, set Config.Database.enabled = false in config/config.lua and restart Crimson-Police.",

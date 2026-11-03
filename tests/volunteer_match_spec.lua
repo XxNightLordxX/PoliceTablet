@@ -826,6 +826,25 @@ do
     H.eq(#frPaid, 1, 'Z2: a linked-accounts run pays the volunteer nothing')
     CP.AntiCheat.flaggedWith = nil
 
+    -- step Z8: a repeat pair with a second sign (rs_pair_repeat, raised in the same hook): no pay either
+    Reset()
+    run = NewRun()
+    run.participants = { [1] = { citizenid = 'OFR00001' } }
+    local repeatRun = run.id
+    CP.AntiCheat.flaggedWith = function(r, reason) return reason == 'rs_pair_repeat' and r.id == repeatRun end
+    Answer(30, LastAsk(30), true)
+    H.step(0)
+    recs.VMR00030.contactAt = H.clockMs
+    H.advance(2000, 1000) -- one match pass (TICK_MS 2 s since step LP2)
+    H.step(0)
+    closeOut = {
+        { VMR00030 = 'got_away' },
+        { kind = 'volunteer', order = { 'VMR00030' }, suspects = { VMR00030 = { contactAt = 1, share = 1 } } },
+    }
+    Finish(run, 'completed', 'completed')
+    H.eq(#frPaid, 1, 'Z8: a repeat-pair flagged run pays the volunteer nothing')
+    CP.AntiCheat.flaggedWith = nil
+
     -- a no-show: the event says why he dropped out; endEvent = false sends nothing
     Reset()
     run = NewRun()

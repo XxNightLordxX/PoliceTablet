@@ -83,7 +83,8 @@ function rowActions(r: PaymentRow, v: PaymentsView): RowAction[] {
     const out: RowAction[] = [];
     const sw = v.switches;
     if (r.status === 'paying') out.push('resolve');
-    if (r.status === 'pending') out.push('payNow');
+    // a 'held' row no longer flagged or voided: an approval whose release did not run
+    if (r.status === 'pending' || (r.status === 'held' && !r.flagged && !r.voided)) out.push('payNow');
     if (r.status === 'unfunded' && sw.unfundedRetry && !r.voided) out.push('unfunded');
     if (r.status === 'capped' && r.cut > 0 && !r.restPaid && sw.capTopUp && !r.voided) out.push('capRest');
     if (r.status === 'forfeited' && r.paid === 0 && !r.voided && sw.restoreForfeited) out.push('repay');

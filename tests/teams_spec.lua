@@ -179,7 +179,15 @@ CP.Alerts = {
     inArena = function(src) return arena[src] == true end,
 }
 CP.Calls = {
-    isOnCall = function(src) return onCall[src] == true end,
+    -- onCall[src] = true (any call) or a call id (ignored when opts.except.exact names it, as CP.Calls does)
+    isOnCall = function(src, opts)
+        local v = onCall[src]
+        if type(v) == 'string' then
+            local ex = type(opts) == 'table' and type(opts.except) == 'table' and opts.except.exact or nil
+            return not (ex and ex[v])
+        end
+        return v == true
+    end,
 }
 CP.Permissions = {
     can = function(src, action)
@@ -966,6 +974,25 @@ H.eq(v.tier, 'heavy', 'expected tier for 3')
 res = Cb('sup:getOperation', 1)
 H.eq(res.data.operation.canStart, true, 'launcher can start')
 
+-- Z8: a mission ban or the department's crossDept opt-out set after the join drops him at the start
+Clear()
+CP.MissionBan = {
+    get = function(cid) return cid == 'CID3' and { ['until'] = os.time() + 3600 } or nil end,
+}
+local savedDC8 = CP.DeptControls
+CP.DeptControls = {
+    get = function(dept, key) return key == 'crossDept' and dept == 'fib' and { join = false, places = 0 } or nil end,
+}
+ok, data = Act('server:sup:opStart', 1)
+CP.MissionBan = nil
+CP.DeptControls = savedDC8
+H.eq(data, 'err.op_not_enough', 'Z8: the banned and the opted-out officers are dropped: too few to start')
+H.eq(#O.active().participants, 1, 'Z8: only the officer still allowed is kept')
+H.eq(CountNotes('officer.op.removed_at_start'), 2, 'Z8: both are told')
+Act('server:joinOperation', 5, opId)
+Act('server:joinOperation', 3, { operationId = opId })
+H.eq(#O.active().participants, 3, 'Z8: they join again once allowed')
+
 Clear()
 created = {}
 pickResult = 2
@@ -1711,6 +1738,21 @@ U._sweep()
 onCall[2] = nil
 H.eq(LastCancel().who[1], 2, 'a real call cancels')
 H.ok(HasNote(3, 'unit.ready.cancel_call'), 'real call toast')
+-- Z8: a live claim's ready check: responding to that crime's own dispatch call never cancels it
+Clear()
+local liveCancels = #cancelCalls
+U.lock(u)
+U.readyCheck(u, 'tactical', function() readyCalls = readyCalls + 1 end, function(key, who)
+    cancelCalls[#cancelCalls + 1] = { key = key, who = who }
+    U.unlock(u)
+end, { except = { exact = { crimson_contract_7_1 = true }, prefixes = {} } })
+onCall[2] = 'crimson_contract_7_1'
+U._sweep()
+H.eq(#cancelCalls, liveCancels, 'Z8: the live case\'s own call is not a real call for the sweep')
+onCall[2] = 'other_call'
+U._sweep()
+onCall[2] = nil
+H.eq(#cancelCalls, liveCancels + 1, 'Z8: another call still cancels')
 Clear()
 StartCheck(u)
 for _, fn in ipairs(lostFns) do fn(3, 'off_duty') end

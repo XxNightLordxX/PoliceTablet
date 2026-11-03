@@ -892,6 +892,53 @@ do
 end
 
 -- ============================================================================
+--                         8b. THE CONSOLE STORAGE COPY
+-- ============================================================================
+-- Z8: THE SAME GUARDS AS THE UI.
+
+do
+    -- '/CrimsonPoliceAdmin storage copy ... force' goes through Sys.storageCopy: the maintenance lock during the
+    -- copy, the target's money state kept, and the restart prompt when the target is the store in use
+    local mode = CP.Storage.mode()
+    local liveDir = mode == 'files' and 'database-to-files' or 'files-to-database'
+    local otherDir = mode == 'files' and 'files-to-database' or 'database-to-files'
+    local realCopy, realSnap, realReapply = CP.Admin.storageCopy, Sys.moneySnapshot, Sys.moneyReapply
+    local seen, snaps, reapplied, answer = {}, 0, 0, nil
+    CP.Admin.storageCopy = function(src, dir, force)
+        seen[#seen + 1] = { src = src, dir = dir, force = force, lock = (Maint.active()) }
+        return table.unpack(answer)
+    end
+    Sys.moneySnapshot = function() snaps = snaps + 1 return { runs = { { id = 1 } }, items = {} } end
+    Sys.moneyReapply = function() reapplied = reapplied + 1 return { runs = 1 } end
+    answer = { true, 'admin.cmd.storage_copied', { rows = 3 }, true }
+    CP.Admin.command(0, { 'storage', 'copy', liveDir, 'force' })
+    H.ok(seen[1] and seen[1].lock == 'storage' and seen[1].force == true, 'Z8: the console copy runs under the lock')
+    H.ok(snaps == 1 and reapplied == 1, 'Z8: a forced console copy keeps the money state (paid stays paid)')
+    H.ok(Maint.active() == 'storage' and Maint.view().restart == true,
+        'Z8: into the store in use: the lock holds and asks for a restart')
+    Maint.finish('storage')
+    CP.Admin.command(0, { 'storage', 'copy', otherDir })
+    H.ok(seen[2] and seen[2].lock == 'storage' and Maint.active() == nil, 'Z8: into the other store: the lock ends')
+    -- a copy into the store in use that failed after its writes: never emptied, the lock holds for a restart
+    answer = { false, 'admin.cmd.storage_copy_failed_live', {}, true }
+    CP.Admin.command(0, { 'storage', 'copy', liveDir, 'force' })
+    H.ok(Maint.active() == 'storage' and Maint.view().restart == true,
+        'Z8: a live copy that failed part way keeps the lock and asks for a restart')
+    Maint.finish('storage')
+    -- a refusal before any write ends the lock
+    answer = { false, 'admin.cmd.storage_target_has_rows', {}, false }
+    CP.Admin.command(0, { 'storage', 'copy', liveDir })
+    H.eq(Maint.active(), nil, 'Z8: a copy refused before its writes ends the lock')
+    -- another lock is held: refused, the copy never runs
+    Maint.begin('restore', { by = 'test' })
+    local n = #seen
+    CP.Admin.command(0, { 'storage', 'copy', liveDir })
+    H.eq(#seen, n, 'Z8: another maintenance lock refuses the console copy')
+    Maint.finish('restore')
+    CP.Admin.storageCopy, Sys.moneySnapshot, Sys.moneyReapply = realCopy, realSnap, realReapply
+end
+
+-- ============================================================================
 --                               9. AUDIT EXPORTS
 -- ============================================================================
 
@@ -916,6 +963,16 @@ do
     local text = fh and fh:read('a') or ''
     if fh then fh:close() end
     H.ok(text:find('^id,time') ~= nil, 'the file holds the CSV')
+    -- Z8: a write that fails (FS.write answers nil, err without raising) is refused, never reported as saved
+    local fsT = CP.Storage.MemSQL.fs
+    local realWrite = fsT.write
+    fsT.write = function(path, ...)
+        if tostring(path):match('%.csv$') then return nil, 'disk full' end
+        return realWrite(path, ...)
+    end
+    local resF, eF = Sys.saveAudit({})
+    fsT.write = realWrite
+    H.ok(resF == nil and eF == 'err.export_write', 'Z8: a failed write is refused: ' .. tostring(eF))
 end
 
 return H

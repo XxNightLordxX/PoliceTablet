@@ -424,3 +424,24 @@ names the change it came with.
   with SAST's hour range, and the ban works. (Z7)
 - [ ] Files mode, Settings -> Database -> jsonCacheEntries 0: resmon memory drops after the next badge check and the
   lookups still answer the same. (Z7)
+- [ ] Files mode with paid rows: run `/CrimsonPoliceAdmin storage copy database-to-files force` in the console: the
+  maintenance lock is on during the copy, paid rows stay paid (no second payment at the next login), and the console
+  and Admin UI ask for a restart. (Z8)
+- [ ] Real suspects -> Exclude on a player, then he commits a Crimson-Contracts crime: he is not a suspect of the
+  LIVE call (the live crime audit says "excluded"). (Z8)
+- [ ] `Config.FeatureRewards.suspect.enabled = true`: a volunteer case flagged rs_pair_repeat pays the volunteer
+  nothing. (Z8)
+- [ ] `Config.LiveCrime.enabled = true`: a LIVE claim whose crime ends before the case opens shows Abandoned
+  (cancelled) in History, not Failed, and adds nothing to the leaderboard failed column. (Z8)
+- [ ] Parking Patrol with a returning driver who argues: run him over with an NPC car (or let traffic kill him): the
+  objective completes instead of waiting for the time limit. (Z8)
+- [ ] Flee and arrest, field contact, hostile waves, protect and rescue: an officer who left the run kills a cuffed or
+  unarmed NPC: the run does not fail for the officers still on it. (Z8)
+- [ ] Approve a flagged run while a maintenance lock holds payments: the row stays Held, then the officer's next
+  login (or Admin UI -> Payments -> Pay now on that row) pays it. (Z8)
+- [ ] `Config.LiveCrime.enabled = true`, `readyCheck = true`: a unit member responding to the crime's own 911 call
+  in sc-dispatch does not cancel the ready check, and the unit can claim the call. (Z8)
+- [ ] Cross-Department join window: mission-ban a joined officer (or turn his department's crossDept join off), then
+  Start now: he is removed at the start with the toast, and is not on the run. (Z8)
+- [ ] Admin UI -> Audit -> Save to server with saves/exports read-only: the save fails with the write error and no
+  success toast. (Z8)

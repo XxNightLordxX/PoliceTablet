@@ -243,12 +243,14 @@ end
 
 -- True when the run carries the officer-conduct flag rs_linked_accounts (an officer and the volunteer share a
 -- connection or PC): the volunteer's own feature pay is never paid for it.
-local function Linked(run)
+local function FlaggedWith(run, reason)
     local AC = CP.AntiCheat
     if not (AC and AC.flaggedWith) then return false end
-    local ok, v = pcall(AC.flaggedWith, run, 'rs_linked_accounts')
+    local ok, v = pcall(AC.flaggedWith, run, reason)
     return ok and v == true
 end
+
+local function Linked(run) return FlaggedWith(run, 'rs_linked_accounts') end
 
 local function Candidates(m)
     local out, seen = {}, {}
@@ -841,6 +843,8 @@ function V.payVolunteer(m, run, state, reason)
     if not payload then return false end
     -- an officer of the run shares a connection or PC with him (rs_linked_accounts, held for review): no pay
     if Linked(run) then return false end
+    -- the same pair again with a second sign (rs_pair_repeat, raised by RecordPairs just before): no pay either
+    if FlaggedWith(run, 'rs_pair_repeat') then return false end
     local _, case = Opp('close', run)
     local rec = type(case) == 'table' and type(case.suspects) == 'table' and case.suspects[m.cid] or nil
     local afk = type(rec) == 'table' and (rec.afk == true or tonumber(rec.share) == 0) or false

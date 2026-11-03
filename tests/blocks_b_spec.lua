@@ -578,6 +578,16 @@ do -- killing a surrendered hostile (after the grace) fails; inside the grace it
     AdvanceMs(4000)
     HW.onEntityDead(ctx, b, 1)
     H.eq(S.fails[1], 'run.fail_killed_unarmed', 'participant killed a surrendered hostile')
+    -- Z8: a player who left the run (still in run.participants) kills one: an outside kill
+    ctx, S = MakeCtx('hostile_waves', { waves = { 3 } }, HwLocation(12))
+    HW.start(ctx)
+    ctx.run.participants[2] = { src = 2, status = 'left' }
+    SetHealth(S, S.spawned[1].netId, 110)
+    HW.onEvent(ctx, 1, { type = 'low_health', netId = S.spawned[1].netId })
+    AdvanceMs(4000)
+    HW.onEntityDead(ctx, S.spawned[1].netId, 2)
+    H.eq(#S.fails, 0, 'Z8: a left participant killing a surrendered hostile is not a participant kill')
+    HW.stop(ctx)
     HW.tick(ctx, 1)
     H.eq(S.completes, 0, 'failed objective never completes')
 end
@@ -979,6 +989,14 @@ do -- deaths
     PR.prepare(ctx)
     PR.onEntityDead(ctx, S.spawned[2].netId, 1)
     H.eq(S.fails[1], 'run.fail_killed_unarmed', 'participant killed a hostage')
+
+    -- Z8: a left participant's kill is an outside kill: failIfDies decides
+    ctx, S = MakeCtx('protect_rescue', {}, prLoc, { index = 2 })
+    PR.prepare(ctx)
+    ctx.run.participants[2] = { src = 2, status = 'left' }
+    PR.onEntityDead(ctx, S.spawned[2].netId, 2)
+    H.eq(S.fails[1], 'block.protect_rescue.fail_died',
+        'Z8: a left participant killing a hostage is not a participant kill')
 
     ctx, S = MakeCtx('protect_rescue', { failIfDies = false }, prLoc, { index = 2 })
     PR.prepare(ctx)
@@ -1471,6 +1489,16 @@ do -- door: flee response, aim and escape
     KnockOpen(ctx, S)
     FA.onEntityDead(ctx, S.spawned[1].netId, 1)
     H.eq(S.fails[1], 'run.fail_killed_unarmed', 'killed an unarmed fleeing suspect')
+
+    -- Z8: a player who left the run (still in run.participants, status 'left') kills him: an outside kill
+    Place(1, 3000, 3000, 10)
+    ctx, S = MakeCtx('flee_arrest', { responses = { surrender = 0, flee = 1, fight = 0 }, associates = { count = 0 } },
+        doorLoc)
+    FA.start(ctx)
+    KnockOpen(ctx, S)
+    ctx.run.participants[2] = { src = 2, status = 'left' }
+    FA.onEntityDead(ctx, S.spawned[1].netId, 2)
+    H.eq(#S.fails, 0, 'Z8: a left participant killing an unarmed suspect is not a participant kill')
 end
 
 do -- door: fight response, stun, low health, death before the knock

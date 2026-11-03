@@ -695,6 +695,12 @@ do
     ok, why = Opp.eligible(70)
     H.ok(ok == false and why == 'excluded', '(j) the excludeAce ace (a server BOOL native: 1)')
     H.players[70].ace = {}
+    -- Z8: an admin's Exclude (Opp.excluded) keeps him out too, not only the volunteer list
+    local excludedWas = Opp.excluded
+    Opp.excluded = function(cid) return cid == 'ELIG0070', os.time() + 3600 end
+    ok, why = Opp.eligible(70)
+    H.ok(ok == false and why == 'excluded', '(j) Z8: an admin\'s Exclude')
+    Opp.excluded = excludedWas
     bucket[70] = 3
     ok, why = Opp.eligible(70)
     H.ok(ok == false and why == 'instance', '(j) not in an instance')

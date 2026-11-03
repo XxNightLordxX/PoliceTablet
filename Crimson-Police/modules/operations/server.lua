@@ -617,7 +617,10 @@ local function DoStart(cur, actorSrc, auto)
     local valid, dropped = {}, {}
     for _, p in ipairs(CP.U.copy(cur.participants)) do
         local o = GetOfficer(p.src)
-        if o and o.citizenid == p.citizenid and not OnRun(p.src) and not InArena(p.src) and not IsOnCall(p.src) then
+        -- a mission ban or the department's crossDept rule (join off, places counted over the kept list) set after
+        -- he joined counts too, as on a join
+        if o and o.citizenid == p.citizenid and not OnRun(p.src) and not InArena(p.src) and not IsOnCall(p.src)
+            and not Banned(o.citizenid) and not DeptRefuses({ participants = valid }, o) then
             valid[#valid + 1] = o
         else
             dropped[#dropped + 1] = p

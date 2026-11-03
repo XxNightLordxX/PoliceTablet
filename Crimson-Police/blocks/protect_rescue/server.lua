@@ -145,9 +145,9 @@ end
 local function IsParticipant(ctx, src)
     src = tonumber(src)
     if not src then return false end
-    if ctx.run and type(ctx.run.participants) == 'table' and ctx.run.participants[src] then return true end
+    -- active participants only: one who left the run is an outside kill (AntiCheat flags outside_help)
     for _, s in ipairs(ctx.participants() or {}) do
-        if s == src then return true end
+        if tonumber(s) == src then return true end
     end
     return false
 end

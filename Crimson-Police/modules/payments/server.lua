@@ -808,7 +808,10 @@ Kit.action('server:admin:payNow', 'payments', function(ctx)
     -- a manual_award row still 'none' is a manual cash payment whose audit row was never written: never paid
     local unpaid = st == 'none' and row.state == 'completed' and math.floor(U.num(row.cash_base)) > 0
         and row.mission_type ~= 'manual_award'
-    if st ~= 'pending' and not unpaid then return false, 'err.state_changed' end
+    -- a 'held' row no longer flagged or voided is an approval whose release did not run
+    local released = st == 'held' and row.state == 'completed' and not U.truthy(row.flagged)
+        and not U.truthy(row.voided)
+    if st ~= 'pending' and not unpaid and not released then return false, 'err.state_changed' end
     local id = math.floor(U.num(row.id))
     local status = CP.Cash.pay(id)
     ctx.audit('paymentRetry', Target(id, row.citizenid), st, tostring(status or st))

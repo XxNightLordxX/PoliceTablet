@@ -77,8 +77,15 @@ local ended = {}
 CP.Runs = {
     get = function() return nil end,
     endRun = function(run, state, reason)
+        -- as Runs.endRun: any state but completed or failed is stored failed
+        if state ~= 'completed' and state ~= 'failed' then state = 'failed' end
         ended[#ended + 1] = { run = run.id, state = state, reason = reason }
         run.state = 'ended'
+    end,
+    cancelRun = function(run, reason)
+        ended[#ended + 1] = { run = run.id, state = 'abandoned', reason = reason or 'cancelled' }
+        run.state = 'ended'
+        return true
     end,
 }
 
@@ -271,6 +278,7 @@ do
     H.advance(10)
     H.eq(#ended, 1, 'no case: the run ends')
     H.eq(ended[1].reason, 'cancelled', '...as cancelled')
+    H.eq(ended[1].state, 'abandoned', '...Z8: stored Abandoned (cancelRun), never Failed')
 
     -- not a live run: nothing
     opp.opened = nil

@@ -272,6 +272,46 @@ do
     Runs.endRun(run, 'completed', 'completed')
 end
 
+do
+    -- Z8: a returning driver who dies before he is done (traffic, an NPC: not a participant) no longer leaves the
+    -- objective waiting until its time limit
+    local m = W.mission({
+        {
+            block = 'field_contact',
+            label = 'Check the cars',
+            mode = 'parked',
+            cars = 1,
+            profileSet = 'test_legal',
+            returning = { chance = 1, max = 1 },
+            thief = { chance = 0 },
+            minSeconds = 0,
+        },
+        { block = 'stub_hold', label = 'After', minSeconds = 0 },
+    }, ParkedLocation(2))
+    local run = W.start({ 1 }, m)
+    W.tick(1)
+    local cars = W.cars(run, 1)
+    W.near(1, run, cars[1].netId)
+    W.decide(1, run, cars[1].netId, 'cite')
+    local st = Obj(run, 1).state
+    local rd = nil
+    for _, t in pairs(st.contacts) do if t.returning then rd = t end end
+    H.ok(rd ~= nil, 'Z8: the driver comes back')
+    -- he argues: only Explain the citation would calm him
+    rd.returning.outcome = 'argues'
+    local c = CP.Custody.get(run, rd.netId)
+    if c then c.arguing = true end
+    W.tick(2)
+    H.eq(Obj(run, 1).status, 'active', 'Z8: the objective waits for him')
+    local mdl = W.model(run, rd.netId)
+    mdl.killer = 0
+    mdl.health = 0
+    W.tick(15)
+    H.eq(run.state, 'in_progress', 'Z8: a kill by nobody on the run does not fail the case')
+    H.eq(Obj(run, 1).status, 'done', 'Z8: a dead returning driver is done: the objective completes')
+    Runs.endRun(run, 'completed', 'completed')
+end
+
 -- ============================================================================
 --           4. PARKED: THE THIEF (runs, caught, one act one reward)
 -- ============================================================================
@@ -590,6 +630,26 @@ do
     H.eq(run.state, 'ended', 'killing a person who never drew fails the case')
     H.eq(run.failReason, 'run.fail_killed_unarmed', 'run.fail_killed_unarmed')
     RestoreDemeanour()
+end
+
+do
+    -- Z8: a player who left the run (run.participants status 'left') kills him: an outside kill, not a fail
+    Demeanour('clean', 'compliant')
+    W.place(2, 2000.0, 1985.0, 30.0)
+    local run = W.start({ 1, 2 }, SceneMission({ profileSet = 'test_clean', scene = { loitering = 1 } }))
+    W.tick(1)
+    local p = Contact(run, 1, 'person')
+    W.place(1, 2000.0, 1990.0, 30.0)
+    W.tick(1)
+    H.eq(p.state, 'contacted', 'Z8: a compliant person stays and talks')
+    run.participants[2].status = 'left'
+    local mdl = W.model(run, p.netId)
+    mdl.killer = 200
+    mdl.health = 0
+    W.tick(2)
+    H.eq(run.failReason, nil, 'Z8: a left participant killing him does not fail the case')
+    RestoreDemeanour()
+    if run.state ~= 'ended' then Runs.endRun(run, 'completed', 'completed') end
 end
 
 do

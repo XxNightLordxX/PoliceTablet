@@ -631,6 +631,18 @@ do
     people[8].offline = nil
     local okD, dD = Act('server:admin:retryPending', 1, { requestId = Rid() })
     H.ok(okD and dD.paid == 1 and RowOf(id3).cash_status == 'paid', 'Retry all pending pays the online officers')
+
+    -- Z8: an approved row whose release did not run (still 'held', flag cleared): the login sweep and Pay now pay it
+    local id4 = Row({ status = 'held', owed = 70 })
+    H.eq(Async(function() return Cash.payPending(7) end), 1, 'Z8: payPending pays a held row no longer flagged')
+    H.eq(RowOf(id4).cash_status, 'paid', 'Z8: ...paid')
+    local id5 = Row({ status = 'held', owed = 40, flagged = true })
+    H.eq(Async(function() return Cash.payPending(7) end), 0, 'Z8: a held row still flagged waits for review')
+    local okF, eF = Act('server:admin:payNow', 1, { rowId = id5, requestId = Rid() })
+    H.ok(okF == false and eF == 'err.state_changed', 'Z8: Pay now refuses a held row still flagged')
+    H.sql('UPDATE cp_mission_runs SET flagged = 0 WHERE id = ?', { id5 })
+    local okG, dG = Act('server:admin:payNow', 1, { rowId = id5, requestId = Rid() })
+    H.ok(okG and dG.status == 'paid', 'Z8: Pay now pays a held row once its flag is cleared')
 end
 
 -- ============================================================================

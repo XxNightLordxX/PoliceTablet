@@ -1039,7 +1039,8 @@ H.eq(copyRow[1] and copyRow[1].actor, 'ADM00001', 'actor = the admin\'s citizeni
 H.eq(copyRow[1] and copyRow[1].role, 'admin', 'role admin')
 H.eq(copyRow[1] and copyRow[1].old_value, ('replaced %d rows'):format(SOURCE_ROWS + 1), 'old value = the rows replaced')
 
--- a copy that fails half way (a zero date the saves folder cannot hold): the target is emptied, the source unchanged
+-- a copy that fails half way (a zero date the saves folder cannot hold): the source is unchanged; the saves folder is
+-- the storage in use, so it is never emptied (Z8: rows the server wrote meanwhile stay; the caller asks for a restart)
 Mq('UPDATE cp_officers SET last_complete = \'0000-00-00\' WHERE citizenid = \'CPY00002\'')
 local mariaZero = DumpMaria(live)
 m0 = Mark()
@@ -1047,23 +1048,15 @@ admin('storage', 'copy', 'database-to-files', 'force')
 out = OutputSince(m0)
 H.ok(out:find('The copy stopped at cp_officers', 1, true) ~= nil, 'the failure names the table: ' .. out:sub(1, 300))
 H.ok(out:find('does not support', 1, true) ~= nil, 'and the reason')
-H.ok(out:find('The saves folder was emptied again and the database is unchanged', 1, true) ~= nil, 'and what it did')
-local emptied = 0
-for _, name in ipairs(live:tableNames()) do
-    if name ~= 'cp_schema_migrations' then
-        emptied = emptied + EngineCount(live, 'SELECT COUNT(*) AS n FROM `' .. name .. '`')
-    end
-end
-H.eq(emptied, 0, 'every table of the saves folder is empty')
+H.ok(out:find('The saves folder is the storage in use, so it was not emptied again', 1, true) ~= nil,
+    'Z8: and that the storage in use was not emptied')
 H.eq(EngineCount(live, 'SELECT COUNT(*) AS n FROM cp_schema_migrations'), MIGRATIONS, 'the migration record stays')
-reloaded = M.new({ store = M.folderStore(dir) }):load()
-H.eq(EngineCount(reloaded, 'SELECT COUNT(*) AS n FROM cp_mission_runs'), 0, 'and it is saved empty')
 H.eq(SameTables(mariaZero, DumpMaria(live), 'the source after the failure'), COPIED_TABLES, 'the database is unchanged')
 Mq('UPDATE cp_officers SET last_complete = NULL WHERE citizenid = \'CPY00002\'')
 mariaBefore = DumpMaria(live)
 m0 = Mark()
-admin('storage', 'copy', 'database-to-files')
-H.ok(PrintedSince(m0, 'Copied 28 tables') ~= nil, 'after the fix the copy needs no force (the target is empty)')
+admin('storage', 'copy', 'database-to-files', 'force')
+H.ok(PrintedSince(m0, 'Copied 28 tables') ~= nil, 'after the fix the copy with force replaces the part written')
 H.eq(SameTables(mariaBefore, DumpEngine(live, true), 'after the fix'), COPIED_TABLES,
     'the saves folder holds the database')
 

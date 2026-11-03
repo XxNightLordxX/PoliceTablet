@@ -443,7 +443,12 @@ do
     H.eq(#posted, n, '(i) all excluded: nothing posted')
     local ign = Audited('liveCrimeIgnored', c)
     H.eq(ign[1] and ign[1][7], 'no_suspect', '(i) audited liveCrimeIgnored: no suspect')
-    for _, part in ipairs({ 'on police duty 1', 'cuffed 1', 'in an instance 1', 'excluded by the server.cfg ace 1' }) do
+    for _, part in ipairs({
+        'on police duty 1',
+        'cuffed 1',
+        'in an instance 1',
+        'excluded (server.cfg ace or an admin\'s Exclude) 1',
+    }) do
         H.ok(ign[1] and ign[1][8]:find(part, 1, true), '(i) the audit says ' .. part)
     end
     camReads = 0

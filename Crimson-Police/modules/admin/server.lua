@@ -1419,6 +1419,7 @@ local MIGRATION_DONE = {
     'already exists',
 }
 local storageBusy = false
+local storageWrote = false   -- the copy reached its writes (Admin.storageCopy's 4th answer)
 
 local function StorageMode()
     if Has('Storage', 'mode') then
@@ -2043,6 +2044,7 @@ local function StorageCopy(src, direction, force)
     if console then Reply(src, 'info', 'admin.cmd.storage_folder_used', { path = names.path }) end
     local started = GetGameTimer and GetGameTimer() or 0
     local copied, total, failedAt = {}, 0, nil
+    storageWrote = true
     local ok, err = target.bulk(function()
         local okIn, errIn = pcall(function()
             if force then
@@ -2074,15 +2076,19 @@ local function StorageCopy(src, direction, force)
             end
         end)
         if not okIn then
-            for _, name in ipairs(tgtSchema.order) do
-                if name ~= MIGRATIONS_TABLE then pcall(target.exec, 'DELETE FROM ' .. QuoteName(name)) end
+            -- the storage in use is never emptied: the caller keeps the maintenance lock and asks for a restart
+            if not target.live then
+                for _, name in ipairs(tgtSchema.order) do
+                    if name ~= MIGRATIONS_TABLE then pcall(target.exec, 'DELETE FROM ' .. QuoteName(name)) end
+                end
             end
             error(errIn, 0)
         end
     end)
     if not ok then
         CP.err(TAG, 'storage copy %s failed at %s: %s', direction, tostring(failedAt or '-'), tostring(err))
-        return Reply(src, 'error', 'admin.cmd.storage_copy_failed',
+        return Reply(src, 'error',
+            target.live and 'admin.cmd.storage_copy_failed_live' or 'admin.cmd.storage_copy_failed',
             { table = failedAt or '-', error = ShortError(err), source = names.source, target = names.target })
     end
 
@@ -2119,7 +2125,9 @@ local function StorageCopy(src, direction, force)
 end
 
 -- The storage copy for the command and the Admin UI: one at a time (it shares CP.AdminKit's busy lock with bulk jobs,
--- backups and restores), never while a run is going. ok, messageKey, vars (the replies also reach src).
+-- backups and restores), never while a run is going. ok, messageKey, vars, wrote (the copy reached its writes; the
+-- replies also reach src). The maintenance lock, the money-state keep and the restart prompt are CP.Sysadmin's
+-- storageCopy (the command and the Admin UI both go through it).
 function Admin.storageCopy(src, direction, force)
     if direction ~= 'database-to-files' and direction ~= 'files-to-database' then
         return Reply(src, 'error', 'admin.cmd.storage_usage', { cmd = CmdName() })
@@ -2132,15 +2140,16 @@ function Admin.storageCopy(src, direction, force)
         local okL = kit.lock('storageCopy')
         if not okL then return Reply(src, 'error', 'admin.cmd.storage_copy_busy') end
     end
-    storageBusy = true
+    storageBusy, storageWrote = true, false
     local res = table.pack(pcall(StorageCopy, src, direction, force == true))
     storageBusy = false
     if kit and kit.unlock then kit.unlock('storageCopy') end
     if not res[1] then
         CP.err(TAG, 'storage copy %s failed: %s', direction, tostring(res[2]))
-        return Reply(src, 'error', 'admin.cmd.storage_copy_error', { error = ShortError(res[2]) })
+        local okR, keyR, varsR = Reply(src, 'error', 'admin.cmd.storage_copy_error', { error = ShortError(res[2]) })
+        return okR, keyR, varsR, storageWrote
     end
-    return res[2], res[3], res[4]
+    return res[2], res[3], res[4], storageWrote
 end
 
 SUB.storage = function(src, args)
@@ -2161,7 +2170,13 @@ SUB.storage = function(src, args)
         or #args > 3 then
         return Reply(src, 'error', 'admin.cmd.storage_usage', { cmd = CmdName() })
     end
-    return Admin.storageCopy(src, direction, extra == 'force')
+    -- the same path as the Admin UI action: the maintenance lock, the money-state keep and the restart prompt
+    local guarded = CP.Sysadmin and CP.Sysadmin.storageCopy
+    -- (fxmanifest always loads modules/sysadmin; a spec that loads this module alone copies unguarded)
+    if not guarded then return Admin.storageCopy(src, direction, extra == 'force') end
+    local ok, key, vars, extra2 = guarded(src, direction, extra == 'force')
+    if not ok and type(extra2) == 'table' and extra2.refused then return Reply(src, 'error', key or 'err.refused') end
+    return ok, key, vars
 end
 
 -- Every Config health line (the start-up run prints only the problems): all of them in the console, the counts in

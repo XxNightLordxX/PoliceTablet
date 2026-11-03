@@ -19,7 +19,7 @@
   "livecrime.why.down": "down",
   "livecrime.why.cuffed": "cuffed",
   "livecrime.why.jailed": "in jail",
-  "livecrime.why.excluded": "excluded by the server.cfg ace",
+  "livecrime.why.excluded": "excluded (server.cfg ace or an admin's Exclude)",
   "livecrime.why.admin": "a Crimson-Police admin",
   "livecrime.why.too_far": "too far from the crime",
   "err.setting_live_type": "A crime names an unknown mission type. Use a mission type in Config.MissionTypes (such as investigation or tactical), or false.",

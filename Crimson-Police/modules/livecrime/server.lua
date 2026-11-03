@@ -677,9 +677,8 @@ local function Opened(run)
         CP.warn(TAG, 'run %s: the live case could not open (%s): the run is cancelled', run.id,
             crime and 'no suspect left' or 'the crime is gone')
         SetTimeout(0, function()
-            if run.state ~= 'ended' and CP.Runs and CP.Runs.endRun then
-                CP.Runs.endRun(run, 'abandoned', 'cancelled')
-            end
+            -- cancelRun stores Abandoned (endRun turns any state but completed into failed)
+            if run.state ~= 'ended' and CP.Runs and CP.Runs.cancelRun then CP.Runs.cancelRun(run, 'cancelled') end
         end)
         return
     end

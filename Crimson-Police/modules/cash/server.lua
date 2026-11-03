@@ -589,11 +589,12 @@ function Cash.payPending(src)
     if PaymentsHeld() then return 0 end
     -- 'pending' rows, plus completed mission rows still 'none' although they carry cash (the engine's pay never
     -- ran or was skipped, e.g. a crash right after the row insert): no money moved on either, and pay() claims
-    -- them like any other row. Manual award and goal rows never carry cash.
+    -- them like any other row. Manual award and goal rows never carry cash. 'held' rows no longer flagged too: an
+    -- approval whose release did not run (lock wait, maintenance, a stop between the flag clear and the claim).
     local ok, rows = pcall(MySQL.query.await, [[
         SELECT id FROM cp_mission_runs
         WHERE citizenid = ? AND state = 'completed' AND flagged = 0 AND voided = 0
-          AND (cash_status = 'pending'
+          AND (cash_status IN ('pending', 'held')
                OR (cash_status = 'none' AND mission_type NOT IN ('manual_award', 'goal') AND cash_base > 0))
         ORDER BY id
     ]], { info.citizenid })

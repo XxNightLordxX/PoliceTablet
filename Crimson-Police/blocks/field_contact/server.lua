@@ -1187,6 +1187,14 @@ local function ReturningTick(ctx, st)
     for _, netId in ipairs(st.order) do
         local t = st.contacts[netId]
         local rd = t and t.returning
+        if rd and not rd.done then
+            -- dead (traffic, an NPC), vanished or escaped before he was done: nothing is left to wait for
+            local gone = CP.Custody.get(ctx.run, netId)
+            if t.escaped or not gone or gone.dead or gone.escaped then
+                rd.done = true
+                st.dirty = true
+            end
+        end
         local due = rd and not rd.done and Now() - rd.at >= RETURN_WALK_S * 1000
         if rd and not rd.done and rd.walksIn then
             due = false
@@ -1579,7 +1587,9 @@ local function OnEntityDead(ctx, netId, killerSrc)
     CP.Custody.markDead(ctx.run, netId)
     st.dirty = true
     -- killing a person who never drew a weapon fails the case (compliant, surrendered, in custody or unarmed)
-    if c.kind == 'person' and killerSrc and ctx.run.participants[killerSrc] and not (drew and prev == 'hostile') then
+    local killer = killerSrc and ctx.run.participants[killerSrc]
+    -- an active participant only: one who left the run is an outside kill (AntiCheat flags outside_help)
+    if c.kind == 'person' and killer and killer.status == 'active' and not (drew and prev == 'hostile') then
         Fail(ctx, st, 'run.fail_killed_unarmed')
         return
     end

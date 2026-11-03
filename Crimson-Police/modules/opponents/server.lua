@@ -1041,6 +1041,8 @@ function Opp.eligible(src, opts)
     if type(cfg.excludeAce) == 'string' and cfg.excludeAce ~= '' and IsPlayerAceAllowed(n, cfg.excludeAce) then
         return false, 'excluded'
     end
+    -- an admin's Exclude (Real suspects tool) keeps him out of every case, live crimes too
+    if type(Opp.excluded) == 'function' and Opp.excluded(cid) then return false, 'excluded' end
     if cfg.excludeAdmins ~= false and CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n) then
         return false, 'admin'
     end

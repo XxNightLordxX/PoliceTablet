@@ -637,6 +637,8 @@ function Units.readyCheck(ref, typeKey, onReady, onCancel, extra)
         noAuto = type(extra) == 'table' and extra.crossDepartment == true,
         -- a live case's ready check: { title, street, suspects }, shown as the LIVE line
         live = type(extra) == 'table' and type(extra.live) == 'table' and extra.live or nil,
+        -- a live claim's own dispatch calls (an exemptFor-shaped set): the sweep's isOnCall ignores them too
+        except = type(extra) == 'table' and type(extra.except) == 'table' and extra.except or nil,
     }
     for _, t in ipairs(type(extra) == 'table' and type(extra.twists) == 'table' and extra.twists or {}) do
         if type(t) == 'table' and type(t.key) == 'string' and type(t.label) == 'string' then
@@ -782,7 +784,9 @@ local function SweepChecks(now)
                     if InArena(m) then
                         CancelCheck(unit, 'err.unit_ready_cancelled', { m }, 'unit.ready.cancel_arena')
                     else
-                        local okC, onCall = Call('Calls', 'isOnCall', m)   -- may wait on the database
+                        -- may wait on the database
+                        local okC, onCall = Call('Calls', 'isOnCall', m,
+                            check.except and { except = check.except } or nil)
                         if okC and onCall == true and readyChecks[id] == check and not check.done then
                             CancelCheck(unit, 'err.unit_ready_cancelled', { m }, 'unit.ready.cancel_call')
                         end

@@ -1812,8 +1812,10 @@ function Sys.saveAudit(args)
     end
     local name = ('audit-%s.csv'):format(os.date('!%Y%m%d-%H%M%S', os.time()))
     local fs = Fs()
-    local ok = fs and pcall(fs.write, Root() .. '/' .. EXPORT_DIR .. '/' .. name, table.concat(chunks, '\n'))
-    if not ok then return nil, 'err.export_write' end
+    if not fs then return nil, 'err.export_write' end
+    -- FS.write answers nil, err without raising (io.open refused, a full disk)
+    local okW, res = pcall(fs.write, Root() .. '/' .. EXPORT_DIR .. '/' .. name, table.concat(chunks, '\n'))
+    if not (okW and res == true) then return nil, 'err.export_write' end
     return { path = EXPORT_DIR .. '/' .. name, rows = n, truncated = total >= AUDIT_SAVE_MAX }
 end
 
@@ -1844,6 +1846,43 @@ Kit.callback('admin:getStorage', 'storageAdmin', function(ctx)
     return Sys.storageView()
 end, { rate = 1 })
 
+-- The storage copy behind the maintenance lock, for the Admin UI action and the console command alike: new runs,
+-- claims and payments wait during it, a forced copy keeps the target's money state (paid stays paid), and a copy
+-- into the store in use (also one that failed part way: it is never emptied) ends with the restart prompt.
+-- ok, key, vars, { money, restart, refused } (refused: stopped here before CP.Admin replied to src).
+function Sys.storageCopy(src, direction, force)
+    if direction ~= 'database-to-files' and direction ~= 'files-to-database' then
+        return false, 'err.invalid_payload', nil, { refused = true }
+    end
+    force = force == true
+    if RunsGoing() > 0 then return false, 'err.storage_runs_active', nil, { refused = true } end
+    local okM, errM = Maint.begin('storage', { by = ActorOf(src), copy = direction })
+    if not okM then return false, errM, nil, { refused = true } end
+    local mode = CP.Storage and CP.Storage.mode and CP.Storage.mode() or 'database'
+    local targetKind = direction == 'database-to-files' and 'files' or 'database'
+    local folder = Config.Database and Config.Database.folder or 'saves'
+    -- the store in use changed under the running server: only a restart reads it again
+    local live = targetKind == mode
+    -- a forced copy over a store with data keeps that store's money state (paid stays paid)
+    local snap = nil
+    if force then
+        local target = OpenStore(targetKind, folder)
+        if target then snap = Sys.moneySnapshot(target) end
+    end
+    local okC, ok, key, vars, wrote = Call('Admin', 'storageCopy', src, direction, force)
+    if not okC or not ok then
+        if live and wrote then Maint.askRestart('storage') else Maint.finish('storage') end
+        return false, key or 'err.refused', vars, { restart = live and wrote == true }
+    end
+    local money = nil
+    if snap and (#snap.runs > 0 or #snap.items > 0) then
+        local target = OpenStore(targetKind, folder)
+        if target then money = Sys.moneyReapply(target, snap, { ahead = true }) end
+    end
+    if live then Maint.askRestart('storage') else Maint.finish('storage') end
+    return true, key, vars, { money = money, restart = live }
+end
+
 Kit.action('server:admin:storageCopy', 'storageAdmin', function(ctx)
     local p = ctx.payload
     local direction = p.direction
@@ -1851,33 +1890,11 @@ Kit.action('server:admin:storageCopy', 'storageAdmin', function(ctx)
         return false, 'err.invalid_payload'
     end
     local force = p.force == true
-    if RunsGoing() > 0 then return false, 'err.storage_runs_active' end
-    local okM, errM = Maint.begin('storage', { by = ActorOf(ctx.src), copy = direction })
-    if not okM then return false, errM end
-    local mode = CP.Storage and CP.Storage.mode and CP.Storage.mode() or 'database'
-    local targetKind = direction == 'database-to-files' and 'files' or 'database'
-    local folder = Config.Database and Config.Database.folder or 'saves'
-    -- a forced copy over a store with data keeps that store's money state (paid stays paid)
-    local snap = nil
-    if force then
-        local target = OpenStore(targetKind, folder)
-        if target then snap = Sys.moneySnapshot(target) end
-    end
-    local okC, ok, key, vars = Call('Admin', 'storageCopy', ctx.src, direction, force)
-    if not okC or not ok then
-        Maint.finish('storage')
-        return false, key or 'err.refused'
-    end
-    local money = nil
-    if snap and (#snap.runs > 0 or #snap.items > 0) then
-        local target = OpenStore(targetKind, folder)
-        if target then money = Sys.moneyReapply(target, snap, { ahead = true }) end
-    end
+    local ok, key, vars, extra = Sys.storageCopy(ctx.src, direction, force)
+    if not ok then return false, key or 'err.refused' end
     ctx.audit('storageCopy', direction, force and 'force' or nil, vars and ('%s rows'):format(tostring(vars.rows)))
-    -- the store in use changed under the running server: only a restart reads it again
-    local live = targetKind == mode
-    if live then Maint.askRestart('storage') else Maint.finish('storage') end
-    return true, WithView({ message = key, vars = vars, money = money, restart = live }, Sys.storageView())
+    return true,
+        WithView({ message = key, vars = vars, money = extra.money, restart = extra.restart }, Sys.storageView())
 end, {
     requestId = true,
     confirm = function(p) return p.force == true and 'REPLACE' or nil end,

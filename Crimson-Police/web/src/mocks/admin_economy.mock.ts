@@ -210,7 +210,8 @@ registerMock('action', 'server:admin:resolvePayment', (p: { outcome?: string; ch
 
 registerMock('action', 'server:admin:payNow', (p: unknown) => {
     const r = byId(p);
-    if (r.status !== 'pending') throw new Error('err.state_changed');
+    const released = r.status === 'held' && !r.flagged && !r.voided;
+    if (r.status !== 'pending' && !released) throw new Error('err.state_changed');
     r.status = 'paid';
     r.paid = r.owed;
     return { id: r.id, status: 'paid', online: true };

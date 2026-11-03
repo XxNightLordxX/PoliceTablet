@@ -1901,7 +1901,7 @@ local function AcceptStart(src, typeKey, opts, note)
         end
         -- the teammates see the twists their leader chose on the ready check
         local okRc, res = pcall(readyCheck, unit, typeKey, onReady, onCancel,
-            { twists = TwistLabels(ctx.twists), timeout = readySecs, live = ReadyLine(ctx.live) })
+            { twists = TwistLabels(ctx.twists), timeout = readySecs, live = ReadyLine(ctx.live), except = ctx.except })
         if okRc and res ~= false then return true, { pending = true } end
         CP.warn(TAG, 'the ready check could not start (%s); the draw follows at once', tostring(res))
     end
