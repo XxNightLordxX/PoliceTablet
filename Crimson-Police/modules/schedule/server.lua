@@ -181,8 +181,10 @@ local function MonthsBefore(ts, months)
 end
 
 -- Rows that may move to the archive: never one whose money or item rewards are unfinished (held, pending or paying
--- cash; held, pending or giving rewards), so owed money never vanishes from the Payments screen and the login payment.
+-- cash, a completed run row still 'none' with cash the login payment owes; held, pending or giving rewards), so owed money never vanishes from the Payments screen and the login payment.
 local ARCHIVE_OK = [[r.cash_status NOT IN ('held', 'pending', 'paying')
+    AND NOT (r.cash_status = 'none' AND r.state = 'completed' AND r.cash_base > 0 AND r.voided = 0
+        AND r.mission_type NOT IN ('manual_award', 'goal'))
     AND NOT EXISTS (SELECT 1 FROM cp_item_rewards i WHERE i.row_id = r.id AND i.status IN ('held', 'pending', 'giving'))]]
 
 -- archived, kept (old rows left in place because they are unfinished)

@@ -805,7 +805,8 @@ Kit.action('server:admin:payNow', 'payments', function(ctx)
     local row = RowById(ctx.payload.rowId)
     if not row then return false, 'err.row_not_found' end
     local st = row.cash_status
-    -- a manual_award row still 'none' is a manual cash payment whose audit row was never written: never paid
+    -- a manual_award row still 'none' is a manual cash or feature reward payment that never reached its audit (its
+    -- refused attempt deletes it, an audited one is 'pending' before the pay): never paid
     local unpaid = st == 'none' and row.state == 'completed' and math.floor(U.num(row.cash_base)) > 0
         and row.mission_type ~= 'manual_award'
     -- a 'held' row no longer flagged or voided is an approval whose release did not run
@@ -1069,15 +1070,14 @@ Kit.action('server:admin:manualCash', 'payments', function(ctx)
         Update('DELETE FROM cp_mission_runs WHERE id = ? AND cash_status = \'none\'', { id })
         return false, 'err.audit_failed'
     end
-    local status = CP.Cash.pay(id)
-    if not status then
-        -- not paid now (maintenance lock, lock wait, in flight): 'pending' so the login, start and end-of-maintenance
-        -- sweeps pay it; they skip manual award rows still 'none'
-        status = 'pending'
-        Update([[UPDATE cp_mission_runs SET cash_status = 'pending',
-            breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.cash.status', 'pending'), breakdown)
-            WHERE id = ? AND cash_status = 'none']], { id })
-    end
+    -- 'pending' before the pay waits for the store and the officer's payment lock: a stop or crash in that wait
+    -- leaves an audited row the login, start and end-of-maintenance sweeps pay (they skip manual award rows still
+    -- 'none')
+    Update([[UPDATE cp_mission_runs SET cash_status = 'pending',
+        breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.cash.status', 'pending'), breakdown)
+        WHERE id = ? AND cash_status = 'none']], { id })
+    -- not paid now (maintenance lock, lock wait, in flight): it stays 'pending'
+    local status = CP.Cash.pay(id) or 'pending'
     Touched(ctx, p.citizenid)
     return true, { id = id, status = status, amount = amount }
 end, {

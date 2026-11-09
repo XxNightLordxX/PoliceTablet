@@ -1390,7 +1390,9 @@ TryNext = function(call)
                 })
                 if not okA then ok, data = false, 'err.internal' end
                 if ok and type(data) == 'table' and data.pending then
-                    local readyS = math.floor(Num(Config.Units and Config.Units.readyTimeout, 20))
+                    -- the ready check's own length (the department's readyCheck control), else the config one
+                    local readyS = math.floor(
+                        Num(data.readySeconds, Num(Config.Units and Config.Units.readyTimeout, 20)))
                     call.readyUntil = os.time() + readyS
                     if not c.result then c.result = { true, { pending = true, code = call.code } } end
                     TellLosers(call, c)
@@ -2661,7 +2663,11 @@ CreateThread(function()
     if CP.Admin and CP.Admin.registerSubcommand then
         CP.Admin.registerSubcommand('missioncall', function(src, args)
             local typeKey = args and args[1] and tostring(args[1]):lower() or nil
-            if not typeKey then return false, 'admin.cmd.usage_missioncall' end
+            if not typeKey then
+                return false,
+                    'admin.cmd.usage_missioncall',
+                    { cmd = (Config.Tablet and Config.Tablet.adminCommand) or 'CrimsonPoliceAdmin' }
+            end
             local area = args[2] and tostring(args[2]) or nil
             local ok, data = MC.create(src, typeKey, area)
             if not ok then return false, data end

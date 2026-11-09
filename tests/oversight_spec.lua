@@ -894,6 +894,11 @@ do
     Cb('sup:getReviewQueue', 7)
     H.eq(CP.Admin.shareReviewQueue(8), 1, 'Z8B: an admin\'s decision reaches every department\'s open queue')
     H.eq(CP.Admin.shareReviewQueue(4, 'sast'), 1, 'Z8B: the row\'s department, when given, decides who gets it')
+    -- Z9: a cross-department run's row sits in each department's queue: the list reaches all of them
+    Cb('sup:getReviewQueue', 4)
+    H.eq(CP.Admin.shareReviewQueue(2, { 'sast', 'fib' }), 2,
+        'Z9: a SAST decision on a SAST + FIB run reaches the open FIB queue too')
+    H.eq(CP.Admin.shareReviewQueue(2, { 'sast' }), 1, 'Z9: a list of one department reaches only it')
     infos[8], H.players[8] = nil, nil
     Config.Tablet.supervisorReviewLive = false
 end

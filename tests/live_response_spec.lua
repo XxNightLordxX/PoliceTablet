@@ -147,6 +147,8 @@ do
     H.eq(ctx.state.phase, 'detain', 'held the scene for secureSeconds: phase 3')
     H.eq(#Lines(ctx, 'live_scene'), 1, 'live_scene once')
     H.eq(Detail(ctx), 'Detain and book the suspects', 'the HUD says Detain and book the suspects')
+    local last = ctx.huds[#ctx.huds]
+    H.ok(last.value == false and last.max == false, 'Z9: the detain HUD removes the secure bar (no stale 60/60)')
     H.eq(Checklist(ctx), 'Respond=true,Secure the scene=true,Detain and book the suspects=false',
         'the Detain and book line stays open')
     H.eq(table.concat(timeline, ','), 'responded,scene_secured', 'the staff timeline has both phases')

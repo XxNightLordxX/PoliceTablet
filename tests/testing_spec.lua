@@ -506,6 +506,12 @@ do
     arena[7] = nil
 end
 
+-- Z9: test audit rows: 'admin' only for an admin; a supervisor or a builderEdit grantee (an officer) is supervisor
+H.eq(CP.Testing._auditRole(0), 'console', 'Z9: the console audits as console')
+H.eq(CP.Testing._auditRole(1), 'admin', 'Z9: an admin audits as admin')
+H.eq(CP.Testing._auditRole(6), 'supervisor', 'Z9: a supervisor audits as supervisor')
+H.eq(CP.Testing._auditRole(2), 'supervisor', 'Z9: a granted officer audits as supervisor, never admin')
+
 -- ============================================================================
 --                  STARTING, CONTROLS, DEBUG STREAM, END HOOK
 -- ============================================================================

@@ -1826,6 +1826,43 @@ do -- hidden kind seize: never run.shared.devices, found items are evidence, the
     H.eq(ctx.calls.complete, 1, 'ip seize: complete once every stash is seized')
 end
 
+do -- Z9: every stash found but one still waits for its Seize: it keeps a pointer and the checklist stays open
+    H.clockMs = 8100000
+    stats = {}
+    local spots = { vec3(3200.0, 3000.0, 30.0), vec3(3210.0, 3000.0, 30.0), vec3(3220.0, 3000.0, 30.0) }
+    local obj = IP.defaults({
+        block = 'interact_points',
+        points = 'stashes',
+        progress = { label = 'Searching', duration = 4000 },
+        hidden = { kind = 'seize', count = 2, label = 'Stash', action = { label = 'Seize', duration = 6000 } },
+    })
+    local ctx = FakeCtx({ obj = obj, location = { stashes = spots }, srcs = { 1 }, mission = { source = 'builtin' } })
+    IP.prepare(ctx)
+    IP.start(ctx)
+    local st = ctx.state
+    local function WorkAt(n, ms, kind)
+        At(1, spots[n])
+        for _ = 1, math.ceil(ms / 1000) do
+            Advance(1000)
+            IP.tick(ctx, 1)
+        end
+        return IP.onEvent(ctx, 1, { type = kind or 'interact', point = n })
+    end
+    for n = 1, 3 do WorkAt(n, 4000) end
+    H.eq(st.found, 2, 'Z9 ip seize: both stashes found, none seized')
+    local open = {}
+    for n, p in ipairs(st.points) do if p.status == 'followup' then open[#open + 1] = n end end
+    H.eq(#open, 2, 'Z9 ip seize: two stashes wait for their Seize')
+    local m = IP.marker(ctx)
+    H.ok(type(m) == 'table' and m.kind == 'targets' and #m.targets == 2 and m.targets[1].variant == 'followUp',
+        'Z9 ip seize: the waiting stashes keep a pointer (not false)')
+    H.eq(IP.checklist(ctx)[1].done, false, 'Z9 ip seize: the checklist is not done while a Seize waits')
+    H.ok(IP.presence(ctx, 1, vec3(0.0, 0.0, 30.0)) > 0, 'Z9 ip seize: presence measures to the waiting stash')
+    for _, n in ipairs(open) do WorkAt(n, 6000, 'followup') end
+    H.eq(IP.marker(ctx), false, 'Z9 ip seize: all seized: no pointer')
+    H.eq(IP.checklist(ctx)[1].done, true, 'Z9 ip seize: and the checklist is done')
+end
+
 do -- fastBonus.after: the clock runs from the end of an earlier objective (Drug Lab Raid: from the breach)
     local spots = { vec3(3300.0, 3000.0, 30.0), vec3(3310.0, 3000.0, 30.0) }
     local function Search(after, sinceBreachS)

@@ -1154,6 +1154,8 @@ function Sys.restore(src, name, reason)
         end
         return false, err
     end
+    -- CheckParts yielded: a run that started meanwhile passed the maintenance check, so look again under the lock
+    if RunsGoing() > 0 then return Undo('err.storage_runs_active') end
     local snap, errS = RestoreSnapshot()
     if not snap then return Undo(errS) end
     -- keep N never removes the backup being restored, even the oldest of a full list
@@ -1294,13 +1296,23 @@ function Sys.switchStorage(src, enabled, folder, startEmpty)
     if kind == mode and (kind == 'database' or folder == current) then return false, 'err.storage_same' end
     if RunsGoing() > 0 then return false, 'err.storage_runs_active' end
     if not HasData(kind, folder) and not startEmpty then return false, 'err.storage_target_empty' end
+    -- the lock before the marker writes, and the runs looked at again under it (HasData yielded: a run that started
+    -- meanwhile would end into the store about to be marked left_behind)
+    local okM, errM = Maint.begin('storage', { by = ActorOf(src), switch = kind })
+    if not okM then return false, errM end
+    if RunsGoing() > 0 then
+        Maint.finish('storage')
+        return false, 'err.storage_runs_active'
+    end
     local generation = U.uuid()
     local target = OpenStore(kind, folder)
     if target and target ~= MySQL then WriteMeta(target, generation, 'active') end
-    if not WriteMeta(MySQL, generation, 'left_behind') then return false, 'err.internal' end
+    if not WriteMeta(MySQL, generation, 'left_behind') then
+        Maint.finish('storage')
+        return false, 'err.internal'
+    end
     SetKvp(S.KVP_MODE, kind)
     SetKvp(S.KVP_FOLDER, folder)
-    Maint.begin('storage', { by = ActorOf(src), switch = kind })
     Maint.askRestart('storage')
     return true, { mode = kind, folder = folder, generation = generation, restart = true }
 end
@@ -1749,8 +1761,19 @@ local AUDIT_SELECT = [[SELECT a.id, a.actor, a.role, a.category, a.action, a.tar
   UNIX_TIMESTAMP(a.created_at) AS created_ts, o.display_name
   FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor]]
 
-local function AuditRows(args, limit, offset)
+-- The filter's WHERE and parameters, held to the rows up to maxId when given (a save that reads page by page then
+-- never sees a row written meanwhile, which would shift the later pages by one).
+local function AuditWhere(args, maxId)
     local where, params = CP.Admin._auditWhere(args)
+    if not maxId then return where, params end
+    local out = {}
+    for i, v in ipairs(params or {}) do out[i] = v end
+    out[#out + 1] = maxId
+    return ('(%s) AND a.id <= ?'):format(where), out
+end
+
+local function AuditRows(args, limit, offset, maxId)
+    local where, params = AuditWhere(args, maxId)
     local rows = MySQL.query.await(('%s WHERE %s ORDER BY a.created_at DESC, a.id DESC LIMIT %d OFFSET %d'):format(
         AUDIT_SELECT,
         where,
@@ -1776,8 +1799,8 @@ local function AuditRows(args, limit, offset)
     return out
 end
 
-local function AuditTotal(args)
-    local where, params = CP.Admin._auditWhere(args)
+local function AuditTotal(args, maxId)
+    local where, params = AuditWhere(args, maxId)
     local n = MySQL.scalar.await(
         ('SELECT COUNT(*) FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor WHERE %s'):format(where),
         params)
@@ -1800,10 +1823,12 @@ function Sys.saveAudit(args)
     if not (Has('Admin', '_auditWhere') and Has('Admin', '_csv')) then return nil, 'err.module_unavailable' end
     Db()
     if not EnsureDir(EXPORT_DIR) then return nil, 'err.export_folder' end
-    local total = math.min(AuditTotal(args), AUDIT_SAVE_MAX)
+    -- the rows there now: the pages yield, and audit rows written meanwhile would repeat one row and drop the oldest
+    local maxId = Int(MySQL.scalar.await('SELECT MAX(id) FROM cp_audit', {}))
+    local total = math.min(AuditTotal(args, maxId), AUDIT_SAVE_MAX)
     local chunks, n = {}, 0
     for offset = 0, math.max(0, total - 1), AUDIT_PART do
-        local rows = AuditRows(args, AUDIT_PART, offset)
+        local rows = AuditRows(args, AUDIT_PART, offset, maxId)
         local csv = CP.Admin._csv(rows)
         if offset > 0 then csv = csv:gsub('^[^\n]*\n?', '') end
         if csv ~= '' then chunks[#chunks + 1] = csv end
@@ -1856,6 +1881,9 @@ function Sys.storageCopy(src, direction, force)
     end
     force = force == true
     if RunsGoing() > 0 then return false, 'err.storage_runs_active', nil, { refused = true } end
+    -- any lock already on (a switch's or a live copy's restart lock included): Maint.begin would take a 'storage'
+    -- lock over and the copy's end would then finish it while the server still runs on the old store
+    if Maint.active() then return false, 'err.maintenance', nil, { refused = true } end
     local okM, errM = Maint.begin('storage', { by = ActorOf(src), copy = direction })
     if not okM then return false, errM, nil, { refused = true } end
     local mode = CP.Storage and CP.Storage.mode and CP.Storage.mode() or 'database'

@@ -812,6 +812,9 @@ do
         checks[#checks + 1] = { unit = unit, onReady = onReady, onCancel = onCancel }
         return true
     end
+    -- Z9: the department's readyCheck control (40 s) times the claiming countdown, not Config.Units.readyTimeout
+    local realReady = CP.Runs.readySeconds
+    CP.Runs.readySeconds = function() return 40 end
     local call = NewCall('tactical', 'south_ls')
     H.clockMs = H.clockMs + 3000
     local a = Fire('server:claimMissionCall', 1, { callId = call.id })
@@ -828,6 +831,9 @@ do
     H.eq(other.status, 'claiming', 'other officers see claiming')
     H.eq(other.claiming.callsign, '2L-14', 'with the winning callsign')
     H.ok(other.claiming.expiresIn > 0, 'and the ready countdown')
+    H.ok(other.claiming.expiresIn > 30,
+        'Z9: the countdown is the department\'s 40 s ready check: ' .. tostring(other.claiming.expiresIn))
+    CP.Runs.readySeconds = realReady
     local okC, eC = Claim(5, call.id)
     H.eq(eC, 'err.mc_claiming', 'no claim while the winner confirms')
     local before = call.offerEnds
@@ -997,6 +1003,12 @@ do
     H.eq(okS2, false, 'unknown area')
     H.eq(keyS2, 'err.mc_unknown_area', 'unknown area key')
     H.eq(sub.help, 'admin.cmd.usage_missioncall', 'help key')
+    local okU, keyU, varsU = sub.fn(0, {})
+    H.ok(
+        okU == false and keyU == 'admin.cmd.usage_missioncall' and type(varsU) == 'table'
+            and type(varsU.cmd) == 'string' and varsU.cmd ~= '',
+        'Z9: no type: the usage line comes with its {cmd}'
+    )
     -- the supervisor view
     local sv = Cb('sup:getMissionCalls', 9)
     H.eq(sv.ok, true, 'supervisor view')

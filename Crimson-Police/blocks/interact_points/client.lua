@@ -190,8 +190,25 @@ local function Wanted(ctx, st)
     if not d then return want end
     local pts = d.points or {}
     if d.hidden then
+        if #pts == 0 then return want end
+        if (d.found or 0) >= (d.total or 0) then
+            -- every stash found: the ones still waiting for their Seize keep their point (as the server pointer)
+            if CP.Markers.hidden(ctx, 'point') then return want end
+            for n, p in ipairs(pts) do
+                if p.status == 'followup' then
+                    local c = p.coords
+                    want[n] = {
+                        at = At(c.x, c.y, c.z),
+                        x = c.x,
+                        y = c.y,
+                        z = c.z,
+                        look = p.status .. '|' .. tostring(p.label),
+                    }
+                end
+            end
+            return want
+        end
         if CP.Markers.hidden(ctx, 'searchArea') then return want end
-        if (d.found or 0) >= (d.total or 0) or #pts == 0 then return want end
         local cx, cy, cz = 0.0, 0.0, 0.0
         for _, p in ipairs(pts) do cx, cy, cz = cx + p.coords.x, cy + p.coords.y, cz + p.coords.z end
         cx, cy, cz = cx / #pts, cy / #pts, cz / #pts

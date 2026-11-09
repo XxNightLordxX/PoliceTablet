@@ -488,6 +488,14 @@ do
         'archived content kept')
     res = S._runRetention(T0)
     H.eq(res.archived, 0, 'nothing more to archive')
+    -- Z9: an old completed row still 'none' with cash is owed (the login payment pays it): it stays
+    InsertRun('RET3', 'patrol', 'patrol_owed', 'completed', 'completed', old)
+    H.sql('UPDATE cp_mission_runs SET cash_base = 250 WHERE mission_id = \'patrol_owed\'')
+    res = S._runRetention(T0)
+    H.eq(res.archived, 0, 'Z9: an owed row still none is not archived')
+    H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE mission_id = \'patrol_owed\'')[1].n, 1,
+        'Z9: it stays for the login payment')
+    H.sql('DELETE FROM cp_mission_runs WHERE mission_id = \'patrol_owed\'')
     -- an id collision (AUTO_INCREMENT reset after a restore): the live row is kept, never deleted unarchived
     do
         local archivedId = H.sql('SELECT MIN(id) AS id FROM cp_mission_runs_archive')[1].id

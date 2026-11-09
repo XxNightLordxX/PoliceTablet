@@ -235,6 +235,13 @@ do
     H.ok(not P.can(2, 'bulkVoid'), 'and refused')
     H.ok(not P.can(2, 'openAdmin') and not CP.Access.isAdmin(2), 'a grant never opens the Admin UI')
     H.ok(not P.isGrantable('viewMissionList'), 'the department report is never granted')
+    -- Z9: an extra grant of forceRecall opens Live Missions (the screen to recall from), for his own department
+    local view, errV = CP.Admin.liveRunsFor(2)
+    H.ok(view == nil and errV ~= nil, 'Z9: no grant: an officer has no Live Missions')
+    Config.Permissions.grants.forceRecall = { citizenids = { 'GRO00002' } }
+    view, errV = CP.Admin.liveRunsFor(2)
+    H.ok(type(view) == 'table' and view.canRecall == true,
+        'Z9: a forceRecall grant reads Live Missions and may recall: ' .. tostring(errV))
     Config.Permissions = U.deepcopy(keepPerms)
 end
 

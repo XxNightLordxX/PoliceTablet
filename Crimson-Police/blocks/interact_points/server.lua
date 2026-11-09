@@ -1111,12 +1111,12 @@ CP.Blocks.register(BLOCK, {
     presence = function(ctx, src, coords)
         local st = Ensure(ctx)
         local best
-        if not (st.hidden and st.found >= st.total) then
-            for _, p in ipairs(st.points) do
-                if p.status == 'pending' or p.status == 'followup' then
-                    local d = CP.U.dist(coords, p.coords)
-                    if not best or d < best then best = d end
-                end
+        -- every device found: only a stash still waiting for its Seize is left to reach
+        local allFound = st.hidden and st.found >= st.total
+        for _, p in ipairs(st.points) do
+            if p.status == 'followup' or (p.status == 'pending' and not allFound) then
+                local d = CP.U.dist(coords, p.coords)
+                if not best or d < best then best = d end
             end
         end
         return best or 0.0
@@ -1131,7 +1131,26 @@ CP.Blocks.register(BLOCK, {
         local st = Ensure(ctx)
         if #st.points == 0 then return false end
         if st.hidden then
-            if st.found >= st.total then return false end
+            if st.found >= st.total then
+                -- every stash found: the ones still waiting for their Seize keep a pointer (the circle is gone)
+                local targets = {}
+                for n, p in ipairs(st.points) do
+                    if p.status == 'followup' then
+                        targets[#targets + 1] = {
+                            key = n,
+                            index = n,
+                            number = n,
+                            coords = p.coords,
+                            look = 'point',
+                            variant = 'followUp',
+                            label = Txt(p.label) or Txt(ctx.obj.label)
+                                or CP.Lt('block.interact_points.blip', { n = n }),
+                        }
+                    end
+                end
+                if #targets == 0 then return false end
+                return { kind = 'targets', targets = targets }
+            end
             -- the circle the client half draws: the middle of the spots, 10 m past the farthest
             local cx, cy, cz = 0.0, 0.0, 0.0
             for _, p in ipairs(st.points) do
@@ -1175,7 +1194,8 @@ CP.Blocks.register(BLOCK, {
             return {
                 {
                     label = CP.L('block.interact_points.checklist.devices'),
-                    done = st.found >= st.total,
+                    -- a found stash still waiting for its Seize keeps the line open
+                    done = WorkDone(st),
                     value = st.found,
                     max = st.total,
                 },

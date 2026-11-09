@@ -403,8 +403,8 @@ do
         getBySrc = function(src) return src == 1 and { id = 'r1' } or nil end,
     }
     CP.Admin = {
-        flaggedRows = function(dept, cid)
-            asked.flagged = { dept, cid }
+        flaggedRows = function(dept, cid, admin)
+            asked.flagged = { dept, cid, admin }
             return { {}, {} }
         end,
     }
@@ -421,6 +421,12 @@ do
     H.eq(c.review, 6, 'review: flagged 2 + disputes 1 + profiles 3')
     H.eq(asked.flagged[1], 'sast', 'flagged rows of the supervisor\'s department')
     H.eq(asked.flagged[2], 'ACC1', 'without the supervisor\'s own runs')
+    H.eq(asked.flagged[3], false, 'Z9: a supervisor who is not an admin: no admin-only flag kinds')
+    local realIsAdmin = CP.Access.isAdmin
+    CP.Access.isAdmin = function(src) return src == 1 or realIsAdmin(src) end
+    Counts(1)
+    CP.Access.isAdmin = realIsAdmin
+    H.eq(asked.flagged[3], true, 'Z9: an admin\'s badge counts the admin-only flag kinds his queue lists')
     H.eq(asked.queue, 'sast', 'the profile queue of the department')
     H.eq(c.onRun, true, 'onRun: CP.Runs.getBySrc')
     CP.Units.invitesFor = function() return 3 end

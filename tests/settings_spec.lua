@@ -1102,7 +1102,8 @@ do
             'step P6: happy hour ships on, 5-30 minutes')
         H.ok(
             E('MissionControls.happyHourPerDay').default == 1 and E('MissionControls.happyHourPerDay').max == 24
-                and E('MissionControls.happyHourPerDay').desc:find('a supervisor may start a day', 1, true) ~= nil,
+                and E('MissionControls.happyHourPerDay').desc:find('a day server-wide (any supervisor', 1, true)
+                    ~= nil,
             'step P6: once a day, with its comment'
         )
         H.ok(

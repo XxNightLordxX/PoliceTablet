@@ -926,7 +926,10 @@ local function ReviewCount(src, officer)
     if c and now - c.at < REVIEW_CACHE_S then return c.n end
     local n = 0
     if Can(src, 'reviewFlagged') then
-        n = n + Count(Call('Admin', 'flaggedRows', officer.department, officer.citizenid))
+        -- an admin's badge counts the admin-only flag kinds his Review Queue lists too
+        n = n
+            + Count(Call('Admin', 'flaggedRows', officer.department, officer.citizenid,
+                CP.Access ~= nil and CP.Access.isAdmin ~= nil and CP.Access.isAdmin(src) == true))
     end
     if Can(src, 'handleDisputes') then n = n + Count(Call('Disputes', 'forSupervisor', src)) end
     if Can(src, 'reviewProfiles') then n = n + Count(Call('Profile', 'queue', officer.department)) end

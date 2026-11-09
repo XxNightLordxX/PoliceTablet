@@ -867,7 +867,7 @@ local function PayAgainLocked(row, bd, rowId, amount, needWithdraw)
         if needWithdraw and not RefundSociety(account, amount) then
             CP.err(TAG, 'row %d: Pay again failed after %s was debited %d; it stays paying (transaction %s)', rowId,
                 tostring(account), amount, transId)
-            return false, 'err.payment_refused'
+            return false, 'err.payment_refund_failed'
         end
         Release(rowId, 'again')
         return false, 'err.payment_refused'
@@ -975,7 +975,7 @@ local function CapRestLocked(row, bd, rowId, rest)
         if society and not RefundSociety(account, rest) then
             CP.err(TAG, 'row %d: the capped rest failed after %s was debited %d (transaction %s)', rowId,
                 tostring(account), rest, transId)
-            return false, 'err.payment_refused'
+            return false, 'err.payment_refund_failed'
         end
         Release(rowId, 'restPaid')
         return false, 'err.payment_refused'

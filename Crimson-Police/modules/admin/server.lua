@@ -1406,6 +1406,9 @@ end
 local STORAGE_PAGE = 500          -- rows per read of a table with an integer AUTO_INCREMENT primary key
 local STORAGE_BATCH = 250         -- rows per INSERT into the database
 local MIGRATIONS_TABLE = 'cp_schema_migrations'
+-- tables a storage copy never copies, empties or counts: each store keeps its own migrations and its own
+-- cp_storage_meta (a switch's 'left_behind' marker copied into the store in use would lock it at the next start)
+local COPY_SKIP = { [MIGRATIONS_TABLE] = true, cp_storage_meta = true }
 local MIGRATIONS_CREATE = [[CREATE TABLE IF NOT EXISTS cp_schema_migrations (
   version    INT PRIMARY KEY,
   name       VARCHAR(100) NOT NULL,
@@ -1722,7 +1725,7 @@ local function CountRows(side, schema)
         local r = side.rows('SELECT COUNT(*) AS n FROM ' .. QuoteName(name))
         local n = r[1] and math.tointeger(tonumber(r[1].n or 0)) or 0
         counts[name] = n
-        if name ~= MIGRATIONS_TABLE then total = total + n end
+        if not COPY_SKIP[name] then total = total + n end
     end
     return counts, total
 end
@@ -1998,7 +2001,7 @@ local function StorageCopy(src, direction, force)
     local srcSchema = fromSide.schema()
     local tables = {}
     for _, name in ipairs(srcSchema.order) do
-        if name ~= MIGRATIONS_TABLE then tables[#tables + 1] = name end
+        if not COPY_SKIP[name] then tables[#tables + 1] = name end
     end
     if #tables == 0 then return Reply(src, 'error', 'admin.cmd.storage_source_empty', names) end
 
@@ -2008,7 +2011,7 @@ local function StorageCopy(src, direction, force)
     if beforeTotal > 0 and not force then
         local list = {}
         for _, name in ipairs(tgtSchema.order) do
-            if name ~= MIGRATIONS_TABLE and before[name] > 0 then
+            if not COPY_SKIP[name] and before[name] > 0 then
                 list[#list + 1] = ('%s %d'):format(name, before[name])
             end
         end
@@ -2050,7 +2053,7 @@ local function StorageCopy(src, direction, force)
         local okIn, errIn = pcall(function()
             if force then
                 for _, name in ipairs(tgtSchema.order) do
-                    if name ~= MIGRATIONS_TABLE and (before[name] or 0) > 0 then
+                    if not COPY_SKIP[name] and (before[name] or 0) > 0 then
                         target.exec('DELETE FROM ' .. QuoteName(name))
                     end
                 end
@@ -2080,7 +2083,7 @@ local function StorageCopy(src, direction, force)
             -- the storage in use is never emptied: the caller keeps the maintenance lock and asks for a restart
             if not target.live then
                 for _, name in ipairs(tgtSchema.order) do
-                    if name ~= MIGRATIONS_TABLE then pcall(target.exec, 'DELETE FROM ' .. QuoteName(name)) end
+                    if not COPY_SKIP[name] then pcall(target.exec, 'DELETE FROM ' .. QuoteName(name)) end
                 end
             end
             error(errIn, 0)
@@ -2285,7 +2288,7 @@ end, { rate = 3 })
 
 -- A supervisor's decision answers with his fresh Review Queue (data.queue), so the screen shows the row gone
 -- without a second sup:getReviewQueue request. A queue that cannot be built leaves the reply as it was.
-function Admin.withReviewQueue(src, ok, data)
+function Admin.withReviewQueue(src, ok, data, depts)
     if not ok then return ok, data end
     local out = {}
     if type(data) == 'table' then
@@ -2293,12 +2296,24 @@ function Admin.withReviewQueue(src, ok, data)
     end
     local okQ, queue = pcall(Admin.reviewQueueFor, src)
     if okQ and type(queue) == 'table' then out.queue = queue end
-    pcall(Admin.shareReviewQueue, src)
+    pcall(Admin.shareReviewQueue, src, depts)
     return true, out
 end
 
+-- The departments of a flagged row's run (a cross-department run's row sits in each of their queues), or nil.
+local function RowRunDepartments(rowId)
+    local id = Int(rowId, 1, 2147483647)
+    if not id then return nil end
+    local row = Single('SELECT run_uuid FROM cp_mission_runs WHERE id = ?', { id })
+    if not row or not row.run_uuid then return nil end
+    local list = Admin.runDepartments(row.run_uuid)
+    return #list > 0 and list or nil
+end
+
 CP.Net.action('server:sup:reviewFlagged', function(src, payload)
-    return Admin.withReviewQueue(src, ReviewAction(src, payload))
+    local depts = type(payload) == 'table' and not IsAdmin(src) and RowRunDepartments(payload.rowId) or nil
+    local ok, data = ReviewAction(src, payload)
+    return Admin.withReviewQueue(src, ok, data, depts)
 end, { rate = 3 })
 
 CP.Net.action('server:admin:reviewFlagged', function(src, payload)
@@ -2542,7 +2557,8 @@ end
 -- recall and "+ minutes" replies carry, so the screen needs no second request.
 function Admin.liveRunsFor(src)
     local okP, eP = Can(src, 'viewMissionList')
-    if not okP then return nil, eP end
+    -- an extra grant of forceRecall (viewMissionList cannot be granted) opens Live Missions to recall from
+    if not okP and not Can(src, 'forceRecall') then return nil, eP end
     if not Has('Runs', 'all') then return nil, 'err.module_unavailable' end
     local dept = ViewerDepartment(src)
     local admin = IsAdmin(src)
@@ -2756,17 +2772,31 @@ local function ReviewLiveOn()
 end
 
 -- After src decided a flagged run or a dispute: every other supervisor with the Review Queue open gets his own
--- updated queue at once (push 'reviewQueue'), of dept only: the row's department when given, else a supervisor's own
+-- updated queue at once (push 'reviewQueue'), of dept only: the row's department (or the list of a cross-department
+-- run's departments) when given, else a supervisor's own
 -- (he decides only his department's rows); an admin (any department's rows) or the console: every department.
 -- Returns how many got it; 0 with the switch off.
 function Admin.shareReviewQueue(src, dept)
     if not ReviewLiveOn() or next(reviewWatch) == nil then return 0 end
     if dept == nil and tonumber(src) ~= 0 and not IsAdmin(src) then dept = ViewerDepartment(src) end
+    -- a list: the departments of a cross-department run (its row sits in each of their queues)
+    local depts = nil
+    if type(dept) == 'table' then
+        depts = {}
+        for _, d in ipairs(dept) do depts[d] = true end
+    end
     local now, n = os.time(), 0
     for viewer, at in pairs(reviewWatch) do
         if now - at > REVIEW_WATCH_S then
             reviewWatch[viewer] = nil
-        elseif viewer ~= tonumber(src) and (dept == nil or ViewerDepartment(viewer) == dept) then
+        elseif
+            viewer ~= tonumber(src)
+            and (
+                dept == nil
+                or (depts and depts[ViewerDepartment(viewer) or ''] == true)
+                or (not depts and ViewerDepartment(viewer) == dept)
+            )
+        then
             local okQ, queue = pcall(Admin.reviewQueueFor, viewer)
             if okQ and type(queue) == 'table' and Has('Tablet', 'push') then
                 CP.Tablet.push(viewer, 'reviewQueue', queue)

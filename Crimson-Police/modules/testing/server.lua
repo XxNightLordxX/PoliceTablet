@@ -488,11 +488,12 @@ local function TesterRecord(src)
     return nil, 'err.test_not_eligible'
 end
 
+-- 'admin' only for an admin: a supervisor, or an officer with a builderEdit grant, is 'supervisor' (as CP.Admin)
 local function AuditRole(src)
     if src == 0 then return 'console' end
-    local ok, role = Call('Access', 'role', src)
-    if ok and role == 'supervisor' then return 'supervisor' end
-    return 'admin'
+    local ok, admin = Call('Access', 'isAdmin', src)
+    if ok and admin == true then return 'admin' end
+    return 'supervisor'
 end
 
 local function Audit(src, category, action, target, oldV, newV, reason)
@@ -2510,6 +2511,7 @@ Testing._checkPoints = CheckPoints
 Testing._counts = Counts
 Testing._validTier = ValidTier
 Testing._adminRecord = AdminRecord
+Testing._auditRole = AuditRole
 Testing._reset = function()
     invites, lobbies, tests, byAdmin, pending, lastStart, names = {}, {}, {}, {}, {}, {}, {}
     spawnReports = {}

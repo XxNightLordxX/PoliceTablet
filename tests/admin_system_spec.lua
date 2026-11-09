@@ -859,6 +859,25 @@ do
     })
     H.ok(ok == false and e == 'err.storage_runs_active', 'refused while a run goes')
     runsNow = {}
+    -- Z9: a run that starts while the switch looks at the target (before the lock) is seen under the lock
+    local realBegin = Maint.begin
+    Maint.begin = function(kind, info)
+        runsNow = { { participants = {} } }
+        return realBegin(kind, info)
+    end
+    ok, e = Act('server:admin:setStorageMode', 1, {
+        enabled = false,
+        folder = 'saves/other',
+        startEmpty = true,
+        reason = 'r',
+        confirm = 'SWITCH',
+        requestId = Rid(14),
+    })
+    Maint.begin = realBegin
+    runsNow = {}
+    H.ok(ok == false and e == 'err.storage_runs_active', 'Z9: a run started before the lock refuses the switch')
+    H.ok(Maint.active() == nil and kvp.cp_storage_mode == nil and Sys.storageMeta().state ~= 'left_behind',
+        'Z9: and the lock ends with nothing switched or marked')
     ok, e = Act('server:admin:setStorageMode', 1, {
         enabled = false,
         folder = 'saves/other',
@@ -935,6 +954,14 @@ do
     CP.Admin.command(0, { 'storage', 'copy', liveDir })
     H.eq(#seen, n, 'Z8: another maintenance lock refuses the console copy')
     Maint.finish('restore')
+    -- Z9: a switch's (or a finished live copy's) restart lock is a 'storage' lock too: a copy is refused and the
+    -- lock, with its restart flag, stays
+    Maint.begin('storage', { by = 'test', restart = true })
+    answer = { true, 'admin.cmd.storage_copied', { rows = 3 }, true }
+    CP.Admin.command(0, { 'storage', 'copy', otherDir })
+    H.eq(#seen, n, 'Z9: a copy during a storage restart lock never runs')
+    H.ok(Maint.active() == 'storage' and Maint.view().restart == true, 'Z9: and the restart lock stays')
+    Maint.finish('storage')
     -- Z8B: the Admin UI's refusal with values shows them, never the raw {placeholders}
     answer = { false, 'admin.cmd.storage_runs_active', { count = 2 }, false }
     local okU, errU = Act('server:admin:storageCopy', 1, { direction = otherDir, requestId = Rid(81) })
@@ -978,6 +1005,20 @@ do
     local resF, eF = Sys.saveAudit({})
     fsT.write = realWrite
     H.ok(resF == nil and eF == 'err.export_write', 'Z8: a failed write is refused: ' .. tostring(eF))
+    -- Z9: an audit row written while the save reads its pages is not in it (no repeated row, no dropped oldest)
+    local before = tonumber(H.sql('SELECT COUNT(*) AS n FROM cp_audit')[1].n)
+    local realQuery, wrote = MySQL.query.await, false
+    MySQL.query.await = function(sql, ...)
+        if not wrote and type(sql) == 'string' and sql:find('ORDER BY a.created_at DESC', 1, true) then
+            wrote = true
+            H.sql('INSERT INTO cp_audit (actor, role, action) VALUES (\'console\', \'console\', \'z9Late\')')
+        end
+        return realQuery(sql, ...)
+    end
+    local resL = Sys.saveAudit({})
+    MySQL.query.await = realQuery
+    H.ok(wrote, 'Z9: a row was written during the save')
+    H.eq(resL and resL.rows, before, 'Z9: the save holds the rows there when it began')
 end
 
 return H

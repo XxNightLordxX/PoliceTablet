@@ -270,16 +270,14 @@ function FR.pay(feature, cid, opts)
         Audit(feature, rowId, cid, amount, items, key)
         local status = 'none'
         if amount > 0 and CP.Cash and CP.Cash.pay then
-            status = CP.Cash.pay(rowId)
-            if not status then
-                -- not paid now (maintenance lock, left-behind store, in flight): 'pending' so the login, start and
-                -- end-of-maintenance sweeps pay it; they skip manual award rows still 'none'
-                status = 'pending'
-                local okP, errP = pcall(MySQL.update.await,
-                    [[UPDATE cp_mission_runs SET cash_status = 'pending' WHERE id = ? AND cash_status = 'none']],
-                    { rowId })
-                if not okP then CP.err(TAG, 'marking row %d pending failed: %s', rowId, tostring(errP)) end
-            end
+            -- 'pending' before the pay waits for the store and the officer's payment lock: a stop or crash in that
+            -- wait leaves an audited row the login, start and end-of-maintenance sweeps pay (they skip manual award
+            -- rows still 'none')
+            local okP, errP = pcall(MySQL.update.await,
+                [[UPDATE cp_mission_runs SET cash_status = 'pending' WHERE id = ? AND cash_status = 'none']], { rowId })
+            if not okP then CP.err(TAG, 'marking row %d pending failed: %s', rowId, tostring(errP)) end
+            -- not paid now (maintenance lock, left-behind store, in flight): it stays 'pending'
+            status = CP.Cash.pay(rowId) or 'pending'
         end
         local given = 0
         if #items > 0 and CP.Rewards and CP.Rewards._grant then

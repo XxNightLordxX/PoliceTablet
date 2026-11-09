@@ -177,6 +177,22 @@ CP.Maintenance = oldMaint
 CP.Cash.payPending(7)
 heldRow = Row(FR.uuidOf('suspect', 'run-fair-held', 'FR_SUSPECT1'))[1]
 H.eq(heldRow and heldRow.cash_status, 'paid', 'after the lock: the login sweep pays it')
+
+-- Z9: the server stops while the pay waits for the store or the lock: the audited row is already 'pending'
+local realPay = CP.Cash.pay
+local seenStatus = nil
+CP.Cash.pay = function(id)
+    seenStatus = (H.sql('SELECT cash_status FROM cp_mission_runs WHERE id = ?', { id })[1] or {}).cash_status
+    error('resource stopped')
+end
+FR.pay('suspect', 'FR_SUSPECT1', { key = 'run-fair-stop', outcome = 'got_away' })
+CP.Cash.pay = realPay
+H.eq(seenStatus, 'pending', 'Z9: the row is pending before the pay waits')
+heldRow = Row(FR.uuidOf('suspect', 'run-fair-stop', 'FR_SUSPECT1'))[1]
+H.eq(heldRow and heldRow.cash_status, 'pending', 'Z9: a stop in the wait leaves it pending, not none')
+CP.Cash.payPending(7)
+heldRow = Row(FR.uuidOf('suspect', 'run-fair-stop', 'FR_SUSPECT1'))[1]
+H.eq(heldRow and heldRow.cash_status, 'paid', 'Z9: and the login sweep pays it')
 FC.suspect.enabled = false
 
 -- ============================================================================

@@ -103,6 +103,9 @@ local function Hud(ctx, st)
     if st.phase == 'secure' then
         local need = math.max(0, math.floor(Num(Cfg().secureSeconds, 60)))
         patch.value, patch.max = math.min(need, math.floor(st.secureS)), need
+    else
+        -- false removes the secure bar (ObjectiveHud merges patches): the detain phase shows no stale 59/60
+        patch.value, patch.max = false, false
     end
     ctx.hud(patch)
 end

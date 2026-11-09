@@ -331,6 +331,17 @@ do
     Clear()
     RunX(100, 'v-100', 'OFF00007', 'pending', 0)
     local b = Backup()
+    -- Z9: a run that starts while the restore reads the backup's parts (before the lock) is seen under the lock
+    local realBegin = CP.Maintenance.begin
+    CP.Maintenance.begin = function(kind, info)
+        runsNow = { { participants = {} } }
+        return realBegin(kind, info)
+    end
+    local okW, eW = Restore(b)
+    CP.Maintenance.begin = realBegin
+    runsNow = {}
+    H.ok(okW == false and eW == 'err.storage_runs_active', 'Z9: a run started before the lock refuses the restore')
+    H.ok(CP.Maintenance.active() == nil, 'Z9: and the restore lock ends again')
     H.sql('UPDATE cp_mission_runs SET voided = 1, void_kind = \'bulk\', void_batch = \'batch-1\' WHERE id = 100')
     local ok, e = Restore(b)
     H.ok(ok == true, 'restored: ' .. tostring(type(e) == 'table' and e.backup or e))

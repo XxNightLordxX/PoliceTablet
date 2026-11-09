@@ -241,6 +241,25 @@ local function Mark(run, src, reason, detail, verb)
     return run, p, reason, detail
 end
 
+-- A flag raised after the participant's row was stored (the pair-repeat check runs on run:ended, after every row
+-- settled): the stored row is flagged too, so it reaches the Review Queue. Cash not paid yet is held, paid cash
+-- stays paid (as Flag for review); the counted XP and the item rewards not given yet wait for the review.
+local function FlagStoredRow(p, reason)
+    local id = math.tointeger(tonumber(p.rowId))
+    if not id then return end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local ok, n = pcall(MySQL.update.await, [[UPDATE cp_mission_runs SET flagged = 1, flag_reason = ?,
+        cash_status = IF(state = 'completed' AND cash_status IN ('none', 'pending'), 'held', cash_status)
+        WHERE id = ? AND flagged = 0 AND voided = 0 AND mission_type NOT IN ('manual_award', 'goal')]], { reason, id })
+    if not ok then
+        CP.err(TAG, 'flagging the stored row %d (%s) failed: %s', id, reason, tostring(n))
+        return
+    end
+    if (tonumber(n) or 0) < 1 then return end
+    Call('Scoring', 'onRowFlagged', id)
+    Call('Rewards', 'holdRow', id)
+end
+
 function AC.flag(run, src, reason, detail)
     local p
     run, p, reason, detail = Mark(run, src, reason, detail, 'flagged')
@@ -257,6 +276,7 @@ function AC.flag(run, src, reason, detail)
     CP.warn(TAG, 'run %s (%s) flagged %s%s: %s', tostring(run.id), tostring(run.missionId), reason,
         p and (' for ' .. tostring(p.citizenid)) or '', tostring(detail or ''))
     RecordFlag(run, p, reason, detail)
+    if p and p.rowId then FlagStoredRow(p, reason) end
     return true
 end
 

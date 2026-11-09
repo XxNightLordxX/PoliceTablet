@@ -653,15 +653,16 @@ InsertRows('cp_pvp_pairs', {
     },
     { 4, 'block', nil, 'CPY00001', nil, 'CRM00001', nil, nil, 0, At(1789900000), At(1789000870) },
 })
-local SOURCE_ROWS = #runs + #archive + 3 + 2 + 3 + 2 + 2 + 1 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 2 + 2 + 2 + 8 + 2   -- every table but cp_schema_migrations
-local COPIED_TABLES = 28
+local SOURCE_ROWS = #runs + #archive + 3 + 2 + 3 + 2 + 2 + 1 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 2 + 2 + 2 + 8 + 2 - 1   -- every table but cp_schema_migrations and cp_storage_meta (Z9: each store keeps its own)
+local COPIED_TABLES = 27
 local MIGRATIONS = #H.migrationFiles()
 
 -- ============================================================================
 --                 COMPARING TABLES (as the modules read them)
 -- ============================================================================
 
-local M   -- CP.Storage.MemSQL (set after H.boot)
+local M                                                                     -- CP.Storage.MemSQL (set after H.boot)
+local NOT_COPIED = { cp_schema_migrations = true, cp_storage_meta = true }  -- each store keeps its own
 local function Canon(v)
     if v == nil then return '~' end
     if v == true then return '1' elseif v == false then return '0' end
@@ -705,7 +706,7 @@ local notCopyAudit = function(r) return r.action == 'storageCopy' end
 local function DumpEngine(engine, skipAudit)
     local out = {}
     for _, name in ipairs(engine:tableNames()) do
-        if name ~= 'cp_schema_migrations' then
+        if not NOT_COPIED[name] then
             local sql, cols = SelectOf(engine, name)
             local text, n = DumpRows(M.luaRows(engine:exec(sql)), cols,
                 (skipAudit and name == 'cp_audit') and notCopyAudit or nil)
@@ -717,7 +718,7 @@ end
 local function DumpMaria(engine, skipAudit)
     local out = {}
     for _, name in ipairs(engine:tableNames()) do
-        if name ~= 'cp_schema_migrations' then
+        if not NOT_COPIED[name] then
             local sql, cols = SelectOf(engine, name)
             local text, n = DumpRows(Mq(sql), cols, (skipAudit and name == 'cp_audit') and notCopyAudit or nil)
             out[name] = { text = text, n = n }
@@ -764,18 +765,18 @@ local function EngineNext(engine)
 end
 local function RowCount(sql) local r = Mq(sql); return r[1] and tonumber(r[1].n) or 0 end
 local function EngineCount(engine, sql) local r = M.luaRows(engine:exec(sql)); return r[1] and tonumber(r[1].n) or 0 end
--- rows of the 28 copied tables (cp_schema_migrations left out), in MariaDB and in an engine
+-- rows of the 27 copied tables (cp_schema_migrations left out), in MariaDB and in an engine
 local function MariaTotal(engine)
     local n = 0
     for _, name in ipairs(engine:tableNames()) do
-        if name ~= 'cp_schema_migrations' then n = n + RowCount('SELECT COUNT(*) AS n FROM `' .. name .. '`') end
+        if not NOT_COPIED[name] then n = n + RowCount('SELECT COUNT(*) AS n FROM `' .. name .. '`') end
     end
     return n
 end
 local function EngineTotal(engine)
     local n = 0
     for _, name in ipairs(engine:tableNames()) do
-        if name ~= 'cp_schema_migrations' then
+        if not NOT_COPIED[name] then
             n = n + EngineCount(engine, 'SELECT COUNT(*) AS n FROM `' .. name .. '`')
         end
     end
@@ -944,7 +945,7 @@ local c0, w0 = os.clock(), WALL()
 Command(0, 'storage', 'copy', 'database-to-files')
 local tCopy1, wCopy1 = os.clock() - c0, WALL() - w0
 local out = OutputSince(m0)
-H.ok(out:find('Copied 28 tables and ' .. SOURCE_ROWS .. ' rows from the database to the saves folder', 1, true) ~= nil,
+H.ok(out:find('Copied 27 tables and ' .. SOURCE_ROWS .. ' rows from the database to the saves folder', 1, true) ~= nil,
     'database-to-files: the summary (' .. (out:match('Copied[^\n]*') or out:sub(-300)) .. ')')
 H.ok(out:find(('cp_mission_runs: %d rows copied'):format(#runs), 1, true) ~= nil, 'a line per table')
 H.ok(out:find('Restart Crimson-Police now', 1, true) ~= nil, 'the target is the storage in use: restart')
@@ -972,9 +973,11 @@ H.eq(copyRow[1] and copyRow[1].id, 4, 'with the next id the database would give 
 H.eq(copyRow[1] and copyRow[1].actor, 'console', 'actor console')
 H.eq(copyRow[1] and copyRow[1].target, 'database-to-files', 'target = the direction')
 H.eq(copyRow[1] and copyRow[1].old_value, nil, 'nothing replaced')
-H.eq(copyRow[1] and copyRow[1].new_value, ('28 tables, %d rows'):format(SOURCE_ROWS), 'new value = the tables and rows')
+H.eq(copyRow[1] and copyRow[1].new_value, ('27 tables, %d rows'):format(SOURCE_ROWS), 'new value = the tables and rows')
 H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'storageCopy\''), 0,
     'the source database was only read')
+H.eq(EngineCount(live, 'SELECT COUNT(*) AS n FROM cp_storage_meta WHERE meta_value = \'g-1\''), 0,
+    'Z9: the source\'s cp_storage_meta is not copied (each store keeps its own marker)')
 H.eq(SameTables(mariaBefore, DumpMaria(live), 'the source after the copy'), COPIED_TABLES, 'the source is unchanged')
 
 -- the saves folder: split documents, valid JSON, nothing left over, a reload reads the same
@@ -1021,6 +1024,10 @@ H.eq(SameTables(liveDump, DumpEngine(live), 'after the refusal'), COPIED_TABLES,
 Mq('DELETE FROM cp_officers WHERE citizenid = \'CPY00003\'')
 Mq('UPDATE cp_mission_runs SET final_points = 99, flagged = 1 WHERE id = ?', { 1300 + RUNS })
 Mq('UPDATE cp_custom_missions SET draft_definition = \'{"id":"fib_raid","v":5}\' WHERE id = \'fib_raid\'')
+-- Z9: a switch left the database 'left_behind' and the saves folder 'active'; force keeps each store's own marker
+live:exec('DELETE FROM cp_storage_meta WHERE meta_key = \'state\'')
+live:exec('INSERT INTO cp_storage_meta (meta_key, meta_value) VALUES (\'state\', \'active\')')
+Mq('INSERT INTO cp_storage_meta (meta_key, meta_value) VALUES (\'state\', \'left_behind\')')
 mariaBefore = DumpMaria(live)
 local expected = MariaTotal(live)
 n0 = #notes
@@ -1038,6 +1045,11 @@ H.eq(#copyRow, 1, 'force replaced the earlier audit rows too; one new entry')
 H.eq(copyRow[1] and copyRow[1].actor, 'ADM00001', 'actor = the admin\'s citizenid')
 H.eq(copyRow[1] and copyRow[1].role, 'admin', 'role admin')
 H.eq(copyRow[1] and copyRow[1].old_value, ('replaced %d rows'):format(SOURCE_ROWS + 1), 'old value = the rows replaced')
+H.eq(M.luaRows(live:exec('SELECT meta_value AS v FROM cp_storage_meta WHERE meta_key = \'state\''))[1].v, 'active',
+    'Z9: force keeps the store in use \'active\' (the source\'s left_behind would lock it at the next start)')
+H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_storage_meta WHERE meta_value = \'left_behind\''), 1,
+    'Z9: and the source keeps its own marker')
+Mq('DELETE FROM cp_storage_meta WHERE meta_key = \'state\'')
 
 -- a copy that fails half way (a zero date the saves folder cannot hold): the source is unchanged; the saves folder is
 -- the storage in use, so it is never emptied (Z8: rows the server wrote meanwhile stay; the caller asks for a restart)
@@ -1056,7 +1068,7 @@ Mq('UPDATE cp_officers SET last_complete = NULL WHERE citizenid = \'CPY00002\'')
 mariaBefore = DumpMaria(live)
 m0 = Mark()
 admin('storage', 'copy', 'database-to-files', 'force')
-H.ok(PrintedSince(m0, 'Copied 28 tables') ~= nil, 'after the fix the copy with force replaces the part written')
+H.ok(PrintedSince(m0, 'Copied 27 tables') ~= nil, 'after the fix the copy with force replaces the part written')
 H.eq(SameTables(mariaBefore, DumpEngine(live, true), 'after the fix'), COPIED_TABLES,
     'the saves folder holds the database')
 
@@ -1072,7 +1084,7 @@ c0, w0 = os.clock(), WALL()
 admin('storage', 'copy', 'files-to-database')
 local tCopy2, wCopy2 = os.clock() - c0, WALL() - w0
 out = OutputSince(m0)
-H.ok(out:find('Copied 28 tables and ' .. expected .. ' rows from the saves folder to the database', 1, true) ~= nil,
+H.ok(out:find('Copied 27 tables and ' .. expected .. ' rows from the saves folder to the database', 1, true) ~= nil,
     'files-to-database into an empty database: ' .. (out:match('Copied[^\n]*') or out:sub(1, 300)))
 H.ok(out:find('set Config.Database.enabled = true', 1, true) ~= nil, 'the target is not in use: how to switch')
 Say(
@@ -1115,7 +1127,7 @@ m0 = Mark()
 admin('storage', 'copy', 'files-to-database')
 out = OutputSince(m0)
 H.ok(
-    out:find('Copied 28 tables', 1, true) ~= nil,
+    out:find('Copied 27 tables', 1, true) ~= nil,
     'files-to-database into txAdmin\'s utf8 database with an emoji name and reason: '
         .. (out:match('Copied[^\n]*') or out:match('The copy stopped[^\n]*') or out:sub(1, 300))
 )
@@ -1160,7 +1172,7 @@ Mq('UPDATE cp_seasons SET name = ? WHERE id = 1', { 'Changed in MariaDB' })
 engineDump = DumpEngine(live, true)
 m0 = Mark()
 admin('storage', 'copy', 'files-to-database', 'force')
-H.ok(PrintedSince(m0, 'Copied 28 tables') ~= nil, 'force: copied')
+H.ok(PrintedSince(m0, 'Copied 27 tables') ~= nil, 'force: copied')
 H.eq(SameTables(engineDump, DumpMaria(live, true), 'files-to-database force'), COPIED_TABLES,
     'force: the database holds the saves folder')
 H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_seasons WHERE name = \'Changed in MariaDB\''), 0,
@@ -1210,7 +1222,7 @@ do
             .. ' UNION ALL SELECT COUNT(*) FROM cp_badge_overrides UNION ALL SELECT COUNT(*) FROM cp_dept_funding'
             .. ' UNION ALL SELECT COUNT(*) FROM cp_settings_history UNION ALL SELECT COUNT(*) FROM cp_admin_jobs'
             .. ' UNION ALL SELECT COUNT(*) FROM cp_admin_requests UNION ALL SELECT COUNT(*) FROM cp_staff_notices'
-            .. ' UNION ALL SELECT COUNT(*) FROM cp_storage_meta UNION ALL SELECT COUNT(*) FROM cp_pvp_pairs) x'
+            .. ' UNION ALL SELECT COUNT(*) FROM cp_pvp_pairs) x'
     )
     expected = tonumber(r[1].n)
 end
@@ -1226,7 +1238,7 @@ H.execute(('mkdir -p \'%s\''):format(folder2)) -- the owner makes it
 m0 = Mark()
 admin('storage', 'copy', 'database-to-files')
 out = OutputSince(m0)
-H.ok(out:find('Copied 28 tables and ' .. expected .. ' rows from the database to the saves folder', 1, true) ~= nil,
+H.ok(out:find('Copied 27 tables and ' .. expected .. ' rows from the database to the saves folder', 1, true) ~= nil,
     'database mode, database-to-files: ' .. (out:match('Copied[^\n]*') or out:sub(1, 300)))
 H.ok(out:find('set Config.Database.enabled = false', 1, true) ~= nil, 'how to switch to the saves folder')
 local folderDb = M.new({ store = M.folderStore(folder2) }):load()
@@ -1253,7 +1265,7 @@ local folderDump = DumpEngine(folderDb, true)
 m0 = Mark()
 admin('storage', 'copy', 'files-to-database', 'force')
 out = OutputSince(m0)
-H.ok(out:find('Copied 28 tables', 1, true) ~= nil, 'force: copied')
+H.ok(out:find('Copied 27 tables', 1, true) ~= nil, 'force: copied')
 H.ok(out:find('Restart Crimson-Police now', 1, true) ~= nil, 'the database is in use: restart')
 H.eq(SameTables(folderDump, DumpMaria(folderDb, true), 'database mode, files-to-database force'), COPIED_TABLES,
     'the database holds the folder again')
@@ -1281,7 +1293,7 @@ do
     out = OutputSince(m0)
     H.ok(okCopy, 'the copy ran (' .. tostring(errCopy) .. ')')
     H.ok(wrote, 'the other write happened during the copy')
-    H.ok(out:find('Copied 28 tables', 1, true) ~= nil,
+    H.ok(out:find('Copied 27 tables', 1, true) ~= nil,
         'a row written during the copy does not stop it: ' .. (out:match('[^\n]*failed[^\n]*') or out:sub(1, 300)))
     H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_officers'), officers, 'the database keeps every officer')
     H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_mission_runs'), #runs, 'and every run')
@@ -1314,7 +1326,7 @@ do
     out = OutputSince(m0)
     H.ok(okCopy, 'the copy ran (' .. tostring(errCopy) .. ')')
     local copied = out:match('Copied[^\n]*') or out:sub(1, 300)
-    H.ok(out:find('Copied 28 tables', 1, true) ~= nil,
+    H.ok(out:find('Copied 27 tables', 1, true) ~= nil,
         'Windows: the missing folder is made with os.createdir (' .. copied .. ')')
     H.eq(table.concat(made, ' | '), H.resourcePath() .. '/fx saves | ' .. folder3,
         'only the two missing folders, the parent first')

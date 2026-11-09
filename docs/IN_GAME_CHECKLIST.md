@@ -469,3 +469,35 @@ names the change it came with.
 - [ ] Two runs ask for a volunteer at the same moment: he gets one pop-up only. (Z8B)
 - [ ] Change `Config.Custody.reach.plateFromVehicle`, `Config.Commendations.sameKindCooldownDays` or
   `Config.Profile.reports.reasonMax`: the matching refusal names the new value. (Z8B)
+- [ ] Switch the storage in Admin UI, restart, then `storage copy database-to-files force` (or the reverse): the next
+  start is not locked as 'left behind'. (Z9)
+- [ ] Right after a storage switch (before the restart), run a storage copy: it is refused with the maintenance
+  toast and the restart prompt stays. (Z9)
+- [ ] `Config.LiveCrime.enabled = true`: the same officer and real suspect meet a third time with a fast catch: the
+  officer's row shows in the Review Queue as rs_pair_repeat, unpaid cash shows Held. (Z9)
+- [ ] Give a feature reward or a manual cash payment, then stop the resource while it pays (a payment lock wait):
+  after the restart the row shows Pending and the login pays it. (Z9)
+- [ ] Mission controls: switch No-repeat off: the toggle stays Off and an officer may draw his last mission again.
+  (Z9)
+- [ ] Extra grant forceRecall to an officer: he sees Live Missions and can recall an officer of his department. (Z9)
+- [ ] Go down on a live or volunteer case: the toast says "no type cooldown" and the mission shows its cooldown on
+  the board. Officers / Review Queue show "Vehicle removed by someone outside the run" for that end. (Z9)
+- [ ] `Config.Cash.source = 'society'`: Pay again or Pay the rest where Qbox refuses and the refund fails: the toast
+  says the department was charged and it stays for a manual check. (Z9)
+- [ ] With `Config.Retention.runArchiveMonths` set, an old completed row still owed ('none' with cash) stays in
+  cp_mission_runs after the daily reset and is paid at the login. (Z9)
+- [ ] Start a backup restore or a storage switch while an officer accepts a mission at the same moment: one of them
+  is refused, never both going. (Z9)
+- [ ] Live case: once the scene is secured the HUD shows "Detain and book the suspects" without the 60/60 bar. (Z9)
+- [ ] Drug stash search with Seize: find every stash, cancel one Seize bar: that stash keeps its orange point and
+  GPS line, the checklist stays open until it is seized. (Z9)
+- [ ] `Config.Tablet.supervisorReviewLive = true`: a SAST supervisor decides a SAST + FIB run's row: an FIB
+  supervisor with the Review Queue open sees it go at once. (Z9)
+- [ ] An officer with a builderEdit grant runs a draft test: the audit log shows role supervisor, not admin. (Z9)
+- [ ] An admin's Review badge counts the admin-only flag kinds his Review Queue lists. (Z9)
+- [ ] A department readyCheck Mission control of 40 s: other officers' cards count down 40 s while a call is
+  claiming. (Z9)
+- [ ] A second supervisor starting a happy hour the same day is refused (happyHourPerDay is server-wide, as the
+  docs now say). `/CrimsonPoliceAdmin missioncall` with no type prints the command name, no `{cmd}`. (Z9)
+- [ ] Admin UI -> Audit -> Save to server while staff act: the file holds the rows there when it began, no
+  duplicate. (Z9)

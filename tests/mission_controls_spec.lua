@@ -467,6 +467,28 @@ do
     DC.unregister('t_day')
 end
 
+-- ============================================================================
+--                  Z9: A SAVED false OF A SWITCH IS READ BACK
+-- ============================================================================
+-- (noRepeat: switching the no-repeat rule off took no effect because the saved false read back as nil)
+
+do
+    Config.Permissions.supervisor.missionControls = true
+    DC.register('t_bool', {
+        kind = 'bool',
+        serverWide = true,
+        master = false,
+        configValue = function() return true end,
+        relaxes = function(v) return v == false end,
+    })
+    Config.MissionControls.controls = { t_bool = { on = true } }
+    H.eq(DC.get(nil, 't_bool'), true, 'Z9: the switch reads the config value (on)')
+    local ok, res = SupSet(2, 't_bool', false, 'quiet night')
+    H.ok(ok == true, 'Z9: switching it off is saved: ' .. tostring(type(res) == 'table' and res.value or res))
+    H.eq(DC.get(nil, 't_bool'), false, 'Z9: and reads back off, not the config value')
+    DC.unregister('t_bool')
+end
+
 Config.Permissions.supervisor = keepSup
 Config.MissionControls = keepMC
 Config.Departments.sast.missionControls = nil

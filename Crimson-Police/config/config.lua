@@ -1780,7 +1780,7 @@ Config.MissionControls = {
         -- like an admin's award, at most awardPointsPerDay points a supervisor a day
         awardPoints = { on = false, min = 1, max = 50 },
     },
-    happyHourPerDay = 1, -- happy hours a supervisor may start a day (admins any); never for the one who started it
+    happyHourPerDay = 1, -- happy hours a day server-wide (any supervisor; admins any); never for the one who started it
 
     -- officers' cooldowns one supervisor may clear a day (admins any)
     clearCooldownPerDay = 5,

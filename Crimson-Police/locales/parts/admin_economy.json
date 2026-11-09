@@ -35,6 +35,7 @@
   "err.unfunded_now": "The department account can't cover this now. Nothing was paid.",
   "err.payment_raised": "Qbox or Renewed-Banking failed in the middle of the payment. It stays for a manual check.",
   "err.payment_refused": "Qbox refused the payment. Nothing was paid.",
+  "err.payment_refund_failed": "Qbox refused the payment after the department account was charged, and the refund failed. It stays for a manual check.",
   "err.payment_arrived": "The step marker says the money arrived. Mark it paid instead.",
   "err.payment_step_unknown": "This payment is older than the step markers and the department may have paid already. Check Renewed-Banking and mark it paid, or pay by hand.",
   "err.nothing_to_pay": "There is nothing left to pay, so nothing was sent.",

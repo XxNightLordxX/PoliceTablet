@@ -311,7 +311,11 @@ local function Clamp(def, value, bounds)
         CP.err(TAG, 'the clamp of %s failed: %s', def.key, tostring(v))
         return nil
     end
-    if def.kind == 'bool' then return type(value) == 'boolean' and value or nil end
+    if def.kind == 'bool' then
+        -- a saved false is a value (No-repeat switched off), not 'no longer usable'
+        if type(value) == 'boolean' then return value end
+        return nil
+    end
     if def.kind == 'choice' then return Picked(def, value, bounds) and value or nil end
     if def.kind == 'number' then return GoodNum(def, value) and ClampNum(value, bounds) or nil end
     if type(value) ~= 'table' then return nil end

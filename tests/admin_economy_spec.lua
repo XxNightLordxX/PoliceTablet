@@ -734,6 +734,19 @@ do
     addResult = false
     ok, e = Act('server:admin:payCapRest', 1, { rowId = id2, reason = 'x', confirm = '300', requestId = Rid() })
     H.ok(not ok and e == 'err.payment_refused' and RowOf(id2).bd.cash.restPaid == nil, 'refused by Qbox: claim undone')
+    -- Z9: the department was charged, Qbox refused and the refund failed: not 'Nothing was paid'
+    Reset()
+    Config.Cash.source = 'society'
+    local id4 = Row({ status = 'capped', owed = 400, paid = 100 })
+    addResult = false
+    depositHook = function() error('banking down') end
+    ok, e = Act('server:admin:payCapRest', 1, { rowId = id4, reason = 'x', confirm = '300', requestId = Rid() })
+    depositHook = nil
+    Config.Cash.source = 'server'
+    H.ok(not ok and e == 'err.payment_refund_failed',
+        'Z9: a failed refund says the department was charged: ' .. tostring(e))
+    H.ok(not CP.L('err.payment_refund_failed'):find('Nothing was paid', 1, true),
+        'Z9: its text never says nothing was paid')
     -- Z7: a feature reward row (source 'server', paid as a money item): new money as a money item, even in society
     -- mode, never a department withdraw nor a Qbox account named 'item'
     Reset()
@@ -916,6 +929,16 @@ do
     H.ok(r.mission_type == 'manual_award' and r.final_points == 0 and r.cash_base == 300,
         'a manual_award row (out of run counts, goals, streaks and the draw), 0 points')
     H.eq(Async(function() return Cash.paidToday('OFF00007') end), 0, 'not counted in the daily cap')
+    -- Z9: the server stops while the pay waits: the audited row is already 'pending' for the sweeps
+    local realPay, seenStatus = Cash.pay, nil
+    Cash.pay = function(id)
+        seenStatus = RowOf(id).cash_status
+        error('resource stopped')
+    end
+    Act('server:admin:manualCash', 1, { citizenid = 'OFF00007', amount = 50, reason = 'x', requestId = Rid() })
+    Cash.pay = realPay
+    H.eq(seenStatus, 'pending', 'Z9: the audited manual cash row is pending before the pay waits')
+    H.sql('DELETE FROM cp_mission_runs WHERE cash_base = 50 AND mission_id = \'manual_cash\'')
     ok, e = Act('server:admin:manualCash', 1, { citizenid = 'OFF00007', amount = 800, reason = 'x', requestId = Rid() })
     H.eq(e, 'err.manual_limit', 'the per-admin daily limit, counted from today\'s rows')
     -- the same player on another character of their licence shares that limit
