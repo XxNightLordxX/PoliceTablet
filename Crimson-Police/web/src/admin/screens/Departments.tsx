@@ -101,7 +101,7 @@ function ThemePreview({
             </div>
             <div className="oversight-dep-preview__body">
                 <nav className="oversight-dep-preview__nav">
-                    {(['home', 'board', 'leaderboard', 'profile'] as const).map((k, i) => (
+                    {(['home', 'board', 'unit', 'me'] as const).map((k, i) => (
                         <span
                             key={k}
                             className={

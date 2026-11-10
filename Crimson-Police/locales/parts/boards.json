@@ -432,5 +432,10 @@
   "admin.officers.mod_title.review": "Review the pending change",
   "admin.officers.mod_title.clear": "Clear this part of the profile",
   "admin.officers.mod_title.report": "Handle the profile report",
-  "admin.officers.mod_title.revoke": "Revoke the commendation"
+  "admin.officers.mod_title.revoke": "Revoke the commendation",
+
+  "officer.me.tabs": "Your record",
+  "officer.me.tab.profile": "Profile & History",
+  "officer.me.tab.leaderboard": "Leaderboard",
+  "officer.me.tab.challenge": "Department Challenge"
 }

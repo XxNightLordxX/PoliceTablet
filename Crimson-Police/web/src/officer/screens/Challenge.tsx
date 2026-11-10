@@ -1,4 +1,4 @@
-// Officer UI · Department Challenge (screen key 'challenge', callbacks getChallenge + getDeptContributors).
+// Officer UI · Department Challenge (the Challenge tab of Me, callbacks getChallenge + getDeptContributors).
 
 // One score bar per department in its own theme colour, the season and weeks left, this week's bounty with
 // the department currently leading it, and the viewer's department's top 5 contributors. Tapping a
@@ -26,6 +26,7 @@ import { formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
+import { meLink } from '../../layouts/officerMe';
 import { useSession } from '../../shared/session';
 import {
     asList,
@@ -361,7 +362,7 @@ function ContributorsDialog({ dept, onClose }: { dept: ChallengeDepartment | nul
                     onRowClick={c => {
                         if (!c.citizenid) return;
                         onClose();
-                        navigate('profile', { citizenid: c.citizenid });
+                        navigate('me', meLink('profile', c.citizenid));
                     }}
                     empty={t('challenge.no_contributors')}
                 />
@@ -439,7 +440,7 @@ export default function Challenge() {
                 >
                     <ContributorTiles
                         list={asList(data?.topContributors).slice(0, 5)}
-                        onOpen={c => navigate('profile', { citizenid: c.citizenid })}
+                        onOpen={c => navigate('me', meLink('profile', c.citizenid))}
                     />
                 </Card>
             </>

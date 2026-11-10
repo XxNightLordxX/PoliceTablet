@@ -69,7 +69,7 @@
   "ui.stub.title": "Coming soon",
   "ui.stub.text": "This screen is not available yet.",
   "ui.screen_error": "This screen hit a problem",
-  "ui.help.home": "Your day at a glance: card, goals, type of the day and news. Open the Mission Board to start.",
+  "ui.help.home": "Your status, your next goal and Find a mission; your card, goals, type of the day and news below.",
   "ui.help.active": "Your current run shows here: route, objectives, partners and the timer.",
   "ui.help.unit": "Invite officers, answer invites and see who is ready before the leader starts a run.",
   "ui.help.profile": "Open a run in the history to see its details and points.",
@@ -283,5 +283,7 @@
   "sup.panel.actions": "Actions",
   "sup.panel.no_actions": "There is nothing you may do for this officer from here.",
   "sup.panel.runs": "This week's runs",
-  "sup.panel.no_rookies": "No officer of this department is waiting for a trainer."
+  "sup.panel.no_rookies": "No officer of this department is waiting for a trainer.",
+  "ui.screen.me": "Me",
+  "ui.runbar.links": "Other screens"
 }

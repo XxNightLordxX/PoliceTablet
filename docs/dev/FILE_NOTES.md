@@ -270,6 +270,8 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/layouts/adminNav.ts`: The Admin UI layout, organised by job: Home on top, then People, Missions, Real players, Money, Review and System, each with a one-line description, the rarely used tools under More, and a breadcrumb.
 - `Crimson-Police/web/src/layouts/adminNav.walk.ts`: The Admin UI layout against the browser mocks (node walk.mjs, a gate step): Home, then the screens by job (People, Missions, Real players, Money, Review, System) each with a description, the rare tools under More, the search that jumps to any screen or tab, officer, mission or setting (Ctrl+K), the Review screen and the breadcrumb.
 - `Crimson-Police/web/src/layouts/navBadges.ts`: Sidebar badges: the NavCounts of getNavCounts, kept fresh by the 'nav' push (the server sends one after every push that can change a count).
+- `Crimson-Police/web/src/layouts/officerMe.ts`: The Officer UI with fewer screens (UI5): the Me screen's tabs, Home's next step and the run bar's quick links.
+- `Crimson-Police/web/src/layouts/officerMe.walk.ts`: The Officer UI with fewer screens (UI5) against the browser mocks (node walk.mjs, a gate step).
 - `Crimson-Police/web/src/layouts/officerNav.ts`: The Officer UI sidebar order: Config.Tablet.sidebarOrder ('classic' = the registry order, as before; 'mostUsed' = the screens an officer opens most first) and Config.Tablet.activeFirst (Active Mission right under Home while on a run).
 - `Crimson-Police/web/src/layouts/officerNav.walk.ts`: Officer UI sidebar order against the browser mocks (node walk.mjs, a gate step): Config.Tablet's sidebarOrder, activeFirst and compactSidebar reach the sidebar as the session's config.officerNav, and the order changes only when they are set.
 - `Crimson-Police/web/src/layouts/screens.ts`: The screen registry: sidebar order, titles, icons and visibility.
@@ -323,13 +325,14 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/officer/components/twistTicks.ts`: The twists the accept step (Mission Board, mission call claim) starts with ticked.
 - `Crimson-Police/web/src/officer/components/usualTwists.walk.ts`: My usual twists against the browser mocks (node walk.mjs, a gate step): the accept step starts with the officer's usual twists that the card offers, so a usual twist the type does not offer is never sent; with none picked the department's pre-ticked twists stay the start, as before.
 - `Crimson-Police/web/src/officer/screens/ActiveMission.tsx`: Officer UI · Active Mission (screen key 'active', title key 'ui.screen.active') · run_ui slice.
-- `Crimson-Police/web/src/officer/screens/Challenge.tsx`: Officer UI · Department Challenge (screen key 'challenge', callbacks getChallenge + getDeptContributors).
+- `Crimson-Police/web/src/officer/screens/Challenge.tsx`: Officer UI · Department Challenge (the Challenge tab of Me, callbacks getChallenge + getDeptContributors).
 - `Crimson-Police/web/src/officer/screens/Dispatch.tsx`: Officer UI · Dispatch (screen key 'dispatch'): mission calls.
 - `Crimson-Police/web/src/officer/screens/Home.tsx`: Officer UI · Home (screen key 'home', title key 'ui.screen.home').
-- `Crimson-Police/web/src/officer/screens/Leaderboard.tsx`: Officer UI · Leaderboard (screen key 'leaderboard', callback getBoard).
+- `Crimson-Police/web/src/officer/screens/Leaderboard.tsx`: Officer UI · Leaderboard (the Leaderboard tab of Me, screen key 'me', callback getBoard).
+- `Crimson-Police/web/src/officer/screens/Me.tsx`: Officer UI · Me (screen key 'me', UI5): Profile & History (officer/screens/Profile), Leaderboard (officer/screens/Leaderboard) and Department Challenge (officer/screens/Challenge) as tabs of one screen, each the old screen itself. params.meTab picks the tab (layouts/officerMe.ts); params.citizenid opens an officer's public profile.
 - `Crimson-Police/web/src/officer/screens/MissionBoard.tsx`: Officer UI · Mission Board (screen key 'board', title key 'ui.screen.board') · run_ui slice.
 - `Crimson-Police/web/src/officer/screens/MyOptions.tsx`: Officer UI · My options (screen key 'options'): one place where an officer sets the tablet up for himself.
-- `Crimson-Police/web/src/officer/screens/Profile.tsx`: Officer UI · Profile & History (screen key 'profile', callback getProfile, actions server:setHideName and
+- `Crimson-Police/web/src/officer/screens/Profile.tsx`: Officer UI · Profile & History (the Profile tab of Me, callback getProfile, actions server:setHideName and
 - `Crimson-Police/web/src/officer/screens/Unit.tsx`: Officer UI · Unit (screen key 'unit', title key 'ui.screen.unit').
 - `Crimson-Police/web/src/officer/screens/abandonPress.ts`: What a press of Abandon on Active Mission does (officer option abandonConfirm).
 - `Crimson-Police/web/src/officer/screens/abandonPress.walk.ts`: My options -> During a mission against the browser mocks (node walk.mjs, a gate step): Abandon without the dialog still takes two presses, and distances read in feet and miles on the HUD fixture.

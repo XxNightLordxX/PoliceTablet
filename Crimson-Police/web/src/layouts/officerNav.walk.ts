@@ -14,7 +14,7 @@ function ok(cond: unknown, what: string): void {
     else failures.push(what);
 }
 
-const CLASSIC = ['home', 'board', 'dispatch', 'unit', 'active', 'leaderboard', 'challenge', 'profile', 'options'];
+const CLASSIC = ['home', 'board', 'dispatch', 'unit', 'active', 'me', 'options'];
 const keys = (list: { key: string }[]) => list.map(s => s.key).join(',');
 const screens = (list: string[]) => list.map(key => ({ key }));
 
@@ -44,16 +44,12 @@ async function steps(): Promise<void> {
 
     const most = { ...CLASSIC_NAV, order: 'mostUsed' as const };
     ok(
-        keys(orderOfficerScreens(all, most, false)) ===
-            'home,board,active,dispatch,unit,profile,leaderboard,challenge,options',
+        keys(orderOfficerScreens(all, most, false)) === 'home,board,active,dispatch,unit,me,options',
         'mostUsed: the common path first',
     );
     // Dispatch and My options hidden (MissionCalls or OfficerOptions off): the rest keep the mostUsed order
     const some = screens(CLASSIC.filter(k => k !== 'dispatch' && k !== 'options'));
-    ok(
-        keys(orderOfficerScreens(some, most, false)) === 'home,board,active,unit,profile,leaderboard,challenge',
-        'a hidden screen stays hidden',
-    );
+    ok(keys(orderOfficerScreens(some, most, false)) === 'home,board,active,unit,me', 'a hidden screen stays hidden');
     ok(
         keys(orderOfficerScreens(screens([...CLASSIC, 'extra']), most, false)).endsWith(',options,extra'),
         'a screen the order does not name keeps its place after the named ones',
@@ -62,8 +58,7 @@ async function steps(): Promise<void> {
     const first = { ...CLASSIC_NAV, activeFirst: true };
     ok(keys(orderOfficerScreens(all, first, false)) === CLASSIC.join(','), 'activeFirst off a run: as before');
     ok(
-        keys(orderOfficerScreens(all, first, true)) ===
-            'home,active,board,dispatch,unit,leaderboard,challenge,profile,options',
+        keys(orderOfficerScreens(all, first, true)) === 'home,active,board,dispatch,unit,me,options',
         'activeFirst on a run: under Home',
     );
     ok(

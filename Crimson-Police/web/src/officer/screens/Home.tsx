@@ -1,6 +1,8 @@
 // Officer UI · Home (screen key 'home', title key 'ui.screen.home').
 
-// Officer card (callsign, rank, department tag, XP level badge and XP bar, streak with this week's grace
+// On top (UI5, layouts/officerMe.ts homeNext): the officer's status (on a run, the day's missions done, or ready),
+// the goal to work on next and one big button: Find a mission (the Mission Board), or Back to your mission on a run.
+// Below it: the officer card (callsign, rank, department tag, XP level badge and XP bar, streak with this week's grace
 // day, season points, cash earned this week), today's and this week's goal, the Type of the Day in the
 // accent colour, announcements and the season champions banner. Data: callback 'getHome' (HomeData,
 // ARCHITECTURE §9.4, typeOfTheDay extras in src/types/economy.ts), refreshed when the run ends (push 'run'
@@ -30,6 +32,8 @@ import { useSession } from '../../shared/session';
 import type { Goal, HomeData } from '../../shared/types';
 import type { HomeStreak, HomeTypeOfTheDay } from '../../types/economy';
 import type { HomeExtras } from '../../types/profile';
+import { useNavCounts } from '../../layouts/navBadges';
+import { homeNext } from '../../layouts/officerMe';
 import { HappyHourBanner } from '../components/HappyHourBanner';
 import { RewardsLocker } from '../components/RewardsLocker';
 import { screenStateOf } from '../../shared/screenHeads';
@@ -282,7 +286,7 @@ function multiplierText(m: number | undefined, fallback: number): string {
     return String(Math.round(n * 100) / 100);
 }
 
-function TypeOfTheDay({ tod, onBoard }: { tod: HomeTypeOfTheDay | null; onBoard: () => void }) {
+function TypeOfTheDay({ tod }: { tod: HomeTypeOfTheDay | null }) {
     return (
         <Card title={t('officer.home.tod')} icon="zap" highlight="accent" className="economy-tod">
             {tod ? (
@@ -297,11 +301,6 @@ function TypeOfTheDay({ tod, onBoard }: { tod: HomeTypeOfTheDay | null; onBoard:
                     <p className="economy-tod__note">
                         {t('officer.home.tod_note', { cap: multiplierText(tod.cap, 2) })}
                     </p>
-                    <div>
-                        <Button variant="secondary" size="sm" iconRight="chevronRight" onClick={onBoard}>
-                            {t('officer.home.open_board')}
-                        </Button>
-                    </div>
                 </div>
             ) : (
                 <EmptyState compact icon="zap" title={t('officer.home.tod_none')} />
@@ -359,6 +358,55 @@ function Announcements({ list, news }: { list: HomeData['announcements']; news?:
     );
 }
 
+const STATUS_ICON: Record<string, IconName> = { run: 'activity', limit: 'clock', ready: 'checkCircle' };
+
+// The officer's status, his next goal and one big button.
+function NextStep({
+    data,
+    onRun,
+    onOpen,
+}: {
+    data: HomeView;
+    onRun: boolean;
+    onOpen: (key: 'active' | 'board') => void;
+}) {
+    const next = homeNext(data.goals, data.missionsToday, onRun);
+    const g = next.goal?.goal;
+    return (
+        <Card padding="lg" className={cx('economy-next', `is-${next.status}`)}>
+            <div className="economy-next__row">
+                <div className="economy-next__text">
+                    <span className="economy-next__status">
+                        <Icon name={STATUS_ICON[next.status]} size={15} />
+                        {t(`officer.home.status.${next.status}`)}
+                    </span>
+                    {g && next.goal ? (
+                        <span className="economy-next__goal">
+                            {t(next.goal.kind === 'daily' ? 'officer.home.next_daily' : 'officer.home.next_weekly', {
+                                goal: g.label,
+                                progress: Math.min(Math.max(0, g.progress), Math.max(1, g.count)),
+                                count: Math.max(1, g.count),
+                            })}
+                        </span>
+                    ) : (
+                        <span className="economy-next__goal">
+                            {t(next.allDone ? 'officer.home.next_done' : 'officer.home.next_none')}
+                        </span>
+                    )}
+                </div>
+                <Button
+                    variant="primary"
+                    icon={next.open === 'active' ? 'target' : 'search'}
+                    className="economy-next__button"
+                    onClick={() => onOpen(next.open === 'active' ? 'active' : 'board')}
+                >
+                    {next.open === 'active' ? t('officer.home.back_to_run') : t('officer.home.find_mission')}
+                </Button>
+            </div>
+        </Card>
+    );
+}
+
 export default function Home() {
     const session = useSession();
     const navigate = useNavigate();
@@ -368,24 +416,20 @@ export default function Home() {
     usePush('run', view => {
         if (view === null || view === undefined) void refetch();
     });
-    const openBoard = () => navigate('board');
+    const counts = useNavCounts();
     const firstName = (data?.card.name ?? session.officer?.name ?? '').split(' ')[0];
 
     return (
         <Screen
             head="home"
             subtitle={firstName ? t('officer.home.greeting', { name: firstName }) : undefined}
-            actions={
-                <Button variant="primary" icon="list" onClick={openBoard}>
-                    {t('officer.home.open_board')}
-                </Button>
-            }
             className="economy-home"
         >
             <HappyHourBanner />
             <ScreenStatus state={screenStateOf(!!data, loading, error)} error={error} onRetry={() => void refetch()} />
             {data ? (
                 <>
+                    <NextStep data={data} onRun={counts.onRun === true} onOpen={navigate} />
                     {data.champions ? <ChampionsBanner champions={data.champions} /> : null}
                     <OfficerCard card={data.card} missionsToday={data.missionsToday} />
                     <CallsOpen n={data.extras?.callsOpen ?? 0} onOpen={() => navigate('dispatch')} />
@@ -393,10 +437,7 @@ export default function Home() {
                     <Grid cols={3} gap={4} className="economy-home__row">
                         <GoalCard kind="daily" goal={data.goals?.daily} />
                         <GoalCard kind="weekly" goal={data.goals?.weekly} />
-                        <TypeOfTheDay
-                            tod={(data.typeOfTheDay as HomeTypeOfTheDay | null | undefined) ?? null}
-                            onBoard={openBoard}
-                        />
+                        <TypeOfTheDay tod={(data.typeOfTheDay as HomeTypeOfTheDay | null | undefined) ?? null} />
                     </Grid>
                     <Announcements list={data.announcements} news={data.extras?.news} />
                 </>

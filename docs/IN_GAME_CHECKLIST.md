@@ -75,6 +75,18 @@ names the change it came with.
 - [ ] Supervisor Department -> Training: End training still takes two clicks. Admin Payments, Officers, Leaderboards
   and Real suspects: the page buttons under the lists work as before. (UI1)
 
+## Officer UI with fewer screens
+
+- [ ] Open the officer tablet: the sidebar shows Home, Mission Board, Dispatch, Unit, Active Mission, Me and My
+  options. Home opens on your status (Ready for a mission), your next goal with its count and a big Find a mission
+  button that opens the Mission Board; with today's goal done it names this week's. (UI5)
+- [ ] Me: Profile & History, Leaderboard and Department Challenge are three tabs; a commendation puts its badge on
+  Me. Click a leaderboard row: that officer's profile opens on the Profile tab; Back opens the Leaderboard tab; a
+  challenge contributor opens his profile too; Edit profile, Hide my name and disputes work as before. (UI5)
+- [ ] Start Beat Patrol: Home's button reads Back to your mission and opens Active Mission. The bar over every
+  screen opens Active Mission and has Mission Board, Dispatch and Unit links (Dispatch gone with mission calls off;
+  no link to the screen you are on). (UI5)
+
 ## Admin UI by job, one search
 
 - [ ] Admin UI: the sidebar shows Home, then People (Officers, Departments, Who can do what; Leaderboards and Seasons

@@ -13,9 +13,7 @@ import MissionBoard from '../officer/screens/MissionBoard';
 import Dispatch from '../officer/screens/Dispatch';
 import Unit from '../officer/screens/Unit';
 import ActiveMission from '../officer/screens/ActiveMission';
-import Leaderboard from '../officer/screens/Leaderboard';
-import Challenge from '../officer/screens/Challenge';
-import Profile from '../officer/screens/Profile';
+import Me from '../officer/screens/Me';
 import MyOptions from '../officer/screens/MyOptions';
 
 import SupMissionList from '../supervisor/screens/MissionList';
@@ -81,9 +79,8 @@ export const OFFICER_SCREENS: ScreenDef<OfficerScreenKey>[] = [
     },
     { key: 'unit', titleKey: 'ui.screen.unit', icon: 'users', component: Unit },
     { key: 'active', titleKey: 'ui.screen.active', icon: 'target', component: ActiveMission },
-    { key: 'leaderboard', titleKey: 'ui.screen.leaderboard', icon: 'trophy', component: Leaderboard },
-    { key: 'challenge', titleKey: 'ui.screen.challenge', icon: 'flag', component: Challenge },
-    { key: 'profile', titleKey: 'ui.screen.profile', icon: 'user', component: Profile },
+    // Me: Profile & History, Leaderboard and Department Challenge as three tabs (layouts/officerMe.ts)
+    { key: 'me', titleKey: 'ui.screen.me', icon: 'user', component: Me },
     {
         key: 'options',
         titleKey: 'ui.screen.options',

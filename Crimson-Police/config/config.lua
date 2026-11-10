@@ -94,9 +94,9 @@ Config.Tablet = {
     -- Milliseconds (0-1000) the GTA pause key is blocked after Escape or the close button closes the tablet, so the
     -- same Escape press does not also open the pause menu (0 = off)
     pauseGuardMs = 300,
-    -- The Officer UI sidebar order: 'classic' = Home, Mission Board, Dispatch, Unit, Active Mission, Leaderboard,
-    -- Challenge, Profile, My options (as before); 'mostUsed' = Home, Mission Board, Active Mission, Dispatch, Unit,
-    -- Profile, Leaderboard, Challenge, My options. Only the order changes
+    -- The Officer UI sidebar order: 'classic' = Home, Mission Board, Dispatch, Unit, Active Mission, Me (Profile,
+    -- Leaderboard and Challenge as tabs), My options (as before); 'mostUsed' = Home, Mission Board, Active Mission,
+    -- Dispatch, Unit, Me, My options. Only the order changes
     sidebarOrder = 'classic',
     -- true = while the officer is on a run, Active Mission moves to the top of the sidebar, right under Home; false =
     -- it keeps its place (as before)

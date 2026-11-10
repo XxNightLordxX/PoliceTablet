@@ -1033,7 +1033,7 @@ do
     local dialog = Read(WEB .. 'officer/components/ProfileEditDialog.tsx') or ''
     local mock = Read(WEB .. 'mocks/options.mock.ts') or ''
     local tclientSrc = Read(ROOT .. 'modules/tablet/client.lua') or ''
-    Has(nav, '\'challenge\' | \'profile\' | \'options\';', 'OfficerScreenKey has options')
+    Has(nav, '\'me\' | \'options\';', 'OfficerScreenKey has options')
     Has(screens, 'import MyOptions from \'../officer/screens/MyOptions\';', 'the screen registry imports MyOptions')
     Has(
         Squash(screens),
@@ -1047,8 +1047,8 @@ do
 ];]]),
         'options is the last officer screen, hidden while officer options are off'
     )
-    local atProfile = screens:find('key: \'profile\'', 1, true) or math.huge
-    H.ok(atProfile < (screens:find('key: \'options\'', 1, true) or 0), 'and comes after profile')
+    local atMe = screens:find('key: \'me\'', 1, true) or math.huge
+    H.ok(atMe < (screens:find('key: \'options\'', 1, true) or 0), 'and comes after me')
     -- every callback and action the screen uses has a browser mock
     for _, use in ipairs({
         { 'useRequest<OptionsView>(\'getOptions\'', 'registerMock(\'request\', \'getOptions\',' },

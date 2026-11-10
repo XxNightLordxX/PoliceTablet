@@ -9,7 +9,7 @@ export type OfficerNav = { order: 'classic' | 'mostUsed'; activeFirst: boolean; 
 export const CLASSIC_NAV: OfficerNav = { order: 'classic', activeFirst: false, compact: false };
 
 // 'mostUsed': the common path first (find a mission, run it, take a call, form a unit), then the officer's own record
-const MOST_USED = ['home', 'board', 'active', 'dispatch', 'unit', 'profile', 'leaderboard', 'challenge', 'options'];
+const MOST_USED = ['home', 'board', 'active', 'dispatch', 'unit', 'me', 'options'];
 
 // The session's sidebar settings; an older session or an unknown value = as before.
 export function officerNavOf(session: Session | null | undefined): OfficerNav {

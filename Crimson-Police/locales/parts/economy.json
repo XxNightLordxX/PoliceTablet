@@ -1,6 +1,5 @@
 {
   "officer.home.greeting": "Welcome back, {name}",
-  "officer.home.open_board": "Open the Mission Board",
   "officer.home.champions_eyebrow": "Season champions",
   "officer.home.champions": "{department} won {season}",
   "officer.home.xp": "XP",
@@ -191,5 +190,14 @@
   "ui.screen.home": "Home",
   "ui.screen.sup_payouts": "Payouts",
   "ui.screen.admin_payouts": "Payouts",
-  "sup.payouts.default_line": "Config default {amount}"
+  "sup.payouts.default_line": "Config default {amount}",
+  "officer.home.status.run": "You are on a run",
+  "officer.home.status.limit": "Today's missions are done",
+  "officer.home.status.ready": "Ready for a mission",
+  "officer.home.next_daily": "Next: {goal} today ({progress} / {count})",
+  "officer.home.next_weekly": "Next: {goal} this week ({progress} / {count})",
+  "officer.home.next_done": "Both goals done. Every mission still scores points.",
+  "officer.home.next_none": "No goal set. Every mission scores points.",
+  "officer.home.find_mission": "Find a mission",
+  "officer.home.back_to_run": "Back to your mission"
 }

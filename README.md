@@ -264,7 +264,7 @@ Section [8](#8-troubleshooting) lists every message and what to do.
 ### 3.5 Open the tablet in game
 
 - **Officers**: be on duty in a department job (SAST or FIB by default), then type `/CrimsonPolice`. Press **Esc**,
-  or the **X** at the top right, to close the tablet.
+  or **X** to close it. **Me** holds Profile, Leaderboard and Challenge as tabs.
 - **Supervisors**: open the tablet, then press **Supervisor** at the bottom of the left sidebar.
 - **Admins**: type `/CrimsonPoliceAdmin`. Admins don't need a police job and don't need to be on duty. **Esc**
   closes the Admin UI too.

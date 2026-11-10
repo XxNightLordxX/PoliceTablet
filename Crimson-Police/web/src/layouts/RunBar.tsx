@@ -1,8 +1,11 @@
 // The officer's current run, pinned above every Officer UI screen while a run is active.
-// Data: request 'getRun' (ActiveMissionView or null) on mount, then the view each push topic 'run' carries (the same
-// CP.Runs.view getRun returns). Click → Active Mission.
 
-import { Badge, Countdown, Icon, TierBadge } from '../shared/components';
+// The officer's current run, pinned above every Officer UI screen while a run is active.
+// Data: request 'getRun' (ActiveMissionView or null) on mount, then the view each push topic 'run' carries (the same
+// CP.Runs.view getRun returns). Click → Active Mission; its quick links open the Mission Board, Dispatch and Unit
+// (layouts/officerMe.ts runBarLinks: the ones the officer's UI shows).
+
+import { Badge, Button, Countdown, Icon, TierBadge } from '../shared/components';
 import { cx } from '../shared/cx';
 import { ACTION_LEFT_SHOWN, asArray } from '../shared/data';
 import { useCountdown, usePush, useRequest } from '../shared/hooks';
@@ -10,6 +13,9 @@ import { t } from '../shared/i18n';
 import { useNavigation } from '../shared/navigation';
 import { useFormatDistance } from '../shared/options';
 import type { ActiveMissionView } from '../shared/types';
+import { runBarLinks } from './officerMe';
+
+const LINK_ICON = { board: 'list', dispatch: 'radio', unit: 'users' } as const;
 
 function RouteStatus({ route }: { route: ActiveMissionView['route'] }) {
     const formatDistance = useFormatDistance();
@@ -71,7 +77,7 @@ function RouteStatus({ route }: { route: ActiveMissionView['route'] }) {
 
 export function RunBar() {
     const { data, setData, loading, refetch } = useRequest<ActiveMissionView | null>('getRun', {});
-    const { navigate, screen } = useNavigation();
+    const { navigate, screen, available } = useNavigation();
     // A 'run' push carrying the view applies as it is, with no getRun per push. The end of the run is
     // CP.Tablet.push(src, 'run', nil): Lua drops the nil field, so `data` arrives missing (undefined), not null.
     usePush<ActiveMissionView | null | undefined>('run', view => {
@@ -89,46 +95,65 @@ export function RunBar() {
     const total = objectives.length;
     const inProgress = data.state === 'in_progress';
 
+    const links = runBarLinks(available, screen);
+
     return (
-        <button
-            type="button"
-            className={cx('cp-runbar', screen === 'active' && 'is-current', data.test && 'is-test')}
-            onClick={() => navigate('active')}
-            aria-label={t('ui.runbar.open')}
-        >
-            <span className={cx('cp-runbar__pulse', inProgress && 'is-live')} aria-hidden />
-            <span className="cp-runbar__main">
-                <span className="cp-runbar__eyebrow">
-                    {data.test ? (
-                        <Badge tone="warning" variant="solid" size="sm">
-                            {t('hud.test_run')}
-                        </Badge>
-                    ) : null}
-                    {inProgress ? t('ui.runbar.in_progress') : t('ui.runbar.en_route')}
+        <div className={cx('cp-runbar', screen === 'active' && 'is-current', data.test && 'is-test')}>
+            <button
+                type="button"
+                className="cp-runbar__go"
+                onClick={() => navigate('active')}
+                aria-label={t('ui.runbar.open')}
+            >
+                <span className={cx('cp-runbar__pulse', inProgress && 'is-live')} aria-hidden />
+                <span className="cp-runbar__main">
+                    <span className="cp-runbar__eyebrow">
+                        {data.test ? (
+                            <Badge tone="warning" variant="solid" size="sm">
+                                {t('hud.test_run')}
+                            </Badge>
+                        ) : null}
+                        {inProgress ? t('ui.runbar.in_progress') : t('ui.runbar.en_route')}
+                    </span>
+                    <span className="cp-runbar__title">{data.missionLabel}</span>
                 </span>
-                <span className="cp-runbar__title">{data.missionLabel}</span>
-            </span>
-            <span className="cp-runbar__meta">
-                <TierBadge tier={data.tier} expected={data.tierExpected} size="sm" />
-                {inProgress ? (
-                    <span className="cp-runbar__status">
-                        <Icon name="checkCircle" size={13} />
-                        {t('ui.runbar.objectives', { done, total })}
-                    </span>
-                ) : (
-                    <RouteStatus route={data.route} />
-                )}
-                {data.remaining !== null && data.remaining !== undefined ? (
-                    <span className="cp-runbar__timer">
-                        <Icon name="clock" size={14} />
-                        <Countdown seconds={data.remaining} paused={data.paused} warnBelow={60} dangerBelow={15} />
-                    </span>
-                ) : null}
-            </span>
-            <span className="cp-runbar__open">
-                {t('ui.runbar.view')}
-                <Icon name="chevronRight" size={15} />
-            </span>
-        </button>
+                <span className="cp-runbar__meta">
+                    <TierBadge tier={data.tier} expected={data.tierExpected} size="sm" />
+                    {inProgress ? (
+                        <span className="cp-runbar__status">
+                            <Icon name="checkCircle" size={13} />
+                            {t('ui.runbar.objectives', { done, total })}
+                        </span>
+                    ) : (
+                        <RouteStatus route={data.route} />
+                    )}
+                    {data.remaining !== null && data.remaining !== undefined ? (
+                        <span className="cp-runbar__timer">
+                            <Icon name="clock" size={14} />
+                            <Countdown seconds={data.remaining} paused={data.paused} warnBelow={60} dangerBelow={15} />
+                        </span>
+                    ) : null}
+                </span>
+                <span className="cp-runbar__open">
+                    {t('ui.runbar.view')}
+                    <Icon name="chevronRight" size={15} />
+                </span>
+            </button>
+            {links.length > 0 ? (
+                <nav className="cp-runbar__links" aria-label={t('ui.runbar.links')}>
+                    {links.map(k => (
+                        <Button
+                            key={k}
+                            variant="ghost"
+                            size="sm"
+                            icon={LINK_ICON[k as keyof typeof LINK_ICON]}
+                            onClick={() => navigate(k)}
+                        >
+                            {t(`ui.screen.${k}`)}
+                        </Button>
+                    ))}
+                </nav>
+            ) : null}
+        </div>
     );
 }

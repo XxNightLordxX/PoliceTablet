@@ -1331,17 +1331,25 @@ nothing moved, the full sidebar:
 
 | Setting | What it does |
 |---|---|
-| `sidebarOrder` | `'classic'` (shipped: Home, Mission Board, Dispatch, Unit, Active Mission, Leaderboard, Challenge, Profile, My options) or `'mostUsed'`: Home, Mission Board, Active Mission, Dispatch, Unit, Profile, Leaderboard, Challenge, My options. Only the order changes |
+| `sidebarOrder` | `'classic'` (shipped: Home, Mission Board, Dispatch, Unit, Active Mission, Me, My options) or `'mostUsed'`: Home, Mission Board, Active Mission, Dispatch, Unit, Me, My options. Only the order changes |
 | `activeFirst` | `true` (shipped `false`) = while the officer is on a run, Active Mission sits right under Home (off a run it keeps its place) |
 | `compactSidebar` | `true` (shipped `false`) = a narrow strip of icons, each name on hover, so the screens get more room (handy with large text) |
 
 The same screens show in every order; one an owner switched off (Dispatch, My options) stays hidden.
 
+**Fewer screens for officers.** Home opens on the officer's status (on a run, today's missions done, or ready), the
+goal to work on next and one big **Find a mission** button (on a run it reads **Back to your mission**); the officer
+card, both goals, the Type of the Day and the news follow below. **Me** holds Profile & History, Leaderboard and
+Department Challenge as three tabs (the commendations badge sits on Me); a leaderboard row or a challenge contributor
+opens that officer on the Profile tab, and Back returns to the Leaderboard tab. While on a run, the bar over every
+screen opens Active Mission and has quick links to Mission Board, Dispatch and Unit (Dispatch only while mission
+calls are on). Display only: every action, rule and permission is the same.
+
 Home, Mission Board, Active Mission and Dispatch share one header: the screen name, then one line saying what the
 screen is for (Home also greets the officer). While a screen loads it shows a spinner; if the first load fails, the
 error with Retry; if the server sends nothing, "Nothing to show yet" with Retry; if a later refresh fails, a small
 "Could not refresh" line with Retry over what was loaded last. Display only: nothing an officer can do changes.
-Unit, Profile, Leaderboard and My options use the same header and load states. Profile's field training card shows
+Unit, the three tabs of Me and My options use the same header and load states. Profile's field training card shows
 how many of your rookies' tasks are ready to sign off, and the live case card on Active Mission says which of its
 three steps the case is on ("Step 2 of 3").
 

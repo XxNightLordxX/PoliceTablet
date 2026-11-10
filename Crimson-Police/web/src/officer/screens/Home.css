@@ -4,6 +4,52 @@
     color: var(--cp-muted);
 }
 
+/* Next step (on top): the status, the next goal and one big button */
+.economy-next__row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.economy-next__text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.economy-next__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cp-fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--cp-success);
+}
+
+.economy-next.is-run .economy-next__status {
+    color: var(--cp-accent-text);
+}
+
+.economy-next.is-limit .economy-next__status {
+    color: var(--cp-warning);
+}
+
+.economy-next__goal {
+    font-size: var(--cp-fs-md);
+    font-weight: 650;
+}
+
+.economy-next__button {
+    flex: none;
+    min-height: 44px;
+    padding: 0 22px;
+    font-size: var(--cp-fs-md);
+}
+
 /* Champions banner */
 .economy-champions {
     display: flex;

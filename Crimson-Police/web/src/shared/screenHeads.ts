@@ -3,7 +3,7 @@
 // The page header of every screen of the four tablets (officer, supervisor, admin, criminal): its title and the one
 // line of help under it (locale keys), and the load state every screen shows the same way. <Screen head="key"> reads
 // its title and help from here (shared/components/Card.tsx). A screen made of tabs (Admin Money, Supervisor
-// Department) has no head of its own: each of its tabs has one. Checked by shared/designSystem.walk.ts.
+// Department, Officer Me) has no head of its own: each of its tabs has one. Checked by shared/designSystem.walk.ts.
 
 // title: the screen name key; help: the one line under it (both locale keys).
 export interface ScreenHead {
@@ -18,6 +18,7 @@ export const SCREEN_HEADS = {
     dispatch: { title: 'ui.screen.dispatch', help: 'mc.subtitle' },
     unit: { title: 'ui.screen.unit', help: 'ui.help.unit' },
     active: { title: 'ui.screen.active', help: 'ui.help.active' },
+    // profile, leaderboard and challenge: the tabs of the Me screen
     leaderboard: { title: 'ui.screen.leaderboard', help: 'ui.help.leaderboard' },
     challenge: { title: 'ui.screen.challenge', help: 'ui.help.challenge' },
     profile: { title: 'ui.screen.profile', help: 'ui.help.profile' },
@@ -65,7 +66,7 @@ export const SCREEN_HEADS = {
 export type ScreenHeadKey = keyof typeof SCREEN_HEADS;
 
 // The registered screens made of tabs: no head of their own, each tab has one.
-export const TABBED_SCREENS = ['admin_money', 'sup_department'];
+export const TABBED_SCREENS = ['admin_money', 'sup_department', 'me'];
 
 // loading: first fetch running; error: first fetch failed; empty: the reply had no data and no error;
 // stale: data from before is shown but the last refresh failed; ready: data is shown.

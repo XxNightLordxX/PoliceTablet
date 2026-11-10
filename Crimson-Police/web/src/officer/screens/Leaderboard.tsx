@@ -1,4 +1,4 @@
-// Officer UI · Leaderboard (screen key 'leaderboard', callback getBoard).
+// Officer UI · Leaderboard (the Leaderboard tab of Me, screen key 'me', callback getBoard).
 
 // Tabs Weekly · Monthly · Season · All-time, filter chips (Overall, the mission types, Unit, Cross-Department,
 // Department + department select), the top 25 with medals for 1–3 and the viewer's own row pinned at the
@@ -28,6 +28,7 @@ import { useRequest } from '../../shared/hooks';
 import { useRememberedFilter } from '../../shared/filters';
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
+import { meLink } from '../../layouts/officerMe';
 import { useSession } from '../../shared/session';
 import type { Session } from '../../shared/types';
 import { asList, type BoardPeriod, type BoardRowView, type BoardView } from '../../types/boards';
@@ -269,7 +270,7 @@ export default function Leaderboard() {
     const pinned = me ? (
         <tr
             className={cx('boards-pinned', meInList && 'is-listed')}
-            onClick={() => navigate('profile')}
+            onClick={() => navigate('me', meLink('profile'))}
             title={t('leaderboard.open_own')}
         >
             <td>
@@ -399,7 +400,7 @@ export default function Leaderboard() {
                         columns={columns}
                         rows={rows}
                         rowKey={r => r.citizenid}
-                        onRowClick={r => navigate('profile', r.citizenid === myCid ? {} : { citizenid: r.citizenid })}
+                        onRowClick={r => navigate('me', meLink('profile', r.citizenid === myCid ? null : r.citizenid))}
                         highlightRow={r => r.citizenid === myCid}
                         loading={loading && !board}
                         maxHeight={440}

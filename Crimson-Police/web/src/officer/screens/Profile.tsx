@@ -1,6 +1,6 @@
-// Officer UI · Profile & History (screen key 'profile', callback getProfile, actions server:setHideName and
+// Officer UI · Profile & History (the Profile tab of Me, callback getProfile, actions server:setHideName and
 
-// server:dispute). Own profile by default; navigate('profile', { citizenid }) opens someone's public
+// server:dispute). Own profile by default; navigate('me', { meTab: 'profile', citizenid }) opens someone's public
 // profile (no cash, no cash breakdown, no toggle, no disputes). Shows the XP level badge and bar, badges,
 // the hide-name toggle, and the last 20 runs with how each ended; a row opens the points/cash breakdown in
 // the same presentation as the HUD result card; flagged, voided or failed runs from the dispute window can
@@ -48,6 +48,7 @@ import {
 import { useAction, useRequest } from '../../shared/hooks';
 import { t, tOr } from '../../shared/i18n';
 import { useNavigate, useNavigation } from '../../shared/navigation';
+import { meLink } from '../../layouts/officerMe';
 import { useSession } from '../../shared/session';
 import type { RunResult, Session } from '../../shared/types';
 import { asList, type ProfileData, type ProfileRunView } from '../../types/boards';
@@ -413,7 +414,11 @@ export default function Profile() {
                 head="profile"
                 actions={
                     target ? (
-                        <Button variant="ghost" icon="chevronLeft" onClick={() => navigate('leaderboard')}>
+                        <Button
+                            variant="ghost"
+                            icon="chevronLeft"
+                            onClick={() => navigate('me', meLink('leaderboard'))}
+                        >
                             {t('profile.back')}
                         </Button>
                     ) : undefined
@@ -458,7 +463,11 @@ export default function Profile() {
                         <Button variant="ghost" icon="flag" onClick={() => setReporting(true)}>
                             {t('profile.report.button')}
                         </Button>
-                        <Button variant="ghost" icon="chevronLeft" onClick={() => navigate('leaderboard')}>
+                        <Button
+                            variant="ghost"
+                            icon="chevronLeft"
+                            onClick={() => navigate('me', meLink('leaderboard'))}
+                        >
                             {t('profile.back')}
                         </Button>
                     </>

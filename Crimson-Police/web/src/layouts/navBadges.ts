@@ -34,7 +34,8 @@ export function navBadge(key: ScreenKey, c: NavCounts): { badge?: string; live?:
             return { badge: countBadge(c.invites) };
         case 'active':
             return { live: c.onRun === true };
-        case 'profile':
+        // the commendations wait on the Profile tab of Me
+        case 'me':
             return { badge: countBadge(c.commendations) };
         // the Review Queue is a tab of Department (MG3): its open items sit on Department
         case 'sup_department':

@@ -3778,7 +3778,8 @@ shared/
   index.ts                re-exports all of the above: import { … } from '../../shared'
 layouts/                  TabletFrame, Header, Sidebar, RunBar, NotificationBell, ScreenHost, navBadges,
                           Officer/Supervisor/AdminLayout, screens.ts (the screen registry)
-officer/screens/          Home, MissionBoard, Dispatch, Unit, ActiveMission, Leaderboard, Challenge, Profile
+officer/screens/          Home, MissionBoard, Dispatch, Unit, ActiveMission, Me (tabs: Profile, Leaderboard,
+                          Challenge), MyOptions
 supervisor/screens/       MissionList, CrossDept, LiveMissions, ReviewQueue, Payouts, Builder, DeptReport
 admin/screens/            Payouts, Missions, Seasons, Leaderboards, Officers, Departments, Permissions, Settings, Audit,
                           Testing

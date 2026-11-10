@@ -327,6 +327,32 @@
     border-color: rgba(var(--cp-accent-rgb), 0.75);
 }
 
+/* The whole bar but the quick links opens Active Mission */
+.cp-runbar__go {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+/* Quick links while on a run: Mission Board, Dispatch, Unit */
+.cp-runbar__links {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+    padding-left: 10px;
+    border-left: 1px solid var(--cp-border);
+}
+
 .cp-runbar.is-current {
     border-color: rgba(var(--cp-accent-rgb), 0.6);
 }
