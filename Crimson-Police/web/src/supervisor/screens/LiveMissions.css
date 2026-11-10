@@ -14,15 +14,15 @@
     display: inline-flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .oversight-live-card__facts {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
-    padding: 10px 12px;
-    margin-bottom: 12px;
+    padding: 10px var(--cp-space-3);
+    margin-bottom: var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     background: var(--cp-surface-2);
     border: 1px solid var(--cp-border);
@@ -60,7 +60,7 @@
     padding: 0;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 6px 8px;
+    gap: 6px var(--cp-space-2);
 }
 
 .oversight-live-person {
@@ -68,7 +68,7 @@
     align-items: center;
     gap: 10px;
     min-height: 44px;
-    padding: 6px 8px 6px 10px;
+    padding: 6px var(--cp-space-2) 6px 10px;
     border-radius: var(--cp-radius-sm);
     border: 1px solid rgba(var(--cp-text-rgb), 0.06);
     background: rgba(var(--cp-text-rgb), 0.025);
@@ -134,8 +134,8 @@
 .oversight-live-addtime {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 8px;
+    gap: var(--cp-space-2);
+    margin-top: var(--cp-space-2);
 }
 
 .oversight-live-addtime__done {

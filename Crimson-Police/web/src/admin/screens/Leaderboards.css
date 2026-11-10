@@ -3,7 +3,7 @@
 .boards-admin-toolbar {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .boards-admin-select {
@@ -17,11 +17,11 @@
 .boards-admin-stats {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .boards-admin-stats > .cp-stat {
-    padding: 12px 14px;
+    padding: var(--cp-space-3) 14px;
     border: 1px solid var(--cp-border);
     border-radius: var(--cp-radius);
     background: rgba(var(--cp-surface-rgb), 0.92);
@@ -57,33 +57,33 @@
 .boards-admin-result {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     font-size: var(--cp-fs-sm);
 }
 
 .boards-admin-flags {
     display: inline-flex;
-    gap: 4px;
+    gap: var(--cp-space-1);
     flex-wrap: wrap;
 }
 
 .boards-row-actions {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .boards-award-form {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 /* stuck payments */
 .boards-stuck__list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -93,7 +93,7 @@
     display: flex;
     flex-direction: column;
     gap: 5px;
-    padding: 10px 12px;
+    padding: 10px var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     border: 1px solid rgba(var(--cp-warning-rgb), 0.35);
     background: rgba(var(--cp-warning-rgb), 0.07);
@@ -102,7 +102,7 @@
 .boards-stuck__head {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     min-width: 0;
 }
 
@@ -113,14 +113,14 @@
 .boards-stuck__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 2px 12px;
+    gap: 2px var(--cp-space-3);
     font-size: var(--cp-fs-xs);
     color: var(--cp-muted);
 }
 
 .boards-stuck__trans {
     display: block;
-    padding: 5px 8px;
+    padding: 5px var(--cp-space-2);
     border-radius: var(--cp-radius-xs);
     background: rgba(var(--cp-bg-rgb), 0.6);
     font-family: var(--cp-mono);
@@ -144,7 +144,7 @@
 .boards-admin-side {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--cp-space-4);
     min-width: 0;
 }
 

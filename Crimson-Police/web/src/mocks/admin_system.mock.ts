@@ -214,7 +214,7 @@ registerMock('action', 'server:admin:finishSetup', (p: { skip?: boolean; preset?
 });
 
 // admin:getHome: Admin UI -> Home's dashboard (?homeCalm: nothing waiting, ?homeNoShortcuts: homeShortcuts = {},
-// ?setup: the First-start setup shows until finished or skipped)
+// ?homeByUse: homeShortcutsByUse = true, ?setup: the First-start setup shows until finished or skipped)
 registerMock('request', 'admin:getHome', (): AdminHomeData => {
     const calm = typeof window !== 'undefined' && /[?&]homeCalm\b/.test(window.location.search);
     const none = typeof window !== 'undefined' && /[?&]homeNoShortcuts\b/.test(window.location.search);
@@ -242,6 +242,7 @@ registerMock('request', 'admin:getHome', (): AdminHomeData => {
             load: { loaded: 42, refused: 0, error: false },
         },
         shortcuts: none ? [] : ['newMission', 'missionSwitch', 'pay', 'points', 'settings'],
+        shortcutsByUse: typeof window !== 'undefined' && /[?&]homeByUse\b/.test(window.location.search),
         setup: setupPending(),
         serverTime: now(),
     };

@@ -32,6 +32,7 @@ local BAKED = {
 local KEPT = {
     'AdminUi.reasonChips',
     'AdminUi.homeShortcuts',
+    'AdminUi.homeShortcutsByUse',
     'AdminUi.presets',
     'AdminUi.pageSize',
     'Tablet.sidebarOrder',

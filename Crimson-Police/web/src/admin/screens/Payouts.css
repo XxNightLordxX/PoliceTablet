@@ -2,14 +2,14 @@
 
 .economy-admin-pay-summary {
     display: inline-flex;
-    gap: 8px;
+    gap: var(--cp-space-2);
     flex-wrap: wrap;
 }
 
 .economy-admin-pay-toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--cp-space-3);
     flex-wrap: wrap;
 }
 
@@ -72,14 +72,14 @@
 .economy-admin-pay-source {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     flex-wrap: wrap;
 }
 
 .economy-admin-pay-actions {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
     justify-content: flex-end;
 }
 
@@ -107,14 +107,14 @@
 .economy-admin-pay-edit {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--cp-space-4);
 }
 
 .economy-admin-pay-edit__facts {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    padding: 12px 14px;
+    gap: var(--cp-space-3);
+    padding: var(--cp-space-3) 14px;
     border-radius: var(--cp-radius);
     background: var(--cp-surface-2);
     border: 1px solid var(--cp-border);
@@ -150,7 +150,7 @@
 .economy-admin-pay-note {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--cp-space-2);
     font-size: var(--cp-fs-sm);
     color: var(--cp-muted);
 }

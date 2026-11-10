@@ -4,8 +4,8 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: var(--cp-space-3);
+    padding: var(--cp-space-3) var(--cp-space-4);
     border-radius: var(--cp-radius);
     border: 1px solid rgba(var(--cp-accent-rgb), 0.45);
     background: rgba(var(--cp-accent-rgb), 0.12);
@@ -37,20 +37,20 @@
 .ready-check__timer {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
     font-size: var(--cp-fs-sm);
     color: var(--cp-muted);
 }
 
 .ready-check__actions {
     display: flex;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .ready-check__twists {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
     margin-top: 2px;
     font-size: var(--cp-fs-sm);
     color: var(--cp-accent-text);
@@ -60,7 +60,7 @@
 .ready-check__live {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
     margin-top: 2px;
     font-size: var(--cp-fs-sm);
     font-weight: 600;

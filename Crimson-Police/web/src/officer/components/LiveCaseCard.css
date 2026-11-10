@@ -7,7 +7,7 @@
 .live-case__title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     flex-wrap: wrap;
 }
 
@@ -15,7 +15,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px 14px;
-    margin: 6px 0 4px;
+    margin: 6px 0 var(--cp-space-1);
     padding: 0;
     list-style: none;
     font-size: var(--cp-fs-sm);
@@ -25,7 +25,7 @@
 .live-case__step {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .live-case__step.is-done {

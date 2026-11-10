@@ -47,7 +47,7 @@
     color: #ddd;
     border: 1px solid #333;
     border-radius: 10px;
-    padding: 8px 10px 10px;
+    padding: var(--cp-space-2) 10px 10px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
@@ -70,7 +70,7 @@
 .dev-panel__group {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--cp-space-1);
     align-items: center;
     margin-top: 6px;
 }

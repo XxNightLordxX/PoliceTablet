@@ -4,12 +4,12 @@
 // callback (admin:getHome, modules/admin/adminhome) once a minute and again shortly after a push that can change it
 // ('operation', 'builder', 'nav'). Live now: officers on duty, the runs going and the queues waiting, each a tile
 // that opens its screen. Alerts: Problems, today's refused starts, Config health and the last mission load. Shortcuts:
-// the tiles Config.AdminUi.homeShortcuts names, in its order; four of them hold a quick form
+// the tiles Config.AdminUi.homeShortcuts names, in its order (or the most used first with homeShortcutsByUse); four of them hold a quick form
 // (admin/components/HomeForms) that does the job right there, and Open still opens the full screen. The tiles and
 // lines come from admin/components/adminHome.ts. While Config.AdminUi.setupScreen is on and the setup is not done
 // (data.setup), the First-start setup (admin/components/SetupWizard) shows above the dashboard.
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Badge, Button, Card, Icon, Screen } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { formatNumber } from '../../shared/format';
@@ -20,7 +20,15 @@ import { NEW_MISSION_PARAMS } from '../../builder/quickMission';
 import { MissionSwitchForm, PayForm, PointsForm, QuickSettingsForm } from '../components/HomeForms';
 import { SetupWizard } from '../components/SetupWizard';
 import type { AdminHomeData, HomeShortcutKey } from '../../types/admin_system';
-import { alertLines, liveTiles, shortcutsOf, waitingCount, type ShortcutDef } from '../components/adminHome';
+import {
+    alertLines,
+    countShortcutUse,
+    liveTiles,
+    readShortcutUses,
+    shortcutsOf,
+    waitingCount,
+    type ShortcutDef,
+} from '../components/adminHome';
 import './Home.css';
 
 // A push asks again once, this long after the first one (a busy run sends many).
@@ -63,28 +71,36 @@ function Shortcut({ def }: { def: ShortcutDef }) {
     const params = def.key === 'newMission' ? { ...NEW_MISSION_PARAMS } : def.params;
     const form = FORMS[def.key];
     return (
-        <Card className="admin-home-tile" padding="md">
-            <div className="admin-home-tile__head">
-                <span className="admin-home-tile__icon" aria-hidden>
-                    <Icon name={def.icon} size={20} />
-                </span>
-                <div className="admin-home-tile__titles">
-                    <div className="admin-home-tile__title">{t(def.title)}</div>
-                    <div className="admin-home-tile__text">{t(def.text)}</div>
+        // any button of the tile (Open or its quick form) counts as a use (Config.AdminUi.homeShortcutsByUse)
+        <div
+            className="admin-home-tile__use"
+            onClickCapture={e => {
+                if ((e.target as HTMLElement).closest?.('button')) countShortcutUse(def.key);
+            }}
+        >
+            <Card className="admin-home-tile" padding="md">
+                <div className="admin-home-tile__head">
+                    <span className="admin-home-tile__icon" aria-hidden>
+                        <Icon name={def.icon} size={20} />
+                    </span>
+                    <div className="admin-home-tile__titles">
+                        <div className="admin-home-tile__title">{t(def.title)}</div>
+                        <div className="admin-home-tile__text">{t(def.text)}</div>
+                    </div>
                 </div>
-            </div>
-            {form ? form() : null}
-            <div className="admin-home-tile__actions">
-                <Button
-                    variant="primary"
-                    size="sm"
-                    iconRight="chevronRight"
-                    onClick={() => navigate(def.screen, params)}
-                >
-                    {t('admin.home.open')}
-                </Button>
-            </div>
-        </Card>
+                {form ? form() : null}
+                <div className="admin-home-tile__actions">
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        iconRight="chevronRight"
+                        onClick={() => navigate(def.screen, params)}
+                    >
+                        {t('admin.home.open')}
+                    </Button>
+                </div>
+            </Card>
+        </div>
     );
 }
 
@@ -210,7 +226,9 @@ function Alerts({ data, failed, retry }: { data: AdminHomeData | null; failed: b
 
 export default function AdminHome() {
     const { data, error, refetch } = useHome();
-    const shortcuts = shortcutsOf(data);
+    // read once per Home visit, so the tiles do not jump while the admin uses them
+    const [uses] = useState(readShortcutUses);
+    const shortcuts = shortcutsOf(data, uses);
     return (
         <Screen head="admin_home" subtitle={t('admin.home.subtitle')} className="admin-home-screen">
             {data?.setup ? <SetupWizard onDone={() => void refetch()} /> : null}

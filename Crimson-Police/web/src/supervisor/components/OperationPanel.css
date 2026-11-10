@@ -3,7 +3,7 @@
 .teams-op {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--cp-space-4);
     min-width: 0;
 }
 
@@ -18,7 +18,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--cp-space-4);
 }
 
 .teams-op-hero__titles {
@@ -79,7 +79,7 @@
 }
 
 .teams-op-stats {
-    padding: 14px 16px;
+    padding: 14px var(--cp-space-4);
     border-radius: var(--cp-radius);
     background: rgba(var(--cp-bg-rgb), 0.45);
     border: 1px solid var(--cp-border);
@@ -99,8 +99,8 @@
 .teams-op-notice {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: var(--cp-space-3);
+    padding: var(--cp-space-3) 14px;
     border-radius: var(--cp-radius);
     border: 1px solid rgba(var(--cp-warning-rgb), 0.35);
     background: rgba(var(--cp-warning-rgb), 0.1);
@@ -127,7 +127,7 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--cp-space-3);
     padding-top: 14px;
     border-top: 1px solid var(--cp-border);
 }
@@ -135,7 +135,7 @@
 .teams-op-controls__group {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--cp-space-3);
     min-width: 0;
 }
 
@@ -156,7 +156,7 @@
 .teams-op-depts {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .teams-op-dept {
@@ -209,7 +209,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 6px 4px;
+    padding: 6px var(--cp-space-1);
     border-radius: var(--cp-radius-xs);
 }
 
@@ -268,7 +268,7 @@
 }
 
 .teams-op-launch__text {
-    margin-top: 4px;
+    margin-top: var(--cp-space-1);
     font-size: var(--cp-fs-sm);
     color: var(--cp-muted);
     max-width: 640px;
@@ -277,15 +277,15 @@
 .teams-op-launch__form {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--cp-space-4);
     max-width: 720px;
 }
 
 .teams-op-launch__details {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    padding: 12px 14px;
+    gap: var(--cp-space-3);
+    padding: var(--cp-space-3) 14px;
     border-radius: var(--cp-radius);
     background: rgba(var(--cp-bg-rgb), 0.45);
     border: 1px solid var(--cp-border);
@@ -294,7 +294,7 @@
 .teams-op-launch__actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .teams-op-cooldown {

@@ -9,7 +9,7 @@
     display: flex;
     align-items: flex-end;
     flex-wrap: wrap;
-    gap: 10px 12px;
+    gap: 10px var(--cp-space-3);
 }
 
 .oversight-aud-f-cat {
@@ -128,7 +128,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--cp-space-3);
     margin-top: -6px;
 }
 
@@ -163,7 +163,7 @@
     width: 100%;
     min-height: 300px;
     max-height: 46vh;
-    padding: 12px;
+    padding: var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     border: 1px solid var(--cp-border);
     background: var(--cp-bg);

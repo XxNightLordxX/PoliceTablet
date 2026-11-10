@@ -189,6 +189,9 @@ Config.AdminUi = {
     -- missions on or off), 'pay' (Change pay), 'points' (Give or take points), 'settings' (Quick settings), 'live'
     -- (Running now), 'review' (Review) and 'activity' (Activity log); {} = no shortcuts
     homeShortcuts = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings' },
+    -- true = each admin sees those shortcuts with the ones he uses most first (counted on his own tablet, each time he
+    -- uses a tile); false = always in the order above (as before)
+    homeShortcutsByUse = false,
     -- true = Admin UI -> Restrictions (every tablet suspension, mission ban, real-suspect pair block, exclusion and
     -- suspension, and volunteer strikes block running now, in one list) also offers Extend: add hours to one, up to
     -- that kind's longest; false = the list offers only Lift. Each kind keeps its own permission for both

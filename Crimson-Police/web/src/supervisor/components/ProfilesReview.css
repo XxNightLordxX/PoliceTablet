@@ -9,8 +9,8 @@
     display: grid;
     grid-template-columns: minmax(140px, 1fr) auto minmax(0, 2fr) auto;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
+    gap: var(--cp-space-3);
+    padding: 10px var(--cp-space-3);
     border: 1px solid var(--cp-border);
     border-radius: var(--cp-radius);
     background: var(--cp-surface);
@@ -41,21 +41,21 @@
 .profile-review__what {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .profile-review__content {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     min-width: 0;
 }
 
 .profile-review__url {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
     max-width: 100%;
     overflow: hidden;
     color: var(--cp-muted);

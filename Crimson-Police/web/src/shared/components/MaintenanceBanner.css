@@ -4,7 +4,7 @@
     align-items: flex-start;
     gap: 10px;
     padding: 10px 14px;
-    margin: 0 0 12px;
+    margin: 0 0 var(--cp-space-3);
     border-radius: 8px;
     border: 1px solid var(--cp-warning);
     background: rgba(var(--cp-warning-rgb), 0.14);

@@ -3,11 +3,11 @@
 .boards-season-facts {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 14px 20px;
+    gap: 14px var(--cp-space-5);
 }
 
 .boards-note {
-    margin-top: 12px;
+    margin-top: var(--cp-space-3);
     font-size: var(--cp-fs-sm);
     color: var(--cp-muted);
 }
@@ -15,7 +15,7 @@
 .boards-override {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     width: 100%;
 }
 

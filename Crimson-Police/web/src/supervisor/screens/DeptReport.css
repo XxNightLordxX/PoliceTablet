@@ -48,7 +48,7 @@
 .boards-mini-standings {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     margin: 0;
     padding: 10px 0 0;
     border-top: 1px solid var(--cp-border);
@@ -59,7 +59,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 5px 8px;
+    padding: 5px var(--cp-space-2);
     border-radius: var(--cp-radius-sm);
     font-size: var(--cp-fs-sm);
 }
@@ -100,11 +100,11 @@
 .boards-report-stats {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .boards-report-stats > .cp-stat {
-    padding: 12px 14px;
+    padding: var(--cp-space-3) 14px;
     border: 1px solid var(--cp-border);
     border-radius: var(--cp-radius);
     background: rgba(var(--cp-surface-rgb), 0.92);
@@ -143,14 +143,14 @@
 .boards-report-result {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     font-size: var(--cp-fs-sm);
 }
 
 .boards-report-flags {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .boards-report-note {
@@ -161,7 +161,7 @@
 
 /* Clear cooldown: the officer's cooldowns, one row each */
 .sup-cd-note {
-    margin: 0 0 8px;
+    margin: 0 0 var(--cp-space-2);
     color: var(--cp-muted);
     font-size: var(--cp-fs-sm);
 }
@@ -171,12 +171,12 @@
 }
 
 .sup-cd-head {
-    margin: 12px 0 6px;
+    margin: var(--cp-space-3) 0 6px;
     font-size: var(--cp-fs-sm);
 }
 
 .sup-cd-list {
-    margin: 0 0 12px;
+    margin: 0 0 var(--cp-space-3);
     padding: 0;
     list-style: none;
 }
@@ -184,7 +184,7 @@
 .sup-cd-row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--cp-space-3);
     padding: 6px 0;
     border-bottom: 1px solid var(--cp-border);
 }

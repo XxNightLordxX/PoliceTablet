@@ -767,3 +767,10 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Generic config (SALE3), on a stock Qbox test server only: copy `config/examples/generic.lua` over
   `config/config.lua` and restart: the start-up check has no red line, the departments LSPD, BCSO and SASP match
   the jobs `police`, `bcso` and `sasp`, and `/CrimsonPoliceAdmin` opens on the First-start setup. (SALE3)
+- [ ] Finish (FIN1): Supervisor UI -> Department -> Officers -> an officer -> Give points: *Your controls used today*
+  goes up at once (no 30 s wait). A rookie whose training is done shows his finished training and Pair trainer in
+  the panel; pairing him again works as on the Training tab. Admin UI -> Money, Review and Supervisor Department
+  switch tabs as before and a Home tile or a search result still opens the right tab. In Settings set
+  `AdminUi.homeShortcutsByUse` on, use Change pay three times from Home, reopen Home: Change pay is first; set it
+  back off: your order again. Screens look as before (the spacing now comes from the shared scale). Paged lists
+  read "Page n of m". (FIN1)

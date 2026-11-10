@@ -3959,16 +3959,16 @@ head. `shared/designSystem.walk.ts` checks that every `<Screen>` passes its head
 | `Badge` | `tone` neutral\|primary\|accent\|success\|warning\|danger\|grey\|bronze\|silver\|gold\|platinum, `variant` soft\|solid\|outline, `size`, `icon`, `dot` |
 | `TierBadge` | `tier` (standard…critical), `label?`, `expected?`, `size` |
 | `XpBadge` | `badge` (Config.Recognition.levels colour), `label` |
-| `Tabs` / `SegmentedControl` | `items [{ key, label, icon?, badge?, disabled? }]`, `value`, `onChange`; arrow keys move |
-| `Table` | `columns [{ key, header, render?, width?, align?, numeric?, sortable?, sortValue? }]`, `rows`, `rowKey?`, `onRowClick?`, `highlightRow?`, `empty?`, `loading?`, `stickyHeader` (default true), `maxHeight?`, `dense?`, `footer?`, `filter` (true or `{ text, placeholder }`: a search box over the rows), `pageSize` (client pages with the Pager), `defaultSort` |
-| `Pager` | `page`, `pages`, `onPage`, `disabled` — previous / next and "page n of m" (nothing for one page) |
+| `Tabs` / `SegmentedControl` | `items [{ key, label, icon?, badge?, disabled? }]`, `value`, `onChange`; arrow keys move; `TabbedScreen` (a screen of tabs): `tabOf(params)`, `children(tab)`, `above?` |
+| `Table` | `columns [{ key, header, render?, width?, align?, numeric?, sortable?, sortValue? }]`, `rows`, `rowKey?`, `onRowClick?`, `highlightRow?`, `empty?`, `loading?`, `stickyHeader` (default true), `maxHeight?`, `dense?`, `footer?`, `filter` (true or `{ text, placeholder }`: a search box), `pageSize` (client pages), `defaultSort` |
+| `Pager` | `page`, `pages`, `onPage`, `disabled` — previous / next, "page n of m" (none for one page) |
 | `Dialog` | `open`, `onClose`, `title`, `description`, `footer`, `size` sm\|md\|lg, `dismissible` — renders inside the tablet, Escape closes it first |
 | `ConfirmButton` | `label`, `confirmLabel`, `onConfirm`, `variant` (before), `armedVariant` (default danger), button props — two clicks within 3 s (`CONFIRM_ARM_MS`) |
 | `ConfirmDialog` | `open`, `title`, `message`, `confirmLabel`, `tone` primary\|danger, `reason` (true or `{ label, placeholder, required, maxLength }`), `onConfirm(reason)` (may return a Promise → spinner), `onCancel`, `busy` |
 | `Field` | `label`, `hint`, `error`, `required`, `inline` — wires ids/aria for the control inside |
 | `TextInput` / `SearchInput` | `value`, `onChange(string)`, `prefix`, `suffix`, `invalid`, `onEnter`, input attrs |
-| `NumberInput` | `value (number\|null)`, `onChange`, `min`, `max`, `step`, `integer` (default true), `prefix`, `suffix`, `formatRange` (e.g. formatMoney), `showRange`, `stepper`, `onValidityChange` — shows "Between min and max", refuses out-of-range input (onChange is never called with it) |
-| `Select` | `value`, `onChange`, `options [{ value, label, disabled? }]`, `placeholder`, `invalid`, `disabled`, `aria-label`, `className` — a button and a list drawn inside the tablet (not a native `<select>`, whose list CEF draws outside the tablet's scale); arrows, Home/End, Enter/Space and type-ahead; Escape closes the list first. Use it for every dropdown |
+| `NumberInput` | `value (number\|null)`, `onChange`, `min`, `max`, `step`, `integer` (default true), `prefix`, `suffix`, `formatRange` (e.g. formatMoney), `showRange`, `stepper`, `onValidityChange` — shows "Between min and max", never sends out-of-range input to onChange |
+| `Select` | `value`, `onChange`, `options [{ value, label, disabled? }]`, `placeholder`, `invalid`, `disabled`, `aria-label`, `className` — a list drawn inside the tablet (CEF draws a native `<select>` outside its scale); arrows, Home/End, Enter/Space and type-ahead; Escape closes the list first. Use it for every dropdown |
 | `Textarea` | `value`, `onChange`, `rows`, `maxLength`, `showCount` |
 | `Toggle` / `Checkbox` | `checked`, `onChange(bool)`, `label`, `description` (Toggle), `disabled`, `indeterminate` (Checkbox) |
 | `ProgressBar` | `value`, `max`, `tone`, `size` sm\|md\|lg, `label`, `showValue` |

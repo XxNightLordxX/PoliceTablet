@@ -38,7 +38,7 @@
     align-items: center;
     justify-content: space-between;
     min-height: 34px;
-    padding: 4px 10px 4px 16px;
+    padding: var(--cp-space-1) 10px var(--cp-space-1) var(--cp-space-4);
     font-size: var(--cp-fs-xs);
     font-weight: 700;
     letter-spacing: 0.07em;
@@ -50,7 +50,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 0 8px 10px;
+    padding: 0 var(--cp-space-2) 10px;
     overflow-y: auto;
     min-height: 0;
     flex: 1;
@@ -121,7 +121,7 @@
 
 .oversight-off-result__tags {
     display: inline-flex;
-    gap: 4px;
+    gap: var(--cp-space-1);
     flex: none;
 }
 
@@ -133,7 +133,7 @@
 .oversight-off-detail {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--cp-space-4);
 }
 
 .oversight-off-head__row {
@@ -193,8 +193,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 12px;
-    padding: 8px 10px;
+    margin-top: var(--cp-space-3);
+    padding: var(--cp-space-2) 10px;
     border-radius: var(--cp-radius-sm);
     background: rgba(var(--cp-warning-rgb), 0.1);
     border: 1px solid rgba(var(--cp-warning-rgb), 0.3);
@@ -222,7 +222,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-top: 4px;
+    margin-top: var(--cp-space-1);
     padding-top: 10px;
     border-top: 1px solid var(--cp-border);
     min-width: 0;
@@ -250,7 +250,7 @@
 .oversight-off-susp-hist li {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--cp-space-2);
     min-width: 0;
 }
 
@@ -308,14 +308,14 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .oversight-off-dispute {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 14px;
+    padding: var(--cp-space-3) 14px;
     border-radius: var(--cp-radius-sm);
     background: var(--cp-surface-2);
     border: 1px solid var(--cp-border);
@@ -324,7 +324,7 @@
 .oversight-off-dispute__main {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     min-width: 0;
     flex: 1;
 }
@@ -333,7 +333,7 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .oversight-off-dispute__reason,
@@ -343,7 +343,7 @@
 }
 
 .oversight-off-quote {
-    padding: 10px 12px;
+    padding: 10px var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     background: var(--cp-surface-2);
     border-left: 3px solid var(--cp-accent);
@@ -393,7 +393,7 @@
 .oversight-off-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .oversight-off-result-cell {
@@ -421,14 +421,14 @@
 .oversight-off-profile {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .oversight-off-profile__text {
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
     min-width: 0;
 }
 
@@ -444,7 +444,7 @@
     align-items: center;
     gap: 10px;
     margin-top: 10px;
-    padding: 8px 10px;
+    padding: var(--cp-space-2) 10px;
     border-radius: var(--cp-radius);
     background: var(--cp-surface-2);
 }
@@ -462,8 +462,8 @@
 .oversight-off-list__filters {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 12px;
-    padding: 8px 12px;
+    gap: 6px var(--cp-space-3);
+    padding: var(--cp-space-2) var(--cp-space-3);
     border-bottom: 1px solid var(--cp-border);
     font-size: 12px;
 }

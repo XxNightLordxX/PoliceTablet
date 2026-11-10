@@ -20,6 +20,9 @@ export type { BadgeProps, BadgeTone } from './Badge';
 export { Tabs, SegmentedControl } from './Tabs';
 export type { TabItem } from './Tabs';
 
+export { TabbedScreen } from './TabbedScreen';
+export type { TabbedScreenProps } from './TabbedScreen';
+
 export { Table, sortRows, filterRows, pageRows } from './Table';
 export type { TableColumn, TableProps, TableSort } from './Table';
 

@@ -3,8 +3,8 @@
 .mc-board-link {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: var(--cp-space-2);
+    padding: var(--cp-space-2) var(--cp-space-3);
     border-radius: var(--cp-radius);
     border: 1px solid rgba(var(--cp-accent-rgb), 0.35);
     background: rgba(var(--cp-accent-rgb), 0.08);

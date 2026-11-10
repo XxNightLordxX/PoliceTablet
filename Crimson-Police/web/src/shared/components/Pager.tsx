@@ -18,15 +18,15 @@ export function Pager({ page, pages, onPage, disabled }: PagerProps) {
             <IconButton
                 icon="chevronLeft"
                 size="sm"
-                label={t('ui.kit.page_prev')}
+                label={t('ui.pager.prev')}
                 disabled={disabled || page <= 1}
                 onClick={() => onPage(page - 1)}
             />
-            <span className="cp-pager__text">{t('ui.kit.page_of', { page, pages })}</span>
+            <span className="cp-pager__text">{t('ui.pager.of', { page, pages })}</span>
             <IconButton
                 icon="chevronRight"
                 size="sm"
-                label={t('ui.kit.page_next')}
+                label={t('ui.pager.next')}
                 disabled={disabled || page >= pages}
                 onClick={() => onPage(page + 1)}
             />

@@ -3,7 +3,7 @@
 .my-options__column {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--cp-space-4);
     max-width: 760px;
     width: 100%;
 }
@@ -18,7 +18,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--cp-space-4);
     min-width: 0;
 }
 
@@ -33,7 +33,7 @@
     display: inline-flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     font-weight: 600;
 }
 
@@ -64,20 +64,20 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .my-options__chips {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     flex-shrink: 0;
 }
 
 .my-options__saved {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
     color: var(--cp-success);
     font-size: var(--cp-fs-xs);
     font-weight: 600;
@@ -85,7 +85,7 @@
 
 .my-options__kbd {
     min-width: 32px;
-    padding: 3px 8px;
+    padding: 3px var(--cp-space-2);
     border: 1px solid var(--cp-border);
     border-radius: 6px;
     background: var(--cp-surface-2);

@@ -11,8 +11,8 @@
 .sup-today__tile {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 12px;
+    gap: var(--cp-space-1);
+    padding: 10px var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     background: var(--cp-surface-2);
     border: 1px solid var(--cp-border);

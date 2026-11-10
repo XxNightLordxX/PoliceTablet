@@ -9,7 +9,7 @@
 .reward-pools__group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
     padding: 10px;
     border: 1px solid var(--cp-border);
     border-radius: var(--cp-radius-sm);
@@ -20,7 +20,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .reward-pools__spec > * {
@@ -38,7 +38,7 @@
 .reward-pools__expected {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .reward-pools__expected-title {
@@ -48,5 +48,5 @@
 
 .reward-pools__save {
     display: flex;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }

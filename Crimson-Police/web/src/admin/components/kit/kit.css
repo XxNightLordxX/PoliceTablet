@@ -2,7 +2,7 @@
 .admin-kit-dates {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .admin-kit-dates__input {
@@ -28,7 +28,7 @@
 .admin-kit-picker__list {
     list-style: none;
     margin: 0;
-    padding: 4px;
+    padding: var(--cp-space-1);
     max-height: 220px;
     overflow: auto;
     border: 1px solid var(--cp-border);
@@ -42,7 +42,7 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    padding: 6px 8px;
+    padding: 6px var(--cp-space-2);
     border: 0;
     border-radius: 6px;
     background: transparent;
@@ -69,12 +69,12 @@
 .admin-kit-preview {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .admin-kit-preview__head {
     display: flex;
-    gap: 8px;
+    gap: var(--cp-space-2);
     font-weight: 600;
 }
 
@@ -88,24 +88,24 @@
 .admin-kit-money {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     margin: 0;
 }
 
 .admin-kit-money__line {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .admin-kit-money__line dd {
     display: flex;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin: 0;
 }
 
 .admin-kit-money__line--total {
-    padding-top: 4px;
+    padding-top: var(--cp-space-1);
     border-top: 1px solid var(--cp-border);
     font-weight: 600;
 }
@@ -129,21 +129,21 @@
 .admin-kit-rows {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .admin-kit-rows__row {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 8px;
+    padding: var(--cp-space-2);
     border: 1px solid var(--cp-border);
     border-radius: 8px;
 }
 
 .admin-kit-rows__n {
     min-width: 20px;
-    padding-top: 8px;
+    padding-top: var(--cp-space-2);
     color: var(--cp-muted);
 }
 
@@ -151,13 +151,13 @@
     display: flex;
     flex: 1;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .admin-kit-rows__field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     min-width: 140px;
 }
 
@@ -168,7 +168,7 @@
 
 .admin-kit-rows__vec {
     display: flex;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .admin-kit-rows__tools {

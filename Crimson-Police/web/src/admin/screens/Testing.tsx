@@ -30,6 +30,7 @@ import {
     LoadingBlock,
     Screen,
     SearchInput,
+    filterRows,
     SegmentedControl,
     Select,
     Spinner,
@@ -500,13 +501,12 @@ function Catalog({ view, now, pending, canStart, onTest, onRecord, tools }: Cata
         return [...seen.entries()].map(([value, label]) => ({ value, label }));
     }, [missions]);
 
-    const q = search.trim().toLowerCase();
-    const groups = missions
-        .filter(
-            m =>
-                (!type || m.type === type) &&
-                (!q || m.label.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)),
-        )
+    // the shared Table search: every typed word in the mission's name or id
+    const groups = filterRows(
+        missions.filter(m => !type || m.type === type),
+        search,
+        m => `${m.label} ${m.id}`,
+    )
         .map(m => ({ m, locs: asList(m.locations).filter(l => matchesFilter(l, filter)) }))
         .filter(g => g.locs.length > 0 || (filter === 'all' && asList(g.m.locations).length === 0));
 

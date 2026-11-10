@@ -105,10 +105,12 @@ example Give points shows the min to max points and today's use), and risky acti
 **One Department screen.** Everything a supervisor does for his department sits on **Supervisor UI -> Department**.
 On top, **Today at a glance**: officers on duty, runs going, waiting for review and *Your controls used today*
 (for example *43 / 103*); each number opens the tab (or Live Missions) where he acts on it, and it turns amber when
-something waits or a day count is spent. Below it five tabs: **Officers** (the Department Report: each officer's
+something waits or a day count is spent; the numbers update every 30 seconds and the moment he acts in an officer's
+side panel. Below it five tabs: **Officers** (the Department Report: each officer's
 week; clicking an officer opens one side panel with his runs, his commendations and every action the supervisor may
 take on him, **Give points**, **Mission ban** (or Lift), **Clear cooldown**, **Commend** and **Field training**, each
-form opening right in the panel with the same limits, reasons, permission checks and audit rows as before),
+form opening right in the panel with the same limits, reasons, permission checks and audit rows as before; a rookie
+whose training is done can be paired with a trainer again right there),
 **Controls** (Mission controls: each control shows the admin's limits and today's use on its own row, for example
 *Admin limits: 1 to 50* and *Today: 40 of 100 used*, and the controls used from their own buttons, such as Give
 points and Mission ban, are listed in one card with the same),
@@ -847,7 +849,7 @@ from an older `config.lua` (Crimson-Police ignores it).
 | `Config.Tablet.supervisorReviewLive` | a decided flagged run or dispute leaves every other open Review Queue at once | Supervisor UI → Department → Review |
 
 **Kept as settings**, because a city may want them differently: `Config.AdminUi.reasonChips` (your own reason
-buttons), `Config.AdminUi.homeShortcuts` (Home's shortcuts and their order), `Config.AdminUi.presets` (the Settings presets), `Config.AdminUi.setupScreen` and `setupDone` (the First-start setup on Home), `Config.Tablet.sidebarOrder`, `activeFirst`, `compactSidebar`, `supervisorCompact` and `supervisorLanding`
+buttons), `Config.AdminUi.homeShortcuts` (Home's shortcuts and their order), `Config.AdminUi.homeShortcutsByUse` (each admin's most used shortcuts first), `Config.AdminUi.presets` (the Settings presets), `Config.AdminUi.setupScreen` and `setupDone` (the First-start setup on Home), `Config.Tablet.sidebarOrder`, `activeFirst`, `compactSidebar`, `supervisorCompact` and `supervisorLanding`
 (how each city likes its sidebars), and the tuning numbers `Config.AdminUi.pageSize` and `Config.Performance.loopScale`,
 `pushGapMs`, `latentAboveBytes` and `markerRange` (each shipped as before).
 
@@ -1458,6 +1460,8 @@ mission or count changes. It only reads; every number opens the screen where you
   a reason), **Give or take points** (find the officer, enter the points, below 0 takes away, and a reason; from 500
   points up you also type their citizen ID) and **Quick settings** (find an everyday setting and change it there,
   with the same checks as the Settings screen). **Open** on each tile opens the full screen.
+  `Config.AdminUi.homeShortcutsByUse = true` puts the shortcuts each admin uses most first (counted on his own
+  tablet each time he uses a tile; a tie keeps your order); shipped `false`, always your order.
 
 Under the reason box of every **Set payout** (Money, Home, a mission's drawer), **Give or take points** (Home,
 Leaderboards, Officers) and **Quick edit** sit ready-made reasons: **Balance change**, **Event** and **Correction**.

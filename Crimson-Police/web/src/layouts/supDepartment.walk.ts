@@ -179,6 +179,15 @@ async function panel(): Promise<void> {
     const tr = ftoRoleOf(fto, 'T1');
     ok(tr?.kind === 'trainer' && tr.rookies.length === 1, 'a trainer: his rookies, give him one');
     ok(ftoRoleOf(fto, 'C1')?.kind === 'candidate', 'an officer not in training: pair him with a trainer');
+    const doneFto = {
+        ...fto,
+        pairs: [{ ...fto.pairs[0], doneAt: 5 }],
+        candidates: [...fto.candidates, { citizenid: 'R1', name: 'R1' }],
+    } as unknown as FtoDept;
+    const again = ftoRoleOf(doneFto, 'R1');
+    ok(again?.kind === 'candidate' && again.done?.doneAt === 5, 'a rookie whose training is done: pair him again here');
+    ok(reportSrc.includes('todayChanged()'), 'a panel action refreshes today at a glance');
+    ok(deptSrc.includes('TabbedScreen') && !deptSrc.includes('<Tabs'), 'Department is a TabbedScreen');
     ok(ftoRoleOf(fto, 'X') === null && ftoRoleOf(false, 'C1') === null, 'unknown, or field training off: nothing');
     ok(reportSrc.includes('placement="right"') && reportSrc.includes('<OfficerPanel'), 'one side panel per officer');
     ok(!/<(AwardPoints|MissionBan|ClearCooldown|Commend)Dialog\b/.test(reportSrc), 'no dialog per action any more');

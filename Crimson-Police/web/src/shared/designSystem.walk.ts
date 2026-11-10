@@ -15,6 +15,8 @@ import { mockCrimReset } from '../mocks/criminal.mock';
 import { mockLocale } from '../mocks/samples';
 import { ADMIN_SCREENS, OFFICER_SCREENS, SUPERVISOR_SCREENS } from '../layouts/screens';
 import baseCss from '../styles/base.css?raw';
+import uiLocale from '../../../locales/parts/ui.json';
+import kitLocale from '../../../locales/parts/admin_kit.json';
 import type { CrimView } from '../types/criminal';
 import { ConfirmButton, Pager, Screen, Table, filterRows, pageRows, sortRows, type TableColumn } from './components';
 import { setLocale } from './i18n';
@@ -38,6 +40,10 @@ export async function walk(): Promise<{ passed: number; failures: string[] }> {
 }
 
 // every screen source of the four tablets (the dev-only mocks gallery aside)
+const SCREEN_CSS = import.meta.glob('../**/*.css', { query: '?raw', import: 'default', eager: true }) as Record<
+    string,
+    string
+>;
 const SOURCES = import.meta.glob('../**/*.tsx', { query: '?raw', import: 'default', eager: true }) as Record<
     string,
     string
@@ -127,6 +133,27 @@ async function steps(): Promise<void> {
     ok(sorted.indexOf('Liam Ortiz') < sorted.indexOf('Mason Reed'), 'table: rows drawn in the sort order');
     const box = table({ filter: true, pageSize: 2 });
     ok(box.includes('cp-table__filter') && box.includes('cp-pager'), 'table: the search box and the Pager');
+    // the Pager's own lines, not the admin kit's
+    const uiLines = uiLocale as Record<string, string>;
+    const kitLines = kitLocale as Record<string, string>;
+    ok(
+        ['ui.pager.prev', 'ui.pager.next', 'ui.pager.of'].every(k => !!uiLines[k]),
+        'the Pager: ui.pager.* lines',
+    );
+    ok(!Object.keys(kitLines).some(k => k.startsWith('ui.kit.page_')), 'no ui.kit.page_* lines left');
+    // the screens with their own search box over a list search the way the Table filter does
+    for (const path of ['../admin/screens/Leaderboards.tsx', '../admin/screens/Testing.tsx']) {
+        ok((SOURCES[path] ?? '').includes('filterRows('), `${path}: the shared Table search`);
+    }
+    // a screen made of tabs is one TabbedScreen
+    for (const path of [
+        '../admin/screens/Money.tsx',
+        '../admin/screens/Review.tsx',
+        '../supervisor/screens/Department.tsx',
+    ]) {
+        const src = SOURCES[path] ?? '';
+        ok(src.includes('<TabbedScreen') && !src.includes('<Tabs'), `${path}: a TabbedScreen`);
+    }
     ok(box.includes('Mason Reed') && !box.includes('Liam Ortiz'), 'table: the first page only');
     ok(table({ rows: [] }).includes('cp-empty'), 'table: the empty state');
     ok(renderToStaticMarkup(createElement(Pager, { page: 1, pages: 1, onPage: () => {} })) === '', 'pager: 1 page');
@@ -142,6 +169,15 @@ async function steps(): Promise<void> {
     // tokens: the spacing scale and the street theme's colours
     for (const n of [1, 2, 3, 4, 5, 6, 8]) ok(baseCss.includes(`--cp-space-${n}: ${n * 4}px;`), `--cp-space-${n}`);
     ok(/\.cp-theme-street \{[^}]*--cp-primary: #c6f432;/.test(baseCss), 'street theme: its acid green primary');
+    // every screen's own CSS spaces on the scale: a gap, padding or margin of 4, 8, 12, 16, 20, 24 or 32 px is its
+    // --cp-space token (the values between the steps stay as each screen tuned them)
+    const onScale =
+        /^\s*(?:gap|row-gap|column-gap|padding(?:-[a-z-]+)?|margin(?:-[a-z-]+)?)\s*:[^;{}]*(?<![\w.-])(?:4|8|12|16|20|24|32)px\b/m;
+    const offScale = Object.entries(SCREEN_CSS)
+        .filter(([path, css]) => !path.includes('/styles/') && onScale.test(css))
+        .map(([path]) => path);
+    ok(Object.keys(SCREEN_CSS).length > 40, 'the screen CSS files are found');
+    ok(offScale.length === 0, `screen CSS spaces with the --cp-space tokens (raw px in ${offScale.join(', ')})`);
 
     // the criminal tablet: the shared components in the street theme, none of its old copies
     mockCrimReset();

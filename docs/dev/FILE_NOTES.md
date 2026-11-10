@@ -377,6 +377,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/shared/components/Pager.tsx`: Pager: previous / next and "page n of m" for every paged list (the Admin UI's server pages of at most 50 rows, and a Table with pageSize).
 - `Crimson-Police/web/src/shared/components/QuietBoundary.tsx`: An error boundary that drops only the broken part (it renders nothing) and says so in the NUI console, so a crashed HUD, result card, overlay or toast list never unmounts the whole NUI. onError lets the tablet hand the focus back.
 - `Crimson-Police/web/src/shared/components/ScreenStatus.tsx`: The loading, error, empty and stale lines of a screen, one look on every screen of every tablet.
+- `Crimson-Police/web/src/shared/components/TabbedScreen.tsx`: TabbedScreen: one screen made of tabs (Admin Money, Admin Review, Supervisor Department).
 - `Crimson-Police/web/src/shared/components/index.ts`: Src/shared/components · the one component set of all four tablets (officer, supervisor, admin, criminal):
 - `Crimson-Police/web/src/shared/countdown.walk.ts`: HUD countdowns (docs/dev/LOOPS.md): useCountdown wakes once a second, just after each whole second, instead of polling every 200 ms (node walk.mjs, a gate step).
 - `Crimson-Police/web/src/shared/cx.ts`: Tiny className joiner (clsx-style): cx('a', cond && 'b', { c: true }).
@@ -418,6 +419,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/supervisor/components/officerPanel.ts`: Supervisor UI · Department → Officers: which actions the officer's side panel offers (UI4).
 - `Crimson-Police/web/src/supervisor/components/reviewQueue.ts`: The one Review queue (review:getQueue): flagged runs and disputes in one list with a type column.
 - `Crimson-Police/web/src/supervisor/components/reviewQueue.walk.ts`: The one Review queue against the browser mocks (node walk.mjs, a gate step, FM3): review:getQueue lists flagged
+- `Crimson-Police/web/src/supervisor/components/todayRefresh.ts`: Supervisor UI · Department: today at a glance asks again the moment a side panel action is taken (points given, a ban set or lifted, a cooldown cleared, a commendation, a training pairing), not only on its 30 s poll. todayChanged() tells it; useTodayChanged(fn) runs fn on each tell while the component is shown.
 - `Crimson-Police/web/src/supervisor/screens/Builder.tsx`: Supervisor UI · Mission Builder (screen key 'sup_builder', title key 'ui.screen.sup_builder').
 - `Crimson-Police/web/src/supervisor/screens/CrossDept.tsx`: Supervisor UI · Cross-Department Mission (screen key 'sup_crossdept', title key 'ui.screen.sup_crossdept').
 - `Crimson-Police/web/src/supervisor/screens/Department.tsx`: Supervisor UI · Department (screen key 'sup_department'): Officers (supervisor/screens/DeptReport), Controls

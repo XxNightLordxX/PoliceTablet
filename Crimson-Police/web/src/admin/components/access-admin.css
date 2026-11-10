@@ -14,8 +14,8 @@
     display: grid;
     grid-template-columns: 92px 150px 1fr;
     align-items: center;
-    gap: 12px;
-    padding: 8px 2px;
+    gap: var(--cp-space-3);
+    padding: var(--cp-space-2) 2px;
     border-bottom: 1px solid var(--cp-border);
     font-size: var(--cp-fs-sm);
 }
@@ -41,7 +41,7 @@
 .access-desks {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -50,8 +50,8 @@
 .access-desk {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
+    gap: var(--cp-space-3);
+    padding: 10px var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     border: 1px solid var(--cp-border);
     background: var(--cp-surface-2);
@@ -76,14 +76,14 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 12px;
+    margin-bottom: var(--cp-space-3);
 }
 
 /* Personal accents */
 .access-accents {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .access-accent {
@@ -117,5 +117,5 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
-    margin-bottom: 12px;
+    margin-bottom: var(--cp-space-3);
 }

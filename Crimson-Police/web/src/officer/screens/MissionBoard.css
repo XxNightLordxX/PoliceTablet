@@ -9,7 +9,7 @@
 .run_ui-notice {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--cp-space-3);
     padding: 10px 14px;
     border-radius: var(--cp-radius);
     border: 1px solid rgba(var(--cp-info-rgb), 0.42);
@@ -88,8 +88,8 @@
 .run_ui-unitline {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 8px 8px 12px;
+    gap: var(--cp-space-3);
+    padding: var(--cp-space-2) var(--cp-space-2) var(--cp-space-2) var(--cp-space-3);
     border-radius: var(--cp-radius);
     border: 1px solid var(--cp-border);
     background: rgba(var(--cp-surface-rgb), 0.82);
@@ -164,8 +164,8 @@
 .run_ui-type__head {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 16px 10px;
+    gap: var(--cp-space-3);
+    padding: 14px var(--cp-space-4) 10px;
 }
 
 .run_ui-type__icon {
@@ -218,8 +218,8 @@
 .run_ui-type__stats {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr) minmax(0, 0.85fr);
-    margin: 0 16px;
-    padding: 10px 0 12px;
+    margin: 0 var(--cp-space-4);
+    padding: 10px 0 var(--cp-space-3);
     border-top: 1px solid var(--cp-border);
 }
 
@@ -232,7 +232,7 @@
     flex-direction: column;
     gap: 2px;
     min-width: 0;
-    padding: 0 12px;
+    padding: 0 var(--cp-space-3);
 }
 
 .run_ui-stat:first-child {
@@ -292,9 +292,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--cp-space-3);
     margin-top: auto;
-    padding: 10px 12px 10px 16px;
+    padding: 10px var(--cp-space-3) 10px var(--cp-space-4);
     border-top: 1px solid var(--cp-border);
     background: rgba(var(--cp-bg-rgb), 0.28);
 }
@@ -350,9 +350,9 @@
 .run_ui-status__timer {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
     flex: none;
-    padding: 1px 8px;
+    padding: 1px var(--cp-space-2);
     border-radius: var(--cp-radius-pill);
     font-weight: 700;
     color: var(--cp-warning);
@@ -371,8 +371,8 @@
 .run_ui-boss__body {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 14px 16px;
+    gap: var(--cp-space-4);
+    padding: 14px var(--cp-space-4);
 }
 
 .run_ui-boss__icon {
@@ -401,7 +401,7 @@
 .run_ui-boss__main {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     flex: 1;
     min-width: 0;
 }
@@ -432,7 +432,7 @@
     display: grid;
     grid-template-columns: auto auto;
     flex: none;
-    padding-left: 16px;
+    padding-left: var(--cp-space-4);
     border-left: 1px solid var(--cp-border);
 }
 
@@ -503,8 +503,8 @@
 .run_ui-op__side {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px 14px;
+    gap: var(--cp-space-2);
+    padding: var(--cp-space-3) 14px;
     border-radius: var(--cp-radius);
     background: rgba(var(--cp-bg-rgb), 0.35);
     border: 1px solid var(--cp-border);
@@ -519,8 +519,8 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 8px;
-    padding-top: 8px;
+    gap: var(--cp-space-2);
+    padding-top: var(--cp-space-2);
     border-top: 1px solid var(--cp-border);
 }
 
@@ -540,7 +540,7 @@
 .run_ui-op__facts {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 18px;
+    gap: var(--cp-space-2) 18px;
     margin: 0 18px;
     padding: 10px 0 14px;
     border-top: 1px solid var(--cp-border);
@@ -569,8 +569,8 @@
 .run_ui-confirm__warn {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
-    padding: 8px 10px;
+    gap: var(--cp-space-2);
+    padding: var(--cp-space-2) 10px;
     border-radius: var(--cp-radius-sm);
     color: var(--cp-text);
     background: rgba(var(--cp-warning-rgb), 0.1);
@@ -590,14 +590,14 @@
 
 /* "Real suspect OK" in the accept dialog of a type that may play a volunteer suspect */
 .run_ui-confirm__real {
-    padding: 8px 10px;
+    padding: var(--cp-space-2) 10px;
     border-radius: var(--cp-radius-sm);
     border: 1px solid rgba(var(--cp-danger-rgb), 0.35);
 }
 
 .run_ui-confirm__real .run_ui-confirm__warn {
     display: block;
-    margin: 4px 0;
+    margin: var(--cp-space-1) 0;
 }
 
 .run_ui-footnote {
@@ -618,9 +618,9 @@
 .run_ui-hidden__toggle {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     width: 100%;
-    padding: 9px 12px;
+    padding: 9px var(--cp-space-3);
     border: 1px dashed var(--cp-border);
     border-radius: var(--cp-radius);
     background: transparent;
@@ -655,8 +655,8 @@
 .run_ui-oneclick {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 12px;
+    gap: var(--cp-space-1);
+    padding: 10px var(--cp-space-3);
     border-left: 3px solid var(--cp-warning);
     border-radius: var(--cp-radius-sm);
     background: rgba(var(--cp-primary-rgb), 0.05);

@@ -8,7 +8,7 @@
 // the queue's filter). The Activity log (Audit) sits beside it in the Review group.
 
 import { useEffect, useState } from 'react';
-import { Screen, Tabs } from '../../shared/components';
+import { Screen, TabbedScreen } from '../../shared/components';
 import { t } from '../../shared/i18n';
 import { useNavigation, type ScreenParams } from '../../shared/navigation';
 import { ReviewQueuePanel } from '../../supervisor/components/ReviewQueuePanel';
@@ -29,30 +29,30 @@ export function reviewTabOf(params: ScreenParams | null | undefined): AdminRevie
 
 export default function AdminReview() {
     const { params, navigate } = useNavigation();
-    const [tab, setTab] = useState<AdminReviewTab>(reviewTabOf(params));
     const [show, setShow] = useState<ReviewShow>(showOf(params?.show));
-    // a link opened while the screen shows (Home's tiles, the search) picks its tab and filter
-    useEffect(() => {
-        setTab(reviewTabOf(params));
-        setShow(showOf(params?.show));
-    }, [params]);
+    // a link opened while the screen shows (Home's tiles, the search) picks the queue's filter
+    useEffect(() => setShow(showOf(params?.show)), [params]);
     return (
         <Screen head="admin_review" className="oversight-screen">
-            <Tabs<AdminReviewTab>
+            <TabbedScreen<AdminReviewTab>
                 items={REVIEW_TABS.map(k => ({ key: k, label: t(`admin.review.tab.${k}`), icon: TAB_ICONS[k] }))}
-                value={tab}
-                onChange={setTab}
+                tabOf={reviewTabOf}
                 aria-label={t('ui.nav.plain.admin_review')}
-            />
-            {tab === 'queue' ? (
-                <ReviewQueuePanel
-                    all
-                    show={show}
-                    onOpenOfficer={cid => navigate('admin_officers', { citizenid: cid })}
-                />
-            ) : null}
-            {tab === 'profiles' ? <ReviewTab /> : null}
-            {tab === 'corrections' ? <CorrectionsTab /> : null}
+            >
+                {tab => (
+                    <>
+                        {tab === 'queue' ? (
+                            <ReviewQueuePanel
+                                all
+                                show={show}
+                                onOpenOfficer={cid => navigate('admin_officers', { citizenid: cid })}
+                            />
+                        ) : null}
+                        {tab === 'profiles' ? <ReviewTab /> : null}
+                        {tab === 'corrections' ? <CorrectionsTab /> : null}
+                    </>
+                )}
+            </TabbedScreen>
         </Screen>
     );
 }

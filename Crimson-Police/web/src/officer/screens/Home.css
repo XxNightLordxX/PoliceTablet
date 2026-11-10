@@ -14,7 +14,7 @@
 .economy-next__text {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     flex: 1;
     min-width: 0;
 }
@@ -54,8 +54,8 @@
 .economy-champions {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
+    gap: var(--cp-space-3);
+    padding: 10px var(--cp-space-4);
     border-radius: var(--cp-radius);
     border: 1px solid rgba(var(--cp-xp-gold-rgb), 0.45);
     background: linear-gradient(90deg, rgba(var(--cp-xp-gold-rgb), 0.16), rgba(var(--cp-xp-gold-rgb), 0.03) 70%);
@@ -95,21 +95,21 @@
 .economy-officer__grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-    gap: 20px;
+    gap: var(--cp-space-5);
     align-items: center;
 }
 
 .economy-officer__main {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--cp-space-4);
     min-width: 0;
 }
 
 .economy-officer__who {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: var(--cp-space-4);
     min-width: 0;
 }
 
@@ -166,8 +166,8 @@
 .economy-stat {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 6px 12px;
+    gap: var(--cp-space-1);
+    padding: 6px var(--cp-space-3);
     min-width: 0;
     align-self: stretch;
     justify-content: center;
@@ -248,7 +248,7 @@
 .economy-goal .cp-card__body {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .economy-goal__label {
@@ -260,7 +260,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin-top: auto;
 }
 
@@ -315,14 +315,14 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .economy-news__item {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 9px 12px;
+    padding: 9px var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     background: var(--cp-surface-2);
     border: 1px solid var(--cp-border);

@@ -8,8 +8,7 @@
 // the sidebar's Review Queue count): officers on duty, runs going, waiting for review and the supervisor's controls
 // used today, each a click away from the tab or screen where he acts on it.
 
-import { useEffect, useState } from 'react';
-import { Icon, Screen, Tabs, type IconName } from '../../shared/components';
+import { Icon, Screen, TabbedScreen, type IconName } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { usePush, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
@@ -23,6 +22,7 @@ import './Department.css';
 import { NoticesCard } from '../../shared/NoticesCard';
 import { FieldTrainingPanel } from '../components/FieldTrainingPanel';
 import MissionCallsPanel from '../components/MissionCallsPanel';
+import { useTodayChanged } from '../components/todayRefresh';
 import DeptReport from './DeptReport';
 import MissionControls from './MissionControls';
 import ReviewQueue from './ReviewQueue';
@@ -53,14 +53,17 @@ const TODAY_ICON: Record<TodayKey, IconName> = {
     controls: 'sliders',
 };
 
-// Today at a glance: one tile per number; a click opens its tab (or Live Missions). Asked every 30 s and again on a
-// Mission controls push.
+// Today at a glance: one tile per number; a click opens its tab (or Live Missions). Asked every 30 s, again on a
+// Mission controls push and the moment a side panel action is taken (todayChanged).
 function Today({ tabs, onTab }: { tabs: DeptTab[]; onTab: (tab: DeptTab) => void }) {
     const session = useSession();
     const { navigate } = useNavigation();
     const shown = tabs.includes('officers');
     const { data, refetch } = useRequest<SupToday>('sup:getToday', {}, { skip: !shown, pollMs: 30000 });
     usePush(shown ? 'missionControls' : null, () => void refetch());
+    useTodayChanged(() => {
+        if (shown) void refetch();
+    });
     const counts = useNavCounts(shown && tabs.includes('review'));
     const screens = screensFor('supervisor', session).map(s => s.key);
     const tiles = todayTiles(data, counts.review, tabs, screens);
@@ -107,24 +110,16 @@ function TabBody({ tab }: { tab: DeptTab }) {
 
 export default function Department() {
     const session = useSession();
-    const { params } = useNavigation();
     const tabs = deptTabsFor(session);
-    const [tab, setTab] = useState<DeptTab>(deptTabOf(params, session));
-    // a link opened while the screen shows (an old key, a notification) picks its tab
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => setTab(deptTabOf(params, session)), [params]);
-    const shown = tabs.includes(tab) ? tab : deptTabOf(null, session);
     return (
-        <>
-            <Today tabs={tabs} onTab={setTab} />
-            <Tabs<DeptTab>
-                className="sup-dept__tabs"
-                aria-label={t('sup.dept.tabs')}
-                value={shown}
-                onChange={setTab}
-                items={tabs.map(k => ({ key: k, label: t(`sup.dept.tab.${k}`) }))}
-            />
-            <TabBody tab={shown} />
-        </>
+        <TabbedScreen<DeptTab>
+            className="sup-dept__tabs"
+            aria-label={t('sup.dept.tabs')}
+            tabOf={params => deptTabOf(params, session)}
+            items={tabs.map(k => ({ key: k, label: t(`sup.dept.tab.${k}`) }))}
+            above={setTab => <Today tabs={tabs} onTab={setTab} />}
+        >
+            {tab => <TabBody tab={tab} />}
+        </TabbedScreen>
     );
 }

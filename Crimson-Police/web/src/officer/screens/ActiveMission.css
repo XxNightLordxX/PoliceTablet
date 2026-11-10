@@ -10,7 +10,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 14px;
+    padding: var(--cp-space-2) 14px;
     border-radius: var(--cp-radius);
     color: var(--cp-warning);
     border: 1px dashed rgba(var(--cp-warning-rgb), 0.7);
@@ -53,13 +53,13 @@
     flex-direction: column;
     gap: 6px;
     min-width: 0;
-    padding: 16px 18px;
+    padding: var(--cp-space-4) 18px;
 }
 
 .run_ui-hero__eyebrow {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     font-size: var(--cp-fs-xs);
     font-weight: 800;
     letter-spacing: 0.1em;
@@ -123,7 +123,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    margin-top: 4px;
+    margin-top: var(--cp-space-1);
 }
 
 .run_ui-hero__stats {
@@ -140,7 +140,7 @@
     justify-content: center;
     gap: 1px;
     flex: 1;
-    padding: 8px 16px;
+    padding: var(--cp-space-2) var(--cp-space-4);
     min-width: 0;
 }
 
@@ -222,8 +222,8 @@
 .run_ui-route__status {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
+    gap: var(--cp-space-3);
+    padding: 10px var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     border: 1px solid rgba(var(--cp-info-rgb), 0.35);
     background: rgba(var(--cp-info-rgb), 0.1);
@@ -286,7 +286,7 @@
 .run_ui-route__countdown {
     flex: none;
     min-width: 64px;
-    padding: 4px 10px;
+    padding: var(--cp-space-1) 10px;
     text-align: center;
     font-size: var(--cp-fs-xl);
     font-weight: 800;
@@ -298,8 +298,8 @@
 .run_ui-route__actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
+    gap: var(--cp-space-2);
+    margin-top: var(--cp-space-3);
 }
 
 .run_ui-route__hint {
@@ -320,8 +320,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 12px;
-    margin-top: 12px;
+    gap: var(--cp-space-2) var(--cp-space-3);
+    margin-top: var(--cp-space-3);
 }
 
 .run_ui-objectives__gps-hint {
@@ -334,7 +334,7 @@
 .run_ui-objectives__pending {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin-bottom: 10px;
     font-size: var(--cp-fs-sm);
     color: var(--cp-muted);
@@ -351,7 +351,7 @@
 
 .run_ui-obj {
     display: flex;
-    gap: 12px;
+    gap: var(--cp-space-3);
     padding: 9px 10px;
     border-radius: var(--cp-radius-sm);
     border: 1px solid transparent;
@@ -400,7 +400,7 @@
 .run_ui-obj__row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     min-width: 0;
 }
 
@@ -459,7 +459,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 0;
+    padding: var(--cp-space-2) 0;
 }
 
 .run_ui-partner + .run_ui-partner {
@@ -538,7 +538,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 8px;
+    margin-top: var(--cp-space-2);
     font-size: var(--cp-fs-sm);
     color: var(--cp-subtle);
 }
@@ -558,7 +558,7 @@
 .run_ui-log__text {
     color: var(--cp-muted);
     font-size: var(--cp-fs-sm);
-    margin-bottom: 12px;
+    margin-bottom: var(--cp-space-3);
 }
 
 .run_ui-log__choices {

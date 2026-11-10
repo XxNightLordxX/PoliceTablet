@@ -30,7 +30,7 @@
 .crim-header {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: var(--cp-space-4);
     padding: 14px 22px;
     border-bottom: 1px dashed var(--cp-border);
     background: repeating-linear-gradient(135deg, #111114 0 12px, #0d0d10 12px 24px);
@@ -57,7 +57,7 @@
     border: 1px solid var(--cp-border);
     color: var(--cp-text);
     border-radius: 6px;
-    padding: 4px 6px;
+    padding: var(--cp-space-1) 6px;
     cursor: pointer;
 }
 
@@ -71,8 +71,8 @@
     width: 200px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 16px 10px;
+    gap: var(--cp-space-1);
+    padding: var(--cp-space-4) 10px;
     border-right: 1px dashed var(--cp-border);
 }
 
@@ -80,7 +80,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 10px var(--cp-space-3);
     background: none;
     border: 1px solid transparent;
     border-radius: 4px;

@@ -4,21 +4,21 @@
 .system-stack {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .system-muted {
     color: var(--cp-muted);
     font-size: var(--cp-fs-sm);
-    margin: 0 0 8px;
+    margin: 0 0 var(--cp-space-2);
 }
 
 .system-note {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin-top: 10px;
-    padding: 8px 12px;
+    padding: var(--cp-space-2) var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     background: rgba(var(--cp-info-rgb), 0.08);
     border: 1px solid rgba(var(--cp-info-rgb), 0.28);
@@ -40,7 +40,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .system-inline {
@@ -53,13 +53,13 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 12px;
-    margin-bottom: 8px;
+    gap: var(--cp-space-3);
+    margin-bottom: var(--cp-space-2);
 }
 
 .system-steps {
-    margin: 8px 0 12px;
-    padding-left: 20px;
+    margin: var(--cp-space-2) 0 var(--cp-space-3);
+    padding-left: var(--cp-space-5);
     color: var(--cp-muted);
     font-size: var(--cp-fs-sm);
 }
@@ -89,7 +89,7 @@
 }
 
 .system-hook {
-    padding: 8px 10px;
+    padding: var(--cp-space-2) 10px;
     border-radius: var(--cp-radius-sm);
     border: 1px solid var(--cp-border);
 }
@@ -97,14 +97,14 @@
 .system-hook__head {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .system-hook__line {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 4px;
+    margin-top: var(--cp-space-1);
     word-break: break-all;
 }
 
@@ -127,23 +127,23 @@
 .system-checklist li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .system-steps-list {
     list-style: none;
-    margin: 8px 0;
+    margin: var(--cp-space-2) 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     font-size: var(--cp-fs-sm);
 }
 
 .system-steps-list li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .system-step--bad {
@@ -157,7 +157,7 @@
 .system-state {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-    gap: 6px 12px;
+    gap: 6px var(--cp-space-3);
     font-size: var(--cp-fs-sm);
 }
 
@@ -165,5 +165,5 @@
 .system-jobs {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }

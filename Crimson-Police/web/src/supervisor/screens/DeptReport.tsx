@@ -50,6 +50,7 @@ import type { Commendation } from '../../types/profile';
 import type { FtoDept } from '../../types/fieldTraining';
 import { AwardPointsForm, ClearCooldownForm, FieldTrainingForm, MissionBanForm } from '../components/OfficerActions';
 import { CommendForm } from '../components/CommendDialog';
+import { todayChanged } from '../components/todayRefresh';
 import { ftoRoleOf, officerActions, type OfficerAction } from '../components/officerPanel';
 import './DeptReport.css';
 
@@ -97,8 +98,10 @@ function OfficerPanel({ officer, onClose }: { officer: ReportOfficer | null; onC
     });
     const shown = action && actions.includes(action) ? action : null;
     // an action's reply carries the officer's fresh activity (an older server: ask for it)
-    const applyReply = (reply: unknown) =>
+    const applyReply = (reply: unknown) => {
+        todayChanged();
         applyReplyView<OfficerActivity>(reply, 'activity', setData, () => void refetch());
+    };
     const done = (reply: unknown) => {
         setAction(null);
         applyReply(reply);
@@ -206,7 +209,7 @@ function OfficerPanel({ officer, onClose }: { officer: ReportOfficer | null; onC
             />
         );
     } else if (who && shown === 'cooldown') {
-        form = <ClearCooldownForm officer={who} onCancel={() => setAction(null)} />;
+        form = <ClearCooldownForm officer={who} onCancel={() => setAction(null)} onCleared={todayChanged} />;
     } else if (who && shown === 'commend') {
         form = (
             <CommendForm
@@ -230,7 +233,10 @@ function OfficerPanel({ officer, onClose }: { officer: ReportOfficer | null; onC
                 fto={ftoDept}
                 role={ftoRole}
                 onCancel={() => setAction(null)}
-                onDone={() => void fto.refetch()}
+                onDone={() => {
+                    todayChanged();
+                    void fto.refetch();
+                }}
             />
         );
     }

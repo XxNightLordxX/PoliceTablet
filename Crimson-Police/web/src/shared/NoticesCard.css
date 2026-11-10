@@ -11,7 +11,7 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .cp-notices__soft {
@@ -31,7 +31,7 @@
 .cp-notices__list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -41,8 +41,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 12px;
-    padding: 8px 10px;
+    gap: 6px var(--cp-space-3);
+    padding: var(--cp-space-2) 10px;
     border-radius: var(--cp-radius-sm);
     border: 1px solid var(--cp-border);
 }

@@ -8,20 +8,20 @@
 .profile-edit__section {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .profile-edit__preview {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: var(--cp-space-4);
     flex-wrap: wrap;
 }
 
 .profile-edit__presets {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .profile-edit__preset {
@@ -64,7 +64,7 @@
 .profile-edit__accents {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .profile-edit__swatch {
@@ -123,13 +123,13 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    margin: 12px 0 0;
+    margin: var(--cp-space-3) 0 0;
     color: var(--cp-muted);
     font-size: var(--cp-fs-sm);
 }
 
 .profile-service__bests {
-    margin-top: 12px;
+    margin-top: var(--cp-space-3);
 }
 
 .profile-service__label {
@@ -148,8 +148,8 @@
 .profile-service__bests li {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
-    padding: 4px 0;
+    gap: var(--cp-space-3);
+    padding: var(--cp-space-1) 0;
     border-bottom: 1px solid var(--cp-border);
     font-size: var(--cp-fs-sm);
 }
@@ -165,7 +165,7 @@
 .profile-commend__list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -175,7 +175,7 @@
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 8px 10px;
+    padding: var(--cp-space-2) 10px;
     border-radius: var(--cp-radius);
     background: var(--cp-surface-2);
 }

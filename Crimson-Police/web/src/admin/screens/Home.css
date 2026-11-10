@@ -31,8 +31,8 @@
 .admin-home-stat {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 12px;
+    gap: var(--cp-space-1);
+    padding: 10px var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     background: var(--cp-surface-2);
     border: 1px solid var(--cp-border);
@@ -75,6 +75,11 @@
     gap: 14px;
 }
 
+/* counts each use of a tile; the tile itself stays the grid item */
+.admin-home-tile__use {
+    display: contents;
+}
+
 .admin-home-tile {
     display: flex;
     flex-direction: column;
@@ -84,13 +89,13 @@
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .admin-home-tile__head {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .admin-home-tile__icon {
@@ -140,7 +145,7 @@
 .admin-home-live__run {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     width: 100%;
     padding: 7px 10px;
     border-radius: var(--cp-radius-sm);
@@ -166,7 +171,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .admin-home-live__run {
@@ -220,14 +225,14 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .admin-home-form__sub {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin: 8px 0 0 12px;
+    margin: var(--cp-space-2) 0 0 var(--cp-space-3);
 }
 
 .admin-home-form__more {
@@ -243,7 +248,7 @@
 .admin-home-form__pick {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     width: 100%;
     padding: 7px 10px;
     border-radius: var(--cp-radius-sm);
@@ -271,43 +276,43 @@
 
 .admin-home-form__settings .settings-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
+    gap: var(--cp-space-2);
     padding: 10px 0;
 }
 
 /* First-start setup (admin/components/SetupWizard) */
 .admin-setup {
-    margin-bottom: 16px;
+    margin-bottom: var(--cp-space-4);
 }
 
 .admin-setup__step {
-    margin: 0 0 4px;
+    margin: 0 0 var(--cp-space-1);
 }
 
 .admin-setup__text {
-    margin: 0 0 8px;
+    margin: 0 0 var(--cp-space-2);
     opacity: 0.85;
 }
 
 .admin-setup__list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .admin-setup__label {
-    margin-top: 8px;
+    margin-top: var(--cp-space-2);
     font-weight: 600;
 }
 
 .admin-setup__chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 16px;
+    gap: var(--cp-space-1) var(--cp-space-4);
 }
 
 .admin-setup__nav {
     display: flex;
     justify-content: space-between;
-    margin-top: 12px;
+    margin-top: var(--cp-space-3);
 }

@@ -3,22 +3,22 @@
 .dept-funds {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-top: 12px;
-    padding-top: 12px;
+    gap: var(--cp-space-2);
+    margin-top: var(--cp-space-3);
+    padding-top: var(--cp-space-3);
     border-top: 1px solid var(--cp-border);
 }
 
 .dept-funds__head {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .dept-funds__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 6px 12px;
+    gap: 6px var(--cp-space-3);
 }
 
 .dept-funds__low {
@@ -29,7 +29,7 @@
 .dept-funds__recent {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -39,6 +39,6 @@
 .dept-funds__recent li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     flex-wrap: wrap;
 }

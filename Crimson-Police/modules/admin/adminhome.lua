@@ -169,6 +169,8 @@ function AH.home(src)
             load = Load(),
         },
         shortcuts = AH.shortcuts(),
+        -- Config.AdminUi.homeShortcutsByUse: the tablet puts the admin's most used shortcuts first
+        shortcutsByUse = type(Config.AdminUi) == 'table' and Config.AdminUi.homeShortcutsByUse == true,
         -- true while the First-start setup shows on Home (CP.Setup: Config.AdminUi.setupScreen, not done yet)
         setup = Setup(),
         serverTime = os.time(),

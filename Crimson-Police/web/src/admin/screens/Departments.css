@@ -9,7 +9,7 @@
 .oversight-dep-note {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin-top: -6px;
     color: var(--cp-muted);
     font-size: var(--cp-fs-sm);
@@ -24,7 +24,7 @@
 .oversight-dep-card__head {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .oversight-dep-card__logo {
@@ -70,7 +70,7 @@
 .oversight-dep-card__tags {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .oversight-dep-card__strip {
@@ -81,13 +81,13 @@
 .oversight-dep-swatches {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .oversight-dep-swatch {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     min-width: 0;
 }
 
@@ -113,7 +113,7 @@
 }
 
 .oversight-dep-card__stats {
-    padding: 10px 12px;
+    padding: 10px var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     background: var(--cp-surface-2);
     border: 1px solid var(--cp-border);
@@ -145,7 +145,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 10px var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     background: rgba(var(--cp-success-rgb), 0.07);
     border: 1px solid rgba(var(--cp-success-rgb), 0.22);
@@ -183,13 +183,13 @@
 .oversight-dep-card__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px 22px;
+    gap: var(--cp-space-3) 22px;
 }
 
 .oversight-dep-card__meta > div {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .oversight-dep-card__label {
@@ -214,7 +214,7 @@
 .oversight-dep-jobs {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .oversight-dep-card__footer {
@@ -285,9 +285,9 @@
 .oversight-dep-preview__nav {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     width: 150px;
-    padding: 12px 8px;
+    padding: var(--cp-space-3) var(--cp-space-2);
     background: rgba(var(--cp-surface-rgb), 0.8);
     border-right: 1px solid var(--cp-border);
 }
@@ -309,10 +309,10 @@
 .oversight-dep-preview__main {
     position: relative;
     flex: 1;
-    padding: 16px 18px;
+    padding: var(--cp-space-4) 18px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
     overflow: hidden;
 }
 
@@ -354,12 +354,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .oversight-dep-preview__buttons {
     display: flex;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 /* Department admin tools (add, edit, turn off, delete, desks) */
@@ -371,7 +371,7 @@
 .dept-admin-jobs {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 16px;
+    gap: 6px var(--cp-space-4);
 }
 
 /* Department admin: officer options (Allowed and Default per option) */
@@ -385,7 +385,7 @@
 .dept-admin-option {
     display: grid;
     grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(140px, 1fr);
-    gap: 8px;
+    gap: var(--cp-space-2);
     align-items: center;
 }
 

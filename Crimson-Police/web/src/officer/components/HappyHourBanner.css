@@ -3,7 +3,7 @@
 .happy-hour {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--cp-space-3);
     padding: 10px 14px;
     border-radius: var(--cp-radius);
     border: 1px solid rgba(var(--cp-accent-rgb), 0.45);

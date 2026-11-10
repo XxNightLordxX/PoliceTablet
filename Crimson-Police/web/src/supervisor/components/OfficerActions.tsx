@@ -259,7 +259,15 @@ function CooldownRow({
 // (sup:getOfficerCooldowns), each with Clear; a reason is required (the one last used to start with). The server
 // refuses the supervisor's own character, an officer on a run, the officer's daily clears (all staff) and the
 // supervisor's own clears a day.
-export function ClearCooldownForm({ officer, onCancel }: { officer: PanelOfficer; onCancel: () => void }) {
+export function ClearCooldownForm({
+    officer,
+    onCancel,
+    onCleared,
+}: {
+    officer: PanelOfficer;
+    onCancel: () => void;
+    onCleared?: () => void;
+}) {
     const { data, loading, error, refetch, setData } = useRequest<OfficerCooldowns>('sup:getOfficerCooldowns', {
         citizenid: officer.citizenid,
     });
@@ -292,6 +300,7 @@ export function ClearCooldownForm({ officer, onCancel }: { officer: PanelOfficer
         );
         if (!res.ok) return;
         keepLastUsed('cooldown', { reason });
+        onCleared?.();
         // the reply carries the fresh list (an older server: ask for it)
         applyReplyView<OfficerCooldowns>(res.data, 'view', setData, () => void refetch());
     };
@@ -424,6 +433,14 @@ export function FieldTrainingForm({
     return (
         <>
             <p className="sup-cd-note">{t('fto.pair_text', { grade: fto.trainerGrade, n: fto.rookiesPerTrainer })}</p>
+            {role.kind === 'candidate' && role.done ? (
+                <p className="profile-commend__head">
+                    <span className="profile-commend__by">
+                        {t('fto.trainer')}: {role.done.trainer.name}
+                    </span>
+                    <FtoProgress view={role.done} />
+                </p>
+            ) : null}
             {role.kind === 'trainer' && role.rookies.length ? (
                 <ul className="sup-cd-list">
                     {role.rookies.map(v => (

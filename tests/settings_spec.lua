@@ -324,6 +324,9 @@ do
     H.ok(Check('AdminUi.homeShortcuts', { 'review', 'pay' }), 'another order and set is fine')
     H.ok(not Check('AdminUi.homeShortcuts', { 'nope' }), 'an unknown shortcut is refused')
     H.ok(not Check('AdminUi.homeShortcuts', { 'pay', 'pay' }), 'a shortcut twice is refused')
+    H.eq(E('AdminUi.homeShortcutsByUse').default, false, 'homeShortcutsByUse ships false')
+    H.ok((E('AdminUi.homeShortcutsByUse').desc or ''):find('the ones he uses most first', 1, true) ~= nil,
+        'homeShortcutsByUse: its config.lua comment is its description')
     H.eq(E('Tablet.sidebarOrder').default, 'classic', 'the Officer UI sidebar ships in its classic order')
     H.eq(E('Tablet.sidebarOrder').kind, 'enum', 'sidebarOrder is a choice')
     H.ok((E('Tablet.sidebarOrder').desc or ''):find('Only the order changes', 1, true) ~= nil,

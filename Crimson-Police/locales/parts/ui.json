@@ -286,5 +286,8 @@
   "sup.panel.no_rookies": "No officer of this department is waiting for a trainer.",
   "ui.screen.me": "Me",
   "ui.runbar.links": "Other screens",
-  "admin.review.tab.queue": "Queue"
+  "admin.review.tab.queue": "Queue",
+  "ui.pager.prev": "Previous page",
+  "ui.pager.next": "Next page",
+  "ui.pager.of": "Page {page} of {pages}"
 }

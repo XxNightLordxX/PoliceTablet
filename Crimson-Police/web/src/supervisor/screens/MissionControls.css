@@ -4,7 +4,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    margin: 0 0 12px;
+    margin: 0 0 var(--cp-space-3);
     color: var(--cp-muted);
     font-size: var(--cp-fs-sm);
 }
@@ -12,14 +12,14 @@
 .sup-mc-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .sup-mc-row {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 12px;
+    padding: var(--cp-space-3);
     border-radius: var(--cp-radius-sm);
     border: 1px solid var(--cp-border);
 }
@@ -28,11 +28,11 @@
     display: inline-flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .sup-mc-row__desc {
-    margin: 4px 0 0;
+    margin: var(--cp-space-1) 0 0;
     color: var(--cp-muted);
     font-size: var(--cp-fs-sm);
 }
@@ -40,7 +40,7 @@
 .sup-mc-row__facts {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 16px;
+    gap: var(--cp-space-1) var(--cp-space-4);
     font-size: var(--cp-fs-sm);
 }
 
@@ -58,11 +58,11 @@
 .sup-mc-types {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .sup-mc-types__missions {
-    margin: 4px 0 0 18px;
+    margin: var(--cp-space-1) 0 0 18px;
     font-size: var(--cp-fs-sm);
     color: var(--cp-subtle);
 }
@@ -70,7 +70,7 @@
 .sup-mc-types__missions[open] {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .sup-mc-types__missions summary {
@@ -99,7 +99,7 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .sup-mc-row__wait {
@@ -144,7 +144,7 @@
 .sup-mc-picks {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 4px 12px;
+    gap: var(--cp-space-1) var(--cp-space-3);
 }
 
 .sup-mc-picks__label {

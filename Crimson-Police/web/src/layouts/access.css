@@ -5,14 +5,14 @@
 .cp-header-officer {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
     margin-left: 6px;
     padding-left: 14px;
     border-left: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .cp-header-level {
-    padding: 2px 8px;
+    padding: 2px var(--cp-space-2);
     border-radius: var(--cp-radius-pill);
     border: 1px solid rgba(255, 255, 255, 0.35);
     background: rgba(0, 0, 0, 0.22);
@@ -62,7 +62,7 @@
     right: -3px;
     min-width: 17px;
     height: 17px;
-    padding: 0 4px;
+    padding: 0 var(--cp-space-1);
     border-radius: var(--cp-radius-pill);
     background: var(--cp-accent);
     color: var(--cp-accent-contrast);
@@ -93,7 +93,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 10px;
-    padding: 12px 14px 10px;
+    padding: var(--cp-space-3) 14px 10px;
     border-bottom: 1px solid var(--cp-border);
 }
 
@@ -110,7 +110,7 @@
 
 .cp-bell__list {
     margin: 0;
-    padding: 4px 0;
+    padding: var(--cp-space-1) 0;
     list-style: none;
 }
 

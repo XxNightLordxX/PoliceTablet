@@ -233,8 +233,48 @@ export const SHORTCUTS: Record<HomeShortcutKey, ShortcutDef> = {
     },
 };
 
-// The shortcuts the answer names, in its order, each once; unknown keys are left out.
-export function shortcutsOf(data: AdminHomeData | null | undefined): ShortcutDef[] {
+// How often this admin used each shortcut on this tablet (Config.AdminUi.homeShortcutsByUse). Kept in the tablet's
+// own storage: a missing or blocked storage counts nothing, and Home keeps the configured order.
+export const SHORTCUT_USES_KEY = 'cp:adminHome:shortcutUses';
+export type ShortcutUses = Partial<Record<HomeShortcutKey, number>>;
+
+export function readShortcutUses(): ShortcutUses {
+    try {
+        const raw = JSON.parse(window.localStorage.getItem(SHORTCUT_USES_KEY) ?? '{}') as unknown;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const out: ShortcutUses = {};
+        for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+            if (Object.prototype.hasOwnProperty.call(SHORTCUTS, k) && typeof v === 'number' && v > 0) {
+                out[k as HomeShortcutKey] = Math.floor(v);
+            }
+        }
+        return out;
+    } catch {
+        return {};
+    }
+}
+
+export function countShortcutUse(key: HomeShortcutKey): void {
+    try {
+        const uses = readShortcutUses();
+        uses[key] = (uses[key] ?? 0) + 1;
+        window.localStorage.setItem(SHORTCUT_USES_KEY, JSON.stringify(uses));
+    } catch {
+        // no storage: nothing is counted
+    }
+}
+
+// The shortcuts with the most used first; a tie (and every shortcut never used) keeps the configured order.
+export function orderByUse(defs: ShortcutDef[], uses: ShortcutUses): ShortcutDef[] {
+    return defs
+        .map((def, i) => ({ def, i, n: uses[def.key] ?? 0 }))
+        .sort((a, b) => b.n - a.n || a.i - b.i)
+        .map(x => x.def);
+}
+
+// The shortcuts the answer names, in its order, each once; unknown keys are left out. With shortcutsByUse (and the
+// uses counted), the most used first.
+export function shortcutsOf(data: AdminHomeData | null | undefined, uses?: ShortcutUses): ShortcutDef[] {
     const seen = new Set<string>();
     const out: ShortcutDef[] = [];
     for (const k of Array.isArray(data?.shortcuts) ? data.shortcuts : []) {
@@ -244,5 +284,5 @@ export function shortcutsOf(data: AdminHomeData | null | undefined): ShortcutDef
             out.push(def);
         }
     }
-    return out;
+    return data?.shortcutsByUse && uses ? orderByUse(out, uses) : out;
 }

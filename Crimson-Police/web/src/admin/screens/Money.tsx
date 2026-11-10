@@ -5,10 +5,8 @@
 // Payments (admin/screens/Payments) and Department funds (admin/components/MoneyFunds), each the old screen itself
 // with the same params. params.moneyTab picks the tab; layouts/adminMoney.ts maps the old keys onto it.
 
-import { useEffect, useState } from 'react';
-import { Tabs } from '../../shared/components';
+import { TabbedScreen } from '../../shared/components';
 import { t } from '../../shared/i18n';
-import { useNavigation } from '../../shared/navigation';
 import { MONEY_TABS, moneyTabOf, type MoneyTab } from '../../layouts/adminMoney';
 import { MoneyFunds } from '../components/MoneyFunds';
 import AdminPayments from './Payments';
@@ -29,20 +27,14 @@ function TabBody({ tab }: { tab: MoneyTab }) {
 }
 
 export default function AdminMoney() {
-    const { params } = useNavigation();
-    const [tab, setTab] = useState<MoneyTab>(moneyTabOf(params));
-    // a link opened while the screen shows (Home's tiles, Leaderboards) picks its tab
-    useEffect(() => setTab(moneyTabOf(params)), [params]);
     return (
-        <>
-            <Tabs<MoneyTab>
-                className="admin-money__tabs"
-                aria-label={t('admin.money.tabs')}
-                value={tab}
-                onChange={setTab}
-                items={MONEY_TABS.map(k => ({ key: k, label: t(`admin.money.tab.${k}`) }))}
-            />
-            <TabBody tab={tab} />
-        </>
+        <TabbedScreen<MoneyTab>
+            className="admin-money__tabs"
+            aria-label={t('admin.money.tabs')}
+            tabOf={moneyTabOf}
+            items={MONEY_TABS.map(k => ({ key: k, label: t(`admin.money.tab.${k}`) }))}
+        >
+            {tab => <TabBody tab={tab} />}
+        </TabbedScreen>
     );
 }

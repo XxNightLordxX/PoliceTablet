@@ -1,7 +1,7 @@
 /* Officer UI · Home · Rewards locker. Only --cp-* variables; classes prefixed rewards-. */
 
 .rewards-locker__reason {
-    margin: 0 0 8px;
+    margin: 0 0 var(--cp-space-2);
     font-size: var(--cp-fs-sm);
     color: var(--cp-muted);
 }
@@ -19,7 +19,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 8px;
+    padding: 6px var(--cp-space-2);
     border-radius: var(--cp-radius-sm);
     border: 1px solid var(--cp-border);
     background: var(--cp-bg);

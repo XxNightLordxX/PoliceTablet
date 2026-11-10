@@ -146,6 +146,8 @@ export interface AdminHomeData {
         load?: { loaded: number; refused: number; error: boolean } | null;
     };
     shortcuts: HomeShortcutKey[];
+    // Config.AdminUi.homeShortcutsByUse: true = the admin's most used shortcuts first (counted on his tablet)
+    shortcutsByUse?: boolean;
     // true while the First-start setup shows on Home (Config.AdminUi.setupScreen on, setupDone not yet)
     setup?: boolean;
     serverTime?: number;

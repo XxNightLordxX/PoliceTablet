@@ -10,7 +10,7 @@
     display: flex;
     gap: 10px;
     align-items: flex-start;
-    padding: 10px 12px;
+    padding: 10px var(--cp-space-3);
     border-radius: var(--cp-radius);
     border: 1px solid var(--cp-border);
     background: var(--cp-surface);
@@ -94,14 +94,14 @@
 .economy-pay-edit {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--cp-space-4);
 }
 
 .economy-pay-edit__facts {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    padding: 12px 14px;
+    gap: var(--cp-space-3);
+    padding: var(--cp-space-3) 14px;
     border-radius: var(--cp-radius);
     background: var(--cp-surface-2);
     border: 1px solid var(--cp-border);
@@ -110,7 +110,7 @@
 .economy-pay-edit__note {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--cp-space-2);
     font-size: var(--cp-fs-sm);
     color: var(--cp-muted);
 }

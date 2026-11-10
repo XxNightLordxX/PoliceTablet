@@ -15,18 +15,25 @@ export const OFFICER_ACTIONS: OfficerAction[] = ['points', 'ban', 'cooldown', 'c
 // viewer can give a rookie (with the rookies he trains now), or a rookie the viewer can pair with a trainer, or
 // nothing (field training off, or the viewer may not manage it).
 export type FtoRole =
-    { kind: 'rookie'; view: FtoView } | { kind: 'candidate' } | { kind: 'trainer'; rookies: FtoView[] } | null;
+    | { kind: 'rookie'; view: FtoView }
+    // done: his finished training, when he trained before (a done rookie may be paired again)
+    | { kind: 'candidate'; done?: FtoView }
+    | { kind: 'trainer'; rookies: FtoView[] }
+    | null;
 
 export function ftoRoleOf(fto: FtoDept | false | null | undefined, citizenid: string | null | undefined): FtoRole {
     if (!fto || !citizenid) return null;
     const pairs = asList(fto.pairs);
     const view = pairs.find(v => v.rookie?.citizenid === citizenid);
+    const candidate = asList(fto.candidates).some(o => o.citizenid === citizenid);
+    // a rookie whose training is done is a candidate again: pair him again right here (as the Training tab does)
+    if (view && view.doneAt && candidate) return { kind: 'candidate', done: view };
     if (view) return { kind: 'rookie', view };
     // a trainer is a candidate too (every officer not in training is): the trainer first
     const rookies = pairs.filter(v => v.trainer?.citizenid === citizenid && !v.doneAt);
     if (rookies.length || asList(fto.trainers).some(o => o.citizenid === citizenid))
         return { kind: 'trainer', rookies };
-    if (asList(fto.candidates).some(o => o.citizenid === citizenid)) return { kind: 'candidate' };
+    if (candidate) return { kind: 'candidate' };
     return null;
 }
 

@@ -11,7 +11,7 @@
 .map-markers__row {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cp-space-2);
     padding: 10px;
     border: 1px solid var(--cp-border);
     border-radius: var(--cp-radius-sm);
@@ -50,18 +50,18 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .map-markers__checks {
     align-items: center;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .map-markers__field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     min-width: 150px;
 }
 

@@ -2,7 +2,7 @@
 .admin-bulk {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .admin-bulk__filters {
@@ -19,12 +19,12 @@
 }
 
 .admin-bulk__note {
-    margin-top: 4px;
+    margin-top: var(--cp-space-1);
     color: var(--cp-muted);
 }
 
 .admin-bulk__warn {
-    margin-top: 4px;
+    margin-top: var(--cp-space-1);
     color: var(--cp-danger);
     font-weight: 600;
 }

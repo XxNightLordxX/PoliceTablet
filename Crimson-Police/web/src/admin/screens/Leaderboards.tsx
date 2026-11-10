@@ -26,6 +26,7 @@ import {
     Row,
     Screen,
     SearchInput,
+    filterRows,
     SegmentedControl,
     Select,
     Spacer,
@@ -212,9 +213,8 @@ export default function AdminLeaderboards() {
             : null;
     const rows = asList(list === 'ranked' ? board?.rows : board?.unranked);
     const q = search.trim().toLowerCase();
-    const shown = q
-        ? rows.filter(r => [r.realName, r.name, r.callsign ?? '', r.citizenid].some(v => v.toLowerCase().includes(q)))
-        : rows;
+    // the shared Table search: every typed word in the name, character name, callsign or citizen ID
+    const shown = filterRows(rows, search, r => [r.realName, r.name, r.callsign ?? '', r.citizenid].join(' '));
     const ranked = asList(board?.rows);
     const stuck = asList(board?.stuck);
     const totalPoints = ranked.reduce((s, r) => s + (Number(r.points) || 0), 0);

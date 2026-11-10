@@ -5,7 +5,16 @@ import '../../mocks/admin_system.mock';
 import { adminTitleKey } from '../../layouts/adminNav';
 import { request } from '../../shared/nui';
 import type { AdminHomeData } from '../../types/admin_system';
-import { SHORTCUTS, alertLines, liveTiles, shortcutsOf, waitingCount } from './adminHome';
+import {
+    SHORTCUTS,
+    alertLines,
+    countShortcutUse,
+    liveTiles,
+    orderByUse,
+    readShortcutUses,
+    shortcutsOf,
+    waitingCount,
+} from './adminHome';
 
 const failures: string[] = [];
 let passed = 0;
@@ -74,6 +83,30 @@ async function steps(): Promise<void> {
     });
     ok(mixed.map(s => s.key).join(',') === 'review,pay,activity', 'the order given, each once, unknown left out');
     ok(shortcutsOf({ ...(data as AdminHomeData), shortcuts: [] }).length === 0, '{} = no shortcuts');
+    // Config.AdminUi.homeShortcutsByUse: shipped off (the configured order whatever the uses); on, most used first
+    const uses = { points: 3, settings: 5, pay: 3 };
+    const order = (d: AdminHomeData) =>
+        shortcutsOf(d, uses)
+            .map(s => s.key)
+            .join(',');
+    ok(order(data as AdminHomeData) === 'newMission,missionSwitch,pay,points,settings', 'off: the configured order');
+    ok(
+        order({ ...(data as AdminHomeData), shortcutsByUse: true }) === 'settings,pay,points,newMission,missionSwitch',
+        'on: the most used first, a tie keeps the configured order',
+    );
+    ok(orderByUse(shortcutsOf(data), {}).length === 5, 'nothing used yet: every shortcut, as configured');
+    ok(Object.keys(readShortcutUses()).length === 0, 'no storage: nothing counted, nothing thrown');
+    const store = new Map<string, string>();
+    const w = window as unknown as { localStorage?: unknown };
+    const had = w.localStorage;
+    w.localStorage = {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+    };
+    countShortcutUse('review');
+    countShortcutUse('review');
+    ok(readShortcutUses().review === 2, 'each use is counted on the tablet');
+    w.localStorage = had;
     ok(Object.values(SHORTCUTS).filter(s => s.form).length === 4, 'four shortcuts hold a quick form');
     ok(SHORTCUTS.activity.screen === 'admin_audit' && SHORTCUTS.live.screen === 'admin_live', 'open-only shortcuts');
 

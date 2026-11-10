@@ -19,8 +19,8 @@
 .cp-contact__entry {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: var(--cp-space-2);
+    padding: 10px var(--cp-space-3);
     border: 1px solid var(--cp-border);
     border-radius: var(--cp-radius);
     background: var(--cp-surface-2);
@@ -35,7 +35,7 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 .cp-contact__label {
@@ -49,13 +49,13 @@
 .cp-contact__badges {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .cp-contact__facts {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -65,7 +65,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--cp-space-2);
     font-size: var(--cp-fs-sm);
     color: var(--cp-text);
 }
@@ -78,7 +78,7 @@
 .cp-contact__fact-tags {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .cp-contact__fact-by {
@@ -96,7 +96,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
+    gap: var(--cp-space-1);
     font-size: var(--cp-fs-xs);
     color: var(--cp-muted);
 }

@@ -188,6 +188,16 @@ do -- Config.AdminUi.homeShortcuts: the known keys in its order, each once; {} =
     Config.AdminUi.homeShortcuts = was
 end
 
+do -- Config.AdminUi.homeShortcutsByUse: shipped off (the order above); on, the tablet puts the most used first
+    H.eq(Config.AdminUi.homeShortcutsByUse, false, 'homeShortcutsByUse ships false')
+    H.eq(Cb('admin:getHome', 1).shortcutsByUse, false, 'shipped: the answer keeps the configured order')
+    Config.AdminUi.homeShortcutsByUse = true
+    local on = Cb('admin:getHome', 1)
+    H.eq(on.shortcutsByUse, true, 'on: the answer tells the tablet to order by use')
+    H.eq(table.concat(on.shortcuts, ','), 'newMission,missionSwitch,pay,points,settings', 'the same shortcuts are sent')
+    Config.AdminUi.homeShortcutsByUse = false
+end
+
 do -- anyone but an admin is refused
     local data, err = Cb('admin:getHome', 7)
     H.ok(data == nil and err == 'err.no_permission', 'an officer is refused')

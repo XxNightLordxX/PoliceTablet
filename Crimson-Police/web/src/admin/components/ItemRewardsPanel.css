@@ -3,7 +3,7 @@
 .rewards-admin {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .rewards-admin__head {
@@ -18,7 +18,7 @@
 .rewards-admin__health {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cp-space-1);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -72,7 +72,7 @@
 .rewards-admin__pool-items {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--cp-space-1);
 }
 
 .rewards-admin__officer {
@@ -88,14 +88,14 @@
 .rewards-admin__pager {
     align-items: center;
     justify-content: flex-end;
-    margin-top: 8px;
+    margin-top: var(--cp-space-2);
 }
 
 .rewards-admin__filters {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .rewards-admin__filters > * {
@@ -104,6 +104,6 @@
 
 .rewards-admin__actions {
     display: inline-flex;
-    gap: 4px;
+    gap: var(--cp-space-1);
     justify-content: flex-end;
 }
