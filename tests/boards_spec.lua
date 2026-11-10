@@ -530,7 +530,7 @@ do
     local p2 = Cb('getProfile', 11, { citizenid = 'LB1' }).data
     for _, r in ipairs(p2.runs) do if r.id == lb1Failed then H.eq(r.canDispute, false, 'open dispute blocks') end end
     H.eq(p2.own, true, 'own by citizenid')
-    -- modules/disputes: one dispute per row, ever (a decided one is final: err.dispute_final)
+    -- modules/review/disputes: one dispute per row, ever (a decided one is final: err.dispute_final)
     H.sql('UPDATE cp_disputes SET status = \'rejected\', handled_at = NOW() WHERE run_id = ?', { lb1Failed })
     local p3 = Cb('getProfile', 11, nil).data
     for _, r in ipairs(p3.runs) do

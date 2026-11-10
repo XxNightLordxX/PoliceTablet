@@ -16,7 +16,10 @@ import cardSrc from '../components/MyControlsCard.tsx?raw';
 import { actionControlRows, myControlRow, myControlRows } from '../components/myControls';
 import reportSrc from './DeptReport.tsx?raw';
 import controlsSrc from './MissionControls.tsx?raw';
-import reviewSrc from './ReviewQueue.tsx?raw';
+import reviewScreenSrc from './ReviewQueue.tsx?raw';
+import reviewPanelSrc from '../components/ReviewQueuePanel.tsx?raw';
+// the screen and its one queue panel (FM3)
+const reviewSrc = reviewScreenSrc + reviewPanelSrc;
 import { SCREEN_HEADS } from '../../shared/screenHeads';
 import { SUP_GROUP_HELP } from './supHead';
 

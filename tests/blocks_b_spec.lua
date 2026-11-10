@@ -75,7 +75,7 @@ CP.Npc = {
     end,
 }
 NPC.stunChecks = {}
--- the real stun rule of CP.AntiCheat (modules/anticheat), its staff notes and flags watched
+-- the real stun rule of CP.AntiCheat (modules/review/anticheat), its staff notes and flags watched
 CP.AntiCheat = H.realAntiCheat()
 local AC_NOTES, AC_FLAGS = {}, {}
 do

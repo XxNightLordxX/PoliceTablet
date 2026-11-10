@@ -169,8 +169,8 @@ PoliceTablet/                      (git repo)
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
 (alphabetical: init, lib, locale, net, npccombat, options, twists, utils), then `modules/**/server.lua` (server) /
-`modules/**/client.lua` (client), then the server sub-files of `modules/progression/*.lua` and
-`modules/supervisor/*.lua`, then `blocks/**/server.lua` / `blocks/**/client.lua`.
+`modules/**/client.lua` (client), then the server sub-files of `modules/progression/*.lua`,
+`modules/supervisor/*.lua` and `modules/review/*.lua`, then `blocks/**/server.lua` / `blocks/**/client.lua`.
 Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` and
 `modules/storage/server.lua` before every other server module (so the `MySQL` global is settled before
 any module can query), then `modules/adminkit/server.lua` (so any module may register its admin actions with
@@ -186,6 +186,8 @@ More folders (all in the spec's Feature folders table; §5.30–§5.34):
 `modules/custody/` (server, client), `modules/missioncalls/` (server, client), `modules/progression/` (server sub-files:
 scoring, goals, challenge, events, leaderboard, profile; listed in fxmanifest as `modules/progression/*.lua`),
 `modules/supervisor/` (server sub-files: fieldtraining; listed as `modules/supervisor/*.lua`),
+`modules/review/` (server sub-files: anticheat, corrections, disputes, queue, reviewrules; `modules/review/*.lua`,
+§5.26a),
 `modules/rewards/` (server), `modules/confighealth/` (server), `modules/integrations/sc_police/` (server),
 `blocks/field_contact/` and `blocks/process_scene/` (server, client).
 
@@ -209,7 +211,7 @@ blocks.lua, the mission and location switches, and the same values on every clie
 
 `modules/adminkit/` (server, §5.37): full admin control's foundation. `CP.AdminKit` (the guard wrapper of every new
 admin action, previews, request ids, jobs, day counts, the busy lock) and `CP.Maintenance` (the maintenance lock).
-Full admin control also has `modules/corrections/` (§5.38), `modules/livectl/` (§5.39), `modules/payments/`
+Full admin control also has `modules/review/corrections` (§5.38), `modules/livectl/` (§5.39), `modules/payments/`
 (§5.40) and `modules/sysadmin/` (§5.41).
 
 ---
@@ -1478,14 +1480,15 @@ Boards, profiles and the weekly announcements.
   activity = this week's department rows; the report's officers carry arrests, citations, impounds, decisions and
   calls; activity adds the officer's active commendations with `mine`; `err.other_department`, `err.unknown_officer`).
 
-### 5.24 CP.Disputes — modules/disputes (S)
+### 5.24 CP.Disputes — modules/review/disputes (S)
 Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `locales/parts/oversight.json`,
 `web/src/types/oversight.ts` (every response shape), `web/src/mocks/oversight.mock.ts` (answers through `luaify()`;
 `?oversight=edge|empty`).
 - `server:dispute { rowId, reason }` → `{ disputeId, goesTo, kind }` — own rows only (on duty), flagged, voided or
   failed (kind priority in that order), within `Config.Disputes.windowHours` from `created_at`, never award rows, 3
   filings a minute.
-- `forSupervisor(src)`, `forAdmin()` (`admin:getDisputes`), `forOfficer(citizenid, goesTo?, viewerSrc?)`.
+- `forSupervisor(src)`, `forAdmin()` (both read by the one Review queue, §5.26a), `forOfficer(citizenid, goesTo?,
+  viewerSrc?)`.
 - `handle(src, disputeId, decision, reason, awardPoints)` — claim first (`status = 'open'`), then apply.
 - `supervisorCanAnswer(runUuid)` — `Config.Permissions.supervisor.handleDisputes` on and an online supervisor (on or
   off duty) of the run's departments who did not take part.
@@ -1516,11 +1519,12 @@ Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `loc
   direction, force)` (one at a time, never during a run, under `CP.AdminKit`'s busy lock).
 - `missionLabel` names `manual_adjust` and `manual_cash` rows.
 - Callbacks and actions: §8.3 (permissions: `getMissionList` / `sup:getLiveRuns` need `viewMissionList`,
-  `sup:getReviewQueue` needs `reviewFlagged` or `handleDisputes`, every `admin:*` needs `openAdmin`).
+  `review:getQueue` needs `reviewFlagged` or `handleDisputes`, or `openAdmin` with `all`, every `admin:*` needs
+  `openAdmin`).
 - UI notes: supervisor screens poll (Mission List 20 s + push `operation`, Live Missions 10 s, Review Queue 30 s);
   suspend/unsuspend need a reason in the UI.
 
-### 5.26 CP.AntiCheat — modules/anticheat (S)
+### 5.26 CP.AntiCheat — modules/review/anticheat (S)
 - `checkEvent(run, src, index, evidence) -> ok, reason` (after CP.Runs' own checks).
 - Two classes: only an officer's own conduct is a **flag**.
 - `stunMode() -> 'flag'|'hold'|'strict'|'off'` (`Config.AntiCheat.stunNeedsProof`; true reads as strict, false as off,
@@ -1533,6 +1537,22 @@ Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `loc
 - `onVoided(citizenid)` — voided mission rows within `voidWindowDays` since the last `autoSuspend` reach
   `voidsToSuspend` → `CP.Access.suspend(citizenid, suspendDays, 0, 'auto')` + audit `autoSuspend` (never while one is
   active).
+
+### 5.26a CP.Review — modules/review (S)
+One module for everything reviewed: `review/anticheat.lua` (§5.26), `review/reviewrules.lua` (the reviewRules
+Mission control), `review/disputes.lua` (§5.24), `review/corrections.lua` (§5.38) and `review/queue.lua`, the one
+Review queue:
+- `queueFor(src, all) -> { items, canReview, canHandle, all }`: every flagged row (`CP.Admin.flaggedRows`) and open
+  dispute (`CP.Disputes.forSupervisor`, with `all` `forAdmin`) in one list, each with `type = 'flag'|'dispute'` and
+  `id` (the row id of a flag, the dispute id), newest first. A supervisor: his department; `all` (`openAdmin`): every
+  department, the admin-only flag kinds and failed-run disputes too. The viewer's own runs never.
+- `decide(src, payload)` (`server:review:decide`): a flag → `CP.Admin.approveFlagged` / `voidFlagged` (or, admins,
+  every flagged row of `runUuid`); a dispute → `CP.Disputes.handle` (supervisors never a failed-run one).
+  `reply(src, ok, data, depts, all)` adds the viewer's fresh `queue` and calls `share`.
+- `share(src, dept?)`: pushes `reviewQueue` to every other supervisor who read his queue in the last 75 s, of the
+  row's departments (an admin's decision: all). The Admin UI's queue polls (60 s).
+- Web: `supervisor/components/ReviewQueuePanel.tsx` (Department → Review and Admin UI → Review → Queue),
+  helpers `supervisor/components/reviewQueue.ts`.
 
 ### 5.27 CP.Testing — modules/testing
 Admin test mode.
@@ -2050,7 +2070,7 @@ while one is held is refused), `finish(kind)`, `active() -> kind, info | nil`, `
 txAdmin or the server console"; Crimson-Police never restarts itself), `mark(kind, fields)` (merges fields into the
 held lock's info and pushes: a restore that stopped part way sets `failed` and `automatic`, shown in the view).
 
-### 5.38 CP.Corrections — modules/corrections (S)
+### 5.38 CP.Corrections — modules/review/corrections (S)
 An admin's corrections to officers' records, all through `CP.AdminKit` (§5.37) and the admin-only keys of §5.3.
 
 - **Rows, not edits.** A correction writes a new row (an adjustment) or voids rows.
@@ -3113,11 +3133,11 @@ not in `Config.LiveCrime.sources`.
 
 Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome`, `getBoard`,
 `getProfile`, `getChallenge`, `getDeptContributors`, `getMissionList`, `getMissionDefs`,
-`sup:getOperation`, `sup:getLiveRuns`, `sup:getReviewQueue`, `sup:getPayouts`, `sup:getDeptReport`,
+`sup:getOperation`, `sup:getLiveRuns`, `review:getQueue`, `sup:getPayouts`, `sup:getDeptReport`,
 `sup:getOfficerActivity`, `admin:getPayouts`, `admin:getMissions`, `admin:getSeasons`,
 `admin:getBoards`, `admin:getStuckPayments`, `admin:searchOfficers`, `admin:getOfficer`,
 `admin:getDepartments`, `admin:getPermissions`, `admin:getAudit`, `admin:exportAudit`,
-`admin:getTests`, `admin:getFlagged`, `admin:getDisputes`, `builder:list`, `builder:get`,
+`admin:getTests`, `builder:list`, `builder:get`,
 `builder:config`, `test:pendingInvites`, `test:state` (testRun or builderEdit), `test:candidates` (testRun),
 `server:test:spawnPoints` (testRun; the spawn point check and its "Teleport here" with `point`, §5.27).
 Also: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
@@ -3144,8 +3164,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:sup:opRelaunch` / `server:admin:opRelaunch` | — | launchCrossDept | operations |
 | `server:sup:opCancel` / `server:admin:opCancel` | `{ reason }` | launchCrossDept | operations |
 | `server:sup:forceRecall` | `{ runId, src }` | forceRecall | admin |
-| `server:sup:reviewFlagged` / `server:admin:reviewFlagged` | `{ rowId, decision = 'approve'|'void', reason }` (a supervisor's first Void under reviewRules.secondVoid → `{ rowId, pending = true }`) | reviewFlagged | admin |
-| `server:sup:handleDispute` / `server:admin:handleDispute` | `{ disputeId, decision = 'approve'|'reject', reason, awardPoints }` | handleDisputes / handleFailedDispute | disputes |
+| `server:review:decide` | `{ type = 'flag'|'dispute', id, decision = 'approve'|'void'|'reject', reason, awardPoints?, all? }`; a flag with `runUuid` and no id: approve every flagged row of that run (admins); a supervisor's first Void under reviewRules.secondVoid → `{ rowId, pending = true }`; the reply carries `queue` | reviewFlagged / handleDisputes / handleFailedDispute (failed runs: admins) | review |
 | `server:admin:voidRun` | `{ rowId }` or `{ runUuid }`, `reason` | voidAnyRun | admin |
 | `server:admin:awardPoints` | `{ citizenid, points, reason }` | manualAward | admin → scoring |
 | `server:admin:suspend` | `{ citizenid, days, reason }` | suspend | admin → access |
@@ -3211,7 +3230,6 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `server:admin:setVoidKind` | action | restoreRun | `{ rowId, kind = 'strike'\|'correction', liftSuspension?, reason }` | K on the old kind |
 | `server:admin:flagRow` | action | restoreRun | `{ rowId, reason }` | K (`flagged = 0 AND voided = 0`); refuses `manual_award` and `goal` rows |
 | `server:admin:voidRun` | action (old) | voidAnyRun | `{ rowId \| runUuid, reason, kind?, confirm?, goalRowIds? }` | gains `kind`, `VOID <n>` for a run of 3 or more, the goal rewards it completed |
-| `server:admin:approveRun` | action | reviewFlagged | `{ runUuid, reason }` | every flagged row of one run |
 | `admin:getBadgeCatalog`, `server:admin:grantBadge`, `revokeBadge`, `clearBadgeOverride` | callback / actions | progression | `{ citizenid, badgeId, reason }` | ids from `Scoring.validBadgeId` (an achievement, a closed week, an existing season); audit category `board` |
 | `server:admin:recheckBadges` / `recheckAllBadges` | action | progression | `{ citizenid }` / `{ requestId }` | everyone: a J job |
 | `server:admin:recalcStreak`, `forgiveStreakDays` | action | progression | `{ citizenid, days?, reason }` | forgive: 1..`streakForgiveMax`, once per officer per day (from `cp_audit`) |
@@ -3240,7 +3258,7 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 Hooks: fires `row:voided`, `row:restored`, `row:forfeitUndone`, `admin:changed`; listens to `settings:changed`
 (`Leaderboard.*` → `LB.invalidate()`, `Profile.bannedWords*` → reload, `Objectives.challenge|bounty.*` → board webhook notice, `Objectives.dailyGoal|weeklyGoal.*`
 → logged; a period already rewarded stays rewarded) and `admin:changed` (`LB.invalidate()`). Sidebar counts:
-`adminReview` (modules/progression/profile) and `adminDisputes` (modules/disputes).
+`adminReview` (modules/progression/profile) and `adminDisputes` (modules/review/disputes).
 
 #### 8.4.2 Missions and the Mission Builder
 
@@ -3458,14 +3476,14 @@ without `acks` is never closed by the 6 s open check (§5.4).
 
 Replies that carry their screen's view (`shared/replyView.ts` applies `data.view` / `queue` / `activity` / `runs` /
 `officer`; the screen asks again only when it is missing): `server:sup|admin:reviewFlagged` and `handleDispute`
-(`queue`, `CP.Admin.reviewQueueFor`), `server:declineMissionCall` (`MC.list`), `server:sup|admin:mcWithdraw|mcPage|
+(`queue`, `CP.Review.queueFor`), `server:declineMissionCall` (`MC.list`), `server:sup|admin:mcWithdraw|mcPage|
 mcCreate` (`MC.supView`), `server:sup:forceRecall` and `addRunTime` (`CP.Admin.liveRunsFor`), `server:sup:
 clearCooldowns` (`CP.LiveCtl.supCooldownsView`), `server:sup:commend|revokeCommendation|missionBan|liftMissionBan|
 awardPoints` sent with `activityOf` (`activity`, `CP.Challenge.supActivity`), `server:admin:voidRun|restoreRun|
 setVoidKind|flagRow` sent with `views = { rowId, archived, citizenid, runs, officer }` (`CP.Corrections.withViews`),
 `server:admin:backupNow|restoreBackup|deleteBackup` (`Sys.backupsView`), `storageCopy|setStorageMode|useStoreAgain`
 (`Sys.storageView`; `admin:getStorage` allows one read per 5 s), `server:admin:resetAllSettings` (`Settings.all()`).
-After each review decision `CP.Admin.shareReviewQueue(src)` pushes `reviewQueue` to the department's other
+After each review decision `CP.Review.share(src)` pushes `reviewQueue` to the department's other
 supervisors who asked for the queue in the last 75 s. Supervisor dialogs open with the values last used
 (`supervisor/components/lastUsed.ts`, page memory only).
 

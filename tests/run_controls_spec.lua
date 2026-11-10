@@ -88,7 +88,7 @@ H.eq(sast.startTimeout, 900, 'the live run keeps its 900 s')
 H.eq(sast.controls.idleCheck, 120, 'and its 120 s idle check')
 
 -- the idle check: 120 s for the SAST run, 180 s (config) for the FIB run
-H.load('modules/anticheat/server.lua')   -- the real idle check (the fixture stubs CP.AntiCheat)
+H.load('modules/review/anticheat.lua')   -- the real idle check (the fixture stubs CP.AntiCheat)
 Runs.markArrived(sast, 7)
 Runs.markArrived(fib, 8)
 H.eq(sast.state, 'in_progress', 'the SAST run started')

@@ -262,7 +262,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua && find blocks -name server.lua | sort'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
     p:close()
@@ -761,13 +761,13 @@ do
     local items = ItemRows(cid)
     H.eq(items[1] and items[1].status, 'held', 'review: the run\'s items are held too')
     H.eq(ItemsGiven(7, 'water'), 0, 'review: ...and not given')
-    local queue = Cb('sup:getReviewQueue', 4)
+    local queue = Cb('review:getQueue', 4)
     local seen = false
-    for _, f in ipairs(queue and queue.flagged or {}) do if f.id == r.id or f.rowId == r.id then seen = true end end
+    for _, f in ipairs(H.reviewItems(queue, 'flag')) do if f.id == r.id or f.rowId == r.id then seen = true end end
     H.eq(seen, true, 'review: the run is in the FIB supervisor\'s Review Queue')
-    local ok, data = Act('server:sup:reviewFlagged', 3, { rowId = r.id, decision = 'approve', reason = 'SAST' })
+    local ok, data = Act('server:review:decide', 3, { type = 'flag', id = r.id, decision = 'approve', reason = 'SAST' })
     H.eq(ok, false, 'review: a SAST supervisor cannot review a FIB run (' .. tostring(data) .. ')')
-    ok, data = Act('server:sup:reviewFlagged', 4, { rowId = r.id, decision = 'approve', reason = 'GPS glitch' })
+    ok, data = Act('server:review:decide', 4, { type = 'flag', id = r.id, decision = 'approve', reason = 'GPS glitch' })
     H.eq(ok, true, 'review: the FIB supervisor approves: ' .. tostring(data))
     Secs(5)
     r = Rows('id = ?', { r.id })[1] or {}
@@ -775,7 +775,7 @@ do
     H.eq(r.cash_status, 'paid', 'review: the held cash is paid')
     H.eq(select(2, Paid(cid)), 250, 'review: $250')
     H.eq(ItemsGiven(7, 'water'), 2, 'review: the held items are given')
-    ok = Act('server:sup:reviewFlagged', 4, { rowId = r.id, decision = 'approve', reason = 'again' })
+    ok = Act('server:review:decide', 4, { type = 'flag', id = r.id, decision = 'approve', reason = 'again' })
     H.eq(ok, false, 'review: a second approval is refused')
     H.eq(Paid(cid), 1, 'review: ...and pays nothing more')
 
@@ -783,7 +783,7 @@ do
     Act('server:sup:clearCooldowns', 4, { citizenid = cid, scope = 'mission', key = 'beat_patrol', reason = 'again' })
     local v = FlaggedPatrol(7, vec3(-3000.0, 3000.0, 30.0))
     local xpFlagged = Xp(cid)
-    ok, data = Act('server:sup:reviewFlagged', 4, { rowId = v.id, decision = 'void', reason = 'teleport' })
+    ok, data = Act('server:review:decide', 4, { type = 'flag', id = v.id, decision = 'void', reason = 'teleport' })
     H.eq(ok, true, 'void: the FIB supervisor voids it: ' .. tostring(data))
     v = Rows('id = ?', { v.id })[1] or {}
     H.eq(Bit(v.voided), true, 'void: voided')
@@ -798,7 +798,8 @@ do
         if d.rowId == v.id then disputeId = disputeId or d.id end
     end
     H.ok(disputeId ~= nil, 'dispute: in the FIB supervisor\'s Review Queue')
-    ok, data = Act('server:sup:handleDispute', 4, { disputeId = disputeId, decision = 'approve', reason = 'crash' })
+    ok, data = Act('server:review:decide', 4,
+        { type = 'dispute', id = disputeId, decision = 'approve', reason = 'crash' })
     H.eq(ok, true, 'dispute: approved: ' .. tostring(data))
     Secs(5)
     v = Rows('id = ?', { v.id })[1] or {}

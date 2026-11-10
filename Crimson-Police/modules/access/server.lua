@@ -42,7 +42,7 @@
 --       0 days lifts it. days: a whole number 0-3650 (err.invalid_days); citizenid as stored by Qbox
 --       (err.invalid_citizenid). When actorSrc is a player it must pass CP.Permissions.can(actorSrc,
 --       'suspend') (err.no_permission). An online officer is told on their tablet and a new suspension
---       fires onLost(src, 'suspended'). Not audited here: the caller (modules/admin, modules/anticheat)
+--       fires onLost(src, 'suspended'). Not audited here: the caller (modules/admin, modules/review/anticheat)
 --       writes the audit entry.
 --   CP.Access.refreshOfficerRow(src) -> boolean
 --       Upsert cp_officers callsign (32), rank_label (40), display_name (64) and department for a

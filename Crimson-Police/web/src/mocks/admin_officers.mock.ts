@@ -1,4 +1,4 @@
-// Browser mocks for full admin control: Officers, Leaderboards and Seasons (modules/corrections, the officers tools
+// Browser mocks for full admin control: Officers, Leaderboards and Seasons (modules/review/corrections, the officers tools
 // of modules/progression: profile, scoring and goals, the recognition and season tools of leaderboard and challenge).
 
 import { registerMock } from '../shared/nui';
@@ -274,7 +274,6 @@ for (const name of [
     'server:admin:setBannedWords',
     'server:admin:recountWeek',
     'server:admin:repostWeek',
-    'server:admin:approveRun',
     'server:admin:renameSeason',
     'server:admin:scheduleSeasonEnd',
     'server:admin:cancelSeasonEnd',

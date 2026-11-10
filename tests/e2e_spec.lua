@@ -368,7 +368,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua && find blocks -name server.lua | sort'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
     p:close()
@@ -1383,27 +1383,28 @@ do
         H.ok(row.citizenid ~= cid, 'a flagged run is held off the board')
     end
 
-    local queue = Cb('sup:getReviewQueue', src)
+    local queue = Cb('review:getQueue', src)
     local own = false
-    for _, f in ipairs(queue and queue.flagged or {}) do if f.id == r.id or f.rowId == r.id then own = true end end
+    for _, f in ipairs(H.reviewItems(queue, 'flag')) do if f.id == r.id or f.rowId == r.id then own = true end end
     H.eq(own, false, 'their own run never appears in their Review Queue')
-    local ok, data = Act('server:sup:reviewFlagged', src,
-        { rowId = r.id, decision = 'approve', reason = 'looks fine to me' })
+    local ok, data = Act('server:review:decide', src,
+        { type = 'flag', id = r.id, decision = 'approve', reason = 'looks fine to me' })
     H.eq(data, 'err.own_run', 'approving your own run is refused')
-    ok, data = Act('server:sup:reviewFlagged', src, { rowId = r.id, decision = 'void', reason = 'nope' })
+    ok, data = Act('server:review:decide', src, { type = 'flag', id = r.id, decision = 'void', reason = 'nope' })
     H.eq(data, 'err.own_run', 'voiding your own run is refused')
-    ok, data = Act('server:sup:reviewFlagged', 3, { rowId = r.id, decision = 'approve', reason = 'not my department' })
+    ok, data = Act('server:review:decide', 3,
+        { type = 'flag', id = r.id, decision = 'approve', reason = 'not my department' })
     H.eq(ok, false, 'a SAST supervisor cannot review a FIB-only run (' .. tostring(data) .. ')')
-    ok, data = Act('server:sup:reviewFlagged', 1, { rowId = r.id, decision = 'approve', reason = 'officer' })
+    ok, data = Act('server:review:decide', 1, { type = 'flag', id = r.id, decision = 'approve', reason = 'officer' })
     H.eq(data, 'err.no_permission', 'an officer cannot review')
-    ok, data = Act('server:sup:reviewFlagged', 8, { rowId = r.id, decision = 'approve', reason = '' })
+    ok, data = Act('server:review:decide', 8, { type = 'flag', id = r.id, decision = 'approve', reason = '' })
     H.eq(data, 'err.reason_required', 'a reason is required')
-    local queue8 = Cb('sup:getReviewQueue', 8)
+    local queue8 = Cb('review:getQueue', 8)
     local seen = false
-    for _, f in ipairs(queue8 and queue8.flagged or {}) do if f.id == r.id or f.rowId == r.id then seen = true end end
+    for _, f in ipairs(H.reviewItems(queue8, 'flag')) do if f.id == r.id or f.rowId == r.id then seen = true end end
     H.eq(seen, true, 'the run is in the other FIB supervisor\'s Review Queue')
-    ok, data = Act('server:sup:reviewFlagged', 8,
-        { rowId = r.id, decision = 'approve', reason = 'GPS glitch, route checked' })
+    ok, data = Act('server:review:decide', 8,
+        { type = 'flag', id = r.id, decision = 'approve', reason = 'GPS glitch, route checked' })
     H.eq(ok, true, 'another FIB supervisor approves: ' .. tostring(data))
     r = Rows('id = ?', { r.id })[1] or {}
     H.eq(H.bit(r.flagged), 0, 'no longer flagged')
@@ -1417,7 +1418,7 @@ do
     H.eq(tx, 1, 'one Renewed-Banking entry for the approved row')
     local xpAfter = tonumber((H.sql('SELECT xp FROM cp_officers WHERE citizenid = ?', { cid })[1] or {}).xp) or 0
     H.eq(xpAfter - xpBefore, r.final_points, 'XP added once the flagged run is approved')
-    ok, data = Act('server:sup:reviewFlagged', 8, { rowId = r.id, decision = 'approve', reason = 'again' })
+    ok, data = Act('server:review:decide', 8, { type = 'flag', id = r.id, decision = 'approve', reason = 'again' })
     H.eq(ok, false, 'a second approval is refused (' .. tostring(data) .. ')')
     H.eq(paidTo(), 1, 'and pays nothing more')
     local audit = H.sql('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'approveFlagged\' AND target LIKE ?',
@@ -1448,8 +1449,8 @@ do
     offline[src] = true
     H.fire('playerDropped', src, 'quit')
     Secs(1)
-    local ok, data = Act('server:sup:reviewFlagged', 8,
-        { rowId = r.id, decision = 'approve', reason = 'verified on CCTV' })
+    local ok, data = Act('server:review:decide', 8,
+        { type = 'flag', id = r.id, decision = 'approve', reason = 'verified on CCTV' })
     H.eq(ok, true, 'approved while the officer is offline: ' .. tostring(data))
     r = Rows('id = ?', { r.id })[1] or {}
     H.eq(r.cash_status, 'pending', 'the payment waits (pending)')
@@ -1492,7 +1493,8 @@ do
     local r = Rows('run_uuid = ?', { run.id })[1] or {}
     H.eq(r.cash_status, 'held', 'flagged: held')
     local xpFlagged = tonumber((H.sql('SELECT xp FROM cp_officers WHERE citizenid = ?', { cid })[1] or {}).xp) or 0
-    local ok, data = Act('server:sup:reviewFlagged', 3, { rowId = r.id, decision = 'void', reason = 'teleport' })
+    local ok, data = Act('server:review:decide', 3,
+        { type = 'flag', id = r.id, decision = 'void', reason = 'teleport' })
     H.eq(ok, true, 'a SAST supervisor voids it: ' .. tostring(data))
     r = Rows('id = ?', { r.id })[1] or {}
     H.eq(H.bit(r.voided), 1, 'voided')
@@ -1510,8 +1512,8 @@ do
     local found = false
     for _, d in ipairs(list or {}) do if d.rowId == r.id then found = true disputeId = disputeId or d.id end end
     H.eq(found, true, 'in the SAST supervisor\'s Review Queue')
-    ok, data = Act('server:sup:handleDispute', 3,
-        { disputeId = disputeId, decision = 'approve', reason = 'crash confirmed' })
+    ok, data = Act('server:review:decide', 3,
+        { type = 'dispute', id = disputeId, decision = 'approve', reason = 'crash confirmed' })
     H.eq(ok, true, 'dispute approved: ' .. tostring(data))
     r = Rows('id = ?', { r.id })[1] or {}
     H.eq(H.bit(r.voided), 0, 'the run is restored')

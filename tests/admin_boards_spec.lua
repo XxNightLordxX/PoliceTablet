@@ -275,11 +275,12 @@ do
         { citizenid = 'OFF00003', points = 70, flagged = true, uuid = run, cash = 100, cashStatus = 'held' })
     local b = W.row(
         { citizenid = 'OFF00006', points = 70, flagged = true, uuid = run, cash = 100, cashStatus = 'held' })
-    local ok, e = Act('server:admin:approveRun', 1, { runUuid = run, reason = 'checked' })
+    local ok, e = Act('server:review:decide', 1,
+        { type = 'flag', decision = 'approve', runUuid = run, reason = 'checked' })
     H.ok(ok == true and e.approved == 2, 'every flagged row of the run is approved: ' .. tostring(e))
     H.eq(Count('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE flagged = 1 AND id IN (?, ?)', { a, b }), 0,
         'unflagged')
-    ok, e = Act('server:admin:approveRun', 2, { runUuid = run, reason = 'x' })
+    ok, e = Act('server:review:decide', 2, { type = 'flag', decision = 'approve', runUuid = run, reason = 'x' })
     H.ok(not ok, 'a supervisor can\'t use Approve all')
 
     -- restore a voided run: the board shows it at once
@@ -348,14 +349,14 @@ do
     local args = { period = 'alltime', filter = 'overall', citizenid = 'OFF00011', runsPage = 2 }
     local d = W.data('admin:getBoards', 1, args)
     H.ok(#d.runs == 14 and d.runsPage == nil, 'shipped (pageSize 0): every run at once, as before')
-    H.eq(d.flagged, nil, 'the board carries no flagged runs (they are on Review -> Flagged runs)')
+    H.eq(d.flagged, nil, 'the board carries no flagged runs (they are on the Review queue)')
     Config.AdminUi.pageSize = 10
     d = W.data('admin:getBoards', 1, args)
     H.ok(d.runsPage and d.runsPage.page == 2 and d.runsPage.pages == 2 and d.runsPage.total == 14,
         'pageSize 10: page 2 of 2, 14 runs')
     H.eq(#d.runs, 4, 'page 2 holds the last 4 runs')
-    local alone = W.data('admin:getFlagged', 1, {})
-    H.ok(type(alone.flagged) == 'table' and #alone.flagged >= 1, 'admin:getFlagged lists the flagged run')
+    local alone = W.data('review:getQueue', 1, { all = true })
+    H.ok(#H.reviewItems(alone, 'flag') >= 1, 'the Admin UI\'s Review queue lists the flagged run')
     Config.AdminUi.pageSize = 0
 end
 

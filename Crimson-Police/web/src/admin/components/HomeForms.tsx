@@ -23,7 +23,7 @@ import type { SettingsData, SettingView } from '../../types/settings';
 // How many matches a search lists on a tile (the full screen lists them all).
 const LISTED = 5;
 const REASON_MAX = 255;
-// modules/corrections: -10,000 to +10,000 points per adjustment (not 0)
+// modules/review/corrections: -10,000 to +10,000 points per adjustment (not 0)
 const POINTS_MAX = 10000;
 
 const has = (text: string | null | undefined, q: string) => (text ?? '').toLowerCase().includes(q);

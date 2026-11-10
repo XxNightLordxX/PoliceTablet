@@ -302,7 +302,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/runs/server.lua | maintenance | always | 60 s | housekeeping |
 | modules/route/server.lua | drive-to-start safety net | while a run or a tracked participant exists | 1000 ms | the warning deadline is in seconds |
 | modules/alerts/server.lua | crimsonArena flag reconcile | always | 1000 -> 2000 ms, scaled | a lost flag is restored within two seconds |
-| modules/anticheat/server.lua | buckets, idle, presence sampling | always | 1000 -> 2000 ms, presence 5 s (on the next pass) | idle and bucket rules count seconds |
+| modules/review/anticheat.lua | buckets, idle, presence sampling | always | 1000 -> 2000 ms, presence 5 s (on the next pass) | idle and bucket rules count seconds |
 | modules/custody/server.lua | custody timers | while a run has a custody book | 1000 ms (kept) | each service vehicle step (road point ask, spawn, drive, park, leave) is one pass: 2 s would make every transport and coroner arrive seconds later |
 | modules/npc/server.lua | death watcher, health, cuff reach, flee clock | while a run is live or a ped record is kept | 1000 ms (kept) | the flee clock adds a second a pass (sprint, jog, walk), and a vanished ped must be seen before the engine's own 2-pass vanish rule |
 | modules/opponents/server.lua | live crime watch | while a case or crew is tracked | 1000 ms (kept) | second deadlines: the lost rule, the disconnect grace, AFK and the trail |
@@ -363,7 +363,7 @@ strings do not count.
 | `modules/admin/server.lua` | 4 | 0 | push queue while queued; one-shots |
 | `modules/adminkit/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/alerts/server.lua` | 2 | 1 | flag reconcile (always, players); one-shots |
-| `modules/anticheat/server.lua` | 2 | 1 | buckets, idle, presence (always, players); one-shots |
+| `modules/review/anticheat.lua` | 2 | 1 | buckets, idle, presence (always, players); one-shots |
 | `modules/builder/client.lua` | 4 | 4 | Builder tools (admin, per frame while open); bounded loads |
 | `modules/builder/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/calls/server.lua` | 2 | 1 | prune, 60 s; one-shots |
@@ -374,7 +374,7 @@ strings do not count.
 | `modules/crimtab/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/custody/client.lua` | 3 | 0 | bounded control and load waits; one-shots |
 | `modules/custody/server.lua` | 1 | 0 | one-shot; the custody tick is a `CP.Perf.armed` loop |
-| `modules/disputes/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/review/disputes.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/downed/client.lua` | 1 | 0 | bounded waits |
 | `modules/downed/server.lua` | 3 | 0 | start-up hooks; the check is a `CP.Perf.armed` loop |
 | `modules/draw/server.lua` | 2 | 1 | holder housekeeping, 60 s; a one-shot |

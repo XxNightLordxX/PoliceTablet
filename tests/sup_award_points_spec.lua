@@ -142,7 +142,7 @@ CP.Leaderboard = { invalidate = function() end }
 
 for _, m in ipairs({
     'modules/adminkit/server.lua',
-    'modules/corrections/server.lua',
+    'modules/review/corrections.lua',
     'modules/deptcontrols/server.lua',
     'modules/supawards/server.lua',
 }) do

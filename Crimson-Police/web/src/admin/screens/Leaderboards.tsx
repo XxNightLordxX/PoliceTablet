@@ -69,7 +69,7 @@ import { ReasonChips } from '../components/ReasonChips';
 import type { OfficerPoints } from '../../types/admin_officers';
 import './Leaderboards.css';
 
-const AWARD_MAX = 10000; // modules/corrections: -10,000 to +10,000 points per adjustment (not 0)
+const AWARD_MAX = 10000; // modules/review/corrections: -10,000 to +10,000 points per adjustment (not 0)
 interface AwardForm {
     citizenid: string;
     name?: string;

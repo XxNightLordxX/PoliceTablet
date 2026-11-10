@@ -153,7 +153,7 @@ do
     ok, e = Act('server:admin:flagRow', 1, { rowId = ded2, reason = 'flag' })
     H.ok(not ok and e == 'err.not_reviewable', 'flag by hand refuses a manual row')
     H.sql('UPDATE cp_mission_runs SET flagged = 1 WHERE id = ?', { ded2 })
-    ok, e = Act('server:sup:reviewFlagged', 2, { rowId = ded2, decision = 'void', reason = 'erase' })
+    ok, e = Act('server:review:decide', 2, { type = 'flag', id = ded2, decision = 'void', reason = 'erase' })
     H.ok(not ok, 'a supervisor review refuses a deduction: ' .. tostring(e))
     H.sql('UPDATE cp_mission_runs SET flagged = 0 WHERE id = ?', { ded2 })
 
@@ -662,7 +662,7 @@ end
 do
     local merged = CP.Locale.all()
     local missing = {}
-    for _, file in ipairs({ 'modules/corrections/server.lua' }) do
+    for _, file in ipairs({ 'modules/review/corrections.lua' }) do
         local src = assert(io.open(H.root .. file, 'r')):read('a')
         for key in src:gmatch('\'([%a_]+%.[%w_%.]+)\'') do
             local ns = key:match('^([%a_]+)%.')
@@ -671,7 +671,7 @@ do
             end
         end
     end
-    H.eq(table.concat(missing, ', '), '', 'every locale key of modules/corrections exists')
+    H.eq(table.concat(missing, ', '), '', 'every locale key of modules/review/corrections exists')
 end
 
 _G.print = W.realPrint or print

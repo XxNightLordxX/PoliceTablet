@@ -57,28 +57,34 @@ async function steps(): Promise<void> {
     ok(asked === 1, 'no view: the screen asks again (an older server)');
     ok(replyView(null, 'queue') === null && replyView({ queue: 3 }, 'queue') === null, 'only an object is a view');
 
-    // Review Queue: Approve answers with the queue, the row gone
-    const before = await request<ReviewQueueData>('sup:getReviewQueue', {});
-    const first = before.ok && before.data && Array.isArray(before.data.flagged) ? before.data.flagged[0] : undefined;
+    // Review queue: Approve answers with the queue, the row gone
+    const before = await request<ReviewQueueData>('review:getQueue', {});
+    const items = before.ok && before.data && Array.isArray(before.data.items) ? before.data.items : [];
+    const first = items.find(i => i.type === 'flag');
     ok(!!first, 'the mock queue lists a flagged run');
     if (first) {
-        const res = await action('server:sup:reviewFlagged', {
-            rowId: first.rowId,
+        const res = await action('server:review:decide', {
+            type: 'flag',
+            id: first.id,
             decision: 'approve',
             reason: 'Checked on camera',
         });
         const q = replyView<ReviewQueueData>(res.data, 'queue');
-        ok(res.ok && !!q, 'Approve answers with the Review Queue');
-        ok(!!q && Array.isArray(q.flagged) && !q.flagged.some(r => r.rowId === first.rowId), 'the row is gone from it');
+        ok(res.ok && !!q, 'Approve answers with the Review queue');
+        ok(
+            !!q && Array.isArray(q.items) && !q.items.some(r => r.type === 'flag' && r.id === first.id),
+            'the row is gone',
+        );
     }
-    const disputes = before.ok && before.data && Array.isArray(before.data.disputes) ? before.data.disputes : [];
-    if (disputes[0]) {
-        const res = await action('server:sup:handleDispute', {
-            disputeId: disputes[0].id,
+    const dispute = items.find(i => i.type === 'dispute');
+    if (dispute) {
+        const res = await action('server:review:decide', {
+            type: 'dispute',
+            id: dispute.id,
             decision: 'reject',
             reason: 'The run was fine',
         });
-        ok(res.ok && !!replyView<ReviewQueueData>(res.data, 'queue'), 'a dispute answer carries the Review Queue');
+        ok(res.ok && !!replyView<ReviewQueueData>(res.data, 'queue'), 'a dispute answer carries the Review queue');
     }
 
     // Dispatch: Decline answers with the view, the call gone

@@ -8,9 +8,9 @@
 // it, approve or reject a flagged/voided-run dispute (no award points: approving restores the run), void a
 // run from the history. The server re-checks every action (admin only).
 // Data: callbacks admin:searchOfficers { query } and admin:getOfficer { citizenid } · actions
-// server:admin:suspend { citizenid, days, reason }, server:admin:handleDispute { disputeId, decision, reason,
+// server:admin:suspend { citizenid, days, reason }, server:review:decide { type: 'dispute', id, decision, reason,
 // awardPoints } (awardPoints only for failed runs), server:admin:voidRun { rowId, reason } (modules/admin,
-// modules/disputes).
+// modules/review/disputes).
 
 import { useEffect, useState } from 'react';
 import {
@@ -375,9 +375,10 @@ function Detail({ citizenid }: { citizenid: string }) {
     const doAward = async () => {
         if (!award || !award.points || !award.reason.trim()) return;
         const res = await run(
-            'server:admin:handleDispute',
+            'server:review:decide',
             {
-                disputeId: award.dispute.id,
+                type: 'dispute',
+                id: award.dispute.id,
                 decision: 'approve',
                 reason: award.reason.trim(),
                 awardPoints: award.points,
@@ -392,8 +393,8 @@ function Detail({ citizenid }: { citizenid: string }) {
     const doDismiss = async (reason: string) => {
         if (!dismiss) return;
         const res = await run(
-            'server:admin:handleDispute',
-            { disputeId: dismiss.id, decision: 'reject', reason },
+            'server:review:decide',
+            { type: 'dispute', id: dismiss.id, decision: 'reject', reason },
             { success: 'admin.officers.dismissed_toast' },
         );
         setDismiss(null);
@@ -403,8 +404,8 @@ function Detail({ citizenid }: { citizenid: string }) {
     const doReview = async (reason: string) => {
         if (!review) return;
         const res = await run(
-            'server:admin:handleDispute',
-            { disputeId: review.dispute.id, decision: review.decision, reason },
+            'server:review:decide',
+            { type: 'dispute', id: review.dispute.id, decision: review.decision, reason },
             { success: review.decision === 'approve' ? 'sup.review.dispute_approved' : 'sup.review.dispute_rejected' },
         );
         setReview(null);

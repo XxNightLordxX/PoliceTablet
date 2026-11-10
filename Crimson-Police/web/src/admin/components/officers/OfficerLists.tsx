@@ -1,6 +1,6 @@
-// Admin UI → Review's tabs: Profiles (every pending picture, bio and report, plus the banned-words list),
-// Disputes (every open dispute) and Corrections (every bulk void, retirement, record move and season reopen, with
-// Undo). Each row can open the officer.
+// Admin UI → Review's tabs: Profiles (every pending picture, bio and report, plus the banned-words list) and
+// Corrections (every bulk void, retirement, record move and season reopen, with Undo). The disputes are in the one
+// Review queue (supervisor/components/ReviewQueuePanel.tsx).
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -23,7 +23,6 @@ import { usePush, useRequest } from '../../../shared/hooks';
 import { request } from '../../../shared/nui';
 import { t } from '../../../shared/i18n';
 import type { BannedTest, BannedWords, CorrectionBatch } from '../../../types/admin_officers';
-import type { DisputeView } from '../../../types/oversight';
 import { ProfilesReview } from '../../../supervisor/components/ProfilesReview';
 import { JobProgress, useAdminAction } from '../kit';
 import './OfficerTools.css';
@@ -128,59 +127,6 @@ export function ReviewTab() {
             </Card>
             <BannedWordsCard />
         </div>
-    );
-}
-
-// ============================================================================
-//                                   DISPUTES
-// ============================================================================
-
-export function DisputesTab({ onOpen }: { onOpen: (citizenid: string) => void }) {
-    const { data, loading, error, refetch } = useRequest<{ disputes: DisputeView[] }>(
-        'admin:getDisputes',
-        {},
-        { pollMs: 60000 },
-    );
-    const rows = data?.disputes ?? [];
-    const columns: TableColumn<DisputeView>[] = [
-        { key: 'when', header: t('ui.admin_officers.col.when'), width: 120, render: d => fmtDateTime(d.createdAt) },
-        {
-            key: 'officer',
-            header: t('ui.admin_officers.col.officer'),
-            width: 180,
-            render: d => [d.callsign, d.name].filter(Boolean).join(' '),
-        },
-        { key: 'mission', header: t('ui.admin_officers.col.mission'), render: d => d.missionLabel },
-        { key: 'reason', header: t('common.reason'), render: d => `“${d.reason}”` },
-        {
-            key: 'goes',
-            header: '',
-            width: 110,
-            render: d => (
-                <Badge size="sm" variant="outline">
-                    {d.goesTo === 'admin' ? t('ui.admin_officers.disputes.admin') : t('ui.admin_officers.disputes.sup')}
-                </Badge>
-            ),
-        },
-    ];
-    if (!data && loading) return <LoadingBlock />;
-    if (!data && error) return <ErrorState error={error} onRetry={() => void refetch()} />;
-    return (
-        <Card
-            title={t('ui.admin_officers.tab.disputes')}
-            icon="inbox"
-            subtitle={t('ui.admin_officers.disputes.hint')}
-            padding="none"
-        >
-            <Table
-                columns={columns}
-                rows={rows}
-                rowKey={d => d.id}
-                onRowClick={d => onOpen(d.citizenid)}
-                dense
-                empty={t('admin.officers.no_disputes')}
-            />
-        </Card>
     );
 }
 

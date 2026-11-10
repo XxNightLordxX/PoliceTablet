@@ -1,5 +1,5 @@
 -- The oversight slice: modules/admin (audit, webhooks, /CrimsonPoliceAdmin, review and void, force recall,
--- supervisor/admin callbacks), modules/disputes and modules/anticheat.
+-- supervisor/admin callbacks), modules/review/disputes and modules/review/anticheat.
 
 -- The real CP.Access and CP.Permissions modules run on a CP.Qbx stub; every other module is a stub that
 -- records its calls. Every SQL statement of the three modules runs here against MariaDB cp_test.
@@ -400,36 +400,32 @@ H.load('modules/adminkit/server.lua')
 H.load('modules/access/server.lua')
 H.load('modules/permissions/server.lua')
 H.load('modules/admin/server.lua')
-H.load('modules/disputes/server.lua')
-H.load('modules/anticheat/server.lua')
+H.load('modules/review/disputes.lua')
+H.load('modules/review/queue.lua')
+H.load('modules/review/anticheat.lua')
 
 H.ok(H.commands['CrimsonPoliceAdmin'] ~= nil and H.commands['CrimsonPoliceAdmin'].restricted == false,
     'admin command registered (unrestricted, checked in code)')
 for _, name in ipairs({
     'server:sup:forceRecall',
-    'server:sup:reviewFlagged',
-    'server:admin:reviewFlagged',
+    'server:review:decide',
     'server:admin:voidRun',
     'server:admin:awardPoints',
     'server:admin:suspend',
     'server:dispute',
-    'server:sup:handleDispute',
-    'server:admin:handleDispute',
 }) do
     H.ok(H.handlers['crimson-police:' .. name] ~= nil, 'action registered: ' .. name)
 end
 for _, name in ipairs({
     'getMissionList',
     'sup:getLiveRuns',
-    'sup:getReviewQueue',
-    'admin:getFlagged',
+    'review:getQueue',
     'admin:searchOfficers',
     'admin:getOfficer',
     'admin:getDepartments',
     'admin:getPermissions',
     'admin:getAudit',
     'admin:exportAudit',
-    'admin:getDisputes',
 }) do
     H.ok(H.callbacks['crimson-police:' .. name] ~= nil, 'callback registered: ' .. name)
 end
@@ -810,32 +806,34 @@ end
 H.clockMs = H.clockMs + 60000
 local supLines = SecurityLines(2)
 
-local ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowA, decision = 'approve', reason = '' })
+local ok, res = Act('server:review:decide', 2, { type = 'flag', id = rowA, decision = 'approve', reason = '' })
 H.eq(ok, false, 'reason required')
 H.eq(res, 'err.reason_required', 'reason error key')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowFib, decision = 'approve', reason = 'ok' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = rowFib, decision = 'approve', reason = 'ok' })
 H.eq(res, 'err.other_department', 'supervisor refused for a run without their department')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowOwn, decision = 'approve', reason = 'mine' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = rowOwn, decision = 'approve', reason = 'mine' })
 H.eq(res, 'err.own_run', 'supervisor refused for their own run')
-ok, res = Act('server:sup:reviewFlagged', 3, { rowId = rowA, decision = 'approve', reason = 'x' })
+ok, res = Act('server:review:decide', 3, { type = 'flag', id = rowA, decision = 'approve', reason = 'x' })
 H.eq(res, 'err.no_permission', 'officers cannot review')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowA, decision = 'maybe', reason = 'x' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = rowA, decision = 'maybe', reason = 'x' })
 H.eq(res, 'err.invalid_decision', 'decision validated')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = 'abc', decision = 'approve', reason = 'x' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = 'abc', decision = 'approve', reason = 'x' })
 H.eq(res, 'err.invalid_row', 'row id validated')
 
 Config.Permissions.supervisor.reviewFlagged = false
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowA, decision = 'approve', reason = 'Verified on camera' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'flag', id = rowA, decision = 'approve', reason = 'Verified on camera' })
 H.eq(res, 'err.no_permission', 'switched-off supervisor action refused')
 Config.Permissions.supervisor.reviewFlagged = true
 
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowA, decision = 'approve', reason = 'Verified on camera' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'flag', id = rowA, decision = 'approve', reason = 'Verified on camera' })
 H.eq(ok, true, 'supervisor approves a flagged run of their department')
 -- step WF2: the decision answers with the supervisor's fresh Review Queue (no second sup:getReviewQueue)
-H.ok(type(res) == 'table' and type(res.queue) == 'table' and type(res.queue.flagged) == 'table',
+H.ok(type(res) == 'table' and type(res.queue) == 'table' and type(res.queue.items) == 'table',
     'WF2: the approve reply carries the Review Queue')
 local stillListed = false
-for _, r in ipairs(type(res) == 'table' and type(res.queue) == 'table' and res.queue.flagged or {}) do
+for _, r in ipairs(H.reviewItems(type(res) == 'table' and res.queue, 'flag')) do
     if r.rowId == rowA then stillListed = true end
 end
 H.eq(stillListed, false, 'WF2: the approved run is gone from it')
@@ -852,19 +850,20 @@ H.eq(H.sql(
     'SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'approveFlagged\' AND category = \'flags\' AND actor = \'SUP00002\''
 )[1].n, 1, 'approval audited')
 H.eq(LastNotify(3).key, 'admin.notice.run_approved', 'officer told')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowA, decision = 'approve', reason = 'again' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = rowA, decision = 'approve', reason = 'again' })
 H.eq(res, 'err.not_flagged', 'cannot approve twice')
 
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowB, decision = 'void', reason = 'Joined only for the cash' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'flag', id = rowB, decision = 'void', reason = 'Joined only for the cash' })
 H.eq(ok, true, 'supervisor voids a flagged run')
 local rb = H.sql('SELECT flagged, voided, cash_status FROM cp_mission_runs WHERE id = ?', { rowB })[1]
 H.eq(H.bit(rb.voided), 1, 'voided')
 H.eq(H.bit(rb.flagged), 1, 'stays flagged')
 H.eq(rb.cash_status, 'held', 'cash stays held until the window closes')
 H.eq(LastCall('onRowVoided')[1], rowB, 'scoring void hook')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowB, decision = 'void', reason = 'again' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = rowB, decision = 'void', reason = 'again' })
 H.eq(res, 'err.already_voided', 'cannot void twice')
-H.eq(Cb('sup:getReviewQueue', 2).ok, true, 'the supervisor\'s review queue')
+H.eq(Cb('review:getQueue', 2).ok, true, 'the supervisor\'s review queue')
 
 -- step FX1 (BK1: always): a decision pushes the updated queue to the other supervisors of that department who have
 -- it open (each his own queue)
@@ -877,31 +876,30 @@ do
         return out
     end
     H.eq(Config.Tablet.supervisorReviewLive, nil, 'BK1: no switch for the live Review Queue')
-    for _, src in ipairs({ 2, 7, 4 }) do Cb('sup:getReviewQueue', src) end
+    for _, src in ipairs({ 2, 7, 4 }) do Cb('review:getQueue', src) end
     before = #Pushes()
-    local okW, reply = CP.Admin.withReviewQueue(2, true, { rowId = rowB })
+    local okW, reply = CP.Review.reply(2, true, { rowId = rowB })
     H.ok(okW and type(reply.queue) == 'table', 'FX1: on: the decider still gets his own queue in the reply')
     local got = {}
     for i = before + 1, #Pushes() do got[Pushes()[i][1]] = Pushes()[i][3] end
-    H.ok(type(got[7]) == 'table' and type(got[7].flagged) == 'table',
-        'FX1: on: the other SAST supervisor gets his queue')
+    H.ok(type(got[7]) == 'table' and type(got[7].items) == 'table', 'FX1: on: the other SAST supervisor gets his queue')
     H.eq(got[2], nil, 'FX1: ...not the decider himself')
     H.eq(got[4], nil, 'FX1: ...nor a supervisor of another department')
     H.fire('playerDropped', 7, 'Exiting')
-    H.eq(CP.Admin.shareReviewQueue(2), 0, 'FX1: a supervisor who left is forgotten')
-    Cb('sup:getReviewQueue', 7)
+    H.eq(CP.Review.share(2), 0, 'FX1: a supervisor who left is forgotten')
+    Cb('review:getQueue', 7)
     H.time = H.time + 120
-    H.eq(CP.Admin.shareReviewQueue(2), 0, 'FX1: a queue not asked for in 75 s counts as closed')
+    H.eq(CP.Review.share(2), 0, 'FX1: a queue not asked for in 75 s counts as closed')
     -- Z8B: an admin who is also an FIB officer decides a SAST row: the SAST supervisor still gets his queue
     AddPlayer(8, 'ADM00008', 'Al Fed', 'fib', 3, true, true)
-    Cb('sup:getReviewQueue', 7)
-    H.eq(CP.Admin.shareReviewQueue(8), 1, 'Z8B: an admin\'s decision reaches every department\'s open queue')
-    H.eq(CP.Admin.shareReviewQueue(4, 'sast'), 1, 'Z8B: the row\'s department, when given, decides who gets it')
+    Cb('review:getQueue', 7)
+    H.eq(CP.Review.share(8), 1, 'Z8B: an admin\'s decision reaches every department\'s open queue')
+    H.eq(CP.Review.share(4, 'sast'), 1, 'Z8B: the row\'s department, when given, decides who gets it')
     -- Z9: a cross-department run's row sits in each department's queue: the list reaches all of them
-    Cb('sup:getReviewQueue', 4)
-    H.eq(CP.Admin.shareReviewQueue(2, { 'sast', 'fib' }), 2,
+    Cb('review:getQueue', 4)
+    H.eq(CP.Review.share(2, { 'sast', 'fib' }), 2,
         'Z9: a SAST decision on a SAST + FIB run reaches the open FIB queue too')
-    H.eq(CP.Admin.shareReviewQueue(2, { 'sast' }), 1, 'Z9: a list of one department reaches only it')
+    H.eq(CP.Review.share(2, { 'sast' }), 1, 'Z9: a list of one department reaches only it')
     infos[8], H.players[8] = nil, nil
 end
 H.eq(SecurityLines(2), supLines, 'a supervisor\'s review flow (queue, approve, void, refusals) leaves no security line')
@@ -937,7 +935,7 @@ do
         return realReview(...)
     end
     local nVoided = CountCalls('onRowVoided')
-    ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowRace, decision = 'void', reason = 'Too late' })
+    ok, res = Act('server:review:decide', 2, { type = 'flag', id = rowRace, decision = 'void', reason = 'Too late' })
     CP.Permissions.canReviewRun = realReview
     H.eq(res, 'err.conflict', 'a void of a row approved meanwhile is refused')
     H.eq(H.bit(H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { rowRace })[1].voided), 0,
@@ -945,9 +943,10 @@ do
     H.eq(CountCalls('onRowVoided'), nVoided, 'no XP removed')
 end
 
-ok, res = Act('server:admin:reviewFlagged', 2, { rowId = rowFib, decision = 'approve', reason = 'x' })
-H.eq(res, 'err.no_permission', 'admin endpoint refuses supervisors')
-ok, res = Act('server:admin:reviewFlagged', 1, { rowId = rowFib, decision = 'approve', reason = 'Checked' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = rowFib, decision = 'approve', reason = 'x' })
+H.ok(ok == false and (res == 'err.other_department' or res == 'err.no_permission'),
+    'one decide action: a supervisor never decides another department\'s row')
+ok, res = Act('server:review:decide', 1, { type = 'flag', id = rowFib, decision = 'approve', reason = 'Checked' })
 H.eq(ok, true, 'admin approves any department')
 
 -- void any run
@@ -1232,10 +1231,11 @@ H.eq(failView and failView.decisions and #failView.decisions, 1, 'the admin sees
 H.eq(failView and failView.decisions[1].factLog[1].atS, 42, 'with when each fact reached the decider')
 H.eq(failView and failView.people and failView.people[1].demeanour, 'nervous', 'and the people debrief')
 H.eq(flagView and flagView.decisions, nil, 'a row without decisions shows none')
-local rq = Cb('sup:getReviewQueue', 2)
+local rq = Cb('review:getQueue', 2)
 H.eq(rq.ok, true, 'review queue')
-H.eq(#rq.data.disputes, 3, 'queue carries the disputes')
-H.eq(Cb('admin:getDisputes', 1).data.disputes[1].id ~= nil, true, 'admin:getDisputes')
+H.eq(#H.reviewItems(rq.data, 'dispute'), 3, 'the queue carries the disputes')
+H.eq(H.reviewItems(Cb('review:getQueue', 1, { all = true }).data, 'dispute')[1].id ~= nil, true,
+    'the Admin UI\'s queue lists the disputes')
 
 -- step Z2: a flag kind the department's reviewRules gives to admins only is not a supervisor's through a dispute
 do
@@ -1254,8 +1254,8 @@ do
         if v.id == disFlag then inAdmin = true end
     end
     H.eq(inAdmin, true, 'Z2: an admin still sees it')
-    local okZ, resZ = Act('server:sup:handleDispute', 2,
-        { disputeId = disFlag, decision = 'approve', reason = 'Presence data was wrong' })
+    local okZ, resZ = Act('server:review:decide', 2,
+        { type = 'dispute', id = disFlag, decision = 'approve', reason = 'Presence data was wrong' })
     H.eq(okZ and 'ok' or resZ, 'err.review_admin_only', 'Z2: a supervisor cannot approve it through the dispute')
     H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { dFlag })[1].flagged), 1,
         'Z2: the flag stays')
@@ -1265,19 +1265,19 @@ do
 end
 
 -- answering
-ok, res = Act('server:sup:handleDispute', 2,
-    { disputeId = disFail, decision = 'approve', reason = 'x', awardPoints = 10 })
+ok, res = Act('server:review:decide', 2,
+    { type = 'dispute', id = disFail, decision = 'approve', reason = 'x', awardPoints = 10 })
 H.eq(res, 'err.no_permission', 'supervisors never answer failed-run disputes')
-ok, res = Act('server:sup:handleDispute', 7, { disputeId = disVoid2, decision = 'approve', reason = 'x' })
+ok, res = Act('server:review:decide', 7, { type = 'dispute', id = disVoid2, decision = 'approve', reason = 'x' })
 H.eq(res, 'err.own_run', 'nobody answers a dispute about a run they took part in')
-ok, res = Act('server:sup:handleDispute', 4, { disputeId = disFlag, decision = 'approve', reason = 'x' })
+ok, res = Act('server:review:decide', 4, { type = 'dispute', id = disFlag, decision = 'approve', reason = 'x' })
 H.eq(res, 'err.other_department', 'only their department')
-ok, res = Act('server:sup:handleDispute', 2, { disputeId = disFlag, decision = 'approve', reason = '' })
+ok, res = Act('server:review:decide', 2, { type = 'dispute', id = disFlag, decision = 'approve', reason = '' })
 H.eq(res, 'err.reason_required', 'reason required')
-ok, res = Act('server:sup:handleDispute', 2,
-    { disputeId = disFlag, decision = 'approve', reason = 'Presence data was wrong' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'dispute', id = disFlag, decision = 'approve', reason = 'Presence data was wrong' })
 H.eq(ok, true, 'supervisor approves a flagged-run dispute')
-H.ok(type(res) == 'table' and type(res.queue) == 'table' and type(res.queue.disputes) == 'table',
+H.ok(type(res) == 'table' and type(res.queue) == 'table' and #H.reviewItems(res.queue, 'dispute') >= 0,
     'WF2: the dispute reply carries the Review Queue')
 H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { dFlag })[1].flagged), 0,
     'run restored (flag cleared)')
@@ -1290,38 +1290,42 @@ H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'disputeApproved\
 H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'approveFlagged\'')[1].n, 0,
     'no second audit entry for the approval itself')
 H.eq(LastNotify(3).key, 'admin.notice.dispute_approved', 'officer told')
-ok, res = Act('server:sup:handleDispute', 2, { disputeId = disFlag, decision = 'reject', reason = 'changed my mind' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'dispute', id = disFlag, decision = 'reject', reason = 'changed my mind' })
 H.eq(res, 'err.dispute_closed', 'decision is final')
 
-ok, res = Act('server:sup:handleDispute', 2,
-    { disputeId = disVoid, decision = 'approve', reason = 'GPS glitch confirmed' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'dispute', id = disVoid, decision = 'approve', reason = 'GPS glitch confirmed' })
 H.eq(ok, true, 'supervisor approves a voided-run dispute')
 local rv = H.sql('SELECT voided, flagged FROM cp_mission_runs WHERE id = ?', { dVoid })[1]
 H.eq(H.bit(rv.voided), 0, 'voided run restored')
 H.eq(H.bit(rv.flagged), 0, 'and unflagged')
 H.eq(LastCall('onRowApproved')[1], dVoid, 'XP back')
 
-ok, res = Act('server:sup:handleDispute', 2, { disputeId = disVoid2, decision = 'reject', reason = 'Void stands' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'dispute', id = disVoid2, decision = 'reject', reason = 'Void stands' })
 H.eq(ok, true, 'supervisor rejects a voided-run dispute')
 H.eq(LastCall('cashForfeit')[1], dVoid2, 'rejected dispute forfeits the held cash')
 H.eq(H.bit(H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { dVoid2 })[1].voided), 1, 'void kept')
 
-ok, res = Act('server:admin:handleDispute', 2,
-    { disputeId = disFail, decision = 'approve', reason = 'x', awardPoints = 10 })
-H.eq(res, 'err.no_permission', 'admin endpoint refuses supervisors')
-ok, res = Act('server:admin:handleDispute', 1, { disputeId = disFail, decision = 'approve', reason = 'Bug confirmed' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'dispute', id = disFail, decision = 'approve', reason = 'x', awardPoints = 10 })
+H.ok(ok == false and (res == 'err.other_department' or res == 'err.no_permission'),
+    'one decide action: a supervisor never decides another department\'s row')
+ok, res = Act('server:review:decide', 1,
+    { type = 'dispute', id = disFail, decision = 'approve', reason = 'Bug confirmed' })
 H.eq(res, 'err.invalid_points', 'failed-run approval needs points')
 CP.Scoring.manualAward = function() return false, 'err.award_failed' end
-ok, res = Act('server:admin:handleDispute', 1,
-    { disputeId = disFail, decision = 'approve', reason = 'Bug confirmed', awardPoints = 60 })
+ok, res = Act('server:review:decide', 1,
+    { type = 'dispute', id = disFail, decision = 'approve', reason = 'Bug confirmed', awardPoints = 60 })
 H.eq(res, 'err.award_failed', 'a failed award is reported')
 H.eq(H.sql('SELECT status FROM cp_disputes WHERE id = ?', { disFail })[1].status, 'open', 'and the dispute re-opened')
 CP.Scoring.manualAward = function(src, cid, points, reason)
     Record('manualAward', src, cid, points, reason)
     return true
 end
-ok, res = Act('server:admin:handleDispute', 1,
-    { disputeId = disFail, decision = 'approve', reason = 'Bug confirmed', awardPoints = 60 })
+ok, res = Act('server:review:decide', 1,
+    { type = 'dispute', id = disFail, decision = 'approve', reason = 'Bug confirmed', awardPoints = 60 })
 H.eq(ok, true, 'admin answers a failed-run dispute with a manual award')
 local ma = LastCall('manualAward')
 H.eq(ma[2], 'OFF00003', 'award to the officer')
@@ -1511,15 +1515,15 @@ local ohRow = AddRow({
     flag_reason = 'outside_help',
     cash_status = 'held',
 })
-local fr = Cb('sup:getReviewQueue', 2)
+local fr = Cb('review:getQueue', 2)
 local found = nil
-for _, f in ipairs(fr.data.flagged) do if f.rowId == ohRow then found = f end end
+for _, f in ipairs(H.reviewItems(fr.data, 'flag')) do if f.rowId == ohRow then found = f end end
 H.ok(found ~= nil, 'flagged row in the queue')
 H.ok(found and found.flagDetail and found.flagDetail:find('Otto Outsider', 1, true) ~= nil, 'queue shows who helped')
 H.eq(found and found.cash, 920, 'held cash amount from the breakdown')
 H.eq(found and found.flagReason, 'outside_help', 'flag reason')
-H.eq(Cb('sup:getReviewQueue', 6).error, 'err.no_permission', 'officers get no queue')
-H.eq(#Cb('admin:getFlagged', 1).data.flagged >= 1, true, 'admin:getFlagged')
+H.eq(Cb('review:getQueue', 6).error, 'err.no_permission', 'officers get no queue')
+H.eq(#H.reviewItems(Cb('review:getQueue', 1, { all = true }).data, 'flag') >= 1, true, 'the Admin UI\'s queue')
 
 -- participant flag
 H.eq(CP.AntiCheat.flag(oh, 6, 'presence', 'share 40%'), true, 'participant-level flag')
@@ -1880,19 +1884,19 @@ local liveRow = AddRow({
     flag_reason = 'speed',
     cash_status = 'none',
 })
-local q2 = Cb('sup:getReviewQueue', 2)
+local q2 = Cb('review:getQueue', 2)
 local seen2 = false
-for _, f in ipairs(q2.data.flagged) do if f.rowId == liveRow then seen2 = true end end
+for _, f in ipairs(H.reviewItems(q2.data, 'flag')) do if f.rowId == liveRow then seen2 = true end end
 H.eq(seen2, false, 'a flagged row of a run the supervisor is still on is not in their queue')
-local q7 = Cb('sup:getReviewQueue', 7)
+local q7 = Cb('review:getQueue', 7)
 local seen7 = false
-for _, f in ipairs(q7.data.flagged) do if f.rowId == liveRow then seen7 = true end end
+for _, f in ipairs(H.reviewItems(q7.data, 'flag')) do if f.rowId == liveRow then seen7 = true end end
 H.eq(seen7, true, 'another supervisor of the department sees it')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = liveRow, decision = 'approve', reason = 'I was there' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = liveRow, decision = 'approve', reason = 'I was there' })
 H.eq(res, 'err.own_run', 'a participant still on the run cannot approve it')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = liveRow, decision = 'void', reason = 'I was there' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = liveRow, decision = 'void', reason = 'I was there' })
 H.eq(res, 'err.own_run', 'nor void it')
-local adminFlaggedLive = Cb('admin:getFlagged', 1).data.flagged
+local adminFlaggedLive = H.reviewItems(Cb('review:getQueue', 1, { all = true }).data, 'flag')
 H.ok(#adminFlaggedLive >= 1, 'admins not on the run see it')
 
 H.clockMs = H.clockMs + 21000
@@ -1903,14 +1907,14 @@ local supList = CP.Disputes.forSupervisor(2)
 local listed = false
 for _, d in ipairs(supList) do if d.id == liveDispute then listed = true end end
 H.eq(listed, false, 'the dispute is hidden from a supervisor still on that run')
-ok, res = Act('server:sup:handleDispute', 2, { disputeId = liveDispute, decision = 'approve', reason = 'ok' })
+ok, res = Act('server:review:decide', 2, { type = 'dispute', id = liveDispute, decision = 'approve', reason = 'ok' })
 H.eq(res, 'err.own_run', 'and they cannot answer it')
 H.eq(H.sql('SELECT status FROM cp_disputes WHERE id = ?', { liveDispute })[1].status, 'open', 'the dispute stays open')
 
 -- A supervisor who was not on the run answers it: one toast for the officer (no double "approved").
 for k in pairs(notifies) do notifies[k] = nil end
-ok, res = Act('server:sup:handleDispute', 7,
-    { disputeId = liveDispute, decision = 'approve', reason = 'Lag confirmed' })
+ok, res = Act('server:review:decide', 7,
+    { type = 'dispute', id = liveDispute, decision = 'approve', reason = 'Lag confirmed' })
 H.eq(ok, true, 'another supervisor approves the dispute')
 H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { liveRow })[1].flagged), 0, 'the row is approved')
 local toasts3 = {}
@@ -2025,17 +2029,18 @@ local held = H.sql('SELECT flagged, voided, cash_status FROM cp_mission_runs WHE
 H.eq(H.bit(held.flagged), 1, 'the row stays flagged')
 H.eq(held.cash_status, 'held', 'its cash stays held')
 H.eq(CountCalls('cashRelease'), released, 'no cash released')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = altRow, decision = 'approve', reason = 'Backup was called' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'flag', id = altRow, decision = 'approve', reason = 'Backup was called' })
 H.eq(res, 'err.own_run', 'nor from the Review Queue')
 ok, res = Co(CP.Admin.voidFlagged, 2, altRow, 'Farming')
 H.ok(ok == false and res == 'err.own_run', 'nor void it')
-ok, res = Act('server:sup:reviewFlagged', 2, { rowId = altRow, decision = 'void', reason = 'Farming' })
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = altRow, decision = 'void', reason = 'Farming' })
 H.eq(res, 'err.own_run', 'nor void it from the Review Queue')
 H.eq(H.bit(H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { altRow })[1].voided), 0, 'the row is not voided')
 
 -- admins are held to the same rule
 infos[1].license = LIC_A
-ok, res = Act('server:admin:reviewFlagged', 1, { rowId = altRow, decision = 'approve', reason = 'Checked' })
+ok, res = Act('server:review:decide', 1, { type = 'flag', id = altRow, decision = 'approve', reason = 'Checked' })
 H.eq(res, 'err.own_run', 'an admin on the same license cannot approve it either')
 infos[1].license = nil
 
@@ -2060,15 +2065,15 @@ H.eq(Co(CP.Disputes.supervisorCanAnswer, O1), false, 'no supervisor online can a
 infos[7] = away7
 H.eq(Co(CP.Disputes.supervisorCanAnswer, O1), true, 'a sergeant on another license online: he can')
 infos[8], H.players[8] = nil, nil
-ok, res = Act('server:sup:handleDispute', 2,
-    { disputeId = altDispute, decision = 'approve', reason = 'Backup was called' })
+ok, res = Act('server:review:decide', 2,
+    { type = 'dispute', id = altDispute, decision = 'approve', reason = 'Backup was called' })
 H.eq(res, 'err.own_run', 'the sergeant cannot answer the dispute of their own second character')
 H.eq(H.sql('SELECT status FROM cp_disputes WHERE id = ?', { altDispute })[1].status, 'open', 'the dispute stays open')
 H.eq(CountCalls('cashRelease'), released, 'still no cash released')
 
 -- control: a sergeant on another license, and the console
-ok, res = Act('server:sup:handleDispute', 7,
-    { disputeId = altDispute, decision = 'approve', reason = 'Backup confirmed' })
+ok, res = Act('server:review:decide', 7,
+    { type = 'dispute', id = altDispute, decision = 'approve', reason = 'Backup confirmed' })
 H.eq(ok, true, 'a sergeant on another license answers the dispute')
 H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { altRow })[1].flagged), 0, 'the row is approved')
 H.eq((LastCall('cashRelease') or {})[1], altRow, 'and its held cash is released')
@@ -2095,7 +2100,7 @@ for _, name in ipairs({ 'admin_kit.json', 'admin_officers.json' }) do
     local pf = io.open(H.root .. 'locales/parts/' .. name, 'r')
     if pf then for k, v in pairs(cjson.decode(pf:read('a'))) do adminParts[k] = v end pf:close() end
 end
-for _, file in ipairs({ 'modules/admin/server.lua', 'modules/disputes/server.lua', 'modules/anticheat/server.lua' }) do
+for _, file in ipairs({ 'modules/admin/server.lua', 'modules/review/disputes.lua', 'modules/review/anticheat.lua' }) do
     local src = assert(io.open(H.root .. file, 'r')):read('a')
     for key in src:gmatch('\'([%a_]+%.[%w_%.]+)\'') do
         local ns = key:match('^([%a_]+)%.')

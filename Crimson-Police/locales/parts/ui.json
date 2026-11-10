@@ -285,5 +285,6 @@
   "sup.panel.runs": "This week's runs",
   "sup.panel.no_rookies": "No officer of this department is waiting for a trainer.",
   "ui.screen.me": "Me",
-  "ui.runbar.links": "Other screens"
+  "ui.runbar.links": "Other screens",
+  "admin.review.tab.queue": "Queue"
 }

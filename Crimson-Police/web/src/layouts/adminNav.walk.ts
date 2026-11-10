@@ -123,8 +123,9 @@ async function steps(): Promise<void> {
         ADMIN_SCREENS.find(s => s.key === 'admin_rs')?.visible !== undefined,
         'Real players: hidden with its only screen while live crimes and volunteers are off',
     );
-    ok(REVIEW_TABS.join(',') === 'flagged,profiles,disputes,corrections', 'Review: four tabs');
-    ok(reviewTabOf({ tab: 'disputes' }) === 'disputes' && reviewTabOf({}) === 'flagged', 'Review: a link picks a tab');
+    ok(REVIEW_TABS.join(',') === 'queue,profiles,corrections', 'Review: one queue, Profiles and Corrections');
+    ok(reviewTabOf({ tab: 'profiles' }) === 'profiles' && reviewTabOf({}) === 'queue', 'Review: a link picks a tab');
+    ok(reviewTabOf({ tab: 'flagged' }) === 'queue', 'Review: the old flagged and disputes tabs are gone');
     ok(
         REVIEW_TABS.every(k => t(`admin.review.tab.${k}`) !== `admin.review.tab.${k}`),
         'Review: every tab has a name',
@@ -158,8 +159,8 @@ async function steps(): Promise<void> {
     );
     const builder = find(t('admin.missions.tab.builder')).find(r => r.params?.tab === 'builder');
     ok(builder?.screen === 'admin_missions', 'search: a tab (Mission Builder) opens its screen on that tab');
-    const disputes = find(t('admin.review.tab.disputes')).find(r => r.params?.tab === 'disputes');
-    ok(disputes?.screen === 'admin_review', 'search: Disputes opens Review on its tab');
+    const disputes = find(t('admin.review.tab.disputes')).find(r => r.params?.show === 'dispute');
+    ok(disputes?.screen === 'admin_review', 'search: Disputes opens the Review queue on its disputes');
     const noRs = globalResults({ screens: screens.filter(s => s.key !== 'admin_rs'), jumps }, t('rs.ui.volunteers'));
     ok(!noRs.some(r => r.screen === 'admin_rs'), "search: a hidden screen's tabs are not listed");
     ok(screenHits('a').length <= FOUND_MAX.screens, 'search: a short list of screens');

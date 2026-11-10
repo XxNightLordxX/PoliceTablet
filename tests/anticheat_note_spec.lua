@@ -1,6 +1,6 @@
 -- Staff notes (critic 2 #12 and #13): CP.AntiCheat.note records a fact for staff (audited as runNoted, shown
 -- in the Review run detail) and never holds anyone's points or items; a flag (runFlagged) still does. Real:
--- modules/admin (cp_audit, the Review Queue), modules/anticheat, modules/cash (Cash.compute) and modules/rewards.
+-- modules/admin (cp_audit, the Review Queue), modules/review/anticheat, modules/cash (Cash.compute) and modules/rewards.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })
@@ -164,7 +164,8 @@ H.load('modules/adminkit/server.lua')
 H.load('modules/access/server.lua')
 H.load('modules/permissions/server.lua')
 H.load('modules/admin/server.lua')
-H.load('modules/anticheat/server.lua')
+H.load('modules/review/anticheat.lua')
+H.load('modules/review/queue.lua')
 H.load('modules/cash/server.lua')
 H.load('modules/schedule/server.lua')
 H.load('modules/rewards/server.lua')
@@ -324,8 +325,8 @@ do
     local onlyNote = AddRow('run-only-note', 'OFF00006', nil)
     local lone = NewRun('run-only-note', { 6 })
     AC.note(lone, 6, 'stun_unproven', 'Objective 1, person 5009')
-    local res = Cb('sup:getReviewQueue', 2)
-    local list = res and res.data and res.data.flagged or {}
+    local res = Cb('review:getQueue', 2)
+    local list = H.reviewItems(res and res.data, 'flag')
     local row, others = nil, {}
     for _, r in ipairs(list) do
         if r.rowId == held then row = r else others[#others + 1] = r.rowId end

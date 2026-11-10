@@ -276,8 +276,9 @@ H.load('modules/progression/goals.lua')
 H.load('modules/progression/leaderboard.lua')
 H.load('modules/progression/challenge.lua')
 H.load('modules/admin/server.lua')
-H.load('modules/disputes/server.lua')
-H.load('modules/anticheat/server.lua')
+H.load('modules/review/disputes.lua')
+H.load('modules/review/queue.lua')
+H.load('modules/review/anticheat.lua')
 
 -- The goals of the day and week rotate with the real date (this spec runs on the real clock): no shipped
 -- goal may complete from the rows below and add its points to the XP and board checks. Section 4 sets its own.
@@ -404,8 +405,8 @@ end
 local f1 = InsertRun({ flagged = true, status = 'held', amount = 1150, final = 240 })
 H.eq(BoardPoints(3), 0, 'a flagged row is not on the board')
 H.eq(XpOf('IOFF0003'), 0, 'no XP for a flagged row')
-local ok, data = Act('server:sup:reviewFlagged', 2,
-    { rowId = f1, decision = 'approve', reason = 'Checked the footage' })
+local ok, data = Act('server:review:decide', 2,
+    { type = 'flag', id = f1, decision = 'approve', reason = 'Checked the footage' })
 H.eq(ok, true, 'supervisor approves the flagged run of their department')
 local r1 = RowOf(f1)
 H.eq(H.bit(r1.flagged), 0, 'flag cleared')
@@ -420,7 +421,7 @@ H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'approveFlagged\'
 
 -- A second approval changes nothing (no double XP, no second payment).
 local paidBefore = #qbx.addMoney
-ok, data = Act('server:sup:reviewFlagged', 2, { rowId = f1, decision = 'approve', reason = 'again' })
+ok, data = Act('server:review:decide', 2, { type = 'flag', id = f1, decision = 'approve', reason = 'again' })
 H.eq(ok, false, 'second approval refused')
 H.eq(data, 'err.not_flagged', 'not flagged any more')
 H.eq(XpOf('IOFF0003'), 240, 'XP unchanged')
@@ -444,13 +445,13 @@ H.eq(suspensions.IOFF0003, nil, 'one void does not suspend')
 local f2 = InsertRun({ flagged = true, status = 'held', final = 100 })
 OfficerRow('IOFF0003', 'Olly Officer', 'sast')
 H.sql('UPDATE cp_officers SET xp = 500 WHERE citizenid = \'IOFF0003\'')
-ok = Act('server:sup:reviewFlagged', 2, { rowId = f2, decision = 'void', reason = 'Outside help' })
+ok = Act('server:review:decide', 2, { type = 'flag', id = f2, decision = 'void', reason = 'Outside help' })
 H.eq(ok, true, 'supervisor voids a flagged run')
 H.eq(XpOf('IOFF0003'), 500, 'a never-counted row takes no XP back')
 H.eq(RowOf(f2).cash_status, 'held', 'held cash stays held until the dispute window closes')
 
 local f3 = InsertRun({ flagged = true, status = 'held', final = 100 })
-ok = Act('server:sup:reviewFlagged', 2, { rowId = f3, decision = 'void', reason = 'Outside help again' })
+ok = Act('server:review:decide', 2, { type = 'flag', id = f3, decision = 'void', reason = 'Outside help again' })
 H.eq(ok, true, 'third void')
 H.ok(suspensions.IOFF0003 ~= nil, 'three voids in 30 days -> CP.Access.suspend (anticheat)')
 H.eq(suspensions.IOFF0003 and suspensions.IOFF0003.days, Config.AntiCheat.suspendDays, 'for suspendDays')
@@ -469,7 +470,8 @@ suspensions.IOFF0003 = nil
 ok, data = Act('server:dispute', 3, { rowId = f2, reason = 'It was my partner who fired' })
 H.eq(ok, true, 'the officer disputes their voided run')
 local d2 = data and data.disputeId
-ok, data = Act('server:sup:handleDispute', 2, { disputeId = d2, decision = 'reject', reason = 'Footage is clear' })
+ok, data = Act('server:review:decide', 2,
+    { type = 'dispute', id = d2, decision = 'reject', reason = 'Footage is clear' })
 H.eq(ok, true, 'supervisor rejects the dispute')
 H.eq(RowOf(f2).cash_status, 'forfeited', 'rejected dispute about a voided run -> CP.Cash.forfeit')
 H.eq(Bd(f2).cash.status, 'forfeited', 'breakdown status too')
@@ -478,8 +480,8 @@ ok, data = Act('server:dispute', 3, { rowId = f3, reason = 'Wrong officer' })
 H.eq(ok, true, 'second dispute filed')
 local d3 = data and data.disputeId
 local xpBefore = XpOf('IOFF0003')
-ok, data = Act('server:sup:handleDispute', 2,
-    { disputeId = d3, decision = 'approve', reason = 'Confirmed: another unit' })
+ok, data = Act('server:review:decide', 2,
+    { type = 'dispute', id = d3, decision = 'approve', reason = 'Confirmed: another unit' })
 H.eq(ok, true, 'supervisor approves the dispute')
 local r3 = RowOf(f3)
 H.eq(H.bit(r3.voided), 0, 'void lifted')

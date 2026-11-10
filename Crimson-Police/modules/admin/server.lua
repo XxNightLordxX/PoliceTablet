@@ -69,8 +69,6 @@
 -- Net (docs/dev/ARCHITECTURE.md §8.3)
 --   actions
 --     server:sup:forceRecall     { runId, src, reason? }                forceRecall (runs involving their dept)
---     server:sup:reviewFlagged   { rowId, decision = 'approve'|'void', reason }   reviewFlagged
---     server:admin:reviewFlagged { rowId, decision, reason }            admin
 --     server:admin:voidRun       { rowId } | { runUuid }, reason         voidAnyRun
 --     server:admin:awardPoints   { citizenid, points, reason }           manualAward -> CP.Scoring.manualAward
 --     server:admin:suspend       { citizenid, days, reason }             suspend -> CP.Access.suspend (audited)
@@ -79,8 +77,6 @@
 --     admin:getMissions          admin -> MissionListData, each mission + { filePath, editedInCode, defHash, status,
 --                                disabledInConfig }
 --     sup:getLiveRuns            viewMissionList -> { runs = { LiveRun + extras }, serverTime, canRecall }
---     sup:getReviewQueue         reviewFlagged|handleDisputes -> { flagged, disputes, canReview, canHandle }
---     admin:getFlagged           admin -> { flagged }
 --     admin:searchOfficers       { query } -> { officers }
 --     admin:getOfficer           { citizenid } -> OfficerDetail (incl. suspensions = the last 10 suspend/unsuspend/autoSuspend entries)
 --     admin:getDepartments       -> { departments, cashSource, showSociety }
@@ -2264,54 +2260,9 @@ end
 --                                 NET: actions
 -- ============================================================================
 
-local function ReviewAction(src, payload)
-    if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-    local decision = payload.decision
-    if decision == 'approve' then return Admin.approveFlagged(src, payload.rowId, payload.reason) end
-    if decision == 'void' then return Admin.voidFlagged(src, payload.rowId, payload.reason) end
-    return false, 'err.invalid_decision'
-end
-
 CP.Net.action('server:sup:forceRecall', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     return Admin.withLiveRuns(src, Admin.forceRecall(src, payload.runId, payload.src, payload.reason))
-end, { rate = 3 })
-
--- A supervisor's decision answers with his fresh Review Queue (data.queue), so the screen shows the row gone
--- without a second sup:getReviewQueue request. A queue that cannot be built leaves the reply as it was.
-function Admin.withReviewQueue(src, ok, data, depts)
-    if not ok then return ok, data end
-    local out = {}
-    if type(data) == 'table' then
-        for k, v in pairs(data) do out[k] = v end
-    end
-    local okQ, queue = pcall(Admin.reviewQueueFor, src)
-    if okQ and type(queue) == 'table' then out.queue = queue end
-    pcall(Admin.shareReviewQueue, src, depts)
-    return true, out
-end
-
--- The departments of a flagged row's run (a cross-department run's row sits in each of their queues), or nil.
-local function RowRunDepartments(rowId)
-    local id = Int(rowId, 1, 2147483647)
-    if not id then return nil end
-    local row = Single('SELECT run_uuid FROM cp_mission_runs WHERE id = ?', { id })
-    if not row or not row.run_uuid then return nil end
-    local list = Admin.runDepartments(row.run_uuid)
-    return #list > 0 and list or nil
-end
-
-CP.Net.action('server:sup:reviewFlagged', function(src, payload)
-    local depts = type(payload) == 'table' and not IsAdmin(src) and RowRunDepartments(payload.rowId) or nil
-    local ok, data = ReviewAction(src, payload)
-    return Admin.withReviewQueue(src, ok, data, depts)
-end, { rate = 3 })
-
-CP.Net.action('server:admin:reviewFlagged', function(src, payload)
-    if not IsAdmin(src) then return false, 'err.no_permission' end
-    local ok, data = ReviewAction(src, payload)
-    if ok then pcall(Admin.shareReviewQueue, src) end
-    return ok, data
 end, { rate = 3 })
 
 CP.Net.action('server:admin:voidRun', function(src, payload)
@@ -2327,33 +2278,10 @@ CP.Net.action('server:admin:voidRun', function(src, payload)
     local ok, data = Admin.voidRun(src, target, payload.reason,
         { kind = payload.kind, confirm = payload.confirm, goalRowIds = payload.goalRowIds })
     -- the reply carries the run's detail and the officer's views (CP.Corrections.withViews)
-    if ok then pcall(Admin.shareReviewQueue, src) end
+    if ok then Call('Review', 'share', src) end
     if Has('Corrections', 'withViews') then return CP.Corrections.withViews(src, payload, ok, data) end
     return ok, data
 end, { rate = 3 })
-
--- Leaderboards → Flagged: approve every flagged row of one run (the held cash of all of them is released).
-CP.Net.action('server:admin:approveRun', function(src, payload)
-    if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-    if not IsAdmin(src) then return false, 'err.no_permission' end
-    local okP, eP = Can(src, 'reviewFlagged')
-    if not okP then return false, eP end
-    if not ValidUuid(payload.runUuid) then return false, 'err.invalid_run' end
-    local reason = CleanText(payload.reason)
-    if not reason then return false, 'err.reason_required' end
-    local okOwn, eOwn = OwnRunCheck(src, payload.runUuid)
-    if not okOwn then return false, eOwn end
-    local rows = Query('SELECT id FROM cp_mission_runs WHERE run_uuid = ? AND flagged = 1 AND voided = 0 ORDER BY id',
-        { payload.runUuid }) or {}
-    if #rows == 0 then return false, 'err.not_flagged' end
-    local n = 0
-    for _, r in ipairs(rows) do
-        if Admin.approveFlagged(src, r.id, reason) then n = n + 1 end
-    end
-    if n == 0 then return false, 'err.conflict' end
-    pcall(Admin.shareReviewQueue, src)
-    return true, { approved = n, runUuid = payload.runUuid }
-end, { rate = 2 })
 
 CP.Net.action('server:admin:awardPoints', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
@@ -2543,6 +2471,7 @@ local function ViewerDepartment(src)
     end
     return officer and officer.department or nil, citizenid
 end
+Admin.viewerDepartment = ViewerDepartment
 
 -- Supervisor UI -> Live Missions (sup:getLiveRuns): nil and an error key when src may not see it. Also the view the
 -- recall and "+ minutes" replies carry, so the screen needs no second request.
@@ -2736,75 +2665,6 @@ function Admin.flaggedRows(dept, excludeCitizenid, admin)
     return out
 end
 
--- The supervisor's Review Queue (flagged runs and the disputes he answers); nil and an error key when he may not see it.
-function Admin.reviewQueueFor(src)
-    local canReview = Can(src, 'reviewFlagged')
-    local canHandle = Can(src, 'handleDisputes')
-    if not canReview and not canHandle then return nil, 'err.no_permission' end
-    local dept, citizenid = ViewerDepartment(src)
-    if not dept and not IsAdmin(src) then return nil, 'err.no_permission' end
-    local flagged = canReview and Admin.flaggedRows(dept, citizenid or '', IsAdmin(src)) or {}
-    local disputes = {}
-    if canHandle and Has('Disputes', 'forSupervisor') then
-        local ok, list = Call('Disputes', 'forSupervisor', src)
-        if ok and type(list) == 'table' then disputes = list end
-    end
-    return { flagged = flagged, disputes = disputes, canReview = canReview, canHandle = canHandle }
-end
-
--- Who has the Review Queue open (src -> os.time() of his last
--- sup:getReviewQueue; the screen asks every 30 s while open). Closing the tablet or leaving forgets him.
-local reviewWatch = {}
-local REVIEW_WATCH_S = 75
-
--- After src decided a flagged run or a dispute: every other supervisor with the Review Queue open gets his own
--- updated queue at once (push 'reviewQueue'), of dept only: the row's department (or the list of a cross-department
--- run's departments) when given, else a supervisor's own
--- (he decides only his department's rows); an admin (any department's rows) or the console: every department.
--- Returns how many got it.
-function Admin.shareReviewQueue(src, dept)
-    if next(reviewWatch) == nil then return 0 end
-    if dept == nil and tonumber(src) ~= 0 and not IsAdmin(src) then dept = ViewerDepartment(src) end
-    -- a list: the departments of a cross-department run (its row sits in each of their queues)
-    local depts = nil
-    if type(dept) == 'table' then
-        depts = {}
-        for _, d in ipairs(dept) do depts[d] = true end
-    end
-    local now, n = os.time(), 0
-    for viewer, at in pairs(reviewWatch) do
-        if now - at > REVIEW_WATCH_S then
-            reviewWatch[viewer] = nil
-        elseif
-            viewer ~= tonumber(src)
-            and (
-                dept == nil
-                or (depts and depts[ViewerDepartment(viewer) or ''] == true)
-                or (not depts and ViewerDepartment(viewer) == dept)
-            )
-        then
-            local okQ, queue = pcall(Admin.reviewQueueFor, viewer)
-            if okQ and type(queue) == 'table' and Has('Tablet', 'push') then
-                CP.Tablet.push(viewer, 'reviewQueue', queue)
-                n = n + 1
-            end
-        end
-    end
-    return n
-end
-Admin._reviewWatch = function() return reviewWatch end
-
-CP.Net.callback('sup:getReviewQueue', function(src)
-    local queue, err = Admin.reviewQueueFor(src)
-    if queue and tonumber(src) and tonumber(src) > 0 then reviewWatch[tonumber(src)] = os.time() end
-    return queue, err
-end, { rate = 3 })
-
-AddEventHandler('playerDropped', function() reviewWatch[tonumber(source)] = nil end)
-if CP.Hooks and CP.Hooks.on then
-    CP.Hooks.on('tablet:closed', function(src) reviewWatch[tonumber(src)] = nil end)
-end
-
 local function AdminOnly(src)
     return Can(src, 'openAdmin')
 end
@@ -2814,18 +2674,6 @@ local function PageSize()
     local Kit = CP.AdminKit
     return Kit and Kit.pageSize and Kit.pageSize() or nil
 end
-
--- The flagged runs an admin reviews (his own runs left out): admin:getFlagged (Admin UI -> Review -> Flagged runs).
-function Admin.flaggedFor(src)
-    local _, citizenid = ViewerDepartment(src)
-    return Admin.flaggedRows(nil, citizenid or '')
-end
-
-CP.Net.callback('admin:getFlagged', function(src)
-    local okP, eP = AdminOnly(src)
-    if not okP then return nil, eP end
-    return { flagged = Admin.flaggedFor(src) }
-end, { rate = 3 })
 
 -- ARCHITECTURE §8.3: payments left in 'paying' after a crash or a failed deposit (SPEC Cash payouts: "listed in
 -- Admin UI → Leaderboards for a manual check against the Renewed-Banking history"). CP.Cash owns the query.

@@ -22,6 +22,7 @@ import type {
     OfficerSearchData,
     OfficerSearchRow,
     PermissionsData,
+    ReviewItem,
     ReviewQueueData,
 } from '../types/oversight';
 import { BROKEN_LOGO, FIB_LOGO, SAST_LOGO } from './logos';
@@ -608,37 +609,41 @@ if (EDGE) {
     disputes[0].reason = LONG_REASON;
 }
 
-const reviewQueue = (): ReviewQueueData => ({
-    flagged: emptyIf(flagged),
-    disputes: emptyIf(disputes.filter(d => d.status === 'open' && d.goesTo === 'supervisor')),
+const typed = (all: boolean): ReviewItem[] => [
+    ...emptyIf(flagged).map(r => ({ ...r, type: 'flag' as const, id: r.rowId })),
+    ...emptyIf(
+        all
+            ? [...disputes, ...Object.values(officerDetails).flatMap(o => o.disputes)].filter(d => d.status === 'open')
+            : disputes.filter(d => d.status === 'open' && d.goesTo === 'supervisor'),
+    ).map(d => ({ ...d, type: 'dispute' as const })),
+];
+const reviewQueue = (all = false): ReviewQueueData => ({
+    items: typed(all).sort((a, b) => b.createdAt - a.createdAt),
     canReview: true,
     canHandle: true,
+    all,
 });
-registerMock('request', 'sup:getReviewQueue', reviewQueue);
-registerMock('request', 'admin:getFlagged', () => ({ flagged: emptyIf(flagged) }));
-registerMock('request', 'admin:getDisputes', () => ({
-    disputes: [...disputes, ...Object.values(officerDetails).flatMap(o => o.disputes)].filter(d => d.status === 'open'),
-}));
+registerMock('request', 'review:getQueue', (p?: { all?: boolean }) => reviewQueue(p?.all === true));
 
-function reviewFlagged(p: { rowId: number; decision: string; reason: string }) {
+function decideFlag(p: { id?: number; runUuid?: string; decision: string; reason: string }) {
     if (!p?.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
-    const i = flagged.findIndex(r => r.rowId === p.rowId);
+    if (p.id == null && p.runUuid) {
+        const n = flagged.filter(r => r.runUuid === p.runUuid).length;
+        if (!n) throw new Error('err.not_flagged');
+        for (let i = flagged.length - 1; i >= 0; i--) if (flagged[i].runUuid === p.runUuid) flagged.splice(i, 1);
+        return { approved: n, runUuid: p.runUuid };
+    }
+    const i = flagged.findIndex(r => r.rowId === p.id);
     if (i < 0) throw new Error('err.not_flagged');
     if (p.decision !== 'approve' && p.decision !== 'void') throw new Error('err.invalid_decision');
     flagged.splice(i, 1);
-    return { rowId: p.rowId };
+    return { rowId: p.id };
 }
-// the supervisor's decision answers with his fresh Review Queue
-registerMock('action', 'server:sup:reviewFlagged', (p: { rowId: number; decision: string; reason: string }) => ({
-    ...reviewFlagged(p),
-    queue: reviewQueue(),
-}));
-registerMock('action', 'server:admin:reviewFlagged', reviewFlagged);
 
-function handleDispute(p: { disputeId: number; decision: string; reason: string; awardPoints?: number }) {
+function decideDispute(p: { id: number; decision: string; reason: string; awardPoints?: number }) {
     if (!p?.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
     const all = [...disputes, ...Object.values(officerDetails).flatMap(o => o.disputes)];
-    const d = all.find(x => x.id === p.disputeId);
+    const d = all.find(x => x.id === p.id);
     if (!d) throw new Error('err.dispute_not_found');
     if (d.status !== 'open') throw new Error('err.dispute_closed');
     if (d.kind === 'failed' && p.decision === 'approve' && !(Number(p.awardPoints) >= 1))
@@ -649,11 +654,16 @@ function handleDispute(p: { disputeId: number; decision: string; reason: string;
     d.handledAt = now();
     return { disputeId: d.id, status: d.status };
 }
-registerMock('action', 'server:sup:handleDispute', (p: { disputeId: number; decision: string; reason: string }) => ({
-    ...handleDispute(p),
-    queue: reviewQueue(),
-}));
-registerMock('action', 'server:admin:handleDispute', handleDispute);
+// one decide action for both types; the reply carries the viewer's fresh queue
+registerMock(
+    'action',
+    'server:review:decide',
+    (p: { type: string; id: number; runUuid?: string; decision: string; reason: string; all?: boolean }) => {
+        if (p?.type !== 'flag' && p?.type !== 'dispute') throw new Error('err.invalid_payload');
+        const data = p.type === 'flag' ? decideFlag(p) : decideDispute(p);
+        return { ...data, queue: reviewQueue(p.all === true) };
+    },
+);
 
 // ============================================================================
 //                                   OFFICERS

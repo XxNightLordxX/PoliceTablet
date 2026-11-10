@@ -288,7 +288,7 @@ You set them in Admin UI → **Permissions** → **Mission controls** (below); s
     a second supervisor of that department confirms it (the same supervisor, another character of his, or a
     supervisor of another department cannot). A server restart clears a pending Void (it is voided only by two).
     Flags of the kinds he ticks (for example "Ran a suspect over") leave the supervisors' Review queue: only admins
-    approve or void them (Admin UI → Review → Flagged runs). Admins always void at once. The anti-cheat flag
+    approve or void them (Admin UI → Review → Queue). Admins always void at once. The anti-cheat flag
     triggers (`Config.AntiCheat`) are never relaxed.
 
 - **Twists** (per department, off when you install, under the master switch):
@@ -1406,7 +1406,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([1.2](#12
 | **Seasons & Challenge** | Start or end a season, override this week's bounty |
 | **Leaderboards** | Every board, cash paid, payments stuck in "paying", void runs, award points, and the **Item rewards** tab (the flagged runs are on **Review**) |
 | **Officers** | Search officers: history, suspend or unsuspend, disputes about failed runs, commendations, service record |
-| **Review** | Everything waiting for a decision, as four tabs. **Flagged runs**: approve or void each one (or every flagged row of a run at once), your own runs left out. **Profiles**: pictures, bios and reports waiting, and the banned words. **Disputes**: every open dispute (a row opens the officer). **Corrections**: bulk voids, retirements, record moves and season reopens, with **Undo** |
+| **Review** | Everything waiting for a decision, as three tabs. **Queue**: every flagged run and open dispute of every department in one list, with a **Type** column and a filter (All, Flagged runs, Disputes); approve or void a flagged run (or every flagged row of a run at once), approve or reject a dispute (one about a failed run opens the officer, where you award its points); your own runs left out. **Profiles**: pictures, bios and reports waiting, and the banned words. **Corrections**: bulk voids, retirements, record moves and season reopens, with **Undo** |
 | **Departments** | Each department's jobs, colours, logo, desks, member count and (with society payouts) account balance |
 | **Missions** (switches) | Turn any mission, or single locations of it, on or off ([2.7](#27-turn-missions-and-locations-on-or-off)) |
 | **Permissions** | What supervisors may do (a switch for each), **Extra grants** (a power for departments from a grade, Qbox gangs from a grade or single citizen IDs; [1.3](#13-mission-builder-permissions)), **Mission controls** (each control's switch, limits, current value and Reset; [1.2](#12-what-supervisors-may-do)), and **Config health**: the start-up check, with a **Check again** button |
@@ -1421,7 +1421,7 @@ mission or count changes. It only reads; every number opens the screen where you
 
 - **Live now**: **Officers on duty** (with each department's count under it; opens Departments), **Runs going**
   (opens Live, with the first six runs as chips; only with the `liveRuns` admin key), then the queues waiting for
-  you: **Flagged runs to review**, **Profiles to review** and **Open disputes** (each opens its Review tab; flagged
+  you: **Flagged runs to review**, **Profiles to review** and **Open disputes** (each opens the Review queue on that type; flagged
   runs count one per run, your own left out, every one counted), **Stuck payments** (Money → Payments) and **Open
   player suspect cases** (Real suspects; only while you have that screen). A queue with something in it has an
   orange edge.
@@ -1450,7 +1450,7 @@ A click fills the box; you can still type your own. Change the list in `Config.A
 | **Missions**: NPC missions, the Mission Builder, the runs going on now, map markers and tests | Missions (with the Mission Builder tab); Running now (Live); Map markers; Test tools (Testing) |
 | **Real players**: real players as suspects | Player suspects (Real suspects; the whole group shows only while live crimes or volunteers are on) |
 | **Money**: pay rates, rewards, every payment made and the department funds | Money (Pay rates, Rewards, Payments and Department funds tabs) |
-| **Review**: flagged runs, profiles, disputes, corrections and the activity log | Review (Flagged runs, Profiles, Disputes and Corrections tabs); Activity log (Audit Log) |
+| **Review**: flagged runs, profiles, disputes, corrections and the activity log | Review (Queue, Profiles and Corrections tabs; the queue holds the flagged runs and disputes); Activity log (Audit Log) |
 | **System**: settings, storage, backups and problems | Settings; Server health (System: Storage, Backups, Webhooks, Problems, Integrations, Clean-up tabs) |
 
 The rarely used tools fold under **More**; while it is folded its badge adds up theirs, so nothing waiting is hidden,
@@ -1776,9 +1776,9 @@ every admin tool:
 
 #### 5.15.1 Officers, points and boards
 
-**Officers** is the search and the officer's record. The server-wide lists are on **Review**: **Flagged runs**,
-**Profiles** (every pending picture, bio and profile report, and the banned-words list), **Disputes** (every open
-dispute) and **Corrections** (every bulk void, retirement, record move and season reopen, each with **Undo**). Search
+**Officers** is the search and the officer's record. The server-wide lists are on **Review**: **Queue** (every
+flagged run and open dispute, one list with a Type column), **Profiles** (every pending picture, bio and profile
+report, and the banned-words list) and **Corrections** (every bulk void, retirement, record move and season reopen, each with **Undo**). Search
 finds officers by name, callsign or
 citizen ID and can filter by department, online, suspended, retired, off the boards, needs review, open dispute and
 flagged run. An online character who never finished a run is found by typing their citizen ID.

@@ -1,4 +1,4 @@
-// Shapes of the oversight slice's callbacks (modules/admin, modules/disputes). The server side is documented in the
+// Shapes of the oversight slice's callbacks (modules/admin, modules/review/disputes). The server side is documented in the
 // header comments of those modules and in docs/dev/ARCHITECTURE.md §5.25.
 
 import type { LiveRun, Logo, Theme } from '../shared/types';
@@ -156,11 +156,15 @@ export interface DisputeView {
     decisions?: DecisionEntry[] | null;
     people?: DebriefPerson[] | null;
 }
+// One Review queue item (review:getQueue): a flagged row (id = its row id) or an open dispute (id = the dispute id).
+export type ReviewItem = (FlaggedRow & { type: 'flag'; id: number }) | (DisputeView & { type: 'dispute' });
+export type ReviewItemType = ReviewItem['type'];
+// review:getQueue { all? }: the supervisor's department, or (all, Admin UI) every department; newest first.
 export interface ReviewQueueData {
-    flagged: FlaggedRow[];
-    disputes: DisputeView[];
+    items: ReviewItem[];
     canReview: boolean;
     canHandle: boolean;
+    all?: boolean;
 }
 
 // ============================================================================
@@ -596,5 +600,5 @@ export interface AuditExport {
     truncated: boolean;
 }
 
-// Review Queue tabs: flagged runs, disputes and (reviewProfiles) Profiles: pictures, bios and reports.
-export type ReviewTab = 'flagged' | 'disputes' | 'profiles';
+// Review tabs of the Supervisor UI: the queue (flagged runs and disputes) and (reviewProfiles) Profiles.
+export type ReviewTab = 'queue' | 'profiles';

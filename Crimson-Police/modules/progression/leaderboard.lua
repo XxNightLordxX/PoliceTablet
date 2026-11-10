@@ -1453,7 +1453,7 @@ LIMIT ?]]
 
 local function Disputable(row, own, nowTs, citizenid)
     if not own or AWARD_TYPES[row.mission_type] then return false end
-    -- modules/disputes allows one dispute per row, ever: an open one blocks (err.dispute_open) and a
+    -- modules/review/disputes allows one dispute per row, ever: an open one blocks (err.dispute_open) and a
     -- decided one is final (err.dispute_final), so any cp_disputes row hides the button.
     if Num(row.disputes) ~= 0 then return false end
     if Has('Disputes', 'eligible') then

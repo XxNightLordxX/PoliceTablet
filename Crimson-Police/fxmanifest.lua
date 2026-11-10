@@ -41,6 +41,7 @@ server_scripts {
     -- modules made of sub-files (one file per part, no server.lua)
     'modules/progression/*.lua',
     'modules/supervisor/*.lua',
+    'modules/review/*.lua',
     'blocks/**/server.lua',
 }
 

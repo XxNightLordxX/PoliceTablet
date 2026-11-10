@@ -241,42 +241,44 @@ end
 -- ============================================================================
 -- Visual fixes of this pass.
 
-local rq = Read(WEB .. 'supervisor/screens/ReviewQueue.tsx')
-Has(rq, 'key: \'flag\', header: t(\'sup.review.col.flag\'), width: 176',
-    'Review Queue flag column fits "Impossible speed"')
+local rq = Read(WEB .. 'supervisor/components/ReviewQueuePanel.tsx')
+Has(rq, 'key: \'type\', header: t(\'sup.review.col.type\'), width: 190',
+    'Review queue type column fits "Impossible speed"')
 local ml = Read(WEB .. 'supervisor/screens/MissionList.tsx')
 local mlCss = Read(WEB .. 'supervisor/screens/MissionList.css')
 Has(ml, 'oversight-mission__label', 'Mission List clamps long mission labels')
 Has(mlCss, '-webkit-line-clamp: 2', 'Mission List label clamp is two lines')
 
 -- ============================================================================
---                       ADMIN UI → Review → Flagged runs
+--                          ADMIN UI → Review → Queue
 -- ============================================================================
--- Approve / void a flagged run (SPEC Supervisor & admin actions). UI2: the flagged runs left Leaderboards for Review,
--- which asks admin:getFlagged itself.
+-- Approve / void a flagged run, approve / reject a dispute (SPEC Supervisor & admin actions). FM3: one Review queue
+-- (flagged runs and disputes, a type column) for supervisors and admins: one read, one decide action.
 
 do
     local rv = Read(WEB .. 'admin/screens/Review.tsx')
+    local panel = Read(WEB .. 'supervisor/components/ReviewQueuePanel.tsx')
+    local helpers = Read(WEB .. 'supervisor/components/reviewQueue.ts')
     local lb = Read(WEB .. 'admin/screens/Leaderboards.tsx')
-    local adminSrv = Read(ROOT .. 'modules/admin/server.lua')
-    H.ok(rv ~= nil and lb ~= nil and adminSrv ~= nil, 'Admin Review and Leaderboards screens and modules/admin exist')
-    Has(adminSrv, 'CP.Net.callback(\'admin:getFlagged\'', 'modules/admin registers admin:getFlagged')
-    Has(adminSrv, 'CP.Net.action(\'server:admin:reviewFlagged\'', 'modules/admin registers server:admin:reviewFlagged')
-    Has(rv, 'useRequest<{ flagged: FlaggedRow[] }>(\'admin:getFlagged\'',
-        'Review -> Flagged runs asks admin:getFlagged')
+    local queueSrv = Read(ROOT .. 'modules/review/queue.lua')
+    H.ok(rv ~= nil and panel ~= nil and lb ~= nil and queueSrv ~= nil, 'Admin Review, the queue panel, modules/review')
+    Has(queueSrv, 'CP.Net.callback(\'review:getQueue\'', 'modules/review registers review:getQueue')
+    Has(queueSrv, 'CP.Net.action(\'server:review:decide\'', 'modules/review registers server:review:decide')
+    H.ok(not Read(ROOT .. 'modules/admin/server.lua'):find('admin:getFlagged', 1, true), 'admin:getFlagged is gone')
+    Has(rv, '<ReviewQueuePanel all', 'Review -> Queue is the one queue of every department')
+    Has(panel, '\'review:getQueue\', all ? { all: true } : {}', 'the panel asks review:getQueue')
+    Has(panel, 'run<{ pending?: boolean; queue?: ReviewQueueData }>(\'server:review:decide\', payload)',
+        'Approve / Void / Reject send server:review:decide')
+    Has(helpers, 'i.type === \'flag\' ? [\'approve\', \'void\'] : [\'approve\', \'reject\']',
+        'a flag is approved or voided, a dispute approved or rejected')
     H.ok(not lb:find('withFlagged', 1, true) and not lb:find('FlaggedPanel', 1, true),
         'Leaderboards no longer lists the flagged runs (one place: Review)')
     H.ok(not Read(ROOT .. 'modules/progression/leaderboard.lua'):find('withFlagged', 1, true),
         'admin:getBoards no longer carries them')
-    Has(rv, 'run(\'server:admin:reviewFlagged\', { rowId: review.row.rowId, decision: review.decision, reason }',
-        'Approve / Void send server:admin:reviewFlagged { rowId, decision, reason }')
-    Has(rv, 'onDecide(r, \'approve\')', 'each flagged row has Approve')
-    Has(rv, 'onDecide(r, \'void\')', 'each flagged row has Void')
-    local dialog = rv:match('<ConfirmDialog%s+open={!!review}(.-)/>')
-    H.ok(dialog ~= nil and dialog:find('required: true', 1, true) ~= nil, 'the review dialog requires a reason')
-    Has(rv, '// a decided row leaves the list', 'the flagged list refreshes after a decision')
+    local dialog = panel:match('<ConfirmDialog%s+open={!!pending}(.-)/>')
+    H.ok(dialog ~= nil and dialog:find('required: true', 1, true) ~= nil, 'the decision dialog requires a reason')
     local missing = {}
-    for _, src in ipairs({ lb, rv }) do
+    for _, src in ipairs({ lb, rv, panel }) do
         for key in pairs(LiteralKeys(src)) do if not keys[key] then missing[#missing + 1] = key end end
         for key in src:gmatch('\'(sup%.review%.[%w_]+)\'') do if not keys[key] then missing[#missing + 1] = key end end
     end
@@ -307,15 +309,16 @@ end
 
 do
     local off = Read(WEB .. 'admin/screens/Officers.tsx')
-    local disputes = Read(ROOT .. 'modules/disputes/server.lua')
-    H.ok(off ~= nil and disputes ~= nil, 'Admin Officers screen and modules/disputes exist')
-    Has(disputes, 'CP.Net.action(\'server:admin:handleDispute\'',
-        'modules/disputes registers server:admin:handleDispute')
+    local queue = Read(ROOT .. 'modules/review/queue.lua')
+    H.ok(off ~= nil and queue ~= nil, 'Admin Officers screen and modules/review/queue exist')
+    Has(queue, 'CP.Disputes.handle(src, id, p.decision, p.reason, p.awardPoints)',
+        'server:review:decide answers disputes through CP.Disputes.handle')
     Has(off, 'd.status === \'open\' && d.kind === \'failed\'', 'Award / Dismiss only for failed-run disputes')
     Has(off, 'setReview({ dispute: d, decision: \'approve\' })', 'flagged/voided disputes have Approve')
     Has(off, 'setReview({ dispute: d, decision: \'reject\' })', 'flagged/voided disputes have Reject')
-    Has(off, 'run(\'server:admin:handleDispute\', { disputeId: review.dispute.id, decision: review.decision, reason }',
-        'Approve / Reject send server:admin:handleDispute { disputeId, decision, reason } without awardPoints')
+    Has(off,
+        'run(\'server:review:decide\', { type: \'dispute\', id: review.dispute.id, decision: review.decision, reason }',
+        'Approve / Reject send server:review:decide { type, id, decision, reason } without awardPoints')
     local review = off:match('const doReview = async(.-)};')
     H.ok(review ~= nil and review:find('awardPoints', 1, true) == nil,
         'the approve / reject call never carries award points')
@@ -751,7 +754,7 @@ do
         operations = true,
     }
     local found, missing, n = {}, {}, 0
-    local p = io.popen('ls ' .. ROOT .. 'modules/*/server.lua')
+    local p = io.popen('ls ' .. ROOT .. 'modules/*/*.lua')   -- server.lua and the sub-files of modules made of parts
     for file in p:lines() do
         local src = Read(file) or ''
         for _, pat in ipairs({

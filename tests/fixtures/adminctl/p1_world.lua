@@ -173,13 +173,14 @@ return function(H)
         'modules/progression/scoring.lua',
         'modules/progression/leaderboard.lua',
         'modules/progression/challenge.lua',
-        'modules/disputes/server.lua',
-        'modules/anticheat/server.lua',
+        'modules/review/disputes.lua',
+        'modules/review/queue.lua',
+        'modules/review/anticheat.lua',
         'modules/progression/profile.lua',
         'modules/progression/goals.lua',
         'modules/payouts/server.lua',
         'modules/cash/server.lua',
-        'modules/corrections/server.lua',
+        'modules/review/corrections.lua',
     }) do
         H.load(m)
     end

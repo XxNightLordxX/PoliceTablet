@@ -25,8 +25,13 @@ async function steps(): Promise<void> {
     const by = Object.fromEntries(tiles.map(l => [l.key, l]));
     ok(by.onduty?.n === 5 && by.onduty.screen === 'admin_departments' && !by.onduty.waits, 'on duty: Departments');
     ok(by.runs?.n === 2 && by.runs.screen === 'admin_live', 'runs going: Live');
-    ok(by.flagged?.screen === 'admin_review' && by.flagged.params?.tab === 'flagged', 'flagged: Review -> Flagged');
-    ok(by.profiles?.params?.tab === 'profiles' && by.disputes?.params?.tab === 'disputes', 'Review tabs');
+    ok(
+        by.flagged?.screen === 'admin_review' &&
+            by.flagged.params?.tab === 'queue' &&
+            by.flagged.params?.show === 'flag',
+        'flagged: Review -> Queue, flags',
+    );
+    ok(by.profiles?.params?.tab === 'profiles' && by.disputes?.params?.show === 'dispute', 'Review tabs');
     ok(by.payments?.screen === 'admin_money' && by.payments.params?.moneyTab === 'payments', 'stuck payments: Money');
     ok(by.rs?.screen === 'admin_rs', 'player suspect cases: Player suspects');
     ok(waitingCount(tiles) === 2, 'two queues waiting (the counts of on duty and runs never wait)');

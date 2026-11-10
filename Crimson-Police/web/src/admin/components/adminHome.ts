@@ -56,7 +56,7 @@ export function liveTiles(data: AdminHomeData | null | undefined): HomeLine[] {
             waits: true,
             icon: 'flag',
             screen: 'admin_review',
-            params: { tab: 'flagged' },
+            params: { tab: 'queue', show: 'flag' },
         },
         {
             key: 'profiles',
@@ -74,7 +74,7 @@ export function liveTiles(data: AdminHomeData | null | undefined): HomeLine[] {
             waits: true,
             icon: 'gavel',
             screen: 'admin_review',
-            params: { tab: 'disputes' },
+            params: { tab: 'queue', show: 'dispute' },
         },
         {
             key: 'payments',

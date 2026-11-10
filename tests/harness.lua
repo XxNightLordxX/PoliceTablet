@@ -1412,6 +1412,15 @@ end
 
 -- TINYINT(1) the way the spec's storage hands it over: 0/1 from the harness' MariaDB, false/true from
 -- oxmysql and the saves folder engine. H.bit(v) gives 0/1 either way (anything else is returned as is).
+-- The items of one type ('flag' | 'dispute') of a Review queue (review:getQueue, CP.Review.queueFor); {} for nil.
+function H.reviewItems(queue, kind)
+    local out = {}
+    for _, i in ipairs(type(queue) == 'table' and queue.items or {}) do
+        if i.type == kind then out[#out + 1] = i end
+    end
+    return out
+end
+
 function H.bit(v)
     if v == true then return 1 elseif v == false then return 0 end
     return v
@@ -2673,14 +2682,14 @@ function H.load(rel)
     return r
 end
 
--- The real CP.AntiCheat (modules/anticheat/server.lua) as a table of its own, without its 1 s loop, for a spec that
+-- The real CP.AntiCheat (modules/review/anticheat.lua) as a table of its own, without its 1 s loop, for a spec that
 -- stubs CP.AntiCheat: it takes the stun rule (stunMode, stunReport) and the staff notes from it. CP.AntiCheat stays
 -- what it was. The real functions call each other through the returned table (wrap its note or flag to watch them).
 function H.realAntiCheat()
     local saved, thread = CP.AntiCheat, _G.CreateThread
     CP.AntiCheat = nil
     _G.CreateThread = function() end
-    local ok, err = pcall(H.load, 'modules/anticheat/server.lua')
+    local ok, err = pcall(H.load, 'modules/review/anticheat.lua')
     _G.CreateThread = thread
     local real = CP.AntiCheat
     CP.AntiCheat = saved

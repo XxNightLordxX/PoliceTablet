@@ -708,5 +708,13 @@
   "admin.perms.extra.grant.supervisor_from": "Supervisors from grade {grade} have it already",
   "admin.perms.extra.grant.summary_off": "Nobody extra",
   "admin.perms.extra.grant.summary_min": "Grade {grade} and up",
-  "admin.perms.extra.grant.summary_list": "Grades {grades}"
+  "admin.perms.extra.grant.summary_list": "Grades {grades}",
+  "sup.review.tab.queue": "Queue",
+  "sup.review.col.type": "Type",
+  "sup.review.show_all": "All",
+  "sup.review.type.dispute": "Dispute: {kind}",
+  "sup.review.empty_title": "Nothing to review",
+  "sup.review.empty_text": "Flagged runs and disputes about your department's runs appear here.",
+  "sup.review.empty_text_all": "Flagged runs and open disputes of every department appear here. Your own runs are not listed.",
+  "sup.review.open_officer": "Open the officer"
 }

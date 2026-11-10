@@ -2,8 +2,8 @@
 // screen needs no second request after the action. A reply without it (an older server) asks again, as before.
 
 // (smoother workflows): replyView(data, key) reads the fresh view an action reply carries and
-// applyReplyView(data, key, set, refetch) applies it, or asks again when an older server sent none. Used by Review
-// Queue (server:sup:reviewFlagged and server:sup:handleDispute answer with data.queue) and Dispatch
+// applyReplyView(data, key, set, refetch) applies it, or asks again when an older server sent none. Used by the Review
+// queue (server:review:decide answers with data.queue) and Dispatch
 // (server:declineMissionCall answers with data.view). Walk: replyView.walk.ts (with lastUsed.ts).
 // the Admin System screen's Backups (backupNow, restoreBackup, deleteBackup) and Storage (storageCopy,
 // setStorageMode, useStoreAgain) panels apply data.view the same way. So do the supervisor's Mission calls
