@@ -31,7 +31,7 @@ function TabBody({ tab }: { tab: MoneyTab }) {
 export default function AdminMoney() {
     const { params } = useNavigation();
     const [tab, setTab] = useState<MoneyTab>(moneyTabOf(params));
-    // a link opened while the screen shows (Home tile, Needs attention, Leaderboards) picks its tab
+    // a link opened while the screen shows (Home's tiles, Leaderboards) picks its tab
     useEffect(() => setTab(moneyTabOf(params)), [params]);
     return (
         <>

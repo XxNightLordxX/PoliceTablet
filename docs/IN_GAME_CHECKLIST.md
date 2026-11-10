@@ -138,7 +138,7 @@ names the change it came with.
 - [ ] config.lua opens with PART 1 · GENERAL and its six parts follow the Admin UI; Settings -> All settings lists the sections in that order, with Run limits (Config.Limits) under Server; a mission desk still shows for its department after a department's jobs change in Settings. (AP2)
 - [ ] config.lua opens with CONTENTS (the six parts and their blocks) and every PART heading has a "Usually changed here:" line; Settings -> All settings shows a description on every setting, also Bonuses -> lab_fire -> value, Markers -> kinds -> clue -> scale, Departments -> fib -> jobs and a Builder range such as Blocks -> pursuit -> speed. The server behaves as before (no value changed). (G8)
 - [ ] Settings -> Features lists the features by section; turning "Runners tire" off asks nothing and shows Off at once; turning Live crimes on asks first; Cash for live cases switches on with one click; Cash.allowManualCash still wants ENABLE; each change is in Settings -> History and the audit log; Settings opens that setting in All settings. (AP1)
-- [ ] /CrimsonPoliceAdmin lands on Home with Live now and six tiles; each tile opens the right screen; Something wrong? lines open Missions, Permissions and Money → Payments. (A3)
+- [ ] /CrimsonPoliceAdmin lands on Home with Live now, Alerts and five shortcuts; each shortcut opens the right screen; the Config health and mission load alerts open Permissions and Missions, Stuck payments opens Money → Payments. (A3, UI3)
 - [ ] The Admin sidebar folds Seasons, Leaderboards, Departments, Audit and Testing under More; a link to one of them unfolds More; More stays open after reopening. (A2)
 - [ ] Settings opens in Simple (about 25 plain settings, no Config paths); "All settings" shows everything by section; search "tweaks" shows Open Missions. (A7, A8)
 - [ ] Settings: click "Built-in mission tweaks" near the bottom and its settings are in view; Tablet and commands shows "Default tablet key" and "Players may open the tablet with a key"; labels read plainly (e.g. "Seconds a runner sprints"). (A1, A7)
@@ -146,7 +146,7 @@ names the change it came with.
 - [ ] Missions -> Gang Shootout opens one drawer; switch a location off and set a new payout with a reason: the catalog has one location fewer and Payouts -> Missions shows the amount. (A10)
 - [ ] Home -> Give or take points 50 with a reason: the toast names the officer and points move; 600 asks for the citizen ID. Turn missions on or off (type "beat"), Change pay (Patrol), Quick settings ("debug") all work. (A11)
 - [ ] Payouts -> Set payout -> Event chip fills the reason; Home's points form has the same chips; a built-in's Quick edit time limit 20 shows 20:00. (A12)
-- [ ] Start a mission while a unit member is already on a run: Live -> Refused shows "A unit member is already on a mission."; Home -> Something wrong? shows Refused starts today: 1 and opens the tab. (A4, A5)
+- [ ] Start a mission while a unit member is already on a run: Live -> Refused shows "A unit member is already on a mission."; Home -> Alerts shows Refused starts today: 1 and opens the tab. (A4, A5)
 - [ ] Put a broken custom mission (e.g. timeLimit = 5) in missions/custom and press Reload mission files: it shows greyed "Not loaded" with "Time limit must be 1 to 60 minutes."; Show the problem gives the file and the loader's text. (A6)
 - [ ] Admin -> Departments -> FIB -> Edit -> Officer options -> HUD side -> Allowed: No: an FIB officer's My options no longer shows HUD side. (O12)
 - [ ] Admin -> Officers -> an officer with changed options -> Look lists them; Reset options with a reason empties the list, he gets a notice and My options shows defaults. (O12)
@@ -173,8 +173,8 @@ names the change it came with.
   once.
 - [ ] Settings: type in the search box with a few hundred settings showing: the text follows your typing without lag;
   saving one setting still updates its row.
-- [ ] Home's Something wrong? shows Last mission load, Config health and stuck payments (Problems and Refused starts
-  are on the Needs attention panel). (R1, BK1)
+- [ ] Home's Alerts show Problems, Refused starts today, Config health warnings and Missions the last load refused;
+  Live now shows Stuck payments. (R1, BK1, UI3)
 
 ## Mission Builder
 
@@ -342,7 +342,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Criminal tablet: `Config.Volunteers.enabled` and `Config.CriminalTablet.enabled` on; a civilian types `/crimtab`: the dark tablet opens on Home; agree, tick a suspect, Get on the list: the time left shows. An officer on duty types `/crimtab`: refused. (G2)
 - [ ] With the criminal tablet open, officers take a mission a volunteer can play: Jobs shows the suspect, type, area and timer (no pop-up); Accept sets the waypoint and Active shows the meet point and time left; Give up within a minute is free (no strike in History). Close the tablet while a question is open: the pop-up comes up for the seconds left. (G2)
 - [ ] `access = 'granted'`: Admin UI → Permissions → Extra grants → Criminal tablet for one gang from a grade: only its members open `/crimtab`; the grant gives no Supervisor UI button. Resmon of Crimson-Police with the tablet closed stays at 0.02 ms or less. (G2)
-- [ ] Home shows Needs attention on top with Problems, Refused starts today, Open disputes, Flagged runs waiting for review and (with live crimes or volunteers on) Open player suspect cases. File a dispute from an officer: Open disputes goes to 1 within a minute; click it: Officers opens on Disputes. Click Problems: Server health opens on Problems. (H5)
+- [ ] Home's Live now shows Officers on duty (each department's count under it), Runs going with the run chips, Flagged runs to review, Profiles to review, Open disputes, Stuck payments and (with live crimes or volunteers on) Open player suspect cases. Go on duty: Officers on duty goes up within a few seconds. File a dispute from an officer: Open disputes goes to 1 within a minute; click it: Review opens on Disputes. Click Problems under Alerts: Server health opens on Problems. Set Config.AdminUi.homeShortcuts to { 'review', 'pay' } in Settings: Home shows those two shortcuts in that order. (H5, UI3)
 - [ ] Feature rewards on (suspect): start an admin backup (maintenance lock) and let a volunteer case end fairly meanwhile: his row shows Pending in Payments made, and he is paid when the backup ends or at his next login (never lost as a duplicate). (Z1)
 - [ ] Live crimes with backup on: an officer joins a live case, quits the game and reconnects while it runs: he gets no join offer and "You left this live case and can't join it again"; Live shows one entry for him. (Z1)
 - [ ] Volunteers on: a volunteer with a police job plays a case, officers reach him, he goes on duty: he is told his part is void with a strike, the staff timeline shows "went on police duty mid-case", the criminal tablet History shows "Went on police duty (strike)". (Z1)

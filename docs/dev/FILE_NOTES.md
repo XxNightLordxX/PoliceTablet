@@ -34,7 +34,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/access/client.lua`: CP.Access (client): the latest officer and department the server sent.
 - `Crimson-Police/modules/access/server.lua`: CP.Access (server): departments, roles, duty, active job, rank and callsign, suspension checks.
 - `Crimson-Police/modules/admin/server.lua`: CP.Admin (server): supervisor and admin actions, /CrimsonPoliceAdmin, the audit log (cp_audit) and the Discord webhooks.
-- `Crimson-Police/modules/adminhome/server.lua`: CP.AdminHome (server): Admin UI -> Home's "Needs attention" panel in one batched callback (admin:getNeedsAttention): the Problems lines, today's refused mission starts, the open disputes, the flagged runs waiting for a review and the open real-suspect cases.
+- `Crimson-Police/modules/adminhome/server.lua`: CP.AdminHome (server): Admin UI -> Home, a dashboard in one batched callback (admin:getHome): live now (officers on
 - `Crimson-Police/modules/adminkit/server.lua`: CP.AdminKit (server): the one wrapper every new admin action goes through (permission, rate, request id, reason, typed word, preview, self, compare-and-set, audit, caches, toasts), bulk jobs, day counts and the busy lock.
 - `Crimson-Police/modules/alerts/server.lua`: CP.Alerts (server): Hard rule 16 (no mission alerts) and the only writer of the crimsonArena state bag (docs/dev/ARCHITECTURE.md §5.14, Crimson-Arena rules 1, 2, 3, 9, 11).
 - `Crimson-Police/modules/anticheat/server.lua`: CP.AntiCheat (server): objective-event checks, run flags, outside help, presence sampling, the idle check and the voids -> suspension rule.
@@ -163,6 +163,8 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/RewardPoolEditor.tsx`: Slot: Settings → Item rewards: a structured editor for the reward pools (item picker without forbidden items, chance 0–1, rolls 0–10, count 1–100, weight above 0, value 0 or more) with the server's verdict and the expected items and value per run at each tier.
 - `Crimson-Police/web/src/admin/components/SettingsTools.tsx`: Admin UI → Settings: the structured editors (row lists with Use my position and Teleport to, Names, Goals) and the Export / Import panel.
 - `Crimson-Police/web/src/admin/components/SpawnCheckDialog.tsx`: Admin UI · Testing: the Check spawn points dialog.
+- `Crimson-Police/web/src/admin/components/adminHome.ts`: Admin UI -> Home, the dashboard: the tiles of Live now, the Alerts lines and the shortcuts, all from the one admin:getHome answer, each a count that opens its screen.
+- `Crimson-Police/web/src/admin/components/adminHome.walk.ts`: Admin UI -> Home's dashboard against the browser mocks (node walk.mjs, a gate step): the one batched admin:getHome answer, the Live now tiles, the Alerts lines, the screen each one opens, and the shortcuts in the configured order.
 - `Crimson-Police/web/src/admin/components/boards/RecognitionPanel.tsx`: Leaderboards → Recognition: what officers' Home shows, the last closed weeks (Recount, Post again) and the staff notices (Post, Remove).
 - `Crimson-Police/web/src/admin/components/boards/SeasonTools.tsx`: Seasons → season tools: rename, planned end, reopen within 24 h and Undo, next week's bounty, a past season (Recount bounty week, Recount champion) and a department's contributors.
 - `Crimson-Police/web/src/admin/components/copyText.ts`: Copy one line of text for the admin (a server.cfg line, an export).
@@ -181,8 +183,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/mapMarkers.ts`: Admin UI -> Map markers: Config.Markers as rows built from the settings data
 - `Crimson-Police/web/src/admin/components/mapMarkers.walk.ts`: Admin UI -> Map markers walked against the browser mocks (node walk.mjs, a gate step).
 - `Crimson-Police/web/src/admin/components/missionControls.walk.ts`: Admin UI -> Permissions -> Mission controls against the browser mocks (node walk.mjs, a gate step): the card's body rendered off (nothing switched on, nothing changed) and on with changed values, and a Reset.
-- `Crimson-Police/web/src/admin/components/needsAttention.ts`: Admin UI -> Home's Needs attention panel: the lines of admin:getNeedsAttention, each a count that opens its screen.
-- `Crimson-Police/web/src/admin/components/needsAttention.walk.ts`: Admin UI -> Home's Needs attention panel against the browser mocks (node walk.mjs, a gate step): the one batched admin:getNeedsAttention answer, its lines and the screen each one opens, and the plain screen titles.
 - `Crimson-Police/web/src/admin/components/officers/OfficerLists.tsx`: Admin UI → Review's tabs: Profiles (every pending picture, bio and report, plus the banned-words list), Disputes (every open dispute) and Corrections (every bulk void, retirement, record move and season reopen, with Undo).
 - `Crimson-Police/web/src/admin/components/officers/OfficerRuns.tsx`: Officers → Runs: one officer's run history, live and archived (admin:getOfficerRuns), and the run dialog (admin:getRun) with Void (strike or correction, all participants, goal rewards), Restore, Change kind, Flag.
 - `Crimson-Police/web/src/admin/components/officers/OfficerTools.tsx`: Officers → officer detail: the admin cards for points (adjust), XP (check, fix), streak, goals, look, badges and the record (refresh, boards, void runs, reset, retire, move record).
@@ -193,7 +193,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/spawnCheckStore.ts`: Check spawn points: the admin's check kept in module memory, fed by the Lua testing client's pushes.
 - `Crimson-Police/web/src/admin/screens/Audit.tsx`: Admin UI · Audit Log (screen key 'admin_audit'): filters (also by target, role, the acting player's every character and reason text), export in parts of 5000 rows, and Save to server (saves/exports).
 - `Crimson-Police/web/src/admin/screens/Departments.tsx`: Admin UI · Departments (screen key 'admin_departments'): themes, members, mission desks, personal accents and a preview of each officer look; add, edit, turn off and delete departments, upload logos, and edit the desks.
-- `Crimson-Police/web/src/admin/screens/Home.tsx`: Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on.
+- `Crimson-Police/web/src/admin/screens/Home.tsx`: Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on, a dashboard read from one batched
 - `Crimson-Police/web/src/admin/screens/Leaderboards.tsx`: Admin UI · Leaderboards (screen key 'admin_leaderboards', callback admin:getBoards).
 - `Crimson-Police/web/src/admin/screens/Live.tsx`: Admin UI → Live: every live run (tests and Cross-Department Missions too) and every unit, with Recall, End run, End test, + minutes, Remove from unit and Disband (modules/livectl/server.lua).
 - `Crimson-Police/web/src/admin/screens/MapMarkers.tsx`: Admin UI · Map markers (screen key 'admin_markers'):
@@ -427,7 +427,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/admin_control_e2e_spec.lua`: Full admin control, end to end: the packages together on the real server side.
 - `tests/admin_economy_spec.lua`: Full admin control, economy: the payments ledger, resolving stuck payments, pay now and retries, the money tools that ship off, payout unlock and Adjust all, the archive and forfeiture jobs under the busy lock, maintenance, the clean-up and the cash health lines.
 - `tests/admin_features_spec.lua`: Admin UI split by play, (the owner: "ensure the admin panel separates npc stuff and player player stuff
-- `tests/admin_home_spec.lua`: Admin UI -> Home's Needs attention panel: admin:getNeedsAttention answers the Problems lines, today's
+- `tests/admin_home_spec.lua`: Admin UI -> Home, the dashboard: admin:getHome answers everything Home shows in one request: live now (officers on
 - `tests/admin_lists_spec.lua`: The long Admin UI lists: Config.AdminUi.pageSize (rows per page, 0 = each list as before) read through CP.AdminKit, and the Player suspects cases a page at a time.
 - `tests/admin_live_spec.lua`: Full admin control, live runs and units: the Live screen's runs (incl. tests and operations), End run, End test, Recall, + minutes, the units list with Remove and Disband, Type of the Day, the modifier switches and the maintenance refusal at accept.
 - `tests/admin_missions_spec.lua`: Full admin control, Missions and Mission Builder: the Builder for admins while it is off, Change owner,

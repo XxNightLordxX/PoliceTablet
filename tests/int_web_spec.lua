@@ -410,43 +410,43 @@ do
     Has(reg, 'return keep && current ? current.key : landingScreen(ui, session, available);',
         'a screen not shown falls back to the landing screen')
     local home = Read(WEB .. 'admin/screens/Home.tsx') or ''
-    -- one tile per title, plus Something wrong?
-    local tiles, titles = 0, {}
-    local grid = home:match('export default function AdminHome%(%).*') or ''
-    for k in grid:gmatch('title={t%(\'admin%.home%.([%w_]+)_title\'%)}') do
-        if not titles[k] then titles[k], tiles = true, tiles + 1 end
+    local dash = Read(WEB .. 'admin/components/adminHome.ts') or ''
+    -- UI3: a dashboard: Live now, Alerts and the shortcuts of Config.AdminUi.homeShortcuts, from one request
+    Has(home, 'useRequest<AdminHomeData>(\'admin:getHome\', {}, { pollMs: 60000 })', 'Home asks admin:getHome')
+    for _, topic in ipairs({ 'operation', 'builder', 'nav' }) do
+        Has(home, 'usePush(\'' .. topic .. '\', later);', 'Home refreshes on the ' .. topic .. ' push')
     end
-    for _ in home:gmatch('<SomethingWrong%s') do tiles = tiles + 1 end
-    H.eq(tiles, 6, 'Home has six tiles')
-    Has(home, 'screen="admin_missions" params={{ ...NEW_MISSION_PARAMS }}', 'Make a new mission opens the wizard')
-    -- B15: the Missions header's New mission opens the wizard too (not only the Builder tab)
-    local missionsScreen = Read(WEB .. 'admin/screens/Missions.tsx') or ''
-    Has(missionsScreen, 'onClick={startNew}', 'the Missions header New mission opens the wizard')
-    Has(missionsScreen, '<BuilderWorkspace scope="admin" newRequest={newRequest} />', 'the Builder tab gets the press')
-    Has(home, 'screen="admin_missions" params={{ tab: \'catalog\' }}', 'Turn missions on/off opens the list')
-    Has(home, 'screen="admin_officers"', 'Give or take points opens Officers')
-    Has(home, 'screen="admin_settings"', 'Quick settings opens Settings')
     for _, req in ipairs({
         'admin:getMissionLoad',
         'admin:getConfigHealth',
         'admin:getLiveRuns',
         'admin:getNeedsAttention',
     }) do
-        H.ok(home:find('\'' .. req .. '\'', 1, true) ~= nil, 'Home reuses ' .. req)
-        local mocked = false
-        for _, f in ipairs({ 'core', 'admin_missions', 'admin_system', 'admin_live' }) do
-            local m = Read(WEB .. 'mocks/' .. f .. '.mock.ts') or ''
-            if m:find('registerMock(\'request\', \'' .. req .. '\'', 1, true) then mocked = true end
-        end
-        H.ok(mocked, req .. ' has a browser mock')
+        H.ok(home:find('\'' .. req .. '\'', 1, true) == nil, 'Home no longer asks ' .. req .. ' itself')
     end
-    Has(home, 'const stuck = counts.adminPayments ?? 0;', 'stuck payments come from the sidebar counts')
+    Has(home, '<LiveNow data={data} />', 'Home shows Live now')
+    Has(home, '<Alerts data={data}', 'Home shows the Alerts')
+    Has(home, 'shortcuts.map(def => (', 'Home shows the configured shortcuts')
+    Has(home, 'def.key === \'newMission\' ? { ...NEW_MISSION_PARAMS } : def.params',
+        'Make a new mission opens the wizard')
+    -- B15: the Missions header's New mission opens the wizard too (not only the Builder tab)
+    local missionsScreen = Read(WEB .. 'admin/screens/Missions.tsx') or ''
+    Has(missionsScreen, 'onClick={startNew}', 'the Missions header New mission opens the wizard')
+    Has(missionsScreen, '<BuilderWorkspace scope="admin" newRequest={newRequest} />', 'the Builder tab gets the press')
+    Has(dash, 'screen: \'admin_missions\',\n        params: { tab: \'catalog\' },',
+        'Turn missions on/off opens the list')
+    Has(dash, 'screen: \'admin_officers\'', 'Give or take points opens Officers')
+    Has(dash, 'screen: \'admin_settings\'', 'Quick settings opens Settings')
+    Has(dash, 'screen: \'admin_audit\'', 'the Activity log shortcut')
+    local mocked = Read(WEB .. 'mocks/admin_system.mock.ts') or ''
+    Has(mocked, 'registerMock(\'request\', \'admin:getHome\'', 'admin:getHome has a browser mock')
+    for k in dash:gmatch('\'(admin%.home%.[%w_]+)\'') do H.ok(keys[k], 'locale key ' .. k) end
     local missions = Read(WEB .. 'admin/screens/Missions.tsx')
     Has(missions, 'LINK_TABS.includes(params.tab as Tab)) setTab(params.tab as Tab);',
         'Missions opens the tab Home (or the search) asks for')
     Has(missions, 'const LINK_TABS: Tab[] = [\'catalog\', \'builder\',', 'Home\'s builder and catalog tabs among them')
-    local att = Read(WEB .. 'admin/components/needsAttention.ts') or ''
-    Has(att, 'screen: \'admin_live\'', 'Refused starts today (Needs attention) opens Live')
+    Has(dash, 'screen: \'admin_live\',\n            params: { tab: \'refused\' }',
+        'Refused starts today (Alerts) opens Live')
     local live = Read(WEB .. 'admin/screens/Live.tsx') or ''
     Has(live, 'if (params.tab === \'refused\'', 'Live opens the tab Home asks for')
     Has(live, '{t(r.reason)}', 'a refused start shows the reason in the officer\'s words')
@@ -465,7 +465,6 @@ end
 do
     local home = Read(WEB .. 'admin/screens/Home.tsx') or ''
     local forms = Read(WEB .. 'admin/components/HomeForms.tsx') or ''
-    Has(home, '<NeedsAttention />', 'Home always shows the Needs attention panel')
     for _, f in ipairs({ 'MissionSwitchForm', 'PayForm', 'PointsForm', 'QuickSettingsForm' }) do
         Has(home, '<' .. f .. ' />', 'Home shows the ' .. f)
         Has(forms, 'export function ' .. f .. '()', f .. ' is in HomeForms')

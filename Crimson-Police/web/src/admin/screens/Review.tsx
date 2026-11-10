@@ -243,7 +243,7 @@ function FlaggedRunsTab() {
 export default function AdminReview() {
     const { params, navigate } = useNavigation();
     const [tab, setTab] = useState<AdminReviewTab>(reviewTabOf(params));
-    // a link opened while the screen shows (Home's Needs attention, the search) picks its tab
+    // a link opened while the screen shows (Home's tiles, the search) picks its tab
     useEffect(() => setTab(reviewTabOf(params)), [params]);
     return (
         <Screen head="admin_review" className="oversight-screen">

@@ -2656,7 +2656,7 @@ local FLAGGED_SQL = [[SELECT r.id, r.run_uuid, r.citizenid, r.department, r.miss
   LEFT JOIN cp_officers o ON o.citizenid = r.citizenid
   WHERE r.flagged = 1 AND r.voided = 0]]
 
--- How many runs wait in an admin's flagged queue (Home's Needs attention): every department, the viewer's own runs
+-- How many runs wait in an admin's flagged queue (Home's Live now): every department, the viewer's own runs
 -- (also the one he is still on) left out, as on Leaderboards -> Flagged runs. Only the run ids are read, with no
 -- FLAGGED_LIMIT cap, so a count over 200 is the real one. The saves folder engine has no COUNT(DISTINCT ...), so the
 -- distinct ids are counted here.
@@ -3220,7 +3220,8 @@ CP.Net.callback('admin:getOfficer', function(src, args)
     return Admin.officerDetail(src, cid)
 end, { rate = 4 })
 
-local function OnDutyCounts()
+-- The officers on duty now, by department key (Admin UI -> Departments and Home's Live now).
+function Admin.onDutyCounts()
     local counts = {}
     if not (Has('Qbx', 'getOnlinePlayers') and Has('Qbx', 'getInfo')) then return counts end
     local ok, list = Call('Qbx', 'getOnlinePlayers')
@@ -3247,7 +3248,7 @@ CP.Net.callback('admin:getDepartments', function(src)
         members[r.department] = { n = math.floor(Num(r.n, 0)), suspended = math.floor(Num(r.suspended, 0)) }
     end
     local society = Config.Cash and Config.Cash.source == 'society'
-    local duty = OnDutyCounts()
+    local duty = Admin.onDutyCounts()
     local out = {}
     for _, d in ipairs(CP.Access.departments() or {}) do
         local balance = nil

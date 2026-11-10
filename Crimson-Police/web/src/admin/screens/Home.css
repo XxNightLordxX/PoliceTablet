@@ -1,18 +1,72 @@
-/* Admin UI · Home (the landing screen): the Live now strip, the six tiles and their quick forms.
+/* Admin UI · Home (the dashboard): Live now and Alerts side by side, then the shortcut tiles and their quick forms.
    Only --cp-* variables. */
 
-.admin-home-screen .admin-home-live {
-    margin-bottom: 14px;
-}
-
-/* Needs attention: its lines side by side on a wide screen */
-.admin-home-screen .admin-home-attention {
-    margin-bottom: 14px;
-}
-
-.admin-home-attention__lines {
+.admin-home-top {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+    gap: var(--cp-space-4);
+    margin-bottom: var(--cp-space-4);
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .admin-home-top {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.admin-home-live > .cp-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-3);
+}
+
+/* Live now: one tile per count, a click opens its screen */
+.admin-home-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--cp-space-2);
+}
+
+.admin-home-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-home-stat:hover {
+    border-color: var(--cp-primary);
+}
+
+.admin-home-stat--waiting {
+    border-color: var(--cp-warning);
+}
+
+.admin-home-stat__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--cp-subtle);
+    font-size: 12px;
+}
+
+.admin-home-stat__value {
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.admin-home-heading {
+    margin: 0 0 var(--cp-space-3);
+    font-size: 15px;
+    font-weight: 600;
 }
 
 .admin-home-grid {

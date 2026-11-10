@@ -582,6 +582,8 @@ local METRICS = {
     'judgement',
     'live_catches',
 }
+-- Admin UI -> Home's shortcut keys (the same list as modules/adminhome AH.SHORTCUTS)
+local HOME_SHORTCUTS = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings', 'live', 'review', 'activity' }
 local APPEARANCES = { 'department', 'midnight', 'high_contrast', 'colourblind' }
 local END_REASONS = {
     'real_call',
@@ -1601,6 +1603,12 @@ local KNOWN = {
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
     ['Tablet.sidebarOrder'] = { tpl = Enum({ 'classic', 'mostUsed' }), kind = 'enum' },
     ['Tablet.supervisorLanding'] = { tpl = Enum({ 'first', 'report', 'review', 'live' }), kind = 'enum' },
+    -- Admin UI -> Home's shortcuts (modules/adminhome AH.SHORTCUTS)
+    ['AdminUi.homeShortcuts'] = {
+        tpl = ListOf(Enum(HOME_SHORTCUTS), { max = 8, unique = true }),
+        kind = 'list',
+        options = HOME_SHORTCUTS,
+    },
     ['AdminUi.reasonChips'] = {
         tpl = ListOf(Text('%S', 60), { max = 8, unique = true }),
         kind = 'list',

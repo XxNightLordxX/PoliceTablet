@@ -9,7 +9,7 @@ import type {
     ClientStateView,
     DepartmentSetup,
     IntegrationsData,
-    NeedsAttentionData,
+    AdminHomeData,
     ProblemsData,
     RestorePreview,
     StorageView,
@@ -133,14 +133,37 @@ registerMock('request', 'admin:getWebhooks', (): { webhooks: WebhookView[] } => 
     })),
 }));
 
-// admin:getNeedsAttention: Home's Needs attention panel (?needsAttention), two lines waiting
-registerMock('request', 'admin:getNeedsAttention', (): NeedsAttentionData => ({
-    problems: 2,
-    refusedToday: 2,
-    disputes: 0,
-    flagged: 3,
-    rsCases: 0,
-}));
+// admin:getHome: Admin UI -> Home's dashboard (?homeCalm: nothing waiting, ?homeNoShortcuts: homeShortcuts = {})
+registerMock('request', 'admin:getHome', (): AdminHomeData => {
+    const calm = typeof window !== 'undefined' && /[?&]homeCalm\b/.test(window.location.search);
+    const none = typeof window !== 'undefined' && /[?&]homeNoShortcuts\b/.test(window.location.search);
+    return {
+        live: {
+            onDuty: 5,
+            departments: [
+                { key: 'lspd', label: 'LSPD', n: 3 },
+                { key: 'bcso', label: 'BCSO', n: 2 },
+                { key: 'sast', label: 'SAST', n: 0 },
+            ],
+            runs: {
+                n: 2,
+                rows: [
+                    { runId: 'run-1', missionLabel: 'Downtown Patrol', people: 2, test: false },
+                    { runId: 'run-2', missionLabel: 'Bank Alarm', people: 1, test: true },
+                ],
+            },
+        },
+        queues: { flagged: calm ? 0 : 3, profiles: calm ? 0 : 1, disputes: 0, payments: 0, rsCases: 0 },
+        alerts: {
+            problems: calm ? 0 : 2,
+            refusedToday: calm ? 0 : 2,
+            health: { warn: calm ? 0 : 1, error: 0 },
+            load: { loaded: 42, refused: 0, error: false },
+        },
+        shortcuts: none ? [] : ['newMission', 'missionSwitch', 'pay', 'points', 'settings'],
+        serverTime: now(),
+    };
+});
 
 registerMock('request', 'admin:getProblems', (): ProblemsData => ({
     lines: [

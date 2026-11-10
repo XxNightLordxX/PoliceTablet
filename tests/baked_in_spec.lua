@@ -31,6 +31,7 @@ local BAKED = {
 -- the keys of the same blocks that are real choices or tuning numbers: they stay settings
 local KEPT = {
     'AdminUi.reasonChips',
+    'AdminUi.homeShortcuts',
     'AdminUi.pageSize',
     'Tablet.sidebarOrder',
     'Tablet.activeFirst',

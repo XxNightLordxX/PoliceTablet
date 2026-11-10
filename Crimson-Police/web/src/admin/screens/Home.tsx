@@ -1,58 +1,84 @@
-// Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on. A Needs attention panel on top reads
-// admin:getNeedsAttention (modules/adminhome) once a minute; its lines come from admin/components/needsAttention.ts.
+// Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on, a dashboard read from one batched
 
-// Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on. A Needs attention panel on top reads
-// admin:getNeedsAttention (modules/adminhome) once a minute; its lines come from admin/components/needsAttention.ts.
-// Six tiles open the screens of the common jobs (navigate with params where the screen takes them); four of them
-// hold a quick form (admin/components/HomeForms) that does the job right there, and Open still opens the full
-// screen. A Live now strip shows the runs of the Live screen. Every number comes from a request another screen
-// already makes.
+// Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on, a dashboard read from one batched
+// callback (admin:getHome, modules/adminhome) once a minute and again shortly after a push that can change it
+// ('operation', 'builder', 'nav'). Live now: officers on duty, the runs going and the queues waiting, each a tile
+// that opens its screen. Alerts: Problems, today's refused starts, Config health and the last mission load. Shortcuts:
+// the tiles Config.AdminUi.homeShortcuts names, in its order; four of them hold a quick form
+// (admin/components/HomeForms) that does the job right there, and Open still opens the full screen. The tiles and
+// lines come from admin/components/adminHome.ts.
 
-import type { ReactNode } from 'react';
-import { Badge, Button, Card, Icon, Screen, type IconName } from '../../shared/components';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { Badge, Button, Card, Icon, Screen } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { formatNumber } from '../../shared/format';
-import { useRequest } from '../../shared/hooks';
+import { usePush, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
-import { useNavigate, type AdminScreenKey, type ScreenParams } from '../../shared/navigation';
-import type { ConfigHealthItem } from '../../shared/types';
-import { useNavCounts } from '../../layouts/navBadges';
+import { useNavigate } from '../../shared/navigation';
 import { NEW_MISSION_PARAMS } from '../../builder/quickMission';
 import { MissionSwitchForm, PayForm, PointsForm, QuickSettingsForm } from '../components/HomeForms';
-import type { AdminLiveRunsData } from '../../types/admin_live';
-import type { MissionLoadSummary } from '../../types/admin_missions';
-import type { NeedsAttentionData } from '../../types/admin_system';
-import { attentionLines, attentionWaiting } from '../components/needsAttention';
+import type { AdminHomeData, HomeShortcutKey } from '../../types/admin_system';
+import { alertLines, liveTiles, shortcutsOf, waitingCount, type ShortcutDef } from '../components/adminHome';
 import './Home.css';
 
-// How many runs the Live now strip lists before "and N more".
-const LIVE_MAX = 6;
+// A push asks again once, this long after the first one (a busy run sends many).
+const PUSH_GAP_MS = 2000;
 
-interface TileProps {
-    icon: IconName;
-    title: string;
-    text: string;
-    screen: AdminScreenKey;
-    params?: ScreenParams;
-    children?: ReactNode;
+// The quick form a shortcut holds on Home (none: the tile only opens its screen).
+const FORMS: Partial<Record<HomeShortcutKey, () => ReactNode>> = {
+    missionSwitch: () => <MissionSwitchForm />,
+    pay: () => <PayForm />,
+    points: () => <PointsForm />,
+    settings: () => <QuickSettingsForm />,
+};
+
+// One admin:getHome request, asked again a moment after an 'operation', 'builder' or 'nav' push.
+function useHome() {
+    const req = useRequest<AdminHomeData>('admin:getHome', {}, { pollMs: 60000 });
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const refetch = req.refetch;
+    const later = () => {
+        if (timer.current) return;
+        timer.current = setTimeout(() => {
+            timer.current = null;
+            void refetch();
+        }, PUSH_GAP_MS);
+    };
+    usePush('operation', later);
+    usePush('builder', later);
+    usePush('nav', later);
+    useEffect(
+        () => () => {
+            if (timer.current) clearTimeout(timer.current);
+        },
+        [],
+    );
+    return req;
 }
 
-function Tile({ icon, title, text, screen, params, children }: TileProps) {
+function Shortcut({ def }: { def: ShortcutDef }) {
     const navigate = useNavigate();
+    const params = def.key === 'newMission' ? { ...NEW_MISSION_PARAMS } : def.params;
+    const form = FORMS[def.key];
     return (
         <Card className="admin-home-tile" padding="md">
             <div className="admin-home-tile__head">
                 <span className="admin-home-tile__icon" aria-hidden>
-                    <Icon name={icon} size={20} />
+                    <Icon name={def.icon} size={20} />
                 </span>
                 <div className="admin-home-tile__titles">
-                    <div className="admin-home-tile__title">{title}</div>
-                    <div className="admin-home-tile__text">{text}</div>
+                    <div className="admin-home-tile__title">{t(def.title)}</div>
+                    <div className="admin-home-tile__text">{t(def.text)}</div>
                 </div>
             </div>
-            {children}
+            {form ? form() : null}
             <div className="admin-home-tile__actions">
-                <Button variant="primary" size="sm" iconRight="chevronRight" onClick={() => navigate(screen, params)}>
+                <Button
+                    variant="primary"
+                    size="sm"
+                    iconRight="chevronRight"
+                    onClick={() => navigate(def.screen, params)}
+                >
                     {t('admin.home.open')}
                 </Button>
             </div>
@@ -60,108 +86,53 @@ function Tile({ icon, title, text, screen, params, children }: TileProps) {
     );
 }
 
-interface CheckLine {
-    key: string;
-    label: string;
-    value: string;
-    bad: boolean;
-    screen: AdminScreenKey;
-    params?: ScreenParams;
-}
-
-// Something wrong?: the last mission load, Config health and stuck payments, each a link (the Problems lines and
-// today's refused starts are in Needs attention).
-function SomethingWrong() {
+// Live now: one tile per count (officers on duty, runs going, each queue); a click opens its screen. Under the
+// tiles, the departments on duty and the first runs as chips.
+function LiveNow({ data }: { data: AdminHomeData | null }) {
     const navigate = useNavigate();
-    const load = useRequest<MissionLoadSummary>('admin:getMissionLoad', {}, { pushTopic: 'builder', pollMs: 60000 });
-    const health = useRequest<ConfigHealthItem[]>('admin:getConfigHealth', {});
-    const counts = useNavCounts();
-    const refused = load.data ? asArray(load.data.failed).length + asArray(load.data.overrideFailed).length : 0;
-    const unhealthy = asArray(health.data).filter(i => i.level !== 'ok').length;
-    const stuck = counts.adminPayments ?? 0;
-    const dash = t('admin.home.unknown');
-    const lines: CheckLine[] = [
-        {
-            key: 'load',
-            label: t('admin.home.check_load'),
-            value: load.data
-                ? t('admin.home.load_value', { loaded: formatNumber(load.data.loaded), refused: formatNumber(refused) })
-                : dash,
-            bad: refused > 0 || !!load.data?.error,
-            screen: 'admin_missions',
-        },
-        {
-            key: 'health',
-            label: t('admin.home.check_health'),
-            value: health.data ? formatNumber(unhealthy) : dash,
-            bad: unhealthy > 0,
-            screen: 'admin_permissions',
-        },
-        {
-            key: 'payments',
-            label: t('admin.home.check_payments'),
-            value: formatNumber(stuck),
-            bad: stuck > 0,
-            screen: 'admin_money',
-            params: { moneyTab: 'payments' },
-        },
-    ];
-    const anyBad = lines.some(l => l.bad);
-    return (
-        <Card className="admin-home-tile" padding="md" highlight={anyBad ? 'warning' : undefined}>
-            <div className="admin-home-tile__head">
-                <span className="admin-home-tile__icon" aria-hidden>
-                    <Icon name={anyBad ? 'alert' : 'checkCircle'} size={20} />
-                </span>
-                <div className="admin-home-tile__titles">
-                    <div className="admin-home-tile__title">{t('admin.home.wrong_title')}</div>
-                    <div className="admin-home-tile__text">
-                        {anyBad ? t('admin.home.wrong_some') : t('admin.home.wrong_none')}
-                    </div>
-                </div>
-            </div>
-            <ul className="admin-home-checks">
-                {lines.map(l => (
-                    <li key={l.key}>
-                        <button type="button" className="admin-home-check" onClick={() => navigate(l.screen, l.params)}>
-                            <span className="admin-home-check__label">{l.label}</span>
-                            <Badge size="sm" tone={l.bad ? 'warning' : 'success'}>
-                                {l.value}
-                            </Badge>
-                        </button>
-                    </li>
-                ))}
-            </ul>
-        </Card>
-    );
-}
-
-// Live now: the Live screen's request (every live run, tests too), one chip per run.
-function LiveNow() {
-    const navigate = useNavigate();
-    const { data } = useRequest<AdminLiveRunsData>('admin:getLiveRuns', {}, { pollMs: 10000, pushTopic: 'operation' });
-    const runs = asArray(data?.runs);
+    const tiles = liveTiles(data);
+    const waiting = waitingCount(tiles);
+    const depts = asArray(data?.live?.departments).filter(d => d.n > 0);
+    const runs = data?.live?.runs;
+    const rows = asArray(runs?.rows);
     return (
         <Card
             className="admin-home-live"
             title={t('admin.home.live_title')}
             subtitle={
                 data
-                    ? runs.length > 0
-                        ? t('admin.home.live_count', { n: formatNumber(runs.length) })
-                        : t('admin.home.live_none')
+                    ? waiting > 0
+                        ? t('admin.home.live_waiting', { n: formatNumber(waiting) })
+                        : t('admin.home.live_calm')
                     : t('admin.home.unknown')
             }
             icon="activity"
-            actions={
-                <Button size="sm" variant="secondary" iconRight="chevronRight" onClick={() => navigate('admin_live')}>
-                    {t('admin.home.live_open')}
-                </Button>
-            }
+            highlight={waiting > 0 ? 'warning' : undefined}
         >
-            {runs.length > 0 ? (
+            <div className="admin-home-stats">
+                {tiles.map(l => (
+                    <button
+                        type="button"
+                        key={l.key}
+                        className={`admin-home-stat${l.waits && l.n > 0 ? ' admin-home-stat--waiting' : ''}`}
+                        onClick={() => navigate(l.screen, l.params)}
+                    >
+                        <span className="admin-home-stat__label">
+                            <Icon name={l.icon} size={14} />
+                            <span>{t(l.label)}</span>
+                        </span>
+                        <span className="admin-home-stat__value cp-num">{formatNumber(l.n)}</span>
+                    </button>
+                ))}
+            </div>
+            {depts.length > 0 ? (
+                <div className="admin-home-live__meta">
+                    {depts.map(d => `${d.label} ${formatNumber(d.n)}`).join(' · ')}
+                </div>
+            ) : null}
+            {rows.length > 0 ? (
                 <div className="admin-home-live__runs">
-                    {runs.slice(0, LIVE_MAX).map(r => (
+                    {rows.map(r => (
                         <button
                             type="button"
                             key={r.runId}
@@ -170,9 +141,7 @@ function LiveNow() {
                         >
                             <span className="admin-home-live__label">{r.missionLabel}</span>
                             <span className="admin-home-live__meta">
-                                {t('admin.home.live_people', {
-                                    n: formatNumber(asArray(r.participants).filter(p => p.status === 'active').length),
-                                })}
+                                {t('admin.home.live_people', { n: formatNumber(r.people) })}
                             </span>
                             {r.test ? (
                                 <Badge size="sm" tone="accent">
@@ -181,9 +150,9 @@ function LiveNow() {
                             ) : null}
                         </button>
                     ))}
-                    {runs.length > LIVE_MAX ? (
+                    {runs && runs.n > rows.length ? (
                         <span className="admin-home-live__more">
-                            {t('admin.home.live_more', { n: formatNumber(runs.length - LIVE_MAX) })}
+                            {t('admin.home.live_more', { n: formatNumber(runs.n - rows.length) })}
                         </span>
                     ) : null}
                 </div>
@@ -192,33 +161,31 @@ function LiveNow() {
     );
 }
 
-// Needs attention: what is waiting for an admin, from one batched request
-// (admin:getNeedsAttention), each line a count that opens its screen.
-function NeedsAttention() {
+// Alerts: each line a count that opens the screen where it is fixed.
+function Alerts({ data, failed, retry }: { data: AdminHomeData | null; failed: boolean; retry: () => void }) {
     const navigate = useNavigate();
-    const { data, error, refetch } = useRequest<NeedsAttentionData>('admin:getNeedsAttention', {}, { pollMs: 60000 });
-    const lines = attentionLines(data);
-    const waiting = attentionWaiting(lines);
+    const lines = alertLines(data);
+    const waiting = waitingCount(lines);
     return (
         <Card
-            className="admin-home-attention"
-            title={t('admin.home.attention_title')}
+            className="admin-home-alerts"
+            title={t('admin.home.alerts_title')}
             subtitle={
                 data
                     ? waiting > 0
-                        ? t('admin.home.attention_some', { n: formatNumber(waiting) })
-                        : t('admin.home.attention_none')
+                        ? t('admin.home.alerts_some', { n: formatNumber(waiting) })
+                        : t('admin.home.alerts_none')
                     : t('admin.home.unknown')
             }
             icon={waiting > 0 ? 'alert' : 'checkCircle'}
             highlight={waiting > 0 ? 'warning' : undefined}
         >
-            {error && !data ? (
-                <button type="button" className="admin-home-check" onClick={() => void refetch()}>
-                    <span className="admin-home-check__label">{t('admin.home.attention_error')}</span>
+            {failed && !data ? (
+                <button type="button" className="admin-home-check" onClick={retry}>
+                    <span className="admin-home-check__label">{t('admin.home.load_failed')}</span>
                 </button>
             ) : (
-                <ul className="admin-home-checks admin-home-attention__lines">
+                <ul className="admin-home-checks">
                     {lines.map(l => (
                         <li key={l.key}>
                             <button
@@ -240,53 +207,24 @@ function NeedsAttention() {
 }
 
 export default function AdminHome() {
+    const { data, error, refetch } = useHome();
+    const shortcuts = shortcutsOf(data);
     return (
         <Screen head="admin_home" subtitle={t('admin.home.subtitle')} className="admin-home-screen">
-            <NeedsAttention />
-            <LiveNow />
-            <div className="admin-home-grid">
-                <Tile
-                    icon="plus"
-                    title={t('admin.home.new_title')}
-                    text={t('admin.home.new_text')}
-                    screen="admin_missions"
-                    params={{ ...NEW_MISSION_PARAMS }}
-                />
-                <Tile
-                    icon="layers"
-                    title={t('admin.home.onoff_title')}
-                    text={t('admin.home.onoff_form')}
-                    screen="admin_missions"
-                    params={{ tab: 'catalog' }}
-                >
-                    <MissionSwitchForm />
-                </Tile>
-                <Tile
-                    icon="dollar"
-                    title={t('admin.home.pay_title')}
-                    text={t('admin.home.pay_form')}
-                    screen="admin_money"
-                >
-                    <PayForm />
-                </Tile>
-                <Tile
-                    icon="star"
-                    title={t('admin.home.points_title')}
-                    text={t('admin.home.points_form')}
-                    screen="admin_officers"
-                >
-                    <PointsForm />
-                </Tile>
-                <Tile
-                    icon="sliders"
-                    title={t('admin.home.settings_title')}
-                    text={t('admin.home.settings_form')}
-                    screen="admin_settings"
-                >
-                    <QuickSettingsForm />
-                </Tile>
-                <SomethingWrong />
+            <div className="admin-home-top">
+                <LiveNow data={data} />
+                <Alerts data={data} failed={!!error} retry={() => void refetch()} />
             </div>
+            {shortcuts.length > 0 ? (
+                <>
+                    <h3 className="admin-home-heading">{t('admin.home.shortcuts_title')}</h3>
+                    <div className="admin-home-grid">
+                        {shortcuts.map(def => (
+                            <Shortcut key={def.key} def={def} />
+                        ))}
+                    </div>
+                </>
+            ) : null}
         </Screen>
     );
 }

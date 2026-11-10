@@ -311,6 +311,17 @@ do
     H.eq(cjson.encode(E('AdminUi.reasonChips').default), '["Balance change","Event","Correction"]',
         'the reason buttons ship with three ready-made reasons')
     H.eq(E('AdminUi.reasonChips').kind, 'list', 'reasonChips is a list of texts')
+    -- step UI3: Home's shortcuts, shipped as the five tiles Home had, in that order
+    H.eq(cjson.encode(E('AdminUi.homeShortcuts').default), '["newMission","missionSwitch","pay","points","settings"]',
+        'homeShortcuts ships the five Home tiles')
+    H.eq(E('AdminUi.homeShortcuts').kind, 'list', 'homeShortcuts is a list')
+    H.eq(table.concat(E('AdminUi.homeShortcuts').options, ','),
+        'newMission,missionSwitch,pay,points,settings,live,review,activity', 'picked from the known shortcuts')
+    H.ok((E('AdminUi.homeShortcuts').desc or ''):find('The shortcuts on Admin UI -> Home', 1, true) ~= nil,
+        'homeShortcuts: its config.lua comment is its description')
+    H.ok(Check('AdminUi.homeShortcuts', { 'review', 'pay' }), 'another order and set is fine')
+    H.ok(not Check('AdminUi.homeShortcuts', { 'nope' }), 'an unknown shortcut is refused')
+    H.ok(not Check('AdminUi.homeShortcuts', { 'pay', 'pay' }), 'a shortcut twice is refused')
     H.eq(E('Tablet.sidebarOrder').default, 'classic', 'the Officer UI sidebar ships in its classic order')
     H.eq(E('Tablet.sidebarOrder').kind, 'enum', 'sidebarOrder is a choice')
     H.ok((E('Tablet.sidebarOrder').desc or ''):find('Only the order changes', 1, true) ~= nil,

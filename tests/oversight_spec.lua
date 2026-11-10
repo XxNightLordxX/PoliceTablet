@@ -795,7 +795,7 @@ local rowOwn = AddRow(
     { run_uuid = R3, citizenid = 'SUP00002', flagged = 1, flag_reason = 'presence', cash_status = 'held' })
 Co(CP.Admin.audit, 'console', 'console', 'flags', 'runFlagged', R1, nil, 'outside_help',
     'Killed by: Otto Outsider [OUT00005]')
--- Home's Needs attention count: one per run (R1's two rows once), the viewer's own run (R3) left out, no row cap
+-- Home's flagged runs count: one per run (R1's two rows once), the viewer's own run (R3) left out, no row cap
 H.eq(Co(CP.Admin.flaggedCount, 'SUP00002'), 2, 'flaggedCount: R1 once and R2; the own run R3 left out')
 
 -- K9: one player's 'security' lines in System → Problems (CP.Permissions.probe); the supervisor's review flow below

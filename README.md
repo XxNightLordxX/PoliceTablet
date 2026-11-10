@@ -672,7 +672,7 @@ old layout switches and where each one lives now.
 
 | Group | Screen | What it is for |
 |---|---|---|
-| | **Home** | Where the panel opens: Needs attention, tiles for the common jobs (new mission, missions on or off, change pay, give or take points, quick settings, **Something wrong?**) and the live runs |
+| | **Home** | Where the panel opens: a dashboard of **Live now** (officers on duty, runs going, the queues waiting: review, disputes, stuck payments), **Alerts** (problems, refused starts, Config health) and your **Shortcuts** (`Config.AdminUi.homeShortcuts`: new mission, missions on or off, change pay, give or take points, quick settings) |
 | People | **Officers** | Search officers: history, suspensions, disputes about failed runs, commendations and the officer tools |
 | | **Departments** | Each department's jobs, colours, logo, desks, members and (with society payouts) account balance |
 | | **Permissions** | What supervisors may do, the extra grants, the Mission controls and the config health check |

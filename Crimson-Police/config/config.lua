@@ -161,6 +161,10 @@ Config.AdminUi = {
     -- Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases;
     -- 0 = each list's own size (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case)
     pageSize = 0,
+    -- The shortcuts on Admin UI -> Home, in this order: 'newMission' (Make a new mission), 'missionSwitch' (Turn
+    -- missions on or off), 'pay' (Change pay), 'points' (Give or take points), 'settings' (Quick settings), 'live'
+    -- (Running now), 'review' (Review) and 'activity' (Activity log); {} = no shortcuts
+    homeShortcuts = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings' },
 }
 
 -- ============================================================================

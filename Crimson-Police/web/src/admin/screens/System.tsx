@@ -827,7 +827,7 @@ function CleanupPanel() {
 
 export default function AdminSystem() {
     const [panel, setPanel] = useState<Panel>('storage');
-    // another screen (Home's Needs attention) opens a tab with navigate('admin_system', { tab })
+    // another screen (Home's Alerts) opens a tab with navigate('admin_system', { tab })
     const { params } = useNavigation();
     useEffect(() => {
         if (PANELS.some(p => p.key === params.tab)) setPanel(params.tab as Panel);

@@ -117,14 +117,36 @@ export interface ProblemsData {
     tags: string[];
 }
 
-// admin:getNeedsAttention: Home's Needs attention panel in one answer.
-export interface NeedsAttentionData {
-    problems: number;
-    refusedToday: number;
-    disputes: number;
-    flagged: number;
-    // null / missing: the admin has no Player suspects screen (no key, or live crimes and volunteers off)
-    rsCases?: number | null;
+// Config.AdminUi.homeShortcuts: Home's shortcut keys (modules/adminhome AH.SHORTCUTS)
+export type HomeShortcutKey =
+    'newMission' | 'missionSwitch' | 'pay' | 'points' | 'settings' | 'live' | 'review' | 'activity';
+
+// admin:getHome: Admin UI -> Home, the whole dashboard in one answer.
+export interface AdminHomeData {
+    live: {
+        onDuty: number;
+        departments: { key: string; label: string; n: number }[];
+        // null / missing: the admin has no liveRuns key (Home shows no runs)
+        runs?: { n: number; rows: { runId: string; missionLabel: string; people: number; test: boolean }[] } | null;
+    };
+    queues: {
+        flagged: number;
+        profiles: number;
+        disputes: number;
+        payments: number;
+        // null / missing: the admin has no Player suspects screen (no key, or live crimes and volunteers off)
+        rsCases?: number | null;
+    };
+    alerts: {
+        problems: number;
+        refusedToday: number;
+        // null / missing: the checks could not run
+        health?: { warn: number; error: number } | null;
+        // null / missing: the missions have not loaded yet
+        load?: { loaded: number; refused: number; error: boolean } | null;
+    };
+    shortcuts: HomeShortcutKey[];
+    serverTime?: number;
 }
 
 export interface ResourceView {

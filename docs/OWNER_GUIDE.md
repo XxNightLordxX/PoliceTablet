@@ -810,9 +810,9 @@ from an older `config.lua` (Crimson-Police ignores it).
 | `Config.AdminUi.plainLayout` | plain names, six described groups, the screen search and the breadcrumb | Admin UI sidebar ([5.3](#53-the-admin-panel)) |
 | `Config.AdminUi.landing` | the Admin UI opens on **Home**, whose tiles open Money and Missions | Admin UI → Home |
 | `Config.AdminUi.settingsView` | Settings opens in Simple; **All settings** is one click away | Admin UI → Settings |
-| `Config.AdminUi.homeForms` | the Home tiles hold their quick forms; **Open** opens the full screen | Admin UI → Home |
+| `Config.AdminUi.homeForms` | the Home shortcuts hold their quick forms; **Open** opens the full screen | Admin UI → Home |
 | `Config.AdminUi.markersScreen` | the **Map markers** screen is shown | Admin UI → NPC missions → Map markers ([3.13](#313-map-markers-every-part-of-a-mission)) |
-| `Config.AdminUi.needsAttention` | the **Needs attention** panel on top of Home | Admin UI → Home |
+| `Config.AdminUi.needsAttention` | Home's **Live now** queues and **Alerts** (UI3: one dashboard) | Admin UI → Home |
 | `Config.AdminUi.oneRequest` | Payments made and Leaderboards open with one request each | Admin UI → Money → Payments, Leaderboards |
 | `Config.AdminUi.windowRows` | long lists draw only the rows in view | every tablet UI |
 | `Config.AdminUi.foldAdvanced` | settings-heavy dialogs and Mission controls fold the rare options under **More** | Admin UI dialogs, Supervisor UI → Department → Controls |
@@ -823,7 +823,7 @@ from an older `config.lua` (Crimson-Police ignores it).
 | `Config.Tablet.supervisorReviewLive` | a decided flagged run or dispute leaves every other open Review Queue at once | Supervisor UI → Department → Review |
 
 **Kept as settings**, because a city may want them differently: `Config.AdminUi.reasonChips` (your own reason
-buttons), `Config.Tablet.sidebarOrder`, `activeFirst`, `compactSidebar`, `supervisorCompact` and `supervisorLanding`
+buttons), `Config.AdminUi.homeShortcuts` (Home's shortcuts and their order), `Config.Tablet.sidebarOrder`, `activeFirst`, `compactSidebar`, `supervisorCompact` and `supervisorLanding`
 (how each city likes its sidebars), and the tuning numbers `Config.AdminUi.pageSize` and `Config.Performance.loopScale`,
 `pushGapMs`, `latentAboveBytes` and `markerRange` (each shipped as before).
 
@@ -1373,7 +1373,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([1.2](#12
 
 | Screen | What it is for |
 |---|---|
-| **Home** | Where the panel opens: six tiles for the common jobs (make a new mission, turn missions on or off, change pay, give or take points, quick settings, **Something wrong?**) and a **Live now** strip of the live runs |
+| **Home** | Where the panel opens: a dashboard of **Live now** (officers on duty, runs going, the queues waiting), **Alerts** (problems, refused starts, Config health, the last mission load) and your **Shortcuts** (`Config.AdminUi.homeShortcuts`) |
 | **Money** | Every money tool in one screen, as four tabs. **Pay rates** (the old Payouts screen): every type and mission payout, set or clear them. **Rewards**: every feature that pays, its money, account and items. **Payments**: every payment Crimson-Police made or still owes, with totals and the payment tools ([5.15.4](#5154-payments-item-rewards-and-department-money)). **Department funds**: each department's society account (the same Funds card as on Departments) |
 | **Missions** | Built-in and custom missions: Builder, publish, archive, restore, roll back, break edit locks, reload files, Cross-Department Missions and mission calls |
 | **Seasons & Challenge** | Start or end a season, override this week's bounty |
@@ -1389,18 +1389,26 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([1.2](#12
 | **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
 | **Testing** | Optional: every mission and location with its test result, test runs, testers, and an area coverage table ([5.13](#513-testing-tools)) |
 
-**Home** is where the panel opens. On top, **Needs attention** shows what is waiting for you, each line a count that
-opens its screen: **Problems** (System → Problems), **Refused starts today** (Live → Refused), **Open disputes**
-(Review → Disputes), **Flagged runs waiting for review** (Review → Flagged runs, one per run, your own left out,
-every one counted) and **Open player suspect cases** (Real suspects; only while you have that screen). It loads in one request
-and refreshes every minute; it only reads.
+**Home** is where the panel opens: a dashboard read in one request, every minute and again a moment after a run,
+mission or count changes. It only reads; every number opens the screen where you act on it.
 
-The tiles do the common jobs right there: **Turn missions on or off** (type part of a mission's name, flip its
-switch, or open its locations and flip one), **Change pay** (find a mission type or a mission, enter the amount and a
-reason), **Give or take points** (find the officer, enter the points, below 0 takes away, and a reason; from 500
-points up you also type their citizen ID) and **Quick settings** (find an everyday setting and change it there, with
-the same checks as the Settings screen). **Open** on each tile opens the full screen. **Something wrong?** lists the
-last mission load (loaded and refused), Config health warnings and stuck payments; click a line to open its screen.
+- **Live now**: **Officers on duty** (with each department's count under it; opens Departments), **Runs going**
+  (opens Live, with the first six runs as chips; only with the `liveRuns` admin key), then the queues waiting for
+  you: **Flagged runs to review**, **Profiles to review** and **Open disputes** (each opens its Review tab; flagged
+  runs count one per run, your own left out, every one counted), **Stuck payments** (Money → Payments) and **Open
+  player suspect cases** (Real suspects; only while you have that screen). A queue with something in it has an
+  orange edge.
+- **Alerts**: **Problems** (System → Problems), **Refused starts today** (Live → Refused), **Config health
+  warnings** (Permissions → Config health; checked again at most every 30 seconds for Home) and **Missions the last
+  load refused** (Missions).
+- **Shortcuts**: the tiles `Config.AdminUi.homeShortcuts` names, in its order (Admin UI → **Settings**). Shipped:
+  **Make a new mission**, **Turn missions on or off**, **Change pay**, **Give or take points** and **Quick
+  settings**. Also available: `live` (Running now), `review` (Review) and `activity` (Activity log); `{}` shows no
+  shortcuts. Four tiles do the job right there: **Turn missions on or off** (type part of a mission's name, flip its
+  switch, or open its locations and flip one), **Change pay** (find a mission type or a mission, enter the amount and
+  a reason), **Give or take points** (find the officer, enter the points, below 0 takes away, and a reason; from 500
+  points up you also type their citizen ID) and **Quick settings** (find an everyday setting and change it there,
+  with the same checks as the Settings screen). **Open** on each tile opens the full screen.
 
 Under the reason box of every **Set payout** (Money, Home, a mission's drawer), **Give or take points** (Home,
 Leaderboards, Officers) and **Quick edit** sit ready-made reasons: **Balance change**, **Event** and **Correction**.
@@ -1434,7 +1442,7 @@ nothing you may see is not shown.
 
 **The Money screen.** Admin UI → **Money** holds every money tool as four tabs: **Pay rates** (the old Payouts
 screen), **Rewards** (every feature that pays), **Payments** (every payment made, with its row actions) and
-**Department funds**. Home's Change pay tile, the Needs attention lines and the Leaderboards stuck payments link open
+**Department funds**. Home's Change pay tile, the Stuck payments tile and the Leaderboards stuck payments link open
 the right tab, and the search box finds Money by the old names (Payouts, Rewards, Payments). Every action, permission
 check, audit row and money-tool switch is the same as before.
 
@@ -1789,7 +1797,7 @@ Voids and restores:
 - **Refused mission starts**: the server remembers the last `AdminControl.refusalsKept` (200) mission starts it
   refused (who tried, the type or mission, and why, such as on a run, in the arena or the maintenance lock) for
   admins: Admin UI → **Live** → **Refused** lists them (time, officer, mission or type, and the message the officer
-  saw), and Home → **Something wrong?** counts today's. Memory only: a restart empties the list.
+  saw), and Home → **Alerts** counts today's. Memory only: a restart empties the list.
 - **Reset progression** is the same for all of an officer's runs; **Undo** restores them.
 - **Retire** (a deleted character, a banned player) voids all their runs as a correction, closes the tablet to them
   and hides their picture and bio from everyone else (nothing is deleted). It is refused while they are on a run.

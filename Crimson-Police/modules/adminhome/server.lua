@@ -1,6 +1,9 @@
--- CP.AdminHome (server): Admin UI -> Home's "Needs attention" panel in one batched callback
--- (admin:getNeedsAttention): the Problems lines, today's refused mission starts, the open disputes, the flagged runs
--- waiting for a review and the open real-suspect cases.
+-- CP.AdminHome (server): Admin UI -> Home, a dashboard in one batched callback (admin:getHome): live now (officers on
+
+-- CP.AdminHome (server): Admin UI -> Home, a dashboard in one batched callback (admin:getHome): live now (officers on
+-- duty, the runs going, the queues waiting: flagged runs, profiles, disputes, stuck payments, player suspect cases),
+-- the alerts (Problems lines, today's refused starts, Config health, the last mission load) and the shortcuts of
+-- Config.AdminUi.homeShortcuts.
 
 CP.AdminHome = CP.AdminHome or {}
 local AH = CP.AdminHome
@@ -32,7 +35,7 @@ local function Count(ok, v)
     return math.floor(n)
 end
 
--- The refused mission starts on the server's day (CP.Schedule, the daily reset), as Home's "Refused starts today".
+-- The refused mission starts on the server's day (CP.Schedule, the daily reset), as Home's Refused starts today alert.
 local function RefusedToday()
     local okL, list = Call('Refusals', 'list')
     local okNow, now = Call('Schedule', 'now')
@@ -45,7 +48,7 @@ local function RefusedToday()
     return n
 end
 
--- The flagged runs an admin still has to approve or void (Leaderboards -> Flagged runs): one per run, the admin's
+-- The flagged runs an admin still has to approve or void (Review -> Flagged runs): one per run, the admin's
 -- own runs left out as on that card. CP.Admin.flaggedCount counts them all (the card's rows stop at 200).
 local function FlaggedRuns(src)
     local okI, info = Call('Qbx', 'getInfo', src)
@@ -71,14 +74,112 @@ local function OpenCases(src)
     return n
 end
 
--- Everything the panel shows, for one admin (src). rsCases is nil when that line is not his to see.
-function AH.needsAttention(src)
+-- The officers on duty now: the total and each department's count (CP.Admin.onDutyCounts, as Departments shows).
+local function OnDuty()
+    local ok, counts = Call('Admin', 'onDutyCounts')
+    counts = ok and type(counts) == 'table' and counts or {}
+    local okD, depts = Call('Access', 'departments')
+    local out, total = {}, 0
+    for _, d in ipairs(okD and type(depts) == 'table' and depts or {}) do
+        local n = Count(true, counts[d.key])
+        total = total + n
+        out[#out + 1] = { key = d.key, label = d.short or d.label or d.key, n = n }
+    end
+    return total, out
+end
+
+-- The runs going (CP.LiveCtl.liveRuns, the Live screen's list): the count and the first LIVE_ROWS as chips, or nil
+-- when the admin has no liveRuns key (no Live screen actions: Home shows no runs).
+local LIVE_ROWS = 6
+local function Runs(src)
+    local okP, can = Call('Permissions', 'can', src, 'liveRuns', nil, { admin = true })
+    if not (okP and can == true) then return nil end
+    local ok, list = Call('LiveCtl', 'liveRuns', src)
+    list = ok and type(list) == 'table' and list or {}
+    local rows = {}
+    for i = 1, math.min(#list, LIVE_ROWS) do
+        local r, people = list[i], 0
+        for _, p in ipairs(type(r.participants) == 'table' and r.participants or {}) do
+            if p.status == 'active' then people = people + 1 end
+        end
+        rows[i] = {
+            runId = r.runId,
+            missionLabel = tostring(r.missionLabel or r.missionId or ''),
+            people = people,
+            test = r.test == true,
+        }
+    end
+    return { n = #list, rows = rows }
+end
+
+-- Config health (CP.ConfigHealth.run, every check): how many warning and error lines. Read again at most every
+-- HEALTH_CACHE_S seconds (Home refreshes on pushes; Permissions -> Config health always runs the checks again).
+local HEALTH_CACHE_S = 30
+local healthCache = { at = -math.huge }
+local function Health()
+    local now = os.time()
+    if now - healthCache.at < HEALTH_CACHE_S then return healthCache.value end
+    local ok, items = Call('ConfigHealth', 'run')
+    local value = nil
+    if ok and type(items) == 'table' then
+        value = { warn = 0, error = 0 }
+        for _, item in ipairs(items) do
+            if item.level == 'warn' or item.level == 'error' then value[item.level] = value[item.level] + 1 end
+        end
+    end
+    healthCache = { at = now, value = value }
+    return value
+end
+
+-- The last mission load (CP.Missions.loadSummary): loaded, refused (missions and edited built-ins), its error.
+local function Load()
+    local ok, sum = Call('Missions', 'loadSummary')
+    if not ok or type(sum) ~= 'table' then return nil end
+    local failed = type(sum.failed) == 'table' and #sum.failed or 0
+    local over = type(sum.overrideFailed) == 'table' and #sum.overrideFailed or 0
+    return { loaded = Count(true, sum.loaded), refused = failed + over, error = sum.error ~= nil and sum.error ~= false }
+end
+
+-- Config.AdminUi.homeShortcuts: the known keys in their order, each once (nil = the shipped five, {} = none).
+AH.SHORTCUTS = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings', 'live', 'review', 'activity' }
+local SHIPPED = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings' }
+local SHORTCUTS_MAX = 8
+
+function AH.shortcuts()
+    local cfg = type(Config.AdminUi) == 'table' and Config.AdminUi.homeShortcuts or nil
+    if cfg == nil then cfg = SHIPPED end
+    local known, seen, out = {}, {}, {}
+    for _, k in ipairs(AH.SHORTCUTS) do known[k] = true end
+    for _, k in ipairs(type(cfg) == 'table' and cfg or {}) do
+        if known[k] and not seen[k] and #out < SHORTCUTS_MAX then
+            seen[k] = true
+            out[#out + 1] = k
+        end
+    end
+    return out
+end
+
+-- Everything Home shows, for one admin (src). queues.rsCases is nil when that line is not his to see; live.runs is
+-- nil without the liveRuns key.
+function AH.home(src)
+    local onDuty, departments = OnDuty()
     return {
-        problems = Count(Call('Problems', 'total')),
-        refusedToday = RefusedToday(),
-        disputes = Count(Call('Disputes', 'openCount')),
-        flagged = FlaggedRuns(src),
-        rsCases = OpenCases(src),
+        live = { onDuty = onDuty, departments = departments, runs = Runs(src) },
+        queues = {
+            flagged = FlaggedRuns(src),
+            profiles = Count(Call('Profile', 'reviewCount')),
+            disputes = Count(Call('Disputes', 'openCount')),
+            payments = Count(Call('Payments', 'stuckCount')),
+            rsCases = OpenCases(src),
+        },
+        alerts = {
+            problems = Count(Call('Problems', 'total')),
+            refusedToday = RefusedToday(),
+            health = Health(),
+            load = Load(),
+        },
+        shortcuts = AH.shortcuts(),
+        serverTime = os.time(),
     }
 end
 
@@ -87,7 +188,7 @@ end
 -- ============================================================================
 
 if CP.AdminKit and CP.AdminKit.callback then
-    CP.AdminKit.callback('admin:getNeedsAttention', 'openAdmin', function(ctx)
-        return AH.needsAttention(ctx.src)
+    CP.AdminKit.callback('admin:getHome', 'openAdmin', function(ctx)
+        return AH.home(ctx.src)
     end, { rate = 2 })
 end

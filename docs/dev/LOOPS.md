@@ -438,6 +438,7 @@ strings do not count.
 | `web/src/admin/components/kit/OfficerPicker.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/admin/components/officers/OfficerLists.tsx` | 2 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/admin/screens/Audit.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
+| `web/src/admin/screens/Home.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/admin/screens/Testing.tsx` | 1 | 0 | clock tick, 30 s |
 | `web/src/builder/steps/StepTest.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/builder/useDraftEditor.ts` | 2 | 0 | autosave interval, validate debounce |
