@@ -107,13 +107,13 @@ Config.Rewards.byType = {
 }
 
 for _, m in ipairs({
-    'modules/permissions/server.lua',
-    'modules/access/server.lua',
-    'modules/admin/server.lua',
-    'modules/adminkit/server.lua',
-    'modules/confighealth/server.lua',
-    'modules/settings/server.lua',
-    'modules/tablet/server.lua',
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/admin/confighealth.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
     'modules/money/engine.lua',
     'modules/money/rewards.lua',
 }) do

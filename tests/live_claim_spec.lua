@@ -90,7 +90,7 @@ CP.Runs = {
 }
 
 H.load('blocks/live_response/server.lua')
-H.load('modules/missions/server.lua')
+H.load('modules/missions/missions.lua')
 H.load('modules/realplayers/livecrime.lua')
 local LC = CP.LiveCrime
 local M = CP.Missions
@@ -318,7 +318,7 @@ do
         end,
     }
     H.players[1] = { coords = vec3(0.0, 0.0, 30.0) }
-    H.load('modules/runs/server.lua')
+    H.load('modules/runs/runs.lua')
     local caps = 0
     CP.Runs.capsOk = function() caps = caps + 1 return false, 'err.server_busy' end
     local crime = Crime()

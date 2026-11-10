@@ -1,8 +1,8 @@
--- The placer (modules/spawn/client.lua): a participant's game puts a new mission entity on the ground when
+-- The placer (modules/runs/client/spawn.lua): a participant's game puts a new mission entity on the ground when
 -- the server asks through its cp bag, or leaves a bad point frozen, and tells the server, against the typed natives
 -- of H.placerNatives over the ground map of H.groundNatives.
 
--- The placer (modules/spawn/client.lua) on H.placerNatives (players, network ids, control that comes after a
+-- The placer (modules/runs/client/spawn.lua) on H.placerNatives (players, network ids, control that comes after a
 -- request or never or is taken over, freeze and coordinates kept only on an entity this game controls) over the ground
 -- map of H.groundNatives, both checking argument types: a person 1 m over the ground put on it at the server's x, y
 -- (frozen first, moved, let go, tasks kept, collision kept loaded, the probe around him ignoring him), told once per
@@ -30,7 +30,7 @@ local currentRun = nil
 CP.Runs = {
     current = function() return currentRun end,
 }
-H.load('modules/spawn/client.lua')
+H.load('modules/runs/client/spawn.lua')
 
 local EVENT = 'crimson-police:server:spawnPlaced'
 local ME, PARTNER, BYSTANDER = 0, 1, 2 -- player indexes in this game

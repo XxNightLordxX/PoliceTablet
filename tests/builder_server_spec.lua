@@ -46,7 +46,7 @@ do
     local f = io.open(H.root .. 'locales/parts/builder_server.json', 'r')
     local part = cjson.decode(f:read('a'))
     f:close()
-    local src = io.open(H.root .. 'modules/builder/server.lua', 'r'):read('a')
+    local src = io.open(H.root .. 'modules/missions/builder.lua', 'r'):read('a')
     local missing = {}
     for key in src:gmatch('\'(err%.[%w_]+)\'') do if not part[key] then missing[#missing + 1] = key end end
     for key in src:gmatch('\'(builder%.[%w_%.]+)\'') do
@@ -66,7 +66,7 @@ do
     end
     H.ok(nBlocks >= 11, 'every Config.Blocks block is checked (' .. nBlocks .. ')')
     H.eq(table.concat(missing, ', '), '',
-        'every locale key used by modules/builder/server.lua is in builder_server.json')
+        'every locale key used by modules/missions/builder.lua is in builder_server.json')
     -- keys shared with other parts carry the same text
     local p = io.popen('ls ' .. H.root .. 'locales/parts/*.json')
     local clash = {}
@@ -233,7 +233,7 @@ local function Body()
         startDraft = function(src, def, opts)
             drafts[#drafts + 1] = { src = src, def = def, opts = opts }
             if not testingOk then return false, 'err.in_arena' end
-            -- as modules/testing: the data names the location that runs ('random' picks one)
+            -- as modules/missions/testing: the data names the location that runs ('random' picks one)
             return true,
                 {
                     runId = 'run-' .. #drafts,
@@ -258,8 +258,8 @@ local function Body()
             onDamaged = function() end,
         }
 
-    H.load('modules/scaling/server.lua')
-    H.load('modules/permissions/server.lua')
+    H.load('modules/runs/scaling.lua')
+    H.load('modules/access/permissions.lua')
     for _, b in ipairs({
         'checkpoint_route',
         'interact_points',
@@ -280,8 +280,8 @@ local function Body()
     H.sql('DELETE FROM cp_officers')
     H.sql(
         'INSERT INTO cp_officers (citizenid, display_name, department) VALUES (\'SUP00001\', \'John Doe\', \'sast\'), (\'SUP00002\', \'Jane Roe\', \'fib\')')
-    H.load('modules/builder/server.lua')
-    H.load('modules/missions/server.lua')
+    H.load('modules/missions/builder.lua')
+    H.load('modules/missions/missions.lua')
     H.step(10)   -- CP.Missions.loadAll (built-ins + CP.Builder.loadPublished)
     local B = CP.Builder
     do
@@ -2415,7 +2415,7 @@ local function Body()
         local start, stop = before:find(('\'%s\''):format(label), 1, true)
         H.ok(start ~= nil, 'the published file holds the copy\'s label')
         if start then WriteRel(gpath, before:sub(1, start - 1) .. '\'Docks Shootout\'' .. before:sub(stop + 1)) end
-        H.load('modules/missions/server.lua')
+        H.load('modules/missions/missions.lua')
         H.eq(#CP.Missions.list(), 0, 'at server start no built-in is loaded before the file sync')
         local summary = CP.Missions.loadAll()
         local sync = summary.builder or {}

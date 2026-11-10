@@ -5,7 +5,7 @@
 -- Units live on the server (modules/teams/units.lua). The Unit screen (NUI) lists members, invites
 -- and the invite picker, and every answer goes through the tablet (server:unitRespond). This half only
 -- makes an incoming invite noticeable while the tablet is closed: the server's toast
--- (CP.Tablet.notify 'unit.invite_received', rendered by modules/tablet) is paired with a short frontend
+-- (CP.Tablet.notify 'unit.invite_received', rendered by modules/access/tablet) is paired with a short frontend
 -- sound when the 'unit' push for this player carries { invited = true }. Nothing is created in the game
 -- world, so there is nothing to clean up on resource stop.
 --

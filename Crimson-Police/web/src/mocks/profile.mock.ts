@@ -10,7 +10,7 @@ const now = () => Math.floor(Date.now() / 1000);
 const MODE = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('profile') : null;
 
 // The mock session's shared config and action lists gain the profile values the real getSession sends
-// (modules/tablet), when no other mock added them yet.
+// (modules/access/tablet), when no other mock added them yet.
 {
     const officer = buildSession('officer');
     const cfg = officer.config;

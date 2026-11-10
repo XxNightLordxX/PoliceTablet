@@ -118,7 +118,7 @@ CP.Missions = {
 }
 
 H.load('modules/system/schedule.lua')
-H.load('modules/draw/server.lua')
+H.load('modules/runs/draw.lua')
 local D = CP.Draw
 
 -- ============================================================================

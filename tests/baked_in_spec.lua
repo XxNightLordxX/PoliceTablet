@@ -78,10 +78,10 @@ local function Boot()
         reload = function() end,
         get = function() return nil end,
     }
-    H.load('modules/permissions/server.lua')
-    H.load('modules/admin/server.lua')
-    H.load('modules/confighealth/server.lua')
-    H.load('modules/settings/server.lua')
+    H.load('modules/access/permissions.lua')
+    H.load('modules/admin/admin.lua')
+    H.load('modules/admin/confighealth.lua')
+    H.load('modules/admin/settings.lua')
     H.step(0)
     return CP.Settings
 end

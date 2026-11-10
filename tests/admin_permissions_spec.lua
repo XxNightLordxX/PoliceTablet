@@ -15,7 +15,7 @@ _G.PerformHttpRequest = function() end
 -- ============================================================================
 --                                    STUBS
 -- ============================================================================
--- Real: modules/permissions, admin, confighealth, settings, deptcontrols. Stand-ins: CP.Access (supervisor by
+-- Real: modules/access/permissions, admin, confighealth, settings, deptcontrols. Stand-ins: CP.Access (supervisor by
 -- grade 4 of the department) and CP.Qbx (citizenid, job and gang of each player).
 
 local people = {
@@ -68,11 +68,11 @@ CP.Missions = {
     reload = function() end,
     get = function() return nil end,
 }
-H.load('modules/permissions/server.lua')
-H.load('modules/admin/server.lua')
-H.load('modules/confighealth/server.lua')
-H.load('modules/settings/server.lua')
-H.load('modules/deptcontrols/server.lua')
+H.load('modules/access/permissions.lua')
+H.load('modules/admin/admin.lua')
+H.load('modules/admin/confighealth.lua')
+H.load('modules/admin/settings.lua')
+H.load('modules/supervisor/deptcontrols.lua')
 H.step(0)
 local S, P, DC, U = CP.Settings, CP.Permissions, CP.DeptControls, CP.U
 

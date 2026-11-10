@@ -10,11 +10,11 @@ for _, b in ipairs({ 'interact_points', 'flee_arrest', 'process_scene' }) do H.l
 local realWarn = CP.warn
 CP.warn = function() end
 CP.Missions = nil
-H.load('modules/missions/server.lua')
+H.load('modules/missions/missions.lua')
 local Missions = CP.Missions
 Missions.loadAll()
 CP.warn = realWarn
-H.load('modules/spawn/server.lua')
+H.load('modules/runs/spawn.lua')
 local FA = CP.Blocks.get('flee_arrest')
 
 -- ============================================================================

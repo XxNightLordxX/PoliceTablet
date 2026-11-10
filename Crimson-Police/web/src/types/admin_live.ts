@@ -1,4 +1,4 @@
-// Full admin control, live runs, units and anti-farm (modules/livectl/server.lua, docs/dev/ARCHITECTURE.md §5.39 and §9.5).
+// Full admin control, live runs, units and anti-farm (modules/supervisor/livectl.lua, docs/dev/ARCHITECTURE.md §5.39 and §9.5).
 
 import type { HappyHourState } from '../shared/types';
 

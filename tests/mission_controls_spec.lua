@@ -10,7 +10,7 @@ H.boot({ side = 'server', realLocale = true })
 -- ============================================================================
 --                                  THE SERVER
 -- ============================================================================
--- Real: shared/*, modules/permissions, access, admin, adminkit, settings, tablet, deptcontrols. Stand-in: CP.Qbx.
+-- Real: shared/*, modules/access/permissions, access, admin, adminkit, settings, tablet, deptcontrols. Stand-in: CP.Qbx.
 
 local LIC2 = 'license:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2'
 local people = {
@@ -84,13 +84,13 @@ for _, t in ipairs({ 'cp_audit', 'cp_settings', 'cp_admin_requests', 'cp_officer
 end
 
 for _, m in ipairs({
-    'modules/permissions/server.lua',
-    'modules/access/server.lua',
-    'modules/admin/server.lua',
-    'modules/adminkit/server.lua',
-    'modules/deptcontrols/server.lua',
-    'modules/settings/server.lua',
-    'modules/tablet/server.lua',
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/supervisor/deptcontrols.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
 }) do
     H.load(m)
 end

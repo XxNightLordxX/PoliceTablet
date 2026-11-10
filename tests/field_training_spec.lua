@@ -140,7 +140,7 @@ CP.Tablet = {
     end,
 }
 
-for _, m in ipairs({ 'modules/adminkit/server.lua', 'modules/supervisor/fieldtraining.lua' }) do H.load(m) end
+for _, m in ipairs({ 'modules/admin/adminkit.lua', 'modules/supervisor/fieldtraining.lua' }) do H.load(m) end
 local Kit, FT = CP.AdminKit, CP.FieldTraining
 local FTC = Config.Recognition.fieldTraining
 

@@ -1,5 +1,5 @@
 // Slot: Missions → Today: Type of the Day (with today's override), the Weekly Boss day and the run modifiers with their
-// switches (Settings → Events). modules/livectl/server.lua (admin:getToday, server:admin:setTypeOfDay).
+// switches (Settings → Events). modules/supervisor/livectl.lua (admin:getToday, server:admin:setTypeOfDay).
 
 import { useEffect, useState } from 'react';
 import { Badge, Button, Card, ConfirmDialog, Field, Row, Select } from '../../shared/components';

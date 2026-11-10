@@ -1,7 +1,7 @@
 // Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on, a dashboard read from one batched
 
 // Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on, a dashboard read from one batched
-// callback (admin:getHome, modules/adminhome) once a minute and again shortly after a push that can change it
+// callback (admin:getHome, modules/admin/adminhome) once a minute and again shortly after a push that can change it
 // ('operation', 'builder', 'nav'). Live now: officers on duty, the runs going and the queues waiting, each a tile
 // that opens its screen. Alerts: Problems, today's refused starts, Config health and the last mission load. Shortcuts:
 // the tiles Config.AdminUi.homeShortcuts names, in its order; four of them hold a quick form

@@ -10,7 +10,7 @@ let seq = 0;
 export type ToastTime = 'short' | 'normal' | 'long';
 
 // How long a toast stays (ms) for the officer option toastTime (shared/options_popups.lua); the Lua toasts
-// get theirs from the same table in modules/tablet/client.lua.
+// get theirs from the same table in modules/access/client/tablet.lua.
 export const TOAST_MS: Record<ToastTime, Record<NotificationKind, number>> = {
     short: { info: 3000, success: 3000, warning: 5000, error: 5000 },
     normal: { info: 5000, success: 5000, warning: 7000, error: 7000 },

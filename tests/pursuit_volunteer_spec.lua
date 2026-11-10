@@ -11,11 +11,11 @@ for _, b in ipairs({ 'field_contact' }) do H.load('blocks/' .. b .. '/server.lua
 local realWarn = CP.warn
 CP.warn = function() end
 CP.Missions = nil
-H.load('modules/missions/server.lua')
+H.load('modules/missions/missions.lua')
 local Missions = CP.Missions
 Missions.loadAll()
 CP.warn = realWarn
-H.load('modules/spawn/server.lua')
+H.load('modules/runs/spawn.lua')
 local P = CP.Blocks.get('pursuit')
 
 -- ============================================================================

@@ -125,7 +125,7 @@ CP.Missions = {
 
 H.load('modules/realplayers/volunteers.lua')
 H.load('modules/system/schedule.lua')
-H.load('modules/draw/server.lua')
+H.load('modules/runs/draw.lua')
 H.step(0)
 local V, D = CP.Volunteers, CP.Draw
 local WARRANT, SEARCH = missions[1], missions[2]
@@ -342,7 +342,7 @@ end
 -- ============================================================================
 
 do
-    H.load('modules/settings/server.lua')
+    H.load('modules/admin/settings.lua')
     local S = CP.Settings
     H.ok(S.check('RealPlayers.volunteer.modes', { patrol = 'players_only' }), 'a mode per type is accepted')
     H.ok(not S.check('RealPlayers.volunteer.modes', { patrol = 'everyone' }), 'a value that is no mode is refused')

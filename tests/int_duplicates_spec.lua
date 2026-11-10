@@ -2,8 +2,8 @@
 -- published after its test.
 
 -- The REAL loader (CP.Missions.loadAll at start: missions/builtin/index.lua and every built-in file), the REAL
--- blocks and the REAL builder (modules/builder/server.lua) on MariaDB; stubs only for access, qbx, admin audit,
--- tablet pushes and CP.Testing.startDraft (the test run itself is modules/testing's job). For each of the 14
+-- blocks and the REAL builder (modules/missions/builder.lua) on MariaDB; stubs only for access, qbx, admin audit,
+-- tablet pushes and CP.Testing.startDraft (the test run itself is modules/missions/testing's job). For each of the 14
 -- built-ins:
 --   * server:builder:duplicate (B.sanitize, the standard-bonus filter and B.customBonusFields) gives a draft
 --     whose record has no guardrail errors;
@@ -158,8 +158,8 @@ local function Body()
             onDamaged = function() end,
         }
 
-    H.load('modules/scaling/server.lua')
-    H.load('modules/permissions/server.lua')
+    H.load('modules/runs/scaling.lua')
+    H.load('modules/access/permissions.lua')
     for _, b in ipairs({
         'checkpoint_route',
         'interact_points',
@@ -178,8 +178,8 @@ local function Body()
     H.sql('DELETE FROM cp_custom_missions')
     H.sql('DELETE FROM cp_officers WHERE citizenid = \'SUP00001\'')
     H.sql('INSERT INTO cp_officers (citizenid, display_name, department) VALUES (\'SUP00001\', \'John Doe\', \'sast\')')
-    H.load('modules/builder/server.lua')
-    H.load('modules/missions/server.lua')
+    H.load('modules/missions/builder.lua')
+    H.load('modules/missions/missions.lua')
     H.step(10)   -- CP.Missions.loadAll (built-ins + CP.Builder.loadPublished)
     local B = CP.Builder
 

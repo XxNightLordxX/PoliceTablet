@@ -1,7 +1,7 @@
 // Mission Builder in-world overlays: the placement tool, route recording and test drive HUDs.
 
 // Props: { overlay } — the `overlay` message payload whose kind is 'placement' | 'recording' | 'testdrive',
-// sent by modules/builder/client.lua every ~150 ms while a tool runs (shapes: src/types/builder_client.ts).
+// sent by modules/missions/client/builder.lua every ~150 ms while a tool runs (shapes: src/types/builder_client.ts).
 // Rendered full-screen by App while such an overlay is set; the tablet is closed at that time, there is no NUI
 // focus (the keys are game controls read by the Lua tool), so this panel is display-only.
 //   placement  what is being placed, count placed / needed / max, valid or invalid spot with the reason,

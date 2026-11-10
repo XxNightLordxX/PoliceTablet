@@ -86,7 +86,7 @@ waits = {}
 CP.Access.setSession(Session({ autoReady = true }))
 H.eq(O.get('autoReady'), true, 'Auto-Ready on')
 H.advance(5000, 250)
-local n, threads = From('modules/options/client.lua')
+local n, threads = From('modules/access/client/options.lua')
 H.ok(n >= 10, ('on: the watcher looks for input (%d waits)'):format(n))
 H.eq(threads, 1, 'on: one watcher')
 pressed[32] = true
@@ -96,13 +96,14 @@ H.ok(O.activeWithin(60000), 'on: the watcher saw the input')
 O.watchInput()
 CP.Hooks.fire('settings:changed')
 H.advance(1000, 250)
-H.eq(select(2, From('modules/options/client.lua')), 1, 'a second start (hook, Settings change) keeps one watcher')
+H.eq(select(2, From('modules/access/client/options.lua')), 1,
+    'a second start (hook, Settings change) keeps one watcher')
 
 CP.Access.setSession(Session({ autoReady = false }))
 H.advance(1000, 250)
 waits = {}
 H.advance(30000, 250)
-H.eq((From('modules/options/client.lua')), 0, 'off: the watcher has ended, nothing wakes')
+H.eq((From('modules/access/client/options.lua')), 0, 'off: the watcher has ended, nothing wakes')
 H.ok(not O.activeWithin(60000), 'off: the last input is forgotten')
 
 -- turned on by a change no hook saw (a department rule in config.lua): the first Auto-Ready question starts it
@@ -111,11 +112,11 @@ CP.Access.setSession(Session({ autoReady = true }))
 H.advance(1000, 250)
 waits = {}
 H.advance(5000, 250)
-H.eq((From('modules/options/client.lua')), 0, 'locked by config.lua: no watcher')
+H.eq((From('modules/access/client/options.lua')), 0, 'locked by config.lua: no watcher')
 Config.OfficerOptions.allow.autoReady = true
 H.ok(not O.activeWithin(60000), 'unlocked: the first question answers "not at the keys"')
 H.advance(1000, 250)
-H.ok((From('modules/options/client.lua')) > 0, 'unlocked: that question started the watcher')
+H.ok((From('modules/access/client/options.lua')) > 0, 'unlocked: that question started the watcher')
 CP.Access.setSession(Session({ autoReady = false }))
 H.advance(1000, 250)
 Config.OfficerOptions.allow.autoReady = keepAllow
@@ -228,7 +229,7 @@ do
     -- the paced waits only (the prop's model and animation loads wait 10 ms at a time once)
     local n, threads = 0, {}
     for _, w in ipairs(waits) do
-        if w.file == 'modules/tablet/client.lua' and w.ms >= 1000 then
+        if w.file == 'modules/access/client/tablet.lua' and w.ms >= 1000 then
             n = n + 1
             threads[w.co] = true
         end
@@ -242,7 +243,7 @@ do
     H.advance(3000, 250)
     waits = {}
     H.advance(10000, 250)
-    H.eq((From('modules/tablet/client.lua')), 0, 'closed: the watcher has ended')
+    H.eq((From('modules/access/client/tablet.lua')), 0, 'closed: the watcher has ended')
     H.exportsMock.ox_inventory = keepInv
     CP.Net.request = keepReq
     _G.GetResourceState = keepState

@@ -34,7 +34,7 @@ CP.DeptControls = {
 
 H.load('modules/supervisor/happyhour.lua')
 H.load('modules/progression/events.lua')
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/progression/scoring.lua')
 local HH, E, S = CP.HappyHour, CP.Events, CP.Scoring
 local MC = Config.MissionControls.controls

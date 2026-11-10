@@ -1,7 +1,7 @@
 # Crimson-Police workflows: how they work and the specs that drive them
 
 Every workflow an officer, a supervisor or an admin goes through, and the end-to-end spec that drives it start to
-finish on the real server side of Crimson-Police (every `modules/**/server.lua` and `blocks/**/server.lua` loaded as in
+finish on the real server side of Crimson-Police (every file of fxmanifest's server_scripts loaded as in
 game; only the other resources and the natives are stubs). The specs run in files mode (database off, the saves
 folder, as shipped) with every switch the workflow needs turned on through the Admin UI's own Settings action, and
 `tests/storage_copy_spec.lua` and the shadow suite cover where the database differs. Run one with

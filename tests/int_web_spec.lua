@@ -5,7 +5,7 @@
 --   * Mission Board: BoardData.operation.joinBlocked (CP.Operations.boardCard) is typed, read by the
 --     screen, and every key the Lua can send has a text in some locale part;
 --   * Unit screen: test invitations (SPEC Admin test mode, "accept on their own screen") use the names
---     modules/testing registers (callback test:pendingInvites, action server:testRespond { inviteId,
+--     modules/missions/testing registers (callback test:pendingInvites, action server:testRespond { inviteId,
 --     accepted }, push 'invites') and the TestInvite fields the Lua returns; every literal key exists;
 --   * a nil push ('run' with no data) arrives as a missing field: the RunBar, Home, Mission Board and
 --     Active Mission treat undefined like null;
@@ -13,7 +13,7 @@
 --   * lists from Lua ({} for an empty table): the touched screens wrap them (asArray / asList);
 --   * theme: primary/accent text colours reach WCAG AA (4.5:1) on the surface, checked with a Lua port of
 --     web/src/shared/theme.ts on the configured department themes (FIB's navy primary was 3.2:1);
---   * Check spawn points: the push topic spawnCheck and every state modules/testing/client.lua pushes
+--   * Check spawn points: the push topic spawnCheck and every state modules/missions/client/testing.lua pushes
 --     are handled by admin/components/spawnCheckStore.ts at module level, with the fields the Lua sends; the
 --     client actions spawnCheck, spawnCheckStop and teleport { target: 'point' } are the ones the Lua registers;
 --     the button, the location item and Teleport here follow admin:getTests config.spawnCheck; the report uses
@@ -92,7 +92,7 @@ Has(board, '\'board.op.cannot_join\'', 'generic hint kept when joinBlocked is mi
 -- ============================================================================
 
 local unit = Read(WEB .. 'officer/screens/Unit.tsx')
-local testing = Read(ROOT .. 'modules/testing/server.lua')
+local testing = Read(ROOT .. 'modules/missions/testing.lua')
 local testTypes = Read(WEB .. 'types/testing.ts')
 H.ok(unit ~= nil and testing ~= nil and testTypes ~= nil, 'Unit screen, testing server and testing types exist')
 Has(unit, 'useRequest<TestInvite[]>(\'test:pendingInvites\', {}, { pushTopic: \'invites\' })',
@@ -100,9 +100,10 @@ Has(unit, 'useRequest<TestInvite[]>(\'test:pendingInvites\', {}, { pushTopic: \'
 Has(unit, 'run(\'server:testRespond\', { inviteId: inv.inviteId, accepted }',
     'Unit answers with server:testRespond { inviteId, accepted }')
 Has(unit, 'asList(data)', 'the invitation list tolerates {} from Lua')
-Has(testing, 'CP.Net.callback(\'test:pendingInvites\'', 'modules/testing registers test:pendingInvites')
-Has(testing, 'CP.Net.action(\'server:testRespond\'', 'modules/testing registers server:testRespond')
-Has(testing, 'CP.push(target, \'invites\', { test = true })', 'modules/testing pushes \'invites\' to the invitee')
+Has(testing, 'CP.Net.callback(\'test:pendingInvites\'', 'modules/missions/testing registers test:pendingInvites')
+Has(testing, 'CP.Net.action(\'server:testRespond\'', 'modules/missions/testing registers server:testRespond')
+Has(testing, 'CP.push(target, \'invites\', { test = true })',
+    'modules/missions/testing pushes \'invites\' to the invitee')
 do
     local shape = testing:match('function Testing%.pendingInvites.-out%[#out %+ 1%] = {(.-)}')
     H.ok(shape ~= nil, 'pendingInvites builds its entries')
@@ -264,7 +265,7 @@ do
     H.ok(rv ~= nil and panel ~= nil and lb ~= nil and queueSrv ~= nil, 'Admin Review, the queue panel, modules/review')
     Has(queueSrv, 'CP.Net.callback(\'review:getQueue\'', 'modules/review registers review:getQueue')
     Has(queueSrv, 'CP.Net.action(\'server:review:decide\'', 'modules/review registers server:review:decide')
-    H.ok(not Read(ROOT .. 'modules/admin/server.lua'):find('admin:getFlagged', 1, true), 'admin:getFlagged is gone')
+    H.ok(not Read(ROOT .. 'modules/admin/admin.lua'):find('admin:getFlagged', 1, true), 'admin:getFlagged is gone')
     Has(rv, '<ReviewQueuePanel all', 'Review -> Queue is the one queue of every department')
     Has(panel, '\'review:getQueue\', all ? { all: true } : {}', 'the panel asks review:getQueue')
     Has(panel, 'run<{ pending?: boolean; queue?: ReviewQueueData }>(\'server:review:decide\', payload)',
@@ -555,7 +556,7 @@ do
         'the HUD shows where the objective is and how far while the objectives run')
     Has(hudSrc, 't(\'hud.target.distance\', { distance: formatDistance(target.distance) })', 'its distance')
     Has(data, 'target: h.target ?? null,', 'normalizeHud keeps a missing target as null')
-    local tabletCl = Read(ROOT .. 'modules/tablet/client.lua')
+    local tabletCl = Read(ROOT .. 'modules/access/client/tablet.lua')
     Has(tabletCl, 'detail = true, target = true }', 'the HUD patch target = false clears it (NULLABLE_HUD)')
 end
 
@@ -565,8 +566,8 @@ end
 -- (PLAN S8): the dialog, its store and the Lua testing client.
 
 do
-    local tclient = Read(ROOT .. 'modules/testing/client.lua')
-    local tserver = Read(ROOT .. 'modules/testing/server.lua')
+    local tclient = Read(ROOT .. 'modules/missions/client/testing.lua')
+    local tserver = Read(ROOT .. 'modules/missions/testing.lua')
     local store = Read(WEB .. 'admin/components/spawnCheckStore.ts')
     local dialog = Read(WEB .. 'admin/components/SpawnCheckDialog.tsx')
     local screen = Read(WEB .. 'admin/screens/Testing.tsx')
@@ -1009,12 +1010,12 @@ do
     local types = Read(WEB .. 'shared/types.ts')
     local opts = Read(WEB .. 'shared/options.ts')
     local appSrc = Read(WEB .. 'App.tsx')
-    local oclient = Read(ROOT .. 'modules/options/client.lua')
-    local tclientSrc = Read(ROOT .. 'modules/tablet/client.lua')
+    local oclient = Read(ROOT .. 'modules/access/client/options.lua')
+    local tclientSrc = Read(ROOT .. 'modules/access/client/tablet.lua')
     Has(types, 'localOptions: { type: \'localOptions\'; options: Record<string, OfficerOptionValue> };',
         'NuiMessageMap lists the message localOptions')
     Has(oclient, 'CP.Tablet.send({ type = \'localOptions\', options = O.localValues() })',
-        'which modules/options/client.lua sends')
+        'which modules/access/client/options.lua sends')
     Has(tclientSrc, 'CP.Options.sendLocal()', 'on the NUI \'ready\'')
     Has(opts, 'useNuiEvent(\'localOptions\'', 'shared/options.ts reads localOptions')
     Has(opts, '\'setLocalOption\'', 'shared/options.ts calls the client action setLocalOption')
@@ -1035,7 +1036,7 @@ do
     local screen = Read(WEB .. 'officer/screens/MyOptions.tsx') or ''
     local dialog = Read(WEB .. 'officer/components/ProfileEditDialog.tsx') or ''
     local mock = Read(WEB .. 'mocks/options.mock.ts') or ''
-    local tclientSrc = Read(ROOT .. 'modules/tablet/client.lua') or ''
+    local tclientSrc = Read(ROOT .. 'modules/access/client/tablet.lua') or ''
     Has(nav, '\'me\' | \'options\';', 'OfficerScreenKey has options')
     Has(screens, 'import MyOptions from \'../officer/screens/MyOptions\';', 'the screen registry imports MyOptions')
     Has(
@@ -1072,7 +1073,8 @@ do
     Has(screen, '<StoreChip store={def.store} />', 'each row says This character or This PC')
     Has(screen, 't(\'options.reset\')', 'each group has Back to default')
     Has(screen, 't(\'options.keys.hint\')', 'My keys says where to change the keys')
-    Has(tclientSrc, 'T.registerClientAction(\'getKeyLabels\',', 'modules/tablet/client.lua registers getKeyLabels')
+    Has(tclientSrc, 'T.registerClientAction(\'getKeyLabels\',',
+        'modules/access/client/tablet.lua registers getKeyLabels')
     Has(dialog, 'navigate(\'options\');', 'the Edit profile Look tab opens My options')
     Has(dialog, 't(\'options.more\')', 'with More options')
 end
@@ -1088,7 +1090,7 @@ do
     local screen = Read(WEB .. 'supervisor/screens/MissionControls.tsx') or ''
     local mock = Read(WEB .. 'mocks/oversight.mock.ts') or ''
     local samples = Read(WEB .. 'mocks/samples.ts') or ''
-    local tabletSrc = Read(ROOT .. 'modules/tablet/server.lua') or ''
+    local tabletSrc = Read(ROOT .. 'modules/access/tablet.lua') or ''
     -- MG3: Mission controls is the Controls tab of the Department screen (BK1: no old screen key)
     local dept = Read(WEB .. 'layouts/supDepartment.ts') or ''
     H.ok(not nav:find('| \'sup_controls\'', 1, true), 'SupervisorScreenKey has no sup_controls any more')

@@ -33,7 +33,7 @@ end
 -- Z9: every run end reason (RESULT in modules/runs) has its Officers / Review Queue label, and the downed end
 -- texts no longer promise 'no cooldown' (MISSION_COOLDOWN applies the mission cooldown; only the type one is off)
 do
-    local f = io.open('Crimson-Police/modules/runs/server.lua', 'rb')
+    local f = io.open('Crimson-Police/modules/runs/runs.lua', 'rb')
     local src = f:read('a')
     f:close()
     local block = src:match('\nlocal RESULT = (%b{})')

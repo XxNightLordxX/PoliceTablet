@@ -156,7 +156,7 @@ cli_net_action = collect('client', r"CP\.Net\.action\(\s*['\"](server:[\w:]+)['\
 srv_handlers = collect('server', r"RegisterNetEvent\(\s*['\"](crimson-police:server:[\w:]+)['\"]")
 for k, v in collect('server', r"RegisterNetEvent\(\s*CP\.e\(\s*['\"](server:[\w:]+)['\"]").items(): srv_handlers['crimson-police:' + k] += v
 srv_actions = collect('server', r"CP\.Net\.action\(\s*['\"](server:[\w:]+)['\"]")
-# admin actions registered through CP.AdminKit (modules/adminkit) are net actions too
+# admin actions registered through CP.AdminKit (modules/admin/adminkit) are net actions too
 for k, v in collect_kit('action').items(): srv_actions[k] += v
 for k, v in collect_kit('supAction').items(): srv_actions[k] += v  # Kit.supAction: the supervisor variant
 for k, v in collect('server', r"CP\.Net\.action\(\s*\(\s*['\"]server:%s:([\w:]+)['\"]\s*\)\s*:\s*format").items():

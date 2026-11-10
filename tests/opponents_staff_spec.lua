@@ -60,7 +60,7 @@ CP.AntiCheat = {
     note = function() return true end,
     flag = function() return true end,
 }
-H.load('modules/integrations/qbx/server.lua')
+H.load('modules/system/integrations/qbx.lua')
 H.load('modules/realplayers/opponents.lua')
 H.load('modules/realplayers/staff.lua')
 H.load('modules/supervisor/restrictions.lua')
@@ -550,7 +550,7 @@ end
 -- ============================================================================
 
 do
-    H.load('modules/permissions/server.lua')
+    H.load('modules/access/permissions.lua')
     local P = CP.Permissions
     local answer = true
     Opp.suspectOfRun = function() return answer end

@@ -1,4 +1,4 @@
--- The builder_client slice: modules/builder/client.lua (CP.Builder, client side).
+-- The builder_client slice: modules/missions/client/builder.lua (CP.Builder, client side).
 
 -- Pure logic: the route recorder (snapping cadence is the runner's; waypoints at turns and every maxGap, duplicates,
 -- undo, stop points), the placement spot checks, the client-action payload parsers, driving styles, thinning and
@@ -247,7 +247,7 @@ CP.Qbx = {
     onUnload = function(fn) unloadFns[#unloadFns + 1] = fn end,
 }
 
-H.load('modules/builder/client.lua')
+H.load('modules/missions/client/builder.lua')
 local B = CP.Builder
 
 local function Act(name, payload) return T.actions[name](payload) end
@@ -2468,7 +2468,7 @@ end
 -- ============================================================================
 
 do
-    local fh = assert(io.open(H.root .. 'modules/builder/client.lua', 'r'))
+    local fh = assert(io.open(H.root .. 'modules/missions/client/builder.lua', 'r'))
     local src = fh:read('a')
     fh:close()
     local missing = {}

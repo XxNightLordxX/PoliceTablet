@@ -1,7 +1,7 @@
 -- Config.NpcCombat: no automatic weapons, the accuracy caps, and an officer's run-scoped damage settings.
 
 -- Config.NpcCombat (the owner's request of 2026-10-19: no automatic weapons, lower accuracy, slower fire, less damage to
--- officers, no headshot one-shots): the weapon helper (shared/npccombat.lua), the accuracy caps of modules/scaling,
+-- officers, no headshot one-shots): the weapon helper (shared/npccombat.lua), the accuracy caps of modules/runs/scaling,
 -- and, in their own Lua state, the run-scoped damage settings of an officer's game (tests/fixtures/npccombat). The
 -- client caps, the drive-by and the server's willKill cancel are in npc_spec, blocks_c_spec and the npc client checks;
 -- the Builder check with Config.NpcCombat off (the allowed list alone), flee_arrest's swapped door weapon and the
@@ -177,7 +177,7 @@ cfg.lethalCancelAbove = nil
 H.eq(NC.lethalCancelAbove(), 0.75, 'missing: three quarters')
 cfg.lethalCancelAbove = 0.75
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 local S = CP.Scaling
 -- the worst case of the audit: Kingpin waves 30 + 20 (critical) + 8 (hard) = 58 before the cap
 Config.NpcDifficulty.preset = 'hard'
@@ -194,11 +194,11 @@ cfg.accuracyMax, cfg.accuracyScale = 18, 0.7
 --                   A REAL PLAYER'S HIT DROPS THE PROTECTION
 -- ============================================================================
 -- playerHitDropsProtection, V8.
--- modules/npccombat/server.lua: a weaponDamageEvent from a player who is not on the run, on an active participant of
+-- modules/npc/npccombat.lua: a weaponDamageEvent from a player who is not on the run, on an active participant of
 -- an NPC run, sends that officer one crimson-police:client:npcCombatDrop for the rest of the run.
 
 H.eq(cfg.playerHitDropsProtection, false, 'playerHitDropsProtection ships false (today\'s behaviour)')
-H.load('modules/npccombat/server.lua')
+H.load('modules/npc/npccombat.lua')
 H.ok(type(NC.dropFor) == 'function' and type(NC.runStarted) == 'function', 'the server API is there')
 
 -- Player peds are src * 100 with the net id 7000 + src; NPC 50001 (net id 9001) is simulated by player 5's game.

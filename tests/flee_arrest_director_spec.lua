@@ -32,12 +32,12 @@ end
 local realWarn = CP.warn
 CP.warn = function() end
 CP.Missions = nil
-H.load('modules/missions/server.lua')
+H.load('modules/missions/missions.lua')
 local Missions = CP.Missions
 local summary = Missions.loadAll()
 CP.warn = realWarn
 H.eq(#(summary.failed or {}), 0, 'the real loader rejects no built-in mission')
-H.load('modules/spawn/server.lua')
+H.load('modules/runs/spawn.lua')
 local FA = CP.Blocks.get('flee_arrest')
 
 local cfg = Config.Spawning

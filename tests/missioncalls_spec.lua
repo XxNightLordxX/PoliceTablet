@@ -257,8 +257,8 @@ do
 end
 
 H.load('modules/system/schedule.lua')
-H.load('modules/draw/server.lua')
-H.load('modules/integrations/sc_dispatch/server.lua')
+H.load('modules/runs/draw.lua')
+H.load('modules/system/integrations/sc_dispatch.lua')
 H.load('modules/dispatch/missioncalls.lua')
 local MC = CP.MissionCalls
 local D = CP.Draw
@@ -1122,7 +1122,7 @@ do
     MC._pushAll()
     H.ok(Find(pushes, function(p) return p.src == 1 and p.topic == 'calls' end) ~= nil, 'the open tablet gets the push')
     H.eq(Find(pushes, function(p) return p.src == 2 end), nil, 'a closed tablet gets nothing')
-    -- the tablet's own close (server:tabletClosed in modules/tablet fires 'tablet:closed') ends a watch
+    -- the tablet's own close (server:tabletClosed in modules/access/tablet fires 'tablet:closed') ends a watch
     CP.Hooks.fire('tablet:closed', 1)
     Cb('getMissionCalls', 2)
     CP.Hooks.fire('tablet:closed', 2)
@@ -1417,8 +1417,8 @@ do
     }
     local Stub = CP.Access
     CP.Access = nil
-    H.load('modules/integrations/qbx/server.lua')
-    H.load('modules/access/server.lua')
+    H.load('modules/system/integrations/qbx.lua')
+    H.load('modules/access/access.lua')
     -- six on-duty officers (a unit of 1 and 2, four solo) and 100 civilians, all loaded the way qbx_core loads them
     for s = 1, 6 do QbxPlayer(s, 'sast', true) end
     for s = 101, 200 do QbxPlayer(s, 'unemployed', false) end

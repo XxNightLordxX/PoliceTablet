@@ -82,9 +82,9 @@ CP.Qbx = {
     onPlayerUnload = function() end,
     getOnlinePlayers = function() return {} end,
 }
-H.load('modules/access/server.lua')
+H.load('modules/access/access.lua')
 CP.Qbx = nil
-H.load('modules/integrations/qbx/server.lua')
+H.load('modules/system/integrations/qbx.lua')
 H.load('modules/realplayers/opponents.lua')
 H.load('modules/realplayers/surrender.lua')
 H.step(0)

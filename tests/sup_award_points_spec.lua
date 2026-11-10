@@ -141,10 +141,10 @@ CP.Scoring = {
 CP.Leaderboard = { invalidate = function() end }
 
 for _, m in ipairs({
-    'modules/adminkit/server.lua',
+    'modules/admin/adminkit.lua',
     'modules/review/corrections.lua',
-    'modules/deptcontrols/server.lua',
-    'modules/supawards/server.lua',
+    'modules/supervisor/deptcontrols.lua',
+    'modules/supervisor/supawards.lua',
 }) do
     H.load(m)
 end

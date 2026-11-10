@@ -2,7 +2,7 @@
 
 --   local H = dofile('tests/harness.lua')
 --   H.boot({ side = 'server' })            -- Config, CP shared layer, native stubs, MySQL -> MariaDB
---   H.load('modules/scaling/server.lua')   -- any resource file, path relative to Crimson-Police/
+--   H.load('modules/runs/scaling.lua')   -- any resource file, path relative to Crimson-Police/
 --   H.eq(CP.Scaling.tierFor(3).tier, 'heavy')
 --
 -- MySQL.* runs real queries against the local MariaDB database `cp_test` through the mysql CLI
@@ -2010,7 +2010,7 @@ end
 --           MOVEMENT NATIVES WITH THEIR REAL ARGUMENT TYPES (opt-in)
 -- ============================================================================
 -- H.gaitNatives(onCall) installs the natives a runner's game uses to move him and to hold him to a pace
--- (modules/npc/client.lua, Config.Flee), with natives.json's argument types checked as H.combatNatives does (Lua
+-- (modules/npc/client/npc.lua, Config.Flee), with natives.json's argument types checked as H.combatNatives does (Lua
 -- leaves out the Vector3* of GetSafeCoordForPed and answers it after the BOOL). The world it returns keeps what the
 -- game would:
 --   peds[ped] = { cap, capAt, rate, rateAt, clipset, task = { name = 'nav'|'smartFlee', x, y, z, mbr, flags, from,
@@ -2169,7 +2169,7 @@ end
 --             GROUND PROBE NATIVES WITH THEIR REAL ARGUMENT TYPES
 -- ============================================================================
 -- H.groundNatives(onCall) (opt-in) installs the client natives a ground probe uses (CP.Spawn.probe,
--- modules/spawn/client.lua), each checking its arguments as H.combatNatives does (a float where the game reads a
+-- modules/runs/client/spawn.lua), each checking its arguments as H.combatNatives does (a float where the game reads a
 -- float: an integer coordinate from a mission file must be passed as x + 0.0). The world it returns is a small game
 -- map the spec sets up:
 --   ped, car: this player's ped and the car he sits in (0 = on foot)
@@ -2352,7 +2352,7 @@ end
 -- ============================================================================
 --            PLACER NATIVES WITH THEIR REAL ARGUMENT TYPES (opt-in)
 -- ============================================================================
--- H.placerNatives(onCall) installs the client natives the placer uses (modules/spawn/client.lua, PLAN S9: players,
+-- H.placerNatives(onCall) installs the client natives the placer uses (modules/runs/client/spawn.lua, PLAN S9: players,
 -- network ids, control, freeze, coordinates, the ground natives of vehicles and objects) with natives.json's argument
 -- types, as H.groundNatives does (a spec of the placer installs both). The world it returns is a small game:
 --   me: this game's player index (PlayerId)

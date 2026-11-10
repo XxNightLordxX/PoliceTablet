@@ -4,7 +4,7 @@
 import { asArray } from '../../shared/data';
 import type { PresetPreview, SettingView, SettingsData, SettingsSection } from '../../types/settings';
 
-// The sections a screen's gear shows, in the server's order for that screen (modules/settings Play.screens).
+// The sections a screen's gear shows, in the server's order for that screen (modules/admin/settings Play.screens).
 export function gearSections(data: SettingsData | null | undefined, screen: string): SettingsSection[] {
     const keys = asArray(data?.screens?.[screen]);
     const secs = asArray(data?.sections);

@@ -1,4 +1,4 @@
--- The spawn director (Config.Spawning; modules/runs/server.lua Runs.choosePoints, Runs.whenNear, ctx.choosePoints,
+-- The spawn director (Config.Spawning; modules/runs/runs.lua Runs.choosePoints, Runs.whenNear, ctx.choosePoints,
 -- ctx.whenNear) on a real test run of the engine, officers placed through the harness's ped coords.
 
 -- The spawn director (Config.Spawning) on a real test run of the engine: three officers placed through the
@@ -93,7 +93,7 @@ local mission = {
 
 local function Place(src, x, y, z) H.players[src].coords = vec3(x + 0.0, y + 0.0, (z or 30.0) + 0.0) end
 for src = 1, 3 do H.players[src] = { coords = vec3(0.0, 0.0, 30.0) } end
-H.load('modules/runs/server.lua')
+H.load('modules/runs/runs.lua')
 local Runs = CP.Runs
 H.step(0)
 H.ok(type(Runs.choosePoints) == 'function' and type(Runs.whenNear) == 'function', 'Runs.choosePoints, Runs.whenNear')

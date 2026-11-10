@@ -2,9 +2,9 @@
 
 -- the modules that call it: CP.Banking.depositSociety (CP.Cash's society refund), the live-run own-run check
 -- of CP.Permissions.canReviewRun, the session tier labels from CP.Scaling.label, and on the client the one
--- NUI path of the mission HUD / result screen (modules/runs/client.lua -> CP.Tablet -> SendNUIMessage),
+-- NUI path of the mission HUD / result screen (modules/runs/client/runs.lua -> CP.Tablet -> SendNUIMessage),
 -- the HUD kept off screen while Crimson-Arena owns the player (Crimson-Arena rule 8) and the panel focus
--- helper CP.Tablet.panelFocus that modules/testing's test-control panel needs.
+-- helper CP.Tablet.panelFocus that modules/missions/testing's test-control panel needs.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
@@ -86,9 +86,9 @@ H.exportsMock['Renewed-Banking'] = {
     end,
 }
 
-H.load('modules/integrations/renewed_banking/server.lua')
-H.load('modules/permissions/server.lua')
-H.load('modules/tablet/server.lua')
+H.load('modules/system/integrations/renewed_banking.lua')
+H.load('modules/access/permissions.lua')
+H.load('modules/access/tablet.lua')
 
 -- CP.Banking.depositSociety (economy request: the refund path of a society-funded payout)
 do
@@ -296,9 +296,9 @@ CP.Route = {
 }
 CP.Blocks.register('int_core_block', { prepare = function() end, start = function() end, stop = function() end })
 
-H.load('modules/integrations/qbx/client.lua')
-H.load('modules/tablet/client.lua')
-H.load('modules/runs/client.lua')
+H.load('modules/system/client/qbx.lua')
+H.load('modules/access/client/tablet.lua')
+H.load('modules/runs/client/runs.lua')
 local T = CP.Tablet
 local function Tick(ms) H.advance(ms or 600, 50) end
 Tick(3000) -- theme refresh, client action registration
@@ -368,14 +368,14 @@ local function Breakdown(runId)
     }
 end
 
--- exactly one path: modules/runs/client.lua handles client:hud / client:runEnded, the tablet forwards to the NUI
+-- exactly one path: modules/runs/client/runs.lua handles client:hud / client:runEnded, the tablet forwards to the NUI
 do
     H.ok(arenaHandler ~= nil, 'the tablet watches the local crimsonArena value')
     H.eq(#(H.handlers['crimson-police:client:hud'] or {}), 1,
         'one client:hud handler (the run engine), none in the tablet')
     H.eq(#(H.handlers['crimson-police:client:runEnded'] or {}), 1,
         'one client:runEnded handler among the tablet and the run engine')
-    local src = (LoadResourceFile('Crimson-Police', 'modules/tablet/client.lua') or '')
+    local src = (LoadResourceFile('Crimson-Police', 'modules/access/client/tablet.lua') or '')
     local code = src:gsub('%-%-[^\n]*', '')
     H.eq(code:find('client:hud', 1, true), nil, 'the tablet code never registers client:hud')
     H.eq(code:find('client:runEnded', 1, true), nil, 'the tablet code never registers client:runEnded')
@@ -496,7 +496,7 @@ do
     Tick(12500)
 end
 
--- CP.Tablet.panelFocus: the NUI focus helper for the test-control panel (modules/testing)
+-- CP.Tablet.panelFocus: the NUI focus helper for the test-control panel (modules/missions/testing)
 do
     local f0 = #focus
     H.eq(T.panelFocus('testing', true), true, 'the panel takes the focus')

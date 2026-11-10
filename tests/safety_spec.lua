@@ -309,9 +309,9 @@ PlayerRec(22).state.crimsonArena = { active = true, matchId = 'm0' }
 -- ============================================================================
 
 H.load('modules/dispatch/alerts.lua')
-H.load('modules/route/server.lua')
+H.load('modules/runs/route.lua')
 H.load('modules/dispatch/calls.lua')
-H.load('modules/downed/server.lua')
+H.load('modules/runs/downed.lua')
 H.step(0)   -- runtime wiring (every module registers its listeners after Wait(0))
 
 H.eq(Bag(21), nil, 'start: leftover Crimson-Police flag removed')
@@ -1858,8 +1858,8 @@ do
         local chunk = assert(loadfile(H.root .. rel, 't', env))
         chunk()
     end
-    LoadClient('modules/route/client.lua')
-    LoadClient('modules/downed/client.lua')
+    LoadClient('modules/runs/client/route.lua')
+    LoadClient('modules/runs/client/downed.lua')
     H.step(0)
     local CR, CD = clientCP.Route, clientCP.Downed
     H.ok(type(CR.begin) == 'function' and type(CD.busy) == 'function', 'client modules loaded')

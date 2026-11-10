@@ -1,4 +1,4 @@
-// Admin UI -> Settings -> Features: every feature switch (SettingsData.features, modules/settings Play.features) with
+// Admin UI -> Settings -> Features: every feature switch (SettingsData.features, modules/admin/settings Play.features) with
 // the setting it writes, grouped by section of play. Pure helpers; FeaturesPanel.tsx draws them.
 
 import { asArray } from '../../shared/data';

@@ -103,9 +103,9 @@ CP.Dispatch = {
 }
 
 H.load('blocks/live_response/server.lua')
-H.load('modules/missions/server.lua')
+H.load('modules/missions/missions.lua')
 H.load('modules/realplayers/livecrime.lua')
-H.load('modules/runs/server.lua')
+H.load('modules/runs/runs.lua')
 H.step(0)
 local LC, Runs = CP.LiveCrime, CP.Runs
 

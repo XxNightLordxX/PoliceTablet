@@ -49,7 +49,7 @@ export function StepPublish({ ed, cfg, def, ro, goTo }: StepProps) {
     const tested = !!rec?.draftTested;
     const testRequired = !!cfg.requireTestToPublish;
     const hasDraft = !!rec?.hasDraft || rec?.dbStatus === 'draft';
-    // the file publishing writes (FilePathFor in modules/builder/server.lua): an edited built-in goes to overrides/
+    // the file publishing writes (FilePathFor in modules/missions/builder.lua): an edited built-in goes to overrides/
     const exportDir = (cfg.exportPath ?? 'missions/custom/').replace(/\/?$/, '/');
     const filePath = `${exportDir}${rec?.overridesBuiltin ? 'overrides/' : ''}${ed.id}.lua`;
     const items = [

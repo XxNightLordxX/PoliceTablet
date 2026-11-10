@@ -266,9 +266,9 @@ CP.Events = {
     typeOfTheDay = function() return nil end,
 }
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/system/schedule.lua')
-H.load('modules/permissions/server.lua')
+H.load('modules/access/permissions.lua')
 H.load('modules/money/engine.lua')
 H.load('modules/money/payouts.lua')
 H.load('modules/money/cash.lua')
@@ -276,7 +276,7 @@ H.load('modules/progression/scoring.lua')
 H.load('modules/progression/goals.lua')
 H.load('modules/progression/leaderboard.lua')
 H.load('modules/progression/challenge.lua')
-H.load('modules/admin/server.lua')
+H.load('modules/admin/admin.lua')
 H.load('modules/review/disputes.lua')
 H.load('modules/review/queue.lua')
 H.load('modules/review/anticheat.lua')

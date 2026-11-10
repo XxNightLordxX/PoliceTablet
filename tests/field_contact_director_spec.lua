@@ -11,7 +11,7 @@
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H
 local U = CP.U
-H.load('modules/spawn/server.lua')
+H.load('modules/runs/spawn.lua')
 local impl = CP.Blocks.get('field_contact')
 
 local cfg = Config.Spawning
@@ -70,7 +70,7 @@ local function HudsWith(text)
     return n
 end
 
--- The officer's game answering the walk-in ask (modules/spawn/client.lua Spawn.walkIn): Answer(src, args) -> the
+-- The officer's game answering the walk-in ask (modules/runs/client/spawn.lua Spawn.walkIn): Answer(src, args) -> the
 -- reply and how long his game takes (ox_lib's await yields until the reply comes back).
 local WALK_IN = 'crimson-police:client:spawn:walkIn'
 local asks = {}

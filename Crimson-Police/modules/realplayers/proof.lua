@@ -612,12 +612,13 @@ CreateThread(function()
         P.on('escort', OnEscort)
         P.on('jail', OnJail)
     else
-        CP.err(TAG, 'modules/integrations/sc_police is missing: real suspects can never be detained or booked')
+        CP.err(TAG, 'modules/system/integrations/sc_police is missing: real suspects can never be detained or booked')
     end
     if A and A.on then
         A.on('respawn', OnRespawn)
     else
-        CP.err(TAG, 'modules/integrations/sc_ambulance is missing: hospital respawns of real suspects are not seen')
+        CP.err(TAG,
+            'modules/system/integrations/sc_ambulance is missing: hospital respawns of real suspects are not seen')
     end
     if Opp.onTick then
         Opp.onTick(Tick)

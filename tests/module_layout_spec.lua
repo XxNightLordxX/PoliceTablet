@@ -1,0 +1,242 @@
+-- The module layout: the 14 owner-approved modules, each a folder of named sub-files.
+
+-- Each part is modules/<module>/<part>.lua (client parts in modules/<module>/client/<part>.lua). fxmanifest.lua
+-- lists every file once, in the order the files have always loaded in, and the moved files use the shared library
+-- (CP.Call, CP.Num) instead of their own copies.
+
+local H = dofile('tests/harness.lua')
+
+local function Read(path)
+    local fh = io.open(H.root .. path, 'r')
+    if not fh then return nil end
+    local s = fh:read('a')
+    fh:close()
+    return s
+end
+
+local function Lines(cmd)
+    local out = {}
+    local p = io.popen('cd ' .. H.root .. ' && ' .. cmd)
+    for line in p:lines() do out[#out + 1] = line end
+    p:close()
+    return out
+end
+
+-- ============================================================================
+--                                THE 14 MODULES
+-- ============================================================================
+
+local MODULES = {
+    'access',
+    'admin',
+    'dispatch',
+    'map',
+    'missions',
+    'money',
+    'npc',
+    'progression',
+    'realplayers',
+    'review',
+    'runs',
+    'supervisor',
+    'system',
+    'teams',
+}
+local approved = {}
+for _, m in ipairs(MODULES) do approved[m] = true end
+local found = Lines('ls -1 modules')
+H.eq(#found, #MODULES, 'modules/ holds 14 module folders (' .. table.concat(found, ' ') .. ')')
+for _, m in ipairs(found) do H.ok(approved[m], 'modules/' .. m .. ' is an approved module') end
+
+local OLD = {
+    'permissions',
+    'tablet',
+    'options',
+    'adminhome',
+    'adminkit',
+    'sysadmin',
+    'settings',
+    'confighealth',
+    'diag',
+    'route',
+    'scaling',
+    'spawn',
+    'draw',
+    'downed',
+    'builder',
+    'testing',
+    'npccombat',
+    'custody',
+    'markers',
+    'integrations',
+    'deptcontrols',
+    'livectl',
+    'supawards',
+    'suptoday',
+}
+for _, old in ipairs(OLD) do
+    H.eq(#Lines('ls -d modules/' .. old .. ' 2>/dev/null'), 0, 'the old modules/' .. old .. ' folder is gone')
+end
+H.eq(#Lines('find modules -name server.lua -o -name client.lua'), 0, 'every module part is a named sub-file')
+
+-- ============================================================================
+--                      THE MANIFEST LISTS EVERY FILE ONCE
+-- ============================================================================
+
+local server, client = H.manifestScripts('server_scripts'), H.manifestScripts('client_scripts')
+local seen = {}
+for _, list in ipairs({ server, client }) do
+    for _, f in ipairs(list) do seen[f] = (seen[f] or 0) + 1 end
+end
+for _, f in ipairs(Lines('find modules -name "*.lua" | sort')) do
+    H.eq(seen[f], 1, 'fxmanifest lists ' .. f .. ' once')
+end
+for _, f in ipairs(client) do
+    if f:sub(1, 8) == 'modules/' then H.ok(f:find('/client/', 1, true), 'a client file sits in client/: ' .. f) end
+end
+for _, f in ipairs(server) do
+    if f:sub(1, 8) == 'modules/' then
+        H.ok(not f:find('/client/', 1, true), 'a server file is not in client/: ' .. f)
+    end
+end
+
+-- the order every file has always loaded in (storage first, CP.AdminKit before every module)
+local ORDER = {
+    'modules/system/memsql.lua',
+    'modules/system/storage.lua',
+    'modules/admin/adminkit.lua',
+    'modules/system/migrations.lua',
+    'modules/system/schedule.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminhome.lua',
+    'modules/missions/builder.lua',
+    'modules/admin/confighealth.lua',
+    'modules/npc/custody.lua',
+    'modules/supervisor/deptcontrols.lua',
+    'modules/runs/downed.lua',
+    'modules/runs/draw.lua',
+    'modules/system/integrations/crimson_contracts.lua',
+    'modules/system/integrations/qbx.lua',
+    'modules/system/integrations/renewed_banking.lua',
+    'modules/system/integrations/sc_ambulance.lua',
+    'modules/system/integrations/sc_dispatch.lua',
+    'modules/system/integrations/sc_police.lua',
+    'modules/supervisor/livectl.lua',
+    'modules/map/markers.lua',
+    'modules/missions/missions.lua',
+    'modules/npc/npc.lua',
+    'modules/npc/npccombat.lua',
+    'modules/access/options.lua',
+    'modules/access/permissions.lua',
+    'modules/runs/route.lua',
+    'modules/runs/runs.lua',
+    'modules/runs/scaling.lua',
+    'modules/admin/settings.lua',
+    'modules/runs/spawn.lua',
+    'modules/supervisor/supawards.lua',
+    'modules/supervisor/today.lua',
+    'modules/admin/sysadmin.lua',
+    'modules/access/tablet.lua',
+    'modules/missions/testing.lua',
+    'modules/progression/challenge.lua',
+    'modules/supervisor/fieldtraining.lua',
+    'modules/review/anticheat.lua',
+    'modules/realplayers/conduct.lua',
+    'modules/dispatch/alerts.lua',
+    'modules/teams/common.lua',
+    'modules/money/engine.lua',
+    'modules/money/rewards.lua',
+}
+local CLIENT_ORDER = {
+    'modules/access/client/access.lua',
+    'modules/missions/client/builder.lua',
+    'modules/npc/client/custody.lua',
+    'modules/admin/client/diag.lua',
+    'modules/runs/client/downed.lua',
+    'modules/system/client/qbx.lua',
+    'modules/system/client/sc_ambulance.lua',
+    'modules/map/client/markers.lua',
+    'modules/missions/client/missions.lua',
+    'modules/npc/client/npc.lua',
+    'modules/npc/client/npccombat.lua',
+    'modules/access/client/options.lua',
+    'modules/runs/client/route.lua',
+    'modules/runs/client/runs.lua',
+    'modules/admin/client/settings.lua',
+    'modules/runs/client/spawn.lua',
+    'modules/access/client/tablet.lua',
+    'modules/missions/client/testing.lua',
+    'modules/realplayers/client/crimtab.lua',
+    'modules/dispatch/client/missioncalls.lua',
+    'modules/teams/client/operations.lua',
+}
+for _, case in ipairs({ { 'server', server, ORDER }, { 'client', client, CLIENT_ORDER } }) do
+    local at = {}
+    for i, f in ipairs(case[2]) do at[f] = at[f] or i end
+    local last = 0
+    for _, f in ipairs(case[3]) do
+        H.ok(at[f] and at[f] > last, case[1] .. ' load order keeps ' .. f .. ' in its place')
+        last = at[f] or last
+    end
+end
+
+-- ============================================================================
+--                    THE SHARED LIBRARY, NOT PRIVATE COPIES
+-- ============================================================================
+
+local CALLS = {
+    'access/tablet',
+    'admin/adminkit',
+    'admin/sysadmin',
+    'admin/admin',
+    'admin/adminhome',
+    'runs/runs',
+    'missions/testing',
+    'npc/custody',
+    'supervisor/fieldtraining',
+    'supervisor/supawards',
+    'supervisor/missionban',
+    'supervisor/today',
+    'supervisor/livectl',
+}
+for _, f in ipairs(CALLS) do
+    local src = Read('modules/' .. f .. '.lua') or ''
+    local body = src:match('local function Call%(modName, fnName, %.%.%.%)([^\n]*)')
+    H.eq(body, ' return CP.Call(TAG, modName, fnName, ...) end', f .. ': Call is CP.Call')
+end
+local NUMS = {
+    'admin/admin',
+    'runs/runs',
+    'runs/spawn',
+    'missions/testing',
+    'npc/custody',
+    'map/markers',
+    'supervisor/supawards',
+    'supervisor/livectl',
+}
+for _, f in ipairs(NUMS) do
+    local src = Read('modules/' .. f .. '.lua') or ''
+    H.ok(not src:find('local function Num(', 1, true) and src:find('local Num = CP.Num', 1, true),
+        f .. ': Num is CP.Num')
+end
+
+-- the shared ones answer as the private copies did
+H.boot({ side = 'server' })
+CP.Probe = {
+    twice = function(n) return n * 2 end,
+    boom = function() error('boom') end,
+}
+local realErr = CP.err
+CP.err = function() end
+local ok, v = CP.Call('layout', 'Probe', 'twice', 21)
+H.ok(ok and v == 42, 'CP.Call: true and the answer')
+H.eq(CP.Call('layout', 'Probe', 'boom'), false, 'CP.Call: false when it raised')
+H.eq(CP.Call('layout', 'Probe', 'missing'), false, 'CP.Call: false when it is missing')
+CP.err = realErr
+CP.Probe = nil
+H.eq(CP.Num('12', 0), 12, 'CP.Num: a numeric string')
+H.eq(CP.Num('x', 5), 5, 'CP.Num: the default for text')
+H.eq(CP.Num(0 / 0, 5), 5, 'CP.Num: the default for NaN')
+
+return H

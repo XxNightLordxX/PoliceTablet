@@ -871,8 +871,8 @@ H.boot({ side = 'server', realLocale = true })
 M = CP.Storage.MemSQL
 Stubs()
 H.load('modules/system/migrations.lua')   -- the real runner (its CP.Migrations._split splits the copy's migrations)
-H.load('modules/access/server.lua')
-H.load('modules/admin/server.lua')
+H.load('modules/access/access.lua')
+H.load('modules/admin/admin.lua')
 H.ok(H.commands['CrimsonPoliceAdmin'] ~= nil, 'the admin command is registered')
 H.eq(CP.Storage.mode(), 'files', 'files mode')
 H.ok(CP.Migrations.isReady(), 'the migrations found the saves folder built')
@@ -1189,8 +1189,8 @@ H.load('modules/system/memsql.lua')  -- what fxmanifest loads right after @oxmys
 H.load('modules/system/storage.lua')
 M = CP.Storage.MemSQL
 Stubs()
-H.load('modules/access/server.lua')
-H.load('modules/admin/server.lua')   -- CP.Migrations is the harness stub here: the copy splits the files itself
+H.load('modules/access/access.lua')
+H.load('modules/admin/admin.lua')    -- CP.Migrations is the harness stub here: the copy splits the files itself
 H.eq(CP.Storage.mode(), 'database', 'database mode')
 local folder2 = H.resourcePath() .. '/backup saves'
 Config.Database.folder = folder2

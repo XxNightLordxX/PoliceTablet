@@ -69,7 +69,7 @@ CP.Permissions = {
 
 H.load('modules/progression/leaderboard.lua')
 H.load('modules/review/reviewrules.lua')
-H.load('modules/admin/server.lua')
+H.load('modules/admin/admin.lua')
 local LB, RR, Admin = CP.Leaderboard, CP.ReviewRules, CP.Admin
 
 -- ============================================================================

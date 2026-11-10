@@ -125,7 +125,7 @@ CP.Tablet = {
     push = function(src, topic) pushes[#pushes + 1] = { src = src, topic = topic } end,
 }
 
-H.load('modules/permissions/server.lua')
+H.load('modules/access/permissions.lua')
 H.load('modules/system/schedule.lua')
 H.load('modules/progression/scoring.lua')
 H.load('modules/progression/leaderboard.lua')

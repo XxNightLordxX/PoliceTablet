@@ -2,7 +2,7 @@
 
 // core.mock.ts's fallback), server:acceptType, server:joinOperation, server:abandon and the client actions
 // setGps, recalcRoute and logResult. Lua side effects are faked the way the game does them: 'board' /
-// 'operation' / 'run' pushes, the route toasts from modules/route, the run.accepted toast and the result card.
+// 'operation' / 'run' pushes, the route toasts from modules/runs/route, the run.accepted toast and the result card.
 //
 // URL variants (screenshots and manual checks):
 //   ?board=normal (default) | unit | member | locked | busy | oncall | boss | bossused
@@ -1064,7 +1064,7 @@ function edgeBoard(): unknown {
             },
         ],
         unit: { size: 4, isLeader: true },
-        todMultiplier: 1.5, // the optional extra requested from modules/draw (Config.Objectives.typeOfTheDay.multiplier)
+        todMultiplier: 1.5, // the optional extra requested from modules/runs/draw (Config.Objectives.typeOfTheDay.multiplier)
     };
 }
 
@@ -1242,7 +1242,7 @@ registerMock('client', 'setGps', () => {
     return res;
 });
 
-// Objective GPS (modules/markers): refused while driving to the start and under Radio Silence 'area' (shipped).
+// Objective GPS (modules/map/markers): refused while driving to the start and under Radio Silence 'area' (shipped).
 registerMock('client', 'setObjectiveGps', () => {
     const r = mockRun;
     if (!r || r.state !== 'in_progress') throw new Error('err.objective_gps_none');

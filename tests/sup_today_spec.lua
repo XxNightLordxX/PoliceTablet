@@ -3,7 +3,7 @@
 -- Supervisor UI -> Department, today at a glance (UI4): sup:getToday answers the department's officers on duty, its
 -- runs going (as Live Missions lists them: every run not ended with an officer of the department on it) and the
 -- viewer's Mission controls used today (each control with a day count, use capped at it); an admin with no department
--- sees every department; refused without viewMissionList. Plain Lua: modules/suptoday with stand-ins.
+-- sees every department; refused without viewMissionList. Plain Lua: modules/supervisor/today with stand-ins.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })
@@ -51,7 +51,7 @@ CP.DeptControls = {
     end,
 }
 
-H.load('modules/suptoday/server.lua')
+H.load('modules/supervisor/today.lua')
 
 local function Cb(src)
     H.clockMs = (H.clockMs or 0) + 6000

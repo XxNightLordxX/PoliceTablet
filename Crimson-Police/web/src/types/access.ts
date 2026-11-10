@@ -1,4 +1,4 @@
-// Tablet access shapes (modules/tablet admin:getTabletAccess): the ways, the mission desks and each department's
+// Tablet access shapes (modules/access/tablet admin:getTabletAccess): the ways, the mission desks and each department's
 // personal accents, for Admin UI → Departments.
 
 export interface DeskView {

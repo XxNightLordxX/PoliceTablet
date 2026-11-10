@@ -1,5 +1,5 @@
--- The run-scoped damage settings of an officer's game (modules/npccombat/client.lua, started and stopped by
--- modules/runs/client.lua) in their own Lua state (H.boot side = 'client'). Run by tests/npc_combat_spec.lua as a child
+-- The run-scoped damage settings of an officer's game (modules/npc/client/npccombat.lua, started and stopped by
+-- modules/runs/client/runs.lua) in their own Lua state (H.boot side = 'client'). Run by tests/npc_combat_spec.lua as a child
 -- process; prints "RESULT <passed> <failed>".
 
 package.path = package.path .. ';tests/?.lua'
@@ -38,8 +38,8 @@ end
 local W = H.combatNatives()
 local NC = Config.NpcCombat
 
-H.load('modules/npccombat/client.lua')
-H.load('modules/runs/client.lua')
+H.load('modules/npc/client/npccombat.lua')
+H.load('modules/runs/client/runs.lua')
 H.ok(type(CP.NpcCombat.start) == 'function' and type(CP.NpcCombat.stop) == 'function', 'client API present')
 
 local function Start(runId)

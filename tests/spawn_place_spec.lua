@@ -1,6 +1,6 @@
--- The server's side of the placer (Config.Spawning.place; modules/spawn/server.lua) on the real engine
+-- The server's side of the placer (Config.Spawning.place; modules/runs/spawn.lua) on the real engine
 
--- The server's side of the placer (Config.Spawning.place; modules/spawn/server.lua) on the real engine
+-- The server's side of the placer (Config.Spawning.place; modules/runs/spawn.lua) on the real engine
 -- (tests/fixtures/custody/world.lua: runs, npc, scaling, scoring): every new mission entity is frozen, its cp bag asks
 -- for a placement, the answer of an officer's game is taken or refused, a bad point moves it to another point, no
 -- answer in time lets it go (or removes it). FREEZE_ENTITY_POSITION is the server RPC FXServer sends to the game that
@@ -12,7 +12,7 @@ local H = W.H
 local U = CP.U
 local Runs = CP.Runs
 
-H.load('modules/spawn/server.lua')
+H.load('modules/runs/spawn.lua')
 local Spawn = CP.Spawn
 H.ok(type(Spawn) == 'table' and type(Spawn.ask) == 'function', 'CP.Spawn.ask on the server')
 
@@ -384,7 +384,7 @@ end
 --                         A BIG WAVE WITH SLOW PROBES
 -- ============================================================================
 -- THE TIME WAITS WHILE AN OFFICER'S GAME CHECKS.
--- The placer checks 4 at a time (modules/spawn/client.lua PLACERS_MAX); each one can take collisionTimeoutMs +
+-- The placer checks 4 at a time (modules/runs/client/spawn.lua PLACERS_MAX); each one can take collisionTimeoutMs +
 -- interiorTimeoutMs and two control asks. It tells the server it checks an entity (server:spawnChecking) before it
 -- waits for its turn, so the later ones of a wave are never let go unchecked when placeTimeoutMs runs out.
 

@@ -396,10 +396,10 @@ end
 -- ============================================================================
 
 -- CP.AdminKit loads before every module (fxmanifest.lua), as in the real resource
-H.load('modules/adminkit/server.lua')
-H.load('modules/access/server.lua')
-H.load('modules/permissions/server.lua')
-H.load('modules/admin/server.lua')
+H.load('modules/admin/adminkit.lua')
+H.load('modules/access/access.lua')
+H.load('modules/access/permissions.lua')
+H.load('modules/admin/admin.lua')
 H.load('modules/review/disputes.lua')
 H.load('modules/review/queue.lua')
 H.load('modules/review/anticheat.lua')
@@ -2100,7 +2100,7 @@ for _, name in ipairs({ 'admin_kit.json', 'admin_officers.json' }) do
     local pf = io.open(H.root .. 'locales/parts/' .. name, 'r')
     if pf then for k, v in pairs(cjson.decode(pf:read('a'))) do adminParts[k] = v end pf:close() end
 end
-for _, file in ipairs({ 'modules/admin/server.lua', 'modules/review/disputes.lua', 'modules/review/anticheat.lua' }) do
+for _, file in ipairs({ 'modules/admin/admin.lua', 'modules/review/disputes.lua', 'modules/review/anticheat.lua' }) do
     local src = assert(io.open(H.root .. file, 'r')):read('a')
     for key in src:gmatch('\'([%a_]+%.[%w_%.]+)\'') do
         local ns = key:match('^([%a_]+)%.')

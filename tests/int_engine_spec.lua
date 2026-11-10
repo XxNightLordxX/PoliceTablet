@@ -254,13 +254,13 @@ local BLOCKS = {
     'process_scene',
 }
 for _, b in ipairs(BLOCKS) do H.load('blocks/' .. b .. '/server.lua') end
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/system/schedule.lua')
 H.load('modules/progression/events.lua')
-H.load('modules/missions/server.lua')
-H.load('modules/draw/server.lua')
-H.load('modules/npc/server.lua')
-H.load('modules/runs/server.lua')
+H.load('modules/missions/missions.lua')
+H.load('modules/runs/draw.lua')
+H.load('modules/npc/npc.lua')
+H.load('modules/runs/runs.lua')
 local Runs, Missions, Draw = CP.Runs, CP.Missions, CP.Draw
 H.step(0)   -- the start threads: CP.Missions.loadAll (after Wait(0)) and the engine's hook registration
 
@@ -788,7 +788,7 @@ do
     local realClear, realNotify = CP.Alerts.clear, CP.Tablet.notify
     CP.Alerts.clear = function(src) clears[#clears + 1] = src end
     CP.Tablet.notify = function(src, kind, key) toasts[#toasts + 1] = { src = src, key = key } end
-    H.load('modules/downed/server.lua')
+    H.load('modules/runs/downed.lua')
     H.step(0)
     downedSet[2] = true
     Runs.endRun(run, 'completed', 'completed')

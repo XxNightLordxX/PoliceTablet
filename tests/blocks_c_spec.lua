@@ -2637,7 +2637,7 @@ local function CountOf(list, e)
 end
 
 -- the objective pointer the client halves hand their blips to (it is loaded before the blocks in the game too)
-H.load('modules/markers/client.lua')
+H.load('modules/map/client/markers.lua')
 -- ClientCtx's Radio Silence stands for "no blips" in the AI checks below (most run before the blip natives exist):
 -- Config.Markers.radioSilence 'none', which hides every objective blip; the M8 modes have their own checks
 local shippedSilence = Config.Markers.radioSilence
@@ -3348,7 +3348,7 @@ do -- pursuit host (Q12): cars and suspects another officer's game owns are aske
     local function SetOwned(on) for _, e in ipairs(all) do ents[e].owned, ents[e].askedAt = on, nil end end
     SetOwned(true) -- a solo host: this game owns everything
     local cctx = ClientCtx('run-cl-q12', PU.defaults({ block = 'pursuit', route = 'race' }), raceLoc)
-    -- CP.Runs.control as modules/runs/client.lua has it, on the run host: ask, then wait frame by frame for the
+    -- CP.Runs.control as modules/runs/client/runs.lua has it, on the run host: ask, then wait frame by frame for the
     -- hand-over until the deadline. Another officer's game keeps the entities here, so the hand-over never comes.
     local asks, setups, waits = {}, {}, {}
     local saved = {
@@ -3491,7 +3491,7 @@ do -- search host (Q13): a witness on its phone is left with the officer whose g
     ents[fug].bag, ents[fug].owned = { state = 'idle', cfg = {} }, true -- a solo host to begin with
     local all = { wit[1], wit[2], wit[3], fug }
     local cctx = ClientCtx('run-cl-q13', SA.defaults({ block = 'search_area' }), huntLoc)
-    -- CP.Runs.control as modules/runs/client.lua has it, on the run host: ask, then wait frame by frame for the
+    -- CP.Runs.control as modules/runs/client/runs.lua has it, on the run host: ask, then wait frame by frame for the
     -- hand-over until the deadline. Another officer's game keeps the peds here, so the hand-over never comes.
     local asks, waits, loopCo = {}, {}, nil
     local saved = { request = rawget(_G, 'NetworkRequestControlOfEntity'), wait = Wait, thread = CreateThread }

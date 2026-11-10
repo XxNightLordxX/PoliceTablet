@@ -210,13 +210,13 @@ H.exportsMock['Renewed-Banking'] = {
 --                                LOAD THE SLICE
 -- ============================================================================
 
-H.load('modules/integrations/qbx/server.lua')
-H.load('modules/integrations/sc_dispatch/server.lua')
-H.load('modules/integrations/sc_ambulance/server.lua')
-H.load('modules/integrations/renewed_banking/server.lua')
-H.load('modules/access/server.lua')
-H.load('modules/permissions/server.lua')
-H.load('modules/tablet/server.lua')
+H.load('modules/system/integrations/qbx.lua')
+H.load('modules/system/integrations/sc_dispatch.lua')
+H.load('modules/system/integrations/sc_ambulance.lua')
+H.load('modules/system/integrations/renewed_banking.lua')
+H.load('modules/access/access.lua')
+H.load('modules/access/permissions.lua')
+H.load('modules/access/tablet.lua')
 
 -- ============================================================================
 --                               CP.Qbx (server)
@@ -1536,10 +1536,10 @@ local function PropCount()
 end
 local function Tick(ms) H.advance(ms or 600, 50) end
 
-H.load('modules/integrations/qbx/client.lua')
-H.load('modules/integrations/sc_ambulance/client.lua')
-H.load('modules/access/client.lua')
-H.load('modules/tablet/client.lua')
+H.load('modules/system/client/qbx.lua')
+H.load('modules/system/client/sc_ambulance.lua')
+H.load('modules/access/client/access.lua')
+H.load('modules/access/client/tablet.lua')
 
 -- CP.Qbx (client)
 do

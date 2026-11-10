@@ -1,4 +1,4 @@
-// Admin UI → Settings and the mission switches: the shapes modules/settings/server.lua sends.
+// Admin UI → Settings and the mission switches: the shapes modules/admin/settings.lua sends.
 
 import type { ConfigHealthItem } from '../shared/types';
 

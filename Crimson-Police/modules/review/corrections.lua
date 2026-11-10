@@ -1075,7 +1075,7 @@ function Corr.officerPoints(citizenid)
 end
 
 -- The one point-adjust path: Admin UI -> Give or take points and a supervisor's Give points (the
--- awardPoints Mission control, modules/supawards) both come here after their own guards. It keeps
+-- awardPoints Mission control, modules/supervisor/supawards) both come here after their own guards. It keeps
 -- Config.AdminControl's rules (pointAdjust, the deduction floor, adjustDailyLimit per acting player), writes the signed
 -- row (Scoring.adjust: breakdown.by and the reason, shown in the officer's history) and audits it with ctx.audit (the
 -- role is ctx.role: 'supervisor' for a supervisor). ctx = an AdminKit action's ctx. ok, data | false, errKey.

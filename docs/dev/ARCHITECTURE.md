@@ -16,9 +16,9 @@ exposes that is not listed here is private to that module (keep it `local`).
    `?.`/safe navigation, no `in` unpacking). Use `joaat('name')` / `GetHashKey('name')`. Every Lua file
    must pass `luac5.4 -p`.
 2. **Qbox only.** Never `exports['qb-core']`, `GetCoreObject`, `QBCore.` anything. Framework access
-   only through `CP.Qbx` (modules/integrations/qbx). Listening to the `QBCore:*` *events* that
-   qbx_core fires is allowed (only inside modules/integrations/qbx).
-3. **Integration boundary.** Only `modules/integrations/*` may call qbx_core, sc-police,
+   only through `CP.Qbx` (modules/system/integrations/qbx). Listening to the `QBCore:*` *events* that
+   qbx_core fires is allowed (only inside modules/system/integrations/qbx).
+3. **Integration boundary.** Only `modules/system/integrations/*` may call qbx_core, sc-police,
    sc-dispatch, sc-ambulance, sc-multijob or Renewed-Banking, or read their tables. ox_lib,
    ox_target, ox_inventory and oxmysql may be called anywhere. Never call sc-npcpolice.
    Never trigger `hospital:server:RevivePlayer`, `hospital:client:RevivePlayer`,
@@ -150,8 +150,10 @@ PoliceTablet/                      (git repo)
     missions/custom/archived/
     missions/custom/overrides/     edited built-in missions (<id>.lua, <id>.base.lua; archived/), §5.28
     missions/custom/deleted/       missions deleted for good from the Admin UI (Bring back moves them back)
-    modules/<feature>/server.lua   (+ client.lua where needed)
-    modules/integrations/<name>/server.lua (+ client.lua)
+    modules/<module>/<part>.lua    one sub-file per part; client parts in modules/<module>/client/. 14 modules:
+                                   access, admin, runs, missions, npc, map, dispatch, teams, supervisor, money,
+                                   review, progression, realplayers, system (tests/module_layout_spec.lua)
+    modules/system/integrations/<name>.lua (+ modules/system/client/<name>.lua)
     modules/system/memsql.lua     CP.Storage.MemSQL: SQL engine + saves folder for database-off mode (server)
     modules/system/storage.lua     CP.Storage: picks MySQL/MariaDB or the saves folder (Config.Database)
     saves/                         database-off data (JSON documents, _tables.json); only README.md is committed;
@@ -168,58 +170,43 @@ PoliceTablet/                      (git repo)
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
-(alphabetical: init, lib, locale, net, npccombat, options, twists, utils), then `modules/**/server.lua` (server) /
-`modules/**/client.lua` (client), then the server sub-files of `modules/progression/*.lua`,
-`modules/supervisor/*.lua`, `modules/review/*.lua` and `modules/realplayers/*.lua` (client:
-`modules/realplayers/client/*.lua`), then `blocks/**/server.lua` / `blocks/**/client.lua`.
+(alphabetical: init, lib, locale, net, npccombat, options, twists, utils), then every module sub-file by name, in the
+order the files loaded in before the module folders existed (some read another module's CP table as they load; the
+order is pinned by tests/module_layout_spec.lua), with the folders made only of their own parts listed as globs
+(`modules/progression/*.lua`, `modules/review/*.lua`, `modules/realplayers/*.lua`, `modules/dispatch/*.lua`,
+`modules/teams/*.lua`; client: `modules/realplayers/client/*.lua`, `modules/dispatch/client/*.lua`,
+`modules/teams/client/*.lua`), then `blocks/**/server.lua` / `blocks/**/client.lua`. Every file is listed once.
 Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/system/memsql.lua` and
 `modules/system/storage.lua` before every other server module (so the `MySQL` global is settled before
-any module can query), then `modules/adminkit/server.lua` (so any module may register its admin actions with
+any module can query), then `modules/admin/adminkit.lua` (so any module may register its admin actions with
 `CP.AdminKit.action` as it loads). `files` ships web/dist, locales/*.json and logos/*.
 
-Extra module folders beyond the spec's table (allowed: "each feature in its own folder"):
-- `modules/missions/` — the mission registry: loads built-in and custom mission files, normalises
-  definitions, sends them to clients, reload.
-- `modules/npc/` — shared NPC behaviour used by blocks: state machine (hostile, surrendered,
-  cuffed …), host-side AI, "Cuff suspect", surrender rolls, relationship groups.
+Sub-files of note (sections §5.13–§5.51 have the rest): `modules/missions/missions` (the mission registry),
+`modules/npc/npc` (shared NPC behaviour for blocks), `modules/review/*` (§5.26a), `modules/realplayers/*` (all read
+`Config.RealPlayers` through `CP.RealPlayers`), `modules/money/engine` (loads before the other money parts).
 
-More folders (all in the spec's Feature folders table; §5.30–§5.34):
-`modules/custody/` (server, client), `modules/dispatch/` (calls §5.13, alerts §5.14, missioncalls §5.31; `modules/dispatch/*.lua`,
-client `modules/dispatch/client/*.lua`), `modules/progression/` (server sub-files:
-scoring, goals, challenge, events, leaderboard, profile; listed in fxmanifest as `modules/progression/*.lua`),
-`modules/supervisor/` (server sub-files: fieldtraining, missionban and restrictions, the one restrictions list (FM5);
-listed as `modules/supervisor/*.lua`),
-`modules/review/` (server sub-files: anticheat, corrections, disputes, queue, reviewrules; `modules/review/*.lua`,
-§5.26a),
-`modules/realplayers/` (real players as suspects, one module, FM4: server sub-files opponents, pairs, proof, conduct,
-surrender, staff, saved (§5.45), livecrime (§5.46), volunteers, match (§5.47) and crimtab (§5.51), listed as
-`modules/realplayers/*.lua`; client sub-files livecrime, volunteers and crimtab in `modules/realplayers/client/*.lua`;
-all read `Config.RealPlayers` through `CP.RealPlayers`),
-`modules/money/` (server: engine first, then cash, featurerewards, payments, payouts, rewards), `modules/confighealth/` (server), `modules/integrations/sc_police/` (server),
-`blocks/field_contact/` and `blocks/process_scene/` (server, client).
-
-`modules/diag/` (client, §5.35): the F8 command `CrimsonPoliceState`, with the freeze fix
+`modules/admin/diag` (client, §5.35): the F8 command `CrimsonPoliceState`, with the freeze fix
 (§5.15).
 
-`modules/npccombat/` (client, server, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat), the
+`modules/npc/npccombat` (client, server, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat), the
 protection drop and the `crimsonPoliceRun` player bag.
 
-`modules/markers/` (client, server, §5.44): the one blip system: the current objective's pointer on the officer's
+`modules/map/markers` (client, server, §5.44): the one blip system: the current objective's pointer on the officer's
 map and its one GPS line, the prisoner van and tow truck coming to him, and every other part of a mission
 (Config.Markers; the extra parts shipped off).
 
-`modules/spawn/` (client, server, §5.43): what an officer's game can see of the spawn director's points
+`modules/runs/spawn` (client, server, §5.43): what an officer's game can see of the spawn director's points
 (Config.Spawning.preferHidden), the ground probe of one point (Config.Spawning.ground), the placer that puts a
 new mission entity on the ground when the server asks (Config.Spawning.place), and the server's side of it: the ask
 written for every new mission entity, the answers, another point after a bad one, the time limit.
 
-`modules/settings/` (server, client, §5.36): settings changed in game (Admin UI → Settings) over config.lua and
+`modules/admin/settings` (server, client, §5.36): settings changed in game (Admin UI → Settings) over config.lua and
 blocks.lua, the mission and location switches, and the same values on every client.
 
-`modules/adminkit/` (server, §5.37): full admin control's foundation. `CP.AdminKit` (the guard wrapper of every new
+`modules/admin/adminkit` (server, §5.37): full admin control's foundation. `CP.AdminKit` (the guard wrapper of every new
 admin action, previews, request ids, jobs, day counts, the busy lock) and `CP.Maintenance` (the maintenance lock).
-Full admin control also has `modules/review/corrections` (§5.38), `modules/livectl/` (§5.39), `modules/money/payments`
-(§5.40) and `modules/sysadmin/` (§5.41).
+Full admin control also has `modules/review/corrections` (§5.38), `modules/supervisor/livectl` (§5.39), `modules/money/payments`
+(§5.40) and `modules/admin/sysadmin` (§5.41).
 
 ---
 
@@ -615,7 +602,7 @@ Cooldowns are kept in memory by `CP.Runs` and rebuilt from `cp_mission_runs` row
 
 ### 4.4 Lifecycle (server-owned)
 
-1. `server:acceptType` (modules/draw) validates, draws, then `CP.Runs.create(...)` → state
+1. `server:acceptType` (modules/runs/draw) validates, draws, then `CP.Runs.create(...)` → state
    `accepted`, location reserved, B locked, the chosen twists that fit the drawn mission kept (`run.modifiers`, a
    random one added while `modifierChance` > 0), `client:start` sent to each participant,
    `CP.Route.begin(run, src)` for each, start timeout armed, items given.
@@ -663,7 +650,7 @@ its events and storage, and the rules that are not obvious from the code.
 ### 5.1 Integrations (only these touch outside resources)
 Checked facts about the other resources (signatures, payloads, pitfalls) are in `docs/dev/INTEGRATIONS.md`.
 
-**CP.Qbx** — modules/integrations/qbx
+**CP.Qbx** — modules/system/integrations/qbx
 - S `getPlayer(src)` (raw qbx player, never cached); `getInfo(src) -> { src, citizenid, name, firstname, lastname, job
   = { name, label, type, onduty, gradeLevel, gradeName }, gang, callsign, metadata, isDead, inLastStand, license } |
   nil`, reused for `Config.Limits.playerInfoCacheMs` (1000; 0 = no cache) and cleared by every qbx_core event below,
@@ -685,7 +672,7 @@ Checked facts about the other resources (signatures, payloads, pitfalls) are in 
   `qbx_core:client:onGroupUpdate`, the only event when the active job is removed), `onDutyChange`, `onUnload`,
   `onLoaded`.
 
-**CP.Dispatch** — modules/integrations/sc_dispatch (S)
+**CP.Dispatch** — modules/system/integrations/sc_dispatch (S)
 - `available()`, `isSuspended(citizenid, jobName)`, `normalizeCallId(id) -> string` (`123`, `'123'`, `123.0` →
   `'123'`), `lookupActiveCall(callId) -> uniqueId|nil` (`mdt_dispatch` by id or unique_id, active; nil when
   sc-dispatch is stopped; the numeric form only for digit-only ids; an empty unique_id returns the row id; `npccall-`
@@ -700,7 +687,7 @@ Checked facts about the other resources (signatures, payloads, pitfalls) are in 
   receivedAt)`; data is a sanitised `{ coords, street, zone, sex }`, client-supplied, so distance checks use server
   ped coords; no coords = dropped).
 
-**CP.Ambulance** — modules/integrations/sc_ambulance
+**CP.Ambulance** — modules/system/integrations/sc_ambulance
 - S `doctorCount()` (min of `GetDoctorCount()` and the live on-duty `ambulance` count; 0 with one error log when
   sc-ambulance is stopped).
 - S `revive(src) -> bool` → `TriggerClientEvent('hospital:client:Revive', src)`.
@@ -709,7 +696,7 @@ Checked facts about the other resources (signatures, payloads, pitfalls) are in 
   `hospital:server:RespawnAtHospital` handler; returns at once without a listener or while `CP.Opponents.active()` is
   not true, rate-limits 6/s, index 1..255, each listener in pcall, never yields, never answers a hospital.
 
-**CP.Banking** — modules/integrations/renewed_banking (S)
+**CP.Banking** — modules/system/integrations/renewed_banking (S)
 - `recordDeposit`, `recordWithdraw` (a clawback), `recordSocietyWithdraw`, `recordSocietyDeposit` (all `(account or
   citizenid, amount, message, issuer, receiver, transId)`), `withdrawSociety(account, amount)`,
   `depositSociety(account, amount)`, `societyBalance(account)`, `findTxn(transId, { citizenid, account }) -> {
@@ -718,7 +705,7 @@ Checked facts about the other resources (signatures, payloads, pitfalls) are in 
   cached player).
 - Never raise; return booleans (`societyBalance` a number or nil). 0 amounts send nothing and return true.
 
-**CP.ScPolice** — modules/integrations/sc_police (S)
+**CP.ScPolice** — modules/system/integrations/sc_police (S)
 - A second, read-only `police:server:Impound` handler: a live run's vehicle → `CP.Runs.noteExternalRemoval(netId, src,
   'sc_impound', dist)`.
 - `on(kind, fn) -> bool` (real suspects), listen-only handlers for `CuffPlayer` → `'cuff'` (officerSrc, targetSrc,
@@ -757,7 +744,7 @@ Who is an officer, of which department, with which role.
 - S export `GetDepartment(src)` (the active job's department, on duty or not).
 - C `current()`, `department()`, `roles()`, `setSession(session)`, `clear()` (used by the tablet).
 
-### 5.3 CP.Permissions — modules/permissions (S)
+### 5.3 CP.Permissions — modules/access/permissions (S)
 - `can(src, action, ctx) -> bool, errKey` (`err.no_permission`).
 - Admin-only keys (no supervisor switch can give them; mirrored in modules/admin's ADMIN_ONLY for the Permissions
   screen).
@@ -771,8 +758,8 @@ Who is an officer, of which department, with which role.
 - Extra grants (`Config.Permissions.grants`, Admin UI → Permissions → Extra grants, saved as the setting
   `Permissions.grants`).
 
-### 5.4 CP.Tablet — modules/tablet (owns the NUI)
-Files: `modules/tablet/server.lua`, `modules/tablet/client.lua`.
+### 5.4 CP.Tablet — modules/access/tablet (owns the NUI)
+Files: `modules/access/tablet.lua`, `modules/access/client/tablet.lua`.
 
 Server:
 - callback `getSession(args)` → Session (§9.2), 4/s per player.
@@ -938,7 +925,7 @@ no-build zone were rejected).
   of a fixed place of a public Qbox or ox script (`tests/fixtures/foreign_sites.lua`, written by
   `tools/gen_foreign_sites.py`).
 
-### 5.7 CP.Draw — modules/draw (S)
+### 5.7 CP.Draw — modules/runs/draw (S)
 Which mission and location a unit gets, and the accept.
 - `pool(missionType, members, opts) -> { def }, reasonKey` — published, enabled, type match, open to every member's
   department, supports `#members`, off per-mission cooldown for every member.
@@ -960,7 +947,7 @@ Which mission and location a unit gets, and the accept.
   raw) -> keys | nil, errKey`.
 - An edited built-in is drawn under the built-in's id.
 
-### 5.8 CP.Scaling — modules/scaling (S)
+### 5.8 CP.Scaling — modules/runs/scaling (S)
 - `tierFor(n)` (first `Config.Scaling` row with `maxParticipants >= n`, else the last), `tierByName(name)` (unknown =
   the first row), `lower(a, b)`, `label(name)`, `scaleCount(base, tier)` (`round(base * tier.count)`).
 - `apply(mission, tier) -> objectivesCopy` — a deep copy with every `mission.scaling` path scaled (paths start at an
@@ -982,7 +969,7 @@ Which mission and location a unit gets, and the accept.
   `onCall`, `typeOfTheDay` (true when it is `tactical`) as on type cards.
 
 ### 5.10 CP.Runs — modules/runs (the engine)
-Files: `modules/runs/server.lua`, `modules/runs/client.lua`, `locales/parts/engine_b.json`.
+Files: `modules/runs/runs.lua`, `modules/runs/client/runs.lua`, `locales/parts/engine_b.json`.
 
 #### Server API
 - `create(opts) -> run|nil, errKey` — `opts = { mission, locationIndex, missionType, members = { officer | src },
@@ -1166,7 +1153,7 @@ Listeners run in the caller's thread, in the order added, each in pcall.
 - Telemetry loops only while on a run: ped hits by the player's vehicle, lights/siren, weapon fired, current vehicle.
 
 ### 5.11 CP.Npc — modules/npc (shared NPC behaviour for blocks)
-Files: `modules/npc/{server,client}.lua` (the headers are the full API reference), `locales/parts/npc.json`.
+Files: `modules/npc/npc.lua` and `modules/npc/client/npc.lua` (the headers are the full API reference), `locales/parts/npc.json`.
 
 Server:
 - `setState(run, netId, state, extra) -> bool` — states `idle`, `hostile`, `fleeing`, `surrendered`, `cuffed`, `dead`,
@@ -1209,9 +1196,9 @@ Client (the host runs the AI; every participant sees targets):
   (ox_target labels are static).
 - `nearestParticipant(coords)`.
 
-### 5.12 CP.Route — modules/route (Hard rule 17)
-Files for §5.12–§5.15: `modules/route/{server,client}.lua`, `modules/dispatch/calls.lua`, `modules/dispatch/alerts.lua`,
-`modules/downed/{server,client}.lua`, `locales/parts/safety.json`.
+### 5.12 CP.Route — modules/runs/route (Hard rule 17)
+Files for §5.12–§5.15: `modules/runs/route/{server,client}.lua`, `modules/dispatch/calls.lua`, `modules/dispatch/alerts.lua`,
+`modules/runs/downed/{server,client}.lua`, `locales/parts/safety.json`.
 
 Server: `begin(run, src)`, `stop(run, src)`, `status(run, src) -> { status, secondsLeft, recalcsLeft, distance,
 required }` (`'off'` only while the warning is shown; `distance` is the straight line, the HUD's the polyline left),
@@ -1275,7 +1262,7 @@ The full rule set is the Crimson-Arena section of `docs/dev/INTEGRATIONS.md` (ru
   `Config.Alerts.backstopDelay` s (repeated when an earlier clear may have run before the call existed).
 - Start: removes leftover flags of ours from every player; stop: clears all.
 
-### 5.15 CP.Downed — modules/downed (Hard rule 18)
+### 5.15 CP.Downed — modules/runs/downed (Hard rule 18)
 - Server: every `Config.Downed.checkEvery` s, and at once on `onMetaDataChange` (`isdead` / `inlaststand`), active
   participants with `CP.Qbx.isDowned` leave through `removeParticipant(run, src, reasonFor(run), { keepFlag = true })`
   (a down is counted once).
@@ -1566,7 +1553,7 @@ Review queue:
 - Web: `supervisor/components/ReviewQueuePanel.tsx` (Department → Review and Admin UI → Review → Queue),
   helpers `supervisor/components/reviewQueue.ts`.
 
-### 5.27 CP.Testing — modules/testing
+### 5.27 CP.Testing — modules/missions/testing
 Admin test mode.
 
 Flow — invite first, then Start (nobody joins a test once it started): 1.
@@ -1601,7 +1588,7 @@ Check spawn points (`Config.Testing.spawnCheck`; refused `err.spawn_check_disabl
 - Client actions `spawnCheck { missionId?, location? }` (refused on a run, in a vehicle, dead, in the arena, while one
   runs) and `spawnCheckStop`.
 
-### 5.28 CP.Builder — modules/builder
+### 5.28 CP.Builder — modules/missions/builder
 The Mission Builder: drafts, locks, autosave, draft tests (`CP.Testing.startDraft`, `test.draft = true`), publish (a
 Lua file written with `SaveResourceFile`), archive/restore, rollback, hand edits, edited built-ins, and the in-world
 tools (placement, route recording, test drive).
@@ -1788,7 +1775,7 @@ Where Crimson-Police keeps its data (`Config.Database`).
 
 ---
 
-### 5.30 CP.Custody — modules/custody (police actions, contacts, custody chain)
+### 5.30 CP.Custody — modules/npc/custody (police actions, contacts, custody chain)
 Truths, facts, police actions, grading, the custody chain and the service vehicles (prisoner van, tow truck, coroner
 van).
 - `rollTruth(rng, setName, role)` (`Config.Custody.profileSets[set][role]`, role person|driver|passenger|vehicle,
@@ -1832,7 +1819,7 @@ van).
 | client action `contactAction` | NUI → client | `{ netId, action }`: closes the tablet and runs the begin/bar/finish flow |
 | HUD patch `contact` | S → C | `{ label, fact, hint, confirm, suppressed }` (CP.Lt tokens) |
 
-Client (`modules/npc/client.lua`, `modules/custody/client.lua`): ox_target options `crimson-police:contact_<action>`
+Client (`modules/npc/client/npc.lua`, `modules/npc/client/custody.lua`): ox_target options `crimson-police:contact_<action>`
 on peds and vehicles, `crimson-police:custody_escort`, per door `crimson-police:seat_<action>_<door>` (bones
 door_dside_f, door_pside_f, door_dside_r, door_pside_r), all reading the cp bag only.
 
@@ -1925,11 +1912,11 @@ Data: `cp_item_rewards`, one row per officer, source, source key and item (`uq_r
 - Net: callback `getRewardsLocker`, action `server:rewards:claim { id }` (2/s), callback `admin:getRewards`
   (openAdmin), push `rewards` whenever the locker changes.
 
-### 5.34 CP.ConfigHealth — modules/confighealth
+### 5.34 CP.ConfigHealth — modules/admin/confighealth
 `register(name, fn -> { { level = 'ok'|'warn'|'error', text } })` (a second register replaces it), `run() ->
 ConfigHealthItem[]` (errors first; a failing check is one error line).
 
-### 5.35 CP.Diag — modules/diag (client)
+### 5.35 CP.Diag — modules/admin/diag (client)
 No Crimson-Police state may outlive a run or a downed follow-up (the safety nets of §5.4, §5.15 and the web's
 `QuietBoundary`, §9.1).
 - F8 `CrimsonPoliceState`: four `[crimson-police:diag]` lines with the screen fade, NUI focus, scripted camera, pause
@@ -1939,7 +1926,7 @@ No Crimson-Police state may outlive a run or a downed follow-up (the safety nets
 - Lint FX10 (`tools/lint_fivem.py`, `tools/lua_flow.py`, a Lua 5.4 parser with flow analysis): a while/repeat loop
   that can go round with no Wait while waiting on game state, or an ipairs loop that appends to its own table.
 
-### 5.36 CP.Settings — modules/settings (settings changed in game)
+### 5.36 CP.Settings — modules/admin/settings (settings changed in game)
 Server:
 - The schema is built from the files at the first use: `config/config.lua` and `config/blocks.lua` are read with
   `LoadResourceFile` and tokenized.
@@ -2027,9 +2014,9 @@ Full admin control, System:
 - Net: `server:admin:revertSetting`, `admin:exportSettings`, `admin:previewSettingsImport`,
   `server:admin:importSettings` (§8.4.5).
 
-### 5.37 CP.AdminKit and CP.Maintenance — modules/adminkit (S)
+### 5.37 CP.AdminKit and CP.Maintenance — modules/admin/adminkit (S)
 The one wrapper every new admin action of full admin control goes through, and the maintenance lock. fxmanifest lists
-the file by name (so it loads before every module) and again through `modules/**/server.lua`.
+the file by name, once, before every module sub-file (so any module may register its admin actions as it loads).
 
 **`Kit.action(name, permKey, fn, opts)`** registers `CP.Net.action(name)` (rate `opts.rate`, default 2/s).
 
@@ -2103,7 +2090,7 @@ An admin's corrections to officers' records, all through `CP.AdminKit` (§5.37) 
 - Exports for other modules: `Corr.grantBadge`, `Corr.revokeBadge`, `Corr.officerRuns(cid, args)`,
   `Corr.runDetail(src, rowId, archived)`, `Corr.officerPoints(cid)`.
 
-### 5.39 CP.LiveCtl — modules/livectl (S; full admin control, live runs, units and anti-farm)
+### 5.39 CP.LiveCtl — modules/supervisor/livectl (S; full admin control, live runs, units and anti-farm)
 The Admin UI's **Live** screen, an officer's **Today & cooldowns** card and the Missions **Today** card.
 
 - `liveRuns(adminSrc) -> AdminLiveRun[]` (§9.5): every run that has not ended, tests and Cross-Department Missions
@@ -2136,7 +2123,7 @@ Admin UI → Payments, Departments → Funds and the cash health lines.
   only).
 - Actions and callbacks: §8.4.4.
 
-### 5.41 CP.Sysadmin — modules/sysadmin (S)
+### 5.41 CP.Sysadmin — modules/admin/sysadmin (S)
 Admin UI → System, the Departments tools, positions and Officers → Support (actions and callbacks in §8.4.5).
 - Schema: `schema() -> { order, tables = { [name] = { cols, kinds = dt|date|bool|val, keyset } } }`, built once from
   this version's migration files in an in-memory saves folder engine, so a backup reads and writes the same columns
@@ -2162,20 +2149,20 @@ Admin UI → System, the Departments tools, positions and Officers → Support (
   `saves/exports/audit-<time>.csv`), both through `CP.Admin._auditWhere` and `CP.Admin._csv`.
 - Console: `CrimsonPoliceAdmin storagemode reset` (also reached as `storage mode reset` through `SUB.storage`).
 
-### 5.42 CP.NpcCombat — shared/npccombat.lua and modules/npccombat (client, server)
+### 5.42 CP.NpcCombat — shared/npccombat.lua and modules/npc/npccombat (client, server)
 How hard armed mission NPCs fight back (Config.NpcCombat).
 - Shared (§2): `weapon(name)` — the name when it is in `weapons`, else `replace[name]`, else `fallback`.
-- Client `start(runId)`, `stop()`, `activeRun()`: modules/runs/client.lua starts it at `client:start` and stops it in
+- Client `start(runId)`, `stop()`, `activeRun()`: modules/runs/client/runs.lua starts it at `client:start` and stops it in
   every `Cleanup` (run end, a new start, resource stop).
 - Client `drop(runId)` and the event `client:npcCombatDrop` (runId): for the active run only, `noCriticalHits` and
   `officerDefense` go back exactly as `stop` puts them back (the ped's own flag 2, the defense modifier read before
   the run) and `a.dropped` keeps them off for the rest of that run (`settings:changed`, a respawn).
-- Server (modules/npccombat/server.lua): `dropFor(run, src, why)` sends `client:npcCombatDrop` once per run and active
+- Server (modules/npc/npccombat.lua): `dropFor(run, src, why)` sends `client:npcCombatDrop` once per run and active
   participant (logged; false for a run with `npcCombat == false`, an ended run or a non-participant).
 - The `crimsonPoliceRun` player bag (replicated, exactly `true`): `CP.Runs.create` calls `runStarted(run, src, on)`
   right after each `client:start`, and `on` (start data without `npcCombat = false`) sets it.
 
-### 5.43 CP.Spawn — modules/spawn (client, server)
+### 5.43 CP.Spawn — modules/runs/spawn (client, server)
 What an officer's game can see of the spawn director's points (`Config.Spawning.preferHidden`, §5.10), the ground
 probe of one point (`Config.Spawning.ground`), and the placer that puts a new mission entity on the ground when the
 server asks (`Config.Spawning.place`), so nothing spawns in front of the officers or in the ground.
@@ -2199,9 +2186,9 @@ server asks (`Config.Spawning.place`), so nothing spawns in front of the officer
 - `again(run, netId, coords, from) -> place|nil` — the server moved a live person or vehicle itself (a warrant suspect
   at the door, the prisoner van on its point).
 
-### 5.44 CP.Markers — modules/markers (client, server; the one blip system)
+### 5.44 CP.Markers — modules/map/markers (client, server; the one blip system)
 The current objective on this officer's map (`Config.Markers`): one pointer per officer (a blip, or a circle with its
-centre) and at most one GPS line. modules/runs/client.lua drives it.
+centre) and at most one GPS line. modules/runs/client/runs.lua drives it.
 - The marker (§5.10 `marker`; nil = none): `{ kind = 'point'|'area'|'targets', look, label, key, number, coords,
   radius, route = true|false|'block', targets = { { key, netId, x, y, z, look, label, variant, number, beyond } } }`.
 - One icon per target: `adopt(key, blip)` — a block hands over the blip it draws for target `key`: that blip is the
@@ -2316,7 +2303,7 @@ Server-only (never on an officer's tablet).
   `err.rs_no_case`; latent), `admin:getRsPairs { citizenid? }`.
 - Admin UI → Real suspects (`admin/screens/RealSuspects.tsx`, key `admin_rs`, under More).
 
-### 5.46 CP.LiveCrime — modules/realplayers/livecrime and modules/integrations/crimson_contracts (S)
+### 5.46 CP.LiveCrime — modules/realplayers/livecrime and modules/system/integrations/crimson_contracts (S)
 Live crimes (`Config.RealPlayers.liveCrime`, `enabled` shipped false).
 
 #### Intake
@@ -2478,7 +2465,7 @@ Memory only; only for runs with `run.volunteer`.
   that the shipped config changes nothing), `tests/workflows_e2e_spec.lua`, `tests/live_fto_e2e_spec.lua` (with a
   restart in the middle), `tests/workflows_full_spec.lua`.
 
-### 5.48 CP.Options — modules/options (S; officer options)
+### 5.48 CP.Options — modules/access/options (S; officer options)
 Each character's own tablet choices (My options), saved sparse in `cp_officers.options` (JSON of only the keys that
 differ from the default; NULL = defaults; migration 010).
 - `effective(citizenid, deptKey, raw)` — every `server` option.
@@ -2489,7 +2476,7 @@ differ from the default; NULL = defaults; migration 010).
 - Net: callback `getOptions`, action `server:options:set { key = value }` (both 4/s).
 - Admin: `admin:getOfficerLook` returns the saved `options`; `server:admin:resetOfficerOptions` (modules/progression/profile,
   `officerRecords`, reason, audit `optionsReset`) sets them NULL.
-- Client (modules/options/client.lua): `get(key)` (not allowed → default; `local` → this PC's KVP
+- Client (modules/access/client/options.lua): `get(key)` (not allowed → default; `local` → this PC's KVP
   `crimsonpolice:options`; `server` → the session's), `setLocal(key, value)`, `localValues()`, `refresh()`,
   `keyHint(cmd)`, `sound(group, name, set, p3)`, `activeWithin(ms)`. §8.5 lists the client actions, the NUI message
   and the hook.
@@ -2524,7 +2511,7 @@ differ from the default; NULL = defaults; migration 010).
 
 Every option ships allowed (except `autoReady`) with defaults that keep the tablet as it was.
 
-### 5.49 CP.DeptControls — modules/deptcontrols (S; Mission controls)
+### 5.49 CP.DeptControls — modules/supervisor/deptcontrols (S; Mission controls)
 Rules a department's supervisors may change for their own department (Supervisor UI → Mission controls), only while an
 admin switched them on and only inside the admin's bounds.
 
@@ -2680,7 +2667,7 @@ a fleeing ped holds it to that pace, §5.11 client), and `place = { x, y, z, h?,
 token, from? }` on any mission entity (people, vehicles, objects).
 
 ### 6.3 Telemetry (client → `server:telemetry`)
-Sent only during a run by modules/runs/client.lua; the server rate-limits and caps counts.
+Sent only during a run by modules/runs/client/runs.lua; the server rate-limits and caps counts.
 - `vehicle` `{ netId }` every 5 s while the player drives: the server reads that vehicle's `GetVehicleBodyHealth` /
   `GetVehicleEngineHealth` and stores the lowest values in `p.vehicle`.
 - `ped_hit` `{ netId }` — a non-mission, non-player ped damaged by the player's vehicle (`CEventNetworkEntityDamage`
@@ -3101,8 +3088,8 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:logoFailed` | deptKey | tablet |
 | `server:testRespond` | `{ inviteId, accepted }` | testing |
 | `server:pickupDone` | runId, ok (plain event, no reqId) | downed |
-| `server:spawnPlaced` | runId, `{ netId, token, result = 'placed'\|'bad', reason, groundZ?, dz?, z? }` (plain event, no reqId; the placer, §5.43, once per `place` token; modules/spawn/server.lua takes it from an active participant of that run for the ask's current token, at most 30 a second per player) | spawn |
-| `server:spawnChecking` | runId, `{ netId, token, done? }` (plain event, no reqId; the placer, §5.43, once per `place` token before it waits for its turn, and once more with `done = true` when it gives up with no answer; modules/spawn/server.lua takes the first one from an active participant of that run for the ask's current token: the ask's time waits for that game's answer, at most 34 s + collisionTimeoutMs + interiorTimeoutMs, and runs on again at that game's `done = true`; at most 30 a second per player) | spawn |
+| `server:spawnPlaced` | runId, `{ netId, token, result = 'placed'\|'bad', reason, groundZ?, dz?, z? }` (plain event, no reqId; the placer, §5.43, once per `place` token; modules/runs/spawn.lua takes it from an active participant of that run for the ask's current token, at most 30 a second per player) | spawn |
+| `server:spawnChecking` | runId, `{ netId, token, done? }` (plain event, no reqId; the placer, §5.43, once per `place` token before it waits for its turn, and once more with `done = true` when it gives up with no answer; modules/runs/spawn.lua takes the first one from an active participant of that run for the ask's current token: the ask's time waits for that game's answer, at most 34 s + collisionTimeoutMs + interiorTimeoutMs, and runs on again at that game's `done = true`; at most 30 a second per player) | spawn |
 | `server:npcCuff` | runId, netId (plain event, no reqId) | npc |
 | `server:custody` | runId, netId, action, phase ('begin'\|'finish'), extra (`{ offence }`, `{ door }`) (plain event, no reqId; 4 per 2 s) | custody |
 | `server:stunHit` | netId (plain event, no reqId; 2 per s) | custody |
@@ -3132,7 +3119,7 @@ which add no event of their own. The conduct step also adds a third read-only `w
 
 Other resources' server-only events Crimson-Police listens to with `AddEventHandler` (never `RegisterNetEvent`, so no
 client can send them), checked against `GetInvokingResource()`: Crimson-Contracts' `crimson-contracts:server:contractStarted`,
-`:dispatchSent`, `:contractEnded`, `:memberRejoined` and `:crewShot` (modules/integrations/crimson_contracts, live
+`:dispatchSent`, `:contractEnded`, `:memberRejoined` and `:crewShot` (modules/system/integrations/crimson_contracts, live
 crimes V10, §5.46). Registered always; they do nothing while `Config.RealPlayers.liveCrime.enabled` is not true or the sender is
 not in `Config.RealPlayers.liveCrime.sources`.
 
@@ -3151,7 +3138,7 @@ Also: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
 `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`, `sup:getMyControls`, `sup:getToday` (UI4,
-modules/suptoday: `{ onDuty, running, controls { counted, used, perDay } }`, viewMissionList),
+modules/supervisor/today: `{ onDuty, running, controls { counted, used, perDay } }`, viewMissionList),
 `notices:get` (`{ kind }`, CP.Notices: limits, running, history), `sup:getOfficerCooldowns` (`{ citizenid }`) and `admin:getMissionControls` (§5.49; rate 3);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 
@@ -3395,8 +3382,8 @@ Every name below is admin-only (supervisors never pass) and audited; `reason` is
 | `server:admin:deleteBackup` | `{ name, reason, confirm }` | storageAdmin | R, T the backup name, never the newest or latest pre-restore |
 | `admin:getWebhooks` | — → `{ webhooks: WebhookView[] }` | openAdmin | read only, no link |
 | `admin:getProblems` | `{ tag?, level? }` → ProblemsData | openAdmin | |
-| `admin:previewPreset` | `{ preset }` → PresetPreview (`web/src/types/settings.ts`): `changes { path, label, from, fromSet, to }`, `same`, `refused { path, error }` | openAdmin | Admin UI → Settings → Presets (modules/settings) |
-| `admin:getHome` | — → AdminHomeData (`web/src/types/admin_system.ts`): `live { onDuty, departments, runs? }`, `queues { flagged, profiles, disputes, payments, rsCases? }`, `alerts { problems, refusedToday, health?, load? }`, `shortcuts` | openAdmin | Admin UI → Home (modules/adminhome); `runs` only with `liveRuns`, `rsCases` only with the Player suspects screen; Config health read at most every 30 s; `shortcuts` = Config.AdminUi.homeShortcuts (known keys, each once) |
+| `admin:previewPreset` | `{ preset }` → PresetPreview (`web/src/types/settings.ts`): `changes { path, label, from, fromSet, to }`, `same`, `refused { path, error }` | openAdmin | Admin UI → Settings → Presets (modules/admin/settings) |
+| `admin:getHome` | — → AdminHomeData (`web/src/types/admin_system.ts`): `live { onDuty, departments, runs? }`, `queues { flagged, profiles, disputes, payments, rsCases? }`, `alerts { problems, refusedToday, health?, load? }`, `shortcuts` | openAdmin | Admin UI → Home (modules/admin/adminhome); `runs` only with `liveRuns`, `rsCases` only with the Player suspects screen; Config health read at most every 30 s; `shortcuts` = Config.AdminUi.homeShortcuts (known keys, each once) |
 | `admin:getRefusals` | — → `{ refusals: { at, citizenid?, name?, missionId?, missionLabel?, type?, reason }[], total, today }` | openAdmin | `today`: the kept ones on the server's day (CP.Schedule.dayStart); shown on Live → Refused and Home → Alerts; memory only (CP.Refusals, shared/init.lua): the last `AdminControl.refusalsKept` refused mission starts, newest first; kept by the Mission Board accept (CP.Draw.accept) and by CP.Runs.create for Operations and Testing |
 | `admin:getIntegrations` | — → IntegrationsData | openAdmin | |
 | `admin:getDepartmentSetup` | — → DepartmentSetup | departmentsAdmin | |
@@ -3424,14 +3411,14 @@ Events: `client:diagUnstick`, `client:diagState (token)` (server → one client)
 
 ---
 
-### 8.5 This PC: officer options (modules/options/client.lua)
+### 8.5 This PC: officer options (modules/access/client/options.lua)
 
 - Client actions (NUI `client` endpoint): `getLocalOptions` -> `{ options }` (every 'local' option and its value now);
   `setLocalOption` `{ key, value }` -> `{ key, value, options }` (the clean value; errors `err.invalid_payload`,
   `err.option_locked`, `err.option_value`).
 - NUI message `{ type = 'localOptions', options }` on the NUI `ready` and after every change of this PC's values.
 - Hook `options:changed (key)` (client): an option's value changed (the session, the push `options`, or this PC).
-- Client action `getKeyLabels` (modules/tablet/client.lua) -> `{ keys = { { command, state, label } } }` for
+- Client action `getKeyLabels` (modules/access/client/tablet.lua) -> `{ keys = { { command, state, label } } }` for
   `crimsonpolice_tablet`, `crimsonpolice_dispatch`, `crimsonpolice_ready` and `crimsonpolice_contact`, in that order:
   `CP.Tablet.keyLabel(cmd)` reads `GetControlInstructionalButton(0, joaat(cmd) | 0x80000000, true)`; `'t_F5'` ->
   state `set`, label `F5`; `'b_<n>'` -> `other` (a mouse or pad button); anything else or a failing native -> `unset`.
@@ -3441,7 +3428,7 @@ Events: `client:diagUnstick`, `client:diagState (token)` (server → one client)
 
 ### 9.1 Transport
 
-Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/tablet/client.lua calls it).
+Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/access/client/tablet.lua calls it).
 
 | type | fields | meaning |
 |---|---|---|

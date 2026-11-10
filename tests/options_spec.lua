@@ -1,4 +1,4 @@
--- Officer options (shared/options.lua CP.OptionDefs, modules/options CP.Options): the rules, saving per character
+-- Officer options (shared/options.lua CP.OptionDefs, modules/access/options CP.Options): the rules, saving per character
 -- (sparse JSON in cp_officers.options), getOptions and server:options:set, and what the tablet session carries.
 
 local H = dofile('tests/harness.lua')
@@ -55,8 +55,8 @@ for src in pairs(officers) do H.players[src] = { coords = vec3(0.0, 0.0, 0.0) } 
 Config.Departments.sast = Config.Departments.sast or { label = 'SAST', jobs = { 'sast' } }
 Config.Departments.fib = Config.Departments.fib or { label = 'FIB', jobs = { 'fib' } }
 
-H.load('modules/tablet/server.lua')
-H.load('modules/options/server.lua')
+H.load('modules/access/tablet.lua')
+H.load('modules/access/options.lua')
 local Defs, Options = CP.OptionDefs, CP.Options
 
 -- Four test options, one of each kind, saved on the server; one kept by the tablet only.

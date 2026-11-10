@@ -24,16 +24,7 @@ local LOCK_TRIES = 100       -- 50 ms waits for a rookie's record another thread
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function Call(modName, fnName, ...)
-    local m = CP[modName]
-    if type(m) ~= 'table' or type(m[fnName]) ~= 'function' then return false, nil end
-    local res = table.pack(pcall(m[fnName], ...))
-    if not res[1] then
-        CP.err(TAG, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2]))
-        return false, nil
-    end
-    return true, table.unpack(res, 2, res.n)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 local function Cfg() return (CP.Recognition('fieldTraining')) end
 

@@ -290,19 +290,19 @@ return function(H)
         H.sql('DELETE FROM ' .. t)
     end
     for _, m in ipairs({
-        'modules/permissions/server.lua',
-        'modules/access/server.lua',
-        'modules/admin/server.lua',
-        'modules/adminkit/server.lua',
-        'modules/deptcontrols/server.lua',
-        'modules/tablet/server.lua',
+        'modules/access/permissions.lua',
+        'modules/access/access.lua',
+        'modules/admin/admin.lua',
+        'modules/admin/adminkit.lua',
+        'modules/supervisor/deptcontrols.lua',
+        'modules/access/tablet.lua',
         'modules/system/schedule.lua',
-        'modules/scaling/server.lua',
+        'modules/runs/scaling.lua',
         'modules/progression/events.lua',
         'modules/teams/common.lua',
         'modules/teams/units.lua',
-        'modules/runs/server.lua',
-        'modules/livectl/server.lua',
+        'modules/runs/runs.lua',
+        'modules/supervisor/livectl.lua',
     }) do
         H.load(m)
     end

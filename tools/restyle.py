@@ -46,7 +46,7 @@ NOTES = os.path.join(ROOT, 'docs', 'dev', 'FILE_NOTES.md')
 
 SKIP_DIRS = {'node_modules', 'dist', '.git', 'saves'}
 # Mission files are data in the spec's Example file layout, the same layout the Mission Builder writes
-# (modules/builder/server.lua); they keep it, so built-in and builder-written missions look alike.
+# (modules/missions/builder.lua); they keep it, so built-in and builder-written missions look alike.
 SKIP_PREFIXES = (os.path.join(RES, 'missions') + os.sep,)
 WEB_EXT = ('.ts', '.tsx', '.mjs')
 # the build's own sources next to web/src: Prettier formats them too (index.html gets no other pass)

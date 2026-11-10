@@ -1,8 +1,8 @@
--- CP.Spawn.visible and the ox_lib callback crimson-police:client:spawn:visible (modules/spawn/client.lua):
+-- CP.Spawn.visible and the ox_lib callback crimson-police:client:spawn:visible (modules/runs/client/spawn.lua):
 -- what an officer's game can see of the points the server's spawn director may use, from line-of-sight probes run
 -- the way the game runs them (asynchronous, a handle polled each frame until it is done).
 
--- CP.Spawn.visible and its ox_lib callback (modules/spawn/client.lua) against a stubbed game: an asynchronous
+-- CP.Spawn.visible and its ox_lib callback (modules/runs/client/spawn.lua) against a stubbed game: an asynchronous
 -- shape test pool (handles polled each frame, pending, done, invalid, failed starts, the hit BOOL as 1 or true), the
 -- head bone, the rendered camera and the car. A 2 m wall: in front seen, close behind hidden, far behind the camera
 -- sees over, down a slope hidden; four probes per point (two eyes, chest and head height) with the flags, options and
@@ -93,7 +93,7 @@ local function ResetGame()
 end
 
 _G.AddStateBagChangeHandler = function() end -- the placer's handler (tests/spawn_placer_spec.lua)
-H.load('modules/spawn/client.lua')
+H.load('modules/runs/client/spawn.lua')
 local CALLBACK = 'crimson-police:client:spawn:visible'
 H.ok(type(CP.Spawn) == 'table' and type(CP.Spawn.visible) == 'function', 'CP.Spawn.visible')
 H.ok(type(H.callbacks[CALLBACK]) == 'function', 'the ox_lib callback is registered')

@@ -49,7 +49,7 @@ const HEALTH_ICON = { ok: 'checkCircle', warn: 'alert', error: 'xCircle' } as co
 // A health line may name the setting that fixes it (opens Settings at it) or a server.cfg line to paste.
 type HealthLine = ConfigHealthItem & { fix?: string; cfgLine?: string };
 
-// Config health (modules/confighealth): every check's lines, problems first.
+// Config health (modules/admin/confighealth): every check's lines, problems first.
 function ConfigHealthCard() {
     const { data, loading, error, refetch } = useRequest<HealthLine[]>('admin:getConfigHealth', {});
     const navigate = useNavigate();

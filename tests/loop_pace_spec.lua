@@ -68,12 +68,12 @@ Config.Performance.loopScale = 1.0
 -- CP.NpcCombat's run watcher (re-applies the NPC damage values): 1000 ms before step LP2, 2000 ms now, 4000 ms at
 -- loopScale 2.
 
-H.load('modules/npccombat/client.lua')
+H.load('modules/npc/client/npccombat.lua')
 H.step(0)
 waits = {}
 CP.NpcCombat.start('lp2-run')
 H.advance(8000, 250)
-local list = WaitsOf('modules/npccombat/client.lua')
+local list = WaitsOf('modules/npc/client/npccombat.lua')
 H.ok(#list >= 3, ('the watcher ran (%d waits)'):format(#list))
 local allTwo = #list > 0
 for _, ms in ipairs(list) do if ms ~= 2000 then allTwo = false end end
@@ -84,7 +84,7 @@ Config.Performance.loopScale = 2
 H.advance(4000, 250)   -- the pass already waiting ends at its old pace
 waits = {}
 H.advance(16000, 250)
-list = WaitsOf('modules/npccombat/client.lua')
+list = WaitsOf('modules/npc/client/npccombat.lua')
 local allFour = #list > 0
 for _, ms in ipairs(list) do if ms ~= 4000 then allFour = false end end
 H.ok(allFour, 'loopScale 2: every 4 s: ' .. table.concat(list, ','))
@@ -108,15 +108,15 @@ local function Has(rel, needle, msg)
     H.ok(Read(rel):find(needle, 1, true) ~= nil, msg .. ' (' .. rel .. ')')
 end
 
-Has('modules/tablet/client.lua', 'local DESK_WATCH_MS = 1000', 'walk-away close checked every 1 s')
-Has('modules/tablet/client.lua', 'local DOWN_WATCH_MS = 1000', 'downed check every 1 s')
-Has('modules/tablet/client.lua', 'local ITEM_WATCH_MS = 2000', 'tablet item check every 2 s')
-Has('modules/tablet/client.lua', 'local ANIM_WATCH_MS = 2000', 'tablet animation kept every 2 s')
-Has('modules/markers/client.lua', 'local TICK_MS = 2000', 'objective pointer every 2 s')
-Has('modules/runs/client.lua', 'local TELEMETRY_MS = 2000', 'run telemetry every 2 s')
-Has('modules/runs/client.lua', 'local UNARMED_MS = 1000', 'unarmed weapon check every 1 s')
-Has('modules/npc/client.lua', 'local LOOP_MS = 1000', 'NPC retask every 1 s')
-Has('modules/npc/client.lua', 'local GOVERN_MS = 2000', 'NPC combat governor every 2 s')
+Has('modules/access/client/tablet.lua', 'local DESK_WATCH_MS = 1000', 'walk-away close checked every 1 s')
+Has('modules/access/client/tablet.lua', 'local DOWN_WATCH_MS = 1000', 'downed check every 1 s')
+Has('modules/access/client/tablet.lua', 'local ITEM_WATCH_MS = 2000', 'tablet item check every 2 s')
+Has('modules/access/client/tablet.lua', 'local ANIM_WATCH_MS = 2000', 'tablet animation kept every 2 s')
+Has('modules/map/client/markers.lua', 'local TICK_MS = 2000', 'objective pointer every 2 s')
+Has('modules/runs/client/runs.lua', 'local TELEMETRY_MS = 2000', 'run telemetry every 2 s')
+Has('modules/runs/client/runs.lua', 'local UNARMED_MS = 1000', 'unarmed weapon check every 1 s')
+Has('modules/npc/client/npc.lua', 'local LOOP_MS = 1000', 'NPC retask every 1 s')
+Has('modules/npc/client/npc.lua', 'local GOVERN_MS = 2000', 'NPC combat governor every 2 s')
 Has('modules/dispatch/alerts.lua', 'local RECONCILE_MS = 2000', 'crimsonArena flag reconcile every 2 s')
 Has('modules/review/anticheat.lua', 'local TICK_MS = 2000', 'anticheat pass every 2 s')
 Has('modules/teams/operations.lua', 'local TICK_IDLE_MS = 10000', 'no operation: every 10 s')
@@ -136,11 +136,11 @@ for _, rel in ipairs({
     Has(rel, 'CP.Perf.ms(MARKER_FAR_MS)', 'the far marker wait is scaled')
 end
 -- per frame stays per frame: the armed shooting check and the in-range markers never go through CP.Perf
-Has('modules/runs/client.lua', 'if IsPedArmed(ped, 6) then\n                Wait(0)',
+Has('modules/runs/client/runs.lua', 'if IsPedArmed(ped, 6) then\n                Wait(0)',
     'armed: the shot check every frame')
 -- the run engine's 1 s tick (run deadlines, HUD timers) is not scaled (step LP4 only arms it while it has work)
-H.ok(Read('modules/runs/server.lua'):find('CP.Perf.ms', 1, true) == nil, 'the run engine keeps its own 1 s tick')
-Has('modules/runs/server.lua', 'CP.Perf.armed(TAG, 1000,', 'the armed run engine tick stays 1 s')
+H.ok(Read('modules/runs/runs.lua'):find('CP.Perf.ms', 1, true) == nil, 'the run engine keeps its own 1 s tick')
+Has('modules/runs/runs.lua', 'CP.Perf.armed(TAG, 1000,', 'the armed run engine tick stays 1 s')
 
 -- ============================================================================
 --                 CHECKPOINT ROUTE: THE FAR WAIT IN A CAR (Z4)

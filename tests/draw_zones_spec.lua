@@ -128,7 +128,7 @@ CP.Missions = {
 }
 
 H.load('modules/system/schedule.lua')
-H.load('modules/draw/server.lua')
+H.load('modules/runs/draw.lua')
 local D = CP.Draw
 
 -- south_ls centre (150, -1750), downtown (-150, -850), vinewood (250, 250)

@@ -1,6 +1,6 @@
 -- CP.LiveCrime (server): live crimes (option A, Config.RealPlayers.liveCrime). The intake keeps a record of each crime
 -- a script in Config.RealPlayers.liveCrime.sources reports (memory only) and decides its suspects when its police alert
--- goes out; the LIVE call itself is LiveCrime.post. Its events arrive through modules/integrations/crimson_contracts.
+-- goes out; the LIVE call itself is LiveCrime.post. Its events arrive through modules/system/integrations/crimson_contracts.
 
 CP.LiveCrime = CP.LiveCrime or {}
 local LC = CP.LiveCrime

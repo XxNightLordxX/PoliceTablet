@@ -1,4 +1,4 @@
--- Slice npc: modules/npc/server.lua driven through a fake entity world, stubbed
+-- Slice npc: modules/npc/npc.lua driven through a fake entity world, stubbed
 
 -- CP.Runs / CP.AntiCheat / CP.Tablet / CP.Alerts / CP.Access, the harness clock (the 1 s watcher runs
 -- as a harness thread) and simulated net events. The client half is checked in a separate Lua state
@@ -157,7 +157,7 @@ CP.Access = {
     end,
 }
 
-H.load('modules/npc/server.lua')
+H.load('modules/npc/npc.lua')
 local Npc = CP.Npc
 H.ok(
     type(Npc.setState) == 'function' and type(Npc.getState) == 'function' and type(Npc.isNeutralised) == 'function'
@@ -778,7 +778,7 @@ do
         text = text:gsub('%-%-%[(=*)%[.-%]%1%]', ''):gsub('%-%-[^\n]*', '')
         return text
     end
-    for _, file in ipairs({ 'modules/npc/server.lua', 'modules/runs/server.lua' }) do
+    for _, file in ipairs({ 'modules/npc/npc.lua', 'modules/runs/runs.lua' }) do
         local text = Code(file)
         H.eq(text:find('state%.cp'), nil, file .. ' never reads Entity(e).state.cp')
         H.eq(text:find('state%[%s*\'cp\'%s*%]'), nil, file .. ' never reads Entity(e).state[\'cp\']')
@@ -1586,7 +1586,7 @@ do
     -- Config.NpcDifficulty's fleeMult (CP.Scaling.feel): 'hard' runners last 20 % longer, 'easy' ones 20 % shorter
     local savedScaling = CP.Scaling
     CP.Scaling = nil
-    H.load('modules/scaling/server.lua')
+    H.load('modules/runs/scaling.lua')
     local preset = Config.NpcDifficulty.preset
     Config.NpcDifficulty.preset = 'hard'
     local hr = NewRun('flee-hard', { 31 }, { seed = 1 })
@@ -1859,7 +1859,7 @@ for k, v in pairs(part) do
 end
 H.ok(flat, 'npc.json is a flat map of strings')
 local used = {}
-for _, file in ipairs({ 'modules/npc/server.lua', 'modules/npc/client.lua' }) do
+for _, file in ipairs({ 'modules/npc/npc.lua', 'modules/npc/client/npc.lua' }) do
     local src = ReadFile(H.root .. file)
     for key in src:gmatch('CP%.L%(\'([%w%._]+)\'') do used[key] = true end
     for key in src:gmatch('\'(err%.[%w_]+)\'') do used[key] = true end

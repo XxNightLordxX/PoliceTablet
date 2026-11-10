@@ -308,7 +308,7 @@ end
 -- ============================================================================
 
 do
-    H.load('modules/runs/server.lua')
+    H.load('modules/runs/runs.lua')
     local run = {
         id = 'W1',
         state = 'in_progress',
@@ -322,7 +322,7 @@ do
     CP.Runs.award(run, 'hostile_arrested', { count = 2 })
     H.eq(run.score.shared.hostile_arrested, 2, 'no weight: whole occurrences as before')
 
-    H.load('modules/scaling/server.lua')
+    H.load('modules/runs/scaling.lua')
     H.load('modules/progression/scoring.lua')
     local p = { src = 1, department = 'sast', status = 'active', score = {}, vehicle = { seen = false } }
     local srun = {
@@ -349,7 +349,7 @@ end
 -- ============================================================================
 
 do
-    H.load('modules/missions/server.lua')
+    H.load('modules/missions/missions.lua')
     local def = {
         id = 'lr_file',
         label = 'Live file',

@@ -76,15 +76,15 @@ end
 H.time = tonumber(H.sql('SELECT UNIX_TIMESTAMP(NOW()) AS t')[1].t)   -- align os.time() with NOW()
 
 for _, m in ipairs({
-    'modules/permissions/server.lua',
-    'modules/access/server.lua',
-    'modules/admin/server.lua',
-    'modules/adminkit/server.lua',
-    'modules/deptcontrols/server.lua',
-    'modules/settings/server.lua',
-    'modules/tablet/server.lua',
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/supervisor/deptcontrols.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
     'modules/supervisor/happyhour.lua',
-    'modules/runs/server.lua',
+    'modules/runs/runs.lua',
 }) do
     H.load(m)
 end
@@ -93,7 +93,7 @@ H.step(0)
 local DC, Runs, HH = CP.DeptControls, CP.Runs, CP.HappyHour
 local CID = {}
 for src, p in pairs(people) do CID[src] = p.cid end
--- the no-repeat control lives in modules/draw: the same registration, without the draw
+-- the no-repeat control lives in modules/runs/draw: the same registration, without the draw
 if not DC.def('noRepeat') then
     DC.register('noRepeat', {
         kind = 'bool',

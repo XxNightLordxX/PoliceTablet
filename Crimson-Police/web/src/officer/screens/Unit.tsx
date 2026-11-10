@@ -443,7 +443,7 @@ function InvitesCard({
 }
 
 // Test invitations waiting for the viewer (SPEC Admin test mode: testers "accept on their own screen").
-// Callback test:pendingInvites (modules/testing, anyone: their own invitations), live via push 'invites';
+// Callback test:pendingInvites (modules/missions/testing, anyone: their own invitations), live via push 'invites';
 // Accept / Decline → server:testRespond { inviteId, accepted }. Hidden while there are none.
 function TestInvitesCard() {
     const { data, refetch } = useRequest<TestInvite[]>('test:pendingInvites', {}, { pushTopic: 'invites' });

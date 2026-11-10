@@ -91,7 +91,7 @@ local MISSION = {
     objectives = { { block = 'crimtab_runner' } },
 }
 
-H.load('modules/permissions/server.lua')
+H.load('modules/access/permissions.lua')
 H.load('modules/realplayers/volunteers.lua')
 H.load('modules/realplayers/match.lua')
 H.load('modules/realplayers/crimtab.lua')

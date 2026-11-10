@@ -303,8 +303,8 @@ gives a quick list. What the engine deliberately does not copy is in the header 
 ### lint-fivem
 
 ```
-Crimson-Police/modules/tablet/client.lua:745: FX04 SetNuiFocus(false, ...) outside an if (only while a CP UI holds the focus)
-tools/lint_baseline.txt:11: stale: FX06 Crimson-Police/modules/runs/server.lua no longer has this hit; delete the line
+Crimson-Police/modules/access/client/tablet.lua:745: FX04 SetNuiFocus(false, ...) outside an if (only while a CP UI holds the focus)
+tools/lint_baseline.txt:11: stale: FX06 Crimson-Police/modules/runs/runs.lua no longer has this hit; delete the line
 hits by rule: FX04 1, FX05 3, FX07 2, FX08 2 (71 Lua files)
 lint_fivem FAIL: 1 new hits, 7 known (baseline), 1 stale baseline lines
 ```
@@ -412,7 +412,7 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   `tests/run.lua` checks the client before the first spec.
 - **Mocks that said true where FXServer says 1**: on a real server a native that answers yes or no gives Lua the
   integer 1 (false for no), never true. The spec mocks answered true, so `DoesEntityExist(e) == true` in
-  modules/npc and modules/custody passed every spec while, on a real server, every mission NPC was declared dead
+  modules/npc and modules/npc/custody passed every spec while, on a real server, every mission NPC was declared dead
   a second after it spawned and every police action on a contact was refused. The harness now gives every server
   mock of such a native FXServer's answer (tests/harness.lua, "SERVER NATIVES THAT ANSWER YES OR NO"; checked by
   section 23 of tests/foundation_spec.lua). It owns the metatable of `_G` for that: a spec that wants undefined
@@ -486,9 +486,9 @@ packages, and the runner's own clock and zone (the specs do not read either). Th
   networked entities a spec sets up. As in the game, what this game sets on an entity it does not control is not kept
   (counted in `ignored`); control comes `grantMs` after the first request (or never) and another game can take it
   over at `loseAt`. tests/spawn_placer_spec.lua uses it with H.groundNatives, and tests/spawn_placer_npc_spec.lua
-  too, with modules/npc/client.lua loaded in the same game (its other natives recorded) so CP.Npc tasks a person while
+  too, with modules/npc/client/npc.lua loaded in the same game (its other natives recorded) so CP.Npc tasks a person while
   the placer checks his ground.
-- **The server's side of the placer**: tests/spawn_place_spec.lua runs modules/spawn/server.lua on the real
+- **The server's side of the placer**: tests/spawn_place_spec.lua runs modules/runs/spawn.lua on the real
   engine (tests/fixtures/custody/world.lua) with FXServer's routing of the server RPC `FreezeEntityPosition`: sent to
   the game that simulates the entity (`NetworkGetEntityOwner`, a player's server id or -1), kept for the first game
   that takes an entity nobody simulates yet (ServerRPC.cpp), so a spec sees which game an entity is frozen on.
@@ -595,7 +595,7 @@ Until these gaps are closed, look for them in review.
   function returns; a spec never sets the metatable of `_G` (`H.strictGlobals`, `H.onUndefinedGlobal`).
   `lint-fivem` rule FX12 flags `== true` / `~= true` on such an answer (directly or through the local it went in).
 - **A file listed twice in fxmanifest runs twice.** FXServer runs every entry (a file named by itself and matched
-  again by `modules/**/server.lua` loads twice). Such a file starts with its load guard
+  again by a glob loads twice; fxmanifest lists every file once, tests/module_layout_spec.lua checks it). Such a file starts with its load guard
   (`if CP.X and CP.X._installed then return end`), as storage and adminkit do; tests/adminkit_spec.lua expands the
   manifest the way FXServer does (`H.manifestScripts`) and fails on a repeated file without one.
 - **FXServer's debug library is five functions.** getinfo, getmetatable, setmetatable, getupvalue and traceback

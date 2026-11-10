@@ -400,10 +400,10 @@ end
 
 local function Mod(rel) return StripComments(Read(ROOT .. rel) or '') end
 local runsSrv, drawSrv, eventsSrv =
-    Mod('modules/runs/server.lua'), Mod('modules/draw/server.lua'), Mod('modules/progression/events.lua')
+    Mod('modules/runs/runs.lua'), Mod('modules/runs/draw.lua'), Mod('modules/progression/events.lua')
 local opsSrv, routeSrv, routeCl =
-    Mod('modules/teams/operations.lua'), Mod('modules/route/server.lua'), Mod('modules/route/client.lua')
-local runsCl, ipSrv = Mod('modules/runs/client.lua'), Mod('blocks/interact_points/server.lua')
+    Mod('modules/teams/operations.lua'), Mod('modules/runs/route.lua'), Mod('modules/runs/client/route.lua')
+local runsCl, ipSrv = Mod('modules/runs/client/runs.lua'), Mod('blocks/interact_points/server.lua')
 
 local function Covers(keys, fields, what)
     H.ok(#fields > 0, what .. ': contract fields parsed')
@@ -500,11 +500,11 @@ end
 
 -- Client actions the screen calls.
 H.ok(routeCl:find('registerClientAction(\'setGps\'', 1, true) ~= nil,
-    'client action setGps registered by modules/route')
+    'client action setGps registered by modules/runs/route')
 H.ok(routeCl:find('registerClientAction(\'recalcRoute\'', 1, true) ~= nil,
-    'client action recalcRoute registered by modules/route')
-H.ok(Mod('modules/markers/client.lua'):find('registerClientAction(\'setObjectiveGps\'', 1, true) ~= nil,
-    'client action setObjectiveGps registered by modules/markers (PLAN M10)')
+    'client action recalcRoute registered by modules/runs/route')
+H.ok(Mod('modules/map/client/markers.lua'):find('registerClientAction(\'setObjectiveGps\'', 1, true) ~= nil,
+    'client action setObjectiveGps registered by modules/map/markers (PLAN M10)')
 H.ok((FnBody(routeCl, 'function R.recalculate()') or ''):find('return true, { recalcsLeft = left }', 1, true) ~= nil,
     'recalcRoute replies { recalcsLeft }')
 H.ok(runsCl:find('registerClientAction(\'logResult\', function(payload)', 1, true) ~= nil,
@@ -562,9 +562,9 @@ for st in pairs(opStatuses) do
     H.ok(board:find('op.status === \'' .. st .. '\'', 1, true) ~= nil, 'the operation card handles status ' .. st)
 end
 H.ok(drawSrv:find('CP.Net.callback(\'getMissionTypes\'', 1, true) ~= nil,
-    'callback getMissionTypes is registered by modules/draw')
+    'callback getMissionTypes is registered by modules/runs/draw')
 H.ok(drawSrv:find('CP.Net.action(\'server:acceptType\'', 1, true) ~= nil,
-    'action server:acceptType is registered by modules/draw')
+    'action server:acceptType is registered by modules/runs/draw')
 H.ok(opsSrv:find('\'server:joinOperation\'', 1, true) ~= nil,
     'action server:joinOperation is registered by modules/operations')
 

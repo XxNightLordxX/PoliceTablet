@@ -174,8 +174,8 @@ CP.Missions = {
     isEnabled = function(id) return byId[id] ~= nil end,
 }
 
-H.load('modules/deptcontrols/server.lua')
-H.load('modules/draw/server.lua')
+H.load('modules/supervisor/deptcontrols.lua')
+H.load('modules/runs/draw.lua')
 H.load('modules/dispatch/missioncalls.lua')
 local MC = CP.MissionCalls
 MC._setNextPost(H.time + 10 ^ 9)

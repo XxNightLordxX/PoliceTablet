@@ -1132,7 +1132,7 @@ CreateThread(function()
     Wait(0)
     local Q = CP.Qbx
     if not (Q and Q.onPlayerLoaded and Q.onMetaDataChange) then
-        CP.err(TAG, 'modules/integrations/qbx is missing: real suspects cannot be followed')
+        CP.err(TAG, 'modules/system/integrations/qbx is missing: real suspects cannot be followed')
         return
     end
     Q.onPlayerLoaded(OnLoaded)

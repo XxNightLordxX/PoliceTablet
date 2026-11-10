@@ -1,4 +1,4 @@
-// Browser mocks for full admin control: Live runs, units and anti-farm overrides (modules/livectl/server.lua).
+// Browser mocks for full admin control: Live runs, units and anti-farm overrides (modules/supervisor/livectl.lua).
 
 import { registerMock } from '../shared/nui';
 import { registerRestrictionKind } from './restrictions.mock';

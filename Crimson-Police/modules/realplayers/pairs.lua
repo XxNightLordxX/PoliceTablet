@@ -985,7 +985,7 @@ CreateThread(function()
             if src then Gone(src) end
         end)
     else
-        CP.err(TAG, 'modules/integrations/qbx is missing: duty changes are not seen for real suspects')
+        CP.err(TAG, 'modules/system/integrations/qbx is missing: duty changes are not seen for real suspects')
     end
     if Opp.onTick then Opp.onTick(TrackContact) end
     if CP.Schedule and CP.Schedule.job then

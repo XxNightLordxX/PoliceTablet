@@ -97,11 +97,11 @@ local FILES = {
     ['blocks/skill_check/client.lua'] = 1,
     ['blocks/interact_points/client.lua'] = 1,
     ['blocks/checkpoint_route/client.lua'] = 1,
-    ['modules/runs/client.lua'] = 1,
+    ['modules/runs/client/runs.lua'] = 1,
     -- the Testing debug drawing (step LP1)
-    ['modules/testing/client.lua'] = 1,
+    ['modules/missions/client/testing.lua'] = 1,
     -- placement, recording, the drive test's approach, clear, drive and stop loops
-    ['modules/builder/client.lua'] = 6,
+    ['modules/missions/client/builder.lua'] = 6,
 }
 
 local names = {}

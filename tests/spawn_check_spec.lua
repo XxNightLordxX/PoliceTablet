@@ -1,6 +1,6 @@
--- Check spawn points (modules/testing server and client, each block's pointKinds): the server lists every
+-- Check spawn points (modules/missions/testing server and client, each block's pointKinds): the server lists every
 
--- Check spawn points (modules/testing server and client, each block's pointKinds): the server lists every
+-- Check spawn points (modules/missions/testing server and client, each block's pointKinds): the server lists every
 -- point of a mission's location with what appears there, from the REAL blocks on the REAL built-in mission files; the
 -- admin's own game visits the points, judges each with CP.Spawn.probe and reports back; bad points get one console
 -- line each (and a line in Admin UI -> System -> Problems). "Teleport here" (spawnPoints with a point id:
@@ -68,10 +68,10 @@ local BLOCKS = {
     'process_scene',
 }
 for _, b in ipairs(BLOCKS) do H.load('blocks/' .. b .. '/server.lua') end
-H.load('modules/scaling/server.lua')
-H.load('modules/missions/server.lua')
+H.load('modules/runs/scaling.lua')
+H.load('modules/missions/missions.lua')
 H.step(0) -- CP.Missions.loadAll runs in its start thread
-H.load('modules/testing/server.lua')
+H.load('modules/missions/testing.lua')
 local T = CP.Testing
 local Missions = CP.Missions
 
@@ -704,12 +704,12 @@ CP.Net.action = function(name, payload)
     return { ok = true, data = {} }
 end
 
--- modules/integrations/qbx loads first, as the fxmanifest's modules/**/client.lua glob does (its logout listener)
-H.load('modules/integrations/qbx/client.lua')
-H.load('modules/testing/client.lua')
+-- modules/system/integrations/qbx loads first, as the fxmanifest's modules/**/client.lua glob does (its logout listener)
+H.load('modules/system/client/qbx.lua')
+H.load('modules/missions/client/testing.lua')
 H.step(0) -- the action registration thread
 
--- the ground probe and the sight check (modules/spawn/client.lua) answer from these
+-- the ground probe and the sight check (modules/runs/client/spawn.lua) answer from these
 local probes, asks = {}, {}
 local probeStatus = { ['spawns[1]'] = 'ok', ['spot[1]'] = 'underground', ['door[1]'] = 'snap', ['route[1]'] = 'ok' }
 local onProbe = nil
@@ -1206,7 +1206,7 @@ end
 -- and starting it again: the file runs fresh
 local function StartPolice()
     H.handlers.onResourceStop = nil
-    H.load('modules/testing/client.lua')
+    H.load('modules/missions/client/testing.lua')
     H.step(0)
 end
 

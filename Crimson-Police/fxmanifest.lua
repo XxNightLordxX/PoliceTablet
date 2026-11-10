@@ -22,6 +22,7 @@ dependencies {
 }
 
 -- Load order: config, blocks config, shared helpers, storage, feature modules, then objective blocks.
+-- Each module is a folder of sub-files (modules/<module>/<part>.lua, client parts in modules/<module>/client/).
 -- Mission files are not scripts: modules/missions reads them with LoadResourceFile.
 shared_scripts {
     '@ox_lib/init.lua',
@@ -36,14 +37,49 @@ server_scripts {
     'modules/system/memsql.lua',
     'modules/system/storage.lua',
     -- CP.AdminKit before every module, so any module may register its admin actions as it loads
-    'modules/adminkit/server.lua',
+    'modules/admin/adminkit.lua',
     -- the rest of the system module: the start-up runner, then the calendar and the timed jobs every module joins
     'modules/system/migrations.lua',
     'modules/system/schedule.lua',
-    'modules/**/server.lua',
-    -- modules made of sub-files (one file per part, no server.lua)
+    -- the module sub-files, one by one in the order they have always loaded in (some read another's CP table at load)
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminhome.lua',
+    'modules/missions/builder.lua',
+    'modules/admin/confighealth.lua',
+    'modules/npc/custody.lua',
+    'modules/supervisor/deptcontrols.lua',
+    'modules/runs/downed.lua',
+    'modules/runs/draw.lua',
+    'modules/system/integrations/crimson_contracts.lua',
+    'modules/system/integrations/qbx.lua',
+    'modules/system/integrations/renewed_banking.lua',
+    'modules/system/integrations/sc_ambulance.lua',
+    'modules/system/integrations/sc_dispatch.lua',
+    'modules/system/integrations/sc_police.lua',
+    'modules/supervisor/livectl.lua',
+    'modules/map/markers.lua',
+    'modules/missions/missions.lua',
+    'modules/npc/npc.lua',
+    'modules/npc/npccombat.lua',
+    'modules/access/options.lua',
+    'modules/access/permissions.lua',
+    'modules/runs/route.lua',
+    'modules/runs/runs.lua',
+    'modules/runs/scaling.lua',
+    'modules/admin/settings.lua',
+    'modules/runs/spawn.lua',
+    'modules/supervisor/supawards.lua',
+    'modules/supervisor/today.lua',
+    'modules/admin/sysadmin.lua',
+    'modules/access/tablet.lua',
+    'modules/missions/testing.lua',
     'modules/progression/*.lua',
-    'modules/supervisor/*.lua',
+    'modules/supervisor/fieldtraining.lua',
+    'modules/supervisor/happyhour.lua',
+    'modules/supervisor/missionban.lua',
+    'modules/supervisor/notices.lua',
+    'modules/supervisor/restrictions.lua',
     'modules/review/*.lua',
     'modules/realplayers/*.lua',
     'modules/dispatch/*.lua',
@@ -59,7 +95,25 @@ server_scripts {
 }
 
 client_scripts {
-    'modules/**/client.lua',
+    -- the module client files, in the order they have always loaded in
+    'modules/access/client/access.lua',
+    'modules/missions/client/builder.lua',
+    'modules/npc/client/custody.lua',
+    'modules/admin/client/diag.lua',
+    'modules/runs/client/downed.lua',
+    'modules/system/client/qbx.lua',
+    'modules/system/client/sc_ambulance.lua',
+    'modules/map/client/markers.lua',
+    'modules/missions/client/missions.lua',
+    'modules/npc/client/npc.lua',
+    'modules/npc/client/npccombat.lua',
+    'modules/access/client/options.lua',
+    'modules/runs/client/route.lua',
+    'modules/runs/client/runs.lua',
+    'modules/admin/client/settings.lua',
+    'modules/runs/client/spawn.lua',
+    'modules/access/client/tablet.lua',
+    'modules/missions/client/testing.lua',
     'modules/realplayers/client/*.lua',
     'modules/dispatch/client/*.lua',
     'modules/teams/client/*.lua',

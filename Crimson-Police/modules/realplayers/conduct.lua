@@ -457,7 +457,8 @@ CreateThread(function()
     if P and P.on then
         P.on('seizeCash', OnSeize)
     else
-        CP.err(TAG, 'modules/integrations/sc_police is missing: cash seizures from real suspects are not audited')
+        CP.err(TAG,
+            'modules/system/integrations/sc_police is missing: cash seizures from real suspects are not audited')
     end
     if Opp.onTick then
         Opp.onTick(Tick)

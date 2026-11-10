@@ -12,7 +12,7 @@
 --          When the client passed a reqId it receives 'crimson-police:client:actionResult'.
 --
 -- On the client, CP.Net.request(name, args, opts) and CP.Net.action(name, payload, timeoutMs) call them and
--- wait for the reply; the tablet's NUI bridge (modules/tablet/client.lua) forwards the UI's
+-- wait for the reply; the tablet's NUI bridge (modules/access/client/tablet.lua) forwards the UI's
 -- 'request' and 'action' NUI callbacks to these two functions.
 --
 -- Latent replies (the big Admin UI exports: admin:exportAudit, admin:exportAuditPart, admin:exportPayments, up to 5000
@@ -32,7 +32,7 @@
 
 CP = CP or {}
 CP.Net = CP.Net or {}
--- Who netRateResponse never warns about or drops; modules/access/server.lua sets it to CP.Access.isAdmin
+-- Who netRateResponse never warns about or drops; modules/access/access.lua sets it to CP.Access.isAdmin
 function CP.Net.rateExempt(_) return false end
 
 local RESULT_EVENT = 'crimson-police:client:actionResult'

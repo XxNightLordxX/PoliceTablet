@@ -1,4 +1,4 @@
--- CP.MissionCalls (client, the dispatch module): the new-call toast and tone. The tablet's own close (server:tabletClosed, modules/tablet)
+-- CP.MissionCalls (client, the dispatch module): the new-call toast and tone. The tablet's own close (server:tabletClosed, modules/access/tablet)
 -- tells the server to stop the Dispatch screen data.
 
 CP.MissionCalls = CP.MissionCalls or {}

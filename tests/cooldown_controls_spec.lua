@@ -76,14 +76,14 @@ end
 H.time = tonumber(H.sql('SELECT UNIX_TIMESTAMP(NOW()) AS t')[1].t)   -- align os.time() with NOW()
 
 for _, m in ipairs({
-    'modules/permissions/server.lua',
-    'modules/access/server.lua',
-    'modules/admin/server.lua',
-    'modules/adminkit/server.lua',
-    'modules/deptcontrols/server.lua',
-    'modules/settings/server.lua',
-    'modules/tablet/server.lua',
-    'modules/runs/server.lua',
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/supervisor/deptcontrols.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
+    'modules/runs/runs.lua',
 }) do
     H.load(m)
 end

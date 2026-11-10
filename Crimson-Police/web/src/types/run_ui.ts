@@ -46,7 +46,7 @@ export type BoardOperation = NonNullable<BoardData['operation']> & {
     joinBlocked?: string | null;
 };
 
-// Callback 'getMissionTypes'. Optional extras (requested from modules/draw, docs/dev/ARCHITECTURE.md §12.8):
+// Callback 'getMissionTypes'. Optional extras (requested from modules/runs/draw, docs/dev/ARCHITECTURE.md §12.8):
 // `serverTime` = os.time() when the board was built; `todMultiplier` = Config.Objectives.typeOfTheDay.multiplier (the
 // Type of the Day's points multiplier; the board assumes the default 2 without it).
 export interface MissionBoardData extends Omit<BoardData, 'operation'> {
@@ -210,7 +210,7 @@ export interface RecalcRouteResult {
 export interface SetGpsResult {
     runId: string;
 }
-// Reply of the client action setObjectiveGps (modules/markers): the objective the waypoint was put on.
+// Reply of the client action setObjectiveGps (modules/map/markers): the objective the waypoint was put on.
 export interface ObjectiveGpsResult {
     label: string;
 }

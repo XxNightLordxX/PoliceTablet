@@ -84,7 +84,7 @@ end
 -- a player who loaded before this resource started: only the startup sweep can put him in the map
 chars[901] = 'CQPRE901'
 
-H.load('modules/runs/server.lua')
+H.load('modules/runs/runs.lua')
 local Runs = CP.Runs
 local cids = Runs._cids
 H.step(0)   -- the hook registration thread

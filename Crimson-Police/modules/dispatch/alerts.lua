@@ -728,7 +728,7 @@ CreateThread(function()
         CP.Dispatch.onPlayerDown(DownListener('playerdown_'))
         CP.Dispatch.onPlayerDead(DownListener('playerdead_'))
     else
-        CP.err(TAG, 'modules/integrations/sc_dispatch is missing: the alert backstop is off')
+        CP.err(TAG, 'modules/system/integrations/sc_dispatch is missing: the alert backstop is off')
     end
     while true do
         Wait(CP.Perf.ms(RECONCILE_MS))

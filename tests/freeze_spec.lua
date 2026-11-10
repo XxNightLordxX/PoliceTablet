@@ -104,7 +104,7 @@ local function RunFor(ms)
     while H.clockMs < target do H.step(100) end
 end
 
-H.load('modules/downed/server.lua')
+H.load('modules/runs/downed.lua')
 H.step(0)
 local D = CP.Downed
 
@@ -395,13 +395,13 @@ lib.callback.await = function(name)
     return { ok = true, data = {} }
 end
 
-H.load('modules/integrations/qbx/client.lua')
-H.load('modules/access/client.lua')
-H.load('modules/tablet/client.lua')
-H.load('modules/route/client.lua')
-H.load('modules/runs/client.lua')
-H.load('modules/downed/client.lua')
-H.load('modules/diag/client.lua')
+H.load('modules/system/client/qbx.lua')
+H.load('modules/access/client/access.lua')
+H.load('modules/access/client/tablet.lua')
+H.load('modules/runs/client/route.lua')
+H.load('modules/runs/client/runs.lua')
+H.load('modules/runs/client/downed.lua')
+H.load('modules/admin/client/diag.lua')
 RunFor(3000)
 local T, CD, CR = CP.Tablet, CP.Downed, CP.Runs
 H.ok(T and CD and CR and CP.Route, 'client modules loaded')

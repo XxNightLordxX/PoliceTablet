@@ -1178,7 +1178,7 @@ end
 -- ============================================================================
 
 do
-    local f = io.open('Crimson-Police/modules/runs/server.lua', 'r')
+    local f = io.open('Crimson-Police/modules/runs/runs.lua', 'r')
     local src = f and f:read('a') or ''
     if f then f:close() end
     H.ok(src:find('ctx.volunteer = function()', 1, true) ~= nil, 'every block ctx has ctx.volunteer()')

@@ -478,7 +478,7 @@ CreateThread(function()
         CP.Qbx.onPlayerUnload(OnUnload)
     end -- integrations/qbx loads later
     if not CP.Dispatch then
-        CP.err(TAG, 'modules/integrations/sc_dispatch is missing: real calls cannot end runs')
+        CP.err(TAG, 'modules/system/integrations/sc_dispatch is missing: real calls cannot end runs')
         return
     end
     CP.Dispatch.onResponding(OnResponding)

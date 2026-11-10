@@ -1,8 +1,8 @@
--- CP.Spawn.probe (modules/spawn/client.lua): whether the ground at a mission point is fit to put a person,
+-- CP.Spawn.probe (modules/runs/client/spawn.lua): whether the ground at a mission point is fit to put a person,
 -- a vehicle or an object on, against a small game map whose natives check their argument types (H.groundNatives):
 -- the collision and the inside of a building load first, then the ground, water and wall probes run.
 
--- CP.Spawn.probe (modules/spawn/client.lua) on the small map of H.groundNatives, whose natives check their
+-- CP.Spawn.probe (modules/runs/client/spawn.lua) on the small map of H.groundNatives, whose natives check their
 -- argument types: a person 1 m over the ground ok (whole-number coordinates sent as decimals, the collision asked for
 -- around his ped, his capsule); 0.52 m under put on it; 2 m under the ground under the ground or put on it as
 -- snapWithin says; 5 m under found from 50 m up; floating and put down; ranges read live (a bad range: the default); a
@@ -21,7 +21,7 @@ H.boot({ side = 'client' })
 local W = H.groundNatives()
 local PED, CAR = W.ped, 777
 _G.AddStateBagChangeHandler = function() end -- the placer's handler (tests/spawn_placer_spec.lua)
-H.load('modules/spawn/client.lua')
+H.load('modules/runs/client/spawn.lua')
 H.ok(type(CP.Spawn) == 'table' and type(CP.Spawn.probe) == 'function', 'CP.Spawn.probe')
 
 local DEFAULT_GROUND = {

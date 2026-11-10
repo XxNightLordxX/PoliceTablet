@@ -1,6 +1,6 @@
 // Shapes of the builder client slice: the in-world tool overlays sent by
 
-// modules/builder/client.lua (CP.Tablet.overlay kinds 'placement' | 'recording' | 'testdrive'), the fields the
+// modules/missions/client/builder.lua (CP.Tablet.overlay kinds 'placement' | 'recording' | 'testdrive'), the fields the
 // builder client and screens add to the client protocol of docs/dev/ARCHITECTURE.md §5.28.6, and the editor's
 // UI-side helper types (steps, point specs). The server shapes are in ./builder_server.ts.
 
@@ -315,7 +315,7 @@ export interface AdminMissionEntry extends MissionListEntry {
     status?: string;
     // listed in Config.DisabledMissions
     disabledInConfig?: boolean;
-    // the on/off switches of the mission and its locations (modules/settings)
+    // the on/off switches of the mission and its locations (modules/admin/settings)
     switch?: MissionSwitchView;
 }
 export interface AdminMissionsData extends Omit<MissionListData, 'missions'> {

@@ -149,9 +149,9 @@ local function Boot(pairsFirst)
         onPlayerUnload = function() end,
         getOnlinePlayers = function() return {} end,
     }
-    H.load('modules/access/server.lua')
+    H.load('modules/access/access.lua')
     CP.Qbx = nil
-    H.load('modules/integrations/qbx/server.lua')
+    H.load('modules/system/integrations/qbx.lua')
     H.load('modules/system/schedule.lua')
     -- fxmanifest's globs load the two files in no fixed order: both orders work
     if pairsFirst then H.load('modules/realplayers/pairs.lua') end

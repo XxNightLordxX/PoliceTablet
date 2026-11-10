@@ -98,7 +98,7 @@ export function presenceOf(cfg: BuilderConfig, block: string): Rng {
 // ============================================================================
 //                                 START RADIUS
 // ============================================================================
-// Mirrors modules/builder/server.lua (B.validate): the start marker of a mission with a search_area objective
+// Mirrors modules/missions/builder.lua (B.validate): the start marker of a mission with a search_area objective
 // is its search circle (the run starts when a participant enters it), so every location's start radius must
 // equal the FIRST search_area objective's startRadius (its block default when unset) and is checked against
 // Config.Blocks.search_area.startRadius instead of the start-marker range (builder:config startRadius).

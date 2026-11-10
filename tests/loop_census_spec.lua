@@ -94,7 +94,7 @@ for _, rel in ipairs(webFiles) do
     local frames = Count(text, '%f[%w_]requestAnimationFrame%s*%(')
     if timers + frames > 0 then code[rel] = { timers, frames } end
 end
-H.ok(code['modules/runs/server.lua'] ~= nil and code['web/src/shared/hooks.ts'] ~= nil, 'the scan finds the code')
+H.ok(code['modules/runs/runs.lua'] ~= nil and code['web/src/shared/hooks.ts'] ~= nil, 'the scan finds the code')
 
 -- ============================================================================
 --                              WHAT THE DOCS SAY

@@ -1,4 +1,4 @@
--- The officer options on this PC (modules/options/client.lua): 'local' options live in the resource KVP
+-- The officer options on this PC (modules/access/client/options.lua): 'local' options live in the resource KVP
 -- crimsonpolice:options and apply at once; 'server' options come from the session and the push 'options'.
 
 local H = dofile('tests/harness.lua')
@@ -25,16 +25,16 @@ Defs.add('test_board', { kind = 'enum', values = { 'list', 'cards' }, default = 
 local changed = {}
 CP.Hooks.on('options:changed', function(key) changed[#changed + 1] = key end)
 
--- the duty listener of modules/access/client.lua (Z4)
+-- the duty listener of modules/access/client/access.lua (Z4)
 local dutyListeners = {}
 local hadQbx = CP.Qbx
 CP.Qbx = {
     onUnload = function() end,
     onDutyChange = function(fn) dutyListeners[#dutyListeners + 1] = fn end,
 }
-H.load('modules/access/client.lua')
+H.load('modules/access/client/access.lua')
 CP.Qbx = hadQbx
-H.load('modules/options/client.lua')
+H.load('modules/access/client/options.lua')
 local O = CP.Options
 
 local function Session(options, officerOptions)
@@ -165,10 +165,10 @@ H.eq(select(2, O.setLocal('toastTime', 'forever')), 'err.option_value', 'the toa
 H.ok((O.setLocal('resultTime', 10)) and O.get('resultTime') == 10, 'a 10 s result card is kept on this PC')
 H.eq(LastLocal() and LastLocal().resultTime, 10, 'the NUI got the result card time')
 
--- the real modules/tablet/client.lua (its CP.Tablet), kept for the tablet key below
+-- the real modules/access/client/tablet.lua (its CP.Tablet), kept for the tablet key below
 local tabletModule = nil
 
--- the real CP.Tablet.notify (modules/tablet/client.lua) with the options above
+-- the real CP.Tablet.notify (modules/access/client/tablet.lua) with the options above
 do
     local nui = {}
     _G.SendNUIMessage = function(m) nui[#nui + 1] = m end
@@ -184,7 +184,7 @@ do
     end
     local stub = CP.Tablet
     CP.Tablet = nil
-    H.load('modules/tablet/client.lua')
+    H.load('modules/access/client/tablet.lua')
     local T = CP.Tablet
     tabletModule = T
     local function Last()
@@ -374,10 +374,11 @@ do
 end
 
 -- the client file uses no os or io
-local f = assert(io.open(H.root .. 'modules/options/client.lua', 'r'))
+local f = assert(io.open(H.root .. 'modules/access/client/options.lua', 'r'))
 local src = f:read('a')
 f:close()
-H.ok(src:find('%f[%w]os%.') == nil and src:find('%f[%w]io%.') == nil, 'modules/options/client.lua uses no os or io')
+H.ok(src:find('%f[%w]os%.') == nil and src:find('%f[%w]io%.') == nil,
+    'modules/access/client/options.lua uses no os or io')
 
 -- Auto-Ready (shared/options_unit.lua, step O13): with the option on, a ready check is answered for the officer only
 -- while they are at the keys (game input within 60 s) and not in the pause menu; off, nothing is sent.

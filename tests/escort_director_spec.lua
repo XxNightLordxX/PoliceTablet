@@ -12,7 +12,7 @@
 local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H
 local U = CP.U
-H.load('modules/spawn/server.lua')
+H.load('modules/runs/spawn.lua')
 H.load('blocks/escort/server.lua')
 
 local cfg = Config.Spawning

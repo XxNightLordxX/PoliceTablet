@@ -160,10 +160,10 @@ end
 
 H.mockInventory({ water = { label = 'Water' } })   -- ox_inventory for the item rewards
 
-H.load('modules/adminkit/server.lua')
-H.load('modules/access/server.lua')
-H.load('modules/permissions/server.lua')
-H.load('modules/admin/server.lua')
+H.load('modules/admin/adminkit.lua')
+H.load('modules/access/access.lua')
+H.load('modules/access/permissions.lua')
+H.load('modules/admin/admin.lua')
 H.load('modules/review/anticheat.lua')
 H.load('modules/review/queue.lua')
 H.load('modules/money/engine.lua')

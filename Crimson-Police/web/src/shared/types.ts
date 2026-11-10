@@ -82,7 +82,7 @@ export interface Session {
         disputeWindowHours: number;
         periods: string[];
         filters: string[];
-        // parity-plus config values (modules/tablet getSession)
+        // parity-plus config values (modules/access/tablet getSession)
         dispatch?: { enabled: boolean; areas: { key: string; label: string }[] };
         leaderboardMetrics?: string[];
         profile?: {
@@ -556,7 +556,7 @@ export interface NuiMessageMap {
     };
     // the whole locale again after an admin renamed something in Settings → Names (Config.Labels)
     locale: { type: 'locale'; locale: Record<string, string> };
-    // this PC's 'local' officer options (modules/options/client.lua): on 'ready' and after every change
+    // this PC's 'local' officer options (modules/access/client/options.lua): on 'ready' and after every change
     localOptions: { type: 'localOptions'; options: Record<string, OfficerOptionValue> };
     // the criminal tablet (modules/realplayers/client/crimtab.lua): open with its view (and a screen), a fresh view, or
     // closed (open = false)

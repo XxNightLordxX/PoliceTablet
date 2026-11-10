@@ -2,7 +2,7 @@
 
 // Props: { hud: HudState } — rendered by <Hud/> under the objectives only when hud.testControls is true
 // (the admin who started the test). The HUD has no NUI focus by default: the Lua testing client
-// (modules/testing/client.lua) gives focus with the +crimsonpolice_testpanel key (default F7) and tells
+// (modules/missions/client/testing.lua) gives focus with the +crimsonpolice_testpanel key (default F7) and tells
 // this panel through push 'test' { focused, key, debugOn } (TestPush), kept at module level so a panel that
 // mounts again shows the last values at once. While focused, that key or Escape
 // releases the cursor (client action testPanel { open: false }) on its key-up (useKeyRelease, shared/hooks.ts),

@@ -807,9 +807,9 @@ do
         if f then f:close() return true end
         return false
     end
-    local okLoad, err = pcall(H.load, 'modules/missions/server.lua')
+    local okLoad, err = pcall(H.load, 'modules/missions/missions.lua')
     if not okLoad then
-        Note('CP.Missions.normalize not run: modules/missions/server.lua did not load (%s)', tostring(err))
+        Note('CP.Missions.normalize not run: modules/missions/missions.lua did not load (%s)', tostring(err))
     else
         local loaded = {}
         for _, id in ipairs(ORDER) do

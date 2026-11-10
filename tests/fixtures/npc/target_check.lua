@@ -89,7 +89,7 @@ do
     end
 end
 
-H.load('modules/npc/client.lua')
+H.load('modules/npc/client/npc.lua')
 
 -- ============================================================================
 --                                   HELPERS
@@ -317,7 +317,7 @@ local writeTo = os.getenv('CP_TARGET_SNAPSHOT')
 if writeTo and writeTo ~= '' then
     local f = assert(io.open(writeTo, 'w'))
     f:write(
-        '# canInteract answers of modules/npc/client.lua (tests/fixtures/npc/target_check.lua writes and reads it)\n')
+        '# canInteract answers of modules/npc/client/npc.lua (tests/fixtures/npc/target_check.lua writes and reads it)\n')
     for _, p in ipairs(pages) do f:write(p.key, ' ', p.hex, '\n') end
     f:close()
 else

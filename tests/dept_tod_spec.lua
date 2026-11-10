@@ -142,7 +142,7 @@ H.ok(CP.L('err.tod_picked_today') ~= 'err.tod_picked_today', 'the refusal has a 
 -- ============================================================================
 -- Scoring.compute reads Events.typeOfTheDay with the participant's department and the run's participants.
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/progression/scoring.lua')
 local function Points(dept, cid, members)
     local p = {

@@ -21,7 +21,7 @@ CP.Qbx = {
     onPlayerUnload = function() end,
 }
 
-H.load('modules/adminkit/server.lua')
+H.load('modules/admin/adminkit.lua')
 H.load('modules/progression/scoring.lua')
 H.load('modules/supervisor/fieldtraining.lua')
 local S, FT = CP.Scoring, CP.FieldTraining

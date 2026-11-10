@@ -132,7 +132,7 @@ const LIST_FIELDS: (keyof BuilderDefinition)[] = [
 ];
 
 // Objective fields renamed after missions were published (block -> { old name: new name }), as the server's
-// RENAMED_FIELDS (modules/builder/server.lua): checkpoint_route's policeVehicle is now vehicleRequired.
+// RENAMED_FIELDS (modules/missions/builder.lua): checkpoint_route's policeVehicle is now vehicleRequired.
 const RENAMED_FIELDS: Record<string, Record<string, string>> = {
     checkpoint_route: { policeVehicle: 'vehicleRequired' },
 };
@@ -326,7 +326,7 @@ export function round2(n: number): number {
     return Math.round(n * 100) / 100;
 }
 
-// The id part a label gives a custom mission: B.slug of modules/builder/server.lua (lower case, a-z 0-9 and _,
+// The id part a label gives a custom mission: B.slug of modules/missions/builder.lua (lower case, a-z 0-9 and _,
 // at most 30 characters, 'mission' when nothing is left).
 export function labelSlug(label: string): string {
     const s = label

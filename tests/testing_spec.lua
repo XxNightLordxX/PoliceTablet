@@ -1,6 +1,6 @@
 -- The testing slice: CP.Testing server (invites, start gates, controls, debug geometry, the run-end hook, recording
 -- results, the catalog view) and client (panel focus, HUD flag, teleport arena re-check, debug data). Every SQL
--- statement of modules/testing runs here on MariaDB cp_test.
+-- statement of modules/missions/testing runs here on MariaDB cp_test.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
@@ -366,8 +366,8 @@ local function BeginRun(run)
     run.tier = { tier = run.test.forcedTier or 'standard' }
 end
 
-H.load('modules/scaling/server.lua')
-H.load('modules/testing/server.lua')
+H.load('modules/runs/scaling.lua')
+H.load('modules/missions/testing.lua')
 local T = CP.Testing
 
 H.sql('DELETE FROM cp_mission_tests')
@@ -1055,7 +1055,7 @@ do
     local part = json.decode(f:read('a'))
     f:close()
     local missing = {}
-    for _, file in ipairs({ 'modules/testing/server.lua', 'modules/testing/client.lua' }) do
+    for _, file in ipairs({ 'modules/missions/testing.lua', 'modules/missions/client/testing.lua' }) do
         local fh = assert(io.open(H.root .. file, 'r'))
         local src = fh:read('a')
         fh:close()
@@ -1070,7 +1070,7 @@ end
 -- ============================================================================
 --                                      ═
 -- ============================================================================
--- integration with the REAL run engine (modules/runs/server.lua): the contract calls CP.Testing makes
+-- integration with the REAL run engine (modules/runs/runs.lua): the contract calls CP.Testing makes
 -- (create with an admin record, testSkip/testRestart/pauseTimer/anchor/endRun/failRun, entitiesFor,
 -- remaining) and the onRunEnded hook, with nothing written to cp_mission_runs
 
@@ -1123,7 +1123,7 @@ do
     }
     H.sql('DELETE FROM cp_mission_runs')
     CP.Runs = nil
-    H.load('modules/runs/server.lua')
+    H.load('modules/runs/runs.lua')
     local R = CP.Runs
     H.clockMs = H.clockMs + 5000
     H.reset()
@@ -1381,7 +1381,7 @@ CP.Runs = {
     current = function() return currentRun end,
 }
 
-H.load('modules/testing/client.lua')
+H.load('modules/missions/client/testing.lua')
 local serverReplies = {}
 local sent = {}
 CP.Net.action = function(name, payload)
@@ -1627,7 +1627,7 @@ do
     -- keeps one NUI focus vote per resource: ours is the last SetNuiFocus of this resource, otherFocus another's.
     local otherFocus = false
     _G.IsNuiFocused = function() return (focus[#focus] and focus[#focus][1] == true) or otherFocus end
-    H.load('modules/diag/client.lua')
+    H.load('modules/admin/client/diag.lua')
     local function StateText(args)
         local printed = {}
         local realP = print
@@ -1733,7 +1733,7 @@ do
     local function Boot(settings, testing)
         CP.Settings, Config.Testing = settings, testing
         for i = #keymaps, 1, -1 do keymaps[i] = nil end
-        H.load('modules/testing/client.lua')
+        H.load('modules/missions/client/testing.lua')
     end
     local settingsIn = false
     local waits = {}

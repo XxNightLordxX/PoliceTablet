@@ -1,6 +1,6 @@
--- CP.Markers (modules/markers/server.lua): every part of a mission besides its objective, the extra parts shipped off.
+-- CP.Markers (modules/map/markers.lua): every part of a mission besides its objective, the extra parts shipped off.
 
--- CP.Markers (modules/markers/server.lua): every part of a mission besides its objective, the extra parts shipped off.
+-- CP.Markers (modules/map/markers.lua): every part of a mission besides its objective, the extra parts shipped off.
 -- Who gets which part (each part's on, its rules by department, job, grade, mission type, mission and role), the
 -- extraParts switch, Radio Silence, the fairness rules (no live suspect, nothing staged or hidden, a hiding spot only
 -- once found), the prisoner van and tow truck (their own on, never a second blip) and the clean-up.
@@ -67,7 +67,7 @@ CP.Runs = {
     ctx = function(_, i) return ctxs[i] end,
 }
 
-H.load('modules/markers/server.lua')
+H.load('modules/map/markers.lua')
 local MB = CP.Markers
 
 local function Entity(netId, entity, fields)
@@ -307,7 +307,7 @@ H.eq(Parts(1), 'coronerDrop,coronerVan', 'Radio Silence \'none\': only the vans 
 Config.Markers.radioSilence = 'area'
 silent = false
 
--- the prisoner van and tow truck: never an extra part (modules/custody sends their one blip each), on or off
+-- the prisoner van and tow truck: never an extra part (modules/npc/custody sends their one blip each), on or off
 On({ 'prisonerVan', 'prisonerDrop', 'towTruck' })
 services = { { id = 2, kind = 'transport', status = 'coming', dest = vec4(80.0, 80.0, 30.0, 0.0) } }
 Entity(31, 3101, { role = 'service', tag = 'transport', kind = 'vehicle' })
@@ -323,7 +323,7 @@ Pass()
 H.eq(Parts(1), '', 'a van that drives off has no drop-off any more')
 run.entities[31], run.entities[32] = nil, nil
 
--- who may see the prisoner van and tow truck: their rules (modules/custody asks), whatever extraParts says
+-- who may see the prisoner van and tow truck: their rules (modules/npc/custody asks), whatever extraParts says
 Config.Markers.extraParts = false
 H.eq(MB.vanAllowed('prisonerVan', run, 2), true, 'no rules: every officer on the run sees the van')
 Config.Markers.rules = { prisonerVan = { grade = 2 } }

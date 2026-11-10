@@ -1,5 +1,5 @@
 // Browser mocks for full admin control, System: storage, backups, webhooks, problems, integrations, timed jobs,
-// departments added in game, desks and Support (the shapes of modules/sysadmin).
+// departments added in game, desks and Support (the shapes of modules/admin/sysadmin).
 
 import { registerMock } from '../shared/nui';
 import type {

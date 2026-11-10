@@ -4,7 +4,7 @@
 // (src/builder). Actions follow session.actions: builderEdit (build, record routes, test their own missions),
 // builderPublish, builderArchive, builderEditAny (other people's missions), builderRollback, breakEditLock —
 // the server re-checks every one (docs/dev/ARCHITECTURE.md §5.28.2). Placement, route recording and test
-// drives close the tablet (modules/builder/client.lua) and reopen it here when they end.
+// drives close the tablet (modules/missions/client/builder.lua) and reopen it here when they end.
 
 import { useState } from 'react';
 import { EmptyState, Screen } from '../../shared/components';

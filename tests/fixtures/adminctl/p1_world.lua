@@ -164,11 +164,11 @@ return function(H)
     -- ---- THE MODULES -------------------------------------------------------
 
     for _, m in ipairs({
-        'modules/permissions/server.lua',
-        'modules/access/server.lua',
-        'modules/admin/server.lua',
-        'modules/adminkit/server.lua',
-        'modules/tablet/server.lua',
+        'modules/access/permissions.lua',
+        'modules/access/access.lua',
+        'modules/admin/admin.lua',
+        'modules/admin/adminkit.lua',
+        'modules/access/tablet.lua',
         'modules/system/schedule.lua',
         'modules/progression/scoring.lua',
         'modules/progression/leaderboard.lua',

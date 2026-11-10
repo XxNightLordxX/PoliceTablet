@@ -10,11 +10,11 @@ H.load('blocks/search_area/server.lua')
 local realWarn = CP.warn
 CP.warn = function() end
 CP.Missions = nil
-H.load('modules/missions/server.lua')
+H.load('modules/missions/missions.lua')
 local Missions = CP.Missions
 Missions.loadAll()
 CP.warn = realWarn
-H.load('modules/spawn/server.lua')
+H.load('modules/runs/spawn.lua')
 local S = CP.Blocks.get('search_area')
 
 local def = Missions.get('manhunt')

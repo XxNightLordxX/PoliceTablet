@@ -115,7 +115,7 @@ H.eq(e, 'err.no_permission', 'a kind the admin has no permission for')
 H.eq(Read('Crimson-Police/modules/missionban/server.lua'), nil, 'modules/missionban is gone')
 H.ok(Read('Crimson-Police/modules/supervisor/missionban.lua') ~= nil, 'the mission ban is a sub-file of supervisor')
 local kinds = {
-    { 'Crimson-Police/modules/admin/server.lua', 'CP.Restriction(\'suspension\'' },
+    { 'Crimson-Police/modules/admin/admin.lua', 'CP.Restriction(\'suspension\'' },
     { 'Crimson-Police/modules/supervisor/missionban.lua', 'CP.Restriction(\'missionBan\'' },
     { 'Crimson-Police/modules/realplayers/staff.lua', '{ \'pairBlock\', \'block\' }' },
     { 'Crimson-Police/modules/realplayers/staff.lua', '{ \'exclusion\', \'exclude\' }' },

@@ -78,9 +78,9 @@ do
     end
     local manifest = Read('fxmanifest.lua')
     local storageAt = manifest:find('\'modules/system/storage.lua\'', 1, true)
-    local kitAt = manifest:find('\'modules/adminkit/server.lua\'', 1, true)
+    local kitAt = manifest:find('\'modules/admin/adminkit.lua\'', 1, true)
     local schedAt = manifest:find('\'modules/system/schedule.lua\'', 1, true)
-    local globAt = manifest:find('\'modules/**/server.lua\'', 1, true)
+    local globAt = manifest:find('\'modules/access/access.lua\'', 1, true)
     H.ok(storageAt and kitAt and schedAt and globAt and storageAt < kitAt and kitAt < schedAt and schedAt < globAt,
         'fxmanifest: storage first, then CP.AdminKit, then the jobs engine before every module')
     -- the old ways in are gone everywhere: every timed job registers with CP.Schedule.job
@@ -92,7 +92,7 @@ do
     p:close()
     H.eq(hits, '', 'no module or screen uses the old listeners or the Clean-up tab')
     local REGISTERED = {
-        { 'modules/sysadmin/server.lua', 'backup' },
+        { 'modules/admin/sysadmin.lua', 'backup' },
         { 'modules/system/schedule.lua', 'cleanup' },
         { 'modules/dispatch/missioncalls.lua', 'mission_calls' },
         { 'modules/realplayers/pairs.lua', 'pvp_pairs' },

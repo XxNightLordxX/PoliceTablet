@@ -353,7 +353,7 @@ local function RequiredPoints(obj)
 end
 
 -- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
--- modules/testing; ARCHITECTURE 7.1 pointKinds): the fight's people and the boss at every point.
+-- modules/missions/testing; ARCHITECTURE 7.1 pointKinds): the fight's people and the boss at every point.
 local function PointKinds(obj)
     local out = {}
     for _, k in ipairs(RequiredPoints(obj)) do out[#out + 1] = { key = k, kind = 'ped' } end

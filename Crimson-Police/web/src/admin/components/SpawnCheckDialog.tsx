@@ -1,4 +1,4 @@
-// Admin UI · Testing: the Check spawn points dialog. The check itself is modules/testing/client.lua.
+// Admin UI · Testing: the Check spawn points dialog. The check itself is modules/missions/client/testing.lua.
 
 // Admin UI · Testing · Check spawn points. Scope: all missions, one mission or one location (a location
 // row opens it with that location). Start / Stop (client actions spawnCheck, spawnCheckStop: the Lua testing client

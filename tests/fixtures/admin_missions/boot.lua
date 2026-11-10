@@ -245,15 +245,20 @@ return function(H, name, opts)
     if opts.beforeLoad then opts.beforeLoad(X) end
     do
         local files = {}
-        local p = io.popen(
-            'cd ' .. H.root .. ' && ls modules/system/storage.lua modules/adminkit/server.lua'
-                .. ' modules/system/migrations.lua modules/system/schedule.lua'
-                .. ' && find modules -name server.lua | sort'
-                .. ' && ls modules/progression/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua modules/money/*.lua'
-                .. ' && find blocks -name server.lua | sort'
-        )
-        for file in p:lines() do files[#files + 1] = file end
-        p:close()
+        -- fxmanifest's server_scripts in its order, without the saves folder engine (the harness loaded it) and
+        -- the supervisor parts this fixture has never loaded (field training, happy hour, mission ban, notices,
+        -- restrictions)
+        local skip = {
+            ['modules/system/memsql.lua'] = true,
+            ['modules/supervisor/fieldtraining.lua'] = true,
+            ['modules/supervisor/happyhour.lua'] = true,
+            ['modules/supervisor/missionban.lua'] = true,
+            ['modules/supervisor/notices.lua'] = true,
+            ['modules/supervisor/restrictions.lua'] = true,
+        }
+        for _, file in ipairs(H.manifestScripts('server_scripts')) do
+            if not skip[file] then files[#files + 1] = file end
+        end
         local realCreate = _G.CreateThread
         local deferred = {}
         _G.CreateThread = function(fn) deferred[#deferred + 1] = fn end

@@ -1,4 +1,4 @@
-// Browser mocks for the builder client slice (modules/builder/client.lua and the builder screens).
+// Browser mocks for the builder client slice (modules/missions/client/builder.lua and the builder screens).
 
 // Client actions builderPlace / builderRecord / builderTestDrive play the whole in-game flow: the reply is
 // { started: true }, then the tablet closes (message 'close'), the tool HUD overlay animates for a few seconds,

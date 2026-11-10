@@ -1,6 +1,6 @@
--- CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/spawn/client.lua):
+-- CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/runs/client/spawn.lua):
 
--- CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/spawn/client.lua):
+-- CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/runs/client/spawn.lua):
 -- where a returning driver or a thief appears for the car this officer deals with: a footpath point the game's navmesh
 -- gives (GetSafeCoordForPed, never a building's inside or water) contactRing metres from the car, 25 m or more from
 -- him, in front of him (where his camera looks), the ones he cannot see first, at a standing person's height.
@@ -58,7 +58,7 @@ _G.GetShapeTestResult = function(handle)
 end
 
 _G.AddStateBagChangeHandler = function() end -- the placer's handler (tests/spawn_placer_spec.lua)
-H.load('modules/spawn/client.lua')
+H.load('modules/runs/client/spawn.lua')
 local CALLBACK = 'crimson-police:client:spawn:walkIn'
 H.ok(type(CP.Spawn.walkIn) == 'function', 'CP.Spawn.walkIn')
 H.ok(type(H.callbacks[CALLBACK]) == 'function', 'the ox_lib callback is registered')

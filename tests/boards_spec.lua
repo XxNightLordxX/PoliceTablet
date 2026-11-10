@@ -136,7 +136,7 @@ CP.Missions = {
     get = function(id) if id == 'gang_shootout' then return { label = 'Gang Shootout' } end return nil end,
 }
 
-H.load('modules/permissions/server.lua')
+H.load('modules/access/permissions.lua')
 H.load('modules/system/schedule.lua')
 H.load('modules/progression/leaderboard.lua')
 H.load('modules/progression/scoring.lua') -- the level of a profile (CP.Scoring.xpLevel)

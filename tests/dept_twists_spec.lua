@@ -126,7 +126,7 @@ H.eq(def.relaxes(), false, 'it never relaxes a rule: it applies to the superviso
 --                       THE MISSION BOARD AND THE ACCEPT
 -- ============================================================================
 
-H.load('modules/draw/server.lua')
+H.load('modules/runs/draw.lua')
 local D = CP.Draw
 D.pool = function() return pool end
 H.eq(Keys(D.twistOffer('tactical', pool, 'sast')), 'time_crunch', 'the board card offers SAST Time Crunch only')

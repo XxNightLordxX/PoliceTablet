@@ -1,7 +1,7 @@
 -- Database off (Config.Database.enabled = false) from end to end: the saves folder holds every feature's data,
 -- survives a restart, and stays fast and small at 50,000 runs.
 
---   1. files mode on the REAL server side (every modules/**/server.lua and blocks/**/server.lua, as in e2e_spec):
+--   1. files mode on the REAL server side (every server file of fxmanifest.lua, as in e2e_spec):
 --      an admin starts a season, overrides the weekly bounty, sets a type payout and creates a custom mission; an
 --      officer runs a solo Beat Patrol from the Mission Board to a paid row, and the weekly board ranks them.
 --   2. a server restart: every handler, thread and module table is dropped, a new engine loads the same saves
@@ -326,15 +326,10 @@ local function BootBase()
 end
 local function LoadModules()
     local files = {}
-    local p = io.popen(
-        'cd ' .. H.root .. ' && ls modules/system/storage.lua modules/adminkit/server.lua'
-            .. ' modules/system/migrations.lua modules/system/schedule.lua'
-            .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua modules/money/*.lua'
-            .. ' && find blocks -name server.lua | sort'
-    )
-    for file in p:lines() do files[#files + 1] = file end
-    p:close()
+    -- fxmanifest's server_scripts in its order (the harness has already loaded the saves folder engine)
+    for _, file in ipairs(H.manifestScripts('server_scripts')) do
+        if file ~= 'modules/system/memsql.lua' then files[#files + 1] = file end
+    end
     -- FiveM's CreateThread runs a new thread on the next tick, after every file has loaded
     local realCreate = _G.CreateThread
     local deferred = {}

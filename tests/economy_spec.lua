@@ -1,7 +1,7 @@
 -- Modules/scoring, goals, cash, payouts (slice economy).
 
 -- Other modules are stubbed (CP.Qbx, CP.Access, CP.Missions, CP.Draw, CP.Banking, CP.Tablet, CP.Admin,
--- CP.Events, CP.AntiCheat, CP.Challenge); modules/permissions, scaling and schedule are the real ones.
+-- CP.Events, CP.AntiCheat, CP.Challenge); modules/access/permissions, scaling and schedule are the real ones.
 -- Every SQL statement of the slice runs against MariaDB. The spec uses its own database
 -- (<run database>_economy, rebuilt from sql/migrations like cp_test) so other specs that reset cp_test in
 -- parallel cannot interfere. The fake clock is aligned with the database clock (NOW()).
@@ -297,9 +297,9 @@ CP.Challenge = {
     currentSeason = function() return season end,
 }
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/system/schedule.lua')
-H.load('modules/permissions/server.lua')
+H.load('modules/access/permissions.lua')
 H.load('modules/money/engine.lua')
 H.load('modules/money/payouts.lua')
 H.load('modules/money/cash.lua')

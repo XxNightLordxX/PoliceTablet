@@ -273,7 +273,7 @@ local registered = {
     [Cfg.RealPlayers.criminalTablet.command] = true,
     [Cfg.RealPlayers.surrender.command] = true,
 }
-local diag = ReadRepo('Crimson-Police/modules/diag/client.lua') or ''
+local diag = ReadRepo('Crimson-Police/modules/admin/client/diag.lua') or ''
 registered[diag:match('\nlocal COMMAND = \'([%w_]+)\'') or '?'] = true
 local listed = {}
 for name in commands:gmatch('\n| `/?([%w_]+)') do listed[name] = true end
@@ -281,7 +281,7 @@ for name in pairs(registered) do H.ok(listed[name], 'README 6.1 lists ' .. name)
 for name in pairs(listed) do H.ok(registered[name], 'README 6.1: ' .. name .. ' is a registered command') end
 
 -- every admin subcommand of the table exists in the code, and every one in the code is in the table
-local admin = ReadRepo('Crimson-Police/modules/admin/server.lua') or ''
+local admin = ReadRepo('Crimson-Police/modules/admin/admin.lua') or ''
 local subs = {}
 for sub in admin:gmatch('\nSUB%.([%w_]+) = function') do subs[sub] = true end
 for _, rel in ipairs(files) do
@@ -335,7 +335,7 @@ local ships = readme:match('\n### 5%.2 What ships off and how to turn it on\n(.-
 local offPart, moneyPart, onPart = ships:match('%*%*Ships off%*%*(.-)%*%*Admin money tools%*%*(.-)%*%*Ships on%*%*(.*)')
 H.ok(offPart ~= nil, 'README 5.2 has its three parts')
 offPart, moneyPart, onPart = offPart or '', moneyPart or '', onPart or ''
-local settings = ReadRepo('Crimson-Police/modules/settings/server.lua') or ''
+local settings = ReadRepo('Crimson-Police/modules/admin/settings.lua') or ''
 local features = settings:match('\nPlay%.features = (%b{})') or ''
 local n = 0
 for path in features:gmatch('path = \'([^\']+)\'') do
@@ -414,7 +414,7 @@ H.eq(prose:find('\nFolder layout\n', 1, true), nil, 'SPEC keeps no copy of the A
 H.eq(prose:find('CREATE TABLE cp_', 1, true), nil, 'SPEC restates no migration: the tables point at sql/migrations')
 
 -- step FX1: a disconnect on the Weekly Boss costs its mission cooldown and that week's attempt, never the type cooldown
--- (modules/draw skips the type cooldown for the boss); every SPEC line about the disconnect cooldown says so
+-- (modules/runs/draw skips the type cooldown for the boss); every SPEC line about the disconnect cooldown says so
 for line in spec:gmatch('[^\n]+') do
     local lower = line:lower()
     if lower:find('disconnect', 1, true) and lower:find('type cooldown', 1, true) then

@@ -1,7 +1,7 @@
 -- Service vehicles never appear on top of the officers (Config.Custody.serviceClearance) on the real engine,
 
 -- Service vehicles never appear on top of the officers (Config.Custody.serviceClearance) on the real engine,
--- CP.Custody and the real placement module (tests/fixtures/custody/world.lua + modules/spawn/server.lua): after
+-- CP.Custody and the real placement module (tests/fixtures/custody/world.lua + modules/runs/spawn.lua): after
 -- serviceTimeout a prisoner van or coroner van whose parking point an officer stands on comes to a road point beside
 -- the scene (asked of the driving client, checked by the server) or waits until the officer steps away; a late van is
 -- put on its parking point only once nobody is on it, and then waits frozen for an officer's game to put it on the
@@ -13,7 +13,7 @@ local W = dofile('tests/fixtures/custody/world.lua')
 local H = W.H
 local U = CP.U
 local Runs, Custody = W.Runs, W.Custody
-H.load('modules/spawn/server.lua')
+H.load('modules/runs/spawn.lua')
 
 local TIMEOUT = Config.Custody.serviceTimeout
 H.eq(Config.Custody.serviceClearance, 30.0, 'a service vehicle keeps 30 m from every player (shipped)')

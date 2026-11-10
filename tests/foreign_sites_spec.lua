@@ -40,7 +40,7 @@ local KEEP_OUT = {
     camera = 0.0,         -- a wall camera: nothing walks into it
 }
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 for _, b in ipairs({
     'checkpoint_route',
     'interact_points',
@@ -59,7 +59,7 @@ end
 local realWarn = CP.warn
 CP.warn = function() end
 CP.Missions = nil
-H.load('modules/missions/server.lua')
+H.load('modules/missions/missions.lua')
 local summary = CP.Missions.loadAll()
 CP.warn = realWarn
 H.eq(#(summary.failed or {}), 0, 'the real loader rejects no built-in mission')

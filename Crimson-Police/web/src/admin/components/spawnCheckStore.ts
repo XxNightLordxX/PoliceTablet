@@ -1,14 +1,14 @@
 // Check spawn points: the admin's check kept in module memory, fed by the Lua testing client's pushes.
 
 // Module memory of the admin's spawn point check: a window 'message' listener at module level takes
-// every push of topic 'spawnCheck' (started, location, point, done, stopped, failed; modules/testing/client.lua
+// every push of topic 'spawnCheck' (started, location, point, done, stopped, failed; modules/missions/client/testing.lua
 // PushCheck), so the results stay while the tablet or the dialog is closed. useSpawnCheck() (useSyncExternalStore)
 // -> SpawnCheckView { status idle|running|done|stopped|failed, scope, planned, progress, current, reached, rows
 // (each point's result with its mission and location), skipped, totals, error, stopping }. startSpawnCheck(scope)
 // and stopSpawnCheck() call the client actions (the 'started' push and the action's answer come on two channels:
 // whichever is first starts the memory); a push of a check this memory missed the start of is followed from there.
 // reportLine / spawnCheckReport: one line per point to look at in the server's console format (the same status
-// words as modules/testing/server.lua CHECK_STATUS), the locations not checked, and how it ended. A toast when the
+// words as modules/missions/testing.lua CHECK_STATUS), the locations not checked, and how it ended. A toast when the
 // check ends.
 
 import { useSyncExternalStore } from 'react';
@@ -124,7 +124,7 @@ function numberOr(v: unknown, fallback: number): number {
     return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
-// One 'spawnCheck' push from the Lua testing client (modules/testing/client.lua PushCheck).
+// One 'spawnCheck' push from the Lua testing client (modules/missions/client/testing.lua PushCheck).
 export function applySpawnCheckPush(d: SpawnCheckPush | null | undefined): void {
     if (!d || typeof d !== 'object') return;
     // a check this memory missed the start of (the page reloaded meanwhile): follow it from here
@@ -230,7 +230,7 @@ export async function stopSpawnCheck(): Promise<ApiResult<{ stopping: boolean }>
 // ============================================================================
 //                                  THE REPORT
 // ============================================================================
-// One line per point to look at, in the server's console format (modules/testing/server.lua ReportLine, the same
+// One line per point to look at, in the server's console format (modules/missions/testing.lua ReportLine, the same
 // status words as CHECK_STATUS), so a pasted report reads like the console.
 
 const STATUS_WORD: Record<SpawnProbeStatus, string> = {

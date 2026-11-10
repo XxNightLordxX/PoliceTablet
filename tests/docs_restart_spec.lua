@@ -20,7 +20,7 @@ local function Has(s, needle) return type(s) == 'string' and s:find(needle, 1, t
 local readme = ReadRepo('README.md')
 local guide = ReadRepo('docs/OWNER_GUIDE.md')
 local notes = ReadRepo('docs/dev/FILE_NOTES.md')
-local runs = ReadRepo('Crimson-Police/modules/runs/server.lua')
+local runs = ReadRepo('Crimson-Police/modules/runs/runs.lua')
 H.ok(readme ~= nil and guide ~= nil and notes ~= nil and runs ~= nil,
     'README, the guide, FILE_NOTES and the engine are readable')
 
@@ -45,7 +45,7 @@ H.ok(Has(readme, 'You do not need to restart Crimson-Police after `restart ox_in
 -- The run engine's header says the same, and FILE_NOTES has its one line.
 H.ok(Has(runs, 'the hook is registered again 1 s later'), 'the engine header: the hook comes back 1 s later')
 H.ok(Has(runs, 'items to take back are kept'), 'the engine header: what happens while ox_inventory is stopped')
-H.ok(Has(notes, '\n- `Crimson-Police/modules/runs/server.lua`: '), 'FILE_NOTES has the run engine\'s line')
+H.ok(Has(notes, '\n- `Crimson-Police/modules/runs/runs.lua`: '), 'FILE_NOTES has the run engine\'s line')
 
 -- Units on the owner guide's option rows.
 for _, needle in ipairs({

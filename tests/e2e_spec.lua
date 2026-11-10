@@ -362,19 +362,14 @@ for src, pd in pairs(PD) do CID[src] = pd.citizenid end
 -- ============================================================================
 --                            LOAD THE REAL RESOURCE
 -- ============================================================================
--- Fxmanifest order: modules/**/server.lua, then blocks/**/server.lua.
+-- Fxmanifest order: its server_scripts list (every module sub-file, then blocks/**/server.lua).
 
 local loadedFiles = {}
 do
-    local p = io.popen(
-        'cd ' .. H.root .. ' && ls modules/system/storage.lua modules/adminkit/server.lua'
-            .. ' modules/system/migrations.lua modules/system/schedule.lua'
-            .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua modules/money/*.lua'
-            .. ' && find blocks -name server.lua | sort'
-    )
-    for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
-    p:close()
+    -- fxmanifest's server_scripts in its order (the harness has already loaded the saves folder engine)
+    for _, file in ipairs(H.manifestScripts('server_scripts')) do
+        if file ~= 'modules/system/memsql.lua' then loadedFiles[#loadedFiles + 1] = file end
+    end
     -- FiveM's CreateThread runs the new thread on the next scheduler tick, after every file of the resource
     -- has loaded (the harness runs it at once): defer the threads created at load time to match.
     local realCreate = _G.CreateThread

@@ -27,7 +27,7 @@ CP.Events = {
 }
 
 H.load('modules/realplayers/livecrime.lua')
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/progression/scoring.lua')
 H.load('modules/money/engine.lua')
 H.load('modules/money/cash.lua')
@@ -238,7 +238,7 @@ do
     H.ok(noted[1] and noted[1].key == 'live_catches' and noted[1].src == nil and noted[1].n == 1,
         'for every active participant')
 
-    H.load('modules/runs/server.lua')
+    H.load('modules/runs/runs.lua')
     local run = {
         id = 'LC2',
         state = 'in_progress',
@@ -259,7 +259,7 @@ end
 -- ============================================================================
 
 do
-    H.load('modules/settings/server.lua')
+    H.load('modules/admin/settings.lua')
     local S = CP.Settings
     -- step G3: plain switches (they ship off; no typed ENABLE)
     H.eq((S.entry('RealPlayers.liveCrime.cash') or {}).money, nil, 'RealPlayers.liveCrime.cash needs no typed ENABLE')

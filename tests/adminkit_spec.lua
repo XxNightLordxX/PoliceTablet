@@ -8,7 +8,7 @@ local cjson = require('cjson')
 -- ============================================================================
 --                                  THE SERVER
 -- ============================================================================
--- Real: shared/*, modules/permissions, access, admin, adminkit, confighealth, settings, tablet, cash. Stand-in:
+-- Real: shared/*, modules/access/permissions, access, admin, adminkit, confighealth, settings, tablet, cash. Stand-in:
 -- CP.Qbx (the players below, their licenses and Qbox's players table).
 
 local lines = {}
@@ -104,13 +104,13 @@ H.sql('DELETE FROM cp_mission_runs')
 H.sql('DELETE FROM cp_mission_runs_archive')
 
 for _, m in ipairs({
-    'modules/permissions/server.lua',
-    'modules/access/server.lua',
-    'modules/admin/server.lua',
-    'modules/adminkit/server.lua',
-    'modules/confighealth/server.lua',
-    'modules/settings/server.lua',
-    'modules/tablet/server.lua',
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/admin/confighealth.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
     'modules/money/engine.lua',
     'modules/money/cash.lua',
 }) do
@@ -975,18 +975,19 @@ do
 end
 
 -- ============================================================================
---                FXSERVER RUNS THIS FILE TWICE (fxmanifest.lua)
+--              FXSERVER RUNS THIS FILE ONCE, BEFORE EVERY MODULE
 -- ============================================================================
--- fxmanifest lists modules/adminkit/server.lua by name (so it loads before every module) and again through
--- modules/**/server.lua, and FXServer runs every listed file (no de-duplication across entries): the second run
--- must keep the actions, job kinds and the maintenance lock the first one holds.
+-- fxmanifest.lua.
+-- fxmanifest lists modules/admin/adminkit.lua by name before every module sub-file, and lists every file once
+-- (FXServer runs every listed file, with no de-duplication across entries). A second load of the file (a spec that
+-- loads it again) still keeps the actions, job kinds and the maintenance lock the first one holds.
 
 do
     local list = H.manifestScripts('server_scripts')
     local at = {}
     for i, f in ipairs(list) do at[f] = at[f] or {}; at[f][#at[f] + 1] = i end
-    H.eq(#(at['modules/adminkit/server.lua'] or {}), 2, 'fxmanifest: FXServer runs modules/adminkit/server.lua twice')
-    H.ok(at['modules/admin/server.lua'] and at['modules/admin/server.lua'][1] > at['modules/adminkit/server.lua'][1],
+    H.eq(#(at['modules/admin/adminkit.lua'] or {}), 1, 'fxmanifest: FXServer runs modules/admin/adminkit.lua once')
+    H.ok(at['modules/admin/admin.lua'] and at['modules/admin/admin.lua'][1] > at['modules/admin/adminkit.lua'][1],
         'fxmanifest: the first run comes before modules/admin (the reason for the named entry)')
     for f, runs in pairs(at) do
         if #runs > 1 then
@@ -1008,7 +1009,7 @@ do
     local threads = 0
     local realCreate = _G.CreateThread
     _G.CreateThread = function(fn) threads = threads + 1 end
-    H.load('modules/adminkit/server.lua')
+    H.load('modules/admin/adminkit.lua')
     _G.CreateThread = realCreate
     H.eq(CP.AdminKit, Kit, 'the second run keeps CP.AdminKit')
     H.eq(CP.AdminKit.action, action, 'and its functions')

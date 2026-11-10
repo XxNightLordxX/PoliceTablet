@@ -8,7 +8,7 @@ local cjson = require('cjson')
 -- ============================================================================
 --                                  THE SERVER
 -- ============================================================================
--- Real: shared/*, modules/permissions, access, admin, adminkit, confighealth, settings, tablet, cash, payouts,
+-- Real: shared/*, modules/access/permissions, access, admin, adminkit, confighealth, settings, tablet, cash, payouts,
 -- payments, schedule and the Renewed-Banking history lookup. Stand-ins: CP.Qbx (the players below, their money)
 -- and CP.Banking's money calls (the society accounts below).
 
@@ -119,7 +119,7 @@ CP.Missions = {
 }
 
 -- the real Renewed-Banking history lookup, read before the money calls are replaced by stand-ins
-H.load('modules/integrations/renewed_banking/server.lua')
+H.load('modules/system/integrations/renewed_banking.lua')
 local realFindTxn = CP.Banking.findTxn
 local setHistoryDb = CP.Banking._setHistoryDb
 
@@ -206,13 +206,13 @@ for _, t in ipairs({
 end
 
 for _, m in ipairs({
-    'modules/permissions/server.lua',
-    'modules/access/server.lua',
-    'modules/admin/server.lua',
-    'modules/adminkit/server.lua',
-    'modules/confighealth/server.lua',
-    'modules/settings/server.lua',
-    'modules/tablet/server.lua',
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/admin/confighealth.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
     'modules/money/engine.lua',
     'modules/money/cash.lua',
     'modules/money/payouts.lua',

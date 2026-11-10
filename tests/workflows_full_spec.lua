@@ -298,15 +298,10 @@ local function Secs(n) Adv(n * 1000, 500) end
 
 local loadedFiles = {}
 do
-    local p = io.popen(
-        'cd ' .. H.root .. ' && ls modules/system/storage.lua modules/adminkit/server.lua'
-            .. ' modules/system/migrations.lua modules/system/schedule.lua'
-            .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua modules/money/*.lua'
-            .. ' && find blocks -name server.lua | sort'
-    )
-    for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
-    p:close()
+    -- fxmanifest's server_scripts in its order (the harness has already loaded the saves folder engine)
+    for _, file in ipairs(H.manifestScripts('server_scripts')) do
+        if file ~= 'modules/system/memsql.lua' then loadedFiles[#loadedFiles + 1] = file end
+    end
 end
 
 local autoReady = true        -- every unit member answers Ready at once (false: the spec answers for them)

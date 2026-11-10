@@ -279,7 +279,7 @@ local function RequiredPoints(obj)
 end
 
 -- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
--- modules/testing; ARCHITECTURE 7.1 pointKinds): the hostages are people, the safe spot is a
+-- modules/missions/testing; ARCHITECTURE 7.1 pointKinds): the hostages are people, the safe spot is a
 -- marker.
 local function PointKinds(obj)
     local o = Defaults(U.deepcopy(obj))

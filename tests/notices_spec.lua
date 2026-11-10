@@ -8,7 +8,7 @@
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 local W = dofile('tests/fixtures/adminctl/p1_world.lua')(H)
-H.load('modules/deptcontrols/server.lua')
+H.load('modules/supervisor/deptcontrols.lua')
 CP.Notices.register()
 H.step(0)
 local Act = W.act

@@ -243,7 +243,7 @@ local function RequiredPoints(obj)
 end
 
 -- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
--- modules/testing; ARCHITECTURE 7.1 pointKinds): the parked or scene cars and the prisoner van's
+-- modules/missions/testing; ARCHITECTURE 7.1 pointKinds): the parked or scene cars and the prisoner van's
 -- stand-by spot are vehicles, the scene's people are people, the flee route is a path.
 local function PointKinds(obj)
     local o = Defaults(U.deepcopy(obj))
@@ -945,7 +945,7 @@ end
 -- ============================================================================
 
 -- With the spawn director on (Config.Spawning), the returning driver and the thief appear contactRing metres from the
--- car, on a footpath point the game of the officer at the car picks (modules/spawn/client.lua Spawn.walkIn: in front of
+-- car, on a footpath point the game of the officer at the car picks (modules/runs/client/spawn.lua Spawn.walkIn: in front of
 -- him, out of his sight first), and walk up to the car once an officer's game has put them on the ground (WalkTick).
 -- No usable answer within losTimeoutMs: points round the car at those distances, ring[1] or more from every officer,
 -- the ones in front of him first. The ask waits for his game, so the person appears a moment later, in a thread;

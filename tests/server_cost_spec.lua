@@ -73,12 +73,12 @@ _G.Citizen.Wait = realWait
 -- upkeep and the unit sweep woke every 1-5 s all day; now each runs only while what it watches exists (a run, a test,
 -- a unit), armed again by the next one. The mission calls push flag is a SetTimeout armed by a change, not a 1 s loop.
 for _, m in ipairs({
-    { 'Runs', 'modules/runs/server.lua', '_engineTicking', 2 },
-    { 'Custody', 'modules/custody/server.lua' },
-    { 'Npc', 'modules/npc/server.lua' },
-    { 'Route', 'modules/route/server.lua' },
-    { 'Downed', 'modules/downed/server.lua' },
-    { 'Testing', 'modules/testing/server.lua' },
+    { 'Runs', 'modules/runs/runs.lua', '_engineTicking', 2 },
+    { 'Custody', 'modules/npc/custody.lua' },
+    { 'Npc', 'modules/npc/npc.lua' },
+    { 'Route', 'modules/runs/route.lua' },
+    { 'Downed', 'modules/runs/downed.lua' },
+    { 'Testing', 'modules/missions/testing.lua' },
     { 'Units', 'modules/teams/units.lua' },
 }) do
     local mod, field = CP[m[1]], m[3] or '_ticking'

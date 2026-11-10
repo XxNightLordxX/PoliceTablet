@@ -1,5 +1,5 @@
--- CP.Markers (modules/markers/client.lua): the objective pointer on an officer's map,
--- one GPS line at most, cleared at every stop; and its hooks in modules/runs/client.lua.
+-- CP.Markers (modules/map/client/markers.lua): the objective pointer on an officer's map,
+-- one GPS line at most, cleared at every stop; and its hooks in modules/runs/client/runs.lua.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'client' })
@@ -116,7 +116,7 @@ end
 CP.Route = {
     current = function() return world.route end,
 }
--- the tablet as modules/tablet gives it: the HUD patches, the toasts and the client actions registered (PLAN M10)
+-- the tablet as modules/access/tablet gives it: the HUD patches, the toasts and the client actions registered (PLAN M10)
 local TB = { huds = {}, notes = {}, actions = {} }
 local TABLET = {
     hud = function(patch) TB.huds[#TB.huds + 1] = patch end,
@@ -124,7 +124,7 @@ local TABLET = {
     registerClientAction = function(name, fn) TB.actions[name] = fn end,
 }
 CP.Tablet = TABLET
-H.load('modules/markers/client.lua')
+H.load('modules/map/client/markers.lua')
 local M = CP.Markers
 H.ok(type(M.set) == 'function' and type(M.adopt) == 'function' and type(M.release) == 'function', 'CP.Markers loaded')
 local K = Config.Markers.kinds
@@ -581,7 +581,7 @@ do
 end
 
 -- ============================================================================
---                     THE HOOKS IN modules/runs/client.lua
+--                  THE HOOKS IN modules/runs/client/runs.lua
 -- ============================================================================
 -- Start, marker, stop, end.
 
@@ -602,7 +602,7 @@ do
     _G.IsPedArmed = function() return false end
     _G.GetStreetNameAtCoord = function() return 0 end
     _G.GetNameOfZone = function() return '' end
-    H.load('modules/runs/client.lua')
+    H.load('modules/runs/client/runs.lua')
     local function Fire(name, ...)
         for _, fn in ipairs(H.handlers[CP.e(name)] or {}) do fn(...) end
     end
@@ -1550,11 +1550,11 @@ do
     Config.Labels = {}
 end
 
--- the prisoner van and the tow truck (modules/custody/client.lua): on every officer's map from the server's
+-- the prisoner van and the tow truck (modules/npc/client/custody.lua): on every officer's map from the server's
 -- client:serviceBlip until it drives off or the run ends; never another run's
 do
     Reset()
-    H.load('modules/custody/client.lua')
+    H.load('modules/npc/client/custody.lua')
     local savedCurrent = CP.Runs.current
     local run = { id = 'run-sv7', state = 'in_progress' }
     CP.Runs.current = function() return run end
@@ -1626,7 +1626,7 @@ _G.SetBlipFlashes, _G.SetBlipFlashTimer = flashSetter, timerSetter
 -- ============================================================================
 --         M9: THE MISSION START STAYS A YELLOW PIN FOR THE WHOLE DRIVE
 -- ============================================================================
--- modules/route/client.lua: the named Mission start pin (kinds.start) stays from begin until arrival or the end of
+-- modules/runs/client/route.lua: the named Mission start pin (kinds.start) stays from begin until arrival or the end of
 -- the run (Config.Markers.startBlip). It carries the GPS line while the route is sampled and, after that, only while
 -- the waypoint we set is gone, so the start always keeps a line and never two of ours (BLIPS_FINAL R2).
 
@@ -1667,7 +1667,7 @@ do
         notify = function() end,
         registerClientAction = function(name, fn) actions[name] = fn end,
     }
-    H.load('modules/route/client.lua')
+    H.load('modules/runs/client/route.lua')
     H.step(0)
     local CR = CP.Route
     H.ok(type(CR.begin) == 'function' and actions.setGps and actions.recalcRoute, 'm9: CP.Route (client) loaded')
@@ -1814,7 +1814,7 @@ do
         return out
     end
     local Gps = TB.actions.setObjectiveGps
-    H.ok(type(Gps) == 'function', 'm10: client action setObjectiveGps registered by modules/markers')
+    H.ok(type(Gps) == 'function', 'm10: client action setObjectiveGps registered by modules/map/markers')
     TB.huds = {}
 
     -- the HUD line: the label and the distance from the objective's start, sent only when it changes
@@ -1980,7 +1980,7 @@ end
 -- ============================================================================
 --                                     M11
 -- ============================================================================
--- A LATE PARTNER FOLLOWS THE ACTION (modules/runs/client.lua hook).
+-- A LATE PARTNER FOLLOWS THE ACTION (modules/runs/client/runs.lua hook).
 -- The server's client:routeStatus 'action' (Config.Route.lateArriveRange): the start goes first (circle here, waypoint
 -- and pin in CP.Route.follow, which also stops the sampling and reports), and only then does CP.Markers route. Under
 -- Radio Silence or with no objective line he keeps the start (follow without dropping it).
@@ -1988,7 +1988,7 @@ end
 do
     Reset()
     local follows = {}
-    -- the objective's lines only: modules/route/client.lua (loaded for M9 above) also begins on client:start
+    -- the objective's lines only: modules/runs/client/route.lua (loaded for M9 above) also begins on client:start
     local function ObjRouted()
         local out = {}
         for _, id in ipairs(Routed()) do if B(id).name ~= CP.L('route.blip') then out[#out + 1] = id end end

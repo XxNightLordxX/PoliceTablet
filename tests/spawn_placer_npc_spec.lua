@@ -1,4 +1,4 @@
--- The placer (modules/spawn/client.lua) and CP.Npc (modules/npc/client.lua) on one game: CP.Npc tasks a
+-- The placer (modules/runs/client/spawn.lua) and CP.Npc (modules/npc/client/npc.lua) on one game: CP.Npc tasks a
 -- new person while the placer still checks his ground, and never lets him go before he is on it.
 
 local H = dofile('tests/harness.lua')
@@ -47,8 +47,8 @@ P.players = {
     [ME] = { src = 1, ped = G.ped, coords = vec3(0.0, -60.0, 30.0) },
     [PARTNER] = { src = 2, ped = 5001, coords = vec3(0.0, -90.0, 30.0) },
 }
-H.load('modules/npc/client.lua')
-H.load('modules/spawn/client.lua')
+H.load('modules/npc/client/npc.lua')
+H.load('modules/runs/client/spawn.lua')
 
 local EVENT = 'crimson-police:server:spawnPlaced'
 local function Near(a, b) return type(a) == 'number' and math.abs(a - b) < 1e-6 end

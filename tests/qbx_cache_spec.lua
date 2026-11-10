@@ -74,7 +74,7 @@ local function SetPlayerData(src) TriggerEvent('QBCore:Player:SetPlayerData', Co
 
 local function Joined(list) return table.concat(list, ',') end
 
-H.load('modules/integrations/qbx/server.lua')
+H.load('modules/system/integrations/qbx.lua')
 local Q = CP.Qbx
 
 -- ============================================================================
@@ -337,7 +337,7 @@ end
 -- ============================================================================
 --           (h) THE DOWNED POLL: TWO METADATA READS, NO PLAYER COPY
 -- ============================================================================
--- modules/downed/server.lua asks CP.Qbx.isDowned about every active participant every Config.Downed.checkEvery s.
+-- modules/runs/downed.lua asks CP.Qbx.isDowned about every active participant every Config.Downed.checkEvery s.
 
 do
     local run = { id = 'r-downed', state = 'active', participants = {} }
@@ -355,7 +355,7 @@ do
             removed[#removed + 1] = { src = src, reason = reason }
         end,
     }
-    H.load('modules/downed/server.lua')
+    H.load('modules/runs/downed.lua')
     H.step(0)   -- its thread registers its listeners, then waits for the first poll
     local every = Config.Downed.checkEvery * 1000
     H.eq(every, 2000, 'shipped: a poll every 2 s')

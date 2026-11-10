@@ -1,8 +1,8 @@
 // Mission Builder protocol shapes (docs/dev/ARCHITECTURE.md §5.28).
 
-// Server: modules/builder/server.lua (CP.Builder). Callbacks builder:list / builder:get / builder:config,
+// Server: modules/missions/builder.lua (CP.Builder). Callbacks builder:list / builder:get / builder:config,
 // actions server:builder:*, NUI push topic 'builder', client actions builderPlace / builderRecord /
-// builderTestDrive / builderResult / builderCancel / builderWaypoint (modules/builder/client.lua).
+// builderTestDrive / builderResult / builderCancel / builderWaypoint (modules/missions/client/builder.lua).
 //
 // Units in a BuilderDefinition: seconds, metres, km/h; chances are WHOLE PERCENT (0–100) and progress
 // times are SECONDS (see BuilderConfig.percentFields / secondsFields). The server converts them to

@@ -2199,7 +2199,7 @@ do
     H.strictGlobals(true)
 
     -- the objective pointer the client halves hand their blips to (no pointer is set here: they keep them)
-    H.load('modules/markers/client.lua')
+    H.load('modules/map/client/markers.lua')
     H.load('blocks/checkpoint_route/client.lua')
     H.load('blocks/interact_points/client.lua')
     H.load('blocks/skill_check/client.lua')

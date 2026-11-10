@@ -1250,7 +1250,7 @@ do
             armedCount = function() return 0 end,
         })
     end
-    local ok, err = pcall(H.load, 'modules/missions/server.lua')
+    local ok, err = pcall(H.load, 'modules/missions/missions.lua')
     if H.ok(ok, 'modules/missions loads (' .. tostring(err) .. ')') and CP.Missions and CP.Missions.normalize then
         for _, id in ipairs(ORDER) do
             local def = defs[id]

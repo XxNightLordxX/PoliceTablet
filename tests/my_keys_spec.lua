@@ -1,4 +1,4 @@
--- My options -> My keys (modules/tablet/client.lua): the client action getKeyLabels names the key bound to each
+-- My options -> My keys (modules/access/client/tablet.lua): the client action getKeyLabels names the key bound to each
 -- Crimson-Police key mapping, or says it is not set.
 
 local H = dofile('tests/harness.lua')
@@ -20,7 +20,7 @@ _G.GetPlayerServerId = _G.GetPlayerServerId or function() return 1 end
 _G.AddStateBagChangeHandler = _G.AddStateBagChangeHandler or function() end
 _G.RegisterNUICallback = function(name, fn) nuiCb[name] = fn end
 
-H.load('modules/tablet/client.lua')
+H.load('modules/access/client/tablet.lua')
 local T = CP.Tablet
 
 -- The NUI's fetch to the 'client' callback, as shared/nui.ts clientAction sends it.

@@ -159,7 +159,7 @@ CP.Tablet = {
     notify = function() return true end,
     notifyMany = function(srcs) return #srcs end,
 }
--- CP.Runs' participant API and Record's personal form (modules/runs/server.lua: opts.src scores only that officer)
+-- CP.Runs' participant API and Record's personal form (modules/runs/runs.lua: opts.src scores only that officer)
 CP.Runs = {
     dispatch = function() return true end,
     isParticipant = function(run, src)
@@ -215,15 +215,15 @@ CP.Qbx = {
     onPlayerUnload = function() end,
     getOnlinePlayers = function() return {} end,
 }
-H.load('modules/access/server.lua')
+H.load('modules/access/access.lua')
 CP.Qbx = nil
-H.load('modules/integrations/qbx/server.lua')
-H.load('modules/integrations/sc_police/server.lua')
-H.load('modules/integrations/sc_ambulance/server.lua')
+H.load('modules/system/integrations/qbx.lua')
+H.load('modules/system/integrations/sc_police.lua')
+H.load('modules/system/integrations/sc_ambulance.lua')
 H.load('modules/realplayers/opponents.lua')
 H.load('modules/realplayers/proof.lua')
 H.load('modules/realplayers/conduct.lua')
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/progression/scoring.lua')
 H.step(0)
 local Opp = CP.Opponents

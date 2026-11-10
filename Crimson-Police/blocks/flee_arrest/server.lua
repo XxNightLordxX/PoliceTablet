@@ -479,7 +479,7 @@ local function RequiredPoints(obj)
 end
 
 -- What appears at each location key this objective uses, for the spawn point check (Admin UI -> Testing,
--- modules/testing; ARCHITECTURE 7.1 pointKinds): the suspect, his associates and the runners are
+-- modules/missions/testing; ARCHITECTURE 7.1 pointKinds): the suspect, his associates and the runners are
 -- people, the door is where the officers knock, the flee and escape routes are paths.
 local function PointKinds(obj)
     local o = Defaults(U.deepcopy(obj))

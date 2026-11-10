@@ -324,7 +324,7 @@ local function EndRunStub(run, state)
     if run.operationId then CP.Operations.onRunEnded(run, state) end
 end
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/teams/common.lua')
 H.load('modules/teams/units.lua')
 H.load('modules/teams/operations.lua')
@@ -2109,8 +2109,8 @@ do
         GetJobs = function() return {} end,
     }
     CP.Qbx, CP.Access = nil, nil
-    H.load('modules/integrations/qbx/server.lua')
-    H.load('modules/access/server.lua')
+    H.load('modules/system/integrations/qbx.lua')
+    H.load('modules/access/access.lua')
     H.eq(lists, 1, 'the real CP.Qbx reads the online list once at start')
     H.eq(CP.Qbx.knownJob(150), 'unemployed', 'and seeds the job map from it')
 

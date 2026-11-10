@@ -72,8 +72,8 @@ H.players[1] = { coords = vec3(0.0, 0.0, 0.0) }
 H.players[2] = { coords = vec3(0.0, 0.0, 0.0) }
 H.players[9] = { coords = vec3(0.0, 0.0, 0.0) }
 
-H.load('modules/tablet/server.lua')
-H.load('modules/confighealth/server.lua')
+H.load('modules/access/tablet.lua')
+H.load('modules/admin/confighealth.lua')
 local T = CP.Tablet
 
 -- Every callback in its own second (the callbacks are rate limited per second).
@@ -863,7 +863,7 @@ do
             -- the start-up lines only (Config.Debug may add other modules' debug lines)
             if Contains(line, 'confighealth') or Contains(line, 'Start-up check') then lines[#lines + 1] = line end
         end
-        H.load('modules/confighealth/server.lua')
+        H.load('modules/admin/confighealth.lua')
         H.advance(4000)
         local early = #lines
         H.advance(1100)
@@ -904,7 +904,7 @@ end
 -- Accepting a mission and claiming a mission call check the item again, not only the session that opened the tablet.
 
 do
-    H.load('modules/draw/server.lua')
+    H.load('modules/runs/draw.lua')
     H.load('modules/dispatch/missioncalls.lua')
     local reqN = 0
     local function Act(name, src, payload)
@@ -1057,9 +1057,9 @@ Config.Tablet.desks = {
     },
 }
 
-H.load('modules/integrations/qbx/client.lua')
-H.load('modules/access/client.lua')
-H.load('modules/tablet/client.lua')
+H.load('modules/system/client/qbx.lua')
+H.load('modules/access/client/access.lua')
+H.load('modules/access/client/tablet.lua')
 local CT = CP.Tablet
 
 local function LastOpen()

@@ -1,4 +1,4 @@
--- The run engine (modules/runs/server.lua) against stubs of the other modules, with every SQL statement of the engine
+-- The run engine (modules/runs/runs.lua) against stubs of the other modules, with every SQL statement of the engine
 -- run on the MariaDB test database.
 
 local H = dofile('tests/harness.lua')
@@ -267,7 +267,7 @@ CP.Blocks.register('test_block', {
     stop = function(ctx) Brec('stop', ctx) end,
 })
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 
 local mission = {
     id = 'test_mission',
@@ -359,7 +359,7 @@ local O = {
     },
 }
 
-H.load('modules/runs/server.lua')
+H.load('modules/runs/runs.lua')
 local Runs = CP.Runs
 H.step(0)   -- the hook registration thread
 H.ok(listeners.lost ~= nil and listeners.unload ~= nil and listeners.loaded ~= nil,
@@ -2512,10 +2512,10 @@ end
 -- ============================================================================
 --             THE crimsonPoliceRun BAG FOR CRIMSON-CONTRACTS (V8)
 -- ============================================================================
--- modules/npccombat/server.lua: exactly true (replicated) from client:start of a run whose games run the NPC damage
+-- modules/npc/npccombat.lua: exactly true (replicated) from client:start of a run whose games run the NPC damage
 -- settings until he leaves or the run ends; written only on a change; never for start data with npcCombat = false.
 
-H.load('modules/npccombat/server.lua')
+H.load('modules/npc/npccombat.lua')
 local bagWrites = {}
 do
     local basePlayer = _G.Player

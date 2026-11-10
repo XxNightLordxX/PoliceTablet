@@ -367,7 +367,7 @@ const data: SettingsData = {
         { key: 'server', title: 'Server', help: 'Logs and language.', sections: ['general'] },
     ],
     common: ['Debug', 'Locale', 'Tablet.deskDistance'],
-    // Settings -> Features (modules/settings Play.features); Spawning.enabled is not in this list, so it is left out
+    // Settings -> Features (modules/admin/settings Play.features); Spawning.enabled is not in this list, so it is left out
     features: [
         { key: 'spawning', play: 'npc', path: 'Spawning.enabled', risky: true },
         // limits: RealPlayers.liveCrime.maxLiveRuns is not in this list either, so only the unit size is linked
@@ -380,7 +380,7 @@ const data: SettingsData = {
         },
         { key: 'live_cash', play: 'pvp', path: 'RealPlayers.liveCrime.cash' },
     ],
-    // the gear of each screen (modules/settings Play.screens); a section the data does not have is left out
+    // the gear of each screen (modules/admin/settings Play.screens); a section the data does not have is left out
     screens: {
         admin_home: ['general', 'tablet_and_commands'],
         admin_markers: ['map_markers'],

@@ -11,7 +11,7 @@ local H = dofile('tests/harness.lua')
 -- ============================================================================
 --                                  THE SERVER
 -- ============================================================================
--- Real: shared/*, modules/adminkit, modules/adminhome. Stand-in: CP.Access, CP.Permissions, CP.Qbx, CP.Schedule,
+-- Real: shared/*, modules/admin/adminkit, modules/admin/adminhome. Stand-in: CP.Access, CP.Permissions, CP.Qbx, CP.Schedule,
 -- CP.Disputes, CP.Admin, CP.Opponents, CP.Profile, CP.Payments, CP.LiveCtl, CP.ConfigHealth, CP.Missions (each answers
 -- what the spec sets below).
 
@@ -93,8 +93,8 @@ CP.Opponents = {
     cases = function() return { { open = true }, { open = false }, { open = true } } end,
 }
 
-H.load('modules/adminkit/server.lua')
-H.load('modules/adminhome/server.lua')
+H.load('modules/admin/adminkit.lua')
+H.load('modules/admin/adminhome.lua')
 
 local function Cb(name, src, args)
     H.clockMs = H.clockMs + 6000

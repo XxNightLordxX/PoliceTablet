@@ -8,7 +8,7 @@ local cjson = require('cjson')
 -- ============================================================================
 --                                  THE SERVER
 -- ============================================================================
--- Real: shared/*, modules/permissions, access, admin, adminkit, confighealth, settings, tablet, sysadmin. Stand-in:
+-- Real: shared/*, modules/access/permissions, access, admin, adminkit, confighealth, settings, tablet, sysadmin. Stand-in:
 -- CP.Qbx (the players below and their jobs), CP.Runs (the runs going), ox_inventory, the server's KVP.
 
 H.boot({ side = 'server', realLocale = true })
@@ -160,14 +160,14 @@ for _, t in ipairs({
 end
 
 for _, m in ipairs({
-    'modules/permissions/server.lua',
-    'modules/access/server.lua',
-    'modules/admin/server.lua',
-    'modules/adminkit/server.lua',
-    'modules/confighealth/server.lua',
-    'modules/settings/server.lua',
-    'modules/tablet/server.lua',
-    'modules/sysadmin/server.lua',
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/admin/confighealth.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
+    'modules/admin/sysadmin.lua',
 }) do
     H.load(m)
 end

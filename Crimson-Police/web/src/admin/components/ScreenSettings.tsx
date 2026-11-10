@@ -1,4 +1,4 @@
-// The gear of each Admin UI screen: a drawer with only that screen's settings (modules/settings Play.screens), the
+// The gear of each Admin UI screen: a drawer with only that screen's settings (modules/admin/settings Play.screens), the
 // same rows, checks, saves and audit as Settings -> All settings, which still lists every setting. Loaded on the
 // first click (AdminLayout).
 

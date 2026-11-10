@@ -1,6 +1,6 @@
 // Slot: Officers → officer detail → Today & cooldowns: cooldowns (with Clear), today's counts against every cap (with
 // Allow more today), cash today, the Weekly Boss attempt (with Another boss attempt), free abandons (with Treat as a
-// normal abandon) and the Mission Board as the officer sees it (modules/livectl/server.lua).
+// normal abandon) and the Mission Board as the officer sees it (modules/supervisor/livectl.lua).
 
 import { useState } from 'react';
 import {

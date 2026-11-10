@@ -1,6 +1,6 @@
--- CP.Markers (modules/markers/client.lua): the extra parts of a mission on the minimap and the big map, in the same
+-- CP.Markers (modules/map/client/markers.lua): the extra parts of a mission on the minimap and the big map, in the same
 
--- CP.Markers (modules/markers/client.lua): the extra parts of a mission on the minimap and the big map, in the same
+-- CP.Markers (modules/map/client/markers.lua): the extra parts of a mission on the minimap and the big map, in the same
 -- blip manager as the objective. Blips change only when a list comes in; a car or partner follows its entity once it
 -- streams in; every blip goes at the run's end, a list for another run, logout and resource stop. The prisoner van
 -- and tow truck (M.service) take their look and on from their parts.
@@ -73,7 +73,7 @@ CP.Runs = {
     current = function() return current end,
 }
 
-H.load('modules/markers/client.lua')
+H.load('modules/map/client/markers.lua')
 local MB = CP.Markers
 local EVENT = 'crimson-police:client:markerParts'
 
@@ -178,8 +178,8 @@ H.fire('onResourceStop', nil, 'Crimson-Police')
 H.eq(#Live(), 0, 'resource stop takes them off')
 
 -- the runs module calls the clean-up at every run end
-local src = io.open('Crimson-Police/modules/runs/client.lua'):read('a')
+local src = io.open('Crimson-Police/modules/runs/client/runs.lua'):read('a')
 H.ok(src:find('MarkerCall(\'clearParts\')', 1, true) ~= nil,
-    'modules/runs/client.lua clears the extra parts at run end')
+    'modules/runs/client/runs.lua clears the extra parts at run end')
 
 return H

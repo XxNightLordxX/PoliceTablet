@@ -20,7 +20,7 @@ local APART = 1.5          -- metres (flat): two spawn points of one run closer 
 local CLOSER = 0.05        -- metres: a listed armed point may never come closer to its start than the baseline says
 local BASELINE_MAX = 26    -- lines in tests/spawn_lint_baseline.txt when it was written; never more
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 for _, b in ipairs({
     'checkpoint_route',
     'interact_points',
@@ -39,10 +39,10 @@ end
 local realWarn = CP.warn
 CP.warn = function() end
 CP.Missions = nil
-H.load('modules/missions/server.lua')
+H.load('modules/missions/missions.lua')
 local summary = CP.Missions.loadAll()
 -- after the loader: the Builder's rule for armed spawns (CP.Builder.armedTooClose), no custom file read
-H.load('modules/builder/server.lua')
+H.load('modules/missions/builder.lua')
 CP.warn = realWarn
 H.eq(#(summary.failed or {}), 0, 'the real loader rejects no built-in mission')
 

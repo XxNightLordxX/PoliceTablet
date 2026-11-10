@@ -702,7 +702,7 @@ export default function ActiveMission() {
         if (!res.ok) errorToast(res.error);
     };
 
-    // Objective GPS (modules/markers): a waypoint on what the objective pointer leads to; the game toasts the result.
+    // Objective GPS (modules/map/markers): a waypoint on what the objective pointer leads to; the game toasts the result.
     const setObjectiveGps = async () => {
         if (!view) return;
         setObjGpsBusy(true);

@@ -1,6 +1,6 @@
 -- Police vs real criminal players: second, read-only handlers for sc-police's and sc-ambulance's net events
 -- pass facts to CP.ScPolice.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
--- Real: modules/integrations/sc_police, modules/integrations/sc_ambulance, shared/net.lua (CP.Net.rateOk).
+-- Real: modules/system/integrations/sc_police, modules/system/integrations/sc_ambulance, shared/net.lua (CP.Net.rateOk).
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
@@ -47,8 +47,8 @@ do
     end
 end
 
-H.load('modules/integrations/sc_police/server.lua')
-H.load('modules/integrations/sc_ambulance/server.lua')
+H.load('modules/system/integrations/sc_police.lua')
+H.load('modules/system/integrations/sc_ambulance.lua')
 local SP, Amb = CP.ScPolice, CP.Ambulance
 
 -- event, kind, a valid sender and arguments, what the listener gets

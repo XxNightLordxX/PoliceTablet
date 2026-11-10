@@ -2,7 +2,7 @@
 
 -- CP.Opponents proof: the sc-police cuff pair and custody hold, getting free during the hold (release,
 -- bobby-pin rescue, cuff-break, self-uncuff), downs and the neutralised share, an AFK catch scoring 0, bookings in
--- either order with booking zones, and the hospital rules. Real: modules/integrations/qbx, access, anticheat,
+-- either order with booking zones, and the hospital rules. Real: modules/system/integrations/qbx, access, anticheat,
 -- integrations/sc_police and sc_ambulance (the V3 handlers, fired as net events), opponents and opponents/proof;
 -- qbx_core's exports and its onSetMetaData event are mocked like FXServer sends them.
 
@@ -147,9 +147,9 @@ CP.Qbx = {
     onPlayerUnload = function() end,
     getOnlinePlayers = function() return {} end,
 }
-H.load('modules/access/server.lua')
+H.load('modules/access/access.lua')
 CP.Qbx = nil
-H.load('modules/integrations/qbx/server.lua')
+H.load('modules/system/integrations/qbx.lua')
 
 -- sc-police's own JailPlayer handler, registered before Crimson-Police's (sc-police starts first): it writes injail
 -- inside the handler, so CP sees the injail change before its own jail handler runs (critic 2 #5)
@@ -157,8 +157,8 @@ local scpWritesInjail = false
 RegisterNetEvent('police:server:JailPlayer', function(targetId, jailTime)
     if scpWritesInjail then SetMeta(tonumber(targetId), 'injail', jailTime) end
 end)
-H.load('modules/integrations/sc_police/server.lua')
-H.load('modules/integrations/sc_ambulance/server.lua')
+H.load('modules/system/integrations/sc_police.lua')
+H.load('modules/system/integrations/sc_ambulance.lua')
 H.load('modules/realplayers/opponents.lua')
 H.load('modules/realplayers/proof.lua')
 H.step(0)

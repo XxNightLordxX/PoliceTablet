@@ -778,10 +778,10 @@ CP.Blocks.register('fnd_block', {
     stop = function(ctx) calls[#calls + 1] = { name = 'stop', index = ctx.index } end,
 })
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/progression/scoring.lua')
-H.load('modules/npc/server.lua')
-H.load('modules/runs/server.lua')
+H.load('modules/npc/npc.lua')
+H.load('modules/runs/runs.lua')
 local Runs = CP.Runs
 H.step(0)
 
@@ -1393,7 +1393,7 @@ end
 -- ============================================================================
 
 do
-    for _, f in ipairs({ 'modules/runs/server.lua', 'modules/runs/client.lua', 'modules/progression/scoring.lua' }) do
+    for _, f in ipairs({ 'modules/runs/runs.lua', 'modules/runs/client/runs.lua', 'modules/progression/scoring.lua' }) do
         H.ok(not Contains(ReadFile(H.root .. f), 'LIGHTS_MISSIONS'), f .. ' has no LIGHTS_MISSIONS table')
     end
     local defs = {}
@@ -1746,7 +1746,7 @@ RegisterMission({
     CP.warn = function(tag, fmt, ...) warnings[#warnings + 1] = tostring(fmt):format(...) end
     local realMissions = CP.Missions
     CP.Missions = nil
-    H.load('modules/missions/server.lua')
+    H.load('modules/missions/missions.lua')
     H.step(0)   -- its start-up load, while the fake index is served
     local Missions = CP.Missions
     Config.MissionTweaks = {
@@ -1851,7 +1851,7 @@ do
     CP.Access.isAdmin = function() return true end
     CP.Access.getOfficer = function() return nil end
     local realMissions = CP.Missions
-    H.load('modules/builder/server.lua')
+    H.load('modules/missions/builder.lua')
     CP.Missions = realMissions
     local res = H.callback('crimson-police:builder:config', 0)
     H.ok(res and res.ok, 'builder:config answers')
@@ -1895,7 +1895,7 @@ do
     H.sql([[INSERT INTO cp_officers (citizenid, xp, avatar_kind, avatar_value, avatar_status, appearance, accent,
         ui_scale, calls_muted) VALUES ('SESS1', 1300, 'url', 'https://r2.fivemanage.com/a.png', 'approved', 'midnight',
         '#4CC9F0', 1.10, 1)]])
-    H.load('modules/tablet/server.lua')
+    H.load('modules/access/tablet.lua')
     local res = H.callback('crimson-police:getSession', 1, { ui = 'officer', via = 'desk', desk = 2, silent = true })
     H.ok(res and res.ok, 'getSession answers')
     local s = res and res.data or {}

@@ -1,4 +1,4 @@
--- The client half of the run engine (modules/runs/client.lua). Run in its own process by tests/engine_b_spec.lua (the
+-- The client half of the run engine (modules/runs/client/runs.lua). Run in its own process by tests/engine_b_spec.lua (the
 -- harness boots one side per process); prints "RESULT <passes> <failures>" on the last line.
 
 local H = dofile('tests/harness.lua')
@@ -86,7 +86,7 @@ CP.Blocks.register('test_block', {
     stop = function(ctx) Rec('stop', ctx) end,
 })
 
-H.load('modules/runs/client.lua')
+H.load('modules/runs/client/runs.lua')
 local Runs = CP.Runs
 H.ok(actions.logResult ~= nil, 'logResult client action registered')
 H.eq(Runs.current(), nil, 'no run')

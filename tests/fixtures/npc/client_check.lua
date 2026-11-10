@@ -201,7 +201,7 @@ local SINGLE_SHOT = 0x5D60E4E0
 -- The movement natives with their argument types too; GW keeps each ped's task, pace and clip set.
 local GW = H.gaitNatives(Record)
 
-H.load('modules/npc/client.lua')
+H.load('modules/npc/client/npc.lua')
 local Npc = CP.Npc
 local HOSTILE, NEUTRAL, PLAYER = joaat('CRIMSONPOLICE_HOSTILE'), joaat('CRIMSONPOLICE_NEUTRAL'), joaat('PLAYER')
 H.ok(type(Npc.apply) == 'function' and type(Npc.task) == 'function' and type(Npc.nearestParticipant) == 'function',

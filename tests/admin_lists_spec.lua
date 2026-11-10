@@ -11,13 +11,13 @@ local H = dofile('tests/harness.lua')
 -- ============================================================================
 --                                  THE SERVER
 -- ============================================================================
--- Real: shared/*, modules/adminkit. The Player suspects callback is taken from modules/realplayers/staff with
+-- Real: shared/*, modules/admin/adminkit. The Player suspects callback is taken from modules/realplayers/staff with
 -- CP.Opponents' case list standing in.
 
 H.boot({ side = 'server' })
 _G.GetConvar = function(_, default) return default end
 _G.PerformHttpRequest = function() end
-H.load('modules/adminkit/server.lua')
+H.load('modules/admin/adminkit.lua')
 local Kit = CP.AdminKit
 
 -- ============================================================================

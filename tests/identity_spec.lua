@@ -120,14 +120,14 @@ for _, t in ipairs({
     H.sql('DELETE FROM ' .. t)
 end
 for _, m in ipairs({
-    'modules/integrations/qbx/server.lua',
-    'modules/permissions/server.lua',
-    'modules/access/server.lua',
-    'modules/admin/server.lua',
-    'modules/adminkit/server.lua',
-    'modules/confighealth/server.lua',
-    'modules/settings/server.lua',
-    'modules/tablet/server.lua',
+    'modules/system/integrations/qbx.lua',
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/admin/confighealth.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
     'modules/money/engine.lua',
     'modules/money/cash.lua',
     'modules/money/payouts.lua',

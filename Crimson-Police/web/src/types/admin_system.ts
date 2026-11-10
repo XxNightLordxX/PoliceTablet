@@ -1,4 +1,4 @@
-// Full admin control, System (modules/sysadmin): storage, backups, webhooks, problems, integrations, departments added
+// Full admin control, System (modules/admin/sysadmin): storage, backups, webhooks, problems, integrations, departments added
 // in game, Support (docs/dev/ARCHITECTURE.md §9.5, "Admin control: system").
 
 import type { OfficerOptionValue } from '../shared/types';
@@ -117,7 +117,7 @@ export interface ProblemsData {
     tags: string[];
 }
 
-// Config.AdminUi.homeShortcuts: Home's shortcut keys (modules/adminhome AH.SHORTCUTS)
+// Config.AdminUi.homeShortcuts: Home's shortcut keys (modules/admin/adminhome AH.SHORTCUTS)
 export type HomeShortcutKey =
     'newMission' | 'missionSwitch' | 'pay' | 'points' | 'settings' | 'live' | 'review' | 'activity';
 

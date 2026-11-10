@@ -1537,7 +1537,7 @@ if CP.Hooks and CP.Hooks.on then
     end)
 end
 
--- modules/settings loads after this file: the validator is registered once every file has loaded
+-- modules/admin/settings loads after this file: the validator is registered once every file has loaded
 CreateThread(function()
     if CP.Settings and CP.Settings.registerValidator then
         CP.Settings.registerValidator('Rewards', function(path, clean) return Rewards.checkSetting(path, clean) end)

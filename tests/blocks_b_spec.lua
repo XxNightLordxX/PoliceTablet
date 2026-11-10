@@ -2695,7 +2695,7 @@ do
     CP.Blocks._list.hostile_waves, CP.Blocks._list.protect_rescue, CP.Blocks._list.flee_arrest = nil, nil, nil
     H.strictGlobals(true)
     -- the objective pointer the client halves hand their blips to (it is loaded before the blocks in the game too)
-    H.load('modules/markers/client.lua')
+    H.load('modules/map/client/markers.lua')
     H.load('blocks/hostile_waves/client.lua')
     H.load('blocks/protect_rescue/client.lua')
     H.load('blocks/flee_arrest/client.lua')
@@ -2766,7 +2766,7 @@ do
         local qc = ClientCtx(U.deepcopy(PR.defaults({})), prLoc, { tag = 'pr-q13', index = 2 })
         AddEnt(7051, 75, vec3(2000.0, 2000.0, 20.0), { state = 'restrained', cfg = { group = 'neutral' } })
         AddEnt(7052, 76, vec3(2010.0, 2000.0, 20.0), { state = 'restrained', cfg = { group = 'neutral' } })
-        -- CP.Runs.control as modules/runs/client.lua has it, on the run host: ask, then wait frame by frame for the
+        -- CP.Runs.control as modules/runs/client/runs.lua has it, on the run host: ask, then wait frame by frame for the
         -- hand-over until the deadline. Another officer's game keeps the hostages, so the hand-over never comes.
         local asks, waits, loopCo = {}, {}, nil
         local saved = { request = rawget(_G, 'NetworkRequestControlOfEntity'), wait = Wait, thread = CreateThread }

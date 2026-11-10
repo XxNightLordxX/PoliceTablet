@@ -1253,7 +1253,7 @@ end
 
 CreateThread(function()
     if not CP.Qbx or not CP.Qbx.onPlayerLoaded then
-        CP.err(TAG, 'modules/integrations/qbx is missing: pending payments are not paid on login')
+        CP.err(TAG, 'modules/system/integrations/qbx is missing: pending payments are not paid on login')
     else
         CP.Qbx.onPlayerLoaded(OnLoaded)
     end

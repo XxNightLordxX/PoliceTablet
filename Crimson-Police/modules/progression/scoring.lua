@@ -1636,7 +1636,7 @@ if CP.Hooks and CP.Hooks.on then CP.Hooks.on('row:settled', OnRowSettled) end
 
 CreateThread(function()
     if not CP.Qbx then
-        CP.err(TAG, 'modules/integrations/qbx is missing: the first-run bonus cannot follow duty changes')
+        CP.err(TAG, 'modules/system/integrations/qbx is missing: the first-run bonus cannot follow duty changes')
         return
     end
     CP.Qbx.onDutyChange(function(src) DutyEvaluate(src, false) end)

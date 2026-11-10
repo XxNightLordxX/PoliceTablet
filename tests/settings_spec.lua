@@ -1,4 +1,4 @@
--- Admin UI → Settings (modules/settings): the schema read from config.lua and blocks.lua, every check of a value,
+-- Admin UI → Settings (modules/admin/settings): the schema read from config.lua and blocks.lua, every check of a value,
 -- saving, resetting and a restart in every storage mode, Config and the clients, the mission and location switches.
 
 local H = dofile('tests/harness.lua')
@@ -7,7 +7,7 @@ local cjson = require('cjson')
 -- ============================================================================
 --                                  THE SERVER
 -- ============================================================================
--- Real: modules/permissions, modules/admin (cp_audit), modules/confighealth, modules/settings. Stand-ins: CP.Access
+-- Real: modules/access/permissions, modules/admin (cp_audit), modules/admin/confighealth, modules/admin/settings. Stand-ins: CP.Access
 -- (the real admin rule over H.players aces), CP.Qbx (citizenids), CP.Tablet (pushes) and CP.Missions.
 
 local lines = {}
@@ -59,10 +59,10 @@ local function Boot()
         reload = function() reloads = reloads + 1 end,
         get = function() return nil end,
     }
-    H.load('modules/permissions/server.lua')
-    H.load('modules/admin/server.lua')
-    H.load('modules/confighealth/server.lua')
-    H.load('modules/settings/server.lua')
+    H.load('modules/access/permissions.lua')
+    H.load('modules/admin/admin.lua')
+    H.load('modules/admin/confighealth.lua')
+    H.load('modules/admin/settings.lua')
     H.step(0)
     return CP.Settings
 end
@@ -1007,7 +1007,7 @@ end
 -- switch with the supervisor permissions, grants checked like the teleport grants, registered controls only.
 do
     local function E(p) return S.entry(p) or {} end
-    if not CP.DeptControls then H.load('modules/deptcontrols/server.lua') end
+    if not CP.DeptControls then H.load('modules/supervisor/deptcontrols.lua') end
     local DC = CP.DeptControls
     H.eq(E('MissionControls.changeWait').section, 'mission_controls', 'Mission controls: their own section')
     H.eq(E('MissionControls.changeWait').default, 300, 'changeWait ships 300 s')
@@ -1149,7 +1149,7 @@ do
             'step P22: giving points ships off, 1-50 an award and 100 a supervisor a day, with comments'
         )
     end
-    if not CP.DeptControls.def('difficulty') then H.load('modules/scaling/server.lua') end
+    if not CP.DeptControls.def('difficulty') then H.load('modules/runs/scaling.lua') end
     H.ok((Check('MissionControls.controls', { difficulty = { on = true, presets = { 'easy', 'hard' } } })),
         'step P9: a presets list the admin picks')
     H.ok(not (Check('MissionControls.controls', { difficulty = { presets = { 'brutal' } } })),
@@ -1783,12 +1783,12 @@ do
     CP.Missions = nil
     local realWarn = CP.warn
     CP.warn = function() end
-    H.load('modules/missions/server.lua')
+    H.load('modules/missions/missions.lua')
     local M = CP.Missions
     local summary = M.loadAll()
     CP.warn = realWarn
     H.ok(summary.loaded > 15, 'the real missions load')
-    H.load('modules/draw/server.lua')
+    H.load('modules/runs/draw.lua')
     local Draw = CP.Draw
 
     local def = M.get('beat_patrol')
@@ -2028,7 +2028,7 @@ end
 do
     H.restart()
     H.boot({ side = 'client' })
-    H.load('modules/settings/client.lua')
+    H.load('modules/admin/client/settings.lua')
     local C = CP.Settings
     H.eq(#H.findEvents('crimson-police:server:settingsHello'), 1, 'the client asks for the settings at start')
     H.eq(C.received(), false, 'nothing received yet')

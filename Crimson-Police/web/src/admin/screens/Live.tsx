@@ -1,5 +1,5 @@
 // Admin UI → Live: every live run (tests and Cross-Department Missions too) and every unit, with Recall, End run,
-// End test, + minutes, Remove from unit and Disband (modules/livectl/server.lua).
+// End test, + minutes, Remove from unit and Disband (modules/supervisor/livectl.lua).
 
 import { useEffect, useState } from 'react';
 import {

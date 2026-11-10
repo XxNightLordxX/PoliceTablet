@@ -26,7 +26,7 @@ end
 local realWarn = CP.warn
 CP.warn = function() end
 CP.Missions = nil
-H.load('modules/missions/server.lua')
+H.load('modules/missions/missions.lua')
 local Missions = CP.Missions
 local summary = Missions.loadAll()
 CP.warn = realWarn

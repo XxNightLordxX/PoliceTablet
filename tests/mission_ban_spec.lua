@@ -230,7 +230,7 @@ end
 
 -- step Z5: Clear cooldown and Add run time (Config.MissionControls per-day caps) take the same one-at-a-time lock
 do
-    local f = io.open('Crimson-Police/modules/livectl/server.lua', 'r')
+    local f = io.open('Crimson-Police/modules/supervisor/livectl.lua', 'r')
     local src = f and f:read('a') or ''
     if f then f:close() end
     local _, n = src:gsub('oneAtATime = true', '')

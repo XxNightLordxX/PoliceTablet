@@ -51,7 +51,7 @@ CP.Admin = {
 }
 CP.Tablet = { notify = function() end }
 
-H.load('modules/permissions/server.lua')
+H.load('modules/access/permissions.lua')
 H.load('modules/system/schedule.lua')
 H.load('modules/progression/challenge.lua')
 local C = CP.Challenge

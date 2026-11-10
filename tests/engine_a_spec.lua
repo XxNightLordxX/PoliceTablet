@@ -295,11 +295,11 @@ CP.Builder = {
 --                                LOAD THE SLICE
 -- ============================================================================
 
-H.load('modules/scaling/server.lua')
+H.load('modules/runs/scaling.lua')
 H.load('modules/system/schedule.lua')
 H.load('modules/progression/events.lua')
-H.load('modules/missions/server.lua')
-H.load('modules/draw/server.lua')
+H.load('modules/missions/missions.lua')
+H.load('modules/runs/draw.lua')
 
 -- Helpers for net handlers.
 local reqN = 0
@@ -1692,7 +1692,7 @@ do
         if name == 'getMissionDefs' then return { ok = true, data = U.deepcopy(serverList) } end
         return { ok = false, error = 'err.no_response' }
     end
-    H.load('modules/missions/client.lua')
+    H.load('modules/missions/client/missions.lua')
     local client = CP.Missions
     H.eq(client.get('tac_one'), nil, 'nothing before the request')
     H.advance(2000)
