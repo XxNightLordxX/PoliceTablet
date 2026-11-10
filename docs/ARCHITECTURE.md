@@ -3942,6 +3942,11 @@ part's `on` shipped false too).
   such a blip is on the map), `SetBlipDisplay(2)`; `MB.clear()` at the run's clean-up (modules/runs), logout
   (`CP.Qbx.onUnload`) and resource stop. Settings: `MissionBlips.*` ranges, the `MissionBlips.rules` template, the
   Features row `mission_blips`. Specs: tests/missionblips_server_spec.lua, tests/missionblips_client_spec.lua.
+- Admin UI: the Mission blips screen (`admin_blips`, NPC missions; `Config.AdminUi.missionBlipsScreen`, session
+  `config.adminUi.missionBlipsScreen`, shown unless false; web admin/screens/MissionBlips.tsx,
+  admin/components/missionBlips.ts) reads `admin:getSettings` and `admin:getMissions` and saves each part field and
+  the whole `MissionBlips.rules` value through `server:admin:setSetting` (checked and audited as any setting). Walk:
+  admin/components/missionBlips.walk.ts.
 
 ## 6. Cross-cutting conventions
 

@@ -22,6 +22,7 @@ export const ADMIN_GROUPS: AdminGroup[] = ['npc', 'pvp', 'team', 'rewards', 'per
 export const ADMIN_GROUP_OF: Record<string, AdminGroup> = {
     admin_missions: 'npc',
     admin_live: 'npc',
+    admin_blips: 'npc',
     admin_rs: 'pvp',
     admin_officers: 'team',
     admin_departments: 'team',

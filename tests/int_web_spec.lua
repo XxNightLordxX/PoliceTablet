@@ -363,7 +363,8 @@ do
     H.eq(table.concat(groups.main, ','),
         'admin_home,admin_payouts,admin_money,admin_rewards,admin_missions,admin_live,admin_officers,admin_settings',
         'the everyday admin screens stay in the sidebar')
-    H.eq(#groups.more, 9, 'the other nine fold under More (' .. table.concat(groups.more, ',') .. ')')
+    -- admin_blips (BL2): the Mission blips screen folds under More too
+    H.eq(#groups.more, 10, 'the other ten fold under More (' .. table.concat(groups.more, ',') .. ')')
     local rs = admin:match('key: \'admin_rs\',(.-)}') or ''
     H.ok(rs:find('s.config?.realSuspects?.screen === true', 1, true) ~= nil,
         'Real suspects (V18) shows only while the server says live crimes or volunteers are on')

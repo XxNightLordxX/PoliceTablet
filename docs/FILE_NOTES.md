@@ -179,6 +179,8 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/kit/RowsEditor.tsx`: RowsEditor: the base row editor for a list setting with a row template (SettingView.rows): add, remove and move rows, one input per field.
 - `Crimson-Police/web/src/admin/components/kit/index.ts`: The admin kit: shared pieces of the full admin control screens (docs/ARCHITECTURE.md §9.5, "Admin control").
 - `Crimson-Police/web/src/admin/components/kit/useAdminAction.ts`: useAdminAction: useAction for the admin actions of CP.AdminKit.
+- `Crimson-Police/web/src/admin/components/missionBlips.ts`: Admin UI -> Mission blips (Config.AdminUi.missionBlipsScreen): the extra mission blips of Config.MissionBlips as
+- `Crimson-Police/web/src/admin/components/missionBlips.walk.ts`: Admin UI -> Mission blips (Config.AdminUi.missionBlipsScreen) walked against the browser mocks (node walk.mjs, a gate step): the screen shows under NPC missions unless switched off, lists every part with its look, the pickers offer the departments, jobs, mission types and missions, and the rules saved are the value the server checks.
 - `Crimson-Police/web/src/admin/components/missionControls.walk.ts`: Admin UI -> Permissions -> Mission controls against the browser mocks (node walk.mjs, a gate step): the card's body rendered off (nothing switched on, nothing changed) and on with changed values, and a Reset.
 - `Crimson-Police/web/src/admin/components/needsAttention.ts`: Admin UI -> Home's Needs attention panel (Config.AdminUi.needsAttention): the lines of admin:getNeedsAttention, each a count that opens its screen.
 - `Crimson-Police/web/src/admin/components/needsAttention.walk.ts`: Admin UI -> Home's Needs attention panel against the browser mocks (node walk.mjs, a gate step): the one batched admin:getNeedsAttention answer, its lines and the screen each one opens, and the plain screen titles.
@@ -195,6 +197,7 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/screens/Home.tsx`: Admin UI · Home (screen key 'admin_home', Config.AdminUi.landing = 'home'): the landing screen.
 - `Crimson-Police/web/src/admin/screens/Leaderboards.tsx`: Admin UI · Leaderboards (screen key 'admin_leaderboards', callback admin:getBoards).
 - `Crimson-Police/web/src/admin/screens/Live.tsx`: Admin UI → Live: every live run (tests and Cross-Department Missions too) and every unit, with Recall, End run, End test, + minutes, Remove from unit and Disband (modules/livectl/server.lua).
+- `Crimson-Police/web/src/admin/screens/MissionBlips.tsx`: Admin UI · Mission blips (screen key 'admin_blips', Config.AdminUi.missionBlipsScreen): the extra mission blips.
 - `Crimson-Police/web/src/admin/screens/Missions.tsx`: Admin UI · Missions (screen key 'admin_missions', title key 'ui.screen.admin_missions').
 - `Crimson-Police/web/src/admin/screens/Money.tsx`: Admin UI → Money (Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs of one screen.
 - `Crimson-Police/web/src/admin/screens/Officers.tsx`: Admin UI · Officers (screen key 'admin_officers').

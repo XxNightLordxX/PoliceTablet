@@ -1673,7 +1673,17 @@ Map markers (`Config.Markers`) marks the objective. **Extra mission blips** (`Co
 other parts of a mission on the minimap and the big map. It ships off: with `Config.MissionBlips.enabled = false`
 nothing extra shows and the map is as before.
 
-Turn it on in Admin UI → **Settings** → **Features** (Extra mission blips), then switch on the parts you want in
+The easy way is Admin UI → **Mission blips** (under NPC missions; `Config.AdminUi.missionBlipsScreen`, shipped
+`true`, `false` hides the screen). On top is the main switch (**Turn on**) and how often the server checks. Below it
+is one row per part, each with:
+
+- its **on** switch (a part that is on waits for the main switch, and says so);
+- its **look**: the picture (pick a named one such as Van, Car or Hospital, or type any blip id), the colour (pick
+  a named one such as Blue or Red, or type any colour id), the size, the name on the map and **Only when near**;
+- **Who sees it**: tick departments, jobs and mission types, add missions, set the lowest grade and pick everyone,
+  the unit leader or supervisors. Nothing ticked means any. **Remove the rules** shows the part to everyone again.
+
+You can also turn it on in Admin UI → **Settings** → **Features** (Extra mission blips) and edit every value in
 Admin UI → **Settings** → Missions and Builder → **Mission blips** (or in `config/config.lua`). Changes work at once,
 no restart, and every change is saved and audited like any setting.
 

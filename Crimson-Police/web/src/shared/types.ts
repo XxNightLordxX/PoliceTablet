@@ -112,6 +112,8 @@ export interface Session {
             plainLayout?: boolean;
             // the Rewards screen (admin/screens/Rewards.tsx; false = no such screen)
             rewardsScreen?: boolean;
+            // the Mission blips screen (admin/screens/MissionBlips.tsx; only false = no such screen)
+            missionBlipsScreen?: boolean;
             // Home's Needs attention panel (Config.AdminUi.needsAttention)
             needsAttention?: boolean;
             // one Money screen (Config.AdminUi.moneyScreen) and one request per screen open (oneRequest)

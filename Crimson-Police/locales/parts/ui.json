@@ -224,5 +224,7 @@
   "ui.help.sup_review": "Open a row to see the details, then Approve or Void with a reason.",
   "ui.more.show": "More options",
   "ui.more.show_n": "More options ({n})",
-  "ui.more.hide": "Fewer options"
+  "ui.more.hide": "Fewer options",
+  "ui.screen.admin_blips": "Mission blips",
+  "ui.nav.plain.admin_blips": "Map blips for every part of a mission"
 }

@@ -59,6 +59,7 @@ const AdminSystem = lazyScreen('admin', () => import('../admin/screens/System'))
 const AdminRealSuspects = lazyScreen('admin', () => import('../admin/screens/RealSuspects'));
 const AdminRewards = lazyScreen('admin', () => import('../admin/screens/Rewards'));
 const AdminMoney = lazyScreen('admin', () => import('../admin/screens/Money'));
+const AdminMissionBlips = lazyScreen('admin', () => import('../admin/screens/MissionBlips'));
 
 export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     key: K;
@@ -233,6 +234,16 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         component: AdminLive,
         play: 'npc',
         group: 'main',
+    },
+    {
+        // Mission blips (Config.AdminUi.missionBlipsScreen, shipped on): the extra mission blips, part by part
+        key: 'admin_blips',
+        titleKey: 'ui.screen.admin_blips',
+        icon: 'mapPin',
+        component: AdminMissionBlips,
+        visible: s => s.config?.adminUi?.missionBlipsScreen !== false,
+        play: 'npc',
+        group: 'more',
     },
     {
         key: 'admin_seasons',

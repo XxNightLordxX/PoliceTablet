@@ -598,3 +598,9 @@ marker. Run the mission on that location (turn its other locations off, README 5
   the hospital while he is down. (BL1)
 - [ ] End the run, leave a run, log out: every extra blip goes. resmon on a run with every part on stays under
   0.05 ms. (BL1)
+- [ ] Admin UI -> Mission blips is listed under NPC missions. Turn on: the card turns green and Settings -> Features
+  shows Extra mission blips on. Switch on Coroner van, pick the picture Van and the colour Purple: on the next
+  Process the scene run the van shows with that look on the minimap and the big map, no restart. (BL2)
+- [ ] Mission blips -> Partner -> Change who sees it: tick SAST, pick The unit leader only, Save: the row shows
+  the two limits, Settings -> History has the change, and only the SAST unit leader sees partners. Remove the
+  rules: everyone on the run sees them again. `Config.AdminUi.missionBlipsScreen = false` hides the screen. (BL2)

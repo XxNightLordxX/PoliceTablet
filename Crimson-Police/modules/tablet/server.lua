@@ -422,6 +422,8 @@ local function ExtraConfig(deptKey)
             plainLayout = aui.plainLayout == true,
             -- the Rewards screen (admin/screens/Rewards.tsx), shipped false = no such screen
             rewardsScreen = aui.rewardsScreen == true,
+            -- the Mission blips screen (admin/screens/MissionBlips.tsx), shipped true; false = no such screen
+            missionBlipsScreen = aui.missionBlipsScreen ~= false,
             -- Home's Needs attention panel (admin:getNeedsAttention), shipped false = no panel
             needsAttention = aui.needsAttention == true,
             -- one Money screen for Mission pay and Payments made, and one request per screen open

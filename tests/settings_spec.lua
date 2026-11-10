@@ -1499,6 +1499,14 @@ do
     for _, f in ipairs(S._features or {}) do if f.key == 'mission_blips' then row = f end end
     H.ok(row ~= nil and row.play == 'npc', 'the Features tab has a Mission blips row (NPC missions)')
     H.eq(row and row.path, 'MissionBlips.enabled', 'it switches Config.MissionBlips.enabled')
+    -- the Mission blips screen (BL2) edits these same settings: one per part field, the rules as one value
+    H.eq(E('AdminUi.missionBlipsScreen').default, true, 'the Admin UI ships with a Mission blips screen')
+    H.eq(E('AdminUi.missionBlipsScreen').kind, 'boolean', 'missionBlipsScreen is a switch')
+    H.ok((E('AdminUi.missionBlipsScreen').desc or ''):find('Mission blips screen', 1, true) ~= nil,
+        'missionBlipsScreen: its config.lua comment is its description')
+    H.eq(E('MissionBlips.parts.coronerVan.sprite').kind, 'number', 'a part\'s sprite is its own number setting')
+    H.eq(E('MissionBlips.parts.coronerVan.shortRange').kind, 'boolean', 'its range is a switch')
+    H.eq(E('MissionBlips.rules').kind, 'json', 'the rules are one setting the screen saves whole')
 end
 
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.

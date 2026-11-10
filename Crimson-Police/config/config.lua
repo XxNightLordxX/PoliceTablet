@@ -200,6 +200,11 @@ Config.AdminUi = {
     -- its money, how it is paid and its items, saved like any setting; false = no such screen (Settings still has
     -- every value). Nothing is paid differently
     rewardsScreen = false,
+    -- true = the Admin UI gets a Mission blips screen (under NPC missions): the master switch of the extra mission
+    -- blips, every part with its on switch, look (sprite, colour, size), label and range, and who sees it
+    -- (departments, jobs, lowest grade, mission types, missions, role), saved like any setting; false = no such
+    -- screen (Settings still has every value). The blips themselves stay off until Config.MissionBlips.enabled
+    missionBlipsScreen = true,
     -- true = Admin UI -> Home shows a "Needs attention" panel on top: the Problems lines, today's refused mission
     -- starts, the open disputes, the flagged runs waiting for a review and the open player suspect cases, each a
     -- count that opens its screen; false = no such panel (Home as before). It only reads
