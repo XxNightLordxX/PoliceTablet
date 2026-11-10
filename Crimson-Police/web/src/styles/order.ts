@@ -11,7 +11,7 @@ import '../shared/components/MaintenanceBanner.css';
 import '../layouts/access.css';
 import '../officer/components/HappyHourBanner.css';
 import '../officer/components/RewardsLocker.css';
-import '../officer/components/ScreenStatus.css';
+import '../shared/components/ScreenStatus.css';
 import '../officer/screens/Home.css';
 import '../officer/components/MissionCallsLink.css';
 import '../officer/components/TwistPicker.css';

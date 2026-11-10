@@ -18,6 +18,7 @@ import {
     Screen,
     Select,
     Toggle,
+    ScreenStatus,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { useAction, useRequest } from '../../shared/hooks';
@@ -30,8 +31,7 @@ import type { ProfileData } from '../../types/boards';
 import type { KeyLabel, OptionDef, OptionsView } from '../../types/options';
 import type { ProfileEdit, ProfileSetPayload } from '../../types/profile';
 import '../components/ProfileCards.css';
-import { ScreenStatus } from '../components/ScreenStatus';
-import { OFFICER_HEADS, screenStateOf } from './screenHead';
+import { screenStateOf } from '../../shared/screenHeads';
 import './MyOptions.css';
 import { makeDebouncer, type Debouncer } from './debouncedSave';
 
@@ -544,7 +544,7 @@ export default function MyOptions() {
     }
 
     return (
-        <Screen title={t(OFFICER_HEADS.options.title)} subtitle={t(OFFICER_HEADS.options.help)} className="my-options">
+        <Screen head="options" className="my-options">
             <ScreenStatus
                 state={screenStateOf(!!data, loading, error ?? (data || loading ? null : 'err.internal'))}
                 error={error ?? 'err.internal'}

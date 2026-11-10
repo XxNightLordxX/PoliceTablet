@@ -25,6 +25,7 @@ import {
     Tabs,
     TierBadge,
     type TableColumn,
+    ScreenStatus,
 } from '../../shared/components';
 import { DecisionsBlock, PeopleBlock } from '../../hud/Debrief';
 import { asArray } from '../../shared/data';
@@ -36,9 +37,7 @@ import { toast } from '../../shared/toast';
 import { useCan } from '../../shared/session';
 import type { DisputeView, FlaggedRow, ReviewQueueData, ReviewTab } from '../../types/oversight';
 import { ProfilesReview } from '../components/ProfilesReview';
-import { ScreenStatus } from '../../officer/components/ScreenStatus';
-import { screenStateOf } from '../../officer/screens/screenHead';
-import { SUP_HEADS } from './supHead';
+import { screenStateOf } from '../../shared/screenHeads';
 import './ReviewQueue.css';
 
 type TabKey = ReviewTab;
@@ -502,9 +501,8 @@ export default function SupReviewQueue() {
 
     return (
         <Screen
-            title={t(SUP_HEADS.review.title)}
+            head="sup_review"
             subtitle={t('sup.review.subtitle')}
-            help={t(SUP_HEADS.review.help)}
             actions={
                 <IconButton
                     icon="refresh"

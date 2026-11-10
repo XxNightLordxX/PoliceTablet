@@ -17,7 +17,7 @@ export default function SupBuilder() {
     const [open, setOpen] = useState<string | null>(() => editorMemory('sup').openId);
     if (!can('builderEdit')) {
         return (
-            <Screen title={t('ui.screen.sup_builder')}>
+            <Screen head="sup_builder">
                 <EmptyState
                     icon="lock"
                     title={t('builder.screen.no_access_title')}
@@ -28,7 +28,7 @@ export default function SupBuilder() {
     }
     return (
         <Screen
-            title={open ? undefined : t('ui.screen.sup_builder')}
+            head={open ? undefined : 'sup_builder'}
             subtitle={open ? undefined : t('builder.screen.sup_subtitle')}
             className="builder_client-screen"
         >

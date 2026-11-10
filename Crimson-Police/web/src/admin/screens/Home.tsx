@@ -23,7 +23,6 @@ import type { AdminLiveRunsData } from '../../types/admin_live';
 import type { MissionLoadSummary } from '../../types/admin_missions';
 import type { NeedsAttentionData } from '../../types/admin_system';
 import { attentionLines, attentionWaiting } from '../components/needsAttention';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Home.css';
 
 // How many runs the Live now strip lists before "and N more".
@@ -241,9 +240,8 @@ function NeedsAttention() {
 }
 
 export default function AdminHome() {
-    const screenTitle = useAdminTitle('admin_home');
     return (
-        <Screen title={screenTitle} subtitle={t('admin.home.subtitle')} className="admin-home-screen">
+        <Screen head="admin_home" subtitle={t('admin.home.subtitle')} className="admin-home-screen">
             <NeedsAttention />
             <LiveNow />
             <div className="admin-home-grid">

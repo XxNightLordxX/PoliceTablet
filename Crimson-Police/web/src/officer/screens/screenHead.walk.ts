@@ -1,6 +1,6 @@
 // Officer screens tidy, part 1 against the browser mocks (node walk.mjs, a gate step): Home, Mission Board,
-// Active Mission and Dispatch share one header (title, one line of help) and one set of loading, error, empty and
-// stale lines.
+// Active Mission and Dispatch share one header (title, one line of help: <Screen head>, shared/screenHeads.ts) and
+// one set of loading, error, empty and stale lines (the shared ScreenStatus).
 
 import '../../mocks/core.mock';
 import { createElement } from 'react';
@@ -10,13 +10,12 @@ import missioncalls from '../../../../locales/parts/missioncalls.json';
 import options from '../../../../locales/parts/options.json';
 import runUi from '../../../../locales/parts/run_ui.json';
 import ui from '../../../../locales/parts/ui.json';
-import { Screen } from '../../shared/components';
-import { ScreenStatus } from '../components/ScreenStatus';
+import { Screen, ScreenStatus } from '../../shared/components';
+import { SCREEN_HEADS, screenStateOf, type ScreenState } from '../../shared/screenHeads';
 import activeSrc from './ActiveMission.tsx?raw';
 import dispatchSrc from './Dispatch.tsx?raw';
 import homeSrc from './Home.tsx?raw';
 import boardSrc from './MissionBoard.tsx?raw';
-import { OFFICER_HEADS, screenStateOf, type ScreenState } from './screenHead';
 
 const failures: string[] = [];
 let passed = 0;
@@ -39,7 +38,9 @@ export async function walk(): Promise<{ passed: number; failures: string[] }> {
 
 function steps(): void {
     // every screen has a title and one line of help, both in the locale
-    for (const [key, head] of Object.entries(OFFICER_HEADS)) {
+    const officer = ['home', 'board', 'active', 'dispatch', 'unit', 'profile', 'leaderboard', 'options', 'challenge'];
+    for (const key of officer) {
+        const head = SCREEN_HEADS[key as keyof typeof SCREEN_HEADS];
         ok(typeof locale[head.title] === 'string' && locale[head.title].length > 0, `${key}: title in the locale`);
         const help = locale[head.help];
         ok(typeof help === 'string' && help.length > 0, `${key}: help in the locale`);
@@ -93,10 +94,10 @@ function steps(): void {
         ['dispatch', dispatchSrc],
     ];
     for (const [key, src] of sources) {
-        ok(src.includes(`OFFICER_HEADS.${key}.title`), `${key}: title from OFFICER_HEADS`);
-        // the literal key also counts (tests/run_ui_spec.lua finds the run_ui keys a screen uses by their text)
-        const help = OFFICER_HEADS[key as keyof typeof OFFICER_HEADS].help;
-        ok(src.includes(`OFFICER_HEADS.${key}.help`) || src.includes(`'${help}'`), `${key}: help from OFFICER_HEADS`);
+        ok(
+            new RegExp(`<Screen\\s+head="${key}"`).test(src),
+            `${key}: title and help from its head (shared/screenHeads.ts)`,
+        );
         ok(src.includes('<ScreenStatus'), `${key}: ScreenStatus for its load states`);
         ok(!src.includes('<LoadingBlock') && !src.includes('<ErrorState'), `${key}: no own loading or error block`);
     }

@@ -15,6 +15,7 @@ import {
     Screen,
     SegmentedControl,
     Toggle,
+    ScreenStatus,
 } from '../../shared/components';
 import type { BadgeTone, IconName } from '../../shared/components';
 import { cx } from '../../shared/cx';
@@ -29,8 +30,7 @@ import { useSession } from '../../shared/session';
 import { toast } from '../../shared/toast';
 import type { ClaimCallResult, DispatchView, MissionCall, RecentCall } from '../../types/missioncalls';
 import { TwistPicker, tickedTwists } from '../components/TwistPicker';
-import { ScreenStatus } from '../components/ScreenStatus';
-import { OFFICER_HEADS, screenStateOf } from './screenHead';
+import { screenStateOf } from '../../shared/screenHeads';
 import './Dispatch.css';
 
 const POLL_MS = 15000;
@@ -433,8 +433,7 @@ export default function Dispatch() {
 
     return (
         <Screen
-            title={t(OFFICER_HEADS.dispatch.title)}
-            subtitle={t(OFFICER_HEADS.dispatch.help)}
+            head="dispatch"
             className="mc-screen"
             actions={
                 <Toggle checked={muted} onChange={v => void toggleMute(v)} label={t('mc.mute.label')} disabled={busy} />

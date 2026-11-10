@@ -42,6 +42,7 @@ import {
     Checkbox,
     XpBadge,
     type TableColumn,
+    Pager,
 } from '../../shared/components';
 import { DecisionsBlock, PeopleBlock } from '../../hud/Debrief';
 import { asArray } from '../../shared/data';
@@ -59,7 +60,7 @@ import type {
 } from '../../types/oversight';
 import { useSession } from '../../shared/session';
 import { useNavigation } from '../../shared/navigation';
-import { Pager } from '../components/kit';
+
 import { CommendationTools, OfficerTools } from '../components/officers/OfficerTools';
 import { OfficerRuns, RunDialog } from '../components/officers/OfficerRuns';
 import { CorrectionsTab, DisputesTab, ReviewTab } from '../components/officers/OfficerLists';
@@ -69,7 +70,6 @@ import { ServiceRecordCard } from '../../officer/components/ServiceRecordCard';
 import { CommendDialog } from '../../supervisor/components/CommendDialog';
 import { OfficerRunControls } from '../components/OfficerRunControls';
 import { OfficerSupport } from '../components/OfficerSupport';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Officers.css';
 
 const endLabel = (reason: string) => (hasKey(`sup.end.${reason}`) ? t(`sup.end.${reason}`) : reason);
@@ -1137,7 +1137,6 @@ type ScreenTab = 'officers' | 'review' | 'disputes' | 'corrections';
 const FILTER_KEYS = ['online', 'suspended', 'retired', 'excluded', 'review', 'dispute', 'flagged'] as const;
 
 export default function AdminOfficers() {
-    const screenTitle = useAdminTitle('admin_officers');
     const session = useSession();
     const [screenTab, setScreenTab] = useState<ScreenTab>('officers');
     const [query, setQuery] = useState('');
@@ -1181,7 +1180,7 @@ export default function AdminOfficers() {
     }, [params]);
 
     return (
-        <Screen title={screenTitle} subtitle={t('admin.officers.subtitle')} className="oversight-screen">
+        <Screen head="admin_officers" subtitle={t('admin.officers.subtitle')} className="oversight-screen">
             <Tabs
                 items={[
                     { key: 'officers', label: t('ui.admin_officers.tab.officers'), icon: 'users' },

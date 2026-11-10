@@ -27,6 +27,7 @@ import {
     type BadgeTone,
     type IconName,
     type TableColumn,
+    Pager,
 } from '../../shared/components';
 import { formatDateTime, formatMoney, formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
@@ -43,9 +44,8 @@ import type {
     PaymentsView,
     UnfundedPreview,
 } from '../../types/admin_economy';
-import { DateRangeField, MoneyEffect, OfficerPicker, Pager, PreviewTable, useAdminAction } from '../components/kit';
+import { DateRangeField, MoneyEffect, OfficerPicker, PreviewTable, useAdminAction } from '../components/kit';
 import type { DateRange } from '../components/kit';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Payments.css';
 
 const REASON_MAX = 255;
@@ -429,7 +429,6 @@ function ManualDialog({
 // ============================================================================
 
 export default function AdminPayments() {
-    const screenTitle = useAdminTitle('admin_payments');
     const session = useSession();
     const departments = session.config?.departments ?? [];
     // Leaderboards → stuck payments links here with navigate('admin_money', { moneyTab: 'payments', status: 'paying' })
@@ -630,7 +629,7 @@ export default function AdminPayments() {
 
     return (
         <Screen
-            title={screenTitle}
+            head="admin_payments"
             subtitle={t('payments.subtitle')}
             className="payments-admin"
             actions={
@@ -757,7 +756,7 @@ export default function AdminPayments() {
                         rows={data.rows}
                         dense
                         empty={<EmptyState compact icon="creditCard" title={t('payments.empty')} />}
-                        aria-label={screenTitle}
+                        aria-label={t('ui.nav.plain.admin_payments')}
                     />
                     <div className="payments-admin__foot">
                         <span className="payments-admin__soft">

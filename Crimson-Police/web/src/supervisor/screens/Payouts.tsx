@@ -275,7 +275,7 @@ export default function SupPayouts() {
     ];
 
     return (
-        <Screen title={t('ui.screen.sup_payouts')} subtitle={t('sup.payouts.subtitle')} className="economy-payouts">
+        <Screen head="sup_payouts" subtitle={t('sup.payouts.subtitle')} className="economy-payouts">
             <div className="economy-pay-rules">
                 <div className="economy-pay-rule">
                     <Icon name="barChart" size={16} />

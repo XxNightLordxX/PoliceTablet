@@ -2,7 +2,8 @@ import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import { cx } from '../cx';
 
 type Space = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8;
-const gapPx = (g: Space) => `${g * 4}px`;
+// The --cp-space tokens of styles/base.css (4px steps).
+const gapPx = (g: Space) => (g ? `var(--cp-space-${g})` : '0');
 
 export interface GridProps extends HTMLAttributes<HTMLDivElement> {
     // Fixed column count (e.g. 3), or a CSS grid-template-columns string.

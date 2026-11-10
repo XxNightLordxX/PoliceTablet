@@ -1,5 +1,7 @@
 import type { HTMLAttributes, KeyboardEvent, ReactNode } from 'react';
 import { cx } from '../cx';
+import { t } from '../i18n';
+import { SCREEN_HEADS, type ScreenHeadKey } from '../screenHeads';
 import { Icon, type IconName } from './Icon';
 
 export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
@@ -113,9 +115,12 @@ export function Section({ title, description, actions, children, className }: Se
 }
 
 export interface ScreenProps {
+    // The page header from shared/screenHeads.ts: its title and its one line of help (each overridden by title or
+    // help when given). Every screen of the four tablets passes it; undefined = no header (e.g. the open builder).
+    head?: ScreenHeadKey;
     title?: ReactNode;
     subtitle?: ReactNode;
-    // One line of help under the subtitle (muted, smaller).
+    // One line of help under the subtitle (muted, smaller); default: the head's help.
     help?: ReactNode;
     // Right side of the title row.
     actions?: ReactNode;
@@ -123,16 +128,20 @@ export interface ScreenProps {
     className?: string;
 }
 
-// Standard screen wrapper: page title row, then content with the screen's vertical rhythm.
-export function Screen({ title, subtitle, help, actions, children, className }: ScreenProps) {
+// The page header and body of every screen: title, subtitle, the one line of help and the actions, then the content
+// with the screen's vertical rhythm (the --cp-space tokens of styles/base.css).
+export function Screen({ head, title, subtitle, help, actions, children, className }: ScreenProps) {
+    const def = head ? SCREEN_HEADS[head] : undefined;
+    const shownTitle = title ?? (def ? t(def.title) : undefined);
+    const shownHelp = help ?? (def ? t(def.help) : undefined);
     return (
-        <div className={cx('cp-screen', className)}>
-            {title || actions ? (
+        <div className={cx('cp-screen', className)} data-head={head}>
+            {shownTitle || actions ? (
                 <header className="cp-screen__header">
                     <div className="cp-screen__titles">
-                        {title ? <h2 className="cp-screen__title">{title}</h2> : null}
+                        {shownTitle ? <h2 className="cp-screen__title">{shownTitle}</h2> : null}
                         {subtitle ? <p className="cp-screen__subtitle">{subtitle}</p> : null}
-                        {help ? <p className="cp-screen__help">{help}</p> : null}
+                        {shownHelp ? <p className="cp-screen__help">{shownHelp}</p> : null}
                     </div>
                     {actions ? <div className="cp-screen__actions">{actions}</div> : null}
                 </header>

@@ -23,7 +23,7 @@ function CallsAndNotices() {
     const session = useSession();
     const can = useCan();
     return (
-        <Screen title={t('sup.dept.tab.calls')} subtitle={t('sup.dept.calls_help')}>
+        <Screen head="sup_calls">
             {can('missionCalls') ? <MissionCallsPanel scope={session.officer ? 'sup' : 'admin'} /> : null}
             <DeptNoticesCard />
         </Screen>
@@ -32,7 +32,7 @@ function CallsAndNotices() {
 
 function Training() {
     return (
-        <Screen title={t('sup.dept.tab.training')} className="boards-report">
+        <Screen head="sup_training" className="boards-report">
             <FieldTrainingPanel showOff />
         </Screen>
     );

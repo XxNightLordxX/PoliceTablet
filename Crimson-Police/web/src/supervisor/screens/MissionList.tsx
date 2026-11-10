@@ -393,7 +393,7 @@ export default function SupMissionList() {
 
     return (
         <Screen
-            title={t('ui.screen.sup_missions')}
+            head="sup_missions"
             subtitle={t('sup.missions.subtitle')}
             actions={
                 <IconButton

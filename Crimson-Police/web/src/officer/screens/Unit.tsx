@@ -22,6 +22,7 @@ import {
     Screen,
     SearchInput,
     Stack,
+    ScreenStatus,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { useAction, usePush, useRequest } from '../../shared/hooks';
@@ -41,8 +42,7 @@ import type {
 } from '../../types/teams';
 import { asList, type TestInvite } from '../../types/testing';
 import { ReadyCheckBanner } from '../components/ReadyCheckBanner';
-import { ScreenStatus } from '../components/ScreenStatus';
-import { OFFICER_HEADS, screenStateOf } from './screenHead';
+import { screenStateOf } from '../../shared/screenHeads';
 import './Unit.css';
 
 // A leader control waiting for its confirm dialog.
@@ -815,9 +815,8 @@ export default function Unit() {
 
     return (
         <Screen
-            title={t(OFFICER_HEADS.unit.title)}
+            head="unit"
             subtitle={t('unit.ui.subtitle', { max })}
-            help={t(OFFICER_HEADS.unit.help)}
             actions={
                 unit ? (
                     <Button variant="danger" icon="logout" onClick={() => setConfirmLeave(true)} disabled={!!busyKey}>

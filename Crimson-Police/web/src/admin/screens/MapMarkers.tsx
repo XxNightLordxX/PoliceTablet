@@ -56,7 +56,6 @@ import {
 } from '../components/mapMarkers';
 import { settingsByPath } from '../components/features';
 import { Editor, mergeSettingsReply, useSettingSave, type SavePayload } from './Settings';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './MapMarkers.css';
 
 type Save = (s: SettingView, p: SavePayload) => Promise<boolean>;
@@ -384,7 +383,6 @@ function KindRow({ kind, disabled, save }: { kind: BlipKind; disabled: boolean; 
 }
 
 export default function AdminMapMarkers() {
-    const screenTitle = useAdminTitle('admin_markers');
     const { data, loading, error, refetch, setData } = useRequest<SettingsData>(
         'admin:getSettings',
         {},
@@ -411,7 +409,7 @@ export default function AdminMapMarkers() {
     if (error && !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
     return (
-        <Screen title={screenTitle} subtitle={t('admin.map_markers.subtitle')}>
+        <Screen head="admin_markers" subtitle={t('admin.map_markers.subtitle')}>
             {objective.length ? (
                 <Card
                     title={t('admin.map_markers.objective_title')}

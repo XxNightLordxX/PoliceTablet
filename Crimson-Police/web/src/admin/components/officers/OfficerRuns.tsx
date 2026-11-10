@@ -18,6 +18,7 @@ import {
     Table,
     Toggle,
     type TableColumn,
+    Pager,
 } from '../../../shared/components';
 import { DecisionsBlock, PeopleBlock } from '../../../hud/Debrief';
 import { fmtDateTime, formatNumber } from '../../../shared/format';
@@ -25,7 +26,7 @@ import { useRequest } from '../../../shared/hooks';
 import { hasKey, t } from '../../../shared/i18n';
 import { applyReplyView } from '../../../shared/replyView';
 import type { OfficerRunRow, OfficerRunsPage, RunDetail, VoidKind } from '../../../types/admin_officers';
-import { DateRangeField, Pager, useAdminAction, type DateRange } from '../kit';
+import { DateRangeField, useAdminAction, type DateRange } from '../kit';
 import './OfficerTools.css';
 
 type RunTool =

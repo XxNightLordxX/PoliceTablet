@@ -29,6 +29,7 @@ import {
     Screen,
     TierBadge,
     TIER_ORDER,
+    ScreenStatus,
 } from '../../shared/components';
 import type { IconName } from '../../shared/components';
 import { cx } from '../../shared/cx';
@@ -57,8 +58,6 @@ import { ContactPanel } from '../components/ContactPanel';
 import { LiveCaseCard } from '../components/LiveCaseCard';
 import { ABANDON_ARM_MS, abandonPress } from './abandonPress';
 import { IntelLine, MissionCallLine } from '../components/RunNotices';
-import { ScreenStatus } from '../components/ScreenStatus';
-import { OFFICER_HEADS } from './screenHead';
 import './MissionBoard.css';
 import './ActiveMission.css';
 
@@ -760,11 +759,7 @@ export default function ActiveMission() {
 
     if (!view) {
         return (
-            <Screen
-                title={t(OFFICER_HEADS.active.title)}
-                subtitle={t(OFFICER_HEADS.active.help)}
-                className="run_ui-active"
-            >
+            <Screen head="active" className="run_ui-active">
                 {!loadedOnce ? <ScreenStatus state="loading" onRetry={() => void refetch()} /> : null}
                 {loadedOnce && error ? (
                     <ScreenStatus state="error" error={error} onRetry={() => void refetch()} />
@@ -824,7 +819,7 @@ export default function ActiveMission() {
 
     return (
         <Screen
-            title={t(OFFICER_HEADS.active.title)}
+            head="active"
             subtitle={view.state === 'in_progress' ? t('run.subtitle_in_progress') : t('run.subtitle_accepted')}
             className="run_ui-active"
             actions={

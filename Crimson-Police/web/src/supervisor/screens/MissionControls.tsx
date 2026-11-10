@@ -4,7 +4,7 @@
 // controls an admin switched on (sup:getMissionControls), grouped, each with the config value, the value in use, an
 // editor by kind, Back to config, who changed it and when, and the change-wait countdown. Every save asks for a
 // reason (server:sup:setMissionControl / server:sup:resetMissionControl). Live: push 'missionControls'.
-// header and load states from supHead.ts (SUP_HEADS) and officer ScreenStatus; each group card has a help
+// header and load states from shared/screenHeads.ts and ScreenStatus; each group card has a help
 // line (SUP_GROUP_HELP, sup.controls.group_help.<group>). Review Queue uses the same. Walk: supHead.walk.ts.
 // Inline use (MG3, the old 'Your controls today' card): sup:getMyControls gives each control the supervisor may use
 // now the admin's limits and today's use against its per-day count, shown on its row; the controls used from their
@@ -25,6 +25,7 @@ import {
     SegmentedControl,
     Textarea,
     Toggle,
+    ScreenStatus,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { fmtDateTime, formatDuration } from '../../shared/format';
@@ -50,9 +51,8 @@ import { ReasonChips } from '../../admin/components/ReasonChips';
 import { useAdminAction } from '../../admin/components/kit';
 import { ActionControlsCard } from '../components/MyControlsCard';
 import { actionControlRows, myControlRows, type MyControlRow } from '../components/myControls';
-import { ScreenStatus } from '../../officer/components/ScreenStatus';
-import { screenStateOf } from '../../officer/screens/screenHead';
-import { SUP_GROUP_HELP, SUP_HEADS } from './supHead';
+import { screenStateOf } from '../../shared/screenHeads';
+import { SUP_GROUP_HELP } from './supHead';
 import './MissionControls.css';
 
 const REASON_MAX = 255;
@@ -1035,9 +1035,8 @@ export default function MissionControls() {
 
     return (
         <Screen
-            title={t(SUP_HEADS.controls.title)}
+            head="sup_controls"
             subtitle={t('sup.controls.subtitle')}
-            help={t(SUP_HEADS.controls.help)}
             className="sup-mc"
             actions={
                 <Button size="sm" variant="ghost" icon="refresh" disabled={loading} onClick={reload}>

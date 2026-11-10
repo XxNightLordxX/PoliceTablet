@@ -64,6 +64,17 @@ names the change it came with.
 - [ ] Dispatch open: a call claimed by another unit updates within about a second. A HUD countdown steps once a
   second and ends on time.
 
+## One look on every tablet
+
+- [ ] Open every screen of the officer tablet, the Supervisor UI and the Admin UI: each shows its name, then one
+  short line of help under it, with the same spacing, cards, tables and buttons on every screen. Admin Money and
+  Supervisor Department show the line on each tab. (UI1)
+- [ ] `/crimtab` (criminal tablet on): the dark street look stays (acid green, typewriter font, square corners);
+  every screen shows its name and one line of help; History lists the cases in a table with When, Mission, Suspect and
+  Outcome; Stop volunteering and Give up still take two clicks. (UI1)
+- [ ] Supervisor Department -> Training: End training still takes two clicks. Admin Payments, Officers, Leaderboards
+  and Real suspects: the page buttons under the lists work as before. (UI1)
+
 ## Supervisor
 
 - [ ] As a SAST sergeant (master switch off, as shipped): Supervisor -> Mission controls is in the sidebar; Mission cooldowns -> Tactical x0.5, Save with a reason: the row shows "Changed by" and the change wait counts down. (P5)

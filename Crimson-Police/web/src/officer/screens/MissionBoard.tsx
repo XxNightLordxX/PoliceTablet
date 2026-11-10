@@ -28,6 +28,7 @@ import {
     ProgressBar,
     Screen,
     Toggle,
+    ScreenStatus,
 } from '../../shared/components';
 import type { IconName } from '../../shared/components';
 import { cx } from '../../shared/cx';
@@ -52,8 +53,7 @@ import type { BoardCallsInfo } from '../../types/missioncalls';
 import { HappyHourBanner } from '../components/HappyHourBanner';
 import { CallsOpenLink, DailyLimitBadge, readyCheckSentText } from '../components/MissionCallsLink';
 import { TwistPicker, tickedTwists } from '../components/TwistPicker';
-import { ScreenStatus } from '../components/ScreenStatus';
-import { OFFICER_HEADS, screenStateOf } from './screenHead';
+import { screenStateOf } from '../../shared/screenHeads';
 import { arrangeTypeCards, typeKeys } from './boardOrder';
 import './MissionBoard.css';
 
@@ -896,7 +896,7 @@ export default function MissionBoard() {
 
     return (
         <Screen
-            title={t(OFFICER_HEADS.board.title)}
+            head="board"
             subtitle={operation ? t('board.subtitle_operation') : t('board.subtitle')}
             className="run_ui-board"
         >

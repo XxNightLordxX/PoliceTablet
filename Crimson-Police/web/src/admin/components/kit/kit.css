@@ -1,17 +1,4 @@
 /* Admin kit */
-.admin-kit-pager {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 8px 0;
-}
-
-.admin-kit-pager__text {
-    color: var(--cp-muted);
-    font-size: 13px;
-}
-
 .admin-kit-dates {
     display: flex;
     align-items: center;

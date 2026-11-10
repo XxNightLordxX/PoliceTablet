@@ -35,9 +35,5 @@ export function MoneyFunds() {
                 ))}
             </Grid>
         );
-    return (
-        <Screen title={t('admin.money.tab.funds')} subtitle={t('admin.money.funds_help')}>
-            {body}
-        </Screen>
-    );
+    return <Screen head="admin_funds">{body}</Screen>;
 }

@@ -13,14 +13,14 @@ import teams from '../../../../locales/parts/teams.json';
 import ui from '../../../../locales/parts/ui.json';
 import { readyToSign } from '../components/FieldTrainingCard';
 import { LiveCaseCard, stepIndex } from '../components/LiveCaseCard';
-import { ScreenStatus } from '../components/ScreenStatus';
+import { ScreenStatus } from '../../shared/components';
 import type { FtoTask, FtoView } from '../../types/fieldTraining';
 import challengeSrc from './Challenge.tsx?raw';
 import leaderboardSrc from './Leaderboard.tsx?raw';
 import optionsSrc from './MyOptions.tsx?raw';
 import profileSrc from './Profile.tsx?raw';
 import unitSrc from './Unit.tsx?raw';
-import { OFFICER_HEADS } from './screenHead';
+import { SCREEN_HEADS } from '../../shared/screenHeads';
 
 const failures: string[] = [];
 let passed = 0;
@@ -54,29 +54,27 @@ function task(type: string, ready: boolean, signed = false): FtoTask {
 
 function steps(): void {
     // the four part 2 screens: heads in the locale, help one short line, shared heads and state lines
-    const sources: [keyof typeof OFFICER_HEADS, string][] = [
+    const sources: [keyof typeof SCREEN_HEADS, string][] = [
         ['unit', unitSrc],
         ['profile', profileSrc],
         ['leaderboard', leaderboardSrc],
         ['options', optionsSrc],
     ];
     for (const [key, src] of sources) {
-        const head = OFFICER_HEADS[key];
+        const head = SCREEN_HEADS[key];
         ok(head, `${key}: has a head`);
         if (!head) continue;
         ok(typeof locale[head.title] === 'string' && locale[head.title].length > 0, `${key}: title in the locale`);
         const help = locale[head.help];
         ok(typeof help === 'string' && help.length > 0, `${key}: help in the locale`);
         ok(typeof help === 'string' && !help.includes('\n') && help.length <= 120, `${key}: help is one short line`);
-        ok(src.includes(`OFFICER_HEADS.${key}.title`), `${key}: title from OFFICER_HEADS`);
-        ok(src.includes(`OFFICER_HEADS.${key}.help`), `${key}: help from OFFICER_HEADS`);
+        ok(new RegExp(`<Screen\\s+head="${key}"`).test(src), `${key}: title and help from its head`);
         ok(src.includes('<ScreenStatus'), `${key}: ScreenStatus for its load states`);
         ok(!src.includes('<LoadingBlock') && !src.includes('<ErrorState'), `${key}: no own loading or error block`);
     }
 
     // Challenge: the same head and load states; its contributors dialog keeps its own compact error line
-    ok(challengeSrc.includes('OFFICER_HEADS.challenge.title'), 'challenge: title from OFFICER_HEADS');
-    ok(challengeSrc.includes('OFFICER_HEADS.challenge.help'), 'challenge: help from OFFICER_HEADS');
+    ok(/<Screen\s+head="challenge"/.test(challengeSrc), 'challenge: title and help from its head');
     ok(challengeSrc.includes('<ScreenStatus') && !challengeSrc.includes('<LoadingBlock'), 'challenge: ScreenStatus');
     ok(typeof locale['ui.help.challenge'] === 'string' && locale['ui.help.challenge'].length <= 120, 'challenge: help');
 

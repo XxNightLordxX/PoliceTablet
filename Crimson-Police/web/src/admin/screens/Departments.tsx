@@ -39,7 +39,6 @@ import { DepartmentFunds } from '../components/DepartmentFunds';
 import { DepartmentDialog, DepartmentTools, DesksPanel } from '../components/DepartmentAdmin';
 import type { DepartmentSetting, DepartmentSetup } from '../../types/admin_system';
 import type { DepartmentView, DepartmentsData } from '../../types/oversight';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Departments.css';
 import '../components/access-admin.css';
 
@@ -348,7 +347,6 @@ function DeptCard({
 type Panel = 'departments' | 'desks';
 
 export default function AdminDepartments() {
-    const screenTitle = useAdminTitle('admin_departments');
     const session = useSession();
     const { data, loading, error, refetch } = useRequest<DepartmentsData>('admin:getDepartments', {});
     const setup = useRequest<DepartmentSetup>('admin:getDepartmentSetup', {}, { pushTopic: 'settings' });
@@ -410,7 +408,7 @@ export default function AdminDepartments() {
 
     return (
         <Screen
-            title={screenTitle}
+            head="admin_departments"
             subtitle={showSociety ? t('admin.depts.subtitle_society') : t('admin.depts.subtitle')}
             actions={
                 <>

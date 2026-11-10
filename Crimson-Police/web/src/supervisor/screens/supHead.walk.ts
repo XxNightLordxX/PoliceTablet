@@ -17,7 +17,8 @@ import { actionControlRows, myControlRow, myControlRows } from '../components/my
 import reportSrc from './DeptReport.tsx?raw';
 import controlsSrc from './MissionControls.tsx?raw';
 import reviewSrc from './ReviewQueue.tsx?raw';
-import { SUP_GROUP_HELP, SUP_HEADS } from './supHead';
+import { SCREEN_HEADS } from '../../shared/screenHeads';
+import { SUP_GROUP_HELP } from './supHead';
 
 const failures: string[] = [];
 let passed = 0;
@@ -40,15 +41,15 @@ export async function walk(): Promise<{ passed: number; failures: string[] }> {
 
 function steps(): void {
     // headers and load states: Mission controls and Review Queue
-    const sources: [keyof typeof SUP_HEADS, string][] = [
-        ['controls', controlsSrc],
-        ['review', reviewSrc],
+    const sources: ['sup_controls' | 'sup_review', string][] = [
+        ['sup_controls', controlsSrc],
+        ['sup_review', reviewSrc],
     ];
     for (const [key, src] of sources) {
-        const head = SUP_HEADS[key];
+        const head = SCREEN_HEADS[key];
         ok(line(head.title), `${key}: title in the locale`);
         ok(line(head.help) && locale[head.help].length <= 120, `${key}: help is one short line`);
-        ok(src.includes(`SUP_HEADS.${key}.title`) && src.includes(`SUP_HEADS.${key}.help`), `${key}: SUP_HEADS`);
+        ok(new RegExp(`<Screen\\s+head="${key}"`).test(src), `${key}: title and help from its head`);
         ok(src.includes('<ScreenStatus'), `${key}: ScreenStatus for its load states`);
         ok(!src.includes('<LoadingBlock') && !src.includes('<ErrorState'), `${key}: no own loading or error block`);
     }

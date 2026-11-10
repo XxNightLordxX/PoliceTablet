@@ -441,14 +441,14 @@ function FullDeptReport() {
 
     if (!data && loading) {
         return (
-            <Screen title={t('ui.screen.sup_report')}>
+            <Screen head="sup_report">
                 <LoadingBlock />
             </Screen>
         );
     }
     if (!data) {
         return (
-            <Screen title={t('ui.screen.sup_report')}>
+            <Screen head="sup_report">
                 <ErrorState error={error ?? 'err.internal'} onRetry={() => void refetch()} />
             </Screen>
         );
@@ -456,7 +456,7 @@ function FullDeptReport() {
 
     return (
         <Screen
-            title={t('ui.screen.sup_report')}
+            head="sup_report"
             subtitle={t('sup.report.subtitle', {
                 dept: dept?.label ?? session.officer?.departmentLabel ?? '',
                 from: formatDay(data.week?.key),

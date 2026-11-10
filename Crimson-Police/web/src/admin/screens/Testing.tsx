@@ -69,7 +69,6 @@ import { useAdminAction } from '../components/kit';
 import { SpawnCheckDialog, type SpawnCheckPreset } from '../components/SpawnCheckDialog';
 import { useSpawnCheck } from '../components/spawnCheckStore';
 import type { TestHistory } from '../../types/admin_missions';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Testing.css';
 
 // ============================================================================
@@ -1407,7 +1406,6 @@ function ResultsDialog({
 }
 
 export default function AdminTesting() {
-    const screenTitle = useAdminTitle('admin_testing');
     const [markOf, setMarkOf] = useState<{ m: TestMissionRow; loc: TestLocationRow } | null>(null);
     const [resultsOf, setResultsOf] = useState<{ m: TestMissionRow; loc: TestLocationRow } | null>(null);
     const adminAct = useAdminAction();
@@ -1462,8 +1460,8 @@ export default function AdminTesting() {
 
     return (
         <Screen
+            head="admin_testing"
             className="testing-screen"
-            title={screenTitle}
             subtitle={t('test.ui.subtitle')}
             actions={
                 <>

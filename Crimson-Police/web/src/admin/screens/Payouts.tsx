@@ -42,7 +42,6 @@ import type { PayoutAdjustPreview, PayoutAdjustRow } from '../../types/admin_eco
 import type { AdminPayoutMission, AdminPayoutType, AdminPayoutsView } from '../../types/economy';
 import { PreviewTable, useAdminAction } from '../components/kit';
 import { ReasonChips } from '../components/ReasonChips';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Payouts.css';
 
 const REASON_MAX = 255;
@@ -417,7 +416,6 @@ function AdjustDialog({ open, onClose, onDone }: { open: boolean; onClose: () =>
 }
 
 export default function AdminPayouts() {
-    const screenTitle = useAdminTitle('admin_payouts');
     const { data, loading, error, refetch } = useRequest<AdminPayoutsView>(
         'admin:getPayouts',
         {},
@@ -690,7 +688,7 @@ export default function AdminPayouts() {
 
     return (
         <Screen
-            title={screenTitle}
+            head="admin_payouts"
             subtitle={t('admin.payouts.subtitle')}
             actions={
                 data ? (
@@ -709,7 +707,7 @@ export default function AdminPayouts() {
             }
             className="economy-admin-payouts"
         >
-            <Tabs items={tabs} value={tab} onChange={setTab} aria-label={screenTitle} />
+            <Tabs items={tabs} value={tab} onChange={setTab} aria-label={t('ui.nav.plain.admin_payouts')} />
 
             {data && (data.outOfRange ?? 0) > 0 ? (
                 <Card highlight="warning" padding="sm">

@@ -40,7 +40,6 @@ import { formatDay } from '../../officer/screens/Leaderboard';
 import { SeasonDetailDialog, SeasonTools } from '../components/boards/SeasonTools';
 import { request } from '../../shared/nui';
 import type { SeasonEndPreview } from '../../types/admin_officers';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Seasons.css';
 
 function SeasonFacts({
@@ -79,7 +78,6 @@ function SeasonFacts({
 }
 
 export default function AdminSeasons() {
-    const screenTitle = useAdminTitle('admin_seasons');
     const { data, loading, error, refetch } = useRequest<SeasonsAdmin>('admin:getSeasons', {}, { pollMs: 60000 });
     const { run, busy } = useAction();
     const [startOpen, setStartOpen] = useState(false);
@@ -250,14 +248,14 @@ export default function AdminSeasons() {
 
     if (!data && loading) {
         return (
-            <Screen title={screenTitle}>
+            <Screen head="admin_seasons">
                 <LoadingBlock />
             </Screen>
         );
     }
     if (!data) {
         return (
-            <Screen title={screenTitle}>
+            <Screen head="admin_seasons">
                 <ErrorState error={error ?? 'err.internal'} onRetry={() => void refetch()} />
             </Screen>
         );
@@ -265,7 +263,7 @@ export default function AdminSeasons() {
 
     return (
         <Screen
-            title={screenTitle}
+            head="admin_seasons"
             subtitle={t('admin.seasons.subtitle')}
             actions={
                 <>

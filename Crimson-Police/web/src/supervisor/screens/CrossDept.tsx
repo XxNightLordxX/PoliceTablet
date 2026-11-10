@@ -11,7 +11,7 @@ import OperationPanel from '../components/OperationPanel';
 
 export default function SupCrossDept() {
     return (
-        <Screen title={t('ui.screen.sup_crossdept')} subtitle={t('sup.crossdept.screen_subtitle')}>
+        <Screen head="sup_crossdept" subtitle={t('sup.crossdept.screen_subtitle')}>
             <OperationPanel scope="sup" />
         </Screen>
     );

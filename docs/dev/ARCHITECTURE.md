@@ -3631,7 +3631,7 @@ interface AdminTodayData { day; todEnabled; typeOfTheDay: string | null; typeLab
 ```
 
 The admin kit (web/src/admin/components/kit): `useAdminAction()` (`run(name, payload, { requestId? })` adds a fresh
-`requestId`), `newRequestId()`, `OfficerPicker`, `DateRangeField`, `Pager`, `PreviewTable`, `JobProgress` /
+`requestId`), `newRequestId()`, `OfficerPicker`, `DateRangeField`, `PreviewTable`, `JobProgress` /
 `useAdminJob(jobId)`, `MoneyEffect`, `RowsEditor` (on `SettingView.rows`). `ConfirmDialog` takes `effect` and
 `typedWord` (Confirm stays off until the word matches; `onConfirm(reason, typed)`). `MaintenanceBanner` shows on every
 UI; `useMaintenance()` (shared/session.tsx) follows the session and the push. New admin screens: `admin_money`,
@@ -3895,21 +3895,32 @@ Formatting (`shared/format.ts`): `formatMoney(1040)` → `$1,040`, `formatNumber
 `applyTheme(el, theme)` (`shared/theme.ts`) validates 6-digit hex per key (default: the Crimson-Police theme `#a4161a
 / #e5383b / #0b090a / #161a1d / #f5f3f4`) and sets.
 
+One design system for the four tablets (officer, supervisor, admin, criminal): `styles/base.css` holds the tokens
+(colours `--cp-*`, spacing `--cp-space-1..8` in 4px steps, type `--cp-fs-*`, radii `--cp-radius-*`) and every
+screen is built from `shared/components` only. A tablet theme sets only the colour tokens: the department theme and
+the admin theme through `applyTheme()`, the criminal tablet's dark street theme with the class `.cp-theme-street`
+(its colours, square corners and typewriter font; `criminal/criminal.css` keeps only its frame, header and side tabs).
+Every screen's header comes from `shared/screenHeads.ts`: `<Screen head="key">` shows the head's title and its one line
+of help (`ui.help.*`, `crimtab.help.*`); a screen made of tabs (Admin Money, Supervisor Department) gives each tab a
+head. `shared/designSystem.walk.ts` checks that every `<Screen>` passes its head first.
+
 ### 12.6 Components (`shared/components`)
 | Component | Props |
 |---|---|
 | `Button` | `variant` primary\|secondary\|ghost\|danger, `size` sm\|md, `loading`, `icon`, `iconRight`, `block`, button attrs |
 | `IconButton` | `icon`, `label` (required, aria + tooltip), `variant`, `size`, `loading` |
 | `Card` | `title`, `subtitle`, `icon`, `actions` (header slot), `footer`, `padding` none\|sm\|md\|lg, `highlight` primary\|accent\|success\|warning\|danger, `muted`, `onClick` (becomes keyboard-clickable) |
-| `Screen` | `title`, `subtitle`, `help` (one muted line under the subtitle), `actions` — standard page wrapper for every screen |
+| `Screen` | `head` (a `shared/screenHeads.ts` key: its title and one line of help), `title` / `help` (override the head's), `subtitle`, `actions` — the page header of every screen of every tablet |
 | `Section` | `title`, `description`, `actions` |
 | `Grid` / `Stack` / `Row` / `Spacer` / `Divider` / `KeyValue` | `Grid cols={3}\|"2fr 1fr"`, `min={220}` (auto-fill), `gap` (4px steps); `Stack direction gap align justify wrap grow` |
 | `Badge` | `tone` neutral\|primary\|accent\|success\|warning\|danger\|grey\|bronze\|silver\|gold\|platinum, `variant` soft\|solid\|outline, `size`, `icon`, `dot` |
 | `TierBadge` | `tier` (standard…critical), `label?`, `expected?`, `size` |
 | `XpBadge` | `badge` (Config.XPLevels colour), `label` |
 | `Tabs` / `SegmentedControl` | `items [{ key, label, icon?, badge?, disabled? }]`, `value`, `onChange`; arrow keys move |
-| `Table` | `columns [{ key, header, render?, width?, align?, numeric? }]`, `rows`, `rowKey?`, `onRowClick?`, `highlightRow?`, `empty?`, `loading?`, `stickyHeader` (default true), `maxHeight?`, `dense?`, `footer?` |
+| `Table` | `columns [{ key, header, render?, width?, align?, numeric?, sortable?, sortValue? }]`, `rows`, `rowKey?`, `onRowClick?`, `highlightRow?`, `empty?`, `loading?`, `stickyHeader` (default true), `maxHeight?`, `dense?`, `footer?`, `filter` (true or `{ text, placeholder }`: a search box over the rows), `pageSize` (client pages with the Pager), `defaultSort` |
+| `Pager` | `page`, `pages`, `onPage`, `disabled` — previous / next and "page n of m" (nothing for one page) |
 | `Dialog` | `open`, `onClose`, `title`, `description`, `footer`, `size` sm\|md\|lg, `dismissible` — renders inside the tablet, Escape closes it first |
+| `ConfirmButton` | `label`, `confirmLabel`, `onConfirm`, `variant` (before), `armedVariant` (default danger), button props — two clicks within 3 s (`CONFIRM_ARM_MS`) |
 | `ConfirmDialog` | `open`, `title`, `message`, `confirmLabel`, `tone` primary\|danger, `reason` (true or `{ label, placeholder, required, maxLength }`), `onConfirm(reason)` (may return a Promise → spinner), `onCancel`, `busy` |
 | `Field` | `label`, `hint`, `error`, `required`, `inline` — wires ids/aria for the control inside |
 | `TextInput` / `SearchInput` | `value`, `onChange(string)`, `prefix`, `suffix`, `invalid`, `onEnter`, input attrs |
@@ -3924,7 +3935,8 @@ Formatting (`shared/format.ts`): `formatMoney(1040)` → `$1,040`, `formatNumber
 | `Money` / `MoneyRange` / `Points` | `amount`, `sign` / `range [min, max]` → `$1,040–$1,300` / `value`, `sign`, `suffix` |
 | `Icon` | `name` (see `ICON_NAMES`), `size`, `label` |
 | `Watermark` / `DeptLogo` | `logo`, `department` — used by the layouts; hide on load error and report `logoFailed` |
-| `Toasts`, `ErrorBoundary`, `ScreenStub`, `LayerRootContext` | used by App/layouts |
+| `ScreenStatus` | `state` (`screenStateOf(hasData, loading, error)`, shared/screenHeads.ts), `error`, `onRetry`, `loadingText` — the loading, error, empty and stale lines |
+| `Toasts`, `ErrorBoundary`, `LayerRootContext` | used by App/layouts |
 
 ### 12.7 Browser dev mode
 `npm run dev` and open http://localhost:5173.

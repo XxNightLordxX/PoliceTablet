@@ -75,7 +75,6 @@ import type { MissionListEntry } from '../../types/oversight';
 import { MissionsToday } from '../components/MissionsToday';
 import type { AdminMissionsData } from '../../types/builder_client';
 import type { MissionSwitchView } from '../../types/settings';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Settings.css';
 import './Missions.css';
 
@@ -130,7 +129,6 @@ type Confirm =
 let handledNewParams: unknown = null;
 
 export default function AdminMissions() {
-    const screenTitle = useAdminTitle('admin_missions');
     const can = useCan();
     const [tab, setTabState] = useState<Tab>(
         () => editorMemory('admin').tab ?? (editorMemory('admin').openId ? 'builder' : 'catalog'),
@@ -772,7 +770,7 @@ export default function AdminMissions() {
 
     return (
         <Screen
-            title={screenTitle}
+            head="admin_missions"
             subtitle={t('admin.missions.subtitle')}
             className="builder_client-screen"
             actions={
@@ -898,7 +896,7 @@ export default function AdminMissions() {
                             rowClassName={r => (r.loadError ? 'is-muted' : undefined)}
                             onRowClick={r => setDrawerOf(r.id)}
                             empty={t('admin.missions.none')}
-                            aria-label={screenTitle}
+                            aria-label={t('ui.nav.plain.admin_missions')}
                         />
                     </>
                 )

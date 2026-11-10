@@ -336,7 +336,7 @@ export default function SupLiveMissions() {
 
     return (
         <Screen
-            title={t('ui.screen.sup_live')}
+            head="sup_live"
             subtitle={
                 isAdminView
                     ? t('sup.live.subtitle_all')

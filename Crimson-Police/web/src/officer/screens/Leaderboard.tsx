@@ -20,6 +20,7 @@ import {
     Table,
     Tabs,
     type TableColumn,
+    ScreenStatus,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { fmtDate, fmtDateTime, formatNumber } from '../../shared/format';
@@ -30,8 +31,7 @@ import { useNavigate } from '../../shared/navigation';
 import { useSession } from '../../shared/session';
 import type { Session } from '../../shared/types';
 import { asList, type BoardPeriod, type BoardRowView, type BoardView } from '../../types/boards';
-import { ScreenStatus } from '../components/ScreenStatus';
-import { OFFICER_HEADS, screenStateOf } from './screenHead';
+import { screenStateOf } from '../../shared/screenHeads';
 import './Leaderboard.css';
 
 export const BOARD_PERIODS: BoardPeriod[] = ['weekly', 'monthly', 'season', 'alltime'];
@@ -316,9 +316,8 @@ export default function Leaderboard() {
 
     return (
         <Screen
-            title={t(OFFICER_HEADS.leaderboard.title)}
+            head="leaderboard"
             subtitle={windowText(board, period) || t('leaderboard.subtitle')}
-            help={t(OFFICER_HEADS.leaderboard.help)}
             actions={
                 <>
                     {board ? (

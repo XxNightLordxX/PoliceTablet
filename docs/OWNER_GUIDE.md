@@ -1304,7 +1304,8 @@ CP_FOREIGN_REPORT=1 lua5.4 tests/run.lua foreign_sites   # also lists every miss
 
 ### 5.1 The officer's tablet
 
-The tablet uses the officer's department colours and logo. Eight screens on the left:
+The tablet uses the officer's department colours and logo. Every screen of every tablet (officer, supervisor,
+admin and criminal) shows its name with one short line of help under it. Eight screens on the left:
 
 | Screen | What is on it |
 |---|---|
@@ -2231,7 +2232,7 @@ For staff:
 ### 6.5 The criminal tablet
 
 A tablet of its own for volunteer suspects (`Config.CriminalTablet`), with a dark street look nothing like
-the police tablet. It ships **off** (`enabled = false`): until you turn it on, nothing changes and `/crimsonheat`
+the police tablet (the same buttons, cards and tables as the police tablets, in its own colours). It ships **off** (`enabled = false`): until you turn it on, nothing changes and `/crimsonheat`
 keeps its pop-up menu. It runs on volunteers, so `Config.Volunteers.enabled` must be on too.
 
 - **Open it** with `/crimtab` (`command`, restart to rename it) or an ox_inventory item: paste the

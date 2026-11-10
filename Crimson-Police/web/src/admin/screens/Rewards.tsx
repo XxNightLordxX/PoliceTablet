@@ -37,7 +37,6 @@ import {
     type RewardRow,
 } from '../components/rewardsScreen';
 import { Editor, mergeSettingsReply, useSettingSave, type SavePayload } from './Settings';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Rewards.css';
 
 type Save = (s: SettingView, p: SavePayload) => Promise<boolean>;
@@ -219,7 +218,6 @@ function Row({
 }
 
 export default function AdminRewards() {
-    const screenTitle = useAdminTitle('admin_rewards');
     const { data, loading, error, refetch, setData } = useRequest<SettingsData>(
         'admin:getSettings',
         {},
@@ -239,7 +237,7 @@ export default function AdminRewards() {
     if (error && !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
     return (
-        <Screen title={screenTitle} subtitle={t('admin.rewards_screen.subtitle')}>
+        <Screen head="admin_rewards" subtitle={t('admin.rewards_screen.subtitle')}>
             {items ? (
                 <Card
                     title={t('admin.rewards_screen.items_title')}

@@ -37,6 +37,7 @@ import {
     Textarea,
     TextInput,
     type TableColumn,
+    Pager,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { formatDateTime, formatMoney, formatNumber } from '../../shared/format';
@@ -66,10 +67,9 @@ import { ItemRewardsPanel } from '../components/ItemRewardsPanel';
 import { BulkVoidDialog } from '../components/BulkVoidDialog';
 import { RecognitionPanel } from '../components/boards/RecognitionPanel';
 import { RunDialog } from '../components/officers/OfficerRuns';
-import { Pager, newRequestId } from '../components/kit';
+import { newRequestId } from '../components/kit';
 import { ReasonChips } from '../components/ReasonChips';
 import type { OfficerPoints } from '../../types/admin_officers';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Leaderboards.css';
 
 const AWARD_MAX = 10000; // modules/corrections: -10,000 to +10,000 points per adjustment (not 0)
@@ -275,7 +275,6 @@ function ViewTabs({ value, onChange }: { value: AdminBoardsView; onChange: (v: A
 }
 
 export default function AdminLeaderboards() {
-    const screenTitle = useAdminTitle('admin_leaderboards');
     const session = useSession();
     const { run, busy } = useAction();
     const departments = asList(session.config?.departments);
@@ -581,7 +580,7 @@ export default function AdminLeaderboards() {
     if (view === 'recognition') {
         return (
             <Screen
-                title={screenTitle}
+                head="admin_leaderboards"
                 subtitle={t('ui.admin_officers.recognition.subtitle')}
                 className="boards-admin-boards"
             >
@@ -593,7 +592,7 @@ export default function AdminLeaderboards() {
 
     if (view === 'rewards') {
         return (
-            <Screen title={screenTitle} subtitle={t('admin.rewards.subtitle')} className="boards-admin-boards">
+            <Screen head="admin_leaderboards" subtitle={t('admin.rewards.subtitle')} className="boards-admin-boards">
                 <ViewTabs value={view} onChange={setView} />
                 <ItemRewardsPanel />
             </Screen>
@@ -602,7 +601,7 @@ export default function AdminLeaderboards() {
 
     return (
         <Screen
-            title={screenTitle}
+            head="admin_leaderboards"
             subtitle={t('admin.boards.subtitle')}
             actions={
                 <>
@@ -785,7 +784,7 @@ export default function AdminLeaderboards() {
                                     ? t('leaderboard.empty_text', { n: board?.minRuns ?? 3 })
                                     : t('admin.boards.unranked_empty')
                         }
-                        aria-label={screenTitle}
+                        aria-label={t('ui.nav.plain.admin_leaderboards')}
                     />
                     <div className="boards-admin-side">
                         <FlaggedPanel

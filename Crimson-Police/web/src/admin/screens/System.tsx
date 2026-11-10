@@ -46,7 +46,6 @@ import type {
     WebhookView,
 } from '../../types/admin_system';
 import type { CleanupView } from '../../types/admin_economy';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './System.css';
 
 type Panel = 'storage' | 'backups' | 'webhooks' | 'problems' | 'integrations' | 'cleanup';
@@ -827,7 +826,6 @@ function CleanupPanel() {
 }
 
 export default function AdminSystem() {
-    const screenTitle = useAdminTitle('admin_system');
     const [panel, setPanel] = useState<Panel>('storage');
     // another screen (Home's Needs attention) opens a tab with navigate('admin_system', { tab })
     const { params } = useNavigation();
@@ -842,7 +840,7 @@ export default function AdminSystem() {
     else if (panel === 'cleanup') body = <CleanupPanel />;
     else body = <IntegrationsPanel />;
     return (
-        <Screen title={screenTitle} subtitle={t('sysadmin.ui.subtitle')} className="system-screen">
+        <Screen head="admin_system" subtitle={t('sysadmin.ui.subtitle')} className="system-screen">
             <Tabs<Panel>
                 value={panel}
                 onChange={setPanel}

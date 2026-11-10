@@ -32,6 +32,7 @@ import {
     Textarea,
     type BadgeTone,
     type TableColumn,
+    Pager,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { formatDateTime } from '../../shared/format';
@@ -50,7 +51,7 @@ import type {
     RsSuspect,
     RsTool,
 } from '../../types/admin_rs';
-import { Pager } from '../components/kit';
+
 import { ReasonChips } from '../components/ReasonChips';
 import {
     RS_CLEAR_STRIKES_ACTION,
@@ -71,7 +72,6 @@ import {
     type RsCaseFilter,
     type RsToolForm,
 } from '../components/realSuspects';
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './RealSuspects.css';
 
 type Tab = 'cases' | 'pairs' | 'volunteers';
@@ -915,7 +915,6 @@ function VolunteersTab({ req: { data, loading, error, refetch } }: { req: UseReq
 }
 
 export default function RealSuspects() {
-    const screenTitle = useAdminTitle('admin_rs');
     const [tab, setTab] = useState<Tab>('cases');
     const [openRun, setOpenRun] = useState<string | null>(null);
     const [tool, setTool] = useState<Partial<RsToolForm> | null>(null);
@@ -925,7 +924,7 @@ export default function RealSuspects() {
     const cases = useRequest<RsCasesData>('admin:getRsCases', { page: casesPage, filter: caseFilter });
     const data = cases.data;
     return (
-        <Screen title={screenTitle} subtitle={t('rs.ui.subtitle')}>
+        <Screen head="admin_rs" subtitle={t('rs.ui.subtitle')}>
             {data && !data.enabled ? (
                 <div className="rs-banner" role="status">
                     <Icon name="info" size={16} />
@@ -933,7 +932,7 @@ export default function RealSuspects() {
                 </div>
             ) : null}
             <Tabs<Tab>
-                aria-label={screenTitle}
+                aria-label={t('ui.nav.plain.admin_rs')}
                 items={[
                     { key: 'cases', label: t('rs.ui.cases'), icon: 'activity' },
                     { key: 'pairs', label: t('rs.ui.pairs_tab'), icon: 'users' },

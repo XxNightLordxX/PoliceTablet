@@ -1,15 +1,5 @@
-// Supervisor screens inside: Mission controls and Review Queue use the Officer UI's header (title, then one
-// line of help) and load states (officer/screens/screenHead, ScreenStatus); each Mission controls group card says what
-// its task is. Display only. Checked by supHead.walk.ts.
-
-import type { OfficerHead } from '../../officer/screens/screenHead';
-
-export type SupHeadKey = 'controls' | 'review';
-
-export const SUP_HEADS: Record<SupHeadKey, OfficerHead> = {
-    controls: { title: 'ui.screen.sup_controls', help: 'ui.help.sup_controls' },
-    review: { title: 'ui.screen.sup_review', help: 'ui.help.sup_review' },
-};
+// Supervisor UI · Mission controls: the one line of help under each group's title (MissionControls.tsx GROUPS).
+// The screen headers of the supervisor screens are in shared/screenHeads.ts. Checked by supHead.walk.ts.
 
 // The Mission controls groups (MissionControls.tsx GROUPS): the one line under each group's title.
 export const SUP_GROUP_HELP = {

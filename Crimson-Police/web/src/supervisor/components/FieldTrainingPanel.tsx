@@ -5,30 +5,19 @@
 // End training (two clicks). The server checks every rule again. Nothing shows while the feature is off. a
 // Pairings heading with the count, and the stale line when a refresh fails.
 
-import { useEffect, useRef, useState } from 'react';
-import { Button, Card, Dialog, EmptyState, Field, Select } from '../../shared/components';
+import { useState } from 'react';
+import { Button, Card, ConfirmButton, Dialog, EmptyState, Field, Select, ScreenStatus } from '../../shared/components';
 import { useAction, useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { asList } from '../../types/boards';
 import type { FtoDept, FtoView } from '../../types/fieldTraining';
 import { FtoProgress, FtoTaskList } from '../../officer/components/FieldTrainingCard';
-import { ScreenStatus } from '../../officer/components/ScreenStatus';
-import { screenStateOf } from '../../officer/screens/screenHead';
+import { screenStateOf } from '../../shared/screenHeads';
 import '../../officer/components/ProfileCards.css';
 
 function EndButton({ view, onDone }: { view: FtoView; onDone: () => void }) {
     const { run, busy } = useAction();
-    const [armed, setArmed] = useState(false);
-    const timer = useRef<number | undefined>(undefined);
-    useEffect(() => () => window.clearTimeout(timer.current), []);
-    const click = async () => {
-        if (!armed) {
-            setArmed(true);
-            timer.current = window.setTimeout(() => setArmed(false), 3000);
-            return;
-        }
-        window.clearTimeout(timer.current);
-        setArmed(false);
+    const end = async () => {
         const res = await run(
             'server:sup:ftoUnpair',
             { rookie: view.rookie.citizenid },
@@ -37,9 +26,15 @@ function EndButton({ view, onDone }: { view: FtoView; onDone: () => void }) {
         if (res.ok) onDone();
     };
     return (
-        <Button size="sm" variant={armed ? 'danger' : 'ghost'} icon="x" loading={busy} onClick={() => void click()}>
-            {t(armed ? 'fto.unpair_confirm' : 'fto.unpair')}
-        </Button>
+        <ConfirmButton
+            size="sm"
+            variant="ghost"
+            icon="x"
+            loading={busy}
+            label={t('fto.unpair')}
+            confirmLabel={t('fto.unpair_confirm')}
+            onConfirm={() => void end()}
+        />
     );
 }
 

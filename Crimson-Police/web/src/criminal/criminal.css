@@ -1,15 +1,9 @@
-/* The criminal tablet: a dark street look of its own, nothing like the police tablet. No blur and no
-   running animation (CEF cost); the frame is the police tablet's size and scale. */
+/* The criminal tablet: the frame, header and side tabs of its dark street look. Everything inside is the shared
+   components in the street theme (.cp-theme-street, styles/base.css: its colours, corners and font), with the few
+   street touches below. No blur and no running animation (CEF cost); the frame is the police tablet's size and
+   scale. */
 
 .crim-backdrop {
-    --crim-bg: #0b0b0d;
-    --crim-panel: #15151a;
-    --crim-line: #2a2a31;
-    --crim-text: #e6e3dc;
-    --crim-muted: #8c8a85;
-    --crim-acid: #c6f432;
-    --crim-blood: #e0413a;
-    --crim-amber: #f2a93b;
     position: fixed;
     inset: 0;
     display: flex;
@@ -23,14 +17,13 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    background: var(--crim-bg);
-    color: var(--crim-text);
+    background: var(--cp-bg);
+    color: var(--cp-text);
     border: 14px solid #050506;
     border-radius: 28px;
     box-shadow:
         0 0 0 2px #1d1d22,
         0 30px 80px rgba(0, 0, 0, 0.7);
-    font-family: 'Courier New', ui-monospace, monospace;
     overflow: hidden;
 }
 
@@ -39,7 +32,7 @@
     align-items: center;
     gap: 16px;
     padding: 14px 22px;
-    border-bottom: 1px dashed var(--crim-line);
+    border-bottom: 1px dashed var(--cp-border);
     background: repeating-linear-gradient(135deg, #111114 0 12px, #0d0d10 12px 24px);
 }
 
@@ -48,21 +41,21 @@
     font-weight: 700;
     letter-spacing: 0.3em;
     text-transform: uppercase;
-    color: var(--crim-acid);
+    color: var(--cp-primary);
 }
 
 .crim-signal {
     margin-left: auto;
     font-size: 13px;
-    color: var(--crim-muted);
+    color: var(--cp-muted);
     text-transform: uppercase;
     letter-spacing: 0.15em;
 }
 
 .crim-close {
     background: none;
-    border: 1px solid var(--crim-line);
-    color: var(--crim-text);
+    border: 1px solid var(--cp-border);
+    color: var(--cp-text);
     border-radius: 6px;
     padding: 4px 6px;
     cursor: pointer;
@@ -80,7 +73,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 16px 10px;
-    border-right: 1px dashed var(--crim-line);
+    border-right: 1px dashed var(--cp-border);
 }
 
 .crim-tab {
@@ -91,7 +84,7 @@
     background: none;
     border: 1px solid transparent;
     border-radius: 4px;
-    color: var(--crim-muted);
+    color: var(--cp-muted);
     font: inherit;
     font-size: 15px;
     text-align: left;
@@ -99,179 +92,78 @@
 }
 
 .crim-tab:hover {
-    color: var(--crim-text);
-    border-color: var(--crim-line);
+    color: var(--cp-text);
+    border-color: var(--cp-border);
 }
 
 .crim-tab.is-on {
-    color: var(--crim-bg);
-    background: var(--crim-acid);
+    color: var(--cp-bg);
+    background: var(--cp-primary);
 }
 
-.crim-badge {
+.crim-tab__badge {
     margin-left: auto;
-    font-style: normal;
-    font-size: 12px;
-    padding: 1px 7px;
-    border-radius: 10px;
-    background: var(--crim-blood);
-    color: #fff;
 }
 
 .crim-main {
     flex: 1;
     overflow-y: auto;
-    padding: 20px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+    padding: var(--cp-space-5) var(--cp-space-6);
 }
 
-.crim-card {
-    background: var(--crim-panel);
-    border: 1px solid var(--crim-line);
-    border-left: 3px solid var(--crim-acid);
-    border-radius: 4px;
-    padding: 16px 20px;
+/* street touches on the shared components: the edge on the left, titles and buttons in capitals */
+.cp-theme-street .cp-card--hl-primary {
+    border-top: 1px solid var(--cp-border);
+    border-left: 3px solid var(--cp-primary);
 }
 
-.crim-card h2 {
-    margin: 0 0 10px;
-    font-size: 18px;
+.cp-theme-street .cp-card__title,
+.cp-theme-street .cp-btn {
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
 
-.crim-card p {
+.crim-main .cp-card p {
     margin: 6px 0;
     line-height: 1.45;
 }
 
-.crim-empty {
-    border-left-color: var(--crim-line);
-}
-
-.crim-job header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-}
-
 .crim-big {
-    font-size: 20px;
-    color: var(--crim-acid);
+    font-size: var(--cp-fs-xl);
+    color: var(--cp-primary);
 }
 
 .crim-muted {
-    color: var(--crim-muted);
-    font-size: 13px;
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
 }
 
 .crim-warn {
-    color: var(--crim-amber);
+    color: var(--cp-warning);
     margin: 0;
 }
 
 .crim-timer {
-    font-size: 20px;
-    color: var(--crim-amber);
+    font-size: var(--cp-fs-xl);
+    color: var(--cp-warning);
 }
 
-.crim-facts {
-    display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 6px 14px;
-    margin: 8px 0;
+.crim-bad {
+    color: var(--cp-danger);
 }
 
-.crim-facts dt {
-    color: var(--crim-muted);
-}
-
-.crim-facts dd {
-    margin: 0;
-}
-
-.crim-roles {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 10px 0;
-}
-
-.crim-role,
+.crim-facts,
+.crim-roles,
 .crim-agree {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border: 1px solid var(--crim-line);
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.crim-role.is-on {
-    border-color: var(--crim-acid);
-}
-
-.crim-agree {
-    border-style: dashed;
-    margin: 8px 0;
+    margin: var(--cp-space-2) 0;
 }
 
 .crim-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 12px;
-}
-
-.crim-btn {
-    font: inherit;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    padding: 9px 16px;
-    border-radius: 4px;
-    border: 1px solid var(--crim-line);
-    background: #1e1e24;
-    color: var(--crim-text);
-    cursor: pointer;
-}
-
-.crim-btn:disabled {
-    opacity: 0.4;
-    cursor: default;
-}
-
-.crim-btn.is-primary {
-    background: var(--crim-acid);
-    border-color: var(--crim-acid);
-    color: var(--crim-bg);
-}
-
-.crim-btn.is-danger {
-    border-color: var(--crim-blood);
-    color: var(--crim-blood);
+    margin-top: var(--cp-space-3);
 }
 
 .crim-list {
     margin: 6px 0;
-    padding-left: 20px;
+    padding-left: var(--cp-space-5);
     line-height: 1.6;
-}
-
-.crim-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-}
-
-.crim-table td {
-    padding: 6px 8px;
-    border-bottom: 1px dashed var(--crim-line);
-}
-
-.crim-table td.is-bad {
-    color: var(--crim-blood);
 }

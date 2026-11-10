@@ -147,32 +147,36 @@
 }
 
 .cp-card--pad-sm > .cp-card__body {
-    padding: 12px;
+    padding: var(--cp-space-3);
 }
 
 .cp-card--pad-md > .cp-card__body {
-    padding: 16px 18px 18px;
+    padding: var(--cp-space-4);
 }
 
 .cp-card--pad-lg > .cp-card__body {
-    padding: 22px 24px 24px;
+    padding: var(--cp-space-6);
 }
 
 .cp-card__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 14px 18px 0;
+    gap: var(--cp-space-3);
+    padding: var(--cp-space-4) var(--cp-space-4) 0;
     min-height: 30px;
 }
 
 .cp-card--pad-sm > .cp-card__header {
-    padding: 10px 12px 0;
+    padding: var(--cp-space-3) var(--cp-space-3) 0;
+}
+
+.cp-card--pad-lg > .cp-card__header {
+    padding: var(--cp-space-6) var(--cp-space-6) 0;
 }
 
 .cp-card--pad-none > .cp-card__header {
-    padding: 14px 18px 12px;
+    padding: var(--cp-space-4);
     border-bottom: 1px solid var(--cp-border);
 }
 
@@ -227,8 +231,8 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
-    padding: 12px 18px;
+    gap: var(--cp-space-2);
+    padding: var(--cp-space-3) var(--cp-space-4);
     border-top: 1px solid var(--cp-border);
     background: rgba(var(--cp-text-rgb), 0.02);
     border-radius: 0 0 var(--cp-radius) var(--cp-radius);
@@ -272,7 +276,7 @@
 .cp-screen {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--cp-space-5);
     animation: cp-rise 180ms var(--cp-ease);
 }
 
@@ -280,7 +284,7 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--cp-space-4);
 }
 
 .cp-screen__title {
@@ -291,7 +295,7 @@
 }
 
 .cp-screen__subtitle {
-    margin-top: 4px;
+    margin-top: var(--cp-space-1);
     color: var(--cp-muted);
 }
 
@@ -313,7 +317,7 @@
 
 .cp-screen__actions {
     display: flex;
-    gap: 8px;
+    gap: var(--cp-space-2);
     align-items: center;
     flex-wrap: wrap;
     justify-content: flex-end;
@@ -322,14 +326,14 @@
 .cp-screen__body {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--cp-space-5);
     min-width: 0;
 }
 
 .cp-section {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--cp-space-3);
     min-width: 0;
 }
 
@@ -337,7 +341,7 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--cp-space-3);
 }
 
 .cp-section__title {
@@ -349,14 +353,14 @@
 }
 
 .cp-section__desc {
-    margin-top: 4px;
+    margin-top: var(--cp-space-1);
     color: var(--cp-subtle);
     font-size: var(--cp-fs-sm);
 }
 
 .cp-section__actions {
     display: flex;
-    gap: 8px;
+    gap: var(--cp-space-2);
 }
 
 /* Grid / Stack helpers */
@@ -764,7 +768,7 @@
 
 .cp-table th {
     height: 38px;
-    padding: 0 14px;
+    padding: 0 var(--cp-space-3);
     font-size: var(--cp-fs-xs);
     font-weight: 700;
     text-transform: uppercase;
@@ -791,19 +795,19 @@
 
 .cp-table td {
     height: 46px;
-    padding: 6px 14px;
+    padding: 6px var(--cp-space-3);
     border-bottom: 1px solid rgba(var(--cp-text-rgb), 0.06);
     vertical-align: middle;
 }
 
 .cp-table--dense td {
     height: 36px;
-    padding: 4px 12px;
+    padding: var(--cp-space-1) var(--cp-space-3);
 }
 
 .cp-table--dense th {
     height: 32px;
-    padding: 0 12px;
+    padding: 0 var(--cp-space-3);
 }
 
 .cp-table tbody tr:last-child td {
@@ -841,9 +845,62 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 28px 16px;
+    gap: var(--cp-space-2);
+    padding: var(--cp-space-6) var(--cp-space-4);
     color: var(--cp-muted);
+}
+
+/* Table with a search box and / or pages (filter, pageSize) */
+.cp-table-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-2);
+    min-width: 0;
+}
+
+.cp-table__filter {
+    max-width: 320px;
+}
+
+/* a sortable column's header: the whole header is the button */
+.cp-table__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cp-space-1);
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+}
+
+.cp-table__sort:hover {
+    color: var(--cp-text);
+}
+
+.cp-table__sort svg {
+    opacity: 0.35;
+}
+
+.cp-table__sort svg.is-on {
+    opacity: 1;
+    color: var(--cp-accent-text);
+}
+
+/* Pager: previous / next and "page n of m" (shared/components/Pager.tsx) */
+.cp-pager {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--cp-space-2);
+    padding: var(--cp-space-2) 0;
+}
+
+.cp-pager__text {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
 }
 
 .cp-table__refreshing {

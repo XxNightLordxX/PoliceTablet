@@ -19,6 +19,7 @@ import {
     Screen,
     Table,
     type TableColumn,
+    ScreenStatus,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
 import { formatNumber } from '../../shared/format';
@@ -35,8 +36,7 @@ import {
     type DeptContributors,
 } from '../../types/boards';
 import { CallsignText, RankCell } from './Leaderboard';
-import { ScreenStatus } from '../components/ScreenStatus';
-import { OFFICER_HEADS, screenStateOf } from './screenHead';
+import { screenStateOf } from '../../shared/screenHeads';
 import './Challenge.css';
 
 // "3d 4h" / "5h 12m" / "8m" until the week closes.
@@ -448,13 +448,12 @@ export default function Challenge() {
 
     return (
         <Screen
-            title={t(OFFICER_HEADS.challenge.title)}
+            head="challenge"
             subtitle={
                 season
                     ? t('challenge.subtitle', { name: season.name, n: season.weeksLeft })
                     : t('challenge.subtitle_none')
             }
-            help={t(OFFICER_HEADS.challenge.help)}
             actions={
                 <IconButton
                     icon="refresh"

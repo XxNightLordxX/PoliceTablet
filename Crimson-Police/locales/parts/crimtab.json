@@ -93,5 +93,14 @@
   "err.crimtab_closed": "The criminal tablet closed: you can no longer use it.",
   "health.crimtab.ok": "The criminal tablet item {item} exists in ox_inventory",
   "health.crimtab.missing": "{item} (Config.CriminalTablet.item) is not an ox_inventory item: the criminal tablet cannot be opened with it. Paste its entry from items/ox_inventory_items.lua into ox_inventory, or set the item to false",
-  "health.crimtab.no_inventory": "ox_inventory is not running: the criminal tablet item {item} cannot be checked or used"
+  "health.crimtab.no_inventory": "ox_inventory is not running: the criminal tablet item {item} cannot be checked or used",
+  "crimtab.help.home": "Put yourself on the list to be asked to play a suspect, and pick which suspects you play.",
+  "crimtab.help.jobs": "Accept or decline before the timer runs out; nothing starts without your yes.",
+  "crimtab.help.active": "Get to the meet point in time and play it out; giving up may cost a strike.",
+  "crimtab.help.history": "Your past cases and the strikes that still count against you.",
+  "crimtab.help.rules": "How the list, the questions, the strikes and the blocks work.",
+  "crimtab.history.col.when": "When",
+  "crimtab.history.col.type": "Mission",
+  "crimtab.history.col.role": "Suspect",
+  "crimtab.history.col.outcome": "Outcome"
 }

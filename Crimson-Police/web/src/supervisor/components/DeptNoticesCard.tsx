@@ -6,15 +6,14 @@
 // card is split by task (Post a notice, Running now), shows the stale line when a refresh fails; End takes two clicks.
 
 import { useState } from 'react';
-import { Button, Card, EmptyState, Field, NumberInput, Textarea } from '../../shared/components';
+import { Button, Card, EmptyState, Field, NumberInput, Textarea, ScreenStatus } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { fmtDateTime } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import type { DeptNoticesView } from '../../types/oversight';
 import { useAdminAction } from '../../admin/components/kit';
-import { ScreenStatus } from '../../officer/components/ScreenStatus';
-import { screenStateOf } from '../../officer/screens/screenHead';
+import { screenStateOf } from '../../shared/screenHeads';
 
 export function DeptNoticesCard() {
     const { data, loading, error, refetch } = useRequest<DeptNoticesView>(

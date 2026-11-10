@@ -1,12 +1,15 @@
-// Src/shared/components · the shared UI toolkit. Import from here:
+// Src/shared/components · the one component set of all four tablets (officer, supervisor, admin, criminal):
+
+// Src/shared/components · the one component set of all four tablets (officer, supervisor, admin, criminal):
+// every screen builds from these. Import from here:
 // import { Button, Card, Table, Money, TierBadge } from '../../shared/components';
 // Props are documented on each component and in docs/dev/ARCHITECTURE.md §12.
 
 export { Icon, ICON_NAMES } from './Icon';
 export type { IconName, IconProps } from './Icon';
 
-export { Button, IconButton } from './Button';
-export type { ButtonProps, ButtonVariant, ButtonSize, IconButtonProps } from './Button';
+export { Button, IconButton, ConfirmButton, CONFIRM_ARM_MS } from './Button';
+export type { ButtonProps, ButtonVariant, ButtonSize, IconButtonProps, ConfirmButtonProps } from './Button';
 
 export { Card, Section, Screen } from './Card';
 export type { CardProps, SectionProps, ScreenProps } from './Card';
@@ -17,8 +20,13 @@ export type { BadgeProps, BadgeTone } from './Badge';
 export { Tabs, SegmentedControl } from './Tabs';
 export type { TabItem } from './Tabs';
 
-export { Table } from './Table';
-export type { TableColumn, TableProps } from './Table';
+export { Table, sortRows, filterRows, pageRows } from './Table';
+export type { TableColumn, TableProps, TableSort } from './Table';
+
+export { Pager } from './Pager';
+export type { PagerProps } from './Pager';
+
+export { ScreenStatus } from './ScreenStatus';
 
 export { Dialog, ConfirmDialog, LayerRootContext } from './Dialog';
 export type { DialogProps, ConfirmDialogProps } from './Dialog';
@@ -55,7 +63,6 @@ export type { AvatarProps } from './Avatar';
 
 export { ErrorBoundary } from './ErrorBoundary';
 export { QuietBoundary } from './QuietBoundary';
-export { ScreenStub } from './ScreenStub';
 export { MaintenanceBanner } from './MaintenanceBanner';
 
 export { MoreFold, readMoreOpen, writeMoreOpen, MORE_PREFIX } from './MoreFold';

@@ -35,7 +35,6 @@ import type { AuditExport, AuditFilters, AuditPage, AuditRow } from '../../types
 import type { AuditPartView, AuditSaveReply } from '../../types/admin_system';
 import { useAdminAction } from '../components/kit';
 
-import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Audit.css';
 
 type Filters = AuditFilters;
@@ -121,7 +120,6 @@ async function copyText(text: string, el: HTMLTextAreaElement | null): Promise<b
 }
 
 export default function AdminAudit() {
-    const screenTitle = useAdminTitle('admin_audit');
     const [category, setCategory] = useState('');
     const [action, setAction] = useState('');
     const [actor, setActor] = useState('');
@@ -320,7 +318,7 @@ export default function AdminAudit() {
 
     return (
         <Screen
-            title={screenTitle}
+            head="admin_audit"
             subtitle={t('admin.audit.subtitle')}
             actions={
                 <>
@@ -442,7 +440,7 @@ export default function AdminAudit() {
                             title={filtered ? t('admin.audit.empty_filtered') : t('admin.audit.empty')}
                         />
                     }
-                    aria-label={screenTitle}
+                    aria-label={t('ui.nav.plain.admin_audit')}
                 />
             )}
 

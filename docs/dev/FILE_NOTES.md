@@ -174,7 +174,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/kit/JobProgress.tsx`: JobProgress: a bulk job's progress from the 'adminjob' push (admin players only), for one job id or the latest.
 - `Crimson-Police/web/src/admin/components/kit/MoneyEffect.tsx`: MoneyEffect: the money an action moves, line by line (the amount the server computed, never one typed here).
 - `Crimson-Police/web/src/admin/components/kit/OfficerPicker.tsx`: OfficerPicker: find an officer by name, callsign or citizenid (admin:searchOfficers) and pick one.
-- `Crimson-Police/web/src/admin/components/kit/Pager.tsx`: Pager: previous / next and "page n of m" for the paged admin lists (pages of at most 50 rows).
 - `Crimson-Police/web/src/admin/components/kit/PreviewTable.tsx`: PreviewTable: the exact rows an action will change (from a preview callback), with the total and a note when only the first rows are listed.
 - `Crimson-Police/web/src/admin/components/kit/RowsEditor.tsx`: RowsEditor: the base row editor for a list setting with a row template (SettingView.rows): add, remove and move rows, one input per field.
 - `Crimson-Police/web/src/admin/components/kit/index.ts`: The admin kit: shared pieces of the full admin control screens (docs/dev/ARCHITECTURE.md §9.5, "Admin control").
@@ -276,7 +275,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/layouts/supDepartment.walk.ts`: The Department screen of the Supervisor UI against the browser mocks (node walk.mjs, a gate step, MG3): its five tabs, each with the permission of the screen it replaces, the old keys sup_report, sup_controls and sup_review opening their tab (params kept), the tab a link or the landing picks, and the sidebar listing Department alone.
 - `Crimson-Police/web/src/layouts/supervisorNav.ts`: The Supervisor UI sidebar and landing: the screens grouped by task under People, Missions and Rewards (supervisorTaskOf), Config.Tablet.supervisorCompact (icons only) and supervisorLanding (the screen it opens on).
 - `Crimson-Police/web/src/layouts/supervisorNav.walk.ts`: Supervisor UI sidebar and landing against the browser mocks (node walk.mjs, a gate step): the screens grouped by task, and Config.Tablet's supervisorCompact and supervisorLanding reaching the Supervisor UI as the session's config.supervisorNav.
-- `Crimson-Police/web/src/layouts/useAdminTitle.ts`: The title inside an Admin UI screen: its plain name (the sidebar's and the breadcrumb's name, layouts/adminNav.ts).
 - `Crimson-Police/web/src/main.tsx`: Every stylesheet first, in its fixed order (styles/order.ts)
 - `Crimson-Police/web/src/mocks/DevPanel.tsx`: Browser dev mode only (App lazy-loads this file when isEnvBrowser(); it never runs in FiveM).
 - `Crimson-Police/web/src/mocks/Gallery.tsx`: Browser dev mode only: a component gallery inside the tablet frame (DevPanel → Gallery, or ?gallery=1).
@@ -318,7 +316,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/officer/components/ReadyCheckBanner.tsx`: The unit ready check: "Ready for Tactical?" with a countdown, Ready / Not ready (the type only, never a mission).
 - `Crimson-Police/web/src/officer/components/RewardsLocker.tsx`: The Rewards locker card on Home: item rewards that could not be given yet (offline, no room, Crimson-Arena).
 - `Crimson-Police/web/src/officer/components/RunNotices.tsx`: Active Mission notices: the intel line a block set (view.intel) and the claimed mission call's response target.
-- `Crimson-Police/web/src/officer/components/ScreenStatus.tsx`: The loading, error, empty and stale lines of an officer screen, one look on every screen.
 - `Crimson-Police/web/src/officer/components/ServiceRecordCard.tsx`: The service record of an officer (lifetime or this season), their personal bests and favourite partner.
 - `Crimson-Police/web/src/officer/components/TwistPicker.tsx`: The twists a leader may add at the accept step (Mission Board, mission call claim): one switch per twist with its own bonus, and the total bonus of the ones picked ("+45% points, x1.50 cash"), capped as the server caps it.
 - `Crimson-Police/web/src/officer/components/twistTicks.ts`: The twists the accept step (Mission Board, mission call claim) starts with ticked.
@@ -338,18 +335,20 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/officer/screens/boardOrder.walk.ts`: My options -> Mission Board against the browser mocks (node walk.mjs, a gate step): the type cards of the mock board in the officer's order (favourites first, hidden folded, never the last card) and the options' schema.
 - `Crimson-Police/web/src/officer/screens/debouncedSave.ts`: My options: one save per key after the officer stops changing it (delay ms). cancel(keys) drops the pending saves of those keys (a group's Reset, so a change made a moment before it cannot undo the reset); flush() runs every pending save at once (the screen closes).
 - `Crimson-Police/web/src/officer/screens/debouncedSave.walk.ts`: My options: a group's Reset clicked within the save delay of a change is not undone by that change's pending save (node walk.mjs, a gate step).
-- `Crimson-Police/web/src/officer/screens/screenHead.ts`: Officer UI screen heads and load states: every officer screen (part 1: Home, Mission Board,
-- `Crimson-Police/web/src/officer/screens/screenHead.walk.ts`: Officer screens tidy, part 1 against the browser mocks (node walk.mjs, a gate step): Home, Mission Board, Active Mission and Dispatch share one header (title, one line of help) and one set of loading, error, empty and stale lines.
+- `Crimson-Police/web/src/officer/screens/screenHead.walk.ts`: Officer screens tidy, part 1 against the browser mocks (node walk.mjs, a gate step): Home, Mission Board, Active Mission and Dispatch share one header (title, one line of help: <Screen head>, shared/screenHeads.ts) and one set of loading, error, empty and stale lines (the shared ScreenStatus).
 - `Crimson-Police/web/src/officer/screens/screenHead2.walk.ts`: Officer screens tidy, part 2 against the browser mocks (node walk.mjs, a gate step): Unit, Profile, Leaderboard and My options share the part 1 header (title, one line of help) and load states; the field training card counts the tasks ready to sign; the live case card says which step of three the case is on.
 - `Crimson-Police/web/src/shared/components/Avatar.tsx`: An officer's picture: a preset image, an approved link (the initials when it fails to load) or the initials, in a ring of their XP level badge colour.
 - `Crimson-Police/web/src/shared/components/Icon.tsx`: Inline stroke icons (24×24 grid).
 - `Crimson-Police/web/src/shared/components/MaintenanceBanner.tsx`: The maintenance banner: shown on every UI while CP.Maintenance holds the lock (a storage copy or switch, a backup
 - `Crimson-Police/web/src/shared/components/MoreFold.tsx`: The More fold: the rarely changed options of a settings-heavy dialog or screen sit under a More button.
+- `Crimson-Police/web/src/shared/components/Pager.tsx`: Pager: previous / next and "page n of m" for every paged list (the Admin UI's server pages of at most 50 rows, and a Table with pageSize).
 - `Crimson-Police/web/src/shared/components/QuietBoundary.tsx`: An error boundary that drops only the broken part (it renders nothing) and says so in the NUI console, so a crashed HUD, result card, overlay or toast list never unmounts the whole NUI. onError lets the tablet hand the focus back.
-- `Crimson-Police/web/src/shared/components/index.ts`: Src/shared/components · the shared UI toolkit.
+- `Crimson-Police/web/src/shared/components/ScreenStatus.tsx`: The loading, error, empty and stale lines of a screen, one look on every screen of every tablet.
+- `Crimson-Police/web/src/shared/components/index.ts`: Src/shared/components · the one component set of all four tablets (officer, supervisor, admin, criminal):
 - `Crimson-Police/web/src/shared/countdown.walk.ts`: HUD countdowns (docs/dev/LOOPS.md): useCountdown wakes once a second, just after each whole second, instead of polling every 200 ms (node walk.mjs, a gate step).
 - `Crimson-Police/web/src/shared/cx.ts`: Tiny className joiner (clsx-style): cx('a', cond && 'b', { c: true }).
 - `Crimson-Police/web/src/shared/data.ts`: Defensive helpers for data coming from Lua.
+- `Crimson-Police/web/src/shared/designSystem.walk.ts`: One design system for the four tablets against the browser mocks (node walk.mjs, a gate step): every screen of the
 - `Crimson-Police/web/src/shared/filters.ts`: Remember my filters: with the officer option rememberFilters on (this PC), a screen's filter starts from the 'local' option filters (entries 'screen.part:value', e.g. 'dispatch.filter:near'; not a row of My options) and each change is saved there.
 - `Crimson-Police/web/src/shared/format.ts`: Number/time formatting shared by components and screens.
 - `Crimson-Police/web/src/shared/hooks.ts`: Data hooks for screens.
@@ -367,6 +366,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/shared/replyViewFx1.walk.ts`: Replies that carry the fresh view, against the browser mocks (node walk.mjs, a gate step): the supervisor and admin actions whose replies carry the screen's fresh view (Mission calls, Live Missions, Clear cooldown, the activity dialog, Reset all, Admin System -> Storage), so the screen needs no second request.
 - `Crimson-Police/web/src/shared/rowWindow.ts`: Windowed lists: a long list draws only the rows in view, plus a few above and below, and two spacers keep the scroll bar and the scroll position as if every row were there. docs/dev/LOOPS.md "NUI".
 - `Crimson-Police/web/src/shared/rowWindow.walk.ts`: Windowed lists against the browser mocks (node walk.mjs, a gate step): the window math, and a long scrolling Table drawing only the rows in view (every row with windowRows={false}).
+- `Crimson-Police/web/src/shared/screenHeads.ts`: The page header of every screen of the four tablets (officer, supervisor, admin, criminal): its title and the one
 - `Crimson-Police/web/src/shared/session.tsx`: The open UI's session (ARCHITECTURE §9.2) and tablet controls.
 - `Crimson-Police/web/src/shared/theme.ts`: Department theming (SPEC "Departments & tablet theming").
 - `Crimson-Police/web/src/shared/toast.ts`: The Crimson-Police toast bus.
@@ -393,7 +393,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/supervisor/screens/MissionList.tsx`: Supervisor UI · Mission List (screen key 'sup_missions').
 - `Crimson-Police/web/src/supervisor/screens/Payouts.tsx`: Supervisor UI · Payouts (screen key 'sup_payouts', title key 'ui.screen.sup_payouts').
 - `Crimson-Police/web/src/supervisor/screens/ReviewQueue.tsx`: Supervisor UI · Department → Review: the Review Queue.
-- `Crimson-Police/web/src/supervisor/screens/supHead.ts`: Supervisor screens inside: Mission controls and Review Queue use the Officer UI's header (title, then one line of help) and load states (officer/screens/screenHead, ScreenStatus); each Mission controls group card says what its task is.
+- `Crimson-Police/web/src/supervisor/screens/supHead.ts`: Supervisor UI · Mission controls: the one line of help under each group's title (MissionControls.tsx GROUPS).
 - `Crimson-Police/web/src/supervisor/screens/supHead.walk.ts`: Supervisor screens inside against the browser mocks (node walk.mjs, a gate step): Mission controls and
 - `Crimson-Police/web/src/types/access.ts`: Tablet access shapes (modules/tablet admin:getTabletAccess): the ways, the mission desks and each department's personal accents, for Admin UI → Departments.
 - `Crimson-Police/web/src/types/admin_control.ts`: Full admin control: the shapes every admin package shares (docs/dev/ARCHITECTURE.md §9.5, "Admin control").
