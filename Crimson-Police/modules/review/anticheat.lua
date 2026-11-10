@@ -87,20 +87,9 @@ local function Clip(s, n)
     return s:sub(1, utf8.offset(s, n + 1) - 1)
 end
 
-local function Has(modName, fnName)
-    local m = CP[modName]
-    return type(m) == 'table' and type(m[fnName]) == 'function'
-end
+local Has = CP.Has
 
-local function Call(modName, fnName, ...)
-    if not Has(modName, fnName) then return false end
-    local res = table.pack(pcall(CP[modName][fnName], ...))
-    if not res[1] then
-        CP.err(TAG, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2]))
-        return false
-    end
-    return true, table.unpack(res, 2, res.n)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 local function Num(v, default)
     local n = tonumber(v)

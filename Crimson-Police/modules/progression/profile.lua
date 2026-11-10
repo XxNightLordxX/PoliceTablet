@@ -36,18 +36,9 @@ local function Cfg() return type(Config.Profile) == 'table' and Config.Profile o
 
 local function CommendCfg() return (CP.Recognition('commendations')) end
 
-local function Has(mod, fn) return type(CP[mod]) == 'table' and type(CP[mod][fn]) == 'function' end
+local Has = CP.Has
 
--- pcall a module function; returns ok, results...
-local function Call(mod, fn, ...)
-    if not Has(mod, fn) then return false end
-    local res = table.pack(pcall(CP[mod][fn], ...))
-    if not res[1] then
-        CP.err(TAG, 'CP.%s.%s failed: %s', mod, fn, tostring(res[2]))
-        return false
-    end
-    return true, table.unpack(res, 2, res.n)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 local function Now() return os.time() end
 
@@ -117,15 +108,10 @@ end
 -- Profile news (commendations, reviews, admin changes) is social: the officer option quietRun keeps its info and
 -- success toasts in the bell during a run.
 local function Notify(citizenid, kind, key, vars)
-    local ok, src = Call('Qbx', 'getByCitizenId', citizenid)
-    if ok then CP.notify(src, kind, key, vars, { channel = 'social' }) end
-    return ok and src or nil
+    return CP.notifyCitizen(citizenid, kind, key, vars, { channel = 'social' })
 end
 
-local function PushProfile(citizenid)
-    local ok, src = Call('Qbx', 'getByCitizenId', citizenid)
-    if ok then CP.push(src, 'profile', { citizenid = citizenid }) end
-end
+local function PushProfile(citizenid) CP.pushCitizen(citizenid, 'profile', { citizenid = citizenid }) end
 
 local function InvalidateBoards()
     if Has('Leaderboard', 'invalidate') then Call('Leaderboard', 'invalidate') end
@@ -1367,8 +1353,8 @@ end, { rate = 1 })
 -- Supervisor handlers check the permission first (ARCHITECTURE §0.7), then the payload.
 local function SupAction(permission, fn)
     return function(src, payload)
-        local ok, errKey = CP.Permissions.can(src, permission)
-        if not ok then return false, errKey or 'err.no_permission' end
+        local ok, errKey = CP.can(src, permission)
+        if not ok then return false, errKey end
         -- from the department report's activity dialog the reply carries his fresh activity
         if Has('Challenge', 'withActivity') then
             return CP.Challenge.withActivity(src, payload, Filled(fn(src, 'supervisor', payload)))
@@ -1379,8 +1365,8 @@ end
 
 local function AdminAction(fn)
     return function(src, payload)
-        local ok, errKey = CP.Permissions.can(src, 'openAdmin')
-        if not ok then return false, errKey or 'err.no_permission' end
+        local ok, errKey = CP.can(src, 'openAdmin')
+        if not ok then return false, errKey end
         return Filled(fn(src, 'admin', payload))
     end
 end
@@ -1397,8 +1383,8 @@ CP.Net.action('server:sup:handleReport', SupAction('reviewProfiles', Profile.han
 CP.Net.action('server:admin:handleReport', AdminAction(Profile.handleReport), { rate = 4 })
 
 CP.Net.callback('sup:getProfileQueue', function(src, args)
-    local ok, errKey = CP.Permissions.can(src, 'reviewProfiles')
-    if not ok then return nil, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, 'reviewProfiles')
+    if not ok then return nil, errKey end
     if args ~= nil and type(args) ~= 'table' then return nil, 'err.invalid_payload' end
     local officer = CP.Access.getOfficer(src)
     local dept = officer and officer.department or nil
@@ -1411,8 +1397,8 @@ CP.Net.callback('sup:getProfileQueue', function(src, args)
 end)
 
 CP.Net.callback('admin:getOfficerProfile', function(src, args)
-    local ok, errKey = CP.Permissions.can(src, 'openAdmin')
-    if not ok then return nil, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, 'openAdmin')
+    if not ok then return nil, errKey end
     if type(args) ~= 'table' then return nil, 'err.invalid_payload' end
     return Profile.adminView(args.citizenid, args.seasonId)
 end)

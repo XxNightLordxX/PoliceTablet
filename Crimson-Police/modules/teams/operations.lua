@@ -48,7 +48,7 @@
 --   CP.Operations.cooldownLeft() -> seconds until the next launch is allowed (0 = now)
 --   CP.Operations.eligible(def) -> ok, errKey   launchable: published and enabled, departments empty
 --       (open to every department), maxOfficers >= 2, never the Weekly Boss
--- Net (CP.Net; every sup/admin action checks CP.Permissions.can(src, 'launchCrossDept') first, the admin
+-- Net (CP.Net; every sup/admin action checks CP.can(src, 'launchCrossDept') first, the admin
 -- ones also require an admin)
 --   actions server:sup:opLaunch / server:admin:opLaunch   { missionId }  -> { id }
 --           server:sup:opStart / server:admin:opStart     -              -> { runId, participants }
@@ -395,8 +395,7 @@ local function NotifySupervisors(kind, key, vars)
         for _, p in ipairs(OnlinePlayers()) do
             p = CP.U.toSrc(p)
             if p and (IsAdmin(p) or MaybeOfficer(p)) then
-                local ok, allowed = Call('Permissions', 'can', p, 'launchCrossDept')
-                if ok and allowed then targets[#targets + 1] = p end
+                if CP.can(p, 'launchCrossDept') then targets[#targets + 1] = p end
             end
         end
         NotifyMany(targets, kind, key, vars)
@@ -817,10 +816,7 @@ end
 
 local function Allowed(src)
     if src == 0 then return true end
-    if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    local ok, can, errKey = Call('Permissions', 'can', src, 'launchCrossDept')
-    if not ok or not can then return false, errKey or 'err.no_permission' end
-    return true
+    return CP.can(src, 'launchCrossDept')
 end
 
 local function WaitlistOn()
@@ -1344,9 +1340,8 @@ end
 
 local function Guarded(scope, handler)
     return function(src, payload)
-        if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-        local ok, errKey = CP.Permissions.can(src, 'launchCrossDept')
-        if not ok then return false, errKey or 'err.no_permission' end
+        local ok, errKey = CP.can(src, 'launchCrossDept')
+        if not ok then return false, errKey end
         if scope == 'admin' and not IsAdmin(src) then return false, 'err.no_permission' end
         return handler(src, payload)
     end
@@ -1399,9 +1394,8 @@ CP.Net.action('server:joinOperation', function(src, payload)
 end, { rate = 3 })
 
 CP.Net.callback('sup:getOperation', function(src)
-    if not (CP.Permissions and CP.Permissions.can) then return nil, 'err.no_permission' end
-    local ok, errKey = CP.Permissions.can(src, 'launchCrossDept')
-    if not ok then return nil, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, 'launchCrossDept')
+    if not ok then return nil, errKey end
     return Ops.view(src)
 end, { rate = 4 })
 

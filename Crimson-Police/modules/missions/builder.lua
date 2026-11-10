@@ -2694,7 +2694,7 @@ local function PermSet(src, actor)
         if actor.isAdmin then
             set[name] = true
         else
-            set[name] = CP.Permissions and CP.Permissions.can and CP.Permissions.can(src, name) == true or false
+            set[name] = CP.can(src, name)
         end
     end
     return set
@@ -2715,8 +2715,7 @@ B.editBuiltinsOn = EditBuiltinsOn
 local function OverrideOk(actor)
     if not (actor and actor.isAdmin) or not EditBuiltinsOn() then return false end
     if actor.src == 0 then return true end
-    if not (CP.Permissions and CP.Permissions.can) then return false end
-    return CP.Permissions.can(actor.src, 'editBuiltins') == true
+    return CP.can(actor.src, 'editBuiltins') == true
 end
 
 -- kind: edit | publish | archive | rollback | breakLock
@@ -2774,15 +2773,9 @@ local function PushAll(data)
     end
 end
 
-local function SrcOfCitizen(citizenid)
-    if type(citizenid) ~= 'string' or citizenid == 'console' then return nil end
-    if CP.Qbx and CP.Qbx.getByCitizenId then return CP.Qbx.getByCitizenId(citizenid) end
-    return nil
-end
-
 -- Tell an editor (by citizenid) that they lost the lock or the draft. `by` = who did it (display name).
 local function TellEditor(citizenid, event, id, key, vars, by)
-    local src = SrcOfCitizen(citizenid)
+    local src = CP.srcOf(citizenid)
     if not src then return end
     TriggerClientEvent(CP.e('client:builder'), src, { event = event, id = id, by = by })
     if key and CP.Tablet and CP.Tablet.notify then pcall(CP.Tablet.notify, src, 'warning', key, vars) end
@@ -3122,9 +3115,8 @@ local function Begin(src)
     if CfgB().enabled == false and not (src == 0 or (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src))) then
         return nil, 'err.builder_disabled'
     end
-    if not (CP.Permissions and CP.Permissions.can) then return nil, 'err.no_permission' end
-    local ok, errKey = CP.Permissions.can(src, 'builderEdit')
-    if not ok then return nil, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, 'builderEdit')
+    if not ok then return nil, errKey end
     local actor, aerr = GetActor(src)
     if not actor then return nil, aerr end
     return actor, PermSet(src, actor)

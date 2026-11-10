@@ -2246,9 +2246,7 @@ local function Deliver(tool, result)
     state.seq = state.seq + 1
     result.seq = state.seq
     state.result = result
-    if CP.Tablet and CP.Tablet.push then
-        CP.Tablet.push('builder', { event = 'clientResult', id = result.missionId, result = result })
-    end
+    CP.push('builder', { event = 'clientResult', id = result.missionId, result = result })
     if tool.noReopen then return end
     CreateThread(function()
         Wait(300)
@@ -2585,8 +2583,8 @@ RegisterNetEvent(CP.e('client:builder'), function(data)
     if ev == 'deleted' and state.result and state.result.missionId == data.id then state.result = nil end
     -- The open builder screen learns it lost the lock / the draft even when the server's 'builder' push did not
     -- reach it (it only goes to recent viewers); the screen's handlers are idempotent.
-    if (ev == 'lockBroken' or ev == 'reloaded') and CP.Tablet and CP.Tablet.push then
-        CP.Tablet.push('builder', { event = ev, id = data.id, by = type(data.by) == 'string' and data.by or nil })
+    if ev == 'lockBroken' or ev == 'reloaded' then
+        CP.push('builder', { event = ev, id = data.id, by = type(data.by) == 'string' and data.by or nil })
     end
 end)
 

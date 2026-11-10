@@ -18,7 +18,6 @@ local MAX_NETID = 0xFFFFFF
 
 local bagRun = {}    -- [src] = the run id this script set his crimsonPoliceRun bag for
 local dropped = {}   -- [runId] = { [src] = true }: officers of that run whose protection is already off
-local errorAt = 0
 
 -- ============================================================================
 --                                   HELPERS
@@ -53,14 +52,6 @@ local function RunOf(src)
     if not (CP.Runs and CP.Runs.getBySrc) then return nil end
     local run = CP.Runs.getBySrc(src)
     return type(run) == 'table' and run or nil
-end
-
--- One console line a minute at most for a failing handler.
-local function LogError(fmt, ...)
-    local now = os.time()
-    if now - errorAt < 60 then return end
-    errorAt = now
-    CP.err(TAG, fmt, ...)
 end
 
 -- ============================================================================
@@ -168,7 +159,7 @@ AddEventHandler('weaponDamageEvent', function(sender, data)
     local src = CP.U.toSrc(sender) or CP.U.toSrc(source)
     if not src or type(data) ~= 'table' or WasEventCanceled() then return end
     local ok, err = pcall(OnHit, src, data)
-    if not ok then LogError('weaponDamageEvent from %s failed: %s', tostring(src), tostring(err)) end
+    if not ok then CP.errEvery(TAG, 'damage', 'weaponDamageEvent from %s failed: %s', tostring(src), tostring(err)) end
 end)
 
 -- ============================================================================

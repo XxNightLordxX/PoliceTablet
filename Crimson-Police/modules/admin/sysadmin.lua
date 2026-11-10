@@ -78,10 +78,7 @@ local statePending = {}     -- token -> { src, state }
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function Has(modName, fnName)
-    local m = CP[modName]
-    return type(m) == 'table' and type(m[fnName]) == 'function'
-end
+local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
@@ -210,14 +207,6 @@ local function WriteRows(path, rows)
     return okW and res == true, #text
 end
 
-local function SrcOf(citizenid)
-    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
-    local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    s = ok and math.tointeger(tonumber(s)) or nil
-    if not s or s <= 0 then return nil end
-    return s
-end
-
 -- The online player a Support action names: { src } or { citizenid }.
 local function TargetOf(p)
     local s = math.tointeger(tonumber(p.src) or -1)
@@ -226,7 +215,7 @@ local function TargetOf(p)
         if ok and type(info) == 'table' then return s, info end
         return nil
     end
-    s = SrcOf(p.citizenid)
+    s = CP.srcOf(p.citizenid)
     if not s then return nil end
     local ok, info = Call('Qbx', 'getInfo', s)
     if ok and type(info) == 'table' then return s, info end
@@ -1271,7 +1260,7 @@ local function OpenStore(kind, folder)
     end
     if kind == 'database' then
         local real = CP.Storage and CP.Storage.realMySQL
-        if type(real) == 'table' and type(real.query) == 'table' and GetResourceState('oxmysql') == 'started' then
+        if type(real) == 'table' and type(real.query) == 'table' and CP.Ext.started('oxmysql') then
             return real
         end
         return nil

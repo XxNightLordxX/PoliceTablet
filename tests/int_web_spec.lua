@@ -579,7 +579,7 @@ do
 
     -- the push: one topic, heard at module level (the check runs on while the tablet is closed)
     Has(tclient, 'local SPAWN_TOPIC = \'spawnCheck\'', 'the Lua client pushes topic spawnCheck')
-    Has(tclient, 'CP.Tablet.push(SPAWN_TOPIC, data)', 'through CP.Tablet.push')
+    Has(tclient, 'CP.push(SPAWN_TOPIC, data)', 'through CP.push (CP.Tablet.push)')
     Has(store, 'window.addEventListener(\'message\',', 'the store listens at module level')
     Has(store, 'd.type !== \'push\' || d.topic !== \'spawnCheck\'', 'to push messages of topic spawnCheck')
     local states = {}

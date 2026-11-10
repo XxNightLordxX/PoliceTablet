@@ -74,20 +74,9 @@ local function Clip(s, n)
     return s:sub(1, utf8.offset(s, n + 1) - 1)
 end
 
-local function Has(modName, fnName)
-    local m = CP[modName]
-    return type(m) == 'table' and type(m[fnName]) == 'function'
-end
+local Has = CP.Has
 
-local function Call(modName, fnName, ...)
-    if not Has(modName, fnName) then return false end
-    local res = table.pack(pcall(CP[modName][fnName], ...))
-    if not res[1] then
-        CP.err(TAG, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2]))
-        return false
-    end
-    return true, table.unpack(res, 2, res.n)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 local function Num(v, default)
     local n = tonumber(v)
@@ -144,13 +133,7 @@ local function IsAdmin(src)
     return CP.Access ~= nil and CP.Access.isAdmin ~= nil and CP.Access.isAdmin(src) == true
 end
 
-local function Can(src, action, ctx)
-    if not Has('Permissions', 'can') then return false, 'err.no_permission' end
-    local ok, allowed, errKey = Call('Permissions', 'can', src, action, ctx)
-    if not ok then return false, 'err.internal' end
-    if not allowed then return false, errKey or 'err.no_permission' end
-    return true
-end
+local Can = CP.can
 
 local function RoleOf(src)
     if tonumber(src) == 0 then return 'console' end
@@ -180,12 +163,6 @@ end
 
 local function Webhook(...)
     if Has('Admin', 'webhook') then Call('Admin', 'webhook', ...) end
-end
-
-local function OnlineSrc(citizenid)
-    if type(citizenid) ~= 'string' or not Has('Qbx', 'getByCitizenId') then return nil end
-    local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    return ok and U.toSrc(s) or nil
 end
 
 local function CitizenOf(src)
@@ -633,7 +610,7 @@ function D.restoreRow(src, rowId, reason)
         WHERE run_id = ? AND status = 'open']], { Clip(handler, 50), id }) or 0
     Call('Leaderboard', 'invalidate')
     if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:restored', id) end
-    CP.notify(OnlineSrc(row.citizenid), 'success', 'admin.notice.run_restored',
+    CP.notify(CP.srcOf(row.citizenid), 'success', 'admin.notice.run_restored',
         { mission = MissionLabel(row.mission_id) })
     return true,
         {
@@ -743,7 +720,7 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
     if points then newValue = ('+%d'):format(points) end
     Audit(src, RoleOf(src), 'flags', decision == 'approve' and 'disputeApproved' or 'disputeRejected',
         ('#%s %s'):format(tostring(d.run_id), tostring(d.citizenid)), kind, newValue, reason)
-    CP.notify(OnlineSrc(d.citizenid), decision == 'approve' and 'success' or 'warning',
+    CP.notify(CP.srcOf(d.citizenid), decision == 'approve' and 'success' or 'warning',
         decision == 'approve' and 'admin.notice.dispute_approved' or 'admin.notice.dispute_rejected',
         { mission = label })
     CP.log(TAG, 'dispute %d %s by %s', id, status, tostring(handler))

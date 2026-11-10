@@ -30,8 +30,7 @@ R.cid = Cid
 
 local function Can(src, key)
     if type(key) ~= 'string' then return false end
-    if not (CP.Permissions and CP.Permissions.can) then return false end
-    return CP.Permissions.can(src, key, nil, { admin = true }) == true
+    return CP.can(src, key, nil, { admin = true }) == true
 end
 
 -- Config.AdminUi.restrictionsExtend: the Restrictions screen offers Extend.
@@ -112,7 +111,7 @@ local function FillNames(rows)
     local function want(cid)
         if type(cid) ~= 'string' or cid == '' or seen[cid] then return end
         seen[cid] = true
-        local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(cid)
+        local src = CP.srcOf(cid)
         local info = src and CP.Qbx.getInfo and CP.Qbx.getInfo(src)
         if type(info) == 'table' and type(info.name) == 'string' and info.name ~= '' then
             names[cid] = info.name

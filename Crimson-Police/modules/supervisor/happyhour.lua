@@ -218,9 +218,8 @@ HH.pointsBonusFor = BonusFor
 -- "Sgt Doe": the rank and name of the officer who started it while he is online, else nil (the screens say who by
 -- role then).
 local function NameOf(cid)
-    if type(cid) ~= 'string' or not (CP.Qbx and CP.Qbx.getByCitizenId and CP.Access) then return nil end
-    local ok, src = pcall(CP.Qbx.getByCitizenId, cid)
-    if not ok or not src then return nil end
+    local src = CP.Access and CP.srcOf(cid)
+    if not src then return nil end
     local okO, o = pcall(CP.Access.getOfficer, src)
     if not okO or type(o) ~= 'table' then return nil end
     return ('%s %s'):format(o.rank or '', o.name or ''):gsub('^%s+', '')

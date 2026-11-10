@@ -347,7 +347,7 @@ local PayClaimed
 local function PayRow(row)
     local rowId = math.floor(CP.U.num(row.id))
     local cid = row.citizenid
-    local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(cid)
+    local src = CP.srcOf(cid)
 
     if not src then
         local ok, n = pcall(MySQL.update.await, [[
@@ -739,7 +739,7 @@ end
 
 -- The online officer of a row, re-read: src, info | nil.
 local function OnlineOf(cid)
-    local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(cid)
+    local src = CP.srcOf(cid)
     if not src then return nil end
     local info = CP.Qbx.getInfo and CP.Qbx.getInfo(src)
     if not info or info.citizenid ~= cid then return nil end

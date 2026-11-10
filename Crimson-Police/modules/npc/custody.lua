@@ -121,7 +121,7 @@ local function Exists(e)
     return found == true or found == 1
 end
 
-local function Has(mod, fn) return CP[mod] ~= nil and type(CP[mod][fn]) == 'function' end
+local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 

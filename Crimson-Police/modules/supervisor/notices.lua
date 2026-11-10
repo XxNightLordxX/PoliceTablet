@@ -40,16 +40,7 @@ local function Int(v, lo, hi)
     return n
 end
 
-local function Call(modName, fnName, ...)
-    local m = CP[modName]
-    if type(m) ~= 'table' or type(m[fnName]) ~= 'function' then return false, nil end
-    local res = table.pack(pcall(m[fnName], ...))
-    if not res[1] then
-        CP.err(TAG, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2]))
-        return false, nil
-    end
-    return true, table.unpack(res, 2, res.n)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 -- The limits of one kind, inside what the table holds.
 function N.limits(kind)
@@ -180,9 +171,8 @@ KINDS.staff = {
     on = function() return KindCfg('staff').on ~= false end,
     use = function(src)
         if not (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src)) then return false, 'err.no_permission' end
-        if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-        local ok, err = CP.Permissions.can(src, 'officerRecords', nil, { admin = true })
-        if not ok then return false, err or 'err.no_permission' end
+        local ok, err = CP.can(src, 'officerRecords', nil, { admin = true })
+        if not ok then return false, err end
         return true, nil, src == 0 and 'console' or 'admin', nil
     end,
     audience = function(p)
@@ -409,6 +399,8 @@ if Kit and Kit.supAction then
     Kit.supAction('server:notice:post', 'missionControls', Post, {
         reason = 'optional',
         category = 'board',
+        -- one post of a kind at a time, whoever posts: the per-day and running counts are read before a yield
+        oneAtATime = function(ctx) return type(ctx.payload) == 'table' and ctx.payload.kind or nil end,
         permission = function(src, payload)
             if not (type(payload) == 'table' and KINDS[payload.kind]) then return false, 'err.notice_kind' end
             return AnyUse(src, payload)

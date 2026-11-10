@@ -2040,9 +2040,8 @@ function Draw.locationStats(missionId)
 end
 
 CP.Net.callback('admin:getLocationStats', function(src, args)
-    if not (CP.Permissions and CP.Permissions.can) then return nil, 'err.no_permission' end
-    local okP, eP = CP.Permissions.can(src, 'openAdmin')
-    if not okP then return nil, eP or 'err.no_permission' end
+    local okP, eP = CP.can(src, 'openAdmin')
+    if not okP then return nil, eP end
     local missionId = type(args) == 'table' and args.missionId or nil
     if type(missionId) ~= 'string' or missionId == '' or #missionId > 64 then return nil, 'err.invalid_payload' end
     return Draw.locationStats(missionId)

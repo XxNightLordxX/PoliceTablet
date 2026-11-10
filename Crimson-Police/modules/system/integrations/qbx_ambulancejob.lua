@@ -17,37 +17,19 @@ local HOSPITAL_INDEX = 1             -- qbx_medical names no hospital: every res
 
 A.emsRequest = RESOURCE
 
-local errorLoggedAt = {}
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorLoggedAt[key] and now - errorLoggedAt[key] < 60 then return end
-    errorLoggedAt[key] = now
-    CP.err(TAG, fmt, ...)
-end
-
-local function Started(res) return GetResourceState(res) == 'started' end
-
 function A.doctorCount()
-    if not Started(RESOURCE) then return 0 end
-    local ok, n = pcall(function() return exports.qbx_core:GetDutyCountType('ems') end)
-    if not ok then
-        LogError('GetDutyCountType', 'exports.qbx_core:GetDutyCountType failed: %s', tostring(n))
-        return 0
-    end
+    if not CP.Ext.started(RESOURCE) then return 0 end
+    local ok, n = CP.Ext.call('qbx_core', 'GetDutyCountType', 'ems')
+    if not ok then return 0 end
     return math.floor(tonumber(n) or 0)
 end
 
 function A.revive(n)
-    if not Started(MEDICAL) then
-        LogError('medical', 'qbx_medical is not started: a pick-up cannot revive anyone')
+    if not CP.Ext.started(MEDICAL) then
+        CP.errEvery(TAG, 'medical', 'qbx_medical is not started: a pick-up cannot revive anyone')
         return false
     end
-    local ok, err = pcall(function() exports[MEDICAL]:Revive(n) end)
-    if not ok then
-        LogError('Revive', 'exports.qbx_medical:Revive failed: %s', tostring(err))
-        return false
-    end
+    if not CP.Ext.call(MEDICAL, 'Revive', n) then return false end
     CP.log(TAG, 'revive sent to %d', n)
     return true
 end

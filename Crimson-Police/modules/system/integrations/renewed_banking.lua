@@ -33,23 +33,14 @@ local B = {}
 local TAG = 'renewed_banking'
 local RESOURCE = 'Renewed-Banking'
 
-local errorLoggedAt = {}
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorLoggedAt[key] and now - errorLoggedAt[key] < 60 then return end
-    errorLoggedAt[key] = now
-    CP.err(TAG, fmt, ...)
-end
-
 local function Available()
-    if GetResourceState(RESOURCE) == 'started' then return true end
-    LogError('stopped', 'Renewed-Banking is not started: bank entries and society accounts are unavailable')
+    if CP.Ext.started(RESOURCE) then return true end
+    CP.errEvery(TAG, 'stopped', 'Renewed-Banking is not started: bank entries and society accounts are unavailable')
     return false
 end
 
 -- Renewed-Banking is started (no error line: Settings asks it before reading a balance).
-function B.available() return GetResourceState(RESOURCE) == 'started' end
+function B.available() return CP.Ext.started(RESOURCE) end
 
 -- A non-negative whole amount, or nil.
 local function ToAmount(amount)
@@ -95,14 +86,8 @@ local function Transaction(account, amount, message, issuer, receiver, transType
     if not Available() then return false end
     local tid = transId ~= nil and Text(transId, 128) or nil
     local args = { account, Title(), n, SafeMessage(message), Text(issuer, 100), Text(receiver, 100), transType, tid }
-    local ok, res = pcall(function()
-        return exports[RESOURCE]:handleTransaction(args[1], args[2], args[3], args[4], args[5], args[6], args[7],
-            args[8])
-    end)
-    if not ok then
-        LogError('handleTransaction', 'exports[\'Renewed-Banking\']:handleTransaction failed: %s', tostring(res))
-        return false
-    end
+    local ok, res = CP.Ext.call(RESOURCE, 'handleTransaction', table.unpack(args, 1, 8))
+    if not ok then return false end
     if type(res) ~= 'table' then
         CP.warn(TAG, 'Renewed-Banking rejected the %s entry for %s (invalid arguments)', transType, account)
         return false
@@ -134,11 +119,8 @@ function B.withdrawSociety(account, amount)
     if not n then return false end
     if n == 0 then return true end
     if not Available() then return false end
-    local ok, res = pcall(function() return exports[RESOURCE]:removeAccountMoney(account, n) end)
-    if not ok then
-        LogError('removeAccountMoney', 'exports[\'Renewed-Banking\']:removeAccountMoney failed: %s', tostring(res))
-        return false
-    end
+    local ok, res = CP.Ext.call(RESOURCE, 'removeAccountMoney', account, n)
+    if not ok then return false end
     CP.log(TAG, 'withdraw %d from %s -> %s', n, account, tostring(res))
     return res == true
 end
@@ -146,11 +128,8 @@ end
 function B.societyBalance(account)
     if type(account) ~= 'string' or account == '' then return nil end
     if not Available() then return nil end
-    local ok, res = pcall(function() return exports[RESOURCE]:getAccountMoney(account) end)
-    if not ok then
-        LogError('getAccountMoney', 'exports[\'Renewed-Banking\']:getAccountMoney failed: %s', tostring(res))
-        return nil
-    end
+    local ok, res = CP.Ext.call(RESOURCE, 'getAccountMoney', account)
+    if not ok then return nil end
     if type(res) == 'number' then return res end
     return nil
 end
@@ -161,11 +140,8 @@ function B.depositSociety(account, amount)
     if not n then return false end
     if n == 0 then return true end
     if not Available() then return false end
-    local ok, res = pcall(function() return exports[RESOURCE]:addAccountMoney(account, n) end)
-    if not ok then
-        LogError('addAccountMoney', 'exports[\'Renewed-Banking\']:addAccountMoney failed: %s', tostring(res))
-        return false
-    end
+    local ok, res = CP.Ext.call(RESOURCE, 'addAccountMoney', account, n)
+    if not ok then return false end
     CP.log(TAG, 'deposit %d into %s -> %s', n, account, tostring(res))
     return res == true
 end
@@ -194,7 +170,7 @@ local function FindIn(sql, id, transId)
     if not db then return nil end
     local ok, row = pcall(db.single.await, sql, { id })
     if not ok then
-        LogError('history', 'reading the Renewed-Banking history failed: %s', tostring(row))
+        CP.errEvery(TAG, 'history', 'reading the Renewed-Banking history failed: %s', tostring(row))
         return nil
     end
     if type(row) ~= 'table' or type(row.transactions) ~= 'string' then return { found = false } end

@@ -83,10 +83,6 @@ local function HudRoute(route)
     if CP.Tablet and CP.Tablet.hud then CP.Tablet.hud({ route = route }) end
 end
 
-local function Toast(kind, key, vars)
-    if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(kind, CP.L(key, vars)) end
-end
-
 -- Cumulative lengths so the HUD can show the distance still to drive along the fixed line.
 local function SetPolyline(pts)
     local cum = { 0.0 }
@@ -273,7 +269,7 @@ local function SamplePolyline(token)
     if not pts then
         CP.warn(TAG, 'no GPS route to the start of run %s: using the straight line', runId)
         pts = { start, target }
-        if Valid(token) then Toast('warning', 'route.no_gps') end
+        if Valid(token) then CP.notify('warning', 'route.no_gps') end
     else
         CP.log(TAG, 'route of run %s sampled: %d points', runId, #pts)
     end
@@ -397,7 +393,7 @@ local function MarkArrived()
     removeBlip()
     ClearOurWaypoint(target)
     HudRoute({ status = 'arrived' })
-    Toast('success', cur.action and 'route.arrived_action' or 'route.arrived')
+    CP.notify('success', cur.action and 'route.arrived_action' or 'route.arrived')
 end
 
 -- The run went In progress before this officer reached the start (the server's client:routeStatus 'action',
@@ -429,7 +425,7 @@ function R.follow(runId, dropStart, secondsLeft)
     end
     local left = tonumber(secondsLeft)
     HudRoute({ status = 'action', secondsLeft = left and math.max(0, math.floor(left)) or nil })
-    Toast('info', dropStart and 'route.follow_action' or 'route.follow_action_start')
+    CP.notify('info', dropStart and 'route.follow_action' or 'route.follow_action_start')
     return true
 end
 
@@ -457,7 +453,7 @@ function R.recalculate()
     if not Resample(token) then return false, 'err.route_inactive' end
     ShowRoute()
     local left = tonumber(res.left) or 0
-    Toast('info', 'route.recalculated', { left = left })
+    CP.notify('info', 'route.recalculated', { left = left })
     return true, { recalcsLeft = left }
 end
 
@@ -471,12 +467,12 @@ RegisterNetEvent(CP.e('client:routeWarning'), function(runId, secondsLeft)
         local first = cur.warning == nil
         cur.warning = math.max(0, math.floor(secondsLeft))
         ShowRoute()
-        if first then Toast('warning', 'route.warning', { seconds = cur.warning }) end
+        if first then CP.notify('warning', 'route.warning', { seconds = cur.warning }) end
     else
         local was = cur.warning ~= nil
         cur.warning = nil
         ShowRoute()
-        if was then Toast('success', 'route.back_on') end
+        if was then CP.notify('success', 'route.back_on') end
     end
 end)
 
@@ -553,7 +549,7 @@ CreateThread(function()
         if not cur.sampling then
             StartLine(false)
         end -- our waypoint is the line again
-        Toast('info', 'route.gps_set')
+        CP.notify('info', 'route.gps_set')
         return true, { runId = cur.runId }
     end)
     CP.Tablet.registerClientAction('recalcRoute', function()

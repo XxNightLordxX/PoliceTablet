@@ -37,7 +37,6 @@ local RAMMED = U32(joaat('WEAPON_RAMMED_BY_CAR'))
 local FALL = U32(joaat('WEAPON_FALL'))
 
 local lessCache = { list = false, set = {} }   -- Config.RealPlayers.lessLethal hashed once (again after a change)
-local errorAt = {}
 
 -- ============================================================================
 --                                   HELPERS
@@ -48,13 +47,6 @@ local function Cfg() return (CP.RealPlayers()) end
 local Num = CP.Num
 
 local function Ms(key, default) return math.max(0, Num(Cfg()[key], default)) * 1000 end
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorAt[key] and now - errorAt[key] < 60 then return end
-    errorAt[key] = now
-    CP.err(TAG, fmt, ...)
-end
 
 local function ToInt(v, lo, hi)
     if type(v) ~= 'number' or v ~= v then return nil end
@@ -225,7 +217,7 @@ local function Flag(case, rec, officerSrc, reason, detail, entry)
     Line(case, rec, reason, { by = officerSrc, detail = detail })
     if CP.AntiCheat and CP.AntiCheat.flag then
         local ok, err = pcall(CP.AntiCheat.flag, case.run, officerSrc, reason, detail)
-        if not ok then LogError('flag', 'CP.AntiCheat.flag failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'flag', 'CP.AntiCheat.flag failed: %s', tostring(err)) end
     end
     return true
 end
@@ -239,7 +231,7 @@ local function Penalize(case, rec, officerSrc, id)
     seen[officerSrc] = true
     if not (CP.Runs and CP.Runs.penalize) then return false end
     local ok, res = pcall(CP.Runs.penalize, case.run, id, { src = officerSrc })
-    if not ok then LogError('penalize', 'CP.Runs.penalize failed: %s', tostring(res)) end
+    if not ok then CP.errEvery(TAG, 'penalize', 'CP.Runs.penalize failed: %s', tostring(res)) end
     return ok and res ~= false
 end
 
@@ -361,7 +353,7 @@ AddEventHandler('weaponDamageEvent', function(sender, data)
     src = src and math.tointeger(src)
     if not src or src <= 0 or type(data) ~= 'table' or WasEventCanceled() then return end
     local ok, err = pcall(OnDamage, src, data)
-    if not ok then LogError('damage', 'weaponDamageEvent from %s failed: %s', tostring(src), tostring(err)) end
+    if not ok then CP.errEvery(TAG, 'damage', 'weaponDamageEvent from %s failed: %s', tostring(src), tostring(err)) end
 end)
 
 -- ============================================================================
@@ -408,7 +400,7 @@ local function OnSeize(officerSrc, targetSrc)
         local runId, state = case.runId, rec and rec.state or '-'
         CreateThread(function()
             local ok, err = pcall(CP.Admin.audit, officerSrc, nil, 'flags', 'seizeCash', runId, which, state, reason)
-            if not ok then LogError('audit', 'the seizeCash audit failed: %s', tostring(err)) end
+            if not ok then CP.errEvery(TAG, 'audit', 'the seizeCash audit failed: %s', tostring(err)) end
         end)
     end
     if not rec or rec.state == 'void' then return end
@@ -419,7 +411,7 @@ local function OnSeize(officerSrc, targetSrc)
         Line(tCase, rec, 'rs_bad_seize', { by = officerSrc, detail = detail })
         if CP.AntiCheat and CP.AntiCheat.flag then
             local ok, err = pcall(CP.AntiCheat.flag, tCase.run, officerSrc, 'rs_bad_seize', detail)
-            if not ok then LogError('flag', 'CP.AntiCheat.flag failed: %s', tostring(err)) end
+            if not ok then CP.errEvery(TAG, 'flag', 'CP.AntiCheat.flag failed: %s', tostring(err)) end
         end
     else
         params.name = info and info.name or GetPlayerName(officerSrc) or tostring(officerSrc)

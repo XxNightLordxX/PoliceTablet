@@ -86,12 +86,6 @@ local function Update(sql, params)
     return tonumber(n) or 0
 end
 
-local function SrcOf(citizenid)
-    if not (CP.Qbx and CP.Qbx.getByCitizenId) then return nil end
-    local ok, src = pcall(CP.Qbx.getByCitizenId, citizenid)
-    return ok and src or nil
-end
-
 local function CitizenOf(src)
     if not (CP.Qbx and CP.Qbx.getInfo) then return nil end
     local ok, info = pcall(CP.Qbx.getInfo, src)
@@ -112,7 +106,7 @@ end
 
 local function Push(citizenid)
     counts[citizenid] = nil
-    local src = SrcOf(citizenid)
+    local src = CP.srcOf(citizenid)
     CP.push(src, 'rewards', { changed = true })
 end
 
@@ -584,7 +578,7 @@ local function DeliverAll(citizenid)
     -- the lock is read after the wait for the store: a lock the start takes (left behind) holds before this goes on
     CP.Db()
     if DeliveryHeld() then return 0 end
-    local src = SrcOf(citizenid)
+    local src = CP.srcOf(citizenid)
     if not src then return 0 end
     if InArena(src) then
         arenaWait[src] = true
@@ -1015,7 +1009,7 @@ function Rewards.adminView(args)
     q[#q + 1] = (page - 1) * ADMIN_PAGE
     local recent = AdminRows(from .. ' WHERE ' .. where .. ' ORDER BY r.id DESC LIMIT ? OFFSET ?', q)
     for _, list in ipairs({ stuck, recent }) do
-        for _, r in ipairs(list) do r.online = SrcOf(r.citizenid) ~= nil end
+        for _, r in ipairs(list) do r.online = CP.srcOf(r.citizenid) ~= nil end
     end
     return {
         enabled = Enabled(),
@@ -1044,8 +1038,8 @@ CP.Net.action('server:rewards:claim', function(src, payload)
 end, { rate = 2 })
 
 CP.Net.callback('admin:getRewards', function(src, args)
-    local ok, errKey = CP.Permissions.can(src, 'openAdmin')
-    if not ok then return nil, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, 'openAdmin')
+    if not ok then return nil, errKey end
     if args ~= nil and type(args) ~= 'table' then return nil, 'err.invalid_payload' end
     return Rewards.adminView(args or {})
 end)
@@ -1093,7 +1087,7 @@ function Rewards.checkInventory(id)
     local r = RewardById(id)
     if not r then return nil, 'err.reward_not_found' end
     id = math.floor(U.num(r.id))
-    local src = SrcOf(r.citizenid)
+    local src = CP.srcOf(r.citizenid)
     local out = {
         id = id,
         status = r.status,
@@ -1120,7 +1114,7 @@ function Rewards.resolve(id, outcome, audit)
     if r.status ~= 'giving' then return false, 'err.state_changed' end
     local cid = r.citizenid
     if lock:held(cid) then return false, 'err.reward_busy' end
-    local src = SrcOf(cid)
+    local src = CP.srcOf(cid)
     if not src then return false, 'err.officer_offline' end
     local count = TaggedSlots(src, r.item, id)
     if count == nil then return false, 'err.reward_no_inventory' end
@@ -1162,7 +1156,7 @@ function Rewards.takeBack(id, audit)
     id = math.floor(U.num(r.id))
     if r.status ~= 'given' then return false, 'err.state_changed' end
     local cid = r.citizenid
-    local src = SrcOf(cid)
+    local src = CP.srcOf(cid)
     if not src then return false, 'err.officer_offline' end
     local need = math.floor(U.num(r.count, 1))
     local res = WithLock(cid, function()
@@ -1185,9 +1179,7 @@ function Rewards.takeBack(id, audit)
             local take = math.min(left, math.floor(Num(sl.count, 0)))
             -- RemoveItem matches the whole metadata table exactly (strict), and ox_inventory added durability,
             -- degrade or a container to it when it gave the item: the slot's own metadata is that exact table
-            local okR, removed = pcall(function()
-                return exports.ox_inventory:RemoveItem(src, r.item, take, sl.metadata, sl.slot)
-            end)
+            local okR, removed = CP.Ext.call('ox_inventory', 'RemoveItem', src, r.item, take, sl.metadata, sl.slot)
             if okR and removed then left = left - take end
         end
         if left > 0 then
@@ -1446,7 +1438,7 @@ if CP.AdminKit and CP.AdminKit.action then
         local cid = ctx.payload.citizenid
         if not ValidCitizenId(cid) then return false, 'err.invalid_citizenid' end
         if not Enabled() then return false, 'err.rewards_off' end
-        if not SrcOf(cid) then return false, 'err.officer_offline' end
+        if not CP.srcOf(cid) then return false, 'err.officer_offline' end
         local n = Rewards.deliver(cid)
         ctx.audit('rewardDeliver', cid, nil, tostring(n))
         return true, { given = n }

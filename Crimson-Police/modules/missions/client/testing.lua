@@ -139,7 +139,6 @@ local function KeyLabel()
 end
 
 local function PushNui(extra)
-    if not (CP.Tablet and CP.Tablet.push) then return end
     local cfg = Config.Testing or {}
     local data = {
         controls = state.controls and state.inRun,
@@ -153,7 +152,7 @@ local function PushNui(extra)
     if type(extra) == 'table' then
         for k, v in pairs(extra) do data[k] = v end
     end
-    CP.Tablet.push('test', data)
+    CP.push('test', data)
 end
 
 -- An invitation seen through client:testInvite (or the prompt's list) that has not expired yet.
@@ -510,7 +509,7 @@ local function PushCheck(state, extra)
     if type(extra) == 'table' then
         for k, v in pairs(extra) do data[k] = v end
     end
-    if CP.Tablet and CP.Tablet.push then CP.Tablet.push(SPAWN_TOPIC, data) end
+    CP.push(SPAWN_TOPIC, data)
 end
 
 local function FadeOut()

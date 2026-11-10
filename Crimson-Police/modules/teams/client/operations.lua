@@ -37,8 +37,7 @@ RegisterNetEvent(CP.e('client:operation'), function(state, missionLabel, extra)
 
     local toast = TOASTS[state]
     if state == 'launched' and extra.relaunched == true then toast = TOASTS.relaunch end
-    if not (CP.Tablet and CP.Tablet.notify) then return end
-    CP.Tablet.notify(toast.kind, CP.L(toast.key, { mission = missionLabel }), {
+    CP.notify(toast.kind, toast.key, { mission = missionLabel }, {
         title = CP.L('officer.op.toast_title'),
         duration = toast.duration,
     })

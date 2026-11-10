@@ -178,10 +178,6 @@ local function TierRow(run)
     return { tier = 'standard', points = 1.0, cash = 1.0 }
 end
 
-local function Notify(citizenid, kind, key, vars)
-    if CP.Qbx and CP.Qbx.getByCitizenId then CP.notify(CP.Qbx.getByCitizenId(citizenid), kind, key, vars) end
-end
-
 -- ============================================================================
 --                                      P
 -- ============================================================================
@@ -436,7 +432,7 @@ end
 -- Whether an online officer's next completed run still earns the first-run bonus (nil when not online).
 function Scoring.firstRunAvailable(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
-    local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid) or nil
+    local src = CP.srcOf(citizenid)
     if not CP.U.toSrc(src, true) then return nil end
     return Scoring.isFirstRunSinceDuty(src)
 end
@@ -1017,8 +1013,8 @@ local function AddXp(citizenid, delta, signed)
         local oldLevel, newLevel = Scoring.levelOf(0), Scoring.levelOf(newXp or 0)
         if newLevel > oldLevel then
             local info = Scoring.xpLevel(newXp)
-            Notify(citizenid, 'success', 'scoring.level_up', { level = LevelText(info), n = info.n })
-            local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid) or nil
+            CP.notifyCitizen(citizenid, 'success', 'scoring.level_up', { level = LevelText(info), n = info.n })
+            local src = CP.srcOf(citizenid)
             if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('xp:levelUp', citizenid, src, oldLevel, newLevel) end
         end
         return
@@ -1036,8 +1032,8 @@ local function AddXp(citizenid, delta, signed)
     if delta > 0 and newLevel > oldLevel then
         -- the one level-up toast (and hook): once per level-up, naming the level reached
         local info = Scoring.xpLevel(newXp)
-        Notify(citizenid, 'success', 'scoring.level_up', { level = LevelText(info), n = info.n })
-        local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid) or nil
+        CP.notifyCitizen(citizenid, 'success', 'scoring.level_up', { level = LevelText(info), n = info.n })
+        local src = CP.srcOf(citizenid)
         if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('xp:levelUp', citizenid, src, oldLevel, newLevel) end
     end
     CP.log(TAG, 'XP %s %+d -> %d', citizenid, delta, newXp)
@@ -1145,7 +1141,7 @@ local function CheckBadges(citizenid, revoke)
                 if ok and (tonumber(n) or 0) > 0 then
                     added[#added + 1] = b.id
                     CP.log(TAG, '%s earned the %s badge', citizenid, b.id)
-                    Notify(citizenid, 'success', 'scoring.badge_earned', { badge = CP.L('badge.' .. b.id) })
+                    CP.notifyCitizen(citizenid, 'success', 'scoring.badge_earned', { badge = CP.L('badge.' .. b.id) })
                 elseif not ok then
                     CP.err(TAG, 'awarding %s to %s failed: %s', b.id, citizenid, tostring(n))
                 end
@@ -1473,9 +1469,8 @@ end
 function Scoring.manualAward(actorSrc, citizenid, points, reason)
     local actor = CP.U.toSrc(actorSrc, true)
     if not actor then return false, 'err.no_permission' end
-    if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    local okP, errKey = CP.Permissions.can(actor, 'manualAward')
-    if not okP then return false, errKey or 'err.no_permission' end
+    local okP, errKey = CP.can(actor, 'manualAward')
+    if not okP then return false, errKey end
     if type(citizenid) ~= 'string' then return false, 'err.invalid_citizenid' end
     citizenid = CP.U.trim(citizenid)
     if citizenid == '' or #citizenid > 50 or not citizenid:match('^[%w_%-]+$') then
@@ -1517,7 +1512,7 @@ function Scoring.manualAward(actorSrc, citizenid, points, reason)
             'INSERT INTO cp_audit (actor, role, category, action, target, old_value, new_value, reason) VALUES (?, ?, \'audit\', \'manualAward\', ?, NULL, ?, ?)',
             { CP.U.clip(actorId, 50), role, citizenid, tostring(n), r })
     end
-    Notify(citizenid, 'success', 'scoring.manual_award', { points = n, reason = r })
+    CP.notifyCitizen(citizenid, 'success', 'scoring.manual_award', { points = n, reason = r })
     CP.log(TAG, 'manual award %d to %s by %s: %s', n, citizenid, tostring(actor), r)
     return true, rowId
 end
@@ -1536,9 +1531,9 @@ function Scoring.adjust(actorSrc, citizenid, points, reason)
         { reason = reason, by = ActorId(actor) })
     if not rowId then return nil, 'err.internal' end
     if n > 0 then
-        Notify(citizenid, 'success', 'scoring.manual_award', { points = n, reason = reason })
+        CP.notifyCitizen(citizenid, 'success', 'scoring.manual_award', { points = n, reason = reason })
     else
-        Notify(citizenid, 'warning', 'scoring.points_adjusted', { points = n, reason = reason })
+        CP.notifyCitizen(citizenid, 'warning', 'scoring.points_adjusted', { points = n, reason = reason })
     end
     return rowId
 end

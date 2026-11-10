@@ -40,7 +40,7 @@
 --   CP.Access.isSuspended(citizenid) -> boolean, untilTs|nil
 --   CP.Access.suspend(citizenid, days, actorSrc, reason) -> ok, errKey
 --       0 days lifts it. days: a whole number 0-3650 (err.invalid_days); citizenid as stored by Qbox
---       (err.invalid_citizenid). When actorSrc is a player it must pass CP.Permissions.can(actorSrc,
+--       (err.invalid_citizenid). When actorSrc is a player it must pass CP.can(actorSrc,
 --       'suspend') (err.no_permission). An online officer is told on their tablet and a new suspension
 --       fires onLost(src, 'suspended'). Not audited here: the caller (modules/admin, modules/review/anticheat)
 --       writes the audit entry.
@@ -734,7 +734,7 @@ function A.suspend(citizenid, days, actorSrc, reason, opts)
     d = math.floor(d)
     local actor = tonumber(actorSrc)
     if actor and actor > 0 then
-        local allowed = CP.Permissions and CP.Permissions.can and CP.Permissions.can(actor, 'suspend')
+        local allowed = CP.can(actor, 'suspend')
         if not allowed then return false, 'err.no_permission' end
     end
 
@@ -768,7 +768,7 @@ function A.suspend(citizenid, days, actorSrc, reason, opts)
     CP.log(TAG, '%s %s (%d days) by %s: %s', d == 0 and 'unsuspended' or 'suspended', citizenid, d, tostring(actorSrc),
         tostring(reason or ''))
 
-    local target = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid)
+    local target = CP.srcOf(citizenid)
     if target then
         if d > 0 then
             FireLost(target, 'suspended')

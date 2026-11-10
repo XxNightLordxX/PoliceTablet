@@ -16,10 +16,6 @@ local state = { open = false, opening = false, registered = nil, refreshing = fa
 
 local function Send(msg) SendNUIMessage(CP.U.serialize(msg)) end
 
-local function Toast(kind, key)
-    if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(kind, CP.L(key)) end
-end
-
 local function PlayerDown()
     return CP.Tablet ~= nil and CP.Tablet.playerDown ~= nil and CP.Tablet.playerDown() == true
 end
@@ -76,18 +72,18 @@ function C.open(screen)
     if state.opening then return false end
     if CP.Tablet and CP.Tablet.isOpen and CP.Tablet.isOpen() then return false end
     if PlayerDown() then
-        Toast('error', 'err.downed')
+        CP.notify('error', 'err.downed')
         return false
     end
     state.opening = true
     local view, err = Fetch()
     state.opening = false
     if not view then
-        Toast('error', err)
+        CP.notify('error', err)
         return false
     end
     if not (CP.Tablet and CP.Tablet.panelFocus and CP.Tablet.panelFocus(OWNER, true)) then
-        Toast('error', 'err.crimtab_busy')
+        CP.notify('error', 'err.crimtab_busy')
         return false
     end
     state.open = true
@@ -129,7 +125,7 @@ function C.refresh(screen)
                 Send({ type = 'crimtab', open = true, view = view, screen = screen })
             else
                 C.close()
-                Toast('error', err)
+                CP.notify('error', err)
                 break
             end
             screen = nil
@@ -159,7 +155,7 @@ end)
 RegisterNetEvent(CP.e('client:crimtabOpen'), function() CreateThread(function() C.open() end) end)
 
 RegisterNetEvent(CP.e('client:crimtabClose'), function()
-    if C.close() then Toast('warning', 'err.crimtab_closed') end
+    if C.close() then CP.notify('warning', 'err.crimtab_closed') end
 end)
 
 -- Whatever the volunteer side hears changes what the tablet shows.

@@ -1085,7 +1085,7 @@ local function DeskList()
 end
 
 local function TargetUp()
-    return GetResourceState('ox_target') == 'started'
+    return CP.Ext.started('ox_target')
 end
 
 local function SpawnDeskProp(desk)
@@ -1114,27 +1114,25 @@ CreateDeskZones = function()
     for i, desk in ipairs(desks) do
         if type(desk) == 'table' and desk.coords then
             local index = i
-            local ok, id = pcall(function()
-                return exports.ox_target:addBoxZone({
-                    coords = desk.coords,
-                    size = desk.size or vec3(1.0, 1.0, 1.0),
-                    rotation = tonumber(desk.rotation) or 0.0,
-                    debug = Config.Debug == true,
-                    options = {
-                        {
-                            name = DESK_OPTION,
-                            label = CP.L('tablet.desk.open'),
-                            icon = 'fa-solid fa-laptop',
-                            distance = DESK_TARGET_DISTANCE,
-                            canInteract = function()
-                                -- cheap checks first: the arena flag is a state bag read
-                                return not state.open and DeskAllows(desk, DeskDepartment()) and not InForeignArena()
-                            end,
-                            onSelect = function() RequestOpen('desk', index) end,
-                        },
+            local ok, id = CP.Ext.call('ox_target', 'addBoxZone', {
+                coords = desk.coords,
+                size = desk.size or vec3(1.0, 1.0, 1.0),
+                rotation = tonumber(desk.rotation) or 0.0,
+                debug = Config.Debug == true,
+                options = {
+                    {
+                        name = DESK_OPTION,
+                        label = CP.L('tablet.desk.open'),
+                        icon = 'fa-solid fa-laptop',
+                        distance = DESK_TARGET_DISTANCE,
+                        canInteract = function()
+                            -- cheap checks first: the arena flag is a state bag read
+                            return not state.open and DeskAllows(desk, DeskDepartment()) and not InForeignArena()
+                        end,
+                        onSelect = function() RequestOpen('desk', index) end,
                     },
-                })
-            end)
+                },
+            })
             if ok and id then
                 ids[#ids + 1] = id
                 local obj = SpawnDeskProp(desk)
@@ -1153,7 +1151,7 @@ RemoveDeskZones = function()
     local ids = state.deskZones
     state.deskZones = nil
     if ids and TargetUp() then
-        for _, id in ipairs(ids) do pcall(function() exports.ox_target:removeZone(id) end) end
+        for _, id in ipairs(ids) do CP.Ext.call('ox_target', 'removeZone', id) end
     end
     for _, obj in ipairs(state.deskProps) do DeleteObject(obj) end
     state.deskProps = {}
@@ -1254,8 +1252,7 @@ local function WatchedItem()
 end
 
 local function ClientItemCount(item)
-    if GetResourceState('ox_inventory') ~= 'started' then return nil end
-    local ok, res = pcall(function() return exports.ox_inventory:Search('count', item) end)
+    local ok, res = CP.Ext.call('ox_inventory', 'Search', 'count', item)
     return ok and tonumber(res) or nil
 end
 

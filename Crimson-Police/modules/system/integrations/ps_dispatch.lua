@@ -22,27 +22,15 @@ local RESOURCE = 'ps-dispatch'
 local MAX_ID = 2 ^ 31
 local CLEAR_CHECK_MS = 250       -- ps-dispatch's own clearCall handler removes the call first: look after this long
 
-local errorLoggedAt = {}
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorLoggedAt[key] and now - errorLoggedAt[key] < 60 then return end
-    errorLoggedAt[key] = now
-    CP.err(TAG, fmt, ...)
-end
-
 local function Serving() return CP.Integrations.is('dispatch', RESOURCE) end
 
-function D.available() return GetResourceState(RESOURCE) == 'started' end
+function D.available() return CP.Ext.started(RESOURCE) end
 
 -- ps-dispatch's call list, or nil when it is not started or the export failed.
 local function Calls()
     if not D.available() then return nil end
-    local ok, list = pcall(function() return exports[RESOURCE]:GetDispatchCalls() end)
-    if not ok then
-        LogError('GetDispatchCalls', 'exports[\'ps-dispatch\']:GetDispatchCalls failed: %s', tostring(list))
-        return nil
-    end
+    local ok, list = CP.Ext.call(RESOURCE, 'GetDispatchCalls')
+    if not ok then return nil end
     return type(list) == 'table' and list or nil
 end
 

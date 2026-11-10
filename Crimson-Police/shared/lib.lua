@@ -5,16 +5,24 @@
 -- after shared/init.lua and before every module (docs/dev/ARCHITECTURE.md, "The helper library").
 --   CP.U.toSrc   a player source number from anything (shared/utils.lua)
 --   CP.Db        wait for the store before a query (server)
+--   CP.errEvery  an error line at most once a minute per tag and key (a failure that repeats every tick)
 --   CP.notify    a tablet toast (server: to one player; client: to this player)
---   CP.push      a tablet push to one player, through CP.Tablet.push and its Config.Performance.pushGapMs rule
---   CP.Ext       a safe call into another resource's export, with the resource-started check
+--   CP.push      a tablet push (server: to one player, through CP.Tablet.push and its Config.Performance.pushGapMs
+--                rule; client: to this player's own screen)
+--   CP.srcOf     the source of the player who has a character loaded (server); CP.notifyCitizen and
+--                CP.pushCitizen: a toast or push to him
+--   CP.Ext       a safe call into another resource's export, with the resource-started check (failures through
+--                CP.errEvery)
 --   CP.Lock      one-at-a-time per key (an officer, a row, a player), freed on error and when a player drops
 --   CP.Daily     per-day counters for caps: count and reserve in one step, so two requests cannot pass a cap
 --   CP.Objective one kind of Config.Objectives (dailyGoal, weeklyGoal, challenge, bounty, typeOfTheDay) and its switch
 --   CP.Recognition one part of Config.Recognition (levels, levelCurve, badges, weeklyBadges, commendations,
 --                fieldTraining) and its switch
 --   CP.Num       a finite number or the default, kept between lo and hi
---   CP.Call      a safe call into another module of this resource (CP.<Mod>.<fn> in pcall, failures logged)
+--   CP.Has       whether CP.<Mod>.<fn> is there (a module that may be missing or not loaded yet)
+--   CP.can       whether a player may use a power (CP.Permissions.can, safe, always an error key on false)
+--   CP.Call      a safe call into another module of this resource (CP.<Mod>.<fn> in pcall, failures through
+--                CP.errEvery); a module binds its log tag once: local function Call(modName, fnName, ...)
 --   CP.RealPlayers one mode of Config.RealPlayers (liveCrime, volunteer, criminalTablet) or the shared rules, and its
 --                switch; CP.RealPlayersTakePart and CP.RealPlayersRowFilter: what a real-player case takes part in
 --   CP.Restriction one kind of restriction (a mission ban, a suspension, a pair block...) joins the one restrictions
@@ -31,6 +39,34 @@ CP = CP or {}
 function CP.Db()
     local M = CP.Migrations -- server only
     if M and M.ready then M.ready() end
+    return true
+end
+
+-- ============================================================================
+--                                 ERROR LINES
+-- ============================================================================
+
+local ERR_EVERY_S = 60
+local errAt = {} -- errAt[tag .. '\0' .. key] = the second the last line of that key was printed
+
+-- Seconds now: os.time on the server, the game timer on the client (it has no os library).
+local function NowS()
+    if os and os.time then return os.time() end
+    if type(GetGameTimer) == 'function' then return GetGameTimer() // 1000 end
+    return 0
+end
+
+-- CP.err(tag, fmt, ...) at most once a minute per tag and key: a failure that repeats every tick (a stopped
+-- resource's export, a lookup in a loop) prints one line a minute. Answers true when the line was printed.
+---@param tag string
+---@param key any
+---@return boolean
+function CP.errEvery(tag, key, fmt, ...)
+    local k = tostring(tag) .. '\0' .. tostring(key)
+    local now = NowS()
+    if errAt[k] and now - errAt[k] < ERR_EVERY_S then return false end
+    errAt[k] = now
+    CP.err(tag, fmt, ...)
     return true
 end
 
@@ -55,18 +91,36 @@ function CP.ValidCid(v)
     return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
 end
 
+-- true when CP[modName][fnName] is a function.
+---@param modName string
+---@param fnName string
+---@return boolean
+function CP.Has(modName, fnName)
+    local m = CP[modName]
+    return type(m) == 'table' and type(m[fnName]) == 'function'
+end
+
+-- Whether player src may use a power: CP.Permissions.can(src, action, ctx, known) in CP.Call. Answers true | false,
+-- errKey (never nil: 'err.no_permission' while the permissions module is missing, raised or named no key).
+---@param action string
+---@return boolean ok, string|nil errKey
+function CP.can(src, action, ctx, known)
+    local ok, allowed, errKey = CP.Call('permissions', 'Permissions', 'can', src, action, ctx, known)
+    if ok and allowed == true then return true end
+    return false, ok and errKey or 'err.no_permission'
+end
+
 -- Calls CP[modName][fnName](...) in pcall. Answers false when the module or function is missing or raised (the error
--- is logged under tag), else true followed by the function's own answers.
+-- is logged under tag, once a minute per function), else true followed by the function's own answers.
 ---@param tag string
 ---@param modName string
 ---@param fnName string
 ---@return boolean ok
 function CP.Call(tag, modName, fnName, ...)
-    local m = CP[modName]
-    if type(m) ~= 'table' or type(m[fnName]) ~= 'function' then return false end
-    local res = table.pack(pcall(m[fnName], ...))
+    if not CP.Has(modName, fnName) then return false end
+    local res = table.pack(pcall(CP[modName][fnName], ...))
     if not res[1] then
-        if CP.err then CP.err(tag, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2])) end
+        CP.errEvery(tag, modName .. '.' .. fnName, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2]))
         return false
     end
     return true, table.unpack(res, 2, res.n)
@@ -97,6 +151,30 @@ if CP.isServer then
         return TabletCall('notify', n, kind, key, vars, opts)
     end
 
+    -- The source of the player who has that character loaded now (CP.Qbx.getByCitizenId), or nil (offline, the
+    -- console, no player lookup).
+    function CP.srcOf(citizenid)
+        if type(citizenid) ~= 'string' or citizenid == '' or citizenid == 'console' then return nil end
+        local ok, s = CP.Call('lib', 'Qbx', 'getByCitizenId', citizenid)
+        return ok and CP.U.toSrc(s) or nil
+    end
+
+    -- CP.notify to the player who has that character loaded: the source it went to, or nil (offline).
+    function CP.notifyCitizen(citizenid, kind, key, vars, opts)
+        local n = CP.srcOf(citizenid)
+        if not n then return nil end
+        CP.notify(n, kind, key, vars, opts)
+        return n
+    end
+
+    -- CP.push to the player who has that character loaded: the source it went to, or nil (offline).
+    function CP.pushCitizen(citizenid, topic, data)
+        local n = CP.srcOf(citizenid)
+        if not n then return nil end
+        CP.push(n, topic, data)
+        return n
+    end
+
     -- A tablet push of one topic to one player. CP.Tablet.push holds a second push of a topic within
     -- Config.Performance.pushGapMs and merges it with the next one.
     function CP.push(src, topic, data)
@@ -108,6 +186,11 @@ else
     -- A tablet toast to this player: kind, a locale key and its vars, opts as CP.Tablet.notify takes them.
     function CP.notify(kind, key, vars, opts)
         return TabletCall('notify', kind, CP.L(key, vars), opts)
+    end
+
+    -- A tablet push of one topic to this player's own screen (local live updates).
+    function CP.push(topic, data)
+        return TabletCall('push', topic, data)
     end
 end
 
@@ -123,7 +206,7 @@ function CP.Ext.started(resource)
 end
 
 -- exports[resource]:fnName(...) in pcall. Answers true, its results | false, 'not_started' (the resource is not
--- started) | false, the error (logged under the tag 'ext').
+-- started) | false, the error (logged under the tag 'ext', once a minute per resource and export).
 function CP.Ext.call(resource, fnName, ...)
     if not CP.Ext.started(resource) then return false, 'not_started' end
     local args = table.pack(...)
@@ -132,7 +215,8 @@ function CP.Ext.call(resource, fnName, ...)
         return r[fnName](r, table.unpack(args, 1, args.n))
     end))
     if not res[1] then
-        CP.err('ext', 'exports[\'%s\']:%s failed: %s', resource, fnName, tostring(res[2]))
+        CP.errEvery('ext', resource .. ':' .. fnName, 'exports[\'%s\']:%s failed: %s', resource, fnName,
+            tostring(res[2]))
         return false, res[2]
     end
     return true, table.unpack(res, 2, res.n)

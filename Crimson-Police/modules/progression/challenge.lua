@@ -150,19 +150,9 @@ local function ScoringMode()
     return m
 end
 
-local function Has(mod, fn)
-    return type(CP[mod]) == 'table' and type(CP[mod][fn]) == 'function'
-end
+local Has = CP.Has
 
-local function Call(mod, fn, ...)
-    if not Has(mod, fn) then return false end
-    local res = table.pack(pcall(CP[mod][fn], ...))
-    if not res[1] then
-        CP.err(TAG, 'CP.%s.%s failed: %s', mod, fn, tostring(res[2]))
-        return false
-    end
-    return true, table.unpack(res, 2, res.n)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 local function ValidCitizenId(v)
     return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
@@ -840,8 +830,8 @@ end
 local function Allowed(src, action)
     local n = tonumber(src)
     if n == 0 then return true end
-    if not n or not Has('Permissions', 'can') then return false, 'err.no_permission' end
-    return CP.Permissions.can(n, action)
+    if not n then return false, 'err.no_permission' end
+    return CP.can(n, action)
 end
 
 local function Audit(src, action, target, old, new, reason)
@@ -1306,8 +1296,8 @@ end
 -- ============================================================================
 -- The department a supervisor/admin looks at: their own; admins may pass args.department.
 local function ReportDepartment(src, args)
-    local ok, errKey = CP.Permissions.can(src, 'viewMissionList')
-    if not ok then return nil, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, 'viewMissionList')
+    if not ok then return nil, errKey end
     if args ~= nil and type(args) ~= 'table' then return nil, 'err.invalid_payload' end
     local officer = CP.Access.getOfficer(src)
     local dept = officer and officer.department or nil
@@ -1511,7 +1501,7 @@ CP.Net.callback('getDeptContributors', function(src, args)
 end)
 
 CP.Net.callback('admin:getSeasons', function(src)
-    local ok, errKey = CP.Permissions.can(src, 'seasons')
+    local ok, errKey = CP.can(src, 'seasons')
     if not ok then return nil, errKey end
     return C.adminView()
 end)
@@ -1554,8 +1544,8 @@ end)
 
 -- Department report -> an officer's activity (sup:getOfficerActivity): nil and an error key when src may not see it.
 function C.supActivity(src, args)
-    local ok, permErr = CP.Permissions.can(src, 'viewMissionList')
-    if not ok then return nil, permErr or 'err.no_permission' end
+    local ok, permErr = CP.can(src, 'viewMissionList')
+    if not ok then return nil, permErr end
     if type(args) ~= 'table' then return nil, 'err.invalid_payload' end
     if not ValidCitizenId(args.citizenid) then return nil, 'err.invalid_citizenid' end
     local dept, errKey = ReportDepartment(src, { department = args.department })

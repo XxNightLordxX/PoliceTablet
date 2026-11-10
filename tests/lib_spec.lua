@@ -70,6 +70,97 @@ do
     H.exportsMock.some_res = nil
 end
 
+-- CP.errEvery: one line a minute per tag and key; CP.Ext.call and CP.Call log their failures through it
+do
+    local realErr, realTime = CP.err, os.time
+    local logged, now = {}, 1000000
+    CP.err = function(tag, fmt, ...) logged[#logged + 1] = tag .. ':' .. fmt:format(...) end
+    os.time = function() return now end
+    H.eq(CP.errEvery('t', 'k', 'a %d', 1), true, 'errEvery: the first line is printed')
+    H.eq(CP.errEvery('t', 'k', 'a %d', 2), false, 'errEvery: the same key within a minute is not')
+    H.eq(CP.errEvery('t', 'other', 'b'), true, 'errEvery: another key is')
+    H.eq(CP.errEvery('u', 'k', 'c'), true, 'errEvery: the same key of another tag is')
+    now = now + 60
+    H.eq(CP.errEvery('t', 'k', 'a %d', 3), true, 'errEvery: a minute later it is printed again')
+    H.eq(#logged, 4, 'errEvery: four lines')
+    logged = {}
+    H.exportsMock.some_res = {
+        Fails = function() error('broken') end,
+    }
+    for _ = 1, 5 do CP.Ext.call('some_res', 'Fails') end
+    H.eq(#logged, 1, 'an export failing five times in a minute prints one line')
+    H.exportsMock.some_res = nil
+    logged = {}
+    CP.Probe2 = {
+        boom = function() error('boom') end,
+    }
+    for _ = 1, 5 do CP.Call('probe', 'Probe2', 'boom') end
+    H.eq(#logged, 1, 'a module function failing five times prints one line')
+    CP.Probe2 = nil
+    CP.err, os.time = realErr, realTime
+end
+
+-- CP.Has and CP.can: a module that may be missing; a permission answer always carries an error key
+do
+    H.eq(CP.Has('Nope', 'fn'), false, 'Has: a missing module')
+    CP.Probe3 = {
+        fn = function() return 1 end,
+        notFn = 1,
+    }
+    H.eq(CP.Has('Probe3', 'fn'), true, 'Has: a function')
+    H.eq(CP.Has('Probe3', 'notFn'), false, 'Has: not a function')
+    CP.Probe3 = nil
+    local savedP, realErr = CP.Permissions, CP.err
+    CP.err = function() end
+    CP.Permissions = nil
+    local ok, e = CP.can(1, 'openAdmin')
+    H.ok(ok == false and e == 'err.no_permission', 'can: no permissions module: refused with a key')
+    CP.Permissions = {
+        can = function(src, action, ctx, known)
+            if action == 'boom' then error('bad') end
+            if action == 'none' then return false end
+            if action == 'dept' then return ctx.department == 'sast' and known.admin == true, 'err.department' end
+            return action == 'yes', 'err.special'
+        end,
+    }
+    H.eq(CP.can(1, 'yes'), true, 'can: allowed')
+    ok, e = CP.can(1, 'no')
+    H.ok(ok == false and e == 'err.special', 'can: refused with its own key')
+    ok, e = CP.can(1, 'none')
+    H.ok(ok == false and e == 'err.no_permission', 'can: refused with no key: err.no_permission')
+    ok, e = CP.can(1, 'boom')
+    H.ok(ok == false and e == 'err.no_permission', 'can: a raising check refuses, never raises')
+    H.eq(CP.can(1, 'dept', { department = 'sast' }, { admin = true }), true, 'can: ctx and known are passed on')
+    CP.Permissions, CP.err = savedP, realErr
+end
+
+-- CP.srcOf, CP.notifyCitizen, CP.pushCitizen: a toast or push to the player who has a character loaded
+do
+    local savedQ, savedTablet = CP.Qbx, CP.Tablet
+    local seen = {}
+    CP.Qbx = {
+        getByCitizenId = function(cid) return ({ ON001 = 4, STR01 = '6' })[cid] end,
+    }
+    CP.Tablet = {
+        notify = function(src, kind, key) seen[#seen + 1] = { 'notify', src, kind, key } end,
+        push = function(src, topic) seen[#seen + 1] = { 'push', src, topic } end,
+    }
+    H.eq(CP.srcOf('ON001'), 4, 'srcOf: an online character')
+    H.eq(CP.srcOf('STR01'), 6, 'srcOf: a source as a string is a number')
+    H.eq(CP.srcOf('OFF01'), nil, 'srcOf: offline')
+    H.eq(CP.srcOf('console'), nil, 'srcOf: the console is no player')
+    H.eq(CP.srcOf(nil), nil, 'srcOf: nil')
+    H.eq(CP.notifyCitizen('ON001', 'info', 'k'), 4, 'notifyCitizen: the source it went to')
+    H.eq(CP.notifyCitizen('OFF01', 'info', 'k'), nil, 'notifyCitizen: nil while offline')
+    H.eq(CP.pushCitizen('ON001', 'profile', {}), 4, 'pushCitizen: the source it went to')
+    H.eq(#seen, 2, 'one toast and one push sent, nothing to an offline character')
+    H.ok(seen[1][1] == 'notify' and seen[1][2] == 4 and seen[2][1] == 'push' and seen[2][3] == 'profile',
+        'to the right player')
+    CP.Qbx = nil
+    H.eq(CP.srcOf('ON001'), nil, 'srcOf: no player lookup: nil')
+    CP.Qbx, CP.Tablet = savedQ, savedTablet
+end
+
 -- CP.Lock: one at a time, waits, frees on error
 do
     local lock = CP.Lock.new()

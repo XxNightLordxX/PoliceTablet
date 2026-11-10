@@ -183,7 +183,7 @@ end
 
 -- The officer's department: his job while he is online (on duty or not), else his officer row.
 local function DeptOf(citizenid)
-    local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid)
+    local src = CP.srcOf(citizenid)
     local info = src and CP.Qbx.getInfo and CP.Qbx.getInfo(src)
     if type(info) == 'table' and type(info.job) == 'table' and CP.Access and CP.Access.departmentForJob then
         local dept = CP.Access.departmentForJob(info.job.name)
@@ -371,13 +371,8 @@ local function Award(kind, citizenid, force, extra, dept)
     if CP.Hooks and CP.Hooks.fire then
         CP.Hooks.fire('goal:completed', citizenid, goal.id, ('%s:%s'):format(kind, tostring(key)))
     end
-    if CP.Tablet and CP.Tablet.notify and CP.Qbx and CP.Qbx.getByCitizenId then
-        local src = CP.Qbx.getByCitizenId(citizenid)
-        if src then
-            CP.Tablet.notify(src, 'success', kind == 'daily' and 'goals.completed_daily' or 'goals.completed_weekly',
-                { goal = label, points = points })
-        end
-    end
+    CP.notifyCitizen(citizenid, 'success', kind == 'daily' and 'goals.completed_daily' or 'goals.completed_weekly',
+        { goal = label, points = points })
     return true
 end
 

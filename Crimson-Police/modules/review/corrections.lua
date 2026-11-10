@@ -46,20 +46,9 @@ local function Int(v, lo, hi)
     return n
 end
 
-local function Has(modName, fnName)
-    local m = CP[modName]
-    return type(m) == 'table' and type(m[fnName]) == 'function'
-end
+local Has = CP.Has
 
-local function Call(modName, fnName, ...)
-    if not Has(modName, fnName) then return false end
-    local res = table.pack(pcall(CP[modName][fnName], ...))
-    if not res[1] then
-        CP.err(TAG, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2]))
-        return false
-    end
-    return true, table.unpack(res, 2, res.n)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 local function Query(sql, params)
     CP.Db()
@@ -120,14 +109,6 @@ local function ActorId(src)
     return ('player:%d'):format(n)
 end
 
-local function OnlineSrc(citizenid)
-    if not ValidCid(citizenid) then return nil end
-    local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    local n = ok and U.toSrc(s, true) or nil
-    if n and n > 0 then return n end
-    return nil
-end
-
 local function Clip(s, n)
     if s == nil then return nil end
     s = tostring(s)
@@ -178,7 +159,7 @@ end
 -- The officer is busy with something an admin must not pull the rows from under: a run, a unit's ready check or a
 -- Cross-Department Mission. errKey | nil.
 local function OfficerBusy(citizenid)
-    local s = OnlineSrc(citizenid)
+    local s = CP.srcOf(citizenid)
     if not s then return nil end
     local okR, run = Call('Runs', 'getBySrc', s)
     if okR and run then return 'err.officer_on_run' end
@@ -700,7 +681,7 @@ local function MovePlan(src, from, to)
     if Cfg('recordMove', true) == false then return nil, 'err.record_move_off' end
     if not ValidCid(from) or not ValidCid(to) or from == to then return nil, 'err.invalid_citizenid' end
     if not Officer(from) then return nil, 'err.unknown_officer' end
-    if OnlineSrc(from) or OnlineSrc(to) then return nil, 'err.record_move_online' end
+    if CP.srcOf(from) or CP.srcOf(to) then return nil, 'err.record_move_online' end
     if src ~= 0 and Kit and (Kit.isSelf(src, from) or Kit.isSelf(src, to)) then return nil, 'err.self_target' end
     local okE, exists = Call('Qbx', 'characterExists', to)
     if not okE or exists ~= true then return nil, 'err.record_move_target' end
@@ -1130,6 +1111,8 @@ end
 
 local function SelfCid(p) return { citizenid = p.citizenid } end
 local function SelfCidStrict(p) return { citizenid = p.citizenid, strict = true } end
+-- The oneAtATime key of a cap counted per officer (Kit.dailyCount by target): two admins at once cannot both pass it.
+local function TargetKey(ctx) return type(ctx.payload) == 'table' and ctx.payload.citizenid or nil end
 
 local function RowById(rowId, archived)
     local id = Int(rowId, 1, 2147483647)
@@ -1371,7 +1354,7 @@ if Kit and Kit.action then
         if not rows then return nil, 'err.internal' end
         local effect = VoidEffect(rows)
         effect.busy = OfficerBusy(cid)
-        effect.online = OnlineSrc(cid) ~= nil
+        effect.online = CP.srcOf(cid) ~= nil
         effect.confirmWord = cid
         effect.previewToken = ctx.preview('retire', ids, {})
         return effect
@@ -1450,7 +1433,7 @@ if Kit and Kit.action then
             jobId = res
         end
         ctx.audit('unretireOfficer', cid, nil, ('%d'):format(#keys), { category = 'flags' })
-        Kit.notify(cid, 'success', 'admin.notice.unretired', {})
+        CP.notifyCitizen(cid, 'success', 'admin.notice.unretired', {})
         return true, { jobId = jobId, rows = #keys }
     end, { reason = true, requestId = true })
 
@@ -1535,7 +1518,7 @@ if Kit and Kit.action then
         Call('Rewards', 'holdRow', row.id)
         ctx.audit('flagManual', ('#%s %s'):format(tostring(row.id), tostring(row.citizenid)), row.state, 'flagged',
             { category = 'flags' })
-        Kit.notify(row.citizenid, 'warning', 'admin.notice.run_flagged',
+        CP.notifyCitizen(row.citizenid, 'warning', 'admin.notice.run_flagged',
             { mission = Has('Admin', 'missionLabel') and CP.Admin.missionLabel(row.mission_id) or row.mission_id })
         Invalidate(row.citizenid, 'flag')
         return Corr.withViews(ctx.src, ctx.payload, true, { rowId = math.floor(Num(row.id, 0)) })
@@ -1642,21 +1625,21 @@ if Kit and Kit.action then
             { category = 'flags' })
         Invalidate(cid, 'streak')
         return true, res
-    end, { reason = true, self = SelfCid })
+    end, { reason = true, self = SelfCid, oneAtATime = TargetKey }) -- once a day per officer, whichever admin acts
 
     Kit.action('server:admin:resetFirstRun', 'progression', function(ctx)
         local cid = ctx.payload.citizenid
-        if not OnlineSrc(cid) then return false, 'err.officer_offline' end
+        if not CP.srcOf(cid) then return false, 'err.officer_offline' end
         local n = Kit.dailyCount('firstRunReset', { target = cid })
         if n == nil then return false, 'err.internal' end
         if n > 0 then return false, 'err.once_a_day' end
         local ok = Call('Scoring', 'resetFirstRun', cid)
         if not ok then return false, 'err.internal' end
         ctx.audit('firstRunReset', cid, nil, 'available', { category = 'flags' })
-        Kit.notify(cid, 'info', 'admin.notice.first_run_again', {})
+        CP.notifyCitizen(cid, 'info', 'admin.notice.first_run_again', {})
         Invalidate(cid, 'firstRun')
         return true, { citizenid = cid }
-    end, { reason = true, self = SelfCid })
+    end, { reason = true, self = SelfCid, oneAtATime = TargetKey }) -- once a day per officer, whichever admin acts
 
     Kit.action('server:admin:completeGoal', 'progression', function(ctx)
         local p = ctx.payload
@@ -1693,7 +1676,7 @@ if Kit and Kit.action then
     -- Refresh from Qbox: the callsign, rank and name Qbox owns (never edited here), for an online officer.
     Kit.action('server:admin:refreshOfficer', 'officerRecords', function(ctx)
         local cid = ctx.payload.citizenid
-        local s = OnlineSrc(cid)
+        local s = CP.srcOf(cid)
         if not s then return false, 'err.officer_offline' end
         local ok, done = Call('Access', 'refreshOfficerRow', s)
         if not ok or not done then return false, 'err.not_police' end
@@ -1742,7 +1725,7 @@ if Kit and Kit.action then
         local job = Kit.job(ctx.payload.jobId)
         if not job or job.kind ~= 'recordMove' or job.state ~= 'done' then return false, 'err.batch_unknown' end
         local d = job.detail
-        if OnlineSrc(d.from) or OnlineSrc(d.to) then return false, 'err.record_move_online' end
+        if CP.srcOf(d.from) or CP.srcOf(d.to) then return false, 'err.record_move_online' end
         if Officer(d.from) then return false, 'err.batch_restored' end
         -- the new character's rows must all be the moved ones (no rows of its own since)
         local moved = {}

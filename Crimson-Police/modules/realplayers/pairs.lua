@@ -28,7 +28,6 @@ local lastPolice = {}                          -- [citizenid] = os.time() he las
 local lastSuspect = {}                         -- [citizenid] = os.time() a case with him as a suspect closed
 local ledger = { rows = {}, byOfficer = {}, bySuspect = {}, byRun = {}, keys = {}, from = nil }
 local blocks, excludes, suspends = {}, {}, {}  -- [officer|suspect] / [citizenid] = until (os.time())
-local errorAt = {}
 
 -- ============================================================================
 --                                   HELPERS
@@ -45,13 +44,6 @@ end
 local function Lic(v)
     if type(v) ~= 'string' or v == '' or #v > 64 then return nil end
     return v
-end
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorAt[key] and now - errorAt[key] < 60 then return end
-    errorAt[key] = now
-    CP.err(TAG, fmt, ...)
 end
 
 -- Either feature on: only then is a duty change written to the ledger (the memory maps are always kept).
@@ -201,7 +193,9 @@ local function Insert(rows)
                 tuples[#tuples + 1] = '(' .. table.concat(marks, ', ') .. ')'
             end
             local ok, err = pcall(MySQL.insert.await, INSERT .. table.concat(tuples, ', '), params)
-            if not ok then LogError('insert', 'writing %d pair ledger row(s) failed: %s', #tuples, tostring(err)) end
+            if not ok then
+                CP.errEvery(TAG, 'insert', 'writing %d pair ledger row(s) failed: %s', #tuples, tostring(err))
+            end
         end
     end)
 end
@@ -220,7 +214,7 @@ local function LoadRows(fromTs, toTs)
     end
     local ok, rows = pcall(MySQL.query.await, sql, params)
     if not ok then
-        LogError('load', 'reading the pair ledger failed: %s', tostring(rows))
+        CP.errEvery(TAG, 'load', 'reading the pair ledger failed: %s', tostring(rows))
         return false
     end
     for _, r in ipairs(type(rows) == 'table' and rows or {}) do
@@ -251,7 +245,7 @@ local function LoadAdmin(now)
         UNIX_TIMESTAMP(until_at) AS until_ts FROM cp_pvp_pairs
         WHERE kind IN ('block', 'exclude', 'suspend') AND until_at > FROM_UNIXTIME(?)]], { now })
     if not ok then
-        LogError('load', 'reading the pair ledger\'s admin rows failed: %s', tostring(rows))
+        CP.errEvery(TAG, 'load', 'reading the pair ledger\'s admin rows failed: %s', tostring(rows))
         return false
     end
     for _, r in ipairs(type(rows) == 'table' and rows or {}) do
@@ -279,7 +273,7 @@ local function Prune(now)
         if ok then
             removed = removed + math.floor(Num(n, 0))
         else
-            LogError('prune', 'the pair ledger clean-up failed: %s', tostring(n))
+            CP.errEvery(TAG, 'prune', 'the pair ledger clean-up failed: %s', tostring(n))
         end
     end
     local ok, n = pcall(MySQL.update.await,
@@ -288,7 +282,7 @@ local function Prune(now)
     if ok then
         removed = removed + math.floor(Num(n, 0))
     else
-        LogError('prune', 'the pair ledger clean-up failed: %s', tostring(n))
+        CP.errEvery(TAG, 'prune', 'the pair ledger clean-up failed: %s', tostring(n))
     end
     Trim(now)
     if removed > 0 then CP.log(TAG, 'pair ledger clean-up removed %d row(s)', removed) end
@@ -348,7 +342,7 @@ local function SuspectOf(cid, hint)
     local src = CP.U.toSrc(hint)
     local info = src and Info(src)
     if not info or info.citizenid ~= cid then
-        src = CP.Qbx and CP.Qbx.getByCitizenId and CP.U.toSrc(CP.Qbx.getByCitizenId(cid)) or nil
+        src = CP.srcOf(cid)
         info = src and Info(src)
         if not info or info.citizenid ~= cid then src, info = nil, nil end
     end
@@ -743,7 +737,7 @@ function Opp.lift(kind, officer, suspect)
     CreateThread(function()
         if not DbReady() then return end
         local ok, err = pcall(MySQL.update.await, LIFT_SQL[kind], params)
-        if not ok then LogError('lift', 'lifting a %s in the pair ledger failed: %s', kind, tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'lift', 'lifting a %s in the pair ledger failed: %s', kind, tostring(err)) end
     end)
     return true, untilAt
 end
@@ -767,7 +761,7 @@ function Opp.suspectOfRun(cid, runUuid)
     local ok, res = pcall(MySQL.scalar.await, [[SELECT 1 AS was_suspect FROM cp_pvp_pairs
         WHERE run_uuid = ? AND suspect_citizenid = ? AND kind IN ('live', 'volunteer') LIMIT 1]], { runUuid, cid })
     if not ok then
-        LogError('suspectOfRun', 'reading the pair ledger failed: %s', tostring(res))
+        CP.errEvery(TAG, 'suspectOfRun', 'reading the pair ledger failed: %s', tostring(res))
         return nil
     end
     return res ~= nil
@@ -907,7 +901,7 @@ function Opp.checkPairFlags(run)
                 local ok, res = false, nil
                 if officerSrc and CP.AntiCheat and CP.AntiCheat.flag then
                     ok, res = pcall(CP.AntiCheat.flag, run, officerSrc, 'rs_pair_repeat', detail)
-                    if not ok then LogError('flag', 'CP.AntiCheat.flag failed: %s', tostring(res)) end
+                    if not ok then CP.errEvery(TAG, 'flag', 'CP.AntiCheat.flag failed: %s', tostring(res)) end
                 end
                 if ok and res then out[#out + 1] = row.officer end
                 if type(case.timeline) == 'table' then

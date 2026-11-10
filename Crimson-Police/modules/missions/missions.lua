@@ -1411,9 +1411,8 @@ local function PlainSummary(summary)
 end
 
 CP.Net.action('server:admin:reloadMissions', function(src)
-    if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    local allowed, errKey = CP.Permissions.can(src, 'reloadMissions')
-    if not allowed then return false, errKey or 'err.no_permission' end
+    local allowed, errKey = CP.can(src, 'reloadMissions')
+    if not allowed then return false, errKey end
     if not CP.Net.rateOk(src, 'missions:reload', 1, 5000) then return false, 'err.rate_limited' end
     local before = CP.U.count(defs)
     local summary = Missions.reload()

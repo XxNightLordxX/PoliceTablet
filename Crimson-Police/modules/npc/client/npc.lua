@@ -2141,12 +2141,7 @@ local function RegisterContactOptions()
     for _, door in ipairs(DOOR_ORDER) do
         for _, a in ipairs(SEAT_OPTIONS) do vehicles[#vehicles + 1] = SeatOption(a, door) end
     end
-    local ok, err = pcall(function()
-        exports.ox_target:addGlobalPed(peds)
-        exports.ox_target:addGlobalVehicle(vehicles)
-    end)
-    if not ok then
-        CP.warn(TAG, 'could not add the contact options: %s', tostring(err))
+    if not (CP.Ext.call('ox_target', 'addGlobalPed', peds) and CP.Ext.call('ox_target', 'addGlobalVehicle', vehicles)) then
         return
     end
     contactOptions = {}
@@ -2161,10 +2156,8 @@ local function RemoveContactOptions()
     for _, o in ipairs(contactOptions) do
         if o[1] == 'ped' then pedNames[#pedNames + 1] = o[2] else vehNames[#vehNames + 1] = o[2] end
     end
-    pcall(function()
-        exports.ox_target:removeGlobalPed(pedNames)
-        exports.ox_target:removeGlobalVehicle(vehNames)
-    end)
+    CP.Ext.call('ox_target', 'removeGlobalPed', pedNames)
+    CP.Ext.call('ox_target', 'removeGlobalVehicle', vehNames)
     contactReady = false
 end
 
@@ -2459,9 +2452,7 @@ end
 
 local function RegisterOption(label)
     local name = cuffOptions[label]
-    local ok, err = pcall(function() exports.ox_target:addGlobalPed({ OptionFor(label, name) }) end)
-    if not ok then CP.warn(TAG, 'could not add the ox_target option %s: %s', name, tostring(err)) end
-    return ok
+    return (CP.Ext.call('ox_target', 'addGlobalPed', { OptionFor(label, name) }))
 end
 
 EnsureCuffOption = function(label)
@@ -2480,8 +2471,7 @@ local function RemoveAll()
     local names = {}
     for _, label in ipairs(optionOrder) do names[#names + 1] = cuffOptions[label] end
     if #names > 0 then
-        local ok, err = pcall(function() exports.ox_target:removeGlobalPed(names) end)
-        if not ok then CP.warn(TAG, 'could not remove the ox_target options: %s', tostring(err)) end
+        CP.Ext.call('ox_target', 'removeGlobalPed', names)
     end
     RemoveContactOptions()
     optionsOn = false
@@ -2489,7 +2479,7 @@ end
 
 -- ox_target's eye menu is open (false when ox_target is gone or cannot say).
 local function TargetMenuOpen()
-    local ok, open = pcall(function() return exports.ox_target:isActive() end)
+    local ok, open = CP.Ext.call('ox_target', 'isActive')
     return ok and open and true or false
 end
 
@@ -2521,7 +2511,7 @@ EnsureCuffOption(DefaultLabel())
 
 CreateThread(function()
     EnsureGroups()
-    while GetResourceState('ox_target') ~= 'started' do Wait(1000) end
+    while not CP.Ext.started('ox_target') do Wait(1000) end
     targetReady = true
     SyncTargetOptions()
 end)

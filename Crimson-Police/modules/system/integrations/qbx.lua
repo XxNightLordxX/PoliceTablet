@@ -75,7 +75,6 @@ local online = { at = -1, set = {}, list = {}, dirty = false }
 -- src -> { at = GetGameTimer(), info = getInfo's table }: reused for Config.Limits.playerInfoCacheMs, and cleared by
 -- every qbx_core event that changes the player (duty, job, load, unload, groups, metadata, SetPlayerData) and by a drop.
 local infoCache = {}
-local errorLoggedAt = {}
 -- src -> the player's primary Qbox job name, kept only by qbx_core's events and by lookups (never polled), so loops
 -- over every player can skip non-police without copying their Player object (CP.Access.maybeOfficer).
 local jobOf = {}
@@ -85,17 +84,6 @@ local metadataExport = true
 -- ============================================================================
 --                                   HELPERS
 -- ============================================================================
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorLoggedAt[key] and now - errorLoggedAt[key] < 60 then return end
-    errorLoggedAt[key] = now
-    CP.err(TAG, fmt, ...)
-end
-
-local function Started()
-    return GetResourceState(RESOURCE) == 'started'
-end
 
 local function Str(v)
     if type(v) == 'string' then return v end
@@ -177,12 +165,9 @@ end
 
 function Q.getPlayer(src)
     src = CP.U.toSrc(src)
-    if not src or not Started() then return nil end
-    local ok, player = pcall(function() return exports.qbx_core:GetPlayer(src) end)
-    if not ok then
-        LogError('GetPlayer', 'exports.qbx_core:GetPlayer failed: %s', tostring(player))
-        return nil
-    end
+    if not src or not CP.Ext.started(RESOURCE) then return nil end
+    local ok, player = CP.Ext.call('qbx_core', 'GetPlayer', src)
+    if not ok then return nil end
     if type(player) ~= 'table' or type(player.PlayerData) ~= 'table' then return nil end
     return player
 end
@@ -230,7 +215,7 @@ function Q.getInfo(src)
     local n = CP.U.toSrc(src)
     local ms = InfoCacheMs()
     local hit = n and ms > 0 and infoCache[n]
-    if hit and GetGameTimer() - hit.at < ms and Started() then
+    if hit and GetGameTimer() - hit.at < ms and CP.Ext.started(RESOURCE) then
         jobOf[n] = hit.info.job.name
         return CopyInfo(hit.info)
     end
@@ -241,12 +226,9 @@ function Q.getInfo(src)
 end
 
 function Q.getByCitizenId(citizenid)
-    if type(citizenid) ~= 'string' or citizenid == '' or not Started() then return nil end
-    local ok, player = pcall(function() return exports.qbx_core:GetPlayerByCitizenId(citizenid) end)
-    if not ok then
-        LogError('GetPlayerByCitizenId', 'exports.qbx_core:GetPlayerByCitizenId failed: %s', tostring(player))
-        return nil
-    end
+    if type(citizenid) ~= 'string' or citizenid == '' or not CP.Ext.started(RESOURCE) then return nil end
+    local ok, player = CP.Ext.call('qbx_core', 'GetPlayerByCitizenId', citizenid)
+    if not ok then return nil end
     if type(player) ~= 'table' or type(player.PlayerData) ~= 'table' then return nil end
     return CP.U.toSrc(player.PlayerData.source)
 end
@@ -254,11 +236,8 @@ end
 -- The whole list from GetQBPlayers (a map keyed by server id that copies every player's data across the export
 -- boundary). false when the export failed.
 local function ReadOnline(now)
-    local ok, players = pcall(function() return exports.qbx_core:GetQBPlayers() end)
-    if not ok then
-        LogError('GetQBPlayers', 'exports.qbx_core:GetQBPlayers failed: %s', tostring(players))
-        return false
-    end
+    local ok, players = CP.Ext.call('qbx_core', 'GetQBPlayers')
+    if not ok then return false end
     local list, seen, jobs = {}, {}, {}
     if type(players) == 'table' then
         for key, p in pairs(players) do
@@ -289,7 +268,7 @@ local function SetOnline(src, on)
 end
 
 function Q.getOnlinePlayers()
-    if not Started() then return {} end
+    if not CP.Ext.started(RESOURCE) then return {} end
     local now = GetGameTimer()
     local maxAge = InfoCacheMs() > 0 and ONLINE_REREAD_MS or ONLINE_CACHE_MS
     if online.at < 0 or now - online.at >= maxAge then
@@ -311,24 +290,18 @@ function Q.knownJob(src)
 end
 
 function Q.getJobs()
-    if not Started() then return {} end
-    local ok, jobs = pcall(function() return exports.qbx_core:GetJobs() end)
-    if not ok then
-        LogError('GetJobs', 'exports.qbx_core:GetJobs failed: %s', tostring(jobs))
-        return {}
-    end
+    if not CP.Ext.started(RESOURCE) then return {} end
+    local ok, jobs = CP.Ext.call('qbx_core', 'GetJobs')
+    if not ok then return {} end
     if type(jobs) ~= 'table' then return {} end
     return jobs
 end
 
 -- Qbox's gangs (exports.qbx_core:GetGangs): { [name] = { label, grades = { [level] = { name } } } }; {} when it fails.
 function Q.getGangs()
-    if not Started() then return {} end
-    local ok, gangs = pcall(function() return exports.qbx_core:GetGangs() end)
-    if not ok then
-        LogError('GetGangs', 'exports.qbx_core:GetGangs failed: %s', tostring(gangs))
-        return {}
-    end
+    if not CP.Ext.started(RESOURCE) then return {} end
+    local ok, gangs = CP.Ext.call('qbx_core', 'GetGangs')
+    if not ok then return {} end
     return type(gangs) == 'table' and gangs or {}
 end
 
@@ -384,7 +357,7 @@ end
 -- One metadata value through qbx_core's GetMetadata export: a lookup inside qbx_core, no copy of the whole Player.
 -- src must be a number: qbx_core reads its players table for a citizenid string (GetOfflinePlayer).
 local function ReadMetadata(src, key)
-    return pcall(function() return exports.qbx_core:GetMetadata(src, key) end)
+    return CP.Ext.call('qbx_core', 'GetMetadata', src, key)
 end
 
 -- With no ambulance script (CP.Ambulance.downedByPed) nothing writes that metadata: a dead ped counts as down too.
@@ -415,7 +388,7 @@ end
 
 function Q.isDowned(src)
     src = CP.U.toSrc(src)
-    if not src or not Started() then return false end
+    if not src or not CP.Ext.started(RESOURCE) then return false end
     return MetadataDowned(src) or PedDead(src)
 end
 
@@ -428,8 +401,8 @@ function Q.plateOwned(plate)
     if type(db) ~= 'table' or type(db.scalar) ~= 'table' then return nil end
     local ok, found = pcall(db.scalar.await, 'SELECT 1 FROM player_vehicles WHERE plate = ? LIMIT 1', { plate })
     if not ok then
-        LogError('plate', 'player_vehicles plate lookup failed (mission plates use the reserved pattern only): %s',
-            tostring(found))
+        CP.errEvery(TAG, 'plate',
+            'player_vehicles plate lookup failed (mission plates use the reserved pattern only): %s', tostring(found))
         return nil
     end
     return found ~= nil
@@ -463,7 +436,7 @@ function Q.licenseOf(citizenid)
     if not db then return nil end
     local ok, row = pcall(db.single.await, 'SELECT license FROM players WHERE citizenid = ? LIMIT 1', { citizenid })
     if not ok then
-        LogError('licenseOf', 'players license lookup failed: %s', tostring(row))
+        CP.errEvery(TAG, 'licenseOf', 'players license lookup failed: %s', tostring(row))
         return nil
     end
     if type(row) == 'table' and type(row.license) == 'string' and row.license ~= '' then return row.license end
@@ -478,7 +451,7 @@ function Q.characterExists(citizenid)
     if not db then return nil end
     local ok, row = pcall(db.single.await, 'SELECT 1 AS found FROM players WHERE citizenid = ? LIMIT 1', { citizenid })
     if not ok then
-        LogError('characterExists', 'players lookup failed: %s', tostring(row))
+        CP.errEvery(TAG, 'characterExists', 'players lookup failed: %s', tostring(row))
         return nil
     end
     return type(row) == 'table'
@@ -534,7 +507,7 @@ function Q.characterNames(cids)
             ('SELECT citizenid, charinfo FROM players WHERE citizenid IN (%s)'):format(table.concat(marks, ', ')),
             chunk)
         if not ok then
-            LogError('characterNames', 'players name lookup failed: %s', tostring(rows))
+            CP.errEvery(TAG, 'characterNames', 'players name lookup failed: %s', tostring(rows))
             return out
         end
         for _, r in ipairs(type(rows) == 'table' and rows or {}) do
@@ -552,7 +525,7 @@ function Q.citizenidsOfLicense(license)
     if not db then return {} end
     local ok, rows = pcall(db.query.await, 'SELECT citizenid FROM players WHERE license = ? LIMIT 20', { license })
     if not ok then
-        LogError('citizenidsOfLicense', 'players lookup by license failed: %s', tostring(rows))
+        CP.errEvery(TAG, 'citizenidsOfLicense', 'players lookup by license failed: %s', tostring(rows))
         return {}
     end
     local out = {}
@@ -579,7 +552,7 @@ function Q.userLicenses(license)
     local ok, rows = pcall(db.query.await,
         'SELECT license, license2 FROM users WHERE license = ? OR license2 = ? LIMIT 5', { license, license })
     if not ok then
-        LogError('userLicenses', 'users lookup by license failed: %s', tostring(rows))
+        CP.errEvery(TAG, 'userLicenses', 'users lookup by license failed: %s', tostring(rows))
         return out
     end
     for _, r in ipairs(type(rows) == 'table' and rows or {}) do

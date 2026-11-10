@@ -137,7 +137,7 @@ RegisterNetEvent('crimson-police:client:contactConfirm', function(data)
         if CP.Tablet and CP.Tablet.isOpen and not CP.Tablet.isOpen() and CP.Tablet.open then
             CP.Tablet.open('officer', { screen = 'active' })
         end
-        if CP.Tablet and CP.Tablet.push then CP.Tablet.push('contactConfirm', data) end
+        CP.push('contactConfirm', data)
     end)
 end)
 

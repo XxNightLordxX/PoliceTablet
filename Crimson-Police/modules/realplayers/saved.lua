@@ -16,7 +16,6 @@ local TRIM_BATCH = 100            -- rows past casesKept removed per statement
 local VERSION = 1                 -- the layout of case_json
 
 local state = { loaded = false, loading = false }
-local errorAt = {}
 
 -- The suspect fields the staff views read (Opp.staffCase); the rest (positions, server ids, timers) stays out.
 local REC_FIELDS = {
@@ -50,13 +49,6 @@ end
 
 local function ValidRunId(v)
     return type(v) == 'string' and #v > 0 and #v <= 36 and v:match('^[%w%-]+$') ~= nil
-end
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorAt[key] and now - errorAt[key] < 60 then return end
-    errorAt[key] = now
-    CP.err(TAG, fmt, ...)
 end
 
 local function FeatureOn() return select(2, CP.RealPlayers()) end
@@ -226,7 +218,7 @@ local function TrimKept()
         ('SELECT run_uuid FROM cp_pvp_cases ORDER BY closed_at DESC, run_uuid DESC LIMIT %d OFFSET %d'):format(
             TRIM_BATCH, Kept()))
     if not ok then
-        LogError('trim', 'reading the saved cases failed: %s', tostring(rows))
+        CP.errEvery(TAG, 'trim', 'reading the saved cases failed: %s', tostring(rows))
         return
     end
     local ids, marks = {}, {}
@@ -239,7 +231,7 @@ local function TrimKept()
     if #ids == 0 then return end
     local okDel, err = pcall(MySQL.update.await,
         'DELETE FROM cp_pvp_cases WHERE run_uuid IN (' .. table.concat(marks, ', ') .. ')', ids)
-    if not okDel then LogError('trim', 'removing old saved cases failed: %s', tostring(err)) end
+    if not okDel then CP.errEvery(TAG, 'trim', 'removing old saved cases failed: %s', tostring(err)) end
 end
 
 local function Save(case)
@@ -248,14 +240,15 @@ local function Save(case)
     local okText, text = false, nil
     if okForm then okText, text = pcall(json.encode, form) end
     if not okText or type(text) ~= 'string' then
-        LogError('save', 'run %s: the case could not be saved: %s', tostring(case.runId), tostring(text or form))
+        CP.errEvery(TAG, 'save', 'run %s: the case could not be saved: %s', tostring(case.runId),
+            tostring(text or form))
         return
     end
     local ok, err = pcall(MySQL.update.await, [[INSERT INTO cp_pvp_cases (run_uuid, kind, closed_at, case_json)
         VALUES (?, ?, FROM_UNIXTIME(?), ?) ON DUPLICATE KEY UPDATE kind = VALUES(kind), closed_at = VALUES(closed_at),
         case_json = VALUES(case_json)]], { case.runId, form.kind, math.floor(Num(case.closedAt, os.time())), text })
     if not ok then
-        LogError('save', 'run %s: saving the case failed: %s', tostring(case.runId), tostring(err))
+        CP.errEvery(TAG, 'save', 'run %s: saving the case failed: %s', tostring(case.runId), tostring(err))
         return
     end
     TrimKept()
@@ -266,7 +259,7 @@ local function Load()
     local ok, rows = pcall(MySQL.query.await,
         ('SELECT run_uuid, case_json FROM cp_pvp_cases ORDER BY closed_at DESC, run_uuid DESC LIMIT %d'):format(Kept()))
     if not ok then
-        LogError('load', 'reading the saved cases failed: %s', tostring(rows))
+        CP.errEvery(TAG, 'load', 'reading the saved cases failed: %s', tostring(rows))
         return false
     end
     local list = {}
@@ -279,7 +272,8 @@ local function Load()
         if entry and entry.case.runId == rows[i].run_uuid then
             list[#list + 1] = entry
         else
-            LogError('decode', 'the saved case of run %s could not be read; it is left out', tostring(rows[i].run_uuid))
+            CP.errEvery(TAG, 'decode', 'the saved case of run %s could not be read; it is left out',
+                tostring(rows[i].run_uuid))
         end
     end
     if Opp.restoreClosed then Opp.restoreClosed(list) end
@@ -293,7 +287,7 @@ local function Prune(now)
     if not DbReady() then return end
     local cutoff = now - math.floor(math.max(1, Num(Cfg().pairLedgerDays, 30)) * DAY_S)
     local ok, err = pcall(MySQL.update.await, 'DELETE FROM cp_pvp_cases WHERE closed_at < FROM_UNIXTIME(?)', { cutoff })
-    if not ok then LogError('prune', 'the saved cases clean-up failed: %s', tostring(err)) end
+    if not ok then CP.errEvery(TAG, 'prune', 'the saved cases clean-up failed: %s', tostring(err)) end
     TrimKept()
 end
 

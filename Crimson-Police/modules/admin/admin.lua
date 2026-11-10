@@ -201,10 +201,7 @@ local function WarnOnce(key, fmt, ...)
     CP.warn(TAG, fmt, ...)
 end
 
-local function Has(modName, fnName)
-    local m = CP[modName]
-    return type(m) == 'table' and type(m[fnName]) == 'function'
-end
+local Has = CP.Has
 
 -- pcall CP.<mod>.<fn>(...): true + results, or false when missing/failed.
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
@@ -282,22 +279,10 @@ local function RoleOf(src)
     return 'supervisor'
 end
 
-local function Can(src, action, ctx)
-    if not Has('Permissions', 'can') then return false, 'err.no_permission' end
-    local ok, allowed, errKey = Call('Permissions', 'can', src, action, ctx)
-    if not ok then return false, 'err.internal' end
-    if not allowed then return false, errKey or 'err.no_permission' end
-    return true
-end
+local Can = CP.can
 
 local function IsAdmin(src)
     return CP.Access ~= nil and CP.Access.isAdmin ~= nil and CP.Access.isAdmin(src) == true
-end
-
-local function OnlineSrc(citizenid)
-    if type(citizenid) ~= 'string' or not Has('Qbx', 'getByCitizenId') then return nil end
-    local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    return ok and U.toSrc(s) or nil
 end
 
 -- The character citizenid of a player src (nil for the console or a player without a character).
@@ -845,7 +830,7 @@ function Admin.approveFlagged(src, rowId, reason, opts)
         Admin.audit(src, RoleOf(src), 'flags', 'approveFlagged', RowTarget(row), row.flag_reason, 'approved', reason)
     end
     if not opts.quiet then
-        CP.notify(OnlineSrc(row.citizenid), 'success', 'admin.notice.run_approved',
+        CP.notify(CP.srcOf(row.citizenid), 'success', 'admin.notice.run_approved',
             { mission = Admin.missionLabel(row.mission_id) })
     end
     CP.log(TAG, 'row %d approved by %s', row.id, tostring(src))
@@ -869,7 +854,7 @@ local function VoidRow(src, row, reason, action, flaggedOnly, kind)
     Call('ReviewRules', 'clear', row.id)
     Admin.audit(src, RoleOf(src), 'flags', action, RowTarget(row), row.flagged and 'flagged' or row.state,
         kind == 'correction' and 'voided:correction' or 'voided', reason)
-    CP.notify(OnlineSrc(row.citizenid), 'warning', 'admin.notice.run_voided',
+    CP.notify(CP.srcOf(row.citizenid), 'warning', 'admin.notice.run_voided',
         { mission = Admin.missionLabel(row.mission_id) })
     if not NON_MISSION_TYPES[row.mission_type] and kind == 'strike' then
         Call('AntiCheat', 'onVoided', row.citizenid)
@@ -1032,9 +1017,9 @@ function Admin.resolveCitizenId(input)
     -- cp_officers uses a case-insensitive collation: this returns the stored spelling.
     local row = Single('SELECT citizenid FROM cp_officers WHERE citizenid = ? LIMIT 1', { s })
     if row and type(row.citizenid) == 'string' then return row.citizenid end
-    if OnlineSrc(s) then return s end
+    if CP.srcOf(s) then return s end
     local up = s:upper()
-    if up ~= s and OnlineSrc(up) then return up end
+    if up ~= s and CP.srcOf(up) then return up end
     return nil
 end
 
@@ -1660,7 +1645,7 @@ local function OpenDatabase()
     local real, live = MySQL, true
     if StorageMode() == 'files' then
         real, live = CP.Storage.realMySQL, false
-        if GetResourceState and GetResourceState('oxmysql') ~= 'started' then real = nil end
+        if not CP.Ext.started('oxmysql') then real = nil end
     end
     if type(real) ~= 'table' or type(real.query) ~= 'table' or type(real.query.await) ~= 'function' then
         return nil, 'admin.cmd.storage_no_database'
@@ -2790,7 +2775,7 @@ CP.Net.callback('admin:searchOfficers', function(src, args)
             departmentShort = DeptShort(r.department),
             xp = math.floor(Num(r.xp, 0)),
             suspendedUntil = SuspensionOf(r.suspended_ts),
-            online = OnlineSrc(r.citizenid) ~= nil,
+            online = CP.srcOf(r.citizenid) ~= nil,
             retired = r.retired_ts ~= nil,
             excluded = U.truthy(r.board_excluded),
             known = true,
@@ -2798,7 +2783,7 @@ CP.Net.callback('admin:searchOfficers', function(src, args)
     end
     -- an online character without a row yet (never finished a run): found by the exact citizenid
     if total == 0 and q ~= '' and q:match('^[%w_%-]+$') and next(filters) == nil then
-        local s2 = OnlineSrc(q) or OnlineSrc(q:upper())
+        local s2 = CP.srcOf(q) or CP.srcOf(q:upper())
         local okI, info = false, nil
         if s2 then okI, info = Call('Qbx', 'getInfo', s2) end
         if okI and type(info) == 'table' and type(info.citizenid) == 'string' then
@@ -2966,7 +2951,7 @@ function Admin.officerDetail(src, cid)
     local _, viewerCid = ViewerDepartment(src)
     local dept = o and o.department or nil
     local deptInfo = dept and CP.Access and CP.Access.department and CP.Access.department(dept) or nil
-    local online = OnlineSrc(cid)
+    local online = CP.srcOf(cid)
     -- the live streak (a broken one shows 0, not the stored count), the SC-Dispatch suspension (view only)
     local okSt, streak = Call('Scoring', 'streak', cid)
     streak = okSt and type(streak) == 'table' and streak or { days = math.floor(Num(o and o.streak_days, 0)) }

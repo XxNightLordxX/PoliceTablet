@@ -46,8 +46,7 @@ end
 -- The open real-suspect cases, or nil when the admin has no Player suspects screen (no antiFarmOverride key, or live
 -- crimes and volunteers both off, or Config.RealPlayers.adminScreen = false).
 local function OpenCases(src)
-    local okP, can = Call('Permissions', 'can', src, 'antiFarmOverride')
-    if not (okP and can == true) then return nil end
+    if not CP.can(src, 'antiFarmOverride') then return nil end
     local rs, on = CP.RealPlayers()
     if rs.adminScreen == false or not on then return nil end
     local ok, list = Call('Opponents', 'cases')
@@ -77,8 +76,7 @@ end
 -- when the admin has no liveRuns key (no Live screen actions: Home shows no runs).
 local LIVE_ROWS = 6
 local function Runs(src)
-    local okP, can = Call('Permissions', 'can', src, 'liveRuns', nil, { admin = true })
-    if not (okP and can == true) then return nil end
+    if not CP.can(src, 'liveRuns', nil, { admin = true }) then return nil end
     local ok, list = Call('LiveCtl', 'liveRuns', src)
     list = ok and type(list) == 'table' and list or {}
     local rows = {}

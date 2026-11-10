@@ -619,6 +619,18 @@ do
     H.ok(ok == true and type(e.new) == 'table', 'streak recalculated: ' .. tostring(e))
     ok, e = Act('server:admin:forgiveStreakDays', 1, { citizenid = 'OFF00003', days = 99, reason = 'downtime' })
     H.ok(not ok and e == 'err.invalid_days', 'forgive is capped at streakForgiveMax')
+    -- FIN2: a cap counted per officer is one call per officer at a time, whichever admin acts: a second admin's
+    -- forgive sent while the first still reads today's count gets err.busy, so two at once cannot both pass it
+    local realCount, inner = CP.AdminKit.dailyCount, nil
+    CP.AdminKit.dailyCount = function(...)
+        CP.AdminKit.dailyCount = realCount
+        inner = table.pack(
+            Act('server:admin:forgiveStreakDays', 5, { citizenid = 'OFF00003', days = 1, reason = 'same time' }))
+        return realCount(...)
+    end
+    Act('server:admin:forgiveStreakDays', 1, { citizenid = 'OFF00003', days = 1, reason = 'downtime' })
+    CP.AdminKit.dailyCount = realCount
+    H.eq(inner and inner[2], 'err.busy', 'FIN2: a second admin forgiving the same officer at once gets err.busy')
 
     -- banned words: file write with .bak and live reload
     local okW, eW = Act('server:admin:setBannedWords', 1, { add = { 'zorkle' }, remove = {}, reason = 'new slur' })

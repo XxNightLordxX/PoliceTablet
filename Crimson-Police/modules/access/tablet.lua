@@ -868,10 +868,7 @@ local function InviteCount(src)
     return c
 end
 
-local function Can(src, action)
-    local ok, yes = Call('Permissions', 'can', src, action)
-    return ok and yes == true
-end
+local function Can(src, action) return (CP.can(src, action)) end
 
 -- Every officer: a review power can be granted below supervisor grade (CP.Permissions decides each one).
 local function ReviewCount(src, officer)

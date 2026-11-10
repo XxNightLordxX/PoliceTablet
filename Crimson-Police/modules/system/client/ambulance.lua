@@ -59,7 +59,7 @@ function A.sendEMSRequest(script)
         CP.warn(TAG, 'no ambulance script takes EMS requests (%s): no EMS request was sent', tostring(script))
         return false
     end
-    if GetResourceState(script) ~= 'started' then
+    if not CP.Ext.started(script) then
         CP.warn(TAG, '%s is not started: no EMS request was sent', script)
         return false
     end

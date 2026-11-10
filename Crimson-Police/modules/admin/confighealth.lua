@@ -164,7 +164,7 @@ local function CheckDesks()
             end
         end
     end
-    if GetResourceState('ox_target') ~= 'started' then out[#out + 1] = Line('error', 'health.desk.no_target') end
+    if not CP.Ext.started('ox_target') then out[#out + 1] = Line('error', 'health.desk.no_target') end
     table.insert(out, 1, Line('ok', 'health.desk.ok', { n = good, total = #desks }))
     return out
 end

@@ -24,7 +24,6 @@ local DONE = { lost = true, left = true, void = true }
 
 local held = {}                        -- [citizenid] = true while the suspect is 'cuffed' (pruned when he is not)
 local pass = { at = -1, coords = {} }  -- the online players' server coords, read once per watch pass during a hold
-local errorAt = {}
 
 -- ============================================================================
 --                                   HELPERS
@@ -38,13 +37,6 @@ local Num = CP.Num
 local function Ms(key, default) return math.max(0, Num(Cfg()[key], default)) * 1000 end
 
 local function Share() return math.max(0, math.min(1, Num(Cfg().neutralisedShare, 0.5))) end
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorAt[key] and now - errorAt[key] < 60 then return end
-    errorAt[key] = now
-    CP.err(TAG, fmt, ...)
-end
 
 local function Bucket(src)
     if type(GetPlayerRoutingBucket) ~= 'function' then return 0 end
@@ -241,7 +233,7 @@ local function OutsideCuffed(case, rec, o, now)
     local LC = CP.LiveCrime
     if case.kind == 'live' and LC and type(LC.offer) == 'function' then
         local ok, err = pcall(LC.offer, case.run, o.src, 'cuff')
-        if not ok then LogError('offer', 'CP.LiveCrime.offer failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'offer', 'CP.LiveCrime.offer failed: %s', tostring(err)) end
     end
 end
 
@@ -390,7 +382,7 @@ local function OnCuff(officerSrc, targetSrc)
     local own = CP.Runs and CP.Runs.getBySrc and CP.Runs.getBySrc(officerSrc) or nil
     if type(own) == 'table' and own.live and CP.LiveCrime and type(CP.LiveCrime.cuffHint) == 'function' then
         local ok, err = pcall(CP.LiveCrime.cuffHint, own, officerSrc)
-        if not ok then LogError('cuffHint', 'CP.LiveCrime.cuffHint failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'cuffHint', 'CP.LiveCrime.cuffHint failed: %s', tostring(err)) end
     end
 end
 

@@ -679,7 +679,7 @@ Kit.callback('admin:checkBankingTxn', 'payments', function(ctx)
         personal = found and found.personal or nil,
         society = found and found.society or nil,
         busy = v.busy,
-        online = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(row.citizenid) ~= nil or false,
+        online = CP.srcOf(row.citizenid) ~= nil,
         payAgain = Switch('allowPayAgain'),
     }
 end, { rate = 2 })
@@ -815,7 +815,7 @@ Kit.action('server:admin:payNow', 'payments', function(ctx)
     local id = math.floor(U.num(row.id))
     local status = CP.Cash.pay(id)
     ctx.audit('paymentRetry', Target(id, row.citizenid), st, tostring(status or st))
-    local online = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(row.citizenid) ~= nil
+    local online = CP.srcOf(row.citizenid) ~= nil
     Touched(ctx, row.citizenid)
     return true, { id = id, status = status or st, online = online == true }
 end, { requestId = true, rate = 2 })

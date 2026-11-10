@@ -88,11 +88,7 @@ local function On() return Cfg().extraParts == true end
 
 local Num = CP.Num
 
-local function Call(mod, fn, ...)
-    local m = CP[mod]
-    if not (m and type(m[fn]) == 'function') then return false end
-    return pcall(m[fn], ...)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 local function PartCfg(part)
     local parts = type(Cfg().parts) == 'table' and Cfg().parts or {}

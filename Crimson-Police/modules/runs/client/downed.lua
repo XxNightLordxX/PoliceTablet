@@ -67,10 +67,6 @@ local function Overlay(o)
     if o == nil then overlaid = false end
 end
 
-local function Toast(kind, key, vars)
-    if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(kind, CP.L(key, vars)) end
-end
-
 local function FadeOut()
     faded = true
     DoScreenFadeOut(FADE_MS)
@@ -154,7 +150,7 @@ local function RunPickup(runId, dest)
     WaitFor(function() return HasCollisionLoadedAroundEntity(PlayerPedId()) end, COLLISION_TIMEOUT_MS, 100)
     FadeIn()
     Overlay(nil)
-    Toast('info', 'downed.dropped_off')
+    CP.notify('info', 'downed.dropped_off')
     Report(runId, true)
 end
 
@@ -213,7 +209,7 @@ RegisterNetEvent(CP.e('client:requestEMS'), function(runId, script)
         CP.err(TAG, 'modules/system/client/ambulance is missing: no EMS request was sent')
         return
     end
-    if CP.Ambulance.sendEMSRequest(script) then Toast('info', 'downed.ems_requested') end
+    if CP.Ambulance.sendEMSRequest(script) then CP.notify('info', 'downed.ems_requested') end
 end)
 
 AddEventHandler('onResourceStop', function(res)

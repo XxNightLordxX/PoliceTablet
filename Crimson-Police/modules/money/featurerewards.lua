@@ -20,7 +20,7 @@ local ACCOUNTS = { bank = true, cash = true, item = true }
 local CODES = { suspect = 'sus', surrender = 'sur', ftoSignOff = 'fts', ftoComplete = 'ftc', supAward = 'sup' }
 FR.FEATURES = { 'suspect', 'surrender', 'ftoSignOff', 'ftoComplete', 'supAward' }
 
-local busy = {}                    -- [run_uuid] = true while that payment is being written
+local busy = CP.Lock.new()         -- a run_uuid while that payment is being written
 
 -- ============================================================================
 --                                   HELPERS
@@ -190,9 +190,7 @@ function FR.pay(feature, cid, opts)
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
     local uuidCid = ValidCid(opts.uuidCid) and opts.uuidCid or nil
     local runUuid = FR.uuidOf(feature, key, uuidCid or cid)
-    if busy[runUuid] then return nil, 'busy' end
-    busy[runUuid] = true
-    local ok, res, why = pcall(function()
+    local state, res, why = busy:run(runUuid, 0, function()
         local had = CP.Money.rowOf(runUuid, not uuidCid and cid or nil)
         if had == false then return nil, 'error' end
         if had then return nil, 'duplicate' end
@@ -217,8 +215,8 @@ function FR.pay(feature, cid, opts)
             tostring(status), given)
         return { rowId = rowId, status = status, amount = amount, items = items }
     end)
-    busy[runUuid] = nil
-    if not ok then
+    if state == 'busy' then return nil, 'busy' end
+    if state == 'error' then
         CP.err(TAG, 'the %s payment for %s failed: %s', feature, cid, tostring(res))
         return nil, 'error'
     end
@@ -454,4 +452,4 @@ if CP.Hooks and CP.Hooks.on then
 end
 
 -- Test hooks (not part of the contract).
-FR._reset = function() busy = {} end
+FR._reset = function() busy:clear() end

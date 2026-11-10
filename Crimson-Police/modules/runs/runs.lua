@@ -265,10 +265,7 @@ local function WarnOnce(key, fmt, ...)
     CP.warn(TAG, fmt, ...)
 end
 
-local function Has(modName, fnName)
-    local m = CP[modName]
-    return type(m) == 'table' and type(m[fnName]) == 'function'
-end
+local Has = CP.Has
 
 -- Call CP.<mod>.<fn>(...) when it exists; returns true plus its results, or false.
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
@@ -2202,9 +2199,7 @@ local function GiveItems(run, p)
                 CP.warn(TAG, 'cannot give %dx %s to %d for run %s: no room', count, name, p.src, run.id)
                 CP.notify(p.src, 'warning', 'run.item_no_room', { item = name })
             else
-                local ok, success, response = pcall(function()
-                    return exports.ox_inventory:AddItem(p.src, name, count, meta)
-                end)
+                local ok, success, response = CP.Ext.call('ox_inventory', 'AddItem', p.src, name, count, meta)
                 if ok and success then
                     p.items[#p.items + 1] = { name = name, count = count }
                 else
@@ -2245,9 +2240,7 @@ local function RemoveSlots(src, name, meta, skip)
         if type(slot) == 'table' and slot.slot and HasMeta(slot) and not (skip and skip(slot)) then
             local count = math.floor(Num(slot.count, 1))
             -- the slot's own metadata: RemoveItem matches it exactly, so only that unchanged stack is taken
-            local okRm, success = pcall(function()
-                return exports.ox_inventory:RemoveItem(src, name, count, slot.metadata, slot.slot)
-            end)
+            local okRm, success = CP.Ext.call('ox_inventory', 'RemoveItem', src, name, count, slot.metadata, slot.slot)
             if okRm and success then removed = removed + count end
         end
     end
@@ -2339,13 +2332,11 @@ local itemHookId = nil
 local function RegisterItemHook()
     if itemHookId ~= nil then return true end
     if not InventoryUp() then return false end
-    local ok, id = pcall(function()
-        return exports.ox_inventory:registerHook('swapItems', function(payload)
-            local okH, allowed = pcall(Runs._swapItemsHook, payload)
-            if not okH then return true end
-            return allowed
-        end, {})
-    end)
+    local ok, id = CP.Ext.call('ox_inventory', 'registerHook', 'swapItems', function(payload)
+        local okH, allowed = pcall(Runs._swapItemsHook, payload)
+        if not okH then return true end
+        return allowed
+    end, {})
     if not ok then
         WarnOnce('inv_hook', 'could not register the ox_inventory swapItems hook: %s', tostring(id))
         return false

@@ -774,3 +774,10 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   `AdminUi.homeShortcutsByUse` on, use Change pay three times from Home, reopen Home: Change pay is first; set it
   back off: your order again. Screens look as before (the spacing now comes from the shared scale). Paged lists
   read "Page n of m". (FIN1)
+- [ ] Finish (FIN2, the shared helper library): with two admins, open the same officer and press Forgive streak days
+  (or Reset first run) at the same moment: one goes through, the other says busy, and a second try says once a day.
+  Stop Renewed-Banking and pay a society-funded run twice within a minute: the console shows one "Renewed-Banking
+  is not started" line a minute, not one per call (a failing export prints one `[crimson-police:ext]` line a
+  minute the same way). Toasts still arrive
+  for commendations, level-ups, goals, mission bans and field training; the Mission Builder, custody and the testing
+  panel still refresh on the tablet; desks and the cuff and contact options still work through ox_target. (FIN2)

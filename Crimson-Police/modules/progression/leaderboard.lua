@@ -105,20 +105,9 @@ local function CacheSeconds() return math.max(0, Num(Cfg('Leaderboard', 'cacheSe
 local function MinRuns() return math.max(0, Int(Cfg('Leaderboard', 'minRunsToRank', 3))) end
 local function TopN() return math.max(1, Int(Cfg('Leaderboard', 'topN', 25))) end
 
-local function Has(mod, fn)
-    return type(CP[mod]) == 'table' and type(CP[mod][fn]) == 'function'
-end
+local Has = CP.Has
 
--- pcall a module function; returns ok, results...
-local function Call(mod, fn, ...)
-    if not Has(mod, fn) then return false end
-    local res = table.pack(pcall(CP[mod][fn], ...))
-    if not res[1] then
-        CP.err(TAG, 'CP.%s.%s failed: %s', mod, fn, tostring(res[2]))
-        return false
-    end
-    return true, table.unpack(res, 2, res.n)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 local function ValidCitizenId(v)
     return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
@@ -1329,7 +1318,7 @@ if CP.AdminKit and CP.AdminKit.callback then
         end
         if leader and not held then
             Call('Corrections', 'grantBadge', ctx.src, leader.citizenid, rec.badgeId, ctx.reason, { earnedAt = rec.to })
-            Kit.notify(leader.citizenid, 'success', 'leaderboard.officer_of_week_notice', { week = p.weekKey })
+            CP.notifyCitizen(leader.citizenid, 'success', 'leaderboard.officer_of_week_notice', { week = p.weekKey })
             moved = moved + 1
         end
         LB.invalidate()
@@ -1984,11 +1973,11 @@ CP.Net.action('server:setHideName', function(src, payload)
 end, { rate = 2 })
 
 CP.Net.callback('admin:getBoards', function(src, args)
-    local ok, errKey = CP.Permissions.can(src, 'openAdmin')
+    local ok, errKey = CP.can(src, 'openAdmin')
     if not ok then return nil, errKey end
     -- a past week, month or season is heavier: one every 2 s per admin
     if type(args) == 'table' and (args.period == 'range' or args.seasonId ~= nil) then
-        local okB = CP.Permissions.can(src, 'boardsAdmin')
+        local okB = CP.can(src, 'boardsAdmin')
         if not okB then return nil, 'err.no_permission' end
         if not CP.Net.rateOk(src, 'boards:past', 1, 2000) then return nil, 'err.rate_limited' end
     end

@@ -141,7 +141,7 @@ function Setup.view()
         storage = {
             database = db.enabled == true,
             folder = tostring(db.folder or 'saves'),
-            oxmysql = GetResourceState('oxmysql') == 'started',
+            oxmysql = CP.Ext.started('oxmysql'),
             copyCommand = ('/%s storage copy'):format(tostring(cmd)),
         },
         integrations = Integrations(),

@@ -21,10 +21,7 @@ local SCOPES = { all = true, type = true, mission = true }
 
 local Num = CP.Num
 
-local function Has(modName, fnName)
-    local m = CP[modName]
-    return type(m) == 'table' and type(m[fnName]) == 'function'
-end
+local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
@@ -67,16 +64,8 @@ local function MissionLabel(id)
     return tostring(id)
 end
 
--- The online src of a citizenid (nil when offline).
-local function OnlineSrc(citizenid)
-    local ok, src = Call('Qbx', 'getByCitizenId', citizenid)
-    src = ok and U.toSrc(src, true) or nil
-    if not src or src == 0 then return nil end
-    return src
-end
-
 local function RunOfCitizen(citizenid)
-    local src = OnlineSrc(citizenid)
+    local src = CP.srcOf(citizenid)
     if not src then return nil, nil end
     local ok, run = Call('Runs', 'getBySrc', src)
     if ok and type(run) == 'table' then return run, src end

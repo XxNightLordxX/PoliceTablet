@@ -39,31 +39,19 @@ local TAG = 'sc_dispatch'
 local RESOURCE = 'sc-dispatch'
 local MAX_ID_LEN = 64            -- mdt_dispatch.unique_id is VARCHAR(64)
 
-local errorLoggedAt = {}
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorLoggedAt[key] and now - errorLoggedAt[key] < 60 then return end
-    errorLoggedAt[key] = now
-    CP.err(TAG, fmt, ...)
-end
-
 -- sc-dispatch serves dispatch now (its events mean nothing otherwise).
 local function Serving() return CP.Integrations.is('dispatch', RESOURCE) end
 
 function D.available()
-    return GetResourceState(RESOURCE) == 'started'
+    return CP.Ext.started(RESOURCE)
 end
 
 function D.isSuspended(citizenid, jobName)
     if type(citizenid) ~= 'string' or citizenid == '' then return false end
     if not D.available() then return false end
     if type(jobName) ~= 'string' or jobName == '' then jobName = nil end
-    local ok, res = pcall(function() return exports[RESOURCE]:IsPlayerSuspended(citizenid, jobName) end)
-    if not ok then
-        LogError('IsPlayerSuspended', 'exports[\'sc-dispatch\']:IsPlayerSuspended failed: %s', tostring(res))
-        return false
-    end
+    local ok, res = CP.Ext.call(RESOURCE, 'IsPlayerSuspended', citizenid, jobName)
+    if not ok then return false end
     return res == true
 end
 
@@ -78,8 +66,8 @@ function D.lookupActiveCall(callId)
     local ok, rows = pcall(MySQL.query.await,
         'SELECT id, unique_id FROM mdt_dispatch WHERE (id = ? OR unique_id = ?) AND active = 1 LIMIT 1', { num, key })
     if not ok then
-        LogError('lookup', 'mdt_dispatch lookup failed (sc-dispatch must have started once to add unique_id): %s',
-            tostring(rows))
+        CP.errEvery(TAG, 'lookup',
+            'mdt_dispatch lookup failed (sc-dispatch must have started once to add unique_id): %s', tostring(rows))
         return nil
     end
     local row = type(rows) == 'table' and rows[1] or nil
@@ -104,11 +92,8 @@ function D.clearNotification(uniqueId, jobs)
     end
     if #list == 0 then list = { 'police' } end
     if not D.available() then return false end
-    local ok, res = pcall(function() return exports[RESOURCE]:ClearNotification(uniqueId, list) end)
-    if not ok then
-        LogError('ClearNotification', 'exports[\'sc-dispatch\']:ClearNotification failed: %s', tostring(res))
-        return false
-    end
+    local ok, res = CP.Ext.call(RESOURCE, 'ClearNotification', uniqueId, list)
+    if not ok then return false end
     CP.log(TAG, 'cleared %s for %s', uniqueId, table.concat(list, ','))
     return res ~= false
 end
@@ -137,7 +122,8 @@ function D.realCallSummary()
         WHERE active = 1 AND (unique_id IS NULL OR unique_id NOT LIKE ?) GROUP BY priority
     ]], { LikePrefix(prefix) })
     if not ok or type(rows) ~= 'table' then
-        LogError('summary', 'mdt_dispatch real-call count failed (the Dispatch strip is hidden): %s', tostring(rows))
+        CP.errEvery(TAG, 'summary', 'mdt_dispatch real-call count failed (the Dispatch strip is hidden): %s',
+            tostring(rows))
     else
         local total, p1 = 0, 0
         for _, r in ipairs(rows) do
@@ -159,7 +145,8 @@ function D.mdtCommendations(citizenid)
         WHERE citizenid = ? AND type = 'commendation' ORDER BY created_at DESC LIMIT 10
     ]], { citizenid })
     if not ok or type(rows) ~= 'table' then
-        LogError('commendations', 'employee_incidents commendations failed (the MDT tag is hidden): %s', tostring(rows))
+        CP.errEvery(TAG, 'commendations', 'employee_incidents commendations failed (the MDT tag is hidden): %s',
+            tostring(rows))
         return nil
     end
     local out = {}

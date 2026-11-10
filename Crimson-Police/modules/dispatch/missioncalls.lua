@@ -78,20 +78,7 @@ local function Rng()
 end
 MC._setRng = function(r) rng = r end
 
-local function Safe(fn, ...)
-    if type(fn) ~= 'function' then return false, nil end
-    local ok, a, b, c = pcall(fn, ...)
-    if not ok then
-        CP.err(TAG, 'call failed: %s', tostring(a))
-        return false, nil
-    end
-    return true, a, b, c
-end
-
-local function Call(modName, fnName, ...)
-    local m = CP[modName]
-    return Safe(m and m[fnName], ...)
-end
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
 local function GetOfficer(src)
     if not (CP.Access and CP.Access.getOfficer) then return nil, 'err.not_police' end
@@ -1598,7 +1585,7 @@ local function PushCheck(src, role, dept, missionId, typeKey, areaKey, unit, iss
     return nil
 end
 
-local pushBusy = {}   -- issuer -> true while his push is checked and posted
+local pushBusy = CP.Lock.new()   -- an issuer while his push is checked and posted
 local PostPage
 
 -- opts.missionId: push that mission to the unit instead of a random one; the pushMission Mission control,
@@ -1634,15 +1621,13 @@ function MC.page(src, typeKey, area, leaderSrc, opts)
     if not push then return PostPage(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, nil) end
     -- one push per issuer at a time: the per-day count is read through a yielding query, so two pushes sent at
     -- once could both pass it; the lock covers the check and the audit row that counts it
-    if pushBusy[issuer] then return false, 'err.busy' end
-    pushBusy[issuer] = true
-    local res = table.pack(pcall(function()
+    local res = table.pack(pushBusy:run(issuer, 0, function()
         local errP = PushCheck(src, role, dept, opts.missionId, typeKey, areaKey, unit, issuer)
         if errP then return false, errP end
         return PostPage(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, opts.missionId)
     end))
-    pushBusy[issuer] = nil
-    if not res[1] then
+    if res[1] == 'busy' then return false, 'err.busy' end
+    if res[1] == 'error' then
         CP.err(TAG, 'the push of %s failed: %s', tostring(opts.missionId), tostring(res[2]))
         return false, 'err.internal'
     end
@@ -2431,9 +2416,8 @@ local function StaffAllowed(src, adminOnly)
         local _, admin = Call('Access', 'isAdmin', src)
         if not admin then return false, 'err.no_permission' end
     end
-    if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    local ok, e = CP.Permissions.can(src, 'missionCalls')
-    if not ok then return false, e or 'err.no_permission' end
+    local ok, e = CP.can(src, 'missionCalls')
+    if not ok then return false, e end
     return true
 end
 
@@ -2497,9 +2481,8 @@ CP.Net.callback('sup:getMissionCalls', function(src)
 end, { rate = 3 })
 
 CP.Net.callback('admin:getAreaCoverage', function(src)
-    if not (CP.Permissions and CP.Permissions.can) then return nil, 'err.no_permission' end
-    local okP, eP = CP.Permissions.can(src, 'openAdmin')
-    if not okP then return nil, eP or 'err.no_permission' end
+    local okP, eP = CP.can(src, 'openAdmin')
+    if not okP then return nil, eP end
     local index = MC.areaIndex()
     local types = {}
     for key in pairs(Config.MissionTypes or {}) do types[#types + 1] = key end

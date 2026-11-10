@@ -4463,9 +4463,8 @@ end)
 -- ============================================================================
 
 local function AdminOnly(src)
-    if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    local ok, errKey = CP.Permissions.can(src, 'openAdmin')
-    if not ok then return false, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, 'openAdmin')
+    if not ok then return false, errKey end
     return true
 end
 

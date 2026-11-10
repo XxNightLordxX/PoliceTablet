@@ -32,10 +32,7 @@ local maintenance = nil      -- { kind, info, since }
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function Has(modName, fnName)
-    local m = CP[modName]
-    return type(m) == 'table' and type(m[fnName]) == 'function'
-end
+local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
@@ -309,13 +306,6 @@ function Kit.changed(kind, citizenid, missionId)
 end
 
 -- A toast to an officer who is online (nothing when they are not).
-function Kit.notify(citizenid, kind, key, vars)
-    if type(citizenid) ~= 'string' or citizenid == '' then return false end
-    local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    if not ok or not U.toSrc(s, true) or U.toSrc(s, true) == 0 then return false end
-    local okN = Call('Tablet', 'notify', s, kind, key, vars)
-    return okN
-end
 
 -- ============================================================================
 --                      L AND DAY COUNTS (FROM SAVED ROWS)
@@ -686,21 +676,20 @@ end
 --   opts.maintenance   true: allowed during a maintenance lock (status reads, ending the lock)
 --   opts.pushMine      a push topic sent to the acting player only after success (once the audit row is written), so
 --                      his own screens that count today's use (Your controls today) read the new count
---   opts.oneAtATime    true: one call per actor at a time (another while it runs gets err.busy), for a per-day cap
---                      read before a yield
+--   opts.oneAtATime    for a per-day cap read before a yield (Kit.dailyCount): another call while one runs gets
+--                      err.busy. true: one call per actor at a time; fn(ctx) -> key: one call per key at a time,
+--                      whoever acts (a cap counted per target: the key is the target; nil: no lock)
 -- fn(ctx) -> ok, data | false, errKey. ctx = { src, payload, name, reason, requestId, actor, role, target, old, new,
 -- audit(action, target, old, new, aopts), consume(token, kind, ids), changed(kind, citizenid, missionId),
 -- notify(citizenid, kind, key, vars) }.
 
 local GuardRest
 
--- Kit.supAction's permission: opts.permission(src, payload) when given, else CP.Permissions.can(src, permKey, {
+-- Kit.supAction's permission: opts.permission(src, payload) when given, else CP.can(src, permKey, {
 -- department }) with the department opts.department(payload) names (nil: no department check).
 -- admin: what CP.Access.isAdmin answered for n in this request (Guard asks once and hands it to Permissions.can).
 local function SupPermission(entry, n, p, admin)
-    if not (CP.Access and CP.Access.isAdmin and CP.Permissions and CP.Permissions.can) then
-        return false, 'err.no_permission'
-    end
+    if not (CP.Access and CP.Access.isAdmin) then return false, 'err.no_permission' end
     local opts = entry.opts
     if type(opts.permission) == 'function' then
         local okF, ok, err = pcall(opts.permission, n, p)
@@ -715,7 +704,7 @@ local function SupPermission(entry, n, p, admin)
         local okD, d = pcall(opts.department, p)
         if okD and type(d) == 'string' then dept = d end
     end
-    return CP.Permissions.can(n, entry.permKey, dept and { department = dept } or nil, { admin = admin })
+    return CP.can(n, entry.permKey, dept and { department = dept } or nil, { admin = admin })
 end
 
 local function Refuse(ctx, err)
@@ -747,9 +736,8 @@ local function Guard(entry, src, payload)
         if CP.Permissions and CP.Permissions.probe then CP.Permissions.probe(n, name) end
         return false, 'err.no_permission'
     end
-    if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    local okP, errP = CP.Permissions.can(n, permKey, nil, { admin = true })
-    if not okP then return false, errP or 'err.no_permission' end
+    local okP, errP = CP.can(n, permKey, nil, { admin = true })
+    if not okP then return false, errP end
     return GuardRest(entry, n, p, ctx)
 end
 
@@ -826,11 +814,24 @@ local function MakeCtx(ctx, entry)
     end
     ctx.consume = function(token, kind, ids) return Kit.consume(ctx.src, token, kind, ids) end
     ctx.changed = Kit.changed
-    ctx.notify = Kit.notify
+    ctx.notify = CP.notifyCitizen
     return ctx
 end
 
-local inFlight = CP.Lock.new() -- '<action>|<actor>' while an opts.oneAtATime handler of that actor runs
+local inFlight = CP.Lock.new() -- '<action>|<actor or key>' while an opts.oneAtATime handler of that key runs
+
+-- The opts.oneAtATime lock key of this call, or nil (no lock).
+local function OneAtATimeKey(entry, ctx)
+    local one = entry.opts.oneAtATime
+    if one == true then return entry.name .. '|' .. tostring(ctx.actor) end
+    if type(one) ~= 'function' then return nil end
+    local ok, key = pcall(one, ctx)
+    if not ok then
+        CP.err(TAG, 'the oneAtATime key of %s failed: %s', entry.name, tostring(key))
+        return entry.name -- one call of the action at a time
+    end
+    return key ~= nil and (entry.name .. '|' .. tostring(key)) or nil
+end
 
 local function Run(entry, src, payload)
     local okG, ctx = Guard(entry, src, payload)
@@ -839,9 +840,9 @@ local function Run(entry, src, payload)
         return false, ctx.data or 'err.refused'
     end
     if not okG then return false, ctx end
-    -- opts.oneAtATime: one call per actor at a time, so a per-day cap read before a yield (Kit.dailyCount) cannot be
-    -- passed by two requests sent at once; the lock covers the handler and its audit row
-    local lockKey = entry.opts.oneAtATime and (entry.name .. '|' .. tostring(ctx.actor)) or nil
+    -- opts.oneAtATime: one call per actor (or per key) at a time, so a per-day cap read before a yield
+    -- (Kit.dailyCount) cannot be passed by two requests sent at once; the lock covers the handler and its audit row
+    local lockKey = OneAtATimeKey(entry, ctx)
     if lockKey and inFlight:held(lockKey) then return Refuse(ctx, 'err.busy') end
     MakeCtx(ctx, entry)
     local res
@@ -883,7 +884,7 @@ function Kit.action(name, permKey, fn, opts)
 end
 
 -- Kit.supAction(name, permKey, fn, opts): an action for supervisors and admins with the same guards as Kit.action
--- (M, L, I, R, T, S) and the same ctx. P: CP.Permissions.can(src, permKey, { department = opts.department(payload)
+-- (M, L, I, R, T, S) and the same ctx. P: CP.can(src, permKey, { department = opts.department(payload)
 -- }) (a supervisor only for his own department; admins always), or opts.permission(src, payload) -> ok, errKey when
 -- the action decides itself. A supervisor's audit rows carry the role 'supervisor' (ctx.role).
 function Kit.supAction(name, permKey, fn, opts)
@@ -918,8 +919,8 @@ function Kit.callback(name, permKey, fn, opts)
             if CP.Permissions and CP.Permissions.probe then CP.Permissions.probe(n, name) end
             return nil, 'err.no_permission'
         end
-        local okP, errP = CP.Permissions.can(n, permKey, nil, { admin = true })
-        if not okP then return nil, errP or 'err.no_permission' end
+        local okP, errP = CP.can(n, permKey, nil, { admin = true })
+        if not okP then return nil, errP end
         local ctx = { src = n, args = type(args) == 'table' and args or {}, name = name, actor = ActorId(n) }
         ctx.preview = function(kind, ids, effect) return Kit.preview(n, kind, ids, effect) end
         return fn(ctx)

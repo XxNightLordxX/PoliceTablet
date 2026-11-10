@@ -203,12 +203,47 @@ local CALLS = {
     'supervisor/missionban',
     'supervisor/today',
     'supervisor/livectl',
+    'supervisor/notices',
+    'progression/profile',
+    'progression/challenge',
+    'progression/leaderboard',
+    'review/anticheat',
+    'review/disputes',
+    'review/corrections',
+    'review/queue',
+    'dispatch/missioncalls',
+    'map/markers',
 }
 for _, f in ipairs(CALLS) do
     local src = Read('modules/' .. f .. '.lua') or ''
     local body = src:match('local function Call%(modName, fnName, %.%.%.%)([^\n]*)')
     H.eq(body, ' return CP.Call(TAG, modName, fnName, ...) end', f .. ': Call is CP.Call')
 end
+
+-- FIN2: no module keeps its own copy of a library helper: the module check (CP.Has), the once-a-minute error line
+-- (CP.errEvery), another resource's export in pcall (CP.Ext.call), the online source of a citizenid (CP.srcOf) or a
+-- permission check with its missing-module guard (CP.can)
+local COPIES = {
+    { 'local function Has%(modName, fnName%)', 'Has is CP.Has' },
+    { 'local function Has%(mod, fn%)', 'Has is CP.Has' },
+    { 'errorLoggedAt%[', 'its error lines go through CP.errEvery' },
+    { 'now %- errorAt', 'its error lines go through CP.errEvery' },
+    { 'pcall%(function%(%) return exports', 'exports go through CP.Ext.call' },
+    { 'pcall%(function%(%)\n%s*return exports', 'exports go through CP.Ext.call' },
+    { 'CP%.Permissions and CP%.Permissions%.can', 'permissions go through CP.can' },
+    { 'CP%.Qbx and CP%.Qbx%.getByCitizenId and', 'the online source is CP.srcOf' },
+    { 'CP%.Tablet and CP%.Tablet%.push', 'client pushes go through CP.push', client = true },
+}
+local scanned = 0
+for _, f in ipairs(Lines('find modules -name "*.lua" | sort')) do
+    local src = Read(f) or ''
+    scanned = scanned + 1
+    for _, c in ipairs(COPIES) do
+        if not c.client or f:find('/client/', 1, true) then H.ok(not src:find(c[1]), f .. ': ' .. c[2]) end
+    end
+end
+H.ok(scanned > 100, 'every module file is scanned')
+
 local NUMS = {
     'admin/admin',
     'runs/runs',

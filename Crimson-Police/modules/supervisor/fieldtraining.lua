@@ -279,7 +279,7 @@ function FT.onRowSettled(run, p, _, row)
         if not WriteRecord(cid, rec) then return false end
         CP.log(TAG, '%s: %s run %d of %d with trainer %s', cid, run.missionType, st.runs, need, rec.trainer)
         if st.runs >= need then
-            Kit.notify(rec.trainer, 'info', 'fto.toast.ready',
+            CP.notifyCitizen(rec.trainer, 'info', 'fto.toast.ready',
                 { name = r.name or cid, task = TaskLabel(run.missionType) })
         end
         return true
@@ -343,8 +343,7 @@ end
 local function CanManage(src, dept)
     if not FT.enabled() then return false, 'err.fto_off' end
     if type(dept) ~= 'string' then return false, 'err.unknown_officer' end
-    if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    return CP.Permissions.can(src, 'fieldTraining', { department = dept })
+    return CP.can(src, 'fieldTraining', { department = dept })
 end
 
 local function RookiePermission(src, payload)
@@ -387,8 +386,8 @@ local function Pair(ctx)
         }
         if not ctx.audit('ftoPair', rookie, nil, trainer) then return false, 'err.internal' end
         if not WriteRecord(rookie, record) then return false, 'err.internal' end
-        Kit.notify(rookie, 'success', 'fto.toast.paired_rookie', { name = record.trainerName })
-        Kit.notify(trainer, 'success', 'fto.toast.paired_trainer', { name = r.name or rookie })
+        CP.notifyCitizen(rookie, 'success', 'fto.toast.paired_rookie', { name = record.trainerName })
+        CP.notifyCitizen(trainer, 'success', 'fto.toast.paired_trainer', { name = r.name or rookie })
         return true, FT.view(rookie, r.name, record)
     end)
 end
@@ -435,8 +434,8 @@ local function Finish(cid, record, name)
         { cid, badge, record.doneAt })
     if not ok then CP.err(TAG, 'the %s badge for %s failed: %s', badge, cid, tostring(err)) end
     CP.log(TAG, '%s finished field training with %s', cid, record.trainer)
-    Kit.notify(cid, 'success', 'fto.toast.done', { name = record.trainerName or record.trainer })
-    Kit.notify(record.trainer, 'success', 'fto.toast.done_trainer', { name = name or cid })
+    CP.notifyCitizen(cid, 'success', 'fto.toast.done', { name = record.trainerName or record.trainer })
+    CP.notifyCitizen(record.trainer, 'success', 'fto.toast.done_trainer', { name = name or cid })
     return true
 end
 
@@ -451,7 +450,7 @@ local function Bonus(trainerCid, rookieName, task)
         CP.warn(TAG, 'the trainer bonus of %s could not be saved', trainerCid)
         return nil
     end
-    Kit.notify(trainerCid, 'success', 'fto.toast.bonus', { points = n, name = rookieName })
+    CP.notifyCitizen(trainerCid, 'success', 'fto.toast.bonus', { points = n, name = rookieName })
     return rowId
 end
 
@@ -482,7 +481,7 @@ function FT.signOff(src, payload)
         if not id then return false, 'err.internal' end
         local done = Finish(rookie, rec, r.name)
         if not WriteRecord(rookie, rec) then return false, 'err.internal' end
-        Kit.notify(rookie, 'success', 'fto.toast.signed', { task = TaskLabel(task), name = st.signedName })
+        CP.notifyCitizen(rookie, 'success', 'fto.toast.signed', { task = TaskLabel(task), name = st.signedName })
         Bonus(officer.citizenid, r.name or rookie, task)
         -- Config.FeatureRewards: the trainer per sign-off, the rookie once his training is done; each once
         -- per rookie and task whatever pairing comes later (uuidCid: the row is keyed by the rookie, not the trainer)

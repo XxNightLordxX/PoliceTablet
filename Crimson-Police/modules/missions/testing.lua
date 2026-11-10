@@ -136,10 +136,7 @@ end
 
 local Num = CP.Num
 
-local function Has(modName, fnName)
-    local m = CP[modName]
-    return type(m) == 'table' and type(m[fnName]) == 'function'
-end
+local Has = CP.Has
 
 -- Call CP.<mod>.<fn>(...) when it exists: true plus its results, or false (missing or it raised).
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
@@ -207,16 +204,7 @@ local function PlayerName(src)
     return GetPlayerName(src) or ('#' .. tostring(src))
 end
 
-local function Can(src, action)
-    if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
-    local ok, allowedNow, errKey = pcall(CP.Permissions.can, src, action)
-    if not ok then
-        CP.err(TAG, 'CP.Permissions.can(%s) failed: %s', tostring(action), tostring(allowedNow))
-        return false, 'err.no_permission'
-    end
-    if allowedNow then return true end
-    return false, errKey or 'err.no_permission'
-end
+local Can = CP.can
 
 -- Clip to at most n bytes without splitting a UTF-8 character (fits VARCHAR(n) whatever the connection
 -- charset); nil for invalid UTF-8.

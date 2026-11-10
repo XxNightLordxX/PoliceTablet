@@ -45,9 +45,8 @@ end
 
 -- { onDuty, running, controls = { counted, used, perDay } }, or nil, errKey.
 function ST.today(src)
-    local okP, can, errKey = Call('Permissions', 'can', src, 'viewMissionList')
-    if not okP then return nil, 'err.internal' end
-    if can ~= true then return nil, errKey or 'err.no_permission' end
+    local can, errKey = CP.can(src, 'viewMissionList')
+    if not can then return nil, errKey end
     local okO, officer = Call('Access', 'getOfficer', src)
     local dept = okO and type(officer) == 'table' and officer.department or nil
     local okA, admin = Call('Access', 'isAdmin', src)

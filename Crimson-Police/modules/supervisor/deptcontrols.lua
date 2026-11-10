@@ -563,8 +563,8 @@ function DC.canChange(src, key, dept)
     local granted = officer ~= nil and officer.isSupervisor ~= true and Granted(n)
     if not officer or (officer.isSupervisor ~= true and not granted) then return false, 'err.no_permission' end
     if def.master then
-        local ok, err = CP.Permissions.can(n, 'missionControls', { department = officer.department })
-        if not ok then return false, err or 'err.no_permission' end
+        local ok, err = CP.can(n, 'missionControls', { department = officer.department })
+        if not ok then return false, err end
     end
     if def.serverWide then
         dept = SERVER_WIDE
@@ -654,7 +654,7 @@ end
 -- Z10: the controls being written now (DC.set reads its rule, then waits on the database): a second change of the same
 -- control meanwhile is refused, so two supervisors pressing Start happy hour together cannot both pass its rule.
 -- A control with a rule (def.allow, e.g. happy hour's one-at-a-time and per-day count) is held server-wide.
-local setting = {}  -- lockKey -> true
+local setting = CP.Lock.new()  -- the controls being written now
 
 local function SetChecked(src, key, value, reason, opts, role, dept)
     local def = defs[key]
@@ -719,11 +719,9 @@ function DC.set(src, key, value, reason, opts)
     local ok, err, role, dept = DC.canChange(src, key, opts.department)
     if not ok then return false, err end
     local lockKey = defs[key].allow and key or (tostring(dept) .. '|' .. key)
-    if setting[lockKey] then return false, 'err.control_busy' end
-    setting[lockKey] = true
-    local res = table.pack(pcall(SetChecked, src, key, value, reason, opts, role, dept))
-    setting[lockKey] = nil
-    if not res[1] then
+    local res = table.pack(setting:run(lockKey, 0, SetChecked, src, key, value, reason, opts, role, dept))
+    if res[1] == 'busy' then return false, 'err.control_busy' end
+    if res[1] == 'error' then
         CP.err(TAG, 'setting the %s control of %s failed: %s', key, tostring(dept), tostring(res[2]))
         return false, 'err.internal'
     end
@@ -880,8 +878,8 @@ function DC.view(src)
             if not def.master and Active(def, BoundsOf(def, officer.department)) then outside = true end
         end
         if not outside then
-            local ok, err = CP.Permissions.can(n, 'missionControls', { department = officer.department })
-            if not ok then return nil, err or 'err.no_permission' end
+            local ok, err = CP.can(n, 'missionControls', { department = officer.department })
+            if not ok then return nil, err end
         end
         depts[1] = officer.department
     end

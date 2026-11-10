@@ -158,8 +158,6 @@ local function Confirm(p)
     return word
 end
 
-local Busy = {}  -- { [actor] = true }: one award at a time per player, so two at once cannot pass the daily limits
-
 -- { citizenid, points, reason, confirm? }: min to max points to an officer of his own department, never one of his
 -- own characters; a supervisor gives at most Config.MissionControls.awardPointsPerDay points a day. Admins skip the
 -- department and the per-day rule (the self rule and Config.AdminControl's limits stay).
@@ -192,22 +190,15 @@ Kit.supAction('server:sup:awardPoints', 'missionControls', function(ctx)
     local cid = Cid(ctx.payload.citizenid)
     if not cid then return false, 'err.invalid_payload' end
     if not AdjustOn() then return false, 'err.award_off' end
-    local key = tostring(ctx.actor or ctx.src)
-    if Busy[key] then return false, 'err.busy' end
-    Busy[key] = true
-    local res = table.pack(pcall(Award, ctx, cid))
-    Busy[key] = nil
-    if not res[1] then
-        CP.err(TAG, 'awardPoints failed: %s', tostring(res[2]))
-        return false, 'err.internal'
-    end
+    local ok, res = Award(ctx, cid)
     -- from the department report's activity dialog the reply carries his fresh activity
     if CP.Challenge and CP.Challenge.withActivity then
-        return CP.Challenge.withActivity(ctx.src, ctx.payload, res[2], res[3])
+        return CP.Challenge.withActivity(ctx.src, ctx.payload, ok, res)
     end
-    return table.unpack(res, 2, res.n)
+    return ok, res
 end, {
     reason = true,
+    oneAtATime = true,            -- one award at a time per player, so two at once cannot pass the daily limits
     pushMine = 'missionControls', -- Your controls today shows the new count of today
     self = OfficerTarget,
     targetRate = { 1, 10000 },

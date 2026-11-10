@@ -48,11 +48,11 @@ local REASON_MAX = 255
 local TYPE_KEY_MAX = 32
 local MISSION_ID_MAX = 40
 
-local typeRows = {}       -- mission_type -> { amount, adminLocked, updatedBy, updatedByName, updatedTs }
-local missionRows = {}    -- mission_id -> { amount, setBy, setByName, updatedTs }
+local typeRows = {}             -- mission_type -> { amount, adminLocked, updatedBy, updatedByName, updatedTs }
+local missionRows = {}          -- mission_id -> { amount, setBy, setByName, updatedTs }
 local loaded = false
 local loading = false
-local busy = {}           -- 'type:<key>' / 'mission:<id>' while a write is in flight
+local busy = CP.Lock.new()      -- 'type:<key>' / 'mission:<id>' while a write is in flight
 
 -- ============================================================================
 --                                   HELPERS
@@ -425,14 +425,6 @@ local function CleanAmount(amount)
     return n
 end
 
-local function Lock(key)
-    if busy[key] then return false end
-    busy[key] = true
-    return true
-end
-
-local function Unlock(key) busy[key] = nil end
-
 -- ============================================================================
 --                                    WRITES
 -- ============================================================================
@@ -499,15 +491,14 @@ function Payouts.setType(src, key, amount, reason, role, opts)
     if role ~= 'admin' and role ~= 'supervisor' then
         role = (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src)) and 'admin' or 'supervisor'
     end
-    if not CP.Permissions or not CP.Permissions.can then return false, 'err.no_permission' end
     if role == 'admin' then
         if not (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src)) then return false, 'err.no_permission' end
         local action = amount == nil and 'clearPayout' or 'setTypePayout'
-        local ok, errKey = CP.Permissions.can(src, action)
-        if not ok then return false, errKey or 'err.no_permission' end
+        local ok, errKey = CP.can(src, action)
+        if not ok then return false, errKey end
     else
-        local ok, errKey = CP.Permissions.can(src, 'setTypePayout')
-        if not ok then return false, errKey or 'err.no_permission' end
+        local ok, errKey = CP.can(src, 'setTypePayout')
+        if not ok then return false, errKey end
         if amount == nil then return false, 'err.invalid_amount' end
     end
     local value = nil
@@ -519,12 +510,10 @@ function Payouts.setType(src, key, amount, reason, role, opts)
     local r, errKey = CleanReason(reason, role)
     if not r then return false, errKey end
 
-    local lk = 'type:' .. key
-    if not Lock(lk) then return false, 'err.busy' end
     if role ~= 'admin' then opts = nil end
-    local okCall, ok, res = pcall(SetTypeLocked, src, key, value, r, role, opts)
-    Unlock(lk)
-    if not okCall then
+    local state, ok, res = busy:run('type:' .. key, 0, SetTypeLocked, src, key, value, r, role, opts)
+    if state == 'busy' then return false, 'err.busy' end
+    if state == 'error' then
         CP.err(TAG, 'setType failed: %s', tostring(ok))
         return false, 'err.internal'
     end
@@ -584,9 +573,8 @@ function Payouts.setMission(src, missionId, amount, reason)
         or not missionId:match('^[%w_%-]+$') then
         return false, 'err.unknown_mission'
     end
-    if not CP.Permissions or not CP.Permissions.can then return false, 'err.no_permission' end
-    local ok, errKey = CP.Permissions.can(src, amount == nil and 'clearPayout' or 'setMissionPayout')
-    if not ok then return false, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, amount == nil and 'clearPayout' or 'setMissionPayout')
+    if not ok then return false, errKey end
     local value = nil
     if amount ~= nil then
         local n, e = CleanAmount(amount)
@@ -596,11 +584,9 @@ function Payouts.setMission(src, missionId, amount, reason)
     local r, e = CleanReason(reason, 'admin')
     if not r then return false, e end
 
-    local lk = 'mission:' .. missionId
-    if not Lock(lk) then return false, 'err.busy' end
-    local okCall, res1, res2 = pcall(SetMissionLocked, src, missionId, value, r)
-    Unlock(lk)
-    if not okCall then
+    local state, res1, res2 = busy:run('mission:' .. missionId, 0, SetMissionLocked, src, missionId, value, r)
+    if state == 'busy' then return false, 'err.busy' end
+    if state == 'error' then
         CP.err(TAG, 'setMission failed: %s', tostring(res1))
         return false, 'err.internal'
     end
@@ -775,15 +761,15 @@ local function AdminView()
 end
 
 CP.Net.callback('sup:getPayouts', function(src)
-    local ok, errKey = CP.Permissions.can(src, 'setTypePayout')
-    if not ok then return nil, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, 'setTypePayout')
+    if not ok then return nil, errKey end
     return SupView()
 end)
 
 CP.Net.callback('admin:getPayouts', function(src)
     if not (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src)) then return nil, 'err.no_permission' end
-    local ok, errKey = CP.Permissions.can(src, 'setMissionPayout')
-    if not ok then return nil, errKey or 'err.no_permission' end
+    local ok, errKey = CP.can(src, 'setMissionPayout')
+    if not ok then return nil, errKey end
     return AdminView()
 end)
 

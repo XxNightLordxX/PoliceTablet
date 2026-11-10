@@ -1791,7 +1791,8 @@ do
         arena = nil,
         emsSent = 0,
     }
-    local clientCP = {
+    local clientCP
+    clientCP = {
         U = CP.U,
         L = CP.L,
         Locale = CP.Locale,
@@ -1802,6 +1803,8 @@ do
         resource = 'Crimson-Police',
         prefix = 'crimson-police',
         isServer = false,
+        -- shared/lib.lua's client toast: CP.Tablet.notify with the translated text
+        notify = function(kind, key, vars, opts) return clientCP.Tablet.notify(kind, CP.L(key, vars), opts) end,
         Tablet = {
             hud = function(p) cstate.huds[#cstate.huds + 1] = p end,
             overlay = function(o) cstate.overlays[#cstate.overlays + 1] = o or false end,

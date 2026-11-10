@@ -48,8 +48,6 @@ local function Setting(kind)
     return v
 end
 
-local function Started(res) return GetResourceState(res) == 'started' end
-
 function I.register(kind, resource, adapter)
     if not adapters[kind] or type(resource) ~= 'string' or resource == '' or type(adapter) ~= 'table' then
         CP.err(TAG, 'register: unknown kind \'%s\' or a bad adapter for \'%s\'', tostring(kind), tostring(resource))
@@ -75,7 +73,7 @@ function I.pick(kind)
     local keep = found[kind]
     if keep and adapters[kind][keep] then return keep end
     for _, res in ipairs(ORDER[kind]) do
-        if adapters[kind][res] and Started(res) then
+        if adapters[kind][res] and CP.Ext.started(res) then
             found[kind] = res
             return res
         end
@@ -170,15 +168,6 @@ local function AddTo(list, fn)
         if list[i] == fn then return end
     end
     list[#list + 1] = fn
-end
-
-local errorAt = {}             -- errorAt[key] = os.time() of the last listener error logged (one a minute)
-
-local function LogOnce(key, fmt, ...)
-    local now = os.time()
-    if errorAt[key] and now - errorAt[key] < 60 then return end
-    errorAt[key] = now
-    CP.err(TAG, fmt, ...)
 end
 
 -- True only while CP.Opponents says a real-suspect case is open; false while that module is missing.
@@ -282,7 +271,7 @@ function A.doctorCount()
     if not (a and a.doctorCount) then return 0 end
     local ok, n = pcall(a.doctorCount)
     if not ok then
-        LogOnce('doctorCount', 'doctorCount failed: %s', tostring(n))
+        CP.errEvery(TAG, 'doctorCount', 'doctorCount failed: %s', tostring(n))
         return 0
     end
     n = math.floor(tonumber(n) or 0)
@@ -294,7 +283,7 @@ local function InArena(src)
     if not (CP.Alerts and CP.Alerts.inArena) then return false end
     local ok, res = pcall(CP.Alerts.inArena, src)
     if not ok then
-        LogOnce('inArena', 'CP.Alerts.inArena failed: %s', tostring(res))
+        CP.errEvery(TAG, 'inArena', 'CP.Alerts.inArena failed: %s', tostring(res))
         return true
     end
     return res == true
@@ -318,7 +307,7 @@ function A.revive(src)
     local a = I.adapter('ambulance')
     if a and a.revive then
         local ok, res = pcall(a.revive, n)
-        if not ok then LogOnce('revive', 'revive failed: %s', tostring(res)) end
+        if not ok then CP.errEvery(TAG, 'revive', 'revive failed: %s', tostring(res)) end
         return ok and res == true
     end
     TriggerClientEvent(CP.e('client:revive'), n)
@@ -355,7 +344,7 @@ function A._respawned(resource, src, index)
     if not index then return end
     for i = 1, #respawnListeners do
         local ok, err = pcall(respawnListeners[i], src, index)
-        if not ok then LogOnce('on:respawn', 'a \'respawn\' listener failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'on:respawn', 'a \'respawn\' listener failed: %s', tostring(err)) end
     end
 end
 
@@ -424,7 +413,7 @@ local function Fire(kind, ...)
     local list = policeListeners[kind]
     for i = 1, #list do
         local ok, err = pcall(list[i], ...)
-        if not ok then LogOnce('police:' .. kind, 'a \'%s\' listener failed: %s', kind, tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'police:' .. kind, 'a \'%s\' listener failed: %s', kind, tostring(err)) end
     end
 end
 
@@ -494,7 +483,7 @@ end
 local function HealthLines()
     local out = {}
     for _, s in ipairs(I.status()) do
-        if s.active and not Started(s.active) then
+        if s.active and not CP.Ext.started(s.active) then
             -- named in config.lua (or found by 'auto') but not running now: its features answer "no script"
             out[#out + 1] = {
                 level = 'warn',

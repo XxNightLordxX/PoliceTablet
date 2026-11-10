@@ -25,15 +25,11 @@ local TAG = 'qbx'
 local listeners = { job = {}, duty = {}, unload = {}, loaded = {} }
 
 function Q.getPlayerData()
-    if GetResourceState('qbx_core') ~= 'started' then return {} end
+    if not CP.Ext.started('qbx_core') then return {} end
     local st = LocalPlayer and LocalPlayer.state
     if st and st.isLoggedIn == false then return {} end
-    local ok, pd = pcall(function() return exports.qbx_core:GetPlayerData() end)
-    if not ok then
-        CP.err(TAG, 'exports.qbx_core:GetPlayerData failed: %s', tostring(pd))
-        return {}
-    end
-    if type(pd) ~= 'table' then return {} end
+    local ok, pd = CP.Ext.call('qbx_core', 'GetPlayerData')
+    if not ok or type(pd) ~= 'table' then return {} end
     return pd
 end
 

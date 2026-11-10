@@ -30,17 +30,9 @@ local EMS_JOB = 'ambulance'          -- the only job name sc-ambulance counts as
 A.emsRequest = RESOURCE
 
 local notStartedLogged = false
-local errorLoggedAt = {}
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorLoggedAt[key] and now - errorLoggedAt[key] < 60 then return end
-    errorLoggedAt[key] = now
-    CP.err(TAG, fmt, ...)
-end
 
 local function Started()
-    if GetResourceState(RESOURCE) == 'started' then
+    if CP.Ext.started(RESOURCE) then
         notStartedLogged = false
         return true
     end
@@ -66,11 +58,8 @@ end
 
 function A.doctorCount()
     if not Started() then return 0 end
-    local ok, count = pcall(function() return exports[RESOURCE]:GetDoctorCount() end)
-    if not ok then
-        LogError('GetDoctorCount', 'exports[\'sc-ambulance\']:GetDoctorCount failed: %s', tostring(count))
-        return 0
-    end
+    local ok, count = CP.Ext.call(RESOURCE, 'GetDoctorCount')
+    if not ok then return 0 end
     local n = math.floor(tonumber(count) or 0)
     if n < 0 then n = 0 end
     if n > 0 then

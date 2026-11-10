@@ -46,7 +46,6 @@ local afkOf = {}                  -- [citizenid] = { coords, cam, stillSince, ne
 local closed = {}                 -- { runId, outcomes, case }, the last casesKept (oldest first)
 local tickHooks = {}
 local watch = { on = false, token = 0 }
-local errorAt = {}
 
 -- ============================================================================
 --                                   HELPERS
@@ -61,13 +60,6 @@ local function Kept() return math.min(CLOSED_MAX, math.max(1, math.floor(Num(Cfg
 
 local function ValidCid(cid)
     return type(cid) == 'string' and cid ~= '' and #cid <= 50 and cid:match('^[%w_%-]+$') ~= nil
-end
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorAt[key] and now - errorAt[key] < 60 then return end
-    errorAt[key] = now
-    CP.err(TAG, fmt, ...)
 end
 
 -- Citizenids from a list ({ 'A1', 'B2' }) or a map ({ [cid] = true }, Crimson-Contracts' { [cid] = src }: the value
@@ -272,7 +264,7 @@ function Opp.note(run, reason, detail, cid)
     if CP.AntiCheat and CP.AntiCheat.note then
         -- keyed by the suspect: in a crew every suspect's leave or instance reaches the audit, once each
         local ok, err = pcall(CP.AntiCheat.note, run, nil, reason, detail, rec and rec.cid or nil)
-        if not ok then LogError('note', 'CP.AntiCheat.note failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'note', 'CP.AntiCheat.note failed: %s', tostring(err)) end
     end
     return true
 end
@@ -287,7 +279,7 @@ local function Send(case, rec, kind, extra)
     if extra then for k, v in pairs(extra) do ev[k] = v end end
     local ok, err = pcall(CP.Runs.dispatch, run, case.index, nil, ev)
     if not ok then
-        LogError('dispatch', 'dispatch of %s to run %s failed: %s', kind, tostring(run.id), tostring(err))
+        CP.errEvery(TAG, 'dispatch', 'dispatch of %s to run %s failed: %s', kind, tostring(run.id), tostring(err))
     end
 end
 
@@ -548,7 +540,7 @@ local function TickCase(case, now)
     for i = 1, #tickHooks do
         if cases[case.runId] ~= case then return end
         local ok, err = pcall(tickHooks[i], case, now)
-        if not ok then LogError('tickHook', 'a tick listener failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'tickHook', 'a tick listener failed: %s', tostring(err)) end
     end
 end
 
@@ -573,12 +565,14 @@ local function Tick()
     for i = 1, #list do
         if cases[list[i].runId] == list[i] then
             local ok, err = pcall(TickCase, list[i], now)
-            if not ok then LogError('tick', 'watch of run %s failed: %s', tostring(list[i].runId), tostring(err)) end
+            if not ok then
+                CP.errEvery(TAG, 'tick', 'watch of run %s failed: %s', tostring(list[i].runId), tostring(err))
+            end
         end
     end
     if next(crewOf) then
         local ok, err = pcall(TickCrews, now)
-        if not ok then LogError('crews', 'crew samples failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'crews', 'crew samples failed: %s', tostring(err)) end
     end
 end
 
@@ -682,7 +676,7 @@ function Opp.open(run, spec)
     local offline = {}
     for _, cid in ipairs(cids) do
         local rec = case.suspects[cid]
-        local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(cid) or nil
+        local src = CP.srcOf(cid)
         local info = src and CP.Qbx.getInfo(src) or nil
         if info and info.citizenid == cid then
             Bind(cid, src)
@@ -739,7 +733,7 @@ function Opp.close(run)
     -- Opp.onClose: a cuff release still waiting for its explanation is decided first
     if type(Opp.onClose) == 'function' then
         local ok, err = pcall(Opp.onClose, case)
-        if not ok then LogError('onClose', 'CP.Opponents.onClose failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'onClose', 'CP.Opponents.onClose failed: %s', tostring(err)) end
     end
     for _, cid in ipairs(case.order) do
         local rec = case.suspects[cid]
@@ -764,7 +758,7 @@ function Opp.close(run)
     -- Opp.onClosed (modules/realplayers/saved): the closed case is saved so a restart keeps it
     if type(Opp.onClosed) == 'function' then
         local ok, err = pcall(Opp.onClosed, case)
-        if not ok then LogError('onClosed', 'CP.Opponents.onClosed failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'onClosed', 'CP.Opponents.onClosed failed: %s', tostring(err)) end
     end
     return copy(outcomes), case
 end
@@ -1083,7 +1077,7 @@ local function OnMeta(src, key, old, new)
     hit.rec.md[key] = MdValue(key, new)
     if type(Opp.onMeta) == 'function' then
         local ok, err = pcall(Opp.onMeta, hit.rec, key, old, new, hit.case)
-        if not ok then LogError('onMeta', 'CP.Opponents.onMeta failed: %s', tostring(err)) end
+        if not ok then CP.errEvery(TAG, 'onMeta', 'CP.Opponents.onMeta failed: %s', tostring(err)) end
     end
 end
 

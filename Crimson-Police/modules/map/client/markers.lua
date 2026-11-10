@@ -833,7 +833,7 @@ function M.objectiveGps()
     gps = { runId = cur.runId, index = cur.index, x = p.x, y = p.y }
     RouteOff() -- the waypoint is his line now, at once
     local label = LabelOf(el)
-    if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify('info', CP.L('markers.gps_set', { label = label })) end
+    CP.notify('info', 'markers.gps_set', { label = label })
     return true, { label = label }
 end
 
