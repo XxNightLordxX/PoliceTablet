@@ -1,11 +1,9 @@
--- CP.FieldTraining (server): field training (Config.FieldTraining). Pairing, runs that count, the trainer's
--- sign-offs (and his trainerBonus points), the badge, and the ride-along rule (requireTrainerFor) that CP.Draw's
--- accept asks.
+-- CP.FieldTraining (server): field training (Config.Recognition.fieldTraining), part of the supervisor module. A
 
--- CP.FieldTraining (server): field training (Config.FieldTraining). A supervisor (or an admin) pairs a
--- trainer with a rookie of the department; completed runs the two finish together count towards the sign-off tasks
--- (per mission type); the trainer signs a task off once its count is reached (trainerBonus points to him); every
--- task signed off gives the badge. The ride-along rule (requireTrainerFor, checked by CP.Draw's accept). FT.joinCheck,
+-- CP.FieldTraining (server): field training (Config.Recognition.fieldTraining), part of the supervisor module. A
+-- supervisor (or an admin) pairs a trainer with a rookie of the department; completed runs the two finish together
+-- count towards the sign-off tasks (per mission type); the trainer signs a task off once its count is reached
+-- (trainerBonus points to him); every task signed off gives the badge. The ride-along rule (requireTrainerFor, checked by CP.Draw's accept). FT.joinCheck,
 -- the same rule for a live case backup (CP.Runs.addParticipant).
 -- The record lives on the rookie's officer row (cp_officers.field_training, migration 015), so the database and the
 -- saves folder keep it alike. Shipped off: no hook does anything and every action is refused.
@@ -37,9 +35,9 @@ local function Call(modName, fnName, ...)
     return true, table.unpack(res, 2, res.n)
 end
 
-local function Cfg() return type(Config.FieldTraining) == 'table' and Config.FieldTraining or {} end
+local function Cfg() return (CP.Recognition('fieldTraining')) end
 
-function FT.enabled() return Cfg().enabled == true end
+function FT.enabled() return select(2, CP.Recognition('fieldTraining')) end
 
 local function Cid(v)
     if type(v) ~= 'string' then return nil end
@@ -56,7 +54,8 @@ end
 
 local function IsAdmin(src) return CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true end
 
--- The lowest Qbox grade of a trainer in a department (Config.FieldTraining.trainerGrades, else its supervisorGrade).
+-- The lowest Qbox grade of a trainer in a department (Config.Recognition.fieldTraining.trainerGrades, else its
+-- supervisorGrade).
 function FT.trainerGrade(dept)
     local g = type(Cfg().trainerGrades) == 'table' and Int(Cfg().trainerGrades[dept]) or nil
     if g then return g end
@@ -98,11 +97,11 @@ local function RookiesMax() return math.max(1, Int(Cfg().rookiesPerTrainer) or 2
 
 local BONUS_MAX = 1000
 
--- Points the trainer gets per signed task (Config.FieldTraining.trainerBonus, 0 to 1000; 0 = none).
+-- Points the trainer gets per signed task (Config.Recognition.fieldTraining.trainerBonus, 0 to 1000; 0 = none).
 function FT.trainerBonus() return math.max(0, math.min(BONUS_MAX, Int(Cfg().trainerBonus) or 0)) end
 
--- The mission types of the ride-along rule (Config.FieldTraining.requireTrainerFor): { [type] = true }. A list of
--- type keys; a { tactical = true } map is read the same way.
+-- The mission types of the ride-along rule (Config.Recognition.fieldTraining.requireTrainerFor): { [type] = true }.
+-- A list of type keys; a { tactical = true } map is read the same way.
 function FT.requiredTypes()
     local out = {}
     local list = Cfg().requireTrainerFor

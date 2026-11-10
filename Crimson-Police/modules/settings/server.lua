@@ -166,8 +166,8 @@ Play.groups = {
             'units',
             'cross_department_missions',
             'mission_controls',
-            'field_training',
-            'scoring_and_xp_levels',
+            'recognition',
+            'scoring',
             'leaderboard',
             'objectives',
             'officer_profile',
@@ -405,22 +405,22 @@ Play.features = {
     {
         key = 'field_training',
         play = 'team',
-        path = 'FieldTraining.enabled',
+        path = 'Recognition.fieldTraining.enabled',
         risky = true,
         limits = {
-            'FieldTraining.rookiesPerTrainer',
-            'FieldTraining.trainerBonus',
-            'FieldTraining.trainerGrades',
-            'FieldTraining.tasks',
+            'Recognition.fieldTraining.rookiesPerTrainer',
+            'Recognition.fieldTraining.trainerBonus',
+            'Recognition.fieldTraining.trainerGrades',
+            'Recognition.fieldTraining.tasks',
         },
     },
     {
         key = 'commendations',
         play = 'team',
-        path = 'Commendations.enabled',
+        path = 'Recognition.commendations.enabled',
         limits = {
-            'Commendations.perSupervisorPerDay',
-            'Commendations.sameKindCooldownDays',
+            'Recognition.commendations.perSupervisorPerDay',
+            'Recognition.commendations.sameKindCooldownDays',
         },
     },
     -- the Objectives (Config.Objectives): one switch per kind
@@ -546,7 +546,7 @@ Settings._playGroups = Play.groups
 -- as Settings -> All settings, which still lists every setting). Every section is under at least one gear.
 Play.screens = {
     admin_home = { 'general', 'tablet_and_commands', 'formats' },
-    admin_officers = { 'officer_profile', 'admin_control', 'field_training' },
+    admin_officers = { 'officer_profile', 'recognition', 'admin_control' },
     admin_departments = {
         'departments',
         'names',
@@ -556,7 +556,7 @@ Play.screens = {
         'objectives',
     },
     admin_permissions = { 'permissions' },
-    admin_leaderboards = { 'leaderboard', 'objectives', 'scoring_and_xp_levels', 'bonuses_and_penalties' },
+    admin_leaderboards = { 'leaderboard', 'recognition', 'objectives', 'scoring', 'bonuses_and_penalties' },
     admin_seasons = { 'objectives', 'leaderboard' },
     admin_missions = {
         'mission_types',
@@ -620,17 +620,17 @@ local OPEN = {
     'Rewards.goals',
     'Rewards.levels',
     'Rewards.season',
-    'LiveCrime.types',                  -- the crime keys are Crimson-Contracts' contract keys
-    'Volunteers.modes',                 -- mission type keys
-    'Volunteers.missionModes',          -- mission ids
-    'FeatureRewards.suspect.byType',    -- mission type keys
-    'Permissions.builderTeleport',      -- department keys
-    'Permissions.grants',               -- power keys (Admin UI -> Permissions -> Extra grants)
-    'MissionControls.grants',           -- department keys
-    'MissionControls.controls',         -- control keys
-    'FieldTraining.trainerGrades',      -- department keys
-    'FieldTraining.tasks',              -- mission type keys
-    'FieldTraining.requireTrainerFor',  -- a list of mission type keys
+    'LiveCrime.types',                              -- the crime keys are Crimson-Contracts' contract keys
+    'Volunteers.modes',                             -- mission type keys
+    'Volunteers.missionModes',                      -- mission ids
+    'FeatureRewards.suspect.byType',                -- mission type keys
+    'Permissions.builderTeleport',                  -- department keys
+    'Permissions.grants',                           -- power keys (Admin UI -> Permissions -> Extra grants)
+    'MissionControls.grants',                       -- department keys
+    'MissionControls.controls',                     -- control keys
+    'Recognition.fieldTraining.trainerGrades',      -- department keys
+    'Recognition.fieldTraining.tasks',              -- mission type keys
+    'Recognition.fieldTraining.requireTrainerFor',  -- a list of mission type keys
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
@@ -718,8 +718,8 @@ local RANGES = {
     ['Downed.checkEvery'] = { 1, 10 },
     ['Route.reportEvery'] = { 1, 30 },
     ['Route.sampleEvery'] = { 5, 500 },
-    ['XPCurve.growth'] = { 1, 3 },
-    ['XPCurve.maxLevel'] = { 1, 500 },
+    ['Recognition.levelCurve.growth'] = { 1, 3 },
+    ['Recognition.levelCurve.maxLevel'] = { 1, 500 },
     ['Profile.bioLines'] = { 1, 20 },
     ['Profile.bioMax'] = { 1, 2000 },
     ['OfficerOptions.defaults.hudScale'] = { 0.5, 2 },
@@ -850,8 +850,9 @@ local RANGES = {
     ['MissionControls.noticesPerDay'] = { 0, 50 },
     ['MissionControls.pushMissionPerDay'] = { 0, 50 },
     ['MissionControls.awardPointsPerDay'] = { 0, 10000 },
-    ['FieldTraining.rookiesPerTrainer'] = { 1, 20 },
-    ['FieldTraining.trainerBonus'] = { 0, 1000 },
+    ['Recognition.fieldTraining.rookiesPerTrainer'] = { 1, 20 },
+    ['Recognition.fieldTraining.trainerBonus'] = { 0, 1000 },
+    ['Recognition.badges.*'] = { 0, 100000 },
     ['MissionControls.callLaneMaxOpen'] = { 1, 10 },
     ['Cash.addFundsMax'] = { 0, 10000000 },
     ['Cash.manualDailyLimit'] = { 0, 10000000 },
@@ -955,9 +956,9 @@ local RANGES = {
     ['Profile.editCooldown'] = { 0, 86400 },
     ['Profile.reports.perDay'] = { 0, 50 },
     ['Profile.avatarUrls.perDay'] = { 0, 50 },
-    ['Commendations.perSupervisorPerDay'] = { 0, 50 },
-    ['Commendations.sameKindCooldownDays'] = { 0, 365 },
-    ['Commendations.announceDays'] = { 0, 90 },
+    ['Recognition.commendations.perSupervisorPerDay'] = { 0, 50 },
+    ['Recognition.commendations.sameKindCooldownDays'] = { 0, 365 },
+    ['Recognition.commendations.announceDays'] = { 0, 90 },
     ['Cash.dailyCap'] = { 0, 100000000 },
     ['Payouts.supervisorCooldown'] = { 0, 86400 },
     ['Disputes.windowHours'] = { 1, 720 },
@@ -994,7 +995,7 @@ local RANGE_LISTS = {
     'MissionCalls.spawnEvery',
     'Npc.tellSeconds',
     'Custody.*.spawnDistance',
-    'Commendations.citation',
+    'Recognition.commendations.citation',
     'Profile.uiScale',
     'OfficerOptions.bounds.hudScale',
     'OfficerOptions.bounds.resultTime',
@@ -1626,7 +1627,7 @@ local KNOWN = {
     ['DisabledMissions'] = { tpl = ListOf(ID, { unique = true }), kind = 'list', item = 'string' },
     ['DisabledLocations'] = { tpl = MapOf(ListOf(Alts(Num(1, 999, true), Text(nil, 64))), '^[%w_%-]+$') },
     ['MissionTweaks'] = { tpl = MapOf(TWEAK, '^[%w_%-]+$') },
-    ['Leaderboard.weeklyBadges'] = { tpl = ListOf(Enum(METRICS), { unique = true }), kind = 'list', options = METRICS },
+    ['Recognition.weeklyBadges'] = { tpl = ListOf(Enum(METRICS), { unique = true }), kind = 'list', options = METRICS },
     ['Leaderboard.metrics'] = {
         tpl = ListOf(Enum(METRICS), { min = 1, unique = true }),
         kind = 'list',
@@ -1995,7 +1996,7 @@ local ROWS = {
             },
         },
     },
-    ['XPLevels'] = {
+    ['Recognition.levels'] = {
         tpl = ListOf(Record({
             label = Text(nil, 32),
             xp = Num(0, 1000000000, true),
@@ -2061,7 +2062,7 @@ local LABEL_KINDS = {
     {
         prefix = 'profile.commend.kind.',
         known = function(id)
-            local kinds = Effective and Effective('Commendations.kinds') or nil
+            local kinds = Effective and Effective('Recognition.commendations.kinds') or nil
             return ListHas(kinds, id)
         end,
     },
@@ -2378,10 +2379,10 @@ KNOWN['MissionControls.grants'] = {
     check = GradeGrants('err.setting_grant_department', 'err.setting_grant_grant'),
 }
 
--- Config.FieldTraining: trainerGrades by department key of Config.Departments (a grade number) and tasks by
--- mission type key of Config.MissionTypes (missions to run, 0 = no task). Each is edited as a whole, so a key can be
+-- Config.Recognition.fieldTraining: trainerGrades by department key of Config.Departments (a grade number) and tasks
+-- by mission type key of Config.MissionTypes (missions to run, 0 = no task). Each is edited as a whole, so a key can be
 -- added or left out (before, the shipped keys were required and no other key was allowed).
-KNOWN['FieldTraining.trainerGrades'] = {
+KNOWN['Recognition.fieldTraining.trainerGrades'] = {
     tpl = MapOf(GRADE, '^[%w_%-]+$'),
     check = function(map, _, ctx)
         local deps = type(Config.Departments) == 'table' and Config.Departments or {}
@@ -2391,7 +2392,7 @@ KNOWN['FieldTraining.trainerGrades'] = {
         return nil
     end,
 }
-KNOWN['FieldTraining.tasks'] = {
+KNOWN['Recognition.fieldTraining.tasks'] = {
     tpl = MapOf(Num(0, 100, true), '^[%w_%-]+$'),
     check = function(map, _, ctx)
         local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}

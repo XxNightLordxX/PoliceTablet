@@ -474,7 +474,7 @@ const LEVELS = [
     { label: 'Veteran', level: 38, badge: 'gold' },
     { label: 'Elite', level: 50, badge: 'platinum' },
 ];
-// Config.XPCurve: level n starts at round(100 × (1.07^(n−1) − 1) ÷ 0.07) XP; a prestige star per 10,000 after 50.
+// Config.Recognition.levelCurve: level n starts at round(100 × (1.07^(n−1) − 1) ÷ 0.07) XP; a prestige star per 10,000 after 50.
 const levelXp = (n: number) => Math.round((100 * (Math.pow(1.07, n - 1) - 1)) / 0.07);
 function level(xp: number): LevelInfo & { next: number | null } {
     let n = 1;

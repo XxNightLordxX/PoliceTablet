@@ -1119,12 +1119,12 @@ end
 
 -- The weekly reset job for the week [prevStart, curStart): top 3 to Discord and the Officer of the Week
 -- badge. Idempotent: nothing happens when that week's badge already exists.
--- Optional weekly badges per metric (Config.Leaderboard.weeklyBadges, e.g. { 'arrests' }): "Top Arrests of the
+-- Optional weekly badges per metric (Config.Recognition.weeklyBadges, e.g. { 'arrests' }): "Top Arrests of the
 -- Week" for #1 of that metric. Each badge is given once (its id names the week); points stay Officer of the Week.
 
 local function WeeklyMetricBadges(prevStart, curStart, weekKey)
     local given = 0
-    for _, metric in ipairs(Cfg('Leaderboard', 'weeklyBadges', {}) or {}) do
+    for _, metric in ipairs(CP.Recognition('weeklyBadges')) do
         if type(metric) == 'string' and METRICS[metric] and metric ~= 'points' then
             local badgeId = U.clip(('top_%s_%s'):format(metric, weekKey), 40)
             if not BadgeDone(badgeId) then
@@ -1356,25 +1356,11 @@ end
 --                                   PROFILE
 -- ============================================================================
 
+-- The level (CP.Scoring.xpLevel, Config.Recognition.levels); unknown while scoring is not loaded.
 local function XpLevel(xp)
     local ok, lv = Call('Scoring', 'xpLevel', xp)
     if ok and type(lv) == 'table' and lv.label then return lv end
-    local levels = {}
-    for _, l in ipairs(Config.XPLevels or {}) do
-        if type(l) == 'table' and tonumber(l.xp) then levels[#levels + 1] = l end
-    end
-    table.sort(levels, function(a, b) return Num(a.xp) < Num(b.xp) end)
-    local cur, nxt = levels[1], nil
-    for i, l in ipairs(levels) do
-        if xp >= Num(l.xp) then cur = l; nxt = levels[i + 1] end
-    end
-    if not cur then return { label = CP.L('common.unknown'), badge = 'grey', xp = 0 } end
-    return {
-        label = tostring(cur.label),
-        badge = tostring(cur.badge or 'grey'),
-        xp = Int(cur.xp),
-        next = nxt and Int(nxt.xp) or nil,
-    }
+    return { label = CP.L('common.unknown'), badge = 'grey', xp = 0 }
 end
 
 local seasonNames = { at = 0, byId = {} }

@@ -474,11 +474,11 @@ do
     H.eq(Act('server:sup:commend', 21, { citizenid = 'P1', kind = 'teamwork', citation = good }), true, 'a third one')
     H.eq(select(2, Act('server:sup:commend', 21, { citizenid = 'P1', kind = 'valor', citation = good })),
         'err.commend_limit', 'at most 3 a day')
-    Config.Commendations.crossDepartment = true
+    Config.Recognition.commendations.crossDepartment = true
     H.time = NOW + 6 * DAY
     H.eq(Act('server:sup:commend', 21, { citizenid = 'P3', kind = 'valor', citation = good }), true,
         'crossDepartment lets a supervisor commend another department')
-    Config.Commendations.crossDepartment = false
+    Config.Recognition.commendations.crossDepartment = false
     H.eq(Act('server:admin:commend', 1, { citizenid = 'P3', kind = 'leadership', citation = good }), true,
         'an admin commends anyone')
     H.eq(Counts(), before, 'zero points: no row, no points, no XP, no badge')

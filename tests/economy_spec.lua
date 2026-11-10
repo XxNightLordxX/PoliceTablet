@@ -1256,7 +1256,8 @@ H.near(sk.multiplier, 1.15, 1e-9, 'streak multiplier')
 H.eq(sk.graceLeft, true, 'grace day left')
 b = CP.Scoring.compute(FakeRun(), FakeP({ result = 'completed' }), 'completed', { durationS = 500 })
 H.near(b.mStreak, 1.20, 1e-9, 'today completes day 4 -> +20%')
-Config.Badges.ironWheels, Config.Badges.partnerInCrime, Config.Badges.sharpshooter = 2, 1, 1
+Config.Recognition.badges.iron_wheels, Config.Recognition.badges.partner_in_crime, Config.Recognition.badges.sharpshooter =
+    2, 1, 1
 notes = {}
 local nd = {
     { id = 'no_vehicle_damage', label = 'x', points = 10 },
@@ -1307,7 +1308,8 @@ CP.Scoring.onRowVoided(uncounted)
 H.eq(H.sql('SELECT xp FROM cp_officers WHERE citizenid = \'CPOFF001\'')[1].xp, 100,
     'voiding a row that never counted takes nothing')
 H.sql('DELETE FROM cp_mission_runs_archive')
-Config.Badges.ironWheels, Config.Badges.partnerInCrime, Config.Badges.sharpshooter = 20, 50, 10
+Config.Recognition.badges.iron_wheels, Config.Recognition.badges.partner_in_crime, Config.Recognition.badges.sharpshooter =
+    20, 50, 10
 
 -- approval of a flagged row
 local rF = InsertRun({ final = 250, flagged = true, status = 'held' })
@@ -1321,7 +1323,7 @@ CP.Scoring.onRowApproved(rF2)
 H.eq(H.sql('SELECT xp FROM cp_officers WHERE citizenid = \'CPOFF001\'')[1].xp, 350, 'still flagged: nothing counted')
 
 -- XP levels
--- one ladder: the numbered level (Config.XPCurve) and its Config.XPLevels band
+-- one ladder: the numbered level (Config.Recognition.levelCurve) and its Config.Recognition.levels band
 local lv = CP.Scoring.xpLevel(0)
 H.eq(lv.label, 'Probationary', 'level 0')
 H.eq(lv.n, 1, 'Lv 1 at 0 XP')

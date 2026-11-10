@@ -572,7 +572,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] `Config.LiveCrime.enabled = true`: a crew of two where one suspect already scored maxCatchesPerSuspectDay
   today: catching him adds no detain line, catching the other one does. (Z8B)
 - [ ] Two runs ask for a volunteer at the same moment: he gets one pop-up only. (Z8B)
-- [ ] Change `Config.Custody.reach.plateFromVehicle`, `Config.Commendations.sameKindCooldownDays` or
+- [ ] Change `Config.Custody.reach.plateFromVehicle`, `Config.Recognition.commendations.sameKindCooldownDays` or
   `Config.Profile.reports.reasonMax`: the matching refusal names the new value. (Z8B)
 - [ ] Switch the storage in Admin UI, restart, then `storage copy database-to-files force` (or the reverse): the next
   start is not locked as 'left behind'. (Z9)

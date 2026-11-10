@@ -104,6 +104,11 @@ CP.Access = {
 CP.Qbx = {
     getInfo = function() return nil end,
     getByCitizenId = function(cid) return cid == 'LB5' and 55 or nil end,
+    -- modules/progression/scoring.lua (the profile's level) follows duty changes
+    onDutyChange = function() end,
+    onJobChange = function() end,
+    onPlayerLoaded = function() end,
+    onPlayerUnload = function() end,
 }
 local audits, hooks, notes = {}, {}, {}
 CP.Admin = {
@@ -134,6 +139,7 @@ CP.Missions = {
 H.load('modules/permissions/server.lua')
 H.load('modules/schedule/server.lua')
 H.load('modules/progression/leaderboard.lua')
+H.load('modules/progression/scoring.lua') -- the level of a profile (CP.Scoring.xpLevel)
 H.load('modules/progression/challenge.lua')
 local LB, C = CP.Leaderboard, CP.Challenge
 
@@ -492,8 +498,10 @@ do
     H.eq(p.citizenid, 'LB1', 'own citizenid')
     H.eq(p.name, 'Alpha One', 'own name')
     H.eq(p.xp, 5000, 'xp')
-    H.eq(p.level.label, 'Senior Patrol', 'xp level from Config.XPLevels')
-    H.eq(p.level.next, 15000, 'next level')
+    -- one level rule (CP.Scoring.xpLevel): 5000 XP is level 23, in the Patrol Officer band of Config.Recognition.levels
+    H.eq(p.level.label, 'Patrol Officer', 'xp level from Config.Recognition.levels')
+    H.eq(p.level.n, 23, 'level number from Config.Recognition.levelCurve')
+    H.eq(p.level.next, CP.Scoring.levelXp(24), 'next level')
     H.eq(#p.badges, 2, 'badges')
     local week = nil
     for _, b in ipairs(p.badges) do if b.kind == 'week' then week = b end end

@@ -1,4 +1,4 @@
--- Field training, part 1 (Config.FieldTraining): a supervisor pairs a trainer with a rookie of his own
+-- Field training, part 1 (Config.Recognition.fieldTraining): a supervisor pairs a trainer with a rookie of his own
 -- department, completed runs the two finish together count per mission type, the trainer signs a ready task off,
 -- and every task signed off gives the badge. Plain Lua: stubbed MySQL (the officer rows), the real adminkit.
 
@@ -140,9 +140,9 @@ CP.Tablet = {
     end,
 }
 
-for _, m in ipairs({ 'modules/adminkit/server.lua', 'modules/fieldtraining/server.lua' }) do H.load(m) end
+for _, m in ipairs({ 'modules/adminkit/server.lua', 'modules/supervisor/fieldtraining.lua' }) do H.load(m) end
 local Kit, FT = CP.AdminKit, CP.FieldTraining
-local FTC = Config.FieldTraining
+local FTC = Config.Recognition.fieldTraining
 
 local function Pair(src, rookie, trainer)
     return Kit.run('server:sup:ftoPair', src, { rookie = rookie, trainer = trainer })

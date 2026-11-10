@@ -2952,21 +2952,10 @@ CP.Net.callback('admin:searchOfficers', function(src, args)
     return { officers = out, query = q, total = total, page = page, pages = pages }
 end, { rate = 4 })
 
+-- The level (CP.Scoring.xpLevel, Config.Recognition.levels); nil while scoring is not loaded.
 local function XpLevel(xp)
-    if Has('Scoring', 'xpLevel') then
-        local ok, lvl = Call('Scoring', 'xpLevel', xp)
-        if ok and type(lvl) == 'table' then return lvl end
-    end
-    local levels = Config.XPLevels or {}
-    local cur, nextXp = nil, nil
-    for i, l in ipairs(levels) do
-        if xp >= Num(l.xp, 0) then
-            cur = l
-            nextXp = levels[i + 1] and levels[i + 1].xp or nil
-        end
-    end
-    if not cur then return nil end
-    return { label = cur.label, badge = cur.badge, xp = xp, next = nextXp }
+    local ok, lvl = Call('Scoring', 'xpLevel', xp)
+    return ok and type(lvl) == 'table' and lvl or nil
 end
 
 local function BadgesOf(citizenid)

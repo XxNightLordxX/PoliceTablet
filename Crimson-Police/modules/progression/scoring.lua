@@ -24,9 +24,9 @@
 --     days with a completed run; up to Config.Scoring.streakGraceDays missed days per week (counted from the
 --     weekly reset) are forgiven and add nothing; M_streak = 1 + min(streakMax, streakStep x days)
 --   * XP (cp_officers.xp = lifetime points, never below 0) with an idempotency marker in the row's breakdown
---     ('$.xpCounted'), XP levels (Config.XPLevels, cosmetic), the five achievement badges (Config.Badges,
---     counted from cp_mission_runs + cp_mission_runs_archive, revoked when a void drops a count below its
---     threshold), manual_award rows, "first completed run since going on duty" (CP.Qbx duty/load events)
+--     ('$.xpCounted'), XP levels (Config.Recognition.levels, cosmetic), the auto badges
+--     (Config.Recognition.badges, counted from cp_mission_runs + cp_mission_runs_archive, revoked when a void drops
+--     a count below its threshold), manual_award rows, "first completed run since going on duty" (CP.Qbx duty/load events)
 --   * callback getHome -> HomeData (ARCHITECTURE §9.4)
 --
 -- Public API (docs/dev/ARCHITECTURE.md §5.18)
@@ -59,13 +59,13 @@ local COMMON_RECORDED = {
     shot_surrendered = { key = 'shotSurrendered', each = true },
 }
 local BADGES = {
-    { id = 'iron_wheels', cfg = 'ironWheels' },
-    { id = 'sharpshooter', cfg = 'sharpshooter' },
-    { id = 'road_warrior', cfg = 'roadWarrior' },
-    { id = 'partner_in_crime', cfg = 'partnerInCrime' },
-    { id = 'joint_task_force', cfg = 'jointTaskForce' },
-    { id = 'by_the_book', cfg = 'byTheBook' },
-    { id = 'first_responder', cfg = 'firstResponder' },
+    { id = 'iron_wheels' },
+    { id = 'sharpshooter' },
+    { id = 'road_warrior' },
+    { id = 'partner_in_crime' },
+    { id = 'joint_task_force' },
+    { id = 'by_the_book' },
+    { id = 'first_responder' },
 }
 local MAX_WALK_DAYS = 400      -- missed days examined for grace before a streak counts as broken
 local STREAK_STORE_MAX = 127   -- cp_officers.streak_days is a signed TINYINT
@@ -827,7 +827,7 @@ end
 
 local function Levels()
     local list = {}
-    for _, l in ipairs(Config.XPLevels or {}) do
+    for _, l in ipairs(CP.Recognition('levels')) do
         if type(l) == 'table' then list[#list + 1] = l end
     end
     table.sort(list, function(a, b)
@@ -838,7 +838,7 @@ local function Levels()
     return list
 end
 
--- Level names are configuration (Config.XPLevels label, like mission type labels); the locale only
+-- Level names are configuration (Config.Recognition.levels label, like mission type labels); the locale only
 -- fills in a level that has no label.
 local function LevelLabel(l)
     if type(l.label) == 'string' and l.label ~= '' then return l.label end
@@ -846,7 +846,7 @@ local function LevelLabel(l)
 end
 
 local function Curve()
-    local c = Config.XPCurve or {}
+    local c = CP.Recognition('levelCurve')
     local maxLevel = math.max(1, math.floor(Num(c.maxLevel, 50)))
     local first = math.max(1, Num(c.first, 100))
     local growth = Num(c.growth, 1.07)
@@ -854,7 +854,8 @@ local function Curve()
     return maxLevel, first, growth, math.max(1, math.floor(Num(c.prestigeEvery, 10000)))
 end
 
--- XP needed to reach level n (Config.XPCurve): round(first × (growth^(n − 1) − 1) ÷ (growth − 1)).
+-- XP needed to reach level n (Config.Recognition.levelCurve): round(first × (growth^(n − 1) − 1) ÷
+-- (growth − 1)).
 function Scoring.levelXp(n)
     local maxLevel, first, growth = Curve()
     n = math.max(1, math.min(maxLevel, math.floor(Num(n, 1))))
@@ -871,8 +872,8 @@ function Scoring.levelOf(xp)
     return n
 end
 
--- The Config.XPLevels band a level falls in: the last entry whose level is at or below n (entries without a
--- level keep their old xp threshold, compared with the level's XP).
+-- The Config.Recognition.levels band a level falls in: the last entry whose level is at or below n (entries
+-- without a level keep their old xp threshold, compared with the level's XP).
 local function BandOf(n, levelXp)
     local list = Levels()
     local cur = list[1]
@@ -883,8 +884,8 @@ local function BandOf(n, levelXp)
     return cur
 end
 
--- LevelInfo (web/src/shared/types.ts): n from Config.XPCurve, label and badge from the band of n, xp and
--- levelXp = the XP at which level n starts, nextLevelXp = the next level (or prestige star), next = the same
+-- LevelInfo (web/src/shared/types.ts): n from Config.Recognition.levelCurve, label and badge from the band of n,
+-- xp and levelXp = the XP at which level n starts, nextLevelXp = the next level (or prestige star), next = the same
 -- (kept for old callers), prestige = stars after the last level.
 function Scoring.xpLevel(xp)
     xp = math.max(0, math.floor(Num(xp, 0)))
@@ -1073,6 +1074,9 @@ local function BadgeCounts(citizenid)
     return out
 end
 
+-- The count an auto badge needs (Config.Recognition.badges.<id>; 0 = that badge is off).
+local function BadgeNeed(id) return math.max(0, math.floor(Num(CP.Recognition('badges')[id], 0))) end
+
 local function OwnedBadges(citizenid)
     local ok, rows = pcall(MySQL.query.await, 'SELECT badge_id FROM cp_badges WHERE citizenid = ?', { citizenid })
     local set = {}
@@ -1103,7 +1107,7 @@ local function CheckBadges(citizenid, revoke)
     if not counts or not owned then return added, removed end
     local overrides = Overrides(citizenid)
     for _, b in ipairs(BADGES) do
-        local need = math.floor(Num(Config.Badges and Config.Badges[b.cfg], 0))
+        local need = BadgeNeed(b.id)
         if need > 0 then
             if counts[b.id] >= need and not owned[b.id] and overrides[b.id] ~= 'block' then
                 local ok, n = pcall(MySQL.update.await,
@@ -1138,8 +1142,8 @@ function Scoring.recheckBadges(citizenid)
     return CheckBadges(citizenid, true)
 end
 
--- The field training badge (Config.FieldTraining.badge) while field training is on, else nil. Its sign-offs
--- give it (CP.FieldTraining); an admin may grant or revoke it like an achievement.
+-- The field training badge (Config.Recognition.fieldTraining.badge) while field training is on, else nil. Its
+-- sign-offs give it (CP.FieldTraining); an admin may grant or revoke it like an achievement.
 local function FieldTrainingBadge()
     local FT = CP.FieldTraining
     if not (FT and FT.enabled and FT.badge) then return nil end
@@ -1159,7 +1163,7 @@ function Scoring.badgeCatalog()
         out.achievements[#out.achievements + 1] = {
             id = b.id,
             label = CP.L('badge.' .. b.id),
-            need = math.floor(Num(Config.Badges and Config.Badges[b.cfg], 0)),
+            need = BadgeNeed(b.id),
         }
     end
     local ft = FieldTrainingBadge()

@@ -328,7 +328,7 @@ local function LoadModules()
     local files = {}
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua && find blocks -name server.lua | sort'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua && find blocks -name server.lua | sort'
     )
     for file in p:lines() do files[#files + 1] = file end
     p:close()

@@ -56,7 +56,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/downed/server.lua`: CP.Downed (server): Hard rule 18, downed participants (docs/dev/ARCHITECTURE.md §5.15, SPEC "Downed participants", Crimson-Arena rules 1 and 3).
 - `Crimson-Police/modules/draw/server.lua`: CP.Draw: mission pools, the random draw, locations and the Mission Board.
 - `Crimson-Police/modules/featurerewards/server.lua`: CP.FeatureRewards (server): the money and items of the features outside a mission's own pay
-- `Crimson-Police/modules/fieldtraining/server.lua`: CP.FieldTraining (server): field training (Config.FieldTraining).
 - `Crimson-Police/modules/happyhour/server.lua`: CP.HappyHour (server): the happy hour Mission control.
 - `Crimson-Police/modules/integrations/crimson_contracts/server.lua`: CP.CrimsonContracts (server): the adapter for Crimson-Contracts' server-only contract events (sent only with ContractsConfig.LifecycleEvents = true).
 - `Crimson-Police/modules/integrations/qbx/client.lua`: CP.Qbx (client): the only client code that talks to qbx_core.
@@ -116,6 +115,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/storage/memsql.lua`: CP.Storage.MemSQL: the SQL engine and the saves folder behind "database off" (Config.Database.enabled = false). fxmanifest loads it before every other server module; it only defines functions. modules/storage/server.lua decides whether it is used.
 - `Crimson-Police/modules/storage/server.lua`: CP.Storage: where Crimson-Police keeps its data (Config.Database).
 - `Crimson-Police/modules/supawards/server.lua`: CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
+- `Crimson-Police/modules/supervisor/fieldtraining.lua`: CP.FieldTraining (server): field training (Config.Recognition.fieldTraining), part of the supervisor module.
 - `Crimson-Police/modules/suptoday/server.lua`: CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday, UI4).
 - `Crimson-Police/modules/sysadmin/server.lua`: CP.Sysadmin (server): Admin UI → System (storage, backups, webhooks, problems, integrations), Departments (add, turn off, delete, logos, desks), Settings positions and Officers → Support (check access, tablet item, stuck screen).
 - `Crimson-Police/modules/tablet/client.lua`: CP.Tablet (client): the NUI.
@@ -316,7 +316,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/mocks/testing.mock.ts`: Browser mocks for Admin test mode (admin/screens/Testing.tsx, hud/TestControls.tsx, hud/DebugOverlay.tsx).
 - `Crimson-Police/web/src/officer/components/CommendationsCard.tsx`: An officer's commendations, newest first, plus the read-only SC-Dispatch MDT commendations (tagged MDT).
 - `Crimson-Police/web/src/officer/components/ContactPanel.tsx`: Active Mission · Contact panel: every person and car of the current contact objective, its facts, the checks still open, the police actions and the dispositions (CP.Custody.view; decisions go to server:contactDecide).
-- `Crimson-Police/web/src/officer/components/FieldTrainingCard.tsx`: Profile · Field training (Config.FieldTraining): the rookie's own training (tasks, progress, trainer, notes, ride-along types) and the trainer's rookies with Sign off (and a count of the tasks ready).
+- `Crimson-Police/web/src/officer/components/FieldTrainingCard.tsx`: Profile · Field training (Config.Recognition.fieldTraining): the rookie's own training (tasks, progress, trainer, notes, ride-along types) and the trainer's rookies with Sign off (and a count of the tasks ready).
 - `Crimson-Police/web/src/officer/components/HappyHourBanner.tsx`: Happy hour: "Happy hour: no mission cooldowns for 18:00, set by Sgt Doe" on the officer Home and the Mission Board.
 - `Crimson-Police/web/src/officer/components/LiveCaseCard.tsx`: Active Mission · the live case card (Config.LiveCrime.caseCard): the reported crime, the suspect count, the three steps (the same for every suspect, like the HUD) and when the "last reported" map points were taken.
 - `Crimson-Police/web/src/officer/components/LookCard.tsx`: The own profile's Look card: appearance, personal accent, tablet size and call alerts, as saved on cp_officers.
@@ -384,7 +384,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/styles/order.ts`: Every stylesheet of the NUI, in one fixed order, loaded with the page.
 - `Crimson-Police/web/src/supervisor/components/CommendDialog.tsx`: Commend an officer: a kind, a citation (10–255 characters) and optionally the run it is for.
 - `Crimson-Police/web/src/supervisor/components/DeptNoticesCard.tsx`: Supervisor UI · Department → Calls & notices · Department notices (the notices Mission control): post a short notice
-- `Crimson-Police/web/src/supervisor/components/FieldTrainingPanel.tsx`: Supervisor UI · Department · Training (Config.FieldTraining): every pairing of the department
+- `Crimson-Police/web/src/supervisor/components/FieldTrainingPanel.tsx`: Supervisor UI · Department · Training (Config.Recognition.fieldTraining): every pairing of the department
 - `Crimson-Police/web/src/supervisor/components/MissionCallsPanel.tsx`: Mission calls for staff: the Supervisor UI's Department → Calls & notices panel and the Admin UI's Missions tab (withdraw, page a unit, create a call, today's calls), plus the Admin area coverage matrix and location plays.
 - `Crimson-Police/web/src/supervisor/components/MyControlsCard.tsx`: Supervisor UI · Department → Controls · Used from their own buttons (MG3): each action control this supervisor may use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
 - `Crimson-Police/web/src/supervisor/components/OfficerActions.tsx`: Supervisor UI · Department → Officers: the action forms of the officer's side panel (UI4).
@@ -418,7 +418,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/types/criminal.ts`: The criminal tablet (modules/crimtab): what crimtab:get and server:crimtab:act answer.
 - `Crimson-Police/web/src/types/custody.ts`: Shapes of the Contact panel (ActiveMissionView.contact, built by CP.Custody.view for a field_contact objective).
 - `Crimson-Police/web/src/types/economy.ts`: Response shapes of the economy slice's supervisor/admin callbacks and actions (modules/payouts/server.lua; documented in docs/dev/ARCHITECTURE.md §5.18).
-- `Crimson-Police/web/src/types/fieldTraining.ts`: Shapes of field training (modules/fieldtraining, Config.FieldTraining).
+- `Crimson-Police/web/src/types/fieldTraining.ts`: Shapes of field training (modules/supervisor/fieldtraining.lua, Config.Recognition.fieldTraining).
 - `Crimson-Police/web/src/types/missioncalls.ts`: Shapes of the Dispatch screen (mission calls): getMissionCalls and push topic 'calls', the supervisor panel and the admin area coverage matrix.
 - `Crimson-Police/web/src/types/options.ts`: Shapes of My options: the officer options (callback getOptions, action server:options:set) and My keys (client action getKeyLabels).
 - `Crimson-Police/web/src/types/oversight.ts`: Shapes of the oversight slice's callbacks (modules/admin, modules/disputes).
@@ -484,7 +484,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/feature_rewards_spec.lua`: Feature rewards (Config.FeatureRewards): money and items for the volunteer suspect, the officer who talks a
 - `tests/field_contact_director_spec.lua`: field_contact through the spawn director (Config.Spawning) on the real engine, the real block and the
 - `tests/field_contact_spec.lua`: Blocks/field_contact: the three modes (parked, scene, stop), approach reactions and tells, runners and escapes, the returning driver and the thief, the leak spec, and a stop-mode fixture completing at every tier.
-- `tests/field_training_spec.lua`: Field training, part 1 (Config.FieldTraining): a supervisor pairs a trainer with a rookie of his own department, completed runs the two finish together count per mission type, the trainer signs a ready task off, and every task signed off gives the badge.
+- `tests/field_training_spec.lua`: Field training, part 1 (Config.Recognition.fieldTraining): a supervisor pairs a trainer with a rookie of his own department, completed runs the two finish together count per mission type, the trainer signs a ready task off, and every task signed off gives the badge.
 - `tests/fixtures/admin_live_world.lua`: The world of tests/admin_live_spec.lua, tests/admin_runctl_spec.lua and tests/sup_actions_spec.lua: the real
 - `tests/fixtures/admin_missions/boot.lua`: The real server side of Crimson-Police for the Missions and Mission Builder admin specs (tests/builtin_override_spec.lua, tests/admin_missions_spec.lua): every module and block loaded in fxmanifest order, the outside resources stubbed the way tests/e2e_spec.lua stubs them.
 - `tests/fixtures/adminctl/p1_world.lua`: The world of the officers-and-boards specs (tests/admin_officers_spec.lua, tests/admin_boards_spec.lua): the real officers, points and boards modules of full admin control on one server, with Qbox stood in for.
@@ -570,6 +570,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/realsuspects_e2e_spec.lua`: End-to-end scenarios for real suspects on the REAL server side of Crimson-Police: every server file loaded as in game, database off (the saves folder, as shipped), only the other resources and the natives stubbed.
 - `tests/realsuspects_facts_spec.lua`: Police vs real criminal players: second, read-only handlers for sc-police's and sc-ambulance's net events pass facts to CP.ScPolice.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
 - `tests/realsuspects_rules_spec.lua`: Police vs real criminal players: the NPC-mission Hard rules 15-18 bent for cases with a real suspect (run.realSuspect), each a Config.RealSuspects choice, and Config.LiveCrime.requireRoute for live crimes.
+- `tests/recognition_spec.lua`: Config.Recognition (FM2): XP levels, the auto badges, the weekly board badges, commendations and the field training
 - `tests/resmon_spec.lua`: Client resmon (docs/dev/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
 - `tests/restore_flagged_spec.lua`: Restoring a bulk-void batch keeps the held item rewards of a row that is still flagged (it waits for the Review Queue), and undoing a batch-caused forfeit of a flagged row puts its items back to held, not pending.
 - `tests/rewards_spec.lua`: CP.Rewards (modules/rewards): optional item rewards.

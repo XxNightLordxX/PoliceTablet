@@ -46,7 +46,7 @@ Config.Departments = {
 }
 Config.Leaderboard.minRunsToRank = 3
 Config.Leaderboard.minDecisions = 10
-Config.Leaderboard.weeklyBadges = { 'arrests' }
+Config.Recognition.weeklyBadges = { 'arrests' }
 Config.Objectives.challenge.minRunsActive = 3
 
 local officers = {}
@@ -464,7 +464,7 @@ do
         H.ok(text:find('lethal', 1, true) == nil and text:lower():find('kill', 1, true) == nil,
             'no kills in a board or profile payload')
     end
-    -- the profile's level: the Config.XPLevels band of the number
+    -- the profile's level: the Config.Recognition.levels band of the number
     local p = Cb('getProfile', 11, { citizenid = 'M3' }).data
     H.eq(p.level.n, 25, 'M3 at 6,000 XP is level 25')
     H.eq(p.level.label, 'Senior Patrol', 'the band of level 25')

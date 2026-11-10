@@ -1,7 +1,7 @@
-// Profile · Field training (Config.FieldTraining): the rookie's own training (tasks, progress, trainer, notes,
+// Profile · Field training (Config.Recognition.fieldTraining): the rookie's own training (tasks, progress, trainer, notes,
 // ride-along types) and the trainer's rookies with Sign off (and a count of the tasks ready).
 
-// Profile · Field training (Config.FieldTraining): the officer's own training as a rookie (tasks,
+// Profile · Field training (Config.Recognition.fieldTraining): the officer's own training as a rookie (tasks,
 // progress, trainer, sign-off notes and the ride-along types) and, as a trainer, his rookies with a Sign off button on
 // every task whose count is reached (and the trainer bonus, when there is one). The server checks every rule again (only
 // the rookie's own trainer, only a task that is ready and not signed yet). Nothing shows while the feature is off.

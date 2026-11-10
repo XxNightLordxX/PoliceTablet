@@ -10,7 +10,7 @@ export type BadgeTone =
     | 'success'
     | 'warning'
     | 'danger'
-    // XP level badge colours (Config.XPLevels badge)
+    // XP level badge colours (Config.Recognition.levels badge)
     | 'grey'
     | 'bronze'
     | 'silver'
@@ -94,7 +94,7 @@ export function TierBadge({
 
 const XP_TONES = ['grey', 'bronze', 'silver', 'gold', 'platinum'];
 
-// XP level badge (Config.XPLevels): medal in the badge colour plus the level label.
+// XP level badge (Config.Recognition.levels): medal in the badge colour plus the level label.
 export function XpBadge({
     badge,
     label,

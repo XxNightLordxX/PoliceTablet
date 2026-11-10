@@ -34,7 +34,7 @@ local function Int(v) return math.floor(Num(v, 0) + 0.0) end
 
 local function Cfg() return type(Config.Profile) == 'table' and Config.Profile or {} end
 
-local function CommendCfg() return type(Config.Commendations) == 'table' and Config.Commendations or {} end
+local function CommendCfg() return (CP.Recognition('commendations')) end
 
 local function Has(mod, fn) return type(CP[mod]) == 'table' and type(CP[mod][fn]) == 'function' end
 

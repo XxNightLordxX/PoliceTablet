@@ -70,7 +70,7 @@ do
     H.eq(seen.live_crimes, 'play_pvp', 'live crimes are Player vs police')
     H.eq(seen.volunteer_suspects, 'play_pvp', 'volunteer suspects are Player vs police')
     H.eq(seen.real_suspects, 'play_pvp', 'the real-suspect rules are Player vs police')
-    H.eq(seen.field_training, 'play_team', 'field training is Police teamwork')
+    H.eq(seen.recognition, 'play_team', 'recognition (with field training) is Police teamwork')
     H.eq(seen.mission_controls, 'play_team', 'supervisor mission controls are Police teamwork')
     H.eq(seen.cross_department_missions, 'play_team', 'cross-department operations are Police teamwork')
     H.eq(seen.storage, 'play_system', 'storage stays under the server')
@@ -122,8 +122,8 @@ do
         'Volunteers.enabled',
         'RealSuspects.surrender.enabled',
         'CrossDept.enabled',
-        'FieldTraining.enabled',
-        'Commendations.enabled',
+        'Recognition.fieldTraining.enabled',
+        'Recognition.commendations.enabled',
         'Permissions.supervisor.missionControls',
         'Rewards.enabled',
     }) do

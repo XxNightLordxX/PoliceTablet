@@ -1,4 +1,4 @@
-// Shapes of field training (modules/fieldtraining, Config.FieldTraining).
+// Shapes of field training (modules/supervisor/fieldtraining.lua, Config.Recognition.fieldTraining).
 
 export interface FtoTask {
     type: string;
@@ -28,7 +28,7 @@ export interface FtoView {
 export interface FtoMine {
     training?: FtoView | null;
     rookies: FtoView[];
-    // points the trainer gets per signed task (Config.FieldTraining.trainerBonus; 0 = none)
+    // points the trainer gets per signed task (Config.Recognition.fieldTraining.trainerBonus; 0 = none)
     trainerBonus?: number;
 }
 

@@ -9,7 +9,7 @@ import type { DebriefPerson, DecisionEntry, RunItem, RunMissionCall, RunProgress
 //                                 §9.2 SESSION
 // ============================================================================
 
-// The XP level (Config.XPCurve): n is the number, label and badge the Config.XPLevels band it falls in, xp the
+// The XP level (Config.Recognition.levelCurve): n is the number, label and badge the Config.Recognition.levels band it falls in, xp the
 // officer's XP, levelXp and nextLevelXp where level n and the next level (or prestige star) start.
 export interface LevelInfo {
     n: number;

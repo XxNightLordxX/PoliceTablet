@@ -880,7 +880,7 @@ do
         'Downed.dropOffs',
         'MissionCalls.areas',
         'Scaling',
-        'XPLevels',
+        'Recognition.levels',
         'Profile.avatarPresets',
     }) do
         H.ok((Check(p, U.deepcopy(U.getPath(D, p)))), p .. ': the shipped rows pass')
@@ -919,12 +919,12 @@ do
     Err('Scaling', rows, 'err.setting_option', 'a tier that does not exist')
     rows = { U.deepcopy(D.Scaling[1]) }
     Err('Scaling', rows, 'err.setting_scaling_last', 'the last row must cover the largest unit')
-    local levels = U.deepcopy(D.XPLevels)
+    local levels = U.deepcopy(D.Recognition.levels)
     levels[1].xp = 5
-    Err('XPLevels', levels, 'err.setting_xp_first', 'the first level starts at 0 XP')
-    levels = U.deepcopy(D.XPLevels)
+    Err('Recognition.levels', levels, 'err.setting_xp_first', 'the first level starts at 0 XP')
+    levels = U.deepcopy(D.Recognition.levels)
     levels[3].xp = levels[2].xp
-    Err('XPLevels', levels, 'err.setting_order', 'XP keeps rising')
+    Err('Recognition.levels', levels, 'err.setting_order', 'XP keeps rising')
     local presets = U.deepcopy(D.Profile.avatarPresets)
     presets[1].id = 'unicorn'
     Err('Profile.avatarPresets', presets, 'err.setting_option', 'a picture the UI does not ship')

@@ -1,6 +1,6 @@
-// Supervisor UI · Department · Training (Config.FieldTraining): every pairing of the department
+// Supervisor UI · Department · Training (Config.Recognition.fieldTraining): every pairing of the department
 
-// Supervisor UI · Department · Training (Config.FieldTraining): every pairing of the department
+// Supervisor UI · Department · Training (Config.Recognition.fieldTraining): every pairing of the department
 // with its progress, Pair trainer (a rookie of the department and an online trainer at or above the trainer grade) and
 // End training (two clicks). The server checks every rule again. Nothing shows while the feature is off. a
 // Pairings heading with the count, and the stale line when a refresh fails.
@@ -38,7 +38,7 @@ function EndButton({ view, onDone }: { view: FtoView; onDone: () => void }) {
     );
 }
 
-// showOff (the Department screen's Training tab): say so while Config.FieldTraining is off, else show nothing.
+// showOff (the Department screen's Training tab): say so while Config.Recognition.fieldTraining is off, else show nothing.
 export function FieldTrainingPanel({ showOff = false }: { showOff?: boolean }) {
     const { data, loading, error, refetch } = useRequest<FtoDept | false>('sup:getFieldTraining', {});
     const { run, busy } = useAction();

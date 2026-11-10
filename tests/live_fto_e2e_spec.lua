@@ -279,7 +279,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua && find blocks -name server.lua | sort'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
     p:close()
@@ -591,7 +591,7 @@ do
     H.eq(Config.Database.enabled, false, 'shipped: database off (the saves folder)')
     H.eq(Config.LiveCrime.enabled, false, 'shipped: live crimes off')
     H.eq(Config.LiveCrime.cash, false, 'shipped: live cases pay points only')
-    H.eq(Config.FieldTraining.enabled, false, 'shipped: field training off')
+    H.eq(Config.Recognition.fieldTraining.enabled, false, 'shipped: field training off')
     H.eq(Config.FeatureRewards.surrender.enabled, false, 'shipped: talk-downs pay nothing')
     H.eq(Config.FeatureRewards.ftoSignOff.enabled, false, 'shipped: sign-offs pay nothing')
     H.eq(Config.FeatureRewards.ftoComplete.enabled, false, 'shipped: a finished training pays nothing')
@@ -608,9 +608,9 @@ do
         { 'Rewards.enabled', true },
         { 'FeatureRewards.surrender.enabled', true },
         { 'FeatureRewards.surrender.items', water },
-        { 'FieldTraining.enabled', true },
-        { 'FieldTraining.tasks', { tactical = 1 } },
-        { 'FieldTraining.trainerBonus', 10 },
+        { 'Recognition.fieldTraining.enabled', true },
+        { 'Recognition.fieldTraining.tasks', { tactical = 1 } },
+        { 'Recognition.fieldTraining.trainerBonus', 10 },
         { 'FeatureRewards.ftoSignOff.enabled', true },
         { 'FeatureRewards.ftoComplete.enabled', true },
     }) do
@@ -618,7 +618,7 @@ do
         H.eq(ok, true, ('admin: %s saved: %s'):format(c[1], tostring(err)))
     end
     H.eq(Config.LiveCrime.enabled, true, 'admin: live crimes on at once')
-    H.eq(Config.FieldTraining.enabled, true, 'admin: field training on at once')
+    H.eq(Config.Recognition.fieldTraining.enabled, true, 'admin: field training on at once')
 
     -- every officer opens the tablet once (the session also saves his officer row: department, callsign)
     for _, src in ipairs({ 1, 2, 3, 4, 6, 7 }) do
@@ -783,7 +783,7 @@ do
     Restart()
 
     H.eq(Config.LiveCrime.enabled, true, 'restart: the Settings changes are kept')
-    H.eq(Config.FieldTraining.enabled, true, 'restart: ...field training too')
+    H.eq(Config.Recognition.fieldTraining.enabled, true, 'restart: ...field training too')
     H.eq(Runs.getBySrc(1), nil, 'restart: the leader is on no case')
     H.eq(Runs.getBySrc(2), nil, 'restart: nor is his partner')
     H.eq(CP.Opponents.active(), false, 'restart: no case is open')
@@ -908,7 +908,8 @@ do
     Secs(3)
     H.ok(Toasts(7, mark)['fto.toast.done'], 'fto: the rookie is told his training is done')
     local badge = H.sql('SELECT badge_id FROM cp_badges WHERE citizenid = ?', { CID[7] })
-    H.eq(badge[1] and badge[1].badge_id, Config.FieldTraining.badge, 'fto: the rookie has the Field Training badge')
+    H.eq(badge[1] and badge[1].badge_id, Config.Recognition.fieldTraining.badge,
+        'fto: the rookie has the Field Training badge')
     H.eq(select(2, Paid(CID[3])) - paidT, Config.FeatureRewards.ftoSignOff.money, 'fto: the trainer is paid $250')
     H.eq(select(2, Paid(CID[7])) - paidR, Config.FeatureRewards.ftoComplete.money, 'fto: the rookie is paid $1000')
     local bonus = Rows('citizenid = ? AND mission_id = ?', { CID[3], 'fto_bonus' })

@@ -538,7 +538,7 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Cash for volunteer cases | Player vs police | `Config.Volunteers.payCash` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
 | Item rewards for volunteer cases | Player vs police | `Config.Volunteers.payRewards` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
 | Supervisor mission controls | Police teamwork | `Config.Permissions.supervisor.missionControls` | [guide 1.2](docs/OWNER_GUIDE.md#12-what-supervisors-may-do) |
-| Field training (FTO) | Police teamwork | `Config.FieldTraining.enabled` | [guide 3.11](docs/OWNER_GUIDE.md#311-field-training-fto) |
+| Field training (FTO) | Police teamwork | `Config.Recognition.fieldTraining.enabled` | [guide 3.11](docs/OWNER_GUIDE.md#311-field-training-fto) |
 | Avatar image links | Police teamwork | `Config.Profile.avatarUrls.enabled` | [guide 3.4](docs/OWNER_GUIDE.md#34-profile-pictures) |
 | Item rewards | Economy and rewards | `Config.Rewards.enabled` | [guide 3.3](docs/OWNER_GUIDE.md#33-item-rewards) |
 | Pay volunteer suspects | Economy and rewards | `Config.FeatureRewards.suspect.enabled` | [guide 3.12](docs/OWNER_GUIDE.md#312-feature-rewards-money-and-items-for-every-feature) |
@@ -585,7 +585,7 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Real suspects admin screen | Player vs police | `Config.RealSuspects.adminScreen` |
 | Cross-department operations | Police teamwork | `Config.CrossDept.enabled` |
 | Unit ready check | Police teamwork | `Config.Units.readyCheck` |
-| Commendations | Police teamwork | `Config.Commendations.enabled` |
+| Commendations | Police teamwork | `Config.Recognition.commendations.enabled` |
 | Daily goal | Police teamwork | `Config.Objectives.dailyGoal.enabled` |
 | Weekly goal | Police teamwork | `Config.Objectives.weeklyGoal.enabled` |
 | Department challenge | Police teamwork | `Config.Objectives.challenge.enabled` |

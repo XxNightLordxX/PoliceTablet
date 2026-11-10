@@ -351,7 +351,7 @@ export function ClearCooldownForm({ officer, onCancel }: { officer: PanelOfficer
     );
 }
 
-// Field training (Config.FieldTraining) for this officer: his training as a rookie with End training (two clicks);
+// Field training (Config.Recognition.fieldTraining) for this officer: his training as a rookie with End training (two clicks);
 // a rookie paired with a trainer picked here; a trainer given a rookie picked here (with the rookies he trains). The
 // same server actions as Department → Training (server:sup:ftoPair, server:sup:ftoUnpair).
 export function FieldTrainingForm({

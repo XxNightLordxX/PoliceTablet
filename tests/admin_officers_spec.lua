@@ -561,14 +561,14 @@ do
     H.ok(type(removed) == 'table' and #removed == 0 and type(added) == 'table', 'nothing removed')
     ok = Act('server:admin:revokeBadge', 1, { citizenid = 'OFF00003', badgeId = 'iron_wheels', reason = 'Not earned' })
     H.eq(ok, true, 'revoked')
-    Config.Badges = CP.U.copy(Config.Badges)
-    Config.Badges.roadWarrior = 1
+    Config.Recognition.badges = CP.U.copy(Config.Recognition.badges)
+    Config.Recognition.badges.road_warrior = 1
     ok = Act('server:admin:revokeBadge', 1, { citizenid = 'OFF00003', badgeId = 'road_warrior', reason = 'Blocked' })
     H.eq(ok, true, 'a badge is blocked')
     W.async(function() return CP.Scoring.recheckBadges('OFF00003') end)
     H.eq(Count([[SELECT COUNT(*) AS n FROM cp_badges WHERE citizenid = 'OFF00003' AND badge_id = 'road_warrior']]), 0,
         'a blocked badge is never added again')
-    Config.Badges.roadWarrior = 100
+    Config.Recognition.badges.road_warrior = 100
     local o = Data('admin:getOfficer', 1, { citizenid = 'OFF00003' })
     local blocked = false
     for _, b in ipairs(o and o.badges or {}) do

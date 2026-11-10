@@ -96,8 +96,8 @@ do
         'Limits.startTimeout',
         'MissionCalls.maxOpen',
         'MissionCalls.staffCooldown',
-        'Commendations.perSupervisorPerDay',
-        'Commendations.sameKindCooldownDays',
+        'Recognition.commendations.perSupervisorPerDay',
+        'Recognition.commendations.sameKindCooldownDays',
         'Payouts.supervisorCooldown',
         'Cash.dailyCap',
         'Rewards.dailyItemCap',
@@ -122,8 +122,8 @@ do
         'Limits.',
         'AdminControl.',
         'MissionControls.',
-        'FieldTraining.',
-        'Commendations.',
+        'Recognition.fieldTraining.',
+        'Recognition.commendations.',
         'CrossDept.',
         'Volunteers.',
         'RealSuspects.',
@@ -168,7 +168,7 @@ do
             and Has(mc.limits, 'MissionControls.noticesPerDay') and Has(mc.limits, 'MissionControls.awardPointsPerDay'),
         'Mission controls link the ban, notice and points caps'
     )
-    H.ok(byKey.field_training and Has(byKey.field_training.limits, 'FieldTraining.rookiesPerTrainer'),
+    H.ok(byKey.field_training and Has(byKey.field_training.limits, 'Recognition.fieldTraining.rookiesPerTrainer'),
         'field training links rookies per trainer')
     H.ok(byKey.item_rewards and Has(byKey.item_rewards.limits, 'Rewards.dailyValueCap'), 'item rewards link the caps')
     H.ok(byKey.volunteers and Has(byKey.volunteers.limits, 'Volunteers.strikes'), 'volunteers link the strikes')

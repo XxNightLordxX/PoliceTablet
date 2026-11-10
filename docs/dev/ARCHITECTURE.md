@@ -123,7 +123,7 @@ PoliceTablet/                      (git repo)
     config/blocks.lua              Mission Builder ranges and defaults
     shared/init.lua                CP namespace, logging, CP.Blocks registry, RegisterMission stub
     shared/lib.lua                 the helper library: CP.Db, CP.notify, CP.push, CP.Ext, CP.Lock, CP.Daily,
-                                   CP.Objective (§2)
+                                   CP.Objective, CP.Recognition (§2)
     shared/locale.lua              CP.L / CP.Locale
     shared/net.lua                 CP.Net (actions and callbacks)
     shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
@@ -169,7 +169,8 @@ PoliceTablet/                      (git repo)
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
 (alphabetical: init, lib, locale, net, npccombat, options, twists, utils), then `modules/**/server.lua` (server) /
-`modules/**/client.lua` (client), then the server sub-files of `modules/progression/*.lua`, then `blocks/**/server.lua` / `blocks/**/client.lua`.
+`modules/**/client.lua` (client), then the server sub-files of `modules/progression/*.lua` and
+`modules/supervisor/*.lua`, then `blocks/**/server.lua` / `blocks/**/client.lua`.
 Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` and
 `modules/storage/server.lua` before every other server module (so the `MySQL` global is settled before
 any module can query), then `modules/adminkit/server.lua` (so any module may register its admin actions with
@@ -184,6 +185,7 @@ Extra module folders beyond the spec's table (allowed: "each feature in its own 
 More folders (all in the spec's Feature folders table; §5.30–§5.34):
 `modules/custody/` (server, client), `modules/missioncalls/` (server, client), `modules/progression/` (server sub-files:
 scoring, goals, challenge, events, leaderboard, profile; listed in fxmanifest as `modules/progression/*.lua`),
+`modules/supervisor/` (server sub-files: fieldtraining; listed as `modules/supervisor/*.lua`),
 `modules/rewards/` (server), `modules/confighealth/` (server), `modules/integrations/sc_police/` (server),
 `blocks/field_contact/` and `blocks/process_scene/` (server, client).
 
@@ -238,6 +240,7 @@ Full admin control also has `modules/corrections/` (§5.38), `modules/livectl/` 
 | `CP.Lock.new({ players? }) -> lock`; `lock:run(key, waitMs, fn, ...) -> 'ok', ... \| 'busy' \| 'error', err`, `lock:runAll(keys, fn, ...)`, `lock:held(key)`, `lock:take(key) -> token`, `lock:free(key, token)`, `lock:clear()` | shared/lib.lua | One at a time per key (an officer's payment, rewards or goals, a row, an admin action per actor, a unit's accept). `run` waits up to `waitMs` in 50 ms steps (0 = busy at once); the key is freed when fn ends or raises. `players = true`: keys are sources, freed on `playerDropped`; the run that held a dropped key never frees the next holder's key |
 | `CP.Daily.new(dayFn?) -> daily`; `daily:reserve(key, cap, n) -> token \| nil`, `:commit(token)`, `:cancel(token)`, `:used(key)`, `:left(key, cap)`, `:add(key, n)`, `:clear(key?)` | shared/lib.lua | Per-day counters for caps kept in memory (the server day, `CP.Schedule.dayStart`). `reserve` checks the cap with the reservations of requests still running and takes n in one step, so two requests sent at once cannot both pass a cap; commit after the save, cancel when it failed. Profile picture links use it (`Config.Profile.avatarUrls.perDay`) |
 | `CP.Objective(kind) -> cfg, on` | shared/lib.lua | One kind of `Config.Objectives` (`dailyGoal`, `weeklyGoal`, `challenge`, `bounty`, `typeOfTheDay`) as it is now, never nil, and its switch (`enabled ~= false`; the bounty also needs the challenge). Goals, the challenge, the bounty and the Type of the Day read their settings only through it |
+| `CP.Recognition(part) -> cfg, on` | shared/lib.lua | One part of `Config.Recognition` (`levels`, `levelCurve`, `badges`, `weeklyBadges`, `commendations`, `fieldTraining`) as it is now, never nil, and its switch (commendations `enabled ~= false`, field training `enabled == true`, the others always on). Scoring (levels, auto badges), the boards (weekly badges), profiles (commendations), the tablet and field training read their settings only through it |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText`, `toSrc(v, console?)` (a player source: an integer above 0, or nil; 0 too with `console = true`) |
 
 Naming of `CP.Net.action` names: officer actions are `'server:<name>'` (spec events, e.g. `'server:acceptType'`),
@@ -1829,8 +1832,8 @@ English only: a profile has no language.
   callsign's initials, never the picture, unless own), `avatarFor(citizenid, viewerSrc|nil)`, `prefsFor(citizenid) ->
   { appearance, accent, uiScale (clamped to Config.Profile.uiScale), callsMuted }`.
 - `commendations(citizenid, { staff, viewer })` (active, newest first; `staff` adds revoked ones; `viewer` adds
-  `mine`; a hidden issuer shows by callsign), `newCommendations(citizenid)` (last `Config.Commendations.announceDays`,
-  60 s cache).
+  `mine`; a hidden issuer shows by callsign), `newCommendations(citizenid)` (last
+  `Config.Recognition.commendations.announceDays`, 60 s cache).
 - `validateBio(text)` (≤ bioMax characters and bioLines lines, control characters removed, no word or phrase of
   `Config.Profile.bannedWords` or `config/banned_words.txt`), `validateUrl(url)` (https, an exact host of
   `avatarUrls.hosts`, ≤ 255, a .png/.jpg/.jpeg/.webp path, no spaces, quotes, backticks, backslashes or angle
@@ -1847,7 +1850,7 @@ English only: a profile has no language.
 | `server:sup\|admin:reviewAvatar` | `{ citizenid, decision = 'approve'\|'reject', reason, what? = 'avatar'\|'bio' }` | reviewProfiles, own department (admins any), never your own, reason required, a claim UPDATE; audited reviewAvatar / reviewBio |
 | `server:sup\|admin:clearProfile` | `{ citizenid, what, reason }` | same; audited clearBio / clearAvatar |
 | `server:sup\|admin:handleReport` | `{ id, decision = 'clear'\|'dismiss', reason }` | same, on the report's department; clear also clears the content; final once handled |
-| `server:sup\|admin:commend` | `{ citizenid, kind, citation, runUuid? }` → `{ id }` | issueCommendation / openAdmin; kind from `Config.Commendations.kinds`; never yourself; supervisors own department unless `crossDepartment`, `perSupervisorPerDay`; `sameKindCooldownDays`; a run must be the recipient's and not the issuer's. Zero points: only cp_commendations and the audit row are written; toast, Home news, optional board webhook |
+| `server:sup\|admin:commend` | `{ citizenid, kind, citation, runUuid? }` → `{ id }` | issueCommendation / openAdmin; kind from `Config.Recognition.commendations.kinds`; never yourself; supervisors own department unless `crossDepartment`, `perSupervisorPerDay`; `sameKindCooldownDays`; a run must be the recipient's and not the issuer's. Zero points: only cp_commendations and the audit row are written; toast, Home news, optional board webhook |
 | `server:sup\|admin:revokeCommendation` | `{ id, reason }` | the issuer or any admin; audited |
 | callback `sup:getProfileQueue` | `{ department? }` → ProfileQueueItem[] | reviewProfiles; reports show the live content, never the reporter |
 | callback `admin:getOfficerProfile` | `{ citizenid }` → the staff profile with realName, pending values, every commendation, open reports | openAdmin |
@@ -2564,9 +2567,9 @@ admin switched them on and only inside the admin's bounds.
   `missionBanState`, `awardPoints`), `sup:getLiveRuns` (`addTime`, per run `timeAdded`, `own`), `sup:getDeptReport`
   rows (`missionBan`), `MC.supView` (`lanes`, `push`).
 
-### 5.50 CP.FieldTraining — modules/fieldtraining (S; field training)
-Config.FieldTraining (ships `enabled = false`: the hook counts nothing, every action answers `err.fto_off`, both reads
-answer `false`).
+### 5.50 CP.FieldTraining — modules/supervisor/fieldtraining.lua (S; field training)
+Config.Recognition.fieldTraining (ships `enabled = false`: the hook counts nothing, every action answers
+`err.fto_off`, both reads answer `false`).
 - `FT.enabled()`, `FT.tasks() -> { { type, need, label } }` (Config tasks with a count above 0, sorted),
   `FT.trainerGrade(dept)` (trainerGrades, else the department's supervisorGrade), `FT.badge()` (a safe badge id),
   `FT.view(cid, name, record) -> FtoView` (web/src/types/fieldTraining.ts).
@@ -3194,7 +3197,7 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `admin:getOfficerPoints` | callback | officerRecords | `{ citizenid }` | week/month/season/all-time points and ranks, `adjust.maxDeduction`, `confirmAbove`, `dailyLimit` |
 | `server:admin:adjustPoints` | action | pointsAdjust | `{ citizenid, points (−10,000..10,000, not 0), reason, confirm?, requestId }` | R I S(strict) L(1 per 10 s per officer); T = the citizenid at ≥ `adjustConfirmAbove`; a deduction never takes season points or XP below 0; `adjustDailyLimit` summed from today's rows of every character of the admin's licenses (license: and license2:); audit `manualAward` / `pointsAdjust` (flags) |
 | `server:sup:awardPoints` | supAction | missionControls (DC.canChange awardPoints) | `{ citizenid, points (the department's min..max), reason, confirm? }` | R S(strict) L(1 per 10 s per officer); T as above; a supervisor: own department, `awardPointsPerDay` from today's rows; then `CP.Corrections.adjust` |
-| `server:sup:ftoPair` / `server:sup:ftoUnpair` | supAction | viewMissionList (own department; Config.FieldTraining.enabled) | `{ rookie, trainer }` / `{ rookie }` | S on the rookie; audit `ftoPair` / `ftoUnpair` (§5.50) |
+| `server:sup:ftoPair` / `server:sup:ftoUnpair` | supAction | viewMissionList (own department; Config.Recognition.fieldTraining.enabled) | `{ rookie, trainer }` / `{ rookie }` | S on the rookie; audit `ftoPair` / `ftoUnpair` (§5.50) |
 | `server:fto:signOff` | action | the rookie's own trainer | `{ rookie, task, note? }` | a ready task, once; audit `ftoSignOff`; the last one gives the badge (§5.50) |
 | `admin:previewBulkVoid` | callback | bulkVoid | `{ filter = { citizenid?, department?, missionType?, missionId?, operationId?, from, to \| allTime, includeAwards? } }` | V: rows, officers (XP before/after), points, held cash, archived, left-out own runs, `confirmWord`, `previewToken` (none above `bulkMaxRows`) |
 | `server:admin:bulkVoid` | action | bulkVoid | `{ filter, kind?, reason, confirm = 'VOID <n>', previewToken, requestId }` | R I V T J; refused while the officer is on a run; audit `bulkVoid` (flags) + one `voidRun` per row |
@@ -3937,7 +3940,7 @@ head. `shared/designSystem.walk.ts` checks that every `<Screen>` passes its head
 | `Grid` / `Stack` / `Row` / `Spacer` / `Divider` / `KeyValue` | `Grid cols={3}\|"2fr 1fr"`, `min={220}` (auto-fill), `gap` (4px steps); `Stack direction gap align justify wrap grow` |
 | `Badge` | `tone` neutral\|primary\|accent\|success\|warning\|danger\|grey\|bronze\|silver\|gold\|platinum, `variant` soft\|solid\|outline, `size`, `icon`, `dot` |
 | `TierBadge` | `tier` (standard…critical), `label?`, `expected?`, `size` |
-| `XpBadge` | `badge` (Config.XPLevels colour), `label` |
+| `XpBadge` | `badge` (Config.Recognition.levels colour), `label` |
 | `Tabs` / `SegmentedControl` | `items [{ key, label, icon?, badge?, disabled? }]`, `value`, `onChange`; arrow keys move |
 | `Table` | `columns [{ key, header, render?, width?, align?, numeric?, sortable?, sortValue? }]`, `rows`, `rowKey?`, `onRowClick?`, `highlightRow?`, `empty?`, `loading?`, `stickyHeader` (default true), `maxHeight?`, `dense?`, `footer?`, `filter` (true or `{ text, placeholder }`: a search box over the rows), `pageSize` (client pages with the Pager), `defaultSort` |
 | `Pager` | `page`, `pages`, `onPage`, `disabled` — previous / next and "page n of m" (nothing for one page) |

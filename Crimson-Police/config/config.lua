@@ -13,10 +13,10 @@
 --                               Alert suppression, Downed participants, Police actions and custody, Decisions,
 --                               Special events, Built-in mission tweaks, Mission Builder
 --   PART 3 PLAYER VS POLICE     Real suspects, Live crimes, Volunteer suspects, Criminal tablet
---   PART 4 POLICE TEAMWORK      Units, Cross-department missions, Mission controls, Field training, Leaderboard,
---                               Objectives (goals, challenge, bounty, Type of the Day), Officer profile (and My
---                               options, commendations)
---   PART 5 ECONOMY AND REWARDS  Cash, Payout editing, Disputes, Scoring and XP levels, Bonuses and penalties,
+--   PART 4 POLICE TEAMWORK      Units, Cross-department missions, Mission controls, Recognition (XP levels,
+--                               badges, commendations, field training), Leaderboard, Objectives (goals,
+--                               challenge, bounty, Type of the Day), Officer profile (and My options)
+--   PART 5 ECONOMY AND REWARDS  Cash, Payout editing, Disputes, Scoring, Bonuses and penalties,
 --                               Item rewards, Feature rewards
 --   PART 6 SYSTEM               Run limits, Anti-exploit, Time, Admin test mode, Retention, Backups (webhooks are
 --                               server.cfg convars, listed at the end)
@@ -1633,9 +1633,9 @@ Config.CriminalTablet = {
 
 -- ############################################################################
 --                           PART 4 · POLICE TEAMWORK
--- Officers working together: units, Cross-Department Missions, supervisor mission controls, field
--- training, leaderboards, the objectives (goals, department challenge, bounty, Type of the Day) and officer
--- profiles.
+-- Officers working together: units, Cross-Department Missions, supervisor mission controls, recognition
+-- (levels, badges, commendations, field training), leaderboards, the objectives (goals, department challenge,
+-- bounty, Type of the Day) and officer profiles.
 -- Usually changed here: the unit size, which Mission controls supervisors get, and field training.
 -- ############################################################################
 
@@ -1813,27 +1813,77 @@ Config.MissionControls = {
 }
 
 -- ============================================================================
---                                FIELD TRAINING
+--                                 RECOGNITION
 -- ============================================================================
--- Field training (FTO): a supervisor (or an admin) pairs a trainer with a rookie of his own department in Supervisor
--- UI -> Department Report. Completed missions the rookie runs together with his trainer (both finish the same run)
--- count towards the sign-off tasks below. Once a task's count is reached the trainer signs it off on his tablet
--- (Profile -> Field training), with an optional note. When every task is signed off the rookie gets the badge below
--- and the training is done. Every pairing and sign-off is in the audit log. Off when you install.
-Config.FieldTraining = {
-    enabled = false,                 -- true = supervisors can pair trainers and rookies, and runs count for them
-    -- Who may train, per department key: the lowest Qbox grade number of a trainer (that grade and up). A department
-    -- not listed here uses its supervisorGrade (so only supervisors train there)
-    trainerGrades = { sast = 2, fib = 2 },
-    -- Sign-off tasks, per mission type key: the completed missions of that type the rookie must run with his trainer
-    -- before the trainer may sign the task off. A type left out (or 0) is no task
-    tasks = { patrol = 3, investigation = 2, tactical = 1 },
-    rookiesPerTrainer = 2,           -- rookies one trainer may train at the same time
-    badge = 'field_training',        -- the badge a rookie gets when every task is signed off (Profile -> Badges)
-    -- Ride-along rule: mission type keys (e.g. { 'tactical' }) a rookie in training may only accept (or claim) with his
-    -- trainer in the same unit. Empty = a rookie runs every type with anyone
-    requireTrainerFor = {},
-    trainerBonus = 0,                -- points the trainer gets for each task he signs off (0 = none)
+-- Everything an officer is recognised with, in one place: XP levels (the name and medal shown with his level), the
+-- badges he earns by himself (auto badges), the weekly board badges, the commendations a supervisor gives and the
+-- field training badge. Each kind keeps its own rules below. Cosmetic only: never the Qbox rank, never pay. An admin
+-- grants or revokes any badge in Admin UI -> Officers; every grant, revoke and commendation is in the audit log.
+Config.Recognition = {
+    -- XP levels: each name is a band of numbered levels starting at level, with its medal colour; xp stays for old
+    -- callers
+    levels = {
+        { label = 'Probationary', xp = 0, badge = 'grey', level = 1 },
+        { label = 'Patrol Officer', xp = 1000, badge = 'bronze', level = 10 },
+        { label = 'Senior Patrol', xp = 5000, badge = 'silver', level = 25 },
+        { label = 'Veteran', xp = 15000, badge = 'gold', level = 38 },
+        { label = 'Elite', xp = 40000, badge = 'platinum', level = 50 },
+    },
+    -- Level n needs round(first x (growth^(n - 1) - 1) / (growth - 1)) XP. Lv 10 = about 1,200 XP, Lv 25 = about
+    -- 5,800, Lv 50 = about 37,900
+    levelCurve = {
+        maxLevel = 50,               -- the last numbered level
+        first = 100,                 -- XP from level 1 to level 2
+        growth = 1.07,               -- each level needs this much more than the one before
+        prestigeEvery = 10000,       -- after maxLevel, one prestige star per this much XP
+    },
+    -- Auto badges: given by themselves once the count is reached, taken back if a void drops the count below it
+    -- (unless an admin granted it). 0 = that badge is off
+    badges = {
+        iron_wheels = 20,            -- completed runs with no vehicle damage
+        sharpshooter = 10,           -- Gang Shootouts with no participant downed
+        road_warrior = 100,          -- Patrol missions
+        partner_in_crime = 50,       -- unit runs
+        joint_task_force = 10,       -- runs with 2 or more departments
+        by_the_book = 100,           -- Best dispositions
+        first_responder = 25,        -- mission calls answered with rapid response
+    },
+    -- Weekly board badges by metric, e.g. { 'arrests' } ("Top Arrests of the week"); Officer of the Week (by points)
+    -- is always given
+    weeklyBadges = {},
+    -- Commendations: a supervisor commends an officer of his own department (Supervisor UI -> Department)
+    commendations = {
+        enabled = true,              -- true = supervisors may commend officers
+        -- the kinds a supervisor may pick (ids; rename them in Admin UI -> Settings -> Names,
+        -- profile.commend.kind.<id>)
+        kinds = { 'valor', 'lifesaving', 'teamwork', 'professionalism', 'leadership', 'investigation' },
+        citation = { 10, 255 },      -- characters
+        perSupervisorPerDay = 3,     -- commendations one supervisor may give per day
+        sameKindCooldownDays = 7,    -- days before the same officer may get the same kind again
+        crossDepartment = false,     -- true = supervisors may commend officers of other departments
+        announceDays = 7,            -- days the Home announcement shows for the recipient
+        announce = false,            -- also post it to the board webhook
+    },
+    -- Field training (FTO): a supervisor (or an admin) pairs a trainer with a rookie of his own department in
+    -- Supervisor UI -> Department. Completed missions the rookie runs together with his trainer (both finish the same
+    -- run) count towards the sign-off tasks below. Once a task's count is reached the trainer signs it off on his
+    -- tablet (Profile -> Field training), with an optional note. When every task is signed off the rookie gets the
+    -- badge below and the training is done. Off when you install
+    fieldTraining = {
+        enabled = false,             -- true = supervisors can pair trainers and rookies, and runs count for them
+        -- Who may train, per department key: the lowest Qbox grade number of a trainer (that grade and up). A
+        -- department not listed here uses its supervisorGrade (so only supervisors train there)
+        trainerGrades = { sast = 2, fib = 2 },
+        -- Sign-off tasks, per mission type key: the completed missions of that type the rookie must run with his
+        -- trainer before the trainer may sign the task off. A type left out (or 0) is no task
+        tasks = { patrol = 3, investigation = 2, tactical = 1 },
+        rookiesPerTrainer = 2,       -- rookies one trainer may train at the same time
+        badge = 'field_training',    -- the badge a rookie gets when every task is signed off (Profile -> Badges)
+        -- Ride-along rule: mission type keys (e.g. { 'tactical' }) a rookie in training may only accept (or claim)
+        -- with his trainer in the same unit. Empty = a rookie runs every type with anyone
+        requireTrainerFor = {},
+        trainerBonus = 0,            -- points the trainer gets for each task he signs off (0 = none)
+    },
 }
 
 -- ============================================================================
@@ -1849,7 +1899,6 @@ Config.Leaderboard = {
     -- Rank by tabs; 'live_catches' (suspects detained in live cases, Config.LiveCrime) can be added
     metrics = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' },
     minDecisions = 10,       -- Judgement: decisions needed in the window
-    weeklyBadges = {},       -- extra weekly badges by metric, e.g. { 'arrests' }; Officer of the Week stays by points
     announceWeekly = true,   -- the weekly top 3 on Home and the board webhook
     announceMonthly = true,  -- the monthly top 3 on Home and the board webhook
 }
@@ -2051,21 +2100,9 @@ Config.OfficerOptions = {
     autoReadyRange = 150.0,          -- metres: Auto-Ready answers only while the officer is this close to the leader
 }
 
-Config.Commendations = {
-    enabled = true,                  -- true = supervisors may commend officers
-    -- the kinds a supervisor may pick (ids: rename them in Admin UI -> Settings -> Names, profile.commend.kind.<id>)
-    kinds = { 'valor', 'lifesaving', 'teamwork', 'professionalism', 'leadership', 'investigation' },
-    citation = { 10, 255 },          -- characters
-    perSupervisorPerDay = 3,         -- commendations one supervisor may give per day
-    sameKindCooldownDays = 7,        -- same officer, same kind
-    crossDepartment = false,         -- true = supervisors may commend officers of other departments
-    announceDays = 7,                -- days the Home announcement shows for the recipient
-    announce = false,                -- also post it to the board webhook
-}
-
 -- ############################################################################
 --                         PART 5 · ECONOMY AND REWARDS
--- Cash, payout changes, disputes, points, XP, badges, bonuses and item rewards.
+-- Cash, payout changes, disputes, points, bonuses and item rewards.
 -- Usually changed here: Cash (bank or cash, server or society money, the daily cap) and bonus values.
 -- Item rewards, feature rewards and the money tools all ship off.
 -- ############################################################################
@@ -2113,7 +2150,7 @@ Config.Disputes = {
 }
 
 -- ============================================================================
---                            SCORING AND XP LEVELS
+--                                   SCORING
 -- ============================================================================
 
 -- How a run's points (P = the mission type's points) are worked out. Usually changed here: the streak and the common
@@ -2204,35 +2241,6 @@ Config.Bonuses = {
     live_book = { kind = 'pct', value = 0.25, each = true, engineOnly = true },
     -- live case: per suspect detained after a surrender, no officer hit (x his share)
     peaceful_arrest = { kind = 'pct', value = 0.15, each = true, engineOnly = true },
-}
-
--- Cosmetic badges only; never the Qbox rank. Each name is a band of numbered levels starting at level;
--- xp stays for old callers.
-Config.XPLevels = {
-    { label = 'Probationary', xp = 0, badge = 'grey', level = 1 },
-    { label = 'Patrol Officer', xp = 1000, badge = 'bronze', level = 10 },
-    { label = 'Senior Patrol', xp = 5000, badge = 'silver', level = 25 },
-    { label = 'Veteran', xp = 15000, badge = 'gold', level = 38 },
-    { label = 'Elite', xp = 40000, badge = 'platinum', level = 50 },
-}
-
--- Level n needs round(first × (growth^(n − 1) − 1) ÷ (growth − 1)) XP. Cosmetic only: never the rank,
--- never pay, never missions. Lv 10 ≈ 1,200 XP, Lv 25 ≈ 5,800, Lv 50 ≈ 37,900.
-Config.XPCurve = {
-    maxLevel = 50,           -- the last numbered level
-    first = 100,             -- XP from level 1 to level 2
-    growth = 1.07,           -- each level needs this much more than the one before
-    prestigeEvery = 10000,   -- after maxLevel, one prestige star per this much XP
-}
-
-Config.Badges = {            -- achievement badge counts
-    ironWheels = 20,     -- completed runs with no vehicle damage
-    sharpshooter = 10,   -- Gang Shootouts with no participant downed
-    roadWarrior = 100,   -- Patrol missions
-    partnerInCrime = 50, -- unit runs
-    jointTaskForce = 10, -- runs with 2 or more departments
-    byTheBook = 100,     -- Best dispositions
-    firstResponder = 25, -- mission calls answered with rapid response
 }
 
 -- ============================================================================
@@ -2327,7 +2335,7 @@ Config.FeatureRewards = {
         money = 300,                 -- dollars per peaceful arrest
         items = {},                  -- items per peaceful arrest
     },
-    -- Field training (Config.FieldTraining): the trainer for each task he signs off
+    -- Field training (Config.Recognition.fieldTraining): the trainer for each task he signs off
     ftoSignOff = {
         enabled = false,             -- true = the trainer is paid for each sign-off
         account = 'bank',            -- 'bank' | 'cash' | 'item'

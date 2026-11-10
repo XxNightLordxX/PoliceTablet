@@ -375,8 +375,8 @@ local function ExtraConfig(deptKey)
         if type(m) == 'string' then metrics[#metrics + 1] = m end
     end
     local kinds = {}
-    local cm = Config.Commendations or {}
-    if cm.enabled ~= false then
+    local cm, cmOn = CP.Recognition('commendations')
+    if cmOn then
         for _, k in ipairs(type(cm.kinds) == 'table' and cm.kinds or {}) do
             if type(k) == 'string' then kinds[#kinds + 1] = k end
         end

@@ -162,7 +162,7 @@ do
     H.ok(db.tables.cp_officers.colIndex.options ~= nil, '010 adds cp_officers.options')
     H.ok(db.tables.cp_officers.colIndex.mission_ban ~= nil, '012 adds cp_officers.mission_ban')
     H.ok(db.tables.cp_officers.colIndex.field_training ~= nil, '015 adds cp_officers.field_training')
-    -- the field training statements (modules/fieldtraining) run in the saves folder engine
+    -- the field training statements (modules/supervisor/fieldtraining.lua) run in the saves folder engine
     shim.update.await('INSERT INTO cp_officers (citizenid, department) VALUES (?, ?)', { 'FT_R1', 'sast' })
     shim.update.await('UPDATE cp_officers SET field_training = ? WHERE citizenid = ?',
         { '{"trainer":"FT_T1","tasks":{}}', 'FT_R1' })
@@ -1508,7 +1508,7 @@ end
 do
     H.sql('DELETE FROM cp_mission_runs')
     H.sql('DELETE FROM cp_badges')
-    Config.Badges.byTheBook = 5
+    Config.Recognition.badges.by_the_book = 5
     local function Insert(state, best, arrests)
         H.sql([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid, department, participants,
             departments_n, tier, state, end_reason, points_base, bonus_points, penalty_points, final_points, cash_base,
@@ -1525,7 +1525,7 @@ do
     CP.Scoring._checkBadges('STAT1', false)
     local b = H.sql('SELECT badge_id FROM cp_badges WHERE citizenid = \'STAT1\'')
     H.eq(b[1] and b[1].badge_id, 'by_the_book', 'By the Book from completed rows (decisions_best)')
-    Config.Badges.byTheBook = 100
+    Config.Recognition.badges.by_the_book = 100
     H.load('modules/progression/goals.lua')
     local n = CP.Goals._progress({ id = 'arrests_x', stat = 'arrests', count = 2 }, 'STAT1', os.time() - 3600)
     H.eq(n, 1, 'a stat goal sums completed rows only')
@@ -1590,7 +1590,7 @@ do
     H.eq(S.xpLevel(top + 10000).prestige, 1, 'a prestige star every 10,000 XP after 50')
     H.eq(S.xpLevel(top + 25000).prestige, 2, 'two stars')
     H.eq(S.xpLevel(top + 25000).n, 50, 'still Lv 50')
-    for _, band in ipairs(Config.XPLevels) do
+    for _, band in ipairs(Config.Recognition.levels) do
         local at = S.levelXp(band.level)
         H.eq(S.xpLevel(at).label, band.label, 'Lv ' .. band.level .. ' starts the ' .. band.label .. ' band')
         if band.level > 1 then
@@ -1924,7 +1924,7 @@ do
     H.eq(#c.profile.accents, #Config.Departments.sast.theme.personalAccents, 'the department\'s accents')
     H.eq(c.profile.accents[3].level, 10, 'with their levels')
     H.eq(c.profile.uiScale[2], 1.25, 'uiScale range')
-    H.eq(#c.commendationKinds, #Config.Commendations.kinds, 'commendationKinds')
+    H.eq(#c.commendationKinds, #Config.Recognition.commendations.kinds, 'commendationKinds')
     H.eq(c.rewards.enabled, false, 'rewards off')
     H.eq(c.format.currency, '$', 'format.currency')
     H.eq(c.format.currencyAfter, false, 'format.currencyAfter')

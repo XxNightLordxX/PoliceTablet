@@ -1602,7 +1602,8 @@ local function CheckAccept(src, typeKey, counts, live)
         end
     end
 
-    -- field training's ride-along rule (Config.FieldTraining.requireTrainerFor): a rookie needs his trainer
+    -- field training's ride-along rule (Config.Recognition.fieldTraining.requireTrainerFor): a rookie needs his
+    -- trainer
     if CP.FieldTraining and CP.FieldTraining.unitCheck then
         local okF, allowed, ftErr, rookie = Safe(CP.FieldTraining.unitCheck, officers, missionType)
         if okF and allowed == false then

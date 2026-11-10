@@ -124,7 +124,8 @@ do
     H.eq(keys[#keys], 'blocks', 'blocks.lua is the last section')
     local titles = {}
     for _, sec in ipairs(sc.sections) do titles[sec.key] = sec.title end
-    H.eq(titles.scoring_and_xp_levels, 'Scoring and XP levels', 'banner titles in sentence case')
+    H.eq(titles.scoring, 'Scoring', 'banner titles in sentence case')
+    H.eq(titles.recognition, 'Recognition', 'the Recognition banner is one section')
     H.eq(titles.objectives, 'Objectives', 'the Objectives banner is one section')
     H.eq(titles.scaling_by_participants, 'Scaling by participants', 'short words such as BY go to lower case')
     H.eq(titles.route_to_the_start, 'Route to the start', 'TO goes to lower case')
@@ -162,7 +163,7 @@ do
         'criminal_tablet',
         'units',
         'mission_controls',
-        'field_training',
+        'recognition',
         'officer_profile',
         'cash',
         'disputes',
@@ -211,7 +212,7 @@ do
         'Builder.enabled',
         'CrossDept.maxParticipants',
         'Objectives.bounty.bonus',
-        'Commendations.perSupervisorPerDay',
+        'Recognition.commendations.perSupervisorPerDay',
         'Testing.enabled',
         'AdminTheme.primary',
         'Profile.bioLines',
@@ -1874,31 +1875,53 @@ do
     S.resetMission(1, 'beat_patrol')
 end
 
--- Config.FieldTraining (step T1): its own section with the police settings, shipped off, each comment its description.
+-- Config.Recognition.fieldTraining (steps T1, FM2): in the Recognition section, shipped off, each comment its
+-- description.
 do
     local function E(p) return S.entry(p) or {} end
     local groups, section = {}, nil
     for _, sec in ipairs(S._schema().sections) do
         for _, g in ipairs(sec.groups) do groups[g.path] = g end
-        if sec.key == 'field_training' then section = sec end
+        if sec.key == 'recognition' then section = sec end
     end
-    H.ok(section and section.title == 'Field training' and section.group == 'play_team',
-        'Field training: Police teamwork')
-    H.eq(E('FieldTraining.enabled').default, false, 'field training ships off')
-    H.ok(E('FieldTraining.enabled').desc:find('supervisors can pair trainers and rookies', 1, true) ~= nil,
+    H.ok(section and section.title == 'Recognition' and section.group == 'play_team',
+        'Recognition (with field training): Police teamwork')
+    H.eq(E('Recognition.fieldTraining.enabled').default, false, 'field training ships off')
+    H.ok(E('Recognition.fieldTraining.enabled').desc:find('supervisors can pair trainers and rookies', 1, true) ~= nil,
         'enabled: its comment')
-    H.ok(((groups['FieldTraining.tasks'] or {}).desc or E('FieldTraining.tasks').desc or ''):find(
-        'the completed missions of that type',
-        1,
-        true
-    ) ~= nil, 'tasks: its comment')
-    H.ok(E('FieldTraining.rookiesPerTrainer').default == 2 and E('FieldTraining.rookiesPerTrainer').max == 20,
-        'two rookies a trainer, at most 20')
-    H.eq(E('FieldTraining.badge').default, 'field_training', 'the badge id')
-    H.ok(E('FieldTraining.trainerBonus').default == 0 and E('FieldTraining.trainerBonus').max == 1000,
-        'T2: no trainer bonus as shipped, at most 1000')
-    local ride = groups['FieldTraining.requireTrainerFor'] or E('FieldTraining.requireTrainerFor')
+    H.ok(
+        ((groups['Recognition.fieldTraining.tasks'] or {}).desc or E('Recognition.fieldTraining.tasks').desc or ''):find(
+            'the completed missions of that type',
+            1,
+            true
+        ) ~= nil, 'tasks: its comment')
+    H.ok(
+        E('Recognition.fieldTraining.rookiesPerTrainer').default == 2
+            and E('Recognition.fieldTraining.rookiesPerTrainer').max == 20,
+        'two rookies a trainer, at most 20'
+    )
+    H.eq(E('Recognition.fieldTraining.badge').default, 'field_training', 'the badge id')
+    H.ok(
+        E('Recognition.fieldTraining.trainerBonus').default == 0
+            and E('Recognition.fieldTraining.trainerBonus').max == 1000,
+        'T2: no trainer bonus as shipped, at most 1000'
+    )
+    local ride = groups['Recognition.fieldTraining.requireTrainerFor']
+        or E('Recognition.fieldTraining.requireTrainerFor')
     H.ok((ride.desc or ''):find('Ride-along rule', 1, true) ~= nil, 'T2: requireTrainerFor, its comment')
+    -- FM2: the other parts of Config.Recognition in the same section, each comment its description
+    for _, p in ipairs({
+        'Recognition.badges.iron_wheels',
+        'Recognition.commendations.enabled',
+        'Recognition.commendations.sameKindCooldownDays',
+        'Recognition.levelCurve.maxLevel',
+    }) do
+        H.eq(E(p).section, 'recognition', p .. ': in the Recognition section')
+        H.ok((E(p).desc or '') ~= '', p .. ': its comment is its description')
+    end
+    H.eq(E('Recognition.badges.iron_wheels').default, 20, 'an auto badge count, as before')
+    H.eq(E('Recognition.badges.iron_wheels').max, 100000, 'with a top')
+    H.eq(E('Recognition.levels').kind, 'rows', 'the level names: a row editor')
 end
 
 -- ============================================================================

@@ -154,8 +154,8 @@ Mission** (`launchCrossDept`), **Payouts** (`setTypePayout`), **Mission Builder*
 `missionCalls` is `false` and no Mission control is open to him).
 
 Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%), `Config.Payouts.supervisorCooldown`
-(`1800` seconds), `Config.Commendations.crossDepartment` (`false`; `true` lets supervisors commend other departments),
-`Config.Commendations.perSupervisorPerDay` (`3`).
+(`1800` seconds), `Config.Recognition.commendations.crossDepartment` (`false`; `true` lets supervisors commend other
+departments), `Config.Recognition.commendations.perSupervisorPerDay` (`3`).
 
 **Mission controls** let a department's supervisors change a few mission rules for their own department, inside limits
 you set. They are **off on install** except the seven server-wide cooldown controls below (cooldownScale,
@@ -603,13 +603,12 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Leaderboard.weekStartsOn` | The day the week starts (`'monday'`) |
 | `Config.Profile` | Bios, banned words, picture presets and picture links (see [3.4](#34-profile-pictures)) |
 | `Config.OfficerOptions` | The choices each officer makes for their own tablet (My options), saved per character. `enabled = false` = no My options screen and every option keeps its default; `allow` (per option, `false` = officers cannot change it), `defaults` (what every officer starts with) and `bounds` (per number option, `{ min, max }` officers may pick). A department may set its own in `Config.Departments.<key>.officerOptions = { allow, defaults, bounds }`, which win for its officers. Also in **Settings** → Officer profile. Officers find them in the Officer UI → **My options** (after Profile & History), which also holds the tablet look, hide my name and **My keys** (the key bound to each Crimson-Police key mapping, or not set). The **Mission HUD** group (kept on this PC): `hudSide` (`'right'` or `'left'`), `hudScale` (HUD size, `bounds.hudScale` shipped `{ 0.8, 1.3 }`), `hudCompact` (only the current objective) and `reduceMotion` (no slide-in or flashing); all allowed, defaults as before (right, 1.0, off, off). The **Easier to read** group (saved with the character): `hudLook` (**Use my tablet look on the HUD**: the mission HUD, result card and notifications take the officer's appearance and accent, so the colour-blind or high-contrast look reaches them too) and `textSize` (`'normal'` or `'large'`: bigger text on the tablet and the mission HUD); both allowed, defaults as before (off, normal). The **Pop-ups** group (kept on this PC): `toastTime` (`'short'`, `'normal'` or `'long'`: how long notifications stay), `resultTime` (seconds the result card stays, `bounds.resultTime` shipped `{ 8, 60 }`) and `quietRun` (**Fewer pop-ups during a mission**: unit invites, commendations, rewards and profile news go only to the bell while on a run) and `keyHints` (**Key hints**: the unit ready check banner says "or press K" with the ready key, a new mission call adds "F6 opens Dispatch" and the contact HUD line names the contact key; a key not bound in GTA Settings, or bound to a mouse or pad button, is never named); all allowed, defaults as before (normal, 25, off) and key hints on (they only add text). The **Sounds** group (kept on this PC): `soundCalls` (the mission call tone), `soundUnit` (the unit invite and ready check tone) and `soundCues` (objective cues on a run: checkpoints, a defused target, a found item); on or off, all allowed, all on as before. The **Mission Board** group (saved with the character): `favouriteTypes` (mission type keys shown first, e.g. `{ 'tactical' }`), `hiddenTypes` (types folded under **Hidden types (n)**, never every type) and `skipAcceptConfirm` (**Accept in one click**: Accept starts the type at once and the confirm's warnings sit under the cards; the Weekly Boss still asks) and `usualTwists` (**My usual twists**: twist keys, e.g. `{ 'time_crunch' }`, from the twists enabled in `Config.Events.twists`, that start ticked on the accept step of the Mission Board and a mission call claim where that card offers them; the officer can untick them, the bonus line follows, and the server still checks the list and pays the bonuses only for a completed run; when the officer picks any they replace his department's pre-ticked twists, a twist the department does not offer is never ticked, and a twist switched off later is dropped from the saved list; **Accept in one click** still takes no twists); all allowed, defaults as before (none, none, off, none). The **Dispatch** group (saved with the character): `skipClaimConfirm` (**Claim in one click**: Claim takes a mission call at once, the warnings sit under the calls and a Twists button opens the old dialog; when several units claim within the claim window the nearest still wins), `callAlerts` (`'all'` or `'favourites'`: only calls of the officer's favourite types pop up, the rest still show on Dispatch; with no favourite picked every call pops up; muting every call stays **Mute call alerts** on Dispatch) and `dispatchKeyAfterCall` (for 20 seconds after a mission call pops up, the tablet key opens the tablet on Dispatch; nothing is claimed); all allowed, defaults as before (off, `'all'`, off). The **Opening the tablet** group: `openOn` (saved with the character: `'last'` = the screen it was closed on, `'home'`, or `'active_on_run'` = Active Mission on a run and Unit while a ready check waits for the officer, else the last screen) and `rememberFilters` (kept on this PC: Dispatch and the Leaderboard open with the filters used last); both allowed, defaults as before (`'last'`, off). The **During a mission** group: `abandonConfirm` (saved with the character; on = **Abandon** asks in a dialog as before; off = no dialog: the button turns into **Click again to abandon** for 3 seconds, so an abandon still takes two presses and still costs the type cooldown), `skipRecalcConfirm` (saved with the character; **Recalculate in one click**: Recalculate route draws the new route at once, `Config.Route.maxRecalcs` still counts) and `distanceUnits` (kept on this PC; `'metric'` = m and km as before, `'imperial'` = ft and miles on the mission HUD, the run bar, Active Mission and Dispatch); all allowed, defaults as before (dialog on, Recalculate asks, metric). The **Unit** group (saved with the character): `autoReady` (**Auto-Ready**: when the unit leader accepts a mission type, the officer is Ready at once, but only while at the keys (no pause menu, game input in the last minute) and within `autoReadyRange` metres of the leader, shipped `150.0`, 10 to 1000, server-side positions; farther away the banner asks as before; **Not ready** still works after an automatic Ready; never for a Cross-Department join). It ships locked and off (`allow.autoReady = false`): turn it on for everyone here, or for one department in **Admin** → **Departments** → Edit → Officer options. The **Map** group: `objectiveGps` (saved with the character; `'route'` = the GPS line to each objective as before, `'waypoint'` = a map waypoint set on each new objective instead, e.g. each door of a Business Check, never over the officer's own waypoint, `'off'` = neither; the **Objective GPS** button still sets one; Radio Silence still hides it and the drive to the start keeps its route), `hudTargetLine` (kept on this PC; the HUD line naming the objective and how far it is) and `colourblindMap` (kept on this PC; objective blips, circles and the line in blue, yellow, orange, white and purple, never red or green; enemies are purple); all allowed, defaults as before (`'route'`, on, off). Later updates add more groups |
-| `Config.Commendations` | Commendation kinds and limits; `announce = true` posts them to the board webhook |
+| `Config.Recognition` | Everything an officer is recognised with, one block per part: `levels` (names and colours of the XP level bands, for show only) and `levelCurve` (XP per level), `badges` (the auto badges by id with the count each needs, `0` = off), `weeklyBadges` (extra weekly board badges by metric), `commendations` (`enabled`, kinds, `perSupervisorPerDay`, `sameKindCooldownDays`, `crossDepartment`; `announce = true` posts them to the board webhook) and `fieldTraining` (see [3.11](#311-field-training-fto)). Also in **Settings** → Recognition and under the gears of **Officers** and **Leaderboards** |
 
 **Economy and rewards**
 
 | Setting | What it does |
 |---|---|
-| `Config.XPLevels` | Names and colours of the XP level bands (for show only) |
 | `Config.Rewards` | Item rewards, off by default (see [3.3](#33-item-rewards)) |
 | `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
 
@@ -1047,7 +1046,7 @@ Five optional webhooks, set as convars in `server.cfg` (the block in [README
 
 | Convar | What it posts |
 |---|---|
-| `cp_webhook_board` | Weekly top 3, season results (and commendations with `Config.Commendations.announce = true`) |
+| `cp_webhook_board` | Weekly top 3, season results (and commendations with `Config.Recognition.commendations.announce = true`) |
 | `cp_webhook_audit` | Payout changes and admin actions |
 | `cp_webhook_flags` | Flagged runs, voids and disputes |
 | `cp_webhook_builder` | Mission Builder: publish, archive, rollback, edit-lock breaks, file edits and test results |
@@ -1116,15 +1115,16 @@ Then do step 4 below for sc-dispatch and sc-police.
 
 ### 3.11 Field training (FTO)
 
-Off by default (`Config.FieldTraining.enabled = false`): nothing changes until you switch it on (in config.lua or
-Admin UI → Settings → Police → Field training).
+Field training is a part of `Config.Recognition` (with the XP levels, badges and commendations). Off by default
+(`Config.Recognition.fieldTraining.enabled = false`): nothing changes until you switch it on (in config.lua or Admin
+UI → Settings → Recognition, or the Field training row of Settings → Features).
 
-1. Set who may train: `Config.FieldTraining.trainerGrades`, the lowest Qbox grade of a trainer per department
-   (`{ sast = 2, fib = 2 }` shipped; a department you leave out uses its `supervisorGrade`).
-2. Set the sign-off tasks: `Config.FieldTraining.tasks`, how many completed missions of each type the rookie must run
-   with his trainer (`{ patrol = 3, investigation = 2, tactical = 1 }` shipped). In Settings both lists are edited as
-   a whole: you may leave a type (or department) out or add one, for example `{ "tactical": 1 }` for one Tactical
-   run only; a key that is not a mission type (or department) is refused.
+1. Set who may train: `Config.Recognition.fieldTraining.trainerGrades`, the lowest Qbox grade of a trainer per
+   department (`{ sast = 2, fib = 2 }` shipped; a department you leave out uses its `supervisorGrade`).
+2. Set the sign-off tasks: `Config.Recognition.fieldTraining.tasks`, how many completed missions of each type the
+   rookie must run with his trainer (`{ patrol = 3, investigation = 2, tactical = 1 }` shipped). In Settings both
+   lists are edited as a whole: you may leave a type (or department) out or add one, for example
+   `{ "tactical": 1 }` for one Tactical run only; a key that is not a mission type (or department) is refused.
 3. `rookiesPerTrainer` (2) caps the rookies one trainer has at once; `badge` (`field_training`) is the badge a rookie
    gets at the end. While field training is on, an admin can also grant or revoke it in **Admin UI → Officers →
    Badges** like the other badges.
@@ -1579,8 +1579,8 @@ wake early.
 ### 5.8 XP and levels
 
 Every point an officer earns is also XP. XP gives a level from 1 to 50, then a prestige star for every 10,000 XP.
-Level names (`Config.XPLevels`): Probationary, Patrol Officer, Senior Patrol, Veteran and Elite. Levels are for
-show only: they never change the Qbox rank, pay or missions. They unlock looks (picture presets and accent colours),
+Level names (`Config.Recognition.levels`, the curve in `levelCurve`): Probationary, Patrol Officer, Senior Patrol,
+Veteran and Elite. Levels are for show only: they never change the Qbox rank, pay or missions. They unlock looks (picture presets and accent colours),
 and an optional level-up item if you set one in `Config.Rewards.levels`.
 
 ### 5.9 Leaderboards

@@ -11,6 +11,8 @@
 --   CP.Lock      one-at-a-time per key (an officer, a row, a player), freed on error and when a player drops
 --   CP.Daily     per-day counters for caps: count and reserve in one step, so two requests cannot pass a cap
 --   CP.Objective one kind of Config.Objectives (dailyGoal, weeklyGoal, challenge, bounty, typeOfTheDay) and its switch
+--   CP.Recognition one part of Config.Recognition (levels, levelCurve, badges, weeklyBadges, commendations,
+--                fieldTraining) and its switch
 
 CP = CP or {}
 
@@ -267,4 +269,32 @@ function CP.Objective(kind)
         on = ch.enabled ~= false
     end
     return cfg, on
+end
+
+-- ============================================================================
+--                                 RECOGNITION
+-- ============================================================================
+
+-- The parts of Config.Recognition and whether each is on when its enabled key is left out (field training ships
+-- off, so it is only on with enabled = true; commendations are on unless enabled = false).
+local RECOGNITION_PARTS = {
+    levels = true,
+    levelCurve = true,
+    badges = true,
+    weeklyBadges = true,
+    commendations = true,
+    fieldTraining = false,
+}
+
+-- One part of Config.Recognition as it is now (a setting changed in game included), never nil, and whether it is
+-- on. Parts without a switch (levels, levelCurve, badges, weeklyBadges) are always on.
+---@param part string 'levels' | 'levelCurve' | 'badges' | 'weeklyBadges' | 'commendations' | 'fieldTraining'
+---@return table cfg, boolean on
+function CP.Recognition(part)
+    local all = type(Config) == 'table' and type(Config.Recognition) == 'table' and Config.Recognition or {}
+    local known = RECOGNITION_PARTS[part]
+    local cfg = known ~= nil and type(all[part]) == 'table' and all[part] or {}
+    if known == nil then return cfg, false end
+    if known then return cfg, cfg.enabled ~= false end
+    return cfg, cfg.enabled == true
 end

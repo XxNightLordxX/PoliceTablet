@@ -38,7 +38,7 @@
     --cp-info: #4ea1ff;
     --cp-info-rgb: 78, 161, 255;
 
-    /* XP level badges (Config.XPLevels). */
+    /* XP level badges (Config.Recognition.levels). */
     --cp-xp-grey: #a3a9b1;
     --cp-xp-grey-rgb: 163, 169, 177;
     --cp-xp-bronze: #d08c4f;

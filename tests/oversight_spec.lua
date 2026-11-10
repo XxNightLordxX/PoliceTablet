@@ -1725,7 +1725,7 @@ H.eq(Cb('admin:getOfficer', 1, { citizenid = 'NOPE0000' }).error, 'err.unknown_o
 CP.Scoring.xpLevel, CP.Scoring.badges = nil, nil
 go = Cb('admin:getOfficer', 1, { citizenid = 'OFF00003' })
 H.eq(go.data.badges[1].id, 'ironWheels', 'badge fallback from cp_badges')
-H.ok(go.data.level ~= nil, 'XP level fallback from Config.XPLevels')
+H.eq(go.data.level, nil, 'no XP level of its own while scoring is not loaded (CP.Scoring.xpLevel is the one rule)')
 
 ok, res = Act('server:admin:suspend', 1, { citizenid = 'OFF00003', days = 3, reason = 'SOP breach' })
 H.eq(ok, true, 'admin suspends from the Officers screen')
