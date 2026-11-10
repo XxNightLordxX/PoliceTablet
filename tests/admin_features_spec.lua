@@ -192,7 +192,7 @@ do
     Has(tablet, 'groupByPlay = aui.groupByPlay ~= false,', 'the Admin UI session carries groupByPlay')
     local screens = ReadRepo('Crimson-Police/web/src/layouts/screens.ts')
     Has(screens, 'export const PLAY_SECTIONS', 'the sidebar knows the play sections')
-    for _, key in ipairs({ 'admin_missions', 'admin_rs', 'admin_officers', 'admin_settings', 'admin_payouts' }) do
+    for _, key in ipairs({ 'admin_missions', 'admin_rs', 'admin_officers', 'admin_settings', 'admin_money' }) do
         local entry = screens and screens:match('key: \'' .. key .. '\',(.-)}') or ''
         H.ok(entry:find('play: \'', 1, true) ~= nil, key .. ': has a play section')
     end

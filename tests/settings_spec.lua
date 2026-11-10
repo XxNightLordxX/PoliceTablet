@@ -353,20 +353,15 @@ do
     H.eq(E('AdminUi.plainLayout').kind, 'boolean', 'plainLayout is a switch')
     H.ok((E('AdminUi.plainLayout').desc or ''):find('Only the layout changes', 1, true) ~= nil,
         'plainLayout: its config.lua comment is its description')
-    -- step H1: the Rewards screen ships off; volunteer suspect money by mission type ships empty
-    H.eq(E('AdminUi.rewardsScreen').default, false, 'the Admin UI ships with no Rewards screen')
-    H.eq(E('AdminUi.rewardsScreen').kind, 'boolean', 'rewardsScreen is a switch')
-    H.ok((E('AdminUi.rewardsScreen').desc or ''):find('Nothing is paid differently', 1, true) ~= nil,
-        'rewardsScreen: its config.lua comment is its description')
+    -- step MG2: one Money screen is the only way: the Rewards and Money switches are no settings any more
+    H.eq(S.entry('AdminUi.rewardsScreen'), nil, 'no rewardsScreen setting (Money -> Rewards is always there)')
+    H.eq(S.entry('AdminUi.moneyScreen'), nil, 'no moneyScreen setting (one Money screen, always)')
+    H.ok(Config.AdminUi.rewardsScreen == nil and Config.AdminUi.moneyScreen == nil, 'config.lua has neither')
     H.eq(E('AdminUi.needsAttention').default, false, 'Admin Home ships with no Needs attention panel')
     H.eq(E('AdminUi.needsAttention').kind, 'boolean', 'needsAttention is a switch')
     H.ok((E('AdminUi.needsAttention').desc or ''):find('each a count that opens its screen', 1, true) ~= nil,
         'needsAttention: its config.lua comment is its description')
-    -- step H6: one Money screen, rows per page and one request per screen open, all shipped as before
-    H.eq(E('AdminUi.moneyScreen').default, false, 'the Admin UI ships with Payouts and Payments apart')
-    H.eq(E('AdminUi.moneyScreen').kind, 'boolean', 'moneyScreen is a switch')
-    H.ok((E('AdminUi.moneyScreen').desc or ''):find('one Money screen with two tabs', 1, true) ~= nil,
-        'moneyScreen: its config.lua comment is its description')
+    -- step H6: rows per page and one request per screen open, all shipped as before
     H.eq(E('AdminUi.pageSize').default, 0, 'pageSize ships 0: every list as before')
     H.ok(E('AdminUi.pageSize').min == 0 and E('AdminUi.pageSize').max == 200, 'pageSize: 0 to 200')
     H.ok((E('AdminUi.pageSize').desc or ''):find('Rows per page', 1, true) ~= nil,

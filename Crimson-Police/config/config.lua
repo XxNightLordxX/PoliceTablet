@@ -189,17 +189,12 @@ Config.AdminUi = {
     -- Ready-made reasons shown as buttons under the reason box when setting pay, giving or taking points and in a
     -- mission's Quick edit: a click fills the box, which can still be typed in; {} = no buttons, only typing
     reasonChips = { 'Balance change', 'Event', 'Correction' },
-    -- true = the Admin UI uses plain names and puts every screen under seven groups, each with a one-line
-    -- description: NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy and System; the
+    -- true = the Admin UI uses plain names and puts every screen under six groups, each with a one-line
+    -- description: NPC missions, Player vs police, Police teamwork, Permissions, Economy and System; the
     -- rarely used tools fold under More, a search box finds any screen or setting, a breadcrumb shows where you are
     -- and each screen's title uses the same plain name; false = the sidebar and titles as before. Only the layout
     -- changes
     plainLayout = false,
-    -- true = the Admin UI gets a Rewards screen: every feature that pays (NPC mission types, live and volunteer
-    -- cases for officers, volunteer suspects, talk-downs, field training, supervisor awards) on one page, each with
-    -- its money, how it is paid and its items, saved like any setting; false = no such screen (Settings still has
-    -- every value). Nothing is paid differently
-    rewardsScreen = false,
     -- true = the Admin UI gets a Map markers screen (under NPC missions): how the objective blips look, the switch of
     -- the extra parts, and every part (the prisoner van and tow truck among them) with its on switch, look (sprite,
     -- colour, size), label and range, and who sees it (departments, jobs, lowest grade, mission types, missions,
@@ -210,9 +205,6 @@ Config.AdminUi = {
     -- starts, the open disputes, the flagged runs waiting for a review and the open player suspect cases, each a
     -- count that opens its screen; false = no such panel (Home as before). It only reads
     needsAttention = false,
-    -- true = Mission pay and Payments made become one Money screen with two tabs; old links, Home tiles and a
-    -- landing of 'payouts' open the right tab; false = two separate screens as before
-    moneyScreen = false,
     -- Rows per page (10-200, e.g. 50) on the long Admin UI lists, each read a page at a time from the server:
     -- Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases;
     -- 0 = each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case)

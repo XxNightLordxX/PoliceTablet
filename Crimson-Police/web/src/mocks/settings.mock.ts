@@ -290,7 +290,7 @@ const data: SettingsData = {
                 },
             ],
         },
-        // Admin UI -> Rewards (?rewardsScreen): what each feature pays, its account and items
+        // Admin UI -> Money -> Rewards: what each feature pays, its account and items
         {
             key: 'feature_rewards',
             title: 'Feature rewards',

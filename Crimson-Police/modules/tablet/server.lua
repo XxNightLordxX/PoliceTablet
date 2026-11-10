@@ -420,14 +420,11 @@ local function ExtraConfig(deptKey)
             reasonChips = ReasonChips(aui.reasonChips),
             -- the plain layout (layouts/adminNav.ts), shipped false = as before
             plainLayout = aui.plainLayout == true,
-            -- the Rewards screen (admin/screens/Rewards.tsx), shipped false = no such screen
-            rewardsScreen = aui.rewardsScreen == true,
             -- the Map markers screen (admin/screens/MapMarkers.tsx), shipped true; false = no such screen
             markersScreen = aui.markersScreen ~= false,
             -- Home's Needs attention panel (admin:getNeedsAttention), shipped false = no panel
             needsAttention = aui.needsAttention == true,
-            -- one Money screen for Mission pay and Payments made, and one request per screen open
-            moneyScreen = aui.moneyScreen == true,
+            -- one request per screen open (Payments and Leaderboards)
             oneRequest = aui.oneRequest == true,
             -- long lists draw only the rows in view (shared/components/Table, Settings search), shipped false
             windowRows = aui.windowRows == true,

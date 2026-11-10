@@ -2833,7 +2833,8 @@ local function BuildSchema()
     for _, f in ipairs(FILES) do ReadFile(f, meta, sections) end
     local list, byPath = {}, {}
     local function add(path, default)
-        if byPath[path] then return end
+        -- an older config.lua's retired keys (Settings.RETIRED) are no settings any more
+        if byPath[path] or Settings.RETIRED[path] then return end
         local e = Describe(path, default)
         local m = meta[path]
         local parts = Segments(path)
@@ -3133,6 +3134,23 @@ local function DeleteRow(path)
     return true
 end
 
+-- Settings config.lua no longer has because the screen they switched is now the only way (MG2: one Money screen
+-- with Pay rates, Rewards, Payments and Department funds). A row saved under one is skipped quietly at start (no
+-- warning, no Problems line, nothing applied) and an imported file's row is left out (Settings.RETIRED).
+Settings.RETIRED = {
+    ['AdminUi.rewardsScreen'] = true,
+    ['AdminUi.moneyScreen'] = true,
+}
+
+-- The saved rows without the retired ones.
+function Settings._dropRetired(rows)
+    local out = {}
+    for _, r in ipairs(rows) do
+        if not Settings.RETIRED[tostring(r.setting_key)] then out[#out + 1] = r end
+    end
+    return out
+end
+
 -- The saved rows with Map markers' old names read as the new ones (CP.MarkerAliases.paths), once: an old row is saved
 -- again under each of its new paths that has no row yet, then removed, so every later change, reset or export uses
 -- the new name. A row that cannot be moved is still read under its new name this start.
@@ -3188,7 +3206,7 @@ local function LoadRows()
         return false
     end
     saved = {}
-    rows = Settings._aliasRows(type(rows) == 'table' and rows or {})
+    rows = Settings._aliasRows(Settings._dropRetired(type(rows) == 'table' and rows or {}))
     -- every saved value, so a bonus's kind is checked with its saved value (they are saved together)
     local pending = {}
     for _, r in ipairs(rows) do
@@ -4507,7 +4525,10 @@ function Settings.previewImport(text)
     end
     for _, item in ipairs(doc.settings) do
         local news = type(item) == 'table' and CP.MarkerAliases and CP.MarkerAliases.paths(item.path) or nil
-        if news then
+        if type(item) == 'table' and Settings.RETIRED[item.path] then
+            -- a retired setting (the Money screen took it in): left out quietly, not listed as unknown
+            named[item.path] = true
+        elseif news then
             for _, new in ipairs(news) do
                 if not named[new] then
                     named[new] = true

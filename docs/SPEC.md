@@ -291,7 +291,7 @@ Layout options (presentation only: screen keys, visibility and links never chang
 
 - Supervisor UI (Config.Tablet, all default false or 'first'): supervisorByTask groups the sidebar by task (people, missions, rewards, review) with a heading over each; supervisorCompact shows icons only; supervisorLanding opens on 'report', 'review' or 'live' when visible (anything else = the first screen) until a screen is picked. supervisorControlsCard shows on Department Report a read-only card of each Mission control he may use now (value in use, whether a change is live, min and max, today's use; the callback is refused with err.controls_card_off while off). supervisorRemember reopens Give points, Mission ban and Clear cooldown with the last successful values (page memory only; out-of-range numbers fall back to the min; the server checks again). supervisorReviewLive pushes a decision on a flagged run or dispute to every other supervisor of the decider's department (an admin without one: every department) with the Review Queue open (asked in the last 75 s); off = at their next 30 s refresh.
 - Officer UI (Config.Tablet.sidebarOrder 'classic' or 'mostUsed', activeFirst, compactSidebar): 'mostUsed' lists home, board, active, dispatch, unit, profile, leaderboard, challenge, options; activeFirst moves Active Mission under Home while on a run; compact shows icons only (68 px, names as button titles, badges on the icon).
-- Admin UI sidebar: groupSidebar (on) shows Home, Payouts, Missions, Live, Officers and Settings and folds the rest under More (which carries their badge sum; kept open per viewer in the browser). groupByPlay (true) orders the screens by section with headings (NPC missions, Player vs police, Police teamwork, Economy, System), Settings follows the same sections, and Settings → Features lists every feature switch by section with On/Off, a save (risky ones confirm first, money ones need the typed ENABLE) and a link to the setting. plainLayout (false) gives each screen a plain name, a group heading with a one-line description, a screen search (with "Search settings for ...", Enter opens the first) and a breadcrumb over every screen but Home.
+- Admin UI sidebar: groupSidebar (on) shows Home, Money, Missions, Live, Officers and Settings and folds the rest under More (which carries their badge sum; kept open per viewer in the browser). groupByPlay (true) orders the screens by section with headings (NPC missions, Player vs police, Police teamwork, Economy, System), Settings follows the same sections, and Settings → Features lists every feature switch by section with On/Off, a save (risky ones confirm first, money ones need the typed ENABLE) and a link to the setting. plainLayout (false) gives each screen a plain name, a group heading with a one-line description, a screen search (with "Search settings for ...", Enter opens the first) and a breadcrumb over every screen but Home.
 - Admin UI pages: markersScreen (true; missionBlipsScreen before, still read) shows the Map markers screen (NPC missions; the old Mission blips key opens it): the objective's settings and the look of each kind of objective blip, Config.Markers.extraParts (the switch of the extra parts), every part's switch, look and label, and its rules picked from the departments, jobs, mission types and missions, every save a normal setting save. rewardsScreen (false) shows the Rewards screen, one place for every payout and item reward of NPC missions, live and volunteer cases and Config.FeatureRewards features, headed by the Rewards.enabled switch, every save a normal setting save. landing ('home'; 'payouts' or 'missions' hide Home) opens on Home: a Live now strip and six tiles (builder, catalog, payouts, officers, settings search, Something wrong? with mission load, config health, problems, payments and today's refusals). homeForms (true) puts quick forms in four tiles (missions and locations on or off, change pay with a reason, give or take points with the typed citizen ID at or above Corrections.adjustConfirmAbove, quick settings) that send the full screens' actions. reasonChips (three texts; at most 8 of up to 60 characters) are buttons under the reason boxes of Set payout, Give or take points and Quick edit that replace the editable reason (Quick edit times are typed in minutes). settingsView ('simple') opens Settings on the everyday settings with plain labels and no Config path; a switch and a button open All settings (by config.lua section); a search or filter looks through every setting; in Simple, MissionTweaks and DisabledLocations point to Missions.
 - Action replies carry the new state (a speed-up only): supervisor and admin actions answer with the screen's new view, which the screen applies and asks again only when it is missing; Active Mission's log gets the next point pushed at once.
 
@@ -1685,17 +1685,12 @@ Config.AdminUi = {
     -- Ready-made reasons shown as buttons under the reason box when setting pay, giving or taking points and in a
     -- mission's Quick edit: a click fills the box, which can still be typed in; {} = no buttons, only typing
     reasonChips = { 'Balance change', 'Event', 'Correction' },
-    -- true = the Admin UI uses plain names and puts every screen under seven groups, each with a one-line
-    -- description: NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy and System; the
+    -- true = the Admin UI uses plain names and puts every screen under six groups, each with a one-line
+    -- description: NPC missions, Player vs police, Police teamwork, Permissions, Economy and System; the
     -- rarely used tools fold under More, a search box finds any screen or setting, a breadcrumb shows where you are
     -- and each screen's title uses the same plain name; false = the sidebar and titles as before. Only the layout
     -- changes
     plainLayout = false,
-    -- true = the Admin UI gets a Rewards screen: every feature that pays (NPC mission types, live and volunteer
-    -- cases for officers, volunteer suspects, talk-downs, field training, supervisor awards) on one page, each with
-    -- its money, how it is paid and its items, saved like any setting; false = no such screen (Settings still has
-    -- every value). Nothing is paid differently
-    rewardsScreen = false,
     -- true = the Admin UI gets a Map markers screen (under NPC missions): how the objective blips look, the switch of
     -- the extra parts, and every part (the prisoner van and tow truck among them) with its on switch, look (sprite,
     -- colour, size), label and range, and who sees it (departments, jobs, lowest grade, mission types, missions,
@@ -1706,9 +1701,6 @@ Config.AdminUi = {
     -- starts, the open disputes, the flagged runs waiting for a review and the open player suspect cases, each a
     -- count that opens its screen; false = no such panel (Home as before). It only reads
     needsAttention = false,
-    -- true = Mission pay and Payments made become one Money screen with two tabs; old links, Home tiles and a
-    -- landing of 'payouts' open the right tab; false = two separate screens as before
-    moneyScreen = false,
     -- Rows per page (10-200, e.g. 50) on the long Admin UI lists, each read a page at a time from the server:
     -- Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases;
     -- 0 = each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case)

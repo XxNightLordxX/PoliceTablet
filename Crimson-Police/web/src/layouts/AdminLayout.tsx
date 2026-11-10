@@ -21,6 +21,7 @@ import {
     adminTitleKey,
     searchScreens,
 } from './adminNav';
+import { moneySearchWords } from './adminMoney';
 import { navBadge, useNavCounts } from './navBadges';
 import { NotificationBell } from './NotificationBell';
 import { ScreenHost } from './ScreenHost';
@@ -37,7 +38,7 @@ export function AdminLayout() {
     const grouped = session.config?.adminUi?.groupSidebar !== false;
     // Config.AdminUi.groupByPlay: NPC missions, Player vs police, Police teamwork, then money and the server
     const byPlay = session.config?.adminUi?.groupByPlay !== false;
-    // Config.AdminUi.plainLayout: plain names, the seven groups, search and breadcrumb (false = as before)
+    // Config.AdminUi.plainLayout: plain names, the six groups, search and breadcrumb (false = as before)
     const nav = adminNavOf(session);
     const [find, setFind] = useState('');
     const groupLabel = (g: string) => t(`ui.nav.admin_group.${g}`);
@@ -60,7 +61,13 @@ export function AdminLayout() {
         ? searchScreens(
               items.map(it => ({
                   ...it,
-                  words: [it.label, t(`ui.screen.${it.key}`), it.play ? groupLabel(it.play) : ''],
+                  words: [
+                      it.label,
+                      t(`ui.screen.${it.key}`),
+                      it.play ? groupLabel(it.play) : '',
+                      // Money is found by its tabs' and its old screens' names too (Payouts, Rewards, Payments)
+                      ...(it.key === 'admin_money' ? moneySearchWords() : []),
+                  ],
               })),
               find,
           ).map(({ words: _w, ...it }) => it)

@@ -1,9 +1,9 @@
-// The Admin UI plain layout (Config.AdminUi.plainLayout): plain screen names, the sidebar under seven groups
-// (NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy, System) each with a one-line
+// The Admin UI plain layout (Config.AdminUi.plainLayout): plain screen names, the sidebar under six groups
+// (NPC missions, Player vs police, Police teamwork, Permissions, Economy, System) each with a one-line
 // description, the rarely used tools under More, a search box over the screens (and the settings), and a breadcrumb.
 
-// The Admin UI plain layout (Config.AdminUi.plainLayout): plain screen names, the sidebar under seven groups
-// (NPC missions, Player vs police, Police teamwork, Rewards, Permissions, Economy, System) each with a one-line
+// The Admin UI plain layout (Config.AdminUi.plainLayout): plain screen names, the sidebar under six groups
+// (NPC missions, Player vs police, Police teamwork, Permissions, Economy, System) each with a one-line
 // description, the rarely used tools under More, a search box over the screens (and the settings), and a breadcrumb.
 // Only the layout changes: the same screens show, a hidden one stays hidden, screen keys and links stay the same.
 
@@ -11,12 +11,13 @@ import type { ScreenKey } from '../shared/navigation';
 import type { Session } from '../shared/types';
 
 export type AdminNav = { plain: boolean };
-export type AdminGroup = 'npc' | 'pvp' | 'team' | 'rewards' | 'permissions' | 'economy' | 'system';
+export type AdminGroup = 'npc' | 'pvp' | 'team' | 'permissions' | 'economy' | 'system';
 
 export const CLASSIC_ADMIN_NAV: AdminNav = { plain: false };
 
 // The groups in sidebar order (title ui.nav.admin_group.<key>, one-line description ui.nav.admin_hint.<key>).
-export const ADMIN_GROUPS: AdminGroup[] = ['npc', 'pvp', 'team', 'rewards', 'permissions', 'economy', 'system'];
+// (Rewards was a group of its own before the Money screen took in Payouts and Rewards: Money is under Economy.)
+export const ADMIN_GROUPS: AdminGroup[] = ['npc', 'pvp', 'team', 'permissions', 'economy', 'system'];
 
 // The group each Admin screen is listed under in the plain layout (Home has none: it stays on top).
 export const ADMIN_GROUP_OF: Record<string, AdminGroup> = {
@@ -28,10 +29,7 @@ export const ADMIN_GROUP_OF: Record<string, AdminGroup> = {
     admin_departments: 'team',
     admin_seasons: 'team',
     admin_leaderboards: 'team',
-    admin_payouts: 'rewards',
-    admin_rewards: 'rewards',
     admin_permissions: 'permissions',
-    admin_payments: 'economy',
     admin_money: 'economy',
     admin_settings: 'system',
     admin_system: 'system',

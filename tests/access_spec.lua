@@ -193,13 +193,11 @@ do
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.plainLayout, false,
         'anything but true counts as off')
     Config.AdminUi.plainLayout = false
-    -- Config.AdminUi.rewardsScreen (H1): the Rewards screen, shipped off
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.rewardsScreen, false,
-        'rewardsScreen ships off: no Rewards screen')
-    Config.AdminUi.rewardsScreen = true
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.rewardsScreen, true,
-        'rewardsScreen on: the session asks for it')
-    Config.AdminUi.rewardsScreen = false
+    -- MG2: one Money screen, always: an older config.lua's rewardsScreen / moneyScreen are not sent
+    Config.AdminUi.rewardsScreen, Config.AdminUi.moneyScreen = false, false
+    local old = Cb('getSession', 1, { via = 'export' }).data.config.adminUi
+    H.ok(old.rewardsScreen == nil and old.moneyScreen == nil, 'the session has no Rewards or Money switch')
+    Config.AdminUi.rewardsScreen, Config.AdminUi.moneyScreen = nil, nil
     -- Config.AdminUi.markersScreen (MG1, missionBlipsScreen before): the Map markers screen, shipped on
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.markersScreen, true,
         'markersScreen ships on: the Admin UI has a Map markers screen')
@@ -217,13 +215,13 @@ do
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.needsAttention, false,
         'needsAttention: anything but true is off')
     Config.AdminUi.needsAttention = false
-    -- Config.AdminUi.moneyScreen and oneRequest (H6): shipped off, true only
+    -- Config.AdminUi.oneRequest (H6): shipped off, true only
     local aui = Cb('getSession', 1, { via = 'export' }).data.config.adminUi
-    H.ok(aui.moneyScreen == false and aui.oneRequest == false, 'moneyScreen and oneRequest ship off')
-    Config.AdminUi.moneyScreen, Config.AdminUi.oneRequest = true, 'yes'
+    H.ok(aui.oneRequest == false, 'oneRequest ships off')
+    Config.AdminUi.oneRequest = 'yes'
     aui = Cb('getSession', 1, { via = 'export' }).data.config.adminUi
-    H.ok(aui.moneyScreen == true and aui.oneRequest == false, 'on: true; anything but true is off')
-    Config.AdminUi.moneyScreen, Config.AdminUi.oneRequest = false, false
+    H.ok(aui.oneRequest == false, 'anything but true is off')
+    Config.AdminUi.oneRequest = false
     -- Config.AdminUi.foldAdvanced (FX2): the More fold, shipped off; the Supervisor UI gets it too
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.foldAdvanced, false,
         'foldAdvanced ships off: every option open')

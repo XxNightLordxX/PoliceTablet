@@ -1,4 +1,4 @@
-// Admin UI -> Rewards (Config.AdminUi.rewardsScreen): every feature that pays, as rows built from the
+// Admin UI -> Money -> Rewards: every feature that pays, as rows built from the
 // settings data (admin:getSettings), each with its switch, money, how the money is paid and its items. Pure helpers;
 // admin/screens/Rewards.tsx draws them and saves through the Settings save flow (server:admin:setSetting, audited).
 

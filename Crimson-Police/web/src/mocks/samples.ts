@@ -164,12 +164,9 @@ const CONFIG: Session['config'] = {
         plainLayout: typeof window !== 'undefined' && /[?&]plainLayout\b/.test(window.location.search),
         // ?needsAttention: Home's Needs attention panel (Config.AdminUi.needsAttention = true)
         needsAttention: typeof window !== 'undefined' && /[?&]needsAttention\b/.test(window.location.search),
-        // ?rewardsScreen: the Rewards screen (Config.AdminUi.rewardsScreen = true)
-        rewardsScreen: typeof window !== 'undefined' && /[?&]rewardsScreen\b/.test(window.location.search),
         // ?noMarkersScreen: no Map markers screen (Config.AdminUi.markersScreen = false)
         markersScreen: !(typeof window !== 'undefined' && /[?&]noMarkersScreen\b/.test(window.location.search)),
-        // ?moneyScreen, ?oneRequest: one Money screen and one request per screen open
-        moneyScreen: typeof window !== 'undefined' && /[?&]moneyScreen\b/.test(window.location.search),
+        // ?oneRequest: one request per screen open
         oneRequest: typeof window !== 'undefined' && /[?&]oneRequest\b/.test(window.location.search),
     },
     // ?rsOff: no Real suspects screen (Config.LiveCrime.enabled and Config.Volunteers.enabled both false)

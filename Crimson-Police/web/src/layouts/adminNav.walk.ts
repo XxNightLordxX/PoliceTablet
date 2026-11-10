@@ -80,9 +80,9 @@ async function steps(): Promise<void> {
         ADMIN_SCREENS.every(s => adminFoldOf(s.key, CLASSIC_ADMIN_NAV, s.group) === s.group),
         'off: the folds as before',
     );
-    ok(!adminCrumbs('admin_payouts', CLASSIC_ADMIN_NAV).home, 'off: no breadcrumb');
+    ok(!adminCrumbs('admin_money', CLASSIC_ADMIN_NAV).home, 'off: no breadcrumb');
 
-    // on: Home on top, then the seven groups in order, rare tools under More
+    // on: Home on top, then the six groups in order, rare tools under More
     const sections = ADMIN_GROUPS.map(k => ({ key: k, label: k, hint: `hint ${k}` }));
     const listed = inSections(
         keys.map(k => ({ key: k, play: adminGroupOf(k, PLAIN) })),
@@ -108,7 +108,7 @@ async function steps(): Promise<void> {
         ADMIN_RARE.every(k => adminFoldOf(k, PLAIN, 'main') === 'more'),
         'on: the rarely used tools fold under More',
     );
-    ok(adminFoldOf('admin_payments', PLAIN, 'more') === 'main', 'on: Payments made shows without opening More');
+    ok(adminFoldOf('admin_money', PLAIN, 'more') === 'main', 'on: Money shows without opening More');
     ok(
         !inSections(
             keys.filter(k => k !== 'admin_rs').map(k => ({ key: k, play: adminGroupOf(k, PLAIN) })),
@@ -139,6 +139,6 @@ async function steps(): Promise<void> {
     ok(searchScreens(items, 'zzz').length === 0, 'search: no match, nothing listed');
 
     // breadcrumb: Home > group > screen; none on Home itself
-    ok(adminCrumbs('admin_payouts', PLAIN).group === 'rewards', 'breadcrumb: Mission pay sits under Rewards');
+    ok(adminCrumbs('admin_money', PLAIN).group === 'economy', 'breadcrumb: Money sits under Economy');
     ok(!adminCrumbs('admin_home', PLAIN).home, 'breadcrumb: none on Home');
 }

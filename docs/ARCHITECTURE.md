@@ -3946,8 +3946,8 @@ point awarded, up to `maxMoney`).
   outcome, missionType })` pays the type's amount for that outcome when set, else `money.got_away` / `money.caught`;
   `FR.suspectEnded` passes the end payload's `missionType`, and `CP.CrimTab.rewardText(missionType)` shows the job's
   own amounts. `FR.checkSetting` refuses an unknown type, another outcome key or an amount outside 0-1,000,000
-  (`err.feature_reward_by_type`). The Admin UI Rewards screen (`Config.AdminUi.rewardsScreen`, session
-  `config.adminUi.rewardsScreen`; web admin/screens/Rewards.tsx, admin/components/rewardsScreen.ts) edits these paths
+  (`err.feature_reward_by_type`). The Admin UI Money screen's Rewards tab (MG2; web admin/screens/Rewards.tsx inside
+  admin/screens/Money.tsx, admin/components/rewardsScreen.ts) edits these paths
   and the mission types' payouts and pools through `server:admin:setSetting`. Spec:
   tests/feature_rewards_spec.lua (and the hook lines in field_training, sup_award_points, live_response and
   volunteer_match specs).

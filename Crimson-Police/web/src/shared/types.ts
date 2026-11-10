@@ -108,16 +108,13 @@ export interface Session {
             landing?: 'home' | 'payouts' | 'missions';
             homeForms?: boolean;
             reasonChips?: string[];
-            // plain names, seven described groups, search and breadcrumb (layouts/adminNav; false = as before)
+            // plain names, six described groups, search and breadcrumb (layouts/adminNav; false = as before)
             plainLayout?: boolean;
-            // the Rewards screen (admin/screens/Rewards.tsx; false = no such screen)
-            rewardsScreen?: boolean;
             // the Map markers screen (admin/screens/MapMarkers.tsx; only false = no such screen)
             markersScreen?: boolean;
             // Home's Needs attention panel (Config.AdminUi.needsAttention)
             needsAttention?: boolean;
-            // one Money screen (Config.AdminUi.moneyScreen) and one request per screen open (oneRequest)
-            moneyScreen?: boolean;
+            // one request per screen open (Config.AdminUi.oneRequest)
             oneRequest?: boolean;
             // long lists draw only the rows in view (Config.AdminUi.windowRows; false = every row)
             windowRows?: boolean;

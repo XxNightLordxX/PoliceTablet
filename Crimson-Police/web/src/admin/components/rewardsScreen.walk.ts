@@ -1,12 +1,11 @@
-// Admin UI -> Rewards (Config.AdminUi.rewardsScreen) walked against the browser mocks (node walk.mjs, a gate
-// step): the screen shows only when asked, lists every feature that pays with its money, account and items, saves
+// Admin UI -> Money -> Rewards walked against the browser mocks (node walk.mjs, a gate
+// step): the tab its old key opens, lists every feature that pays with its money, account and items, saves
 // through server:admin:setSetting, and the item editors build the values the server checks.
 
 import '../../mocks/settings.mock';
-import { ADMIN_GROUP_OF } from '../../layouts/adminNav';
+import { moneyTabOf, resolveAdminKey } from '../../layouts/adminMoney';
 import { ADMIN_SCREENS } from '../../layouts/screens';
 import { action, request } from '../../shared/nui';
-import type { Session } from '../../shared/types';
 import type { SettingsData } from '../../types/settings';
 import { groupsOf, handlesRewardPool, valueOf } from './RewardPoolEditor';
 import { itemSwitch, missionTypes, rewardRows, showsMoneyItem, typeAmount, withTypeAmount } from './rewardsScreen';
@@ -19,15 +18,10 @@ function ok(cond: unknown, what: string): void {
 }
 
 async function steps(): Promise<void> {
-    // the screen: under Rewards in the plain layout, shown only with Config.AdminUi.rewardsScreen = true
-    const def = ADMIN_SCREENS.find(s => s.key === 'admin_rewards');
-    ok(def, 'the Rewards screen is in the Admin registry');
-    const session = (rewardsScreen?: boolean) =>
-        ({ config: { adminUi: { groupSidebar: true, rewardsScreen } } }) as unknown as Session;
-    ok(def?.visible && def.visible(session()) === false, 'shipped (unset): no Rewards screen');
-    ok(def?.visible && def.visible(session(false)) === false, 'rewardsScreen = false: no Rewards screen');
-    ok(def?.visible && def.visible(session(true)) === true, 'rewardsScreen = true: the screen shows');
-    ok(ADMIN_GROUP_OF.admin_rewards === 'rewards', 'the plain layout lists it under Rewards');
+    // the screen: a tab of Money (no screen of its own), its old key opens that tab
+    ok(!ADMIN_SCREENS.some(s => s.key === 'admin_rewards'), 'no Rewards screen of its own in the sidebar');
+    const opened = resolveAdminKey('admin_rewards', undefined, null);
+    ok(opened.key === 'admin_money' && moneyTabOf(opened.params) === 'rewards', 'admin_rewards opens Money on Rewards');
 
     // the rows from the settings data
     const res = await request<SettingsData>('admin:getSettings', {});

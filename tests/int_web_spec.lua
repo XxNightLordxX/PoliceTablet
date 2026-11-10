@@ -359,12 +359,12 @@ do
         local key, group = entry:match('key: \'([%w_]+)\''), entry:match('group: \'(%w+)\'')
         if key and groups[group or ''] then groups[group][#groups[group] + 1] = key end
     end
-    -- admin_rewards (H1) and admin_money (H6) show only with their Config.AdminUi switch on (shipped off)
+    -- MG2: one Money screen in place of Payouts, Rewards and Payments (their keys open its tabs)
     H.eq(table.concat(groups.main, ','),
-        'admin_home,admin_payouts,admin_money,admin_rewards,admin_missions,admin_live,admin_officers,admin_settings',
+        'admin_home,admin_money,admin_missions,admin_live,admin_officers,admin_settings',
         'the everyday admin screens stay in the sidebar')
     -- admin_markers (MG1, admin_blips before): the Map markers screen folds under More too
-    H.eq(#groups.more, 10, 'the other ten fold under More (' .. table.concat(groups.more, ',') .. ')')
+    H.eq(#groups.more, 9, 'the other nine fold under More (' .. table.concat(groups.more, ',') .. ')')
     local rs = admin:match('key: \'admin_rs\',(.-)}') or ''
     H.ok(rs:find('s.config?.realSuspects?.screen === true', 1, true) ~= nil,
         'Real suspects (V18) shows only while the server says live crimes or volunteers are on')

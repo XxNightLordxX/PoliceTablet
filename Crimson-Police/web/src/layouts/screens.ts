@@ -5,7 +5,7 @@ import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import type { IconName } from '../shared/components';
 import type { AdminScreenKey, OfficerScreenKey, ScreenKey, SupervisorScreenKey } from '../shared/navigation';
 import type { Session, UiKind } from '../shared/types';
-import { moneyScreenOn, resolveAdminKey } from './adminMoney';
+import { resolveAdminKey } from './adminMoney';
 import { supervisorLanding, supervisorNavOf } from './supervisorNav';
 
 import Home from '../officer/screens/Home';
@@ -43,7 +43,6 @@ export function preloadScreens(ui: UiKind): void {
 
 const SupBuilder = lazyScreen('supervisor', () => import('../supervisor/screens/Builder'));
 const AdminHome = lazyScreen('admin', () => import('../admin/screens/Home'));
-const AdminPayouts = lazyScreen('admin', () => import('../admin/screens/Payouts'));
 const AdminMissions = lazyScreen('admin', () => import('../admin/screens/Missions'));
 const AdminSeasons = lazyScreen('admin', () => import('../admin/screens/Seasons'));
 const AdminLeaderboards = lazyScreen('admin', () => import('../admin/screens/Leaderboards'));
@@ -54,10 +53,8 @@ const AdminSettings = lazyScreen('admin', () => import('../admin/screens/Setting
 const AdminAudit = lazyScreen('admin', () => import('../admin/screens/Audit'));
 const AdminTesting = lazyScreen('admin', () => import('../admin/screens/Testing'));
 const AdminLive = lazyScreen('admin', () => import('../admin/screens/Live'));
-const AdminPayments = lazyScreen('admin', () => import('../admin/screens/Payments'));
 const AdminSystem = lazyScreen('admin', () => import('../admin/screens/System'));
 const AdminRealSuspects = lazyScreen('admin', () => import('../admin/screens/RealSuspects'));
-const AdminRewards = lazyScreen('admin', () => import('../admin/screens/Rewards'));
 const AdminMoney = lazyScreen('admin', () => import('../admin/screens/Money'));
 const AdminMapMarkers = lazyScreen('admin', () => import('../admin/screens/MapMarkers'));
 
@@ -181,43 +178,14 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         group: 'main',
     },
     {
-        key: 'admin_payouts',
-        titleKey: 'ui.screen.admin_payouts',
-        icon: 'dollar',
-        component: AdminPayouts,
-        // Config.AdminUi.moneyScreen: a tab of Money instead (the key stays an alias)
-        visible: s => !moneyScreenOn(s),
-        play: 'economy',
-        group: 'main',
-    },
-    {
-        // Money (Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs
+        // Money: Pay rates, Rewards, Payments and Department funds as four tabs; the old keys admin_payouts,
+        // admin_rewards and admin_payments open their tab (resolveAdminKey)
         key: 'admin_money',
         titleKey: 'ui.screen.admin_money',
         icon: 'dollar',
         component: AdminMoney,
-        visible: s => moneyScreenOn(s),
         play: 'economy',
         group: 'main',
-    },
-    {
-        // Rewards (Config.AdminUi.rewardsScreen): every feature that pays, its money, account and items
-        key: 'admin_rewards',
-        titleKey: 'ui.screen.admin_rewards',
-        icon: 'gift',
-        component: AdminRewards,
-        visible: s => s.config?.adminUi?.rewardsScreen === true,
-        play: 'economy',
-        group: 'main',
-    },
-    {
-        key: 'admin_payments',
-        titleKey: 'ui.screen.admin_payments',
-        icon: 'creditCard',
-        component: AdminPayments,
-        visible: s => !moneyScreenOn(s),
-        play: 'economy',
-        group: 'more',
     },
     {
         key: 'admin_missions',
@@ -351,7 +319,7 @@ export function defaultScreen(ui: UiKind): ScreenKey {
 // opens on Config.AdminUi.landing (Home, Payouts or Missions) and the Supervisor UI on Config.Tablet.supervisorLanding.
 export function landingScreen(ui: UiKind, session: Session | null, available: ScreenKey[]): ScreenKey {
     if (ui === 'admin' && session) {
-        // a landing of 'payouts' opens Money's Mission pay tab while the Money screen is on
+        // a landing of 'payouts' opens Money's Pay rates tab (resolveAdminKey)
         const want = resolveAdminKey(`admin_${adminLanding(session)}` as ScreenKey, {}, session).key;
         if (available.includes(want)) return want;
     }

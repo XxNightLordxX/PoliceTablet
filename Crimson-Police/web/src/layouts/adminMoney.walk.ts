@@ -1,12 +1,15 @@
 // The Money screen and one request per screen open against the browser mocks (node walk.mjs, a gate step):
-// Config.AdminUi.moneyScreen merges Mission pay and Payments made into one screen whose old keys stay aliases, and
-// Config.AdminUi.oneRequest brings Payments made's totals with its list.
+// one Money screen with Pay rates, Rewards, Payments and Department funds tabs, whose old screen keys stay aliases,
+// and Config.AdminUi.oneRequest brings Payments' totals with its list.
 
 import '../mocks/admin_economy.mock';
+import '../mocks/oversight.mock';
+import { t } from '../shared/i18n';
 import { request } from '../shared/nui';
 import type { Session } from '../shared/types';
-import type { PaymentsView } from '../types/admin_economy';
-import { MONEY_SCREEN_OF, moneyScreenOn, moneyTabOf, resolveAdminKey } from './adminMoney';
+import type { DepartmentFundsView, PaymentsView } from '../types/admin_economy';
+import type { DepartmentsData } from '../types/oversight';
+import { MONEY_TABS, moneySearchWords, moneyTabOf, resolveAdminKey } from './adminMoney';
 import { ADMIN_GROUP_OF } from './adminNav';
 import { navBadge, EMPTY_COUNTS } from './navBadges';
 import { landingScreen, screensFor } from './screens';
@@ -22,43 +25,55 @@ const sessionOf = (adminUi: Record<string, unknown>) =>
     ({ actions: [], config: { adminUi: { landing: 'home', ...adminUi } } }) as unknown as Session;
 
 async function steps(): Promise<void> {
-    // shipped: two screens as before, no Money screen, no alias
+    // one Money screen, always: the old money screens are its tabs, not sidebar items
     const shipped = sessionOf({});
     const keys = screensFor('admin', shipped).map(s => s.key);
-    ok(!moneyScreenOn(shipped), 'shipped: the Money screen is off');
-    ok(keys.includes('admin_payouts') && keys.includes('admin_payments'), 'shipped: Payouts and Payments show');
-    ok(!keys.includes('admin_money'), 'shipped: no Money screen');
-    ok(resolveAdminKey('admin_payouts', { a: 1 }, shipped).key === 'admin_payouts', 'shipped: no alias');
-    ok(moneyScreenOn(sessionOf({ moneyScreen: 'yes' })) === false, 'anything but true is off');
+    ok(keys.includes('admin_money'), 'the Money screen shows');
+    ok(
+        !keys.includes('admin_payouts') && !keys.includes('admin_rewards') && !keys.includes('admin_payments'),
+        'Payouts, Rewards and Payments are tabs of Money, not screens of their own',
+    );
+    ok(keys.indexOf('admin_money') === keys.indexOf('admin_home') + 1, 'Money sits right under Home');
+    // an older saved setting (moneyScreen or rewardsScreen false) changes nothing
+    const old = sessionOf({ moneyScreen: false, rewardsScreen: false });
+    ok(
+        screensFor('admin', old).some(s => s.key === 'admin_money'),
+        'old switches are ignored: Money still shows',
+    );
+    ok(MONEY_TABS.join(',') === 'pay,rewards,payments,funds', 'tabs: Pay rates, Rewards, Payments, Department funds');
+    ok(
+        MONEY_TABS.every(k => t(`admin.money.tab.${k}`) !== `admin.money.tab.${k}`),
+        'every tab has its English name',
+    );
 
-    // on: one Money screen in place of the two, the old keys open its tabs with their params kept
-    const on = sessionOf({ moneyScreen: true });
-    const onKeys = screensFor('admin', on).map(s => s.key);
-    ok(onKeys.includes('admin_money'), 'on: the Money screen shows');
-    ok(!onKeys.includes('admin_payouts') && !onKeys.includes('admin_payments'), 'on: the two old screens are tabs');
-    ok(onKeys.indexOf('admin_money') === keys.indexOf('admin_payouts'), "on: Money takes Payouts' place");
-    const pay = resolveAdminKey('admin_payouts', undefined, on);
-    ok(pay.key === 'admin_money' && moneyTabOf(pay.params) === 'pay', 'admin_payouts opens the Mission pay tab');
-    const made = resolveAdminKey('admin_payments', { status: 'paying' }, on);
-    ok(made.key === 'admin_money' && moneyTabOf(made.params) === 'payments', 'admin_payments opens Payments made');
+    // the old keys are aliases of their tab, with the link's own params kept
+    const pay = resolveAdminKey('admin_payouts', undefined, shipped);
+    ok(pay.key === 'admin_money' && moneyTabOf(pay.params) === 'pay', 'admin_payouts opens the Pay rates tab');
+    const rew = resolveAdminKey('admin_rewards', undefined, null);
+    ok(rew.key === 'admin_money' && moneyTabOf(rew.params) === 'rewards', 'admin_rewards opens the Rewards tab');
+    const made = resolveAdminKey('admin_payments', { status: 'paying' }, shipped);
+    ok(made.key === 'admin_money' && moneyTabOf(made.params) === 'payments', 'admin_payments opens Payments');
     ok(made.params.status === 'paying', "the link's own params are kept (Leaderboards -> stuck payments)");
-    ok(resolveAdminKey('admin_live', { tab: 'refused' }, on).key === 'admin_live', 'other screens are untouched');
-    ok(moneyTabOf({}) === 'pay' && moneyTabOf(null) === 'pay', 'Money opens on Mission pay');
-    ok(MONEY_SCREEN_OF.payments === 'admin_payments', 'the tab keeps its old screen');
+    ok(resolveAdminKey('admin_live', { tab: 'refused' }, shipped).key === 'admin_live', 'other screens are untouched');
+    ok(resolveAdminKey('admin_blips', {}, shipped).key === 'admin_markers', 'the Mission blips alias still works');
+    ok(moneyTabOf({}) === 'pay' && moneyTabOf(null) === 'pay', 'Money opens on Pay rates');
+    ok(moneyTabOf({ moneyTab: 'funds' }) === 'funds', 'Department funds can be asked for');
+    ok(moneyTabOf({ moneyTab: 'nope' }) === 'pay', 'an unknown tab opens Pay rates');
     ok(navBadge('admin_money', { ...EMPTY_COUNTS, adminPayments: 4 }).badge === '4', 'Money keeps the payments badge');
     ok(ADMIN_GROUP_OF.admin_money === 'economy', 'plain layout: Money under Economy');
-    const landing = sessionOf({ moneyScreen: true, landing: 'payouts' });
+    const words = moneySearchWords().join(' ').toLowerCase();
+    ok(words.includes('payouts') && words.includes('rewards') && words.includes('funds'), 'search finds Money');
+    const landing = sessionOf({ landing: 'payouts' });
     const avail = screensFor('admin', landing).map(s => s.key);
     ok(landingScreen('admin', landing, avail) === 'admin_money', 'a landing of payouts opens Money');
-    const oldLanding = sessionOf({ landing: 'payouts' });
-    ok(
-        landingScreen(
-            'admin',
-            oldLanding,
-            screensFor('admin', oldLanding).map(s => s.key),
-        ) === 'admin_payouts',
-        'shipped: a landing of payouts opens Payouts',
-    );
+
+    // Department funds: the departments its cards are drawn for
+    const depts = await request<DepartmentsData>('admin:getDepartments', {});
+    ok(depts.ok && (depts.data?.departments.length ?? 0) > 0, 'Department funds: the departments are listed');
+    const funds = await request<DepartmentFundsView>('admin:getDepartmentFunds', {
+        department: depts.data?.departments[0]?.key,
+    });
+    ok(funds.ok && funds.data && typeof funds.data.enabled === 'boolean', "Department funds: a department's card");
 
     // oneRequest: the list brings its totals when asked for them
     const two = await request<PaymentsView>('admin:getPayments', { page: 1, size: 25 });

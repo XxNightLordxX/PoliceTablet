@@ -954,7 +954,7 @@ Config.MissionTypes = {
 - `Config.Cash`: `account = 'bank'` or `'cash'`; `source = 'server'` (new money) or `'society'` (the department's
   bank account, see [6.8](#68-paying-from-the-departments-bank-account)); `minPayout` and `maxPayout` limit every
   payout set in game (0 to 25,000); `dailyCap` = most cash per officer per day (0 = no cap).
-- Admins can also change payouts in game (Admin UI → **Payouts**, or `/CrimsonPoliceAdmin payout type patrol 300
+- Admins can also change payouts in game (Admin UI → **Money** → **Pay rates**, or `/CrimsonPoliceAdmin payout type patrol 300
   New economy`). A payout set in game wins over `config.lua`. An admin can go back to the `config.lua` value with
   `/CrimsonPoliceAdmin payout type patrol clear Back to config`. **Let supervisors change it again** and **Adjust all** are in
   [9.15.4](#9154-payments-item-rewards-and-department-money).
@@ -1563,8 +1563,9 @@ Renewed-Banking account instead:
    and the officer, the department's online supervisors and the console are told ("unfunded").
 4. In your Qbox jobs file, give `bankAuth = true` to the grades that may see and fund the account in Renewed-Banking.
 
-Admin UI → **Departments** shows each account's balance and spending (the **Funds** part of each department), and
-Admin UI → **Payments** shows every unfunded payment with a **Retry unfunded** button (a switch that ships off). An
+Admin UI → **Departments** shows each account's balance and spending (the **Funds** part of each department; Admin
+UI → **Money** → **Department funds** shows the same cards for every department on one page), and Admin UI → **Money**
+→ **Payments** shows every unfunded payment with a **Retry unfunded** button (a switch that ships off). An
 account Renewed-Banking does not know shows as an error in the Config health list, and `Config.Cash.lowBalanceWarn`
 warns before an account runs dry. See [9.15.4](#9154-payments-item-rewards-and-department-money).
 
@@ -1644,15 +1645,14 @@ Features → Money** (no typed word needed). Each row there shows its money, acc
   caught = 600 } }`. A mission type or an outcome you leave out pays `money.got_away` / `money.caught`; the criminal
   tablet's Jobs card shows the amounts of the job's own type. Settings refuses a type that is not in
   `Config.MissionTypes`.
-- **The Rewards screen** (`Config.AdminUi.rewardsScreen`, shipped `false`; turn it on in Admin UI → **Settings**):
-  Admin UI → **Rewards** (in the plain layout, under the Rewards group) puts every feature that pays on one page:
+- **The Rewards tab**: Admin UI → **Money** → **Rewards** puts every feature that pays on one page:
   each NPC mission type (its payout, paid as `Config.Cash.account`, and its own `Config.Rewards.byType` item pool),
   live cases and volunteer cases for officers (their cash and item switches; they pay the mission type's payout),
   volunteer suspects (money by outcome and by mission type), talk-downs, field training and supervisor awards (each
   with its switch, money, account, money item and items list). The items use the same item picker as Settings (only
   items your ox_inventory has; the server checks every name again). The **Item rewards** switch sits on top with a
   one-click **Turn item rewards on**. Every change saves like a setting (checked, audited, in Settings → History).
-  Nothing is paid differently with the screen on or off.
+  The tab only shows and edits the settings: nothing is paid differently because of it.
 - `account`: `'bank'`, `'cash'` or `'item'`. With `'item'` the money is paid as the item in `moneyItem` (shipped
   `'black_money'`, a dirty-money item; it must exist in your ox_inventory), one item per dollar.
 - `items`: add items per feature, e.g. `items = { { item = 'water', count = { 1, 2 }, chance = 0.5, value = 20 } }`
@@ -1977,8 +1977,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44
 | Screen | What it is for |
 |---|---|
 | **Home** | Where the panel opens: six tiles for the common jobs (make a new mission, turn missions on or off, change pay, give or take points, quick settings, **Something wrong?**) and a **Live now** strip of the live runs |
-| **Payouts** | Every type and mission payout; set or clear them |
-| **Payments** | Every payment Crimson-Police made or still owes, with totals and the payment tools ([9.15.4](#9154-payments-item-rewards-and-department-money)) |
+| **Money** | Every money tool in one screen, as four tabs. **Pay rates** (the old Payouts screen): every type and mission payout, set or clear them. **Rewards**: every feature that pays, its money, account and items. **Payments**: every payment Crimson-Police made or still owes, with totals and the payment tools ([9.15.4](#9154-payments-item-rewards-and-department-money)). **Department funds**: each department's society account (the same Funds card as on Departments) |
 | **Missions** | Built-in and custom missions: Builder, publish, archive, restore, roll back, break edit locks, reload files, Cross-Department Missions and mission calls |
 | **Seasons & Challenge** | Start or end a season, override this week's bounty |
 | **Leaderboards** | Every board, cash paid, payments stuck in "paying", void runs, award points, and the **Item rewards** tab |
@@ -2018,8 +2017,8 @@ Leaderboards, Officers) and **Quick edit** sit ready-made reasons: **Balance cha
 A click fills the box; you can still type your own. Change the list in `Config.AdminUi.reasonChips` (Admin UI →
 **Settings**, up to 8 reasons of up to 60 characters); `{}` shows no buttons.
 
-The sidebar shows the everyday screens (**Home**, **Payouts**, **Missions**, **Live**, **Officers**, **Settings**) and a
-**More** button with the other eight. While More is folded its badge adds up theirs, so nothing waiting is hidden; a
+The sidebar shows the everyday screens (**Home**, **Money**, **Missions**, **Live**, **Officers**, **Settings**) and a
+**More** button with the others. While More is folded its badge adds up theirs, so nothing waiting is hidden; a
 link or notification that opens one of them unfolds it, and the panel remembers whether you left it open. To get one
 flat list again, set `Config.AdminUi.groupSidebar = false` (Admin UI → **Settings**).
 
@@ -2043,9 +2042,8 @@ reorganizes the Admin UI for owners who want plain words and fewer places to loo
 | **NPC missions**: missions against computer suspects and the runs going on now | Missions; Running now (Live) |
 | **Player vs police**: real players as suspects | Player suspects (Real suspects; while live crimes or volunteers are on) |
 | **Police teamwork**: officers, departments and boards | Officers; Departments, Leaderboards, Seasons and challenges (under More) |
-| **Rewards**: what each mission and feature pays | Mission pay (Payouts); Rewards for every feature (Rewards, with `Config.AdminUi.rewardsScreen`) |
 | **Permissions**: who may do what | Who can do what (Permissions) |
-| **Economy**: every payment made | Payments made (Payments) |
+| **Economy**: pay rates, rewards, every payment made and the department funds | Money (Pay rates, Rewards, Payments and Department funds tabs) |
 | **System**: settings, server health, activity log and tests | Settings; Server health (System); Activity log (Audit Log) and Test tools (Testing) under More |
 
 Home stays on top. A **Find a screen or setting** box over the sidebar lists the screens whose plain name, old name
@@ -2055,11 +2053,19 @@ to go back. The title inside each screen uses the same plain name (Running now, 
 what, ...). Only the layout changes: every screen keeps its permission and its links (the screen keys stay the same,
 so saved links and notifications still open the right screen), and a group with nothing you may see is not shown.
 
-**Money screen, long lists and faster screens** (each in Admin UI → **Settings**, each shipped off):
+**The Money screen.** Admin UI → **Money** holds every money tool as four tabs: **Pay rates** (the old Payouts
+screen), **Rewards** (every feature that pays), **Payments** (every payment made, with its row actions) and
+**Department funds**. There is no switch for it: it is the only way in. The old screen keys still work, so a Home
+tile (Change pay), a Needs attention line, the Leaderboards stuck payments link and a landing of `'payouts'` open the
+right tab, and the search box finds Money by the old names (Payouts, Rewards, Payments). Every action, permission
+check, audit row and money-tool switch is the same as before. The old switches `AdminUi.rewardsScreen` and
+`AdminUi.moneyScreen` are gone: an older config.lua that still has them, or a value saved for them in game, is
+ignored quietly.
+
+**Long lists and faster screens** (each in Admin UI → **Settings**, each shipped off):
 
 | Setting | Shipped | What it does |
 | --- | --- | --- |
-| `Config.AdminUi.moneyScreen` | `false` | **Mission pay** (Payouts) and **Payments made** (Payments) become one **Money** screen with two tabs. A Home tile, a Needs attention line, the Leaderboards stuck payments link or a landing of `'payouts'` opens the right tab. |
 | `Config.AdminUi.pageSize` | `0` | Rows per page (10-200, for example 50) on the Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases. The server sends one page at a time. `0` keeps each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case at once). The case filters on Player suspects work on the page shown. |
 | `Config.AdminUi.oneRequest` | `false` | Payments made gets its totals and Leaderboards gets its flagged runs in the same request as the list, so each screen opens with one request instead of two. The screens show the same data. |
 | `Config.AdminUi.windowRows` | `false` | In every tablet UI, a scrolling table of more than 100 rows (such as the Admin UI's Leaderboards board, the officer Leaderboard or the supervisor Department Report) draws only the rows in view and the next ones as you scroll, and the Settings search results start with 60 rows and add more as you reach the end. The rows and their order are the same; `false` draws every row at once. |
