@@ -51,6 +51,7 @@ say the same things in short and point back here.
    - [6.11 Field training (FTO)](#611-field-training-fto)
    - [6.12 Feature rewards: money and items for every feature](#612-feature-rewards-money-and-items-for-every-feature)
 7. [Settings to check in your other resources](#7-settings-to-check-in-your-other-resources)
+   - [7.1 Locations and other scripts](#71-locations-and-other-scripts)
 8. [All commands and keys](#8-all-commands-and-keys)
    - [8.1 Commands](#81-commands)
    - [8.2 Keys](#82-keys)
@@ -1702,6 +1703,39 @@ Good to know:
   (Drug Lab Raid's old Zancudo River cabin is now the Davis Quartz site office).
 - **Server time zone**: daily and weekly resets and the Weekly Boss days use the server machine's clock. Set the
   machine's time zone to your community's.
+
+
+### 7.1 Locations and other scripts
+
+The built-in missions were checked against the fixed places of the public Qbox and overextended scripts:
+qbx_garages, qbx_policejob, qbx_ambulancejob, qbx_vehicleshop, qbx_management, qbx_cityhall, qbx_properties,
+qbx_scrapyard, qbx_towjob, qbx_truckerjob, qbx_taxijob, qbx_busjob, qbx_garbagejob, qbx_bankrobbery,
+qbx_storerobbery, qbx_jewelery, qbx_houserobbery, qbx_drugs, qbx_spawn, qbx_prison, ox_inventory (shops, stashes)
+and ox_doorlock, which keeps its doors in its database and so adds none (790 places: garage markers and car spawns, shop counters, registers and safes, bank vault doors
+and lockers, hospital beds, job pick-up spots, house entrances, spawn points).
+
+- No mission start, person, car or object of a built-in mission sits on one of those places: 6 m clear of a
+  garage, a vehicle spawn or a job's pick-up spot (qbx_garages keeps 5 m clear before it spawns a car), 4 m of a
+  hospital, station or prison point, 2 m of anything you use with ox_target (a counter, register, safe, locker,
+  stash or door), or the script's own radius when it is larger. A delivery area bigger than 10 m (the trucker's
+  40 m boxes) and a wall camera are only listed.
+- Bomb Disposal's counter and back-room spots, Hostage Rescue's back-office robbers, the Wild Oats Drive
+  warrant suspect and the Route 68 stolen car were moved a metre or two for this; `docs/IN_GAME_CHECKLIST.md`
+  lists each one to look at.
+- Markers where nothing spawns stay where they are: the Beat Patrol checkpoint at the Motor Hotel car park sits on
+  the qbx_garages marker, the Wild Oats Drive warrant door is the qbx_houserobbery entrance of that house, and the
+  Business Check doors are the shop doors.
+
+When you add one of these scripts or another public script, check again:
+
+```sh
+git clone <the script> <folder>/<name>               # one folder holding every script to check
+# add its name and kind to SCRIPTS in tools/gen_foreign_sites.py
+python3 tools/gen_foreign_sites.py <folder>          # writes tests/fixtures/foreign_sites.lua
+python3 tools/restyle.py tests/fixtures/foreign_sites.lua
+lua5.4 tests/run.lua foreign_sites                   # fails on a mission point inside a place
+CP_FOREIGN_REPORT=1 lua5.4 tests/run.lua foreign_sites   # also lists every mission point within 50 m of a place
+```
 
 ---
 

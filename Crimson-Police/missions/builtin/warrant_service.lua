@@ -6,10 +6,11 @@
   Locations (6 houses): Grove Street (Davis), Forum Drive (Strawberry), Mirror Park, Wild Oats Drive
   (Vinewood Hills), Sandy Shores and Paleto Bay. Each has a front door, the suspect's spot, fleeTo points
   out the back, four associate spawns (the count scales) and a yard marker. The suspect waits on the door
-  step, 1.2 m beside the door: none of these houses can be relied on to have an interior a ped can walk
-  out of (most have none, and story-mode doors are locked in multiplayer), so a ped placed behind the
-  facade would be stuck in the walls. From beside the door, the block's surrender move (1 m past the
-  door, away from where he waited) keeps him on the step, and a fleeing suspect runs round the house to
+  step, 1.2 m beside the door (Wild Oats Drive: 2.7 m, clear of the qbx_houserobbery entrance there):
+  none of these houses can be relied on to have an interior a ped can walk out of (most have none, and
+  story-mode doors are locked in multiplayer), so a ped placed behind the facade would be stuck in the
+  walls. From beside the door, the block's surrender move (1 m past the door, away from where he waited)
+  keeps him on the step, and a fleeing suspect runs round the house to
   fleeTo. Associates and the yard marker are in the front and side yard for the same reason. fleeTo points
   on or beside a street have that street's height (+1 m) from the GTA V vehicle nodes (Wild Oats Drive drops
   18 m over the flee path; Grove Street's back street is 3 m below the house).
@@ -82,7 +83,7 @@ RegisterMission({
       label      = 'Wild Oats Drive, Vinewood Hills',
       start      = { coords = vec3(-140.35, 524.73, 141.03), radius = 50.0 },   -- the street in front of the house
       door       = vec4(-174.35, 502.73, 137.42, 0.0),   -- "Knock and announce"; heading faces out
-      suspect    = vec4(-175.55, 503.03, 137.42, 0.0),   -- on the door step, beside the door (see the header)
+      suspect    = vec4(-177.00, 503.05, 137.42, 0.0),   -- on the door step, 2.7 m beside the door (see the header)
       fleeTo     = {   -- out the back, in order
         vec3(-191.35, 505.73, 134.29), vec3(-204.35, 506.73, 132.35),
         vec3(-226.35, 510.73, 128.77), vec3(-252.35, 512.73, 123.52),

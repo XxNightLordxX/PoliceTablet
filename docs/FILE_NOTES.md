@@ -472,6 +472,7 @@ docs/ARCHITECTURE.md.
 - `tests/fixtures/adminctl/p1_world.lua`: The world of the officers-and-boards specs (tests/admin_officers_spec.lua, tests/admin_boards_spec.lua): the real officers, points and boards modules of full admin control on one server, with Qbox stood in for.
 - `tests/fixtures/custody/world.lua`: The shared world of tests/custody_spec.lua, field_contact_spec.lua and process_scene_spec.lua: the real engine (runs, npc, scoring, scaling), CP.Custody, the two blocks and the sc-police listener on H.entity, with spies.
 - `tests/fixtures/engine_b/client_spec.lua`: The client half of the run engine (modules/runs/client.lua).
+- `tests/fixtures/foreign_sites.lua`: The fixed world places of other public scripts (Qbox and overextended), for tests/foreign_sites_spec.lua.
 - `tests/fixtures/foundation/blocks_before.lua`: Mission Builder ranges and defaults.
 - `tests/fixtures/lint/fx10_loops.lua`: Loops for tools/lua_flow.py (lint rule FX10), read by tests/freeze_spec.lua.
 - `tests/fixtures/lint/fx12_bool.lua`: Server yes/no answers for tools/lint_fivem.py rule FX12, read by tests/foundation_spec.lua (run as a server script with `--files server`).
@@ -480,6 +481,7 @@ docs/ARCHITECTURE.md.
 - `tests/fixtures/npccombat/client_check.lua`: The run-scoped damage settings of an officer's game (modules/npccombat/client.lua, started and stopped by modules/runs/client.lua) in their own Lua state (H.boot side = 'client').
 - `tests/flee_arrest_director_spec.lua`: flee_arrest through the spawn director (Config.Spawning) on the real engine, the real block and the
 - `tests/flee_arrest_volunteer_spec.lua`: flee_arrest's volunteer slot (docs/ARCHITECTURE.md §7.3): Warrant Service's wanted person at the door played by a volunteer runner.
+- `tests/foreign_sites_spec.lua`: Other scripts' places: no built-in mission spawns or starts on a fixed place of another public script.
 - `tests/foundation_spec.lua`: The foundation: migrations 003-007, CP.Hooks, CP.Lt tokens, the engine contracts other modules build on (stats, decisions, adoption, hidden spawns, plates, held bodies, removals), levels, tweaks, the Session.
 - `tests/frame_loops_spec.lua`: Frame loops read cache.ped (skill check K19): every while loop that can wait 0 ms in the block clients, the run client, the Testing debug drawing and the builder client reads the player's ped from ox_lib's cache, not PlayerPedId() each frame.
 - `tests/freeze_spec.lua`: The freeze after a down on the way to a mission start (recovered before the pick-up): the downed follow-up's end signal, the client's screen safety net, the tablet while down, the NUI open check, the web error boundaries and lint rule FX10 (loops that can go round with no Wait).

@@ -39,12 +39,12 @@ RegisterMission({
   locations = {
     {
       label  = "Route 68, east Harmony",
-      start  = { coords = vec3(1167.25, 2683.25, 38.03), radius = 85.0 },  -- last seen here, 36 m from the car
-      spawn  = vec4(1137.00, 2664.50, 37.50, 352.96),   -- the stolen car
-      -- 16 road waypoints, 1271 m flee route: Route 68
+      start  = { coords = vec3(1167.25, 2683.25, 38.03), radius = 85.0 },  -- last seen here, 41 m from the car
+      spawn  = vec4(1130.75, 2664.75, 37.50, 352.96),   -- the stolen car, 6 m clear of the qbx_garages marker
+      -- 16 road waypoints, 1272 m flee route: Route 68
       route  = {
         points = {
-          vec3(1137.00, 2664.50, 37.00),
+          vec3(1130.75, 2664.75, 37.00),
           vec3(1139.50, 2684.75, 37.28),
           vec3(1039.75, 2690.00, 38.34),
           vec3(948.50, 2695.00, 39.41),

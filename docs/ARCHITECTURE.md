@@ -1035,6 +1035,10 @@ order; no payout field; `departments = {}`), checked by `tests/missions_b_spec.l
   largest team brings (real `CP.Scaling` counts), armed spawns outside the start circle plus
   `Config.Builder.spawnMargin` unless the director places them (waves, scatter, staged); known cases in
   `tests/spawn_lint_baseline.txt`, which may only shrink.
+- Other scripts' places (`tests/foreign_sites_spec.lua`): no built-in start or spawn point inside the keep-out circle of
+  a fixed place of a public Qbox or ox script (`tests/fixtures/foreign_sites.lua`, written by
+  `tools/gen_foreign_sites.py`): 6 m round a garage, vehicle spawn or job spot, 4 m round a hospital, station or
+  prison point, 2 m round an ox_target spot, or the script's own radius up to 10 m; no baseline.
 
 ### 5.7 CP.Draw — modules/draw (S)
 Which mission and location a unit gets, and the accept. Tests: `tests/engine_a_spec.lua`, `tests/missioncalls_spec.lua`.

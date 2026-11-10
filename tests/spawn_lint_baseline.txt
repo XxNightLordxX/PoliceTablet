@@ -14,10 +14,6 @@ pair hostage_rescue#4 hostages[3] spawns[7]  1.48 m
 pair hostage_rescue#5 hostages[3] spawns[7]  1.49 m
 pair hostage_rescue#6 hostages[3] spawns[7]  1.49 m
 # Bomb Disposal: hiding spots 3 and 4 are 1.496-1.498 m apart at four stores (a device prop each, at most 2 devices).
-pair bomb_disposal#2 hiding[3] hiding[4]  1.50 m
-pair bomb_disposal#4 hiding[3] hiding[4]  1.50 m
-pair bomb_disposal#5 hiding[3] hiding[4]  1.50 m
-pair bomb_disposal#6 hiding[3] hiding[4]  1.50 m
 # Pursuit Sim: the getaway car waits 47 m from a 25 m start; the spawn director makes it once every officer is 40 m
 # from it (Config.Spawning.minDistance; hardMin 20 m after waveDelayMax).
 armed pursuit_sim#1 spawn  47.00 m (needs 65)

@@ -7,6 +7,7 @@
   (Burton), Boulevard Del Perro (Rockford Hills), Great Ocean Highway (Banham Canyon) and Route 68. Every
   point is placed in the bank's own frame (teller position and heading): hostiles behind the counter, in
   the back office by the vault and in the lobby; hostages kneel in the lobby; the safe marker is outside.
+  No hostile stands within 2 m of the qbx_bankrobbery vault door or a locker (tests/foreign_sites_spec.lua).
   Blocks: hostile_waves → protect_rescue (the hostages appear when objective 2 starts: Config.Spawning.hostagesAt).
 ]]
 
@@ -30,7 +31,7 @@ RegisterMission({
       start    = { coords = vec3(186.05, -1039.03, 28.57), radius = 60.0 },   -- on the street outside
       spawns   = {   -- 7 hostile spots inside (counter, back office, lobby)
         vec4(149.46, -1042.09, 29.37, 335.4), vec4(151.23, -1042.79, 29.37, 335.4),
-        vec4(147.23, -1044.81, 29.37, 335.4), vec4(149.74, -1044.85, 29.37, 335.4),
+        vec4(147.43, -1043.86, 29.37, 335.4), vec4(152.09, -1044.40, 29.37, 335.4),
         vec4(152.28, -1038.32, 29.37, 335.4), vec4(148.33, -1037.83, 29.37, 355.4),
         vec4(153.78, -1040.33, 29.37, 315.4),
       },
@@ -46,7 +47,7 @@ RegisterMission({
       start    = { coords = vec3(350.23, -275.68, 53.36), radius = 60.0 },   -- on the street outside
       spawns   = {   -- 7 hostile spots inside (counter, back office, lobby)
         vec4(313.84, -280.58, 54.16, 338.3), vec4(315.64, -281.19, 54.16, 338.3),
-        vec4(311.75, -283.41, 54.16, 338.3), vec4(314.25, -283.33, 54.16, 338.3),
+        vec4(311.90, -282.31, 54.16, 338.3), vec4(316.35, -282.83, 54.16, 338.3),
         vec4(316.47, -276.68, 54.16, 338.3), vec4(312.49, -276.39, 54.16, 358.3),
         vec4(318.07, -278.60, 54.16, 318.3),
       },
@@ -62,7 +63,7 @@ RegisterMission({
       start    = { coords = vec3(-315.20, -44.22, 48.24), radius = 60.0 },   -- on the street outside
       spawns   = {   -- 7 hostile spots inside (counter, back office, lobby)
         vec4(-351.23, -51.28, 49.04, 341.7), vec4(-349.39, -51.78, 49.04, 341.7),
-        vec4(-353.15, -54.23, 49.04, 341.7), vec4(-350.65, -54.00, 49.04, 341.7),
+        vec4(-353.10, -53.18, 49.04, 341.7), vec4(-348.75, -53.60, 49.04, 341.7),
         vec4(-348.84, -47.23, 49.04, 341.7), vec4(-352.82, -47.17, 49.04, 1.7),
         vec4(-347.13, -49.05, 49.04, 321.7),
       },
@@ -78,7 +79,7 @@ RegisterMission({
       start    = { coords = vec3(-1188.02, -304.01, 36.98), radius = 60.0 },   -- on the street outside
       spawns   = {   -- 7 hostile spots inside (counter, back office, lobby)
         vec4(-1211.90, -331.90, 37.78, 20.1), vec4(-1210.15, -331.15, 37.78, 20.1),
-        vec4(-1211.58, -335.40, 37.78, 20.1), vec4(-1209.76, -333.67, 37.78, 20.1),
+        vec4(-1212.18, -334.75, 37.78, 20.1), vec4(-1208.46, -331.67, 37.78, 20.1),
         vec4(-1212.54, -327.24, 37.78, 20.1), vec4(-1215.70, -329.67, 37.78, 40.1),
         vec4(-1210.06, -327.61, 37.78, 0.1),
       },
@@ -94,7 +95,7 @@ RegisterMission({
       start    = { coords = vec3(-2975.60, 516.84, 14.90), radius = 60.0 },   -- on the street outside
       spawns   = {   -- 7 hostile spots inside (counter, back office, lobby)
         vec4(-2961.14, 483.09, 15.70, 83.8), vec4(-2961.04, 484.99, 15.70, 83.8),
-        vec4(-2957.86, 481.83, 15.70, 83.8), vec4(-2958.60, 484.22, 15.70, 83.8),
+        vec4(-2958.86, 481.78, 15.70, 83.8), vec4(-2959.65, 486.12, 15.70, 83.8),
         vec4(-2965.61, 484.58, 15.70, 83.8), vec4(-2964.82, 480.67, 15.70, 103.8),
         vec4(-2964.18, 486.64, 15.70, 63.8),
       },
@@ -110,7 +111,7 @@ RegisterMission({
       start    = { coords = vec3(1142.35, 2691.03, 37.29), radius = 60.0 },   -- on the street outside
       spawns   = {   -- 7 hostile spots inside (counter, back office, lobby)
         vec4(1174.80, 2708.20, 38.09, 178.5), vec4(1172.90, 2708.15, 38.09, 178.5),
-        vec4(1175.79, 2711.58, 38.09, 178.5), vec4(1173.46, 2710.64, 38.09, 178.5),
+        vec4(1175.99, 2710.53, 38.09, 178.5), vec4(1171.76, 2709.49, 38.09, 178.5),
         vec4(1173.68, 2703.63, 38.09, 178.5), vec4(1177.51, 2704.73, 38.09, 198.5),
         vec4(1171.51, 2704.88, 38.09, 158.5),
       },

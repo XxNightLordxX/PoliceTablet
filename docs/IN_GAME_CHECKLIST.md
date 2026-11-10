@@ -230,6 +230,53 @@ names the change it came with.
 - [ ] Testing: invite an officer, start a test: the debug stream and the invitation expiry work; a unit's invite
   still expires after 120 s; `jobRecheck`: go off duty during a run, you leave it within `jobRecheck` seconds.
 
+## Mission locations and other scripts
+
+Points moved so they stay clear of other public scripts' places (README 7.1): Bomb Disposal spots 2 m from the
+store registers, safes and shop counter, Hostage Rescue robbers 2 m from the vault door and lockers, the warrant
+suspect 2 m from the house-robbery entrance, the stolen car and one Bomb Disposal spot 6 m from a garage or taxi
+marker. Run the mission on that location (turn its other locations off, README 5.8) and walk to the point.
+
+- [ ] Bomb Disposal, 24/7 Supermarket, Innocence Boulevard: hiding[1] (behind the counter) at (24.51, -1349.67) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Innocence Boulevard: hiding[2] (in front of the counter) at (26.79, -1345.27) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Innocence Boulevard: hiding[3] (back room) at (28.46, -1336.95) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Innocence Boulevard: hiding[4] (back room) at (26.21, -1337.99) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Clinton Avenue: hiding[1] (behind the counter) at (371.56, 324.35) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Clinton Avenue: hiding[2] (in front of the counter) at (375.27, 327.14) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Clinton Avenue: hiding[3] (back room) at (379.92, 334.79) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Clinton Avenue: hiding[4] (back room) at (376.89, 335.33) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Palomino Freeway: hiding[1] (behind the counter) at (2559.26, 380.11) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Palomino Freeway: hiding[2] (in front of the counter) at (2554.87, 383.54) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Palomino Freeway: hiding[3] (back room) at (2547.04, 384.64) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Palomino Freeway: hiding[4] (back room) at (2548.00, 382.99) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Senora Freeway: hiding[1] (behind the counter) at (2679.77, 3277.83) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Senora Freeway: hiding[2] (in front of the counter) at (2677.62, 3282.20) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Senora Freeway: hiding[3] (back room) at (2670.39, 3286.63) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Senora Freeway: hiding[4] (back room) at (2670.99, 3288.23) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Senora Freeway (Mount Chiliad): hiding[1] (behind the counter) at (1726.53, 6413.21) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Senora Freeway (Mount Chiliad): hiding[2] (in front of the counter) at (1730.83, 6416.05) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Senora Freeway (Mount Chiliad): hiding[3] (back room) at (1736.93, 6421.54) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Senora Freeway (Mount Chiliad): hiding[4] (back room) at (1733.25, 6422.62) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Barbareno Road (Chumash): hiding[1] (behind the counter) at (-3240.08, 999.15) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Barbareno Road (Chumash): hiding[2] (in front of the counter) at (-3243.92, 1002.36) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Barbareno Road (Chumash): hiding[3] (back room) at (-3251.97, 1003.13) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Barbareno Road (Chumash): hiding[4] (back room) at (-3252.37, 1004.79) is inside on the floor, not in a wall. (LOC1)
+- [ ] Bomb Disposal, 24/7 Supermarket, Barbareno Road (Chumash): hiding[7] (outside by the entrance) at (-3237.15, 1005.48) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Legion Square: spawns[3] (back office) at (147.43, -1043.86) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Legion Square: spawns[4] (back office) at (152.09, -1044.40) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Hawick Avenue (Alta): spawns[3] (back office) at (311.90, -282.31) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Hawick Avenue (Alta): spawns[4] (back office) at (316.35, -282.83) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Hawick Avenue (Burton): spawns[3] (back office) at (-353.10, -53.18) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Hawick Avenue (Burton): spawns[4] (back office) at (-348.75, -53.60) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Boulevard Del Perro: spawns[3] (back office) at (-1212.18, -334.75) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Boulevard Del Perro: spawns[4] (back office) at (-1208.46, -331.67) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Great Ocean Highway: spawns[3] (back office) at (-2958.86, 481.78) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Great Ocean Highway: spawns[4] (back office) at (-2959.65, 486.12) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Route 68: spawns[3] (back office) at (1175.99, 2710.53) is inside on the floor, not in a wall. (LOC1)
+- [ ] Hostage Rescue, Fleeca Bank, Route 68: spawns[4] (back office) at (1171.76, 2709.49) is inside on the floor, not in a wall. (LOC1)
+- [ ] Warrant Service, Wild Oats Drive: the suspect waits on the step 2.7 m left of the door at (-177.00, 503.05), not in the bushes or the wall, and surrenders onto the step. (LOC1)
+- [ ] Stolen Vehicle Takedown, Route 68 east Harmony: the stolen car spawns in the Motor Hotel car park at (1130.75, 2664.75), on the tarmac and clear of parked cars and the qbx_garages marker, and drives out onto Route 68. (LOC1)
+
 ## Real suspects (ships off)
 
 - [ ] With Config.LiveCrime.enabled and Config.Volunteers.enabled off as shipped, nothing changes for officers and idle resmon is unchanged. (V1, V3, V4, V5, V6)
