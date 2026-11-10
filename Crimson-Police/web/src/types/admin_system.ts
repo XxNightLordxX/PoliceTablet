@@ -146,7 +146,55 @@ export interface AdminHomeData {
         load?: { loaded: number; refused: number; error: boolean } | null;
     };
     shortcuts: HomeShortcutKey[];
+    // true while the First-start setup shows on Home (Config.AdminUi.setupScreen on, setupDone not yet)
+    setup?: boolean;
     serverTime?: number;
+}
+
+// admin:getSetup (modules/admin/setup): what the First-start setup shows.
+export interface SetupJobGrade {
+    level: number;
+    name: string;
+    boss: boolean;
+}
+export interface SetupJob {
+    name: string;
+    label: string;
+    police: boolean;
+    grades: SetupJobGrade[];
+    // the department that lists this job already
+    department?: string | null;
+}
+export interface SetupDepartment {
+    key: string;
+    label: string;
+    short: string;
+    jobs: string[];
+    supervisorGrade: number;
+    enabled: boolean;
+    added: boolean;
+}
+export interface SetupIntegration {
+    kind: string;
+    setting: string;
+    active?: string | null;
+    why?: string | null;
+    options: string[];
+}
+export interface SetupView {
+    pending: boolean;
+    departments: SetupDepartment[];
+    jobs: SetupJob[];
+    desks: { index: number; label: string; coords?: { x: number; y: number; z: number } | null }[];
+    storage: { database: boolean; folder: string; oxmysql: boolean; copyCommand: string };
+    integrations: SetupIntegration[];
+    presets: { key: string; name: string; help: string; count: number }[];
+}
+// server:admin:finishSetup's answer
+export interface SetupReply {
+    changed: number;
+    preset?: { key: string; changed: number };
+    presetError?: string;
 }
 
 export interface ResourceView {

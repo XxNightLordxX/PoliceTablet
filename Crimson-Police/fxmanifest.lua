@@ -74,6 +74,7 @@ server_scripts {
     'modules/supervisor/supawards.lua',
     'modules/supervisor/today.lua',
     'modules/admin/sysadmin.lua',
+    'modules/admin/setup.lua',
     'modules/access/tablet.lua',
     'modules/missions/testing.lua',
     'modules/progression/*.lua',
@@ -133,6 +134,16 @@ client_scripts {
     'blocks/pursuit/client.lua',
     'blocks/search_area/client.lua',
     'blocks/skill_check/client.lua',
+}
+
+-- FiveM asset escrow: everything a city edits stays readable (README "What you can edit"): the config files and the
+-- generic starting config, the locale texts and the built-in missions. Custom missions are files written in game,
+-- and web/dist ships built.
+escrow_ignore {
+    'config/*.lua',
+    'config/examples/*.lua',
+    'locales/*',
+    'missions/builtin/*',
 }
 
 ui_page 'web/dist/index.html'

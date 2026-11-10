@@ -847,7 +847,7 @@ from an older `config.lua` (Crimson-Police ignores it).
 | `Config.Tablet.supervisorReviewLive` | a decided flagged run or dispute leaves every other open Review Queue at once | Supervisor UI → Department → Review |
 
 **Kept as settings**, because a city may want them differently: `Config.AdminUi.reasonChips` (your own reason
-buttons), `Config.AdminUi.homeShortcuts` (Home's shortcuts and their order), `Config.AdminUi.presets` (the Settings presets), `Config.Tablet.sidebarOrder`, `activeFirst`, `compactSidebar`, `supervisorCompact` and `supervisorLanding`
+buttons), `Config.AdminUi.homeShortcuts` (Home's shortcuts and their order), `Config.AdminUi.presets` (the Settings presets), `Config.AdminUi.setupScreen` and `setupDone` (the First-start setup on Home), `Config.Tablet.sidebarOrder`, `activeFirst`, `compactSidebar`, `supervisorCompact` and `supervisorLanding`
 (how each city likes its sidebars), and the tuning numbers `Config.AdminUi.pageSize` and `Config.Performance.loopScale`,
 `pushGapMs`, `latentAboveBytes` and `markerRange` (each shipped as before).
 
@@ -1422,7 +1422,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([1.2](#12
 
 | Screen | What it is for |
 |---|---|
-| **Home** | Where the panel opens: a dashboard of **Live now** (officers on duty, runs going, the queues waiting), **Alerts** (problems, refused starts, Config health, the last mission load) and your **Shortcuts** (`Config.AdminUi.homeShortcuts`) |
+| **Home** | Where the panel opens: while `Config.AdminUi.setupScreen` is on and the setup is not done, the **First-start setup** (`Crimson-Police/README.md`) above a dashboard of **Live now** (officers on duty, runs going, the queues waiting), **Alerts** (problems, refused starts, Config health, the last mission load) and your **Shortcuts** (`Config.AdminUi.homeShortcuts`) |
 | **Money** | Every money tool in one screen, as four tabs. **Pay rates** (the old Payouts screen): every type and mission payout, set or clear them. **Rewards**: every feature that pays, its money, account and items. **Payments**: every payment Crimson-Police made or still owes, with totals and the payment tools ([5.15.4](#5154-payments-item-rewards-and-department-money)). **Department funds**: each department's society account (the same Funds card as on Departments) |
 | **Missions** | Built-in and custom missions: Builder, publish, archive, restore, roll back, break edit locks, reload files, Cross-Department Missions and mission calls |
 | **Seasons & Challenge** | Start or end a season, override this week's bounty |

@@ -723,3 +723,13 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   `society` and `Integrations.banking = 'none'`, a department's society account can be changed (no "account does not
   exist"). On the ps-dispatch test server: Responding on one call, then on another, leaves the officer on the second
   only, and his run stays a free abandon. (SALE2)
+- [ ] First-start setup (SALE3): as shipped, Admin UI -> Home opens on its dashboard (no setup). In Settings set
+  `AdminUi.setupScreen` on: Home shows First-start setup above the dashboard. Step 1 lists your departments with
+  their Qbox jobs and supervisor grade, and the qbx_core police jobs no department lists; step 2 the desks; step 3
+  where data is saved; step 4 the four scripts found (sc-dispatch, sc-ambulance, Renewed-Banking, sc-police here);
+  step 5 the presets. Change nothing and press Finish (0 changes): the setup goes away and the Activity log has
+  "First-start setup finished"; the departments, desks and scripts are as before. Set `AdminUi.setupDone` off,
+  then Skip setup (two clicks): it goes away again. Set `AdminUi.setupScreen` back off. (SALE3)
+- [ ] Generic config (SALE3), on a stock Qbox test server only: copy `config/examples/generic.lua` over
+  `config/config.lua` and restart: the start-up check has no red line, the departments LSPD, BCSO and SASP match
+  the jobs `police`, `bcso` and `sasp`, and `/CrimsonPoliceAdmin` opens on the First-start setup. (SALE3)

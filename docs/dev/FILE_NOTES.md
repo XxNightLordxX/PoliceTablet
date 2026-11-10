@@ -31,6 +31,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/blocks/skill_check/server.lua`: Objective block "skill_check" (server half)
 - `Crimson-Police/config/blocks.lua`: Mission Builder ranges and defaults.
 - `Crimson-Police/config/config.lua`: Every Crimson-Police setting.
+- `Crimson-Police/config/examples/generic.lua`: GENERIC STARTING CONFIG for a fresh Qbox city (SALE3).
 - `Crimson-Police/items/ox_inventory_items.lua`: The Crimson-Police tablet item for ox_inventory.
 - `Crimson-Police/modules/access/access.lua`: CP.Access (server): departments, roles, duty, active job, rank and callsign, suspension checks.
 - `Crimson-Police/modules/access/client/access.lua`: CP.Access (client): the latest officer and department the server sent.
@@ -46,6 +47,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/admin/client/settings.lua`: CP.Settings (client): the settings an admin changed in game, sent by the server at start and after every change, put over this client's copy of config.lua so client code reads the same values as the server.
 - `Crimson-Police/modules/admin/confighealth.lua`: CP.ConfigHealth (server): the Config health list of Admin UI → Permissions.
 - `Crimson-Police/modules/admin/settings.lua`: CP.Settings (server): settings an admin changes in game (Admin UI → Settings and the mission switches), saved in cp_settings over the values of config/config.lua and config/blocks.lua, and sent to every client.
+- `Crimson-Police/modules/admin/setup.lua`: CP.Setup (server): Admin UI -> Home's First-start setup (Config.AdminUi.setupScreen), shown to admins until one
 - `Crimson-Police/modules/admin/sysadmin.lua`: CP.Sysadmin (server): Admin UI → System (storage, backups, webhooks, problems, integrations), Departments (add, turn off, delete, logos, desks), Settings positions and Officers → Support (check access, tablet item, stuck screen).
 - `Crimson-Police/modules/dispatch/alerts.lua`: CP.Alerts (server, the dispatch module): Hard rule 16 (no mission alerts) and the only writer of the crimsonArena state bag (docs/dev/ARCHITECTURE.md §5.14, docs/dev/INTEGRATIONS.md, Crimson-Arena rules 1, 2, 3, 9, 11).
 - `Crimson-Police/modules/dispatch/calls.lua`: CP.Calls (server, the dispatch module): Hard rule 15, real calls first (docs/dev/ARCHITECTURE.md §5.13, SPEC "Real calls end missions; NPC calls never do", INTEGRATIONS sc-dispatch and sc-npcpolice).
@@ -175,6 +177,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/ScreenSettings.tsx`: The gear of each Admin UI screen: a drawer with only that screen's settings (modules/admin/settings Play.screens), the same rows, checks, saves and audit as Settings -> All settings, which still lists every setting.
 - `Crimson-Police/web/src/admin/components/SettingsPresets.tsx`: Admin UI -> Settings -> Presets: a group of settings (Config.AdminUi.presets) set in one click.
 - `Crimson-Police/web/src/admin/components/SettingsTools.tsx`: Admin UI → Settings: the structured editors (row lists with Use my position and Teleport to, Names, Goals) and the Export / Import panel.
+- `Crimson-Police/web/src/admin/components/SetupWizard.tsx`: Admin UI -> Home · First-start setup (Config.AdminUi.setupScreen): shown above the dashboard until an admin
 - `Crimson-Police/web/src/admin/components/SpawnCheckDialog.tsx`: Admin UI · Testing: the Check spawn points dialog.
 - `Crimson-Police/web/src/admin/components/adminHome.ts`: Admin UI -> Home, the dashboard: the tiles of Live now, the Alerts lines and the shortcuts, all from the one admin:getHome answer, each a count that opens its screen.
 - `Crimson-Police/web/src/admin/components/adminHome.walk.ts`: Admin UI -> Home's dashboard against the browser mocks (node walk.mjs, a gate step): the one batched admin:getHome answer, the Live now tiles, the Alerts lines, the screen each one opens, and the shortcuts in the configured order.
@@ -208,6 +211,8 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/rewardsScreen.walk.ts`: Admin UI -> Money -> Rewards walked against the browser mocks (node walk.mjs, a gate step): the Rewards tab of Money lists every feature that pays with its money, account and items, saves through server:admin:setSetting, and the item editors build the values the server checks.
 - `Crimson-Police/web/src/admin/components/screenSettings.ts`: The gear of each Admin UI screen (admin/components/ScreenSettings.tsx) and Settings -> Presets: which settings a screen's gear shows and whether a preset can be applied.
 - `Crimson-Police/web/src/admin/components/screenSettings.walk.ts`: The gear of each Admin UI screen and Settings -> Presets walked against the browser mocks (node walk.mjs, a gate
+- `Crimson-Police/web/src/admin/components/setup.ts`: Admin UI -> Home's First-start setup (admin/components/SetupWizard): the steps, the answers it starts from (what the server runs with now) and the one server:admin:finishSetup payload, which names only what the admin changed.
+- `Crimson-Police/web/src/admin/components/setup.walk.ts`: Admin UI -> Home's First-start setup against the browser mocks (node walk.mjs, a gate step): Home says to show it, the answers start as the server runs now (a finish with nothing changed sends nothing but the done mark), each change goes into the one server:admin:finishSetup payload, and finishing (or skipping) takes it off Home.
 - `Crimson-Police/web/src/admin/components/spawnCheckStore.ts`: Check spawn points: the admin's check kept in module memory, fed by the Lua testing client's pushes.
 - `Crimson-Police/web/src/admin/screens/Audit.tsx`: Admin UI · Audit Log (screen key 'admin_audit'): filters (also by target, role, the acting player's every character and reason text), export in parts of 5000 rows, and Save to server (saves/exports).
 - `Crimson-Police/web/src/admin/screens/Departments.tsx`: Admin UI · Departments (screen key 'admin_departments'): themes, members, mission desks, personal accents and a preview of each officer look; add, edit, turn off and delete departments, upload logos, and edit the desks.
@@ -525,6 +530,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/foundation_spec.lua`: The foundation: migrations 003-007, CP.Hooks, CP.Lt tokens, the engine contracts other modules build on (stats, decisions, adoption, hidden spawns, plates, held bodies, removals), levels, tweaks, the Session.
 - `tests/frame_loops_spec.lua`: Frame loops read cache.ped (skill check K19): every while loop that can wait 0 ms in the block clients, the run client, the Testing debug drawing and the builder client reads the player's ped from ox_lib's cache, not PlayerPedId() each frame.
 - `tests/freeze_spec.lua`: The freeze after a down on the way to a mission start (recovered before the pick-up): the downed follow-up's end signal, the client's screen safety net, the tablet while down, the NUI open check, the web error boundaries and lint rule FX10 (loops that can go round with no Wait).
+- `tests/generic_config_spec.lua`: The generic starting config (SALE3, config/examples/generic.lua): what a copy for sale ships as config/config.lua.
 - `tests/globals_lint_spec.lua`: Globals lint (skill check K20): no server or shared script names a local, loop variable or parameter source (the event global; RegisterCommand's own signature aside), and no script writes the global _ or source.
 - `tests/happy_hour_spec.lua`: Happy hour: a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
 - `tests/harness.lua`: A tiny FiveM/Qbox stand-in for unit tests (not shipped with the resource).
@@ -615,6 +621,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/server_cost_spec.lua`: Server cost (docs/dev/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
 - `tests/settings_spec.lua`: Admin UI → Settings (modules/admin/settings): the schema read from config.lua and blocks.lua, every check of a value, saving, resetting and a restart in every storage mode, Config and the clients, the mission and location switches.
 - `tests/setup_coords_spec.lua`: Setup coordinates from the Qbox scripts: each shipped mission desk and drop-off names its source or is kept.
+- `tests/setup_spec.lua`: Admin UI -> Home's First-start setup (SALE3, modules/admin/setup): shipped off (Home as before); with
 - `tests/shadow/fuzz_agg.lua`: Random aggregate queries, compared in shadow mode (lua5.4 tests/run.lua --fuzz): SUM /
 - `tests/shadow/fuzz_funcs.lua`: Random expressions, compared in shadow mode (lua5.4 tests/run.lua --fuzz): arithmetic on
 - `tests/shadow/fuzz_rows.lua`: Random row queries and writes, compared in shadow mode (lua5.4 tests/run.lua --fuzz):

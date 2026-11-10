@@ -193,6 +193,13 @@ Config.AdminUi = {
     -- suspension, and volunteer strikes block running now, in one list) also offers Extend: add hours to one, up to
     -- that kind's longest; false = the list offers only Lift. Each kind keeps its own permission for both
     restrictionsExtend = true,
+    -- true = Admin UI -> Home opens on the First-start setup (departments from your Qbox jobs, supervisor grades,
+    -- desks, storage, the scripts found and a preset) until an admin finishes or skips it; false = Home opens on its
+    -- dashboard (as before). Every answer is an ordinary setting, editable later
+    setupScreen = false,
+    -- true = the First-start setup was finished or skipped, so it no longer shows; false = it shows while setupScreen
+    -- is on (set it back to false to walk through it again)
+    setupDone = false,
     -- The presets on Admin UI -> Settings -> Presets: each sets a group of settings in one click, after a preview of
     -- every change and a confirm (each change is saved and audited like a single setting, with the preset as the
     -- reason). Each preset is a list of { path = 'Config path of the setting', value = its new value }. A preset never

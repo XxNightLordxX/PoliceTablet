@@ -13,6 +13,8 @@ import type {
     AdminHomeData,
     ProblemsData,
     RestorePreview,
+    SetupReply,
+    SetupView,
     StorageView,
     WebhookView,
 } from '../types/admin_system';
@@ -134,7 +136,85 @@ registerMock('request', 'admin:getWebhooks', (): { webhooks: WebhookView[] } => 
     })),
 }));
 
-// admin:getHome: Admin UI -> Home's dashboard (?homeCalm: nothing waiting, ?homeNoShortcuts: homeShortcuts = {})
+// The First-start setup (modules/admin/setup): a fresh city with qbx_core's three police jobs, one department set
+// up and the owner's scripts missing. ?setup turns it on; finish or skip turns it off.
+let setupDone = false;
+function setupPending(): boolean {
+    return !setupDone && typeof window !== 'undefined' && /[?&]setup\b/.test(window.location.search);
+}
+const LADDER = [
+    { level: 0, name: 'Recruit', boss: false },
+    { level: 1, name: 'Officer', boss: false },
+    { level: 2, name: 'Sergeant', boss: false },
+    { level: 3, name: 'Lieutenant', boss: false },
+    { level: 4, name: 'Chief', boss: true },
+];
+registerMock('request', 'admin:getSetup', (): SetupView => ({
+    pending: setupPending(),
+    departments: [
+        {
+            key: 'police',
+            label: 'Los Santos Police Department',
+            short: 'LSPD',
+            jobs: ['police'],
+            supervisorGrade: 3,
+            enabled: true,
+            added: false,
+        },
+    ],
+    jobs: [
+        { name: 'bcso', label: 'BCSO', police: true, grades: LADDER, department: null },
+        { name: 'police', label: 'LSPD', police: true, grades: LADDER, department: 'police' },
+        { name: 'sasp', label: 'SASP', police: true, grades: LADDER, department: null },
+    ],
+    desks: [
+        { index: 1, label: 'Mission Row PD front desk', coords: { x: 441.0, y: -977.3, z: 30.69 } },
+        { index: 2, label: 'Sandy Shores office', coords: { x: 1853.2, y: 3689.6, z: 34.27 } },
+        { index: 3, label: 'Paleto Bay sheriff front desk', coords: { x: -448.55, y: 6011.92, z: 31.82 } },
+    ],
+    storage: { database: false, folder: 'saves', oxmysql: true, copyCommand: '/CrimsonPoliceAdmin storage copy' },
+    integrations: [
+        {
+            kind: 'dispatch',
+            setting: 'auto',
+            active: 'ps-dispatch',
+            options: ['auto', 'sc-dispatch', 'ps-dispatch', 'none'],
+        },
+        {
+            kind: 'ambulance',
+            setting: 'auto',
+            active: 'qbx_ambulancejob',
+            options: ['auto', 'sc-ambulance', 'qbx_ambulancejob', 'none'],
+        },
+        {
+            kind: 'banking',
+            setting: 'auto',
+            active: null,
+            why: 'missing',
+            options: ['auto', 'Renewed-Banking', 'none'],
+        },
+        {
+            kind: 'police',
+            setting: 'auto',
+            active: 'qbx_policejob',
+            options: ['auto', 'sc-police', 'qbx_policejob', 'none'],
+        },
+    ],
+    presets: [
+        { key: 'casual', name: 'Casual', help: 'Easier, friendlier play', count: 4 },
+        { key: 'serious', name: 'Serious RP', help: 'The route rule on, no hints', count: 4 },
+        { key: 'golive', name: 'Go-live', help: 'Ready for players', count: 4 },
+    ],
+}));
+registerMock('action', 'server:admin:finishSetup', (p: { skip?: boolean; preset?: string }): SetupReply => {
+    setupDone = true;
+    if (p.skip) return { changed: 0 };
+    const changed = Object.keys(p).filter(k => k !== 'preset' && k !== 'requestId').length;
+    return p.preset ? { changed, preset: { key: p.preset, changed: 4 } } : { changed };
+});
+
+// admin:getHome: Admin UI -> Home's dashboard (?homeCalm: nothing waiting, ?homeNoShortcuts: homeShortcuts = {},
+// ?setup: the First-start setup shows until finished or skipped)
 registerMock('request', 'admin:getHome', (): AdminHomeData => {
     const calm = typeof window !== 'undefined' && /[?&]homeCalm\b/.test(window.location.search);
     const none = typeof window !== 'undefined' && /[?&]homeNoShortcuts\b/.test(window.location.search);
@@ -162,6 +242,7 @@ registerMock('request', 'admin:getHome', (): AdminHomeData => {
             load: { loaded: 42, refused: 0, error: false },
         },
         shortcuts: none ? [] : ['newMission', 'missionSwitch', 'pay', 'points', 'settings'],
+        setup: setupPending(),
         serverTime: now(),
     };
 });

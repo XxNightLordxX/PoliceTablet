@@ -9,6 +9,9 @@ every setting is explained by its own comment in `Crimson-Police/config/config.l
 shows next to it. The small README files inside the folders (`Crimson-Police/`, `items/`, `logos/`, `saves/`, `web/`)
 say the same things in short and point back here.
 
+**Fresh Qbox city:** [3](#3-install-in-5-minutes). Selling a copy (generic config, setup, escrow, license):
+`Crimson-Police/README.md`.
+
 ## Contents
 
 1. [What Crimson-Police is](#1-what-crimson-police-is)
@@ -213,9 +216,8 @@ Then set the grade where supervisors start (`supervisorGrade`, default `3`). Sec
 2.2](docs/OWNER_GUIDE.md#22-supervisor-grades) explains the number. The start-up check (next step) tells you if a job
 name is wrong or if the grade means nobody, or everybody, is a supervisor.
 
-**You can also do all of this in game instead of in the file.** Start the server, type `/CrimsonPoliceAdmin`, open
-**Settings**, search for `jobs` or `supervisorGrade`, change the value and press **Save**. Department changes work at
-once. See [guide 2.6](docs/OWNER_GUIDE.md#26-change-any-setting-in-game-the-settings-screen).
+**Or do it in game:** `/CrimsonPoliceAdmin` → **Settings**, search `jobs` or `supervisorGrade`, change it and
+**Save** (department changes work at once), or the First-start setup. See [guide 2.6](docs/OWNER_GUIDE.md#26-change-any-setting-in-game-the-settings-screen).
 
 ### 3.4 Start the server and read the console
 
@@ -280,8 +282,7 @@ Section [8](#8-troubleshooting) lists every message and what to do.
 
 Quick test as a Qbox admin (these are Qbox commands, not Crimson-Police ones):
 
-1. Type `/optin` (Qbox asks admins to opt in before its admin commands work). It switches on and off: Qbox answers
-   "You have successfully opted in for admin duty." If it says "out", type `/optin` again.
+1. Type `/optin` (Qbox's admin commands need it). It switches on and off: if Qbox says "out", type it again.
 2. Type `/id` to see your server ID.
 3. Type `/setjob <your server id> sast 3` to give yourself the SAST job at grade 3 (use your own job name if you
    changed it in [3.3](#33-check-your-police-jobs)).

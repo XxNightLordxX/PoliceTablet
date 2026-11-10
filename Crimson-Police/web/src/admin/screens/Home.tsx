@@ -6,7 +6,8 @@
 // that opens its screen. Alerts: Problems, today's refused starts, Config health and the last mission load. Shortcuts:
 // the tiles Config.AdminUi.homeShortcuts names, in its order; four of them hold a quick form
 // (admin/components/HomeForms) that does the job right there, and Open still opens the full screen. The tiles and
-// lines come from admin/components/adminHome.ts.
+// lines come from admin/components/adminHome.ts. While Config.AdminUi.setupScreen is on and the setup is not done
+// (data.setup), the First-start setup (admin/components/SetupWizard) shows above the dashboard.
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Badge, Button, Card, Icon, Screen } from '../../shared/components';
@@ -17,6 +18,7 @@ import { t } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import { NEW_MISSION_PARAMS } from '../../builder/quickMission';
 import { MissionSwitchForm, PayForm, PointsForm, QuickSettingsForm } from '../components/HomeForms';
+import { SetupWizard } from '../components/SetupWizard';
 import type { AdminHomeData, HomeShortcutKey } from '../../types/admin_system';
 import { alertLines, liveTiles, shortcutsOf, waitingCount, type ShortcutDef } from '../components/adminHome';
 import './Home.css';
@@ -211,6 +213,7 @@ export default function AdminHome() {
     const shortcuts = shortcutsOf(data);
     return (
         <Screen head="admin_home" subtitle={t('admin.home.subtitle')} className="admin-home-screen">
+            {data?.setup ? <SetupWizard onDone={() => void refetch()} /> : null}
             <div className="admin-home-top">
                 <LiveNow data={data} />
                 <Alerts data={data} failed={!!error} retry={() => void refetch()} />

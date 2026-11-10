@@ -125,6 +125,11 @@ local function Load()
     return { loaded = Count(true, sum.loaded), refused = failed + over, error = sum.error ~= nil and sum.error ~= false }
 end
 
+local function Setup()
+    local ok, pending = Call('Setup', 'pending')
+    return ok and pending == true
+end
+
 -- Config.AdminUi.homeShortcuts: the known keys in their order, each once (nil = the shipped five, {} = none).
 AH.SHORTCUTS = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings', 'live', 'review', 'activity' }
 local SHIPPED = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings' }
@@ -164,6 +169,8 @@ function AH.home(src)
             load = Load(),
         },
         shortcuts = AH.shortcuts(),
+        -- true while the First-start setup shows on Home (CP.Setup: Config.AdminUi.setupScreen, not done yet)
+        setup = Setup(),
         serverTime = os.time(),
     }
 end
