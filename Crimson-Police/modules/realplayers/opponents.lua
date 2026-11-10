@@ -818,7 +818,7 @@ function Opp.wasSuspect(cid, runId)
     return case ~= nil and case.suspects[cid] ~= nil
 end
 
--- true while at least one case is open (CP.ScPolice / CP.Ambulance pass facts only then).
+-- true while at least one case is open (CP.Police / CP.Ambulance pass facts only then).
 function Opp.active() return next(cases) ~= nil end
 
 function Opp.caseOf(run)

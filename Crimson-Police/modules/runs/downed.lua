@@ -4,7 +4,7 @@
 -- Owns: the downed poll, the Failed result for a participant who goes down (end_reason 'downed'), the free
 -- NPC pick-up when no EMS is on duty, the EMS request when EMS is on duty, the server -> client events
 -- client:pickup (runId, dropOff vector3), client:pickupCancel (runId) (a pick-up already sent was cancelled
--- on the server: in the arena, recovered, unload) and client:requestEMS (runId), and the plain net event
+-- on the server: in the arena, recovered, unload) and client:requestEMS (runId, script), and the plain net event
 -- server:pickupDone (runId, ok) the client sends when the pick-up has finished (ok = false: it gave up).
 --
 -- Public API
@@ -253,7 +253,9 @@ local function EmsPath(src, e)
     if not Current(src, e) then return end
     if not Recheck(src, e) then return end
     e.stage = 'ems_sent'
-    TriggerClientEvent(CP.e('client:requestEMS'), src, e.runId)
+    -- the serving ambulance script's name: the client sends that script's own EMS request
+    local script = CP.Ambulance and CP.Ambulance.emsRequest and CP.Ambulance.emsRequest() or ''
+    TriggerClientEvent(CP.e('client:requestEMS'), src, e.runId, script)
     CP.log(TAG, 'EMS request sent for %d (run %s)', src, tostring(e.runId))
     Ended(src, e, 'ems')
 end

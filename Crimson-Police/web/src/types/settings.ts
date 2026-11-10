@@ -185,6 +185,9 @@ export interface FeatureEntry {
     risky?: boolean;
     // the settings that bound the feature (per-day counts, caps, cooldowns, pay), linked under it
     limits?: string[];
+    // why the feature stays off whatever its switch says: a script of the city it needs is missing
+    // (CP.Integrations.featureOff)
+    off?: string;
 }
 
 // The reply of every change: the changed settings, the Config health run right after it.

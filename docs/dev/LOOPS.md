@@ -383,7 +383,7 @@ strings do not count.
 | `modules/supervisor/happyhour.lua` | 1 | 1 | the end check, armed while one may run |
 | `modules/system/client/qbx.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/system/integrations/qbx.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/system/integrations/sc_dispatch.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/system/integrations/integrations.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/progression/leaderboard.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/client/livecrime.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/livecrime.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |

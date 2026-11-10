@@ -49,6 +49,14 @@ local IDLE_WAIT_MS = 60000             -- the forfeiture job waits this long at 
 local MANUAL_CASH = 'manual_cash'      -- an admin's manual cash payment (mission_type manual_award): outside the cap
 local FINAL = { paid = true, capped = true, unfunded = true, forfeited = true }
 
+-- Config.Cash.source = 'society' and a banking script serves the department accounts (CP.Banking.societyOn); with
+-- the banking stand-in of a test (no societyOn), the setting alone.
+local function SocietyOn()
+    local B = CP.Banking
+    if B and B.societyOn then return B.societyOn() end
+    return Config.Cash ~= nil and Config.Cash.source == 'society'
+end
+
 local payLock = CP.Lock.new() -- an officer's citizenid while one of their rows is being paid
 local rowLock = CP.Lock.new() -- a row id while pay() works on it
 
@@ -425,7 +433,8 @@ PayClaimed = function(row, rowId, cid, src, progress)
     -- a feature reward row (CP.FeatureRewards) names its own account ('bank', 'cash' or 'item' with a money
     -- item) and may always be new money (a suspect has no department account)
     local cashBd = type(bd.cash) == 'table' and bd.cash or {}
-    local society = Config.Cash and Config.Cash.source == 'society' and cashBd.source ~= 'server'
+    -- (with no banking script a society payout is new money: CP.Banking.societyOn)
+    local society = SocietyOn() and cashBd.source ~= 'server'
     local account = dept and dept.societyAccount
     local moneyAccount, moneyItem = CP.Money.accountOf(cashBd)
     -- Step markers (claimed -> withdrawn -> added) and what this payment used, saved before and between the money
@@ -892,7 +901,7 @@ local function CapRestLocked(row, bd, rowId, rest)
     local account = dept and dept.societyAccount
     local c = CashOf(bd)
     -- a feature reward row names its own source ('server': new money, never a department account) and account
-    local society = Config.Cash and Config.Cash.source == 'society' and c.source ~= 'server'
+    local society = SocietyOn() and c.source ~= 'server'
     local deptLabel = dept and dept.label or tostring(row.department)
     local label = MissionLabel(row, bd)
     local message = CP.L('cash.bank_message', { mission = label })

@@ -4,6 +4,96 @@ Every fact below was checked against the uploaded copies of the dependency resou
 Implementers of `modules/system/integrations/*` (and anyone relying on them) must follow the **Implication** lines.
 Where a fact says the spec is wrong or incomplete, this file wins over the spec Appendix.
 
+## Adding an adapter
+
+Crimson-Police shares four jobs with the city's other scripts. `modules/system/integrations/integrations.lua`
+(`CP.Integrations`) picks the script for each job from `Config.Integrations` and gives every module one front door
+per job: `CP.Dispatch`, `CP.Ambulance`, `CP.Banking` and `CP.Police`. Each supported script has one adapter file next
+to it that registers itself; nothing else in Crimson-Police names those scripts.
+
+| Job | Front door | Adapters | The adapter's functions (each missing one answers like "no script") |
+|---|---|---|---|
+| dispatch | `CP.Dispatch` | `sc_dispatch.lua`, `ps_dispatch.lua` | `available()`, `isSuspended(cid, job)`, `lookupActiveCall(id)`, `clearNotification(uid, jobs)`, `realCallSummary()`, `mdtCommendations(cid)`; events go out with `CP.Dispatch._emit(kind, ...)` |
+| ambulance | `CP.Ambulance` | `sc_ambulance.lua`, `qbx_ambulancejob.lua` | `doctorCount()`, `revive(src)` (the id, the connection and Crimson-Arena are checked first), `emsRequest` (the name `modules/system/client/ambulance.lua` sends a request for); respawns go out with `CP.Ambulance._respawned(resource, src, index)` |
+| banking | `CP.Banking` | `renewed_banking.lua` | `recordDeposit`, `recordWithdraw`, `recordSocietyDeposit`, `recordSocietyWithdraw`, `withdrawSociety`, `depositSociety`, `societyBalance`, `findTxn` |
+| police | `CP.Police` | `sc_police.lua`, `qbx_policejob.lua` | `CP.Police.addFacts(resource, { { event, kind, read } })` with kinds `cuff`, `uncuff`, `cuffBreak`, `escort`, `jail`, `bobbyPin`, `seizeCash`, `impound` |
+
+Rules for a new adapter (a city's own dispatch, ambulance, banking or police script):
+
+1. Read the script's own source. Use only exports and events you found there; a paid script you cannot read gets no
+   adapter.
+2. Copy the example below to `modules/system/integrations/<name>.lua` and list it in fxmanifest.lua after
+   `modules/system/integrations/sc_police.lua`.
+3. Every handler starts with `local src = source`, does nothing unless `CP.Integrations.is(kind, resource)`, rate
+   limits through `CP.Net.rateOk` and checks every argument. Listen next to the script's handlers; never trigger,
+   cancel or answer its events.
+4. `CP.Integrations.register(kind, resource, adapter)` last. The script joins the end of the `'auto'` order, and
+   `Config.Integrations.<kind> = '<resource>'` picks it on purpose.
+5. Live crimes and volunteer suspects need a police adapter with `cuff` and `jail` facts
+   (`CP.Integrations.realSuspectsBlocked`).
+
+```lua
+-- An example adapter. Copy it to
+-- Crimson-Police/modules/system/integrations/my_dispatch.lua, list that file in fxmanifest.lua right after
+-- 'modules/system/integrations/sc_police.lua', and change every name below to your script's real ones. Use only exports
+-- and events you have read in your script's own source.
+--
+-- 'my-dispatch' stands for the folder name of your dispatch script. Once registered it joins the end of the 'auto'
+-- order, and Config.Integrations.dispatch = 'my-dispatch' picks it on purpose.
+
+local D = {}
+local Dispatch = CP.Dispatch
+local RESOURCE = 'my-dispatch'
+
+local function Serving() return CP.Integrations.is('dispatch', RESOURCE) end
+
+-- Required: true while the script is started.
+function D.available() return GetResourceState(RESOURCE) == 'started' end
+
+-- Optional (each missing function answers like no dispatch script: false or nil).
+-- isSuspended(citizenid, jobName) -> boolean         the officer is suspended in your MDT
+-- lookupActiveCall(callId) -> string|nil              the call's id as a string while that call is active
+-- clearNotification(uniqueId, jobs) -> boolean        remove a call Crimson-Police's mission caused
+-- realCallSummary() -> { total = n, p1 = n }|nil      active real calls for the Dispatch strip
+-- mdtCommendations(citizenid) -> { { title, by, at } }|nil
+function D.lookupActiveCall(callId)
+    local key = Dispatch.normalizeCallId(callId)
+    local ok, calls = pcall(function() return exports[RESOURCE]:GetActiveCalls() end)  -- your script's export
+    if not ok or type(calls) ~= 'table' then return nil end
+    for _, c in ipairs(calls) do
+        if Dispatch.normalizeCallId(c.id) == key then return key end
+    end
+    return nil
+end
+
+-- Events: pass them on with Dispatch._emit, only while this script serves dispatch. 'responding' (src, callId, on),
+-- 'cleared' (callId), 'restart' (), 'shots' / 'down' / 'dead' (src, { coords, street, zone, sex }, os.time()).
+RegisterNetEvent('my-dispatch:server:respond', function(callId, on)   -- your script's own event
+    local src = source
+    if not Serving() or not CP.Net.rateOk(src, 'my_dispatch:respond', 6, 1000) then return end
+    if type(callId) ~= 'number' and type(callId) ~= 'string' then return end
+    Dispatch._emit('responding', src, callId, on == true)
+end)
+
+CP.Integrations.register('dispatch', RESOURCE, D)
+```
+
+What the other supported scripts have (checked in their server files):
+
+- **ps-dispatch**: `exports('GetDispatchCalls')` (the live list, ids are numbers, priority 0, 1 or 2), and the
+  client events `ps-dispatch:server:attach (id, PlayerData)`, `:detach (id, PlayerData)` and `:clearCall (id)`. It
+  has no suspensions, no MDT and no clear another resource may call, and its shots-fired and person-down alerts come
+  through `ps-dispatch:server:notify` in a shape Crimson-Police does not read. A clear counts once the call is gone
+  from the list (`ps_dispatch.lua` looks 250 ms later).
+- **qbx_ambulancejob** (with qbx_medical): doctors = `exports.qbx_core:GetDutyCountType('ems')` (what its
+  `getNumDoctors` returns), revive = `exports.qbx_medical:Revive(src)`, the EMS request is the client event
+  `hospital:server:ambulanceAlert` (no text = its own "civilian down"), and a respawn is the server-local
+  `qbx_medical:server:playerRespawned (src)`. Downed stays the Qbox `isdead` / `inlaststand` metadata.
+- **qbx_policejob**: `police:server:EscortPlayer (escortSrc)`, `:JailPlayer (targetSrc, time)`, `:SeizeCash
+  (targetSrc)` and `:Impound (plate, fullImpound, price, body, engine, fuel, netId)`, the same order as sc-police.
+  Cuffing is the ox_lib callback `police:server:CuffPlayer`, so no cuff fact exists.
+- **qbx_management**: boss menus only; it keeps no money, so it has no banking adapter.
+
 ## sc-multijob
 
 ### Holding jobs: PlayerData.jobs shape and the 5-job limit  _(spec claim: partial)_
@@ -2545,7 +2635,7 @@ end)
 
 - **Spec claim:** Crimson-Police learns what is done with sc-police's player cuffs, escorts, jail, bobby pins and cash seizures without editing, cancelling or answering any of it (police vs real criminal players, owner decision 2026-10-26: "Build all 3 but options in the config.lua")
 - **Evidence:** server/interactions.lua:24 (`police:server:CuffBreakAlert(officerId)`, sent by the suspect who broke free; client/interactions.lua:1070-1071 sends it only when it knows who cuffed him), :56 (`police:server:CuffPlayer(playerId, isSoftcuff)`, the client always sends `true`), :95 (`police:server:UncuffPlayer(playerId)`), :227-233 (`police:server:BobbyPinResult(success)` from the picker; sc-police ignores a result with no pending attempt), :277 (`police:server:EscortPlayer(playerId)`), :476 (`police:server:SeizeCash(playerId)`); server/commands.lua:248-264 (`police:server:JailPlayer(targetId, jailTime)`, which writes `injail` inside its own handler; client/interactions.lua:439 sends `tonumber(input[1])`). server/prison.lua:284 registers another `JailPlayer` handler, but prison.lua is not in sc-police's fxmanifest.
-- **Implication:** net events call every registered handler, so modules/system/integrations/sc_police registers a second handler for each of these seven events (like the Impound one above). Each one only reads: `local src = source` first; it returns at once while no `CP.ScPolice.on` listener of its kind exists or `CP.Opponents.active()` is not true (CP.Opponents is built in V4; until then the handlers do nothing), so with no case open it reads no native at all; then a rate limit of 6 a second per sender and kind (`CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)`, dropped without a log line); then the ids must be whole numbers 1..65535 (a bad one drops the event). The listeners get `'cuff'` (officerSrc, targetSrc, isSoftcuff == true), `'uncuff'` (officerSrc, targetSrc), `'cuffBreak'` (suspectSrc, officerSrc), `'escort'` (officerSrc, targetSrc), `'jail'` (officerSrc, targetSrc, jailTime as sent: the listener clamps it), `'bobbyPin'` (pickerSrc, success == true) and `'seizeCash'` (officerSrc, targetSrc), each inside pcall (at most one error line a minute per kind), inside the event and without yielding. A raw `BobbyPinResult(true)` with no pending attempt still reaches this handler, so a listener must not trust it on its own (design critic 2 #6). Crimson-Police never registers `police:server:SetHandcuffStatus` (it reads cuffs from the qbx `ishandcuffed` metadata only) and still never triggers any police:* event. Nothing consumes these facts until CP.Opponents.
+- **Implication:** net events call every registered handler, so modules/system/integrations/sc_police registers a second handler for each of these seven events (like the Impound one above). Each one only reads: `local src = source` first; it returns at once while no `CP.Police.on` listener of its kind exists or `CP.Opponents.active()` is not true (CP.Opponents is built in V4; until then the handlers do nothing), so with no case open it reads no native at all; then a rate limit of 6 a second per sender and kind (`CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)`, dropped without a log line); then the ids must be whole numbers 1..65535 (a bad one drops the event). The listeners get `'cuff'` (officerSrc, targetSrc, isSoftcuff == true), `'uncuff'` (officerSrc, targetSrc), `'cuffBreak'` (suspectSrc, officerSrc), `'escort'` (officerSrc, targetSrc), `'jail'` (officerSrc, targetSrc, jailTime as sent: the listener clamps it), `'bobbyPin'` (pickerSrc, success == true) and `'seizeCash'` (officerSrc, targetSrc), each inside pcall (at most one error line a minute per kind), inside the event and without yielding. A raw `BobbyPinResult(true)` with no pending attempt still reaches this handler, so a listener must not trust it on its own (design critic 2 #6). Crimson-Police never registers `police:server:SetHandcuffStatus` (it reads cuffs from the qbx `ishandcuffed` metadata only) and still never triggers any police:* event. Nothing consumes these facts until CP.Opponents.
 
 ```lua
 RegisterNetEvent('police:server:CuffBreakAlert', function(officerId) ... end)          -- source = the suspect

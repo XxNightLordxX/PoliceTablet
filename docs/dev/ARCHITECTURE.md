@@ -673,7 +673,10 @@ Checked facts about the other resources (signatures, payloads, pitfalls) are in 
   `qbx_core:client:onGroupUpdate`, the only event when the active job is removed), `onDutyChange`, `onUnload`,
   `onLoaded`.
 
-**CP.Dispatch** — modules/system/integrations/sc_dispatch (S)
+**CP.Integrations** — modules/system/integrations/integrations (S): picks each job's script (`Config.Integrations`)
+and holds the front doors below (INTEGRATIONS.md "Adding an adapter").
+
+**CP.Dispatch** — adapters sc_dispatch, ps_dispatch (S)
 - `available()`, `isSuspended(citizenid, jobName)`, `normalizeCallId(id) -> string` (`123`, `'123'`, `123.0` →
   `'123'`), `lookupActiveCall(callId) -> uniqueId|nil` (`mdt_dispatch` by id or unique_id, active; nil when
   sc-dispatch is stopped; the numeric form only for digit-only ids; an empty unique_id returns the row id; `npccall-`
@@ -688,16 +691,16 @@ Checked facts about the other resources (signatures, payloads, pitfalls) are in 
   receivedAt)`; data is a sanitised `{ coords, street, zone, sex }`, client-supplied, so distance checks use server
   ped coords; no coords = dropped).
 
-**CP.Ambulance** — modules/system/integrations/sc_ambulance
+**CP.Ambulance** — adapters sc_ambulance, qbx_ambulancejob
 - S `doctorCount()` (min of `GetDoctorCount()` and the live on-duty `ambulance` count; 0 with one error log when
   sc-ambulance is stopped).
-- S `revive(src) -> bool` → `TriggerClientEvent('hospital:client:Revive', src)`.
-- C `sendEMSRequest() -> bool` → `hospital:server:EMSDownAlert` from the downed player's own client.
+- S `revive(src)` (none: `client:revive`), `emsRequest()`, `downedByPed()`; C `sendEMSRequest(script)`.
 - S `on('respawn', fn(src, hospitalIndex)) -> bool` (real suspects): a second, read-only
   `hospital:server:RespawnAtHospital` handler; returns at once without a listener or while `CP.Opponents.active()` is
   not true, rate-limits 6/s, index 1..255, each listener in pcall, never yields, never answers a hospital.
 
-**CP.Banking** — modules/system/integrations/renewed_banking (S)
+**CP.Banking** — adapter renewed_banking (S)
+- `societyOn()`.
 - `recordDeposit`, `recordWithdraw` (a clawback), `recordSocietyWithdraw`, `recordSocietyDeposit` (all `(account or
   citizenid, amount, message, issuer, receiver, transId)`), `withdrawSociety(account, amount)`,
   `depositSociety(account, amount)`, `societyBalance(account)`, `findTxn(transId, { citizenid, account }) -> {
@@ -706,9 +709,9 @@ Checked facts about the other resources (signatures, payloads, pitfalls) are in 
   cached player).
 - Never raise; return booleans (`societyBalance` a number or nil). 0 amounts send nothing and return true.
 
-**CP.ScPolice** — modules/system/integrations/sc_police (S)
-- A second, read-only `police:server:Impound` handler: a live run's vehicle → `CP.Runs.noteExternalRemoval(netId, src,
-  'sc_impound', dist)`.
+**CP.Police** — adapters sc_police, qbx_policejob (S)
+- `has(kind)`, `addFacts(resource, facts)`. A read-only `police:server:Impound` handler: a live run's vehicle →
+  `CP.Runs.noteExternalRemoval(netId, src, 'sc_impound', dist)`.
 - `on(kind, fn) -> bool` (real suspects), listen-only handlers for `CuffPlayer` → `'cuff'` (officerSrc, targetSrc,
   isSoftcuff), `UncuffPlayer` → `'uncuff'`, `CuffBreakAlert` → `'cuffBreak'` (suspectSrc, officerSrc), `EscortPlayer`
   → `'escort'`, `JailPlayer` → `'jail'` (jailTime raw, the listener clamps), `BobbyPinResult` → `'bobbyPin'`
@@ -2244,7 +2247,7 @@ The real suspects of a case, shared by live crimes (§5.46) and volunteer suspec
   type = 'opp_<state>' ('opp_released' for free), cid, label, prev, by, share, why })` (server-only types, §5.10).
 
 #### Proof (modules/realplayers/proof.lua)
-Inputs: the `CP.ScPolice.on` facts (cuff, uncuff, cuffBreak, bobbyPin, escort, jail), `CP.Ambulance.on('respawn')`,
+Inputs: the `CP.Police.on` facts (cuff, uncuff, cuffBreak, bobbyPin, escort, jail), `CP.Ambulance.on('respawn')`,
 the metadata mirror (ignored in a bucket ≠ 0, where Crimson-Arena rewrites cuffs and downs) and the watch.
 - Cuff pair: a 'cuff' by an active participant of a live run also gives `CP.LiveCrime.cuffHint` (staff line naming the
   officer, at most one per 10 s).
@@ -2269,7 +2272,7 @@ How officers treat a real suspect, from server facts only.
 - A participant's hit on his suspect, in order: (1) the suspect is in custody (CP's proven cuffed or detained AND the
   cuffs mirror; a suspect who freed himself is not), detained and down for more than `downGrace`, or down for more
   than `downGrace` after an earlier hit by the case's officers → flag `rs_excessive_force`.
-- Cash seizures (`CP.ScPolice.on('seizeCash')`, only on-duty `leo` jobs count): every attempt by a participant of a
+- Cash seizures (`CP.Police.on('seizeCash')`, only on-duty `leo` jobs count): every attempt by a participant of a
   run with a case, or on a suspect, is audited (`seizeCash`, own_suspect|other_case|not_suspect).
 
 #### Identity and pairs (modules/realplayers/pairs.lua, table `cp_pvp_pairs`, migration 009)
@@ -3112,9 +3115,9 @@ Events with "three args, no reqId" are plain `RegisterNetEvent` handlers (client
 all others use `CP.Net.action` (UI → server, with reply).
 
 Other resources' net events Crimson-Police also handles, each with a second, read-only handler that never triggers,
-cancels or answers them (§5.1): `police:server:Impound` (CP.ScPolice.onImpound); `police:server:CuffPlayer`,
+cancels or answers them (§5.1): `police:server:Impound` (CP.Police.onImpound); `police:server:CuffPlayer`,
 `police:server:UncuffPlayer`, `police:server:CuffBreakAlert`, `police:server:EscortPlayer`, `police:server:JailPlayer`,
-`police:server:BobbyPinResult` and `police:server:SeizeCash` (CP.ScPolice.on listeners, real suspects);
+`police:server:BobbyPinResult` and `police:server:SeizeCash` (CP.Police.on listeners, real suspects);
 `hospital:server:RespawnAtHospital` (CP.Ambulance.on listeners). The real-suspect handlers do nothing while no case with a
 real suspect is open; their consumers are the proof step (§5.45) and the conduct step (§5.45: 'seizeCash'),
 which add no event of their own. The conduct step also adds a third read-only `weaponDamageEvent` game-event listener

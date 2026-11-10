@@ -13,10 +13,11 @@
 -- clear the overlay, server:pickupDone (runId, true). The Crimson-Arena value (LocalPlayer.state.crimsonArena
 -- with a source other than 'crimson-police') is re-checked before the fade, while waiting for the revive and
 -- right before SetEntityCoords, and so is a server cancel (client:pickupCancel); every abort path fades back
--- in, clears the overlay and sends server:pickupDone (runId, false). Nothing here revives anyone: the server sends sc-ambulance's own
--- hospital:client:Revive (through CP.Ambulance).
--- client:requestEMS: CP.Ambulance.sendEMSRequest() (sc-ambulance's standard EMS request, sent only after
--- the server removed our flag) and a toast.
+-- in, clears the overlay and sends server:pickupDone (runId, false). Nothing here revives anyone: the server sends
+-- the ambulance script's own revive (through CP.Ambulance; with no ambulance script, the client:revive of
+-- modules/system/client/ambulance).
+-- client:requestEMS (runId, script): CP.Ambulance.sendEMSRequest(script) (that ambulance script's own EMS request,
+-- sent only after the server removed our flag) and a toast.
 
 CP.Downed = CP.Downed or {}
 local D = CP.Downed
@@ -206,13 +207,13 @@ RegisterNetEvent(CP.e('client:downedEnded'), function(runId, why)
     if not ok then CP.err(TAG, 'screen restore failed: %s', tostring(err)) end
 end)
 
-RegisterNetEvent(CP.e('client:requestEMS'), function(runId)
+RegisterNetEvent(CP.e('client:requestEMS'), function(runId, script)
     if type(runId) ~= 'string' or runId == '' then return end
     if not (CP.Ambulance and CP.Ambulance.sendEMSRequest) then
-        CP.err(TAG, 'modules/system/integrations/sc_ambulance is missing: no EMS request was sent')
+        CP.err(TAG, 'modules/system/client/ambulance is missing: no EMS request was sent')
         return
     end
-    if CP.Ambulance.sendEMSRequest() then Toast('info', 'downed.ems_requested') end
+    if CP.Ambulance.sendEMSRequest(script) then Toast('info', 'downed.ems_requested') end
 end)
 
 AddEventHandler('onResourceStop', function(res)

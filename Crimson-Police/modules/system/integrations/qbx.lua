@@ -35,7 +35,8 @@
 --       true without calling qbx_core (nothing to move); negative or invalid amounts return false.
 --       why = 'error' when AddMoney raised: the balance may already have changed, so the caller must not
 --       retry or refund (CP.Cash leaves the row 'paying'). A plain false (refused, offline) has no why.
---   CP.Qbx.isDowned(src) -> boolean                  metadata.isdead == true or metadata.inlaststand == true
+--   CP.Qbx.isDowned(src) -> boolean                  metadata.isdead == true or metadata.inlaststand == true (no
+--                                                    ambulance script: or the ped is dead)
 --       Two GetMetadata exports (src as a number; a citizenid string returns false), no Player copy. If
 --       GetMetadata raises (a Qbox without it), GetPlayer is read from then on, until qbx_core starts again.
 --   Listeners (any number; each runs in its own thread, errors are caught and logged):
@@ -386,11 +387,16 @@ local function ReadMetadata(src, key)
     return pcall(function() return exports.qbx_core:GetMetadata(src, key) end)
 end
 
+-- With no ambulance script (CP.Ambulance.downedByPed) nothing writes that metadata: a dead ped counts as down too.
+local function PedDead(src)
+    if not (CP.Ambulance and CP.Ambulance.downedByPed and CP.Ambulance.downedByPed()) then return false end
+    local ped = GetPlayerPed(src)
+    return ped ~= nil and ped ~= 0 and GetEntityHealth(ped) <= 0
+end
+
 -- Metadata isdead or inlaststand is true. Read with GetMetadata; on a Qbox without that export (the call raised) the
 -- whole Player is read instead, from then on until qbx_core starts again.
-function Q.isDowned(src)
-    src = CP.U.toSrc(src)
-    if not src or not Started() then return false end
+local function MetadataDowned(src)
     if metadataExport then
         local ok, v = ReadMetadata(src, 'isdead')
         if ok and v == true then return true end
@@ -405,6 +411,12 @@ function Q.isDowned(src)
     local md = player.PlayerData.metadata
     if type(md) ~= 'table' then return false end
     return md.isdead == true or md.inlaststand == true
+end
+
+function Q.isDowned(src)
+    src = CP.U.toSrc(src)
+    if not src or not Started() then return false end
+    return MetadataDowned(src) or PedDead(src)
 end
 
 -- Whether a player owns a vehicle with this plate: a read-only look at qbx_core's player_vehicles, used only

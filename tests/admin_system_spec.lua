@@ -160,6 +160,7 @@ for _, t in ipairs({
 end
 
 for _, m in ipairs({
+    'modules/system/integrations/integrations.lua',
     'modules/access/permissions.lua',
     'modules/access/access.lua',
     'modules/admin/admin.lua',

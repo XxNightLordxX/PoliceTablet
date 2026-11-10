@@ -115,14 +115,18 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/supervisor/restrictions.lua`: CP.Restrictions (server): the one restrictions list.
 - `Crimson-Police/modules/supervisor/supawards.lua`: CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
 - `Crimson-Police/modules/supervisor/today.lua`: CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday, UI4).
+- `Crimson-Police/modules/system/client/ambulance.lua`: CP.Ambulance (client): the downed participant's EMS request to the city's ambulance script, and Crimson-Police's own revive when the city has none.
 - `Crimson-Police/modules/system/client/qbx.lua`: CP.Qbx (client): the only client code that talks to qbx_core.
-- `Crimson-Police/modules/system/client/sc_ambulance.lua`: CP.Ambulance (client): sc-ambulance's standard EMS request for a downed participant.
 - `Crimson-Police/modules/system/integrations/crimson_contracts.lua`: CP.CrimsonContracts (server): the adapter for Crimson-Contracts' server-only contract events (sent only with ContractsConfig.LifecycleEvents = true).
+- `Crimson-Police/modules/system/integrations/integrations.lua`: CP.Integrations (server): which other script serves each job Crimson-Police shares with the city (dispatch,
+- `Crimson-Police/modules/system/integrations/ps_dispatch.lua`: The ps-dispatch adapter of CP.Dispatch (modules/system/integrations/integrations): real calls from ps-dispatch.
 - `Crimson-Police/modules/system/integrations/qbx.lua`: CP.Qbx (server): the only server code that talks to qbx_core.
-- `Crimson-Police/modules/system/integrations/renewed_banking.lua`: CP.Banking: the only code that talks to Renewed-Banking.
-- `Crimson-Police/modules/system/integrations/sc_ambulance.lua`: CP.Ambulance (server): the only server code that talks to sc-ambulance.
-- `Crimson-Police/modules/system/integrations/sc_dispatch.lua`: CP.Dispatch: the only code that talks to sc-dispatch.
-- `Crimson-Police/modules/system/integrations/sc_police.lua`: CP.ScPolice: second, read-only handlers for sc-police's net events; they never trigger, cancel or answer one.
+- `Crimson-Police/modules/system/integrations/qbx_ambulancejob.lua`: The qbx_ambulancejob adapter of CP.Ambulance (modules/system/integrations/integrations): Qbox's own ambulance job (with qbx_medical).
+- `Crimson-Police/modules/system/integrations/qbx_policejob.lua`: The qbx_policejob adapter of CP.Police (modules/system/integrations/integrations): second, read-only handlers for Qbox's own police job; they never trigger, cancel or answer one, and do nothing while another script (or none) serves the police job (Config.Integrations.police).
+- `Crimson-Police/modules/system/integrations/renewed_banking.lua`: The Renewed-Banking adapter of CP.Banking (modules/system/integrations/integrations): the only code that talks to Renewed-Banking.
+- `Crimson-Police/modules/system/integrations/sc_ambulance.lua`: The sc-ambulance adapter of CP.Ambulance (modules/system/integrations/integrations): the only server code that talks
+- `Crimson-Police/modules/system/integrations/sc_dispatch.lua`: The sc-dispatch adapter of CP.Dispatch (modules/system/integrations/integrations): the only code that talks to sc-dispatch.
+- `Crimson-Police/modules/system/integrations/sc_police.lua`: The sc-police adapter of CP.Police (modules/system/integrations/integrations): second, read-only handlers for
 - `Crimson-Police/modules/system/memsql.lua`: CP.Storage.MemSQL: the SQL engine and the saves folder behind "database off" (Config.Database.enabled = false). fxmanifest loads it before every other server module; it only defines functions. modules/system/storage.lua decides whether it is used.
 - `Crimson-Police/modules/system/migrations.lua`: Applies sql/migrations/NNN_*.sql in order on start.
 - `Crimson-Police/modules/system/schedule.lua`: CP.Schedule: server-time calendar, reset boundaries and the timed jobs (Admin UI -> System -> Jobs).
@@ -532,6 +536,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/int_engine_spec.lua`: Integration of the engine group: the REAL modules missions, draw, scaling, schedule, events, runs and npc with every REAL block, on the REAL built-in mission files, with stubs only for the modules outside the group (access, qbx, alerts, route, payouts, scoring, cash, anticheat, tablet ...).
 - `tests/int_services_spec.lua`: Integration of the services group: the REAL modules scoring, goals, cash, payouts, leaderboard, challenge, admin, disputes and anticheat running together (plus the real permissions, scaling and schedule), on stubs of CP.Qbx, CP.Access, CP.Tablet, CP.Banking, CP.Missions and CP.Runs.
 - `tests/int_web_spec.lua`: Integration checks for the web group (web/src outside the Mission Builder).
+- `tests/integrations_spec.lua`: SALE1: Crimson-Police on any Qbox city.
 - `tests/jobs_spec.lua`: FM9: one jobs engine (modules/system/schedule.lua): every timed job of the resource registers through CP.Schedule.job, the daily, weekly and monthly ones run at their boundary in their order, a job on its own timer runs through its runner, each keeps its last result, and Admin UI -> System -> Jobs lists them with Run now.
 - `tests/lib_spec.lua`: The shared helper library (shared/lib.lua and CP.U.toSrc): sources, the store wait, toasts and pushes, export calls, one-at-a-time locks and per-day caps, with the races two requests sent at once used to win.
 - `tests/limit_controls_spec.lua`: The no-repeat rule, the hourly cap and the daily cap as Mission controls: noRepeat, hourlyCap and
@@ -591,7 +596,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/realsuspects_config_spec.lua`: Police vs real criminal players, (the owner's decision of 2026-10-26, "Build all 3 but options in the config.lua"): the two master switches ship off and show in Admin UI → Settings, and the docs record the decision without rewording RT1's start-route text.
 - `tests/realsuspects_docs_spec.lua`: The owner docs for real suspects stay in step with the code.
 - `tests/realsuspects_e2e_spec.lua`: End-to-end scenarios for real suspects on the REAL server side of Crimson-Police: every server file loaded as in game, database off (the saves folder, as shipped), only the other resources and the natives stubbed.
-- `tests/realsuspects_facts_spec.lua`: Police vs real criminal players: second, read-only handlers for sc-police's and sc-ambulance's net events pass facts to CP.ScPolice.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
+- `tests/realsuspects_facts_spec.lua`: Police vs real criminal players: second, read-only handlers for sc-police's and sc-ambulance's net events pass facts to CP.Police.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
 - `tests/realsuspects_rules_spec.lua`: Police vs real criminal players: the NPC-mission Hard rules 15-18 bent for cases with a real suspect (run.realSuspect), each a Config.RealPlayers choice, and Config.RealPlayers.liveCrime.requireRoute for live crimes.
 - `tests/recognition_spec.lua`: Config.Recognition (FM2): XP levels, the auto badges, the weekly board badges, commendations and the field training
 - `tests/resmon_spec.lua`: Client resmon (docs/dev/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,

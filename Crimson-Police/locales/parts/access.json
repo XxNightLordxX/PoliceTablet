@@ -57,7 +57,6 @@
   "health.folder.renamed_no_item": "This resource's folder is named {name}, not {expected}: everything works. If you add the tablet item later, its line in ox_inventory/data/items.lua must read export = '{name}.useTablet', and other scripts must call exports['{name}']",
   "health.res.on": "{name} is running",
   "health.res.off": "{name} is not running (optional)",
-  "health.res.sc_police": "sc-police is not running. Crimson-Police still works, but officers cannot set their callsign with /callsign, and officers suspended in sc-dispatch are not kept off duty. Add ensure sc-police to server.cfg if you use it",
   "health.webhook.summary": "Discord webhooks on: {on}. Off: {off} (optional: set cp_webhook_<name> in server.cfg)",
   "health.webhook.none": "none",
   "health.webhook.invalid": "{convar} in server.cfg is not an https:// link, so that webhook is off. Use: set {convar} \"https://discord.com/api/webhooks/...\"",

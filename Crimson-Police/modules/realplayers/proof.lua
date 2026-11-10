@@ -5,7 +5,7 @@
 -- CP.Opponents proof (server): the server facts that decide every detain and booking of a real suspect. The
 -- sc-police cuff pair and the custody hold, getting free during the hold (an officer's uncuff, a friend's bobby pin,
 -- sc-police's cuff-break game, or a self-uncuff), downs, bookings matched in either order, and the hospital rules.
--- The facts come from the CP.ScPolice / CP.Ambulance listeners and the metadata mirror (Opp.onMeta), so
+-- The facts come from the CP.Police / CP.Ambulance listeners and the metadata mirror (Opp.onMeta), so
 -- nothing here runs while no case is open. A suspect's own acts are staff notes (Opp.note): nothing here sets
 -- run.flagged or p.flagged.
 
@@ -603,7 +603,7 @@ end)
 -- The other modules load in any order (fxmanifest globs): register once they are all loaded.
 CreateThread(function()
     Wait(0)
-    local P, A = CP.ScPolice, CP.Ambulance
+    local P, A = CP.Police, CP.Ambulance
     if P and P.on then
         P.on('cuff', OnCuff)
         P.on('uncuff', OnUncuff)
@@ -612,13 +612,14 @@ CreateThread(function()
         P.on('escort', OnEscort)
         P.on('jail', OnJail)
     else
-        CP.err(TAG, 'modules/system/integrations/sc_police is missing: real suspects can never be detained or booked')
+        CP.err(TAG,
+            'modules/system/integrations/integrations is missing: real suspects can never be detained or booked')
     end
     if A and A.on then
         A.on('respawn', OnRespawn)
     else
         CP.err(TAG,
-            'modules/system/integrations/sc_ambulance is missing: hospital respawns of real suspects are not seen')
+            'modules/system/integrations/integrations is missing: hospital respawns of real suspects are not seen')
     end
     if Opp.onTick then
         Opp.onTick(Tick)

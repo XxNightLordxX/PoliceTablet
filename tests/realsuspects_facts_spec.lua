@@ -1,5 +1,5 @@
 -- Police vs real criminal players: second, read-only handlers for sc-police's and sc-ambulance's net events
--- pass facts to CP.ScPolice.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
+-- pass facts to CP.Police.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
 -- Real: modules/system/integrations/sc_police, modules/system/integrations/sc_ambulance, shared/net.lua (CP.Net.rateOk).
 
 local H = dofile('tests/harness.lua')
@@ -42,14 +42,14 @@ local errs = {}
 do
     local realErr = CP.err
     CP.err = function(tag, fmt, ...)
-        if tag == 'sc_police' or tag == 'sc_ambulance' then errs[#errs + 1] = fmt:format(...) end
+        if tag == 'integrations' then errs[#errs + 1] = fmt:format(...) end
         return realErr(tag, fmt, ...)
     end
 end
 
 H.load('modules/system/integrations/sc_police.lua')
 H.load('modules/system/integrations/sc_ambulance.lua')
-local SP, Amb = CP.ScPolice, CP.Ambulance
+local SP, Amb = CP.Police, CP.Ambulance
 
 -- event, kind, a valid sender and arguments, what the listener gets
 local CASES = {
@@ -328,7 +328,7 @@ do
     H.eq(SP.on('handcuff', function() end), false, 'an unknown kind is refused')
     H.eq(SP.on('cuff', 'fn'), false, 'a listener must be a function')
     H.eq(SP.on('respawn', function() end), false, 'respawn belongs to CP.Ambulance')
-    H.eq(Amb.on('cuff', function() end), false, 'cuff belongs to CP.ScPolice')
+    H.eq(Amb.on('cuff', function() end), false, 'cuff belongs to CP.Police')
     H.eq(#errs, 4, 'each refusal is logged')
     local n = 0
     local function Once() n = n + 1 end

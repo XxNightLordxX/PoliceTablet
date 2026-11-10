@@ -997,7 +997,7 @@ do
     H.eq(run5.state, 'in_progress', 'a wreck is not a removal')
     Runs.endRun(run5, 'completed', 'completed')
     -- the listener ignores anything that is not a run vehicle, and Crimson-Police never triggers police:*
-    H.eq(CP.ScPolice.onImpound(1, 99999), false, 'not a run vehicle: ignored')
+    H.eq(CP.Police.onImpound(1, 99999), false, 'not a run vehicle: ignored')
     local ours = 0
     for _, e in ipairs(H.events) do if tostring(e.name):find('^police:') then ours = ours + 1 end end
     H.eq(ours, 0, 'Crimson-Police never triggers any police:* event')

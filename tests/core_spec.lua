@@ -1537,7 +1537,7 @@ end
 local function Tick(ms) H.advance(ms or 600, 50) end
 
 H.load('modules/system/client/qbx.lua')
-H.load('modules/system/client/sc_ambulance.lua')
+H.load('modules/system/client/ambulance.lua')
 H.load('modules/access/client/access.lua')
 H.load('modules/access/client/tablet.lua')
 
@@ -1569,25 +1569,32 @@ end
 -- CP.Ambulance (client)
 do
     H.reset()
-    H.eq(CP.Ambulance.sendEMSRequest(), true, 'EMS request sent')
+    H.eq(CP.Ambulance.sendEMSRequest('sc-ambulance'), true, 'EMS request sent')
     local ev = H.findEvents('hospital:server:EMSDownAlert')[1]
     H.eq(ev and ev.args[1], 'Main St', 'street name sent')
-    H.eq(CP.Ambulance.sendEMSRequest(), false, 'duplicate within 5 s refused')
+    H.eq(CP.Ambulance.sendEMSRequest('sc-ambulance'), false, 'duplicate within 5 s refused')
     H.clockMs = H.clockMs + 5100
-    H.eq(CP.Ambulance.sendEMSRequest(), true, 'again after 5 s')
+    H.eq(CP.Ambulance.sendEMSRequest('sc-ambulance'), true, 'again after 5 s')
     stopped['sc-ambulance'] = true
     H.clockMs = H.clockMs + 5100
-    H.eq(CP.Ambulance.sendEMSRequest(), false, 'sc-ambulance stopped')
+    H.eq(CP.Ambulance.sendEMSRequest('sc-ambulance'), false, 'sc-ambulance stopped')
     stopped['sc-ambulance'] = nil
     H.eq(#H.findEvents('hospital:server:EMSDownAlert'), 2, 'two requests in total')
     -- Crimson-Arena's value (no source): sc-ambulance would drop it, and the debounce is not used up
     H.clockMs = H.clockMs + 5100
     LocalPlayer.state.crimsonArena = { active = true, matchId = 'm1' }
-    H.eq(CP.Ambulance.sendEMSRequest(), false, 'no EMS request while Crimson-Arena owns the player')
+    H.eq(CP.Ambulance.sendEMSRequest('sc-ambulance'), false, 'no EMS request while Crimson-Arena owns the player')
     LocalPlayer.state.crimsonArena = { active = true, source = 'crimson-police' }
-    H.eq(CP.Ambulance.sendEMSRequest(), true, 'our own flag does not block the request (downed clears it first anyway)')
+    H.eq(CP.Ambulance.sendEMSRequest('sc-ambulance'), true,
+        'our own flag does not block the request (downed clears it first anyway)')
     LocalPlayer.state.crimsonArena = nil
     H.eq(#H.findEvents('hospital:server:EMSDownAlert'), 3, 'three requests in total')
+    -- SALE1: qbx_ambulancejob's own alert (hospital:server:ambulanceAlert, its default text), none with no script
+    H.clockMs = H.clockMs + 5100
+    H.eq(CP.Ambulance.sendEMSRequest('qbx_ambulancejob'), true, 'qbx_ambulancejob request sent')
+    H.eq(#H.findEvents('hospital:server:ambulanceAlert'), 1, 'its own alert event')
+    H.clockMs = H.clockMs + 5100
+    H.eq(CP.Ambulance.sendEMSRequest(''), false, 'no ambulance script: no request')
 end
 
 -- CP.Tablet (client)

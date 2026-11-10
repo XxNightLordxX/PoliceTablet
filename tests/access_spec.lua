@@ -780,15 +780,12 @@ do
         if stoppedRes[name] then return stoppedRes[name] end
         return realResState(name)
     end
-    H.eq(Levels('resources'), 'ok,ok,ok,ok',
-        'resources: sc-police, sc-npcpolice, sc-multijob and Crimson-Arena running')
-    stoppedRes['sc-police'] = 'missing'
+    H.eq(Levels('resources'), 'ok,ok,ok', 'resources: sc-npcpolice, sc-multijob and Crimson-Arena running')
     stoppedRes['sc-npcpolice'] = 'stopped'
     stoppedRes['Crimson-Arena'] = 'starting'
-    H.eq(Levels('resources'), 'warn,ok,ok,ok', 'resources: only sc-police missing is a warning')
-    H.ok(HasText('resources', 'Add ensure sc-police to server.cfg'), 'with the line to add')
-    H.ok(HasText('resources', 'officers cannot set their callsign with /callsign'), 'saying what is lost')
-    H.ok(not HasText('resources', '/imp'), 'not the /imp check, which only matters while sc-police runs')
+    -- SALE1: sc-police is one of the police scripts now (Config.Integrations, the 'integrations' check)
+    H.eq(Levels('resources'), 'ok,ok,ok', 'resources: the others missing is no warning')
+    H.ok(not HasText('resources', 'sc-police'), 'sc-police is not in this check any more')
     H.ok(HasText('resources', 'sc-npcpolice is not running (optional)'), 'the others are only mentioned')
     H.ok(HasText('resources', 'Crimson-Arena is running'), 'a resource that is starting counts as running')
     _G.GetResourceState = realResState

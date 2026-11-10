@@ -30,7 +30,8 @@ local slotCache = setmetatable({}, { __mode = 'k' }) -- [mission definition] = {
 
 local function Cfg() return (CP.RealPlayers('volunteer')) end
 
-local function On() return Cfg().enabled == true end
+-- (off as well while the police script sends no cuff and jail facts: CP.RealPlayers)
+local function On() return (select(2, CP.RealPlayers('volunteer'))) end
 
 local Num = CP.Num
 

@@ -8,7 +8,8 @@ description 'Crimson-Police: police tablet with random NPC missions, cash payout
 author 'Crimson-Police'
 version '1.0.0'
 
--- Qbox stack only (see README). Missions need OneSync for server-created entities.
+-- Qbox stack only (see README). Missions need OneSync for server-created entities. Dispatch, ambulance, banking and
+-- police scripts are optional: Config.Integrations picks them (README "Supported scripts").
 dependencies {
     '/onesync',
     'oxmysql',
@@ -16,9 +17,6 @@ dependencies {
     'qbx_core',
     'ox_target',
     'ox_inventory',
-    'sc-dispatch',
-    'sc-ambulance',
-    'Renewed-Banking',
 }
 
 -- Load order: config, blocks config, shared helpers, storage, feature modules, then objective blocks.
@@ -51,8 +49,12 @@ server_scripts {
     'modules/supervisor/deptcontrols.lua',
     'modules/runs/downed.lua',
     'modules/runs/draw.lua',
+    'modules/system/integrations/integrations.lua',
     'modules/system/integrations/crimson_contracts.lua',
+    'modules/system/integrations/ps_dispatch.lua',
     'modules/system/integrations/qbx.lua',
+    'modules/system/integrations/qbx_ambulancejob.lua',
+    'modules/system/integrations/qbx_policejob.lua',
     'modules/system/integrations/renewed_banking.lua',
     'modules/system/integrations/sc_ambulance.lua',
     'modules/system/integrations/sc_dispatch.lua',
@@ -102,7 +104,7 @@ client_scripts {
     'modules/admin/client/diag.lua',
     'modules/runs/client/downed.lua',
     'modules/system/client/qbx.lua',
-    'modules/system/client/sc_ambulance.lua',
+    'modules/system/client/ambulance.lua',
     'modules/map/client/markers.lua',
     'modules/missions/client/missions.lua',
     'modules/npc/client/npc.lua',

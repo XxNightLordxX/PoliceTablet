@@ -6,7 +6,8 @@
 -- section in Admin UI -> Settings -> All settings. Every key has a comment with its unit and the values it takes;
 -- in a list of entries that all have the same fields (Bonuses, map markers, departments), a line "field: text"
 -- above the list explains that field for every entry.
---   PART 1 GENERAL              Debug, Storage (database or saves folder), Formats, Tablet and commands, Permissions,
+--   PART 1 GENERAL              Debug, Storage (database or saves folder), Other scripts (dispatch, ambulance,
+--                               banking, police), Formats, Tablet and commands, Permissions,
 --                               Admin control, Departments, Names
 --   PART 2 NPC MISSIONS         Mission types, Difficulty, Scaling by participants, Spawning, Suspect behaviour,
 --                               Route to the start, Map markers, Random draw, Dispatch (mission calls), Real calls,
@@ -55,6 +56,28 @@ Config.Database = {
     -- Files mode: how many answers of JSON lookups (badge counts read every run of an officer) are kept; about 50 bytes
     -- each, 100000 = about 5 MB; 20000 = the old size; 0 = keep none
     jsonCacheEntries = 100000,
+}
+
+-- ============================================================================
+--                                OTHER SCRIPTS
+-- ============================================================================
+-- The city's dispatch, ambulance, banking and police scripts Crimson-Police works with. Each one is optional.
+-- 'auto' uses the first one that is running, in the order below (the first name is checked first); a name uses that
+-- script only; 'none' uses none, and the features that need one turn themselves off (the console says which, and
+-- Admin UI -> Permissions -> Config health and Settings -> Features say why). README "Supported scripts" lists them.
+Config.Integrations = {
+    -- 'auto' (sc-dispatch, then ps-dispatch) | 'sc-dispatch' | 'ps-dispatch' | 'none' (only the tablet's own
+    -- Dispatch: officers responding to a real call are not released from their run)
+    dispatch = 'auto',
+    -- 'auto' (sc-ambulance, then qbx_ambulancejob) | 'sc-ambulance' | 'qbx_ambulancejob' | 'none' (no EMS: a downed
+    -- participant is always picked up and revived by Crimson-Police; downed = the character is dead)
+    ambulance = 'auto',
+    -- 'auto' (Renewed-Banking) | 'Renewed-Banking' | 'none' (no bank history entries; Cash.source 'society' pays new
+    -- money, as 'server' does)
+    banking = 'auto',
+    -- 'auto' (sc-police, then qbx_policejob) | 'sc-police' | 'qbx_policejob' | 'none' (Crimson-Police's own custody
+    -- only; live crimes and volunteer suspects need sc-police's cuff and jail events and stay off without them)
+    police = 'auto',
 }
 
 -- ============================================================================
@@ -2153,7 +2176,7 @@ Config.OfficerOptions = {
 
 Config.Cash = {
     account = 'bank',     -- 'bank' or 'cash'
-    source = 'server',    -- 'server' (new money) or 'society' (the department's Renewed-Banking account)
+    source = 'server',    -- 'server' (new money) or 'society' (the department's bank account; needs a banking script)
     minPayout = 0,        -- limits for any base payout set in-game
     maxPayout = 25000,    -- dollars
     dailyCap = 0,         -- max cash per officer per day; 0 = no cap

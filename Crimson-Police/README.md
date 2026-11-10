@@ -41,8 +41,9 @@ Mission NPCs carry pistols and pump shotguns only (never automatic weapons), aim
 damage, and officers on a run take no headshot one-shots. Make them easier or harder with `Config.NpcCombat` (lower =
 easier): see [guide 2.8 How hard NPCs fight back](../docs/OWNER_GUIDE.md#28-how-hard-npcs-fight-back).
 
-Required resources (they start before Crimson-Police by themselves): `oxmysql`, `ox_lib`, `qbx_core`, `ox_target`,
-`ox_inventory`, `sc-dispatch`, `sc-ambulance` and `Renewed-Banking`. There is no SQL to import.
+Required resources (they start before Crimson-Police by themselves): `oxmysql`, `ox_lib`, `qbx_core`, `ox_target`
+and `ox_inventory`. There is no SQL to import. Dispatch, ambulance, banking and police scripts are optional:
+`Config.Integrations` finds them ([Supported scripts](../README.md#21-supported-scripts)).
 
 Two switches at the top of `config/config.lua`, as shipped:
 

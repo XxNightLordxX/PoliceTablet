@@ -13,6 +13,7 @@ say the same things in short and point back here.
 
 1. [What Crimson-Police is](#1-what-crimson-police-is)
 2. [What you need](#2-what-you-need)
+   - [2.1 Supported scripts](#21-supported-scripts)
 3. [Install in 5 minutes](#3-install-in-5-minutes)
    - [3.1 Put the folder in resources](#31-put-the-folder-in-resources)
    - [3.2 Paste this into server.cfg](#32-paste-this-into-servercfg)
@@ -91,16 +92,11 @@ English is the only language.
   | `qbx_core` | Players, jobs, grades, duty and money |
   | `ox_target` | Interacting with mission NPCs, cars and props, and mission desks |
   | `ox_inventory` | Mission items, and the optional tablet item and item rewards |
-  | `sc-dispatch` | Knowing when an officer takes a real call, and hiding mission gunfire from dispatch |
-  | `sc-ambulance` | EMS on duty, revives, and hiding downed officers from EMS alerts |
-  | `Renewed-Banking` | The bank history line for each payout, and optional department accounts |
 
 - **These resources are used when they run**, but Crimson-Police starts without them:
 
   | Resource | What happens without it |
   |---|---|
-  | `sc-police` | Officers can't set a callsign with /callsign, and officers suspended in sc-dispatch are not kept off
-  duty. The start-up check warns you |
   | `sc-multijob` | Nothing changes. With it, only a player's **active** job counts |
   | `sc-npcpolice` | Nothing changes. With it, its NPC calls never end a mission |
   | `Crimson-Arena` | Nothing changes. With it, players in the arena can't use the tablet, and both run side by side |
@@ -117,6 +113,19 @@ English is the only language.
   rights, plus the usual SELECT, INSERT, UPDATE and DELETE). With the database off (as shipped, see
   [5.1](#51-the-two-switches-at-the-top-debug-and-storage)), Crimson-Police saves to files instead and needs
   nothing more.
+
+
+### 2.1 Supported scripts
+
+Optional: `Config.Integrations` = `'auto'` (first running one), a name, or `'none'`
+([guide 4](docs/OWNER_GUIDE.md#4-settings-to-check-in-your-other-resources)).
+
+| Job | Scripts (`'auto'` order) |
+|---|---|
+| dispatch | `sc-dispatch`, `ps-dispatch` |
+| ambulance | `sc-ambulance`, `qbx_ambulancejob` |
+| banking | `Renewed-Banking` |
+| police | `sc-police`, `qbx_policejob` |
 
 ---
 
@@ -752,7 +761,7 @@ also show in Admin UI → **Permissions** → **Config health**. Each line start
 | `departments: <DEPT>: supervisorGrade <n> is the lowest grade` | Everybody is a supervisor | Raise `supervisorGrade`, unless you want that |
 | `departments: Qbox gave no job list` | qbx_core had a problem | Read qbx_core's own lines in the console |
 | `admins: No admin group can open the Admin UI yet` | `group.admin` has no admin permission | [4.2](#42-admins) |
-| `resources: sc-police is not running` | sc-police is stopped | Add `ensure sc-police` if you use it |
+| `integrations: No <job> script in use` | None of its scripts runs | [2.1](#21-supported-scripts) |
 | `folder: This resource's folder is named <name>, not Crimson-Police` | The folder was renamed and the tablet item is on | Rename the folder back to `Crimson-Police`, or change the item's line to `export = '<name>.useTablet'` |
 | `items: <item> is not an ox_inventory item` | The item was not pasted into ox_inventory | [guide 3.1](docs/OWNER_GUIDE.md#31-the-tablet-item) step 1, then restart ox_inventory |
 | `items: ox_inventory/web/images has no <item>.png` | The picture was not copied | [guide 3.1](docs/OWNER_GUIDE.md#31-the-tablet-item) step 2 |

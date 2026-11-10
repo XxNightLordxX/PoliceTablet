@@ -394,6 +394,7 @@ local CONFIG_SECTIONS = {
     'Performance',
     'Labels',
     'Blocks',
+    'Integrations',
 }
 local MAX_NAMED_SECTIONS = 6
 

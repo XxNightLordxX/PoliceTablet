@@ -709,3 +709,11 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   the monthly top 3 and both forfeitures, each with its next run and settings. Clean-up -> Run now with a reason: its
   last line shows your id and the counts, and the Activity log has Job run now; a second press within 10 minutes is
   refused. Weekly recognition has no Run now. After the next daily reset every daily job shows a last run. (FM9)
+- [ ] Other scripts (SALE1): with sc-dispatch, sc-ambulance, Renewed-Banking and sc-police running and
+  `Config.Integrations` as shipped, Config health shows "Dispatch script: sc-dispatch" and the other three, and
+  everything works as before (a real call releases a run, EMS is asked for a downed officer, a payout has its bank
+  line, a live-crime cuff and jail count). Set `Integrations.ambulance` to `none` in Settings: a downed participant is
+  picked up and revived by Crimson-Police even with EMS on duty. Set `Integrations.police` to `none` with live crimes
+  on: the console has one line, Config health warns, and Settings -> Features says why live crimes are off. Put both
+  back to `auto`. On a test server with ps-dispatch, qbx_ambulancejob and qbx_policejob instead: Responding on a
+  ps-dispatch call releases the officer from his run, EMS counts the `ems` job, and a pick-up revives. (SALE1)

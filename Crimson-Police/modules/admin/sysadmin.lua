@@ -57,11 +57,10 @@ local REQUIRED_RESOURCES = {
     'qbx_core',
     'ox_target',
     'ox_inventory',
-    'sc-dispatch',
-    'sc-ambulance',
-    'Renewed-Banking',
 }
-local OPTIONAL_RESOURCES = { 'sc-police', 'sc-npcpolice', 'sc-multijob', 'Crimson-Arena' }
+-- the optional others; every dispatch, ambulance, banking and police script with an adapter comes first
+-- (CP.Integrations.ORDER)
+local OTHER_RESOURCES = { 'sc-npcpolice', 'sc-multijob', 'Crimson-Arena' }
 local CHECKLIST = {
     'sysadmin.checklist.dispatch_jobs',
     'sysadmin.checklist.police_jobs',
@@ -2113,7 +2112,11 @@ end
 function Sys.integrations()
     local out = { resources = {}, checklist = CHECKLIST }
     for _, name in ipairs(REQUIRED_RESOURCES) do out.resources[#out.resources + 1] = ResourceRow(name, true) end
-    for _, name in ipairs(OPTIONAL_RESOURCES) do out.resources[#out.resources + 1] = ResourceRow(name, false) end
+    local I = CP.Integrations
+    for _, kind in ipairs(I and I.KINDS or {}) do
+        for _, name in ipairs(I.ORDER[kind]) do out.resources[#out.resources + 1] = ResourceRow(name, false) end
+    end
+    for _, name in ipairs(OTHER_RESOURCES) do out.resources[#out.resources + 1] = ResourceRow(name, false) end
     local arena = {
         state = GetResourceState and GetResourceState('Crimson-Arena') or 'missing',
         players = 0,

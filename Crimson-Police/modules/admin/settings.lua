@@ -191,6 +191,7 @@ Play.groups = {
         sections = {
             'general',
             'storage',
+            'other_scripts',
             'permissions',
             'admin_control',
             'run_limits',
@@ -592,7 +593,7 @@ Play.screens = {
     admin_money = { 'cash', 'payout_editing', 'item_rewards', 'feature_rewards' },
     admin_review = { 'disputes', 'anti_exploit' },
     admin_audit = { 'retention' },
-    admin_system = { 'storage', 'performance', 'time', 'retention', 'timed_jobs', 'backups', 'other' },
+    admin_system = { 'storage', 'other_scripts', 'performance', 'time', 'retention', 'timed_jobs', 'backups', 'other' },
 }
 Settings._screens = Play.screens
 
@@ -1540,6 +1541,15 @@ local function Num(min, max, int) return Tpl('num', { min = min, max = max, int 
 local function SiblingOption(list) return Tpl('option', { list = list }) end
 
 local ITEM_NAME = Text('^[%w_%-]+$', 64)
+
+-- 'auto', 'none' and every script of that kind with an adapter (CP.Integrations.ORDER, a city's own adapters included).
+function Settings.integrationOptions(kind)
+    local out = { 'auto' }
+    local order = CP.Integrations and CP.Integrations.ORDER and CP.Integrations.ORDER[kind] or {}
+    for _, name in ipairs(order) do out[#out + 1] = name end
+    out[#out + 1] = 'none'
+    return out
+end
 local WEAPON_NAME = Text('^[Ww][Ee][Aa][Pp][Oo][Nn]_[%w_]+$', 64)
 local ID = Text('^[%w_%-]+$', 64)
 local HEX = Text('^#%x%x%x%x%x%x$', 7)
@@ -1722,6 +1732,11 @@ local KNOWN = {
     },
     ['Markers.parts.*.label'] = { tpl = Text(nil, 40) },
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
+    -- Config.Integrations: 'auto', 'none' or a script with an adapter (modules/system/integrations)
+    ['Integrations.dispatch'] = { tpl = Enum(Settings.integrationOptions('dispatch')), kind = 'enum' },
+    ['Integrations.ambulance'] = { tpl = Enum(Settings.integrationOptions('ambulance')), kind = 'enum' },
+    ['Integrations.banking'] = { tpl = Enum(Settings.integrationOptions('banking')), kind = 'enum' },
+    ['Integrations.police'] = { tpl = Enum(Settings.integrationOptions('police')), kind = 'enum' },
     ['Tablet.sidebarOrder'] = { tpl = Enum({ 'classic', 'mostUsed' }), kind = 'enum' },
     ['Tablet.supervisorLanding'] = { tpl = Enum({ 'first', 'report', 'review', 'live' }), kind = 'enum' },
     -- Admin UI -> Home's shortcuts (modules/admin/adminhome AH.SHORTCUTS)
@@ -3500,7 +3515,8 @@ function Play.groupOf(sec)
     return Play.ofSection[sec.key] or Play.fallback
 end
 
--- Settings -> Features: the features whose switch config.lua has, each with its play section and its setting.
+-- Settings -> Features: the features whose switch config.lua has, each with its play section and its setting (and
+-- why it is off when it needs a script the city does not run).
 function Settings.features()
     local out = {}
     for _, f in ipairs(Play.features) do
@@ -3515,6 +3531,8 @@ function Settings.features()
                 path = f.path,
                 risky = f.risky or nil,
                 limits = #limits > 0 and limits or nil,
+                -- why it stays off whatever its switch says: the city's script it needs is missing
+                off = CP.Integrations and CP.Integrations.featureOff(f.key) or nil,
             }
         end
     end

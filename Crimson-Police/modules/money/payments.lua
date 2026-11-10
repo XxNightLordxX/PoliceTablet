@@ -68,6 +68,14 @@ end
 
 local function CashCfg() return type(Config.Cash) == 'table' and Config.Cash or {} end
 
+-- Society pay is on: Config.Cash.source = 'society' and a banking script serves (CP.Banking.societyOn); with the
+-- banking stand-in of a test (no societyOn), the setting alone.
+local function SocietyOn()
+    local B = CP.Banking
+    if B and B.societyOn then return B.societyOn() end
+    return CashCfg().source == 'society'
+end
+
 local function Switch(name) return CashCfg()[name] == true end
 
 local function Money(n) return CP.Cash and CP.Cash._fmtMoney and CP.Cash._fmtMoney(n) or ('$' .. tostring(n)) end
@@ -270,7 +278,7 @@ function Payments.list(args)
         total = total,
         size = size,
         switches = Switches(),
-        source = CashCfg().source == 'society' and 'society' or 'server',
+        source = SocietyOn() and 'society' or 'server',
         maxPayout = math.floor(Num(CashCfg().maxPayout, 25000)),
         manualDailyLimit = math.floor(Num(CashCfg().manualDailyLimit, 0)),
         nextForfeitIn = nextAt and math.max(0, nextAt - os.time()) or nil,
@@ -465,7 +473,7 @@ function Payments.departmentFunds(key)
         label = dept.label or key,
         account = account,
         enabled = not (type(cfg) == 'table' and cfg.enabled == false),
-        source = CashCfg().source == 'society' and 'society' or 'server',
+        source = SocietyOn() and 'society' or 'server',
         balance = balance,
         lowBalanceWarn = math.floor(Num(CashCfg().lowBalanceWarn, 0)),
         spent = spent,
@@ -505,7 +513,7 @@ function Payments.sourcePreview()
             }
         end
     end
-    return { departments = out, source = CashCfg().source == 'society' and 'society' or 'server' }
+    return { departments = out, source = SocietyOn() and 'society' or 'server' }
 end
 
 -- Config health (CP.ConfigHealth 'cash'): the money account, missing society accounts, low balances.
@@ -838,7 +846,7 @@ Kit.action('server:admin:retryUnfunded', 'payments', function(ctx)
     local okT, errT = ctx.consume(p.previewToken, 'retryUnfunded', set.ids)
     if not okT then return false, errT end
     -- the balance, read just before: every department must cover its whole part
-    if CashCfg().source == 'society' then
+    if SocietyOn() then
         for key, owed in pairs(set.byDept) do
             local dept = DeptOf(key)
             local b = dept and CP.Banking and CP.Banking.societyBalance

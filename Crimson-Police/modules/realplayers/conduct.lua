@@ -453,12 +453,12 @@ CreateThread(function()
     if CP.Hooks and CP.Hooks.on then
         CP.Hooks.on('settings:changed', function() lessCache.list = false end)
     end
-    local P = CP.ScPolice
+    local P = CP.Police
     if P and P.on then
         P.on('seizeCash', OnSeize)
     else
         CP.err(TAG,
-            'modules/system/integrations/sc_police is missing: cash seizures from real suspects are not audited')
+            'modules/system/integrations/integrations is missing: cash seizures from real suspects are not audited')
     end
     if Opp.onTick then
         Opp.onTick(Tick)

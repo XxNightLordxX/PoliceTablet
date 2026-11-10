@@ -17,9 +17,9 @@ local OX_IMAGE_PATH = 'nui://ox_inventory/web/images'
 local RESOURCE_NAME = 'Crimson-Police'
 -- The group Qbox and txAdmin put server admins in.
 local QBOX_ADMIN_GROUP = 'group.admin'
--- Resources Crimson-Police works without; warn = the line when one is not running (nil = an ok line).
+-- Resources Crimson-Police works without; warn = the line when one is not running (nil = an ok line). The dispatch,
+-- ambulance, banking and police scripts have their own check (CP.Integrations, 'integrations').
 local OPTIONAL_RESOURCES = {
-    { name = 'sc-police', warn = 'health.res.sc_police' },
     { name = 'sc-npcpolice' },
     { name = 'sc-multijob' },
     { name = 'Crimson-Arena' },

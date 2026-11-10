@@ -1,9 +1,9 @@
--- CP.Ambulance (server): the only server code that talks to sc-ambulance. Its one second, read-only handler
--- (hospital:server:RespawnAtHospital) passes the respawn to listeners (A.on) while a case with a real suspect is open
--- (CP.Opponents.active), and does nothing at all otherwise; it never triggers, cancels or answers a hospital:* event.
+-- The sc-ambulance adapter of CP.Ambulance (modules/system/integrations/integrations): the only server code that talks
 
--- modules/system/integrations/sc_ambulance.lua · CP.Ambulance (server): the only server code that
--- talks to sc-ambulance.
+-- The sc-ambulance adapter of CP.Ambulance (modules/system/integrations/integrations): the only server code that talks
+-- to sc-ambulance. Its one second, read-only handler (hospital:server:RespawnAtHospital) passes the respawn to
+-- CP.Ambulance listeners while a case with a real suspect is open; it never triggers, cancels or answers a hospital:*
+-- event, and does nothing while another script (or none) serves the ambulance job (Config.Integrations.ambulance).
 --
 -- Owns exports['sc-ambulance']:GetDoctorCount() and the revive event. The ONLY revive used is
 -- TriggerClientEvent('hospital:client:Revive', src): it resurrects in place, never bills, never touches
@@ -11,25 +11,23 @@
 -- revive-player / help-person / target-revive client events (each makes the officer's client send the
 -- server revive, which bans non-EMS senders), and none of its billing or respawn events.
 --
--- Public API (docs/dev/ARCHITECTURE.md §5.1)
---   CP.Ambulance.doctorCount() -> integer
+-- Adapter functions (CP.Ambulance checks the id, the connection and Crimson-Arena first)
+--   doctorCount() -> integer
 --       On-duty EMS. exports['sc-ambulance']:GetDoctorCount() in pcall; 0 when sc-ambulance is not
 --       started (one error log until it starts again). The export is a counter clients update
 --       themselves (it can be inflated or stale), so it is cross-checked against a live count of
 --       on-duty 'ambulance' players from CP.Qbx.getOnlinePlayers(): the result is the lower of the
 --       two (0 means "no EMS", so a downed participant is picked up).
---   CP.Ambulance.revive(src) -> boolean
---       TriggerClientEvent('hospital:client:Revive', src) for one numeric, connected server id
---       (never -1, never nil). false when refused or when sc-ambulance is not started (no handler).
---       Refused and logged for an in-arena player (CP.Alerts.inArena: a foreign crimsonArena value or a
---       routing bucket other than 0): Crimson-Arena revives and moves its own players
---       (docs/dev/INTEGRATIONS.md, Crimson-Arena rule 3).
+--   revive(src) -> boolean
+--       TriggerClientEvent('hospital:client:Revive', src); false when sc-ambulance is not started (no handler).
+--   emsRequest = 'sc-ambulance'   the downed player's client sends hospital:server:EMSDownAlert
 
-CP.Ambulance = CP.Ambulance or {}
-local A = CP.Ambulance
+local A = {}
 local TAG = 'sc_ambulance'
 local RESOURCE = 'sc-ambulance'
 local EMS_JOB = 'ambulance'          -- the only job name sc-ambulance counts as a doctor
+
+A.emsRequest = RESOURCE
 
 local notStartedLogged = false
 local errorLoggedAt = {}
@@ -85,32 +83,7 @@ function A.doctorCount()
     return n
 end
 
--- CP.Alerts.inArena (guarded: an error counts as in the arena, so nobody is revived by mistake).
-local function InArena(src)
-    if not (CP.Alerts and CP.Alerts.inArena) then return false end
-    local ok, res = pcall(CP.Alerts.inArena, src)
-    if not ok then
-        LogError('inArena', 'CP.Alerts.inArena failed: %s', tostring(res))
-        return true
-    end
-    return res == true
-end
-
-function A.revive(src)
-    local n = tonumber(src)
-    n = n and math.tointeger(n)
-    if not n or n <= 0 then
-        CP.err(TAG, 'revive refused an invalid server id (%s)', tostring(src))
-        return false
-    end
-    if GetPlayerName(n) == nil then
-        CP.log(TAG, 'revive: player %d is not connected', n)
-        return false
-    end
-    if InArena(n) then
-        CP.warn(TAG, 'revive refused for player %d: they are in Crimson-Arena, which handles their revive', n)
-        return false
-    end
+function A.revive(n)
     if not Started() then return false end
     TriggerClientEvent('hospital:client:Revive', n)
     CP.log(TAG, 'revive sent to %d', n)
@@ -124,54 +97,11 @@ end
 -- reads no native and costs nothing; sc-ambulance's own handler (the bill, the bed) runs as before either way.
 
 local RESPAWN_EVENT = 'hospital:server:RespawnAtHospital'
-local MAX_SRC = 65535
-local MAX_HOSPITAL = 255             -- an index into sc-ambulance's Config.Locations.hospital
-local RATE_MAX, RATE_MS = 6, 1000    -- per sender (CP.Net.rateOk); more is dropped without a word
 
-local listeners = {}   -- listeners[kind] = { fn, ... } in the order registered
-
--- A whole number lo..hi, or nil.
-local function WholeIn(v, lo, hi)
-    local n = tonumber(v)
-    n = n and math.tointeger(n)
-    if n and n >= lo and n <= hi then return n end
-    return nil
-end
-
--- True only while CP.Opponents says a case is open; false while that module is missing.
-local function CaseOpen()
-    local opp = CP.Opponents
-    if not (opp and opp.active) then return false end
-    local ok, on = pcall(opp.active)
-    return ok and on == true
-end
-
--- Listen to one kind of fact: 'respawn' (src, hospitalIndex), a player who chose to respawn at a hospital. fn runs
--- inside the event and must not yield. Returns false for an unknown kind or a missing function.
-function A.on(kind, fn)
-    if kind ~= 'respawn' or type(fn) ~= 'function' then
-        CP.err(TAG, 'Ambulance.on: unknown kind \'%s\' or no function', tostring(kind))
-        return false
-    end
-    local list = listeners[kind] or {}
-    for i = 1, #list do
-        if list[i] == fn then return true end
-    end
-    list[#list + 1] = fn
-    listeners[kind] = list
-    return true
-end
-
+-- hospitalIndex: an index into sc-ambulance's Config.Locations.hospital (CP.Ambulance checks it).
 RegisterNetEvent(RESPAWN_EVENT, function(hospitalIndex)
     local src = source
-    local list = listeners.respawn
-    if not list or not CaseOpen() then return end
-    src = WholeIn(src, 1, MAX_SRC)
-    if not src or not CP.Net.rateOk(src, 'scp:respawn', RATE_MAX, RATE_MS) then return end
-    local index = WholeIn(hospitalIndex, 1, MAX_HOSPITAL)
-    if not index then return end
-    for i = 1, #list do
-        local ok, err = pcall(list[i], src, index)
-        if not ok then LogError('on:respawn', 'a \'respawn\' listener failed: %s', tostring(err)) end
-    end
+    CP.Ambulance._respawned(RESOURCE, src, hospitalIndex)
 end)
+
+CP.Integrations.register('ambulance', RESOURCE, A)

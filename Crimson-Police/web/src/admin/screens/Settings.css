@@ -572,6 +572,13 @@
     color: var(--cp-muted);
 }
 
+/* Settings -> Features: why a feature stays off (the city's script it needs is missing) */
+.settings-feature__off {
+    grid-column: 1 / -1;
+    font-size: var(--cp-fs-xs);
+    color: var(--cp-warning);
+}
+
 /* the gear's side panel: only one screen's settings (admin/components/ScreenSettings.tsx) */
 .settings-gear {
     display: flex;

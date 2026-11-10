@@ -1255,7 +1255,20 @@ or the switch is turned off.
 ## 4. Settings to check in your other resources
 
 Crimson-Police never edits your other resources. The copies it was built against already have these settings
-right, so you only need to check them if you changed them.
+right, so you only need to check them if you changed them. Which of these scripts Crimson-Police uses is
+`Config.Integrations` ([README 2.1](../README.md#21-supported-scripts)); a city without them skips their rows.
+
+- **'none'**: dispatch = only the tablet's own Dispatch (officers responding to a real call stay on their run);
+  ambulance = no EMS, a downed participant is always picked up and revived by Crimson-Police and only a dead
+  character counts as down; banking = no bank history line, `Cash.source = 'society'` pays new money like `'server'`;
+  police = Crimson-Police's own custody only, live crimes and volunteer suspects stay off.
+- **ps-dispatch** has no suspensions and no way for another script to clear its calls, so mission gunfire can still
+  make a ps-dispatch call.
+- **qbx_policejob** cuffs through a callback other scripts cannot see, so live crimes and volunteer suspects stay
+  off with it (impounds of mission cars are still seen). They need sc-police.
+- **qbx_management** keeps no money, so a Qbox city without Renewed-Banking uses `banking = 'none'`.
+- Another script (cd_dispatch, wasabi_ambulance and the like) needs a small adapter file a developer writes from
+  that script's source: docs/dev/INTEGRATIONS.md, "Adding an adapter".
 
 | Resource | Setting (in its `config.lua`) | Should be | Why |
 |---|---|---|---|

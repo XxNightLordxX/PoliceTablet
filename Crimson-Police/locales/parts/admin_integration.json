@@ -13,5 +13,14 @@
   "int.ui.trial_text": "{n} of {checked} missions would not load with this value. They stay off until the value is changed back.",
   "int.ui.trial_title": "{name} breaks missions",
   "int.ui.void_operation": "Void this operation's rows",
-  "int.ui.recheck_started": "Re-checking every officer's badges."
+  "int.ui.recheck_started": "Re-checking every officer's badges.",
+  "integrations.on.dispatch": "Dispatch script: {name}",
+  "integrations.on.ambulance": "Ambulance script: {name}",
+  "integrations.on.banking": "Banking script: {name}",
+  "integrations.on.police": "Police script: {name}",
+  "integrations.off.dispatch": "No dispatch script in use (Config.Integrations.dispatch = '{setting}'). The tablet's own Dispatch still works, but officers who respond to a real call are not released from their run, and suspended officers are not kept off duty. Start sc-dispatch or ps-dispatch, or set it to 'none' if you have neither",
+  "integrations.off.ambulance": "No ambulance script in use (Config.Integrations.ambulance = '{setting}'). A downed participant is always picked up and revived by Crimson-Police, and only a dead character counts as down. Start sc-ambulance or qbx_ambulancejob, or set it to 'none' if you have neither",
+  "integrations.off.banking": "No banking script in use (Config.Integrations.banking = '{setting}'). Payouts get no bank history entry, and Cash.source 'society' pays new money like 'server'. Start Renewed-Banking, or set it to 'none' if you do not use it",
+  "integrations.off.police": "No police script in use (Config.Integrations.police = '{setting}'). NPC missions and Crimson-Police's own custody work as usual; live crimes and volunteer suspects stay off. Start sc-police or qbx_policejob, or set it to 'none' if you have neither",
+  "integrations.needs.police_facts": "Off: live crimes and volunteer suspects need a police script that reports cuffing and jailing (sc-police). Police script now: {police}"
 }

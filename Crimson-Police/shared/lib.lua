@@ -357,14 +357,24 @@ local TAKE_PART = { typeOfTheDay = true, goals = true, challenge = true, cash = 
 -- live crimes or volunteers are on.
 ---@param mode? string 'liveCrime' | 'volunteer' | 'criminalTablet'
 ---@return table cfg, boolean on
+-- On the server, live crimes and volunteers are also off while the city's police script sends no cuff and jail facts
+-- (CP.Integrations.realSuspectsBlocked; Admin UI -> Settings -> Features says why).
+local function SuspectsBlocked()
+    local I = CP.Integrations
+    return I ~= nil and I.realSuspectsBlocked ~= nil and I.realSuspectsBlocked()
+end
+
 function CP.RealPlayers(mode)
     local all = type(Config) == 'table' and type(Config.RealPlayers) == 'table' and Config.RealPlayers or {}
     if mode == nil then
         local lc, vo = all.liveCrime, all.volunteer
-        return all, (type(lc) == 'table' and lc.enabled == true) or (type(vo) == 'table' and vo.enabled == true)
+        local on = (type(lc) == 'table' and lc.enabled == true) or (type(vo) == 'table' and vo.enabled == true)
+        return all, on and not SuspectsBlocked()
     end
     local cfg = REAL_PLAYER_MODES[mode] ~= nil and type(all[mode]) == 'table' and all[mode] or {}
-    return cfg, REAL_PLAYER_MODES[mode] ~= nil and cfg.enabled == true
+    local on = REAL_PLAYER_MODES[mode] ~= nil and cfg.enabled == true
+    if on and REAL_PLAYER_MODES[mode] then on = not SuspectsBlocked() end
+    return cfg, on
 end
 
 -- The mode of a run's real-player case: 'liveCrime' (run.live or realSuspect 'live'), 'volunteer' or nil.

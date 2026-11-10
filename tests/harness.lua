@@ -2671,10 +2671,26 @@ end
 --                                     BOOT
 -- ============================================================================
 
+-- The adapter files of modules/system/integrations (each registers itself with CP.Integrations).
+local INTEGRATION_ADAPTERS = {
+    ['modules/system/integrations/ps_dispatch.lua'] = true,
+    ['modules/system/integrations/qbx_ambulancejob.lua'] = true,
+    ['modules/system/integrations/qbx_policejob.lua'] = true,
+    ['modules/system/integrations/renewed_banking.lua'] = true,
+    ['modules/system/integrations/sc_ambulance.lua'] = true,
+    ['modules/system/integrations/sc_dispatch.lua'] = true,
+    ['modules/system/integrations/sc_police.lua'] = true,
+}
+
 function H.load(rel)
     -- a block client half needs the block client kit first, as fxmanifest.lua loads it
     if rel:match('^blocks/[%w_]+/client%.lua$') and rel ~= 'blocks/_kit/client.lua' and not (CP and CP.BlockKit) then
         H.load('blocks/_kit/client.lua')
+    end
+    -- an adapter of a dispatch, ambulance, banking or police script needs CP.Integrations first, as fxmanifest.lua
+    -- loads it
+    if INTEGRATION_ADAPTERS[rel] and not (CP and CP.Integrations and CP.Integrations.register) then
+        H.load('modules/system/integrations/integrations.lua')
     end
     local path = ROOT .. rel
     local chunk, err = loadfile(path)

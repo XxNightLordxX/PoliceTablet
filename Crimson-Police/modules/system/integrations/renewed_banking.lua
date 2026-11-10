@@ -1,4 +1,5 @@
--- CP.Banking: the only code that talks to Renewed-Banking.
+-- The Renewed-Banking adapter of CP.Banking (modules/system/integrations/integrations): the only code that talks to
+-- Renewed-Banking. Its functions answer as with no banking script while Config.Integrations.banking names another.
 
 -- Owns exports['Renewed-Banking']:handleTransaction, removeAccountMoney, getAccountMoney and
 -- addAccountMoney (verified signatures in docs/dev/INTEGRATIONS.md; addAccountMoney is not in the spec's
@@ -6,8 +7,8 @@
 -- Personal money itself moves through Qbox (CP.Qbx.addMoney); Renewed-Banking only keeps the history, so
 -- a payout needs both calls.
 --
--- Public API (docs/dev/ARCHITECTURE.md §5.1). Every function returns false/nil instead of raising when
--- Renewed-Banking is stopped or rejects the call. Amounts are rounded half up to whole dollars;
+-- Adapter functions (CP.Banking, docs/dev/ARCHITECTURE.md §5.1). Every function returns false/nil instead of raising
+-- when Renewed-Banking is stopped or rejects the call. Amounts are rounded half up to whole dollars;
 -- an amount of 0 is never sent (a $0 history entry) and returns true.
 --   CP.Banking.recordDeposit(citizenid, amount, message, issuer, receiver, transId) -> boolean
 --       handleTransaction(citizenid, Config.Tablet.title, amount, message, issuer, receiver, 'deposit', transId).
@@ -27,8 +28,7 @@
 -- message: apostrophes and backslashes are removed (Renewed-Banking doubles them in the stored text).
 -- issuer/receiver: never nil (nil becomes ''). transId: e.g. ('CP-%s-%s'):format(runUuid, citizenid).
 
-CP.Banking = CP.Banking or {}
-local B = CP.Banking
+local B = {}
 local TAG = 'renewed_banking'
 local RESOURCE = 'Renewed-Banking'
 
@@ -228,4 +228,6 @@ function B.findTxn(transId, opts)
 end
 
 -- Test hooks (not part of the contract).
-B._setHistoryDb = function(db) historyDb = db end
+CP.Banking._setHistoryDb = function(db) historyDb = db end
+
+CP.Integrations.register('banking', RESOURCE, B)

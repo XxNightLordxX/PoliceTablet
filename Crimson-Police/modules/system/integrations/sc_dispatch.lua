@@ -1,9 +1,11 @@
--- CP.Dispatch: the only code that talks to sc-dispatch.
+-- The sc-dispatch adapter of CP.Dispatch (modules/system/integrations/integrations): the only code that talks to
+-- sc-dispatch.
 
 -- Owns: the read-only listeners on sc-dispatch's events, the read-only mdt_dispatch lookup,
 -- exports['sc-dispatch']:IsPlayerSuspended and exports['sc-dispatch']:ClearNotification.
 -- Never uses sc-dispatch's call-creating export (missions never create dispatch calls) and never
 -- triggers any sc-dispatch event. sc-dispatch's own handlers always run as well; nothing here blocks them.
+-- Every handler does nothing while another script (or none) serves dispatch (Config.Integrations.dispatch).
 --
 -- Event registration (docs/dev/INTEGRATIONS.md, sc-dispatch):
 --   RegisterNetEvent  sc-dispatch:server:ToggleResponding (callId, isResponding)   client-originated
@@ -14,39 +16,29 @@
 -- Every net handler captures 'source' on its first line (and os.time() right after, before anything can
 -- yield) and validates the payload; per-player rate limits go through CP.Net.rateOk.
 --
--- Public API (docs/dev/ARCHITECTURE.md §5.1)
---   CP.Dispatch.available() -> boolean                 sc-dispatch is started
---   CP.Dispatch.isSuspended(citizenid, jobName) -> boolean
+-- Adapter functions (CP.Dispatch, docs/dev/ARCHITECTURE.md §5.1)
+--   available() -> boolean                 sc-dispatch is started
+--   isSuspended(citizenid, jobName) -> boolean
 --       exports['sc-dispatch']:IsPlayerSuspended(citizenid, jobName); false when sc-dispatch is not
 --       started or the export fails (sc-dispatch itself fails open). May yield (sc-dispatch awaits MySQL).
---   CP.Dispatch.lookupActiveCall(callId) -> uniqueId|nil
+--   lookupActiveCall(callId) -> uniqueId|nil
 --       SELECT id, unique_id FROM mdt_dispatch WHERE (id = ? OR unique_id = ?) AND active = 1 LIMIT 1
 --       with (the integer form or 0, the normalised string), in pcall. Returns the canonical call id:
 --       the row's unique_id, or its row id as a string when unique_id is empty. nil when the call is
 --       unknown or inactive, when sc-dispatch is not started, or on a query error (logged). The result
 --       can be an 'npccall-' id: the caller must still classify it. Yields (database).
---   CP.Dispatch.clearNotification(uniqueId, jobs) -> boolean
+--   clearNotification(uniqueId, jobs) -> boolean
 --       exports['sc-dispatch']:ClearNotification(uniqueId, jobs) in pcall. Only non-numeric string ids
 --       are accepted (a number, or a digit-only string, would also match unrelated ems/fire rows by row
 --       id). jobs defaults to { 'police' }. Call it from a handler or thread (sc-dispatch awaits MySQL).
---   CP.Dispatch.normalizeCallId(id) -> string          123, '123', 123.0 -> '123'; other strings unchanged;
---                                                      nil -> ''
---   Listeners (any number; each runs in its own thread):
---   CP.Dispatch.onResponding(fn(src, callId, isResponding))  callId as sent (number or string, validated),
---                                                             isResponding a boolean
---   CP.Dispatch.onCallCleared(fn(callId))                     number or string, as sc-dispatch sent it
---   CP.Dispatch.onDispatchRestart(fn())                       sc-dispatch started or stopped
---   CP.Dispatch.onShotsFired(fn(src, data, receivedAt))       data = { coords = vector3|nil, street, zone, sex }
---   CP.Dispatch.onPlayerDown(fn(src, data, receivedAt))       (client-supplied: use server-side ped coords
---   CP.Dispatch.onPlayerDead(fn(src, data, receivedAt))        for any distance check), receivedAt = os.time()
+--   realCallSummary() -> { total, p1 }|nil and mdtCommendations(citizenid) -> list|nil (read-only summaries)
 
-CP.Dispatch = CP.Dispatch or {}
-local D = CP.Dispatch
+local D = {}
+local Dispatch = CP.Dispatch
 local TAG = 'sc_dispatch'
 local RESOURCE = 'sc-dispatch'
 local MAX_ID_LEN = 64            -- mdt_dispatch.unique_id is VARCHAR(64)
 
-local listeners = { responding = {}, cleared = {}, restart = {}, shots = {}, down = {}, dead = {} }
 local errorLoggedAt = {}
 
 local function LogError(key, fmt, ...)
@@ -55,6 +47,9 @@ local function LogError(key, fmt, ...)
     errorLoggedAt[key] = now
     CP.err(TAG, fmt, ...)
 end
+
+-- sc-dispatch serves dispatch now (its events mean nothing otherwise).
+local function Serving() return CP.Integrations.is('dispatch', RESOURCE) end
 
 function D.available()
     return GetResourceState(RESOURCE) == 'started'
@@ -72,28 +67,8 @@ function D.isSuspended(citizenid, jobName)
     return res == true
 end
 
-function D.normalizeCallId(id)
-    local t = type(id)
-    if t == 'number' then
-        if id ~= id or id == math.huge or id == -math.huge then return tostring(id) end
-        local i = math.tointeger(id)
-        if i then return ('%d'):format(i) end
-        return tostring(id)
-    elseif t == 'string' then
-        local s = CP.U.trim(id)
-        if s:match('^%d+$') or s:match('^%d+%.0*$') then
-            local i = math.tointeger(tonumber(s))
-            if i then return ('%d'):format(i) end
-        end
-        return id
-    elseif id == nil then
-        return ''
-    end
-    return tostring(id)
-end
-
 function D.lookupActiveCall(callId)
-    local key = D.normalizeCallId(callId)
+    local key = Dispatch.normalizeCallId(callId)
     if key == '' or #key > MAX_ID_LEN then return nil end
     if not D.available() then return nil end
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
@@ -111,7 +86,7 @@ function D.lookupActiveCall(callId)
     if type(row) ~= 'table' then return nil end
     local uid = row.unique_id
     if uid ~= nil and tostring(uid) ~= '' then return tostring(uid) end
-    if row.id ~= nil then return D.normalizeCallId(row.id) end
+    if row.id ~= nil then return Dispatch.normalizeCallId(row.id) end
     return nil
 end
 
@@ -198,40 +173,11 @@ function D.mdtCommendations(citizenid)
     return out
 end
 
-D._resetSummary = function() summaryCache = nil end
+Dispatch._resetSummary = function() summaryCache = nil end
 
 -- ============================================================================
 --                                  LISTENERS
 -- ============================================================================
-
-local function AddListener(kind, fn)
-    if type(fn) ~= 'function' then
-        CP.warn(TAG, 'a %s listener must be a function (got %s)', kind, type(fn))
-        return
-    end
-    local list = listeners[kind]
-    list[#list + 1] = fn
-end
-
-local function Emit(kind, ...)
-    local list = listeners[kind]
-    if #list == 0 then return end
-    local args = table.pack(...)
-    for i = 1, #list do
-        local fn = list[i]
-        CreateThread(function()
-            local ok, err = pcall(fn, table.unpack(args, 1, args.n))
-            if not ok then CP.err(TAG, '%s listener failed: %s', kind, tostring(err)) end
-        end)
-    end
-end
-
-function D.onResponding(fn) AddListener('responding', fn) end
-function D.onCallCleared(fn) AddListener('cleared', fn) end
-function D.onDispatchRestart(fn) AddListener('restart', fn) end
-function D.onShotsFired(fn) AddListener('shots', fn) end
-function D.onPlayerDown(fn) AddListener('down', fn) end
-function D.onPlayerDead(fn) AddListener('dead', fn) end
 
 local function ValidCallId(callId)
     local t = type(callId)
@@ -276,13 +222,13 @@ RegisterNetEvent('sc-dispatch:server:ToggleResponding', function(callId, isRespo
     local src = source
     local n = tonumber(src)
     if not n or n <= 0 then return end
-    if not ValidCallId(callId) then return end
+    if not ValidCallId(callId) or not Serving() then return end
     if not CP.Net.rateOk(n, 'sc_dispatch:toggle', 6, 1000) then
         CP.log(TAG, 'ToggleResponding from %d dropped (rate limit)', n)
         return
     end
     CP.log(TAG, 'ToggleResponding %d %s %s', n, tostring(callId), tostring(isResponding))
-    Emit('responding', n, callId, isResponding and true or false)
+    Dispatch._emit('responding', n, callId, isResponding and true or false)
 end)
 
 local function AlertHandler(kind, rateKey)
@@ -292,9 +238,9 @@ local function AlertHandler(kind, rateKey)
         local n = tonumber(src)
         if not n or n <= 0 then return end
         -- sc-dispatch creates no call without data.coords either.
-        if type(data) ~= 'table' or data.coords == nil then return end
+        if type(data) ~= 'table' or data.coords == nil or not Serving() then return end
         if not CP.Net.rateOk(n, rateKey, 5, 1000) then return end
-        Emit(kind, n, SanitizeAlert(data), receivedAt)
+        Dispatch._emit(kind, n, SanitizeAlert(data), receivedAt)
     end
 end
 
@@ -307,19 +253,21 @@ RegisterNetEvent('sc-dispatch:server:PlayerDead', AlertHandler('dead', 'sc_dispa
 -- ============================================================================
 
 AddEventHandler('sc-dispatch:server:callClearedByOfficer', function(callId)
-    if not ValidCallId(callId) then return end
+    if not ValidCallId(callId) or not Serving() then return end
     CP.log(TAG, 'callClearedByOfficer %s', tostring(callId))
-    Emit('cleared', callId)
+    Dispatch._emit('cleared', callId)
 end)
 
 AddEventHandler('onResourceStart', function(res)
-    if res ~= RESOURCE then return end
+    if res ~= RESOURCE or not Serving() then return end
     CP.log(TAG, 'sc-dispatch started: every dispatch call is inactive now')
-    Emit('restart')
+    Dispatch._emit('restart')
 end)
 
 AddEventHandler('onResourceStop', function(res)
-    if res ~= RESOURCE then return end
+    if res ~= RESOURCE or not Serving() then return end
     CP.log(TAG, 'sc-dispatch stopped: every dispatch call is gone')
-    Emit('restart')
+    Dispatch._emit('restart')
 end)
+
+CP.Integrations.register('dispatch', RESOURCE, D)

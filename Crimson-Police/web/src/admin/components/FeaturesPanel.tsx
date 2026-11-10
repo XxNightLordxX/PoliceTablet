@@ -89,6 +89,11 @@ export function FeaturesPanel({
                                 >
                                     {t('settings.features.open')}
                                 </Button>
+                                {row.f.off ? (
+                                    <div className="settings-feature__off" role="note">
+                                        {row.f.off}
+                                    </div>
+                                ) : null}
                                 {row.limits.length ? (
                                     <div className="settings-feature__limits">
                                         <span>{t('settings.features.limits')}</span>
