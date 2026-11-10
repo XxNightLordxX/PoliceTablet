@@ -400,6 +400,15 @@ do
     H.time = H.time + 31
     T.navCounts(1)
     H.eq(flaggedCalls, 2, 'then read again')
+    -- (Z12) a review decision reads the Review Queue count again at once
+    H.time = H.time + 6
+    T.navChanged(1, { review = true })
+    T.navCounts(1)
+    H.eq(flaggedCalls, 3, '(Z12) navChanged with review = true drops the 30 s Review Queue cache')
+    H.time = H.time + 6
+    T.navChanged(1)
+    T.navCounts(1)
+    H.eq(flaggedCalls, 3, '(Z12) a plain navChanged keeps it')
 
     CP.MissionCalls.claimableCount = function() error('boom') end
     H.eq(Counts(1).calls, 0, 'a failing module gives 0')

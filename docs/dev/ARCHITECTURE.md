@@ -997,7 +997,7 @@ Files: `modules/runs/runs.lua`, `modules/runs/client/runs.lua`, `locales/parts/e
   `CP.Downed.handle`, everyone else leaves as Abandoned through the normal cleanup; an operation's run is ended
   through `CP.Operations.cancel`).
 - `reclassify(citizenid, runId, newEndReason)` (from CP.Calls: `real_call` → `real_call_cancelled`).
-- `objectiveComplete(run, index, data) -> bool`, `dispatch(run, index, src, ev) -> ok, reason` (a server-originated
+- `objectiveComplete(run, index, data, opts) -> bool`, `dispatch(run, index, src, ev) -> ok, reason` (a server-originated
   event such as `{ type = 'cuffed' | 'shot' | 'damaged', ... }` from CP.Npc to the owning block's `onEvent`, no client
   checks), `objectiveEvent(run, index, data)` (→ `client:objective`), `send(run, event, ...)` (every active
   participant), `entityEvent(run, netId, ev)` (handed_over, impounded, removed to the owning objective).
@@ -2766,7 +2766,7 @@ ctx = {
   mission = run.mission, location = run.location, tier = run.tier, state = run.objectives[i].state,
   rng = CP.U.rng(run.seed + i),        -- deterministic per objective
   radioSilence = <bool>,               -- the run has the Radio Silence modifier (as the client half's ctx.radioSilence)
-  complete = function(data) end,       -- -> CP.Runs.objectiveComplete (false if minSeconds not reached: call again next tick)
+  complete = function(data, opts) end, -- -> CP.Runs.objectiveComplete (false before minSeconds; opts.empty skips it)
   fail = function(reasonKey) end,      -- the whole run fails ('mission_failed')
   award = function(id, opts) end, penalize = function(id, opts) end,
   send = function(data) end,           -- objective update to every participant's client half (update)

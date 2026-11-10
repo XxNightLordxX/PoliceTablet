@@ -522,7 +522,8 @@ function Payments.health()
     if c.account ~= nil and c.account ~= 'bank' and c.account ~= 'cash' then
         out[#out + 1] = { level = 'error', text = CP.L('payments.health.account', { account = tostring(c.account) }) }
     end
-    if c.source ~= 'society' then return out end
+    -- no banking script serves: society pay goes out as new money, so nothing is unfunded
+    if not SocietyOn() then return out end
     local warn = math.floor(Num(c.lowBalanceWarn, 0))
     for _, key in ipairs(DepartmentKeys()) do
         local dept = DeptOf(key)
@@ -550,7 +551,7 @@ end
 function Payments.lowBalanceToasts()
     local c = CashCfg()
     local warn = math.floor(Num(c.lowBalanceWarn, 0))
-    if c.source ~= 'society' or warn <= 0 then return 0 end
+    if not SocietyOn() or warn <= 0 then return 0 end
     if not (CP.Qbx and CP.Qbx.getOnlinePlayers and CP.Access and CP.Access.getOfficer) then return 0 end
     local n = 0
     for _, key in ipairs(DepartmentKeys()) do

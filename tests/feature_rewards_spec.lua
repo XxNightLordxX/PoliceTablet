@@ -268,4 +268,46 @@ H.eq(moneyCalls[nTyped + 1] and moneyCalls[nTyped + 1].amount, 3100, 'it pays th
 FC.suspect.byType = {}
 FC.suspect.enabled = false
 
+-- ============================================================================
+--                                     Z12
+-- ============================================================================
+-- A REWARD FOLLOWS ITS SOURCE ROW (VOIDED, THEN RESTORED).
+
+do
+    FC.supAward.enabled = true
+    FC.surrender.enabled = true
+    local function Src(runUuid, missionType, missionId, cid)
+        return MySQL.insert.await([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid,
+            department, state, end_reason, points_base) VALUES (?, ?, ?, ?, 'sast', 'completed', 'completed', 10)]],
+            { runUuid, missionType, missionId, cid })
+    end
+    local function Voided(id)
+        return CP.U.truthy(H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { id })[1].voided) and 1 or 0
+    end
+    -- a supervisor's award of points to an offline officer, and its money row
+    local award = Src('z12-award-1', 'manual_award', 'manual_award', 'FR_OFFLINE9')
+    local paid = FR.pay('supAward', 'FR_OFFLINE9', { key = ('sup:%s'):format(award), points = 10 })
+    H.ok(paid and paid.status == 'pending', 'Z12: the supAward money waits for the login (pending)')
+    CP.Hooks.fire('row:voided', award)
+    H.eq(Voided(paid.rowId), 1, 'Z12: voiding the award\'s points row voids its money row too')
+    online[9] = 'FR_OFFLINE9'
+    pcall(CP.Cash.payPending, 9)
+    H.advance(100)
+    H.eq(tonumber(Row(FR.uuidOf('supAward', ('sup:%s'):format(award), 'FR_OFFLINE9'))[1].cash_paid), 0,
+        'Z12: ...so his login does not pay the voided award')
+    online[9] = nil
+    CP.Hooks.fire('row:restored', award)
+    H.eq(Voided(paid.rowId), 0, 'Z12: restoring the award brings its money row back')
+    -- an officer's live run row and his Talk them down reward
+    local runRow = Src('z12-live-1', 'tactical', 'live_case', 'FR_OFFICER1')
+    local sur = FR.pay('surrender', 'FR_OFFICER1', { key = 'z12-live-1:FR_SUSPECT1' })
+    local other = FR.pay('surrender', 'FR_OFFICER1', { key = 'z12-live-2:FR_SUSPECT1' })
+    H.ok(sur and other, 'Z12: two surrender rewards of two runs')
+    CP.Hooks.fire('row:voided', runRow)
+    H.eq(Voided(sur.rowId), 1, 'Z12: voiding his run row voids that run\'s surrender reward')
+    H.eq(Voided(other.rowId), 0, 'Z12: ...not another run\'s')
+    FC.supAward.enabled = false
+    FC.surrender.enabled = false
+end
+
 return H

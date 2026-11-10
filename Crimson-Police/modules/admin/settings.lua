@@ -3653,7 +3653,7 @@ local function History(src, path, action, oldJson, newJson, opts)
         newJson or '',
         ActorId(src),
         Ident(src) or '',
-        type(opts.reason) == 'string' and opts.reason:sub(1, 255) or '',
+        type(opts.reason) == 'string' and U.clip(opts.reason, 255) or '',
         math.tointeger(tonumber(opts.revertsId) or 0) or 0,
     })
     if not ok then CP.err(TAG, 'the settings history of %s could not be written: %s', path, tostring(err)) end
@@ -4491,7 +4491,7 @@ CP.Net.action('server:admin:setSetting', function(src, payload)
         if not okJ or decoded == nil then return false, 'err.setting_json' end
         value = decoded
     end
-    local reason = type(p.reason) == 'string' and U.trim(p.reason):sub(1, 255) or nil
+    local reason = type(p.reason) == 'string' and U.clip(U.trim(p.reason), 255) or nil
     return Settings.set(src, p.path, value, p.none == true,
         { confirm = p.confirm, reason = reason ~= '' and reason or nil })
 end, { rate = 6 })
@@ -4516,7 +4516,7 @@ CP.Net.action('server:admin:setSettings', function(src, payload)
         end
         changes[#changes + 1] = { path = c.path, value = value, none = c.none == true }
     end
-    local reason = type(p.reason) == 'string' and U.trim(p.reason):sub(1, 255) or nil
+    local reason = type(p.reason) == 'string' and U.clip(U.trim(p.reason), 255) or nil
     return Settings.setMany(src, changes, { confirm = p.confirm, reason = reason ~= '' and reason or nil })
 end, { rate = 4 })
 

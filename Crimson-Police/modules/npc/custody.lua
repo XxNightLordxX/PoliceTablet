@@ -2159,18 +2159,48 @@ local function BlipFor(run, data, src)
     return { runId = data.runId, id = data.id, kind = data.kind, show = false }
 end
 
+-- How often a shown blip's rules are read again for each officer (Config.Markers.refreshEvery seconds): a new leader
+-- (MigrateHost), a department, job or grade change shows or hides it without a status change.
+local function BlipRecheckMs()
+    local m = type(Config.Markers) == 'table' and Config.Markers or {}
+    return math.floor(U.clamp(tonumber(m.refreshEvery) or 3, 1, 30) * 1000)
+end
+
+-- Sends src his part of data and remembers whether it showed (s.blipFor).
+local function SendBlip(run, s, data, src)
+    local d = BlipFor(run, data, src)
+    s.blipFor = s.blipFor or {}
+    s.blipFor[src] = d.show == true
+    TriggerClientEvent(SERVICE_BLIP_EVENT, src, d)
+end
+
 local function SyncBlip(run, s, to)
     if not BLIP_LOOK[s.kind] then return end
     if to then
-        if s.blipOn then TriggerClientEvent(SERVICE_BLIP_EVENT, to, BlipFor(run, BlipOf(run, s), to)) end
+        if s.blipOn then SendBlip(run, s, BlipOf(run, s), to) end
         return
     end
-    if s.blipSent == s.status then return end
+    if s.blipSent == s.status then
+        -- the status did not change: only the officers whose rules now answer otherwise get a new send
+        if not s.blipOn or Now() < (s.blipCheckAt or 0) then return end
+        s.blipCheckAt = Now() + BlipRecheckMs()
+        local data = BlipOf(run, s)
+        s.blipFor = s.blipFor or {}
+        for _, src in ipairs(ActiveSrcs(run)) do
+            local d = BlipFor(run, data, src)
+            if s.blipFor[src] ~= (d.show == true) then
+                s.blipFor[src] = d.show == true
+                TriggerClientEvent(SERVICE_BLIP_EVENT, src, d)
+            end
+        end
+        return
+    end
     s.blipSent = s.status
+    s.blipCheckAt = Now() + BlipRecheckMs()
     local data = BlipOf(run, s)
     if not data.show and not s.blipOn then return end
     s.blipOn = data.show or nil
-    for _, src in ipairs(ActiveSrcs(run)) do TriggerClientEvent(SERVICE_BLIP_EVENT, src, BlipFor(run, data, src)) end
+    for _, src in ipairs(ActiveSrcs(run)) do SendBlip(run, s, data, src) end
 end
 
 -- ============================================================================

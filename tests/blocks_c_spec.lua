@@ -187,9 +187,11 @@ local function FakeCtx(o)
     ctx.capOk = true
     ctx.capBudget = nil
     ctx.srcs = o.srcs or { 1 }
-    ctx.complete = function(data)
+    ctx.complete = function(data, opts)
         c.complete = c.complete + 1
         c.completeData[#c.completeData + 1] = data
+        c.completeOpts = c.completeOpts or {}
+        c.completeOpts[#c.completeOpts + 1] = opts
         return ctx.completeResult
     end
     ctx.fail = function(key) c.fail[#c.fail + 1] = key end
@@ -2169,8 +2171,15 @@ do
     H.eq(npc.states[fug[1].netId], 'surrendered', 'hunt: 3 s within 3 m -> gives up')
     H.eq(npc.cuffs[fug[1].netId].label, CP.L('block.search_area.cuff'), 'hunt: Cuff suspect target')
     npc.states[fug[1].netId] = 'cuffed'
+    local savedRunsSA, arrestsSA = CP.Runs, {}
+    CP.Runs = setmetatable({
+        noteArrest = function(run, src, netId) arrestsSA[#arrestsSA + 1] = { src = src, netId = netId } end,
+    }, { __index = savedRunsSA or {} })
     ok = SA.onEvent(ctx, 1, { type = 'cuffed', netId = fug[1].netId })
+    CP.Runs = savedRunsSA
     H.eq(ok, true, 'hunt: fugitive cuffed')
+    H.ok(#arrestsSA == 1 and arrestsSA[1].src == 1 and arrestsSA[1].netId == fug[1].netId,
+        '(Z12) hunt: the cuff notes one arrest for the officer')
     H.eq(ctx.calls.complete, 1, 'hunt: complete when every fugitive is cuffed')
     H.eq(#ctx.calls.fail, 0, 'hunt: never failed')
 end
@@ -4096,6 +4105,8 @@ do -- pursuit (Traffic Enforcement): the violator stays unmarked until it passed
     local team = TrafficCtx({ team = 2 })
     PU.start(team)
     H.eq(team.state.skipped, true, 'pu marker: a two-officer pursuit with one officer is skipped')
+    local tOpts = team.calls.completeOpts and team.calls.completeOpts[#team.calls.completeOpts]
+    H.ok(tOpts and tOpts.empty == true, '(Z12) the skip completes as empty (no minSeconds, no too_fast flag)')
     H.eq(PU.marker(team), false, 'pu marker: ...and shows nothing')
 end
 

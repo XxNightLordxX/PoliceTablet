@@ -155,9 +155,11 @@ MySQL.query.await = function(_, params)
 end
 
 local pushes = {}
+local navAsked = {}   -- src -> opts of the last CP.Tablet.navChanged (Z12)
 CP.Tablet = {
     push = function(src, topic, data) pushes[#pushes + 1] = { src = src, topic = topic, data = data } end,
     notify = function() end,
+    navChanged = function(src, opts) navAsked[src] = opts or {} end,
 }
 
 H.load('modules/review/queue.lua')
@@ -320,6 +322,9 @@ for _, p in ipairs(pushes) do if p.topic == 'reviewQueue' then got[p.src] = p.da
 H.ok(got[7] ~= nil and type(got[7].items) == 'table', 'the other SAST supervisor gets his fresh queue')
 H.eq(got[2], nil, 'not the decider himself')
 H.eq(got[4], nil, 'nor a supervisor of another department')
+H.ok(navAsked[2] and navAsked[2].review == true, '(Z12) the decider\'s review badge is counted again')
+H.ok(navAsked[7] and navAsked[7].review == true, '(Z12) and the badge of the supervisor whose queue was refreshed')
+H.eq(navAsked[4], nil, '(Z12) not another department\'s')
 H.eq(R.share(1), 3, 'an admin\'s decision reaches every department\'s open queue')
 H.eq(R.share(2, { 'sast', 'fib' }), 2, 'a cross-department run reaches both departments')
 H.fire('playerDropped', 7, 'Exiting')

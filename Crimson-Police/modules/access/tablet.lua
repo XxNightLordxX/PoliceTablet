@@ -919,10 +919,13 @@ local function ExtraCounts(counts, n, officer)
     end
 end
 
--- A count of another module changed for src: the counts are pushed again.
-function T.navChanged(src)
+-- A count of another module changed for src: the counts are pushed again. opts.review = true: the Review Queue
+-- count is read again too (a review decision; its own 30 s cache would keep the old number).
+function T.navChanged(src, opts)
     local n = CP.U.toSrc(src)
-    if n then ScheduleNav(n) end
+    if not n then return end
+    if type(opts) == 'table' and opts.review == true then reviewCache[n] = nil end
+    ScheduleNav(n)
 end
 
 function T.navCounts(src)

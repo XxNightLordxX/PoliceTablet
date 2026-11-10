@@ -511,6 +511,23 @@ local function TypeDailyLimit(key)
     return n and n > 0 and math.floor(n) or nil
 end
 
+-- The completion caps of one officer joining a run that is already going (CP.Runs.addParticipant: a live case's
+-- backup), as the accept checks them for a claim: the hour and day caps, the type's daily limit and, for a live case
+-- with liveCrime.typeCooldown = true, the type cooldown. May yield (database). -> true | false, errKey
+function Draw.joinCaps(o, missionType, live)
+    if type(o) ~= 'table' or type(o.citizenid) ~= 'string' then return false, 'err.member_unavailable' end
+    local caps = Draw.limits({ o })
+    if CompletionsLastHour(o.citizenid) >= caps.hour then return false, 'err.hourly_cap' end
+    if caps.day > 0 and CompletionsToday(o.citizenid) >= caps.day then return false, 'err.daily_cap' end
+    local typeDay = TypeDailyLimit(missionType)
+    if typeDay and CompletionsToday(o.citizenid, missionType) >= typeDay then return false, 'err.type_daily_cap' end
+    if missionType ~= BOSS_KEY and not (live and LiveCfg().typeCooldown ~= true) then
+        local u = tonumber(CooldownsOf(o.citizenid, { o }).types[missionType])
+        if u and u > os.time() then return false, 'err.type_cooldown' end
+    end
+    return true
+end
+
 -- The first officer at a daily limit and which one ('day' or 'type'), or nil.
 local function DailyBlocked(officers, key)
     local max, perType = DailyCap(officers), TypeDailyLimit(key)

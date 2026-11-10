@@ -380,7 +380,24 @@ do
     s = Sent(mark)
     H.ok(#s == 1 and s[1].to == 3 and s[1].data.show == false and s[1].data.netId == nil,
         'blip: an officer the van\'s rules leave out gets show = false')
+    -- Z12: the rules now leave officer 2 out (a new leader, a job change) with no status change: within
+    -- refreshEvery he alone gets show = false, and the blip again once they let him in
+    CP.Markers = {
+        vanAllowed = function(part, _, src) return not (part == 'prisonerVan' and (src == 2 or src == 3)) end,
+    }
+    mark = #H.events
+    W.tick(5)
+    s = Sent(mark)
+    H.ok(#s == 1 and s[1].to == 2 and s[1].data.show == false, 'Z12: blip: the rules changed for 2: he alone loses it')
     CP.Markers = savedMarkers
+    mark = #H.events
+    W.tick(5)
+    s = Sent(mark)
+    local to2 = nil
+    for _, x in ipairs(s) do if x.to == 2 then to2 = x end end
+    H.ok(to2 and to2.data.show == true and to2.data.netId == van.veh,
+        'Z12: blip: and gets it back when they let him in')
+    H.ok(#s <= 2, 'Z12: blip: nobody whose answer did not change is sent it again (' .. #s .. ')')
 
     -- late: put on its parking point (one update each, at its new spot)
     mark = #H.events

@@ -874,6 +874,21 @@ do
 end
 
 do
+    -- Z12: nothing handed over (a wreck): the stop completes with nothing to work, before its minSeconds and with no
+    -- too_fast flag
+    local run = W.start({ 1 }, StopMission({ none = true }, { minSeconds = 15 }))
+    W.tick(5)
+    H.eq(Obj(run, 2).status, 'done', 'Z12: an empty stop completes at once')
+    H.eq(run.flagged, nil, 'Z12: ...and the run is not flagged too_fast')
+    local fastFlag = false
+    for _, p in pairs(run.participants) do
+        if type(p.flagged) == 'table' and p.flagged.reason == 'too_fast' then fastFlag = true end
+    end
+    H.eq(fastFlag, false, 'Z12: ...nor an officer')
+    Runs.endRun(run, 'completed', 'completed')
+end
+
+do
     -- a person who runs from Order out is Evading: caught, Arrest is Best
     Demeanour('clean', 'runner')
     local run = W.start({ 1 }, StopMission({ occupants = 1, truths = { 'clean' }, at = vec4(300.0, 300.0, 30.0, 0.0) }))

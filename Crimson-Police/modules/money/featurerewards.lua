@@ -330,5 +330,128 @@ CreateThread(function()
     end
 end)
 
+-- ============================================================================
+--                       A VOIDED OR RESTORED SOURCE ROW
+-- ============================================================================
+-- A reward follows the row it pays for: a supervisor award's points row (supAward, key 'sup:<rowId>') and the
+-- officer's own row of a live run (surrender, key '<run_uuid>:<suspect>'). Voiding that row voids the reward row as a
+-- correction (no strike), so its cash is never paid at login and the forfeiture jobs forfeit its cash and items after
+-- the dispute window; restoring the row (a dispute, a batch restore) brings the reward back.
+
+local function Rows(sql, params)
+    local ok, rows = pcall(MySQL.query.await, sql, params)
+    if not ok then
+        CP.err(TAG, 'a linked reward lookup failed: %s', tostring(rows))
+        return nil
+    end
+    return type(rows) == 'table' and rows or {}
+end
+
+local function Breakdown(r)
+    local t = U.jsonField(r.breakdown)
+    return type(t) == 'table' and t or {}
+end
+
+-- The reward rows paid for row rowId, voided (true) or not (false) -> { id... }.
+local function LinkedRewards(rowId, voided)
+    local src = (Rows('SELECT id, run_uuid, citizenid, mission_id FROM cp_mission_runs WHERE id = ?', { rowId }) or {})[1]
+    if not src or type(src.mission_id) ~= 'string' or src.mission_id:sub(1, 7) == 'reward_' then return {} end
+    local flag = voided and 1 or 0
+    local out = {}
+    if src.mission_id == 'manual_award' then
+        local uuid = FR.uuidOf('supAward', ('sup:%s'):format(tostring(rowId)), src.citizenid)
+        for _, r in
+            ipairs(Rows(
+                [[SELECT id, breakdown FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = ?
+            AND mission_id = 'reward_supAward' AND voided = ?]],
+                { uuid, src.citizenid, flag }
+            ) or {})
+        do
+            out[#out + 1] = r
+        end
+    elseif type(src.run_uuid) == 'string' and src.run_uuid ~= '' then
+        local prefix = src.run_uuid .. ':'
+        for _, r in
+            ipairs(
+                Rows([[SELECT id, breakdown FROM cp_mission_runs WHERE citizenid = ?
+            AND mission_id = 'reward_surrender' AND voided = ? ORDER BY id]], { src.citizenid, flag }) or {}
+            )
+        do
+            local key = Breakdown(r).caseKey
+            if type(key) == 'string' and key:sub(1, #prefix) == prefix then out[#out + 1] = r end
+        end
+    end
+    if voided then
+        local mine = {}
+        for _, r in ipairs(out) do
+            if math.tointeger(tonumber(Breakdown(r).voidedWith)) == math.tointeger(tonumber(rowId)) then
+                mine[#mine + 1] = r
+            end
+        end
+        out = mine
+    end
+    return out
+end
+
+local function Fire(hook, id)
+    if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire(hook, id) end
+end
+
+function FR.onSourceVoided(rowId)
+    rowId = math.tointeger(tonumber(rowId))
+    if not rowId then return 0 end
+    local n = 0
+    for _, r in ipairs(LinkedRewards(rowId, false)) do
+        local ok, c = pcall(MySQL.update.await, [[UPDATE cp_mission_runs SET voided = 1, void_kind = 'correction',
+            breakdown = IF(JSON_VALID(breakdown), JSON_SET(JSON_SET(breakdown, '$.cash.beforeVoid', cash_status),
+            '$.voidedWith', ?), breakdown)
+            WHERE id = ? AND voided = 0]], { rowId, r.id })
+        if ok and (tonumber(c) or 0) > 0 then
+            n = n + 1
+            CP.log(TAG, 'reward row %s voided with row %d', tostring(r.id), rowId)
+            if CP.Scoring and CP.Scoring.onRowVoided then
+                pcall(CP.Scoring.onRowVoided, r.id)
+            else
+                Fire('row:voided', r.id)
+            end
+        elseif not ok then
+            CP.err(TAG, 'reward row %s could not be voided with row %d: %s', tostring(r.id), rowId, tostring(c))
+        end
+    end
+    return n
+end
+
+function FR.onSourceRestored(rowId)
+    rowId = math.tointeger(tonumber(rowId))
+    if not rowId then return 0 end
+    local n = 0
+    for _, r in ipairs(LinkedRewards(rowId, true)) do
+        local before = (Breakdown(r).cash or {}).beforeVoid
+        -- cash the forfeiture job forfeited because of this void (no money had moved) is pending again
+        if before == 'held' or before == 'pending' then
+            pcall(MySQL.update.await, [[UPDATE cp_mission_runs SET cash_status = 'pending',
+                breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.cash.status', 'pending'), breakdown)
+                WHERE id = ? AND voided = 1 AND cash_status = 'forfeited' AND cash_paid = 0]], { r.id })
+        end
+        local ok, c = pcall(MySQL.update.await, [[UPDATE cp_mission_runs SET voided = 0, void_kind = NULL,
+            breakdown = IF(JSON_VALID(breakdown), JSON_REMOVE(breakdown, '$.cash.beforeVoid', '$.voidedWith'), breakdown)
+            WHERE id = ? AND voided = 1]], { r.id })
+        if ok and (tonumber(c) or 0) > 0 then
+            n = n + 1
+            CP.log(TAG, 'reward row %s restored with row %d', tostring(r.id), rowId)
+            Fire('row:restored', r.id)
+            Fire('row:approved', r.id)
+            Fire('row:forfeitUndone', r.id)
+            if CP.Cash and CP.Cash.release then pcall(CP.Cash.release, r.id) end
+        end
+    end
+    return n
+end
+
+if CP.Hooks and CP.Hooks.on then
+    CP.Hooks.on('row:voided', function(rowId) FR.onSourceVoided(rowId) end)
+    CP.Hooks.on('row:restored', function(rowId) FR.onSourceRestored(rowId) end)
+end
+
 -- Test hooks (not part of the contract).
 FR._reset = function() busy = {} end

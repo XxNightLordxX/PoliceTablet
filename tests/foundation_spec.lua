@@ -934,6 +934,14 @@ do
         points = 0,
     }), 'decide with points = 0')
     H.eq(p1.score.correct_disposition, nil, 'points = 0 records the grade without an award')
+    -- (Z12) every hinted occurrence keeps its own value, next to the latest hint
+    Runs.award(run, 'z12_hint', { points = 20 })
+    Runs.award(run, 'z12_hint', { points = 20 })
+    Runs.award(run, 'z12_hint', { points = 5 })
+    H.ok(run.score.values.z12_hint == 5 and run.score.sums.z12_hint['20'] == 2 and run.score.sums.z12_hint['5'] == 1,
+        '(Z12) run.score.sums keeps each value with its count')
+    Runs.award(run, 'z12_hint', { points = 7, src = 1 })
+    H.eq(p1.scoreSums and p1.scoreSums.z12_hint and p1.scoreSums.z12_hint['7'], 1, '(Z12) and a personal one')
     fired = {}
     Runs.objectiveComplete(run, 1)
     Runs.objectiveComplete(run, 2)

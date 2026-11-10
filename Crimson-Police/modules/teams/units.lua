@@ -323,6 +323,9 @@ local function FinishCheck(unit, check)
     if check.done then return end
     check.done = true
     readyChecks[unit.id] = nil
+    -- the lock's grace starts again here: a long ready check must not let the sweep unlock the unit while its run is
+    -- still being created
+    if unit.locked then unit.lockedAt = os.time() end
     ClearPrompts(check)
     PushUnit(unit)
     CP.log(TAG, 'unit %s: everyone is ready for %s', tostring(unit.id), tostring(check.typeKey))
@@ -556,6 +559,16 @@ function Units.remove(src, opts)
     local removed = false
     local unit = Units.unitOf(src)
     if unit then removed = RemoveMember(unit, src, reason, opts.silent == true) end
+    -- a Cross-Department team's ready check src is asked in is cancelled the same way as a unit's
+    local ids = {}
+    for id in pairs(teams) do ids[#ids + 1] = id end
+    table.sort(ids)
+    for _, id in ipairs(ids) do
+        local team, check = teams[id], readyChecks[id]
+        if team and check and not check.done and IndexOf(check.members, src) then
+            CancelCheck(team, 'err.unit_ready_cancelled', { src }, READY_LEFT_TOAST[reason] or 'unit.ready.cancel_left')
+        end
+    end
     DropInvitesTo(src, nil, (reason == 'disconnected' or reason == 'lost') and 'unit.invite_cancelled' or nil)
     return removed
 end
@@ -639,6 +652,8 @@ local function ReadyCheck(ref, typeKey, onReady, onCancel, extra)
         end
     end)
     CP.log(TAG, 'unit %s: ready check for %s (%d s)', tostring(unit.id), tostring(typeKey), timeout)
+    -- the sweep (arena, real calls) runs for this check too, also when no unit exists (a Cross-Department team)
+    if Units._arm then Units._arm() end
     return true
 end
 Units.readyCheck = ReadyCheck
@@ -1455,7 +1470,8 @@ function Units.view(src)
                 local kicked = KickBlocked(p, src, liveUnit, os.time())
                 if o and not kicked and not OnRun(p) and not InArena(p) then
                     local theirs = Units.unitOf(p)
-                    if not theirs or #theirs.members < max then
+                    -- their unit is full by its own leader's cap, the one Invite enforces
+                    if not theirs or #theirs.members < MaxSize(LeaderDept(theirs)) then
                         view.invitable[#view.invitable + 1] = {
                             src = p,
                             name = o.name or ('#' .. p),

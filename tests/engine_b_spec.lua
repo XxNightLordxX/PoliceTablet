@@ -1823,6 +1823,23 @@ LG.objectives[1].state.log = { point = 2, choices = { { id = 'secure', label = '
 H.advance(1000)
 H.eq(Last('push').data.log.point, 2, 'a log point set by a block tick is pushed on that tick')
 LG.objectives[1].state.log = nil
+-- (Z12) a counter that moves twice inside the push throttle: the second change is pushed on a later tick
+do
+    H.advance(3000)
+    local function PushedValue()
+        local d = Last('push') and Last('push').data
+        local o = d and d.objectives and d.objectives[1]
+        return o and o.value
+    end
+    local beforeHud = Count('push')
+    Runs.ctx(LG, 1).hud({ value = 3, max = 5 })
+    H.ok(Count('push') == beforeHud + 1 and PushedValue() == 3, '(Z12) the first change is pushed at once')
+    Runs.ctx(LG, 1).hud({ value = 4, max = 5 })
+    H.eq(Count('push'), beforeHud + 1, '(Z12) the second, inside the throttle, waits')
+    H.advance(3000)
+    H.eq(PushedValue(), 4, '(Z12) and is pushed on a later tick (no trailing change needed)')
+    Runs.ctx(LG, 1).hud({ value = false, max = false })
+end
 H.fire('crimson-police:server:telemetry', 2, LG.id, 'area', { index = 0, text = 'Route 68 · Harmony' })
 H.eq(Last('push').src, 2, 'the area is pushed to that participant')
 H.eq(Runs.view(LG, 2).area, 'Route 68 · Harmony', 'view.area falls back to the start')
@@ -2140,6 +2157,24 @@ do
     H.ok(tostring(Last('ac.flag').detail):find('min 7.5 s', 1, true) ~= nil,
         'fractional minSeconds: the detail keeps the fraction')
     Runs.removeParticipant(HS, 7, 'cancelled')
+
+    -- (Z12) a block that has nothing to work completes at once (opts.empty): no minSeconds, no too_fast flag
+    do
+        local ES = Runs.create({
+            mission = halfMission,
+            locationIndex = 1,
+            missionType = 'patrol',
+            members = { O7 },
+            leaderSrc = 7,
+        })
+        Runs.markArrived(ES, 7)
+        H.advance(2000)
+        local flagsEmpty = Count('ac.flag')
+        H.eq(Runs.ctx(ES, 1).complete({ skipped = true }, { empty = true }), true,
+            '(Z12) an empty completion goes through before minSeconds')
+        H.eq(Count('ac.flag'), flagsEmpty, '(Z12) ...with no too_fast flag')
+        if ES.state ~= 'ended' then Runs.removeParticipant(ES, 7, 'cancelled') end
+    end
 
     -- in-arena leave: the bag is not touched (only the intent is forgotten)
     local AR = Runs.create(

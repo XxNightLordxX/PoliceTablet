@@ -592,7 +592,7 @@ function Kit.startJob(spec)
         Encode(detail),
         #ids,
         ActorId(spec.src),
-        spec.reason and tostring(spec.reason):sub(1, REASON_MAX) or nil,
+        spec.reason and U.clip(tostring(spec.reason), REASON_MAX) or nil,
     })
     if not ok then
         Kit.unlock('job')

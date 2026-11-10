@@ -441,7 +441,7 @@ do
     H.eq(#f1, 0, 'the first case of a pair never flags')
     local run2, _, f2 = Case({ 1 }, { E }, { play = Plain })
     H.ok(#f2 == 0 and #Flagged(run2) == 0, 'the second case of the pair without a second sign does not flag')
-    local run3, _, f3 = Case({ 1 }, { E }, {
+    local run3, case3, f3 = Case({ 1 }, { E }, {
         play = function(run)
             Opp.noteArmed(E)
             Pass(30)
@@ -454,6 +454,12 @@ do
     H.ok(fl and fl[2] == 1 and run3.participants[1].flagged and run3.participants[1].flagged.reason == 'rs_pair_repeat',
         'on that officer (his own points only)')
     H.eq(run3.flagged, nil, 'never the whole run')
+    local pairLine = nil
+    for _, e in ipairs(case3 and case3.timeline or {}) do
+        if e.what == 'pair_repeat' then pairLine = e end
+    end
+    H.ok(pairLine and pairLine.who and pairLine.who.cid == A,
+        '(Z12) the pair_repeat timeline line names the flagged officer: ' .. tostring(pairLine and pairLine.who))
     H.ok(
         fl and tostring(fl[4]):find('3 cases', 1, true) and tostring(fl[4]):find('30 s after the case started', 1, true),
         'the detail says how often and which sign: ' .. tostring(fl and fl[4]))

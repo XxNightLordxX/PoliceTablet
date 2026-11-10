@@ -2743,7 +2743,7 @@ local function Start(ctx)
     -- second violator); otherwise it completes at once with nothing spawned and nothing handed off
     if tonumber(ctx.obj.team) and #(ctx.participants() or {}) < tonumber(ctx.obj.team) and st.counts.vehicles == 0 then
         st.skipped = true
-        if ctx.complete({ skipped = true }) ~= false then st.completed = true end
+        if ctx.complete({ skipped = true }, { empty = true }) ~= false then st.completed = true end
         return
     end
     Prepare(ctx)
@@ -2758,7 +2758,7 @@ local function Tick(ctx, dt)
     local st = StateOf(ctx)
     if st.halted or st.failed or st.completed then return end
     if st.skipped then
-        if ctx.complete({ skipped = true }) ~= false then st.completed = true end
+        if ctx.complete({ skipped = true }, { empty = true }) ~= false then st.completed = true end
         return
     end
     dt = tonumber(dt) or 1

@@ -1233,6 +1233,8 @@ local function OnEvent(ctx, src, ev)
                 return false, 'too_far'
             end
             MarkCuffed(ctx, st, f)
+            -- the arrest counts for this officer's service record and the arrests metric
+            if CP.Runs and CP.Runs.noteArrest and ctx.run then CP.Runs.noteArrest(ctx.run, src, f.netId) end
             ok = true
         end
     else

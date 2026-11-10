@@ -1050,6 +1050,14 @@ do
         'a missing society account: ' .. text)
     H.ok(text:find('warn:', 1, true) ~= nil, 'a balance below Cash.lowBalanceWarn')
     bank.balance.fib = 5000
+    -- (Z12) source = 'society' with no banking script serving: pay goes out as new money, so no unfunded lines
+    CP.Banking.societyOn = function() return false end
+    local none = Pay.health()
+    local errs = 0
+    for _, l in ipairs(none) do if l.level == 'error' or l.level == 'warn' then errs = errs + 1 end end
+    H.eq(errs, 0, '(Z12) no banking script: no society account or low balance line')
+    H.eq(Pay.lowBalanceToasts(), 0, '(Z12) and no low balance toast')
+    CP.Banking.societyOn = nil
     Config.Cash.lowBalanceWarn = 0
     Config.Cash.source = 'server'
 end

@@ -648,6 +648,17 @@ do
     H.eq(saved1000, 1, 'the saved job reached the last row')
     local _, pushes0 = Run(0)
     H.eq(pushes0, 22, '0 ms: a push after every batch (the old behaviour)')
+    -- (Z12) a 255 character accented reason: the job row is written, its reason cut inside no character
+    local okA, idA
+    CreateThread(function()
+        okA, idA = Kit.startJob(
+            { kind = 'kitThrottle', src = 1, reason = ('\195\169'):rep(200), ids = { 1 }, wait = true })
+    end)
+    for _ = 1, 20 do H.step(20) end
+    H.ok(okA and type(idA) == 'string', '(Z12) a job with a long accented reason starts')
+    local rowA = type(idA) == 'string' and H.sql(('SELECT reason FROM cp_admin_jobs WHERE id = \'%s\''):format(idA))[1]
+    H.ok(rowA and type(rowA.reason) == 'string' and utf8.len(rowA.reason) ~= nil and #rowA.reason <= 255,
+        '(Z12) its saved reason is valid UTF-8 within 255 bytes')
     Config.AdminControl.jobProgressEveryMs = saved
 end
 
@@ -952,6 +963,16 @@ do
         ORDER BY id DESC LIMIT 1]])[1]
     H.ok(h and h.action == 'settingReset' and h.new_json == nil and cjson.decode(h.old_json).v[1] == 'alpha',
         'a reset keeps the old value (NULL = config.lua\'s)')
+    -- (Z12) a long accented reason is cut on a character boundary, so the history row is still written
+    S.set(1, 'Profile.bannedWords', { 'gamma' }, nil, { reason = ('\195\169'):rep(200) })
+    local hr = H.sql([[SELECT reason FROM cp_settings_history WHERE setting_key = 'Profile.bannedWords'
+        ORDER BY id DESC LIMIT 1]])[1]
+    H.ok(hr and type(hr.reason) == 'string' and utf8.len(hr.reason) ~= nil and #hr.reason <= 255,
+        '(Z12) a 200 accented character reason keeps its history row, cut inside no character')
+    S.reset(1, 'Profile.bannedWords')
+    H.sql([[DELETE FROM cp_settings_history WHERE setting_key = 'Profile.bannedWords']])
+    S.set(1, 'Profile.bannedWords', { 'alpha', 'beta' })
+    S.reset(1, 'Profile.bannedWords')
     local hist = Async(function() return S.history({ path = 'Profile.bannedWords' }) end)
     H.ok(hist and hist.total == 2 and hist.rows[1].action == 'settingReset' and hist.rows[2].new[1] == 'alpha',
         'Settings.history reads them back, newest first')

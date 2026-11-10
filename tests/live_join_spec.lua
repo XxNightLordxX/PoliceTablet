@@ -349,9 +349,24 @@ do
     local inUnit = {}
     for _, c in ipairs(asked and asked.unit or {}) do inUnit[c] = true end
     H.ok(inUnit.OF1 and inUnit.OF3 and not inUnit.OF8, '...with the active officers of the case as his unit')
+    -- (Z12) the completion caps a claim is held to (CP.Draw.joinCaps) refuse a backup join too
+    local savedDraw, capAsked = CP.Draw, nil
+    CP.Draw = setmetatable({
+        joinCaps = function(o, missionType, live)
+            capAsked = { cid = o.citizenid, missionType = missionType, live = live }
+            if o.citizenid == 'OF13' then return false, 'err.hourly_cap' end
+            return true
+        end,
+    }, { __index = savedDraw or {} })
+    Place(13, vec3(0.0, 55.0, 30.0))
+    H.eq(select(2, Runs.addParticipant(run, 13)), 'err.hourly_cap', '(Z12) a backup at his hourly cap cannot join')
+    H.eq(run.participants[13], nil, '(Z12) ...he is not in the run')
+    H.ok(capAsked and capAsked.missionType == 'tactical' and capAsked.live == true,
+        '(Z12) ...asked for the case\'s mission type, as a live join')
     Place(12, vec3(0.0, 60.0, 30.0))
     H.ok(Runs.addParticipant(run, 12) ~= nil, 'F3: anyone else joins as before')
     CP.FieldTraining = nil
+    CP.Draw = savedDraw
 
     local before = #LinesOf('participant_cuff')
     H.eq(LC.cuffHint(run, 3), true, 'F3: CP.LiveCrime.cuffHint exists for the proof\'s cuff pair')

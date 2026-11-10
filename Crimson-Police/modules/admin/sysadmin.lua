@@ -2253,6 +2253,10 @@ Kit.action('server:admin:deleteDepartment', 'departmentsAdmin', function(ctx)
     if enabled == 0 then return false, 'err.dept_last' end
     local ok, err = CP.Settings.set(ctx.src, 'Departments.' .. key, nil, true, { reason = ctx.reason })
     if not ok then return false, err end
+    -- its Mission control rows go too, so a department added again with this key starts from config.lua
+    local okC, errC = pcall(MySQL.update.await, 'DELETE FROM cp_dept_controls WHERE department = ?', { key })
+    if not okC then CP.err(TAG, 'the Mission controls of %s could not be removed: %s', key, tostring(errC)) end
+    if CP.DeptControls and CP.DeptControls.clearCache then CP.DeptControls.clearCache(key) end
     ctx.audit('departmentDeleted', key, d.short)
     ctx.changed('department')
     return true, { key = key }

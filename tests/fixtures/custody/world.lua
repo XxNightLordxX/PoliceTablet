@@ -263,6 +263,11 @@ W.stub = {}
 CP.Blocks.register('stub_pursuit', {
     start = function(ctx)
         local o = ctx.obj
+        -- o.none: nothing handed over (a wrecked car, a pursuit skipped by team)
+        if o.none then
+            ctx.complete()
+            return
+        end
         local _, car = ctx.spawnVehicle(
             { model = 'sultan', coords = o.at or vec4(200.0, 200.0, 30.0, 0.0), role = 'suspect_car' })
         local occ = {}

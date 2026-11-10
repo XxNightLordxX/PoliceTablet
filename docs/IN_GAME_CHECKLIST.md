@@ -703,6 +703,36 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   line name the first automatic backup; the second one is gone and the first stays protected. (Z11)
 - [ ] Admin test run of a pursuit that hands off to a stop: Restart objective on the stop: the car and occupants stay
   and can be worked again; the stop does not complete with 0/0. (Z11)
+- [ ] Live crimes on, an officer at his hourly cap (Mission controls hourlyCap 1, one run done): a LIVE claim is
+  refused, and the backup join pop-up answers "You reached the hourly limit..." too; he is not added. (Z12)
+- [ ] FeatureRewards.supAward on: award points to an offline officer, then void that award row (Admin UI -> Runs):
+  at his login no award money is paid; restoring the row (a dispute) pays it once. A live run row voided after a
+  Talk them down does the same for its surrender reward. (Z12)
+- [ ] Stolen Vehicle Takedown, wreck the suspect car: the stop completes at once with nothing to work, and the run
+  is not held for review as too fast. A pursuit skipped by team (Traffic Enforcement, one officer) is not either. (Z12)
+- [ ] Admin bulk void or a Settings revert with a 200 character accented reason (e.g. "é" repeated): the job starts
+  and Settings -> History has the row. (Z12)
+- [ ] Cash.source = 'society' with Integrations.banking = 'none': Admin UI -> Problems shows no "account does not
+  exist ... unfunded" line, and no low balance toast. (Z12)
+- [ ] Add a department in game, change one of its Mission controls, delete it, add it again with the same key:
+  its Mission controls start from config.lua. (Z12)
+- [ ] Manhunt: cuff the fugitive: the officer's service record and the arrests leaderboard count one arrest. (Z12)
+- [ ] Unit with a 40 s ready check (readyCheck control): the last member answers after 35 s; the run starts and
+  the leader cannot kick or disband during it. (Z12)
+- [ ] Cross-Department Mission with readyCheck on and no unit on the server: a team member disconnects or goes off
+  duty during the check: it is cancelled at once with the toast (not after the timeout). (Z12)
+- [ ] unitSize SAST 2, LSPD 4 (or FIB): a full SAST unit of 2 is not listed on an FIB leader's invite list; a
+  SAST leader sees FIB officers in a unit of 3. (Z12)
+- [ ] Markers.rules.prisonerVan = { roles = 'leader' }: request a van, the leader leaves the run: the new leader
+  gets the van blip within a few seconds, the old one loses it. (Z12)
+- [ ] Real suspects timeline of a live case: the repeated pairing line names the officer, and the scene steps read
+  "Officers reached the scene", "Officers secured the scene", "<officer> ended the case" (no bare codes). (Z12)
+- [ ] Review Queue: approve or void a flagged run: the Department sidebar badge and the Waiting for review tile
+  drop within about a second, for you and for another supervisor with the queue open. (Z12)
+- [ ] Active Mission with a counter that moves twice within 2 s (two quick catches): the tablet shows the new value
+  within about 2 s, without waiting for the 15 s refresh. (Z12)
+- [ ] Mission Builder mission with two field_contact objectives (bestPoints 20 and 5): two Best decisions in the
+  first and one in the second give 45 points for correct_disposition. (Z12)
 - [ ] One restrictions list (FM5): suspend an officer for 2 days (Officers), give another a mission ban (supervisor
   officer dialog, Mission controls on): Admin UI -> People -> Restrictions lists both with who set them, until when
   and why. Extend the ban by 2 hours: Until moves on 2 h and the officer is told; Lift the suspension with a reason:

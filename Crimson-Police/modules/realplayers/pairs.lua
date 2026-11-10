@@ -911,11 +911,17 @@ function Opp.checkPairFlags(run)
                 end
                 if ok and res then out[#out + 1] = row.officer end
                 if type(case.timeline) == 'table' then
+                    -- who: the flagged officer, by citizenid (he may have left), so the staff line names him
+                    local part = officerSrc and run.participants[officerSrc] or nil
                     case.timeline[#case.timeline + 1] = {
                         t = os.time(),
                         what = 'pair_repeat',
                         label = rec.label,
                         src = officerSrc,
+                        who = {
+                            cid = row.officer,
+                            name = type(part) == 'table' and type(part.name) == 'string' and part.name or nil,
+                        },
                         count = n,
                     }
                 end

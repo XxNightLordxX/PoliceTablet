@@ -984,6 +984,22 @@ H.eq(b.capped, false, 'not capped')
 H.eq(b.tod, false, 'no ToD')
 H.eq(b.failedShare, nil, 'no failed share')
 H.eq(CP.Scoring.isFirstRunSinceDuty(1), false, 'first-run bonus used by the completed run')
+do -- (Z12) per-occurrence hints: two Best decisions at 20 and one at 5 give 45, not 3 x the last value
+    local hr = FakeRun({
+        shared = { correct_disposition = 3 },
+        values = { correct_disposition = 5 },
+    })
+    hr.score.sums = { correct_disposition = { ['20'] = 2, ['5'] = 1 } }
+    local hb = CP.Scoring.compute(hr, FakeP({ result = 'completed' }), 'completed', { durationS = 300 })
+    H.eq(Find(hb.bonuses, 'correct_disposition') and Find(hb.bonuses, 'correct_disposition').points, 45,
+        '(Z12) each occurrence at its own value (20 + 20 + 5)')
+    local hp = FakeP({ result = 'completed', score = { correct_disposition = 1 } })
+    hp.scoreSums = { correct_disposition = { ['20'] = 1 } }
+    local hr2 = FakeRun({ values = { correct_disposition = 5 } })
+    hb = CP.Scoring.compute(hr2, hp, 'completed', { durationS = 300 })
+    H.eq(Find(hb.bonuses, 'correct_disposition') and Find(hb.bonuses, 'correct_disposition').points, 20,
+        '(Z12) a personal occurrence keeps its own value')
+end
 do -- step P8: a department scaled the time limit (x1.25): the fast bonus still needs 75 % of the unscaled limit
     local scaled = FakeRun({ duration = 500, timeLimit = 750 })
     scaled.fastBaseLimit = 600

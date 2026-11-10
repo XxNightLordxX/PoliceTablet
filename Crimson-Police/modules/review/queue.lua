@@ -151,6 +151,7 @@ function Review.share(src, dept)
                 local okQ, queue = pcall(Review.queueFor, viewer, false)
                 if okQ and type(queue) == 'table' and CP.push(viewer, 'reviewQueue', queue) ~= false then
                     n = n + 1
+                    Call('Tablet', 'navChanged', viewer, { review = true })   -- his badge and tile too
                 end
             end
         end
@@ -238,6 +239,8 @@ function Review.reply(src, ok, data, depts, all)
     end
     local okQ, queue = pcall(Review.queueFor, src, all)
     if okQ and type(queue) == 'table' then out.queue = queue end
+    -- the decider's sidebar badge and Waiting for review tile count again
+    Call('Tablet', 'navChanged', src, { review = true })
     pcall(Review.share, src, depts)
     return true, out
 end

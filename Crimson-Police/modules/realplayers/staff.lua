@@ -42,6 +42,7 @@ local LINE_KEYS = {
     officer_joined = true,
     join_offered = true,
     join_declined = true,
+    participant_cuff = true,
     armed = true,
     down = true,
     up = true,
@@ -79,6 +80,11 @@ local LINE_KEYS = {
     surrendered = true,
     surrender_ended = true,
     peaceful_arrest = true,
+    -- a live case's own steps (blocks/live_response)
+    responded = true,
+    scene_secured = true,
+    dead_case = true,
+    end_case = true,
 }
 
 local STATE_KEY = {

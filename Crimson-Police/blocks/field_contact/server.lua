@@ -1347,7 +1347,9 @@ local function TryComplete(ctx, st)
         AllCorrect(ctx, st)
         Procedure(ctx, st)
     end
-    if ctx.complete({ decided = done, total = total }) ~= false then st.completed = true end
+    -- a stop with no car handed over (a wreck, a skipped pursuit) has nothing to work: no minimum time
+    local empty = st.mode == 'stop' and #st.order == 0
+    if ctx.complete({ decided = done, total = total }, { empty = empty }) ~= false then st.completed = true end
 end
 
 -- ============================================================================

@@ -380,8 +380,17 @@ do
     ok, e = Act('server:admin:deleteDepartment', 1, { key = 'bcso', reason = 'r', confirm = 'BCS' })
     H.ok(ok == false and e == 'err.dept_has_rows', 'a department with history can\'t be deleted')
     H.sql('DELETE FROM cp_mission_runs WHERE run_uuid = \'d1\'')
+    H.sql([[DELETE FROM cp_dept_controls WHERE department = 'sast']])
+    H.sql([[INSERT INTO cp_dept_controls (department, control_key, value_json, expires_at, set_by, set_role)
+        VALUES ('bcso', 'readyCheck', '{"v": 40}', NULL, 'ADM00001', 'admin'),
+        ('sast', 'readyCheck', '{"v": 20}', NULL, 'ADM00001', 'admin')]])
     ok, e = Act('server:admin:deleteDepartment', 1, { key = 'bcso', reason = 'r', confirm = 'BCS' })
     H.ok(ok == true and Config.Departments.bcso == nil, 'deleted when it has no rows: ' .. tostring(e))
+    H.eq(H.sql([[SELECT COUNT(*) AS n FROM cp_dept_controls WHERE department = 'bcso']])[1].n, 0,
+        '(Z12) its Mission control rows are removed too')
+    H.eq(H.sql([[SELECT COUNT(*) AS n FROM cp_dept_controls WHERE department = 'sast']])[1].n, 1,
+        '(Z12) another department keeps its rows')
+    H.sql([[DELETE FROM cp_dept_controls WHERE department = 'sast']])
     H.eq(S._saved()['Departments.bcso'], nil, 'its setting is gone')
 end
 

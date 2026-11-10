@@ -577,6 +577,7 @@ local function PushRun(run, srcs)
         end
     end
     run.pushedAt = GetGameTimer()
+    if not srcs then run.pushOwed = nil end
 end
 
 local function PushNone(src)
@@ -698,7 +699,9 @@ local function GetCtx(run, i)
             -- the Radio Silence twist (run.modifiers), as the client halves get it (their ctx.radioSilence)
             radioSilence = CP.Twists.has(run, 'radio_silence'),
         }
-        ctx.complete = function(data) return Runs.objectiveComplete(run, i, data) end
+        -- opts.empty = true: the block's own server code found nothing to work (a stop with no car handed over, a
+        -- pursuit skipped by team), so the objective's minSeconds does not apply
+        ctx.complete = function(data, opts) return Runs.objectiveComplete(run, i, data, opts) end
         ctx.fail = function(reasonKey) return Runs.failRun(run, reasonKey) end
         ctx.award = function(id, opts) return Runs.award(run, id, opts) end
         ctx.penalize = function(id, opts) return Runs.penalize(run, id, opts) end
@@ -1357,8 +1360,12 @@ local function RefreshHud(run, force)
         Runs.hud(run, { objectives = list })
         if force or logChanged or not run.pushedAt or GetGameTimer() - run.pushedAt >= PUSH_THROTTLE_MS then
             PushRun(run)
+        else
+            run.pushOwed = true   -- throttled: a later tick sends it
         end
     elseif logChanged then
+        PushRun(run)
+    elseif run.pushOwed and (not run.pushedAt or GetGameTimer() - run.pushedAt >= PUSH_THROTTLE_MS) then
         PushRun(run)
     end
 end
@@ -3882,6 +3889,9 @@ function Runs.addParticipant(run, src, opts)
     end
     local okT, trainerOk, ftErr = Call('FieldTraining', 'joinCheck', o.citizenid, unit, run.missionType)
     if okT and trainerOk == false then return nil, ftErr or 'err.fto_trainer_needed' end
+    -- the completion caps a claim is held to: the hour and day caps, the type's daily limit, the type cooldown
+    local okJ, capsOk, capErr = Call('Draw', 'joinCaps', o, run.missionType, true)
+    if okJ and capsOk == false then return nil, capErr or 'err.hourly_cap' end
     local okF, first = Call('Scoring', 'isFirstRunSinceDuty', src)
     -- no yield from here until he is in the run: what the lookups may have changed is checked again
     if not Open() then return nil, 'err.run_not_active' end
@@ -3897,6 +3907,7 @@ function Runs.addParticipant(run, src, opts)
     p.joinedLate = true
     p.joinedVia = type(opts.via) == 'string' and opts.via or nil
     p.sharedBefore = U.copy(run.score and run.score.shared or {})
+    p.sumsBefore = U.deepcopy(run.score and run.score.sums or {})
     run.participants[src] = p
     run.order[#run.order + 1] = src
     bySrc[src] = run.id
@@ -4151,8 +4162,9 @@ local function CompleteObjective(run, index, data, bypass)
     return true
 end
 
-function Runs.objectiveComplete(run, index, data)
-    return CompleteObjective(run, index, data, false)
+-- opts.empty = true (ctx.complete's second argument, server code only): nothing to work, no minSeconds.
+function Runs.objectiveComplete(run, index, data, opts)
+    return CompleteObjective(run, index, data, type(opts) == 'table' and opts.empty == true)
 end
 
 function Runs.failRun(run, reasonKey)
@@ -4221,6 +4233,20 @@ local function Record(run, id, opts, kind)
         local v = tonumber(opts.points)
         if kind == 'penalty' then v = -math.abs(v) end
         run.score.values[id] = v
+        -- each occurrence keeps its own value: { [id] = { [tostring(v)] = count } }, shared or personal, so two
+        -- objectives with their own points for one id are each paid theirs (CP.Scoring HintTotal)
+        local sums
+        if src then
+            local p = run.participants[src]
+            p.scoreSums = p.scoreSums or {}
+            sums = p.scoreSums
+        else
+            run.score.sums = run.score.sums or {}
+            sums = run.score.sums
+        end
+        local key = tostring(v)
+        sums[id] = sums[id] or {}
+        sums[id][key] = (sums[id][key] or 0) + count
     end
     run.score.kinds[id] = kind
     CP.log(TAG, 'run %s: %s %s x%s%s', run.id, kind, id, tostring(count), src and (' for ' .. src) or '')

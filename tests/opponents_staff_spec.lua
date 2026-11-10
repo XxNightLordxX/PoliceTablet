@@ -107,6 +107,10 @@ do
     Opp.timeline(R1, { what = 'cuffed_by_outsider', label = label, src = 2, by = 5 })
     Opp.timeline(R1, { what = 'rs_unarmed_shot', label = label, src = 2, by = 1, detail = 'shot once' })
     Opp.note(R1, 'rs_combat_log', 'left within 20 s', 'CRIM0001')
+    -- (Z12) the live case's own steps and a participant's cuff read as text, not their codes
+    for _, what in ipairs({ 'responded', 'scene_secured', 'dead_case' }) do Opp.timeline(R1, { what = what }) end
+    Opp.timeline(R1, { what = 'end_case', src = 1 })
+    Opp.timeline(R1, { what = 'participant_cuff', src = 1 })
     case.ledger[#case.ledger + 1] = {
         t = os.time(),
         dir = 'officer',
@@ -135,6 +139,12 @@ do
     H.eq(byWhat.cuffed_by_outsider.by.citizenid, 'OUT00001',
         'a server id is named as it was when the line was written (not the player who has it now)')
     H.eq(byWhat.suspect.who.name, 'Bo Test', 'the open line names the suspect')
+    for _, what in ipairs({ 'responded', 'scene_secured', 'dead_case', 'end_case', 'participant_cuff' }) do
+        local l = byWhat[what]
+        H.ok(l and l.text ~= what and not l.text:find('opp.line', 1, true),
+            '(Z12) a readable ' .. what .. ' line: ' .. tostring(l and l.text))
+    end
+    H.eq(byWhat.end_case and byWhat.end_case.text, 'Ada Test (OFF00001) ended the case', '(Z12) end_case names who')
     H.eq(#view.flagLines, 2, 'flag lines: the officer flag and the suspect note')
     local flag, note = nil, nil
     for _, l in ipairs(view.flagLines) do

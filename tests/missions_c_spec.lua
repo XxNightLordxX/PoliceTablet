@@ -743,7 +743,8 @@ do
             Secs(4)
         end
         WorkContacts(1, run, 2)
-        local second = run.objectiveIndex >= 3 and Ctx(run, 3) and Ctx(run, 3).state
+        -- the skipped pursuit completes at once (Z12: an empty completion), so the run may already be past it
+        local second = run.objectives[3] and run.objectives[3].state
         if t.count >= 2 then
             H.eq(run.objectiveIndex, 3, 'traffic_enforcement ' .. t.tier .. ': a second violator with two officers')
             Secs(2)

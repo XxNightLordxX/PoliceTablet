@@ -497,6 +497,29 @@ local function HintValue(hints, id, custom, P)
     return v
 end
 
+-- The points of count occurrences of id valued by block hints (CP.Runs.award opts.points): each recorded value times
+-- its own count (run.score.sums, p.scoreSums; a late joiner without the shared ones from before he joined), and any
+-- occurrence recorded without a value at the latest hint, latest.
+local function HintTotal(run, p, id, custom, P, count, latest)
+    local byV = {}
+    local function Add(t, sign)
+        for k, c in pairs(type(t) == 'table' and t or {}) do byV[k] = (byV[k] or 0) + sign * Num(c, 0) end
+    end
+    Add(run.score and run.score.sums and run.score.sums[id], 1)
+    Add(type(p.sumsBefore) == 'table' and p.sumsBefore[id], -1)
+    Add(p.scoreSums and p.scoreSums[id], 1)
+    local total, n = 0, 0
+    for k, c in pairs(byV) do
+        local v = c > 0 and HintValue({ [id] = tonumber(k) }, id, custom, P) or nil
+        if v then
+            total = total + v * c
+            n = n + c
+        end
+    end
+    if n <= 0 then return latest * count end
+    return total + math.max(0, count - n) * latest
+end
+
 -- Per-occurrence value and 'each' of a listed entry. On custom missions only Config.Bonuses ids carry a
 -- value of their own (the builder's capped override, else the config value; its each flag); a file value
 -- (points / pctOfPoints / each) on any other id is ignored, so only a trusted block hint can value it.
@@ -635,6 +658,7 @@ local function ScoreLines(run, p, P, opts)
                 local count = CountOf(run, p, id)
                 if count > 0 then
                     local value = each and per * count or per
+                    if hint then value = HintTotal(run, p, id, custom, P, count, per) end
                     total = total + AddLine(bonuses, penalties, id, value, count, each, l.penalty)
                 end
             end
@@ -655,6 +679,7 @@ local function ScoreLines(run, p, P, opts)
                 -- engine-awarded ids (decision grades, rapid response): never listed by a mission file, valued
                 -- by the recorded hint or Config.Bonuses, on built-in and custom missions alike
                 local per = HintValue(hints, id, false, P)
+                local hinted = per ~= nil
                 if per == nil then
                     local share = Num(cfgB.value, 0)
                     if id == 'rapid_response' then
@@ -665,6 +690,7 @@ local function ScoreLines(run, p, P, opts)
                 end
                 local each = cfgB.each == true
                 local value = each and per * count or per
+                if hinted and each then value = HintTotal(run, p, id, false, P, count, per) end
                 total = total + AddLine(bonuses, penalties, id, value, count, each, kinds[id] == 'penalty')
             elseif count > 0 and c then
                 if id ~= 'lights_siren' or mission.quietPatrol == true or run.quietPatrol == true then
@@ -678,7 +704,9 @@ local function ScoreLines(run, p, P, opts)
                     'bonus/penalty %s was recorded on a custom mission that does not list it; ignored', id)
             elseif count > 0 and HintValue(hints, id, custom, P) then
                 local per = HintValue(hints, id, custom, P)
-                total = total + AddLine(bonuses, penalties, id, per * count, count, true, kinds[id] == 'penalty')
+                total = total
+                    + AddLine(bonuses, penalties, id, HintTotal(run, p, id, custom, P, count, per), count, true,
+                        kinds[id] == 'penalty')
             elseif count > 0 then
                 WarnOnce('unvalued:' .. id,
                     'bonus/penalty %s was recorded but has no value (not on the mission card, not in Config.Scoring.common, no points hint); ignored',

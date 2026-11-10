@@ -187,6 +187,10 @@ do
     saved.hourlyCap = 6
     local ok, err = D.check(1, 'patrol')
     H.ok(ok == false and err == 'err.hourly_cap', 'hourly cap 6: the 7th SAST completion is refused')
+    -- (Z12) a live case's backup join (CP.Runs.addParticipant) is held to the same caps
+    local o1 = CP.Access.getOfficer(1)
+    local okJ, eJ = D.joinCaps(o1, 'patrol', true)
+    H.ok(okJ == false and eJ == 'err.hourly_cap', '(Z12) joinCaps: the hourly cap of a claim')
     ok, err = D.check(2, 'patrol')
     H.ok(ok == false and err == 'err.hourly_cap', 'and the 7th FIB completion (server-wide)')
     local card, lockMax
@@ -218,6 +222,17 @@ do
     saved.dailyCap = 3
     ok, err = D.check(1, 'patrol')
     H.ok(ok == false and err == 'err.daily_cap', 'daily cap 3: the 4th SAST completion today is refused')
+    local okJD, eJD = D.joinCaps(CP.Access.getOfficer(1), 'patrol', true)
+    H.ok(okJD == false and eJD == 'err.daily_cap', '(Z12) joinCaps: the daily cap')
+    H.eq(D.joinCaps(CP.Access.getOfficer(3), 'patrol', true), true, '(Z12) joinCaps: an officer under the caps')
+    local realCd = CP.Runs.cooldowns
+    CP.Runs.cooldowns = function() return { types = { patrol = os.time() + 600 }, missions = {} } end
+    Config.RealPlayers.liveCrime.typeCooldown = true
+    local okJC, eJC = D.joinCaps(CP.Access.getOfficer(3), 'patrol', true)
+    H.ok(okJC == false and eJC == 'err.type_cooldown', '(Z12) joinCaps: the type cooldown with typeCooldown = true')
+    Config.RealPlayers.liveCrime.typeCooldown = false
+    H.eq(D.joinCaps(CP.Access.getOfficer(3), 'patrol', true), true, '(Z12) and none with typeCooldown = false')
+    CP.Runs.cooldowns = realCd
     ok, err = D.check(2, 'patrol', {
         lastHour = function() return 0 end,
         today = function() return 3 end,

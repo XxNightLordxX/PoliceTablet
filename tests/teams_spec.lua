@@ -741,6 +741,66 @@ AddPlayer(6, { job = 'fib', name = 'Leo Park', callsign = 'F-12' })
 players[2].onduty = true
 U._reset()
 
+-- (Z12) the invite list judges another unit as full by that unit's own leader's cap (the one Invite enforces)
+do
+    local savedDCz = CP.DeptControls
+    CP.DeptControls = {
+        get = function(dept, key) return key == 'unitSize' and dept == 'sast' and 2 or nil end,
+    }
+    Act('server:unitInvite', 1, 2)
+    Act('server:unitRespond', 2, true)
+    H.eq(U.unitOf(1) and #U.unitOf(1).members, 2, '(Z12) a SAST unit of 2 (SAST unitSize 2)')
+    local r = Cb('getUnit', 6)
+    local seenZ = {}
+    for _, o in ipairs(r.data and r.data.invitable or {}) do seenZ[o.src] = true end
+    H.ok(r.data and r.data.maxSize == 4 and not seenZ[1] and not seenZ[2],
+        '(Z12) an FIB officer (cap 4) does not list the members of the full SAST unit')
+    local _, eZ = Act('server:unitInvite', 6, 1)
+    H.eq(eZ, 'err.unit_target_in_full_unit', '(Z12) the same answer as Invite')
+    CP.DeptControls = savedDCz
+    U._reset()
+end
+
+-- (Z12) a ready check that ends after LOCK_GRACE re-stamps the lock: the sweep does not unlock the unit while its
+-- run is being created
+do
+    Act('server:unitInvite', 1, 2)
+    Act('server:unitRespond', 2, true)
+    local uz = U.unitOf(1)
+    H.ok(U.lock(uz), '(Z12) lock')
+    local readyZ = 0
+    H.ok(U.readyCheck(uz, 'patrol', function() readyZ = readyZ + 1 end, function() end, { timeout = 40 }),
+        '(Z12) a 40 s ready check')
+    H.time = H.time + U._LOCK_GRACE + 5
+    H.ok(U.ready(2, true), '(Z12) the last member answers after the grace')
+    H.eq(readyZ, 1, '(Z12) the draw follows')
+    U._sweep()
+    H.eq(uz.locked, true, '(Z12) the sweep right after keeps the lock')
+    U._reset()
+end
+
+-- (Z12) a Cross-Department team's ready check: the sweep runs with no unit, and a member who drops cancels it at once
+do
+    U._reset()
+    for _ = 1, 10 do H.step(5000) end
+    H.eq(U._ticking(), false, '(Z12) no unit, no check: the sweep is idle')
+    local cancelZ, whoZ = nil, nil
+    local team = {
+        id = 'op:z12',
+        leader = 2,
+        members = { 2, 3 },
+        info = { [2] = { name = 'A' }, [3] = { name = 'B' } },
+    }
+    H.ok(U.teamReadyCheck(team, 'patrol', function() end, function(k, who) cancelZ, whoZ = k, who end),
+        '(Z12) a team check starts')
+    H.eq(U._ticking(), true, '(Z12) and arms the sweep')
+    H.fire('playerDropped', 3)
+    H.ok(cancelZ == 'err.unit_ready_cancelled' and whoZ and whoZ[1] == 3,
+        '(Z12) a team member who drops cancels the team check: ' .. tostring(cancelZ))
+    H.eq(U.checkFor(2), nil, '(Z12) nothing is left pending')
+    U._reset()
+end
+
 -- ============================================================================
 --                                  OPERATIONS
 -- ============================================================================
