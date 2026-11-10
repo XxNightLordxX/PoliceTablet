@@ -230,6 +230,13 @@ names the change it came with.
 - [ ] Testing: invite an officer, start a test: the debug stream and the invitation expiry work; a unit's invite
   still expires after 120 s; `jobRecheck`: go off duty during a run, you leave it within `jobRecheck` seconds.
 
+## Mission desks from the Qbox duty points
+
+On a station with the normal game interior (README 6.2). Stand at the desk on duty and look at it.
+
+- [ ] Mission Row PD front desk moved (441.20, -978.90) -> (441.00, -977.30, 30.69), 2.5 m from the qbx_policejob duty point: "Open Crimson-Police" shows at the front counter, the box is not inside a wall, and the duty point and trash still work. (LOC2)
+- [ ] Paleto Bay sheriff front desk (new) at (-448.55, 6011.92, 31.82), 1.6 m from the qbx_policejob duty point: "Open Crimson-Police" shows inside the lobby, not outside or in a wall, and the duty point still works. (LOC2)
+
 ## Mission locations and other scripts
 
 Points moved so they stay clear of other public scripts' places (README 7.1): Bomb Disposal spots 2 m from the

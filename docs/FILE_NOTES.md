@@ -561,6 +561,7 @@ docs/ARCHITECTURE.md.
 - `tests/search_area_volunteer_spec.lua`: search_area's volunteer slot (docs/ARCHITECTURE.md §7.3): Manhunt's fugitive played by a volunteer who hides inside the search circle.
 - `tests/server_cost_spec.lua`: Server cost (docs/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
 - `tests/settings_spec.lua`: Admin UI → Settings (modules/settings): the schema read from config.lua and blocks.lua, every check of a value, saving, resetting and a restart in every storage mode, Config and the clients, the mission and location switches.
+- `tests/setup_coords_spec.lua`: Setup coordinates from the Qbox scripts: each shipped mission desk and drop-off names its source or is kept.
 - `tests/shadow/fuzz_agg.lua`: Random aggregate queries, compared in shadow mode (lua5.4 tests/run.lua --fuzz): SUM /
 - `tests/shadow/fuzz_funcs.lua`: Random expressions, compared in shadow mode (lua5.4 tests/run.lua --fuzz): arithmetic on
 - `tests/shadow/fuzz_rows.lua`: Random row queries and writes, compared in shadow mode (lua5.4 tests/run.lua --fuzz):

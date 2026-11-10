@@ -126,25 +126,34 @@ Config.Tablet = {
     -- department who have the Review Queue open see the updated queue at once; false = they see it at their next
     -- refresh, within 30 seconds (as before)
     supervisorReviewLive = false,
-    -- Mission desks: ox_target boxes that open the Officer UI. The coordinates are placeholders near the
-    -- base-game stations, 2 m or more from sc-police's duty points: check them on your MLO.
-    -- departments = nil lets every department use a desk; prop = a laptop only that player sees, or false.
+    -- Mission desks: ox_target boxes that open the Officer UI, one per police station the Qbox police script
+    -- knows, each 1.5-3 m from its duty point in the base-game interior and facing it. A custom station MLO may need
+    -- a desk moved: Admin UI -> Departments -> Desks. departments = nil lets every department use a desk;
+    -- prop = a laptop only that player sees, or false. tests/setup_coords_spec.lua checks the source of each 'from'
     desks = {
         {
             label = 'Mission Row PD front desk',
-            coords = vec3(441.20, -978.90, 30.69),
+            coords = vec3(441.00, -977.30, 30.69),     -- from qbx_policejob config/shared.lua:21 (the duty point)
             size = vec3(1.2, 0.8, 1.0),
-            rotation = 0.0,
+            rotation = 21.0,
             departments = nil,
             prop = false,
         },
         {
             label = 'Sandy Shores office',
-            coords = vec3(1853.20, 3689.60, 34.27),
+            coords = vec3(1853.20, 3689.60, 34.27),    -- kept: Qbox gives this station a map blip, no duty point
             size = vec3(1.2, 0.8, 1.0),
             rotation = 30.0,
             departments = nil,
             prop = 'prop_laptop_01a',
+        },
+        {
+            label = 'Paleto Bay sheriff front desk',
+            coords = vec3(-448.55, 6011.92, 31.82),    -- from qbx_policejob config/shared.lua:22 (the duty point)
+            size = vec3(1.2, 0.8, 1.0),
+            rotation = 52.0,
+            departments = nil,
+            prop = false,
         },
     },
 }
@@ -887,9 +896,9 @@ Config.Alerts = {
 Config.Downed = {
     checkEvery = 2,     -- seconds between downed checks
     pickupDelay = 15,   -- seconds down, with no EMS on duty, before the pick-up
-    dropOffs = {        -- the nearest one is used; defaults are SC-Ambulance's check-in points
-        vec3(308.19, -595.35, 43.29),   -- Pillbox Hill
-        vec3(-254.54, 6331.78, 32.43),  -- Paleto Bay
+    dropOffs = {        -- the nearest one is used; defaults are the hospitals' check-in points
+        vec3(308.19, -595.35, 43.29),   -- Pillbox Hill, from qbx_ambulancejob config/shared.lua:62
+        vec3(-254.54, 6331.78, 32.43),  -- Paleto Bay, from qbx_ambulancejob config/shared.lua:76
     },
 }
 

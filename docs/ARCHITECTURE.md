@@ -1035,6 +1035,9 @@ order; no payout field; `departments = {}`), checked by `tests/missions_b_spec.l
   largest team brings (real `CP.Scaling` counts), armed spawns outside the start circle plus
   `Config.Builder.spawnMargin` unless the director places them (waves, scatter, staged); known cases in
   `tests/spawn_lint_baseline.txt`, which may only shrink.
+- Setup coordinates (`tests/setup_coords_spec.lua`): each shipped mission desk and downed drop-off names its
+  source place (tests/fixtures/foreign_sites.lua) on its config.lua line and stays within 3 m of it; the Sandy
+  Shores desk has no Qbox source and is listed as kept.
 - Other scripts' places (`tests/foreign_sites_spec.lua`): no built-in start or spawn point inside the keep-out circle of
   a fixed place of a public Qbox or ox script (`tests/fixtures/foreign_sites.lua`, written by
   `tools/gen_foreign_sites.py`): 6 m round a garage, vehicle spawn or job spot, 4 m round a hospital, station or

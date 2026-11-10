@@ -247,7 +247,7 @@ UI build: React 18 + TypeScript built with Vite into web/dist (Hard rule Custom 
 
 - Mission desks are ox_target zones ("Open Crimson-Police") created on the officer's client from config (coords, size, rotation, departments, an optional laptop prop that only that client sees). At a desk the officer plays a standing-at-a-computer animation instead of holding the tablet, and the tablet closes when they walk more than 3 m away. Desks never show for players in Crimson-Arena and are removed when the resource stops.
 
-- The shipped desks are placeholders near the base-game Mission Row PD front desk and the Sandy Shores office; check them against your MLO. Admin UI → Departments lists each department's desks, and its Desks tab adds a desk where the admin stands, moves, edits, removes and teleports to one (live, audited).
+- Three desks ship, one per police station qbx_policejob knows: Mission Row PD and Paleto Bay 1.5-3 m from its duty points (config/shared.lua:21 and :22) in the base-game interiors, facing them, and Sandy Shores at its earlier spot (Qbox has only a map blip there); each config.lua line names its source and tests/setup_coords_spec.lua checks it. A custom station MLO may need a desk moved. Admin UI → Departments lists each department's desks, and its Desks tab adds a desk where the admin stands, moves, edits, removes and teleports to one (live, audited).
 
 - The resource ships items/crimson_police_tablet.png and items/ox_inventory_items.lua, a snippet to paste into ox_inventory's items; Crimson-Police never edits ox_inventory.
 
@@ -332,6 +332,7 @@ Location lints (tests)
 
 - Zone lint (tests/zone_lint_spec.lua): every start and non-route point of a new mission's locations is at least zoneClearance (250 m for Drug Lab Raid) from every point of every other mission; a route counts by its ends. The 102 existing cross-mission pairs under 200 m are listed in tests/zone_lint_baseline.txt (warnings; the spec fails on a new pair or a longer list); no built-in location moves (that would reset its test status), and the owner checklist offers the list for a clean-up.
 - Spawn lint (tests/spawn_lint_spec.lua), on the loaded built-in definitions, flat (2D): (1) no two spawn points of one run closer than 1.5 m (every key a block makes people, vehicles or objects from, as Check spawn points reads them; the escort truck at its route's first point); (2) every list has a point for each person, car or item the largest team brings at once (real CP.Scaling counts, each max applied; hostile_waves: the largest wave on the smallest `use` spawn sets; escort: one per ambush wave), no exceptions; (3) every armed point keeps the start circle plus Config.Builder.spawnMargin (CP.Builder.armedKeepOut) unless the director places it as officers come near (hostile_waves, flee_arrest scatter) or it is staged. Known cases are tests/spawn_lint_baseline.txt (26 lines); the spec fails on an unlisted case, a listed armed key coming closer, a stale line, or a longer list.
+- Setup coordinates (`tests/setup_coords_spec.lua`): each shipped mission desk and downed drop-off names its source place in tests/fixtures/foreign_sites.lua on its config.lua line ('from qbx_policejob config/shared.lua:21') and is within 3 m and 1 m of height of it, 1.5 m clear of every other place, inside the map and in no other no-build zone; a desk is 1.5 m or more off its duty point and faces it. The Sandy Shores desk has no Qbox source and is listed as kept.
 - Other scripts' places (tests/foreign_sites_spec.lua): no built-in start or spawn point (each block's pointKinds) lies inside the keep-out circle of a fixed place of the public Qbox and ox scripts listed in tests/fixtures/foreign_sites.lua (written by tools/gen_foreign_sites.py from clones of them; README 7.1), flat and within 10 m of height: 6 m round a garage, vehicle spawn or job spot, 4 m round a hospital, station or prison point, 2 m round an ox_target spot (counter, register, safe, locker, stash, door), or the script's own radius when larger, up to 10 m (a bigger area and a wall camera are only listed). No baseline: a conflict is moved.
 
 Route to the start (Config.Route)
@@ -1621,25 +1622,34 @@ Config.Tablet = {
     -- department who have the Review Queue open see the updated queue at once; false = they see it at their next
     -- refresh, within 30 seconds (as before)
     supervisorReviewLive = false,
-    -- Mission desks: ox_target boxes that open the Officer UI. The coordinates are placeholders near the
-    -- base-game stations, 2 m or more from sc-police's duty points: check them on your MLO.
-    -- departments = nil lets every department use a desk; prop = a laptop only that player sees, or false.
+    -- Mission desks: ox_target boxes that open the Officer UI, one per police station the Qbox police script
+    -- knows, each 1.5-3 m from its duty point in the base-game interior and facing it. A custom station MLO may need
+    -- a desk moved: Admin UI -> Departments -> Desks. departments = nil lets every department use a desk;
+    -- prop = a laptop only that player sees, or false. tests/setup_coords_spec.lua checks the source of each 'from'
     desks = {
         {
             label = 'Mission Row PD front desk',
-            coords = vec3(441.20, -978.90, 30.69),
+            coords = vec3(441.00, -977.30, 30.69),     -- from qbx_policejob config/shared.lua:21 (the duty point)
             size = vec3(1.2, 0.8, 1.0),
-            rotation = 0.0,
+            rotation = 21.0,
             departments = nil,
             prop = false,
         },
         {
             label = 'Sandy Shores office',
-            coords = vec3(1853.20, 3689.60, 34.27),
+            coords = vec3(1853.20, 3689.60, 34.27),    -- kept: Qbox gives this station a map blip, no duty point
             size = vec3(1.2, 0.8, 1.0),
             rotation = 30.0,
             departments = nil,
             prop = 'prop_laptop_01a',
+        },
+        {
+            label = 'Paleto Bay sheriff front desk',
+            coords = vec3(-448.55, 6011.92, 31.82),    -- from qbx_policejob config/shared.lua:22 (the duty point)
+            size = vec3(1.2, 0.8, 1.0),
+            rotation = 52.0,
+            departments = nil,
+            prop = false,
         },
     },
 }
@@ -2382,9 +2392,9 @@ Config.Alerts = {
 Config.Downed = {
     checkEvery = 2,     -- seconds between downed checks
     pickupDelay = 15,   -- seconds down, with no EMS on duty, before the pick-up
-    dropOffs = {        -- the nearest one is used; defaults are SC-Ambulance's check-in points
-        vec3(308.19, -595.35, 43.29),   -- Pillbox Hill
-        vec3(-254.54, 6331.78, 32.43),  -- Paleto Bay
+    dropOffs = {        -- the nearest one is used; defaults are the hospitals' check-in points
+        vec3(308.19, -595.35, 43.29),   -- Pillbox Hill, from qbx_ambulancejob config/shared.lua:62
+        vec3(-254.54, 6331.78, 32.43),  -- Paleto Bay, from qbx_ambulancejob config/shared.lua:76
     },
 }
 

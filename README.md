@@ -1365,25 +1365,27 @@ A mission desk is a spot at a police station where officers open the tablet with
 standing at a computer instead of holding a tablet. Walking more than 3 metres away closes it. A desk works even
 with `requireItem = true`.
 
-Two desks ship **on**, in `Config.Tablet.desks`. Their positions are guesses near the normal game stations:
+Three desks ship **on**, in `Config.Tablet.desks`, one per police station the Qbox police script (qbx_policejob)
+knows. Mission Row PD and Paleto Bay sit 1.5-3 m from that script's duty points, facing them, in the normal game
+interiors; Sandy Shores keeps its earlier spot (Qbox has only a map blip there). Each `coords` line names its source:
 
 ```lua
 -- inside Config.Tablet (shortened)
 desks = {
     {
         label = 'Mission Row PD front desk',
-        coords = vec3(441.20, -978.90, 30.69),
+        coords = vec3(441.00, -977.30, 30.69),     -- from qbx_policejob config/shared.lua:21 (the duty point)
         size = vec3(1.2, 0.8, 1.0),
-        rotation = 0.0,
+        rotation = 21.0,
         departments = nil,       -- nil = every department; or e.g. { 'sast' }
         prop = false,            -- or a laptop model like 'prop_laptop_01a' that only that player sees
     },
-    -- the second one is the 'Sandy Shores office'
+    -- then 'Sandy Shores office' and 'Paleto Bay sheriff front desk'
 },
 ```
 
-- If your stations are custom interiors (MLOs), stand where you want a desk, read your position with any
-  coordinate tool, and put it in `coords`. Add, move or delete desks freely.
+- A station with a custom interior (MLO) may need its desk moved: Admin UI → Departments → **Desks** (move, add and
+  remove desks in game), or edit `coords`.
 - To turn all desks off, set `desk = false` in `Config.Tablet.access`.
 - Admin UI → **Departments** lists every desk. The start-up check warns about a desk with bad coordinates.
 
@@ -2811,7 +2813,7 @@ keeps its pop-up menu. It runs on volunteers, so `Config.Volunteers.enabled` mus
 - ☐ You and your staff can open `/CrimsonPoliceAdmin` ([4.2](#42-admins)).
 - ☐ The payouts fit your economy ([5.3](#53-payouts)).
 - ☐ Your logos are in `Crimson-Police/logos/` ([6.7](#67-department-logos)).
-- ☐ The mission desks sit in the right place, or are off ([6.2](#62-mission-desks)).
+- ☐ On a custom station MLO, the mission desks sit in the right place, or are off ([6.2](#62-mission-desks)).
 - ☐ `Config.Debug = false` for a quiet console (it ships `true` for testing), and `Config.Database.enabled` is what
   you want: `false` (as shipped) saves to the `saves` folder, `true` uses your database
   ([5.5](#55-the-two-switches-at-the-top-debug-and-storage)).
