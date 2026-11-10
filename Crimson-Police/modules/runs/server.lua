@@ -254,19 +254,10 @@ local orphans = {}       -- citizenid -> { names = { [item] = true }, at, sweptA
 local dayCache = {}      -- citizenid .. '|' .. type -> { n, at }
 local removals = {}      -- netId -> { src, via, dist, at } (noteExternalRemoval)
 local warned = {}
-local dbReady = false
 
 -- ============================================================================
 --                                SMALL HELPERS
 -- ============================================================================
-
-local function ToSrc(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
 
 local function WarnOnce(key, fmt, ...)
     if warned[key] then return end
@@ -289,13 +280,6 @@ local function Call(modName, fnName, ...)
         return false
     end
     return true, table.unpack(res, 2, res.n)
-end
-
-local function Db()
-    if dbReady then return true end
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-    dbReady = true
-    return true
 end
 
 local function PlayerOnline(src)
@@ -476,7 +460,7 @@ function Runs.activeSrcs(run)
 end
 
 function Runs.isParticipant(run, src)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if type(run) ~= 'table' or not src then return false end
     local p = run.participants and run.participants[src]
     return p ~= nil and p.status == 'active'
@@ -499,7 +483,7 @@ function Runs.ended(runId)
 end
 
 function Runs.getBySrc(src)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     local id = src and bySrc[src]
     local run = id and runs[id]
     if not run then return nil end
@@ -584,17 +568,13 @@ function Runs.hud(run, patch)
 end
 
 function Runs.hudFor(run, src, patch)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if type(run) ~= 'table' or not src or type(patch) ~= 'table' then return end
     TriggerClientEvent(CP.e('client:hud'), src, run.id, Tokens(patch))
 end
 
 local function BroadcastParticipants(run)
     Runs.send(run, 'client:participants', run.id, ParticipantsList(run))
-end
-
-local function Notify(src, kind, key, vars)
-    if Has('Tablet', 'notify') then Call('Tablet', 'notify', src, kind, key, vars) end
 end
 
 -- Push topic 'run' (the view) to every active participant, or to the given list.
@@ -702,7 +682,7 @@ local function BlockOf(run, i)
 end
 
 local function PedCoords(src)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if not src then return nil end
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return nil end
@@ -760,7 +740,7 @@ local function GetCtx(run, i)
             if CP.NpcCombat and CP.NpcCombat.scaleAccuracy then acc = CP.NpcCombat.scaleAccuracy(acc) or acc end
             return acc, armour
         end
-        ctx.isHost = function(src) return ToSrc(src) == run.host end
+        ctx.isHost = function(src) return U.toSrc(src) == run.host end
         ctx.host = function() return run.host end
         -- the spawn director (Config.Spawning): which points to use now, and whether an officer is near enough
         ctx.choosePoints = function(candidates, n, opts)
@@ -1982,7 +1962,7 @@ function Runs.entityDied(run, netId, killerSrc)
     run.stats.entitiesDied = (run.stats.entitiesDied or 0) + 1
     if e.kind == 'ped' then
         run.stats.npcDeaths = (run.stats.npcDeaths or 0) + 1
-        local k = ToSrc(killerSrc)
+        local k = U.toSrc(killerSrc)
         if k and run.participants[k] then
             run.stats.kills = run.stats.kills or {}
             run.stats.kills[k] = (run.stats.kills[k] or 0) + 1
@@ -1994,7 +1974,7 @@ function Runs.entityDied(run, netId, killerSrc)
     end
     CP.log(TAG, 'run %s: %s %d died (killer %s)', run.id, e.kind, netId, tostring(killerSrc))
     if run.state == 'in_progress' and e.obj and run.objectives[e.obj] then
-        CallBlock(run, e.obj, 'onEntityDead', netId, ToSrc(killerSrc))
+        CallBlock(run, e.obj, 'onEntityDead', netId, U.toSrc(killerSrc))
     end
 end
 
@@ -2044,7 +2024,7 @@ function Runs.noteExternalRemoval(netId, src, via, dist)
     netId = math.tointeger(tonumber(netId) or -1)
     if not netId or netId <= 0 then return false end
     removals[netId] = {
-        src = ToSrc(src),
+        src = U.toSrc(src),
         via = type(via) == 'string' and via or 'unknown',
         dist = tonumber(dist),
         at = os.time(),
@@ -2162,7 +2142,7 @@ end
 -- ============================================================================
 
 local function InventoryUp()
-    return GetResourceState('ox_inventory') == 'started'
+    return CP.Ext.started('ox_inventory')
 end
 
 -- CP.Alerts.inArena: a foreign crimsonArena flag or a routing bucket other than 0. InArena(src, 'match'), for taking
@@ -2222,10 +2202,10 @@ local function GiveItems(run, p)
             -- without it an officer near his limit would be over it for the whole run (nothing can move into his
             -- inventory). nil (an unknown item or no free slot) counts as no room.
             local meta = { cpRun = run.id, cpItem = true }
-            local okC, can = pcall(function() return exports.ox_inventory:CanCarryItem(p.src, name, count, meta) end)
+            local okC, can = CP.Ext.call('ox_inventory', 'CanCarryItem', p.src, name, count, meta)
             if not (okC and can == true) then
                 CP.warn(TAG, 'cannot give %dx %s to %d for run %s: no room', count, name, p.src, run.id)
-                Notify(p.src, 'warning', 'run.item_no_room', { item = name })
+                CP.notify(p.src, 'warning', 'run.item_no_room', { item = name })
             else
                 local ok, success, response = pcall(function()
                     return exports.ox_inventory:AddItem(p.src, name, count, meta)
@@ -2251,7 +2231,7 @@ end
 -- Remove every slot of `name` whose metadata has `meta`'s keys and values (unless skip(slot)). Returns the count
 -- removed.
 local function RemoveSlots(src, name, meta, skip)
-    local ok, result = pcall(function() return exports.ox_inventory:Search(src, 'slots', name, meta) end)
+    local ok, result = CP.Ext.call('ox_inventory', 'Search', src, 'slots', name, meta)
     if not ok then
         CP.warn(TAG, 'ox_inventory Search failed for %d: %s', src, tostring(result))
         return 0, false
@@ -2400,7 +2380,7 @@ end
 -- src unloaded its character or left: the map forgets it, and a loaded cooldown entry that holds nothing goes too
 -- (Runs.cooldowns reads it again from the rows on the next use).
 function cids.forget(src)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     local citizenid = src and cids.of[src]
     if not citizenid then return end
     cids.of[src] = nil
@@ -2410,7 +2390,7 @@ function cids.forget(src)
 end
 
 function cids.note(src, citizenid)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if not src or type(citizenid) ~= 'string' or citizenid == '' then return end
     if cids.of[src] and cids.of[src] ~= citizenid then cids.forget(src) end
     local prev = cids.online[citizenid]
@@ -2426,7 +2406,7 @@ function cids.srcOf(citizenid)
         if src or cids.seen[citizenid] then return src end
     end
     local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    local src = ok and ToSrc(s) or nil
+    local src = ok and U.toSrc(s) or nil
     if cids.trusted then
         if src then cids.note(src, citizenid) else cids.seen[citizenid] = true end
     end
@@ -2472,7 +2452,7 @@ end
 
 -- The officer's saved JSON marker of one cp_officers column (cooldown_clears, cap_extra): a table, or {}.
 local function OfficerJson(citizenid, column)
-    Db()
+    CP.Db()
     local ok, row = pcall(MySQL.single.await, ('SELECT %s AS v FROM cp_officers WHERE citizenid = ?'):format(column),
         { citizenid })
     if not ok or type(row) ~= 'table' then return {} end
@@ -2493,7 +2473,7 @@ local function LoadCooldowns(citizenid)
         return c
     end
     c.loading = true
-    Db()
+    CP.Db()
     local ok, rows = pcall(MySQL.query.await, [[
         SELECT mission_type, mission_id, end_reason, UNIX_TIMESTAMP(created_at) AS created_ts
         FROM cp_mission_runs
@@ -2819,7 +2799,7 @@ function Runs.completionsLastHour(citizenid)
     local cached = hourCache[citizenid]
     local now = os.time()
     if cached and now - cached.at < HOURLY_CACHE_S then return cached.n end
-    Db()
+    CP.Db()
     local ok, n = pcall(MySQL.scalar.await, [[
         SELECT COUNT(*) AS n FROM cp_mission_runs
         WHERE citizenid = ? AND state = 'completed' AND mission_type NOT IN ('manual_award', 'goal')
@@ -2873,7 +2853,7 @@ function Runs.completionsToday(citizenid, missionType, raw)
     local cached = dayCache[key]
     local now = os.time()
     if cached and now - cached.at < DAY_CACHE_S then return cached.n end
-    Db()
+    CP.Db()
     local sql = [[
         SELECT COUNT(*) AS n FROM cp_mission_runs
         WHERE citizenid = ? AND state = 'completed' AND mission_type NOT IN ('manual_award', 'goal')
@@ -3051,7 +3031,7 @@ local INSERT_COLUMNS = {
 
 -- NULL literals for nil values so the parameter list never has holes.
 local function InsertRow(row)
-    Db()
+    CP.Db()
     local values, params = {}, {}
     for i, col in ipairs(INSERT_COLUMNS) do
         local v = row[col]
@@ -3464,7 +3444,7 @@ end
 
 local function MemberOfficer(m)
     if type(m) == 'table' then return m end
-    local src = ToSrc(m)
+    local src = U.toSrc(m)
     if not src then return nil end
     local ok, officer = Call('Access', 'getOfficer', src)
     if ok and type(officer) == 'table' then return officer end
@@ -3520,7 +3500,7 @@ end
 -- a live case). first: Scoring.isFirstRunSinceDuty's answer.
 function Runs._newParticipant(run, o, now, first)
     return {
-        src = ToSrc(o.src),
+        src = U.toSrc(o.src),
         citizenid = o.citizenid,
         name = U.clip(o.name, 64),
         callsign = o.callsign and U.clip(o.callsign, 32) or nil,
@@ -3573,12 +3553,12 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     local officers, seen = {}, {}
     for _, m in ipairs(opts.members) do
         local o = MemberOfficer(m)
-        local src = o and ToSrc(o.src)
+        local src = o and U.toSrc(o.src)
         if not src or not o.citizenid then return nil, 'err.member_unavailable' end
         if not seen[src] then
             seen[src] = true
             if Runs.isOnMission(src) then
-                return nil, (src == ToSrc(opts.leaderSrc)) and 'err.already_on_run' or 'err.member_on_run'
+                return nil, (src == U.toSrc(opts.leaderSrc)) and 'err.already_on_run' or 'err.member_on_run'
             end
             if InArena(src) then return nil, 'err.in_arena' end
             officers[#officers + 1] = o
@@ -3595,8 +3575,8 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     local now = os.time()
     local seed = U.hash(id .. ':' .. tostring(GetGameTimer()) .. ':' .. tostring(now)) & 0x7FFFFFFF
     if seed == 0 then seed = 1 end
-    local leader = ToSrc(opts.leaderSrc)
-    if not leader or not seen[leader] then leader = ToSrc(officers[1].src) end
+    local leader = U.toSrc(opts.leaderSrc)
+    if not leader or not seen[leader] then leader = U.toSrc(officers[1].src) end
 
     local run = {
         id = id,
@@ -3674,7 +3654,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     do
         local leaderOfficer = officers[1]
         for _, o in ipairs(officers) do
-            if ToSrc(o.src) == leader then leaderOfficer = o end
+            if U.toSrc(o.src) == leader then leaderOfficer = o end
         end
         Cd.rc.apply(run, leaderOfficer, officers)
     end
@@ -3698,7 +3678,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
     run.expectedTier = TierName(forced) or TierName(TierFor(#officers)) or 'standard'
 
     for _, o in ipairs(officers) do
-        local src = ToSrc(o.src)
+        local src = U.toSrc(o.src)
         local okF, first = Call('Scoring', 'isFirstRunSinceDuty', src)
         run.participants[src] = Runs._newParticipant(run, o, now, okF and first == true)
         run.order[#run.order + 1] = src
@@ -3754,7 +3734,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         -- a mission ban set during the accept (after the board's and the ready check's own checks)
         local okB, bo, ban = Call('MissionBan', 'first', officers, os.time())
         if okB and type(bo) == 'table' and type(ban) == 'table' then
-            return nil, (ToSrc(bo.src) == leader) and 'err.mission_banned' or 'err.member_mission_banned'
+            return nil, (U.toSrc(bo.src) == leader) and 'err.mission_banned' or 'err.member_mission_banned'
         end
     end
 
@@ -3832,9 +3812,9 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         TriggerClientEvent(CP.e('client:start'), src, id, data)
         Call('NpcCombat', 'runStarted', run, src, data.npcCombat ~= false)   -- the crimsonPoliceRun bag
         Call('Route', 'begin', run, src)
-        Notify(src, 'info', 'run.accepted', { mission = mission.label or mission.id })
+        CP.notify(src, 'info', 'run.accepted', { mission = mission.label or mission.id })
         if droppedText then
-            Notify(src, 'info', 'run.twist_dropped', { twists = droppedText, mission = mission.label or mission.id })
+            CP.notify(src, 'info', 'run.twist_dropped', { twists = droppedText, mission = mission.label or mission.id })
         end
     end
     CP.log(TAG, 'run %s created: %s #%d (%s, %d participant(s), expected %s, twists %s%s)', id, mission.id,
@@ -3876,7 +3856,7 @@ end
 -- the In progress state and the active objective; the case's lines recorded before he joined are not his
 -- (p.sharedBefore, CP.Scoring). -> participant | nil, errKey.
 function Runs.addParticipant(run, src, opts)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     opts = type(opts) == 'table' and opts or {}
     local function Open()
         return type(run) == 'table' and runs[run.id] == run and run.state ~= 'ended' and not run.ending
@@ -3964,10 +3944,10 @@ function Runs.addParticipant(run, src, opts)
         end
     end
     local label = run.mission and run.mission.label or run.missionId
-    Notify(src, 'success', 'livecrime.join.joined', { mission = label })
+    CP.notify(src, 'success', 'livecrime.join.joined', { mission = label })
     for _, s in ipairs(Runs.activeSrcs(run)) do
         if s ~= src then
-            Notify(s, 'info', 'livecrime.join.partner', { name = p.callsign or p.name or ('#' .. src) })
+            CP.notify(s, 'info', 'livecrime.join.partner', { name = p.callsign or p.name or ('#' .. src) })
         end
     end
     CP.log(TAG, 'run %s: %d joined the live case late (%s), %d participant(s)', run.id, src, tostring(p.joinedVia),
@@ -4083,7 +4063,7 @@ local function StartRun(run)
 end
 
 function Runs.markArrived(run, src)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if type(run) ~= 'table' or not src or run.state == 'ended' then return end
     local p = run.participants[src]
     if not p or p.status ~= 'active' or p.arrived then return end
@@ -4111,7 +4091,7 @@ end
 -- (Config.Route.followActionSeconds), never less time than the start deadline he already had. Returns his deadline
 -- (os.time), nil when he is not an active participant still on his way.
 function Runs.extendStart(run, src, seconds)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if type(run) ~= 'table' or not src or run.state == 'ended' then return nil end
     local p = run.participants[src]
     if not p or p.status ~= 'active' or p.arrived or not tonumber(p.deadline) then return nil end
@@ -4201,7 +4181,7 @@ function Runs.dispatch(run, index, src, ev)
     if type(ev) ~= 'table' then return false, 'bad_event' end
     local impl = BlockOf(run, index)
     if not impl or type(impl.onEvent) ~= 'function' then return false, 'no_handler' end
-    local ok, res, reason = CallBlock(run, index, 'onEvent', ToSrc(src), ev)
+    local ok, res, reason = CallBlock(run, index, 'onEvent', U.toSrc(src), ev)
     if not ok then return false, 'error' end
     if run.state == 'in_progress' then RefreshHud(run) end
     if res == false then return false, reason end
@@ -4240,7 +4220,7 @@ local function Record(run, id, opts, kind)
         if w <= 0 then return false end
         count = count * w
     end
-    local src = ToSrc(opts.src)
+    local src = U.toSrc(opts.src)
     if src then
         local p = run.participants[src]
         if not p then return false end
@@ -4289,7 +4269,7 @@ function Runs.noteStat(run, src, key, n)
         end
         return any
     end
-    src = ToSrc(src)
+    src = U.toSrc(src)
     local p = src and run.participants[src]
     if not p or p.status ~= 'active' then return false end
     AddStat(p, key, n)
@@ -4300,7 +4280,7 @@ end
 -- validated cuff of a mission suspect, or an Arrest graded best or ok). false for a repeat.
 function Runs.noteArrest(run, src, netId)
     if type(run) ~= 'table' or run.state == 'ended' then return false end
-    src = ToSrc(src)
+    src = U.toSrc(src)
     netId = math.tointeger(tonumber(netId) or -1)
     local p = src and run.participants[src]
     if not p or p.status ~= 'active' or not netId then return false end
@@ -4335,7 +4315,7 @@ end
 -- caught runner). 'critical' fails the case for everyone with failKey.
 function Runs.decide(run, src, entry)
     if type(run) ~= 'table' or run.state ~= 'in_progress' or type(entry) ~= 'table' then return false end
-    src = ToSrc(src)
+    src = U.toSrc(src)
     local p = src and run.participants[src]
     if not p or p.status ~= 'active' or not VERDICTS[entry.verdict] then return false end
     local verdict = entry.verdict
@@ -4430,7 +4410,7 @@ local function ReleaseFlag(src)
 end
 
 function Runs.removeParticipant(run, src, endReason, opts)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     opts = type(opts) == 'table' and opts or {}
     if type(run) ~= 'table' or not src or run.state == 'ended' then return nil end
     local p = run.participants[src]
@@ -4486,7 +4466,7 @@ function Runs.removeParticipant(run, src, endReason, opts)
     if not opts.silent then
         TriggerClientEvent(CP.e('client:runEnded'), src, run.id, result, endReason, ForOfficer(rr))
         local key = opts.notify
-        if key then Notify(src, 'warning', key) end
+        if key then CP.notify(src, 'warning', key) end
     else
         TriggerClientEvent(CP.e('client:runEnded'), src, run.id, result, endReason, nil)
     end
@@ -4500,7 +4480,9 @@ function Runs.removeParticipant(run, src, endReason, opts)
         if not run.test and (result == 'completed' or result == 'failed') then Call('Leaderboard', 'invalidate') end
         if run.state ~= 'ended' then
             BroadcastParticipants(run)
-            for _, s in ipairs(others) do Notify(s, 'info', 'run.partner_left', { name = p.name or ('#' .. src) }) end
+            for _, s in ipairs(others) do
+                CP.notify(s, 'info', 'run.partner_left', { name = p.name or ('#' .. src) })
+            end
             RefreshHud(run, true)
             PushRun(run)
         end
@@ -4633,7 +4615,7 @@ function Runs.reclassify(citizenid, runId, newEndReason)
         if p then p.endReason, p.result = newEndReason, RESULT[newEndReason] end
         return p ~= nil
     end
-    Db()
+    CP.Db()
     local ok, n = pcall(
         MySQL.update.await,
         [[
@@ -4745,7 +4727,7 @@ local function RouteFor(run, src, p)
 end
 
 function Runs.view(run, src)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if type(run) ~= 'table' or run.state == 'ended' then return nil end
     local p = src and run.participants[src]
     local started = run.state == 'in_progress'
@@ -5279,7 +5261,7 @@ do
 
     RegisterNetEvent(CP.e('server:objective'), function(runId, index, evidence)
         local src = source
-        src = ToSrc(src)
+        src = U.toSrc(src)
         if not src then return end
         if not CP.Net.rateOk(src, 'runs:objective', 12, 1000) then return end
         if type(runId) ~= 'string' or #runId > 64 then return end
@@ -5428,7 +5410,7 @@ end
 -- Sources: the client's weapon_fired telemetry (misses too) and server-side proof of gunfire on mission
 -- NPCs (CP.Npc: weaponDamageEvent hits and weapon kills by an active participant).
 function Runs.noteWeaponFired(run, src)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if type(run) ~= 'table' or not src or run.state == 'ended' then return false end
     local p = run.participants[src]
     if not p or p.status ~= 'active' then return false end
@@ -5442,7 +5424,7 @@ end
 
 RegisterNetEvent(CP.e('server:telemetry'), function(runId, kind, data)
     local src = source
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if not src then return end
     if not CP.Net.rateOk(src, 'runs:telemetry', 8, 1000) then return end
     if type(runId) ~= 'string' or #runId > 64 or not TELEMETRY_KINDS[kind] then return end
@@ -5695,7 +5677,7 @@ end
 
 AddEventHandler('playerDropped', function()
     local src = source
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if not src then return end
     cids.forget(src)
     DropFromRun(src, 'disconnected')
@@ -5713,7 +5695,7 @@ local function RegisterHooks()
     hooked = true
     cids.trusted = true                        -- an unload (character switch) now reaches cids.forget
     CP.Access.onLost(function(src, endReason)
-        src = ToSrc(src)
+        src = U.toSrc(src)
         local run, p = Runs.getBySrc(src)
         if not run then return end
         if run.test and not p.isOfficer then return end
@@ -5731,13 +5713,13 @@ local function RegisterHooks()
         Runs.removeParticipant(run, src, endReason)
     end)
     CP.Qbx.onPlayerUnload(function(src)
-        src = ToSrc(src)
+        src = U.toSrc(src)
         cids.forget(src)
         DropFromRun(src, 'disconnected')
     end)
     if CP.Qbx.onPlayerLoaded then
         CP.Qbx.onPlayerLoaded(function(src)
-            src = ToSrc(src)
+            src = U.toSrc(src)
             if not src then return end
             cids.note(src, CitizenOf(src))     -- before the migrations wait: the map fills even with no preload
             SetTimeout(5000, function()
@@ -5783,7 +5765,7 @@ CreateThread(function()
     local ok, list = Call('Qbx', 'getOnlinePlayers')
     if ok and type(list) == 'table' then
         for _, src in ipairs(list) do
-            src = ToSrc(src)
+            src = U.toSrc(src)
             local cid = src and CitizenOf(src)
             if cid then
                 cids.note(src, cid)

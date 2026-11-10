@@ -74,12 +74,6 @@ local function Num(v, default, lo, hi)
     return v
 end
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n or n < 1 or n ~= math.floor(n) then return nil end
-    return n
-end
-
 local function Note(src, kind, key, vars)
     if src then TriggerClientEvent(CP.e('client:volunteerNote'), src, kind, key, vars) end
 end
@@ -656,7 +650,7 @@ end
 -- His answer to the pop-up. Checked: the token of his open question, not later than askSeconds (plus lag), the run
 -- still running, and (for a yes) every check of the ask again. A no or no answer is never a strike.
 function V.answer(src, data)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local cid = src and V.cidBySrc and V.cidBySrc(src)
     local m = cid and byCid[cid] and matches[byCid[cid]] or nil
     if type(data) ~= 'table' or type(data.token) ~= 'string' then return false, 'bad' end
@@ -678,7 +672,7 @@ end
 -- His own Cancel this case (the volunteer menu, or Stop volunteering while he plays one). A strike unless it comes
 -- within Config.Volunteers.cancelGraceSeconds of his yes and before any officer reached him.
 function V.cancelCase(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local cid = src and V.cidBySrc and V.cidBySrc(src)
     if src and not cid then
         -- off the list (volunteers turned off, excluded) while his case goes on: his own character still cancels it

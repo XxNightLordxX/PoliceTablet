@@ -42,13 +42,6 @@ local function Num(v, default)
     return v
 end
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    n = n and math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function ValidCid(cid)
     return type(cid) == 'string' and cid ~= '' and #cid <= 50 and cid:match('^[%w_%-]+$') ~= nil
 end
@@ -358,10 +351,10 @@ end
 -- A suspect's online server id and license: the event-kept getInfo for an online one, Qbox's players table (kept
 -- here once known) for an offline one.
 local function SuspectOf(cid, hint)
-    local src = ToSrc(hint)
+    local src = CP.U.toSrc(hint)
     local info = src and Info(src)
     if not info or info.citizenid ~= cid then
-        src = CP.Qbx and CP.Qbx.getByCitizenId and ToSrc(CP.Qbx.getByCitizenId(cid)) or nil
+        src = CP.Qbx and CP.Qbx.getByCitizenId and CP.U.toSrc(CP.Qbx.getByCitizenId(cid)) or nil
         info = src and Info(src)
         if not info or info.citizenid ~= cid then src, info = nil, nil end
     end
@@ -442,7 +435,7 @@ end
 -- raises with CP.AntiCheat.flag on this officer). match = { cid, kinds } names the suspect and the kinds only (never
 -- an identifier). On a cache hit nothing is queried (the availability check calls it per candidate and member).
 function Opp.selfBlock(officerSrc, suspects)
-    local src = ToSrc(officerSrc)
+    local src = CP.U.toSrc(officerSrc)
     local list = SuspectList(suspects)
     local flags = {}
     if #list == 0 then return false, nil, flags end
@@ -521,7 +514,7 @@ end
 
 -- QBCore:Server:SetDuty (a false is the event's own word; PlayerData is set before it).
 local function DutyChanged(src, onDuty)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local info = src and Info(src)
     if not info then return end
     if onDuty ~= true and type(info.job) == 'table' then info.job.onduty = false end
@@ -529,7 +522,7 @@ local function DutyChanged(src, onDuty)
 end
 
 local function JobChanged(src, job)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local info = src and Info(src)
     if not info then return end
     if type(job) == 'table' and type(job.name) == 'string' then info.job = job end
@@ -959,7 +952,7 @@ end
 
 AddEventHandler('playerDropped', function()
     local src = source
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if src and (selfCache[src] or dutyOf[src] or deptOf[src]) then Gone(src) end
 end)
 
@@ -985,7 +978,7 @@ CreateThread(function()
         Q.onDutyChange(DutyChanged)
         Q.onJobChange(JobChanged)
         Q.onPlayerLoaded(function(src)
-            src = ToSrc(src)
+            src = CP.U.toSrc(src)
             if not src then return end
             selfCache[src] = nil   -- a character switch: the cached characters are read again
             local info = Info(src)
@@ -994,7 +987,7 @@ CreateThread(function()
             if info then Sync(src, info, false) end
         end)
         Q.onPlayerUnload(function(src)
-            src = ToSrc(src)
+            src = CP.U.toSrc(src)
             if src then Gone(src) end
         end)
     else

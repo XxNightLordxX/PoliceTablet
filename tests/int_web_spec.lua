@@ -102,7 +102,7 @@ Has(unit, 'run(\'server:testRespond\', { inviteId: inv.inviteId, accepted }',
 Has(unit, 'asList(data)', 'the invitation list tolerates {} from Lua')
 Has(testing, 'CP.Net.callback(\'test:pendingInvites\'', 'modules/testing registers test:pendingInvites')
 Has(testing, 'CP.Net.action(\'server:testRespond\'', 'modules/testing registers server:testRespond')
-Has(testing, 'Push(target, \'invites\', { test = true })', 'modules/testing pushes \'invites\' to the invitee')
+Has(testing, 'CP.push(target, \'invites\', { test = true })', 'modules/testing pushes \'invites\' to the invitee')
 do
     local shape = testing:match('function Testing%.pendingInvites.-out%[#out %+ 1%] = {(.-)}')
     H.ok(shape ~= nil, 'pendingInvites builds its entries')

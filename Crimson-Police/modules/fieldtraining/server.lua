@@ -56,10 +56,6 @@ end
 
 local function IsAdmin(src) return CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true end
 
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
-
 -- The lowest Qbox grade of a trainer in a department (Config.FieldTraining.trainerGrades, else its supervisorGrade).
 function FT.trainerGrade(dept)
     local g = type(Cfg().trainerGrades) == 'table' and Int(Cfg().trainerGrades[dept]) or nil
@@ -140,7 +136,7 @@ end
 
 -- The rookie's officer row: { department, name, record | nil } | nil (no row).
 local function ReadRow(cid)
-    Db()
+    CP.Db()
     local ok, row = pcall(MySQL.single.await,
         'SELECT department, display_name, field_training FROM cp_officers WHERE citizenid = ? LIMIT 1', { cid })
     if not ok then
@@ -152,7 +148,7 @@ local function ReadRow(cid)
 end
 
 local function WriteRecord(cid, record)
-    Db()
+    CP.Db()
     local text = record and json.encode(U.serialize(record)) or nil
     local ok, n = pcall(MySQL.update.await, 'UPDATE cp_officers SET field_training = ? WHERE citizenid = ?',
         { text, cid })
@@ -201,7 +197,7 @@ end
 
 -- The active rookies of one trainer: { { citizenid, name, callsign, department, record } }.
 local function RookiesOf(trainerCid)
-    Db()
+    CP.Db()
     local ok, rows = pcall(MySQL.query.await, [[SELECT citizenid, display_name, callsign, department, field_training
         FROM cp_officers WHERE JSON_VALUE(field_training, '$.trainer') = ?]], { trainerCid })
     if not ok then
@@ -559,7 +555,7 @@ end
 function FT.deptView(src, dept)
     local ok, errKey = CanManage(src, dept)
     if not ok then return nil, errKey end
-    Db()
+    CP.Db()
     local okQ, rows = pcall(MySQL.query.await, [[SELECT citizenid, display_name, callsign, field_training
         FROM cp_officers WHERE department = ? ORDER BY display_name LIMIT ?]], { dept, CANDIDATES_MAX })
     if not okQ then

@@ -7,10 +7,6 @@ local Options = CP.Options
 local Defs = CP.OptionDefs
 local TAG = 'options'
 
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
-
 -- The saved options of a row: a JSON text (or a table) -> table, {} when there is none or it does not read.
 function Options.decode(raw)
     if type(raw) == 'table' then return raw end
@@ -21,7 +17,7 @@ end
 
 local function ReadRaw(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
-    Db()
+    CP.Db()
     local ok, row = pcall(MySQL.single.await, 'SELECT options FROM cp_officers WHERE citizenid = ?', { citizenid })
     if not ok then
         CP.err(TAG, 'reading the options of %s failed: %s', citizenid, tostring(row))
@@ -133,7 +129,7 @@ function Options.set(src, patch)
     CP.log(TAG, '%s changed their options', officer.citizenid)
     -- the call pop-ups (callAlerts, favouriteTypes) apply to the next call, not after the 30 s cache
     if CP.MissionCalls and CP.MissionCalls._forgetMuted then CP.MissionCalls._forgetMuted(officer.citizenid) end
-    if CP.Tablet and CP.Tablet.push then CP.Tablet.push(src, 'options', { values = values }) end
+    CP.push(src, 'options', { values = values })
     return true, { values = values }
 end
 

@@ -3117,6 +3117,7 @@ function H.boot(opts)
     if CP and CP.Hooks then H.resetHooks() end
     -- shared/*.lua in fxmanifest's (alphabetical) order
     H.load('shared/init.lua')
+    H.load('shared/lib.lua')
     H.load('shared/locale.lua')
     H.load('shared/net.lua')
     H.load('shared/npccombat.lua')

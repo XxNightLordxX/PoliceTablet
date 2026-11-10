@@ -96,15 +96,6 @@ local function Started()
     return GetResourceState(RESOURCE) == 'started'
 end
 
--- A positive integer server id, or nil.
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function Str(v)
     if type(v) == 'string' then return v end
     return nil
@@ -184,7 +175,7 @@ end
 -- ============================================================================
 
 function Q.getPlayer(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src or not Started() then return nil end
     local ok, player = pcall(function() return exports.qbx_core:GetPlayer(src) end)
     if not ok then
@@ -235,7 +226,7 @@ end
 -- Reused for Config.Limits.playerInfoCacheMs: loops over every player and getOfficer's several reads of one player in
 -- one tick ask Qbox once. Every Qbox change event clears the entry at once, so a new job or duty is seen at once.
 function Q.getInfo(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local ms = InfoCacheMs()
     local hit = n and ms > 0 and infoCache[n]
     if hit and GetGameTimer() - hit.at < ms and Started() then
@@ -256,7 +247,7 @@ function Q.getByCitizenId(citizenid)
         return nil
     end
     if type(player) ~= 'table' or type(player.PlayerData) ~= 'table' then return nil end
-    return ToSrc(player.PlayerData.source)
+    return CP.U.toSrc(player.PlayerData.source)
 end
 
 -- The whole list from GetQBPlayers (a map keyed by server id that copies every player's data across the export
@@ -272,8 +263,8 @@ local function ReadOnline(now)
         for key, p in pairs(players) do
             local src
             local pd = type(p) == 'table' and type(p.PlayerData) == 'table' and p.PlayerData or nil
-            if pd then src = ToSrc(pd.source) end
-            src = src or ToSrc(key)
+            if pd then src = CP.U.toSrc(pd.source) end
+            src = src or CP.U.toSrc(key)
             if src and not seen[src] then
                 seen[src] = true
                 list[#list + 1] = src
@@ -398,7 +389,7 @@ end
 -- Metadata isdead or inlaststand is true. Read with GetMetadata; on a Qbox without that export (the call raised) the
 -- whole Player is read instead, from then on until qbx_core starts again.
 function Q.isDowned(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src or not Started() then return false end
     if metadataExport then
         local ok, v = ReadMetadata(src, 'isdead')
@@ -639,7 +630,7 @@ end
 -- server-local: AddEventHandler only.
 
 AddEventHandler('QBCore:Server:SetDuty', function(src, onDuty)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     infoCache[src] = nil
     local duty = onDuty == true
@@ -654,7 +645,7 @@ end)
 
 AddEventHandler('QBCore:Server:PlayerLoaded', function(player)
     if type(player) ~= 'table' or type(player.PlayerData) ~= 'table' then return end
-    local src = ToSrc(player.PlayerData.source)
+    local src = CP.U.toSrc(player.PlayerData.source)
     if not src then return end
     infoCache[src] = nil
     SetOnline(src, true)
@@ -664,7 +655,7 @@ AddEventHandler('QBCore:Server:PlayerLoaded', function(player)
 end)
 
 AddEventHandler('QBCore:Server:OnJobUpdate', function(src, job)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     infoCache[src] = nil
     local info = Q.getInfo(src)
@@ -676,7 +667,7 @@ AddEventHandler('QBCore:Server:OnJobUpdate', function(src, job)
 end)
 
 AddEventHandler('QBCore:Server:OnPlayerUnload', function(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     infoCache[src] = nil
     SetOnline(src, false)
@@ -686,7 +677,7 @@ AddEventHandler('QBCore:Server:OnPlayerUnload', function(src)
 end)
 
 AddEventHandler('qbx_core:server:onGroupUpdate', function(src, groupName, grade)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     infoCache[src] = nil
     CP.log(TAG, 'onGroupUpdate %d %s -> %s', src, tostring(groupName), tostring(grade))
@@ -695,7 +686,7 @@ end)
 
 -- qbx_core SetMetaData: TriggerEvent('qbx_core:server:onSetMetaData', key, oldValue, value, source).
 AddEventHandler('qbx_core:server:onSetMetaData', function(key, old, new, src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     infoCache[src] = nil
     if #metaListeners == 0 or type(key) ~= 'string' then return end
@@ -714,14 +705,14 @@ end)
 -- sends the whole PlayerData here; a job set through SetPlayerData('job', ...) fires no other event.
 AddEventHandler('QBCore:Player:SetPlayerData', function(pd)
     if type(pd) ~= 'table' then return end
-    local src = ToSrc(pd.source)
+    local src = CP.U.toSrc(pd.source)
     if not src then return end
     infoCache[src] = nil
     if type(pd.job) == 'table' then jobOf[src] = JobName(pd.job) end
 end)
 
 AddEventHandler('playerDropped', function()
-    local src = ToSrc(source)
+    local src = CP.U.toSrc(source)
     if not src then return end
     infoCache[src] = nil
     SetOnline(src, false)

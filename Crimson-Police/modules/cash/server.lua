@@ -49,8 +49,8 @@ local IDLE_WAIT_MS = 60000             -- the forfeiture job waits this long at 
 local MANUAL_CASH = 'manual_cash'      -- an admin's manual cash payment (mission_type manual_award): outside the cap
 local FINAL = { paid = true, capped = true, unfunded = true, forfeited = true }
 
-local locks = {}       -- citizenid -> true while one of their rows is being paid
-local inFlight = {}    -- rowId -> true while pay() works on it
+local payLock = CP.Lock.new() -- an officer's citizenid while one of their rows is being paid
+local rowLock = CP.Lock.new() -- a row id while pay() works on it
 
 -- ============================================================================
 --                                   HELPERS
@@ -73,10 +73,6 @@ end
 local function Now()
     if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
     return os.time()
-end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
 local function FmtMoney(n)
@@ -109,27 +105,16 @@ local function PresenceFailed(run, p)
 end
 
 local function WithLock(key, fn)
-    local waited = 0
-    while locks[key] do
-        if waited >= LOCK_WAIT_MS then
-            CP.warn(TAG, 'payment lock for %s is still held after %d ms; skipping this attempt', key, waited)
-            return nil
-        end
-        Wait(50)
-        waited = waited + 50
+    local st, res = payLock:run(key, LOCK_WAIT_MS, fn)
+    if st == 'busy' then
+        CP.warn(TAG, 'payment lock for %s is still held after %d ms; skipping this attempt', key, LOCK_WAIT_MS)
+        return nil
     end
-    locks[key] = true
-    local ok, res = pcall(fn)
-    locks[key] = nil
-    if not ok then
+    if st == 'error' then
         CP.err(TAG, 'payment for %s failed: %s', key, tostring(res))
         return nil
     end
     return res
-end
-
-local function Notify(src, kind, key, vars)
-    if src and CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(src, kind, key, vars) end
 end
 
 -- A maintenance lock (a storage copy or switch, a backup restore) holds every payment back: the rows wait and are
@@ -475,7 +460,7 @@ PayClaimed = function(row, rowId, cid, src, progress)
         if not okW then
             SetFinal(rowId, 'unfunded', 0)
             CP.warn(TAG, 'row %d unfunded: society account %s could not cover %d', rowId, tostring(account), amount)
-            Notify(src, 'error', 'cash.unfunded',
+            CP.notify(src, 'error', 'cash.unfunded',
                 { amount = FmtMoney(amount), department = deptLabel, mission = label })
             local sups = SupervisorsOf(deptKey)
             if #sups > 0 and CP.Tablet and CP.Tablet.notifyMany then
@@ -539,9 +524,9 @@ PayClaimed = function(row, rowId, cid, src, progress)
     end
     CP.log(TAG, 'row %d: %s %d to %s (%s)', rowId, status, amount, cid, transId)
     if capped then
-        Notify(src, 'warning', 'cash.capped', { amount = FmtMoney(amount), mission = label })
+        CP.notify(src, 'warning', 'cash.capped', { amount = FmtMoney(amount), mission = label })
     elseif amount > 0 then
-        Notify(src, 'success', 'cash.paid', { amount = FmtMoney(amount), mission = label })
+        CP.notify(src, 'success', 'cash.paid', { amount = FmtMoney(amount), mission = label })
     end
     return status
 end
@@ -549,7 +534,7 @@ end
 -- Cash counted against the daily cap today (manual cash payments left out). nil when the lookup failed.
 function Cash.paidToday(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return 0 end
-    Db()
+    CP.Db()
     return PaidOnDay(citizenid, Now())
 end
 
@@ -557,7 +542,7 @@ function Cash.pay(rowId)
     rowId = ToId(rowId)
     if not rowId then return nil end
     -- the lock is read after the wait for the store: a lock the start takes (left behind) holds before this goes on
-    Db()
+    CP.Db()
     local held = PaymentsHeld()
     if held == 'left_behind' then
         -- permanent: this store was left behind by a storage switch, its rows may be paid in the store that took over
@@ -575,17 +560,14 @@ function Cash.pay(rowId)
             tostring(row.flagged), tostring(row.voided))
         return nil
     end
-    if inFlight[rowId] then return nil end
-    inFlight[rowId] = true
-    local status = WithLock(row.citizenid, function() return PayRow(row) end)
-    inFlight[rowId] = nil
+    local _, status = rowLock:run(rowId, 0, WithLock, row.citizenid, function() return PayRow(row) end)
     return status
 end
 
 function Cash.payPending(src)
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(src)
     if not info or not info.citizenid then return 0 end
-    Db()
+    CP.Db()
     if PaymentsHeld() then return 0 end
     -- 'pending' rows, plus completed mission rows still 'none' although they carry cash (the engine's pay never
     -- ran or was skipped, e.g. a crash right after the row insert): no money moved on either, and pay() claims
@@ -614,7 +596,7 @@ end
 function Cash.release(rowId)
     rowId = ToId(rowId)
     if not rowId then return nil end
-    Db()
+    CP.Db()
     local row = ReadRow(rowId)
     if not row then return nil end
     if CP.U.truthy(row.voided) then return nil end
@@ -632,7 +614,7 @@ end
 function Cash.forfeit(rowId)
     rowId = ToId(rowId)
     if not rowId then return false end
-    Db()
+    CP.Db()
     local ok, n = pcall(MySQL.update.await, [[
         UPDATE cp_mission_runs
         SET cash_status = 'forfeited',
@@ -687,7 +669,7 @@ end
 -- Waits while a maintenance lock holds payments, and for an admin's bulk job (a void in flight is never forfeited
 -- half done); holds the busy lock while it works.
 local function ForfeitureJob()
-    Db()
+    CP.Db()
     if PaymentsHeld() then return 0 end
     local n = UnderBusyLock('forfeiture', ForfeitRows)
     return n or 0
@@ -704,7 +686,7 @@ end
 local function Clean(rowId)
     rowId = ToId(rowId)
     if not rowId then return nil, 'err.invalid_row' end
-    Db()
+    CP.Db()
     if PaymentsHeld() then return nil, 'err.maintenance' end
     local row = ReadRow(rowId)
     if not row then return nil, 'err.row_not_found' end
@@ -746,19 +728,12 @@ end
 -- fn() under the officer's payment lock. The claim is undone (onTimeout) when the lock stays taken; an error after
 -- the claim leaves it for a manual check, because money may have moved.
 local function RunLocked(cid, fn, onTimeout)
-    local waited = 0
-    while locks[cid] do
-        if waited >= LOCK_WAIT_MS then
-            onTimeout()
-            return false, 'err.payment_in_flight'
-        end
-        Wait(50)
-        waited = waited + 50
+    local res = table.pack(payLock:run(cid, LOCK_WAIT_MS, fn))
+    if res[1] == 'busy' then
+        onTimeout()
+        return false, 'err.payment_in_flight'
     end
-    locks[cid] = true
-    local res = table.pack(pcall(fn))
-    locks[cid] = nil
-    if not res[1] then
+    if res[1] == 'error' then
         CP.err(TAG, 'an admin payment for %s failed: %s', cid, tostring(res[2]))
         return false, 'err.payment_raised'
     end
@@ -793,7 +768,7 @@ function Cash.department(key) return DeptOf(key) end
 -- true while pay() works on the row or the officer's payment lock is held (an admin waits for it).
 function Cash.rowBusy(rowId, citizenid)
     rowId = ToId(rowId)
-    return (rowId ~= nil and inFlight[rowId] == true) or (type(citizenid) == 'string' and locks[citizenid] == true)
+    return rowLock:held(rowId) or (type(citizenid) == 'string' and payLock:held(citizenid))
 end
 
 function Cash.paymentsHeld() return PaymentsHeld() end
@@ -891,7 +866,7 @@ local function PayAgainLocked(row, bd, rowId, amount, needWithdraw)
         CP.err(TAG, 'row %d: Pay again paid %d but the status could not be written (transaction %s)', rowId, amount,
             transId)
     end
-    Notify(src, 'success', 'cash.paid', { amount = FmtMoney(amount), mission = label })
+    CP.notify(src, 'success', 'cash.paid', { amount = FmtMoney(amount), mission = label })
     return true, { id = rowId, status = status, amount = amount, txn = transId }
 end
 
@@ -995,7 +970,7 @@ local function CapRestLocked(row, bd, rowId, rest)
         WHERE id = ? AND JSON_VALUE(breakdown, '$.cash.restPaid') = 'paying'
     ]], { newPaid, rest, newPaid, rowId })
     if n < 1 then CP.err(TAG, 'row %d: the capped rest was paid but could not be written (%s)', rowId, transId) end
-    Notify(src, 'success', 'cash.paid', { amount = FmtMoney(rest), mission = label })
+    CP.notify(src, 'success', 'cash.paid', { amount = FmtMoney(rest), mission = label })
     return true, { id = rowId, amount = rest, paid = newPaid, txn = transId }
 end
 
@@ -1077,7 +1052,7 @@ local function ClawbackLocked(row, rowId, amount)
             CP.warn(TAG, 'row %d: the clawback of %d could not be put back into %s', rowId, amount, tostring(account))
         end
     end
-    Notify(src, 'warning', 'cash.clawed_back', { amount = FmtMoney(amount), mission = MissionLabel(row, bd) })
+    CP.notify(src, 'warning', 'cash.clawed_back', { amount = FmtMoney(amount), mission = MissionLabel(row, bd) })
     return true, { id = rowId, amount = amount, txn = transId, refunded = refunded }
 end
 
@@ -1118,7 +1093,7 @@ end
 function Cash.toPending(rowId, from)
     rowId = ToId(rowId)
     if not rowId then return false, 'err.invalid_row' end
-    Db()
+    CP.Db()
     if PaymentsHeld() then return false, 'err.maintenance' end
     local extra = ''
     if from == 'forfeited' then
@@ -1156,7 +1131,7 @@ end
 function Cash.adminForfeit(rowId, mode)
     rowId = ToId(rowId)
     if not rowId then return false, 'err.invalid_row' end
-    Db()
+    CP.Db()
     local n
     if mode == 'voided' then
         n = Update([[
@@ -1244,7 +1219,7 @@ end
 -- ============================================================================
 
 function Cash.stuckPayments()
-    Db()
+    CP.Db()
     local ok, rows = pcall(MySQL.query.await, [[
         SELECT r.id, r.run_uuid, r.citizenid, r.mission_id, r.department, r.cash_base, r.cash_multiplier, r.breakdown,
                UNIX_TIMESTAMP(r.created_at) AS created_ts, o.display_name
@@ -1259,7 +1234,7 @@ function Cash.stuckPayments()
     local out = {}
     for _, r in ipairs(rows or {}) do
         local id = math.floor(CP.U.num(r.id))
-        if not inFlight[id] then
+        if not rowLock:held(id) then
             local bd = CP.U.jsonField(r.breakdown)
             out[#out + 1] = {
                 id = id,
@@ -1281,7 +1256,7 @@ end
 
 function Cash.earnedThisWeek(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return 0 end
-    Db()
+    CP.Db()
     local start = CP.Schedule and CP.Schedule.weekStart and CP.Schedule.weekStart() or (Now() - 7 * 86400)
     local ok, total = pcall(MySQL.scalar.await, [[
         SELECT COALESCE(SUM(cash_paid), 0) AS total FROM cp_mission_runs

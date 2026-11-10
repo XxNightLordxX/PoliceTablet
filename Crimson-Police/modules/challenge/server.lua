@@ -140,10 +140,6 @@ local function ScoringMode()
     return m
 end
 
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
-
 local function Has(mod, fn)
     return type(CP[mod]) == 'table' and type(CP[mod][fn]) == 'function'
 end
@@ -316,7 +312,7 @@ local function SeasonFrom(row)
 end
 
 local function LoadSeasons()
-    Db()
+    CP.Db()
     local rows = MySQL.query.await([[SELECT id, name, UNIX_TIMESTAMP(starts_at) AS starts_ts,
         UNIX_TIMESTAMP(ends_at) AS ends_ts, active, UNIX_TIMESTAMP(planned_end) AS planned_ts, next_name
         FROM cp_seasons ORDER BY id DESC]], {}) or {}
@@ -410,7 +406,7 @@ local BOUNTY_ROW_SQL = 'SELECT objective, winner FROM cp_dept_bounties WHERE sea
 -- The bounty row of week n (created with the seeded pick when missing).
 local function EnsureBounty(season, n)
     if not BountiesOn() or n < 1 or n > MAX_WEEK then return nil end
-    Db()
+    CP.Db()
     local row = MySQL.single.await(BOUNTY_ROW_SQL, { season.id, n })
     if not row then
         local id = PickBounty(season.id, n)
@@ -487,7 +483,7 @@ local function Collect(seasonId, fresh)
     if not fresh and c and os.time() - c.at < CacheSeconds() then return c end
     local season = C.seasonById(seasonId)
     if not season then return nil end
-    Db()
+    CP.Db()
     local gen = collectGen
     local data = { at = os.time(), season = season, officers = {}, weeks = {}, bounties = {} }
     local live = LiveFilter()
@@ -794,7 +790,7 @@ end
 
 local function LatestChampion()
     if bannerCache and os.time() - bannerCache.at < SEASON_RELOAD_S then return bannerCache.row end
-    Db()
+    CP.Db()
     local row = MySQL.single.await([[SELECT s.id, s.name, b.winner FROM cp_seasons s
           LEFT JOIN cp_dept_bounties b ON b.season_id = s.id AND b.week = ?
           WHERE s.active = 0 AND s.ends_at IS NOT NULL
@@ -876,7 +872,7 @@ end
 local function OfficerNames(cids)
     local out = {}
     if #cids == 0 then return out end
-    Db()
+    CP.Db()
     for i = 1, #cids, 100 do
         local chunk = {}
         for j = i, math.min(#cids, i + 99) do chunk[#chunk + 1] = cids[j] end
@@ -1048,7 +1044,7 @@ local function SeasonResultsWebhook(season, list, champion, top10)
 end
 
 local function EndSeasonInternal(src, season, reason)
-    Db()
+    CP.Db()
     local endTs = os.time()
     local changed = MySQL.update.await(
         'UPDATE cp_seasons SET active = 0, ends_at = FROM_UNIXTIME(?), planned_end = NULL WHERE id = ? AND active = 1',
@@ -1138,7 +1134,7 @@ end
 
 -- Ends the running season (when there is one) and starts a new one. Runs inside Guarded.
 local function StartSeasonInternal(src, name)
-    Db()
+    CP.Db()
     local prev = C.currentSeason(true)
     if prev then
         local okEnd, err = EndSeasonInternal(src, prev, CP.L('challenge.audit_replaced', { name = name }))
@@ -1196,7 +1192,7 @@ end
 -- ============================================================================
 
 local function BountyHistory()
-    Db()
+    CP.Db()
     local rows = MySQL.query.await([[SELECT b.season_id, b.week, b.objective, b.winner, s.name
           FROM cp_dept_bounties b JOIN cp_seasons s ON s.id = b.season_id
           WHERE b.week >= 1
@@ -1236,7 +1232,7 @@ local function BountyHistory()
 end
 
 local function SeasonsList()
-    Db()
+    CP.Db()
     local champs = {}
     for _, r in
         ipairs(
@@ -1349,7 +1345,7 @@ LEFT JOIN cp_officers o ON o.citizenid = s.citizenid
 ORDER BY s.points DESC, s.runs DESC, s.citizenid ASC]]
 
 function C.deptReport(dept)
-    Db()
+    CP.Db()
     local nowTs = os.time()
     local ws = WeekStart(nowTs)
     local season = C.currentSeason()
@@ -1418,7 +1414,7 @@ local function MissionLabel(missionType, missionId, bd)
 end
 
 function C.officerActivity(dept, citizenid)
-    Db()
+    CP.Db()
     local ws = WeekStart(os.time())
     local orow = MySQL.single.await(
         'SELECT citizenid, display_name, callsign, rank_label, department FROM cp_officers WHERE citizenid = ?',

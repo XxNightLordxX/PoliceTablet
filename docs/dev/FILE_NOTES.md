@@ -128,6 +128,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/volunteers/match/server.lua`: CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer, set at the draw) asks the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'), makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
 - `Crimson-Police/modules/volunteers/server.lua`: CP.Volunteers (server): the volunteer list behind Config.Volunteers.command (default /crimsonheat).
 - `Crimson-Police/shared/init.lua`: The CP namespace, logging, the block registry, the config load check and RegisterMission().
+- `Crimson-Police/shared/lib.lua`: The shared helper library: the small helpers every module used to carry its own copy of.
 - `Crimson-Police/shared/locale.lua`: Loads locales/<Config.Locale>.json (falls back to en.json).
 - `Crimson-Police/shared/net.lua`: The request/action plumbing between the NUI, the client and the server.
 - `Crimson-Police/shared/npccombat.lua`: CP.NpcCombat (shared): which weapon a mission NPC may carry, and its accuracy and firing caps (Config.NpcCombat).
@@ -513,6 +514,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/int_engine_spec.lua`: Integration of the engine group: the REAL modules missions, draw, scaling, schedule, events, runs and npc with every REAL block, on the REAL built-in mission files, with stubs only for the modules outside the group (access, qbx, alerts, route, payouts, scoring, cash, anticheat, tablet ...).
 - `tests/int_services_spec.lua`: Integration of the services group: the REAL modules scoring, goals, cash, payouts, leaderboard, challenge, admin, disputes and anticheat running together (plus the real permissions, scaling and schedule), on stubs of CP.Qbx, CP.Access, CP.Tablet, CP.Banking, CP.Missions and CP.Runs.
 - `tests/int_web_spec.lua`: Integration checks for the web group (web/src outside the Mission Builder).
+- `tests/lib_spec.lua`: The shared helper library (shared/lib.lua and CP.U.toSrc): sources, the store wait, toasts and pushes, export calls, one-at-a-time locks and per-day caps, with the races two requests sent at once used to win.
 - `tests/limit_controls_spec.lua`: The no-repeat rule, the hourly cap and the daily cap as Mission controls: noRepeat, hourlyCap and
 - `tests/live_claim_spec.lua`: The live claim and the case: the live_crime engine mission in its own registry (CP.Missions.registerEngine), CP.LiveCrime.missionFor / claimCheck, the run:created hook that opens the CP.Opponents case, the run:ended hook that writes the pair rows, and CP.Runs.create opts.live.
 - `tests/live_fto_e2e_spec.lua`: End-to-end workflows, part 3: live crime, surrender and field training on the REAL server side of

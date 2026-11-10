@@ -84,14 +84,6 @@ local pushSentAt = {}          -- src -> { [topic] = GetGameTimer() of the last 
 local navExtra = {}            -- key -> { fn = fn(src, officer) -> number, adminOnly } (T.registerNavCount)
 local navExtraOrder = {}
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 -- A guarded call into another module: false when it is missing or fails, else true and its results.
 local function Call(modName, fnName, ...)
     local m = CP[modName]
@@ -155,8 +147,8 @@ end
 
 -- The tablet item count of src through ox_inventory (nil when the lookup fails).
 local function ItemCount(src, item)
-    if GetResourceState('ox_inventory') ~= 'started' then return nil end
-    local ok, res = pcall(function() return exports.ox_inventory:Search(src, 'count', item) end)
+    if not CP.Ext.started('ox_inventory') then return nil end
+    local ok, res = CP.Ext.call('ox_inventory', 'Search', src, 'count', item)
     if not ok then
         CP.warn(TAG, 'ox_inventory Search for %s failed: %s', item, tostring(res))
         return nil
@@ -720,7 +712,7 @@ end, { rate = 3 })
 -- opts: title (a locale key), duration (ms), channel ('social' = unit invites, commendations, rewards and profile
 -- news: the officer option quietRun keeps its info and success toasts in the bell during a run; nil = always shown).
 function T.notify(src, kind, key, vars, opts)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n or type(key) ~= 'string' or key == '' then return false end
     if not KINDS[kind] then kind = 'info' end
     if type(opts) ~= 'table' then opts = {} end
@@ -740,7 +732,7 @@ function T.notifyMany(srcs, kind, key, vars)
     if type(srcs) ~= 'table' then return 0 end
     local seen, sent = {}, 0
     for _, src in ipairs(srcs) do
-        local n = ToSrc(src)
+        local n = CP.U.toSrc(src)
         if n and not seen[n] then
             seen[n] = true
             if T.notify(n, kind, key, vars) then sent = sent + 1 end
@@ -813,7 +805,7 @@ end
 -- A push to one player. With Config.Performance.pushGapMs on, a second push of the same topic within the gap is
 -- held and merged with any later one, then sent when the gap is over: one push per topic per gap at most.
 function T.push(src, topic, data)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n or type(topic) ~= 'string' or topic == '' then return false end
     local gap = PushGapMs()
     local held = pushHeld[n] and pushHeld[n][topic]
@@ -838,7 +830,7 @@ local function OnlineAdmins()
     local out = {}
     if not (CP.Access and CP.Access.isAdmin) then return out end
     for _, s in ipairs(GetPlayers and GetPlayers() or {}) do
-        local n = ToSrc(s)
+        local n = CP.U.toSrc(s)
         if n and CP.Access.isAdmin(n) then out[#out + 1] = n end
     end
     return out
@@ -938,13 +930,13 @@ end
 
 -- A count of another module changed for src: the counts are pushed again.
 function T.navChanged(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if n then ScheduleNav(n) end
 end
 
 function T.navCounts(src)
     local counts = { invites = 0, calls = 0, review = 0, commendations = 0, rewards = 0, onRun = false }
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n then return counts end
     local now = os.time()
     local c = navCache[n]
@@ -1000,7 +992,7 @@ end)
 -- and the 'tablet:closed' hook tells MissionCalls to stop its Dispatch pushes. A scheduled 'nav' push is dropped.
 RegisterNetEvent(CP.e('server:tabletClosed'), function()
     local src = source
-    if not ToSrc(src) then return end
+    if not CP.U.toSrc(src) then return end
     if not CP.Net.rateOk(src, 'tablet:closed', 4, 1000) then return end
     navWatch[src] = nil
     CP.Hooks.fire('tablet:closed', src)
@@ -1018,7 +1010,7 @@ local function OpenAdminNow(src)
 end
 
 function T.openAdmin(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n then
         CP.warn(TAG, 'the Admin UI can only be opened in game')
         return false, 'err.not_in_game'

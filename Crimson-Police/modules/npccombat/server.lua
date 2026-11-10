@@ -24,12 +24,6 @@ local errorAt = 0
 --                                   HELPERS
 -- ============================================================================
 
-local function ToSrc(v)
-    local n = math.tointeger(tonumber(v) or -1)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function ToInt(v, lo, hi)
     if type(v) ~= 'number' or v ~= v then return nil end
     local n = math.tointeger(v)
@@ -48,7 +42,7 @@ local function IsPlayerPed(e) return Exists(e) and IsPedAPlayer(e) and true or f
 
 local function OwnerOf(e)
     local ok, o = pcall(NetworkGetEntityOwner, e)
-    return ok and ToSrc(o) or nil
+    return ok and CP.U.toSrc(o) or nil
 end
 
 local function IsParticipant(run, src)
@@ -90,7 +84,7 @@ end
 
 -- CP.Runs sent client:start to src: on = his game starts CP.NpcCombat (the start data has no npcCombat = false).
 function NpcCombat.runStarted(run, src, on)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if type(run) ~= 'table' or run.id == nil or not src then return false end
     if dropped[run.id] then
         dropped[run.id][src] = nil
@@ -105,7 +99,7 @@ function NpcCombat.runStarted(run, src, on)
 end
 
 -- Whether this script set src's bag (and for which run), for the specs and the staff tools.
-function NpcCombat.flagRun(src) return bagRun[ToSrc(src) or 0] end
+function NpcCombat.flagRun(src) return bagRun[CP.U.toSrc(src) or 0] end
 
 -- ============================================================================
 --                             THE PROTECTION DROP
@@ -114,7 +108,7 @@ function NpcCombat.flagRun(src) return bagRun[ToSrc(src) or 0] end
 -- Turn off noCriticalHits and officerDefense on src's game for the rest of run (the AI damage values stay: they
 -- soften the NPCs only). Once per run and officer; why is a word for the console. True when the message went out.
 function NpcCombat.dropFor(run, src, why)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if type(run) ~= 'table' or run.id == nil or not src or run.state == 'ended' then return false end
     if run.npcCombat == false or not IsParticipant(run, src) then return false end
     local done = dropped[run.id]
@@ -171,7 +165,7 @@ end
 -- every event so a Settings change needs no restart) it returns at once.
 AddEventHandler('weaponDamageEvent', function(sender, data)
     if not (Config.NpcCombat and Config.NpcCombat.playerHitDropsProtection == true) then return end
-    local src = ToSrc(sender) or ToSrc(source)
+    local src = CP.U.toSrc(sender) or CP.U.toSrc(source)
     if not src or type(data) ~= 'table' or WasEventCanceled() then return end
     local ok, err = pcall(OnHit, src, data)
     if not ok then LogError('weaponDamageEvent from %s failed: %s', tostring(src), tostring(err)) end
@@ -183,7 +177,7 @@ end)
 
 -- He left the run (any reason, a disconnect included): his bag goes, and a later start of the same run may drop again.
 CP.Hooks.on('participant:left', function(run, src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if type(run) ~= 'table' or not src then return end
     if bagRun[src] == run.id then ClearBag(src) end
     if dropped[run.id] then dropped[run.id][src] = nil end

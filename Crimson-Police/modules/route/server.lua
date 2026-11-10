@@ -73,14 +73,6 @@ local stopped = {}              -- stopped[runId][src] = true after an explicit 
 --                                   HELPERS
 -- ============================================================================
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function SecondsMs(v, default)
     local n = tonumber(v) or default
     return math.floor(n * 1000)
@@ -239,7 +231,7 @@ local function PushView(runId, src)
         local _, run = RunsCall('get', runId)
         if type(run) ~= 'table' or run.state == 'ended' then return end
         local _, view = RunsCall('view', run, src)
-        if type(view) == 'table' then pcall(CP.Tablet.push, src, 'run', view) end
+        if type(view) == 'table' then CP.push(src, 'run', view) end
     end)
 end
 
@@ -259,7 +251,7 @@ end
 -- ============================================================================
 
 function R.begin(run, src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if type(run) ~= 'table' or run.id == nil or not src then return false end
     local p = Participant(run, src)
     if type(p) ~= 'table' or p.status ~= 'active' or p.arrived then return false end
@@ -306,7 +298,7 @@ function R.stop(run, src)
         states[runId] = nil
         return
     end
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     MarkStopped(runId, src)
     if byRun then
@@ -316,7 +308,7 @@ function R.stop(run, src)
 end
 
 function R.status(run, src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local runId = type(run) == 'table' and run.id or run
     local st = (runId ~= nil and src) and GetState(runId, src) or nil
     local maxR = math.floor(tonumber(Config.Route.maxRecalcs) or 0)
@@ -589,7 +581,7 @@ end
 
 RegisterNetEvent(CP.e('server:routeStatus'), function(runId, metres, coords)
     local src = source
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n or not ValidRunId(runId) then return end
     if type(metres) ~= 'number' or metres ~= metres or metres < 0 then return end
     if not CP.Net.rateOk(n, 'route:status', 3, 1000) then return end
@@ -629,7 +621,7 @@ end)
 
 RegisterNetEvent(CP.e('server:recalcRoute'), function(runId)
     local src = source
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n or not ValidRunId(runId) then return end
     if not CP.Net.rateOk(n, 'route:recalc', 1, 2000) then
         TriggerClientEvent(CP.e('client:routeRecalc'), n, runId, false, RecalcsLeft(GetState(runId, n)))
@@ -653,7 +645,7 @@ RegisterNetEvent(CP.e('server:recalcRoute'), function(runId)
 end)
 
 AddEventHandler('playerDropped', function()
-    local n = ToSrc(source)
+    local n = CP.U.toSrc(source)
     if not n then return end
     for runId, byRun in pairs(states) do
         byRun[n] = nil

@@ -86,13 +86,6 @@ local function Clip(s, n)
     if utf8.len(s) <= n then return s end
     return s:sub(1, utf8.offset(s, n + 1) - 1)
 end
-local function ToSrc(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
 
 local function Has(modName, fnName)
     local m = CP[modName]
@@ -234,7 +227,7 @@ local function Mark(run, src, reason, detail, verb)
     end
     local p = nil
     if src ~= nil then
-        local n = ToSrc(src)
+        local n = U.toSrc(src)
         p = n and run.participants and run.participants[n] or nil
         if not p then return nil end
     end
@@ -383,7 +376,7 @@ end
 -- ============================================================================
 
 function AC.checkEvent(run, src, index, evidence)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if type(run) ~= 'table' or not src then return false, 'err.invalid_run' end
     if run.state ~= 'in_progress' then return false, 'err.run_not_active' end
     local p = run.participants and run.participants[src]
@@ -440,7 +433,7 @@ end
 -- ============================================================================
 
 function AC.onNpcKilled(run, killerSrc)
-    local k = ToSrc(killerSrc)
+    local k = U.toSrc(killerSrc)
     if type(run) ~= 'table' or not k or run.test or run.state == 'ended' then return end
     local p = run.participants and run.participants[k]
     if p and p.status == 'active' then return end
@@ -485,8 +478,8 @@ local function ReadOnlyCtx(run, i)
         rng = U.rng((tonumber(run.seed) or 1) + i),
     }
     ctx.participants = function() return ActiveSrcs(run) end
-    ctx.coords = function(s) local n = ToSrc(s); return n and PedCoords(n) or nil end
-    ctx.isHost = function(s) return ToSrc(s) == run.host end
+    ctx.coords = function(s) local n = U.toSrc(s); return n and PedCoords(n) or nil end
+    ctx.isHost = function(s) return U.toSrc(s) == run.host end
     ctx.host = function() return run.host end
     ctx.combat = function(acc, armour)
         if Has('Scaling', 'combat') then return CP.Scaling.combat(acc, armour, run.tier, run) end

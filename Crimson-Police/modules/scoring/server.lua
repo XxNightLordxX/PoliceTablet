@@ -85,21 +85,9 @@ local function Num(v, default)
     return n
 end
 
-local function ToSrc(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n < 0 then return nil end
-    return n
-end
-
 local function Now()
     if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
     return os.time()
-end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
 local function WarnOnce(key, fmt, ...)
@@ -189,9 +177,7 @@ local function TierRow(run)
 end
 
 local function Notify(citizenid, kind, key, vars)
-    if not (CP.Tablet and CP.Tablet.notify and CP.Qbx and CP.Qbx.getByCitizenId) then return end
-    local src = CP.Qbx.getByCitizenId(citizenid)
-    if src then CP.Tablet.notify(src, kind, key, vars) end
+    if CP.Qbx and CP.Qbx.getByCitizenId then CP.notify(CP.Qbx.getByCitizenId(citizenid), kind, key, vars) end
 end
 
 -- ============================================================================
@@ -296,7 +282,7 @@ end
 
 function Scoring.streak(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return { days = 0, multiplier = 1.0, graceLeft = false } end
-    Db()
+    CP.Db()
     local row = ReadOfficer(citizenid)
     local today = DayKey(Now())
     local days, gw, gu = CurrentStreak(StreakState(row), today)
@@ -332,7 +318,7 @@ local STREAK_DAYS_SQL = [[SELECT UNIX_TIMESTAMP(created_at) AS ts FROM %s
 -- grace rules as a run: { old = { days, multiplier }, new = { days, multiplier } } | nil, errKey.
 function Scoring.recalcStreak(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'err.invalid_citizenid' end
-    Db()
+    CP.Db()
     local row, ok = ReadOfficer(citizenid)
     if not ok then return nil, 'err.internal' end
     if not row then return nil, 'err.unknown_officer' end
@@ -366,7 +352,7 @@ function Scoring.forgiveStreakDays(citizenid, days)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'err.invalid_citizenid' end
     days = math.tointeger(tonumber(days))
     if not days or days < 1 then return nil, 'err.invalid_days' end
-    Db()
+    CP.Db()
     local row, ok = ReadOfficer(citizenid)
     if not ok then return nil, 'err.internal' end
     if not row then return nil, 'err.unknown_officer' end
@@ -423,7 +409,7 @@ local function DutyEnded(src)
 end
 
 function Scoring.isFirstRunSinceDuty(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src, true)
     if not src or not (CP.Qbx and CP.Qbx.getInfo) then return false end
     local info = CP.Qbx.getInfo(src)
     if not info or not info.citizenid then return false end
@@ -432,7 +418,7 @@ function Scoring.isFirstRunSinceDuty(src)
     local st = duty[cid]
     if not st then
         -- Unknown since this resource started: count a completed run earlier today as the first one.
-        Db()
+        CP.Db()
         local ok, found = pcall(MySQL.scalar.await, [[
             SELECT 1 AS found FROM cp_mission_runs
             WHERE citizenid = ? AND state = 'completed' AND mission_type NOT IN ('manual_award', 'goal')
@@ -449,7 +435,7 @@ end
 function Scoring.firstRunAvailable(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
     local src = CP.Qbx and CP.Qbx.getByCitizenId and CP.Qbx.getByCitizenId(citizenid) or nil
-    if not ToSrc(src) then return nil end
+    if not CP.U.toSrc(src, true) then return nil end
     return Scoring.isFirstRunSinceDuty(src)
 end
 
@@ -788,7 +774,7 @@ function Scoring.compute(run, p, result, opts)
 
     local streakDays = 0
     if p.citizenid then
-        Db()
+        CP.Db()
         local row = ReadOfficer(p.citizenid)
         local st = Advance(StreakState(row), DayKey(Now()))
         streakDays = st.days
@@ -946,7 +932,7 @@ local DERIVED_XP_SQL = [[SELECT COALESCE(SUM(final_points), 0) AS pts, COUNT(*) 
 -- derived XP, the number of counted rows, the signed sum | nil when the rows can't be read.
 function Scoring.derivedXp(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
-    Db()
+    CP.Db()
     local sum, n = 0, 0
     for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
         local ok, row = pcall(MySQL.single.await, DERIVED_XP_SQL:format(tbl), { citizenid })
@@ -1147,7 +1133,7 @@ end
 -- Every achievement badge is checked against the rows again: added, removed.
 function Scoring.recheckBadges(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return {}, {} end
-    Db()
+    CP.Db()
     return CheckBadges(citizenid, true)
 end
 
@@ -1223,7 +1209,7 @@ end
 
 function Scoring.badges(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return {} end
-    Db()
+    CP.Db()
     local ok, rows = pcall(MySQL.query.await, [[
         SELECT badge_id, DATE_FORMAT(earned_at, '%Y-%m-%d %H:%i:%s') AS earned_at, UNIX_TIMESTAMP(earned_at) AS earned_ts
         FROM cp_badges WHERE citizenid = ? ORDER BY earned_at, badge_id
@@ -1264,7 +1250,7 @@ end
 
 function Scoring.onRowCounted(citizenid, row)
     if type(citizenid) ~= 'string' or citizenid == '' or type(row) ~= 'table' then return end
-    Db()
+    CP.Db()
     local state = row.state
     if state ~= 'completed' and state ~= 'failed' then return end
     -- signed: a points adjustment takes XP down (never below 0)
@@ -1282,7 +1268,7 @@ end
 function Scoring.onRowApproved(rowId)
     rowId = tonumber(rowId)
     if not rowId then return end
-    Db()
+    CP.Db()
     local row = ReadRun(rowId)
     if not row then return end
     if CP.U.truthy(row.flagged) or CP.U.truthy(row.voided) then
@@ -1302,7 +1288,7 @@ end
 function Scoring.onRowVoided(rowId)
     rowId = tonumber(rowId)
     if not rowId then return end
-    Db()
+    CP.Db()
     local row = ReadRun(rowId)
     if not row then return end
     local pts = math.floor(CP.U.num(row.final_points))
@@ -1315,7 +1301,7 @@ end
 function Scoring.onRowFlagged(rowId)
     rowId = tonumber(rowId)
     if not rowId then return end
-    Db()
+    CP.Db()
     local row = ReadRun(rowId)
     if not row then return end
     local pts = math.floor(CP.U.num(row.final_points))
@@ -1330,7 +1316,7 @@ end
 
 function Scoring.progressFor(citizenid, gained, pending)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
-    Db()
+    CP.Db()
     gained = math.max(0, math.floor(Num(gained, 0)))
     local now = XpOf(citizenid)
     local before, after = now, now
@@ -1451,7 +1437,7 @@ function Scoring._insertBonusRow(citizenid, kind, missionId, points, labelText, 
 end
 
 function Scoring.manualAward(actorSrc, citizenid, points, reason)
-    local actor = ToSrc(actorSrc)
+    local actor = CP.U.toSrc(actorSrc, true)
     if not actor then return false, 'err.no_permission' end
     if not (CP.Permissions and CP.Permissions.can) then return false, 'err.no_permission' end
     local okP, errKey = CP.Permissions.can(actor, 'manualAward')
@@ -1471,7 +1457,7 @@ function Scoring.manualAward(actorSrc, citizenid, points, reason)
     local rLen = utf8.len(r)
     if not rLen then return false, 'err.invalid_payload' end
     if rLen > REASON_MAX then return false, 'err.reason_too_long' end
-    Db()
+    CP.Db()
     local officer, okRead = ReadOfficer(citizenid)
     if not okRead then return false, 'err.internal' end
     if not officer then return false, 'err.unknown_officer' end
@@ -1508,8 +1494,8 @@ function Scoring.adjust(actorSrc, citizenid, points, reason)
     local n = math.tointeger(tonumber(points))
     if not n or n == 0 or n < -MANUAL_MAX or n > MANUAL_MAX then return nil, 'err.invalid_points' end
     if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'err.invalid_citizenid' end
-    Db()
-    local actor = ToSrc(actorSrc) or 0
+    CP.Db()
+    local actor = CP.U.toSrc(actorSrc, true) or 0
     local missionId = n > 0 and 'manual_award' or 'manual_adjust'
     local label = n > 0 and CP.L('scoring.manual_award_label') or CP.L('scoring.adjust_label')
     local rowId = Scoring._insertBonusRow(citizenid, 'manual_award', missionId, n, label,
@@ -1587,7 +1573,7 @@ end
 
 local function HomeData(officer)
     local cid = officer.citizenid
-    Db()
+    CP.Db()
     local row = ReadOfficer(cid)
     local xp = row and math.max(0, math.floor(CP.U.num(row.xp))) or 0
     local st = Scoring.streak(cid)

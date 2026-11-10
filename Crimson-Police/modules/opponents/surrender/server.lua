@@ -17,7 +17,6 @@ local DONE = { lost = true, left = true, void = true }
 local asks = {}                   -- [citizenid] = { token, untilMs, by (officer src | nil), runId }: one open question
 local talkAt = {}                 -- [officer src] = { [citizenid] = GetGameTimer() of his last Talk them down }
 local registered = nil            -- the command name once registered (RegisterCommand cannot be undone: restart)
-local errorAt = {}
 
 -- ============================================================================
 --                                   HELPERS
@@ -32,13 +31,6 @@ local function Num(v, default)
     v = tonumber(v)
     if not v or v ~= v or v == math.huge or v == -math.huge then return default end
     return v
-end
-
-local function LogError(key, fmt, ...)
-    local now = os.time()
-    if errorAt[key] and now - errorAt[key] < 60 then return end
-    errorAt[key] = now
-    CP.err(TAG, fmt, ...)
 end
 
 -- On while live crimes are on and the surrender block is not switched off (it ships on).
@@ -59,12 +51,6 @@ local function ServerCoords(src)
     return GetEntityCoords(ped)
 end
 
-local function Notify(src, kind, key, vars)
-    if not (CP.Tablet and CP.Tablet.notify) then return end
-    local ok, err = pcall(CP.Tablet.notify, src, kind, key, vars)
-    if not ok then LogError('notify', 'CP.Tablet.notify failed: %s', tostring(err)) end
-end
-
 -- The active participants of the case's run with their server positions (the main bucket only).
 local function Officers(case)
     local out = {}
@@ -81,7 +67,7 @@ local function Officers(case)
 end
 
 local function NotifyOfficers(case, kind, key, vars)
-    for _, o in ipairs(Officers(case)) do Notify(o.src, kind, key, vars) end
+    for _, o in ipairs(Officers(case)) do CP.notify(o.src, kind, key, vars) end
 end
 
 -- The open live case src works as an active participant, or nil.
@@ -147,7 +133,7 @@ local function Apply(case, rec, coords, by)
     rec.surrender = { at = GetGameTimer(), coords = coords, by = by }
     Opp.timeline(case.run, { what = 'surrendered', label = rec.label, src = rec.src, by = by })
     CP.log(TAG, 'run %s suspect %s surrendered%s', tostring(case.runId), rec.label, by and (' to ' .. by) or '')
-    Notify(rec.src, 'success', 'livecrime.surrender.done')
+    CP.notify(rec.src, 'success', 'livecrime.surrender.done')
     NotifyOfficers(case, 'success', 'livecrime.surrender.officers', { label = rec.label })
 end
 
@@ -206,7 +192,7 @@ function Opp.surrenderAnswer(src, token, yes)
     if yes ~= true then
         if a.by then
             Opp.timeline(case.run, { what = 'talk_refused', label = rec.label, src = rec.src, by = a.by })
-            Notify(a.by, 'info', 'livecrime.talk.refused', { label = rec.label })
+            CP.notify(a.by, 'info', 'livecrime.talk.refused', { label = rec.label })
         end
         return false, 'declined'
     end
@@ -243,7 +229,7 @@ end
 local function End(case, rec, why)
     rec.surrender.ended = why
     Opp.timeline(case.run, { what = 'surrender_ended', label = rec.label, src = rec.src, why = why })
-    if rec.src then Notify(rec.src, 'warning', 'livecrime.surrender.ended_' .. why) end
+    if rec.src then CP.notify(rec.src, 'warning', 'livecrime.surrender.ended_' .. why) end
     NotifyOfficers(case, 'warning', 'livecrime.surrender.ended_officers', { label = rec.label })
 end
 
@@ -281,7 +267,7 @@ local function Hints(case, officers)
                 rec.talkHinted = rec.talkHinted or {}
                 if not rec.talkHinted[o.src] and CP.U.dist(o.coords, rec.lastCoords) <= range then
                     rec.talkHinted[o.src] = true
-                    Notify(o.src, 'info', 'livecrime.talk.hint', { label = rec.label })
+                    CP.notify(o.src, 'info', 'livecrime.talk.hint', { label = rec.label })
                 end
             end
         end
@@ -312,7 +298,7 @@ local function Register()
         if not src or src <= 0 then return end
         if CP.Net and CP.Net.rateOk and not CP.Net.rateOk(src, 'livecrime:surrender', 2, 3000) then return end
         local ok, err = Opp.surrenderCommand(src)
-        if not ok then Notify(src, 'error', err) end
+        if not ok then CP.notify(src, 'error', err) end
     end, false)
 end
 Opp.registerSurrender = Register
@@ -323,7 +309,7 @@ RegisterNetEvent(CP.e('server:liveSurrender'), function(token, yes)
     if CP.Net and CP.Net.rateOk and not CP.Net.rateOk(src, 'livecrime:surrender_answer', 3, 1000) then return end
     if type(token) ~= 'string' or #token > 64 then return end
     local ok, err = Opp.surrenderAnswer(src, token, yes == true)
-    if not ok and err ~= 'unknown' and err ~= 'declined' then Notify(src, 'error', err) end
+    if not ok and err ~= 'unknown' and err ~= 'declined' then CP.notify(src, 'error', err) end
 end)
 
 RegisterNetEvent(CP.e('server:liveTalkDown'), function()
@@ -332,9 +318,9 @@ RegisterNetEvent(CP.e('server:liveTalkDown'), function()
     if CP.Net and CP.Net.rateOk and not CP.Net.rateOk(src, 'livecrime:talk', 2, 2000) then return end
     local ok, res = Opp.talkDown(src)
     if ok then
-        Notify(src, 'info', 'livecrime.talk.asked', { label = res })
+        CP.notify(src, 'info', 'livecrime.talk.asked', { label = res })
     else
-        Notify(src, 'error', res)
+        CP.notify(src, 'error', res)
     end
 end)
 

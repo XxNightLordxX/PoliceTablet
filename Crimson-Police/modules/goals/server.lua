@@ -26,7 +26,7 @@ CP.Goals = CP.Goals or {}
 local Goals = CP.Goals
 local TAG = 'goals'
 
-local busy = {}   -- citizenid -> true while onRunCompleted runs for them
+local busy = CP.Lock.new() -- an officer's citizenid while his goals are checked or completed
 
 -- ============================================================================
 --                                   HELPERS
@@ -41,10 +41,6 @@ end
 local function Now()
     if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
     return os.time()
-end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
 local function Period(kind, ts)
@@ -333,7 +329,7 @@ end
 -- department (optional): the officer's department when the caller knows it (his department's goals).
 function Goals.forOfficer(citizenid, department)
     if type(citizenid) ~= 'string' or citizenid == '' then return { daily = nil, weekly = nil } end
-    Db()
+    CP.Db()
     local dept = department
     if type(dept) ~= 'string' then dept = ResolveDept(citizenid) end
     return { daily = GoalView('daily', citizenid, dept), weekly = GoalView('weekly', citizenid, dept) }
@@ -377,24 +373,14 @@ end
 
 function Goals.onRunCompleted(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return end
-    Db()
-    local waited = 0
-    while busy[citizenid] and waited < 10000 do
-        Wait(50)
-        waited = waited + 50
-    end
-    if busy[citizenid] then
-        CP.warn(TAG, 'goal check for %s skipped: another one is still running', citizenid)
-        return
-    end
-    busy[citizenid] = true
-    local ok, err = pcall(function()
+    CP.Db()
+    local st, err = busy:run(citizenid, 10000, function()
         local dept = ResolveDept(citizenid)
         Award('daily', citizenid, false, nil, dept)
         Award('weekly', citizenid, false, nil, dept)
     end)
-    busy[citizenid] = nil
-    if not ok then CP.err(TAG, 'goal check for %s failed: %s', citizenid, tostring(err)) end
+    if st == 'busy' then CP.warn(TAG, 'goal check for %s skipped: another one is still running', citizenid) end
+    if st == 'error' then CP.err(TAG, 'goal check for %s failed: %s', citizenid, tostring(err)) end
 end
 
 -- An admin completes the officer's current goal of this kind (goalId must be that goal, not yet rewarded).
@@ -402,18 +388,16 @@ end
 function Goals.complete(kind, citizenid, goalId, extra)
     if kind ~= 'daily' and kind ~= 'weekly' then return false, 'err.goal_unknown' end
     if type(citizenid) ~= 'string' or citizenid == '' then return false, 'err.invalid_citizenid' end
-    Db()
+    CP.Db()
     local dept = ResolveDept(citizenid)
     local goal, _, start = Pick(kind, citizenid, nil, dept)
     if not goal or goal.id ~= goalId then return false, 'err.goal_unknown' end
     local already = Rewarded(kind, goal, citizenid, start)
     if already == nil then return false, 'err.internal' end
     if already then return false, 'err.goal_rewarded' end
-    if busy[citizenid] then return false, 'err.busy' end
-    busy[citizenid] = true
-    local ok, res = pcall(Award, kind, citizenid, true, extra, dept)
-    busy[citizenid] = nil
-    if not ok or not res then return false, ok and 'err.goal_rewarded' or 'err.internal' end
+    local st, res = busy:run(citizenid, 0, Award, kind, citizenid, true, extra, dept)
+    if st == 'busy' then return false, 'err.busy' end
+    if st ~= 'ok' or not res then return false, st == 'ok' and 'err.goal_rewarded' or 'err.internal' end
     return true
 end
 

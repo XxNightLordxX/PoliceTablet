@@ -68,14 +68,6 @@ local PENDING = { down = true, pickup_wait = true, pickup = true, revived = true
 --                                   HELPERS
 -- ============================================================================
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function RunsCall(name, ...)
     if not (CP.Runs and type(CP.Runs[name]) == 'function') then return false, nil end
     local ok, a, b = pcall(CP.Runs[name], ...)
@@ -115,10 +107,6 @@ local function alerts(name, ...)
         CP.err(TAG, 'CP.Alerts.%s failed: %s', name, tostring(res))
     end
     return nil
-end
-
-local function Notify(src, kind, key, vars)
-    if CP.Tablet and CP.Tablet.notify then pcall(CP.Tablet.notify, src, kind, key, vars) end
 end
 
 local function ServerCoords(src)
@@ -253,7 +241,7 @@ local function EmsPath(src, e)
     if not e.flagged and e.lastStand then
         e.stage = 'done'
         CP.log(TAG, '%d entered last stand without our flag: sc-ambulance already alerted EMS itself', src)
-        Notify(src, 'info', 'downed.ems_on_duty')
+        CP.notify(src, 'info', 'downed.ems_on_duty')
         Ended(src, e, 'ems')
         return
     end
@@ -277,7 +265,7 @@ end
 local function PickupPath(src, e)
     e.stage = 'pickup_wait'
     local delayS = PickupDelay(e)
-    Notify(src, 'info', 'downed.pickup_soon', { seconds = delayS })
+    CP.notify(src, 'info', 'downed.pickup_soon', { seconds = delayS })
     Wait(math.floor(delayS * 1000))
     if not Current(src, e) then return end
     if not Recheck(src, e) then return end
@@ -436,7 +424,7 @@ local function Tick()
         end
     end
     for _, w in ipairs(work) do
-        local src = ToSrc(w.src)
+        local src = CP.U.toSrc(w.src)
         if src then Detect(w.run, src) end
     end
     Prune()
@@ -458,20 +446,20 @@ if CP.Hooks and CP.Hooks.on then CP.Hooks.on('run:created', function() D._arm() 
 -- ============================================================================
 
 function D.isPending(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local e = src and entries[src]
     return e ~= nil and e ~= false and PENDING[e.stage] == true
 end
 
 function D.cancel(src, reason)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local e = src and entries[src]
     if not e then return false end
     return CancelEntry(src, e, reason or 'cancelled')
 end
 
 function D.handle(run, src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src or type(run) ~= 'table' or run.id == nil or run.state == 'ended' then return false end
     local p = run.participants and run.participants[src]
     if type(p) ~= 'table' or p.status ~= 'active' then return false end
@@ -502,7 +490,7 @@ end
 
 local function OnMetaData(src, key, _, new)
     if new ~= true or (key ~= 'isdead' and key ~= 'inlaststand') then return end
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     local _, run = RunsCall('getBySrc', src)
     if type(run) ~= 'table' or run.id == nil or run.state == 'ended' then return end
@@ -518,7 +506,7 @@ end
 
 RegisterNetEvent(CP.e('server:pickupDone'), function(runId, ok)
     local src = source
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n then return end
     if type(runId) ~= 'string' or runId == '' or #runId > 64 then return end
     if ok ~= nil and type(ok) ~= 'boolean' then return end
@@ -534,7 +522,7 @@ RegisterNetEvent(CP.e('server:pickupDone'), function(runId, ok)
 end)
 
 AddEventHandler('playerDropped', function()
-    local n = ToSrc(source)
+    local n = CP.U.toSrc(source)
     if not n then return end
     local e = entries[n]
     if e then

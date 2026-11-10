@@ -16,9 +16,9 @@ local AVATAR_KINDS = { initials = true, preset = true, url = true }
 local REPORT_REASONS = { picture = true, bio = true, other = true }
 local IMAGE_EXTS = { png = true, jpg = true, jpeg = true, webp = true }
 
-local urlSubmits = {}    -- urlSubmits[citizenid] = { day = dayStart, n = link submissions that day }
-local news = {}          -- news[citizenid] = { at, n, list } (the Home extras: read from cache only)
-local banned = nil       -- { words = { lower-case entry }, source = Config.Profile.bannedWords table }
+local urlSubmits = CP.Daily.new()  -- link submissions an officer made today (the server day)
+local news = {}                    -- news[citizenid] = { at, n, list } (the Home extras: read from cache only)
+local banned = nil                 -- { words = { lower-case entry }, source = Config.Profile.bannedWords table }
 
 -- ============================================================================
 --                                   HELPERS
@@ -35,10 +35,6 @@ local function Int(v) return math.floor(Num(v, 0) + 0.0) end
 local function Cfg() return type(Config.Profile) == 'table' and Config.Profile or {} end
 
 local function CommendCfg() return type(Config.Commendations) == 'table' and Config.Commendations or {} end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
 
 local function Has(mod, fn) return type(CP[mod]) == 'table' and type(CP[mod][fn]) == 'function' end
 
@@ -122,15 +118,13 @@ end
 -- success toasts in the bell during a run.
 local function Notify(citizenid, kind, key, vars)
     local ok, src = Call('Qbx', 'getByCitizenId', citizenid)
-    if ok and src and Has('Tablet', 'notify') then
-        Call('Tablet', 'notify', src, kind, key, vars, { channel = 'social' })
-    end
+    if ok then CP.notify(src, kind, key, vars, { channel = 'social' }) end
     return ok and src or nil
 end
 
 local function PushProfile(citizenid)
     local ok, src = Call('Qbx', 'getByCitizenId', citizenid)
-    if ok and src and Has('Tablet', 'push') then Call('Tablet', 'push', src, 'profile', { citizenid = citizenid }) end
+    if ok then CP.push(src, 'profile', { citizenid = citizenid }) end
 end
 
 local function InvalidateBoards()
@@ -165,7 +159,7 @@ FROM cp_officers WHERE citizenid = ?]]
 
 local function ReadRow(citizenid)
     if not ValidCitizenId(citizenid) then return nil end
-    Db()
+    CP.Db()
     local ok, row = pcall(MySQL.single.await, ROW_SQL, { citizenid })
     if not ok then
         CP.err(TAG, 'reading the profile of %s failed: %s', citizenid, tostring(row))
@@ -284,19 +278,9 @@ function Profile.validateUrl(url)
     return true
 end
 
-local function UrlsLeft(citizenid)
-    local perDay = math.max(0, Int(UrlCfg().perDay or 3))
-    local s = urlSubmits[citizenid]
-    if not s or s.day ~= DayStart() then return perDay end
-    return math.max(0, perDay - s.n)
-end
+local function UrlsPerDay() return math.max(0, Int(UrlCfg().perDay or 3)) end
 
-local function CountUrl(citizenid)
-    local day = DayStart()
-    local s = urlSubmits[citizenid]
-    if not s or s.day ~= day then s = { day = day, n = 0 }; urlSubmits[citizenid] = s end
-    s.n = s.n + 1
-end
+local function UrlsLeft(citizenid) return urlSubmits:left(citizenid, UrlsPerDay()) end
 
 -- ============================================================================
 --                                     BIO
@@ -482,7 +466,7 @@ end
 -- Saves the officer's own profile. Returns true, { pending = { avatar, bio } } or false, errKey.
 function Profile.set(officer, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-    Db()
+    CP.Db()
     local row = ReadRow(officer.citizenid)
     local level = LevelOf(row and row.xp or 0)
     local fields, err = LookChanges(officer, payload, level)
@@ -514,9 +498,15 @@ function Profile.set(officer, payload)
     end
     if content then fields[#fields + 1] = { 'profile_updated_at', sql = 'FROM_UNIXTIME(?)', param = Now() } end
     if #fields == 0 then return true, { pending = pending } end
+    -- the link counts before the save yields, so a second request sent at once cannot pass the day's limit
+    local urlToken = urlSubmitted and urlSubmits:reserve(officer.citizenid, UrlsPerDay(), 1) or nil
+    if urlSubmitted and not urlToken then return false, 'err.avatar_url_limit' end
     EnsureRow(officer)
-    if not WriteFields(officer.citizenid, fields) then return false, 'err.internal' end
-    if urlSubmitted then CountUrl(officer.citizenid) end
+    if not WriteFields(officer.citizenid, fields) then
+        urlSubmits:cancel(urlToken)
+        return false, 'err.internal'
+    end
+    urlSubmits:commit(urlToken)
     if payload.callsMuted ~= nil and CP.MissionCalls and CP.MissionCalls._forgetMuted then
         CP.MissionCalls._forgetMuted(officer.citizenid)
     end
@@ -568,7 +558,7 @@ function Profile.report(src, citizenid, reason, note)
         if CharLen(text) > max then return false, 'err.report_too_long', { max = max } end
         if text == '' then text = nil end
     end
-    Db()
+    CP.Db()
     local target = ReadRow(citizenid)
     if not target then return false, 'err.unknown_officer' end
     local day = DayStart()
@@ -634,7 +624,7 @@ end
 -- viewer: a citizenid; each row then says whether that viewer issued it (mine), so the issuer can revoke it.
 local function ReadCommendations(citizenid, staff, viewer)
     if not ValidCitizenId(citizenid) then return {} end
-    Db()
+    CP.Db()
     local rows = MySQL.query.await(COMMEND_SQL:format(staff and '' or 'AND c.revoked = 0'), { citizenid, LIST_LIMIT })
         or {}
     local out = {}
@@ -696,7 +686,7 @@ function Profile.commend(src, role, payload)
     if CharLen(citation) > math.min(255, Int(lim[2] or 255)) then return false, 'err.citation_long' end
     if runUuid ~= nil and runUuid ~= '' and not ValidRunUuid(runUuid) then return false, 'err.invalid_run' end
     if runUuid == '' then runUuid = nil end
-    Db()
+    CP.Db()
     local issuer = 'console'
     local issuerDept = nil
     if tonumber(src) ~= 0 then
@@ -759,7 +749,7 @@ function Profile.revoke(src, role, payload)
     if not id or id < 1 then return false, 'err.invalid_payload' end
     local reason, rErr = Reason(payload.reason)
     if not reason then return false, rErr end
-    Db()
+    CP.Db()
     local row = MySQL.single.await('SELECT id, citizenid, kind, issued_by, revoked FROM cp_commendations WHERE id = ?',
         { id })
     if not row then return false, 'err.commend_not_found' end
@@ -814,7 +804,7 @@ function Profile.review(src, role, payload)
     if what ~= 'avatar' and what ~= 'bio' then return false, 'err.invalid_payload' end
     local reason, rErr = Reason(payload.reason)
     if not reason then return false, rErr end
-    Db()
+    CP.Db()
     local row, err = ModerationTarget(src, role, payload.citizenid)
     if not row then return false, err end
     local cid = tostring(row.citizenid)
@@ -869,7 +859,7 @@ function Profile.clear(src, role, payload)
     if what ~= 'bio' and what ~= 'avatar' then return false, 'err.invalid_payload' end
     local reason, rErr = Reason(payload.reason)
     if not reason then return false, rErr end
-    Db()
+    CP.Db()
     local row, err = ModerationTarget(src, role, payload.citizenid)
     if not row then return false, err end
     local cid = tostring(row.citizenid)
@@ -889,7 +879,7 @@ function Profile.handleReport(src, role, payload)
     if decision ~= 'clear' and decision ~= 'dismiss' then return false, 'err.invalid_payload' end
     local reason, rErr = Reason(payload.reason)
     if not reason then return false, rErr end
-    Db()
+    CP.Db()
     local rep = MySQL.single.await(
         'SELECT id, citizenid, reason, department, status FROM cp_profile_reports WHERE id = ?', { id })
     if not rep then return false, 'err.report_not_found' end
@@ -948,7 +938,7 @@ local REPORTER_DAYS = 30   -- the reporter's recent reports shown to admins (spo
 -- The Profiles tab: pending pictures, pending bios and open reports of one department (nil = every department).
 -- staff (an admin): each report also names who filed it and how many reports they filed lately.
 function Profile.queue(dept, staff)
-    Db()
+    CP.Db()
     local items = {}
     local where, params = '', {}
     if dept then where, params = 'AND department = ?', { dept } end
@@ -1083,7 +1073,7 @@ local reviewCount = { at = 0, n = 0 }
 -- Pending pictures, pending bios and open reports of every department (the admin Review count).
 function Profile.reviewCount()
     if Now() - reviewCount.at < REVIEW_CACHE_S then return reviewCount.n end
-    Db()
+    CP.Db()
     local okA, a = pcall(MySQL.scalar.await, [[SELECT COUNT(*) AS n FROM cp_officers
         WHERE (avatar_status = 'pending' AND avatar_pending IS NOT NULL) OR bio_pending IS NOT NULL]], {})
     local okR, r = pcall(MySQL.scalar.await, 'SELECT COUNT(*) AS n FROM cp_profile_reports WHERE status = \'open\'', {})
@@ -1226,7 +1216,7 @@ if CP.AdminKit and CP.AdminKit.action then
         if not ValidCitizenId(cid) then return false, 'err.invalid_citizenid' end
         if not ReadRow(cid) then return false, 'err.unknown_officer' end
         if not WriteFields(cid, { { 'profile_updated_at', nil } }) then return false, 'err.internal' end
-        urlSubmits[cid] = nil
+        urlSubmits:clear(cid)
         ctx.audit('profileCooldownClear', cid, nil, 'cleared')
         Notify(cid, 'info', 'profile.admin.edit_now')
         return true, { citizenid = cid }
@@ -1303,7 +1293,7 @@ if CP.AdminKit and CP.AdminKit.action then
     Kit.action('server:admin:unrevokeCommendation', 'officerRecords', function(ctx)
         local id = math.tointeger(tonumber(ctx.payload.id))
         if not id or id < 1 then return false, 'err.invalid_payload' end
-        Db()
+        CP.Db()
         local row = MySQL.single.await('SELECT id, citizenid, kind, revoked FROM cp_commendations WHERE id = ?', { id })
         if not row then return false, 'err.commend_not_found' end
         if not U.truthy(row.revoked) then return false, 'err.commend_active' end
@@ -1324,7 +1314,7 @@ if CP.AdminKit and CP.AdminKit.action then
         local lim = type(CommendCfg().citation) == 'table' and CommendCfg().citation or {}
         if not citation or CharLen(citation) < Int(lim[1] or 10) then return false, 'err.citation_short' end
         if CharLen(citation) > math.min(255, Int(lim[2] or 255)) then return false, 'err.citation_long' end
-        Db()
+        CP.Db()
         local row = MySQL.single.await('SELECT id, citizenid, citation FROM cp_commendations WHERE id = ?', { id })
         if not row then return false, 'err.commend_not_found' end
         if row.citation == citation then return true, { id = id } end
@@ -1473,11 +1463,13 @@ end
 
 -- Test hooks (not part of the contract).
 Profile._resetCaches = function()
-    urlSubmits, news, banned = {}, {}, nil
+    news, banned = {}, nil
+    urlSubmits:clear()
 end
 Profile._news = function(citizenid) return news[citizenid] end
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
-    urlSubmits, news = {}, {}
+    news = {}
+    urlSubmits:clear()
 end)

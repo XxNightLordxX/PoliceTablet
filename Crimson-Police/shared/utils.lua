@@ -363,6 +363,14 @@ function U.num(v, default)
     return tonumber(v) or default or 0
 end
 
+-- A player source from anything (a number, a string, an event's source): an integer above 0, or nil. With
+-- console = true, 0 (the server console) passes too.
+function U.toSrc(v, console)
+    local n = math.tointeger(tonumber(v) or -1)
+    if not n or n < 0 or (n == 0 and console ~= true) then return nil end
+    return n
+end
+
 -- Truncate a string to at most n bytes for fixed-size columns, never ending inside a UTF-8 character:
 -- MariaDB strict mode (oxmysql connects as utf8mb4) refuses the whole row for a broken sequence (error 1366).
 function U.clip(s, n)

@@ -21,13 +21,13 @@ local TIERS = { 'standard', 'reinforced', 'heavy', 'major', 'critical' }
 -- owe them, weapons are never handed out, and money items would stand in for a payout.
 local ARENA_ITEMS = { 'armour', 'bandage', 'ammo-*', 'weapon_*', 'money', 'black_money', 'cash' }
 
-local bad = {}          -- bad[lower-case item] = { item, why = 'forbidden' | 'missing' }
-local labels = {}       -- labels[item] = ox_inventory label
-local checked = false   -- the item check ran
-local inventoryUp = nil -- ox_inventory was started when the check ran
-local locks = {}        -- locks[citizenid] = true while rewards are rolled or given for them
-local counts = {}       -- counts[citizenid] = { n, at } (lockerCount cache; home:extras reads it)
-local arenaWait = {}    -- arenaWait[src] = true while a reward waits for the player to leave Crimson-Arena
+local bad = {}                  -- bad[lower-case item] = { item, why = 'forbidden' | 'missing' }
+local labels = {}               -- labels[item] = ox_inventory label
+local checked = false           -- the item check ran
+local inventoryUp = nil         -- ox_inventory was started when the check ran
+local lock = CP.Lock.new()      -- an officer's citizenid while rewards are rolled or given for them
+local counts = {}               -- counts[citizenid] = { n, at } (lockerCount cache; home:extras reads it)
+local arenaWait = {}            -- arenaWait[src] = true while a reward waits for the player to leave Crimson-Arena
 
 -- ============================================================================
 --                                   HELPERS
@@ -68,10 +68,6 @@ end
 local function WeekKey()
     if CP.Schedule and CP.Schedule.weekKey then return tostring(CP.Schedule.weekKey()) end
     return tostring(WeekStart())
-end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
 local function ValidCitizenId(v)
@@ -117,29 +113,22 @@ end
 
 -- Reward toasts are social: the officer option quietRun keeps their info and success ones in the bell during a run.
 local function Notify(src, kind, key, vars)
-    if src and CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(src, kind, key, vars, { channel = 'social' }) end
+    CP.notify(src, kind, key, vars, { channel = 'social' })
 end
 
 local function Push(citizenid)
     counts[citizenid] = nil
     local src = SrcOf(citizenid)
-    if src and CP.Tablet and CP.Tablet.push then CP.Tablet.push(src, 'rewards', { changed = true }) end
+    CP.push(src, 'rewards', { changed = true })
 end
 
 local function WithLock(key, fn)
-    local waited = 0
-    while locks[key] do
-        if waited >= LOCK_WAIT_MS then
-            CP.warn(TAG, 'reward lock for %s is still held after %d ms; skipping this attempt', key, waited)
-            return nil
-        end
-        Wait(50)
-        waited = waited + 50
+    local st, res = lock:run(key, LOCK_WAIT_MS, fn)
+    if st == 'busy' then
+        CP.warn(TAG, 'reward lock for %s is still held after %d ms; skipping this attempt', key, LOCK_WAIT_MS)
+        return nil
     end
-    locks[key] = true
-    local ok, res = pcall(fn)
-    locks[key] = nil
-    if not ok then
+    if st == 'error' then
         CP.err(TAG, 'rewards for %s failed: %s', key, tostring(res))
         return nil
     end
@@ -158,26 +147,22 @@ end
 -- ============================================================================
 --                                  INVENTORY
 -- ============================================================================
--- Every call into ox_inventory is guarded: GetResourceState first, then pcall, read as ok and res.
-
-local function InventoryStarted() return GetResourceState('ox_inventory') == 'started' end
+-- Every call into ox_inventory goes through CP.Ext.call (the started check and pcall), read as ok and res.
 
 local function ItemDef(name)
-    if not InventoryStarted() then return nil end
-    local ok, def = pcall(function() return exports.ox_inventory:Items(name) end)
+    local ok, def = CP.Ext.call('ox_inventory', 'Items', name)
     return ok and type(def) == 'table' and def or nil
 end
 
 local function CanCarry(src, item, count)
-    if not InventoryStarted() then return false end
-    local ok, res = pcall(function() return exports.ox_inventory:CanCarryItem(src, item, count) end)
+    local ok, res = CP.Ext.call('ox_inventory', 'CanCarryItem', src, item, count)
     return ok and res == true
 end
 
 -- true, false (refused: nothing was added) or nil (it raised: the inventory may have changed)
 local function AddItem(src, item, count, id)
-    if not InventoryStarted() then return false end
-    local ok, res = pcall(function() return exports.ox_inventory:AddItem(src, item, count, { cpReward = id }) end)
+    if not CP.Ext.started('ox_inventory') then return false end
+    local ok, res = CP.Ext.call('ox_inventory', 'AddItem', src, item, count, { cpReward = id })
     if not ok then
         CP.err(TAG, 'ox_inventory AddItem(%s, %d) raised for reward %d: %s', item, count, id, tostring(res))
         return nil
@@ -262,7 +247,7 @@ end
 -- owner uses that pool (the example pools only warn when useExamplePools is on; Config health lists them anyway).
 function Rewards.validate()
     bad, labels = {}, {}
-    inventoryUp = InventoryStarted()
+    inventoryUp = CP.Ext.started('ox_inventory')
     local cfg = Cfg()
     local warned = {}
     for _, pool in ipairs(Pools()) do
@@ -300,7 +285,7 @@ end
 
 -- The check runs again once ox_inventory is up when it was not at the last check (it started late).
 local function EnsureChecked()
-    if not checked or (inventoryUp == false and InventoryStarted()) then Rewards.validate() end
+    if not checked or (inventoryUp == false and CP.Ext.started('ox_inventory')) then Rewards.validate() end
 end
 
 -- Checked twice: the forbidden names right here (an item added in game before the next check is never given), and
@@ -318,7 +303,7 @@ function Rewards.usable(name) return Usable(name) end
 
 function Rewards.itemKnown(name)
     if type(name) ~= 'string' or name == '' then return false end
-    if not InventoryStarted() then return nil end
+    if not CP.Ext.started('ox_inventory') then return nil end
     return ItemDef(name) ~= nil
 end
 
@@ -507,7 +492,7 @@ local ROW_COLS = [[r.id, r.row_id, r.source, r.source_key, r.citizenid, r.item, 
 function Rewards.forRow(rowId)
     rowId = ToId(rowId)
     if not rowId then return {} end
-    Db()
+    CP.Db()
     local rows = Query('SELECT ' .. ROW_COLS .. ' FROM cp_item_rewards r WHERE r.row_id = ? ORDER BY r.id', { rowId })
     local out = {}
     for _, r in ipairs(rows or {}) do out[#out + 1] = RewardRow(r) end
@@ -518,7 +503,7 @@ function Rewards.lockerCount(citizenid)
     if not ValidCitizenId(citizenid) then return 0 end
     local c = counts[citizenid]
     if c and Now() - c.at < COUNT_CACHE_S then return c.n end
-    Db()
+    CP.Db()
     local ok, n = pcall(MySQL.scalar.await, [[
         SELECT COUNT(*) AS n FROM cp_item_rewards WHERE citizenid = ? AND status = 'pending'
     ]], { citizenid })
@@ -603,7 +588,7 @@ end
 local function DeliverAll(citizenid)
     if not Enabled() or not ValidCitizenId(citizenid) then return 0 end
     -- the lock is read after the wait for the store: a lock the start takes (left behind) holds before this goes on
-    Db()
+    CP.Db()
     if DeliveryHeld() then return 0 end
     local src = SrcOf(citizenid)
     if not src then return 0 end
@@ -611,8 +596,8 @@ local function DeliverAll(citizenid)
         arenaWait[src] = true
         return 0
     end
-    if not InventoryStarted() then return 0 end
-    Db()
+    if not CP.Ext.started('ox_inventory') then return 0 end
+    CP.Db()
     local rows = Query([[
         SELECT id, row_id, citizenid, item, count FROM cp_item_rewards
         WHERE citizenid = ? AND status = 'pending' ORDER BY id
@@ -642,7 +627,7 @@ end
 -- Stores rewards for one officer and delivers what is pending.
 local function Grant(citizenid, rowId, status, list)
     if not Enabled() or not ValidCitizenId(citizenid) or #list == 0 then return 0 end
-    Db()
+    CP.Db()
     local added = WithLock(citizenid, function()
         local n = Store(citizenid, rowId, status, list)
         if n > 0 and status == 'pending' then DeliverAll(citizenid) end
@@ -736,7 +721,7 @@ end
 local function OnRowApproved(rowId)
     rowId = ToId(rowId)
     if not rowId then return end
-    Db()
+    CP.Db()
     local rows = Query('SELECT DISTINCT citizenid FROM cp_item_rewards WHERE row_id = ? AND status = \'held\'',
         { rowId })
     local n = Update('UPDATE cp_item_rewards SET status = \'pending\' WHERE row_id = ? AND status = \'held\'',
@@ -754,7 +739,7 @@ end
 local function OnRowVoided(rowId)
     rowId = ToId(rowId)
     if not rowId then return end
-    Db()
+    CP.Db()
     local rows = Query('SELECT DISTINCT citizenid FROM cp_item_rewards WHERE row_id = ? AND status = \'pending\'',
         { rowId })
     local n = Update('UPDATE cp_item_rewards SET status = \'held\' WHERE row_id = ? AND status = \'pending\'',
@@ -771,7 +756,7 @@ Rewards.holdRow = OnRowVoided
 local function OnRowForfeited(rowId)
     rowId = ToId(rowId)
     if not rowId then return end
-    Db()
+    CP.Db()
     local rows = Query([[
         SELECT DISTINCT citizenid FROM cp_item_rewards WHERE row_id = ? AND status IN ('held', 'pending')
     ]], { rowId })
@@ -825,7 +810,7 @@ end
 
 -- Waits while a maintenance lock holds rewards back, and for an admin's bulk job; holds the busy lock meanwhile.
 local function ForfeitureJob()
-    Db()
+    CP.Db()
     if DeliveryHeld() then return 0 end
     local Kit = CP.AdminKit
     if not (Kit and Kit.waitIdle and Kit.lock and Kit.unlock) then return ForfeitRows() end
@@ -888,7 +873,7 @@ local function OnSeasonEnded(seasonId, results)
     if type(season) ~= 'table' then return end
     local id = tostring(seasonId)
     if season.champion and type(results.champion) == 'string' and results.champion ~= '' then
-        Db()
+        CP.Db()
         local rows = Query([[
             SELECT citizenid FROM cp_mission_runs
             WHERE season_id = ? AND department = ? AND state = 'completed' AND flagged = 0 AND voided = 0
@@ -914,7 +899,7 @@ end
 function Rewards.locker(src)
     local cid = CitizenOf(src)
     if not cid then return nil, 'err.not_police' end
-    Db()
+    CP.Db()
     local rows = Query([[
         SELECT ]] .. ROW_COLS .. [[ FROM cp_item_rewards r
         WHERE r.citizenid = ? AND r.status IN ('pending', 'held', 'giving') ORDER BY r.id
@@ -930,7 +915,7 @@ function Rewards.locker(src)
         reason = 'rewards.reason.off'
     elseif InArena(src) then
         reason = 'rewards.reason.arena'
-    elseif not InventoryStarted() then
+    elseif not CP.Ext.started('ox_inventory') then
         reason = 'rewards.reason.inventory'
     end
     return { rows = out, canClaim = reason == nil, reason = reason }
@@ -944,8 +929,8 @@ function Rewards.claim(src, id)
     local cid = CitizenOf(src)
     if not cid then return false, 'err.not_police' end
     if InArena(src) then return false, 'err.reward_in_arena' end
-    if not InventoryStarted() then return false, 'err.reward_no_inventory' end
-    Db()
+    if not CP.Ext.started('ox_inventory') then return false, 'err.reward_no_inventory' end
+    CP.Db()
     local rows = Query('SELECT id, row_id, citizenid, item, count, status FROM cp_item_rewards WHERE id = ?', { id })
     local r = rows and rows[1]
     if not r or r.citizenid ~= cid then return false, 'err.reward_not_found' end
@@ -1010,7 +995,7 @@ function Rewards.adminView(args)
     local where, params = AdminWhere(args)
     if not where then return nil, params end
     EnsureChecked()
-    Db()
+    CP.Db()
     local pools = {}
     for _, pool in ipairs(Pools()) do
         local items = {}
@@ -1082,7 +1067,7 @@ end)
 local function RewardById(id)
     id = ToId(id)
     if not id then return nil end
-    Db()
+    CP.Db()
     local rows = Query('SELECT ' .. ROW_COLS .. ' FROM cp_item_rewards r WHERE r.id = ?', { id })
     return rows and rows[1] or nil
 end
@@ -1093,8 +1078,8 @@ local function RewardTarget(id) return ('reward #%d'):format(id) end
 -- ox_inventory's Search matches metadata VALUES and ignores the keys (ox_lib table.contains): { cpReward = 60 } also
 -- finds an untagged food item's { degrade = 60 }, so only a slot whose own cpReward is this id counts.
 local function TaggedSlots(src, item, id)
-    if not InventoryStarted() then return nil end
-    local ok, res = pcall(function() return exports.ox_inventory:Search(src, 'slots', item, { cpReward = id }) end)
+    if not CP.Ext.started('ox_inventory') then return nil end
+    local ok, res = CP.Ext.call('ox_inventory', 'Search', src, 'slots', item, { cpReward = id })
     if not ok then
         CP.err(TAG, 'ox_inventory Search failed for reward %d: %s', id, tostring(res))
         return nil
@@ -1141,7 +1126,7 @@ function Rewards.resolve(id, outcome, audit)
     id = math.floor(U.num(r.id))
     if r.status ~= 'giving' then return false, 'err.state_changed' end
     local cid = r.citizenid
-    if locks[cid] then return false, 'err.reward_busy' end
+    if lock:held(cid) then return false, 'err.reward_busy' end
     local src = SrcOf(cid)
     if not src then return false, 'err.officer_offline' end
     local count = TaggedSlots(src, r.item, id)
@@ -1236,7 +1221,7 @@ end
 function Rewards.undoForfeit(rowId)
     rowId = ToId(rowId)
     if not rowId then return 0 end
-    Db()
+    CP.Db()
     local run = Query('SELECT voided, flagged FROM cp_mission_runs WHERE id = ?', { rowId })
     if not run or not run[1] then return 0 end
     local status = (U.truthy(run[1].voided) or U.truthy(run[1].flagged)) and 'held' or 'pending'
@@ -1397,8 +1382,8 @@ end
 
 -- The item picker: every ox_inventory item a reward may be (forbidden names left out), by name.
 function Rewards.itemChoices()
-    if not InventoryStarted() then return { items = {}, inventory = false } end
-    local ok, all = pcall(function() return exports.ox_inventory:Items() end)
+    if not CP.Ext.started('ox_inventory') then return { items = {}, inventory = false } end
+    local ok, all = CP.Ext.call('ox_inventory', 'Items')
     if not ok or type(all) ~= 'table' then return { items = {}, inventory = false } end
     local out = {}
     for name, def in pairs(all) do
@@ -1594,7 +1579,8 @@ end)
 
 -- Test hooks (not part of the contract).
 Rewards._reset = function()
-    bad, labels, checked, inventoryUp, locks, counts, arenaWait = {}, {}, false, nil, {}, {}, {}
+    bad, labels, checked, inventoryUp, counts, arenaWait = {}, {}, false, nil, {}, {}
+    lock:clear()
 end
 Rewards._arenaWait = function(src) return arenaWait[src] == true end
 Rewards._giveRow = GiveRow
@@ -1602,5 +1588,6 @@ Rewards._forfeitureJob = ForfeitureJob
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
-    locks, counts, arenaWait = {}, {}, {}
+    counts, arenaWait = {}, {}
+    lock:clear()
 end)

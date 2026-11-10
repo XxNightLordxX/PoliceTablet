@@ -22,10 +22,6 @@ local navCache = { at = -1, n = 0 }
 --                                   HELPERS
 -- ============================================================================
 
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
-
 local function Num(v, d)
     local n = tonumber(v)
     if n == nil or n ~= n or n == math.huge or n == -math.huge then return d end
@@ -128,7 +124,7 @@ local ROW_COLS = [[r.id, r.run_uuid, r.citizenid, r.mission_id, r.mission_type, 
 local function RowById(rowId)
     local id = Int(rowId, 1, 2147483647)
     if not id then return nil end
-    Db()
+    CP.Db()
     local rows = Query('SELECT ' .. ROW_COLS .. ' FROM cp_mission_runs r WHERE r.id = ?', { id })
     return rows and rows[1] or nil
 end
@@ -249,7 +245,7 @@ function Payments.list(args)
     local Kit = CP.AdminKit
     local size = Kit and Kit.pageSize and Kit.pageSize() or Int(args.size, 1, PAGE_MAX) or 25
     local page = Int(args.page, 1) or 1
-    Db()
+    CP.Db()
     local total = math.floor(U.num(Scalar('SELECT COUNT(*) AS n FROM cp_mission_runs r WHERE ' .. where, params)))
     local pages = math.max(1, math.ceil(total / size))
     if page > pages then page = pages end
@@ -294,7 +290,7 @@ function Payments.totals(args)
     args = type(args) == 'table' and args or {}
     local where, params = Where({ department = args.department, from = args.from, to = args.to })
     if not where then return nil, params end
-    Db()
+    CP.Db()
     local grouped = Query([[SELECT r.cash_status AS status, r.department AS department, COUNT(*) AS n,
         COALESCE(SUM(r.cash_paid), 0) AS paid, COALESCE(SUM(r.cash_reclaimed), 0) AS reclaimed
         FROM cp_mission_runs r WHERE ]] .. where .. ' GROUP BY r.cash_status, r.department', params)
@@ -391,7 +387,7 @@ end
 function Payments.export(args)
     local where, params = Where(args)
     if not where then return nil, params end
-    Db()
+    CP.Db()
     local q = U.copy(params)
     q[#q + 1] = EXPORT_MAX + 1
     local rows = Query(
@@ -413,7 +409,7 @@ end
 function Payments.stuckCount()
     local now = os.time()
     if navCache.at >= 0 and now - navCache.at < NAV_CACHE_S then return navCache.n end
-    Db()
+    CP.Db()
     local n = Scalar('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE cash_status = \'paying\'', {})
     navCache = { at = now, n = math.floor(U.num(n)) }
     return navCache.n
@@ -427,7 +423,7 @@ function Payments.departmentFunds(key)
     if not ValidKey(key) then return nil, 'err.unknown_department' end
     local dept = DeptOf(key)
     if not dept then return nil, 'err.unknown_department' end
-    Db()
+    CP.Db()
     local account = dept.societyAccount
     local balance = nil
     if CP.Banking and CP.Banking.societyBalance then
@@ -489,7 +485,7 @@ end
 
 -- Before Cash.source changes: each department's balance and what it would then pay (held and pending rows).
 function Payments.sourcePreview()
-    Db()
+    CP.Db()
     local out = {}
     for _, key in ipairs(DepartmentKeys()) do
         local dept = DeptOf(key)
@@ -615,7 +611,7 @@ local function UnfundedSet(args, src)
         end
     end
     params[#params + 1] = UNFUNDED_MAX
-    Db()
+    CP.Db()
     local rows = Query(sql .. ' ORDER BY r.id LIMIT ?', params)
     if not rows then return nil, 'err.internal' end
     local ids, total, byDept, list, excluded = {}, 0, {}, {}, 0
@@ -1049,7 +1045,7 @@ Kit.action('server:admin:manualCash', 'payments', function(ctx)
     local maxPayout = math.floor(Num(CashCfg().maxPayout, 25000))
     local amount = Int(p.amount, 1, maxPayout)
     if not amount then return false, 'err.invalid_amount' end
-    Db()
+    CP.Db()
     local officer = Query('SELECT citizenid, department FROM cp_officers WHERE citizenid = ?', { p.citizenid })
     if not officer then return false, 'err.internal' end
     if not officer[1] then return false, 'err.unknown_officer' end
@@ -1112,7 +1108,7 @@ Kit.action('server:admin:addDepartmentFunds', 'deptFunds', function(ctx)
     local max = math.floor(Num(CashCfg().addFundsMax, 0))
     local amount = Int(p.amount, 1, max)
     if not amount then return false, 'err.invalid_amount' end
-    Db()
+    CP.Db()
     local okI, fundId = pcall(MySQL.insert.await,
         [[INSERT INTO cp_dept_funding (department, amount, txn, state, by_actor,
         reason, created_at) VALUES (?, ?, NULL, 'pending', ?, ?, FROM_UNIXTIME(?))]],

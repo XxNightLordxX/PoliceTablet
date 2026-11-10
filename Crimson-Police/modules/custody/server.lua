@@ -169,10 +169,6 @@ local function OnDuty(src)
     return ok and officer ~= nil
 end
 
-local function Notify(src, kind, key, vars)
-    Call('Tablet', 'notify', src, kind, key, vars)
-end
-
 local function PlayerCoords(src)
     local ped = GetPlayerPed(src)
     if not Exists(ped) then return nil, nil end
@@ -1864,7 +1860,7 @@ end
 
 local function Refuse(src, key, why, vars)
     CP.log(TAG, 'action by %s refused: %s', tostring(src), why or key)
-    if key then Notify(src, 'error', key, vars) end
+    if key then CP.notify(src, 'error', key, vars) end
     return false, key
 end
 
@@ -1927,8 +1923,7 @@ end
 local function HandcuffsOk(src)
     local item = Cfg().handcuffsItem
     if not item or item == '' then return true end
-    if GetResourceState('ox_inventory') ~= 'started' then return false end
-    local ok, n = pcall(function() return exports.ox_inventory:Search(src, 'count', item) end)
+    local ok, n = CP.Ext.call('ox_inventory', 'Search', src, 'count', item)
     return ok and (tonumber(n) or 0) > 0
 end
 
@@ -2032,7 +2027,7 @@ function Custody.noteForce(run, netId, src)
     if last and t - last < FORCE_WINDOW_MS then return false end
     b.force[netId] = t
     Call('Runs', 'penalize', run, 'excessive_force', { src = src })
-    Notify(src, 'warning', 'custody.excessive_force')
+    CP.notify(src, 'warning', 'custody.excessive_force')
     return true
 end
 
@@ -2266,19 +2261,19 @@ end
 function Custody.giveEvidence(run)
     local item = Cfg().evidenceItem
     if type(item) ~= 'string' or item == '' or not IsLive(run) or not UsesEvidence(run) then return 0 end
-    if GetResourceState('ox_inventory') ~= 'started' then return 0 end
+    if not CP.Ext.started('ox_inventory') then return 0 end
     local n = 0
     for _, src in ipairs(ActiveSrcs(run)) do
         local p = run.participants[src]
         if p and not p.evidenceGiven and not InArena(src) then
             -- CanCarryItem first: ox_inventory's AddItem checks free slots only, never weight (nil = no room)
             local meta = { cpRun = run.id, cpItem = true }
-            local okC, can = pcall(function() return exports.ox_inventory:CanCarryItem(src, item, 1, meta) end)
+            local okC, can = CP.Ext.call('ox_inventory', 'CanCarryItem', src, item, 1, meta)
             if not (okC and can == true) then
                 CP.warn(TAG, 'cannot give %s to %s for run %s: no room', item, tostring(src), run.id)
-                Notify(src, 'warning', 'run.item_no_room', { item = item })
+                CP.notify(src, 'warning', 'run.item_no_room', { item = item })
             else
-                local ok, res = pcall(function() return exports.ox_inventory:AddItem(src, item, 1, meta) end)
+                local ok, res = CP.Ext.call('ox_inventory', 'AddItem', src, item, 1, meta)
                 if ok and res then
                     p.evidenceGiven = true
                     p.items = p.items or {}

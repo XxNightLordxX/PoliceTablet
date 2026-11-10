@@ -98,14 +98,6 @@ A.foreignClearedAt = foreignCleared
 --                                   HELPERS
 -- ============================================================================
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function Connected(src)
     local ok, name = pcall(GetPlayerName, src)
     return ok and type(name) == 'string' and name ~= ''
@@ -240,25 +232,25 @@ end
 -- ============================================================================
 
 function A.foreignFlag(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false end
     return Classify(BagValue(src)) == 'foreign'
 end
 
 function A.inArena(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false end
     if Classify(BagValue(src)) == 'foreign' then return true end
     return BucketOf(src) ~= 0
 end
 
 function A.has(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     return src ~= nil and wanted[src] ~= nil
 end
 
 function A.hold(src, on)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     holds[src] = on and true or nil
 end
@@ -272,7 +264,7 @@ function A.onInArena(fn)
 end
 
 function A.set(src, runRef)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false end
     local run, runId = ResolveRun(src, runRef)
     if type(run) == 'table' and run.realSuspect then
@@ -315,7 +307,7 @@ function A.set(src, runRef)
 end
 
 function A.clear(src, opts)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false end
     local force = type(opts) == 'table' and opts.force == true
     if holds[src] and not force then
@@ -342,7 +334,7 @@ function A.releaseRun(run)
     if not AlertsGoOut(run) or type(run.participants) ~= 'table' then return 0 end
     local n = 0
     for s, p in pairs(run.participants) do
-        local src = ToSrc(s)
+        local src = CP.U.toSrc(s)
         if src and type(p) == 'table' and p.status == 'active' then
             local w = wanted[src]
             if (w and (w.runId == nil or w.runId == run.id)) or (not w and Classify(BagValue(src)) == 'ours') then
@@ -410,7 +402,7 @@ local function ForgetIntent(src)
 end
 
 function A.forget(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false end
     local had = wanted[src] ~= nil or holds[src] ~= nil
     ForgetIntent(src)
@@ -470,7 +462,7 @@ if type(AddStateBagChangeHandler) == 'function' then
     bagWatched = true
     AddStateBagChangeHandler(BAG_KEY, nil, function(bagName, _, value)
         local ok, src = pcall(GetPlayerFromStateBagName, bagName)
-        src = ok and ToSrc(src) or nil
+        src = ok and CP.U.toSrc(src) or nil
         if not src then return end
         local kind = Classify(value)
         local prevKind = Classify(BagValue(src)) -- read only: the old value (not set yet)
@@ -540,7 +532,7 @@ end
 local function ArenaExits()
     local seen = {}
     for _, s in ipairs(GetPlayers() or {}) do
-        local src = ToSrc(s)
+        local src = CP.U.toSrc(s)
         if src then
             seen[src] = true
             local now = InArenaNow(src)
@@ -647,7 +639,7 @@ end
 
 local function OnShotsFired(src, _, receivedAt)
     local t = math.tointeger(tonumber(receivedAt) or os.time()) or os.time()
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     if A.foreignFlag(src) then return end
     local run
@@ -670,7 +662,7 @@ local function DownListener(prefix)
     local fmt = prefix .. '%d_%d'
     return function(src, _, receivedAt)
         local t = math.tointeger(tonumber(receivedAt) or os.time()) or os.time()
-        src = ToSrc(src)
+        src = CP.U.toSrc(src)
         if not src then return end
         if A.foreignFlag(src) then return end
         if not wanted[src] then
@@ -697,7 +689,7 @@ local function RemoveLeftovers()
     if not ok or type(players) ~= 'table' then return 0 end
     local n = 0
     for _, s in ipairs(players) do
-        local src = ToSrc(s)
+        local src = CP.U.toSrc(s)
         if src then
             local kind = Classify(BagValue(src))
             if kind == 'ours' and not wanted[src] then
@@ -711,7 +703,7 @@ local function RemoveLeftovers()
 end
 
 AddEventHandler('playerDropped', function()
-    local src = ToSrc(source)
+    local src = CP.U.toSrc(source)
     if not src then return end
     ForgetIntent(src)
     stale[src] = nil

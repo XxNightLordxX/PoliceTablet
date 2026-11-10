@@ -3288,10 +3288,10 @@ local function QueueReload()
 end
 
 local function PushAdmins(data)
-    if not (CP.Tablet and CP.Tablet.push and CP.Access and CP.Access.isAdmin) then return end
+    if not (CP.Access and CP.Access.isAdmin) then return end
     for _, s in ipairs(GetPlayers and GetPlayers() or {}) do
-        local n = tonumber(s)
-        if n and CP.Access.isAdmin(n) then pcall(CP.Tablet.push, n, 'settings', data) end
+        local n = CP.U.toSrc(s)
+        if n and CP.Access.isAdmin(n) then CP.push(n, 'settings', data) end
     end
 end
 

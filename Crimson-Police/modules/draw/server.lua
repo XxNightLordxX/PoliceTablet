@@ -69,7 +69,7 @@ local DAY_SPAN_S = 108000            -- 30 h: from a day start this always lands
 local holders = {} -- holders[missionId][index] = { [holderId] = true }
 local byHolder = {} -- byHolder[holderId] = { missionId, index, at, coords } (coords: the start of the held spot)
 local recent = {} -- recent[citizenid][missionType] = { { missionId, at, seq }, ... } newest first
-local inFlight = {} -- inFlight[src] = true while an accept for that player is being processed
+local inFlight = CP.Lock.new({ players = true }) -- a player's source while an accept for him is processed
 local usedAt = {} -- usedAt[missionId][index] = when a run last took that spot (server-wide freshness)
 local lastLocs = {} -- lastLocs[citizenid][missionId] = { { index, at }, ... } newest first
 local footprints = setmetatable({}, { __mode = 'k' }) -- footprints[def][index] = { pts, box }
@@ -1962,15 +1962,11 @@ CP.Net.action('server:acceptType', function(src, payload)
     if CP.Tablet and CP.Tablet.itemOk and not CP.Tablet.itemOk(src) then return false, 'err.no_tablet_item' end
 
     local srcs = UnitMembers(src)
-    for _, m in ipairs(srcs) do
-        if inFlight[m] then return false, 'err.busy' end
-    end
-    for _, m in ipairs(srcs) do inFlight[m] = true end
     -- the leader ticked "Real suspect OK" (Config.Volunteers modes); anything but true is no
     local realSuspect = type(payload) == 'table' and payload.realSuspect == true or nil
-    local okCall, ok, data = pcall(Accept, src, typeKey, { twists = twists, realSuspect = realSuspect })
-    for _, m in ipairs(srcs) do inFlight[m] = nil end
-    if not okCall then
+    local st, ok, data = inFlight:runAll(srcs, Accept, src, typeKey, { twists = twists, realSuspect = realSuspect })
+    if st == 'busy' then return false, 'err.busy' end
+    if st == 'error' then
         CP.err(TAG, 'server:acceptType failed: %s', tostring(ok))
         local unit = UnitOf(src)
         if unit and unit.locked and not OnMission(src) then UnlockUnit(unit) end
@@ -2030,11 +2026,6 @@ CP.Net.callback('admin:getLocationStats', function(src, args)
     if type(missionId) ~= 'string' or missionId == '' or #missionId > 64 then return nil, 'err.invalid_payload' end
     return Draw.locationStats(missionId)
 end, { rate = 3 })
-
-AddEventHandler('playerDropped', function()
-    local src = source
-    inFlight[src] = nil
-end)
 
 -- Safety net: drop provisional reservations that outlived their accept, and reservations of runs
 -- the engine no longer knows (CP.Runs releases its own on cleanup; this only catches leaks).

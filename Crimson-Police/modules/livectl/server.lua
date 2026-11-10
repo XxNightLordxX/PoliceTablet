@@ -19,12 +19,6 @@ local SCOPES = { all = true, type = true, mission = true }
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function ToSrc(v)
-    local n = math.tointeger(tonumber(v) or -1)
-    if not n or n < 0 then return nil end
-    return n
-end
-
 local function Num(v, default)
     local n = tonumber(v)
     if n == nil or n ~= n or n == math.huge or n == -math.huge then return default end
@@ -44,10 +38,6 @@ local function Call(modName, fnName, ...)
         return false, nil
     end
     return true, table.unpack(res, 2, res.n)
-end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
 local function Ctl() return Config.AdminControl or {} end
@@ -92,7 +82,7 @@ end
 -- The online src of a citizenid (nil when offline).
 local function OnlineSrc(citizenid)
     local ok, src = Call('Qbx', 'getByCitizenId', citizenid)
-    src = ok and ToSrc(src) or nil
+    src = ok and U.toSrc(src, true) or nil
     if not src or src == 0 then return nil end
     return src
 end
@@ -123,7 +113,7 @@ local MARKERS = { cooldown_clears = true, cap_extra = true, boss_extra = true }
 -- exists, oldText (nil = NULL), decoded table
 local function ReadMarker(citizenid, column)
     if not MARKERS[column] then return false end
-    Db()
+    CP.Db()
     local ok, row = pcall(MySQL.single.await,
         ('SELECT citizenid, %s AS v FROM cp_officers WHERE citizenid = ?'):format(column), { citizenid })
     if not ok then
@@ -201,7 +191,7 @@ local function RunView(run, adminSrc)
         timeLimit = run.timeLimit,
         timeAdded = math.floor(Num(run.timeAdded, 0)),
         test = run.test ~= nil,
-        testBy = run.test and ToSrc(run.test.adminSrc) or nil,
+        testBy = run.test and U.toSrc(run.test.adminSrc, true) or nil,
         operationId = run.operationId,
         isBoss = run.isBoss == true,
         modifier = run.modifier,
@@ -219,7 +209,7 @@ function LiveCtl.liveRuns(adminSrc)
     local ok, all = Call('Runs', 'all')
     local out = {}
     for _, run in ipairs(ok and type(all) == 'table' and all or {}) do
-        if run.state ~= 'ended' then out[#out + 1] = RunView(run, ToSrc(adminSrc)) end
+        if run.state ~= 'ended' then out[#out + 1] = RunView(run, U.toSrc(adminSrc, true)) end
     end
     table.sort(out, function(a, b) return (a.acceptedAt or 0) < (b.acceptedAt or 0) end)
     return out
@@ -243,7 +233,7 @@ local function RunTargets(payload) return { runUuid = RunIdOf(payload.runId) } e
 -- ============================================================================
 
 local function FreeAbandons(citizenid)
-    Db()
+    CP.Db()
     local ok, rows = pcall(
         MySQL.query.await,
         ([[SELECT run_uuid, mission_type, mission_id,
@@ -479,7 +469,7 @@ end
 -- A free abandon (end_reason real_call) of the last 24 h becomes a normal one: the type and mission cooldowns start
 -- now, exactly as an un-mark within the dodge window does. The run paid nothing either way.
 function LiveCtl.reclassifyAbandon(citizenid, runUuid)
-    Db()
+    CP.Db()
     local ok, row = pcall(MySQL.single.await, [[SELECT id FROM cp_mission_runs WHERE citizenid = ? AND run_uuid = ?
         AND end_reason = 'real_call' AND created_at >= FROM_UNIXTIME(?) LIMIT 1]],
         { citizenid, runUuid, os.time() - FREE_ABANDON_WINDOW_S })
@@ -545,13 +535,13 @@ local function TellOfficers(key, vars)
     local ok, list = Call('Qbx', 'getOnlinePlayers')
     if not ok or type(list) ~= 'table' then return end
     for _, s in ipairs(list) do
-        local src = ToSrc(s)
+        local src = U.toSrc(s, true)
         local okI, info = Call('Qbx', 'getInfo', src)
         local job = okI and type(info) == 'table' and type(info.job) == 'table' and info.job.name or nil
         local okD, dept = Call('Access', 'departmentForJob', job)
         if src and okD and dept then
-            Call('Tablet', 'notify', src, 'info', key, vars)
-            Call('Tablet', 'push', src, 'board', { tod = true })
+            CP.notify(src, 'info', key, vars)
+            CP.push(src, 'board', { tod = true })
         end
     end
 end
@@ -600,7 +590,7 @@ Kit.callback('admin:getToday', 'liveRuns', function() return LiveCtl.today() end
 -- Recall one participant without penalty (the existing force recall: no cooldown, pay tier kept).
 Kit.action('server:admin:recall', 'liveRuns', function(ctx)
     local runId = RunIdOf(ctx.payload.runId)
-    local target = ToSrc(ctx.payload.src)
+    local target = U.toSrc(ctx.payload.src, true)
     if not runId or not target or target == 0 then return false, 'err.invalid_payload' end
     if not Has('Admin', 'forceRecall') then return false, 'err.module_unavailable' end
     return CP.Admin.forceRecall(ctx.src, runId, target, ctx.reason)
@@ -682,7 +672,7 @@ Kit.action('server:admin:removeFromUnit', 'liveRuns', function(ctx)
     local unit, id = UnitOf(ctx.payload)
     if not unit then return false, 'err.unit_gone' end
     if OwnUnit(ctx.src, unit) then return false, 'err.live_own_unit' end
-    local target = ToSrc(ctx.payload.src)
+    local target = U.toSrc(ctx.payload.src, true)
     local info = target and unit.info and unit.info[target] or nil
     local okR, res = CP.Units.adminRemove(id, target)
     if not okR then return false, res end
@@ -882,7 +872,7 @@ end
 -- What the Department Report's officer dialog needs to show Clear cooldown: nil when that player may not clear this
 -- officer's cooldowns (the control is off, not a supervisor, his own character), else { perDay, usedToday }.
 function LiveCtl.supClearView(src, citizenid)
-    local n = ToSrc(src)
+    local n = U.toSrc(src, true)
     if not n or n == 0 or not CanUse(n, CLEAR_KEY) then return nil end
     if Kit.isSelf(n, citizenid) ~= false then return nil end
     local admin = CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n) == true
@@ -914,7 +904,7 @@ end
 -- Live Missions' "+ minutes" for that player: nil when he may not add time, else { min, max (minutes per click),
 -- maxSeconds (per run), perDay, usedToday }. Admins use Admin UI -> Live.
 function LiveCtl.supTimeView(src)
-    local n = ToSrc(src)
+    local n = U.toSrc(src, true)
     if not n or n == 0 then return nil end
     if CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(n) then return nil end
     local ok, _, _, dept = CanUse(n, TIME_KEY)

@@ -35,10 +35,6 @@ local Kit = CP.AdminKit
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
-
 local function Num(v, default)
     local n = tonumber(v)
     if n == nil or n ~= n then return default end
@@ -70,7 +66,7 @@ local function Call(modName, fnName, ...)
 end
 
 local function Query(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.query.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'query failed: %s', tostring(res))
@@ -80,7 +76,7 @@ local function Query(sql, params)
 end
 
 local function Single(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.single.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'query failed: %s', tostring(res))
@@ -90,7 +86,7 @@ local function Single(sql, params)
 end
 
 local function Update(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.update.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'update failed: %s', tostring(res))
@@ -100,7 +96,7 @@ local function Update(sql, params)
 end
 
 local function Scalar(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.scalar.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'query failed: %s', tostring(res))
@@ -158,7 +154,7 @@ end
 
 -- Saves a notice: id | nil.
 function Corr.insertNotice(text, depts, expires, byActor, now)
-    Db()
+    CP.Db()
     local okI, id = pcall(MySQL.insert.await, [[INSERT INTO cp_staff_notices (text, departments, expires_at, by_actor,
         created_at) VALUES (?, ?, FROM_UNIXTIME(?), ?, FROM_UNIXTIME(?))]],
         { text, depts and json.encode(depts) or nil, expires, byActor, now or os.time() })
@@ -179,15 +175,9 @@ local function ValidCid(v)
     return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
 end
 
-local function ToSrc(v)
-    local n = math.tointeger(tonumber(v) or -1)
-    if not n or n < 0 then return nil end
-    return n
-end
-
 -- Who acted, as cp_audit names them: the citizenid, 'console' or 'player:<src>'.
 local function ActorId(src)
-    local n = ToSrc(src) or 0
+    local n = U.toSrc(src, true) or 0
     if n == 0 then return 'console' end
     local ok, info = Call('Qbx', 'getInfo', n)
     if ok and type(info) == 'table' and type(info.citizenid) == 'string' then return info.citizenid end
@@ -197,7 +187,7 @@ end
 local function OnlineSrc(citizenid)
     if not ValidCid(citizenid) then return nil end
     local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    local n = ok and ToSrc(s) or nil
+    local n = ok and U.toSrc(s, true) or nil
     if n and n > 0 then return n end
     return nil
 end
@@ -390,7 +380,7 @@ end
 
 -- The run ids any of src's characters took part in (live and archived) and the run src is on now.
 local function OwnRuns(src)
-    local n = ToSrc(src) or 0
+    local n = U.toSrc(src, true) or 0
     local out = {}
     if n == 0 then return out end
     local okC, cids = Call('Access', 'selfCitizenids', n)
@@ -716,7 +706,7 @@ local function OfficersOf(rows)
 end
 
 local function Ident(src)
-    local n = ToSrc(src) or 0
+    local n = U.toSrc(src, true) or 0
     if n == 0 then return nil end
     local ok, lic = Call('Access', 'licenseOfSrc', n)
     return ok and type(lic) == 'string' and lic or nil

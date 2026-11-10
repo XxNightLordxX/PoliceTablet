@@ -91,14 +91,6 @@ local dbQueue, dbWorker = {}, false
 --                                   HELPERS
 -- ============================================================================
 
-local function ToSrc(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function Call(modName, fnName, ...)
     local m = CP[modName]
     if type(m) ~= 'table' or type(m[fnName]) ~= 'function' then return false end
@@ -264,10 +256,6 @@ local function ActiveSrcs(run)
     return out
 end
 
-local function Notify(src, kind, key, vars, opts)
-    Call('Tablet', 'notify', src, kind, key, vars, opts)
-end
-
 -- The same toast for a list of players: CP.Tablet.notifyMany (deduplicated; never a -1 broadcast), else one
 -- CP.Tablet.notify per player.
 local function NotifyMany(srcs, kind, key, vars)
@@ -276,7 +264,7 @@ local function NotifyMany(srcs, kind, key, vars)
         Call('Tablet', 'notifyMany', srcs, kind, key, vars)
         return
     end
-    for _, s in ipairs(srcs) do Notify(s, kind, key, vars) end
+    for _, s in ipairs(srcs) do CP.notify(s, kind, key, vars) end
 end
 
 -- Clip to at most n characters without ending inside a UTF-8 sequence (the cp_audit columns count
@@ -289,17 +277,13 @@ local function ClipChars(s, n)
     return s:sub(1, utf8.offset(s, n + 1) - 1)
 end
 
-local function Push(src, topic, data)
-    Call('Tablet', 'push', src, topic, data)
-end
-
 local function OnlinePlayers()
     local ok, list = Call('Qbx', 'getOnlinePlayers')
     if ok and type(list) == 'table' then return list end
     local out = {}
     if GetPlayers then
         for _, s in ipairs(GetPlayers()) do
-            local n = ToSrc(s)
+            local n = CP.U.toSrc(s)
             if n then out[#out + 1] = n end
         end
     end
@@ -424,22 +408,22 @@ local function Broadcast(state, label, extra)
     local data = PushData()
     CreateThread(function()
         for _, p in ipairs(OnlinePlayers()) do
-            p = ToSrc(p)
+            p = CP.U.toSrc(p)
             if p and not MaybeOfficer(p) then
-                if IsAdmin(p) then Push(p, 'operation', data) end
+                if IsAdmin(p) then CP.push(p, 'operation', data) end
             elseif p then
                 local okI, info = Call('Qbx', 'getInfo', p)
                 local job = okI and type(info) == 'table' and type(info.job) == 'table' and info.job or nil
                 local okD, dept = false, nil
                 if job then okD, dept = Call('Access', 'departmentForJob', job.name) end
                 if okD and dept then
-                    Push(p, 'operation', data)
-                    Push(p, 'board', data)
+                    CP.push(p, 'operation', data)
+                    CP.push(p, 'board', data)
                     if state and job.onduty and GetOfficer(p) then
                         TriggerClientEvent(CP.e('client:operation'), p, state, label, extra)
                     end
                 elseif IsAdmin(p) then
-                    Push(p, 'operation', data)
+                    CP.push(p, 'operation', data)
                 end
             end
         end
@@ -452,7 +436,7 @@ local function NotifySupervisors(kind, key, vars)
     CreateThread(function()
         local targets = {}
         for _, p in ipairs(OnlinePlayers()) do
-            p = ToSrc(p)
+            p = CP.U.toSrc(p)
             if p and (IsAdmin(p) or MaybeOfficer(p)) then
                 local ok, allowed = Call('Permissions', 'can', p, 'launchCrossDept')
                 if ok and allowed then targets[#targets + 1] = p end
@@ -631,7 +615,7 @@ local function DoStart(cur, actorSrc, auto)
         for i = #cur.participants, 1, -1 do
             if cur.participants[i].src == p.src then table.remove(cur.participants, i) end
         end
-        Notify(p.src, 'warning', 'officer.op.removed_at_start', { mission = cur.missionLabel })
+        CP.notify(p.src, 'warning', 'officer.op.removed_at_start', { mission = cur.missionLabel })
     end
 
     local def = MissionDef(cur.missionId)
@@ -897,7 +881,7 @@ function Ops.cancel(src, reason)
 end
 
 function Ops.join(src, opId)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false, 'err.invalid_payload' end
     local officer, errKey = GetOfficer(src)
     if not officer then return false, errKey or 'err.not_police' end
@@ -966,10 +950,10 @@ local function FillFromWaitlist(cur)
         if fits and op == cur and cur.status == 'joining' and not cur.joinClosed and #cur.participants < max then
             w.joinedAt = os.time()
             cur.participants[#cur.participants + 1] = w
-            Notify(w.src, 'success', 'officer.op.waitlist_promoted', { mission = cur.missionLabel })
+            CP.notify(w.src, 'success', 'officer.op.waitlist_promoted', { mission = cur.missionLabel })
             CP.log(TAG, 'operation %d: %d took a freed place from the waitlist', cur.id, w.src)
         elseif not fits then
-            Notify(w.src, 'warning', 'officer.op.waitlist_skipped', { mission = cur.missionLabel })
+            CP.notify(w.src, 'warning', 'officer.op.waitlist_skipped', { mission = cur.missionLabel })
         elseif op == cur and cur.status == 'joining' and not cur.joinClosed then
             table.insert(cur.waitlist, 1, w)      -- the place went meanwhile: keep the first place in line
             break
@@ -998,7 +982,7 @@ end
 
 -- An officer leaves before the start (no penalty); once the run exists, leaving is the run's own quit.
 function Ops.leave(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false, 'err.invalid_payload' end
     local cur = op
     if not cur then return false, 'err.op_none' end
@@ -1012,7 +996,7 @@ function Ops.leave(src)
     end
     local was = TakeOut(cur, src)
     if not was then return false, 'err.op_not_joined' end
-    Notify(src, 'info', 'officer.op.left', { mission = cur.missionLabel })
+    CP.notify(src, 'info', 'officer.op.left', { mission = cur.missionLabel })
     CP.log(TAG, 'operation %d: %d left before the start (%s)', cur.id, src, was)
     if was == 'joined' then FillFromWaitlist(cur) else Broadcast(nil) end
     return true, { left = true }
@@ -1028,7 +1012,7 @@ local function DoRemoveJoiner(actorSrc, target, reason)
     for _, w in ipairs(cur.waitlist or {}) do if w.src == target then entry = w end end
     if not entry then return false, 'err.op_not_joined' end
     local was = TakeOut(cur, target)
-    Notify(target, 'warning', 'officer.op.removed_by_supervisor', { mission = cur.missionLabel, reason = reason })
+    CP.notify(target, 'warning', 'officer.op.removed_by_supervisor', { mission = cur.missionLabel, reason = reason })
     Audit(actorSrc, cur, 'opRemoveJoiner', ('%s (%s)'):format(entry.name or '?', tostring(entry.citizenid)), was,
         reason)
     CP.log(TAG, 'operation %d: %s removed %d (%s)', cur.id, tostring(actorSrc), target, tostring(was))
@@ -1039,7 +1023,7 @@ end
 function Ops.removeJoiner(src, target, reason)
     local ok, errKey = Allowed(src)
     if not ok then return false, errKey end
-    target = ToSrc(target)
+    target = CP.U.toSrc(target)
     if not target then return false, 'err.invalid_payload' end
     local text, rErr = CleanReason(reason)
     if not text then return false, rErr end
@@ -1048,7 +1032,7 @@ end
 
 -- The Unit screen's operation card for an officer on the join list or the waitlist (nil otherwise).
 function Ops.officerCard(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local cur = op
     if not src or not cur then return nil end
     local joined, position = false, nil
@@ -1070,7 +1054,7 @@ end
 
 -- A joiner who drops, unloads or no longer qualifies leaves the join list (runs handle the run itself).
 local function RemoveJoiner(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local cur = op
     if not src or not cur or cur.status ~= 'joining' then return end
     local was = TakeOut(cur, src)
@@ -1103,7 +1087,7 @@ end
 function Ops.boardCard(src)
     local cur = op
     if not cur then return nil end
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local now = os.time()
     local def = MissionDef(cur.missionId)
     local max = MaxFor()
@@ -1385,7 +1369,7 @@ end
 for _, scope in ipairs({ 'sup', 'admin' }) do
     CP.Net.action(('server:%s:opRemoveJoiner'):format(scope), Guarded(scope, function(src, payload)
         if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
-        local target = ToSrc(payload.src)
+        local target = CP.U.toSrc(payload.src)
         if not target then return false, 'err.invalid_payload' end
         local reason, errKey = CleanReason(payload.reason)
         if not reason then return false, errKey end

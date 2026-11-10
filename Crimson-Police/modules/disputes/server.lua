@@ -75,13 +75,6 @@ local function Clip(s, n)
     if utf8.len(s) <= n then return s end
     return s:sub(1, utf8.offset(s, n + 1) - 1)
 end
-local function ToSrc(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
 
 local function Has(modName, fnName)
     local m = CP[modName]
@@ -96,10 +89,6 @@ local function Call(modName, fnName, ...)
         return false
     end
     return true, table.unpack(res, 2, res.n)
-end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
 local function Num(v, default)
@@ -124,7 +113,7 @@ local function CleanText(v, max)
 end
 
 local function Query(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.query.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'query failed: %s', tostring(res))
@@ -134,7 +123,7 @@ local function Query(sql, params)
 end
 
 local function Single(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.single.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'query failed: %s', tostring(res))
@@ -144,7 +133,7 @@ local function Single(sql, params)
 end
 
 local function Update(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.update.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'update failed: %s', tostring(res))
@@ -195,14 +184,10 @@ local function Webhook(...)
     if Has('Admin', 'webhook') then Call('Admin', 'webhook', ...) end
 end
 
-local function Notify(src, kind, key, vars)
-    if ToSrc(src) and Has('Tablet', 'notify') then Call('Tablet', 'notify', src, kind, key, vars) end
-end
-
 local function OnlineSrc(citizenid)
     if type(citizenid) ~= 'string' or not Has('Qbx', 'getByCitizenId') then return nil end
     local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    return ok and ToSrc(s) or nil
+    return ok and U.toSrc(s) or nil
 end
 
 local function CitizenOf(src)
@@ -574,7 +559,7 @@ function D.file(src, payload)
     if prev then return false, prev.status == 'open' and 'err.dispute_open' or 'err.dispute_final' end
 
     local goesTo = D.goesTo(kind)
-    Db()
+    CP.Db()
     local okI, id = pcall(MySQL.insert.await, INSERT_SQL, { rowId, officer.citizenid, reason, goesTo, rowId })
     if not okI then
         CP.err(TAG, 'dispute insert failed: %s', tostring(id))
@@ -650,7 +635,8 @@ function D.restoreRow(src, rowId, reason)
         WHERE run_id = ? AND status = 'open']], { Clip(handler, 50), id }) or 0
     Call('Leaderboard', 'invalidate')
     if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:restored', id) end
-    Notify(OnlineSrc(row.citizenid), 'success', 'admin.notice.run_restored', { mission = MissionLabel(row.mission_id) })
+    CP.notify(OnlineSrc(row.citizenid), 'success', 'admin.notice.run_restored',
+        { mission = MissionLabel(row.mission_id) })
     return true,
         {
             rowId = id,
@@ -759,7 +745,7 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
     if points then newValue = ('+%d'):format(points) end
     Audit(src, RoleOf(src), 'flags', decision == 'approve' and 'disputeApproved' or 'disputeRejected',
         ('#%s %s'):format(tostring(d.run_id), tostring(d.citizenid)), kind, newValue, reason)
-    Notify(OnlineSrc(d.citizenid), decision == 'approve' and 'success' or 'warning',
+    CP.notify(OnlineSrc(d.citizenid), decision == 'approve' and 'success' or 'warning',
         decision == 'approve' and 'admin.notice.dispute_approved' or 'admin.notice.dispute_rejected',
         { mission = label })
     CP.log(TAG, 'dispute %d %s by %s', id, status, tostring(handler))

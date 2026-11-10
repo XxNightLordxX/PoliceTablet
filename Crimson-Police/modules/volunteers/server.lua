@@ -39,12 +39,6 @@ local function Num(v, default, lo, hi)
     return v
 end
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n or n < 1 or n ~= math.floor(n) then return nil end
-    return n
-end
-
 local function WindowSeconds() return math.floor(Num(Cfg().windowMinutes, 60, 1, 1440) * 60) end
 
 local function MaxStrikes() return math.floor(Num(Cfg().strikes, 3, 1, 100)) end
@@ -259,7 +253,7 @@ end
 -- blocked (strikes; untilAt = when the block ends).
 function V.check(src)
     if not On() then return false, 'off' end
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local info = n and CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
     if type(info) ~= 'table' or type(info.citizenid) ~= 'string' or info.citizenid == '' then
         return false, 'not_loaded'
@@ -278,7 +272,7 @@ end
 
 -- Puts src on the list for windowMinutes -> true, untilAt | false, reason.
 function V.join(src, roles)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local ok, why, info, untilAt = V.check(n)
     if not ok then return false, why, untilAt end
     local cid = info.citizenid
@@ -308,7 +302,7 @@ end
 
 -- A fresh window from now, after the same checks as joining -> true, untilAt | false, reason.
 function V.renew(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local cid = n and cidOf[n]
     local v = cid and listed[cid]
     if not v then return false, 'not_listed' end
@@ -320,7 +314,7 @@ end
 
 -- Changes the suspects a volunteer plays -> true | false, reason.
 function V.setRoles(src, roles)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local v = n and cidOf[n] and listed[cidOf[n]]
     if not v then return false, 'not_listed' end
     local picked = RolesOf(roles)
@@ -331,7 +325,7 @@ end
 
 -- The volunteer stops himself -> true | false, 'not_listed'.
 function V.stop(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local cid = n and cidOf[n]
     if not cid or not listed[cid] then return false, 'not_listed' end
     End(cid, 'stopped')
@@ -370,7 +364,7 @@ function V.isListed(cid) return listed[cid] ~= nil end
 
 -- The citizenid of the listed volunteer at server id src, or nil (for the volunteer's answer and cancel).
 function V.cidBySrc(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     return n and cidOf[n] or nil
 end
 
@@ -455,7 +449,7 @@ end
 
 -- What the criminal tablet's Home shows: { listed, untilAt, roles = { role, ... }, windowMinutes, maxStrikes }.
 function V.listingOf(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local cid = n and cidOf[n]
     local v = cid and listed[cid]
     return {
@@ -803,7 +797,7 @@ local ACTIONS = {
 }
 
 RegisterNetEvent(CP.e('server:volunteer'), function(action, data)
-    local src = ToSrc(source)
+    local src = CP.U.toSrc(source)
     if not src then return end
     if CP.Net and CP.Net.rateOk and not CP.Net.rateOk(src, 'volunteer', 4, 2000) then return end
     local fn = type(action) == 'string' and (ACTIONS[action] or (V.matchActions or {})[action]) or nil
@@ -817,7 +811,7 @@ end)
 -- ============================================================================
 
 local function Gone(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local cid = src and cidOf[src]
     if cid then End(cid, 'left') end
 end
@@ -849,7 +843,7 @@ CreateThread(function()
     if not (Q and Q.onPlayerUnload and Q.onDutyChange and Q.onJobChange) then return end
     Q.onPlayerUnload(Gone)
     local function Duty(src, job)
-        src = ToSrc(src)
+        src = CP.U.toSrc(src)
         local cid = src and cidOf[src]
         if not cid then return end
         if DeptDuty(job and { job = job } or Q.getInfo(src)) then End(cid, 'on_duty') end

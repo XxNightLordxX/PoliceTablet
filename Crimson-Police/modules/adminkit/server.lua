@@ -32,16 +32,6 @@ local maintenance = nil      -- { kind, info, since }
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function ToSrc(v)
-    local n = math.tointeger(tonumber(v) or -1)
-    if not n or n < 0 then return nil end
-    return n
-end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
-
 local function Has(modName, fnName)
     local m = CP[modName]
     return type(m) == 'table' and type(m[fnName]) == 'function'
@@ -58,7 +48,7 @@ local function Call(modName, fnName, ...)
 end
 
 local function CitizenOf(src)
-    local n = ToSrc(src)
+    local n = U.toSrc(src, true)
     if not n or n == 0 then return nil end
     local ok, info = Call('Qbx', 'getInfo', n)
     if ok and type(info) == 'table' and type(info.citizenid) == 'string' and info.citizenid ~= '' then
@@ -68,7 +58,7 @@ local function CitizenOf(src)
 end
 
 local function ActorId(src)
-    local n = ToSrc(src) or 0
+    local n = U.toSrc(src, true) or 0
     if n == 0 then return 'console' end
     return CitizenOf(n) or ('player:%d'):format(n)
 end
@@ -180,7 +170,7 @@ function Kit.preview(src, kind, ids, effect)
     DropExpired()
     local token = U.uuid()
     previews[token] = {
-        src = ToSrc(src) or 0,
+        src = U.toSrc(src, true) or 0,
         kind = tostring(kind),
         hash = IdsHash(ids),
         effect = effect,
@@ -199,7 +189,7 @@ function Kit.consume(src, token, kind, ids)
         previews[token] = nil
         return false, 'err.preview_expired'
     end
-    if p.src ~= (ToSrc(src) or 0) or p.kind ~= tostring(kind) then return false, 'err.preview_missing' end
+    if p.src ~= (U.toSrc(src, true) or 0) or p.kind ~= tostring(kind) then return false, 'err.preview_missing' end
     if ids ~= nil and p.hash ~= IdsHash(ids) then
         previews[token] = nil
         return false, 'err.preview_stale'
@@ -216,7 +206,7 @@ end
 
 -- true when citizenid is one of src's characters; nil + 'err.self_unknown' when strict and a license is missing.
 function Kit.isSelf(src, citizenid, strict)
-    local n = ToSrc(src) or 0
+    local n = U.toSrc(src, true) or 0
     if n == 0 then return false end
     if type(citizenid) ~= 'string' or citizenid == '' then return false end
     if CitizenOf(n) == citizenid then return true end
@@ -235,7 +225,7 @@ end
 -- true when any of src's characters took part in runUuid (live or archived rows), is on it now, or was a real
 -- suspect of its case (CP.Permissions.tookPart's asSuspect).
 function Kit.selfRun(src, runUuid)
-    local n = ToSrc(src) or 0
+    local n = U.toSrc(src, true) or 0
     if n == 0 or type(runUuid) ~= 'string' or runUuid == '' then return false end
     local _, cids = Call('Access', 'selfCitizenids', n)
     if type(cids) ~= 'table' then cids = { CitizenOf(n) } end
@@ -259,7 +249,7 @@ end
 
 -- An UPDATE whose WHERE names the expected old state: true when exactly one row changed, else err.state_changed.
 function Kit.cas(sql, params)
-    Db()
+    CP.Db()
     local ok, n = pcall(MySQL.update.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'compare-and-set failed: %s', tostring(n))
@@ -272,7 +262,7 @@ end
 -- 'new' (go ahead), 'done' (stored result), 'busy' (the first copy is still running), or nil + errKey.
 function Kit.claimRequest(requestId, action, src)
     if not Kit.validRequestId(requestId) then return nil, 'err.request_id' end
-    Db()
+    CP.Db()
     local rid = requestId:lower()
     local ok, n = pcall(MySQL.update.await,
         'INSERT IGNORE INTO cp_admin_requests (request_id, action, actor, created_at) VALUES (?, ?, ?, NOW())',
@@ -312,7 +302,7 @@ end
 -- The audit row written now (the caller waits): its id, or false when the insert failed.
 function Kit.auditSync(src, category, action, target, old, new, reason, opts)
     if not Has('Admin', 'auditSync') then return false end
-    local n = ToSrc(src) or 0
+    local n = U.toSrc(src, true) or 0
     local actor = n > 0 and n or 'console'
     local role = n > 0 and 'admin' or 'console'
     -- a supervisor's action (Kit.supAction) is audited as 'supervisor'
@@ -330,7 +320,7 @@ end
 function Kit.notify(citizenid, kind, key, vars)
     if type(citizenid) ~= 'string' or citizenid == '' then return false end
     local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    if not ok or not ToSrc(s) or ToSrc(s) == 0 then return false end
+    if not ok or not U.toSrc(s, true) or U.toSrc(s, true) == 0 then return false end
     local okN = Call('Tablet', 'notify', s, kind, key, vars)
     return okN
 end
@@ -359,7 +349,7 @@ end
 -- cp_audit rows of action since the daily reset (or opts.since). opts: { target, actor, since }.
 function Kit.dailyCount(action, opts)
     opts = opts or {}
-    Db()
+    CP.Db()
     local sql = 'SELECT COUNT(*) AS n FROM cp_audit WHERE action = ? AND created_at >= FROM_UNIXTIME(?)'
     local params = { tostring(action), opts.since or Kit.dayStart() }
     if opts.target ~= nil then
@@ -384,7 +374,7 @@ end
 -- one limit). The absolute value of signed points is summed in Lua.
 function Kit.dailySum(opts)
     opts = opts or {}
-    Db()
+    CP.Db()
     local ids = type(opts.missionIds) == 'table' and opts.missionIds or { 'manual_adjust' }
     local marks = {}
     for i = 1, #ids do marks[i] = '?' end
@@ -402,7 +392,7 @@ function Kit.dailySum(opts)
         end
     end
     add(opts.actor)
-    local n = ToSrc(opts.src) or 0
+    local n = U.toSrc(opts.src, true) or 0
     if n ~= 0 then
         add(ActorId(n))
         local okC, cids = Call('Access', 'selfCitizenids', n)
@@ -506,14 +496,14 @@ end
 
 function Kit.job(id)
     if type(id) ~= 'string' or #id > 36 then return nil end
-    Db()
+    CP.Db()
     return JobRow(id)
 end
 
 -- The latest jobs, newest first. opts: { kind, limit (≤ 50) }.
 function Kit.jobs(opts)
     opts = opts or {}
-    Db()
+    CP.Db()
     local limit = math.min(50, math.max(1, math.tointeger(tonumber(opts.limit) or 20) or 20))
     local sql = 'SELECT id FROM cp_admin_jobs'
     local params = {}
@@ -598,7 +588,7 @@ function Kit.startJob(spec)
     local ids = type(spec.ids) == 'table' and spec.ids or {}
     local okL, errL = Kit.lock('job', { kind = spec.kind })
     if not okL then return false, errL end
-    Db()
+    CP.Db()
     local id = spec.id or U.uuid()
     local detail = type(spec.detail) == 'table' and U.deepcopy(spec.detail) or {}
     detail.ids = ids
@@ -627,7 +617,7 @@ function Kit.startJob(spec)
         total = #ids,
         actor = ActorId(spec.src),
         reason = spec.reason,
-        src = ToSrc(spec.src),
+        src = U.toSrc(spec.src, true),
     }
     Progress(job, 'running')
     if spec.wait then
@@ -648,7 +638,7 @@ end
 function Kit._resumeJobs()
     -- a job of this run holds the lock: nothing was interrupted
     if busy then return 0 end
-    Db()
+    CP.Db()
     -- a maintenance lock (a store left behind, a restore that did not finish) changes nothing: the jobs wait for
     -- a start without it
     if maintenance then return 0 end
@@ -744,7 +734,7 @@ end
 local function Guard(entry, src, payload)
     local name, permKey, opts = entry.name, entry.permKey, entry.opts
     local p = type(payload) == 'table' and payload or {}
-    local n = ToSrc(src)
+    local n = U.toSrc(src, true)
     if not n then return false, 'err.no_permission' end
     local ctx = { src = n, payload = p, name = name, actor = ActorId(n), role = n == 0 and 'console' or 'admin' }
     -- M
@@ -848,7 +838,7 @@ local function MakeCtx(ctx, entry)
     return ctx
 end
 
-local inFlight = {} -- ['<action>|<actor>'] = true while an opts.oneAtATime handler of that actor runs
+local inFlight = CP.Lock.new() -- '<action>|<actor>' while an opts.oneAtATime handler of that actor runs
 
 local function Run(entry, src, payload)
     local okG, ctx = Guard(entry, src, payload)
@@ -860,13 +850,15 @@ local function Run(entry, src, payload)
     -- opts.oneAtATime: one call per actor at a time, so a per-day cap read before a yield (Kit.dailyCount) cannot be
     -- passed by two requests sent at once; the lock covers the handler and its audit row
     local lockKey = entry.opts.oneAtATime and (entry.name .. '|' .. tostring(ctx.actor)) or nil
-    if lockKey then
-        if inFlight[lockKey] then return Refuse(ctx, 'err.busy') end
-        inFlight[lockKey] = true
-    end
+    if lockKey and inFlight:held(lockKey) then return Refuse(ctx, 'err.busy') end
     MakeCtx(ctx, entry)
-    local res = table.pack(pcall(entry.fn, ctx))
-    if lockKey then inFlight[lockKey] = nil end
+    local res
+    if lockKey then
+        res = table.pack(inFlight:run(lockKey, 0, entry.fn, ctx))
+        res[1] = res[1] == 'ok'
+    else
+        res = table.pack(pcall(entry.fn, ctx))
+    end
     local ok, data
     if not res[1] then
         CP.err(TAG, '%s failed: %s', entry.name, tostring(res[2]))
@@ -879,10 +871,7 @@ local function Run(entry, src, payload)
         ctx.audit(entry.opts.audit, ctx.target, ctx.old, ctx.new)
     end
     local topic = entry.opts.pushMine
-    if ok and type(topic) == 'string' and ctx.src ~= 0 and CP.Tablet and CP.Tablet.push then
-        local okP, errP = pcall(CP.Tablet.push, ctx.src, topic, { mine = true })
-        if not okP then CP.err(TAG, '%s: its push failed: %s', entry.name, tostring(errP)) end
-    end
+    if ok and type(topic) == 'string' then CP.push(ctx.src, topic, { mine = true }) end
     if ctx.claimed then Kit.finishRequest(ctx.requestId, ok, data) end
     return ok, data
 end
@@ -931,7 +920,7 @@ end
 function Kit.callback(name, permKey, fn, opts)
     opts = type(opts) == 'table' and opts or {}
     CP.Net.callback(name, function(src, args)
-        local n = ToSrc(src)
+        local n = U.toSrc(src, true)
         if not n or not (CP.Access and CP.Access.isAdmin) then return nil, 'err.no_permission' end
         if not CP.Access.isAdmin(n) then
             if CP.Permissions and CP.Permissions.probe then CP.Permissions.probe(n, name) end

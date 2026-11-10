@@ -89,12 +89,6 @@ local function Call(modName, fnName, ...)
     return Safe(m and m[fnName], ...)
 end
 
-local function ToSrc(v)
-    local n = math.tointeger(tonumber(v) or -1)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function GetOfficer(src)
     if not (CP.Access and CP.Access.getOfficer) then return nil, 'err.not_police' end
     return CP.Access.getOfficer(src)
@@ -119,7 +113,7 @@ end
 
 local function LeaderOf(src)
     local unit = UnitOf(src)
-    return unit and ToSrc(unit.leader) or src
+    return unit and CP.U.toSrc(unit.leader) or src
 end
 
 local function OperationLocked()
@@ -182,17 +176,9 @@ local function AreaLabel(key)
     return a and (a.label or a.key) or nil
 end
 
-local function Notify(src, kind, key, vars)
-    if ToSrc(src) then Call('Tablet', 'notify', src, kind, key, vars) end
-end
-
-local function Push(src, topic, data)
-    if ToSrc(src) then Call('Tablet', 'push', src, topic, data) end
-end
-
 local function Audit(src, action, target, old, new, reason)
     local _, admin = Call('Access', 'isAdmin', src)
-    local actor = ToSrc(src) or 'console'
+    local actor = CP.U.toSrc(src) or 'console'
     Call('Admin', 'audit', actor, (admin or actor == 'console') and 'admin' or 'supervisor', 'operations', action,
         target, old, new, reason)
 end
@@ -812,7 +798,7 @@ local function IdleUnits()
     local out, seen, known = {}, {}, {}
     local list = {}
     for _, id in ipairs(GetPlayers() or {}) do
-        local src = ToSrc(id)
+        local src = CP.U.toSrc(id)
         if src then list[#list + 1] = src end
     end
     table.sort(list)
@@ -1152,7 +1138,7 @@ end
 
 -- A pushed mission's issuer, while the same character is still on that player id.
 local function NotifyIssuer(call, key, vars)
-    local src = ToSrc(call.issuerSrc)
+    local src = CP.U.toSrc(call.issuerSrc)
     if not src or not call.issuerCid then return end
     local o = GetOfficer(src)
     local cid = type(o) == 'table' and o.citizenid or nil
@@ -1160,7 +1146,7 @@ local function NotifyIssuer(call, key, vars)
         local _, info = Call('Qbx', 'getInfo', src)
         cid = type(info) == 'table' and info.citizenid or nil
     end
-    if cid == call.issuerCid then Notify(src, 'info', key, vars) end
+    if cid == call.issuerCid then CP.notify(src, 'info', key, vars) end
 end
 
 local function Withdraw(call, reason, now)
@@ -1280,7 +1266,7 @@ local function TellLosers(call, winner)
             local rule = RuleBetween(winner, c)
             call.lostBy[c.src] = rule
             c.result = { false, 'err.mc_taken_by' }
-            Notify(c.src, 'warning', 'mc.toast.lost_' .. rule, {
+            CP.notify(c.src, 'warning', 'mc.toast.lost_' .. rule, {
                 code = call.code,
                 callsign = by.callsign or by.name or '?',
                 department = by.departmentShort or '',
@@ -1301,7 +1287,7 @@ local function Accepted(call, c, ok, data)
         if call.id > 0 then Exec('UPDATE cp_mission_calls SET run_uuid = ? WHERE id = ?', { data.runId, call.id }) end
         if not c.result then c.result = { true, { runId = data.runId, code = call.code } } end
         for _, m in ipairs(c.unit.srcs) do
-            Notify(m, 'success', 'mc.toast.won', {
+            CP.notify(m, 'success', 'mc.toast.won', {
                 code = call.code,
                 distance = data.distance and ('%.1f'):format(data.distance / 1000) or '?',
                 target = data.targetS or '?',
@@ -1332,7 +1318,7 @@ local function Accepted(call, c, ok, data)
         NotifyIssuer(call, 'mc.toast.push_ended', { code = call.code })
     end
     if c.result then
-        Notify(c.src, 'error', errKey)
+        CP.notify(c.src, 'error', errKey)
     else
         c.result = { false, errKey }
     end
@@ -1373,7 +1359,7 @@ TryNext = function(call)
                 }
                 MarkDirty()
                 -- a claimant that lost the window gets its turn after the winner's unit declined
-                if c.result then Notify(c.src, 'info', 'mc.toast.next_in_line', { code = call.code }) end
+                if c.result then CP.notify(c.src, 'info', 'mc.toast.next_in_line', { code = call.code }) end
                 local okA, ok, data = Call('Draw', 'accept', c.src, call.type, {
                     area = c.area,
                     twists = c.twists,
@@ -1430,7 +1416,7 @@ MC._resolve = Resolve
 
 -- twists (optional): the twist keys the leader chose for the run (checked like the Mission Board's).
 function MC.claim(src, callId, twists)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local cfg = Cfg()
     if not src then return false, 'err.not_in_game' end
     if cfg.enabled == false then return false, 'err.mc_disabled' end
@@ -1512,7 +1498,7 @@ end
 -- ============================================================================
 
 local function StaffIssuer(src)
-    if not ToSrc(src) then return 'console', nil end
+    if not CP.U.toSrc(src) then return 'console', nil end
     local o = GetOfficer(src)
     if o then return o.citizenid, o.citizenid end
     local _, info = Call('Qbx', 'getInfo', src)
@@ -1539,7 +1525,7 @@ function MC.create(src, typeKey, area, opts)
     local now = os.time()
     local last = staffLast[issuer]
     -- the wait between two staff calls: config, or the issuer's department's staffCallWait
-    local wait = StaffWait(ToSrc(src) and GetOfficer(src) or nil)
+    local wait = StaffWait(CP.U.toSrc(src) and GetOfficer(src) or nil)
     local waiting = last and now - last < wait
     if waiting and not opts.skipWait then return false, 'err.mc_staff_cooldown' end
     staffLast[issuer] = now
@@ -1547,8 +1533,8 @@ function MC.create(src, typeKey, area, opts)
     Toast(call, IdleUnits())
     Audit(src, 'mcCreate', call.code, nil, ('%s %s'):format(typeKey, areaKey or 'county'), nil)
     if waiting then
-        local role = ToSrc(src) and 'admin' or 'console'
-        Call('Admin', 'audit', ToSrc(src) or 'console', role, 'operations', 'mcCreateSkipWait', call.code,
+        local role = CP.U.toSrc(src) and 'admin' or 'console'
+        Call('Admin', 'audit', CP.U.toSrc(src) or 'console', role, 'operations', 'mcCreateSkipWait', call.code,
             ('%ds left'):format(math.max(0, math.floor(wait - (now - last)))),
             ('%s %s'):format(typeKey, areaKey or 'county'), opts.reason)
     end
@@ -1568,7 +1554,7 @@ MC.pushPerDay = PushPerDay
 local function CanPush(src, dept)
     local dc = CP.DeptControls
     if not (dc and dc.canChange) then return false, 'err.control_off' end
-    local n = ToSrc(src) or 0
+    local n = CP.U.toSrc(src) or 0
     local _, admin = Call('Access', 'isAdmin', n)
     if (admin == true or n == 0) and dept == nil then
         local keys = {}
@@ -1627,7 +1613,7 @@ function MC.page(src, typeKey, area, leaderSrc, opts)
         local okP, errP = CanPush(src, nil)
         if not okP then return false, errP or 'err.no_permission' end
     end
-    local target = ToSrc(leaderSrc)
+    local target = CP.U.toSrc(leaderSrc)
     local leaderO = target and GetOfficer(target)
     if not leaderO then return false, 'err.mc_page_target' end
     if push then
@@ -1640,7 +1626,7 @@ function MC.page(src, typeKey, area, leaderSrc, opts)
     if not IsLeader(target) then return false, 'err.mc_page_not_leader' end
     local unit = UnitInfo(target)
     local issuer, issuerCid = StaffIssuer(src)
-    if ToSrc(src) and (Contains(unit.srcs, ToSrc(src)) or (issuerCid and Contains(unit.cids, issuerCid))) then
+    if CP.U.toSrc(src) and (Contains(unit.srcs, CP.U.toSrc(src)) or (issuerCid and Contains(unit.cids, issuerCid))) then
         return false, 'err.mc_page_self'
     end
     if not push then return PostPage(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, nil) end
@@ -1668,7 +1654,7 @@ PostPage = function(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, mis
         staff = true,
         issuer = issuer,
         issuerCid = issuerCid,
-        issuerSrc = ToSrc(src),
+        issuerSrc = CP.U.toSrc(src),
         pagedCid = leaderO.citizenid,
         missionId = missionId,
     })
@@ -1691,7 +1677,7 @@ end
 
 -- The paged unit's leader turns a pushed mission down: the call ends, nobody else gets it.
 function MC.decline(src, callId)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false, 'err.not_in_game' end
     local call = calls[math.tointeger(tonumber(callId) or 0)]
     if not call or not call.missionId or call.status ~= 'open' or call.window then return false, 'err.mc_not_open' end
@@ -1709,7 +1695,7 @@ end
 function MC.withdraw(src, id, reason)
     local call = calls[math.tointeger(tonumber(id) or 0)]
     if not call or call.status ~= 'open' or call.window then return false, 'err.mc_not_open' end
-    if call.department and ToSrc(src) then
+    if call.department and CP.U.toSrc(src) then
         local _, admin = Call('Access', 'isAdmin', src)
         local o = admin ~= true and GetOfficer(src) or nil
         if admin ~= true and not (o and o.department == call.department) then
@@ -2019,7 +2005,7 @@ local function PushAll()
     for _, src in ipairs(list) do
         if watchers[src] then
             local okV, view = pcall(MC.list, src)
-            if okV and view then Push(src, 'calls', view) end
+            if okV and view then CP.push(src, 'calls', view) end
         end
     end
 end
@@ -2654,7 +2640,7 @@ if CP.Hooks and CP.Hooks.on then
         if type(p) == 'table' and p.key == LANE_KEY and type(p.dept) == 'string' then laneNext[p.dept] = nil end
     end)
     CP.Hooks.on('home:extras', function(_, src, extras)
-        if type(extras) == 'table' and ToSrc(src) then extras.callsOpen = MC.claimableCount(src) end
+        if type(extras) == 'table' and CP.U.toSrc(src) then extras.callsOpen = MC.claimableCount(src) end
     end)
     -- the tablet closed (server:tabletClosed): no more Dispatch pushes until getMissionCalls asks again
     CP.Hooks.on('tablet:closed', function(src) watchers[src] = nil end)

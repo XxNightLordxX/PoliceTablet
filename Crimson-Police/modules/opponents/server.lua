@@ -63,13 +63,6 @@ end
 -- How many closed cases are kept (Config.RealSuspects.casesKept, 1-200).
 local function Kept() return math.min(CLOSED_MAX, math.max(1, math.floor(Num(Cfg().casesKept, CLOSED_KEPT)))) end
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    n = n and math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function ValidCid(cid)
     return type(cid) == 'string' and cid ~= '' and #cid <= 50 and cid:match('^[%w_%-]+$') ~= nil
 end
@@ -229,7 +222,7 @@ end
 -- Who a server id was when a line was written (a server id is given to someone else after a drop): a participant of
 -- the case's run, a suspect, else Qbox's character. -> { cid, name } | nil. Staff only.
 local function WhoOf(case, src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n then return nil end
     local parts = type(case.run) == 'table' and type(case.run.participants) == 'table' and case.run.participants or {}
     local p = parts[n]
@@ -839,7 +832,7 @@ function Opp.caseOf(run)
 end
 
 function Opp.bySrc(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local cid = n and cidOf[n]
     local hit = cid and recOf[cid]
     if not hit then return nil end
@@ -1009,7 +1002,7 @@ end
 -- Config.RealSuspects.noStartZones and not down, cuffed or in jail. Reasons, in this order: not_loaded, in_case,
 -- instance, arena_flag, on_duty, job_hop, afk, no_position, no_start_zone, down, cuffed, jailed, excluded, admin.
 function Opp.eligible(src, opts)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     opts = type(opts) == 'table' and opts or {}
     local info = n and CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
     if not info or not ValidCid(info.citizenid) then return false, 'not_loaded' end
@@ -1055,7 +1048,7 @@ end
 
 -- A character loaded: a tracked citizenid gets his server id back (a rejoin), anyone else matches nothing.
 local function OnLoaded(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src or not HasWork() then return end
     local info = CP.Qbx.getInfo(src)
     local cid = info and info.citizenid
@@ -1112,7 +1105,7 @@ end
 
 AddEventHandler('playerDropped', function()
     local src = source
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src or not cidOf[src] then return end
     OnLeft(src, 'drop')
 end)
@@ -1122,7 +1115,7 @@ if type(AddStateBagChangeHandler) == 'function' then
     AddStateBagChangeHandler(ARENA_BAG, nil, function(bagName)
         if next(cidOf) == nil then return end
         local ok, src = pcall(GetPlayerFromStateBagName, bagName)
-        src = ok and ToSrc(src) or nil
+        src = ok and CP.U.toSrc(src) or nil
         if not src or not cidOf[src] then return end
         SetTimeout(0, function() CheckArenaFlag(src) end)
     end)
@@ -1148,19 +1141,19 @@ CreateThread(function()
     end
     Q.onPlayerLoaded(OnLoaded)
     Q.onPlayerUnload(function(src)
-        src = ToSrc(src)
+        src = CP.U.toSrc(src)
         if src and cidOf[src] then OnLeft(src, 'unload') end
     end)
     Q.onMetaDataChange(function(src, key, old, new)
-        src = ToSrc(src)
+        src = CP.U.toSrc(src)
         if src and cidOf[src] then OnMeta(src, key, old, new) end
     end, MD_KEYS)
     Q.onDutyChange(function(src, onDuty)
-        src = ToSrc(src)
+        src = CP.U.toSrc(src)
         if src and onDuty and cidOf[src] then OnDuty(src, nil) end
     end)
     Q.onJobChange(function(src, job)
-        src = ToSrc(src)
+        src = CP.U.toSrc(src)
         if src and cidOf[src] then OnDuty(src, job) end
     end)
 end)

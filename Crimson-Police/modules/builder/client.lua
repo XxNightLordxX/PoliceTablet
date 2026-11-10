@@ -738,10 +738,6 @@ end
 local function BuilderCfg() return Config.Builder or {} end
 local function RouteCfg() return BuilderCfg().route or {} end
 
-local function Notify(kind, key, vars)
-    if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(kind, CP.L(key, vars)) end
-end
-
 local function Overlay(o)
     if CP.Tablet and CP.Tablet.overlay then CP.Tablet.overlay(o) end
 end
@@ -890,7 +886,7 @@ local function Interrupted()
     if OnRun() then
         -- a unit member is put on the run the leader drew: the tool's controls and HUD would fight the run's
         B.cancel('run')
-        Notify('warning', 'builder.tool_stopped_run')
+        CP.notify('warning', 'builder.tool_stopped_run')
         return true
     end
     return false
@@ -1832,7 +1828,7 @@ local function RunRecording(tool)
         local pts, stops, dropped = rec:finish()
         if #pts < 2 and not cancelled then
             res.cancelled = true
-            Notify('warning', 'builder.rec.nothing')
+            CP.notify('warning', 'builder.rec.nothing')
         end
         res.route = { points = pts, stops = o.stops and stops or {} }
         if o.loop then res.route.loop = true end
@@ -2077,7 +2073,7 @@ local function RunTestDrive(tool)
     if U.dist2d(GetEntityCoords(PlayerPedId()), pts[1]) > APPROACH_RADIUS then
         SetNewWaypoint(pts[1].x + 0.0, pts[1].y + 0.0)
         tool.waypointSet = true
-        Notify('info', 'builder.drive.approach_toast')
+        CP.notify('info', 'builder.drive.approach_toast')
         while true do
             local now = GetGameTimer()
             if guard(now) then return finish(false, true) end
@@ -2103,21 +2099,21 @@ local function RunTestDrive(tool)
     show(GetGameTimer(), true)
     local vehHash = joaat(o.vehicle)
     if not IsModelAVehicle(vehHash) or not LoadModel(vehHash) then
-        Notify('error', 'err.builder_bad_vehicle')
+        CP.notify('error', 'err.builder_bad_vehicle')
         return finish(false, true)
     end
     local drvHash = joaat(DRIVER_MODEL)
     if not IsModelInCdimage(drvHash) then drvHash = joaat(DRIVER_FALLBACK) end
     if not LoadModel(drvHash) then
         SetModelAsNoLongerNeeded(vehHash)
-        Notify('error', 'builder.tool_failed')
+        CP.notify('error', 'builder.tool_failed')
         return finish(false, true)
     end
     local veh = CreateVehicle(vehHash, pts[1].x, pts[1].y, pts[1].z + 0.5, headingOf(pts[1], pts[2]), false, false)
     if not veh or veh == 0 then
         SetModelAsNoLongerNeeded(vehHash)
         SetModelAsNoLongerNeeded(drvHash)
-        Notify('error', 'builder.tool_failed')
+        CP.notify('error', 'builder.tool_failed')
         return finish(false, true)
     end
     tool.entities[#tool.entities + 1] = veh
@@ -2129,7 +2125,7 @@ local function RunTestDrive(tool)
     SetModelAsNoLongerNeeded(vehHash)
     SetModelAsNoLongerNeeded(drvHash)
     if not driver or driver == 0 then
-        Notify('error', 'builder.tool_failed')
+        CP.notify('error', 'builder.tool_failed')
         return finish(false, true)
     end
     tool.entities[#tool.entities + 1] = driver
@@ -2175,7 +2171,7 @@ local function RunTestDrive(tool)
                     failed[#failed + 1] = j
                     failedSet[j] = true
                 end
-                Notify('warning', 'builder.drive.wrecked')
+                CP.notify('warning', 'builder.drive.wrecked')
                 st.timeLeft = false
                 show(now, true, true)
                 return finish(false, false)
@@ -2283,7 +2279,7 @@ local function StartTool(kind, opts, runner)
                 result.length, result.rejected, result.rejectedSamples, result.unreachable = 0, 0, {}, {}
             end
             if kind == 'testdrive' then result.completed, result.failed = false, {} end
-            Notify('error', 'builder.tool_failed')
+            CP.notify('error', 'builder.tool_failed')
         end
         if state.tool == tool then state.tool = nil end
         CP.log(TAG, '%s ended (cancelled = %s)', kind, tostring(result.cancelled))

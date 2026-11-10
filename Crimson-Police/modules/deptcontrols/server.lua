@@ -30,10 +30,6 @@ local lastChange = {}     -- 'department|key' -> os.time() of the last set or re
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
-
 local function Cfg()
     return type(Config.MissionControls) == 'table' and Config.MissionControls or {}
 end
@@ -356,7 +352,7 @@ local ROW_SQL = [[SELECT control_key, value_json, UNIX_TIMESTAMP(expires_at) AS 
 local function Rows(dept)
     local c = cache[dept]
     if c then return c end
-    Db()
+    CP.Db()
     local ok, rows = pcall(MySQL.query.await, ROW_SQL, { dept })
     if not ok then
         CP.err(TAG, 'reading the mission controls of %s failed: %s', tostring(dept), tostring(rows))
@@ -673,7 +669,7 @@ local function SetChecked(src, key, value, reason, opts, role, dept)
         if not secs or secs <= 0 then return false, 'err.control_value' end
         expires = os.time() + secs
     end
-    Db()
+    CP.Db()
     local okW, errW = pcall(MySQL.query.await, [[
         INSERT INTO cp_dept_controls (department, control_key, value_json, expires_at, set_by, set_role, updated_at)
         VALUES (?, ?, ?, FROM_UNIXTIME(?), ?, ?, FROM_UNIXTIME(?))
@@ -719,7 +715,7 @@ function DC.reset(src, dept, key, reason)
     if not cleanReason then return false, errR end
     local row = Rows(where)[key]
     if not row then return false, 'err.control_not_set' end
-    Db()
+    CP.Db()
     local okD, errD = pcall(MySQL.update.await, 'DELETE FROM cp_dept_controls WHERE department = ? AND control_key = ?',
         { where, key })
     if not okD then

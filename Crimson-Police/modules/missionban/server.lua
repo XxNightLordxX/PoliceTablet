@@ -129,7 +129,7 @@ local function PushBoard(citizenid)
     if not src or src <= 0 then return end
     local okM, members = Call('Units', 'members', src)
     for _, s in ipairs(okM and type(members) == 'table' and #members > 0 and members or { src }) do
-        Call('Tablet', 'push', s, 'board', { missionBan = true })
+        CP.push(s, 'board', { missionBan = true })
     end
 end
 

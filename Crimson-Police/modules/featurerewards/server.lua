@@ -340,10 +340,9 @@ function FR.giveMoneyItem(src, item, amount)
     if type(item) ~= 'string' or item == '' then return false end
     amount = math.floor(Num(amount, 0))
     if amount <= 0 then return true end
-    if GetResourceState('ox_inventory') ~= 'started' then return false end
-    local okC, can = pcall(function() return exports.ox_inventory:CanCarryItem(src, item, amount) end)
+    local okC, can = CP.Ext.call('ox_inventory', 'CanCarryItem', src, item, amount)
     if not okC or can ~= true then return false end
-    local ok, res = pcall(function() return exports.ox_inventory:AddItem(src, item, amount) end)
+    local ok, res = CP.Ext.call('ox_inventory', 'AddItem', src, item, amount)
     if not ok then
         CP.err(TAG, 'ox_inventory AddItem(%s, %d) raised for %s: %s', item, amount, tostring(src), tostring(res))
         return false, 'error'

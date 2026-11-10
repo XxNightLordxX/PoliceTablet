@@ -77,14 +77,6 @@ local levelCache = {}         -- citizenid -> { at, level = { n, badge } }
 --                                   HELPERS
 -- ============================================================================
 
-local function ToSrc(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function Call(modName, fnName, ...)
     local m = CP[modName]
     if type(m) ~= 'table' or type(m[fnName]) ~= 'function' then return false end
@@ -204,11 +196,7 @@ local function Notify(src, kind, key, vars, opts)
         opts = type(opts) == 'table' and opts or {}
         opts.channel = 'social'
     end
-    Call('Tablet', 'notify', src, kind, key, vars, opts)
-end
-
-local function Push(src, topic, data)
-    Call('Tablet', 'push', src, topic, data)
+    CP.notify(src, kind, key, vars, opts)
 end
 
 local function InfoOf(officer)
@@ -276,14 +264,14 @@ local function PushUnit(unit, extra, invitedSrc)
         for _, m in ipairs(unit.members) do
             if not sent[m] then
                 sent[m] = true
-                Push(m, 'unit', { unitId = id, readyCheck = CheckView(check, m) })
-                Push(m, 'board', { unit = true })
+                CP.push(m, 'unit', { unitId = id, readyCheck = CheckView(check, m) })
+                CP.push(m, 'board', { unit = true })
             end
         end
         for target in pairs(unit.invites) do
             if not sent[target] then
                 sent[target] = true
-                Push(target, 'unit', { unitId = id, invited = target == invitedSrc or nil })
+                CP.push(target, 'unit', { unitId = id, invited = target == invitedSrc or nil })
             end
         end
     end
@@ -291,8 +279,8 @@ local function PushUnit(unit, extra, invitedSrc)
         for _, s in ipairs(extra) do
             if not sent[s] then
                 sent[s] = true
-                Push(s, 'unit', { unitId = false })
-                Push(s, 'board', { unit = true })
+                CP.push(s, 'unit', { unitId = false })
+                CP.push(s, 'board', { unit = true })
             end
         end
     end
@@ -514,7 +502,7 @@ local function DropInvitesTo(src, exceptUnitId, notifyKey)
             PushUnit(unit)
         end
     end
-    if #touched > 0 then Push(src, 'unit', { unitId = unitIdBySrc[src] or false }) end
+    if #touched > 0 then CP.push(src, 'unit', { unitId = unitIdBySrc[src] or false }) end
 end
 
 -- ============================================================================
@@ -522,13 +510,13 @@ end
 -- ============================================================================
 
 function Units.unitOf(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local id = src and unitIdBySrc[src]
     return id and units[id] or nil
 end
 
 function Units.members(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local unit = Units.unitOf(src)
     if not unit then return src and { src } or {} end
     local out = {}
@@ -537,7 +525,7 @@ function Units.members(src)
 end
 
 function Units.isLeader(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false end
     local unit = Units.unitOf(src)
     if not unit then return true end
@@ -582,7 +570,7 @@ function Units.unlock(ref)
 end
 
 function Units.remove(src, opts)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false end
     opts = type(opts) == 'table' and opts or {}
     local reason = opts.reason or 'left'
@@ -714,7 +702,7 @@ end
 -- an automatic Ready that does not count is ignored and the member still has to answer). A manual Not ready after
 -- an automatic Ready still cancels the check.
 function Units.ready(src, accepted, auto)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local unit = Units.unitOf(src)
     local check = unit and readyChecks[unit.id]
     if not check or check.done or not IndexOf(check.members, src) then return false, 'err.unit_ready_none' end
@@ -831,7 +819,7 @@ local function ManagedUnit(src)
 end
 
 function Units.kick(src, target)
-    src, target = ToSrc(src), ToSrc(target)
+    src, target = CP.U.toSrc(src), CP.U.toSrc(target)
     if not src or not target then return false, 'err.invalid_payload' end
     local unit, me = ManagedUnit(src)
     if not unit then return false, me end
@@ -852,7 +840,7 @@ function Units.kick(src, target)
 end
 
 function Units.promote(src, target)
-    src, target = ToSrc(src), ToSrc(target)
+    src, target = CP.U.toSrc(src), CP.U.toSrc(target)
     if not src or not target then return false, 'err.invalid_payload' end
     local unit, me = ManagedUnit(src)
     if not unit then return false, me end
@@ -870,7 +858,7 @@ function Units.promote(src, target)
 end
 
 function Units.disband(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false, 'err.invalid_payload' end
     local unit, me = ManagedUnit(src)
     if not unit then return false, me end
@@ -890,7 +878,7 @@ end
 
 -- The leader, or the member who sent it, withdraws an open invite: the slot frees at once.
 function Units.cancelInvite(src, target)
-    src, target = ToSrc(src), ToSrc(target)
+    src, target = CP.U.toSrc(src), CP.U.toSrc(target)
     if not src or not target then return false, 'err.invalid_payload' end
     local unit, me = ManagedUnit(src)
     if not unit then return false, me end
@@ -905,7 +893,7 @@ function Units.cancelInvite(src, target)
     else
         PushUnit(unit)
     end
-    Push(target, 'unit', { unitId = unitIdBySrc[target] or false })
+    CP.push(target, 'unit', { unitId = unitIdBySrc[target] or false })
     CP.log(TAG, 'unit %d: %d withdrew the invite to %d', unit.id, src, target)
     return true, { cancelled = target }
 end
@@ -971,7 +959,7 @@ end
 
 -- One member out (the admin's kick). ok, data | false, errKey.
 function Units.adminRemove(unitId, target)
-    target = ToSrc(target)
+    target = CP.U.toSrc(target)
     local unit = Resolve(unitId)
     if not unit then return false, 'err.unit_gone' end
     if not target or not IndexOf(unit.members, target) then return false, 'err.unit_not_member' end
@@ -1027,14 +1015,14 @@ Units._noteRun = NoteRun
 
 -- The online officers of src's last ended run (remembered for PARTNER_MEMORY seconds).
 function Units.lastPartners(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local cid = src and CitizenOf(src)
     local entry = cid and lastRuns[cid]
     if not entry or os.time() - entry.at > PARTNER_MEMORY then return {} end
     local out = {}
     for _, other in ipairs(entry.cids) do
         local ok, s = Call('Qbx', 'getByCitizenId', other)
-        s = ok and ToSrc(s) or nil
+        s = ok and CP.U.toSrc(s) or nil
         if s and s ~= src then out[#out + 1] = s end
     end
     return out
@@ -1198,7 +1186,7 @@ local function Respond(src, accepted, unitId)
         else
             PushUnit(unit)
         end
-        Push(src, 'unit', { unitId = unitIdBySrc[src] or false })
+        CP.push(src, 'unit', { unitId = unitIdBySrc[src] or false })
         return false, 'err.unit_invite_expired'
     end
 
@@ -1211,7 +1199,7 @@ local function Respond(src, accepted, unitId)
         else
             PushUnit(unit)
         end
-        Push(src, 'unit', { unitId = unitIdBySrc[src] or false })
+        CP.push(src, 'unit', { unitId = unitIdBySrc[src] or false })
         return true, { unitId = nil, accepted = false }
     end
 
@@ -1291,7 +1279,7 @@ local function OnlinePlayers()
     local out = {}
     if GetPlayers then
         for _, s in ipairs(GetPlayers()) do
-            local n = ToSrc(s)
+            local n = CP.U.toSrc(s)
             if n then out[#out + 1] = n end
         end
     end
@@ -1307,7 +1295,7 @@ local function MaybeOfficer(src)
 end
 
 function Units.view(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     local me, errKey = GetOfficer(src)
     if not me then return nil, errKey or 'err.not_police' end
     local now = os.time()
@@ -1437,7 +1425,7 @@ function Units.view(src)
         for _, s in ipairs(Units.lastPartners(src)) do partners[s] = true end
         local here = PedCoords(src)
         for _, p in ipairs(OnlinePlayers()) do
-            p = ToSrc(p)
+            p = CP.U.toSrc(p)
             if p and not skip[p] and MaybeOfficer(p) then
                 local o = GetOfficer(p)
                 local kicked = KickBlocked(p, src, liveUnit, os.time())
@@ -1479,7 +1467,7 @@ local function ParseTarget(payload)
     if type(payload) == 'table' then payload = payload.targetSrc or payload.target or payload.src end
     if type(payload) ~= 'number' and type(payload) ~= 'string' then return nil end
     if type(payload) == 'string' and #payload > 8 then return nil end
-    return ToSrc(payload)
+    return CP.U.toSrc(payload)
 end
 
 CP.Net.action('server:unitInvite', function(src, payload)
@@ -1578,7 +1566,7 @@ function Units._sweep()
                     Notify(from.src, 'info', 'unit.invite_expired',
                         { name = from.targetName or ('#' .. target), seconds = INVITE_TTL })
                 end
-                Push(target, 'unit', { unitId = unitIdBySrc[target] or false })
+                CP.push(target, 'unit', { unitId = unitIdBySrc[target] or false })
             end
             if #expired > 0 then
                 if #unit.members <= 1 and next(unit.invites) == nil then

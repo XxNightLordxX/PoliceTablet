@@ -64,21 +64,9 @@ local function Num(v, default)
     return n
 end
 
-local function ToSrc(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n < 0 then return nil end
-    return n
-end
-
 local function Now()
     if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
     return os.time()
-end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
 local function TypeCfg(key)
@@ -157,7 +145,7 @@ end
 -- ============================================================================
 
 local function Load()
-    Db()
+    CP.Db()
     local okT, rows = pcall(MySQL.query.await, [[
         SELECT t.mission_type, t.amount, t.admin_locked, t.updated_by, UNIX_TIMESTAMP(t.updated_at) AS updated_ts,
                o.display_name
@@ -408,10 +396,10 @@ local function Audit(src, role, action, target, old, new, reason)
 end
 
 local function PushChange(data)
-    if not (CP.Tablet and CP.Tablet.push and CP.Qbx and CP.Qbx.getOnlinePlayers) then return end
+    if not (CP.Qbx and CP.Qbx.getOnlinePlayers) then return end
     for _, s in ipairs(CP.Qbx.getOnlinePlayers()) do
-        CP.Tablet.push(s, 'payouts', data)
-        CP.Tablet.push(s, 'board', { reason = 'payouts' })
+        CP.push(s, 'payouts', data)
+        CP.push(s, 'board', { reason = 'payouts' })
     end
 end
 
@@ -509,7 +497,7 @@ local function SetTypeLocked(src, key, amount, reason, role, opts)
 end
 
 function Payouts.setType(src, key, amount, reason, role, opts)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src, true)
     if not src then return false, 'err.no_permission' end
     if type(key) ~= 'string' or #key > TYPE_KEY_MAX or not TypeCfg(key) then return false, 'err.unknown_type' end
     if role ~= 'admin' and role ~= 'supervisor' then
@@ -594,7 +582,7 @@ local function SetMissionLocked(src, missionId, amount, reason)
 end
 
 function Payouts.setMission(src, missionId, amount, reason)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src, true)
     if not src then return false, 'err.no_permission' end
     if type(missionId) ~= 'string' or missionId == '' or #missionId > MISSION_ID_MAX
         or not missionId:match('^[%w_%-]+$') then

@@ -29,12 +29,6 @@ local function Num(v, default, lo, hi)
     return v
 end
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n or n < 1 or n ~= math.floor(n) then return nil end
-    return n
-end
-
 local function HistorySize() return math.floor(Num(Cfg().historySize, 20, 1, 100)) end
 
 -- A police job of Config.Departments (on or off duty).
@@ -80,7 +74,7 @@ end
 -- = any job but a police job, 'granted' = the criminalTablet extra grant (Admin UI -> Permissions -> Extra grants).
 function C.canUse(src)
     if not On() then return false, 'err.crimtab_off' end
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local info = n and CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
     if type(info) ~= 'table' or type(info.citizenid) ~= 'string' or info.citizenid == '' then
         return false, 'err.crimtab_not_loaded'
@@ -267,7 +261,7 @@ end
 
 -- On police duty, or a police job without access: the open tablet closes (the client only acts while it is open).
 local function Recheck(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src or not On() then return end
     if not C.canUse(src) then TriggerClientEvent(CP.e('client:crimtabClose'), src) end
 end
@@ -279,10 +273,10 @@ C._recheck = Recheck
 local function ItemHealth()
     local item = Cfg().item
     if not On() or type(item) ~= 'string' or item == '' then return {} end
-    if GetResourceState('ox_inventory') ~= 'started' then
+    if not CP.Ext.started('ox_inventory') then
         return { { level = 'warn', text = CP.L('health.crimtab.no_inventory', { item = item }) } }
     end
-    local ok, def = pcall(function() return exports.ox_inventory:Items(item) end)
+    local ok, def = CP.Ext.call('ox_inventory', 'Items', item)
     if not ok or def == nil then
         return {
             { level = 'warn', text = CP.L('health.crimtab.missing', { item = item }), fix = 'CriminalTablet.item' },

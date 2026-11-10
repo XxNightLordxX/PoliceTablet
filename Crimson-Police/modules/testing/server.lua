@@ -117,7 +117,6 @@ local lastStart = {}    -- adminSrc -> GetGameTimer() of the last start attempt
 local names = {}        -- citizenid -> display name seen this session
 local inviteSeq = 0
 local warned = {}
-local dbReady = false
 
 -- ============================================================================
 --                                SMALL HELPERS
@@ -127,14 +126,6 @@ local function WarnOnce(key, fmt, ...)
     if warned[key] then return end
     warned[key] = true
     CP.warn(TAG, fmt, ...)
-end
-
-local function ToSrc(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
 end
 
 local function ToInt(v)
@@ -166,13 +157,6 @@ local function Call(modName, fnName, ...)
     return true, table.unpack(res, 2, res.n)
 end
 
-local function Db()
-    if not dbReady then
-        if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-        dbReady = true
-    end
-end
-
 local function Online(src)
     return src ~= nil and GetPlayerName(src) ~= nil
 end
@@ -197,14 +181,6 @@ local function VecTable(v)
     local out = { x = x + 0.0, y = y + 0.0, z = z + 0.0 }
     if (type(v) == 'vector4' or type(v) == 'table') and type(v.w) == 'number' then out.h = v.w + 0.0 end
     return out
-end
-
-local function Notify(src, kind, key, vars)
-    if src and src > 0 and Has('Tablet', 'notify') then Call('Tablet', 'notify', src, kind, key, vars) end
-end
-
-local function Push(src, topic, data)
-    if src and src > 0 and Has('Tablet', 'push') then Call('Tablet', 'push', src, topic, data) end
 end
 
 local function InArena(src)
@@ -350,7 +326,7 @@ end
 -- archivedDefs / getArchived); until it has, the ids and versions are read (read-only) from its
 -- cp_custom_missions rows and the definitions from the archived files (CP.Missions.parse + normalize).
 local function ArchivedRows(id)
-    Db()
+    CP.Db()
     local sql = 'SELECT id, published_version FROM cp_custom_missions WHERE status = \'archived\''
     local params = {}
     if id then
@@ -612,8 +588,8 @@ local function ExpireInvites(now)
             changedAdmins[inv.admin] = true
         end
     end
-    for src in pairs(changedAdmins) do Push(src, 'invites', { test = true }) end
-    for src in pairs(changedTargets) do Push(src, 'invites', { test = true }) end
+    for src in pairs(changedAdmins) do CP.push(src, 'invites', { test = true }) end
+    for src in pairs(changedTargets) do CP.push(src, 'invites', { test = true }) end
 end
 
 -- Withdraw every open invitation of an admin's lobby (status 'withdrawn' or 'started').
@@ -627,8 +603,10 @@ local function CloseLobby(adminSrc, status, notifyKey)
             local wasAccepted = inv.status == 'accepted'
             inv.status = status
             inv.answeredAt = now
-            Push(inv.target, 'invites', { test = true })
-            if notifyKey and wasAccepted then Notify(inv.target, 'info', notifyKey, { mission = inv.missionLabel }) end
+            CP.push(inv.target, 'invites', { test = true })
+            if notifyKey and wasAccepted then
+                CP.notify(inv.target, 'info', notifyKey, { mission = inv.missionLabel })
+            end
         end
     end
     lobbies[adminSrc] = nil
@@ -660,7 +638,7 @@ function Testing.pendingInvites(src)
 end
 
 function Testing.invite(adminSrc, targets, opts)
-    adminSrc = ToSrc(adminSrc)
+    adminSrc = U.toSrc(adminSrc)
     opts = type(opts) == 'table' and opts or {}
     if not adminSrc then return false, 'err.not_in_game' end
     if Cfg().enabled == false then return false, 'err.test_disabled' end
@@ -695,7 +673,7 @@ function Testing.invite(adminSrc, targets, opts)
     local skipped = {}
     local seen = {}
     for _, raw in ipairs(targets) do
-        local target = ToSrc(raw)
+        local target = U.toSrc(raw)
         if not target then
             skipped[#skipped + 1] = { src = tonumber(raw) or false, error = 'err.invalid_payload' }
         elseif not seen[target] then
@@ -751,7 +729,7 @@ function Testing.invite(adminSrc, targets, opts)
                     from = fromName,
                     expiresIn = INVITE_TTL,
                 })
-                Push(target, 'invites', { test = true })
+                CP.push(target, 'invites', { test = true })
                 CP.log(TAG, '%d invited %d to test %s (%s)', adminSrc, target, tostring(missionId), inv.id)
             elseif errKey then
                 skipped[#skipped + 1] = { src = target, error = errKey }
@@ -759,20 +737,20 @@ function Testing.invite(adminSrc, targets, opts)
         end
     end
     if #lobby.order == 0 then lobbies[adminSrc] = nil end
-    Push(adminSrc, 'invites', { test = true })
+    CP.push(adminSrc, 'invites', { test = true })
     return true, { lobby = LobbyView(adminSrc), skipped = skipped }
 end
 
 function Testing.cancelInvites(adminSrc)
-    adminSrc = ToSrc(adminSrc)
+    adminSrc = U.toSrc(adminSrc)
     if not adminSrc then return false, 'err.not_in_game' end
     CloseLobby(adminSrc, 'withdrawn', 'test.invite_withdrawn')
-    Push(adminSrc, 'invites', { test = true })
+    CP.push(adminSrc, 'invites', { test = true })
     return true, LobbyView(adminSrc)
 end
 
 function Testing.respond(src, payload)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if not src then return false, 'err.not_in_game' end
     if type(payload) ~= 'table' or type(payload.inviteId) ~= 'string' or #payload.inviteId > 24
         or type(payload.accepted) ~= 'boolean' then
@@ -790,10 +768,10 @@ function Testing.respond(src, payload)
     if not payload.accepted then
         inv.status = 'declined'
         inv.answeredAt = os.time()
-        Notify(inv.admin, 'info', 'test.invite_declined',
+        CP.notify(inv.admin, 'info', 'test.invite_declined',
             { name = inv.name or ('#' .. src), mission = inv.missionLabel })
-        Push(inv.admin, 'invites', { test = true })
-        Push(src, 'invites', { test = true })
+        CP.push(inv.admin, 'invites', { test = true })
+        CP.push(src, 'invites', { test = true })
         return true, { inviteId = inv.id, status = 'declined' }
     end
     if InArena(src) then return false, 'err.in_arena' end
@@ -804,10 +782,10 @@ function Testing.respond(src, payload)
     inv.status = 'accepted'
     inv.answeredAt = os.time()
     inv.name, inv.callsign, inv.departmentShort, inv.rank = rec.name, rec.callsign, rec.departmentShort, rec.rank
-    Notify(inv.admin, 'success', 'test.invite_accepted',
+    CP.notify(inv.admin, 'success', 'test.invite_accepted',
         { name = inv.name or ('#' .. src), mission = inv.missionLabel })
-    Push(inv.admin, 'invites', { test = true })
-    Push(src, 'invites', { test = true })
+    CP.push(inv.admin, 'invites', { test = true })
+    CP.push(src, 'invites', { test = true })
     CP.log(TAG, '%d accepted invitation %s from %d', src, inv.id, inv.admin)
     return true, { inviteId = inv.id, status = 'accepted' }
 end
@@ -896,7 +874,7 @@ local function StartWith(adminSrc, def, opts, draft)
     local members, srcs, used = { adminRec }, { adminSrc }, {}
     local lobby = lobbies[adminSrc]
     for _, raw in ipairs(testers) do
-        local s = ToSrc(raw)
+        local s = U.toSrc(raw)
         if not s or s == adminSrc then return false, 'err.invalid_payload' end
         if not used[s] then
             used[s] = true
@@ -962,14 +940,14 @@ local function StartWith(adminSrc, def, opts, draft)
     CloseLobby(adminSrc, 'withdrawn', 'test.invite_withdrawn')
 
     TriggerClientEvent(CP.e('client:test'), adminSrc, { controls = true, runId = run.id, debug = false })
-    Notify(adminSrc, 'success', 'test.started',
+    CP.notify(adminSrc, 'success', 'test.started',
         { mission = meta.missionLabel, location = meta.locationLabel, tier = TierLabel(expected) })
     for i = 2, #srcs do
-        Notify(srcs[i], 'info', 'test.started_tester', { mission = meta.missionLabel, from = adminRec.name })
+        CP.notify(srcs[i], 'info', 'test.started_tester', { mission = meta.missionLabel, from = adminRec.name })
     end
     Audit(adminSrc, 'audit', draft and 'testDraft' or 'testStart', ('%s#%d'):format(def.id, locationIndex), nil,
         ('%s x%d%s'):format(expected, #members, useStartRoute and ' route' or ''), nil)
-    Push(adminSrc, 'test', { state = true })
+    CP.push(adminSrc, 'test', { state = true })
     CP.log(TAG, '%d started a %stest of %s #%d at %s with %d tester(s) (run %s)', adminSrc, draft and 'draft ' or '',
         def.id, locationIndex, tostring(expected), #members, run.id)
     return true,
@@ -988,7 +966,7 @@ local function ValidStartPayload(p)
     if p.useStartRoute ~= nil and type(p.useStartRoute) ~= 'boolean' then return false end
     if p.testers ~= nil then
         if type(p.testers) ~= 'table' or #p.testers > MAX_TARGETS then return false end
-        for _, s in ipairs(p.testers) do if not ToSrc(s) then return false end end
+        for _, s in ipairs(p.testers) do if not U.toSrc(s) then return false end end
     end
     return true
 end
@@ -996,7 +974,7 @@ end
 function Testing.start(adminSrc, opts)
     local n = tonumber(adminSrc)
     if n == 0 then return false, 'err.not_in_game' end
-    adminSrc = ToSrc(adminSrc)
+    adminSrc = U.toSrc(adminSrc)
     if not adminSrc then return false, 'err.not_in_game' end
     local okP, errP = Can(adminSrc, 'testRun')
     if not okP then return false, errP or 'err.no_permission' end
@@ -1009,7 +987,7 @@ end
 function Testing.startDraft(src, def, opts)
     local n = tonumber(src)
     if n == 0 then return false, 'err.not_in_game' end
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if not src then return false, 'err.not_in_game' end
     opts = type(opts) == 'table' and opts or {}
     -- builderEdit alone: every admin passes it (as testRun), and testRun is admin-only, so asking it of a supervisor
@@ -1065,7 +1043,7 @@ function Testing.command(src, args)
     end
     if #args > 3 then return false, 'err.test_bad_command' end
     local testers = {}
-    local adminSrc = ToSrc(src)
+    local adminSrc = U.toSrc(src)
     local lobby = adminSrc and lobbies[adminSrc]
     if lobby and lobby.missionId == missionId then
         for _, id in ipairs(lobby.order) do
@@ -1310,12 +1288,14 @@ local function ControlledRun(src, payload)
         ClearStale(src)
         return nil, nil, 'err.test_no_active'
     end
-    if type(run.test) ~= 'table' or ToSrc(run.test.adminSrc) ~= src then return nil, nil, 'err.test_not_controller' end
+    if type(run.test) ~= 'table' or U.toSrc(run.test.adminSrc) ~= src then
+        return nil, nil, 'err.test_not_controller'
+    end
     return run, tests[run.id]
 end
 
 function Testing.control(src, payload)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if not src then return false, 'err.not_in_game' end
     if type(payload) ~= 'table' or type(payload.control) ~= 'string' or not CONTROLS[payload.control] then
         return false, 'err.invalid_payload'
@@ -1443,8 +1423,8 @@ local function FinishTest(meta, run, state, endReason)
     end
     TriggerClientEvent(CP.e('client:test'), meta.admin, { controls = false, runId = meta.runId, debug = false })
     if Online(meta.admin) then
-        Notify(meta.admin, 'info', 'test.ended_record', { mission = meta.missionLabel })
-        Push(meta.admin, 'test', { state = true })
+        CP.notify(meta.admin, 'info', 'test.ended_record', { mission = meta.missionLabel })
+        CP.push(meta.admin, 'test', { state = true })
     end
     CP.log(TAG, 'test %s of %s ended (%s, %s)', meta.runId, meta.missionId, tostring(state), tostring(endReason))
 end
@@ -1488,7 +1468,7 @@ local function ClaimPending(cid, entry)
 end
 
 function Testing.record(src, payload)
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if not src then return false, 'err.not_in_game' end
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     local missionId = payload.missionId
@@ -1536,7 +1516,7 @@ function Testing.record(src, payload)
     if not ClaimPending(cid, entry) then return false, 'err.test_not_run' end
     local tierName = ValidTier(entry.tier) or 'standard'
     local version = tonumber(entry.version) and math.floor(tonumber(entry.version)) or nil
-    Db()
+    CP.Db()
     local okI, id = pcall(MySQL.insert.await, [[
         INSERT INTO cp_mission_tests (mission_id, mission_version, location_index, tier, testers, result, note, tested_by, def_hash)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1599,7 +1579,7 @@ function Testing.record(src, payload)
                 'CP.Builder.onDraftTested is not available: draft test results do not reach the builder')
         end
     end
-    Push(src, 'test', { state = true })
+    CP.push(src, 'test', { state = true })
     CP.log(TAG, '%s recorded %s for %s at %s (row %s)', cid, result, target, tierName, tostring(id))
     return true,
         {
@@ -1632,8 +1612,8 @@ local function TesterNameOf(cid, stored)
     if type(stored) == 'string' and stored ~= '' then return stored end
     if names[cid] then return names[cid] end
     local ok, s = Call('Qbx', 'getByCitizenId', cid)
-    if ok and ToSrc(s) then
-        local okI, info = Call('Qbx', 'getInfo', ToSrc(s))
+    if ok and U.toSrc(s) then
+        local okI, info = Call('Qbx', 'getInfo', U.toSrc(s))
         if okI and type(info) == 'table' and type(info.name) == 'string' then
             names[cid] = info.name
             return info.name
@@ -1672,7 +1652,7 @@ local function AllMissions()
 end
 
 function Testing.list()
-    Db()
+    CP.Db()
     local okQ, rows = pcall(MySQL.query.await, [[
         SELECT t.id, t.mission_id, t.mission_version, t.location_index, t.tier, t.testers, t.result, t.note,
                t.tested_by, t.def_hash, t.unplayed, UNIX_TIMESTAMP(t.created_at) AS created_ts, last.n AS tests_n,
@@ -1800,7 +1780,7 @@ function Testing.candidates(src)
     if not ok or type(list) ~= 'table' then return out end
     local lobby = lobbies[src]
     for _, s in ipairs(list) do
-        s = ToSrc(s)
+        s = U.toSrc(s)
         if s and s ~= src and #out < MAX_CANDIDATES then
             local rec, role = TesterRecord(s)
             if rec then
@@ -2128,7 +2108,7 @@ function Testing.spawnPoints(src, args)
     if args.location == nil then return { missions = { CheckMissionView(def) } } end
     local index = math.tointeger(tonumber(args.location) or -1)
     if not index or index < 1 or index > #(def.locations or {}) then return nil, 'err.invalid_location' end
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if InArena(src) then return nil, 'err.in_arena' end
     if OnMission(src) then return nil, 'err.spawn_check_on_run' end
     local point = args.point
@@ -2355,7 +2335,7 @@ do
             or TierFor(math.floor(Num(def.maxOfficers, 1)))
         if not tier then return false, 'err.test_invalid_tier' end
         local cid = CitizenOf(ctx.src) or 'console'
-        Db()
+        CP.Db()
         local okI, id = pcall(MySQL.insert.await, [[INSERT INTO cp_mission_tests (mission_id, mission_version,
             location_index, tier, testers, result, note, tested_by, def_hash, unplayed)
             VALUES (?, ?, ?, ?, 1, 'passed', ?, ?, ?, 1)]], {
@@ -2380,7 +2360,7 @@ do
         local p = ctx.payload
         local id = math.tointeger(tonumber(p.id) or -1)
         if not id or id < 1 or type(p.hidden) ~= 'boolean' then return false, 'err.invalid_payload' end
-        Db()
+        CP.Db()
         local okR, row = pcall(MySQL.single.await, [[SELECT id, mission_id, location_index, result, def_hash, hidden,
             unplayed FROM cp_mission_tests WHERE id = ?]], { id })
         if not okR or type(row) ~= 'table' then return false, 'err.test_unknown_result' end
@@ -2405,7 +2385,7 @@ do
         if type(missionId) ~= 'string' or #missionId > 40 or not missionId:match(MISSION_ID) or not index then
             return nil, 'err.invalid_payload'
         end
-        Db()
+        CP.Db()
         local okQ, rows = pcall(MySQL.query.await, [[SELECT t.id, t.mission_version, t.tier, t.testers, t.result,
             t.note, t.tested_by, t.def_hash, t.hidden, t.unplayed, UNIX_TIMESTAMP(t.created_at) AS created_ts,
             o.display_name FROM cp_mission_tests t LEFT JOIN cp_officers o ON o.citizenid = t.tested_by
@@ -2437,7 +2417,7 @@ end
 
 AddEventHandler('playerDropped', function()
     local src = source
-    src = ToSrc(src)
+    src = U.toSrc(src)
     if not src then return end
     lastStart[src] = nil
     CloseLobby(src, 'withdrawn', 'test.invite_withdrawn')
@@ -2445,7 +2425,7 @@ AddEventHandler('playerDropped', function()
         if inv.target == src and (inv.status == 'pending' or inv.status == 'accepted') then
             inv.status = 'expired'
             inv.answeredAt = os.time()
-            Push(inv.admin, 'invites', { test = true })
+            CP.push(inv.admin, 'invites', { test = true })
         elseif inv.target == src then
             ForgetInvite(id)
         end
@@ -2460,7 +2440,7 @@ AddEventHandler('playerDropped', function()
                 meta.endedBy = 'admin_left'
                 for _, s in ipairs(run.order or {}) do
                     local p = run.participants[s]
-                    if p and p.status == 'active' and s ~= src then Notify(s, 'warning', 'test.ended_admin_left') end
+                    if p and p.status == 'active' and s ~= src then CP.notify(s, 'warning', 'test.ended_admin_left') end
                 end
                 if Has('Runs', 'failRun') then
                     Call('Runs', 'failRun', run, 'test.ended_admin_left')

@@ -568,8 +568,8 @@ H.ok(opsSrv:find('\'server:joinOperation\'', 1, true) ~= nil,
 
 -- Pushes the board listens to are the ones the modules send.
 local unitsSrv = Mod('modules/units/server.lua')
-H.ok(unitsSrv:find('Push(m, \'board\'', 1, true) ~= nil, 'modules/units pushes \'board\' when the unit changes')
-H.ok(opsSrv:find('Push(p, \'board\', data)', 1, true) ~= nil, 'modules/operations pushes \'board\'')
+H.ok(unitsSrv:find('CP.push(m, \'board\'', 1, true) ~= nil, 'modules/units pushes \'board\' when the unit changes')
+H.ok(opsSrv:find('CP.push(p, \'board\', data)', 1, true) ~= nil, 'modules/operations pushes \'board\'')
 
 -- ============================================================================
 --                                  CSS RULES

@@ -98,14 +98,6 @@ local function WarnOnce(key, fmt, ...)
     CP.warn(TAG, fmt, ...)
 end
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 -- At most n bytes, never ending in half a UTF-8 character: the cp_officers columns count characters,
 -- and MariaDB's strict mode rejects the whole upsert for a string cut inside a multi-byte character
 -- (the same rule as CP.U.clip). Names and callsigns are free text, e.g. "José" or "Łukasz".
@@ -135,10 +127,6 @@ end
 local function Describe(v)
     if v == nil then return 'missing' end
     return ('"%s"'):format(tostring(v))
-end
-
-local function Notify(src, kind, key, vars)
-    if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(src, kind, key, vars) end
 end
 
 -- ============================================================================
@@ -378,7 +366,7 @@ end
 function A.isAdmin(src)
     local n = tonumber(src)
     if n == 0 then return true end
-    n = ToSrc(n)
+    n = CP.U.toSrc(n)
     if not n then return false end
     if AceAllowed(n, A.adminAce()) then return true end
     local qbox = A.qboxAdminAce()
@@ -473,7 +461,7 @@ end
 -- The license of an online player (nil for the console or an unknown player): the loaded character's (Qbox
 -- PlayerData.license), else the player's license: identifier.
 function A.licenseOfSrc(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n then return nil end
     local info = CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
     if type(info) == 'table' and type(info.license) == 'string' and info.license ~= '' then return info.license end
@@ -483,7 +471,7 @@ end
 -- Every license src's characters can be stored under: the loaded character's, the license: and the license2:
 -- identifier, without repeats. {} for the console or an unknown player.
 function A.licensesOfSrc(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n then return {} end
     local out, seen = {}, {}
     local function add(v)
@@ -530,7 +518,7 @@ end
 
 -- Every citizenid of src's licenses (their characters), their current one first. The console has none.
 function A.selfCitizenids(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n then return {} end
     local out, seen = {}, {}
     local function add(cid)
@@ -561,7 +549,7 @@ end
 -- ============================================================================
 
 function A.getOfficer(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n or not (CP.Qbx and CP.Qbx.getInfo) then return nil, 'err.not_police' end
     local info = CP.Qbx.getInfo(n)
     if not info then return nil, 'err.not_police' end
@@ -599,7 +587,7 @@ end
 -- job (info.job): change this together with it. The job map never feeds lastJob (qbx_core sends SetPlayerData before
 -- OnJobUpdate, so Evaluate would see no change and onLost would never fire).
 function A.maybeOfficer(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local j = n and CP.Qbx and CP.Qbx.knownJob and CP.Qbx.knownJob(n)
     return j == nil or Build().byJob[j] ~= nil
 end
@@ -609,7 +597,7 @@ end
 -- the verdict is the opening code itself (A.getOfficer, then CP.Tablet.checkAccess), so the two never disagree.
 -- via: the way to check ('command' when left out).
 function A.explain(src, via)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     local out = { ok = false, steps = {}, via = via or 'command' }
     local function step(check, ok, vars) out.steps[#out.steps + 1] = { check = check, ok = ok == true, vars = vars } end
     local info = n and CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
@@ -649,7 +637,7 @@ end
 
 -- officer: getOfficer(src) when the caller already has it (CP.Permissions.can), so it is looked up once.
 function A.isSupervisor(src, officer)
-    if type(officer) ~= 'table' or officer.src ~= ToSrc(src) then officer = A.getOfficer(src) end
+    if type(officer) ~= 'table' or officer.src ~= CP.U.toSrc(src) then officer = A.getOfficer(src) end
     return officer ~= nil and officer.isSupervisor == true
 end
 
@@ -662,7 +650,7 @@ function A.role(src)
 end
 
 function A.recheck(src, jobName)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n or not (CP.Qbx and CP.Qbx.getInfo) then return true end
     local info = CP.Qbx.getInfo(n)
     if not info then return true end
@@ -706,7 +694,7 @@ end
 
 -- Compare the player's current state with their last known active job.
 local function Evaluate(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n then return end
     local info = CP.Qbx.getInfo(n)
     if not info then return end
@@ -784,16 +772,16 @@ function A.suspend(citizenid, days, actorSrc, reason, opts)
     if target then
         if d > 0 then
             FireLost(target, 'suspended')
-            Notify(target, 'error', 'access.suspended_notice', { days = d })
+            CP.notify(target, 'error', 'access.suspended_notice', { days = d })
         else
-            Notify(target, 'success', 'access.unsuspended_notice')
+            CP.notify(target, 'success', 'access.unsuspended_notice')
         end
     end
     return true
 end
 
 function A.refreshOfficerRow(src)
-    local n = ToSrc(src)
+    local n = CP.U.toSrc(src)
     if not n or not (CP.Qbx and CP.Qbx.getInfo) then return false end
     local info = CP.Qbx.getInfo(n)
     if not info then return false end
@@ -831,7 +819,7 @@ end
 
 local function GetDepartment(src)
     local ok, key = pcall(function()
-        local n = ToSrc(src)
+        local n = CP.U.toSrc(src)
         if not n or not (CP.Qbx and CP.Qbx.getInfo) then return nil end
         local info = CP.Qbx.getInfo(n)
         if not info then return nil end

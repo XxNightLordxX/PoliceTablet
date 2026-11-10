@@ -115,10 +115,10 @@ local function CheckItems()
         end
         return { Line('ok', 'health.item.off') }
     end
-    if GetResourceState('ox_inventory') ~= 'started' then
+    if not CP.Ext.started('ox_inventory') then
         return { Line('error', 'health.item.no_inventory', { item = item }) }
     end
-    local ok, def = pcall(function() return exports.ox_inventory:Items(item) end)
+    local ok, def = CP.Ext.call('ox_inventory', 'Items', item)
     if not ok or def == nil then
         return { Line('warn', 'health.item.missing', { item = item }, { fix = 'Tablet.item' }) }
     end

@@ -94,10 +94,6 @@ local function Call(modName, fnName, ...)
     return true, table.unpack(res, 2, res.n)
 end
 
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
-
 local function Int(v) return math.tointeger(tonumber(v) or 0) or 0 end
 
 local function Now()
@@ -982,7 +978,7 @@ end
 -- One backup of every table and file now. kind: 'manual', 'daily' or 'prerestore'. opts.keep: a backup keep N does not
 -- remove this time (the one a restore puts back next). ok, BackupView | false, errKey.
 function Sys.backup(src, kind, opts)
-    Db()
+    CP.Db()
     SweepStray()
     local name = BackupName(kind or 'manual')
     writing[name] = true
@@ -1087,7 +1083,7 @@ end
 
 -- What a restore of this backup replaces, keeps and puts back (nothing changes).
 function Sys.previewRestore(name)
-    Db()
+    CP.Db()
     local m = Manifest(name)
     if not m then return nil, 'err.backup_unknown' end
     local okC, bad = CheckParts(m)
@@ -1178,7 +1174,7 @@ end
 -- stops during it) keeps the restore lock, also after a restart, until a restore works
 -- (Config.Backups.holdAfterFailedRestore).
 function Sys.restore(src, name, reason)
-    Db()
+    CP.Db()
     local m = Manifest(name)
     if not m then return false, 'err.backup_unknown' end
     local running = RunsGoing()
@@ -1867,7 +1863,7 @@ end
 -- One part of AUDIT_PART rows (export beyond the 5000 of one part).
 function Sys.auditPart(args, part)
     if not (Has('Admin', '_auditWhere') and Has('Admin', '_csv')) then return nil, 'err.module_unavailable' end
-    Db()
+    CP.Db()
     -- Z10: the parts of one export are held to the rows there at its first part (args.maxId, which the Audit screen
     -- sends back with each later part), so audit rows written between the requests never shift the pages
     local maxId = type(args) == 'table' and math.tointeger(tonumber(args.maxId)) or nil
@@ -1882,7 +1878,7 @@ end
 -- Save to server: every matching row (up to AUDIT_SAVE_MAX) into saves/exports/audit-<time>.csv.
 function Sys.saveAudit(args)
     if not (Has('Admin', '_auditWhere') and Has('Admin', '_csv')) then return nil, 'err.module_unavailable' end
-    Db()
+    CP.Db()
     if not EnsureDir(EXPORT_DIR) then return nil, 'err.export_folder' end
     -- the rows there now: the pages yield, and audit rows written meanwhile would repeat one row and drop the oldest
     local maxId = Int(MySQL.scalar.await('SELECT MAX(id) FROM cp_audit', {}))
@@ -2378,10 +2374,10 @@ Kit.action('server:admin:giveTabletItem', 'playerSupport', function(ctx)
     if okA and inArena then return false, 'err.in_arena' end
     local okH, has = Call('Tablet', 'hasTabletItem', target)
     if okH and has then return false, 'err.has_tablet_item' end
-    if GetResourceState('ox_inventory') ~= 'started' then return false, 'err.module_unavailable' end
-    local okC, can = pcall(function() return exports.ox_inventory:CanCarryItem(target, item, 1) end)
+    if not CP.Ext.started('ox_inventory') then return false, 'err.module_unavailable' end
+    local okC, can = CP.Ext.call('ox_inventory', 'CanCarryItem', target, item, 1)
     if not okC or not can then return false, 'err.cannot_carry' end
-    local okI, added = pcall(function() return exports.ox_inventory:AddItem(target, item, 1) end)
+    local okI, added = CP.Ext.call('ox_inventory', 'AddItem', target, item, 1)
     if not okI or not added then return false, 'err.cannot_carry' end
     ctx.audit('tabletItemGive', info.citizenid, nil, item)
     return true, { item = item }
@@ -2485,7 +2481,7 @@ local function StartLocks()
 end
 
 function Sys._boot()
-    Db()
+    CP.Db()
     StartLocks()
 end
 

@@ -127,10 +127,6 @@ local function ArenaForeign()
     return type(v) == 'table' and v.active == true and v.source ~= 'crimson-police'
 end
 
-local function Notify(kind, key, vars, opts)
-    if CP.Tablet and CP.Tablet.notify then CP.Tablet.notify(kind, CP.L(key, vars), opts) end
-end
-
 -- The key bound to +crimsonpolice_testpanel ('t_F7' -> 'F7'), or nil when it has no text label: a mouse or pad
 -- button comes back as 'b_<number>', and naming DEFAULT_KEY then would make the panel wait for the wrong key.
 local function KeyLabel()
@@ -826,7 +822,7 @@ local function OpenPrompt()
             for _, inv in ipairs(list) do RememberInvite(inv) end
         end
         if #list == 0 then
-            Notify('info', 'test.no_invites')
+            CP.notify('info', 'test.no_invites')
             return
         end
         if TabletOpen() or ArenaForeign() then return end
@@ -855,11 +851,11 @@ local function OnPanelKey()
     -- The key may be another resource's too (sc-multijob's F9): with nothing to open it stays silent.
     if not controls and not InviteWaiting() then return end
     if ArenaForeign() then
-        Notify('error', 'err.in_arena')
+        CP.notify('error', 'err.in_arena')
         return
     end
     if Down() then
-        Notify('error', 'test.downed')
+        CP.notify('error', 'test.downed')
         return
     end
     if controls then
@@ -915,7 +911,7 @@ RegisterNetEvent(CP.e('client:testInvite'), function(inv)
     local mission = type(inv.missionLabel) == 'string' and inv.missionLabel or '?'
     RememberInvite(inv)
     local key = KeyLabel()
-    Notify('info', key and 'test.invite_toast' or 'test.invite_toast_nokey',
+    CP.notify('info', key and 'test.invite_toast' or 'test.invite_toast_nokey',
         { from = from, mission = mission, key = key },
         { title = CP.L('test.invite_title'), duration = INVITE_TOAST_MS })
 end)

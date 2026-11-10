@@ -1321,8 +1321,8 @@ local function ItemForbidden(name)
 end
 
 local function ItemKnown(name)
-    if GetResourceState and GetResourceState('ox_inventory') ~= 'started' then return true end
-    local ok, item = pcall(function() return exports.ox_inventory:Items(name) end)
+    if not CP.Ext.started('ox_inventory') then return true end
+    local ok, item = CP.Ext.call('ox_inventory', 'Items', name)
     if not ok then
         return true
     end -- cannot check: ox_inventory decides when the item is given
@@ -2769,7 +2769,7 @@ local function PushAll(data)
         if t - at > VIEWER_TTL_MS then
             viewers[src] = nil
         else
-            pcall(CP.Tablet.push, src, 'builder', data)
+            CP.push(src, 'builder', data)
         end
     end
 end

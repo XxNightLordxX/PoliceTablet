@@ -280,10 +280,6 @@ local function InArenaMatch(src)
     return not ok or (tonumber(b) or 0) ~= 0
 end
 
-local function Notify(src, kind, key, vars)
-    if CP.Tablet and CP.Tablet.notify then pcall(CP.Tablet.notify, src, kind, key, vars) end
-end
-
 local function Dispatch(run, index, src, ev)
     index = tonumber(index)
     if not index or not (CP.Runs and CP.Runs.dispatch) then return false end
@@ -860,7 +856,7 @@ local function Shot(run, netId, rec, src, state)
     end
     Dispatch(run, rec.obj, src, { type = 'shot', netId = netId, src = src })
     local pts = Config.Scoring and Config.Scoring.common and tonumber(Config.Scoring.common.shotSurrendered) or 0
-    Notify(src, 'warning', 'npc.shot_surrendered', { points = math.abs(pts) })
+    CP.notify(src, 'warning', 'npc.shot_surrendered', { points = math.abs(pts) })
     CP.log(TAG, 'run %s: %s shot %s ped %s', tostring(run.id), src, tostring(state), netId)
     return true
 end
@@ -1497,7 +1493,7 @@ ArmTick()
 
 local function Refuse(src, key, why)
     CP.log(TAG, 'cuff by %s refused: %s', tostring(src), why or key)
-    Notify(src, 'error', key)
+    CP.notify(src, 'error', key)
     return false, key
 end
 
@@ -1506,8 +1502,7 @@ end
 local function HandcuffsOk(src)
     local item = Config.Custody and Config.Custody.handcuffsItem
     if not item or item == '' then return true end
-    if GetResourceState('ox_inventory') ~= 'started' then return false end
-    local ok, n = pcall(function() return exports.ox_inventory:Search(src, 'count', item) end)
+    local ok, n = CP.Ext.call('ox_inventory', 'Search', src, 'count', item)
     return ok and (tonumber(n) or 0) > 0
 end
 

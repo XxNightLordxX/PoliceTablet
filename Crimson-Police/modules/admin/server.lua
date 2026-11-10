@@ -199,14 +199,6 @@ end
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function ToSrc(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function WarnOnce(key, fmt, ...)
     if warned[key] then return end
     warned[key] = true
@@ -227,10 +219,6 @@ local function Call(modName, fnName, ...)
         return false
     end
     return true, table.unpack(res, 2, res.n)
-end
-
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
 end
 
 local function Num(v, default)
@@ -269,7 +257,7 @@ local function ValidUuid(v)
 end
 
 local function Query(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.query.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'query failed: %s', tostring(res))
@@ -279,7 +267,7 @@ local function Query(sql, params)
 end
 
 local function Single(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.single.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'query failed: %s', tostring(res))
@@ -289,7 +277,7 @@ local function Single(sql, params)
 end
 
 local function Update(sql, params)
-    Db()
+    CP.Db()
     local ok, res = pcall(MySQL.update.await, sql, params or {})
     if not ok then
         CP.err(TAG, 'update failed: %s', tostring(res))
@@ -322,19 +310,15 @@ local function IsAdmin(src)
     return CP.Access ~= nil and CP.Access.isAdmin ~= nil and CP.Access.isAdmin(src) == true
 end
 
-local function Notify(src, kind, key, vars)
-    if ToSrc(src) and Has('Tablet', 'notify') then Call('Tablet', 'notify', src, kind, key, vars) end
-end
-
 local function OnlineSrc(citizenid)
     if type(citizenid) ~= 'string' or not Has('Qbx', 'getByCitizenId') then return nil end
     local ok, s = Call('Qbx', 'getByCitizenId', citizenid)
-    return ok and ToSrc(s) or nil
+    return ok and U.toSrc(s) or nil
 end
 
 -- The character citizenid of a player src (nil for the console or a player without a character).
 local function CitizenOf(src)
-    local n = ToSrc(src)
+    local n = U.toSrc(src)
     if not n then return nil end
     local ok, info = Call('Qbx', 'getInfo', n)
     if ok and type(info) == 'table' and type(info.citizenid) == 'string' and info.citizenid ~= '' then
@@ -631,7 +615,7 @@ local function ResolveActor(actor)
         return 'console', CP.L('admin.actor.console'), 0
     end
     if type(actor) == 'number' then
-        local n = ToSrc(actor)
+        local n = U.toSrc(actor)
         if not n then return 'console', CP.L('admin.actor.console'), 0 end
         local ok, info = Call('Qbx', 'getInfo', n)
         if ok and type(info) == 'table' and type(info.citizenid) == 'string' then
@@ -678,7 +662,7 @@ local function WriteAudit(entry, hookCategory, actorName, opts)
             params[#params + 1] = v
         end
     end
-    Db()
+    CP.Db()
     local sql = ('INSERT INTO cp_audit (%s) VALUES (%s)'):format(table.concat(AUDIT_COLS, ', '),
         table.concat(values, ', '))
     local ok, id = pcall(MySQL.insert.await, sql, params)
@@ -877,7 +861,7 @@ function Admin.approveFlagged(src, rowId, reason, opts)
         Admin.audit(src, RoleOf(src), 'flags', 'approveFlagged', RowTarget(row), row.flag_reason, 'approved', reason)
     end
     if not opts.quiet then
-        Notify(OnlineSrc(row.citizenid), 'success', 'admin.notice.run_approved',
+        CP.notify(OnlineSrc(row.citizenid), 'success', 'admin.notice.run_approved',
             { mission = Admin.missionLabel(row.mission_id) })
     end
     CP.log(TAG, 'row %d approved by %s', row.id, tostring(src))
@@ -901,7 +885,7 @@ local function VoidRow(src, row, reason, action, flaggedOnly, kind)
     Call('ReviewRules', 'clear', row.id)
     Admin.audit(src, RoleOf(src), 'flags', action, RowTarget(row), row.flagged and 'flagged' or row.state,
         kind == 'correction' and 'voided:correction' or 'voided', reason)
-    Notify(OnlineSrc(row.citizenid), 'warning', 'admin.notice.run_voided',
+    CP.notify(OnlineSrc(row.citizenid), 'warning', 'admin.notice.run_voided',
         { mission = Admin.missionLabel(row.mission_id) })
     if not NON_MISSION_TYPES[row.mission_type] and kind == 'strike' then
         Call('AntiCheat', 'onVoided', row.citizenid)
@@ -1029,7 +1013,7 @@ end
 
 function Admin.forceRecall(src, runId, targetSrc, reason)
     if type(runId) ~= 'string' or #runId > 64 then return false, 'err.invalid_run' end
-    local target = ToSrc(targetSrc)
+    local target = U.toSrc(targetSrc)
     if not target then return false, 'err.invalid_payload' end
     local run = Has('Runs', 'get') and CP.Runs.get(runId) or nil
     if type(run) ~= 'table' or run.state == 'ended' then return false, 'err.invalid_run' end
@@ -1080,7 +1064,7 @@ local function Reply(src, kind, key, vars)
         local colour = ({ error = '^1', success = '^2', warning = '^3' })[kind] or '^5'
         print(('%s[crimson-police] %s^7'):format(colour, CP.L(key, vars)))
     else
-        Notify(src, kind, key, vars)
+        CP.notify(src, kind, key, vars)
     end
     return kind ~= 'error', key, vars
 end
@@ -1747,7 +1731,7 @@ end
 -- /CrimsonPoliceAdmin storage: the mode, the saves folder, the rows of every table and the saves folder's size.
 -- The console gets every line; in game the mode, the totals and the size.
 local function StorageStatus(src)
-    Db()
+    CP.Db()
     local console = tonumber(src) == 0
     local mode = StorageMode()
     local dir = SavesFolder()
@@ -1787,7 +1771,7 @@ end
 -- Admin UI → System → Storage: the facts of /CrimsonPoliceAdmin storage as data. The folder is the setting's
 -- relative name, never the server's full path.
 function Admin.storageStatus()
-    Db()
+    CP.Db()
     local mode = StorageMode()
     local folder = type(Config.Database) == 'table' and Config.Database.folder or 'saves'
     local out = {
@@ -1981,7 +1965,7 @@ local function MirrorAudit(target, src, direction, old, new)
 end
 
 local function StorageCopy(src, direction, force)
-    Db()
+    CP.Db()
     local console = tonumber(src) == 0
     local toFiles = direction == 'database-to-files'
     local dbSide, e1, v1 = OpenDatabase()

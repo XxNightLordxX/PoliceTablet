@@ -53,14 +53,6 @@ local pendingMarks = {}           -- pendingMarks[src] = { { raw, unmarkedAt }, 
 --                                   HELPERS
 -- ============================================================================
 
-local function ToSrc(src)
-    local n = tonumber(src)
-    if not n then return nil end
-    n = math.tointeger(n)
-    if not n or n <= 0 then return nil end
-    return n
-end
-
 local function Normalize(id)
     if CP.Dispatch and CP.Dispatch.normalizeCallId then
         local ok, key = pcall(CP.Dispatch.normalizeCallId, id)
@@ -95,10 +87,6 @@ local function RunsCall(name, ...)
         return false, nil
     end
     return true, a, b
-end
-
-local function Notify(src, kind, key, vars)
-    if CP.Tablet and CP.Tablet.notify then pcall(CP.Tablet.notify, src, kind, key, vars) end
 end
 
 local function Audit(citizenid, action, runId, detail, reason)
@@ -139,7 +127,7 @@ local function AboutOwnRun(run, ...)
     local prefixes = Config.Calls.ownRunCallPrefixes
     if type(prefixes) ~= 'table' or type(run) ~= 'table' or type(run.participants) ~= 'table' then return false end
     for pSrc in pairs(run.participants) do
-        local n = ToSrc(pSrc)
+        local n = CP.U.toSrc(pSrc)
         if n then
             local tail = ('%d_'):format(n)
             for i = 1, #prefixes do
@@ -198,7 +186,7 @@ local function Dodge(src, fa, at)
     CP.log(TAG, '%d un-marked %s within the dodge window: run %s becomes real_call_cancelled', src, tostring(fa.key),
         tostring(fa.runId))
     RunsCall('reclassify', fa.citizenid, fa.runId, 'real_call_cancelled')
-    Notify(src, 'warning', 'calls.reclassified', { seconds = tonumber(Config.Calls.dodgeWindow) or 60 })
+    CP.notify(src, 'warning', 'calls.reclassified', { seconds = tonumber(Config.Calls.dodgeWindow) or 60 })
     Audit(fa.citizenid or src, 'real_call_cancelled', fa.runId, fa.key,
         ('un-marked real call %s after %d s'):format(fa.key, math.max(0, at - fa.at)))
 end
@@ -222,7 +210,7 @@ local function EndForRealCall(run, src, p, key, raw, now, unmarkedAt)
     CP.log(TAG, '%d responds to real call %s: leaving run %s (real_call)', src, key, tostring(run.id))
     RunsCall('removeParticipant', run, src, 'real_call')
     fa.busy = false
-    Notify(src, 'info', 'calls.run_ended')
+    CP.notify(src, 'info', 'calls.run_ended')
     local n = citizenid and CountFreeAbandons(citizenid, now) or 1
     Audit(citizenid or src, 'free_abandon', run.id, key,
         ('free abandon on real call %s (mission %s; %d in the last 24 h)'):format(key, tostring(run.missionId), n))
@@ -304,7 +292,7 @@ end
 
 local function OnResponding(src, callId, isResponding)
     local now = os.time()                           -- the listener thread starts when the event arrives
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     local raw = Normalize(callId)
     if raw == '' or IsNpc(raw) then return end
@@ -366,7 +354,7 @@ function C.exemptFor(run)
     end
     local srcs, seenSrc = {}, {}
     local function Add(v)
-        local n = ToSrc(v)
+        local n = CP.U.toSrc(v)
         if n and not seenSrc[n] then
             seenSrc[n] = true
             srcs[#srcs + 1] = n
@@ -390,7 +378,7 @@ end
 
 -- opts.except (an exemptFor-shaped set): those calls are ignored (a claim of the case they belong to).
 function C.isOnCall(src, opts)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return false end
     local bySrc = responding[src]
     if not bySrc then return false end
@@ -464,7 +452,7 @@ local function Prune()
 end
 
 AddEventHandler('playerDropped', function()
-    local src = ToSrc(source)
+    local src = CP.U.toSrc(source)
     if not src then return end
     responding[src] = nil
     aliases[src] = nil
@@ -476,7 +464,7 @@ end)
 -- A character logout keeps the server id, so the next character must not inherit the old one's real-call mark.
 -- seen and freeAbandons stay: they expire on their own and feed the dodge rule (OnUnmarked's 'known' check).
 local function OnUnload(src)
-    src = ToSrc(src)
+    src = CP.U.toSrc(src)
     if not src then return end
     responding[src] = nil
     aliases[src] = nil

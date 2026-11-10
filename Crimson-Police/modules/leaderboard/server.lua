@@ -105,10 +105,6 @@ local function CacheSeconds() return math.max(0, Num(Cfg('Leaderboard', 'cacheSe
 local function MinRuns() return math.max(0, Int(Cfg('Leaderboard', 'minRunsToRank', 3))) end
 local function TopN() return math.max(1, Int(Cfg('Leaderboard', 'topN', 25))) end
 
-local function Db()
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-end
-
 local function Has(mod, fn)
     return type(CP[mod]) == 'table' and type(CP[mod][fn]) == 'function'
 end
@@ -637,7 +633,7 @@ local function Resolve(opts)
 end
 
 local function Compute(q)
-    Db()
+    CP.Db()
     local rows
     if q.period == 'alltime' then
         rows = MySQL.query.await(ALLTIME_SQL, {}) or {}
@@ -920,7 +916,7 @@ function LB.seasonPoints(citizenid)
     if not season then return 0 end
     local c = seasonPointsCache[citizenid]
     if c and c.seasonId == season.id and os.time() - c.at < CacheSeconds() then return c.value end
-    Db()
+    CP.Db()
     local gen = generation
     local v = MySQL.scalar.await(
         'SELECT COALESCE(SUM(final_points), 0) AS points FROM cp_mission_runs WHERE season_id = ? AND citizenid = ? AND voided = 0 AND flagged = 0',
@@ -1159,7 +1155,7 @@ end
 LB._weeklyMetricBadges = WeeklyMetricBadges
 
 function LB._weeklyJob(prevStart, curStart)
-    Db()
+    CP.Db()
     prevStart = Int(prevStart)
     curStart = Int(curStart)
     if prevStart <= 0 or curStart <= prevStart then return false end
@@ -1236,7 +1232,7 @@ LB.badgeHolders = BadgeHolders
 function LB.weekRecognition(weekKey)
     local from, to = LB.isClosedWeek(weekKey)
     if not from then return nil, 'err.week_open' end
-    Db()
+    CP.Db()
     local top = TopEntries(LB.ranking({ period = 'range', filter = 'overall', from = from, to = to, fresh = true }), 3)
     local badgeId = U.clip('officer_of_week_' .. weekKey, 40)
     local holders = BadgeHolders(badgeId)
@@ -1286,7 +1282,7 @@ if CP.AdminKit and CP.AdminKit.callback then
 
     -- Leaderboards → Recognition: exactly what Home shows (every staff notice) and the last closed weeks.
     Kit.callback('admin:getRecognition', 'boardsAdmin', function()
-        Db()
+        CP.Db()
         local weeks = {}
         for _, key in ipairs(ClosedWeeks()) do
             local rec = LB.weekRecognition(key)
@@ -1435,7 +1431,7 @@ local function BadgesFor(citizenid)
             end
         end
     else
-        Db()
+        CP.Db()
         local rows = MySQL.query.await(
             'SELECT badge_id, UNIX_TIMESTAMP(earned_at) AS earned_ts FROM cp_badges WHERE citizenid = ? ORDER BY earned_at DESC, badge_id ASC',
             { citizenid }) or {}
@@ -1593,7 +1589,7 @@ FROM (
 -- (the officer's own clean-arrest rate only) and never leaves this module in a public payload.
 function LB.serviceRecord(citizenid, seasonId)
     if not ValidCitizenId(citizenid) then return nil end
-    Db()
+    CP.Db()
     local extra, params = '', { citizenid }
     if seasonId then extra = 'AND season_id = ?'; params[#params + 1] = Int(seasonId) end
     params[#params + 1] = citizenid
@@ -1639,7 +1635,7 @@ GROUP BY u.mission_id, u.mission_type]]
 -- Fastest completion of each mission the officer has completed (never a mission they haven't played).
 function LB.personalBests(citizenid)
     if not ValidCitizenId(citizenid) then return {} end
-    Db()
+    CP.Db()
     local out = {}
     for _, r in ipairs(MySQL.query.await(BESTS_SQL, { citizenid, citizenid }) or {}) do
         if Int(r.best) > 0 then
@@ -1668,7 +1664,7 @@ GROUP BY b.citizenid]]
 -- The officer they shared the most completed runs with (ties: the lower citizenid), or nil.
 function LB.favouritePartner(citizenid)
     if not ValidCitizenId(citizenid) then return nil end
-    Db()
+    CP.Db()
     local counts = {}
     for _, t in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
         for _, r in ipairs(MySQL.query.await(PARTNER_SQL:format(t, t), { citizenid }) or {}) do
@@ -1719,7 +1715,7 @@ end
 
 -- opts.staff (admin:getOfficerProfile): the real name and every run field, as the officer sees them.
 function LB.profile(viewer, target, opts)
-    Db()
+    CP.Db()
     opts = type(opts) == 'table' and opts or {}
     local staff = opts.staff == true
     local own = target == nil or target == viewer.citizenid
@@ -1829,7 +1825,7 @@ LIMIT 200]]
 local function StuckPayments()
     local ok, list = Call('Cash', 'stuckPayments')
     if ok and type(list) == 'table' then return NormaliseStuck(list) end
-    Db()
+    CP.Db()
     return NormaliseStuck(MySQL.query.await(STUCK_SQL, {}) or {})
 end
 LB._stuckPayments = StuckPayments
@@ -1988,7 +1984,7 @@ CP.Net.action('server:setHideName', function(src, payload)
     local value = payload
     if type(payload) == 'table' then value = payload.hideName end
     if type(value) ~= 'boolean' then return false, 'err.invalid_payload' end
-    Db()
+    CP.Db()
     MySQL.update.await([[INSERT INTO cp_officers (citizenid, callsign, display_name, department, hide_name)
           VALUES (?, NULLIF(?, ''), ?, ?, ?)
           ON DUPLICATE KEY UPDATE hide_name = VALUES(hide_name)]], {
