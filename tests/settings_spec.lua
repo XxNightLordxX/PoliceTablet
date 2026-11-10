@@ -1865,6 +1865,104 @@ do
 end
 
 -- ============================================================================
+--                   UI6: EACH SCREEN'S GEAR AND THE PRESETS
+-- ============================================================================
+
+do
+    local function E(p) return S.entry(p) or {} end
+    -- the gear: every section is under at least one screen's gear, and every gear names real sections
+    local have, under = {}, {}
+    for _, sec in ipairs(S._schema().sections) do have[sec.key] = true end
+    for screen, keys in pairs(S._screens) do
+        for _, k in ipairs(keys) do
+            if k ~= 'other' then H.ok(have[k], ('the %s gear names a real section: %s'):format(screen, k)) end
+            under[k] = true
+        end
+    end
+    local missing = {}
+    for k in pairs(have) do if not under[k] then missing[#missing + 1] = k end end
+    table.sort(missing)
+    H.eq(table.concat(missing, ','), '', 'every config.lua and blocks.lua section is under a screen\'s gear')
+    -- every Admin UI screen but Settings has one (the screen keys of web/src/layouts/adminNav.ts)
+    local nav = io.open('Crimson-Police/web/src/layouts/adminNav.ts'):read('a')
+    local block = nav:match('ADMIN_GROUP_OF[^{]*(%b{})')
+    local screens = { 'admin_home' }
+    for key in block:gmatch('(admin_[%w_]+):') do screens[#screens + 1] = key end
+    H.ok(#screens > 10, 'the Admin UI screens are read from adminNav.ts')
+    for _, key in ipairs(screens) do
+        if key ~= 'admin_settings' then H.ok(S._screens[key] ~= nil, 'a gear for ' .. key) end
+    end
+    H.eq(S._screens.admin_settings, nil, 'Settings itself is the full editor, no gear')
+    local view = Cb('admin:getSettings', 1).data
+    H.eq(table.concat(view.screens.admin_markers, ','), 'map_markers', 'the view carries each screen\'s gear')
+    H.eq(table.concat(view.screens.admin_money, ','), 'cash,payout_editing,item_rewards,feature_rewards',
+        'Money\'s gear: cash, pay editing and both rewards')
+
+    -- the presets setting: shipped as three presets that change nothing until applied
+    H.eq(E('AdminUi.presets').kind, 'json', 'the presets are one setting')
+    H.ok((E('AdminUi.presets').desc or ''):find('The presets on Admin UI -> Settings -> Presets', 1, true) ~= nil,
+        'presets: its config.lua comment is its description')
+    H.ok(Check('AdminUi.presets', E('AdminUi.presets').default), 'the shipped presets pass their own checks')
+    local names = {}
+    for _, p in ipairs(view.presets) do names[#names + 1] = p.key .. '=' .. p.name end
+    H.eq(table.concat(names, ','), 'casual=Casual,serious=Serious RP,golive=Go-live', 'three presets, in order')
+    H.eq(Config.Debug, true, 'shipped: Debug stays on until Go-live is applied')
+    -- a preset never sets the admins, the permissions, a money switch, a webhook setting or a locked one
+    local function P(path, value) return { mine = { { path = path, value = value } } } end
+    Err('AdminUi.presets', P('QboxAdmins', false), 'err.preset_path', 'a preset may not set the admins')
+    Err('AdminUi.presets', P('Permissions.adjustPoints', false), 'err.preset_path', 'nor the permissions')
+    Err('AdminUi.presets', P('Cash.allowPayAgain', true), 'err.preset_path', 'nor a money switch')
+    Err('AdminUi.presets', P('Leaderboard.announceWeekly', false), 'err.preset_path', 'nor a webhook setting')
+    Err('AdminUi.presets', P('Tablet.command', 'x'), 'err.preset_path', 'nor a setting only config.lua changes')
+    Err('AdminUi.presets', P('AdminUi.presets', {}), 'err.preset_path', 'nor the presets themselves')
+    Err('AdminUi.presets', P('Nope.nothing', 1), 'err.setting_unknown', 'an unknown setting is refused')
+    Err('AdminUi.presets', P('Debug', 'yes'), 'err.preset_value', 'a value its setting refuses')
+    Err('AdminUi.presets', { mine = { { path = 'Debug', value = false }, { path = 'Debug', value = true } } },
+        'err.setting_duplicate', 'a setting twice in one preset')
+    H.ok(Check('AdminUi.presets', {}), '{} = no presets')
+
+    -- preview: every change with its value now and after; a setting already there is counted, not listed
+    local pv = Cb('admin:previewPreset', 1, { preset = 'golive' })
+    H.ok(pv and pv.ok, 'an admin previews a preset')
+    local changes = {}
+    for _, c in ipairs(pv.data.changes) do changes[#changes + 1] = ('%s:%s>%s'):format(c.path, c.from, c.to) end
+    H.eq(table.concat(changes, ','),
+        'Debug:true>false,Testing.allowTeleport:true>false,Testing.debugOverlay:true>false',
+        'Go-live lists each change it makes')
+    H.eq(pv.data.same, 1, 'the reason for pay changes is already on (counted, not listed)')
+    H.eq(#pv.data.refused, 0, 'nothing refused')
+    H.ok(Cb('admin:previewPreset', 2, { preset = 'golive' }).ok == false, 'only admins preview a preset')
+    H.ok(Cb('admin:previewPreset', 1, { preset = 'nope' }).ok == false, 'an unknown preset')
+    -- apply: ordinary setting saves with the preset as their reason, then one summary line
+    H.clockMs = H.clockMs + 6000
+    local okA = Act('server:admin:applyPreset', 2, { preset = 'golive' })
+    H.eq(okA, false, 'only admins apply a preset')
+    H.eq(Config.Debug, true, 'refused: nothing changed')
+    H.clockMs = H.clockMs + 6000
+    local okB, res = Act('server:admin:applyPreset', 1, { preset = 'golive' })
+    H.ok(okB and res.preset.changed == 3, 'Go-live applied: three settings changed')
+    H.eq(Config.Debug, false, 'Debug is off')
+    H.eq(Config.Testing.allowTeleport, false, 'test teleports are off')
+    H.ok(Row('Debug') ~= nil, 'saved like a single setting')
+    local a = LastAudit()
+    H.eq(a.action .. ' ' .. a.target .. ' ' .. a.new_value, 'settingsPreset golive 3', 'one summary audit line')
+    local dbgAudit = H.sql('SELECT action, reason FROM cp_audit WHERE target = \'Debug\' ORDER BY id DESC LIMIT 1')[1]
+    H.eq(dbgAudit.action .. ' / ' .. dbgAudit.reason, 'settingChanged / Preset: Go-live', 'each change audited as now')
+    H.clockMs = H.clockMs + 6000
+    local okC, res2 = Act('server:admin:applyPreset', 1, { preset = 'golive' })
+    H.ok(okC and res2.preset.changed == 0, 'applied again: nothing left to change')
+    H.clockMs = H.clockMs + 6000
+    H.eq(select(2, Act('server:admin:applyPreset', 1, { preset = 'nope' })), 'err.preset_unknown', 'unknown preset')
+    -- a preset saved in game lists after the shipped ones, by its key
+    H.ok(S.set(1, 'AdminUi.presets', { my_night = { { path = 'Npc.tellHints', value = false } } }), 'a city\'s own')
+    H.eq(S.presets()[1].name, 'My night', 'its name from its key')
+    for _, p in ipairs({ 'AdminUi.presets', 'Debug', 'Testing.allowTeleport', 'Testing.debugOverlay' }) do
+        S.reset(1, p)
+    end
+    H.eq(Config.Debug, true, 'reset: Debug on again')
+end
+
+-- ============================================================================
 --                               THE CLIENT HALF
 -- ============================================================================
 

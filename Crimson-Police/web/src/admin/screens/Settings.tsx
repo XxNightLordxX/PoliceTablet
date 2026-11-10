@@ -39,6 +39,7 @@ import { RewardPoolEditor, handlesRewardPool } from '../components/RewardPoolEdi
 import { GoalsField, LabelsField, RowsField, TransferPanel } from '../components/SettingsTools';
 import { copyLine } from '../components/copyText';
 import { FeaturesPanel } from '../components/FeaturesPanel';
+import { PresetsPanel } from '../components/SettingsPresets';
 import { JobProgress, useAdminAction } from '../components/kit';
 import type { CashSourcePreview } from '../../types/admin_economy';
 import type {
@@ -54,9 +55,11 @@ import type {
 import './Settings.css';
 
 // The panels of this screen, in tab order. A new admin panel about settings is one more entry here.
-type Panel = 'settings' | 'features' | 'history' | 'transfer';
-const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'zap' | 'clock' | 'swap' }[] = [
+type Panel = 'settings' | 'presets' | 'features' | 'history' | 'transfer';
+const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'zap' | 'clock' | 'swap' | 'layers' }[] = [
     { key: 'settings', labelKey: 'settings.tab.settings', icon: 'sliders' },
+    // a group of settings in one click, after a preview (admin/components/SettingsPresets.tsx)
+    { key: 'presets', labelKey: 'settings.tab.presets', icon: 'layers' },
     // every feature switch by section of play (admin/components/FeaturesPanel.tsx)
     { key: 'features', labelKey: 'settings.tab.features', icon: 'zap' },
     { key: 'history', labelKey: 'settings.tab.history', icon: 'clock' },
@@ -1217,13 +1220,17 @@ export default function AdminSettings() {
     );
     const health = useRequest<HealthLine[]>('admin:getConfigHealth', {});
     const { run, busy: resetting } = useAction();
-    const [panel, setPanel] = useState<Panel>('settings');
-    // Permissions → Config health → Open setting comes here with the path to show
+    // { tab } opens a panel (a screen's gear, the search); Permissions → Config health → Open setting comes here with
+    // the path to show
     const { params } = useNavigation();
+    const tabOf = (v: unknown): Panel | null => (PANELS.some(p => p.key === v) ? (v as Panel) : null);
+    const [panel, setPanel] = useState<Panel>(tabOf(params.tab) ?? 'settings');
     const [query, setQuery] = useState(typeof params.q === 'string' ? params.q.toLowerCase() : '');
     // the sidebar's 'Search settings for ...' while this screen is already open
     useEffect(() => {
         if (typeof params.q === 'string') setQuery(params.q.toLowerCase());
+        const tab = tabOf(params.tab);
+        if (tab) setPanel(tab);
     }, [params]);
     const [filter, setFilter] = useState<Filter>('all');
     // Simple or All settings: opens in Simple (the everyday settings) until the admin picks All settings
@@ -1358,6 +1365,19 @@ export default function AdminSettings() {
                     setPicked('all');
                     setFilter('all');
                     setQuery(path.toLowerCase());
+                }}
+            />
+        );
+    else if (panel === 'presets')
+        body = (
+            <PresetsPanel
+                data={data}
+                disabled={busy || !!data?.safeMode}
+                show={showValue}
+                onApplied={reply => {
+                    if (!reply) return;
+                    setData(prev => mergeSettingsReply(prev, reply));
+                    if (reply.health) health.setData(asArray(reply.health));
                 }}
             />
         );

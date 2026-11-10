@@ -87,6 +87,19 @@ names the change it came with.
   screen opens Active Mission and has Mission Board, Dispatch and Unit links (Dispatch gone with mission calls off;
   no link to the screen you are on). (UI5)
 
+## Settings inside each screen, presets
+
+- [ ] Admin UI -> Money: the gear at the top right opens Settings for Money with only Cash, Payout editing, Item
+  rewards and Feature rewards; change Cash.dailyCap there and Save: the toast shows, Settings -> History lists the
+  change and the Activity log has it; Cash.allowManualCash still asks for ENABLE. Search "cap" in the panel: only
+  matching rows show. All settings opens the full Settings screen. Home, Map markers and Player suspects have their
+  own gear; Settings has none. (UI6)
+- [ ] Settings -> Presets: Go-live -> Preview lists Debug, Allow teleport and Debug overlay with Now On and After Off
+  (the reason for pay changes counted as already set); Apply: the toast says 3 settings changed, Debug shows Changed,
+  the Activity log has three Setting changed lines with the reason "Preset: Go-live" and one Settings preset applied
+  line. Preview again: nothing to change. Reset Debug: it is on again. Casual and Serious RP preview their own
+  changes; no preset lists an admin, permission, money or webhook setting. (UI6)
+
 ## Admin UI by job, one search
 
 - [ ] Admin UI: the sidebar shows Home, then People (Officers, Departments, Who can do what; Leaderboards and Seasons

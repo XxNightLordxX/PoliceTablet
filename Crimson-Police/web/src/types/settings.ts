@@ -142,6 +142,35 @@ export interface SettingsData {
     common?: string[];
     // Settings -> Features: every feature switch, with its section and the setting it writes
     features?: FeatureEntry[];
+    // the gear of each Admin UI screen: the section keys its settings panel shows (by screen key)
+    screens?: Record<string, string[]>;
+    // Settings -> Presets (Config.AdminUi.presets), in order
+    presets?: SettingsPreset[];
+}
+
+// One preset of Settings -> Presets: count = the settings it sets.
+export interface SettingsPreset {
+    key: string;
+    name: string;
+    help: string;
+    count: number;
+}
+
+// admin:previewPreset: every change the preset makes (from = the value now), how many already match, and the rows
+// the server refuses (then the preset cannot be applied).
+export interface PresetChange {
+    path: string;
+    label: string;
+    from?: unknown;
+    fromSet: boolean;
+    to: unknown;
+}
+export interface PresetPreview {
+    key: string;
+    name: string;
+    changes: PresetChange[];
+    same: number;
+    refused: { path: string; error: string }[];
 }
 
 // The section of play a feature belongs to (Settings -> Features).
@@ -165,6 +194,8 @@ export interface SettingsReply {
     pending: number;
     // Reset all: the whole Settings view after the reset
     view?: SettingsData;
+    // server:admin:applyPreset: the preset and how many settings it changed
+    preset?: { key: string; changed: number };
 }
 
 // One cp_settings_history row: the full old and new values (oldSaved = false: config.lua's value).

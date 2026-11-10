@@ -521,6 +521,50 @@ Play.features = {
 Settings._features = Play.features
 Settings._playGroups = Play.groups
 
+-- The gear of each Admin UI screen: the config.lua sections its settings panel shows (the same rows, saves and audit
+-- as Settings -> All settings, which still lists every setting). Every section is under at least one gear.
+Play.screens = {
+    admin_home = { 'general', 'tablet_and_commands', 'formats' },
+    admin_officers = { 'officer_profile', 'admin_control', 'field_training' },
+    admin_departments = {
+        'departments',
+        'names',
+        'units',
+        'cross_department_missions',
+        'mission_controls',
+        'department_challenge',
+    },
+    admin_permissions = { 'permissions' },
+    admin_leaderboards = { 'leaderboard', 'scoring_xp_levels_and_goals', 'bonuses_and_penalties' },
+    admin_seasons = { 'leaderboard' },
+    admin_missions = {
+        'mission_types',
+        'difficulty',
+        'scaling_by_participants',
+        'spawning',
+        'suspect_behaviour',
+        'route_to_the_start',
+        'random_draw',
+        'dispatch',
+        'special_events',
+        'built_in_mission_tweaks',
+        'downed_participants',
+        'police_actions_and_custody',
+        'decisions',
+        'mission_builder',
+        'blocks',
+    },
+    admin_live = { 'run_limits', 'real_calls', 'alert_suppression' },
+    admin_markers = { 'map_markers' },
+    admin_testing = { 'admin_test_mode' },
+    admin_rs = { 'real_suspects', 'live_crimes', 'volunteer_suspects', 'criminal_tablet' },
+    admin_money = { 'cash', 'payout_editing', 'item_rewards', 'feature_rewards' },
+    admin_review = { 'disputes', 'anti_exploit' },
+    admin_audit = { 'retention' },
+    admin_system = { 'storage', 'performance', 'time', 'retention', 'backups', 'other' },
+}
+Settings._screens = Play.screens
+
 -- Read when the mission files load: a change reloads the missions (as Admin UI → Missions → Reload does).
 local RELOAD = {
     'MissionTweaks',
@@ -1496,6 +1540,46 @@ local TWEAK = Record({
     weapons = ListOf(ITEM_NAME),
 })
 
+-- Admin UI -> Settings -> Presets (Config.AdminUi.presets): the shipped presets in the order they show (any other
+-- preset follows by name). A preset never sets the admins, the permissions, where data is saved, a money switch
+-- (ENABLE), a setting that posts to a webhook, a setting only config.lua may change, or the presets themselves.
+local Preset = {
+    order = { 'casual', 'serious', 'golive' },
+    never = { 'AdminAce', 'QboxAdmins', 'Permissions', 'Database', 'AdminUi.presets' },
+    max = 50,
+}
+
+-- nil when a preset may set this path, else why not (a locale key).
+function Preset.refusal(path)
+    for _, p in ipairs(Preset.never) do
+        if path == p or path:sub(1, #p + 1) == p .. '.' then return 'err.preset_path' end
+    end
+    local lower = path:lower()
+    if lower:find('webhook', 1, true) or lower:find('announce', 1, true) then return 'err.preset_path' end
+    local e = Settings.entry(path)
+    if not e then return 'err.setting_unknown' end
+    if e.locked then return 'err.preset_path' end
+    if e.money then return 'err.preset_path' end
+    return nil
+end
+Settings._presetRefusal = Preset.refusal
+
+-- Config.AdminUi.presets: every row names a setting a preset may set, once, with a value that setting accepts.
+function Preset.check(map)
+    for _, rows in pairs(map) do
+        local seen = {}
+        for _, r in ipairs(rows) do
+            if seen[r.path] then return 'err.setting_duplicate' end
+            seen[r.path] = true
+            local why = Preset.refusal(r.path)
+            if why then return why end
+            local ok = Settings.check(r.path, r.value, false)
+            if not ok then return 'err.preset_value' end
+        end
+    end
+    return nil
+end
+
 -- Explicit templates by path ('*' = any key). kind: what the screen edits it with.
 local KNOWN = {
     ['Tablet.item'] = { tpl = Alts(FALSE, ITEM_NAME), kind = 'optionalText' },
@@ -1608,6 +1692,15 @@ local KNOWN = {
         tpl = ListOf(Enum(HOME_SHORTCUTS), { max = 8, unique = true }),
         kind = 'list',
         options = HOME_SHORTCUTS,
+    },
+    -- Admin UI -> Settings -> Presets: { <preset> = { { path = 'Config path', value = ... } } }
+    ['AdminUi.presets'] = {
+        tpl = MapOf(ListOf(
+            Record({ path = Text('^[%w_%.]+$', 128), value = ANY }, { path = true, value = true }),
+            { max = Preset.max }
+        ), '^%a[%w_]*$'),
+        kind = 'json',
+        check = Preset.check,
     },
     ['AdminUi.reasonChips'] = {
         tpl = ListOf(Text('%S', 60), { max = 8, unique = true }),
@@ -3382,6 +3475,20 @@ function Settings.features()
     return out
 end
 
+-- The gear of each Admin UI screen: its section keys that config.lua and blocks.lua have.
+function Settings.screens()
+    local have, out = {}, {}
+    for _, sec in ipairs(Schema().sections) do have[sec.key] = true end
+    for screen, keys in pairs(Play.screens) do
+        local list = {}
+        for _, k in ipairs(keys) do
+            if have[k] then list[#list + 1] = k end
+        end
+        if #list > 0 then out[screen] = list end
+    end
+    return out
+end
+
 -- The everyday settings (COMMON) that config.lua has, in order.
 function Settings.commonPaths()
     local out = {}
@@ -3435,6 +3542,8 @@ function Settings.all()
     out.groups = Settings.plainGroups()
     out.common = Settings.commonPaths()
     out.features = Settings.features()
+    out.screens = Settings.screens()
+    out.presets = Settings.presets()
     out.safeMode = safeMode or nil
     out.added = Settings.addedDepartments()
     return out
@@ -3620,6 +3729,107 @@ function Settings.setMany(src, changes, opts)
     if #done > 0 then Changed(paths) end
     for _, c in ipairs(done) do AuditChange(src, c, opts) end
     return true, Reply(paths)
+end
+
+-- ============================================================================
+--                                   PRESETS
+-- ============================================================================
+-- Admin UI -> Settings -> Presets: a group of settings (Config.AdminUi.presets) set in one click, after a preview of
+-- every change. Each change is one ordinary setting save (checked, saved, audited, in the history) with the preset as
+-- its reason.
+
+function Preset.label(key, kind)
+    local lk = ('settings.preset.%s.%s'):format(kind, key)
+    if CP.Locale.has(lk) then return CP.L(lk) end
+    return kind == 'name' and Label(key) or ''
+end
+
+function Preset.rows(key)
+    local all = Effective('AdminUi.presets')
+    local rows = type(all) == 'table' and type(key) == 'string' and all[key] or nil
+    return type(rows) == 'table' and rows or nil
+end
+
+-- The presets in order: key, name, help and how many settings each one sets.
+function Settings.presets()
+    local all = Effective('AdminUi.presets')
+    if type(all) ~= 'table' then return {} end
+    local keys, seen = {}, {}
+    for _, k in ipairs(Preset.order) do
+        if type(all[k]) == 'table' then
+            keys[#keys + 1] = k
+            seen[k] = true
+        end
+    end
+    local rest = {}
+    for k, v in pairs(all) do
+        if type(k) == 'string' and type(v) == 'table' and not seen[k] then rest[#rest + 1] = k end
+    end
+    table.sort(rest)
+    for _, k in ipairs(rest) do keys[#keys + 1] = k end
+    local out = {}
+    for _, k in ipairs(keys) do
+        out[#out + 1] = { key = k, name = Preset.label(k, 'name'), help = Preset.label(k, 'help'), count = #all[k] }
+    end
+    return out
+end
+
+-- What a preset would change: { key, name, changes = { { path, label, from, to, fromSet } }, same, refused =
+-- { { path, error } } } | nil, errKey. A setting already at the preset's value is counted in same.
+function Preset.preview(key)
+    local rows = Preset.rows(key)
+    if not rows then return nil, 'err.preset_unknown' end
+    local out, cleans = { key = key, name = Preset.label(key, 'name'), changes = {}, same = 0, refused = {} }, {}
+    for _, r in ipairs(rows) do
+        local why = 'err.invalid_payload'
+        if type(r) == 'table' and type(r.path) == 'string' then why = Preset.refusal(r.path) end
+        local ok, clean
+        if not why then
+            ok, clean = Settings.check(r.path, r.value, false)
+            if not ok then why = clean end
+        end
+        if why then
+            out.refused[#out.refused + 1] = { path = type(r) == 'table' and tostring(r.path) or '?', error = why }
+        else
+            local now = Effective(r.path)
+            if Same(now, clean) then
+                out.same = out.same + 1
+            else
+                out.changes[#out.changes + 1] = {
+                    path = r.path,
+                    label = Settings.entry(r.path).label,
+                    from = Plain(now),
+                    fromSet = now ~= nil,
+                    to = Plain(clean),
+                }
+                cleans[#cleans + 1] = { path = r.path, value = clean }
+            end
+        end
+    end
+    return out, cleans
+end
+
+function Settings.presetPreview(key)
+    local view, err = Preset.preview(key)
+    return view, view == nil and err or nil
+end
+
+-- Sets every setting of the preset (admins only): refused whole when one row is refused. true, Reply + preset
+-- summary | false, errKey.
+function Settings.applyPreset(src, key)
+    local view, changes = Preset.preview(key)
+    if not view then return false, changes end
+    if #view.refused > 0 then return false, 'err.preset_invalid' end
+    if #view.changes == 0 then
+        local reply = Reply({})
+        reply.preset = { key = key, changed = 0 }
+        return true, reply
+    end
+    local ok, res = Settings.setMany(src, changes, { reason = CP.L('settings.preset_reason', { name = view.name }) })
+    if not ok then return false, res end
+    Audit(src, 'settingsPreset', key, nil, tostring(#changes), view.name)
+    res.preset = { key = key, changed = #changes }
+    return true, res
 end
 
 -- A bonus's kind and value are reset together (one without the other could leave a value its kind can't hold).
@@ -4244,6 +4454,21 @@ CP.Net.action('server:admin:setSettings', function(src, payload)
     local reason = type(p.reason) == 'string' and U.trim(p.reason):sub(1, 255) or nil
     return Settings.setMany(src, changes, { confirm = p.confirm, reason = reason ~= '' and reason or nil })
 end, { rate = 4 })
+
+-- Admin UI -> Settings -> Presets: what a preset would change, then the one-click save of all of it.
+CP.Net.callback('admin:previewPreset', function(src, args)
+    local ok, err = AdminOnly(src)
+    if not ok then return nil, err end
+    if not loaded then return nil, 'err.settings_not_ready' end
+    return Settings.presetPreview(Payload(args).preset)
+end, { rate = 4 })
+
+CP.Net.action('server:admin:applyPreset', function(src, payload)
+    local ok, err = AdminOnly(src)
+    if not ok then return false, err end
+    if not CP.Net.rateOk(src, 'settings:preset', 1, 5000) then return false, 'err.rate_limited' end
+    return Settings.applyPreset(src, Payload(payload).preset)
+end, { rate = 2 })
 
 CP.Net.action('server:admin:resetSetting', function(src, payload)
     local ok, err = AdminOnly(src)

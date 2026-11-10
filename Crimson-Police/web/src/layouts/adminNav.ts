@@ -74,6 +74,9 @@ export const ADMIN_JUMPS: AdminJump[] = [
     { screen: 'admin_review', params: { tab: 'profiles' }, label: 'admin.review.tab.profiles' },
     { screen: 'admin_review', params: { tab: 'disputes' }, label: 'admin.review.tab.disputes' },
     { screen: 'admin_review', params: { tab: 'corrections' }, label: 'admin.review.tab.corrections' },
+    { screen: 'admin_settings', params: { tab: 'presets' }, label: 'settings.tab.presets' },
+    { screen: 'admin_settings', params: { tab: 'features' }, label: 'settings.tab.features' },
+    { screen: 'admin_settings', params: { tab: 'history' }, label: 'settings.tab.history' },
     { screen: 'admin_system', params: { tab: 'storage' }, label: 'sysadmin.ui.tab.storage' },
     { screen: 'admin_system', params: { tab: 'backups' }, label: 'sysadmin.ui.tab.backups' },
     { screen: 'admin_system', params: { tab: 'webhooks' }, label: 'sysadmin.ui.tab.webhooks' },
@@ -194,6 +197,11 @@ export function isSearchKey(e: { key: string; ctrlKey?: boolean; metaKey?: boole
 }
 
 // The breadcrumb over a screen: Home > group > screen (none on Home itself).
+// A screen has a gear (its own settings) while the admin may open Settings; Settings itself has none.
+export function gearShown(key: ScreenKey | string, settingsShown: boolean): boolean {
+    return settingsShown && key !== 'admin_settings' && key.startsWith('admin_');
+}
+
 export function adminCrumbs(key: ScreenKey | string): { home: boolean; group?: AdminGroup } {
     if (key === 'admin_home') return { home: false };
     return { home: true, group: ADMIN_GROUP_OF[key] };

@@ -676,6 +676,21 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
   **Police teamwork** (units, cross-department operations, Mission controls, field training, points, goals,
   leaderboard, challenge, profile), then **Tablet and dispatch**, **Pay and rewards** and **Server**. A section with
   no everyday setting shows a button to its settings in All settings.
+- **The gear on every Admin UI screen** (the button at the top right, next to the breadcrumb) opens only that
+  screen's settings in a side panel: Money's gear shows cash, pay editing and both kinds of rewards, Map markers'
+  gear the map markers, Player suspects' gear the real suspects, live crimes, volunteers and the criminal tablet, and
+  so on. The rows, checks, ENABLE prompts, saves and audit are the same as here, and a search box looks through that
+  screen's settings. Every setting is under at least one gear, and **All settings** (the panel's button) still lists
+  every one.
+- The **Presets** tab sets a group of settings in one click. **Casual** (no route rule, NPC hints on, a case-failing
+  choice asks first), **Serious RP** (the route rule on, no hints, no warning, a reason for every pay change) and
+  **Go-live** (Debug lines, test teleports and the debug overlay off, a reason for every pay change). **Preview**
+  lists every change with its value now and after (settings already there are only counted); **Apply** saves them,
+  each one audited and in the History like a single setting, with "Preset: <name>" as the reason. Nothing changes
+  until you apply, and **Reset** on a setting still puts `config.lua`'s value back. A preset never sets the admins,
+  the permissions, where data is saved, a money switch (ENABLE), a setting that posts to a webhook or one only
+  `config.lua` may change. Change the presets, or add your own, in `Config.AdminUi.presets` (a list of
+  `{ path = 'Debug', value = false }` per preset; `{}` = no presets).
 - The **Features** tab lists every feature you can turn on or off, by the same sections: each with its name, its
   `Config.` switch, On or Off, and a **Settings** link that shows that setting in All settings. The switch there saves
   the same setting as the list (audited, Reset puts `config.lua`'s value back) and works at once. Risky ones (safe
@@ -828,7 +843,7 @@ from an older `config.lua` (Crimson-Police ignores it).
 | `Config.Tablet.supervisorReviewLive` | a decided flagged run or dispute leaves every other open Review Queue at once | Supervisor UI → Department → Review |
 
 **Kept as settings**, because a city may want them differently: `Config.AdminUi.reasonChips` (your own reason
-buttons), `Config.AdminUi.homeShortcuts` (Home's shortcuts and their order), `Config.Tablet.sidebarOrder`, `activeFirst`, `compactSidebar`, `supervisorCompact` and `supervisorLanding`
+buttons), `Config.AdminUi.homeShortcuts` (Home's shortcuts and their order), `Config.AdminUi.presets` (the Settings presets), `Config.Tablet.sidebarOrder`, `activeFirst`, `compactSidebar`, `supervisorCompact` and `supervisorLanding`
 (how each city likes its sidebars), and the tuning numbers `Config.AdminUi.pageSize` and `Config.Performance.loopScale`,
 `pushGapMs`, `latentAboveBytes` and `markerRange` (each shipped as before).
 

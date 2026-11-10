@@ -5,7 +5,7 @@
 // screens by job (People, Missions, Real players, Money, Review, System), the rare tools under More, one search box
 // (Ctrl+K) that jumps to any screen or tab, officer, mission or setting, and a breadcrumb (layouts/adminNav.ts).
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Icon, IconButton, LayerRootContext, MaintenanceBanner, SearchInput } from '../shared/components';
 import { useDebounced, useRequest, useViewport } from '../shared/hooks';
 import { t } from '../shared/i18n';
@@ -21,6 +21,7 @@ import {
     FOUND_KINDS,
     SETTINGS_SEARCH,
     adminCrumbs,
+    gearShown,
     adminFoldOf,
     adminGroupOf,
     adminTitleKey,
@@ -30,6 +31,8 @@ import {
 } from './adminNav';
 import { moneySearchWords } from './adminMoney';
 import { navBadge, useNavCounts } from './navBadges';
+// the gear's drawer (only this screen's settings), loaded on the first click
+const ScreenSettings = lazy(() => import('../admin/components/ScreenSettings'));
 import { NotificationBell } from './NotificationBell';
 import { ScreenHost } from './ScreenHost';
 import { screensFor } from './screens';
@@ -139,6 +142,9 @@ export function AdminLayout() {
         return () => window.removeEventListener('keydown', onKey);
     }, []);
     const crumbs = adminCrumbs(screen);
+    // every screen but Settings itself has a gear while the admin may open Settings
+    const gear = gearShown(screen, has('admin_settings'));
+    const [gearOpen, setGearOpen] = useState<string | null>(null);
     const homeShown = screens.some(s => s.key === 'admin_home');
     const root = useRef<HTMLDivElement>(null);
     const [layer, setLayer] = useState<HTMLDivElement | null>(null);
@@ -203,30 +209,56 @@ export function AdminLayout() {
                 />
                 <main className="cp-main cp-main--admin">
                     <MaintenanceBanner admin />
-                    {crumbs.home ? (
-                        <nav className="cp-admin__crumbs" aria-label={t('ui.nav.breadcrumb')}>
-                            {homeShown ? (
-                                <>
-                                    <button type="button" onClick={() => navigate('admin_home')}>
-                                        {t('ui.nav.plain.admin_home')}
-                                    </button>
-                                    <Icon name="chevronRight" size={12} />
-                                </>
+                    {crumbs.home || gear ? (
+                        <div className="cp-admin__bar">
+                            {crumbs.home ? (
+                                <nav className="cp-admin__crumbs" aria-label={t('ui.nav.breadcrumb')}>
+                                    {homeShown ? (
+                                        <>
+                                            <button type="button" onClick={() => navigate('admin_home')}>
+                                                {t('ui.nav.plain.admin_home')}
+                                            </button>
+                                            <Icon name="chevronRight" size={12} />
+                                        </>
+                                    ) : null}
+                                    {crumbs.group ? (
+                                        <>
+                                            <span>{groupLabel(crumbs.group)}</span>
+                                            <Icon name="chevronRight" size={12} />
+                                        </>
+                                    ) : null}
+                                    <span aria-current="page">{t(adminTitleKey(screen))}</span>
+                                </nav>
+                            ) : (
+                                <span />
+                            )}
+                            {gear ? (
+                                <IconButton
+                                    icon="sliders"
+                                    size="sm"
+                                    variant="secondary"
+                                    label={t('settings.gear.open', { screen: t(adminTitleKey(screen)) })}
+                                    onClick={() => setGearOpen(screen)}
+                                />
                             ) : null}
-                            {crumbs.group ? (
-                                <>
-                                    <span>{groupLabel(crumbs.group)}</span>
-                                    <Icon name="chevronRight" size={12} />
-                                </>
-                            ) : null}
-                            <span aria-current="page">{t(adminTitleKey(screen))}</span>
-                        </nav>
+                        </div>
                     ) : null}
                     <LayerRootContext.Provider value={layer}>
                         <ScreenHost screens={screens} />
                     </LayerRootContext.Provider>
                 </main>
             </div>
+            {gearOpen ? (
+                <LayerRootContext.Provider value={layer}>
+                    <Suspense fallback={null}>
+                        <ScreenSettings
+                            screen={gearOpen}
+                            title={t(adminTitleKey(gearOpen))}
+                            onClose={() => setGearOpen(null)}
+                        />
+                    </Suspense>
+                </LayerRootContext.Provider>
+            ) : null}
             <div ref={setLayer} className="cp-layer-root" />
         </div>
     );

@@ -1917,6 +1917,11 @@ Server:
   built-in editing, the test overlay, the resets).
 - Simple view (A8): `admin/screens/Settings.tsx` opens in Simple until the admin picks All settings with the Simple /
   All settings switch.
+- Gear and presets (UI6): `Play.screens` maps each Admin UI screen key to its sections (`Settings.screens()`,
+  `SettingsData.screens`); `layouts/AdminLayout.tsx` shows the gear over every screen but Settings and lazy-loads
+  `admin/components/ScreenSettings.tsx` (the same `SettingRow` and `useSettingSave`). `Preset` holds the presets'
+  order, the paths no preset may set (`Preset.refusal`) and the check of `Config.AdminUi.presets`; `Settings.presets()`,
+  `Settings.presetPreview(key)` and `Settings.applyPreset(src, key)`; web `admin/components/SettingsPresets.tsx`.
 - Net: callbacks `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`: the audit rows of the actions
   above); actions `server:admin:setSetting` (`{ path, value? | json?, none? }`), `server:admin:resetSetting` (`{ path
   }`), `server:admin:resetAllSettings`, `server:admin:setMissionEnabled` (`{ missionId, enabled }`),
@@ -3155,6 +3160,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:admin:setSetting` / `resetSetting` / `resetAllSettings` | `{ path, value? \| json?, none? }` / `{ path }` / — → SettingsReply | openAdmin | settings |
 | `server:admin:setMissionEnabled` / `setLocationEnabled` / `resetMissionSwitches` | `{ missionId, enabled }` / `{ missionId, index, enabled }` / `{ missionId }` → MissionSwitchView | openAdmin | settings |
 | `server:admin:setSettings` | `{ changes = { { path, value? \| json?, none? } }, confirm?, reason? }` → SettingsReply (several settings as one save) | openAdmin | settings |
+| `server:admin:applyPreset` | `{ preset }` → SettingsReply + `preset { key, changed }` (Config.AdminUi.presets through setMany, reason "Preset: <name>", one `settingsPreset` audit line; refused whole when a row is refused; 1 per 5 s) | openAdmin | settings |
 
 `server:admin:setSetting` also takes `confirm` (`ENABLE` for a money switch) and `reason`.
 
@@ -3352,6 +3358,7 @@ Every name below is admin-only (supervisors never pass) and audited; `reason` is
 | `server:admin:deleteBackup` | `{ name, reason, confirm }` | storageAdmin | R, T the backup name, never the newest or latest pre-restore |
 | `admin:getWebhooks` | — → `{ webhooks: WebhookView[] }` | openAdmin | read only, no link |
 | `admin:getProblems` | `{ tag?, level? }` → ProblemsData | openAdmin | |
+| `admin:previewPreset` | `{ preset }` → PresetPreview (`web/src/types/settings.ts`): `changes { path, label, from, fromSet, to }`, `same`, `refused { path, error }` | openAdmin | Admin UI → Settings → Presets (modules/settings) |
 | `admin:getHome` | — → AdminHomeData (`web/src/types/admin_system.ts`): `live { onDuty, departments, runs? }`, `queues { flagged, profiles, disputes, payments, rsCases? }`, `alerts { problems, refusedToday, health?, load? }`, `shortcuts` | openAdmin | Admin UI → Home (modules/adminhome); `runs` only with `liveRuns`, `rsCases` only with the Player suspects screen; Config health read at most every 30 s; `shortcuts` = Config.AdminUi.homeShortcuts (known keys, each once) |
 | `admin:getRefusals` | — → `{ refusals: { at, citizenid?, name?, missionId?, missionLabel?, type?, reason }[], total, today }` | openAdmin | `today`: the kept ones on the server's day (CP.Schedule.dayStart); shown on Live → Refused and Home → Alerts; memory only (CP.Refusals, shared/init.lua): the last `AdminControl.refusalsKept` refused mission starts, newest first; kept by the Mission Board accept (CP.Draw.accept) and by CP.Runs.create for Operations and Testing |
 | `admin:getIntegrations` | — → IntegrationsData | openAdmin | |

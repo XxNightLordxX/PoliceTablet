@@ -674,7 +674,7 @@ old layout switches and where each one lives now.
 
 | Group | Screen | What it is for |
 |---|---|---|
-| | **Home** | Where the panel opens: a dashboard of **Live now** (officers on duty, runs going, the queues waiting: review, disputes, stuck payments), **Alerts** (problems, refused starts, Config health) and your **Shortcuts** (`Config.AdminUi.homeShortcuts`: new mission, missions on or off, change pay, give or take points, quick settings) |
+| | **Home** | A dashboard: **Live now** (officers on duty, runs going, the queues waiting), **Alerts** (problems, refused starts, Config health) and your **Shortcuts** (`Config.AdminUi.homeShortcuts`: new mission, missions on or off, change pay, give or take points, quick settings) |
 | People | **Officers** | Search officers: history, suspensions, disputes about failed runs, commendations and the officer tools |
 | | **Departments** | Each department's jobs, colours, logo, desks, members and (with society payouts) account balance |
 | | **Permissions** | What supervisors may do, the extra grants, the Mission controls and the config health check |
@@ -686,7 +686,7 @@ old layout switches and where each one lives now.
 | Money | **Money** | Pay rates, feature rewards, every payment made or owed (with the payment tools) and the department funds |
 | Review | **Review** | Flagged runs (approve or void), profiles waiting (pictures, bios, reports, banned words), open disputes and corrections (with Undo) |
 | | **Activity log** | Every supervisor and admin action, with filters and a CSV export |
-| System | **Settings** | Every setting of `config.lua` and `blocks.lua`, changed in game with its description, a Features tab and a change history |
+| System | **Settings** | Every setting with its description; Presets (Casual, Serious RP, Go-live: a preview, then one click), Features, History. The gear over each screen opens only its settings |
 | | **Server health** | Storage, backups, webhook states, recent problems, the other resources and the nightly clean-up |
 
 ---

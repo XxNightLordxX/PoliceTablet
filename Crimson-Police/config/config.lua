@@ -165,6 +165,34 @@ Config.AdminUi = {
     -- missions on or off), 'pay' (Change pay), 'points' (Give or take points), 'settings' (Quick settings), 'live'
     -- (Running now), 'review' (Review) and 'activity' (Activity log); {} = no shortcuts
     homeShortcuts = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings' },
+    -- The presets on Admin UI -> Settings -> Presets: each sets a group of settings in one click, after a preview of
+    -- every change and a confirm (each change is saved and audited like a single setting, with the preset as the
+    -- reason). Each preset is a list of { path = 'Config path of the setting', value = its new value }. A preset never
+    -- sets the admins, the permissions, where data is saved, a money switch (ENABLE), a setting that posts to a
+    -- webhook or one only config.lua may change. Nothing changes until an admin applies one; {} = no presets
+    presets = {
+        -- Casual: easier, friendlier play (no route rule, hints on, the case-failing choice asks first)
+        casual = {
+            { path = 'Route.required', value = false },
+            { path = 'Npc.tellHints', value = true },
+            { path = 'Decisions.confirmKnownErrors', value = true },
+            { path = 'Decisions.debrief', value = true },
+        },
+        -- Serious RP: the route rule on, no hints, no "this will fail the case" question, a reason for pay changes
+        serious = {
+            { path = 'Route.required', value = true },
+            { path = 'Npc.tellHints', value = false },
+            { path = 'Decisions.confirmKnownErrors', value = false },
+            { path = 'Payouts.requireReason', value = true },
+        },
+        -- Go-live: ready for players (debug lines, test teleports and the debug overlay off, a reason for pay changes)
+        golive = {
+            { path = 'Debug', value = false },
+            { path = 'Testing.allowTeleport', value = false },
+            { path = 'Testing.debugOverlay', value = false },
+            { path = 'Payouts.requireReason', value = true },
+        },
+    },
 }
 
 -- ============================================================================

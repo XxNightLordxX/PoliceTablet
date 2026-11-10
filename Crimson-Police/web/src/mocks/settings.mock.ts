@@ -3,6 +3,7 @@
 import { registerMock } from '../shared/nui';
 import type {
     MissionSwitchView,
+    PresetPreview,
     SettingsData,
     SettingsHistory,
     SettingsHistoryRow,
@@ -362,6 +363,33 @@ const data: SettingsData = {
         },
         { key: 'live_cash', play: 'pvp', path: 'LiveCrime.cash' },
     ],
+    // the gear of each screen (modules/settings Play.screens); a section the data does not have is left out
+    screens: {
+        admin_home: ['general', 'tablet_and_commands'],
+        admin_markers: ['map_markers'],
+        admin_rs: ['live_crimes'],
+        admin_money: ['limits_and_cash', 'feature_rewards', 'gone_section'],
+        admin_departments: ['departments'],
+    },
+    // Settings -> Presets (Config.AdminUi.presets)
+    presets: [
+        { key: 'casual', name: 'Casual', help: 'Easier, friendlier play.', count: 2 },
+        { key: 'golive', name: 'Go-live', help: 'Ready for players.', count: 2 },
+        { key: 'broken', name: 'Broken', help: '', count: 1 },
+    ],
+};
+
+// the preset rows (the server checks each one; 'broken' names a setting a preset may not set)
+const PRESET_ROWS: Record<string, { path: string; value: unknown }[]> = {
+    casual: [
+        { path: 'Markers.route', value: false },
+        { path: 'Limits.maxUnitSize', value: 8 },
+    ],
+    golive: [
+        { path: 'Debug', value: false },
+        { path: 'Tablet.title', value: 'Crimson-Police' },
+    ],
+    broken: [{ path: 'LiveCrime.cash', value: true }],
 };
 
 const history: SettingsHistoryRow[] = [
@@ -395,6 +423,44 @@ function reply(list: SettingView[]): SettingsReply {
 }
 
 registerMock('request', 'admin:getSettings', (): SettingsData => data);
+
+function presetPreview(key: string): PresetPreview {
+    const rows = PRESET_ROWS[key];
+    if (!rows) throw new Error('err.preset_unknown');
+    const out: PresetPreview = {
+        key,
+        name: data.presets?.find(p => p.key === key)?.name ?? key,
+        changes: [],
+        same: 0,
+        refused: [],
+    };
+    for (const r of rows) {
+        const x = find(r.path);
+        if (!x || x.money || r.path === 'LiveCrime.cash') out.refused.push({ path: r.path, error: 'err.preset_path' });
+        else if (JSON.stringify(x.value) === JSON.stringify(r.value)) out.same += 1;
+        else out.changes.push({ path: r.path, label: x.label, from: x.value, fromSet: x.isSet, to: r.value });
+    }
+    return out;
+}
+
+registerMock('request', 'admin:previewPreset', (a: unknown) =>
+    presetPreview(((a ?? {}) as { preset?: string }).preset ?? ''),
+);
+
+registerMock('action', 'server:admin:applyPreset', (p: unknown): SettingsReply => {
+    const view = presetPreview(((p ?? {}) as { preset?: string }).preset ?? '');
+    if (view.refused.length) throw new Error('err.preset_invalid');
+    const out: SettingView[] = [];
+    for (const c of view.changes) {
+        const x = find(c.path);
+        if (!x) continue;
+        x.value = c.to;
+        x.isSet = true;
+        x.changed = JSON.stringify(x.value) !== JSON.stringify(x.default);
+        out.push(x);
+    }
+    return { ...reply(out), preset: { key: view.key, changed: out.length } };
+});
 
 // Settings -> a setting that reloads the missions: the missions the new value would break (Missions.trial). The
 // unit size limit below a mission's minimum unit breaks it; any other value breaks none.

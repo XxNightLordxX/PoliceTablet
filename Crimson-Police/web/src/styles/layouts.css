@@ -636,12 +636,19 @@
     padding: 0 4px 10px;
 }
 
+.cp-admin__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 34px 0;
+}
+
 .cp-admin__crumbs {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    padding: 12px 34px 0;
     font-size: var(--cp-fs-xs);
     color: var(--cp-subtle);
 }
