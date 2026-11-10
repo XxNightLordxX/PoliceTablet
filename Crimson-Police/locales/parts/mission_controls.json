@@ -89,7 +89,6 @@
   "sup.notice.cooldowns_cleared": "A supervisor cleared one of your mission cooldowns.",
   "sup.notice.time_added": "A supervisor added {minutes} minutes to your mission timer.",
   "sup.cd.button": "Clear cooldown",
-  "sup.cd.title": "{name} · cooldowns",
   "sup.cd.text": "Clear one mission or mission type cooldown. The officer is told and it is in the audit log.",
   "sup.cd.none": "No cooldowns right now.",
   "sup.cd.types": "Mission types",
@@ -157,8 +156,6 @@
   "sup.notice.mission_ban_lifted": "Your mission ban was lifted.",
   "sup.ban.button": "Mission ban",
   "sup.ban.badge": "Mission ban",
-  "sup.ban.title": "{name} · mission ban",
-  "sup.ban.lift_title": "{name} · lift mission ban",
   "sup.ban.text": "No Mission Board accepts, mission call claims or Cross-Department joins until it ends. The officer is told and it is in the audit log.",
   "sup.ban.state": "Mission ban until {time} (by {by})",
   "sup.ban.hours": "Hours ({min}-{max})",
@@ -282,7 +279,6 @@
   "mc.control_desc.awardPoints": "Supervisors give a few points at a time to an officer of their own department (never themselves or another character of theirs), with a reason, from Department Report. It is the same logged manual award as the Admin UI's Give or take points and shows in the officer's history like one. A daily total per supervisor.",
   "mc.unit.awardPoints": "{n} pts",
   "sup.award.button": "Give points",
-  "sup.award.title": "{name} · give points",
   "sup.award.text": "A logged manual award: the officer is told, it shows in their history and it is in the audit log. Only an admin can undo it.",
   "sup.award.points": "Points ({min}-{max})",
   "sup.award.mine_used": "You: {used} of {n} points given today",
@@ -307,7 +303,7 @@
   "sup.mine.used": "{used} of {n} used",
   "sup.mine.no_count": "No daily count",
   "sup.mine.actions_title": "Used from their own buttons",
-  "sup.mine.actions_subtitle": "The admin's limits and today's use of the controls you use from their own dialogs.",
+  "sup.mine.actions_subtitle": "The admin's limits and today's use of the controls you use from an officer's panel or their own buttons.",
   "sup.notices.post_title": "Post a notice",
   "sup.notices.running": "Running now ({n})"
 }

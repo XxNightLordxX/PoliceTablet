@@ -414,7 +414,9 @@ Grades start at 0.
   warns when the number is higher than every grade (nobody is a supervisor) or the lowest grade (everybody is).
 - A department with several jobs (`jobs = { 'sast', 'sasp' }`) uses one `supervisorGrade` for all of them.
 
-The Supervisor UI layout switches, the Department screen and every supervisor permission are in [guide
+A supervisor's **Department** screen opens with *Today at a glance* (on duty, runs going, waiting for review, his
+controls used today); clicking an officer opens one side panel with his week and every action the supervisor may take
+on him. The Supervisor UI layout switches, the Department screen and every supervisor permission are in [guide
 1](docs/OWNER_GUIDE.md#1-supervisors-in-detail).
 
 ### 4.4 Things only admins can do

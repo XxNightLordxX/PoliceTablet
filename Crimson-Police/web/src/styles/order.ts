@@ -37,6 +37,7 @@ import '../supervisor/screens/Payouts.css';
 import '../builder/Builder.css';
 import '../admin/components/kit/kit.css';
 import '../supervisor/screens/DeptReport.css';
+import '../supervisor/screens/Department.css';
 import '../admin/components/ReasonChips.css';
 import '../supervisor/screens/MissionControls.css';
 import '../admin/components/RewardPoolEditor.css';

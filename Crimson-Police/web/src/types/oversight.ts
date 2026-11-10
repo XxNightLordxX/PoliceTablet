@@ -522,6 +522,14 @@ export interface MyControl {
 export interface MyControlsView {
     controls: MyControl[];
 }
+// sup:getToday (UI4): Department's today at a glance. onDuty = the department's officers on duty, running = its runs
+// going (as Live Missions lists them), controls = the viewer's Mission controls with a day count: how many, today's
+// uses and the day counts summed.
+export interface SupToday {
+    onDuty: number;
+    running: number;
+    controls: { counted: number; used: number; perDay: number };
+}
 export interface MissionControlsDepartment {
     key: string;
     label: string;

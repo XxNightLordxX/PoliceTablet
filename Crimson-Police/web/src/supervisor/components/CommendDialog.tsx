@@ -1,20 +1,25 @@
 // Commend an officer: a kind, a citation (10–255 characters) and optionally the run it is for. Supervisors use
 // server:sup:commend (own department, never themselves or their own run, 3 a day), admins server:admin:commend.
 
+// Commend an officer: a kind, a citation (10–255 characters) and optionally the run it is for. Supervisors use
+// server:sup:commend (own department, never themselves or their own run, 3 a day), admins server:admin:commend.
+// CommendForm is the form itself (the Supervisor UI shows it in the officer's side panel, UI4); CommendDialog holds it
+// in a dialog (the Admin UI's officer record).
+
 import { useEffect, useState } from 'react';
 import { Button, Dialog, Field, Select, Textarea } from '../../shared/components';
 import { useAction } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import { commendationKindLabel } from '../../officer/components/CommendationsCard';
+import { FormButtons } from './OfficerActions';
 
-export interface CommendDialogProps {
-    open: boolean;
-    onClose: () => void;
-    officer: { citizenid: string; name: string } | null;
+export interface CommendFormProps {
+    officer: { citizenid: string; name: string };
     scope: 'sup' | 'admin';
     // runs the officer took part in that the commendation may be for (optional)
     runs?: { runUuid: string; label: string }[];
+    onCancel: () => void;
     // reply: the action's reply (with activity = true it carries the officer's fresh activity)
     onDone?: (reply: unknown) => void;
     activity?: boolean;
@@ -23,7 +28,7 @@ export interface CommendDialogProps {
 const CITATION_MIN = 10;
 const CITATION_MAX = 255;
 
-export function CommendDialog({ open, onClose, officer, scope, runs, onDone, activity }: CommendDialogProps) {
+export function CommendForm({ officer, scope, runs, onCancel, onDone, activity }: CommendFormProps) {
     const session = useSession();
     const kinds = Array.isArray(session.config?.commendationKinds) ? session.config.commendationKinds : [];
     const [kind, setKind] = useState<string>(kinds[0] ?? '');
@@ -32,17 +37,16 @@ export function CommendDialog({ open, onClose, officer, scope, runs, onDone, act
     const { run, busy } = useAction();
 
     useEffect(() => {
-        if (!open) return;
         setKind(kinds[0] ?? '');
         setCitation('');
         setRunUuid('');
-    }, [open, officer?.citizenid]);
+    }, [officer.citizenid]);
 
     const len = [...citation.trim()].length;
-    const valid = !!officer && kind !== '' && len >= CITATION_MIN && len <= CITATION_MAX;
+    const valid = kind !== '' && len >= CITATION_MIN && len <= CITATION_MAX;
 
     async function send() {
-        if (!officer || !valid) return;
+        if (!valid) return;
         const res = await run(
             scope === 'admin' ? 'server:admin:commend' : 'server:sup:commend',
             {
@@ -56,27 +60,12 @@ export function CommendDialog({ open, onClose, officer, scope, runs, onDone, act
         );
         if (!res.ok) return;
         onDone?.(res.data);
-        onClose();
+        onCancel();
     }
 
     return (
-        <Dialog
-            open={open}
-            onClose={onClose}
-            title={t('profile.commend.dialog_title', { name: officer?.name ?? '' })}
-            description={t('profile.commend.dialog_text')}
-            size="sm"
-            footer={
-                <>
-                    <Button variant="ghost" onClick={onClose}>
-                        {t('common.cancel')}
-                    </Button>
-                    <Button variant="primary" icon="medal" loading={busy} disabled={!valid} onClick={() => void send()}>
-                        {t('profile.commend.give')}
-                    </Button>
-                </>
-            }
-        >
+        <>
+            <p className="sup-cd-note">{t('profile.commend.dialog_text')}</p>
             <Field label={t('profile.commend.kind')}>
                 <Select
                     value={kind}
@@ -99,6 +88,42 @@ export function CommendDialog({ open, onClose, officer, scope, runs, onDone, act
                         options={runs.map(r => ({ value: r.runUuid, label: r.label }))}
                     />
                 </Field>
+            ) : null}
+            <FormButtons onCancel={onCancel}>
+                <Button
+                    variant="primary"
+                    size="sm"
+                    icon="medal"
+                    loading={busy}
+                    disabled={!valid}
+                    onClick={() => void send()}
+                >
+                    {t('profile.commend.give')}
+                </Button>
+            </FormButtons>
+        </>
+    );
+}
+
+export interface CommendDialogProps {
+    open: boolean;
+    onClose: () => void;
+    officer: { citizenid: string; name: string } | null;
+    scope: 'sup' | 'admin';
+    runs?: { runUuid: string; label: string }[];
+    onDone?: (reply: unknown) => void;
+}
+
+export function CommendDialog({ open, onClose, officer, scope, runs, onDone }: CommendDialogProps) {
+    return (
+        <Dialog
+            open={open && !!officer}
+            onClose={onClose}
+            title={t('profile.commend.dialog_title', { name: officer?.name ?? '' })}
+            size="sm"
+        >
+            {officer ? (
+                <CommendForm officer={officer} scope={scope} runs={runs} onCancel={onClose} onDone={onDone} />
             ) : null}
         </Dialog>
     );

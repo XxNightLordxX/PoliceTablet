@@ -102,11 +102,16 @@ Only the layout changes: every screen keeps its permission, and a screen a super
 heading with nothing under it is not shown). Each control keeps showing its admin limits where it is used (for
 example Give points shows the min to max points and today's use), and risky actions still ask first.
 
-**One Department screen.** Everything a supervisor does for his department sits on **Supervisor UI -> Department**,
-in five tabs: **Officers** (the Department Report: each officer's week, and from an officer **Give points**,
-**Mission ban**, **Commend** and **Clear cooldown**), **Controls** (Mission controls: each control shows the admin's
-limits and today's use on its own row, for example *Admin limits: 1 to 50* and *Today: 40 of 100 used*, and the
-controls used from their own dialogs, such as Give points and Mission ban, are listed in one card with the same),
+**One Department screen.** Everything a supervisor does for his department sits on **Supervisor UI -> Department**.
+On top, **Today at a glance**: officers on duty, runs going, waiting for review and *Your controls used today*
+(for example *43 / 103*); each number opens the tab (or Live Missions) where he acts on it, and it turns amber when
+something waits or a day count is spent. Below it five tabs: **Officers** (the Department Report: each officer's
+week; clicking an officer opens one side panel with his runs, his commendations and every action the supervisor may
+take on him, **Give points**, **Mission ban** (or Lift), **Clear cooldown**, **Commend** and **Field training**, each
+form opening right in the panel with the same limits, reasons, permission checks and audit rows as before),
+**Controls** (Mission controls: each control shows the admin's limits and today's use on its own row, for example
+*Admin limits: 1 to 50* and *Today: 40 of 100 used*, and the controls used from their own buttons, such as Give
+points and Mission ban, are listed in one card with the same),
 **Review** (the Review Queue), **Calls & notices** (the mission calls panel and the department notices) and
 **Training** (field training). A tab shows only when the supervisor may use what is on it, with the same permission
 as before, and the Review Queue count sits on Department. The old screens Department Report, Mission controls and

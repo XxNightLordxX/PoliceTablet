@@ -274,5 +274,14 @@
   "ui.help.admin_settings": "Search a setting, change it and it saves at once; the few marked so apply after a restart.",
   "ui.help.admin_system": "Pick a tab: data and backups, webhooks, recent problems or the other resources.",
   "ui.help.admin_audit": "Filter the log and copy the rows you see as CSV.",
-  "ui.help.admin_testing": "Pick a mission, a location and a tier, then start a test run; nothing is saved or paid."
+  "ui.help.admin_testing": "Pick a mission, a location and a tier, then start a test run; nothing is saved or paid.",
+  "sup.today.title": "Today at a glance",
+  "sup.today.onDuty": "On duty",
+  "sup.today.running": "Runs going",
+  "sup.today.review": "Waiting for review",
+  "sup.today.controls": "Your controls used today",
+  "sup.panel.actions": "Actions",
+  "sup.panel.no_actions": "There is nothing you may do for this officer from here.",
+  "sup.panel.runs": "This week's runs",
+  "sup.panel.no_rookies": "No officer of this department is waiting for a trainer."
 }

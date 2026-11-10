@@ -1,7 +1,7 @@
-// Supervisor UI · Department → Controls · Used from their own dialogs (MG3): each action control this supervisor may
+// Supervisor UI · Department → Controls · Used from their own buttons (MG3): each action control this supervisor may
 // use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
 
-// Supervisor UI · Department → Controls · Used from their own dialogs (MG3): each action control this supervisor may
+// Supervisor UI · Department → Controls · Used from their own buttons (MG3): each action control this supervisor may
 // use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
 // Read only: the rows come from sup:getMyControls (CP.DeptControls.mine, live on push 'missionControls'), read once
 // by MissionControls.tsx, which also shows the same limits and today's use inline on each value control's row.

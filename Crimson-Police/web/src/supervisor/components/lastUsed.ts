@@ -1,8 +1,8 @@
-// Supervisor dialogs open with the values last used: the values of the last successful Give points (points,
+// Supervisor action forms open with the values last used: the values of the last successful Give points (points,
 // reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason), kept in the page's memory only
 // (until Crimson-Police restarts or the player reconnects), so a second award or ban in a row needs no typing.
 
-// Supervisor dialogs open with the values last used: the values of the last successful Give points (points,
+// Supervisor action forms open with the values last used: the values of the last successful Give points (points,
 // reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason), kept in the page's memory only
 // (until Crimson-Police restarts or the player reconnects), so a second award or ban in a row needs no typing.
 // startNumber() keeps a number inside the control's current min..max, else the minimum. The server checks every value

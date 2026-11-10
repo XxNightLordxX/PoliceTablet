@@ -16,6 +16,7 @@ import type {
     MissionControlState,
     MissionControlsView,
     MyControlsView,
+    SupToday,
     MissionListEntry,
     OfficerDetail,
     OfficerSearchData,
@@ -1719,6 +1720,13 @@ registerMock('request', 'admin:exportAudit', (f: AuditFilters): AuditExport => {
 // ============================================================================
 // DEPARTMENT REPORT, ?supControlsCard.
 // A value control left as configured, one changed, and two actions with a day count (one used up).
+
+// DEPARTMENT, today at a glance (UI4): 6 on duty, 2 runs going, 43 of 103 control uses today.
+registerMock('request', 'sup:getToday', (): SupToday => ({
+    onDuty: EMPTY ? 0 : 6,
+    running: EMPTY ? 0 : 2,
+    controls: EMPTY ? { counted: 0, used: 0, perDay: 0 } : { counted: 2, used: 43, perDay: 103 },
+}));
 
 registerMock('request', 'sup:getMyControls', (): MyControlsView => ({
     controls: EMPTY

@@ -2,9 +2,11 @@
 
 // sup:getOfficerActivity). The department's challenge standing, this week's bounty, and every officer
 // of the department who played this week (runs, completed, points, cash, last run); tapping an officer
-// opens their runs of this week. Supervisors only see their own department (the server enforces it).
+// opens his side panel (UI4): his runs of this week, his commendations and every action the viewer may take on him
+// (Give points, Mission ban, Clear cooldown, Commend, Field training), each with its form in the panel. Supervisors
+// only see their own department (the server enforces it).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Badge,
     Button,
@@ -24,6 +26,7 @@ import {
     Table,
     Textarea,
     Field,
+    type IconName,
     type TableColumn,
 } from '../../shared/components';
 import { cx } from '../../shared/cx';
@@ -44,10 +47,10 @@ import { formatDay } from '../../officer/screens/Leaderboard';
 import { ResultCell, missionTypeLabel } from '../../officer/screens/Profile';
 import { CommendationsCard } from '../../officer/components/CommendationsCard';
 import type { Commendation } from '../../types/profile';
-import { ClearCooldownDialog } from '../components/ClearCooldownDialog';
-import { MissionBanDialog } from '../components/MissionBanDialog';
-import { AwardPointsDialog } from '../components/AwardPointsDialog';
-import { CommendDialog } from '../components/CommendDialog';
+import type { FtoDept } from '../../types/fieldTraining';
+import { AwardPointsForm, ClearCooldownForm, FieldTrainingForm, MissionBanForm } from '../components/OfficerActions';
+import { CommendForm } from '../components/CommendDialog';
+import { ftoRoleOf, officerActions, type OfficerAction } from '../components/officerPanel';
 import './DeptReport.css';
 
 // Best dispositions as a share of all of them ("–" without decisions).
@@ -57,13 +60,20 @@ function judgementText(o: ReportOfficer): string {
     return `${Math.round(((o.decisionsBest ?? 0) * 1000) / total) / 10}%`;
 }
 
-function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; onClose: () => void }) {
+const ACTION_ICON: Record<OfficerAction, IconName> = {
+    points: 'medal',
+    ban: 'lock',
+    cooldown: 'clock',
+    commend: 'medal',
+    fto: 'idCard',
+};
+
+// The officer's side panel (UI4): his week (runs, commendations, a ban in force) and every action the viewer may take
+// on him, each opening its form right here under the action buttons (one at a time).
+function OfficerPanel({ officer, onClose }: { officer: ReportOfficer | null; onClose: () => void }) {
     const session = useSession();
     const can = useCan();
-    const [commending, setCommending] = useState(false);
-    const [clearing, setClearing] = useState(false);
-    const [banning, setBanning] = useState(false);
-    const [awarding, setAwarding] = useState(false);
+    const [action, setAction] = useState<OfficerAction | null>(null);
     const [revoking, setRevoking] = useState<Commendation | null>(null);
     const [revokeReason, setRevokeReason] = useState('');
     const { run: act, busy } = useAction();
@@ -72,12 +82,27 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
         { citizenid: officer?.citizenid },
         { skip: !officer },
     );
+    const fto = useRequest<FtoDept | false>('sup:getFieldTraining', {}, { skip: !officer });
+    useEffect(() => setAction(null), [officer?.citizenid]);
     const current = data && data.officer?.citizenid === officer?.citizenid ? data : null;
     const runs = asList(current?.runs);
     const commendations = asList(current?.commendations);
+    const ftoDept = fto.data ? fto.data : null;
+    const ftoRole = ftoRoleOf(ftoDept, officer?.citizenid);
+    const actions = officerActions({
+        activity: current,
+        canCommend: can('issueCommendation'),
+        self: officer?.citizenid === session.officer?.citizenid,
+        fto: ftoRole,
+    });
+    const shown = action && actions.includes(action) ? action : null;
     // an action's reply carries the officer's fresh activity (an older server: ask for it)
     const applyReply = (reply: unknown) =>
         applyReplyView<OfficerActivity>(reply, 'activity', setData, () => void refetch());
+    const done = (reply: unknown) => {
+        setAction(null);
+        applyReply(reply);
+    };
 
     // Revoke: only the issuer's own commendations (the server checks it too), with a reason.
     async function revoke() {
@@ -148,11 +173,75 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
             render: r => <Money amount={r.cash} />,
         },
     ];
+    const who = officer ? { citizenid: officer.citizenid, name: officer.name } : null;
+    const actionLabel = (k: OfficerAction) =>
+        k === 'points'
+            ? t('sup.award.button')
+            : k === 'ban'
+              ? t(current?.missionBanState ? 'sup.ban.lift' : 'sup.ban.button')
+              : k === 'cooldown'
+                ? t('sup.cd.button')
+                : k === 'commend'
+                  ? t('profile.commend.give')
+                  : t('fto.title');
+
+    let form = null;
+    if (who && shown === 'points' && current?.awardPoints) {
+        form = (
+            <AwardPointsForm
+                officer={who}
+                control={current.awardPoints}
+                onCancel={() => setAction(null)}
+                onDone={done}
+            />
+        );
+    } else if (who && shown === 'ban' && current?.missionBan) {
+        form = (
+            <MissionBanForm
+                officer={who}
+                control={current.missionBan}
+                state={current.missionBanState ?? null}
+                onCancel={() => setAction(null)}
+                onDone={done}
+            />
+        );
+    } else if (who && shown === 'cooldown') {
+        form = <ClearCooldownForm officer={who} onCancel={() => setAction(null)} />;
+    } else if (who && shown === 'commend') {
+        form = (
+            <CommendForm
+                officer={who}
+                scope="sup"
+                activity
+                onCancel={() => setAction(null)}
+                onDone={applyReply}
+                runs={runs
+                    .filter(r => !!r.runUuid && r.state === 'completed')
+                    .map(r => ({
+                        runUuid: r.runUuid as string,
+                        label: `${r.missionLabel} · ${formatDateTime(r.createdAt)}`,
+                    }))}
+            />
+        );
+    } else if (who && shown === 'fto' && ftoDept && ftoRole) {
+        form = (
+            <FieldTrainingForm
+                officer={who}
+                fto={ftoDept}
+                role={ftoRole}
+                onCancel={() => setAction(null)}
+                onDone={() => void fto.refetch()}
+            />
+        );
+    }
+
     return (
         <Dialog
             open={!!officer}
             onClose={onClose}
             size="lg"
+            placement="right"
+            className="sup-panel"
             title={officer ? t('sup.report.activity_title', { name: officer.name }) : ''}
             description={
                 officer
@@ -166,31 +255,9 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                     : undefined
             }
             footer={
-                <>
-                    {officer && current?.missionBan && (!current.missionBanState || current.missionBan.canLift) ? (
-                        <Button variant="secondary" icon="lock" onClick={() => setBanning(true)}>
-                            {t(current.missionBanState ? 'sup.ban.lift' : 'sup.ban.button')}
-                        </Button>
-                    ) : null}
-                    {officer && current?.awardPoints ? (
-                        <Button variant="secondary" icon="medal" onClick={() => setAwarding(true)}>
-                            {t('sup.award.button')}
-                        </Button>
-                    ) : null}
-                    {officer && current?.cooldownClear ? (
-                        <Button variant="secondary" icon="clock" onClick={() => setClearing(true)}>
-                            {t('sup.cd.button')}
-                        </Button>
-                    ) : null}
-                    {officer && can('issueCommendation') && officer.citizenid !== session.officer?.citizenid ? (
-                        <Button variant="secondary" icon="medal" onClick={() => setCommending(true)}>
-                            {t('profile.commend.give')}
-                        </Button>
-                    ) : null}
-                    <Button variant="primary" onClick={onClose}>
-                        {t('common.close')}
-                    </Button>
-                </>
+                <Button variant="primary" onClick={onClose}>
+                    {t('common.close')}
+                </Button>
             }
         >
             {current?.missionBanState ? (
@@ -202,39 +269,27 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                     {current.missionBanState.reason ? ` · ${current.missionBanState.reason}` : ''}
                 </p>
             ) : null}
-            <MissionBanDialog
-                officer={banning && officer ? { citizenid: officer.citizenid, name: officer.name } : null}
-                control={current?.missionBan ?? null}
-                state={current?.missionBanState ?? null}
-                onClose={() => setBanning(false)}
-                activity
-                onDone={applyReply}
-            />
-            <AwardPointsDialog
-                officer={awarding && officer ? { citizenid: officer.citizenid, name: officer.name } : null}
-                control={current?.awardPoints ?? null}
-                onClose={() => setAwarding(false)}
-                activity
-                onDone={applyReply}
-            />
-            <ClearCooldownDialog
-                officer={clearing && officer ? { citizenid: officer.citizenid, name: officer.name } : null}
-                onClose={() => setClearing(false)}
-            />
-            <CommendDialog
-                open={commending}
-                onClose={() => setCommending(false)}
-                officer={officer ? { citizenid: officer.citizenid, name: officer.name } : null}
-                scope="sup"
-                activity
-                onDone={applyReply}
-                runs={runs
-                    .filter(r => !!r.runUuid && r.state === 'completed')
-                    .map(r => ({
-                        runUuid: r.runUuid as string,
-                        label: `${r.missionLabel} · ${formatDateTime(r.createdAt)}`,
-                    }))}
-            />
+            <Card title={t('sup.panel.actions')} icon="tool" padding="sm" className="sup-panel__card">
+                {actions.length === 0 ? (
+                    <p className="sup-cd-note">{t(current ? 'sup.panel.no_actions' : 'common.loading')}</p>
+                ) : (
+                    <div className="sup-panel__actions" role="group" aria-label={t('sup.panel.actions')}>
+                        {actions.map(k => (
+                            <Button
+                                key={k}
+                                size="sm"
+                                variant={shown === k ? 'primary' : 'secondary'}
+                                icon={ACTION_ICON[k]}
+                                aria-pressed={shown === k}
+                                onClick={() => setAction(shown === k ? null : k)}
+                            >
+                                {actionLabel(k)}
+                            </Button>
+                        ))}
+                    </div>
+                )}
+                {form ? <div className="sup-panel__form">{form}</div> : null}
+            </Card>
             <Dialog
                 open={!!revoking}
                 onClose={() => setRevoking(null)}
@@ -273,6 +328,7 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
                     canRevoke={c => c.mine === true}
                 />
             ) : null}
+            <h4 className="cp-section-title">{t('sup.panel.runs')}</h4>
             {error && !current ? (
                 <ErrorState compact error={error} onRetry={() => void refetch()} />
             ) : (
@@ -615,7 +671,7 @@ function FullDeptReport() {
                 <span>{t('sup.report.note')}</span>
             </Row>
 
-            <ActivityDialog officer={open} onClose={() => setOpen(null)} />
+            <OfficerPanel officer={open} onClose={() => setOpen(null)} />
         </Screen>
     );
 }

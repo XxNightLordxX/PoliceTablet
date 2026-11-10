@@ -116,6 +116,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/storage/memsql.lua`: CP.Storage.MemSQL: the SQL engine and the saves folder behind "database off" (Config.Database.enabled = false). fxmanifest loads it before every other server module; it only defines functions. modules/storage/server.lua decides whether it is used.
 - `Crimson-Police/modules/storage/server.lua`: CP.Storage: where Crimson-Police keeps its data (Config.Database).
 - `Crimson-Police/modules/supawards/server.lua`: CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
+- `Crimson-Police/modules/suptoday/server.lua`: CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday, UI4).
 - `Crimson-Police/modules/sysadmin/server.lua`: CP.Sysadmin (server): Admin UI → System (storage, backups, webhooks, problems, integrations), Departments (add, turn off, delete, logos, desks), Settings positions and Officers → Support (check access, tablet item, stuck screen).
 - `Crimson-Police/modules/tablet/client.lua`: CP.Tablet (client): the NUI.
 - `Crimson-Police/modules/tablet/server.lua`: CP.Tablet (server): sessions for the three UIs, toasts, live pushes, the Admin UI opener and the department logo checks.
@@ -373,18 +374,17 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/shared/toast.ts`: The Crimson-Police toast bus.
 - `Crimson-Police/web/src/shared/types.ts`: Every NUI data shape (docs/dev/ARCHITECTURE.md §9.2–§9.6, verbatim) plus the UI-side helper types.
 - `Crimson-Police/web/src/styles/order.ts`: Every stylesheet of the NUI, in one fixed order, loaded with the page.
-- `Crimson-Police/web/src/supervisor/components/AwardPointsDialog.tsx`: Supervisor UI · Department Report · Give points (Config.MissionControls.controls.awardPoints): a logged manual award of the admin's min to max points to an officer of the viewer's own department, with a reason.
-- `Crimson-Police/web/src/supervisor/components/ClearCooldownDialog.tsx`: Supervisor UI · Department Report · Clear cooldown (Config.MissionControls.controls.clearCooldown): the officer's current type and mission cooldowns (sup:getOfficerCooldowns), each with Clear; a reason is required.
 - `Crimson-Police/web/src/supervisor/components/CommendDialog.tsx`: Commend an officer: a kind, a citation (10–255 characters) and optionally the run it is for.
 - `Crimson-Police/web/src/supervisor/components/DeptNoticesCard.tsx`: Supervisor UI · Department → Calls & notices · Department notices (the notices Mission control): post a short notice
 - `Crimson-Police/web/src/supervisor/components/FieldTrainingPanel.tsx`: Supervisor UI · Department · Training (Config.FieldTraining): every pairing of the department
-- `Crimson-Police/web/src/supervisor/components/MissionBanDialog.tsx`: Supervisor UI · Department Report · Mission ban (Config.MissionControls.controls.missionBan): bar one officer from taking missions for a number of hours (the admin's min to max), with a reason; or lift the ban the viewer set.
 - `Crimson-Police/web/src/supervisor/components/MissionCallsPanel.tsx`: Mission calls for staff: the Supervisor UI's Department → Calls & notices panel and the Admin UI's Missions tab (withdraw, page a unit, create a call, today's calls), plus the Admin area coverage matrix and location plays.
-- `Crimson-Police/web/src/supervisor/components/MyControlsCard.tsx`: Supervisor UI · Department → Controls · Used from their own dialogs (MG3): each action control this supervisor may use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
+- `Crimson-Police/web/src/supervisor/components/MyControlsCard.tsx`: Supervisor UI · Department → Controls · Used from their own buttons (MG3): each action control this supervisor may use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
+- `Crimson-Police/web/src/supervisor/components/OfficerActions.tsx`: Supervisor UI · Department → Officers: the action forms of the officer's side panel (UI4).
 - `Crimson-Police/web/src/supervisor/components/OperationPanel.tsx`: Supervisor/Admin UI · OperationPanel: the active Cross-Department Mission and its controls.
 - `Crimson-Police/web/src/supervisor/components/ProfilesReview.tsx`: Review Queue → Profiles: pending pictures and bios of the department and the profile reports.
-- `Crimson-Police/web/src/supervisor/components/lastUsed.ts`: Supervisor dialogs open with the values last used: the values of the last successful Give points (points, reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason), kept in the page's memory only (until Crimson-Police restarts or the player reconnects), so a second award or ban in a row needs no typing.
+- `Crimson-Police/web/src/supervisor/components/lastUsed.ts`: Supervisor action forms open with the values last used: the values of the last successful Give points (points, reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason), kept in the page's memory only (until Crimson-Police restarts or the player reconnects), so a second award or ban in a row needs no typing.
 - `Crimson-Police/web/src/supervisor/components/myControls.ts`: Department → Controls, inline use (MG3; the 'Your controls today' card before): one row per Mission control the supervisor may use now, with its current value, the admin's limits and today's use.
+- `Crimson-Police/web/src/supervisor/components/officerPanel.ts`: Supervisor UI · Department → Officers: which actions the officer's side panel offers (UI4).
 - `Crimson-Police/web/src/supervisor/screens/Builder.tsx`: Supervisor UI · Mission Builder (screen key 'sup_builder', title key 'ui.screen.sup_builder').
 - `Crimson-Police/web/src/supervisor/screens/CrossDept.tsx`: Supervisor UI · Cross-Department Mission (screen key 'sup_crossdept', title key 'ui.screen.sup_crossdept').
 - `Crimson-Police/web/src/supervisor/screens/Department.tsx`: Supervisor UI · Department (screen key 'sup_department'): Officers (supervisor/screens/DeptReport), Controls
@@ -594,6 +594,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/storage_spec.lua`: Database off (Config.Database.enabled = false) from end to end: the saves folder holds every feature's data, survives a restart, and stays fast and small at 50,000 runs.
 - `tests/sup_actions_spec.lua`: Supervisor officer actions: Clear cooldown (one officer's mission or type cooldown, from Department Report) and "+ minutes" on a live run (Live Missions), both Mission controls of kind 'action'.
 - `tests/sup_award_points_spec.lua`: A supervisor gives points (the awardPoints Mission control, owner decision 2026-10-19): only through the admin's point-adjust path (CP.Corrections.adjust), inside the admin's min and max and awardPointsPerDay, to an officer of his own department, never to a character of his own license, with a reason, audited as 'supervisor'.
+- `tests/sup_today_spec.lua`: Supervisor UI -> Department, today at a glance (UI4): the sup:getToday answer and its permission.
 - `tests/teams_spec.lua`: Modules/units and modules/operations (slice teams).
 - `tests/testing_spec.lua`: The testing slice: CP.Testing server (invites, start gates, controls, debug geometry, the run-end hook, recording results, the catalog view) and client (panel focus, HUD flag, teleport arena re-check, debug data).
 - `tests/twists_spec.lua`: Twists the officers choose at accept: CP.Twists and CP.Events' fit, offer, check and roll.

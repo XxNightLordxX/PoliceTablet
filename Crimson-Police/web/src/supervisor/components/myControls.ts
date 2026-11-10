@@ -46,7 +46,7 @@ export function myControlRows(list: MyControl[] | null | undefined): MyControlRo
         .map(x => x.r);
 }
 
-// The controls used from their own dialogs (Give points, Mission ban, notices ...): no row on Controls of their own,
+// The controls used from their own buttons (Give points, Mission ban, notices ...): no row on Controls of their own,
 // so their limits and today's use are listed in one card.
 export function actionControlRows(rows: MyControlRow[]): MyControlRow[] {
     return rows.filter(r => r.action);
