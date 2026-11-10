@@ -946,7 +946,7 @@ end
 -- ============================================================================
 
 do
-    -- a participant's /imp on a run vehicle: the objective fails, the run is flagged sc_impound
+    -- a participant's /imp on a run vehicle: the objective fails, the run is flagged police_impound
     local run = HoldRun({ 1, 2 })
     local car = Contact(run, { kind = 'vehicle', role = 'parked', truth = 'stolen' })
     W.near(1, run, car.netId, 4.0)
@@ -956,7 +956,7 @@ do
     W.tick(3)
     H.eq(run.state, 'ended', 'a participant\'s /imp ends the run')
     H.eq(run.failReason, 'reason.vehicle_removed', 'as Mission vehicle removed')
-    H.eq(W.flags[1] and W.flags[1].reason, 'sc_impound', 'flagged sc_impound')
+    H.eq(W.flags[1] and W.flags[1].reason, 'police_impound', 'flagged police_impound')
     H.eq(W.flags[1] and W.flags[1].src, 1, 'with the officer')
     H.eq(#(run.decisions or {}), 0, 'never an Impound disposition')
     H.eq(car.decided, nil, 'the car has no decision')

@@ -31,6 +31,7 @@
 --   calls.reclassified). Listeners run in their own threads and the mark yields twice (the mdt_dispatch
 --   lookup, then the row write in removeParticipant): an un-mark that arrives during either wait is kept and
 --   applied once the free abandon is written, so a quick on/off toggle cannot keep it free.
+--   A 'moved' un-mark (the dispatch script moved the unit to another call, ps-dispatch) only removes the entry.
 -- callClearedByOfficer removes that call for everyone; playerDropped removes the player's entries; a character
 -- unload (CP.Qbx.onPlayerUnload: a character switch keeps the server id) removes the responding entries and
 -- drops a mark still being looked up, but keeps the dodge-rule data (seen, free abandons), which expires on its
@@ -290,7 +291,9 @@ local function OnUnmarked(src, raw, now)
     Dodge(src, fa, now)
 end
 
-local function OnResponding(src, callId, isResponding)
+-- moved: the dispatch script took the unit off this call because it attached to another one (ps-dispatch does
+-- that); the entry goes, but it is no un-mark for the dodge rule (sc-dispatch never sends it).
+local function OnResponding(src, callId, isResponding, moved)
     local now = os.time()                           -- the listener thread starts when the event arrives
     src = CP.U.toSrc(src)
     if not src then return end
@@ -298,6 +301,10 @@ local function OnResponding(src, callId, isResponding)
     if raw == '' or IsNpc(raw) then return end
     if isResponding then
         OnMarked(src, callId, raw, now)
+    elseif moved == true then
+        local al = aliases[src]
+        RemoveEntry(src, (al and al[raw]) or raw)
+        if al then al[raw] = nil end
     else
         OnUnmarked(src, raw, now)
     end
@@ -478,7 +485,7 @@ CreateThread(function()
         CP.Qbx.onPlayerUnload(OnUnload)
     end -- integrations/qbx loads later
     if not CP.Dispatch then
-        CP.err(TAG, 'modules/system/integrations/sc_dispatch is missing: real calls cannot end runs')
+        CP.err(TAG, 'modules/system/integrations/integrations is missing: real calls cannot end runs')
         return
     end
     CP.Dispatch.onResponding(OnResponding)

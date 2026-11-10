@@ -359,7 +359,8 @@ do
     }
     H.fire('police:server:Impound', 1, 'CPXXXXXX', true, 0, 1000.0, 1000.0, 100, 55)
     H.eq(#noted, 1, 'police:server:Impound on a run vehicle is still recorded')
-    H.ok(noted[1] and noted[1][1] == 55 and noted[1][2] == 1 and noted[1][3] == 'sc_impound', 'with netId, sender, why')
+    H.ok(noted[1] and noted[1][1] == 55 and noted[1][2] == 1 and noted[1][3] == 'police_impound',
+        'with netId, sender, why')
     H.fire('police:server:Impound', 1, 'X', false, 0, 1000.0, 1000.0, 100, 56)
     H.eq(#noted, 1, 'not a run vehicle: ignored')
     CP.Runs = nil

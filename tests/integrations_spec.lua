@@ -193,6 +193,21 @@ do
     H.fire('ps-dispatch:server:clearCall', 3, 9)
     H.step(300)
     H.eq(cleared[1], 9, 'a clear once ps-dispatch removed the call')
+    -- SALE2: ps-dispatch keeps a unit on one call: an attach to another takes it off the old one with no detach event
+    local moves = {}
+    D.onResponding(function(src, id, on, moved)
+        moves[#moves + 1] = ('%d:%s:%s:%s'):format(src, tostring(id), tostring(on), tostring(moved))
+    end)
+    H.fire('ps-dispatch:server:attach', 7, 4, { citizenid = 'C7' })
+    H.step(0)
+    H.fire('ps-dispatch:server:attach', 7, 12, { citizenid = 'C7' })
+    H.step(0)
+    H.fire('ps-dispatch:server:detach', 7, 12, { citizenid = 'C7' })
+    H.step(0)
+    H.fire('ps-dispatch:server:attach', 7, 4, { citizenid = 'C7' })
+    H.step(0)
+    H.eq(table.concat(moves, ' '), '7:4:true:nil 7:4:false:true 7:12:true:nil 7:12:false:nil 7:4:true:nil',
+        'SALE2: the old call goes out as a moved un-mark, once; after a detach nothing is moved')
 end
 
 -- ============================================================================
@@ -267,6 +282,27 @@ do
     City(OWNER)
     out = lines.integrations()
     H.eq(out[2].text, CP.L('integrations.on.ambulance', { name = 'sc-ambulance' }), 'which script serves')
+    -- SALE2: a script with no adapter says so (not "start sc-dispatch"); a named script that is not running warns
+    Set('dispatch', 'cd_dispatch')
+    out = lines.integrations()
+    H.eq(out[1].text, CP.L('integrations.no_adapter', { kind = 'dispatch', setting = 'cd_dispatch' }),
+        'SALE2: no adapter for the named script')
+    H.ok(out[1].level == 'warn' and out[1].fix == 'Integrations.dispatch', 'SALE2: a warning that names the setting')
+    Set('dispatch', 'ps-dispatch')
+    out = lines.integrations()
+    H.ok(
+        out[1].level == 'warn'
+            and out[1].text == CP.L('integrations.not_started', { kind = 'dispatch', name = 'ps-dispatch' }),
+        'SALE2: a named script that is not started warns'
+    )
+    Set('dispatch', 'auto')
+    out = lines.integrations()
+    H.eq(out[1].level, 'ok', 'the owner\'s running sc-dispatch: no warning')
+    -- SALE2: CP.Banking.available() follows the banking setting, not Renewed-Banking alone
+    H.eq(B.available(), true, 'SALE2: Renewed-Banking serves and runs')
+    Set('banking', 'none')
+    H.eq(B.available(), false, 'SALE2: banking none: no banking script even while Renewed-Banking runs')
+    Set('banking', 'auto')
 end
 
 return H

@@ -15,7 +15,7 @@ to it that registers itself; nothing else in Crimson-Police names those scripts.
 |---|---|---|---|
 | dispatch | `CP.Dispatch` | `sc_dispatch.lua`, `ps_dispatch.lua` | `available()`, `isSuspended(cid, job)`, `lookupActiveCall(id)`, `clearNotification(uid, jobs)`, `realCallSummary()`, `mdtCommendations(cid)`; events go out with `CP.Dispatch._emit(kind, ...)` |
 | ambulance | `CP.Ambulance` | `sc_ambulance.lua`, `qbx_ambulancejob.lua` | `doctorCount()`, `revive(src)` (the id, the connection and Crimson-Arena are checked first), `emsRequest` (the name `modules/system/client/ambulance.lua` sends a request for); respawns go out with `CP.Ambulance._respawned(resource, src, index)` |
-| banking | `CP.Banking` | `renewed_banking.lua` | `recordDeposit`, `recordWithdraw`, `recordSocietyDeposit`, `recordSocietyWithdraw`, `withdrawSociety`, `depositSociety`, `societyBalance`, `findTxn` |
+| banking | `CP.Banking` | `renewed_banking.lua` | `available()`, `recordDeposit`, `recordWithdraw`, `recordSocietyDeposit`, `recordSocietyWithdraw`, `withdrawSociety`, `depositSociety`, `societyBalance`, `findTxn` |
 | police | `CP.Police` | `sc_police.lua`, `qbx_policejob.lua` | `CP.Police.addFacts(resource, { { event, kind, read } })` with kinds `cuff`, `uncuff`, `cuffBreak`, `escort`, `jail`, `bobbyPin`, `seizeCash`, `impound` |
 
 Rules for a new adapter (a city's own dispatch, ambulance, banking or police script):
@@ -66,8 +66,9 @@ function D.lookupActiveCall(callId)
     return nil
 end
 
--- Events: pass them on with Dispatch._emit, only while this script serves dispatch. 'responding' (src, callId, on),
--- 'cleared' (callId), 'restart' (), 'shots' / 'down' / 'dead' (src, { coords, street, zone, sex }, os.time()).
+-- Events: pass them on with Dispatch._emit, only while this script serves dispatch. 'responding' (src, callId, on,
+-- moved = true when your script itself took the unit off this call), 'cleared' (callId), 'restart' (), 'shots' /
+-- 'down' / 'dead' (src, { coords, street, zone, sex }, os.time()).
 RegisterNetEvent('my-dispatch:server:respond', function(callId, on)   -- your script's own event
     local src = source
     if not Serving() or not CP.Net.rateOk(src, 'my_dispatch:respond', 6, 1000) then return end
@@ -84,7 +85,8 @@ What the other supported scripts have (checked in their server files):
   client events `ps-dispatch:server:attach (id, PlayerData)`, `:detach (id, PlayerData)` and `:clearCall (id)`. It
   has no suspensions, no MDT and no clear another resource may call, and its shots-fired and person-down alerts come
   through `ps-dispatch:server:notify` in a shape Crimson-Police does not read. A clear counts once the call is gone
-  from the list (`ps_dispatch.lua` looks 250 ms later).
+  from the list (`ps_dispatch.lua` looks 250 ms later). An attach takes the unit off its other call without a
+  detach event: `ps_dispatch.lua` sends that as a 'moved' un-mark (the entry goes, no dodge rule).
 - **qbx_ambulancejob** (with qbx_medical): doctors = `exports.qbx_core:GetDutyCountType('ems')` (what its
   `getNumDoctors` returns), revive = `exports.qbx_medical:Revive(src)`, the EMS request is the client event
   `hospital:server:ambulanceAlert` (no text = its own "civilian down"), and a respawn is the server-local
@@ -2616,7 +2618,7 @@ RegisterNetEvent('QBCore:Client:SetDuty', function(duty)
 
 - **Spec claim:** A second, read-only handler for police:server:Impound closes the /imp exploit on mission vehicles
 - **Evidence:** server/vehicle.lua:313-329 (the handler: `IsVehicleOwned(plate)` then `UPDATE player_vehicles SET state = ...` by plate, then `TriggerClientEvent('police:client:DeleteVehicle', -1, netId)`); server/commands.lua:496-515 (`/depot` and `/imp` check job type leo and duty, then `police:client:ImpoundVehicle`); client/interactions.lua:92-110 (the target is `QBCore.Functions.GetClosestVehicle(coords)`, no distance limit), :130 and :146 (the 5 s progress bar, then `TriggerServerEvent('police:server:Impound', plate, fullImpound, price or 0, body, engine, fuel, netId)`)
-- **Implication:** the net event checks neither the sender's job nor the distance, and any client can send it; it deletes the car on every client and, when the plate is in player_vehicles, changes that player's vehicle row. Crimson-Police registers a second handler (net events call every handler) in modules/system/integrations/sc_police: it only reads the 7th argument (netId), and when that is a vehicle of a live run it records the sender, the netId and the sender's server-side distance with `CP.Runs.noteExternalRemoval(netId, src, 'sc_impound', dist)`. It never triggers, cancels or answers any police:* event. The engine then decides when the car vanishes: a participant's removal fails the objective and flags the run `sc_impound` (never an Impound disposition); anyone else's, or a vanish with nothing recorded, ends the run as `vehicle_removed_external` (not counted, no cooldown) and audits the sender. Mission plates are kept out of player_vehicles (qbx_core section), so the handler's UPDATE never reaches a player's car.
+- **Implication:** the net event checks neither the sender's job nor the distance, and any client can send it; it deletes the car on every client and, when the plate is in player_vehicles, changes that player's vehicle row. Crimson-Police registers a second handler (net events call every handler) in modules/system/integrations/sc_police: it only reads the 7th argument (netId), and when that is a vehicle of a live run it records the sender, the netId and the sender's server-side distance with `CP.Runs.noteExternalRemoval(netId, src, 'police_impound', dist)`. It never triggers, cancels or answers any police:* event. The engine then decides when the car vanishes: a participant's removal fails the objective and flags the run `police_impound` (never an Impound disposition); anyone else's, or a vanish with nothing recorded, ends the run as `vehicle_removed_external` (not counted, no cooldown) and audits the sender. Mission plates are kept out of player_vehicles (qbx_core section), so the handler's UPDATE never reaches a player's car.
 
 ```lua
 RegisterNetEvent('police:server:Impound', function(plate, fullImpound, price, body, engine, fuel, netId)

@@ -1268,7 +1268,10 @@ right, so you only need to check them if you changed them. Which of these script
   off with it (impounds of mission cars are still seen). They need sc-police.
 - **qbx_management** keeps no money, so a Qbox city without Renewed-Banking uses `banking = 'none'`.
 - Another script (cd_dispatch, wasabi_ambulance and the like) needs a small adapter file a developer writes from
-  that script's source: docs/dev/INTEGRATIONS.md, "Adding an adapter".
+  that script's source: docs/dev/INTEGRATIONS.md, "Adding an adapter". Until then Config health says there is no
+  adapter for the name you set. It also warns when the chosen script is not started.
+- **ps-dispatch** moves a unit to the call it last marked Responding on: Crimson-Police drops the old call too, and
+  the move does not count as a dodge.
 
 | Resource | Setting (in its `config.lua`) | Should be | Why |
 |---|---|---|---|

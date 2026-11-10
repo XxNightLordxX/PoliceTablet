@@ -760,7 +760,7 @@ Service vehicles (transport van, tow truck, coroner van)
 Impound
 
 - Crimson-Police's Impound is the only lawful impound: a flatbed tow truck with an NPC driver loads the car (Config.Custody.tow.enabled = false: the car fades out). It counts as impounded, never as wrecked or lost.
-- sc-police's /imp and /depot are never triggered by Crimson-Police and must not be used on mission cars. A police:server:Impound on a run vehicle sent by a participant counts as removed (objective fails "Mission vehicle removed", run flagged sc_impound with his name); sent by anyone else, or a car vanishing unrecorded, ends the run not counted (vehicle_removed_external: no points, cash, cooldown or abandon penalty) and the sender goes to the audit log and admin webhook. A pursuit never counts a removed car as stopped or awards vehicle_stopped_fast for it.
+- sc-police's /imp and /depot are never triggered by Crimson-Police and must not be used on mission cars. A police:server:Impound on a run vehicle sent by a participant counts as removed (objective fails "Mission vehicle removed", run flagged police_impound with his name); sent by anyone else, or a car vanishing unrecorded, ends the run not counted (vehicle_removed_external: no points, cash, cooldown or abandon penalty) and the sender goes to the audit log and admin webhook. A pursuit never counts a removed car as stopped or awards vehicle_stopped_fast for it.
 - Every mission plate uses the reserved pattern (Config.Custody.plates), rerolled when player_vehicles has it, so sc-police's plate UPDATE can never reach a player's car.
 
 Process the scene (coroner)
@@ -1389,7 +1389,7 @@ No client message can award points or cash directly: the server re-checks every 
 | Farming arrests and stats | One arrest per person; wrongful arrests never count; stats, goals, bounties and badges count completed rows only; one scoring event per act |
 | Staff steering calls to themselves | Page refused for the issuer's own unit; the issuer's unit can't claim a paged or created call; no rapid response on staff calls; audited |
 | Picking the mission through a narrow area | A call names an area to a viewer only when their eligible pool there has 2+ missions and 3+ locations; otherwise it draws as the board does |
-| Using sc-police /imp to skip a chase | A read-only listener: a participant's /imp on a run vehicle fails the objective and flags the run (sc_impound), and is never a lawful disposition; a removed car never counts as stopped |
+| Using sc-police /imp to skip a chase | A read-only listener: a participant's /imp on a run vehicle fails the objective and flags the run (police_impound), and is never a lawful disposition; a removed car never counts as stopped |
 | Griefing a run with /imp from outside | A removal by a non-participant or with no record ends the run as not counted (no points, cash, cooldown or penalty) and audits the sender; nobody on the team is blamed |
 | /imp reaching a player's car through a matching plate | Mission plates use the reserved pattern and are rerolled when player_vehicles has them |
 | Leader putting members on a run they didn't want | Ready check; decline or timeout costs nothing |

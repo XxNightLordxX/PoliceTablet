@@ -717,3 +717,9 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   on: the console has one line, Config health warns, and Settings -> Features says why live crimes are off. Put both
   back to `auto`. On a test server with ps-dispatch, qbx_ambulancejob and qbx_policejob instead: Responding on a
   ps-dispatch call releases the officer from his run, EMS counts the `ems` job, and a pick-up revives. (SALE1)
+- [ ] Other scripts, part 2 (SALE2): in config.lua set `Config.Integrations.dispatch = 'cd_dispatch'` and restart:
+  Config health says Crimson-Police has no adapter for it (not "start sc-dispatch"). Name `ps-dispatch` while it is
+  not running: Config health warns that it is not started. Put it back to `'auto'`. With Settings -> Cash source
+  `society` and `Integrations.banking = 'none'`, a department's society account can be changed (no "account does not
+  exist"). On the ps-dispatch test server: Responding on one call, then on another, leaves the officer on the second
+  only, and his run stays a free abandon. (SALE2)

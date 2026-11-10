@@ -711,7 +711,7 @@ and holds the front doors below (INTEGRATIONS.md "Adding an adapter").
 
 **CP.Police** — adapters sc_police, qbx_policejob (S)
 - `has(kind)`, `addFacts(resource, facts)`. A read-only `police:server:Impound` handler: a live run's vehicle →
-  `CP.Runs.noteExternalRemoval(netId, src, 'sc_impound', dist)`.
+  `CP.Runs.noteExternalRemoval(netId, src, 'police_impound', dist)`.
 - `on(kind, fn) -> bool` (real suspects), listen-only handlers for `CuffPlayer` → `'cuff'` (officerSrc, targetSrc,
   isSoftcuff), `UncuffPlayer` → `'uncuff'`, `CuffBreakAlert` → `'cuffBreak'` (suspectSrc, officerSrc), `EscortPlayer`
   → `'escort'`, `JailPlayer` → `'jail'` (jailTime raw, the listener clamps), `BobbyPinResult` → `'bobbyPin'`

@@ -1262,15 +1262,15 @@ do
     local run = StartedRun({ 1, 2 })
     local h, car = Runs.spawnVehicle(run, { obj = 1, model = 'sultan', coords = vec4(110, 100, 30, 0), role = 'car' })
     H.advance(1100)   -- one server sample while it exists
-    Runs.noteExternalRemoval(car, 1, 'sc_impound', 4.0)
+    Runs.noteExternalRemoval(car, 1, 'police_impound', 4.0)
     Ent(h).exists = false
     H.advance(2500)
     H.eq(#CallsOf('onEntityDead'), 0, 'a removed car is never counted as wrecked or stopped')
     local removed = CallsOf('onEvent', 1)
     H.eq(removed[1] and removed[1].ev.type, 'removed', 'the block gets { type = removed }')
     H.eq(removed[1] and removed[1].ev.src, 1, 'with the sender')
-    H.eq(removed[1] and removed[1].ev.via, 'sc_impound', 'and how')
-    H.eq(Logged('flag')[1] and Logged('flag')[1].reason, 'sc_impound', 'the run is flagged sc_impound')
+    H.eq(removed[1] and removed[1].ev.via, 'police_impound', 'and how')
+    H.eq(Logged('flag')[1] and Logged('flag')[1].reason, 'police_impound', 'the run is flagged police_impound')
     H.eq(run.state, 'ended', 'the run ends')
     H.eq(run.failReason, 'reason.vehicle_removed', 'the objective fails: vehicle removed')
     H.eq(run.stats.vehiclesWrecked, nil, 'never a wreck')
@@ -1282,7 +1282,7 @@ do
     local run = StartedRun({ 1, 2 }, { id = 'fnd_removed', cooldown = 900 })
     local h, car = Runs.spawnVehicle(run, { obj = 1, model = 'sultan', coords = vec4(110, 100, 30, 0), role = 'car' })
     H.advance(1100)
-    Runs.noteExternalRemoval(car, 3, 'sc_impound', 12.0)
+    Runs.noteExternalRemoval(car, 3, 'police_impound', 12.0)
     local audits = {}
     CP.Admin = {
         audit = function(actor, _, _, action, ...) audits[#audits + 1] = { actor = actor, action = action } end,
@@ -1341,12 +1341,12 @@ do
     Ent(h):set({ velocity = vec3(20.0, 0.0, 0.0) })
     H.advance(3000)
     H.ok(Ent(h).coords.x > 150, 'the car is fleeing (H.entity moves it)')
-    Runs.noteExternalRemoval(car, 1, 'sc_impound', 30.0)
+    Runs.noteExternalRemoval(car, 1, 'police_impound', 30.0)
     Ent(h).exists = false
     H.advance(2500)
     H.eq(#CallsOf('onEntityDead'), 0, 'the chase never counts the car as stopped')
     H.eq(run.failReason, 'reason.vehicle_removed', 'the objective fails')
-    H.eq(Logged('flag')[1] and Logged('flag')[1].reason, 'sc_impound', 'flagged for review')
+    H.eq(Logged('flag')[1] and Logged('flag')[1].reason, 'police_impound', 'flagged for review')
 end
 
 -- ============================================================================

@@ -19,6 +19,7 @@
 --       removeAccountMoney(account, amount): false when the account is unknown or cannot cover it.
 --   CP.Banking.recordSocietyWithdraw(account, amount, message, issuer, receiver, transId) -> boolean
 --       handleTransaction(account, Config.Tablet.title, amount, message, issuer, receiver, 'withdraw', transId).
+--   CP.Banking.available() -> boolean                  Renewed-Banking is started.
 --   CP.Banking.societyBalance(account) -> number|nil   getAccountMoney(account); nil for an unknown account.
 --   CP.Banking.depositSociety(account, amount) -> boolean
 --       addAccountMoney(account, amount): puts money back into a society account (CP.Cash's refund when a
@@ -46,6 +47,9 @@ local function Available()
     LogError('stopped', 'Renewed-Banking is not started: bank entries and society accounts are unavailable')
     return false
 end
+
+-- Renewed-Banking is started (no error line: Settings asks it before reading a balance).
+function B.available() return GetResourceState(RESOURCE) == 'started' end
 
 -- A non-negative whole amount, or nil.
 local function ToAmount(amount)

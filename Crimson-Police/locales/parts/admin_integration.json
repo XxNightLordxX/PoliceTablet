@@ -22,5 +22,7 @@
   "integrations.off.ambulance": "No ambulance script in use (Config.Integrations.ambulance = '{setting}'). A downed participant is always picked up and revived by Crimson-Police, and only a dead character counts as down. Start sc-ambulance or qbx_ambulancejob, or set it to 'none' if you have neither",
   "integrations.off.banking": "No banking script in use (Config.Integrations.banking = '{setting}'). Payouts get no bank history entry, and Cash.source 'society' pays new money like 'server'. Start Renewed-Banking, or set it to 'none' if you do not use it",
   "integrations.off.police": "No police script in use (Config.Integrations.police = '{setting}'). NPC missions and Crimson-Police's own custody work as usual; live crimes and volunteer suspects stay off. Start sc-police or qbx_policejob, or set it to 'none' if you have neither",
-  "integrations.needs.police_facts": "Off: live crimes and volunteer suspects need a police script that reports cuffing and jailing (sc-police). Police script now: {police}"
+  "integrations.needs.police_facts": "Off: live crimes and volunteer suspects need a police script that reports cuffing and jailing (sc-police; qbx_policejob does not report cuffing). Police script now: {police}",
+  "integrations.no_adapter": "Crimson-Police has no adapter for '{setting}' (Config.Integrations.{kind}), so it uses no {kind} script and the features that need one are off. Pick a supported script or 'none', or add an adapter (docs/dev/INTEGRATIONS.md, Adding an adapter)",
+  "integrations.not_started": "{name} serves {kind} but is not started, so the features that need a {kind} script answer as if there were none. Start {name}, or set Integrations.{kind} to 'auto' or 'none'"
 }

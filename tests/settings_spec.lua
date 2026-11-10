@@ -1633,6 +1633,23 @@ do
     ok = S.reset(1, 'Debug')
     H.ok(ok and Config.Debug ~= dbg and Row('Debug') == nil, 'Reset puts config.lua\'s value back')
 
+    -- SALE2: an unknown society account is refused only while a banking script serves (not Renewed-Banking by name)
+    local realBanking, realState = CP.Banking, _G.GetResourceState
+    _G.GetResourceState = function(n) return n == 'Renewed-Banking' and 'started' or realState(n) end
+    local bankUp = false
+    CP.Banking = {
+        societyBalance = function() return nil end,
+        available = function() return bankUp end,
+    }
+    H.ok((S.set(1, 'Cash.source', 'society')), 'SALE2: society pay')
+    H.eq(S.checkDepartments('Departments.sast.societyAccount', 'no_such'), nil,
+        'SALE2: banking none (Renewed-Banking still running): nothing to check the account against')
+    bankUp = true
+    H.eq(S.checkDepartments('Departments.sast.societyAccount', 'no_such'), 'err.dept_account_unknown',
+        'SALE2: a serving banking script without that account refuses it')
+    S.reset(1, 'Cash.source')
+    CP.Banking, _G.GetResourceState = realBanking, realState
+
     -- nil settings
     ok = S.set(1, 'MissionTypes.patrol.dailyLimit', 3)
     H.ok(ok and Config.MissionTypes.patrol.dailyLimit == 3, 'a daily limit where config.lua has none')

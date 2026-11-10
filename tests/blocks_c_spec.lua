@@ -3980,7 +3980,7 @@ do -- a removed car (sc-police /imp) is never stopped and never earns vehicle_st
     local v = ctx.state.vehicles[tostring(car.netId)]
     H.ok(v.state ~= 'stopped' and v.state ~= 'wrecked',
         'pu parity: a vanished car the engine still tracks is not stopped')
-    PU.onEvent(ctx, 1, { type = 'removed', netId = car.netId, src = 1, via = 'sc_impound' })
+    PU.onEvent(ctx, 1, { type = 'removed', netId = car.netId, src = 1, via = 'police_impound' })
     H.eq(v.state, 'removed', 'pu parity: removed')
     ctx.run.entities[car.netId] = nil
     TickN(PU, ctx, 3)

@@ -99,6 +99,14 @@ function I.status()
     return out
 end
 
+-- Why kind has no script, as text: no adapter for the named script, or the kind's own "no script" line.
+local function OffText(s)
+    if s.why == 'no_adapter' then
+        return CP.L('integrations.no_adapter', { kind = s.kind, setting = s.setting })
+    end
+    return CP.L('integrations.off.' .. s.kind, { setting = s.setting, why = s.why })
+end
+
 -- One console line per kind each time what serves it changes: which script, or that its features are off and why.
 function I.report()
     for _, s in ipairs(I.status()) do
@@ -110,7 +118,7 @@ function I.report()
             if s.active then
                 CP.log(TAG, '%s: %s', s.kind, s.active)
             else
-                CP.warn(TAG, '%s', CP.L('integrations.off.' .. s.kind, { setting = s.setting, why = s.why }))
+                CP.warn(TAG, '%s', OffText(s))
             end
         end
     end
@@ -356,6 +364,8 @@ end
 -- entries are skipped and Config.Cash.source = 'society' pays new money, as 'server' does (CP.Banking.societyOn).
 CP.Banking = CP.Banking or {}
 local B = CP.Banking
+-- The serving banking script is started (false with none).
+function B.available() return Via('banking', 'available', false) end
 -- (account or citizenid, amount, message, issuer, receiver, transId) -> boolean
 function B.recordDeposit(...) return Via('banking', 'recordDeposit', false, ...) end
 function B.recordWithdraw(...) return Via('banking', 'recordWithdraw', false, ...) end
@@ -447,7 +457,7 @@ function P.onImpound(src, netId)
     local dist = DistanceTo(src, e)
     CP.log(TAG, 'police impound from %s on vehicle %d of run %s (%.1f m)', tostring(src), netId, run.id, dist or -1)
     if CP.Runs and CP.Runs.noteExternalRemoval then
-        local ok, err = pcall(CP.Runs.noteExternalRemoval, netId, src, 'sc_impound', dist)
+        local ok, err = pcall(CP.Runs.noteExternalRemoval, netId, src, 'police_impound', dist)
         if not ok then CP.err(TAG, 'noteExternalRemoval failed: %s', tostring(err)) end
     end
     return true
@@ -484,12 +494,19 @@ end
 local function HealthLines()
     local out = {}
     for _, s in ipairs(I.status()) do
-        if s.active then
+        if s.active and not Started(s.active) then
+            -- named in config.lua (or found by 'auto') but not running now: its features answer "no script"
+            out[#out + 1] = {
+                level = 'warn',
+                text = CP.L('integrations.not_started', { kind = s.kind, name = s.active }),
+                fix = 'Integrations.' .. s.kind,
+            }
+        elseif s.active then
             out[#out + 1] = { level = 'ok', text = CP.L('integrations.on.' .. s.kind, { name = s.active }) }
         else
             out[#out + 1] = {
                 level = s.setting == 'none' and 'ok' or 'warn',
-                text = CP.L('integrations.off.' .. s.kind, { setting = s.setting, why = s.why }),
+                text = OffText(s),
                 fix = 'Integrations.' .. s.kind,
             }
         end

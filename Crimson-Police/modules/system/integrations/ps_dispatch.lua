@@ -7,7 +7,8 @@
 --
 -- What ps-dispatch has (checked in its server/main.lua):
 --   exports('GetDispatchCalls')      the live call list: { { id = number, priority = 0 | 1 | 2, units, ... } }
---   ps-dispatch:server:attach (id, PlayerData)    a unit marks Responding (from the officer's own client)
+--   ps-dispatch:server:attach (id, PlayerData)    a unit marks Responding (from the officer's own client); it also
+--                                                 takes the unit off any other call (sent on as a 'moved' un-mark)
 --   ps-dispatch:server:detach (id, PlayerData)    the unit leaves the call
 --   ps-dispatch:server:clearCall (id)             an officer closes the call (ps-dispatch checks who may)
 -- What it has not: no suspension list (isSuspended is false), no MDT commendations, no call another resource may clear
@@ -80,6 +81,10 @@ local function ValidId(id)
     return n ~= nil and n == math.floor(n) and n > 0 and n < MAX_ID
 end
 
+-- attached[src] = the call id this unit last attached to. ps-dispatch keeps a unit on one call: attaching to another
+-- takes it off the old one without a detach event, so that one goes out as a 'moved' un-mark.
+local attached = {}
+
 local function OnAttach(isResponding)
     return function(id)
         local src = source
@@ -87,12 +92,24 @@ local function OnAttach(isResponding)
         if not n or n <= 0 or not ValidId(id) or not Serving() then return end
         if not CP.Net.rateOk(n, 'ps_dispatch:toggle', 6, 1000) then return end
         CP.log(TAG, '%s %d %s', isResponding and 'attach' or 'detach', n, tostring(id))
+        local key, before = Dispatch.normalizeCallId(id), attached[n]
+        if isResponding then
+            if before and before ~= key then Dispatch._emit('responding', n, before, false, true) end
+            attached[n] = key
+        elseif before == key then
+            attached[n] = nil
+        end
         Dispatch._emit('responding', n, id, isResponding)
     end
 end
 
 RegisterNetEvent('ps-dispatch:server:attach', OnAttach(true))
 RegisterNetEvent('ps-dispatch:server:detach', OnAttach(false))
+
+AddEventHandler('playerDropped', function()
+    local n = tonumber(source)
+    if n then attached[n] = nil end
+end)
 
 -- A clear counts only once ps-dispatch itself has removed the call (a refused clear leaves it in the list).
 RegisterNetEvent('ps-dispatch:server:clearCall', function(id)
@@ -110,11 +127,13 @@ end)
 
 AddEventHandler('onResourceStart', function(res)
     if res ~= RESOURCE or not Serving() then return end
+    attached = {}
     Dispatch._emit('restart')
 end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= RESOURCE or not Serving() then return end
+    attached = {}
     Dispatch._emit('restart')
 end)
 

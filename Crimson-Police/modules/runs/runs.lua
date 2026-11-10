@@ -2040,7 +2040,7 @@ local function AuditRemoval(run, netId, src, via)
 end
 
 -- A run vehicle that vanished with a healthy last sample. A participant's recorded removal fails the mission
--- and flags the run (sc_impound); anyone else's, or nothing recorded, ends the run as not counted.
+-- and flags the run (police_impound); anyone else's, or nothing recorded, ends the run as not counted.
 local function VehicleRemoved(run, netId, e)
     local r = TakeRemoval(netId)
     local src = r and r.src or nil
@@ -2051,9 +2051,9 @@ local function VehicleRemoved(run, netId, e)
     if participant then
         local detail = ('vehicle %d removed by %s (%s)'):format(netId, tostring(src), via)
         if Has('AntiCheat', 'flag') then
-            Call('AntiCheat', 'flag', run, src, 'sc_impound', detail)
+            Call('AntiCheat', 'flag', run, src, 'police_impound', detail)
         elseif not run.flagged then
-            run.flagged = { reason = 'sc_impound', detail = detail }
+            run.flagged = { reason = 'police_impound', detail = detail }
         end
     end
     if e.obj and run.objectives[e.obj] and run.objectives[e.obj].prepared then

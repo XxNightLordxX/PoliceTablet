@@ -906,6 +906,21 @@ do
 end
 
 do
+    -- SALE2: a 'moved' un-mark (ps-dispatch took the unit off the call when it attached to another) is no dodge
+    H.time = T + 300
+    NewRun('r-calls-3', { srcs = { 16 }, arrived = true, state = 'in_progress' })
+    Respond(16, 123, true)
+    H.eq(RemovedFor(16)[1] and RemovedFor(16)[1].reason, 'real_call', 'SALE2: real call')
+    H.time = T + 310
+    Respond(16, 456, true)
+    Emit('responding', 16, '123', false, true)
+    H.eq(#rlog.reclassify, 1, 'SALE2: moved to another call within 60 s: still a free abandon')
+    H.eq(CP.Calls.isOnCall(16), true, 'SALE2: on the new call')
+    Respond(16, '456', false)
+    H.eq(CP.Calls.isOnCall(16), false, 'SALE2: the moved call\'s entry is gone too')
+end
+
+do
     -- respondingExpiry: 13 has been on a call since T
     H.time = T + 1199
     H.eq(CP.Calls.isOnCall(13), true, 'entry alive before the expiry')

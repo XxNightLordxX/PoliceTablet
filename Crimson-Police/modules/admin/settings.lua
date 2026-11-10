@@ -4383,7 +4383,8 @@ function Settings.checkDepartments(path, clean, ctx, none)
             local was = type(before[key]) == 'table' and before[key].societyAccount or nil
             if type(acc) == 'string' and acc ~= was then
                 local ok, bal = pcall(CP.Banking.societyBalance, acc)
-                if ok and bal == nil and GetResourceState and GetResourceState('Renewed-Banking') == 'started' then
+                -- (only a banking script that serves and runs can say an account is unknown)
+                if ok and bal == nil and CP.Banking.available and CP.Banking.available() then
                     return 'err.dept_account_unknown', acc
                 end
             end
