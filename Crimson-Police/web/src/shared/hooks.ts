@@ -117,6 +117,16 @@ export function useRequest<T = unknown>(
     return { data, loading, error, refetch, setData };
 }
 
+// The value once it has stayed the same for ms (a search box asks the server after the typing stops).
+export function useDebounced<T>(value: T, ms: number): T {
+    const [v, setV] = useState(value);
+    useEffect(() => {
+        const id = setTimeout(() => setV(value), ms);
+        return () => clearTimeout(id);
+    }, [value, ms]);
+    return v;
+}
+
 // ============================================================================
 //                                  useAction
 // ============================================================================

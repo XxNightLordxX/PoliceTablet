@@ -665,27 +665,27 @@ Settings → Key Bindings → FiveM**, then look for the Crimson-Police lines.
 
 `/CrimsonPoliceAdmin` opens a full-screen panel for every department. One line per screen; the full tour and every
 admin tool are in [guide 5.3](docs/OWNER_GUIDE.md#53-the-admin-panel) and
-[guide 5.15](docs/OWNER_GUIDE.md#515-full-admin-control). There is one layout: plain names under six groups, a
-search box, Needs attention on Home. The old layout switches are gone (nothing was removed, only the second way to the
-same screen); [guide 2.9](docs/OWNER_GUIDE.md#29-baked-in-one-way-to-do-each-thing) lists each one and where it
-lives now.
+[guide 5.15](docs/OWNER_GUIDE.md#515-full-admin-control). The sidebar is organised by job: Home, then People,
+Missions, Real players, Money, Review and System. The search box at the top (or **Ctrl+K**) jumps to any screen or
+tab, officer, mission or setting. [Guide 2.9](docs/OWNER_GUIDE.md#29-baked-in-one-way-to-do-each-thing) lists the
+old layout switches and where each one lives now.
 
-| Screen | What it is for |
-|---|---|
-| **Home** | Where the panel opens: Needs attention, tiles for the common jobs (new mission, missions on or off, change pay, give or take points, quick settings, **Something wrong?**) and the live runs |
-| **Money** | Pay rates, feature rewards, every payment made or owed (with the payment tools) and the department funds |
-| **Missions** | Built-in and custom missions: the Mission Builder, publish, archive, restore, roll back, reload files, Cross-Department Missions and mission calls; the switches turn a mission or one location on or off |
-| **Live** | Every live run and unit: recall, end, add time, split a unit, and the starts the server refused |
-| **Officers** | Search officers: history, suspensions, disputes about failed runs, profile moderation, commendations and the officer tools |
-| **Real suspects** | Live crimes, volunteers, surrender and talk-down, the pair ledger, blocks and exclusions (shows while live crimes or volunteers are on) |
-| **Departments** | Each department's jobs, colours, logo, desks, members and (with society payouts) account balance |
-| **Leaderboards** | Every board, cash paid, flagged runs to review, voids, awards and the item rewards tab |
-| **Seasons & Challenge** | Start, rename, plan or end a season, and this week's bounty |
-| **Permissions** | What supervisors may do, the extra grants, the Mission controls and the config health check |
-| **Settings** | Every setting of `config.lua` and `blocks.lua`, changed in game with its description, a Features tab and a change history |
-| **System** | Storage, backups, departments and desks, webhook states, recent problems, the other resources and the nightly clean-up |
-| **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
-| **Testing** | Optional: test results per mission and location, test runs, testers and area coverage |
+| Group | Screen | What it is for |
+|---|---|---|
+| | **Home** | Where the panel opens: Needs attention, tiles for the common jobs (new mission, missions on or off, change pay, give or take points, quick settings, **Something wrong?**) and the live runs |
+| People | **Officers** | Search officers: history, suspensions, disputes about failed runs, commendations and the officer tools |
+| | **Departments** | Each department's jobs, colours, logo, desks, members and (with society payouts) account balance |
+| | **Permissions** | What supervisors may do, the extra grants, the Mission controls and the config health check |
+| | **Leaderboards**, **Seasons** (under More) | Every board, cash paid, voids, awards, item rewards; start, plan or end a season, the bounty |
+| Missions | **Missions** | Built-in and custom missions: the Mission Builder, publish, archive, restore, roll back, reload files, Cross-Department Missions and mission calls; the switches turn a mission or one location on or off |
+| | **Running now** | Every live run and unit: recall, end, add time, split a unit, and the starts the server refused |
+| | **Map markers**, **Test tools** | How each part of a mission shows on the map; optional test results, test runs and testers |
+| Real players | **Player suspects** | Live crimes, volunteers, surrender and talk-down, the pair ledger, blocks and exclusions (the group shows only while live crimes or volunteers are on) |
+| Money | **Money** | Pay rates, feature rewards, every payment made or owed (with the payment tools) and the department funds |
+| Review | **Review** | Flagged runs (approve or void), profiles waiting (pictures, bios, reports, banned words), open disputes and corrections (with Undo) |
+| | **Activity log** | Every supervisor and admin action, with filters and a CSV export |
+| System | **Settings** | Every setting of `config.lua` and `blocks.lua`, changed in game with its description, a Features tab and a change history |
+| | **Server health** | Storage, backups, webhook states, recent problems, the other resources and the nightly clean-up |
 
 ---
 

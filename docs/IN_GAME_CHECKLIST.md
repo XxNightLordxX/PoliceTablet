@@ -75,6 +75,21 @@ names the change it came with.
 - [ ] Supervisor Department -> Training: End training still takes two clicks. Admin Payments, Officers, Leaderboards
   and Real suspects: the page buttons under the lists work as before. (UI1)
 
+## Admin UI by job, one search
+
+- [ ] Admin UI: the sidebar shows Home, then People (Officers, Departments, Who can do what; Leaderboards and Seasons
+  under More), Missions (Missions, Running now, Map markers, Test tools), Real players (Player suspects), Money,
+  Review (Review, Activity log) and System (Settings, Server health). With live crimes and volunteers off, the Real
+  players group is not shown. (UI2)
+- [ ] Press Ctrl+K anywhere in the Admin UI: the cursor goes to the search. Type `builder`: Missions › Mission Builder
+  opens the Builder tab. Type part of an officer's name: he is listed under Officers and a click opens his record.
+  Type part of a mission's name: a click opens its drawer on the list. Type `pageSize`: the setting is listed and opens
+  Settings on it; the last line Search settings for "..." still works. (UI2)
+- [ ] Review -> Flagged runs: Approve and Void ask for a reason and the row leaves the list; a run with two flagged
+  rows has Approve all. Review -> Profiles, Disputes and Corrections work as the old Officers tabs did (Undo on a
+  correction, a dispute row opens the officer). Home's Open disputes and Flagged runs lines open the right Review tab;
+  Leaderboards no longer lists flagged runs. The Review badge counts the profiles waiting and the open disputes. (UI2)
+
 ## Supervisor
 
 - [ ] As a SAST sergeant (master switch off, as shipped): Supervisor -> Mission controls is in the sidebar; Mission cooldowns -> Tactical x0.5, Save with a reason: the row shows "Changed by" and the change wait counts down. (P5)
@@ -609,7 +624,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   the hospital while he is down. (BL1)
 - [ ] End the run, leave a run, log out: every extra blip goes. resmon on a run with every part on stays under
   0.05 ms. (BL1)
-- [ ] Admin UI -> Map markers is listed under NPC missions (an old link to Mission blips opens it). On top: the
+- [ ] Admin UI -> Map markers is listed under Missions. On top: the
   objective's settings and the look of each kind of objective blip; change the Mission start colour: the next start
   pin has it. Turn on the extra parts: the card turns green. Switch on Coroner van, pick the picture Van and the
   colour Purple: on the next Process the scene run the van shows with that look, no restart. Settings -> Features

@@ -5,7 +5,6 @@
 // supervisor/admin shapes the contract leaves to the module owner (§9.5).
 
 import type { Avatar, Board, BoardRow, ChallengeView, LevelInfo, Profile, ProfileRun } from '../shared/types';
-import type { FlaggedRow } from './oversight';
 import type { Commendation } from './profile';
 
 export type BoardPeriod = 'weekly' | 'monthly' | 'season' | 'alltime';
@@ -244,8 +243,6 @@ export interface AdminBoards {
     runs?: AdminRun[];
     // Config.AdminUi.pageSize: runs holds one page of the officer's runs (asked for with runsPage)
     runsPage?: ListPage | null;
-    // the flagged runs, asked for with withFlagged (one request per screen open)
-    flagged?: FlaggedRow[];
     // full admin control: the past windows to pick from and every metric the board can be ranked by
     windows?: { weeks: PastWindow[]; months: PastWindow[] };
     metrics?: string[];

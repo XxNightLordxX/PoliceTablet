@@ -51,6 +51,7 @@ export const SCREEN_HEADS = {
     admin_funds: { title: 'admin.money.tab.funds', help: 'admin.money.funds_help' },
     admin_settings: { title: 'ui.nav.plain.admin_settings', help: 'ui.help.admin_settings' },
     admin_system: { title: 'ui.nav.plain.admin_system', help: 'ui.help.admin_system' },
+    admin_review: { title: 'ui.nav.plain.admin_review', help: 'ui.help.admin_review' },
     admin_audit: { title: 'ui.nav.plain.admin_audit', help: 'ui.help.admin_audit' },
     admin_testing: { title: 'ui.nav.plain.admin_testing', help: 'ui.help.admin_testing' },
     // the criminal tablet (criminal/model.ts CRIM_SCREENS, as crim_<screen>)

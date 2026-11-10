@@ -42,11 +42,11 @@ function ok(cond: unknown, what: string): void {
 }
 
 async function steps(): Promise<void> {
-    // the screen: under NPC missions, always shown
+    // the screen: under Missions, always shown
     const def = ADMIN_SCREENS.find(s => s.key === 'admin_markers');
     ok(def && !def.visible, 'the Map markers screen is in the Admin registry, always shown');
     ok(!ADMIN_SCREENS.some(s => (s.key as string) === 'admin_blips'), 'one screen: no Mission blips screen of its own');
-    ok(ADMIN_GROUP_OF.admin_markers === 'npc', 'listed under NPC missions');
+    ok(ADMIN_GROUP_OF.admin_markers === 'missions', 'listed under Missions');
     ok(t('ui.nav.plain.admin_markers') !== 'ui.nav.plain.admin_markers', 'it has a plain name');
     ok(t('ui.screen.admin_markers') === 'Map markers', 'its title');
 

@@ -32,7 +32,7 @@ async function steps(): Promise<void> {
         !(keys as string[]).some(k => ['admin_payouts', 'admin_rewards', 'admin_payments'].includes(k)),
         'Payouts, Rewards and Payments are tabs of Money, not screens of their own',
     );
-    ok(keys.indexOf('admin_money') === keys.indexOf('admin_home') + 1, 'Money sits right under Home');
+    ok(keys.indexOf('admin_money') > keys.indexOf('admin_rs'), 'Money sits after Real players, by job');
     // an older saved setting (moneyScreen or rewardsScreen false) changes nothing
     const old = sessionOf({ moneyScreen: false, rewardsScreen: false });
     ok(
@@ -52,7 +52,7 @@ async function steps(): Promise<void> {
     ok(moneyTabOf({ moneyTab: 'funds' }) === 'funds', 'Department funds can be asked for');
     ok(moneyTabOf({ moneyTab: 'nope' }) === 'pay', 'an unknown tab opens Pay rates');
     ok(navBadge('admin_money', { ...EMPTY_COUNTS, adminPayments: 4 }).badge === '4', 'Money keeps the payments badge');
-    ok(ADMIN_GROUP_OF.admin_money === 'economy', 'plain layout: Money under Economy');
+    ok(ADMIN_GROUP_OF.admin_money === 'money', 'Money has a group of its own');
     const words = moneySearchWords().join(' ').toLowerCase();
     ok(words.includes('payouts') && words.includes('rewards') && words.includes('funds'), 'search finds Money');
     const avail = screensFor('admin', shipped).map(s => s.key);

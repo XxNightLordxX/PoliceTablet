@@ -339,24 +339,23 @@ end
 -- ============================================================================
 --                                   STEP H6
 -- ============================================================================
--- AN OFFICER'S RUNS A PAGE AT A TIME, FLAGGED RUNS WITH THE BOARD.
+-- AN OFFICER'S RUNS A PAGE AT A TIME; THE FLAGGED RUNS ON THEIR OWN (REVIEW).
 
 do
     W.officer('OFF00011', 'sast', 0)
     for i = 1, 13 do W.row({ citizenid = 'OFF00011', points = 5, at = H.time - 7200 - i * 60 }) end
     W.row({ citizenid = 'OFF00011', points = 5, at = H.time - 9000, flagged = true })
-    local args = { period = 'alltime', filter = 'overall', citizenid = 'OFF00011', runsPage = 2, withFlagged = true }
+    local args = { period = 'alltime', filter = 'overall', citizenid = 'OFF00011', runsPage = 2 }
     local d = W.data('admin:getBoards', 1, args)
     H.ok(#d.runs == 14 and d.runsPage == nil, 'shipped (pageSize 0): every run at once, as before')
-    H.ok(type(d.flagged) == 'table', 'withFlagged: the flagged runs come with the board (one request)')
+    H.eq(d.flagged, nil, 'the board carries no flagged runs (they are on Review -> Flagged runs)')
     Config.AdminUi.pageSize = 10
     d = W.data('admin:getBoards', 1, args)
     H.ok(d.runsPage and d.runsPage.page == 2 and d.runsPage.pages == 2 and d.runsPage.total == 14,
         'pageSize 10: page 2 of 2, 14 runs')
     H.eq(#d.runs, 4, 'page 2 holds the last 4 runs')
     local alone = W.data('admin:getFlagged', 1, {})
-    H.ok(type(d.flagged) == 'table' and #d.flagged == #alone.flagged and #d.flagged >= 1,
-        'the flagged runs that come with the board are the same as admin:getFlagged')
+    H.ok(type(alone.flagged) == 'table' and #alone.flagged >= 1, 'admin:getFlagged lists the flagged run')
     Config.AdminUi.pageSize = 0
 end
 

@@ -20,6 +20,7 @@ export type AdminScreenKey =
     | 'admin_permissions'
     | 'admin_settings'
     | 'admin_audit'
+    | 'admin_review'
     | 'admin_testing'
     | 'admin_live'
     | 'admin_money'

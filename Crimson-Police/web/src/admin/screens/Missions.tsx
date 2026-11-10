@@ -85,6 +85,8 @@ const stopRow = {
 };
 
 type Tab = 'catalog' | 'builder' | 'operation' | 'dispatch' | 'history' | 'stats' | 'deleted';
+// the tabs a link may open (Deleted only shows to a mission admin, who opens it from the tabs)
+const LINK_TABS: Tab[] = ['catalog', 'builder', 'operation', 'dispatch', 'history', 'stats'];
 type SourceFilter = 'all' | 'builtin' | 'custom';
 
 interface CatalogRow {
@@ -146,15 +148,18 @@ export default function AdminMissions() {
         setTab('builder');
         setNewRequest(n => n + 1);
     };
-    // Home links here with navigate('admin_missions', { tab }): 'builder' (make a mission, with wizard: 'new' the
-    // wizard opens) or 'catalog' (on/off)
+    // Home and the Admin UI search link here with navigate('admin_missions', { tab }): 'builder' (make a mission, with
+    // wizard: 'new' the wizard opens), 'catalog' (on/off) or any other tab everyone sees
     const { params } = useNavigation();
+    const [drawerOf, setDrawerOf] = useState<string | null>(null);
     useEffect(() => {
         // once per press: the params stay while the screen is shown, a reopened tablet must not start it again
         if (asksNewMission(params)) {
             if (params !== handledNewParams) startNew();
             handledNewParams = params;
-        } else if (params.tab === 'builder' || params.tab === 'catalog') setTab(params.tab);
+        } else if (typeof params.tab === 'string' && LINK_TABS.includes(params.tab as Tab)) setTab(params.tab as Tab);
+        // the Admin UI search opens a mission's drawer on the list: { tab: 'catalog', mission }
+        if (typeof params.mission === 'string' && params.mission) setDrawerOf(params.mission);
     }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
     const missions = useRequest<AdminMissionsData>('admin:getMissions', {}, { pushTopic: 'operation', pollMs: 30000 });
     const builder = useRequest<BuilderList>('builder:list', {}, { pushTopic: 'builder', pollMs: 30000 });
@@ -171,7 +176,6 @@ export default function AdminMissions() {
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [summary, setSummary] = useState<ReloadSummary | null>(null);
     // the mission whose drawer is open (a catalog row click): everything about it in one place
-    const [drawerOf, setDrawerOf] = useState<string | null>(null);
     const [adminConfirm, setAdminConfirm] = useState<AdminConfirm>(null);
     const [openDialog, setOpenDialog] = useState<Open>(null);
     const [importOpen, setImportOpen] = useState(false);

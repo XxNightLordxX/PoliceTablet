@@ -1,4 +1,4 @@
-// Officers → the server-wide tabs: Review (every pending picture, bio and report, plus the banned-words list),
+// Admin UI → Review's tabs: Profiles (every pending picture, bio and report, plus the banned-words list),
 // Disputes (every open dispute) and Corrections (every bulk void, retirement, record move and season reopen, with
 // Undo). Each row can open the officer.
 
@@ -123,7 +123,7 @@ function BannedWordsCard() {
 export function ReviewTab() {
     return (
         <div className="admin-otools">
-            <Card title={t('ui.admin_officers.tab.review')} icon="eye" padding="md">
+            <Card title={t('admin.review.tab.profiles')} icon="eye" padding="md">
                 <ProfilesReview scope="admin" />
             </Card>
             <BannedWordsCard />

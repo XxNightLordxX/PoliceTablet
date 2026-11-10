@@ -283,7 +283,7 @@ You set them in Admin UI → **Permissions** → **Mission controls** (below); s
     a second supervisor of that department confirms it (the same supervisor, another character of his, or a
     supervisor of another department cannot). A server restart clears a pending Void (it is voided only by two).
     Flags of the kinds he ticks (for example "Ran a suspect over") leave the supervisors' Review queue: only admins
-    approve or void them (Admin UI → Leaderboards → Flagged). Admins always void at once. The anti-cheat flag
+    approve or void them (Admin UI → Review → Flagged runs). Admins always void at once. The anti-cheat flag
     triggers (`Config.AntiCheat`) are never relaxed.
 
 - **Twists** (per department, off when you install, under the master switch):
@@ -1377,8 +1377,9 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([1.2](#12
 | **Money** | Every money tool in one screen, as four tabs. **Pay rates** (the old Payouts screen): every type and mission payout, set or clear them. **Rewards**: every feature that pays, its money, account and items. **Payments**: every payment Crimson-Police made or still owes, with totals and the payment tools ([5.15.4](#5154-payments-item-rewards-and-department-money)). **Department funds**: each department's society account (the same Funds card as on Departments) |
 | **Missions** | Built-in and custom missions: Builder, publish, archive, restore, roll back, break edit locks, reload files, Cross-Department Missions and mission calls |
 | **Seasons & Challenge** | Start or end a season, override this week's bounty |
-| **Leaderboards** | Every board, cash paid, payments stuck in "paying", void runs, award points, and the **Item rewards** tab |
-| **Officers** | Search officers: history, suspend or unsuspend, disputes about failed runs, profile moderation, commendations, service record |
+| **Leaderboards** | Every board, cash paid, payments stuck in "paying", void runs, award points, and the **Item rewards** tab (the flagged runs are on **Review**) |
+| **Officers** | Search officers: history, suspend or unsuspend, disputes about failed runs, commendations, service record |
+| **Review** | Everything waiting for a decision, as four tabs. **Flagged runs**: approve or void each one (or every flagged row of a run at once), your own runs left out. **Profiles**: pictures, bios and reports waiting, and the banned words. **Disputes**: every open dispute (a row opens the officer). **Corrections**: bulk voids, retirements, record moves and season reopens, with **Undo** |
 | **Departments** | Each department's jobs, colours, logo, desks, member count and (with society payouts) account balance |
 | **Missions** (switches) | Turn any mission, or single locations of it, on or off ([2.7](#27-turn-missions-and-locations-on-or-off)) |
 | **Permissions** | What supervisors may do (a switch for each), **Extra grants** (a power for departments from a grade, Qbox gangs from a grade or single citizen IDs; [1.3](#13-mission-builder-permissions)), **Mission controls** (each control's switch, limits, current value and Reset; [1.2](#12-what-supervisors-may-do)), and **Config health**: the start-up check, with a **Check again** button |
@@ -1390,8 +1391,8 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([1.2](#12
 
 **Home** is where the panel opens. On top, **Needs attention** shows what is waiting for you, each line a count that
 opens its screen: **Problems** (System → Problems), **Refused starts today** (Live → Refused), **Open disputes**
-(Officers → Disputes), **Flagged runs waiting for review** (Leaderboards, one per run, your own left out, every one
-counted) and **Open player suspect cases** (Real suspects; only while you have that screen). It loads in one request
+(Review → Disputes), **Flagged runs waiting for review** (Review → Flagged runs, one per run, your own left out,
+every one counted) and **Open player suspect cases** (Real suspects; only while you have that screen). It loads in one request
 and refreshes every minute; it only reads.
 
 The tiles do the common jobs right there: **Turn missions on or off** (type part of a mission's name, flip its
@@ -1406,24 +1407,30 @@ Leaderboards, Officers) and **Quick edit** sit ready-made reasons: **Balance cha
 A click fills the box; you can still type your own. Change the list in `Config.AdminUi.reasonChips` (Admin UI →
 **Settings**, up to 8 reasons of up to 60 characters); `{}` shows no buttons.
 
-**The sidebar** uses plain words and puts every screen under six groups, each with a one-line description:
+**The sidebar** is organised by job: Home on top, then six groups, each with a one-line description:
 
 | Group (with its one-line description) | Screens in it (plain name, old name) |
 |---|---|
-| **NPC missions**: missions against computer suspects and the runs going on now | Missions; Running now (Live); Map markers |
-| **Player vs police**: real players as suspects | Player suspects (Real suspects; while live crimes or volunteers are on) |
-| **Police teamwork**: officers, departments and boards | Officers; Departments, Leaderboards, Seasons and challenges (under More) |
-| **Permissions**: who may do what | Who can do what (Permissions) |
-| **Economy**: pay rates, rewards, every payment made and the department funds | Money (Pay rates, Rewards, Payments and Department funds tabs) |
-| **System**: settings, server health, activity log and tests | Settings; Server health (System); Activity log (Audit Log) and Test tools (Testing) under More |
+| **People**: officers, departments, who can do what, and the boards | Officers; Departments; Who can do what (Permissions); Leaderboards and Seasons and challenges (under More) |
+| **Missions**: NPC missions, the Mission Builder, the runs going on now, map markers and tests | Missions (with the Mission Builder tab); Running now (Live); Map markers; Test tools (Testing) |
+| **Real players**: real players as suspects | Player suspects (Real suspects; the whole group shows only while live crimes or volunteers are on) |
+| **Money**: pay rates, rewards, every payment made and the department funds | Money (Pay rates, Rewards, Payments and Department funds tabs) |
+| **Review**: flagged runs, profiles, disputes, corrections and the activity log | Review (Flagged runs, Profiles, Disputes and Corrections tabs); Activity log (Audit Log) |
+| **System**: settings, storage, backups and problems | Settings; Server health (System: Storage, Backups, Webhooks, Problems, Integrations, Clean-up tabs) |
 
-Home stays on top. The rarely used tools fold under **More**; while it is folded its badge adds up theirs, so nothing
-waiting is hidden, a link or notification that opens one of them unfolds it, and the panel remembers whether you left
-it open. A **Find a screen or setting** box over the sidebar lists the screens whose plain name, old name or group
-matches what you type (Enter opens the first), plus **Search settings for "..."**, which opens Settings with those
-words in its search box. A breadcrumb over each screen (Home › group › screen) shows where you are; click Home to go
-back. The title inside each screen uses the same plain name (Running now, Mission pay, Who can do what, ...). Every
-screen keeps its permission, and a group with nothing you may see is not shown.
+The rarely used tools fold under **More**; while it is folded its badge adds up theirs, so nothing waiting is hidden,
+a link or notification that opens one of them unfolds it, and the panel remembers whether you left it open.
+
+**One search for everything.** The **Find a screen, officer, mission or setting** box over the sidebar (press
+**Ctrl+K** anywhere in the Admin UI to put the cursor in it) lists, under a heading each: the **screens and tabs**
+whose name, old name or group matches (Mission Builder, Flagged runs, Pay rates, Backups, ...), up to five
+**officers** (name, callsign or citizen ID; a click opens the officer), up to five **missions** (a click opens the
+mission's drawer on the list), up to six **settings** (a click opens Settings on that setting) and last **Search
+settings for "..."**, which opens Settings with your words in its search box. Enter opens the first line. The missions
+and settings load once, when you start typing; the officers are asked once you stop typing. A breadcrumb over each
+screen (Home › group › screen) shows where you are; click Home to go back. The title inside each screen uses the same
+plain name (Running now, Mission pay, Who can do what, ...). Every screen keeps its permission, and a group with
+nothing you may see is not shown.
 
 **The Money screen.** Admin UI → **Money** holds every money tool as four tabs: **Pay rates** (the old Payouts
 screen), **Rewards** (every feature that pays), **Payments** (every payment made, with its row actions) and
@@ -1431,8 +1438,8 @@ screen), **Rewards** (every feature that pays), **Payments** (every payment made
 the right tab, and the search box finds Money by the old names (Payouts, Rewards, Payments). Every action, permission
 check, audit row and money-tool switch is the same as before.
 
-**Long lists and faster screens.** Payments made gets its totals and Leaderboards gets its flagged runs in the same
-request as the list, so each screen opens with one request. In every tablet UI, a scrolling table of more than 100
+**Long lists and faster screens.** Payments made gets its totals in the same request as the list, so the screen opens
+with one request. In every tablet UI, a scrolling table of more than 100
 rows (such as the Admin UI's Leaderboards board, the officer Leaderboard or the supervisor Department screen's
 Officers tab) draws only the rows in view and the next ones as you scroll, and the Settings search results start with
 60 rows and add more as you reach the end. The department and mission desk dialogs (Admin UI -> System) show their
@@ -1734,9 +1741,10 @@ every admin tool:
 
 #### 5.15.1 Officers, points and boards
 
-**Officers** has four tabs: **Officers** (search and the officer's record), **Review** (every pending picture, bio
-and profile report, and the banned-words list), **Disputes** (every open dispute) and **Corrections** (every bulk
-void, retirement, record move and season reopen, each with **Undo**). Search finds officers by name, callsign or
+**Officers** is the search and the officer's record. The server-wide lists are on **Review**: **Flagged runs**,
+**Profiles** (every pending picture, bio and profile report, and the banned-words list), **Disputes** (every open
+dispute) and **Corrections** (every bulk void, retirement, record move and season reopen, each with **Undo**). Search
+finds officers by name, callsign or
 citizen ID and can filter by department, online, suspended, retired, off the boards, needs review, open dispute and
 flagged run. An online character who never finished a run is found by typing their citizen ID.
 

@@ -1,24 +1,32 @@
 // Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
 
-// Config.AdminTheme), no watermark, the maintenance banner, and a sidebar with the admin-only badges: plain names,
-// six described groups, the rare tools under More, a search box over the screens and the settings, and a breadcrumb
-// over the screen (layouts/adminNav.ts).
+// Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
+// Config.AdminTheme), no watermark, the maintenance banner, and a sidebar with the admin-only badges: Home, then the
+// screens by job (People, Missions, Real players, Money, Review, System), the rare tools under More, one search box
+// (Ctrl+K) that jumps to any screen or tab, officer, mission or setting, and a breadcrumb (layouts/adminNav.ts).
 
-import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Icon, IconButton, LayerRootContext, MaintenanceBanner, SearchInput } from '../shared/components';
-import { useViewport } from '../shared/hooks';
+import { useDebounced, useRequest, useViewport } from '../shared/hooks';
 import { t } from '../shared/i18n';
 import { useNavigation, type ScreenKey } from '../shared/navigation';
 import { useSession, useTablet } from '../shared/session';
 import { applyTheme } from '../shared/theme';
+import type { AdminMissionsData } from '../types/builder_client';
+import type { OfficerSearchData } from '../types/oversight';
+import type { SettingsData } from '../types/settings';
 import {
     ADMIN_GROUPS,
+    ADMIN_JUMPS,
+    FOUND_KINDS,
     SETTINGS_SEARCH,
     adminCrumbs,
     adminFoldOf,
     adminGroupOf,
     adminTitleKey,
-    searchScreens,
+    globalResults,
+    isSearchKey,
+    type FoundItem,
 } from './adminNav';
 import { moneySearchWords } from './adminMoney';
 import { navBadge, useNavCounts } from './navBadges';
@@ -44,31 +52,92 @@ export function AdminLayout() {
         ...navBadge(s.key, counts),
     }));
     const sections = ADMIN_GROUPS.map(k => ({ key: k, label: groupLabel(k), hint: t(`ui.nav.admin_hint.${k}`) }));
-    // Searching: the matching screens in one list, then 'Search settings for ...' while Settings shows
-    const searching = find.trim() !== '';
-    const found = searching
-        ? searchScreens(
-              items.map(it => ({
-                  ...it,
-                  words: [
-                      it.label,
-                      t(`ui.screen.${it.key}`),
-                      it.play ? groupLabel(it.play) : '',
-                      // Money is found by its tabs' and its old screens' names too (Payouts, Rewards, Payments)
-                      ...(it.key === 'admin_money' ? moneySearchWords() : []),
-                  ],
-              })),
-              find,
-          ).map(({ words: _w, ...it }) => it)
+    // Searching: the matching screens and tabs, officers, missions and settings in one list under a heading each,
+    // then 'Search settings for ...'. The missions and the settings load once, when the first word is typed; the
+    // officers come from the server's own search once the typing stops.
+    const typed = find.trim();
+    const searching = typed !== '';
+    const [wanted, setWanted] = useState(false);
+    useEffect(() => {
+        if (searching) setWanted(true);
+    }, [searching]);
+    const has = (k: string) => screens.some(s => s.key === k);
+    const officerQuery = useDebounced(typed, 300);
+    const officerReq = useRequest<OfficerSearchData>(
+        'admin:searchOfficers',
+        { query: officerQuery, filters: {}, page: 1 },
+        { skip: officerQuery.length < 2 || !has('admin_officers') },
+    );
+    const missionReq = useRequest<AdminMissionsData>(
+        'admin:getMissions',
+        {},
+        { skip: !wanted || !has('admin_missions') },
+    );
+    const settingsReq = useRequest<SettingsData>('admin:getSettings', {}, { skip: !wanted || !has('admin_settings') });
+    const settingsList = useMemo(
+        () =>
+            (settingsReq.data?.sections ?? []).flatMap(sec =>
+                (sec.groups ?? []).flatMap(g => (g.settings ?? []).map(x => ({ path: x.path, label: x.label }))),
+            ),
+        [settingsReq.data],
+    );
+    const results: FoundItem[] = searching
+        ? globalResults(
+              {
+                  screens: items.map(it => ({
+                      key: it.key,
+                      words: [
+                          it.label,
+                          t(`ui.screen.${it.key}`),
+                          it.play ? groupLabel(it.play) : '',
+                          // Money is found by its tabs' and its parts' names too (Payouts, Rewards, Payments)
+                          ...(it.key === 'admin_money' ? moneySearchWords() : []),
+                      ],
+                  })),
+                  jumps: ADMIN_JUMPS.map(j => {
+                      const tab = t(j.label);
+                      const on = t(adminTitleKey(j.screen));
+                      return { jump: j, label: `${on} › ${tab}`, words: [tab, on] };
+                  }),
+                  officers: officerQuery === typed && officerQuery.length >= 2 ? officerReq.data?.officers : [],
+                  missions: missionReq.data?.missions,
+                  settings: settingsList,
+              },
+              typed,
+          )
         : [];
-    if (searching && screens.some(s => s.key === 'admin_settings')) {
-        found.push({ key: SETTINGS_SEARCH, label: t('ui.nav.search_settings', { q: find.trim() }), icon: 'sliders' });
-    }
+    const iconOf = (r: FoundItem) =>
+        r.kind === 'officers'
+            ? 'user'
+            : r.kind === 'missions'
+              ? 'layers'
+              : r.kind === 'settings'
+                ? 'sliders'
+                : (items.find(it => it.key === r.screen)?.icon ?? 'search');
+    const found: SidebarItem[] = results.map(r => ({
+        key: r.key,
+        icon: iconOf(r),
+        play: r.kind,
+        label: r.key === SETTINGS_SEARCH ? t('ui.nav.search_settings', { q: typed }) : r.label,
+    }));
+    const foundSections = FOUND_KINDS.map(k => ({ key: k, label: t(`ui.nav.found.${k}`) }));
     const select = (k: string) => {
+        const hit = results.find(r => r.key === k);
         setFind('');
-        if (k === SETTINGS_SEARCH) navigate('admin_settings', { q: find.trim() });
+        if (hit) navigate(hit.screen, hit.params);
         else navigate(k as ScreenKey);
     };
+    // Ctrl+K puts the cursor in the search box from anywhere in the Admin UI
+    const searchBox = useRef<HTMLSpanElement>(null);
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (!isSearchKey(e)) return;
+            e.preventDefault();
+            searchBox.current?.querySelector('input')?.focus();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
     const crumbs = adminCrumbs(screen);
     const homeShown = screens.some(s => s.key === 'admin_home');
     const root = useRef<HTMLDivElement>(null);
@@ -115,15 +184,17 @@ export function AdminLayout() {
                     heading={t('ui.nav.admin')}
                     items={searching ? found : items}
                     more={!searching ? t('ui.nav.more') : undefined}
-                    sections={searching ? undefined : sections}
+                    sections={searching ? foundSections : sections}
                     search={
-                        <SearchInput
-                            value={find}
-                            onChange={setFind}
-                            onEnter={() => found[0] && select(found[0].key)}
-                            placeholder={t('ui.nav.search_screens')}
-                            aria-label={t('ui.nav.search_screens')}
-                        />
+                        <span ref={searchBox} className="cp-admin__search">
+                            <SearchInput
+                                value={find}
+                                onChange={setFind}
+                                onEnter={() => found[0] && select(found[0].key)}
+                                placeholder={t('ui.nav.search_screens')}
+                                aria-label={t('ui.nav.search_screens')}
+                            />
+                        </span>
                     }
                     active={screen}
                     onSelect={select}

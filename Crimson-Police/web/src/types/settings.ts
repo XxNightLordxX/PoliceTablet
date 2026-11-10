@@ -144,7 +144,7 @@ export interface SettingsData {
     features?: FeatureEntry[];
 }
 
-// The section of play a feature belongs to (Settings -> Features and the Admin sidebar).
+// The section of play a feature belongs to (Settings -> Features).
 export type FeaturePlay = 'npc' | 'pvp' | 'team' | 'economy' | 'system';
 
 // One feature of Settings -> Features: its name is settings.feature.<key>; path = the boolean setting it switches.

@@ -3816,7 +3816,9 @@ fieldTraining; a link names its tab with `{ deptTab }`)
 `sup_payouts` (setTypePayout) `sup_builder` (builderEdit) | | Admin | `admin_home` `admin_money`
 (Money: Pay rates, Rewards, Payments, Department funds; `{ moneyTab }`) `admin_markers`
 `admin_missions` `admin_live` `admin_seasons` `admin_leaderboards` `admin_officers` `admin_departments`
-`admin_permissions` `admin_settings` `admin_system` `admin_audit` `admin_testing` `admin_rs` |
+`admin_permissions` `admin_settings` `admin_system` `admin_audit` `admin_testing` `admin_rs` `admin_review`
+(Review: Flagged runs, Profiles, Disputes, Corrections; `{ tab }`). Sidebar groups and the search: `layouts/adminNav.ts`
+(`ADMIN_GROUPS`, `ADMIN_JUMPS`, `globalResults`, Ctrl+K `isSearchKey`) |
 
 `navigate(key, params)` passes params; read them with `useNavigation().params` (e.g. Leaderboard →
 `navigate('profile', { citizenid })`).

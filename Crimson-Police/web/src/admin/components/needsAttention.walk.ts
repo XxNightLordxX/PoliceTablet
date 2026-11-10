@@ -22,8 +22,11 @@ async function steps(): Promise<void> {
     const by = Object.fromEntries(lines.map(l => [l.key, l]));
     ok(by.problems?.screen === 'admin_system' && by.problems.params?.tab === 'problems', 'Problems opens its tab');
     ok(by.refused?.screen === 'admin_live' && by.refused.params?.tab === 'refused', 'refused: Live -> Refused');
-    ok(by.disputes?.screen === 'admin_officers' && by.disputes.params?.tab === 'disputes', 'Officers -> Disputes');
-    ok(by.flagged?.screen === 'admin_leaderboards' && by.flagged.n === 3, 'flagged runs: Leaderboards, the count');
+    ok(by.disputes?.screen === 'admin_review' && by.disputes.params?.tab === 'disputes', 'Review -> Disputes');
+    ok(
+        by.flagged?.screen === 'admin_review' && by.flagged.params?.tab === 'flagged' && by.flagged.n === 3,
+        'flagged runs: Review -> Flagged runs, the count',
+    );
     ok(by.rs?.screen === 'admin_rs' && by.rs.n === 0, 'open player suspect cases: Player suspects');
     ok(attentionWaiting(lines) === 3, 'three lines have something waiting');
 

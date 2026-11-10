@@ -7,7 +7,7 @@
 // the admin's own characters). Pairs and blocks: pair statistics and the running admin rows (admin:getRsPairs), and
 // the three tools (block a pair, exclude a suspect, suspend an officer), each with days and a reason, audited.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Badge,
     Button,
@@ -38,6 +38,7 @@ import { asArray } from '../../shared/data';
 import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest, type UseRequestResult } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
+import { useNavigation } from '../../shared/navigation';
 import type {
     RsAdminRow,
     RsCaseData,
@@ -914,8 +915,15 @@ function VolunteersTab({ req: { data, loading, error, refetch } }: { req: UseReq
     );
 }
 
+const TABS: Tab[] = ['cases', 'pairs', 'volunteers'];
+
 export default function RealSuspects() {
     const [tab, setTab] = useState<Tab>('cases');
+    // the Admin UI search opens a tab with navigate('admin_rs', { tab })
+    const { params } = useNavigation();
+    useEffect(() => {
+        if (typeof params.tab === 'string' && TABS.includes(params.tab as Tab)) setTab(params.tab as Tab);
+    }, [params]);
     const [openRun, setOpenRun] = useState<string | null>(null);
     const [tool, setTool] = useState<Partial<RsToolForm> | null>(null);
     const [version, setVersion] = useState(0);

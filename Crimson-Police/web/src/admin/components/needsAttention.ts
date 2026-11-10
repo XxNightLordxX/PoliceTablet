@@ -40,10 +40,16 @@ export function attentionLines(data: NeedsAttentionData | null | undefined): Att
             key: 'disputes',
             label: 'admin.home.attention_disputes',
             n: whole(data.disputes),
-            screen: 'admin_officers',
+            screen: 'admin_review',
             params: { tab: 'disputes' },
         },
-        { key: 'flagged', label: 'admin.home.attention_flagged', n: whole(data.flagged), screen: 'admin_leaderboards' },
+        {
+            key: 'flagged',
+            label: 'admin.home.attention_flagged',
+            n: whole(data.flagged),
+            screen: 'admin_review',
+            params: { tab: 'flagged' },
+        },
     ];
     if (typeof data.rsCases === 'number') {
         lines.push({ key: 'rs', label: 'admin.home.attention_rs', n: whole(data.rsCases), screen: 'admin_rs' });

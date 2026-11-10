@@ -2831,7 +2831,7 @@ local function PageSize()
     return Kit and Kit.pageSize and Kit.pageSize() or nil
 end
 
--- The flagged runs an admin reviews (his own runs left out): admin:getFlagged, and admin:getBoards withFlagged.
+-- The flagged runs an admin reviews (his own runs left out): admin:getFlagged (Admin UI -> Review -> Flagged runs).
 function Admin.flaggedFor(src)
     local _, citizenid = ViewerDepartment(src)
     return Admin.flaggedRows(nil, citizenid or '')

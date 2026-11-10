@@ -49,7 +49,7 @@ async function steps(): Promise<void> {
     // the screen: admins (antiFarmOverride) while the server says live crimes or volunteers are on
     const def = ADMIN_SCREENS.find(s => s.key === 'admin_rs');
     ok(def !== undefined, 'the Admin UI has a Real suspects screen');
-    ok(ADMIN_GROUP_OF.admin_rs === 'pvp', 'it sits under Player vs police');
+    ok(ADMIN_GROUP_OF.admin_rs === 'players', 'it sits under Real players');
     const visible = def?.visible ?? (() => true);
     ok(visible(session(['antiFarmOverride'], true)) === true, 'shown to an admin while the feature is on');
     ok(visible(session(['antiFarmOverride'], false)) === false, 'hidden while both features are off (as shipped)');

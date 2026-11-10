@@ -55,6 +55,7 @@ const AdminSystem = lazyScreen('admin', () => import('../admin/screens/System'))
 const AdminRealSuspects = lazyScreen('admin', () => import('../admin/screens/RealSuspects'));
 const AdminMoney = lazyScreen('admin', () => import('../admin/screens/Money'));
 const AdminMapMarkers = lazyScreen('admin', () => import('../admin/screens/MapMarkers'));
+const AdminReview = lazyScreen('admin', () => import('../admin/screens/Review'));
 
 export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     key: K;
@@ -143,6 +144,8 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
 ];
 
 export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
+    // Sidebar order: Home, then by job (layouts/adminNav.ts ADMIN_GROUPS): People, Missions, Real players, Money,
+    // Review, System
     {
         key: 'admin_home',
         titleKey: 'ui.screen.admin_home',
@@ -150,11 +153,34 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         component: AdminHome,
     },
     {
-        // Money: Pay rates, Rewards, Payments and Department funds as four tabs (layouts/adminMoney.ts)
-        key: 'admin_money',
-        titleKey: 'ui.screen.admin_money',
-        icon: 'dollar',
-        component: AdminMoney,
+        key: 'admin_officers',
+        titleKey: 'ui.screen.admin_officers',
+        icon: 'search',
+        component: AdminOfficers,
+    },
+    {
+        key: 'admin_departments',
+        titleKey: 'ui.screen.admin_departments',
+        icon: 'building',
+        component: AdminDepartments,
+    },
+    {
+        key: 'admin_permissions',
+        titleKey: 'ui.screen.admin_permissions',
+        icon: 'key',
+        component: AdminPermissions,
+    },
+    {
+        key: 'admin_leaderboards',
+        titleKey: 'ui.screen.admin_leaderboards',
+        icon: 'podium',
+        component: AdminLeaderboards,
+    },
+    {
+        key: 'admin_seasons',
+        titleKey: 'ui.screen.admin_seasons',
+        icon: 'calendar',
+        component: AdminSeasons,
     },
     {
         key: 'admin_missions',
@@ -176,40 +202,10 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         component: AdminMapMarkers,
     },
     {
-        key: 'admin_seasons',
-        titleKey: 'ui.screen.admin_seasons',
-        icon: 'calendar',
-        component: AdminSeasons,
-    },
-    {
-        key: 'admin_leaderboards',
-        titleKey: 'ui.screen.admin_leaderboards',
-        icon: 'podium',
-        component: AdminLeaderboards,
-    },
-    {
-        key: 'admin_officers',
-        titleKey: 'ui.screen.admin_officers',
-        icon: 'search',
-        component: AdminOfficers,
-    },
-    {
-        key: 'admin_departments',
-        titleKey: 'ui.screen.admin_departments',
-        icon: 'building',
-        component: AdminDepartments,
-    },
-    {
-        key: 'admin_permissions',
-        titleKey: 'ui.screen.admin_permissions',
-        icon: 'key',
-        component: AdminPermissions,
-    },
-    {
-        key: 'admin_settings',
-        titleKey: 'ui.screen.admin_settings',
-        icon: 'sliders',
-        component: AdminSettings,
+        key: 'admin_testing',
+        titleKey: 'ui.screen.admin_testing',
+        icon: 'flask',
+        component: AdminTesting,
     },
     {
         // Real suspects: while live crimes or volunteers are on (Config.RealSuspects.adminScreen)
@@ -220,10 +216,18 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         visible: s => has(s, 'antiFarmOverride') && s.config?.realSuspects?.screen === true,
     },
     {
-        key: 'admin_system',
-        titleKey: 'ui.screen.admin_system',
-        icon: 'server',
-        component: AdminSystem,
+        // Money: Pay rates, Rewards, Payments and Department funds as four tabs (layouts/adminMoney.ts)
+        key: 'admin_money',
+        titleKey: 'ui.screen.admin_money',
+        icon: 'dollar',
+        component: AdminMoney,
+    },
+    {
+        // Review: Flagged runs, Profiles, Disputes and Corrections as four tabs (admin/screens/Review.tsx)
+        key: 'admin_review',
+        titleKey: 'ui.screen.admin_review',
+        icon: 'eye',
+        component: AdminReview,
     },
     {
         key: 'admin_audit',
@@ -232,10 +236,16 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         component: AdminAudit,
     },
     {
-        key: 'admin_testing',
-        titleKey: 'ui.screen.admin_testing',
-        icon: 'flask',
-        component: AdminTesting,
+        key: 'admin_settings',
+        titleKey: 'ui.screen.admin_settings',
+        icon: 'sliders',
+        component: AdminSettings,
+    },
+    {
+        key: 'admin_system',
+        titleKey: 'ui.screen.admin_system',
+        icon: 'server',
+        component: AdminSystem,
     },
 ];
 

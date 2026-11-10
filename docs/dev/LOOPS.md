@@ -438,7 +438,6 @@ strings do not count.
 | `web/src/admin/components/kit/OfficerPicker.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/admin/components/officers/OfficerLists.tsx` | 2 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/admin/screens/Audit.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
-| `web/src/admin/screens/Officers.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/admin/screens/Testing.tsx` | 1 | 0 | clock tick, 30 s |
 | `web/src/builder/steps/StepTest.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/builder/useDraftEditor.ts` | 2 | 0 | autosave interval, validate debounce |
@@ -453,7 +452,7 @@ strings do not count.
 | `web/src/shared/components/Button.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/shared/components/QuietBoundary.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/shared/components/Toasts.tsx` | 2 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
-| `web/src/shared/hooks.ts` | 3 | 0 | `useRequest` poll, `useCountdown` (a timer per second) |
+| `web/src/shared/hooks.ts` | 4 | 0 | `useRequest` poll, `useCountdown` (a timer per second), `useDebounced` (one-shot) |
 | `web/src/shared/nui.ts` | 4 | 0 | request timeout, retry delay, mock latency |
 | `web/src/shared/rowWindow.ts` | 0 | 1 | one frame per scroll burst |
 | `web/src/supervisor/components/DeptNoticesCard.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |

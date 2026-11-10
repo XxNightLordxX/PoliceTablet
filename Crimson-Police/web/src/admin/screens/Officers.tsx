@@ -47,7 +47,7 @@ import {
 import { DecisionsBlock, PeopleBlock } from '../../hud/Debrief';
 import { asArray } from '../../shared/data';
 import { fmtDateTime, formatDateTime, formatNumber } from '../../shared/format';
-import { useAction, useRequest } from '../../shared/hooks';
+import { useAction, useDebounced, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { applyReplyView } from '../../shared/replyView';
 import type {
@@ -63,7 +63,7 @@ import { useNavigation } from '../../shared/navigation';
 
 import { CommendationTools, OfficerTools } from '../components/officers/OfficerTools';
 import { OfficerRuns, RunDialog } from '../components/officers/OfficerRuns';
-import { CorrectionsTab, DisputesTab, ReviewTab } from '../components/officers/OfficerLists';
+import { CorrectionsTab } from '../components/officers/OfficerLists';
 import type { AdminOfficerProfile, Commendation } from '../../types/profile';
 import { CommendationsCard } from '../../officer/components/CommendationsCard';
 import { ServiceRecordCard } from '../../officer/components/ServiceRecordCard';
@@ -79,15 +79,6 @@ const stateTone = (s: string) => (s === 'completed' ? 'success' : s === 'failed'
 // Date with the year (suspensions can run for years; formatDateTime leaves the year out).
 const fullDate = (ts: number | null | undefined) => (ts ? fmtDateTime(ts) : '—');
 const badgeDate = (v: unknown) => (typeof v === 'string' ? v.slice(0, 10) : typeof v === 'number' ? fullDate(v) : '');
-
-function useDebounced<T>(value: T, ms: number): T {
-    const [v, setV] = useState(value);
-    useEffect(() => {
-        const id = setTimeout(() => setV(value), ms);
-        return () => clearTimeout(id);
-    }, [value, ms]);
-    return v;
-}
 
 function ResultRow({ o, active, onSelect }: { o: OfficerSearchRow; active: boolean; onSelect: () => void }) {
     return (
@@ -1133,12 +1124,10 @@ function Detail({ citizenid }: { citizenid: string }) {
     );
 }
 
-type ScreenTab = 'officers' | 'review' | 'disputes' | 'corrections';
 const FILTER_KEYS = ['online', 'suspended', 'retired', 'excluded', 'review', 'dispute', 'flagged'] as const;
 
 export default function AdminOfficers() {
     const session = useSession();
-    const [screenTab, setScreenTab] = useState<ScreenTab>('officers');
     const [query, setQuery] = useState('');
     const debounced = useDebounced(query.trim(), 300);
     const [filters, setFilters] = useState<OfficerSearchFilters>({});
@@ -1159,124 +1148,95 @@ export default function AdminOfficers() {
             return next as OfficerSearchFilters;
         });
     };
-    const openOfficer = (cid: string) => {
-        setSelected(cid);
-        setScreenTab('officers');
-    };
-    // another screen (Live, Payments) links here with navigate('admin_officers', { citizenid })
+    // another screen (Live, Payments, Review, the search) links here with navigate('admin_officers', { citizenid })
     const { params } = useNavigation();
     const linked = typeof params.citizenid === 'string' ? params.citizenid : '';
     useEffect(() => {
-        if (linked) {
-            setSelected(linked);
-            setScreenTab('officers');
-        }
+        if (linked) setSelected(linked);
     }, [linked, params]);
-    // Home's Needs attention opens a tab with navigate('admin_officers', { tab })
-    useEffect(() => {
-        if (params.tab === 'review' || params.tab === 'disputes' || params.tab === 'corrections') {
-            setScreenTab(params.tab);
-        }
-    }, [params]);
 
     return (
         <Screen head="admin_officers" subtitle={t('admin.officers.subtitle')} className="oversight-screen">
-            <Tabs
-                items={[
-                    { key: 'officers', label: t('ui.admin_officers.tab.officers'), icon: 'users' },
-                    { key: 'review', label: t('ui.admin_officers.tab.review'), icon: 'eye' },
-                    { key: 'disputes', label: t('ui.admin_officers.tab.disputes'), icon: 'inbox' },
-                    { key: 'corrections', label: t('ui.admin_officers.tab.corrections'), icon: 'undo' },
-                ]}
-                value={screenTab}
-                onChange={setScreenTab}
-                aria-label={t('ui.admin_officers.tabs')}
-            />
-            {screenTab === 'review' ? <ReviewTab /> : null}
-            {screenTab === 'disputes' ? <DisputesTab onOpen={openOfficer} /> : null}
-            {screenTab === 'corrections' ? <CorrectionsTab /> : null}
-            {screenTab === 'officers' ? (
-                <div className="oversight-off-layout">
-                    <Card padding="none" className="oversight-off-list">
-                        <div className="oversight-off-list__search">
-                            <SearchInput
-                                value={query}
-                                onChange={setQuery}
-                                placeholder={t('admin.officers.search_placeholder')}
-                                aria-label={t('admin.officers.search_placeholder')}
-                                autoFocus
+            <div className="oversight-off-layout">
+                <Card padding="none" className="oversight-off-list">
+                    <div className="oversight-off-list__search">
+                        <SearchInput
+                            value={query}
+                            onChange={setQuery}
+                            placeholder={t('admin.officers.search_placeholder')}
+                            aria-label={t('admin.officers.search_placeholder')}
+                            autoFocus
+                        />
+                    </div>
+                    <div className="oversight-off-list__filters">
+                        <Select
+                            value={filters.department ?? ''}
+                            onChange={v => setFilter('department', v)}
+                            placeholder={t('ui.admin_officers.filter.any_department')}
+                            options={(session.config?.departments ?? []).map(d => ({
+                                value: d.key,
+                                label: d.short,
+                            }))}
+                            aria-label={t('ui.admin_officers.filter.department')}
+                        />
+                        {FILTER_KEYS.map(k => (
+                            <Checkbox
+                                key={k}
+                                checked={!!filters[k]}
+                                onChange={v => setFilter(k, v)}
+                                label={t(`ui.admin_officers.filter.${k}`)}
                             />
-                        </div>
-                        <div className="oversight-off-list__filters">
-                            <Select
-                                value={filters.department ?? ''}
-                                onChange={v => setFilter('department', v)}
-                                placeholder={t('ui.admin_officers.filter.any_department')}
-                                options={(session.config?.departments ?? []).map(d => ({
-                                    value: d.key,
-                                    label: d.short,
-                                }))}
-                                aria-label={t('ui.admin_officers.filter.department')}
-                            />
-                            {FILTER_KEYS.map(k => (
-                                <Checkbox
-                                    key={k}
-                                    checked={!!filters[k]}
-                                    onChange={v => setFilter(k, v)}
-                                    label={t(`ui.admin_officers.filter.${k}`)}
-                                />
-                            ))}
-                        </div>
-                        <div className="oversight-off-list__head">
-                            <span>
-                                {debounced
-                                    ? t('admin.officers.results_for', { n: data?.total ?? officers.length })
-                                    : t('admin.officers.results')}
-                            </span>
-                            {loading ? (
-                                <Spinner size={14} />
-                            ) : (
-                                <IconButton
-                                    icon="refresh"
-                                    size="sm"
-                                    label={t('sup.refresh')}
-                                    onClick={() => void refetch()}
-                                />
-                            )}
-                        </div>
-                        <div className="oversight-off-list__items">
-                            {error && !data ? (
-                                <ErrorState compact error={error} onRetry={() => void refetch()} />
-                            ) : !officers.length && !loading ? (
-                                <EmptyState compact icon="search" title={t('admin.officers.no_results')} />
-                            ) : (
-                                officers.map(o => (
-                                    <ResultRow
-                                        key={o.citizenid}
-                                        o={o}
-                                        active={o.citizenid === selected}
-                                        onSelect={() => setSelected(o.citizenid)}
-                                    />
-                                ))
-                            )}
-                        </div>
-                        <Pager page={data?.page ?? 1} pages={data?.pages ?? 1} onPage={setPage} />
-                    </Card>
-                    <div className="oversight-off-main">
-                        {selected ? (
-                            <Detail key={selected} citizenid={selected} />
+                        ))}
+                    </div>
+                    <div className="oversight-off-list__head">
+                        <span>
+                            {debounced
+                                ? t('admin.officers.results_for', { n: data?.total ?? officers.length })
+                                : t('admin.officers.results')}
+                        </span>
+                        {loading ? (
+                            <Spinner size={14} />
                         ) : (
-                            <Card padding="none">
-                                <EmptyState
-                                    icon="user"
-                                    title={t('admin.officers.select_title')}
-                                    text={t('admin.officers.select_text')}
-                                />
-                            </Card>
+                            <IconButton
+                                icon="refresh"
+                                size="sm"
+                                label={t('sup.refresh')}
+                                onClick={() => void refetch()}
+                            />
                         )}
                     </div>
+                    <div className="oversight-off-list__items">
+                        {error && !data ? (
+                            <ErrorState compact error={error} onRetry={() => void refetch()} />
+                        ) : !officers.length && !loading ? (
+                            <EmptyState compact icon="search" title={t('admin.officers.no_results')} />
+                        ) : (
+                            officers.map(o => (
+                                <ResultRow
+                                    key={o.citizenid}
+                                    o={o}
+                                    active={o.citizenid === selected}
+                                    onSelect={() => setSelected(o.citizenid)}
+                                />
+                            ))
+                        )}
+                    </div>
+                    <Pager page={data?.page ?? 1} pages={data?.pages ?? 1} onPage={setPage} />
+                </Card>
+                <div className="oversight-off-main">
+                    {selected ? (
+                        <Detail key={selected} citizenid={selected} />
+                    ) : (
+                        <Card padding="none">
+                            <EmptyState
+                                icon="user"
+                                title={t('admin.officers.select_title')}
+                                text={t('admin.officers.select_text')}
+                            />
+                        </Card>
+                    )}
                 </div>
-            ) : null}
+            </div>
         </Screen>
     );
 }

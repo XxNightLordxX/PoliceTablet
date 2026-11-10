@@ -250,30 +250,38 @@ Has(ml, 'oversight-mission__label', 'Mission List clamps long mission labels')
 Has(mlCss, '-webkit-line-clamp: 2', 'Mission List label clamp is two lines')
 
 -- ============================================================================
---                           ADMIN UI → Leaderboards
+--                       ADMIN UI → Review → Flagged runs
 -- ============================================================================
--- Approve / void a flagged run (SPEC Supervisor & admin actions).
+-- Approve / void a flagged run (SPEC Supervisor & admin actions). UI2: the flagged runs left Leaderboards for Review,
+-- which asks admin:getFlagged itself.
 
 do
+    local rv = Read(WEB .. 'admin/screens/Review.tsx')
     local lb = Read(WEB .. 'admin/screens/Leaderboards.tsx')
     local adminSrv = Read(ROOT .. 'modules/admin/server.lua')
-    H.ok(lb ~= nil and adminSrv ~= nil, 'Admin Leaderboards screen and modules/admin exist')
+    H.ok(rv ~= nil and lb ~= nil and adminSrv ~= nil, 'Admin Review and Leaderboards screens and modules/admin exist')
     Has(adminSrv, 'CP.Net.callback(\'admin:getFlagged\'', 'modules/admin registers admin:getFlagged')
     Has(adminSrv, 'CP.Net.action(\'server:admin:reviewFlagged\'', 'modules/admin registers server:admin:reviewFlagged')
-    Has(lb, 'const boardArgs = useMemo(() => ({ ...args, withFlagged: true }), [args]);',
-        'Admin Leaderboards loads the flagged runs with the board (one request)')
-    Has(lb, 'run(\'server:admin:reviewFlagged\', { rowId: review.row.rowId, decision: review.decision, reason }',
+    Has(rv, 'useRequest<{ flagged: FlaggedRow[] }>(\'admin:getFlagged\'',
+        'Review -> Flagged runs asks admin:getFlagged')
+    H.ok(not lb:find('withFlagged', 1, true) and not lb:find('FlaggedPanel', 1, true),
+        'Leaderboards no longer lists the flagged runs (one place: Review)')
+    H.ok(not Read(ROOT .. 'modules/leaderboard/server.lua'):find('withFlagged', 1, true),
+        'admin:getBoards no longer carries them')
+    Has(rv, 'run(\'server:admin:reviewFlagged\', { rowId: review.row.rowId, decision: review.decision, reason }',
         'Approve / Void send server:admin:reviewFlagged { rowId, decision, reason }')
-    Has(lb, 'onDecide(r, \'approve\')', 'each flagged row has Approve')
-    Has(lb, 'onDecide(r, \'void\')', 'each flagged row has Void')
-    local dialog = lb:match('<ConfirmDialog%s+open={!!review}(.-)/>')
+    Has(rv, 'onDecide(r, \'approve\')', 'each flagged row has Approve')
+    Has(rv, 'onDecide(r, \'void\')', 'each flagged row has Void')
+    local dialog = rv:match('<ConfirmDialog%s+open={!!review}(.-)/>')
     H.ok(dialog ~= nil and dialog:find('required: true', 1, true) ~= nil, 'the review dialog requires a reason')
-    Has(lb, '// the board\'s refetch brings the flagged runs too', 'the flagged list refreshes after a decision')
+    Has(rv, '// a decided row leaves the list', 'the flagged list refreshes after a decision')
     local missing = {}
-    for key in pairs(LiteralKeys(lb)) do if not keys[key] then missing[#missing + 1] = key end end
-    for key in lb:gmatch('\'(sup%.review%.[%w_]+)\'') do if not keys[key] then missing[#missing + 1] = key end end
+    for _, src in ipairs({ lb, rv }) do
+        for key in pairs(LiteralKeys(src)) do if not keys[key] then missing[#missing + 1] = key end end
+        for key in src:gmatch('\'(sup%.review%.[%w_]+)\'') do if not keys[key] then missing[#missing + 1] = key end end
+    end
     table.sort(missing)
-    H.eq(#missing, 0, 'every text key of Admin Leaderboards exists (' .. table.concat(missing, ', ') .. ')')
+    H.eq(#missing, 0, 'every text key of Admin Leaderboards and Review exists (' .. table.concat(missing, ', ') .. ')')
 end
 
 -- ============================================================================
@@ -363,11 +371,11 @@ do
     end
     H.eq(
         table.concat(main, ','),
-        'admin_home,admin_money,admin_missions,admin_live,admin_markers,admin_officers,admin_permissions,admin_settings,'
-            .. 'admin_rs,admin_system',
-        'the everyday admin screens stay in the sidebar'
+        'admin_home,admin_officers,admin_departments,admin_permissions,admin_missions,admin_live,admin_markers,'
+            .. 'admin_testing,admin_rs,admin_money,admin_review,admin_audit,admin_settings,admin_system',
+        'the everyday admin screens stay in the sidebar, by job'
     )
-    H.eq(#more, 5, 'the rare tools fold under More (' .. table.concat(more, ',') .. ')')
+    H.eq(#more, 2, 'the rare tools fold under More (' .. table.concat(more, ',') .. ')')
     local rs = admin:match('key: \'admin_rs\',(.-)}') or ''
     H.ok(rs:find('s.config?.realSuspects?.screen === true', 1, true) ~= nil,
         'Real suspects (V18) shows only while the server says live crimes or volunteers are on')
@@ -434,8 +442,9 @@ do
     end
     Has(home, 'const stuck = counts.adminPayments ?? 0;', 'stuck payments come from the sidebar counts')
     local missions = Read(WEB .. 'admin/screens/Missions.tsx')
-    Has(missions, 'if (params.tab === \'builder\' || params.tab === \'catalog\') setTab(params.tab);',
-        'Missions opens the tab Home asks for')
+    Has(missions, 'LINK_TABS.includes(params.tab as Tab)) setTab(params.tab as Tab);',
+        'Missions opens the tab Home (or the search) asks for')
+    Has(missions, 'const LINK_TABS: Tab[] = [\'catalog\', \'builder\',', 'Home\'s builder and catalog tabs among them')
     local att = Read(WEB .. 'admin/components/needsAttention.ts') or ''
     Has(att, 'screen: \'admin_live\'', 'Refused starts today (Needs attention) opens Live')
     local live = Read(WEB .. 'admin/screens/Live.tsx') or ''
