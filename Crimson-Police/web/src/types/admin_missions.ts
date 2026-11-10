@@ -1,4 +1,4 @@
-// Full admin control, Missions and Mission Builder (docs/ARCHITECTURE.md §8.4.2): the shapes of the admin reads and
+// Full admin control, Missions and Mission Builder (docs/dev/ARCHITECTURE.md §8.4.2): the shapes of the admin reads and
 // actions of modules/missions, builder, testing, operations and missioncalls.
 
 // ============================================================================

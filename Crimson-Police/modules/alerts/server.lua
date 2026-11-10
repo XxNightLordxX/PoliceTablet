@@ -1,8 +1,8 @@
 -- CP.Alerts (server): Hard rule 16 (no mission alerts) and the only writer of the crimsonArena state bag
--- (docs/ARCHITECTURE.md §5.14, Crimson-Arena rules 1, 2, 3, 9, 11).
+-- (docs/dev/ARCHITECTURE.md §5.14, Crimson-Arena rules 1, 2, 3, 9, 11).
 
 -- modules/alerts/server.lua · CP.Alerts (server): Hard rule 16 (no mission alerts) and the only writer
--- of the crimsonArena state bag (docs/ARCHITECTURE.md §5.14, docs/INTEGRATIONS.md, Crimson-Arena rules 1, 2, 3, 9, 11).
+-- of the crimsonArena state bag (docs/dev/ARCHITECTURE.md §5.14, docs/dev/INTEGRATIONS.md, Crimson-Arena rules 1, 2, 3, 9, 11).
 --
 -- Owns: the replicated player state bag key 'crimsonArena' (the name is fixed by sc-dispatch,
 -- sc-ambulance and Crimson-Arena), the intent table 'wanted', the re-assert of our flag after another

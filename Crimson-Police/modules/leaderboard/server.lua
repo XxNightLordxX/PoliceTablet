@@ -27,7 +27,7 @@
 --   privacy = hide_name officers show their callsign (or leaderboard.hidden_name) instead of their name;
 --             cash is never on public boards.
 --
--- Public API (docs/ARCHITECTURE.md §5.22)
+-- Public API (docs/dev/ARCHITECTURE.md §5.22)
 --   callback getBoard({ period, filter, department? }) -> Board (§9.4) plus
 --       { department?, minRuns, topN, ranked, window = { from, to|nil, fromDate, toDate|nil }, season = { id, name }|nil }
 --       fromDate/toDate = 'YYYY-MM-DD' in server time; the tablet shows these, never from/to in the player's time zone

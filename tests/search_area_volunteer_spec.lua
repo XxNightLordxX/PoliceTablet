@@ -1,4 +1,4 @@
--- search_area's volunteer slot (docs/ARCHITECTURE.md §7.3): Manhunt's fugitive played by a volunteer who hides
+-- search_area's volunteer slot (docs/dev/ARCHITECTURE.md §7.3): Manhunt's fugitive played by a volunteer who hides
 -- inside the search circle. The real engine and block; CP.Volunteers.matchView (ctx.volunteer()), its caseArea /
 -- caseNote / outOfBounds and CP.Opponents.view / caseOf are stubs the spec sets, so only the block's rules are tested.
 

@@ -1,6 +1,6 @@
 # Crimson-Police · web UI
 
-Full guide: section [12. For developers](../../README.md#12-for-developers) of the `README.md` in the repository
+Full guide: [docs/dev/README.md](../../docs/dev/README.md) (for developers) in the repository
 root. This note says the same in short.
 
 **Server owners: you never need to touch this folder.** It holds the tablet's screens (the Officer, Supervisor and
@@ -18,4 +18,4 @@ npm run dev       # the UI in a browser at http://localhost:5173, with sample da
 ```
 
 The full developer guide (source layout, adding a screen, the NUI bridge, hooks, theme variables and component
-props) is `docs/ARCHITECTURE.md §12` in the repository root.
+props) is `docs/dev/ARCHITECTURE.md §12` in the repository root.

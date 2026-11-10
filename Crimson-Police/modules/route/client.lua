@@ -1,4 +1,4 @@
--- CP.Route (client): the GPS route to the mission start and the reports the server checks (docs/ARCHITECTURE.md §5.12,
+-- CP.Route (client): the GPS route to the mission start and the reports the server checks (docs/dev/ARCHITECTURE.md §5.12,
 -- SPEC "Route to the start").
 
 -- Owns: the start waypoint, the named "Mission start" pin (Config.Markers.kinds.start; kept from begin until

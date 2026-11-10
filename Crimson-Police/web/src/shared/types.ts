@@ -1,4 +1,4 @@
-// Every NUI data shape (docs/ARCHITECTURE.md §9.2–§9.6, verbatim) plus the UI-side helper types. Screen code imports
+// Every NUI data shape (docs/dev/ARCHITECTURE.md §9.2–§9.6, verbatim) plus the UI-side helper types. Screen code imports
 // its shapes from here; never redeclare them locally. If a module owner adds a field on the Lua side, add it here
 // (optional) rather than casting.
 

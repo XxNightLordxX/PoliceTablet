@@ -3,7 +3,7 @@
 -- Owns exports.qbx_core:GetPlayerData() and the qbx_core client events the tablet reacts to. These
 -- client events are for the UI only; every decision about runs, roles and access stays on the server.
 --
--- Public API (docs/ARCHITECTURE.md §5.1)
+-- Public API (docs/dev/ARCHITECTURE.md §5.1)
 --   CP.Qbx.getPlayerData() -> PlayerData
 --       A fresh copy from qbx_core every call ({} before a character is loaded or after logout, so
 --       test 'pd.job', never just 'pd'). Display only: the server re-checks everything.

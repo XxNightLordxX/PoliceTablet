@@ -23,7 +23,7 @@
 --     answer it; a failed manual award re-opens it. Every answer is audited (category flags) and posted
 --     to the flags webhook; filing posts to the flags webhook. The officer gets a toast when online.
 --
--- Public API (docs/ARCHITECTURE.md §5.24)
+-- Public API (docs/dev/ARCHITECTURE.md §5.24)
 --   CP.Disputes.eligible(row, citizenid, nowTs) -> ok, errKey|nil, kind    pure; kind 'voided'|'flagged'|'failed'
 --       row = { citizenid, mission_type, state, flagged, voided, created_ts }
 --   CP.Disputes.kindOf(row) -> 'voided'|'flagged'|'failed'|nil      CP.Disputes.goesTo(kind) -> 'supervisor'|'admin'

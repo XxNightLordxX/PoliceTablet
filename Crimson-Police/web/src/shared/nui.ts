@@ -1,4 +1,4 @@
-// The NUI bridge (docs/ARCHITECTURE.md §9.1).
+// The NUI bridge (docs/dev/ARCHITECTURE.md §9.1).
 
 //   Lua → NUI: window 'message' events whose data.type is one of
 //              open | close | session | notify | hud | result | push | overlay | theme

@@ -1,4 +1,4 @@
--- Loops run less often (docs/LOOPS.md): CP.Perf scales the idle and far waits by
+-- Loops run less often (docs/dev/LOOPS.md): CP.Perf scales the idle and far waits by
 -- Config.Performance.loopScale (1-4) and never a per-frame wait; the slower shipped intervals; the NUI's shortest
 -- screen poll.
 
@@ -94,9 +94,9 @@ H.advance(5000, 250)
 Config.Performance.loopScale = 1.0
 
 -- ============================================================================
---                      SHIPPED INTERVALS (docs/LOOPS.md)
+--                    SHIPPED INTERVALS (docs/dev/LOOPS.md)
 -- ============================================================================
--- The idle and far waits the owner asked to be slower, read from the files (before -> after in docs/LOOPS.md).
+-- The idle and far waits the owner asked to be slower, read from the files (before -> after in docs/dev/LOOPS.md).
 
 local function Read(rel)
     local f = assert(io.open(H.root .. rel, 'r'))

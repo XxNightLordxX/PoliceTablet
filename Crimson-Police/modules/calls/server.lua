@@ -1,4 +1,4 @@
--- CP.Calls (server): Hard rule 15, real calls first (docs/ARCHITECTURE.md §5.13, SPEC "Real calls end missions; NPC
+-- CP.Calls (server): Hard rule 15, real calls first (docs/dev/ARCHITECTURE.md §5.13, SPEC "Real calls end missions; NPC
 -- calls never do", INTEGRATIONS sc-dispatch and sc-npcpolice).
 
 -- Owns: the responding map (who is responding to which real call), the free abandon on a real call, the

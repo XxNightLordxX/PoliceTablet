@@ -1566,7 +1566,7 @@ do
     H.ok(CP.Draw.isReserved(last.mission.id, last.locationIndex), 'draw reserves for the run as a fallback')
     rs.mode = 'ok'
 
-    -- an invite accepted while the checks yield (docs/ARCHITECTURE.md §5.16): the locked unit would hold an
+    -- an invite accepted while the checks yield (docs/dev/ARCHITECTURE.md §5.16): the locked unit would hold an
     -- officer who was never checked and is not on the run -> refused, unlocked, the leader tries again
     unit.locked = false
     local realHourly = CP.Runs.completionsLastHour

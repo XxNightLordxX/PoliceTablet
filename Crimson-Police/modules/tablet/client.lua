@@ -7,7 +7,7 @@
 -- the result screen, overlays, live pushes, the department theme sent at login, and every NUI callback.
 -- Every open goes through the server callback getSession, so the server decides who may open what.
 --
--- Public API (docs/ARCHITECTURE.md §5.4)
+-- Public API (docs/dev/ARCHITECTURE.md §5.4)
 --   CP.Tablet.open(ui) -> ok, errKey        ui 'officer'|'supervisor'|'admin'; asks getSession, shows the
 --                                           UI and takes focus; on refusal shows the error as a toast.
 --                                           Yields (call it from a thread).
@@ -59,7 +59,7 @@
 -- down when the focus goes back to the game over as a new press. One thread; a second close extends it.
 -- The UI closes on duty loss, on a switch away from the job it was opened with (or out of every
 -- department) and on character unload (the Admin UI only on unload).
--- Crimson-Arena (docs/INTEGRATIONS.md, Crimson-Arena rule 8): while the local player carries a foreign crimsonArena
+-- Crimson-Arena (docs/dev/INTEGRATIONS.md, Crimson-Arena rule 8): while the local player carries a foreign crimsonArena
 -- value (Crimson-Arena's, not { source = 'crimson-police' }) the command, key mapping, tablet item,
 -- OpenTablet, switchUi and client:openAdmin refuse with the toast err.in_arena; when such a value
 -- arrives, every Crimson-Police UI closes (prop deleted, animation stopped), the HUD and overlays are

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tools/setup_test_env.sh · checks what tools/check_all.sh needs on Debian/Ubuntu, and installs it on request.
-# Safe to run again and again: it only changes what is missing. docs/TESTING.md explains every line.
+# Safe to run again and again: it only changes what is missing. docs/dev/TESTING.md explains every line.
 #
 #   tools/setup_test_env.sh                   check only: one line per requirement, the fix for each problem
 #   tools/setup_test_env.sh --install         also install what is missing: apt packages, Node.js 22 from
@@ -33,13 +33,13 @@ for a in "$@"; do
     esac
 done
 
-# The versions the suite is known to pass with (docs/TESTING.md) and CI pins.
+# The versions the suite is known to pass with (docs/dev/TESTING.md) and CI pins.
 MARIADB_SERIES=10.11
 NODE_MAJOR=22
 NODE_FLOOR=18   # vite 6: ^18 || ^20 || >=22
 NODESOURCE=https://deb.nodesource.com
 NODE_FIX="install Node.js $NODE_MAJOR (--install uses NodeSource; or nvm install $NODE_MAJOR)"
-# the formatters of the style step (docs/STYLE.md pins them: another version may lay the code out differently)
+# the formatters of the style step (docs/dev/STYLE.md pins them: another version may lay the code out differently)
 STYLUA_VERSION=2.5.2
 PRETTIER_VERSION=3.9.9
 
@@ -412,7 +412,7 @@ fi
 
 echo
 if [ "$PROBLEMS" -eq 0 ]; then
-    echo "ready: $WARNINGS warning(s). Run tools/check_all.sh (docs/TESTING.md)."
+    echo "ready: $WARNINGS warning(s). Run tools/check_all.sh (docs/dev/TESTING.md)."
 else
     echo "$PROBLEMS problem(s), $WARNINGS warning(s)."
     [ "$INSTALL" = 0 ] && echo "tools/setup_test_env.sh --install fixes what apt, NodeSource and npm ci can."

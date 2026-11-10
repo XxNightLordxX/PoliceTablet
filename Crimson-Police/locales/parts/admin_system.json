@@ -224,7 +224,7 @@
   "sysadmin.ui.res_stopping": "Stopping",
   "sysadmin.ui.res_uninitialized": "Not started",
   "sysadmin.ui.res_unknown": "Unknown",
-  "sysadmin.ui.checklist_title": "Checklist (README §7)",
+  "sysadmin.ui.checklist_title": "Checklist (owner guide 4)",
   "sysadmin.ui.checklist_note": "Crimson-Police never edits another resource: fix these in their own config.",
   "sysadmin.ui.arena_title": "Crimson-Arena",
   "sysadmin.ui.arena_players": "Players in the arena",

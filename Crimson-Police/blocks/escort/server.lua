@@ -1185,7 +1185,7 @@ local function WatchTruck(ctx, st, dt)
         Advance(ctx, st, c)
         TriggerWaves(ctx, st, c)
         -- 2D, like the waypoints: the destination is a point on the road map, and a route's z (recorded
-        -- or estimated) must not shrink the arrival circle (docs/ARCHITECTURE.md §5.6). Only on the final
+        -- or estimated) must not shrink the arrival circle (docs/dev/ARCHITECTURE.md §5.6). Only on the final
         -- stretch: a route may pass its destination earlier (the other carriageway, a road under a bridge).
         if tr.wp >= #st.points and U.dist2d(c, st.points[#st.points]) <= ctx.obj.arrival then
             tr.arrived = true
@@ -1297,7 +1297,7 @@ local function Flush(ctx, st)
     end
 end
 
--- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
+-- The objective pointer (CP.Runs.marker, docs/dev/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
 -- up mark on the map"): the truck at the server's position, so an officer too far away for his game still sees it
 -- (Config.Markers.farTargets), and the destination. Each officer's own game decides his GPS line: to the truck while
 -- HE is farther than clearRadius from it (beyond), else to the destination. Keyed by the truck's

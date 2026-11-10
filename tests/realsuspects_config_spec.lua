@@ -12,7 +12,7 @@ local function ReadRepo(rel)
     return s
 end
 
--- The bullet of a section that starts with "- <first words>" (one line in docs/SPEC.md).
+-- The bullet of a section that starts with "- <first words>" (one line in docs/dev/SPEC.md).
 local function Bullet(text, first)
     for line in (text or ''):gmatch('[^\n]+') do
         if line:sub(1, #first + 2) == '- ' .. first then return line end
@@ -532,15 +532,15 @@ end
 
 do
     local readme = ReadRepo('README.md')
-    -- README 5.10 (what ships off): live crimes and volunteers are switches that ship off; the route switch ships on
-    local ships = readme and readme:match('### 5%.10 What ships off.-\n## ') or ''
+    -- README 5.2 (what ships off): live crimes and volunteers are switches that ship off; the route switch ships on
+    local ships = readme and readme:match('### 5%.2 What ships off.-\n## ') or ''
     local off, on = ships:match('%*%*Ships off%*%*(.-)%*%*Ships on%*%*(.*)')
     H.ok(Has(off, '`Config.LiveCrime.enabled`') and Has(off, '`Config.Volunteers.enabled`'),
-        'README 5.10 lists live crimes and volunteers as shipping off')
-    H.ok(Has(on, '`Config.Route.required`'), 'README 5.10 lists the start route switch as shipping on')
+        'README 5.2 lists live crimes and volunteers as shipping off')
+    H.ok(Has(on, '`Config.Route.required`'), 'README 5.2 lists the start route switch as shipping on')
 
-    local spec = ReadRepo('docs/SPEC.md')
-    H.ok(spec ~= nil, 'docs/SPEC.md is readable')
+    local spec = ReadRepo('docs/dev/SPEC.md')
+    H.ok(spec ~= nil, 'docs/dev/SPEC.md is readable')
     local route = Bullet(spec, 'Route to the start:')
     local switches = Bullet(spec, 'Rule switches:')
     -- RT1's sentences, word for word
@@ -565,7 +565,7 @@ do
     H.ok(Has(Bullet(spec, 'Real calls first:'), 'There are exactly three exceptions'), 'Real calls first: three')
     H.ok(Has(Bullet(spec, 'Mission choice:'), 'Only five exceptions exist'), 'Mission choice: five (step P19 push)')
 
-    local arch = ReadRepo('docs/ARCHITECTURE.md')
+    local arch = ReadRepo('docs/dev/ARCHITECTURE.md')
     for _, head in ipairs({
         '### 5.45 CP.Opponents',
         '### 5.46 CP.LiveCrime',

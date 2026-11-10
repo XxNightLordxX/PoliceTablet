@@ -1,6 +1,6 @@
 -- CP.Ambulance (client): sc-ambulance's standard EMS request for a downed participant.
 
--- Public API (docs/ARCHITECTURE.md §5.1)
+-- Public API (docs/dev/ARCHITECTURE.md §5.1)
 --   CP.Ambulance.sendEMSRequest() -> boolean
 --       TriggerServerEvent('hospital:server:EMSDownAlert', streetName) from the downed player's OWN
 --       client (sc-ambulance uses 'source' as the patient), with the street name computed exactly as
@@ -18,7 +18,7 @@ local DEBOUNCE_MS = 5000
 
 local lastSentAt = -1
 
--- A crimsonArena value that is not Crimson-Police's own (docs/INTEGRATIONS.md, Crimson-Arena).
+-- A crimsonArena value that is not Crimson-Police's own (docs/dev/INTEGRATIONS.md, Crimson-Arena).
 local function InForeignArena()
     local st = LocalPlayer and LocalPlayer.state
     local v = st and st.crimsonArena

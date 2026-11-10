@@ -12,7 +12,7 @@
 --     reviewFlagged, handleDisputes, handleFailedDispute or voidAnyRun and the own-run check applies to
 --     admins too.
 --
--- Public API (docs/ARCHITECTURE.md §5.3)
+-- Public API (docs/dev/ARCHITECTURE.md §5.3)
 --   CP.Permissions.can(src, action, ctx) -> boolean, errKey
 --       ctx (optional table):
 --         runUuid      -> own-run check for the review actions above (err.own_run, err.invalid_run)
@@ -46,7 +46,7 @@ local ADMIN_ONLY_LIST = {
     'reloadMissions',
     'testRun',
     'openAdmin',
-    -- full admin control (docs/ARCHITECTURE.md §5.37): admins and the console only, whatever Config.Permissions says
+    -- full admin control (docs/dev/ARCHITECTURE.md §5.37): admins and the console only, whatever Config.Permissions says
     'officerRecords',     -- retire, look, profile cooldown, board exclusion, banned words, staff notices
     'pointsAdjust',       -- signed manual adjustments
     'bulkVoid',           -- void or restore many rows as one batch

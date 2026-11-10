@@ -476,7 +476,7 @@ _G.Entity, _G.LocalPlayer = plainEntity, plainLocal
 -- ============================================================================
 --                           (g) ONE PASS OF THE EYE
 -- ============================================================================
--- NATIVES AND RUN LOOKUPS (step OP3, docs/LOOPS.md).
+-- NATIVES AND RUN LOOKUPS (step OP3, docs/dev/LOOPS.md).
 -- ox_target asks every option of a pass in one frame. The run, the player's own state (dead, in a vehicle) and each
 -- entity's exists / networked check are read once per frame, like the bag. Before OP3, one pass over a contacted
 -- person (every ped option) and a stopped car with three seats (every vehicle option) made 96 entity checks, 82 run

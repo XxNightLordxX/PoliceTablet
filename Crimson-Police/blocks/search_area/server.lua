@@ -1350,7 +1350,7 @@ end
 -- ============================================================================
 --                              OBJECTIVE POINTER
 -- ============================================================================
--- CP.Runs.marker (docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come up mark on the map").
+-- CP.Runs.marker (docs/dev/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come up mark on the map").
 -- Until an officer has entered the search: the current circle (it shrinks with every clue) in
 -- Config.Markers.kinds.searchArea, key 'center' (the client half hands its centre blip over with it), so each officer's
 -- GPS line goes to the middle until he is inside. Then whoever runs or gave up, at the server's position and keyed by

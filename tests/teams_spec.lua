@@ -1296,7 +1296,7 @@ H.time = H.time + 300
 H.advance(2000, 500)
 H.eq(O.active() and O.active().status, 'running', 'tick thread starts the run at window end')
 
--- Integration (docs/ARCHITECTURE.md §5.1: "use notifyMany with a list of sources"): participant toasts go through
+-- Integration (docs/dev/ARCHITECTURE.md §5.1: "use notifyMany with a list of sources"): participant toasts go through
 -- CP.Tablet.notifyMany when the tablet module provides it, one call per toast, never a -1 broadcast.
 local manyCalls = {}
 CP.Tablet.notifyMany = function(srcs, kind, key, vars)

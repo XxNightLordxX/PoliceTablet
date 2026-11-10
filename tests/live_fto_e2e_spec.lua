@@ -4,7 +4,7 @@
 -- Crimson-Police, every server file loaded as in game, database off (the saves folder, as shipped), every switch these
 -- workflows touch turned on by the admin through the Admin UI's own Settings action. Each workflow also meets a
 -- resource restart in its middle (H.restart, then every server file loaded again from the same saves folder), and
--- what survives is what README 9.16.4 and 6.11 say. Only the other resources and the natives are stubs.
+-- what survives is what docs/OWNER_GUIDE.md 6.4 and 3.11 say. Only the other resources and the natives are stubs.
 
 local H = dofile('tests/harness.lua')
 H.useFiles()
@@ -750,7 +750,7 @@ end
 --                  3. A RESTART IN THE MIDDLE OF A LIVE CASE
 -- ============================================================================
 -- AND OF A SURRENDER.
--- README 9.16.4: a restart ends every open case and its run with no row, no pay and no cooldown; the closed cases,
+-- docs/OWNER_GUIDE.md 6.4: a restart ends every open case and its run with no row, no pay and no cooldown; the closed cases,
 -- the payments and the settings stay.
 
 do
@@ -842,7 +842,7 @@ end
 --                              4. FIELD TRAINING
 -- ============================================================================
 -- PAIR, A RESTART MID-RUN, THE TASK, A RESTART, SIGN-OFF, BADGE, REWARDS.
--- README 6.11: nothing is lost on a restart (the training is saved with the officer).
+-- docs/OWNER_GUIDE.md 3.11: nothing is lost on a restart (the training is saved with the officer).
 
 do
     -- an officer cannot pair; the supervisor pairs the rookie with the trainer
@@ -928,7 +928,7 @@ end
 --             5. A PLAYER QUITS AND COMES BACK IN THE MIDDLE OF IT
 -- ============================================================================
 -- Step FX1. A LIVE CRIME: A SUSPECT AND AN OFFICER DROP; FIELD TRAINING: THE ROOKIE MID-RUN, THE TRAINER BEFORE THE
--- SIGN-OFF. README 9.16 and 6.11: a suspect who comes back within Config.RealSuspects.disconnectGrace stays in the
+-- SIGN-OFF. docs/OWNER_GUIDE.md 6 and 3.11: a suspect who comes back within Config.RealSuspects.disconnectGrace stays in the
 -- case; an officer who quits leaves the run with his own result while it goes on for the rest; the training is saved.
 
 -- A player quits (FXServer's playerDropped) and later joins again with the same character (Qbox's player loaded).

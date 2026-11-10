@@ -5,7 +5,7 @@
 -- Never uses sc-dispatch's call-creating export (missions never create dispatch calls) and never
 -- triggers any sc-dispatch event. sc-dispatch's own handlers always run as well; nothing here blocks them.
 --
--- Event registration (docs/INTEGRATIONS.md, sc-dispatch):
+-- Event registration (docs/dev/INTEGRATIONS.md, sc-dispatch):
 --   RegisterNetEvent  sc-dispatch:server:ToggleResponding (callId, isResponding)   client-originated
 --   RegisterNetEvent  sc-dispatch:server:ShotsFired / PlayerDown / PlayerDead (data) client-originated
 --   AddEventHandler   sc-dispatch:server:callClearedByOfficer (callId)   server-local ONLY, so no client
@@ -14,7 +14,7 @@
 -- Every net handler captures 'source' on its first line (and os.time() right after, before anything can
 -- yield) and validates the payload; per-player rate limits go through CP.Net.rateOk.
 --
--- Public API (docs/ARCHITECTURE.md §5.1)
+-- Public API (docs/dev/ARCHITECTURE.md §5.1)
 --   CP.Dispatch.available() -> boolean                 sc-dispatch is started
 --   CP.Dispatch.isSuspended(citizenid, jobName) -> boolean
 --       exports['sc-dispatch']:IsPlayerSuspended(citizenid, jobName); false when sc-dispatch is not

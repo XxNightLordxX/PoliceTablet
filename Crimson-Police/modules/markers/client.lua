@@ -1,7 +1,7 @@
 -- CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre)
 
 -- CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre)
--- and at most one GPS line to it, cleared at every objective stop and run end (docs/ARCHITECTURE.md §5.44); the
+-- and at most one GPS line to it, cleared at every objective stop and run end (docs/dev/ARCHITECTURE.md §5.44); the
 -- prisoner van and tow truck coming to him (M.service) and the other parts of his mission the server sends
 -- (Config.Markers.parts, M.applyParts), each part with its own look.
 
@@ -589,7 +589,7 @@ end
 --                                  THE MARKER
 -- ============================================================================
 -- m = { kind = 'point'|'area'|'targets', look, label, key, number, coords, radius, route = true|false|'block',
---       targets = { { key, netId, x, y, z, look, label, variant, number, beyond } } } (docs/ARCHITECTURE.md §5.44)
+--       targets = { { key, netId, x, y, z, look, label, variant, number, beyond } } } (docs/dev/ARCHITECTURE.md §5.44)
 
 local function Build(m)
     local list = {}

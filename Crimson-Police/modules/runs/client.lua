@@ -22,12 +22,12 @@
 -- Client action (NUI 'client' endpoint): logResult { point, choice } -> report(current objective,
 --   { type = 'log', point, choice }) (Business Check tablet log)
 -- Events handled: client:start, client:inProgress, client:objective, client:hud, client:tierChanged,
---   client:hostChanged, client:participants, client:runEnded (docs/ARCHITECTURE.md §8.1), and
+--   client:hostChanged, client:participants, client:runEnded (docs/dev/ARCHITECTURE.md §8.1), and
 --   client:routeStatus 'action' (a late partner): CP.Markers.leads({ radioSilence }) decides
 --   whether the start goes (the start circle here, then CP.Route.follow(runId, true)) or stays as his guide
 --   (CP.Route.follow(runId, false)); CP.Markers routes once CP.Route says he follows the action.
 --
--- Contract interpretations (docs/ARCHITECTURE.md §5.10)
+-- Contract interpretations (docs/dev/ARCHITECTURE.md §5.10)
 --   * client:start begins the start route with CP.Route.begin(runId, startCoords, { startRoute, radius })
 --     (a test run with the route off gets a waypoint only); CP.Route.stop() runs when this player arrives
 --     and at the end.

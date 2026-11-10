@@ -3,14 +3,14 @@
 -- Owns every exports.qbx_core call on the server and the qbx_core server events Crimson-Police
 -- listens to. Those events are fired by qbx_core with TriggerEvent (server-local), so they are
 -- registered with AddEventHandler ONLY: a net handler would let any client spoof a duty or job
--- change (docs/INTEGRATIONS.md, qbx_core-usage). The Qbox player object itself is never kept (getPlayer
+-- change (docs/dev/INTEGRATIONS.md, qbx_core-usage). The Qbox player object itself is never kept (getPlayer
 -- always calls GetPlayer, so money Functions act on a fresh object). getInfo's answer is reused for
 -- Config.Limits.playerInfoCacheMs (1000 ms; 0 = ask Qbox every time) and every Qbox change event clears
 -- it at once: SetDuty, PlayerLoaded, OnJobUpdate, OnPlayerUnload, onGroupUpdate, onSetMetaData,
 -- QBCore:Player:SetPlayerData (qbx_core's UpdatePlayerData, sent after every change), playerDropped and
 -- a qbx_core stop or start. Each caller gets its own copy of the top level and the job table.
 --
--- Public API (docs/ARCHITECTURE.md §5.1)
+-- Public API (docs/dev/ARCHITECTURE.md §5.1)
 --   CP.Qbx.getPlayer(src) -> player|nil
 --       Raw Qbox player object (fields under player.PlayerData).
 --   CP.Qbx.getInfo(src) -> info|nil

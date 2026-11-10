@@ -848,7 +848,7 @@ local function Stop(ctx)
     st.current = false
 end
 
--- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
+-- The objective pointer (CP.Runs.marker, docs/dev/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
 -- up mark on the map"): every hostage still restrained, at the server's position (so an officer too far away for his
 -- game still sees them, Config.Markers.farTargets), and the safe point once a hostage is free to be led there. Each
 -- officer's own game routes him to his nearest. Keyed by the hostage's net id and 'safe', the keys the client half

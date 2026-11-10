@@ -1393,7 +1393,7 @@ end
 --                              OBJECTIVE POINTER
 -- ============================================================================
 -- The owner (2026-10-19): "ensure all objectives as they come up mark on the map" (CP.Runs.marker,
--- docs/ARCHITECTURE.md §5.44). Every contact not yet decided, at the server's position, so one too far away for an
+-- docs/dev/ARCHITECTURE.md §5.44). Every contact not yet decided, at the server's position, so one too far away for an
 -- officer's game still shows (Config.Markers.farTargets): a car in kinds.contactVehicle, a person in kinds.contact, or
 -- kinds.fleeing (orange) while he runs and kinds.suspect (red) once he draws or gave up after running. Keyed by net id
 -- (the client half hands its own blip of each over), in the order they appeared, so the shape never changes by

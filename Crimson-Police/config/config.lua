@@ -42,7 +42,7 @@ Config.Locale = 'en'             -- the language of every text: 'en' (English) o
 -- enabled = false: database off. Everything is saved as files in the resource's saves folder
 --                  (Crimson-Police/saves). Keep that folder when you update the resource, and back it up.
 -- Changing this moves no data: Crimson-Police starts with what the other storage holds (nothing, the
--- first time). To take your data along, use /CrimsonPoliceAdmin storage copy (see the README).
+-- first time). To take your data along, use /CrimsonPoliceAdmin storage copy (see docs/OWNER_GUIDE.md 3.5).
 -- folder only matters when enabled = false: a folder inside the Crimson-Police folder (FXServer only lets
 -- a resource write inside resource folders). A full path works when it points inside the resource.
 Config.Database = {
@@ -2446,11 +2446,11 @@ Config.AntiCheat = {
 -- ============================================================================
 --                                 PERFORMANCE
 -- ============================================================================
--- How often Crimson-Police's background loops wake (docs/LOOPS.md lists every one). Markers near you still draw
+-- How often Crimson-Police's background loops wake (docs/dev/LOOPS.md lists every one). Markers near you still draw
 -- every frame and run deadlines keep their own timers; only the idle and far-away waits stretch. Also how often the
 -- tablet's updates go out and which answers come in the background (both off as shipped).
 Config.Performance = {
-    -- Multiplies the idle/far wait of every Crimson-Police loop; 1 = the values in docs/LOOPS.md, 2 = half as
+    -- Multiplies the idle/far wait of every Crimson-Police loop; 1 = the values in docs/dev/LOOPS.md, 2 = half as
     -- often; 1-4
     loopScale = 1.0,
     -- Milliseconds between two tablet updates of the same kind to one player (a run's progress, the board, the

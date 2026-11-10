@@ -1,4 +1,4 @@
-# StyLua settings for the owner's Lua style (docs/STYLE.md). StyLua 2.5.2:
+# StyLua settings for the owner's Lua style (docs/dev/STYLE.md). StyLua 2.5.2:
 #   cargo install stylua --features lua54   (or a release binary from github.com/JohnnyMorganz/StyLua)
 # Run it through python3 tools/restyle.py, not on its own: StyLua spreads every if, loop and function over
 # several lines, lays out long calls one argument per line and removes the padding before trailing

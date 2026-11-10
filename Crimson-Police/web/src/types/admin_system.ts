@@ -1,5 +1,5 @@
 // Full admin control, System (modules/sysadmin): storage, backups, webhooks, problems, integrations, departments added
-// in game, Support (docs/ARCHITECTURE.md §9.5, "Admin control: system").
+// in game, Support (docs/dev/ARCHITECTURE.md §9.5, "Admin control: system").
 
 import type { OfficerOptionValue } from '../shared/types';
 import type { MaintenanceView } from './admin_control';
@@ -136,7 +136,7 @@ export interface ResourceView {
 
 export interface IntegrationsData {
     resources: ResourceView[];
-    // locale keys of the README §7 checklist
+    // locale keys of the owner guide 4 checklist (settings in the other resources)
     checklist: string[];
     arena: {
         state: string;
@@ -245,7 +245,7 @@ export interface AccessStep {
 export interface CheckAccessResult {
     ok: boolean;
     error?: string;
-    // locale key of the fix (README 11.1)
+    // locale key of the fix (README 8.1)
     fix?: string;
     steps: AccessStep[];
     via: string;

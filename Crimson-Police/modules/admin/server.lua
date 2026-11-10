@@ -24,7 +24,7 @@
 --                                                        force; a failure empties the target again; audited as
 --                                                        storageCopy (also in the target's cp_audit when the target is
 --                                                        not the storage in use). Details: the "storage" section
---                                                        of this file and docs/ARCHITECTURE.md §5.29.
+--                                                        of this file and docs/dev/ARCHITECTURE.md §5.29.
 --     Replies: print() on the console, CP.Tablet.notify in game.
 --   * cp_audit rows (values clipped to the column sizes) and the category webhooks read at call time
 --     from the convars cp_webhook_audit / cp_webhook_flags / cp_webhook_builder / cp_webhook_operations /
@@ -34,7 +34,7 @@
 --   * flagged-run review (approve / void), voiding any run, force recall, manual award and suspension
 --     actions, and the supervisor/admin read callbacks listed below.
 --
--- Public API (docs/ARCHITECTURE.md §5.25)
+-- Public API (docs/dev/ARCHITECTURE.md §5.25)
 --   CP.Admin.audit(actor, role, category, action, target, old, new, reason) -> auditId|nil
 --       actor: src (number; 0 = console), citizenid (string) or 'console'. role: 'supervisor'|'admin'|
 --       'console'; anything else (e.g. 'officer', 'system') is stored as 'console' = an automatic entry
@@ -66,7 +66,7 @@
 --   CP.Admin.missionLabel(missionId) -> text
 --   CP.Admin.command(src, args) -> the /CrimsonPoliceAdmin handler (also used by tests)
 --
--- Net (docs/ARCHITECTURE.md §8.3)
+-- Net (docs/dev/ARCHITECTURE.md §8.3)
 --   actions
 --     server:sup:forceRecall     { runId, src, reason? }                forceRecall (runs involving their dept)
 --     server:sup:reviewFlagged   { rowId, decision = 'approve'|'void', reason }   reviewFlagged
@@ -74,7 +74,7 @@
 --     server:admin:voidRun       { rowId } | { runUuid }, reason         voidAnyRun
 --     server:admin:awardPoints   { citizenid, points, reason }           manualAward -> CP.Scoring.manualAward
 --     server:admin:suspend       { citizenid, days, reason }             suspend -> CP.Access.suspend (audited)
---   callbacks (shapes in docs/ARCHITECTURE.md §5.25 and web/src/types/oversight.ts)
+--   callbacks (shapes in docs/dev/ARCHITECTURE.md §5.25 and web/src/types/oversight.ts)
 --     getMissionList             viewMissionList -> MissionListData
 --     admin:getMissions          admin -> MissionListData, each mission + { filePath, editedInCode, defHash, status,
 --                                disabledInConfig }
@@ -87,7 +87,7 @@
 --     admin:getPermissions       -> { supervisor = { { action, enabled } }, adminOnly, always, teleport }
 --     admin:getAudit             { category, action, actor, from, to, page } -> AuditPage
 --     admin:exportAudit          same filters -> { csv, rows, truncated }
---     admin:getStuckPayments     admin -> { payments = CP.Cash.stuckPayments() (StuckPayment list, docs/ARCHITECTURE.md §5.18),
+--     admin:getStuckPayments     admin -> { payments = CP.Cash.stuckPayments() (StuckPayment list, docs/dev/ARCHITECTURE.md §5.18),
 --                                serverTime }   rows left 'paying' for a manual Renewed-Banking check
 
 CP.Admin = CP.Admin or {}
@@ -139,7 +139,7 @@ local ADMIN_ONLY = {
     'reloadMissions',
     'testRun',
     'openAdmin',
-    -- full admin control (docs/ARCHITECTURE.md §5.37): admins and the console only
+    -- full admin control (docs/dev/ARCHITECTURE.md §5.37): admins and the console only
     'officerRecords',
     'pointsAdjust',
     'bulkVoid',
@@ -2468,7 +2468,7 @@ local function CooldownNow(def)
     return math.floor(base * (ok and tonumber(scale) or 1))
 end
 
--- MissionListData (docs/ARCHITECTURE.md §5.25). adminExtras adds what the Admin UI Missions screen lists besides
+-- MissionListData (docs/dev/ARCHITECTURE.md §5.25). adminExtras adds what the Admin UI Missions screen lists besides
 -- (SPEC Interfaces: "version, Lua file path, 'edited in code' flag"): filePath, editedInCode, defHash, status,
 -- disabledInConfig (Config.DisabledMissions).
 local function MissionListData(src, adminExtras)

@@ -2483,7 +2483,7 @@ end
 -- The owner (2026-10-19): "ensure all objectives as they come up mark on the map". A car that drives past OneSync's
 -- 424 m leaves the officer's game, and its blip with it: the pointer names every live car and every suspect on foot
 -- at the server's position, so each officer's game shows them at any distance (Config.Markers.farTargets) and routes
--- him to his nearest (CP.Runs.marker, docs/ARCHITECTURE.md §5.44). In a block: this file is near Lua's 200 locals.
+-- him to his nearest (CP.Runs.marker, docs/dev/ARCHITECTURE.md §5.44). In a block: this file is near Lua's 200 locals.
 
 local Marker
 do

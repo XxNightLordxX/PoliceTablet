@@ -28,7 +28,7 @@
 --     threshold), manual_award rows, "first completed run since going on duty" (CP.Qbx duty/load events)
 --   * callback getHome -> HomeData (ARCHITECTURE §9.4)
 --
--- Public API (docs/ARCHITECTURE.md §5.18)
+-- Public API (docs/dev/ARCHITECTURE.md §5.18)
 --   CP.Scoring.P(mission) -> number                     whole points (halves up)
 --   CP.Scoring.compute(run, p, result, opts) -> RunResult.points (§9.6)
 --       result 'completed'|'failed'|'abandoned'; opts (all optional) = { objectivesDone, objectivesTotal,

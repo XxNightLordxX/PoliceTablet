@@ -1,6 +1,6 @@
 // Windowed lists (Config.AdminUi.windowRows): a long list draws only the rows in view, plus a few above
 // and below, and two spacers keep the scroll bar and the scroll position as if every row were there. Shipped off:
-// every row is drawn at once, as before. docs/LOOPS.md "NUI".
+// every row is drawn at once, as before. docs/dev/LOOPS.md "NUI".
 
 // Windowed lists (Config.AdminUi.windowRows, shipped false): rowWindow() works out the rows of a scroll
 // position (more than 100 rows, 12 above and below the view, spacers for the rest); useRowWindow() is the Table's scroll

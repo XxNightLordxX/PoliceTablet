@@ -14,7 +14,7 @@
 --     only ones who clear. Every change is audited (CP.Admin.audit, category 'audit', which also posts the
 --     audit webhook) and pushed to open screens (topics 'payouts' and 'board').
 --
--- Public API (docs/ARCHITECTURE.md §5.21)
+-- Public API (docs/dev/ARCHITECTURE.md §5.21)
 --   CP.Payouts.typePayout(type) -> amount, adminLocked      stored amount, or the Config.MissionTypes payout
 --   CP.Payouts.missionPayout(missionId) -> amount|nil        the admin mission payout
 --   CP.Payouts.baseFor(mission) -> B                         whole dollars (halves up)
@@ -31,7 +31,7 @@
 --                        enabled, base, payoutSource ('admin'|'type'|'event'), missionPayout|nil,
 --                        fallback (B without the mission payout), setBy|nil, setByName|nil,
 --                        updatedAt|nil, missing (a stored payout whose mission is not loaded) }
--- Net (docs/ARCHITECTURE.md §5.18 has the response shapes)
+-- Net (docs/dev/ARCHITECTURE.md §5.18 has the response shapes)
 --   callback 'sup:getPayouts'   (permission setTypePayout)  -> SupPayoutsView
 --   callback 'admin:getPayouts' (admin)                     -> AdminPayoutsView
 --   action 'server:sup:setTypePayout'     { type, amount, reason }                 -> SupPayoutType

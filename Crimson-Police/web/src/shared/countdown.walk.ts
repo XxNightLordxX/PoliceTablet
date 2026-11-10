@@ -1,4 +1,4 @@
-// HUD countdowns (docs/LOOPS.md): useCountdown wakes once a second, just after each whole second, instead
+// HUD countdowns (docs/dev/LOOPS.md): useCountdown wakes once a second, just after each whole second, instead
 // of polling every 200 ms (node walk.mjs, a gate step).
 
 import { COUNTDOWN_SLACK_MS, countdownWaitMs } from './hooks';

@@ -12,7 +12,7 @@
 --     end_reason 'completed', final_points = Config.Goals.dailyPoints / weeklyPoints) counted through
 --     CP.Scoring (XP; Overall and Department boards only)
 --
--- Public API (docs/ARCHITECTURE.md §5.19)
+-- Public API (docs/dev/ARCHITECTURE.md §5.19)
 --   CP.Goals.forOfficer(citizenid) -> { daily = Goal|nil, weekly = Goal|nil }
 --       Goal = { id, label, count, progress, done, points }   (progress is capped at count)
 --   CP.Goals.onRunCompleted(citizenid)   (hook: a completed row was counted) -> inserts the goal rows earned

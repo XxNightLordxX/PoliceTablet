@@ -1460,7 +1460,7 @@ local function Stop(ctx)
     st.stopped = true
 end
 
--- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
+-- The objective pointer (CP.Runs.marker, docs/dev/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
 -- up mark on the map"): the fight as a circle with its centre (Config.Markers.kinds.fightArea: a red skull, drawn by
 -- CP.Markers), named Hostiles. The centre is the middle of the fight's spawn points (the rolled spawn sets, as the spawn
 -- director uses them), the circle reaches AREA_MARGIN past the farthest of them or of the boss's spot. Each officer's

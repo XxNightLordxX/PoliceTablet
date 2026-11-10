@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tools/check_all.sh · every check of the repository in one command, in order, with a PASS/FAIL summary.
-# What each step needs and how to read a failure: docs/TESTING.md.
+# What each step needs and how to read a failure: docs/dev/TESTING.md.
 #
 #   tools/check_all.sh                    every step, in the order below
 #   tools/check_all.sh suite-db tsc       only the named steps (still in the order below)
@@ -13,7 +13,7 @@
 #   contracts     python3 tools/check_contracts.py
 #   lint-<name>   python3 tools/lint_<name>.py or tools/check_<name>.py (every one but check_contracts.py);
 #                 today lint-fivem: tools/lint_fivem.py, the FiveM pitfall rules (known hits: tools/lint_baseline.txt)
-#   style         python3 tools/restyle.py --check: fails on any file the formatter would change (docs/STYLE.md)
+#   style         python3 tools/restyle.py --check: fails on any file the formatter would change (docs/dev/STYLE.md)
 #   suite-db      lua5.4 tests/run.lua                    (MariaDB)
 #   suite-files   lua5.4 tests/run.lua --storage=files    (database off, the saves folder engine)
 #   suite-shadow  lua5.4 tests/run.lua --storage=shadow   (all three answers compared, 0 differences)
@@ -130,7 +130,7 @@ detail_contracts() {
 }
 
 # The formatter in check mode: it restyles a scratch copy (never the tree) and names each file that differs.
-# It needs StyLua 2.5.2 and Prettier 3.9.9 (npx), docs/STYLE.md "Keeping the style".
+# It needs StyLua 2.5.2 and Prettier 3.9.9 (npx), docs/dev/STYLE.md "Keeping the style".
 run_style() {
     need python3 || return 1
     python3 tools/restyle.py --check && echo "style: every file is formatted"

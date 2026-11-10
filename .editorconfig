@@ -1,4 +1,4 @@
-# Editor settings for the owner's style (docs/STYLE.md).
+# Editor settings for the owner's style (docs/dev/STYLE.md).
 root = true
 
 [*]

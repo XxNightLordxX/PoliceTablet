@@ -1,7 +1,7 @@
 # The tablet item (optional)
 
-Full guide: section [6.1 The tablet item](../../README.md#61-the-tablet-item) of the `README.md` in the repository
-root. This note says the same in short.
+Full guide: section [3.1 The tablet item](../../docs/OWNER_GUIDE.md#31-the-tablet-item) of `docs/OWNER_GUIDE.md` in the
+repository root. This note says the same in short.
 
 Officers open Crimson-Police with `/CrimsonPolice`, a key or a mission desk. The ox_inventory item is an extra way.
 Crimson-Police never loads anything from this folder and never edits ox_inventory: you copy two things yourself.

@@ -134,7 +134,7 @@ function errorText(err, query, parameters, includeParameters) {
   }\n${message}`;
 }
 
-// The server the harness's mysql CLI talks to, from the variables the CLI reads (docs/TESTING.md): no
+// The server the harness's mysql CLI talks to, from the variables the CLI reads (docs/dev/TESTING.md): no
 // MYSQL_HOST (or 'localhost') means the local socket, like the CLI; any other host means TCP.
 const env = process.env;
 const host = env.CP_SHADOW_HOST || env.MYSQL_HOST || '';

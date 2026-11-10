@@ -7,7 +7,7 @@
 --
 -- MySQL.* runs real queries against the local MariaDB database `cp_test` through the mysql CLI
 -- (schema from sql/migrations). Use H.sql('DELETE FROM cp_mission_runs') to reset tables. The server is the one
--- `mysql -uroot` reaches: the local socket, or MYSQL_HOST / MYSQL_TCP_PORT / MYSQL_PWD (docs/TESTING.md). One
+-- `mysql -uroot` reaches: the local socket, or MYSQL_HOST / MYSQL_TCP_PORT / MYSQL_PWD (docs/dev/TESTING.md). One
 -- mysql client stays open per spec (CP_TEST_MYSQL=spawn: one per call), and every statement runs with
 -- SET timestamp = os.time(), so NOW() is the spec's clock (H.time after H.boot) in every storage mode.
 -- CP_TEST_NOW=<unix time> moves the default H.time, CP_TEST_CLOCK=<unix time> the wall clock (os.time() and NOW()).

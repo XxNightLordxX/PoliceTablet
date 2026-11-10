@@ -1,8 +1,8 @@
--- Loop census (docs/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
+-- Loop census (docs/dev/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
 
--- Loop census (docs/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
+-- Loop census (docs/dev/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
 -- (CreateThread) or runs a `while true do`, and every web/src file that sets a timer (setTimeout, setInterval) or asks
--- for an animation frame, has a census row in docs/LOOPS.md with the same counts. A new loop, or a removed one, fails
+-- for an animation frame, has a census row in docs/dev/LOOPS.md with the same counts. A new loop, or a removed one, fails
 -- here until its row is written (and its five questions answered in the tables above the census).
 -- CP_LOOP_CENSUS_PRINT=1 prints the rows the code needs.
 
@@ -100,9 +100,9 @@ H.ok(code['modules/runs/server.lua'] ~= nil and code['web/src/shared/hooks.ts'] 
 --                              WHAT THE DOCS SAY
 -- ============================================================================
 
-local doc = ReadAll(H.root .. '../docs/LOOPS.md') or ''
+local doc = ReadAll(H.root .. '../docs/dev/LOOPS.md') or ''
 local census = doc:match('\n## Loop census.-\n(.*)$') or ''
-H.ok(census ~= '', 'docs/LOOPS.md has its "Loop census" section')
+H.ok(census ~= '', 'docs/dev/LOOPS.md has its "Loop census" section')
 local rows = {}
 for line in census:gmatch('[^\n]+') do
     local rel, a, b = line:match('^|%s*`([^`]+)`%s*|%s*(%d+)%s*|%s*(%d+)%s*|')
@@ -124,7 +124,7 @@ if os.getenv('CP_LOOP_CENSUS_PRINT') then
 end
 for _, rel in ipairs(names) do
     local want, row = code[rel], rows[rel]
-    H.ok(row ~= nil, rel .. ': has a census row in docs/LOOPS.md')
+    H.ok(row ~= nil, rel .. ': has a census row in docs/dev/LOOPS.md')
     if row then
         H.ok(row[1] == want[1] and row[2] == want[2],
             ('%s: the census row says %d / %d, the code has %d / %d'):format(rel, row[1], row[2], want[1], want[2]))

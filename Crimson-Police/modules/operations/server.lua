@@ -29,7 +29,7 @@
 -- of the last launch (persisted, so a restart keeps it); a relaunch is not a new launch.
 -- Restart safety: rows left joining/running/waiting by a previous server start are marked cancelled.
 --
--- Public API (docs/ARCHITECTURE.md §5.17)
+-- Public API (docs/dev/ARCHITECTURE.md §5.17)
 --   CP.Operations.active() -> op|nil       the live operation table (read only):
 --       op = { id, missionId, missionLabel, missionType, status, launchedBy (citizenid), launcher (name),
 --              createdAt, joinEndsAt|nil, participants = { { src, citizenid, name, callsign, department,
@@ -1123,7 +1123,7 @@ function Ops.boardCard(src)
         end
     end
     local open = cur.status == 'joining' and not cur.joinClosed and cur.joinEndsAt ~= nil and cur.joinEndsAt > now
-    -- joinBlocked (extra, docs/ARCHITECTURE.md §12.8): why this viewer cannot join, the error key Join would return.
+    -- joinBlocked (extra, docs/dev/ARCHITECTURE.md §12.8): why this viewer cannot join, the error key Join would return.
     local joinBlocked = nil
     -- his department opted out or its places are taken (the card still shows: the lock applies to all)
     local deptErr = nil

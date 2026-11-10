@@ -1,4 +1,4 @@
-// Response shapes of units and operations (modules/units, modules/operations; docs/ARCHITECTURE.md §5.16).
+// Response shapes of units and operations (modules/units, modules/operations; docs/dev/ARCHITECTURE.md §5.16).
 // UnitView and BoardData.operation are contract shapes (src/shared/types.ts); the types below add the optional fields
 // the server sends on top of them.
 

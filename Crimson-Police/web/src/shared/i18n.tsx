@@ -1,4 +1,4 @@
-// UI text (docs/ARCHITECTURE.md §10).
+// UI text (docs/dev/ARCHITECTURE.md §10).
 
 // Text comes from the locale Lua sends with the reply to 'ready' (the 'theme' message) and again as a
 // 'locale' message after a Settings → Names rename (CP.Locale.all(), i.e. locales/en.json with

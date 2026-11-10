@@ -1102,7 +1102,7 @@ end
 
 -- Stand the suspect DOOR_STEP in front of the door, facing out. Where he waited does not matter: inside
 -- (the card: "the suspect inside") or on the door step next to the door (the built-in houses have no
--- interior a ped can walk out of, docs/ARCHITECTURE.md §5.6), he always ends up outside, never behind the
+-- interior a ped can walk out of, docs/dev/ARCHITECTURE.md §5.6), he always ends up outside, never behind the
 -- facade.
 local function MoveToDoor(ctx, p)
     local door = PointList(ctx.location, ctx.obj.door)[1]
@@ -1939,7 +1939,7 @@ local function Stop(ctx)
     st.stopped = true
 end
 
--- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
+-- The objective pointer (CP.Runs.marker, docs/dev/ARCHITECTURE.md §5.44; the owner: "ensure all objectives as they come
 -- up mark on the map"). Door mode before the knock: the front door (key 'door', the client half hands its door blip
 -- over with it). Then every suspect, associate or inmate not dead or cuffed, at the server's position, so one who ran
 -- out of an officer's game (OneSync streams 424 m) still shows (Config.Markers.farTargets) while his escape clock

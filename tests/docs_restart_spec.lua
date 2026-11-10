@@ -1,7 +1,7 @@
 -- The docs say what an ox_inventory restart does while Crimson-Police runs, and match the code: the swapItems hook
--- is dropped and registered again 1 s after ox_inventory starts. The README's option rows give the unit of each number.
+-- is dropped and registered again 1 s after ox_inventory starts. The owner guide's option rows give each number's unit.
 
--- README 11.9 and the run engine's own header say what an ox_inventory restart does (the swapItems hook dropped and
+-- README 8.5 and the run engine's own header say what an ox_inventory restart does (the swapItems hook dropped and
 -- registered again 1 s later, as runs/server.lua's onResourceStart handler does), and FILE_NOTES has the engine's
 -- line. Reads files only; no stubs, no database.
 
@@ -18,9 +18,11 @@ end
 local function Has(s, needle) return type(s) == 'string' and s:find(needle, 1, true) ~= nil end
 
 local readme = ReadRepo('README.md')
-local notes = ReadRepo('docs/FILE_NOTES.md')
+local guide = ReadRepo('docs/OWNER_GUIDE.md')
+local notes = ReadRepo('docs/dev/FILE_NOTES.md')
 local runs = ReadRepo('Crimson-Police/modules/runs/server.lua')
-H.ok(readme ~= nil and notes ~= nil and runs ~= nil, 'README, FILE_NOTES and the run engine are readable')
+H.ok(readme ~= nil and guide ~= nil and notes ~= nil and runs ~= nil,
+    'README, the guide, FILE_NOTES and the engine are readable')
 
 -- The code the docs describe.
 local handler = runs
@@ -33,8 +35,8 @@ H.ok(Has(handler, 'itemHookId = nil'), 'the old hook is forgotten')
 H.ok(Has(handler, 'SetTimeout(1000, RegisterItemHook)'), 'and registered again 1 s later')
 
 -- README: its own section in Troubleshooting, linked from the contents.
-H.ok(Has(readme, '### 11.9 Restarting ox_inventory while Crimson-Police runs'), 'README 11.9 exists')
-H.ok(Has(readme, '(#119-restarting-ox_inventory-while-crimson-police-runs)'), 'and is in the contents')
+H.ok(Has(readme, '### 8.5 Restarting ox_inventory while Crimson-Police runs'), 'README 8.5 exists')
+H.ok(Has(readme, '(#85-restarting-ox_inventory-while-crimson-police-runs)'), 'and is in the contents')
 H.ok(Has(readme, 'The lock on mission items is registered again about 1 s after ox_inventory starts'),
     'the hook row matches the code')
 H.ok(Has(readme, 'You do not need to restart Crimson-Police after `restart ox_inventory`.'),
@@ -45,7 +47,7 @@ H.ok(Has(runs, 'the hook is registered again 1 s later'), 'the engine header: th
 H.ok(Has(runs, 'items to take back are kept'), 'the engine header: what happens while ox_inventory is stopped')
 H.ok(Has(notes, '\n- `Crimson-Police/modules/runs/server.lua`: '), 'FILE_NOTES has the run engine\'s line')
 
--- Units on the README option rows.
+-- Units on the owner guide's option rows.
 for _, needle in ipairs({
     '`sprintSeconds` (10 s)',
     '`jogSeconds` (12 s)',
@@ -53,7 +55,7 @@ for _, needle in ipairs({
     '`saveTurnMs` (4 ms)',
     '`panelKeyGuardMs` (300 ms:',
 }) do
-    H.ok(Has(readme, needle), 'README states the unit: ' .. needle)
+    H.ok(Has(guide, needle), 'the guide states the unit: ' .. needle)
 end
 
 return H

@@ -9,9 +9,9 @@
 --   lua5.4 tests/run.lua --jobs=N           (N specs at a time, each on a copy of the run database; = CP_TEST_JOBS=N;
 --                                            default 2; --jobs=1: one after another on the run database itself)
 -- The filter and --storage combine (lua5.4 tests/run.lua --storage=files storage). New or changed SQL must pass in all
--- three modes (docs/ARCHITECTURE.md §5.29, §11). A filter that matches no spec is an error (exit 2).
+-- three modes (docs/dev/ARCHITECTURE.md §5.29, §11). A filter that matches no spec is an error (exit 2).
 -- Before the first spec the run checks lua5.4, lua-cjson, the mysql CLI and (shadow) node + mysql2 and stops with
--- exit 2 when one is missing; tools/setup_test_env.sh checks the whole environment (docs/TESTING.md).
+-- exit 2 when one is missing; tools/setup_test_env.sh checks the whole environment (docs/dev/TESTING.md).
 -- Each spec file is a plain script: local H = dofile('tests/harness.lua'); H.boot{...}; ... H.eq(...)
 -- and must end with `return H`. Every run gets its own MariaDB database, rebuilt from sql/migrations first.
 -- Storage modes (tests/harness.lua has the details):
@@ -27,7 +27,7 @@
 -- A check skipped in a mode (H.skipIn) prints a SKIP line; every skip is listed at the end. A spec's REPORT lines
 -- (timings and sizes of tests/storage_spec.lua and tests/storage_copy_spec.lua) are shown under its result.
 -- Results print in file order whatever --jobs is, and the counts do not depend on it.
--- For hunting order, clock and time zone effects (docs/TESTING.md):
+-- For hunting order, clock and time zone effects (docs/dev/TESTING.md):
 --   CP_TEST_ORDER=reverse | shuffle[:seed]  another spec order (with --jobs=1 also the order they run in)
 --   CP_TEST_NOW=<unix time>                 the harness' default fake clock H.time (1790000000 otherwise)
 --   CP_TEST_CLOCK=<unix time>               the wall clock itself: os.time() and MariaDB NOW() start there
@@ -130,7 +130,7 @@ do
     if #missing > 0 then
         print('tests/run.lua cannot start, missing or not working:')
         for _, m in ipairs(missing) do print('  - ' .. m) end
-        print('tools/setup_test_env.sh checks the whole test environment and says how to fix it (docs/TESTING.md).')
+        print('tools/setup_test_env.sh checks the whole test environment and says how to fix it (docs/dev/TESTING.md).')
         os.exit(2)
     end
 end

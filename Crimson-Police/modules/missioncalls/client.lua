@@ -21,7 +21,7 @@ local function Foreign(v)
     return type(v) == 'table' and v.active == true and v.source ~= 'crimson-police'
 end
 
--- docs/INTEGRATIONS.md, Crimson-Arena: no Crimson-Police cue while the player is in the arena.
+-- docs/dev/INTEGRATIONS.md, Crimson-Arena: no Crimson-Police cue while the player is in the arena.
 local function InArena()
     local ok, v = pcall(function() return LocalPlayer.state.crimsonArena end)
     return ok and Foreign(v)

@@ -6,7 +6,7 @@
 -- immediate "no longer qualifies" signal (onLost) and the server export GetDepartment.
 -- All framework data comes through CP.Qbx; SC-Dispatch suspensions through CP.Dispatch.
 --
--- Public API (docs/ARCHITECTURE.md §5.2)
+-- Public API (docs/dev/ARCHITECTURE.md §5.2)
 --   CP.Access.departmentForJob(jobName) -> deptKey|nil
 --   CP.Access.department(key) -> dept|nil       (a copy)
 --       dept = { key, label, short, jobs = { jobName... }, supervisorGrade, societyAccount,

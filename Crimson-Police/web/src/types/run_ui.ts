@@ -1,6 +1,6 @@
 // Response shapes of the run_ui slice (Mission Board and Active Mission screens,
 
-// documented in docs/ARCHITECTURE.md §12.8). BoardData and ActiveMissionView are contract shapes
+// documented in docs/dev/ARCHITECTURE.md §12.8). BoardData and ActiveMissionView are contract shapes
 // (src/shared/types.ts, ARCHITECTURE §9.4); the types below only add the optional fields the server
 // sends (or may send) on top of them. Every extra field is optional: the screens work without them.
 
@@ -33,7 +33,7 @@ export type TypeCard = BoardCard & {
 // The Weekly Boss event card (BoardCard + available). Accepted with the key 'weekly_boss'.
 export type BossCard = NonNullable<BoardData['boss']>;
 
-// BoardData.operation: the §9.4 fields plus the extras CP.Operations.boardCard sends (docs/ARCHITECTURE.md §5.16).
+// BoardData.operation: the §9.4 fields plus the extras CP.Operations.boardCard sends (docs/dev/ARCHITECTURE.md §5.16).
 export type BoardOperation = NonNullable<BoardData['operation']> & {
     missionType?: string;
     missionTypeLabel?: string;
@@ -46,7 +46,7 @@ export type BoardOperation = NonNullable<BoardData['operation']> & {
     joinBlocked?: string | null;
 };
 
-// Callback 'getMissionTypes'. Optional extras (requested from modules/draw, docs/ARCHITECTURE.md §12.8):
+// Callback 'getMissionTypes'. Optional extras (requested from modules/draw, docs/dev/ARCHITECTURE.md §12.8):
 // `serverTime` = os.time() when the board was built; `todMultiplier` = Config.Events.todMultiplier (the
 // Type of the Day's points multiplier; the board assumes the default 2 without it).
 export interface MissionBoardData extends Omit<BoardData, 'operation'> {
@@ -85,7 +85,7 @@ export type RunObjective = ActiveMissionView['objectives'][number];
 export type RunRoute = NonNullable<ActiveMissionView['route']>;
 export type RunLog = NonNullable<ActiveMissionView['log']>;
 
-// ActiveMissionView plus optional extras (requested from modules/runs, see docs/ARCHITECTURE.md §12.8).
+// ActiveMissionView plus optional extras (requested from modules/runs, see docs/dev/ARCHITECTURE.md §12.8).
 export interface ActiveMissionData extends ActiveMissionView {
     // The viewer's server id (marks "You" in the partners list).
     me?: number;

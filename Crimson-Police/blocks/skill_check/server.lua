@@ -653,7 +653,7 @@ CP.Blocks.register(BLOCK, {
         return nil
     end,
 
-    -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44): every device still to work (armed, set
+    -- The objective pointer (CP.Runs.marker, docs/dev/ARCHITECTURE.md §5.44): every device still to work (armed, set
     -- back, or waiting to be tried again), numbered, each keyed 'd<n>' so the client hands its own blip over (one icon
     -- per device) and every officer's GPS line goes to his nearest; a set-back one in its setback colour. Each is named
     -- as the client half names its blip: the mission's target name, else "Device <n>"; set back, the

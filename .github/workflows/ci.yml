@@ -1,4 +1,4 @@
-# Every check of the repository (tools/check_all.sh) on each push and pull request. docs/TESTING.md has the
+# Every check of the repository (tools/check_all.sh) on each push and pull request. docs/dev/TESTING.md has the
 # same steps for a local machine, and its "CI" section says what differs on a runner.
 name: CI
 
@@ -83,7 +83,7 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: StyLua and Prettier (the style step)
-        # The versions docs/STYLE.md pins: another version may lay the code out differently. The release binary
+        # The versions docs/dev/STYLE.md pins: another version may lay the code out differently. The release binary
         # reads Lua 5.4 (checked below); Prettier comes through npx into the npm cache.
         run: |
           curl -fsSL -o "$RUNNER_TEMP/stylua.zip" \

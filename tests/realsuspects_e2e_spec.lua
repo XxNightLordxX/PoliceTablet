@@ -10,7 +10,7 @@
 --    and books nobody, the other gets away; the points, the case timeline, the end event and the pair rows.
 -- 3. A volunteer suspect: a civilian volunteers with /crimsonheat, a unit accepts Investigation with Real suspect
 --    OK, he says yes, travels, officers reach him and cuff him at Warrant Service's door; the end event.
--- The fairness rules the README's "Rules for cases with real suspects" promise are checked on the way: officers never
+-- The fairness rules docs/OWNER_GUIDE.md's "Rules for cases with real suspects" promise are checked on the way: officers never
 -- get a suspect's live position, a suspect cuffed while down counts only Config.RealSuspects.neutralisedShare, the
 -- volunteer is asked first and can say no, and staff read each case's timeline.
 
@@ -932,7 +932,7 @@ end
 --                7. THE VOLUNTEER QUITS AND COMES BACK MID-CASE
 -- ============================================================================
 -- Step FX1. A CASE BY THE CRIMINAL TABLET, A DROP AND A RECONNECT WITHIN THE GRACE, AN OFFICER DROP.
--- README 9.16: a suspect who comes back within Config.RealSuspects.disconnectGrace stays in the case.
+-- docs/OWNER_GUIDE.md 6: a suspect who comes back within Config.RealSuspects.disconnectGrace stays in the case.
 
 -- A player quits (FXServer's playerDropped) and later joins again with the same character (Qbox's player loaded).
 local function Drop(src)

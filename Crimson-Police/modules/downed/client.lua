@@ -1,5 +1,5 @@
 -- CP.Downed (client): the NPC pick-up of a downed participant and the EMS request from their own client
--- (docs/ARCHITECTURE.md §5.15, Crimson-Arena rules 3 and 13).
+-- (docs/dev/ARCHITECTURE.md §5.15, Crimson-Arena rules 3 and 13).
 
 -- Owns the handlers of client:pickup (runId, dropOff), client:pickupCancel (runId) and client:requestEMS
 -- (runId) and sends the plain net event server:pickupDone (runId, ok).
@@ -161,7 +161,7 @@ function D.busy()
     return active ~= nil
 end
 
--- Run end and the end of the downed follow-up (docs/ARCHITECTURE.md §5.15): our fade and overlay are undone
+-- Run end and the end of the downed follow-up (docs/dev/ARCHITECTURE.md §5.15): our fade and overlay are undone
 -- unless a pick-up is still running (it restores them itself when it ends).
 function D.restore(why)
     if active then return false end

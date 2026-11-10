@@ -1,4 +1,4 @@
--- CP.Downed (server): Hard rule 18, downed participants (docs/ARCHITECTURE.md §5.15, SPEC "Downed participants",
+-- CP.Downed (server): Hard rule 18, downed participants (docs/dev/ARCHITECTURE.md §5.15, SPEC "Downed participants",
 -- Crimson-Arena rules 1 and 3).
 
 -- Owns: the downed poll, the Failed result for a participant who goes down (end_reason 'downed'), the free
@@ -49,7 +49,7 @@
 --   entry per run, so nothing fires twice (also when the 2 s poll still sees metadata "down" right after the
 --   revive). A disconnect (playerDropped) or character unload (CP.Qbx.onPlayerUnload) cancels it.
 -- Every participant downed: CP.Runs ends a run that has no active participant left; when a down removed the
--- last one and the run is still open 5 s later, this module ends it as failed (see docs/ARCHITECTURE.md §5.12).
+-- last one and the run is still open 5 s later, this module ends it as failed (see docs/dev/ARCHITECTURE.md §5.12).
 
 CP.Downed = CP.Downed or {}
 local D = CP.Downed
@@ -194,7 +194,7 @@ local function ReleaseFlag(src)
 end
 
 -- The follow-up is over, however it ended: the client undoes whatever it still shows of it (the pick-up fade and
--- overlay, docs/ARCHITECTURE.md §5.15). Once per entry.
+-- overlay, docs/dev/ARCHITECTURE.md §5.15). Once per entry.
 local function Ended(src, e, why)
     if e.endSent then return end
     e.endSent = true

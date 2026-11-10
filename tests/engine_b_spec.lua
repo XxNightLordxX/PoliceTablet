@@ -1699,7 +1699,7 @@ Runs.removeParticipant(Q, 2, 'cancelled')
 -- ============================================================================
 --                                 INTEGRATION
 -- ============================================================================
--- A unit is kept and unlocked only for normal runs (docs/ARCHITECTURE.md §5.16).
+-- A unit is kept and unlocked only for normal runs (docs/dev/ARCHITECTURE.md §5.16).
 
 H.reset()
 local unlocksBefore = Count('units.unlock')

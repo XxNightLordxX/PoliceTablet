@@ -1,7 +1,7 @@
 # Crimson-Police saves
 
-Full guide: section [6.5 Database off: the saves folder](../../README.md#65-database-off-the-saves-folder) of the
-`README.md` in the repository root. This note says the same in short.
+Full guide: section [3.5 Database off: the saves folder](../../docs/OWNER_GUIDE.md#35-database-off-the-saves-folder) of
+`docs/OWNER_GUIDE.md` in the repository root. This note says the same in short.
 
 When the database is off (`Config.Database.enabled = false` in `config/config.lua`), Crimson-Police saves all of its data here as small JSON files, one per table, named after the table (`officers.json`, `seasons.json` ...). A table with more than 500 rows is split into numbered files (`mission_runs_1.json` holds ids 1-500, `mission_runs_2.json` 501-1000 ...). `_tables.json` describes every table and how it is split.
 

@@ -238,7 +238,7 @@ end
 -- ============================================================================
 --                                    HOOKS
 -- ============================================================================
--- In-resource events between modules (docs/ARCHITECTURE.md §5.10 lists them). fire() calls every listener in
+-- In-resource events between modules (docs/dev/ARCHITECTURE.md §5.10 lists them). fire() calls every listener in
 -- the caller's thread, in the order they were added, each in pcall: a failing listener is logged and the
 -- next one still runs. Listeners may only yield where the hook's contract allows it.
 CP.Hooks = CP.Hooks or { _list = {}, _byId = {}, _next = 0 }
@@ -294,7 +294,7 @@ end
 --                           OBJECTIVE BLOCK REGISTRY
 -- ============================================================================
 -- blocks/<block_id>/server.lua and client.lua each call CP.Blocks.register(id, impl)
--- once. The run engine (modules/runs) looks blocks up by id. See docs/ARCHITECTURE.md.
+-- once. The run engine (modules/runs) looks blocks up by id. See docs/dev/ARCHITECTURE.md.
 CP.Blocks = CP.Blocks or { _list = {} }
 
 function CP.Blocks.register(id, impl)

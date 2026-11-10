@@ -1,4 +1,4 @@
-// Writes a builder client result (docs/ARCHITECTURE.md §5.28.6) into the
+// Writes a builder client result (docs/dev/ARCHITECTURE.md §5.28.6) into the
 
 // draft: placed points into definition.locations[location - 1][key] (a single vector for single-point keys,
 // a list otherwise, one more list for flee paths, { coords, radius } for the start), a recorded road route

@@ -12,7 +12,7 @@
 --
 -- Invites stay open for INVITE_TTL = 120 seconds (below), then expire on their own.
 --
--- Public API (docs/ARCHITECTURE.md §5.16)
+-- Public API (docs/dev/ARCHITECTURE.md §5.16)
 --   CP.Units.unitOf(src) -> unit|nil
 --       unit = { id, leader, members = { src... } (join order: longest-standing first),
 --                invites = { [targetSrc] = expiresAtTs }, locked = bool,
@@ -43,7 +43,7 @@
 -- job change, suspended) take the player out of their unit and cancel invites to them; the run itself is
 -- handled by CP.Runs (disconnected / off_duty / job_change / suspended).
 --
--- UnitView extras (this slice, see docs/ARCHITECTURE.md §5.16):
+-- UnitView extras (this slice, see docs/dev/ARCHITECTURE.md §5.16):
 --   me (the viewer's src), maxSize, inviteTtl (seconds), canInvite, inviteBlocked (locale key|nil), onRun,
 --   unit.size, unit.pending = { { src, name, callsign, departmentShort, expiresIn } },
 --   members[].available (false when that member is no longer an on-duty officer),

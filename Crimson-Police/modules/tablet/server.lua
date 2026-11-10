@@ -2,9 +2,9 @@
 -- checks.
 
 -- Owns the callback getSession, the action server:logoFailed and the server side of the client events
--- crimson-police:client:notify / client:push / client:openAdmin (docs/ARCHITECTURE.md §8.1).
+-- crimson-police:client:notify / client:push / client:openAdmin (docs/dev/ARCHITECTURE.md §8.1).
 --
--- Public API (docs/ARCHITECTURE.md §5.4)
+-- Public API (docs/dev/ARCHITECTURE.md §5.4)
 --   callback getSession(args) -> Session (§9.2)
 --       args = { ui = 'officer'|'supervisor'|'admin' (default 'officer'), silent = bool }
 --       officer:    an officer (CP.Access.getOfficer) -> its errKey otherwise (err.not_police,

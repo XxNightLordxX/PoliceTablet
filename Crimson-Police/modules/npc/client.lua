@@ -2,7 +2,7 @@
 
 -- modules/npc/client.lua · CP.Npc (client): host-side NPC AI helpers and "Cuff suspect".
 --
---  What this module owns (docs/ARCHITECTURE.md §5.11, §6.1, §6.2, §0.14)
+--  What this module owns (docs/dev/ARCHITECTURE.md §5.11, §6.1, §6.2, §0.14)
 --    - The relationship groups CRIMSONPOLICE_HOSTILE and CRIMSONPOLICE_NEUTRAL, created once on every
 --      client. Only the relations FROM these two groups are set: HOSTILE hates PLAYER (5), is a companion
 --      of itself and neutral (3) to NEUTRAL and every other common group; NEUTRAL is neutral to all.

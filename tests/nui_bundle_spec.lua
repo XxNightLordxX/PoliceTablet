@@ -1,6 +1,6 @@
--- The NUI bundle (docs/LOOPS.md "Server cost and NUI"): every player's NUI starts with the officer and
+-- The NUI bundle (docs/dev/LOOPS.md "Server cost and NUI"): every player's NUI starts with the officer and
 
--- The NUI bundle (docs/LOOPS.md "Server cost and NUI"): every player's NUI starts with the officer and
+-- The NUI bundle (docs/dev/LOOPS.md "Server cost and NUI"): every player's NUI starts with the officer and
 -- supervisor screens only; the Admin UI screens, the Supervisor Mission Builder and the criminal tablet load on
 -- first use. Every stylesheet still loads with the page, in one fixed order (web/src/styles/order.ts), so the look
 -- is the same. Reads web/src and web/dist (tools/check_all.sh build checks dist matches the sources).

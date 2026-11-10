@@ -1,6 +1,6 @@
--- Easy to understand (docs/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
+-- Easy to understand (docs/dev/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
 
--- Easy to understand (docs/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
+-- Easy to understand (docs/dev/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
 -- the common workflows (accept, unit, Dispatch, the run, Review Queue, the supervisor dialogs; Backups, Storage copy,
 -- Corrections, Settings) says what went wrong and what to do next, in the merged locales/en.json and in every
 -- locales/parts file that carries the key. Every err.* text of the merged file is also a full sentence (never an id), and every one the

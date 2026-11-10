@@ -1,4 +1,4 @@
-// The admin kit: shared pieces of the full admin control screens (docs/ARCHITECTURE.md §9.5, "Admin control").
+// The admin kit: shared pieces of the full admin control screens (docs/dev/ARCHITECTURE.md §9.5, "Admin control").
 
 export { DateRangeField } from './DateRangeField';
 export type { DateRange } from './DateRangeField';

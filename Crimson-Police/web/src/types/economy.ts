@@ -1,5 +1,5 @@
 // Response shapes of the economy slice's supervisor/admin callbacks and actions (modules/payouts/server.lua;
-// documented in docs/ARCHITECTURE.md §5.18). HomeData and Goal are contract shapes and live in src/shared/types.ts.
+// documented in docs/dev/ARCHITECTURE.md §5.18). HomeData and Goal are contract shapes and live in src/shared/types.ts.
 
 // getHome typeOfTheDay (§9.4 key/label) plus the Config values the Home text shows (extras, optional).
 export interface HomeTypeOfTheDay {

@@ -34,7 +34,7 @@
 --       mission missing or disabled)
 -- The boss is mission id 'weekly_boss_kingpin', accepted with the key 'weekly_boss' (runs store 'tactical').
 --
--- Contract interpretations (details in docs/ARCHITECTURE.md §5.6)
+-- Contract interpretations (details in docs/dev/ARCHITECTURE.md §5.6)
 --   * voided boss rows still use the week's attempt; bossAvailable also refuses during an operation
 --   * the attempt window starts at the reset of the week's first boss day (Friday by default), not at
 --     the week start: rows are written when a run ends, so a boss run accepted on Sunday night that ends

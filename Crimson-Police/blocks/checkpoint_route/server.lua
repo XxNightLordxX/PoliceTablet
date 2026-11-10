@@ -728,7 +728,7 @@ CP.Blocks.register(BLOCK, {
         return best
     end,
 
-    -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44): the current checkpoint, numbered, keyed
+    -- The objective pointer (CP.Runs.marker, docs/dev/ARCHITECTURE.md §5.44): the current checkpoint, numbered, keyed
     -- 'cp<n>' so the client hands its own blip over (one icon). route = 'block': this block keeps its own GPS line to
     -- it (on until the checkpoint is cleared, not only to routeOffWithin), so CP.Markers draws no second line
     --. Under Radio Silence CP.Markers shows the point by Config.Markers.radioSilence.

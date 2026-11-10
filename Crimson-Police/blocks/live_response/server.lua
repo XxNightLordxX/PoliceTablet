@@ -1,7 +1,7 @@
 -- Objective block "live_response" (server half): the engine-only objective of a live crime (the live_crime
 
 -- Objective block "live_response" (server half): the engine-only objective of a live crime (the live_crime
--- engine mission, docs/ARCHITECTURE.md §5.46 and §7.3). The suspects are real players kept by CP.Opponents (§5.45);
+-- engine mission, docs/dev/ARCHITECTURE.md §5.46 and §7.3). The suspects are real players kept by CP.Opponents (§5.45);
 -- this block never touches them. Three phases: Respond (an officer reaches the reported scene or makes contact),
 -- Secure the scene (officers hold it for Config.LiveCrime.secureSeconds), and one open "Detain and book the suspects"
 -- that never closes and never reacts to one suspect's state: the HUD and the checklist only show the phase. Detains

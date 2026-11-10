@@ -33,7 +33,7 @@
 --   weekly reset, as a catch-up after start (a server that was down across the reset) and at season end.
 --   A department added to Config.Departments mid-season simply starts at 0.
 --
--- Public API (docs/ARCHITECTURE.md §5.23)
+-- Public API (docs/dev/ARCHITECTURE.md §5.23)
 --   CP.Challenge.currentSeason(reload?) -> { id, name, startsAt, endsAt|nil, active = true } | nil   (cached)
 --   CP.Challenge.latestSeason() -> the active season, else the last ended one (the Season board)
 --   CP.Challenge.seasonById(id) -> season | nil

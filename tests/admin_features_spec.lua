@@ -200,11 +200,11 @@ do
     Has(layout, 'session.config?.adminUi?.groupByPlay !== false', 'the layout follows the config')
     local st = ReadRepo('Crimson-Police/web/src/admin/screens/Settings.tsx')
     Has(st, '<FeaturesPanel', 'Settings has the Features panel')
-    local readme = ReadRepo('README.md')
-    Has(readme, 'Config.AdminUi.groupByPlay', 'the README describes the three sections')
-    Has(readme, '**Features**', 'and the Features overview')
-    local spec = ReadRepo('docs/SPEC.md')
-    Has(spec, 'groupByPlay = true,', 'the SPEC config copy has the switch')
+    local guide = ReadRepo('docs/OWNER_GUIDE.md')
+    Has(guide, 'Config.AdminUi.groupByPlay', 'the owner guide describes the three sections')
+    Has(ReadRepo('README.md'), '**Features**', 'and the README the Features overview')
+    local config = ReadRepo('Crimson-Police/config/config.lua')
+    Has(config, 'groupByPlay = true,', 'config.lua has the switch')
 end
 
 return H

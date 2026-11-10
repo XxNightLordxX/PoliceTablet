@@ -1,4 +1,4 @@
-// Full admin control, economy: Admin UI → Payments, Departments → Funds, the clean-up (docs/ARCHITECTURE.md §9.5,
+// Full admin control, economy: Admin UI → Payments, Departments → Funds, the clean-up (docs/dev/ARCHITECTURE.md §9.5,
 // "Admin control: economy"). Every amount here is the server's; the NUI never sends one it computed itself.
 
 export type CashStatus = 'held' | 'pending' | 'paying' | 'paid' | 'capped' | 'unfunded' | 'forfeited';

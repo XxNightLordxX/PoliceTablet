@@ -1,9 +1,9 @@
--- CP.Route (server): Hard rule 17, the route to the mission start (docs/ARCHITECTURE.md §5.12, SPEC "Route to the
+-- CP.Route (server): Hard rule 17, the route to the mission start (docs/dev/ARCHITECTURE.md §5.12, SPEC "Route to the
 -- start", Crimson-Arena rules 5 and 6). Config.Route.required (the owner's switch, locked at accept) decides whether
 -- leaving the route ends a run; without it the route is still shown, reported and recalculated, and arrival counts.
 
 -- modules/route/server.lua · CP.Route (server): Hard rule 17, the route to the mission start
--- (docs/ARCHITECTURE.md §5.12, SPEC "Route to the start", Crimson-Arena rules 5 and 6).
+-- (docs/dev/ARCHITECTURE.md §5.12, SPEC "Route to the start", Crimson-Arena rules 5 and 6).
 --
 -- Owns: the per-participant route state, the plain net events server:routeStatus (runId, metres, coords)
 -- and server:recalcRoute (runId), the 1 s arrival / off-route / drift checks, and the server -> client

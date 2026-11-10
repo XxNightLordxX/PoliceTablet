@@ -1,6 +1,6 @@
--- The documents stay true to the code: the SPEC's config copies are the config files byte for byte, every document
--- a file names exists, the README's contents, commands, config keys and "What ships off" table match the code, and
--- FILE_NOTES is one line per file and names only files that exist.
+-- The documents stay true to the code: the SPEC links the config files instead of copying them and every Config key
+-- it names exists, every document a file names exists, the short README and the owner guide keep their contents,
+-- commands, config keys and "What ships off" table in step with the code, and FILE_NOTES is one line per file.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
@@ -45,22 +45,62 @@ end
 local Cfg = Shipped.Config
 
 local readme = ReadRepo('README.md') or ''
-local spec = ReadRepo('docs/SPEC.md') or ''
-H.ok(#readme > 10000 and #spec > 10000, 'README and SPEC are readable')
+local guide = ReadRepo('docs/OWNER_GUIDE.md') or ''
+local spec = ReadRepo('docs/dev/SPEC.md') or ''
+H.ok(#readme > 10000 and #guide > 10000 and #spec > 10000, 'README, the owner guide and SPEC are readable')
 
 -- ============================================================================
---                   THE SPEC'S CONFIG COPIES, BYTE FOR BYTE
+--           THE SPEC LINKS THE CONFIG FILES, AND THEY HOLD ITS KEYS
 -- ============================================================================
 
-for _, c in ipairs({
-    { 'Crimson-Police/config/config.lua', '\nconfig/blocks.lua holds the range' },
-    { 'Crimson-Police/config/blocks.lua', '\n## Example files' },
+-- the README is the short owner guide; the rest is in docs/OWNER_GUIDE.md
+H.ok(#readme < 61440, ('README stays under 60 KB (%d bytes)'):format(#readme))
+for _, part in ipairs({
+    'What you need',
+    'Install in 5 minutes',
+    'Admins, supervisors and permissions',
+    'What ships off and how to turn it on',
+    'All commands and keys',
+    'Admin UI tour',
+    'Troubleshooting',
 }) do
-    local file = ReadRepo(c[1]) or ''
-    local at = spec:find(file, 1, true)
-    H.ok(#file > 1000 and at ~= nil, 'docs/SPEC.md has ' .. c[1] .. ' byte for byte')
-    H.eq(at and spec:sub(at - 2, at - 1), '\n\n', c[1] .. ': the copy starts on its own paragraph')
-    H.eq(at and spec:sub(at + #file, at + #file + #c[2] - 1), c[2], c[2]:sub(2) .. ' follows the copy at once')
+    H.ok(readme:find('\n##+ [%d%.]+ ' .. part .. '\n') ~= nil, 'README has its part: ' .. part)
+end
+H.ok(Has(readme, '](docs/OWNER_GUIDE.md)') and Has(readme, '](docs/dev/README.md)'),
+    'README links the guide and docs/dev')
+
+-- no copy of a config file in the SPEC: it links them, and every Config key it names is a real setting
+for _, rel in ipairs({ 'Crimson-Police/config/config.lua', 'Crimson-Police/config/blocks.lua' }) do
+    local file = ReadRepo(rel) or ''
+    local head = file:sub(1, 400)
+    H.ok(#file > 1000 and not Has(spec, head), 'docs/dev/SPEC.md copies no part of ' .. rel)
+    H.ok(Has(spec, '(../../' .. rel .. ')'), 'docs/dev/SPEC.md links ' .. rel)
+end
+H.ok(#spec < 250000, ('SPEC stays small (%d bytes)'):format(#spec))
+do
+    local SPEC_FOREIGN = {
+        Roster = true,
+        Police = true,
+        DispatchIntegration = true,
+        Integrations = true,
+        ArenaIntegration = true,
+        Prison = true,
+        DispatchJobs = true,
+        PoliceJobs = true,
+        Dispatch = true,
+    }
+    local bad, n, seen = {}, 0, {}
+    for path, after in spec:gmatch('%f[%w]Config%.([%w_%.]+)(.?)') do
+        path = path:gsub('%.+$', '')
+        local top = path:match('^[%w_]+')
+        if not seen[path] and not SPEC_FOREIGN[top] and after ~= '*' and after ~= '<' then
+            seen[path] = true
+            n = n + 1
+            if Node(Cfg, path) == nil then bad[#bad + 1] = path end
+        end
+    end
+    H.ok(n > 150, ('the SPEC names the settings (%d)'):format(n))
+    H.eq(table.concat(bad, ', '), '', 'every Config key the SPEC names exists in config.lua as shipped')
 end
 
 -- ============================================================================
@@ -68,18 +108,21 @@ end
 -- ============================================================================
 
 local DOCS = {
-    'ARCHITECTURE.md',
-    'FILE_NOTES.md',
-    'INTEGRATIONS.md',
     'IN_GAME_CHECKLIST.md',
-    'LOOPS.md',
-    'SPEC.md',
-    'STYLE.md',
-    'TESTING.md',
-    'WORKFLOWS.md',
+    'OWNER_GUIDE.md',
+    'dev/ARCHITECTURE.md',
+    'dev/FILE_NOTES.md',
+    'dev/INTEGRATIONS.md',
+    'dev/LOOPS.md',
+    'dev/README.md',
+    'dev/SPEC.md',
+    'dev/STYLE.md',
+    'dev/TESTING.md',
+    'dev/WORKFLOWS.md',
 }
 local present = Lines('cd "' .. REPO .. 'docs" && find . -type f | sed "s|^\\./||" | LC_ALL=C sort')
-H.eq(table.concat(present, ' '), table.concat(DOCS, ' '), 'docs/ holds the consolidated set, no notes folder')
+H.eq(table.concat(present, ' '), table.concat(DOCS, ' '),
+    'docs/ holds the owner set and docs/dev the developer set, no notes folder')
 
 local files = Lines(
     'cd "' .. REPO .. '" && find . \\( -name node_modules -o -name dist -o -name .git -o -name fixtures \\) -prune'
@@ -179,29 +222,50 @@ H.ok(
 --                   README: CONTENTS, COMMANDS, CONFIG KEYS
 -- ============================================================================
 
--- every heading of sections 1-12 is in the contents, and every link of the contents has its heading
+-- in the README and the owner guide every numbered heading is in the contents, every link of the contents has its
+-- heading, and every link from one to a heading of the other lands on one
 local function Slug(t) return (t:lower():gsub('[^%w%s%-_]', ''):gsub('%s', '-')) end
-local slugs, numbered = {}, {}
-local fence = false
-for ln in (readme .. '\n'):gmatch('(.-)\n') do
-    if ln:match('^```') then fence = not fence end
-    local hashes, text = ln:match('^(#+) (.+)$')
-    if hashes and not fence and #hashes >= 2 then
-        slugs[Slug(text)] = true
-        if text:match('^%d') then numbered[#numbered + 1] = Slug(text) end
+local function Headings(doc)
+    local slugs, numbered = {}, {}
+    local fence = false
+    for ln in (doc .. '\n'):gmatch('(.-)\n') do
+        if ln:match('^```') then fence = not fence end
+        local hashes, text = ln:match('^(#+) (.+)$')
+        if hashes and not fence and #hashes >= 2 then
+            slugs[Slug(text)] = true
+            if text:match('^%d') then numbered[#numbered + 1] = Slug(text) end
+        end
+    end
+    return slugs, numbered
+end
+local docHeads = {}
+for name, doc in pairs({ README = readme, guide = guide }) do
+    local slugs, numbered = Headings(doc)
+    docHeads[name] = slugs
+    local contents = doc:match('\n## Contents\n(.-)\n%-%-%-\n') or ''
+    H.ok(#contents > 500, name .. ' has its contents')
+    for anchor in contents:gmatch('%]%(#([^)]+)%)') do
+        H.ok(slugs[anchor], name .. ' contents: #' .. anchor .. ' is a heading')
+    end
+    for _, slug in ipairs(numbered) do
+        H.ok(Has(contents, '(#' .. slug .. ')'), name .. ' contents lists #' .. slug)
     end
 end
-local contents = readme:match('\n## Contents\n(.-)\n%-%-%-\n') or ''
-H.ok(#contents > 1000, 'README has its contents')
-for anchor in contents:gmatch('%]%(#([^)]+)%)') do
-    H.ok(slugs[anchor], 'README contents: #' .. anchor .. ' is a heading')
-end
-for _, slug in ipairs(numbered) do
-    H.ok(Has(contents, '(#' .. slug .. ')'), 'README contents lists #' .. slug)
+for _, l in ipairs({
+    { readme, 'README', '#', 'README' },
+    { readme, 'README', 'docs/OWNER_GUIDE.md#', 'guide' },
+    { guide, 'guide', '#', 'guide' },
+    { guide, 'guide', '../README.md#', 'README' },
+}) do
+    local bad = {}
+    for target in l[1]:gmatch('%]%(' .. l[3]:gsub('%p', '%%%0') .. '([^)]+)%)') do
+        if not docHeads[l[4]][target] then bad[#bad + 1] = target end
+    end
+    H.eq(table.concat(bad, ' '), '', l[2] .. ': every link to ' .. l[4] .. ' lands on a heading')
 end
 
--- 8.1 lists every command Crimson-Police registers, and nothing else
-local commands = readme:match('\n### 8%.1 Commands\n(.-)\n### 8%.2') or ''
+-- 6.1 lists every command Crimson-Police registers, and nothing else
+local commands = readme:match('\n### 6%.1 Commands\n(.-)\n### 6%.2') or ''
 local registered = {
     [Cfg.Tablet.command] = true,
     [Cfg.Tablet.adminCommand] = true,
@@ -213,8 +277,8 @@ local diag = ReadRepo('Crimson-Police/modules/diag/client.lua') or ''
 registered[diag:match('\nlocal COMMAND = \'([%w_]+)\'') or '?'] = true
 local listed = {}
 for name in commands:gmatch('\n| `/?([%w_]+)') do listed[name] = true end
-for name in pairs(registered) do H.ok(listed[name], 'README 8.1 lists ' .. name) end
-for name in pairs(listed) do H.ok(registered[name], 'README 8.1: ' .. name .. ' is a registered command') end
+for name in pairs(registered) do H.ok(listed[name], 'README 6.1 lists ' .. name) end
+for name in pairs(listed) do H.ok(registered[name], 'README 6.1: ' .. name .. ' is a registered command') end
 
 -- every admin subcommand of the table exists in the code, and every one in the code is in the table
 local admin = ReadRepo('Crimson-Police/modules/admin/server.lua') or ''
@@ -229,8 +293,8 @@ end
 local adminCmd = Cfg.Tablet.adminCommand
 local inTable = {}
 for sub in commands:gmatch('`/?' .. adminCmd .. ' ([%w_]+)') do inTable[sub] = true end
-for sub in pairs(subs) do H.ok(Has(commands, adminCmd .. ' ' .. sub), 'README 8.1 lists the subcommand ' .. sub) end
-for sub in pairs(inTable) do H.ok(subs[sub], 'README 8.1: ' .. sub .. ' is a subcommand in the code') end
+for sub in pairs(subs) do H.ok(Has(commands, adminCmd .. ' ' .. sub), 'README 6.1 lists the subcommand ' .. sub) end
+for sub in pairs(inTable) do H.ok(subs[sub], 'README 6.1: ' .. sub .. ' is a subcommand in the code') end
 
 -- every Config key the owner documents names a real setting (keys of other resources and wildcards left out)
 local FOREIGN = {
@@ -241,7 +305,7 @@ local FOREIGN = {
     DispatcherMode = true,
     ArenaIntegration = true,
 }
-local owner = { 'README.md', 'Crimson-Police/README.md' }
+local owner = { 'README.md', 'docs/OWNER_GUIDE.md', 'Crimson-Police/README.md' }
 for _, rel in ipairs(files) do
     if rel:match('^%./Crimson%-Police/.+/README%.md$') then owner[#owner + 1] = rel:gsub('^%./', '') end
 end
@@ -262,12 +326,12 @@ end
 H.ok(keys > 200, ('the owner docs name the settings (%d)'):format(keys))
 
 -- ============================================================================
---                      README 5.10: WHAT SHIPS OFF AND ON
+--                      README 5.2: WHAT SHIPS OFF AND ON
 -- ============================================================================
 
-local ships = readme:match('\n### 5%.10 What ships off and how to turn it on\n(.-)\n## ') or ''
+local ships = readme:match('\n### 5%.2 What ships off and how to turn it on\n(.-)\n## ') or ''
 local offPart, moneyPart, onPart = ships:match('%*%*Ships off%*%*(.-)%*%*Admin money tools%*%*(.-)%*%*Ships on%*%*(.*)')
-H.ok(offPart ~= nil, 'README 5.10 has its three parts')
+H.ok(offPart ~= nil, 'README 5.2 has its three parts')
 offPart, moneyPart, onPart = offPart or '', moneyPart or '', onPart or ''
 local settings = ReadRepo('Crimson-Police/modules/settings/server.lua') or ''
 local features = settings:match('\nPlay%.features = (%b{})') or ''
@@ -277,24 +341,24 @@ for path in features:gmatch('path = \'([^\']+)\'') do
     local value = Node(Cfg, path)
     local part = value == true and onPart or offPart
     H.ok(Has(part, '`Config.' .. path .. '`'),
-        ('README 5.10 lists Config.%s under ships %s'):format(path, value == true and 'on' or 'off'))
+        ('README 5.2 lists Config.%s under ships %s'):format(path, value == true and 'on' or 'off'))
 end
 H.ok(n >= 40, ('every Features tab switch is checked (%d)'):format(n))
 local money = settings:match('\nlocal MONEY_SWITCHES = (%b{})') or ''
 for path in money:gmatch('\'([%w_%.]+)\'') do
     H.eq(Node(Cfg, path), false, 'the money tool Config.' .. path .. ' ships off')
-    H.ok(Has(moneyPart, '`Config.' .. path .. '`'), 'README 5.10 lists the money tool Config.' .. path)
+    H.ok(Has(moneyPart, '`Config.' .. path .. '`'), 'README 5.2 lists the money tool Config.' .. path)
 end
-H.eq(Cfg.Debug, true, 'Debug ships on, as 5.10 says')
-H.eq(Cfg.Database.enabled, false, 'the database ships off, as 5.10 says')
-H.eq(Cfg.Builder.requireTestToPublish, false, 'testing is never required, as 5.10 says')
-H.ok(Has(ships, '`Config.Builder.requireTestToPublish = false`'), 'README 5.10 says testing is never required')
+H.eq(Cfg.Debug, true, 'Debug ships on, as 5.2 says')
+H.eq(Cfg.Database.enabled, false, 'the database ships off, as 5.2 says')
+H.eq(Cfg.Builder.requireTestToPublish, false, 'testing is never required, as 5.2 says')
+H.ok(Has(ships, '`Config.Builder.requireTestToPublish = false`'), 'README 5.2 says testing is never required')
 
 -- ============================================================================
 --             FILE_NOTES: ONE LINE PER FILE, ONLY FILES THAT EXIST
 -- ============================================================================
 
-local notes = ReadRepo('docs/FILE_NOTES.md') or ''
+local notes = ReadRepo('docs/dev/FILE_NOTES.md') or ''
 local entries, long = 0, 0
 for path, purpose in notes:gmatch('\n%- `([^`]+)`: ([^\n]*)') do
     entries = entries + 1
@@ -310,9 +374,9 @@ H.eq(long, 0, 'every FILE_NOTES line is one sentence')
 H.ok(#notes < 150000, ('FILE_NOTES stays small (%d bytes)'):format(#notes))
 
 -- ARCHITECTURE: one place per module (no second "module notes" part), no build-history narration, every section it
--- names exists, and it stays well under its old 899 KB
-local arch = ReadRepo('docs/ARCHITECTURE.md') or ''
-H.ok(#arch > 100000 and #arch < 560000, ('ARCHITECTURE stays small (%d bytes)'):format(#arch))
+-- names exists, and it stays small (its module sections keep the names and rules; the code headers have the rest)
+local arch = ReadRepo('docs/dev/ARCHITECTURE.md') or ''
+H.ok(#arch > 100000 and #arch < 360000, ('ARCHITECTURE stays small (%d bytes)'):format(#arch))
 H.eq(arch:find('\n## 13.', 1, true), nil, 'ARCHITECTURE has no separate module notes part')
 for _, phrase in ipairs({ 'owner request of', 'as before', 'Contract interpretations', 'this slice' }) do
     H.eq(arch:find(phrase, 1, true), nil, 'ARCHITECTURE has no history phrase: ' .. phrase)
@@ -329,18 +393,12 @@ for _, rel in ipairs(files) do
     local s = ReadRepo(rel:gsub('^%./', '')) or ''
     H.eq(s:find('ARCHITECTURE.md ' .. '§13', 1, true), nil, rel .. ': names no removed ARCHITECTURE section 13')
 end
-H.eq((ReadRepo('docs/TESTING.md') or ''):find('before the ' .. 'speed-up', 1, true), nil,
+H.eq((ReadRepo('docs/dev/TESTING.md') or ''):find('before the ' .. 'speed-up', 1, true), nil,
     'TESTING has no old timing story')
 
--- SPEC: its prose (everything but the two config copies) stays cut down, carries no build history, and every
--- ARCHITECTURE section it names exists
+-- SPEC: it stays cut down, carries no build history, and every ARCHITECTURE section it names exists
 local prose = spec
-for _, rel in ipairs({ 'Crimson-Police/config/config.lua', 'Crimson-Police/config/blocks.lua' }) do
-    local file = ReadRepo(rel) or ''
-    local at = prose:find(file, 1, true)
-    if at then prose = prose:sub(1, at - 1) .. prose:sub(at + #file) end
-end
-H.ok(#prose > 100000 and #prose < 280000, ('SPEC prose stays small (%d bytes)'):format(#prose))
+H.ok(#prose > 100000, ('SPEC keeps its rules (%d bytes)'):format(#prose))
 for _, phrase in ipairs({ 'owner request of', 'owner\'s request of', 'as before', 'owner decision of', 'as today' }) do
     H.eq(prose:find(phrase, 1, true), nil, 'SPEC has no history phrase: ' .. phrase)
 end

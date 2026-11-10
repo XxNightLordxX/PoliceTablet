@@ -18,7 +18,7 @@
 --   unfunded and forfeited are final. A row left in 'paying' (crash, or a failed deposit after a society
 --   withdrawal that could not be refunded) is never retried automatically: see stuckPayments().
 --
--- Public API (docs/ARCHITECTURE.md §5.20)
+-- Public API (docs/dev/ARCHITECTURE.md §5.20)
 --   CP.Cash.compute(run, p) -> amount, breakdown       breakdown = RunResult.cash { B, mTier, mMod, amount, status }
 --       status: 'held' for a completed, flagged, non-test row, else 'none'. Reads p.result (set by the engine).
 --   CP.Cash.pay(rowId) -> status|nil                   'paid'|'capped'|'unfunded'|'pending'|'paying'|nil (nothing done)

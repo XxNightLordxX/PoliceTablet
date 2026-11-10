@@ -315,7 +315,7 @@ end
 -- (anything else). Loads the ground there first (the collision of opts.entity, default this player's ped, within
 -- Config.Spawning.collisionTimeoutMs) and the inside of a building (interiorTimeoutMs). opts.wall = false skips the
 -- wall probe (a marker an officer walks to: a door may stand in the space). Needs a thread. Returns
--- { status, groundZ, dz, z, ... }: see docs/ARCHITECTURE.md 5.43.
+-- { status, groundZ, dz, z, ... }: see docs/dev/ARCHITECTURE.md 5.43.
 function Spawn.probe(kind, x, y, z, h, model, opts)
     kind = KINDS[kind] or 'prop'
     opts = type(opts) == 'table' and opts or {}

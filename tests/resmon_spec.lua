@@ -1,6 +1,6 @@
--- Client resmon (docs/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
+-- Client resmon (docs/dev/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
 
--- Client resmon (docs/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
+-- Client resmon (docs/dev/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
 -- each native counted when a Crimson-Police file calls it. The idle game calls none; the busiest frame loop of a run
 -- (the checkpoint course: two markers, the inside and contact checks) calls few per frame and builds no string; the
 -- HUD sends one NUI message per change; a 'local' officer option decodes this PC's KVP only when it changed. The tired

@@ -1,6 +1,6 @@
 # Department logos
 
-Full guide: section [6.7 Department logos](../../README.md#67-department-logos) of the `README.md` in the
+Full guide: section [3.7 Department logos](../../docs/OWNER_GUIDE.md#37-department-logos) of `docs/OWNER_GUIDE.md` in the
 repository root. This note says the same in short.
 
 - One file per department, named as in `Config.Departments[<key>].logo.file` in `config/config.lua` (`sast.png`

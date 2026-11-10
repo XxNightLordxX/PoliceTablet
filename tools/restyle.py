@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restyle Crimson-Police to the owner's style (docs/STYLE.md). Dev tooling, not shipped.
+"""Restyle Crimson-Police to the owner's style (docs/dev/STYLE.md). Dev tooling, not shipped.
 
   python3 tools/restyle.py                 format and restyle Crimson-Police/ and tests/ in place
   python3 tools/restyle.py --check         change nothing (a scratch copy is restyled); list the files a run
@@ -14,7 +14,7 @@ a formatter cannot:
 
   Lua  - file-level local functions in PascalCase (scope-aware, only when provably safe, see rename_plan);
          closures inside a function keep their name
-       - file headers cut to a short summary; the rest stays under it, docs/FILE_NOTES.md gets one line per file
+       - file headers cut to a short summary; the rest stays under it, docs/dev/FILE_NOTES.md gets one line per file
        - section banners in the owner's 3-line '=' format, sub-banners as '-- ---- TITLE ----'
        - table.insert(t, v) -> t[#t + 1] = v, console print prefixes and colour codes
        - after the last StyLua run: ifs, loops and functions written on one line go back on one line, long
@@ -42,7 +42,7 @@ import textwrap
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 RES = os.path.join(ROOT, 'Crimson-Police')
 WEB = os.path.join(RES, 'web')
-NOTES = os.path.join(ROOT, 'docs', 'FILE_NOTES.md')
+NOTES = os.path.join(ROOT, 'docs', 'dev', 'FILE_NOTES.md')
 
 SKIP_DIRS = {'node_modules', 'dist', '.git', 'saves'}
 # Mission files are data in the spec's Example file layout, the same layout the Mission Builder writes
@@ -1424,7 +1424,7 @@ def purpose_line(keep):
 
 def header_pass(path, lines, lang, notes):
     """Cuts a long file header to its summary (at most HEADER_LINES lines). The rest of the header stays in the
-    file as a comment block under the summary; docs/FILE_NOTES.md gets the file's purpose line."""
+    file as a comment block under the summary; docs/dev/FILE_NOTES.md gets the file's purpose line."""
     h = split_header(lines, lang)
     if not h:
         notes.pop(rel(path), None)
@@ -1755,8 +1755,8 @@ def css_banner_pass(lines):
 NOTES_INTRO = """# File notes
 
 One line per source file: what it is for, the first sentence of its header. tools/restyle.py writes this file;
-the full header, with the details, stays at the top of the file itself (docs/STYLE.md). The module APIs are in
-docs/ARCHITECTURE.md.
+the full header, with the details, stays at the top of the file itself (docs/dev/STYLE.md). The module APIs are in
+docs/dev/ARCHITECTURE.md.
 """
 
 NOTE_RE = re.compile(r'^- `([^`]+)`: (.*)$')

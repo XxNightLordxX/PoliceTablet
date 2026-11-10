@@ -1,6 +1,6 @@
--- Server cost (docs/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
+-- Server cost (docs/dev/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
 
--- Server cost (docs/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
+-- Server cost (docs/dev/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
 -- online and no run, as tests/e2e_spec.lua sets it up (its world is loaded from that file, up to its HELPERS
 -- section, on a database of its own). Counted: the SQL the idle server sends in two minutes, the tablet pushes with
 -- Config.Performance.pushGapMs, and which callback answers go latent with Config.Performance.latentAboveBytes.
@@ -66,8 +66,9 @@ _G.Wait = realWait
 _G.Citizen.Wait = realWait
 
 -- ============================================================================
---            TICKS THAT SLEEP WITH NO RUN (step LP4, docs/LOOPS.md)
+--                         TICKS THAT SLEEP WITH NO RUN
 -- ============================================================================
+-- Step LP4, docs/dev/LOOPS.md.
 -- the run engine (with the job recheck), custody, the NPC watcher, the drive-to-start and downed checks, the Testing
 -- upkeep and the unit sweep woke every 1-5 s all day; now each runs only while what it watches exists (a run, a test,
 -- a unit), armed again by the next one. The mission calls push flag is a SetTimeout armed by a change, not a 1 s loop.

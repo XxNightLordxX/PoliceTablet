@@ -18,7 +18,7 @@
 -- screen shows who accepted and starts the test with the accepted testers (server:admin:startTest). CP.Runs
 -- cannot add participants to a run after create, so nobody joins a test once it has started.
 --
--- Public API (server, docs/ARCHITECTURE.md §5.27)
+-- Public API (server, docs/dev/ARCHITECTURE.md §5.27)
 --   CP.Testing.start(adminSrc, opts) -> ok, data|errKey
 --       opts = { missionId, location = index|'random'|nil, tier = name|'auto'|nil, useStartRoute = bool|nil,
 --                testers = { src, ... } }   testers must have accepted an invitation of this admin for this
@@ -69,7 +69,7 @@
 --   events sent  client:testInvite { inviteId, missionLabel, from, expiresIn } ·
 --                client:test { controls, runId, debug = false|DebugData }
 --   pushes   'test' { state = true } (the admin's test state changed) · 'invites' { test = true }
--- Response shapes: docs/ARCHITECTURE.md §5.27 and web/src/types/testing.ts.
+-- Response shapes: docs/dev/ARCHITECTURE.md §5.27 and web/src/types/testing.ts.
 
 CP.Testing = CP.Testing or {}
 local Testing = CP.Testing

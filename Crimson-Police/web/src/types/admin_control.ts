@@ -1,4 +1,4 @@
-// Full admin control: the shapes every admin package shares (docs/ARCHITECTURE.md §9.5, "Admin control").
+// Full admin control: the shapes every admin package shares (docs/dev/ARCHITECTURE.md §9.5, "Admin control").
 // Package shapes live in types/admin_officers.ts, admin_missions.ts, admin_live.ts, admin_economy.ts and
 // admin_system.ts; this file holds only what the kit and the layouts use.
 

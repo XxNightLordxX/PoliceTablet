@@ -17,7 +17,7 @@ local CLEAR = 1.5       -- metres (flat): kept clear of every other script's pla
 local FACING = 10.0     -- degrees: a desk's rotation is at most this far from facing its source
 local MAP = { minX = -4000.0, maxX = 4500.0, minY = -4000.0, maxY = 8500.0 }
 
--- Shipped coordinates with no Qbox source, kept as they were (README 6.2 and the LOC2 notes list them)
+-- Shipped coordinates with no Qbox source, kept as they were (docs/OWNER_GUIDE.md 3.2 and the LOC2 notes list them)
 local KEPT = {
     ['1853.20, 3689.60, 34.27'] = 'Sandy Shores office desk: qbx_policejob has only a map blip there',
 }

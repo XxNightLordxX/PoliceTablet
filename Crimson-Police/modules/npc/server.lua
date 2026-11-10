@@ -1,6 +1,6 @@
 -- CP.Npc (server): the authoritative state machine of mission NPCs.
 
--- What this module owns (docs/ARCHITECTURE.md §5.11, §6.1, §6.2)
+-- What this module owns (docs/dev/ARCHITECTURE.md §5.11, §6.1, §6.2)
 --   - The state, cuff, task and seq fields of every mission ped's replicated cp entity state
 --     bag (Entity(e).state.cp = { run, obj, role, state, armed, cfg, tag, ... }). The engine
 --     (CP.Runs.spawnPed) writes the bag first and keeps a server copy in run.entities[netId].bag;

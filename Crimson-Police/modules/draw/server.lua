@@ -8,7 +8,7 @@
 --     avoidLastLarge with largePool+ missions in the pool; a pool of one may repeat)
 --   * location picking (reserved spots skipped; spots with a non-participant player within
 --     Config.Draw.playerClearance skipped while another spot is free; server-side ped coords; players
---     in Crimson-Arena are ignored, docs/INTEGRATIONS.md, Crimson-Arena rule 7) and the
+--     in Crimson-Arena are ignored, docs/dev/INTEGRATIONS.md, Crimson-Arena rule 7) and the
 --     location reservations (several holders per spot are allowed so a test run can still reserve)
 --   * the Mission Board data (BoardData, ARCHITECTURE §9.4) and the accept of a mission type
 --
@@ -32,14 +32,14 @@
 --   callback 'getMissionTypes' -> BoardData
 --   action 'server:acceptType' (payload = a Config.MissionTypes key, or 'weekly_boss') -> { runId }
 --       leader only; every member must be an officer (CP.Access.getOfficer), not be in Crimson-Arena
---       (CP.Alerts.inArena: foreign crimsonArena flag or routing bucket <> 0, docs/INTEGRATIONS.md, Crimson-Arena rule 5;
+--       (CP.Alerts.inArena: foreign crimsonArena flag or routing bucket <> 0, docs/dev/INTEGRATIONS.md, Crimson-Arena rule 5;
 --       err.in_arena), have no active run, not be on a real call, be under the hourly
 --       cap and off the type cooldown; server caps (CP.Runs.capsOk); refused while a Cross-Department
 --       Mission is active; the Weekly Boss also needs CP.Events.bossAvailable for every member.
 --       Then CP.Units.lock(unit), the draw, CP.Runs.create (the unit is unlocked again on failure).
 -- Internal (same slice): CP.Draw._eligibility(def, officers, size?, now?) -> ok, why, untilTs, officer
 --
--- Contract interpretations (details in docs/ARCHITECTURE.md §5.6)
+-- Contract interpretations (details in docs/dev/ARCHITECTURE.md §5.6)
 --   * history = distinct missions of the type with state completed/abandoned (failed rows and the Weekly
 --     Boss never count); a unit whose histories cover the whole pool relaxes to avoidLast, then to "not the
 --     unit's most recent mission", then the whole pool; no fallback to avoided missions for locations
@@ -1827,7 +1827,7 @@ local function AcceptStart(src, typeKey, opts, note)
     -- Invites close now: the draw depends on the unit's size and every member's cooldowns.
     if unit and CP.Units and CP.Units.lock then Safe(CP.Units.lock, unit) end
     -- The checks above may yield (database lookups): an invite accepted meanwhile would put an officer in
-    -- the locked unit who is not on the run and was never checked (docs/ARCHITECTURE.md §5.16). The unit must still
+    -- the locked unit who is not on the run and was never checked (docs/dev/ARCHITECTURE.md §5.16). The unit must still
     -- be exactly the members that were checked; otherwise the leader tries again.
     if unit then
         local now2 = UnitMembers(src)

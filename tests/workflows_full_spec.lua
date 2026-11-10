@@ -3,7 +3,7 @@
 -- Full workflow testing (the owner: "do a full workflow testing of everything"): every workflow the other
 -- end-to-end specs leave out, driven start to finish on the REAL server side of Crimson-Police (every server file
 -- loaded as in game, database off: the saves folder, as shipped), every switch on through the Admin UI's own Settings,
--- and a `restart Crimson-Police` and a player drop and reconnect in the middle. docs/WORKFLOWS.md lists every workflow
+-- and a `restart Crimson-Police` and a player drop and reconnect in the middle. docs/dev/WORKFLOWS.md lists every workflow
 -- with the spec that drives it. Only the other resources and the natives are stubs.
 
 local H = dofile('tests/harness.lua')
@@ -741,7 +741,7 @@ end
 --                                  4. A UNIT
 -- ============================================================================
 -- INVITE, A DECLINED READY CHECK, PROMOTE, KICK, LEAVE, RESTART.
--- Units live in memory: after a restart the officers form their unit again (README 11, live crime row).
+-- Units live in memory: after a restart the officers form their unit again (docs/dev/WORKFLOWS.md).
 
 do
     Place(1, vec3(300.0, -1000.0, 29.0))
@@ -790,7 +790,7 @@ end
 --             5. A CROSS-DEPARTMENT MISSION A SUPERVISOR LAUNCHES
 -- ============================================================================
 -- WITH A RESTART FIRST.
--- Docs (README 8): a restart cancels an operation still joining; the launch wait is read back from the saved rows.
+-- Docs (docs/dev/WORKFLOWS.md): a restart cancels an operation still joining; the launch wait is read back from the saved rows.
 
 do
     local function OpRow(id)
@@ -1283,7 +1283,7 @@ end
 --                               12. STORAGE COPY
 -- ============================================================================
 -- THE SAVES FOLDER INTO THE DATABASE (MariaDB).
--- Docs (README 7, Moving between the database and the saves folder): copy, then switch and restart; the copy
+-- Docs (docs/OWNER_GUIDE.md 3.5, Moving between the database and the saves folder): copy, then switch and restart; the copy
 -- leaves the saves folder in use untouched and needs no restart while it is not the store in use.
 
 local function Maria(sql)

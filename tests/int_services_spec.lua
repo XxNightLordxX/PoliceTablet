@@ -2,7 +2,7 @@
 -- disputes and anticheat running together (plus the real permissions, scaling and schedule), on stubs of CP.Qbx,
 -- CP.Access, CP.Tablet, CP.Banking, CP.Missions and CP.Runs.
 
--- It checks the cross-module paths the slice notes asked for (docs/ARCHITECTURE.md §5.18, §5.22, §5.25,
+-- It checks the cross-module paths the slice notes asked for (docs/dev/ARCHITECTURE.md §5.18, §5.22, §5.25,
 -- testing.md): approve/void ordering against the real XP / cash / board hooks, disputes forfeiting and restoring,
 -- goal and manual_award rows (season, department, board refresh), admin:getStuckPayments, reasons counted in
 -- characters across admin -> scoring and in payouts, the Profile's canDispute = CP.Disputes.eligible, badge labels

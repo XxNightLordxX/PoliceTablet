@@ -1118,7 +1118,7 @@ CP.Blocks.register(BLOCK, {
         return best or 0.0
     end,
 
-    -- The objective pointer (CP.Runs.marker, docs/ARCHITECTURE.md §5.44): every point still to do, numbered, each
+    -- The objective pointer (CP.Runs.marker, docs/dev/ARCHITECTURE.md §5.44): every point still to do, numbered, each
     -- keyed by its number so the client hands its own blip over (one icon per point) and every officer's GPS line
     -- goes to his nearest; a hidden search is its circle round the spots (the client hands over the centre, key
     -- 'area'). The same under Radio Silence: each officer's CP.Markers hides by Config.Markers.radioSilence ('area':

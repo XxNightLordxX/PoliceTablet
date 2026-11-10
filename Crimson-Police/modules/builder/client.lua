@@ -1,6 +1,6 @@
--- CP.Builder (client): the Mission Builder's in-world tools. Protocol: docs/ARCHITECTURE.md §5.28.6 (client
+-- CP.Builder (client): the Mission Builder's in-world tools. Protocol: docs/dev/ARCHITECTURE.md §5.28.6 (client
 -- actions, results, overlays); shapes of the overlays and of the fields this client adds:
--- web/src/types/builder_client.ts; notes: docs/ARCHITECTURE.md §5.28.7.
+-- web/src/types/builder_client.ts; notes: docs/dev/ARCHITECTURE.md §5.28.7.
 
 -- Owns
 --   * the placement tool. The tablet closes (CP.Tablet.close) into placement mode: a LOCAL, non-networked
@@ -46,7 +46,7 @@
 --     ({ started = true }); the tablet closes and the tool runs; its BuilderClientResult (plus `seq`) is kept until
 --     the NUI reads it (builderResult), pushed to the NUI (topic 'builder', event 'clientResult') and the tablet
 --     reopens on the UI the tool was started from (payload.ui, default 'supervisor').
---   * refusals (docs/INTEGRATIONS.md, Crimson-Arena rules 8 and 13): every tool refuses with err.in_arena while the local player
+--   * refusals (docs/dev/INTEGRATIONS.md, Crimson-Arena rules 8 and 13): every tool refuses with err.in_arena while the local player
 --     carries Crimson-Arena's crimsonArena value, and a running tool stops (no reopen) when such a value arrives;
 --     also err.builder_busy (a tool runs), err.builder_dead, err.builder_on_run (the player is on a mission run;
 --     a running tool stops, no reopen, when the player is put on one) and err.builder_disabled. The builder never moves the player: no SetEntityCoords on the player's ped or

@@ -1,6 +1,7 @@
 # Crimson-Police
 
-The full guide is the `README.md` one folder up, in the repository root (the front page on GitHub): start at
+The owner's guide is the `README.md` one folder up, in the repository root (the front page on GitHub), with every
+detail in `docs/OWNER_GUIDE.md`. Start at
 [3. Install in 5 minutes](../README.md#3-install-in-5-minutes). This note is the short version, for when you only
 have this folder.
 
@@ -20,7 +21,7 @@ random NPC mission, and finished missions pay cash and earn leaderboard points.
    `Config.QboxAdmins = true` in `config/config.lua`). To add more admins, or a Crimson-Police-only admin, see
    [4. Admins, supervisors and permissions](../README.md#4-admins-supervisors-and-permissions). Optional Discord
    webhooks are `set cp_webhook_<name> "..."` lines: see
-   [6.6 Discord webhooks](../README.md#66-discord-webhooks).
+   [guide 3.6 Discord webhooks](../docs/OWNER_GUIDE.md#36-discord-webhooks).
 3. Check that your Qbox jobs match `jobs` in `Config.Departments` (`config/config.lua`). The shipped departments
    use the jobs `sast` and `fib`, which a stock Qbox server does not have: add them to Qbox, or put your own job
    name in `jobs`. Set `supervisorGrade` to the Qbox grade number where supervisors start.
@@ -31,14 +32,14 @@ random NPC mission, and finished missions pay cash and earn leaderboard points.
 
 You never have to edit `config/config.lua`: an admin can change every setting in game in `/CrimsonPoliceAdmin` →
 **Settings**, and switch missions and their locations on or off in **Missions** (see
-[5.7](../README.md#57-change-any-setting-in-game-the-settings-screen)). Testing missions is optional. Admins also
+[guide 2.6](../docs/OWNER_GUIDE.md#26-change-any-setting-in-game-the-settings-screen)). Testing missions is optional. Admins also
 edit any mission (built-in ones too), correct officers' records, handle payments, add departments and make backups
-there: the list is in [4.6](../README.md#46-things-only-admins-can-do). Who is an admin, Discord webhook links and
+there: the list is in [README 4.4](../README.md#44-things-only-admins-can-do). Who is an admin, Discord webhook links and
 restarting Crimson-Police stay in server.cfg and txAdmin.
 
 Mission NPCs carry pistols and pump shotguns only (never automatic weapons), aim worse, fire single shots and do half
 damage, and officers on a run take no headshot one-shots. Make them easier or harder with `Config.NpcCombat` (lower =
-easier): see [5.9 How hard NPCs fight back](../README.md#59-how-hard-npcs-fight-back).
+easier): see [guide 2.8 How hard NPCs fight back](../docs/OWNER_GUIDE.md#28-how-hard-npcs-fight-back).
 
 Required resources (they start before Crimson-Police by themselves): `oxmysql`, `ox_lib`, `qbx_core`, `ox_target`,
 `ox_inventory`, `sc-dispatch`, `sc-ambulance` and `Renewed-Banking`. There is no SQL to import.
@@ -51,7 +52,7 @@ Two switches at the top of `config/config.lua`, as shipped:
   Nothing to set up. To use your MySQL/MariaDB database instead, set it to `true` and restart Crimson-Police: it
   makes its own tables through oxmysql (the same `set mysql_connection_string` line Qbox already uses). If the
   server already has data, copy it first: see
-  [5.5 The two switches at the top](../README.md#55-the-two-switches-at-the-top-debug-and-storage).
+  [README 5.1 The two switches at the top](../README.md#51-the-two-switches-at-the-top-debug-and-storage).
 
 ## What is in this folder
 
@@ -59,7 +60,7 @@ Two switches at the top of `config/config.lua`, as shipped:
 |---|---|---|
 | `config/` | Every setting: `config.lua`, `blocks.lua` (Mission Builder ranges), `banned_words.txt` | **Yes** (take the new `blocks.lua` unless you changed it) |
 | `logos/` | One logo per department (see `logos/README.md`) | **Yes** |
-| `missions/custom/` | Missions made with the Mission Builder, and your edited built-in missions in `overrides/`. They are data files the server reads and never runs: a hand edit keeps the Builder's layout ([9.12](../README.md#912-mission-builder)) | **Yes** (all of it) |
+| `missions/custom/` | Missions made with the Mission Builder, and your edited built-in missions in `overrides/`. They are data files the server reads and never runs: a hand edit keeps the Builder's layout ([guide 5.12](../docs/OWNER_GUIDE.md#512-mission-builder)) | **Yes** (all of it) |
 | `saves/` | Your data while the database is off, and the in-game backups in `saves/_backups/` (see `saves/README.md`) | **Yes** |
 | `items/` | The optional tablet item to copy into ox_inventory (see `items/README.md`) | Replace |
 | `missions/builtin/` | The built-in missions | Replace |
@@ -67,4 +68,4 @@ Two switches at the top of `config/config.lua`, as shipped:
 | `fxmanifest.lua`, `shared/`, `modules/`, `blocks/`, `locales/`, `sql/` | The resource itself | Replace |
 
 Back up your database (or the `saves` folder with the database off) before every update. The steps are in
-[10.2 Updating](../README.md#102-updating).
+[guide 7.2 Updating](../docs/OWNER_GUIDE.md#72-updating).

@@ -1773,7 +1773,7 @@ local function CheckPoints(list)
     return nil
 end
 
--- The Crimson-Arena zones (docs/INTEGRATIONS.md, Crimson-Arena item 7) may grow, never shrink, move or go.
+-- The Crimson-Arena zones (docs/dev/INTEGRATIONS.md, Crimson-Arena item 7) may grow, never shrink, move or go.
 local function CheckNoBuildZones(list)
     for _, z in ipairs(list) do
         if not Inside(z.coords) then return 'err.setting_outside_map' end

@@ -1,4 +1,4 @@
-// Mission Builder protocol shapes (docs/ARCHITECTURE.md §5.28).
+// Mission Builder protocol shapes (docs/dev/ARCHITECTURE.md §5.28).
 
 // Server: modules/builder/server.lua (CP.Builder). Callbacks builder:list / builder:get / builder:config,
 // actions server:builder:*, NUI push topic 'builder', client actions builderPlace / builderRecord /

@@ -37,7 +37,7 @@
 --     after the officer's last automatic suspension) suspend the officer for suspendDays
 --     (CP.Access.suspend(citizenid, days, 0, 'auto') + audit 'autoSuspend').
 --
--- Public API (docs/ARCHITECTURE.md §5.26)
+-- Public API (docs/dev/ARCHITECTURE.md §5.26)
 --   CP.AntiCheat.checkEvent(run, src, index, evidence) -> ok, reasonKey
 --   CP.AntiCheat.flag(run, src|nil, reason, detail) -> boolean (true when newly recorded)
 --   CP.AntiCheat.onNpcKilled(run, killerSrc)
@@ -213,7 +213,7 @@ end
 --                                    FLAGS
 -- ============================================================================
 
--- Two classes (docs/ARCHITECTURE.md 5.26): a flag (runFlagged) is about an officer's own conduct and holds his
+-- Two classes (docs/dev/ARCHITECTURE.md 5.26): a flag (runFlagged) is about an officer's own conduct and holds his
 -- points (or every participant's with src nil) until a supervisor approves; a note (runNoted) is for staff only.
 local function RecordFlag(run, p, reason, detail, action)
     if not Has('Admin', 'audit') then return end

@@ -35,7 +35,7 @@
 --   event 'crimson-police:client:missions' (list) to every client after each load / register / unregister
 --       (sent with TriggerLatentClientEvent: the list is tens of kB)
 --
--- Contract interpretations (details in docs/ARCHITECTURE.md §5.6)
+-- Contract interpretations (details in docs/dev/ARCHITECTURE.md §5.6)
 --   * CP.Builder.loadPublished() entries: a definition with loader fields, { def, meta }, or meta only
 --     ({ id, filePath, version }) whose file is read here; if the hook throws, loaded custom missions stay
 --   * reload(): CP.Builder.onReload() first, then loadAll()
@@ -45,7 +45,7 @@
 --   * the loader fields (source, isBoss, status, version, filePath) are set BEFORE the blocks' validate()
 --     runs, because the blocks exempt built-in missions (mission.source == 'builtin') from the builder's
 --     allowed model/weapon lists
---   * docs/INTEGRATIONS.md, Crimson-Arena: a mission is rejected when an item is named armour, bandage, ammo-* or
+--   * docs/dev/INTEGRATIONS.md, Crimson-Arena: a mission is rejected when an item is named armour, bandage, ammo-* or
 --     weapon_* (rule 4), or when any point of a location lies inside a Config.Builder.noBuildZones zone
 --     (rule 7; 2D distance, as the blocks and the builder measure it)
 

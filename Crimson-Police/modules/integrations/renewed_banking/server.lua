@@ -1,12 +1,12 @@
 -- CP.Banking: the only code that talks to Renewed-Banking.
 
 -- Owns exports['Renewed-Banking']:handleTransaction, removeAccountMoney, getAccountMoney and
--- addAccountMoney (verified signatures in docs/INTEGRATIONS.md; addAccountMoney is not in the spec's
+-- addAccountMoney (verified signatures in docs/dev/INTEGRATIONS.md; addAccountMoney is not in the spec's
 -- Appendix, INTEGRATIONS.md "addAccountMoney" names it as the only refund path for a society withdrawal).
 -- Personal money itself moves through Qbox (CP.Qbx.addMoney); Renewed-Banking only keeps the history, so
 -- a payout needs both calls.
 --
--- Public API (docs/ARCHITECTURE.md §5.1). Every function returns false/nil instead of raising when
+-- Public API (docs/dev/ARCHITECTURE.md §5.1). Every function returns false/nil instead of raising when
 -- Renewed-Banking is stopped or rejects the call. Amounts are rounded half up to whole dollars;
 -- an amount of 0 is never sent (a $0 history entry) and returns true.
 --   CP.Banking.recordDeposit(citizenid, amount, message, issuer, receiver, transId) -> boolean
