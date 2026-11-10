@@ -368,7 +368,7 @@ FTC.trainerBonus = 0
 for _, k in ipairs({ 'onDutyChange', 'onJobChange', 'onPlayerLoaded', 'onPlayerUnload' }) do
     CP.Qbx[k] = CP.Qbx[k] or function() end
 end
-H.load('modules/scoring/server.lua')
+H.load('modules/progression/scoring.lua')
 local function Listed()
     for _, a in ipairs(CP.Scoring.badgeCatalog().achievements) do
         if a.id == 'field_training' then return a end

@@ -302,8 +302,8 @@ H.load('modules/schedule/server.lua')
 H.load('modules/permissions/server.lua')
 H.load('modules/payouts/server.lua')
 H.load('modules/cash/server.lua')
-H.load('modules/scoring/server.lua')
-H.load('modules/goals/server.lua')
+H.load('modules/progression/scoring.lua')
+H.load('modules/progression/goals.lua')
 
 H.ok(#listeners.duty == 1 and #listeners.job == 1 and #listeners.unload == 1,
     'scoring registered duty/job/unload listeners')
@@ -1036,18 +1036,18 @@ H.eq(b.tod, false, 'another type is not doubled')
 tod = nil
 
 -- the breakdown carries the cap and the Type of the Day multiplier it used, so the result card and the Profile
--- breakdown show Config.Scoring.scoreCap and Config.Events.todMultiplier instead of a fixed 2
+-- breakdown show Config.Scoring.scoreCap and Config.Objectives.typeOfTheDay.multiplier instead of a fixed 2
 do
-    local scoreCap, todMult = Config.Scoring.scoreCap, Config.Events.todMultiplier
-    Config.Scoring.scoreCap, Config.Events.todMultiplier = 1.5, 1.5
+    local scoreCap, todMult = Config.Scoring.scoreCap, Config.Objectives.typeOfTheDay.multiplier
+    Config.Scoring.scoreCap, Config.Objectives.typeOfTheDay.multiplier = 1.5, 1.5
     tod = 'tactical'
     b = CP.Scoring.compute(run, p, 'completed', { durationS = 300, departments = 2 })
     H.eq(b.capped, true, 'configured cap: capped')
     H.eq(b.cap, 300, 'breakdown.cap = Config.Scoring.scoreCap x P, in whole points')
     H.near(b.scoreCap, 1.5, 1e-9, 'breakdown.scoreCap = Config.Scoring.scoreCap')
-    H.near(b.todMultiplier, 1.5, 1e-9, 'breakdown.todMultiplier = Config.Events.todMultiplier')
+    H.near(b.todMultiplier, 1.5, 1e-9, 'breakdown.todMultiplier = Config.Objectives.typeOfTheDay.multiplier')
     H.eq(b.final, 450, 'capped at 300, then x1.5 for the Type of the Day')
-    Config.Scoring.scoreCap, Config.Events.todMultiplier = scoreCap, todMult
+    Config.Scoring.scoreCap, Config.Objectives.typeOfTheDay.multiplier = scoreCap, todMult
     tod = nil
 end
 for _, file in ipairs({ 'web/src/hud/ResultScreen.tsx', 'web/src/officer/screens/Profile.tsx' }) do
@@ -1423,12 +1423,16 @@ local w1 = CP.Goals._pick('weekly', 'CPOFF001', CP.Schedule.weekStart(H.time) + 
 local w2 = CP.Goals._pick('weekly', 'CPOFF001', CP.Schedule.weekStart(H.time) + 5 * 86400)
 H.eq(w1.id, w2.id, 'the weekly goal stays the same all week')
 
-local savedGoals = Config.Goals
-Config.Goals = {
-    dailyPoints = 50,
-    weeklyPoints = 200,
-    daily = { { id = 'patrol_2', label = 'Complete 2 Patrol missions', type = 'patrol', count = 2 } },
-    weekly = { { id = 'cross_2', label = 'Complete 2 cross-department runs', crossDepartment = true, count = 2 } },
+local savedGoals = { Config.Objectives.dailyGoal, Config.Objectives.weeklyGoal }
+Config.Objectives.dailyGoal = {
+    enabled = true,
+    points = 50,
+    goals = { { id = 'patrol_2', label = 'Complete 2 Patrol missions', type = 'patrol', count = 2 } },
+}
+Config.Objectives.weeklyGoal = {
+    enabled = true,
+    points = 200,
+    goals = { { id = 'cross_2', label = 'Complete 2 cross-department runs', crossDepartment = true, count = 2 } },
 }
 local fo = CP.Goals.forOfficer('CPOFF001')
 H.eq(fo.daily.id, 'patrol_2', 'daily goal')
@@ -1470,15 +1474,17 @@ goalRows = H.sql('SELECT mission_id, final_points FROM cp_mission_runs WHERE mis
 H.eq(#goalRows, 2, 'weekly goal rewarded')
 H.eq(goalRows[2].final_points, 200, 'weekly reward')
 H.eq(CP.Goals.forOfficer('CPOFF001').weekly.done, true, 'weekly done')
-Config.Goals.daily = { { id = 'unit_1', label = 'Complete 1 unit run', unit = true, count = 1 } }
+Config.Objectives.dailyGoal.goals = { { id = 'unit_1', label = 'Complete 1 unit run', unit = true, count = 1 } }
 H.eq(CP.Goals.forOfficer('CPOFF001').daily.progress, 1, 'unit goal counts 2+ participant runs')
-Config.Goals.daily = { { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 } }
+Config.Objectives.dailyGoal.goals = { { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 } }
 H.eq(CP.Goals.forOfficer('CPOFF001').daily.progress, 3, 'goal and manual rows never count as runs')
-Config.Goals.daily = { { id = 'shoot_1', label = 'Gang Shootout', mission = 'gang_shootout', count = 1 } }
+Config.Objectives.dailyGoal.goals = {
+    { id = 'shoot_1', label = 'Gang Shootout', mission = 'gang_shootout', count = 1 },
+}
 H.eq(CP.Goals.forOfficer('CPOFF001').daily.progress, 1, 'mission filter')
-Config.Goals.daily = {}
+Config.Objectives.dailyGoal.goals = {}
 H.eq(CP.Goals.forOfficer('CPOFF001').daily, nil, 'no daily goals configured')
-Config.Goals = savedGoals
+Config.Objectives.dailyGoal, Config.Objectives.weeklyGoal = savedGoals[1], savedGoals[2]
 
 -- ============================================================================
 --                                     HOME
@@ -1510,19 +1516,19 @@ H.ok(hd.card.seasonPoints > 0, 'season points from the SQL fallback')
 H.ok(hd.card.cashThisWeek >= 2080, 'cash this week')
 H.eq(hd.typeOfTheDay.key, 'tactical', 'Type of the Day key')
 H.eq(hd.typeOfTheDay.label, 'Tactical', 'Type of the Day label')
-H.near(hd.typeOfTheDay.multiplier, 2.0, 1e-9, 'Type of the Day extra: Config.Events.todMultiplier')
+H.near(hd.typeOfTheDay.multiplier, 2.0, 1e-9, 'Type of the Day extra: Config.Objectives.typeOfTheDay.multiplier')
 H.near(hd.typeOfTheDay.cap, 2.0, 1e-9, 'Type of the Day extra: Config.Scoring.scoreCap')
 H.ok(hd.goals.daily ~= nil and hd.goals.weekly ~= nil, 'goals present')
-H.eq(#hd.announcements, 0, 'no announcements without modules/leaderboard')
-H.eq(hd.champions, nil, 'no champions banner without modules/challenge')
+H.eq(#hd.announcements, 0, 'no announcements without modules/progression/leaderboard')
+H.eq(hd.champions, nil, 'no champions banner without modules/progression/challenge')
 CP.Leaderboard = {
     seasonPoints = function() return 4321 end,
     announcements = function() return { { kind = 'weekly_top', text = 'Top 3' }, { bad = true } } end,
 }
 CP.Challenge.championBanner = function(dept) return { season = 'Season 2', department = 'FIB' } end
 hd = H.callback('crimson-police:getHome', 1).data
-H.eq(hd.card.seasonPoints, 4321, 'season points from modules/leaderboard')
-H.eq(#hd.announcements, 1, 'announcements from modules/leaderboard (invalid entries dropped)')
+H.eq(hd.card.seasonPoints, 4321, 'season points from modules/progression/leaderboard')
+H.eq(#hd.announcements, 1, 'announcements from modules/progression/leaderboard (invalid entries dropped)')
 H.eq(hd.champions.department, 'FIB', 'champions banner')
 tod = nil
 hd = H.callback('crimson-police:getHome', 1).data

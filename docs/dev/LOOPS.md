@@ -319,7 +319,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/admin/server.lua | admin push queue | while queued | 50 ms sent, 250 ms else | ends when empty |
 | modules/schedule/server.lua | daily jobs | always | 30 -> 60 s | minute precision |
 | modules/happyhour/server.lua | happy hour end | while a happy hour may be on: armed at start, by a start and by a Settings change; ends after a pass that sees none | 15 -> 30 s, scaled | the screens hear the end then |
-| modules/challenge/server.lua | planned-end reminders | always | 60 s | |
+| modules/progression/challenge.lua | planned-end reminders | always | 60 s | |
 | modules/calls/server.lua | prune | always | 60 s | |
 | modules/draw/server.lua | housekeeping | always | 60 s | |
 | modules/cash/server.lua, rewards/server.lua | forfeit sweeps | always | 10 min | |
@@ -368,7 +368,7 @@ strings do not count.
 | `modules/builder/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/calls/server.lua` | 2 | 1 | prune, 60 s; one-shots |
 | `modules/cash/server.lua` | 4 | 1 | forfeit sweep, 10 min; one-shots |
-| `modules/challenge/server.lua` | 3 | 1 | planned-end reminders, 60 s; one-shots |
+| `modules/progression/challenge.lua` | 3 | 1 | planned-end reminders, 60 s; one-shots |
 | `modules/confighealth/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/crimtab/client.lua` | 6 | 0 | Escape guard, downed watch; one-shots |
 | `modules/crimtab/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -383,7 +383,7 @@ strings do not count.
 | `modules/integrations/qbx/client.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/integrations/qbx/server.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/integrations/sc_dispatch/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/leaderboard/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/progression/leaderboard.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/livecrime/client.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/livecrime/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/livectl/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -405,14 +405,14 @@ strings do not count.
 | `modules/options/client.lua` | 3 | 0 | Auto-Ready input watcher; start-up hooks |
 | `modules/payments/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/payouts/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/profile/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/progression/profile.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/rewards/server.lua` | 5 | 1 | forfeit sweep, 10 min; one-shots |
 | `modules/route/client.lua` | 2 | 0 | drive-to-start report; a start-up hook |
 | `modules/route/server.lua` | 4 | 0 | one-shots; the tick is a `CP.Perf.armed` loop |
 | `modules/runs/client.lua` | 3 | 1 | telemetry, weapon fired; bounded entity wait |
 | `modules/runs/server.lua` | 6 | 1 | maintenance, 60 s; per-run tick threads; one-shots; the engine is a `CP.Perf.armed` loop |
 | `modules/schedule/server.lua` | 3 | 1 | daily jobs, 60 s; one-shots |
-| `modules/scoring/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/progression/scoring.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/settings/client.lua` | 1 | 0 | bounded settings wait at start |
 | `modules/settings/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/spawn/client.lua` | 2 | 4 | placer batches and bounded collision, shape test, network id and control waits |

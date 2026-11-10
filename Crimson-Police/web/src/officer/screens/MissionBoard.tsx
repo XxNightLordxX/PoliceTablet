@@ -128,7 +128,8 @@ function boardBlocker(data: MissionBoardData): Blocker {
     return null;
 }
 
-// Config.Events.todMultiplier as text (BoardData.todMultiplier when the server sends it, else the default 2).
+// Config.Objectives.typeOfTheDay.multiplier as text (BoardData.todMultiplier when the server sends it, else the
+// default 2).
 function todMultiplierText(data: MissionBoardData | null): string {
     const m = Number(data?.todMultiplier);
     return String(isFinite(m) && m > 0 ? Math.round(m * 100) / 100 : 2);

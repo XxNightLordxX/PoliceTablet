@@ -243,7 +243,7 @@ H.sql('DELETE FROM cp_officers')
 H.time = tonumber(H.sql('SELECT UNIX_TIMESTAMP(NOW()) AS t')[1].t)
 
 H.load('modules/scaling/server.lua')
-H.load('modules/scoring/server.lua')
+H.load('modules/progression/scoring.lua')
 H.load('modules/npc/server.lua')
 H.load('modules/runs/server.lua')
 H.load('modules/custody/server.lua')

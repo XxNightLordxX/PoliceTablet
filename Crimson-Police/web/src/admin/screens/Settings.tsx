@@ -1042,7 +1042,7 @@ async function preflight(s: SettingView, p: SavePayload): Promise<Preflight | nu
             ) : undefined,
         };
     }
-    if (s.path === 'Challenge.bounties' || s.path.startsWith('Challenge.bounties.')) {
+    if (s.path === 'Objectives.bounty.objectives' || s.path.startsWith('Objectives.bounty.objectives.')) {
         return {
             tone: 'primary',
             title: t('int.ui.bounty_title'),

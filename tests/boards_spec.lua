@@ -1,6 +1,6 @@
--- The boards slice: CP.Leaderboard (modules/leaderboard) and CP.Challenge
+-- The boards slice: CP.Leaderboard (modules/progression/leaderboard) and CP.Challenge
 
--- (modules/challenge). Pure ranking/calendar logic plus every SQL statement of both modules, run against
+-- (modules/progression/challenge). Pure ranking/calendar logic plus every SQL statement of both modules, run against
 -- MariaDB cp_test through the harness (boards, profiles, hide-name, admin boards, stuck payments, the
 -- weekly job and announcements; seasons, bounties, standings in all three scoring modes, week closing,
 -- overrides, season end, champion banner, supervisor report and officer activity).
@@ -133,8 +133,8 @@ CP.Missions = {
 
 H.load('modules/permissions/server.lua')
 H.load('modules/schedule/server.lua')
-H.load('modules/leaderboard/server.lua')
-H.load('modules/challenge/server.lua')
+H.load('modules/progression/leaderboard.lua')
+H.load('modules/progression/challenge.lua')
 local LB, C = CP.Leaderboard, CP.Challenge
 
 -- ============================================================================
@@ -798,7 +798,7 @@ end
 
 -- mission labels
 do
-    H.eq(LB.missionLabel('goal', 'patrol_2', nil), 'Complete 2 Patrol missions', 'goal label from Config.Goals')
+    H.eq(LB.missionLabel('goal', 'patrol_2', nil), 'Complete 2 Patrol missions', 'goal label from Config.Objectives')
     H.eq(LB.missionLabel('goal', 'unknown_goal', nil), 'profile.goal_reward', 'unknown goal')
     H.eq(LB.missionLabel('patrol', 'custom_x', { missionLabel = 'Custom X' }), 'Custom X', 'label from the breakdown')
     H.eq(LB.missionLabel('patrol', 'custom_y', nil), 'custom_y', 'id as last resort')
@@ -938,17 +938,17 @@ do
     H.eq(byKey.fib.bonus, 65, 'FIB bonus = floor(10% of 655)')
     H.eq(byKey.sast.score, 440, 'SAST (840 + 40) / 2')
     H.eq(byKey.fib.score, 460, 'FIB (855 + 65) / 2')
-    Config.Challenge.scoring = 'total'
+    Config.Objectives.challenge.scoring = 'total'
     C.invalidate()
     st = C.standings()
     H.eq(st.departments[1].key, 'sast', 'total mode: SAST leads')
     H.eq(st.departments[1].score, 1090, 'total = 1050 + 40')
-    Config.Challenge.scoring = 'top10'
+    Config.Objectives.challenge.scoring = 'top10'
     C.invalidate()
     st = C.standings()
     H.eq(st.departments[1].score, 1090, 'top10 = the 3 SAST officers + bonus')
     H.eq(st.departments[2].score, 920, 'top10 FIB = 855 + 65')
-    Config.Challenge.scoring = 'average'
+    Config.Objectives.challenge.scoring = 'average'
     C.invalidate()
 end
 
@@ -1042,7 +1042,7 @@ do
     H.eq(a.bountyHistory[1].startDate, '2026-09-21', 'bounty week start date in server time')
     H.eq(a.bountyHistory[1].endDate, '2026-09-28', 'bounty week end date in server time')
     H.eq(a.bountyHistory[3].startDate, '2026-09-10', 'week 1 starts on the season start date')
-    H.eq(#a.bounties, #Config.Challenge.bounties, 'override options')
+    H.eq(#a.bounties, #Config.Objectives.bounty.objectives, 'override options')
     H.eq(#a.seasons, 1, 'season list')
 end
 

@@ -421,7 +421,7 @@ export interface RunResult {
         failedShare: number | null;
         final: number;
         // Extras of a completed result (CP.Scoring.compute; older rows lack them): the points cap in whole
-        // points (Config.Scoring.scoreCap × P), Config.Scoring.scoreCap and Config.Events.todMultiplier.
+        // points (Config.Scoring.scoreCap × P), Config.Scoring.scoreCap and Config.Objectives.typeOfTheDay.multiplier.
         cap?: number;
         scoreCap?: number;
         todMultiplier?: number;

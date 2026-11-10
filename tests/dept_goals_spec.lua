@@ -1,4 +1,4 @@
--- A department's goals: a supervisor picks which of the admin's daily and weekly goals (Config.Goals) his
+-- A department's goals: a supervisor picks which of the admin's daily and weekly goals (Config.Objectives) his
 -- department's officers draw theirs from, counting from the next weekly reset; the points never change, other
 -- departments and the setter keep the admin's whole lists. Plain Lua: stubbed controls, schedule and SQL.
 
@@ -73,7 +73,7 @@ CP.Migrations = {
     ready = function() return true end,
 }
 
-H.load('modules/goals/server.lua')
+H.load('modules/progression/goals.lua')
 local G = CP.Goals
 local def = defs.goals
 
@@ -144,8 +144,8 @@ H.ok(G._pick('weekly', 'SUP1', W2).id == G._pick('weekly', 'SUP1', W2, false).id
 NOW = W2
 local fo = G.forOfficer('S0001', 'sast')
 H.ok(fo.weekly and (fo.weekly.id == 'any_15' or fo.weekly.id == 'impound_3'), 'Home shows a picked goal')
-H.eq(fo.weekly.points, Config.Goals.weeklyPoints, 'a picked goal pays the admin\'s weekly points')
-H.eq(fo.daily.points, Config.Goals.dailyPoints, 'and the daily points')
+H.eq(fo.weekly.points, Config.Objectives.weeklyGoal.points, 'a picked goal pays the admin\'s weekly points')
+H.eq(fo.daily.points, Config.Objectives.dailyGoal.points, 'and the daily points')
 
 -- a second change made in that week counts from the week after; the first pick stays until then
 local PICK2 = { daily = {}, weekly = { 'cross_2' } }
@@ -159,10 +159,10 @@ H.eq(Ids('daily', W2 + WEEK), allDaily, 'no daily pick: every goal')
 --                         WHAT THE ADMIN CHANGES LATER
 -- ============================================================================
 
-local keep = Config.Goals.weekly
-Config.Goals.weekly = { { id = 'any_15', label = 'Complete 15 missions', count = 15 } }
+local keep = Config.Objectives.weeklyGoal.goals
+Config.Objectives.weeklyGoal.goals = { { id = 'any_15', label = 'Complete 15 missions', count = 15 } }
 H.eq(Ids('weekly', W2 + WEEK), 'any_15', 'a picked goal the admin removed: back to the admin\'s list')
-Config.Goals.weekly = keep
+Config.Objectives.weeklyGoal.goals = keep
 local cut = def.clamp({ daily = { 'any_3', 'patrol_2', 'unit_1' }, weekly = {} }, { min = 1, max = 2 })
 H.eq(#cut.daily, 2, 'a narrower max cuts a saved list')
 on = false
@@ -174,7 +174,7 @@ NOW = W2
 local view = def.viewExtra('sast')
 H.eq(view.goalsFrom, os.date('!%Y-%m-%d', WeekStart(W2) + WEEK), 'the week a pick saved now counts from')
 H.eq(table.concat(view.goalsNow.weekly, ','), 'any_15,impound_3', 'the lists that count this week')
-H.eq(#view.goalsAll.weekly, #Config.Goals.weekly, 'the admin\'s weekly goals to pick from')
+H.eq(#view.goalsAll.weekly, #Config.Objectives.weeklyGoal.goals, 'the admin\'s weekly goals to pick from')
 H.ok(CP.L('mc.control.goals') ~= 'mc.control.goals', 'the control has a name')
 
 return H

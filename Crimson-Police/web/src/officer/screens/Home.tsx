@@ -39,7 +39,7 @@ import { RewardsLocker } from '../components/RewardsLocker';
 import { screenStateOf } from '../../shared/screenHeads';
 import './Home.css';
 
-// getHome plus the parity-plus extras (modules/scoring homeData: missionsToday, the home:extras hook).
+// getHome plus the parity-plus extras (modules/progression/scoring homeData: missionsToday, the home:extras hook).
 type HomeView = HomeData & { missionsToday?: { n: number; max: number } | null; extras?: HomeExtras | null };
 type Card = HomeData['card'];
 // card.level is CP.Scoring.xpLevel: the band label and badge plus the number and where the level starts
@@ -309,7 +309,7 @@ function TypeOfTheDay({ tod }: { tod: HomeTypeOfTheDay | null }) {
     );
 }
 
-// Kinds sent by modules/leaderboard (weekly_top3, monthly_top3) plus the other kinds the notes list.
+// Kinds sent by modules/progression/leaderboard (weekly_top3, monthly_top3) plus the other kinds the notes list.
 const ANNOUNCEMENT_ICONS: Record<string, IconName> = {
     weekly_top3: 'trophy',
     monthly_top3: 'podium',

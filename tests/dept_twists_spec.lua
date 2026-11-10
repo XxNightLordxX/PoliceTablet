@@ -33,7 +33,7 @@ CP.DeptControls = {
     end,
 }
 
-H.load('modules/events/server.lua')
+H.load('modules/progression/events.lua')
 local E = CP.Events
 
 CP.Blocks.register('dt_armed', {

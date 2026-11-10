@@ -49,7 +49,7 @@
 --   * capsOk failures are reported as err.server_busy; CP.Access / CP.Runs.create error keys pass through
 --   * after CP.Units.lock the unit must still hold exactly the members that were checked (an invite accepted
 --     while the checks yielded): otherwise err.busy, unlocked, and the leader accepts again
---   * BoardData extras: serverTime (os.time) and todMultiplier (Config.Events.todMultiplier)
+--   * BoardData extras: serverTime (os.time) and todMultiplier (Config.Objectives.typeOfTheDay.multiplier)
 
 CP.Draw = CP.Draw or {}
 local Draw = CP.Draw
@@ -1374,7 +1374,7 @@ function Draw.boardCards(src)
         -- Extras (web/src/types/run_ui.ts): the server clock for the locked.until countdowns and the Type
         -- of the Day multiplier the card texts show.
         serverTime = os.time(),
-        todMultiplier = tonumber(Config.Events and Config.Events.todMultiplier) or 2,
+        todMultiplier = tonumber((CP.Objective('typeOfTheDay')).multiplier) or 2,
         -- the twists' caps (each card lists its own twists) for the accept step's total bonus line
         twistMax = Draw.twistCaps(),
         -- a happy hour running now (CP.HappyHour.state: endsAt, by, self ...), false when none

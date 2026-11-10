@@ -67,7 +67,7 @@ CP.Permissions = {
     canReviewRun = function() return true end,
 }
 
-H.load('modules/leaderboard/server.lua')
+H.load('modules/progression/leaderboard.lua')
 H.load('modules/reviewrules/server.lua')
 H.load('modules/admin/server.lua')
 local LB, RR, Admin = CP.Leaderboard, CP.ReviewRules, CP.Admin

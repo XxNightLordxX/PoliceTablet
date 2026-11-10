@@ -11,7 +11,7 @@ local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })
 Config.Debug = false
 Config.Events = Config.Events or {}
-Config.Events.typeOfTheDay = false
+Config.Objectives.typeOfTheDay.enabled = false
 
 -- ============================================================================
 --                                    STUBS
@@ -33,9 +33,9 @@ CP.DeptControls = {
 }
 
 H.load('modules/happyhour/server.lua')
-H.load('modules/events/server.lua')
+H.load('modules/progression/events.lua')
 H.load('modules/scaling/server.lua')
-H.load('modules/scoring/server.lua')
+H.load('modules/progression/scoring.lua')
 local HH, E, S = CP.HappyHour, CP.Events, CP.Scoring
 local MC = Config.MissionControls.controls
 local SAST = { { citizenid = 'SAST1' } }

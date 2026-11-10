@@ -53,7 +53,7 @@ CP.Tablet = { notify = function() end }
 
 H.load('modules/permissions/server.lua')
 H.load('modules/schedule/server.lua')
-H.load('modules/challenge/server.lua')
+H.load('modules/progression/challenge.lua')
 local C = CP.Challenge
 
 for _, t in ipairs({ 'cp_mission_runs', 'cp_seasons', 'cp_dept_bounties' }) do H.sql('DELETE FROM ' .. t) end

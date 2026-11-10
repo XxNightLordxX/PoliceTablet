@@ -741,11 +741,13 @@ do
     H.eq((S.check('Retention.runArchiveMonths', 2)), false, 'archive after 2 months is refused')
     H.eq((S.check('Tablet.access.requireItem', true)), false, 'require the item while no item is set: refused')
     H.eq((S.check('AdminTheme.text', '#111111')), false, 'dark text on the dark admin theme: refused')
-    H.eq((S.check('Challenge.bounties', {})), false, 'no bounty kind while the bounty is on: refused')
-    local okG = S.check('Goals.daily', { { id = 'a', label = 'A', count = 2, type = 'nosuch' } })
+    H.eq((S.check('Objectives.bounty.objectives', {})), false, 'no bounty kind while the bounty is on: refused')
+    local okG = S.check('Objectives.dailyGoal.goals', { { id = 'a', label = 'A', count = 2, type = 'nosuch' } })
     H.eq(okG, false, 'a goal with an unknown mission type is refused')
-    H.eq((S.check('Goals.daily', { { id = 'a', label = 'A', count = 2, stat = 'arrests', enabled = false } })), true,
-        'a goal with a condition and its own switch')
+    H.eq((
+        S.check('Objectives.dailyGoal.goals',
+            { { id = 'a', label = 'A', count = 2, stat = 'arrests', enabled = false } })
+    ), true, 'a goal with a condition and its own switch')
     local all = S.all()
     H.ok(all.resets and all.resets.daily and all.resets.weekly and all.resets.daily > os.time(),
         'the next daily and weekly reset are shown')

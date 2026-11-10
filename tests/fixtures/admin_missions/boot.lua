@@ -246,7 +246,9 @@ return function(H, name, opts)
     do
         local files = {}
         local p = io.popen(
-            'cd ' .. H.root .. ' && find modules -name server.lua | sort && find blocks -name server.lua | sort')
+            'cd ' .. H.root .. ' && find modules -name server.lua | sort'
+                .. ' && ls modules/progression/*.lua && find blocks -name server.lua | sort'
+        )
         for file in p:lines() do files[#files + 1] = file end
         p:close()
         local realCreate = _G.CreateThread

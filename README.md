@@ -542,10 +542,10 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Avatar image links | Police teamwork | `Config.Profile.avatarUrls.enabled` | [guide 3.4](docs/OWNER_GUIDE.md#34-profile-pictures) |
 | Item rewards | Economy and rewards | `Config.Rewards.enabled` | [guide 3.3](docs/OWNER_GUIDE.md#33-item-rewards) |
 | Pay volunteer suspects | Economy and rewards | `Config.FeatureRewards.suspect.enabled` | [guide 3.12](docs/OWNER_GUIDE.md#312-feature-rewards-money-and-items-for-every-feature) |
-| Pay talk-downs | Economy and rewards | `Config.FeatureRewards.surrender.enabled` | [guide 3.12](docs/OWNER_GUIDE.md#312-feature-rewards-money-and-items-for-every-feature) |
-| Pay field training sign-offs | Economy and rewards | `Config.FeatureRewards.ftoSignOff.enabled` | [guide 3.12](docs/OWNER_GUIDE.md#312-feature-rewards-money-and-items-for-every-feature) |
-| Pay finished field training | Economy and rewards | `Config.FeatureRewards.ftoComplete.enabled` | [guide 3.12](docs/OWNER_GUIDE.md#312-feature-rewards-money-and-items-for-every-feature) |
-| Pay supervisor point awards | Economy and rewards | `Config.FeatureRewards.supAward.enabled` | [guide 3.12](docs/OWNER_GUIDE.md#312-feature-rewards-money-and-items-for-every-feature) |
+| Pay talk-downs | Economy and rewards | `Config.FeatureRewards.surrender.enabled` | guide 3.12 |
+| Pay field training sign-offs | Economy and rewards | `Config.FeatureRewards.ftoSignOff.enabled` | guide 3.12 |
+| Pay finished field training | Economy and rewards | `Config.FeatureRewards.ftoComplete.enabled` | guide 3.12 |
+| Pay supervisor point awards | Economy and rewards | `Config.FeatureRewards.supAward.enabled` | guide 3.12 |
 | Daily backup | System | `Config.Backups.daily` | [guide 7.3](docs/OWNER_GUIDE.md#73-backups) |
 
 **Admin money tools** ship off too. They are not in the Features tab: turn one on in Admin UI → **Settings**
@@ -574,7 +574,6 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Follow the GPS route to the start | NPC missions | `Config.Route.required` |
 | Mission calls | NPC missions | `Config.MissionCalls.enabled` |
 | Reopen abandoned mission calls | NPC missions | `Config.MissionCalls.reopen.enabled` |
-| Type of the Day | NPC missions | `Config.Events.typeOfTheDay` |
 | Weekly boss mission | NPC missions | `Config.Events.weeklyBoss.enabled` |
 | Twist: Armored Hostiles | NPC missions | `Config.Events.twists.armored_hostiles.enabled` |
 | Twist: Radio Silence | NPC missions | `Config.Events.twists.radio_silence.enabled` |
@@ -587,7 +586,11 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Cross-department operations | Police teamwork | `Config.CrossDept.enabled` |
 | Unit ready check | Police teamwork | `Config.Units.readyCheck` |
 | Commendations | Police teamwork | `Config.Commendations.enabled` |
-| Department challenge | Police teamwork | `Config.Challenge.enabled` |
+| Daily goal | Police teamwork | `Config.Objectives.dailyGoal.enabled` |
+| Weekly goal | Police teamwork | `Config.Objectives.weeklyGoal.enabled` |
+| Department challenge | Police teamwork | `Config.Objectives.challenge.enabled` |
+| Weekly bounty | Police teamwork | `Config.Objectives.bounty.enabled` |
+| Type of the Day | Police teamwork | `Config.Objectives.typeOfTheDay.enabled` |
 | Weekly top 3 announcement | Police teamwork | `Config.Leaderboard.announceWeekly` |
 | Monthly top 3 announcement | Police teamwork | `Config.Leaderboard.announceMonthly` |
 | Officers set their own options | Police teamwork | `Config.OfficerOptions.enabled` |

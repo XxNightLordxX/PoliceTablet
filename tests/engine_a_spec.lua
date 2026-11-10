@@ -297,7 +297,7 @@ CP.Builder = {
 
 H.load('modules/scaling/server.lua')
 H.load('modules/schedule/server.lua')
-H.load('modules/events/server.lua')
+H.load('modules/progression/events.lua')
 H.load('modules/missions/server.lua')
 H.load('modules/draw/server.lua')
 
@@ -963,9 +963,9 @@ do
         seen[E.typeOfTheDay(('2026-%02d-%02d'):format(10 + (d > 30 and 1 or 0), (d - 1) % 30 + 1))] = true
     end
     H.ok(U.count(seen) >= 3, 'types rotate across days')
-    Config.Events.typeOfTheDay = false
+    Config.Objectives.typeOfTheDay.enabled = false
     H.eq(E.typeOfTheDay('2026-09-21'), nil, 'disabled')
-    Config.Events.typeOfTheDay = true
+    Config.Objectives.typeOfTheDay.enabled = true
 
     local mods = E.modifiers()
     H.eq(mods.armored_hostiles.label, 'modifier.armored_hostiles', 'modifier label key')
@@ -1635,7 +1635,8 @@ do
     -- BoardData extras: the server clock for the countdowns and the Type of the Day multiplier
     local board2 = Cb('getMissionTypes', 1).data
     H.eq(board2.serverTime, H.time, 'BoardData.serverTime = os.time()')
-    H.eq(board2.todMultiplier, Config.Events.todMultiplier, 'BoardData.todMultiplier = Config.Events.todMultiplier')
+    H.eq(board2.todMultiplier, Config.Objectives.typeOfTheDay.multiplier,
+        'BoardData.todMultiplier = Config.Objectives.typeOfTheDay.multiplier')
 
     -- Weekly Boss
     ok, data = Act('server:acceptType', 2, 'weekly_boss')

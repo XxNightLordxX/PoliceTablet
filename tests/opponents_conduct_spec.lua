@@ -223,7 +223,7 @@ H.load('modules/opponents/server.lua')
 H.load('modules/opponents/proof/server.lua')
 H.load('modules/opponents/conduct/server.lua')
 H.load('modules/scaling/server.lua')
-H.load('modules/scoring/server.lua')
+H.load('modules/progression/scoring.lua')
 H.step(0)
 local Opp = CP.Opponents
 local RS = Config.RealSuspects

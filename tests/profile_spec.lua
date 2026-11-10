@@ -1,4 +1,5 @@
--- CP.Profile (modules/profile): bio, pictures, look, call mute, profile reports, moderation and commendations.
+-- CP.Profile (modules/progression/profile.lua): bio, pictures, look, call mute, profile reports, moderation and
+-- commendations.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })
@@ -126,9 +127,9 @@ CP.Tablet = {
 
 H.load('modules/permissions/server.lua')
 H.load('modules/schedule/server.lua')
-H.load('modules/scoring/server.lua')
-H.load('modules/leaderboard/server.lua')
-H.load('modules/profile/server.lua')
+H.load('modules/progression/scoring.lua')
+H.load('modules/progression/leaderboard.lua')
+H.load('modules/progression/profile.lua')
 local P = CP.Profile
 
 local function Tick() H.clockMs = H.clockMs + 1001 end

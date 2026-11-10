@@ -14,8 +14,9 @@
 --                               Special events, Built-in mission tweaks, Mission Builder
 --   PART 3 PLAYER VS POLICE     Real suspects, Live crimes, Volunteer suspects, Criminal tablet
 --   PART 4 POLICE TEAMWORK      Units, Cross-department missions, Mission controls, Field training, Leaderboard,
---                               Department challenge, Officer profile (and My options, commendations)
---   PART 5 ECONOMY AND REWARDS  Cash, Payout editing, Disputes, Scoring, XP levels and goals, Bonuses and penalties,
+--                               Objectives (goals, challenge, bounty, Type of the Day), Officer profile (and My
+--                               options, commendations)
+--   PART 5 ECONOMY AND REWARDS  Cash, Payout editing, Disputes, Scoring and XP levels, Bonuses and penalties,
 --                               Item rewards, Feature rewards
 --   PART 6 SYSTEM               Run limits, Anti-exploit, Time, Admin test mode, Retention, Backups (webhooks are
 --                               server.cfg convars, listed at the end)
@@ -1088,11 +1089,9 @@ Config.Decisions = {
 --                                SPECIAL EVENTS
 -- ============================================================================
 
--- Extra fun on top of the missions: the Type of the Day, twists officers choose and the Weekly Boss. Usually
--- changed here: todMultiplier and the twists' points and cash.
+-- Extra fun on top of the missions: twists officers choose and the Weekly Boss (the Type of the Day is one of the
+-- Objectives, Config.Objectives.typeOfTheDay). Usually changed here: the twists' points and cash.
 Config.Events = {
-    typeOfTheDay = true,     -- true = one mission type a day earns the points multiplier below
-    todMultiplier = 2.0,     -- points only
     -- share of runs that also get one random twist on top of the ones the officers chose (0 = never: officers
     -- choose their own twists when they take a mission; 0.25 = one run in four)
     modifierChance = 0,
@@ -1635,7 +1634,8 @@ Config.CriminalTablet = {
 -- ############################################################################
 --                           PART 4 · POLICE TEAMWORK
 -- Officers working together: units, Cross-Department Missions, supervisor mission controls, field
--- training, leaderboards, the department challenge and officer profiles.
+-- training, leaderboards, the objectives (goals, department challenge, bounty, Type of the Day) and officer
+-- profiles.
 -- Usually changed here: the unit size, which Mission controls supervisors get, and field training.
 -- ############################################################################
 
@@ -1772,16 +1772,16 @@ Config.MissionControls = {
         -- the chosen twists together still stop at Events.twistMaxPoints. min = max = 1.0 moves nothing
         twistPoints = { on = false, min = 1.0, max = 1.0 },
         -- Type of the Day: a supervisor picks one mission type for TOMORROW, at most once a day for his department;
-        -- tomorrow his department's officers earn the Type of the Day points (Events.todMultiplier) on that type
+        -- tomorrow his department's officers earn the Type of the Day points (Objectives.typeOfTheDay) on that type
         -- instead of the server's type, other departments keep the server's. Never on his own runs or a unit he is in
         typeOfTheDay = { on = false },
         -- Dispatch: a supervisor pages a unit of his department (never his own) with one mission he chooses instead
         -- of a random one; only that unit sees the mission's name and may accept or decline it, every accept rule
         -- stays (cooldowns, caps, unit size), the call never earns rapid response and the audit names the mission
         pushMission = { on = false },
-        -- Goals: a supervisor picks min to max of your daily goals and of your weekly goals (Goals.daily, Goals.weekly)
-        -- his department's officers draw theirs from, starting at the next weekly reset (none picked = every goal);
-        -- the goals' points never change and the supervisor himself keeps your whole lists
+        -- Goals: a supervisor picks min to max of your daily goals and of your weekly goals (Objectives.dailyGoal,
+        -- Objectives.weeklyGoal) his department's officers draw theirs from, starting at the next weekly reset (none
+        -- picked = every goal); the goals' points never change and the supervisor himself keeps your whole lists
         goals = { on = false, min = 1, max = 5 },
         -- Department Report: a supervisor gives min to max points at a time to an officer of his own department
         -- (never to himself or another character of his license), with a reason, through the same logged manual award
@@ -1855,22 +1855,62 @@ Config.Leaderboard = {
 }
 
 -- ============================================================================
---                             DEPARTMENT CHALLENGE
+--                                  OBJECTIVES
 -- ============================================================================
-
-Config.Challenge = {
-    enabled = true,            -- true = departments compete in seasons (the department challenge)
-    scoring = 'average',       -- 'average' (per active officer) | 'total' | 'top10'
-    minRunsActive = 3,         -- runs in the week that make an officer active (the average counts only these)
-    weeklyBounty = true,       -- true = a weekly bounty is picked every week
-    bountyBonus = 0.10,        -- share of its week's challenge points the bounty winner gets on top (0.10 = +10%)
-    bounties = {               -- one is picked at random each week; counted per active officer
-        { id = 'most_tactical', label = 'Most Tactical missions' },
-        { id = 'most_cross', label = 'Most cross-department runs' },
-        { id = 'most_unit', label = 'Most unit runs' },
-        { id = 'most_completed', label = 'Most completed runs' },
-        { id = 'most_arrests', label = 'Most arrests' },
-        { id = 'most_calls', label = 'Most mission calls answered' },
+-- Everything officers and departments aim for besides the missions themselves, in one place: each officer's daily
+-- and weekly goal, the department challenge, the weekly bounty and the Type of the Day. Each kind has its own on/off,
+-- points (or multiplier) and picking rules. Daily things (the daily goal, the Type of the Day) reset at
+-- Config.Time.resetHour; weekly things (the weekly goal, the bounty) at that hour on Config.Leaderboard.weekStartsOn.
+-- A supervisor may narrow the goals or pick tomorrow's type for his department (Config.MissionControls: goals,
+-- typeOfTheDay). Usually changed here: the goals' points and lists, and the Type of the Day multiplier.
+--
+-- A goal is drawn per officer from its list: id (unique), label (shown to the officer), count (how many) and at most
+-- one of type (a mission type), unit = true (unit runs), missionCall = true (answered calls), crossDepartment = true
+-- (runs with 2+ departments) or stat (one of arrests, citations, impounds, rescues, vehicles_stopped, evidence,
+-- decisions_ok (Best or Acceptable), decisions_best; completed rows only); none of them = any completed mission.
+Config.Objectives = {
+    dailyGoal = {
+        enabled = true,          -- true = each officer gets one goal a day; false = no daily goal
+        points = 50,             -- points for finishing the daily goal
+        goals = {                -- the goals a daily goal is drawn from (the fields above)
+            { id = 'patrol_2', label = 'Complete 2 Patrol missions', type = 'patrol', count = 2 },
+            { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 },
+            { id = 'unit_1', label = 'Complete 1 unit run', unit = true, count = 1 },
+            { id = 'calls_2', label = 'Answer 2 mission calls', missionCall = true, count = 2 },
+            { id = 'arrests_2', label = 'Make 2 arrests', stat = 'arrests', count = 2 },
+        },
+    },
+    weeklyGoal = {
+        enabled = true,          -- true = each officer gets one goal a week; false = no weekly goal
+        points = 200,            -- points for finishing the weekly goal
+        goals = {                -- the goals a weekly goal is drawn from (the fields above)
+            { id = 'tactical_5', label = 'Complete 5 Tactical missions', type = 'tactical', count = 5 },
+            { id = 'cross_2', label = 'Complete 2 cross-department runs', crossDepartment = true, count = 2 },
+            { id = 'any_15', label = 'Complete 15 missions', count = 15 },
+            { id = 'judgement_15', label = 'Make 15 correct decisions', stat = 'decisions_ok', count = 15 },
+            { id = 'impound_3', label = 'Impound 3 vehicles', stat = 'impounds', count = 3 },
+        },
+    },
+    challenge = {
+        enabled = true,          -- true = departments compete in seasons (the department challenge)
+        scoring = 'average',     -- 'average' (per active officer) | 'total' | 'top10'
+        minRunsActive = 3,       -- runs in the week that make an officer active (the average counts only these)
+    },
+    bounty = {
+        enabled = true,          -- true = a weekly bounty is picked every week (needs the department challenge)
+        bonus = 0.10,            -- share of its week's challenge points the bounty winner gets on top (0.10 = +10%)
+        objectives = {           -- one is picked at random each week; counted per active officer
+            { id = 'most_tactical', label = 'Most Tactical missions' },
+            { id = 'most_cross', label = 'Most cross-department runs' },
+            { id = 'most_unit', label = 'Most unit runs' },
+            { id = 'most_completed', label = 'Most completed runs' },
+            { id = 'most_arrests', label = 'Most arrests' },
+            { id = 'most_calls', label = 'Most mission calls answered' },
+        },
+    },
+    typeOfTheDay = {
+        enabled = true,          -- true = one mission type a day earns the points multiplier below
+        multiplier = 2.0,        -- points only: cash is never multiplied
     },
 }
 
@@ -2025,8 +2065,8 @@ Config.Commendations = {
 
 -- ############################################################################
 --                         PART 5 · ECONOMY AND REWARDS
--- Cash, payout changes, disputes, points, XP, badges, goals, bonuses and item rewards.
--- Usually changed here: Cash (bank or cash, server or society money, the daily cap), bonus values and goals.
+-- Cash, payout changes, disputes, points, XP, badges, bonuses and item rewards.
+-- Usually changed here: Cash (bank or cash, server or society money, the daily cap) and bonus values.
 -- Item rewards, feature rewards and the money tools all ship off.
 -- ############################################################################
 
@@ -2073,7 +2113,7 @@ Config.Disputes = {
 }
 
 -- ============================================================================
---                         SCORING, XP LEVELS AND GOALS
+--                            SCORING AND XP LEVELS
 -- ============================================================================
 
 -- How a run's points (P = the mission type's points) are worked out. Usually changed here: the streak and the common
@@ -2193,31 +2233,6 @@ Config.Badges = {            -- achievement badge counts
     jointTaskForce = 10, -- runs with 2 or more departments
     byTheBook = 100,     -- Best dispositions
     firstResponder = 25, -- mission calls answered with rapid response
-}
-
--- Each officer gets one goal a day and one a week, drawn from the lists below; finishing it earns its points.
--- A goal's stat is one of: arrests, citations, impounds, rescues, vehicles_stopped, evidence, decisions_ok
--- (Best or Acceptable), decisions_best. Stat goals count completed rows only.
-Config.Goals = {
-    dailyPoints = 50,        -- points for finishing the daily goal
-    weeklyPoints = 200,      -- points for finishing the weekly goal
-    -- The goals a daily goal is drawn from: id (unique), label (shown to the officer), count (how many) and at most
-    -- one of type (a mission type), unit = true (unit runs), missionCall = true (answered calls), crossDepartment =
-    -- true (runs with 2+ departments) or stat (above); none of them = any completed mission
-    daily = {
-        { id = 'patrol_2', label = 'Complete 2 Patrol missions', type = 'patrol', count = 2 },
-        { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 },
-        { id = 'unit_1', label = 'Complete 1 unit run', unit = true, count = 1 },
-        { id = 'calls_2', label = 'Answer 2 mission calls', missionCall = true, count = 2 },
-        { id = 'arrests_2', label = 'Make 2 arrests', stat = 'arrests', count = 2 },
-    },
-    weekly = {                   -- the goals a weekly goal is drawn from (the same fields as daily)
-        { id = 'tactical_5', label = 'Complete 5 Tactical missions', type = 'tactical', count = 5 },
-        { id = 'cross_2', label = 'Complete 2 cross-department runs', crossDepartment = true, count = 2 },
-        { id = 'any_15', label = 'Complete 15 missions', count = 15 },
-        { id = 'judgement_15', label = 'Make 15 correct decisions', stat = 'decisions_ok', count = 15 },
-        { id = 'impound_3', label = 'Impound 3 vehicles', stat = 'impounds', count = 3 },
-    },
 }
 
 -- ============================================================================

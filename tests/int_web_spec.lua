@@ -9,7 +9,7 @@
 --     accepted }, push 'invites') and the TestInvite fields the Lua returns; every literal key exists;
 --   * a nil push ('run' with no data) arrives as a missing field: the RunBar, Home, Mission Board and
 --     Active Mission treat undefined like null;
---   * Home styles both announcement kinds modules/leaderboard sends (weekly_top3, monthly_top3);
+--   * Home styles both announcement kinds modules/progression/leaderboard sends (weekly_top3, monthly_top3);
 --   * lists from Lua ({} for an empty table): the touched screens wrap them (asArray / asList);
 --   * theme: primary/accent text colours reach WCAG AA (4.5:1) on the surface, checked with a Lua port of
 --     web/src/shared/theme.ts on the configured department themes (FIB's navy primary was 3.2:1);
@@ -170,9 +170,9 @@ end
 --                              HOME ANNOUNCEMENTS
 -- ============================================================================
 
-local lb = Read(ROOT .. 'modules/leaderboard/server.lua')
+local lb = Read(ROOT .. 'modules/progression/leaderboard.lua')
 for _, kind in ipairs({ 'weekly_top3', 'monthly_top3' }) do
-    Has(lb, 'kind = \'' .. kind .. '\'', 'modules/leaderboard sends ' .. kind)
+    Has(lb, 'kind = \'' .. kind .. '\'', 'modules/progression/leaderboard sends ' .. kind)
     H.ok(home:find('\n%s+' .. kind .. ': ') ~= nil, 'Home has an icon for ' .. kind)
 end
 Has(home, 'asArray(list)', 'Home announcements tolerate {} from Lua')
@@ -266,7 +266,7 @@ do
         'Review -> Flagged runs asks admin:getFlagged')
     H.ok(not lb:find('withFlagged', 1, true) and not lb:find('FlaggedPanel', 1, true),
         'Leaderboards no longer lists the flagged runs (one place: Review)')
-    H.ok(not Read(ROOT .. 'modules/leaderboard/server.lua'):find('withFlagged', 1, true),
+    H.ok(not Read(ROOT .. 'modules/progression/leaderboard.lua'):find('withFlagged', 1, true),
         'admin:getBoards no longer carries them')
     Has(rv, 'run(\'server:admin:reviewFlagged\', { rowId: review.row.rowId, decision: review.decision, reason }',
         'Approve / Void send server:admin:reviewFlagged { rowId, decision, reason }')

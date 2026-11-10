@@ -515,14 +515,14 @@ function LiveCtl.today()
     end
     return {
         day = DayKey(),
-        todEnabled = ev.typeOfTheDay == true,
+        todEnabled = select(2, CP.Objective('typeOfTheDay')),
         typeOfTheDay = tod,
         typeLabel = tod and TypeLabel(tod) or nil,
         rolled = rolled,
         override = type(override) == 'table'
                 and { type = override.type, by = override.by, reason = override.reason, at = override.at }
             or nil,
-        todMultiplier = Num(ev.todMultiplier, 2),
+        todMultiplier = Num((CP.Objective('typeOfTheDay')).multiplier, 2),
         boss = { enabled = boss.enabled == true, today = bossDay, days = boss.days or {} },
         modifierChance = Num(ev.modifierChance, 0),
         modifiers = modifiers,
@@ -762,7 +762,7 @@ end, {
 
 -- Today's Type of the Day: a mission type, 'none' (no Type of the Day today) or 'auto' (back to the day's roll).
 Kit.action('server:admin:setTypeOfDay', 'liveRuns', function(ctx)
-    if not (Config.Events and Config.Events.typeOfTheDay) then return false, 'err.live_tod_off' end
+    if not select(2, CP.Objective('typeOfTheDay')) then return false, 'err.live_tod_off' end
     local t = ctx.payload.type
     if t ~= 'none' and t ~= 'auto' and not (type(t) == 'string' and Config.MissionTypes and Config.MissionTypes[t]) then
         return false, 'err.unknown_type'

@@ -5,7 +5,7 @@
 export interface HomeTypeOfTheDay {
     key: string;
     label: string;
-    // Config.Events.todMultiplier (points only).
+    // Config.Objectives.typeOfTheDay.multiplier (points only).
     multiplier?: number;
     // Config.Scoring.scoreCap (× P); the multiplier is applied after it.
     cap?: number;

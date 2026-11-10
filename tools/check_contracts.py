@@ -33,7 +33,7 @@ def strip_lua_comments(s):
     return re.sub(r'--[^\n]*', '', s)
 
 def manifest_scripts(key):
-    """Plain file entries (no glob, no @resource) of a fxmanifest script list, e.g. modules/storage/memsql.lua."""
+    """The file entries (globs expanded, no @resource) of a fxmanifest script list, e.g. modules/progression/*.lua."""
     try:
         text = read(os.path.join(RES, 'fxmanifest.lua'))
     except OSError:
@@ -43,10 +43,12 @@ def manifest_scripts(key):
         return []
     out = []
     for entry in re.findall(r"['\"]([^'\"]+)['\"]", m.group(1)):
-        if entry.startswith('@') or '*' in entry:
+        if entry.startswith('@'):
             continue
         path = os.path.join(RES, entry)
-        if os.path.exists(path):
+        if '*' in entry:
+            out += sorted(p for p in glob.glob(path, recursive=True) if p not in out)
+        elif os.path.exists(path):
             out.append(path)
     return out
 

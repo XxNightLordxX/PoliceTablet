@@ -1,4 +1,4 @@
-// Shapes of the boards slice (modules/leaderboard, modules/challenge).
+// Shapes of the boards slice (modules/progression/leaderboard, modules/progression/challenge).
 
 // The §9.4 contract types live in shared/types.ts; the interfaces here extend them with the optional
 // fields the Lua modules add (documented in their header comments and docs/dev/ARCHITECTURE.md §5.22), plus the

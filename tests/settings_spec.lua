@@ -124,7 +124,8 @@ do
     H.eq(keys[#keys], 'blocks', 'blocks.lua is the last section')
     local titles = {}
     for _, sec in ipairs(sc.sections) do titles[sec.key] = sec.title end
-    H.eq(titles.scoring_xp_levels_and_goals, 'Scoring, XP levels and goals', 'banner titles in sentence case')
+    H.eq(titles.scoring_and_xp_levels, 'Scoring and XP levels', 'banner titles in sentence case')
+    H.eq(titles.objectives, 'Objectives', 'the Objectives banner is one section')
     H.eq(titles.scaling_by_participants, 'Scaling by participants', 'short words such as BY go to lower case')
     H.eq(titles.route_to_the_start, 'Route to the start', 'TO goes to lower case')
     H.eq(titles.built_in_mission_tweaks, 'Built-in mission tweaks', 'IN goes to lower case')
@@ -209,7 +210,7 @@ do
         'MissionCalls.enabled',
         'Builder.enabled',
         'CrossDept.maxParticipants',
-        'Challenge.bountyBonus',
+        'Objectives.bounty.bonus',
         'Commendations.perSupervisorPerDay',
         'Testing.enabled',
         'AdminTheme.primary',
@@ -945,9 +946,9 @@ do
     rows = U.deepcopy(Config.Scaling)
     rows[2].extra = 1
     Err('Scaling', rows, 'err.setting_key', 'a row with an unknown field')
-    local goals = U.deepcopy(Config.Goals.daily)
+    local goals = U.deepcopy(Config.Objectives.dailyGoal.goals)
     goals[#goals + 1] = { id = 'any_5', label = 'Complete 5 missions', count = 5 }
-    H.ok((Check('Goals.daily', goals)), 'a new goal with the fields the others use')
+    H.ok((Check('Objectives.dailyGoal.goals', goals)), 'a new goal with the fields the others use')
 
     H.ok((Check('Tablet.desks', {
         { label = 'Desk', coords = { x = 1, y = 2, z = 3 }, size = { x = 1, y = 1, z = 1 }, departments = { 'fib' } },
@@ -1446,6 +1447,42 @@ do
     H.eq(E('Markers.parts.coronerVan.sprite').kind, 'number', 'a part\'s sprite is its own number setting')
     H.eq(E('Markers.parts.coronerVan.shortRange').kind, 'boolean', 'its range is a switch')
     H.eq(E('Markers.rules').kind, 'json', 'the rules are one setting the screen saves whole')
+end
+
+-- Config.Objectives (FM1): the goals, the department challenge, the weekly bounty and the Type of the Day are one
+-- section, each kind with its own switch on the Features tab and its comments as descriptions.
+do
+    local function E(p) return S.entry(p) or {} end
+    for _, p in ipairs({
+        'Objectives.dailyGoal.enabled',
+        'Objectives.weeklyGoal.points',
+        'Objectives.challenge.scoring',
+        'Objectives.bounty.enabled',
+        'Objectives.typeOfTheDay.multiplier',
+    }) do
+        H.eq(E(p).section, 'objectives', p .. ': in the Objectives section')
+        H.ok(E(p).desc ~= nil and E(p).desc ~= '', p .. ': has a description')
+    end
+    H.eq(E('Objectives.dailyGoal.enabled').desc, 'true = each officer gets one goal a day; false = no daily goal',
+        'the daily goal switch says what it does')
+    H.eq(E('Objectives.typeOfTheDay.enabled').default, true, 'the Type of the Day ships on')
+    local want = {
+        daily_goal = 'Objectives.dailyGoal.enabled',
+        weekly_goal = 'Objectives.weeklyGoal.enabled',
+        challenge = 'Objectives.challenge.enabled',
+        weekly_bounty = 'Objectives.bounty.enabled',
+        type_of_the_day = 'Objectives.typeOfTheDay.enabled',
+    }
+    for _, f in ipairs(S._features or {}) do
+        if want[f.key] then
+            H.eq(f.path, want[f.key], 'Features: ' .. f.key .. ' switches ' .. want[f.key])
+            want[f.key] = nil
+        end
+    end
+    H.eq(next(want), nil, 'Features: every objective kind has its row')
+    H.ok(not (Check('Objectives.bounty.objectives', {})), 'no bounty kind while the bounty is on: refused')
+    H.eq(S.entry('Goals.dailyPoints'), nil, 'the old Goals section is gone')
+    H.eq(S.entry('Challenge.enabled'), nil, 'the old Challenge section is gone')
 end
 
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.

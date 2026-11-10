@@ -779,7 +779,7 @@ CP.Blocks.register('fnd_block', {
 })
 
 H.load('modules/scaling/server.lua')
-H.load('modules/scoring/server.lua')
+H.load('modules/progression/scoring.lua')
 H.load('modules/npc/server.lua')
 H.load('modules/runs/server.lua')
 local Runs = CP.Runs
@@ -1393,7 +1393,7 @@ end
 -- ============================================================================
 
 do
-    for _, f in ipairs({ 'modules/runs/server.lua', 'modules/runs/client.lua', 'modules/scoring/server.lua' }) do
+    for _, f in ipairs({ 'modules/runs/server.lua', 'modules/runs/client.lua', 'modules/progression/scoring.lua' }) do
         H.ok(not Contains(ReadFile(H.root .. f), 'LIGHTS_MISSIONS'), f .. ' has no LIGHTS_MISSIONS table')
     end
     local defs = {}
@@ -1526,7 +1526,7 @@ do
     local b = H.sql('SELECT badge_id FROM cp_badges WHERE citizenid = \'STAT1\'')
     H.eq(b[1] and b[1].badge_id, 'by_the_book', 'By the Book from completed rows (decisions_best)')
     Config.Badges.byTheBook = 100
-    H.load('modules/goals/server.lua')
+    H.load('modules/progression/goals.lua')
     local n = CP.Goals._progress({ id = 'arrests_x', stat = 'arrests', count = 2 }, 'STAT1', os.time() - 3600)
     H.eq(n, 1, 'a stat goal sums completed rows only')
     local imp = CP.Goals._progress({ id = 'imp_x', stat = 'impounds', count = 2 }, 'STAT1', os.time() - 3600)
@@ -1540,8 +1540,9 @@ end
 do
     -- goal:completed names the period itself (kind and period key), so a goal met again next day or next week
     -- is a new completion for its listeners (item rewards key on the goal id and the period)
-    local savedGoals, savedTime = Config.Goals, H.time
-    Config.Goals = { dailyPoints = 50, weeklyPoints = 0, daily = { { id = 'fnd_any_1', count = 1 } }, weekly = {} }
+    local savedGoals, savedTime = { Config.Objectives.dailyGoal, Config.Objectives.weeklyGoal }, H.time
+    Config.Objectives.dailyGoal = { enabled = true, points = 50, goals = { { id = 'fnd_any_1', count = 1 } } }
+    Config.Objectives.weeklyGoal = { enabled = true, points = 0, goals = {} }
     local seen = {}
     local id = CP.Hooks.on('goal:completed', function(cid, goalId, period)
         seen[#seen + 1] = { cid, goalId, period }
@@ -1567,7 +1568,8 @@ do
     H.eq(#seen, 2, 'the next day completes it again')
     H.ok(seen[2] and seen[2][3] ~= day1, 'as a different period')
     CP.Hooks.off(id)
-    Config.Goals, H.time = savedGoals, savedTime
+    Config.Objectives.dailyGoal, Config.Objectives.weeklyGoal = savedGoals[1], savedGoals[2]
+    H.time = savedTime
     H.sql('DELETE FROM cp_mission_runs')
 end
 

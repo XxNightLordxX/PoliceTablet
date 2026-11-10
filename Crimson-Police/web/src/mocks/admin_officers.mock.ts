@@ -1,5 +1,5 @@
 // Browser mocks for full admin control: Officers, Leaderboards and Seasons (modules/corrections, the officers tools
-// of modules/profile, scoring and goals, the recognition and season tools of modules/leaderboard and challenge).
+// of modules/progression: profile, scoring and goals, the recognition and season tools of leaderboard and challenge).
 
 import { registerMock } from '../shared/nui';
 import type {

@@ -1509,7 +1509,7 @@ end
 do
     local stub = CP.Events
     CP.Events = {}
-    H.load('modules/events/server.lua')
+    H.load('modules/progression/events.lua')
     local real = CP.Events
     CP.Events = stub
     stub.twistOffer, stub.checkTwists, stub.twistFits = real.twistOffer, real.checkTwists, real.twistFits

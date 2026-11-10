@@ -122,7 +122,8 @@ PoliceTablet/                      (git repo)
     config/config.lua              every setting, each with its comment (the Settings description)
     config/blocks.lua              Mission Builder ranges and defaults
     shared/init.lua                CP namespace, logging, CP.Blocks registry, RegisterMission stub
-    shared/lib.lua                 the helper library: CP.Db, CP.notify, CP.push, CP.Ext, CP.Lock, CP.Daily (§2)
+    shared/lib.lua                 the helper library: CP.Db, CP.notify, CP.push, CP.Ext, CP.Lock, CP.Daily,
+                                   CP.Objective (§2)
     shared/locale.lua              CP.L / CP.Locale
     shared/net.lua                 CP.Net (actions and callbacks)
     shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
@@ -167,8 +168,8 @@ PoliceTablet/                      (git repo)
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
-(alphabetical: init, locale, net, npccombat, options, twists, utils), then `modules/**/server.lua` (server) /
-`modules/**/client.lua` (client), then `blocks/**/server.lua` / `blocks/**/client.lua`.
+(alphabetical: init, lib, locale, net, npccombat, options, twists, utils), then `modules/**/server.lua` (server) /
+`modules/**/client.lua` (client), then the server sub-files of `modules/progression/*.lua`, then `blocks/**/server.lua` / `blocks/**/client.lua`.
 Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` and
 `modules/storage/server.lua` before every other server module (so the `MySQL` global is settled before
 any module can query), then `modules/adminkit/server.lua` (so any module may register its admin actions with
@@ -181,7 +182,8 @@ Extra module folders beyond the spec's table (allowed: "each feature in its own 
   cuffed …), host-side AI, "Cuff suspect", surrender rolls, relationship groups.
 
 More folders (all in the spec's Feature folders table; §5.30–§5.34):
-`modules/custody/` (server, client), `modules/missioncalls/` (server, client), `modules/profile/` (server),
+`modules/custody/` (server, client), `modules/missioncalls/` (server, client), `modules/progression/` (server sub-files:
+scoring, goals, challenge, events, leaderboard, profile; listed in fxmanifest as `modules/progression/*.lua`),
 `modules/rewards/` (server), `modules/confighealth/` (server), `modules/integrations/sc_police/` (server),
 `blocks/field_contact/` and `blocks/process_scene/` (server, client).
 
@@ -235,6 +237,7 @@ Full admin control also has `modules/corrections/` (§5.38), `modules/livectl/` 
 | `CP.Ext.started(res)`, `CP.Ext.call(res, fn, ...) -> true, ... \| false, 'not_started' \| false, err` | shared/lib.lua | Another resource's export, `exports[res]:fn(...)`, only while `res` is started, in pcall (a failure is logged under `ext`). Used for every ox_inventory call outside the integrations |
 | `CP.Lock.new({ players? }) -> lock`; `lock:run(key, waitMs, fn, ...) -> 'ok', ... \| 'busy' \| 'error', err`, `lock:runAll(keys, fn, ...)`, `lock:held(key)`, `lock:take(key) -> token`, `lock:free(key, token)`, `lock:clear()` | shared/lib.lua | One at a time per key (an officer's payment, rewards or goals, a row, an admin action per actor, a unit's accept). `run` waits up to `waitMs` in 50 ms steps (0 = busy at once); the key is freed when fn ends or raises. `players = true`: keys are sources, freed on `playerDropped`; the run that held a dropped key never frees the next holder's key |
 | `CP.Daily.new(dayFn?) -> daily`; `daily:reserve(key, cap, n) -> token \| nil`, `:commit(token)`, `:cancel(token)`, `:used(key)`, `:left(key, cap)`, `:add(key, n)`, `:clear(key?)` | shared/lib.lua | Per-day counters for caps kept in memory (the server day, `CP.Schedule.dayStart`). `reserve` checks the cap with the reservations of requests still running and takes n in one step, so two requests sent at once cannot both pass a cap; commit after the save, cancel when it failed. Profile picture links use it (`Config.Profile.avatarUrls.perDay`) |
+| `CP.Objective(kind) -> cfg, on` | shared/lib.lua | One kind of `Config.Objectives` (`dailyGoal`, `weeklyGoal`, `challenge`, `bounty`, `typeOfTheDay`) as it is now, never nil, and its switch (`enabled ~= false`; the bounty also needs the challenge). Goals, the challenge, the bounty and the Type of the Day read their settings only through it |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText`, `toSrc(v, console?)` (a player source: an integer above 0, or nil; 0 too with `console = true`) |
 
 Naming of `CP.Net.action` names: officer actions are `'server:<name>'` (spec events, e.g. `'server:acceptType'`),
@@ -954,9 +957,9 @@ Which mission and location a unit gets, and the accept.
   `armored_hostiles`, + `Config.NpcDifficulty[preset].accuracyAdd/armourAdd`.
 - `feel() -> { healthMult, surrenderMult, fleeMult }` for the blocks (fleeMult stretches CP.Npc's flee clock, §5.11).
 
-### 5.9 CP.Events — modules/events (S)
+### 5.9 CP.Events — modules/progression/events (S)
 - `typeOfTheDay(dayKey?)` — today's admin override first, else `rolledTypeOfTheDay` (seed `CP.U.hash(dayKey)`; nil
-  when `Config.Events.typeOfTheDay` is false).
+  when `Config.Objectives.typeOfTheDay.enabled` is false).
 - `rollModifier(run)` — a random twist on top of the chosen ones with `Config.Events.modifierChance` (0 as shipped);
   deterministic per run (`hash(run.seed .. ':modifier')`).
 - Twists the officers choose (`CP.Twists`, §2, holds the list and the bonus maths).
@@ -1358,7 +1361,7 @@ Units live in memory only (a restart drops them, as it drops runs).
 BoardData.operation adds `missionType`, `description`, `min`, `runState`, `waitlist`, `waitlistPosition`,
 `waitlistOpen`.
 
-### 5.18 CP.Scoring — modules/scoring (S)
+### 5.18 CP.Scoring — modules/progression/scoring (S)
 Points, streaks, XP and badges.
 - `P(mission)` — type points × `Config.Difficulty.pointsByStars[difficulty]` (boss:
   `Config.Events.weeklyBoss.points`), whole points (halves up; `points_base` is a SMALLINT).
@@ -1380,9 +1383,9 @@ Points, streaks, XP and badges.
 - callback `getHome` → HomeData (§9.4) with `typeOfTheDay.multiplier/cap`, `card.streak.graceDays`, level,
   missionsToday and the `home:extras` hook.
 
-### 5.19 CP.Goals — modules/goals (S)
+### 5.19 CP.Goals — modules/progression/goals (S)
 - `forOfficer(citizenid) -> { daily = Goal, weekly = Goal }` (`Goal = { id, label, count, progress, done, points }`;
-  labels from `Config.Goals`, `goals.unnamed` as fallback).
+  labels from `Config.Objectives.dailyGoal|weeklyGoal.goals`, `goals.unnamed` as fallback).
 - A goal has `type`, `unit`, `crossDepartment`, `mission`, `stat` (sums that column) or missionCall (rows with a
   `mission_call_id`).
 - `onRunCompleted(citizenid)` *(hook)* and after an approval: a `goal` row once per period (found by `mission_id` =
@@ -1436,7 +1439,7 @@ Points, streaks, XP and badges.
 Pushes `payouts` and `board` to every online player after a change, and on `settings:changed` of `MissionTypes.*`,
 `Cash.*`, `Payouts.*`, `Events.weeklyBoss.payout`, `Difficulty.cashByStars`.
 
-### 5.22 CP.Leaderboard — modules/leaderboard (S)
+### 5.22 CP.Leaderboard — modules/progression/leaderboard (S)
 Boards, profiles and the weekly announcements.
 - callback `getBoard({ period, filter, department, metric })` → Board (§9.4).
 - Metrics (`Config.Leaderboard.metrics`): points (XP on All-time), missions, arrests, impounds, citations, rescues,
@@ -1458,14 +1461,14 @@ Boards, profiles and the weekly announcements.
 - Web: dates from the server are `'YYYY-MM-DD'` in server time and formatted at noon UTC, so every player sees the
   server's week.
 
-### 5.23 CP.Challenge — modules/challenge (S)
+### 5.23 CP.Challenge — modules/progression/challenge (S)
 - `currentSeason()` (cached, reloaded every 5 min and after every change), `startSeason(src, name)` (ends a running
   one first), `endSeason(src)`, `standings(seasonId?)`, `bounty(weekKey?)`, `overrideBounty(src, objective)`,
   `championBanner(dept)` (the latest ended season's champion when it is `dept`), `invalidate()`.
 - Weeks: week 1 runs from the season start to the first weekly reset; week n = resets since the start + 1.
-- Bounty pick: `CP.U.rng(CP.U.hash('<seasonId>:<week>')):pick(Config.Challenge.bounties)`, stored when first needed.
+- Bounty pick: `CP.U.rng(CP.U.hash('<seasonId>:<week>')):pick(Config.Objectives.bounty.objectives)`, stored when first needed.
 - Scores: `average` (points of active officers + bonuses ÷ active officers), `total`, `top10`.
-- Season end: a champion only with points or runs and no perfect tie (none with `Config.Challenge.enabled = false`);
+- Season end: a champion only with points or runs and no perfect tie (none with `Config.Objectives.challenge.enabled = false`);
   trophies `season_<id>_champion` (its active officers) and `season_<id>_top10`.
 - Callbacks `getChallenge`, `getDeptContributors` (with avatars), `admin:getSeasons`, `sup:getDeptReport`,
   `sup:getOfficerActivity` (`viewMissionList`; supervisors get their own department, only admins pass `department`;
@@ -1820,7 +1823,7 @@ The tablet's own call board.
 - Net: callbacks `getMissionCalls`, `sup:getMissionCalls`, `admin:getAreaCoverage`; actions `server:claimMissionCall`,
   `server:declineMissionCall`, `server:sup:mcWithdraw|mcPage|mcCreate`, `server:admin:*`.
 
-### 5.32 CP.Profile — modules/profile (pictures, bio, look, commendations, moderation)
+### 5.32 CP.Profile — modules/progression/profile (pictures, bio, look, commendations, moderation)
 English only: a profile has no language.
 - `avatarOf(row, { own })` (approved link or preset, else initials; frame = the level badge; a hidden name shows the
   callsign's initials, never the picture, unless own), `avatarFor(citizenid, viewerSrc|nil)`, `prefsFor(citizenid) ->
@@ -1948,9 +1951,9 @@ Full admin control:
 - `Bonuses.*.kind` only with its value (`err.setting_kind_alone`): `setMany(src, changes, opts)` checks every value of
   one save first (each sees the others; a `none` change is `false` in `ctx.pending`), then writes them all.
 - Point values (`POINTS`: `MissionTypes.*.points`, `Bonuses.*.value|kind`, `Scoring.*`, `Scoring.common.*`,
-  `Events.todMultiplier`, `Events.twists.*.points`, `Events.twistMaxPoints`, `Events.weeklyBoss.points`,
-  `CrossDepartmentPoints`, `Difficulty.pointsByStars`, `Scaling`, `Goals.dailyPoints|weeklyPoints`,
-  `Challenge.bountyBonus`, `MissionCalls.rapidResponse.pctOfP`).
+  `Objectives.typeOfTheDay.multiplier`, `Events.twists.*.points`, `Events.twistMaxPoints`, `Events.weeklyBoss.points`,
+  `CrossDepartmentPoints`, `Difficulty.pointsByStars`, `Scaling`, `Objectives.dailyGoal|weeklyGoal.points`,
+  `Objectives.bounty.bonus`, `MissionCalls.rapidResponse.pctOfP`).
 - Money switches (`MONEY_SWITCHES`:
   `Cash.allowUnfundedRetry|allowCapTopUp|allowPayAgain|restoreForfeited|allowAddFunds| allowClawback|allowManualCash`,
   `Rewards.allowTakeBack`).
@@ -1975,7 +1978,8 @@ Full admin control, System:
 - `Tablet.desks` leaves the restart list (clients rebuild their zones on `settings:changed`).
 - More validators: `Retention.auditDays` 0 or ≥ 30, `Retention.runArchiveMonths` 0 or ≥ 3, `Tablet.access.requireItem`
   only with `Tablet.item` set (`err.require_item_none`), `AdminTheme` text at 4.5.
-- Templates: `Challenge.bounties` (kind `rows`: known kinds, unique, ≥ 1 while `weeklyBounty`), `Goals.daily|weekly`
+- Templates: `Objectives.bounty.objectives` (kind `rows`: known kinds, unique, ≥ 1 while `bounty.enabled`),
+  `Objectives.dailyGoal|weeklyGoal.goals`
   (kind `goals`: id, label, count, optional type, mission, stat, unit, crossDepartment, missionCall, enabled; unique
   ids, a known mission type).
 - `all()` adds `resets = { daily, weekly }` (the next reset times), `safeMode` and `added`.
@@ -2450,7 +2454,7 @@ differ from the default; NULL = defaults; migration 010).
 - `view(officer) -> { enabled, schema, values }` (allowed options only; `hidden` ones left out), `config(deptKey)`,
   `decode(raw)`.
 - Net: callback `getOptions`, action `server:options:set { key = value }` (both 4/s).
-- Admin: `admin:getOfficerLook` returns the saved `options`; `server:admin:resetOfficerOptions` (modules/profile,
+- Admin: `admin:getOfficerLook` returns the saved `options`; `server:admin:resetOfficerOptions` (modules/progression/profile,
   `officerRecords`, reason, audit `optionsReset`) sets them NULL.
 - Client (modules/options/client.lua): `get(key)` (not allowed → default; `local` → this PC's KVP
   `crimsonpolice:options`; `server` → the session's), `setLocal(key, value)`, `localValues()`, `refresh()`,
@@ -2655,7 +2659,7 @@ Sent only during a run by modules/runs/client.lua; the server rate-limits and ca
 - `weapon_fired` — once per run when `IsPedShooting(PlayerPedId())` (for `no_weapons_fired`).
 Shots at surrendered NPCs are detected server-side (`weaponDamageEvent`, §5.11).
 
-### 6.4 Scoring details (modules/scoring implements; others rely on these meanings)
+### 6.4 Scoring details (modules/progression/scoring implements; others rely on these meanings)
 - Signed manual rows (full admin control): an adjustment is `mission_type = 'manual_award'` with `mission_id =
   'manual_award'` (positive points) or `'manual_adjust'` (negative points).
 - `P = CP.Scoring.P(mission)`; common fast bonus (`+fastBonus × P` when `duration <= fastShare × timeLimit`) is
@@ -3217,7 +3221,7 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `admin:getRsCases`, `admin:getRsCase`, `admin:getRsPairs` | callbacks | antiFarmOverride | `{}` / `{ runUuid }` / `{ citizenid? }` | modules/opponents/staff; server-only case data, refused for the admin's own case |
 | `server:admin:rsBlockPair`, `rsExclude`, `rsSuspend` | actions | antiFarmOverride | `{ officer, suspect, days, reason }` / `{ citizenid, days, reason }` | 0 < days <= 3650, never his own characters, `err.rs_off` while both features are off |
 | `server:admin:rsLift`, `rsClearStrikes` | actions | antiFarmOverride | `{ kind, officer?, suspect?, reason }` / `{ citizenid, reason }` | never his own characters, `err.rs_no_row` / `err.rs_no_strikes` when nothing is running |
-| `admin:getOfficerLook`, `server:admin:resetLook`, `clearProfileCooldown` | callback / actions | officerRecords | `{ citizenid, reason }` | modules/profile; cooldown clear 1 per 60 s per officer |
+| `admin:getOfficerLook`, `server:admin:resetLook`, `clearProfileCooldown` | callback / actions | officerRecords | `{ citizenid, reason }` | modules/progression/profile; cooldown clear 1 per 60 s per officer |
 | `admin:getBannedWords`, `admin:testBannedWords`, `server:admin:setBannedWords` | callbacks / action | officerRecords | `{ add, remove, reason }` | ≤ 5000 words, ≤ 64 characters; old file kept as `.bak`; live reload |
 | `server:admin:unrevokeCommendation`, `editCitation` | action | officerRecords | `{ id, reason, citation? }` | K on the old value |
 | `admin:getRecognition`, `admin:previewRecount`, `server:admin:recountWeek`, `repostWeek` | callbacks / actions | boardsAdmin | `{ weekKey, post?, reason, confirm = 'RECOUNT', previewToken }` | the last 4 closed weeks; post again 1 per 10 min per week |
@@ -3231,9 +3235,9 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `admin:searchOfficers` | callback (old) | openAdmin | `{ query, filters = { department, online, suspended, retired, excluded, review, dispute, flagged }, page }` | pages of 25; an online character with no row is found by its citizenid |
 
 Hooks: fires `row:voided`, `row:restored`, `row:forfeitUndone`, `admin:changed`; listens to `settings:changed`
-(`Leaderboard.*` → `LB.invalidate()`, `Profile.bannedWords*` → reload, `Challenge.*` → board webhook notice, `Goals.*`
+(`Leaderboard.*` → `LB.invalidate()`, `Profile.bannedWords*` → reload, `Objectives.challenge|bounty.*` → board webhook notice, `Objectives.dailyGoal|weeklyGoal.*`
 → logged; a period already rewarded stays rewarded) and `admin:changed` (`LB.invalidate()`). Sidebar counts:
-`adminReview` (modules/profile) and `adminDisputes` (modules/disputes).
+`adminReview` (modules/progression/profile) and `adminDisputes` (modules/disputes).
 
 #### 8.4.2 Missions and the Mission Builder
 

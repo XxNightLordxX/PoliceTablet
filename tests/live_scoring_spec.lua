@@ -28,7 +28,7 @@ CP.Events = {
 
 H.load('modules/livecrime/server.lua')
 H.load('modules/scaling/server.lua')
-H.load('modules/scoring/server.lua')
+H.load('modules/progression/scoring.lua')
 H.load('modules/cash/server.lua')
 local LC = CP.LiveCrime
 
@@ -245,7 +245,7 @@ do
     H.ok(CP.Runs.noteStat(run, 1, 'live_catches', 1), 'CP.Runs takes the live_catches count')
     H.eq(run.participants[1].stats.live_catches, 1, 'on the participant (written to the row)')
 
-    H.load('modules/leaderboard/server.lua')
+    H.load('modules/progression/leaderboard.lua')
     H.eq(CP.Leaderboard._metricValue({ stats = { live_catches = 4 } }, 'live_catches'), 4, 'Rank by live catches')
     H.eq(CP.Leaderboard.badgeLabel('top_live_catches_2026-11-02'), 'Top Live catches of the Week · 2026-11-02',
         'its weekly badge has a name')

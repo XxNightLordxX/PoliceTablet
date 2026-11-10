@@ -323,7 +323,7 @@ do
     H.eq(run.score.shared.hostile_arrested, 2, 'no weight: whole occurrences as before')
 
     H.load('modules/scaling/server.lua')
-    H.load('modules/scoring/server.lua')
+    H.load('modules/progression/scoring.lua')
     local p = { src = 1, department = 'sast', status = 'active', score = {}, vehicle = { seen = false } }
     local srun = {
         id = 2,

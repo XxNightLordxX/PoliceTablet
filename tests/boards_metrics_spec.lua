@@ -47,7 +47,7 @@ Config.Departments = {
 Config.Leaderboard.minRunsToRank = 3
 Config.Leaderboard.minDecisions = 10
 Config.Leaderboard.weeklyBadges = { 'arrests' }
-Config.Challenge.minRunsActive = 3
+Config.Objectives.challenge.minRunsActive = 3
 
 local officers = {}
 local function Officer(src, cid, name, dept, callsign, sup)
@@ -116,13 +116,13 @@ CP.Missions = {
 
 H.load('modules/permissions/server.lua')
 H.load('modules/schedule/server.lua')
-H.load('modules/scoring/server.lua')
-H.load('modules/goals/server.lua')
-H.load('modules/leaderboard/server.lua')
+H.load('modules/progression/scoring.lua')
+H.load('modules/progression/goals.lua')
+H.load('modules/progression/leaderboard.lua')
 H.load('modules/livecrime/server.lua')
 H.load('modules/volunteers/match/server.lua')
-H.load('modules/challenge/server.lua')
-H.load('modules/profile/server.lua')
+H.load('modules/progression/challenge.lua')
+H.load('modules/progression/profile.lua')
 local LB, C = CP.Leaderboard, CP.Challenge
 
 local function Tick() H.clockMs = H.clockMs + 1001 end
@@ -527,12 +527,16 @@ end
 do
     local fired = {}
     CP.Hooks.on('goal:completed', function(cid, goalId) fired[#fired + 1] = cid .. ':' .. goalId end)
-    local goals = Config.Goals
-    Config.Goals = {
-        dailyPoints = 50,
-        weeklyPoints = 200,
-        daily = { { id = 'arrests_2', label = 'Make 2 arrests', stat = 'arrests', count = 2 } },
-        weekly = { { id = 'calls_2', label = 'Answer 2 calls', missionCall = true, count = 2 } },
+    local goals = { Config.Objectives.dailyGoal, Config.Objectives.weeklyGoal }
+    Config.Objectives.dailyGoal = {
+        enabled = true,
+        points = 50,
+        goals = { { id = 'arrests_2', label = 'Make 2 arrests', stat = 'arrests', count = 2 } },
+    }
+    Config.Objectives.weeklyGoal = {
+        enabled = true,
+        points = 200,
+        goals = { { id = 'calls_2', label = 'Answer 2 calls', missionCall = true, count = 2 } },
     }
     CP.Goals.onRunCompleted('M1')
     CP.Goals.onRunCompleted('M1')
@@ -557,7 +561,7 @@ do
     Row({ cid = 'M6', arrests = 3, season = SID, breakdown = '{"realSuspect":"volunteer"}' })
     H.eq(CP.Goals.forOfficer('M6').daily.progress, 0, 'arrests_2: a volunteer case counts nothing while goals is off')
     H.sql('DELETE FROM cp_mission_runs WHERE citizenid = \'M6\' AND breakdown IS NOT NULL')
-    Config.Goals = goals
+    Config.Objectives.dailyGoal, Config.Objectives.weeklyGoal = goals[1], goals[2]
     H.sql('DELETE FROM cp_mission_runs WHERE mission_type = \'goal\'')
     LB.invalidate()
 end

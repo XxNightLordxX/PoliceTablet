@@ -1064,7 +1064,7 @@ function edgeBoard(): unknown {
             },
         ],
         unit: { size: 4, isLeader: true },
-        todMultiplier: 1.5, // the optional extra requested from modules/draw (Config.Events.todMultiplier)
+        todMultiplier: 1.5, // the optional extra requested from modules/draw (Config.Objectives.typeOfTheDay.multiplier)
     };
 }
 

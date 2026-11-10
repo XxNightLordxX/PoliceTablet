@@ -1,7 +1,7 @@
 // Browser mocks for the boards slice (Leaderboard, Department Challenge, Profile & History, Admin Seasons &
 
-// Challenge, Admin Leaderboards, Supervisor Department Report). Shapes follow modules/leaderboard and
-// modules/challenge (see their header comments and src/types/boards.ts). Actions keep a little state so
+// Challenge, Admin Leaderboards, Supervisor Department Report). Shapes follow modules/progression/leaderboard and
+// modules/progression/challenge (see their header comments and src/types/boards.ts). Actions keep a little state so
 // the screens can be clicked through: hide-name, disputes, season start/end, bounty override, void, award.
 // server:dispute, server:admin:voidRun and server:admin:awardPoints belong to other modules: registered as
 // fallbacks so their owners' mocks win.

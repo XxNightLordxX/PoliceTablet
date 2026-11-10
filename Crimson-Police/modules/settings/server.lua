@@ -66,16 +66,16 @@ local POINTS = {
     'Bonuses.*.kind',
     'Scoring.*',
     'Scoring.common.*',
-    'Events.todMultiplier',
+    'Objectives.typeOfTheDay.multiplier',
     'Events.twists.*.points',
     'Events.twistMaxPoints',
     'Events.weeklyBoss.points',
     'CrossDepartmentPoints',
     'Difficulty.pointsByStars',
     'Scaling',
-    'Goals.dailyPoints',
-    'Goals.weeklyPoints',
-    'Challenge.bountyBonus',
+    'Objectives.dailyGoal.points',
+    'Objectives.weeklyGoal.points',
+    'Objectives.bounty.bonus',
     'MissionCalls.rapidResponse.pctOfP',
 }
 
@@ -167,9 +167,9 @@ Play.groups = {
             'cross_department_missions',
             'mission_controls',
             'field_training',
-            'scoring_xp_levels_and_goals',
+            'scoring_and_xp_levels',
             'leaderboard',
-            'department_challenge',
+            'objectives',
             'officer_profile',
         },
     },
@@ -261,7 +261,6 @@ Play.features = {
             'MissionCalls.reopen.time',
         },
     },
-    { key = 'type_of_the_day', play = 'npc', path = 'Events.typeOfTheDay' },
     {
         key = 'weekly_boss',
         play = 'npc',
@@ -424,14 +423,36 @@ Play.features = {
             'Commendations.sameKindCooldownDays',
         },
     },
+    -- the Objectives (Config.Objectives): one switch per kind
+    {
+        key = 'daily_goal',
+        play = 'team',
+        path = 'Objectives.dailyGoal.enabled',
+        limits = { 'Objectives.dailyGoal.points' },
+    },
+    {
+        key = 'weekly_goal',
+        play = 'team',
+        path = 'Objectives.weeklyGoal.enabled',
+        limits = { 'Objectives.weeklyGoal.points' },
+    },
     {
         key = 'challenge',
         play = 'team',
-        path = 'Challenge.enabled',
-        limits = {
-            'Challenge.minRunsActive',
-            'Challenge.bountyBonus',
-        },
+        path = 'Objectives.challenge.enabled',
+        limits = { 'Objectives.challenge.minRunsActive' },
+    },
+    {
+        key = 'weekly_bounty',
+        play = 'team',
+        path = 'Objectives.bounty.enabled',
+        limits = { 'Objectives.bounty.bonus' },
+    },
+    {
+        key = 'type_of_the_day',
+        play = 'team',
+        path = 'Objectives.typeOfTheDay.enabled',
+        limits = { 'Objectives.typeOfTheDay.multiplier' },
     },
     { key = 'announce_weekly', play = 'team', path = 'Leaderboard.announceWeekly' },
     { key = 'announce_monthly', play = 'team', path = 'Leaderboard.announceMonthly' },
@@ -532,11 +553,11 @@ Play.screens = {
         'units',
         'cross_department_missions',
         'mission_controls',
-        'department_challenge',
+        'objectives',
     },
     admin_permissions = { 'permissions' },
-    admin_leaderboards = { 'leaderboard', 'scoring_xp_levels_and_goals', 'bonuses_and_penalties' },
-    admin_seasons = { 'leaderboard' },
+    admin_leaderboards = { 'leaderboard', 'objectives', 'scoring_and_xp_levels', 'bonuses_and_penalties' },
+    admin_seasons = { 'objectives', 'leaderboard' },
     admin_missions = {
         'mission_types',
         'difficulty',
@@ -655,7 +676,7 @@ local RANGES = {
     ['Departments.*.supervisorGrade'] = { 0, 100 },
     ['Events.modifierChance'] = { 0, 1 },
     ['Events.timeCrunchCut'] = { 0, 0.9 },
-    ['Events.todMultiplier'] = { 0, 10 },
+    ['Objectives.typeOfTheDay.multiplier'] = { 0, 10 },
     -- twists (CP.Twists): points = a share of P added, cash = a multiplier (below 1.0 it would take cash away)
     ['Events.twists.*.points'] = { 0, 2 },
     ['Events.twists.*.cash'] = { 1, 5 },
@@ -929,8 +950,8 @@ local RANGES = {
     ['CrossDept.cooldown'] = { 0, 86400 },
     ['Leaderboard.minRunsToRank'] = { 0, 100 },
     ['Leaderboard.seasonWeeks'] = { 1, 52 },
-    ['Challenge.minRunsActive'] = { 0, 100 },
-    ['Challenge.bountyBonus'] = { 0, 1 },
+    ['Objectives.challenge.minRunsActive'] = { 0, 100 },
+    ['Objectives.bounty.bonus'] = { 0, 1 },
     ['Profile.editCooldown'] = { 0, 86400 },
     ['Profile.reports.perDay'] = { 0, 50 },
     ['Profile.avatarUrls.perDay'] = { 0, 50 },
@@ -942,8 +963,8 @@ local RANGES = {
     ['Disputes.windowHours'] = { 1, 720 },
     ['Scoring.streakStep'] = { 0, 1 },
     ['Scoring.streakMax'] = { 0, 5 },
-    ['Goals.dailyPoints'] = { 0, 10000 },
-    ['Goals.weeklyPoints'] = { 0, 100000 },
+    ['Objectives.dailyGoal.points'] = { 0, 10000 },
+    ['Objectives.weeklyGoal.points'] = { 0, 100000 },
     ['Rewards.dailyItemCap'] = { 0, 1000 },
     ['Rewards.dailyValueCap'] = { 0, 10000000 },
     ['FeatureRewards.*.money'] = { 0, 1000000 },
@@ -1173,7 +1194,7 @@ local CAPITALS = {
     EMS = true,
 }
 
--- 'SCORING, XP LEVELS AND GOALS' -> 'Scoring, XP levels and goals', 'ROUTE TO THE START' -> 'Route to the start'.
+-- 'SCORING AND XP LEVELS' -> 'Scoring and XP levels', 'ROUTE TO THE START' -> 'Route to the start'.
 -- A single capital letter (options B and C) stays as it is.
 local function SentenceCase(title)
     title = tostring(title)
@@ -1755,7 +1776,7 @@ local KNOWN = {
     },
     ['NpcCombat.replace'] = { tpl = MapOf(WEAPON_NAME, '^[Ww][Ee][Aa][Pp][Oo][Nn]_[%w_]+$') },
     ['NpcCombat.fallback'] = { tpl = WEAPON_NAME },
-    ['Challenge.scoring'] = { tpl = Enum({ 'average', 'total', 'top10' }), kind = 'enum' },
+    ['Objectives.challenge.scoring'] = { tpl = Enum({ 'average', 'total', 'top10' }), kind = 'enum' },
     ['Limits.netRateResponse'] = { tpl = Enum({ 'block', 'log', 'kick' }), kind = 'enum' },
     ['Departments.*.jobs'] = { tpl = ListOf(ID, { min = 1, unique = true }), kind = 'list', item = 'string' },
     ['Departments.*.theme.personalAccents'] = {
@@ -2173,7 +2194,8 @@ end
 KNOWN['Tablet.desks'].check = CheckDesks
 KNOWN['Tablet.desks'].tpl.max = DESKS_MAX
 
--- The weekly bounty kinds the challenge counts (modules/challenge): one row per kind, at least one while it is on.
+-- The weekly bounty kinds the challenge counts (modules/progression/challenge.lua): one row per kind, at least one
+-- while it is on.
 local BOUNTY_KINDS = { 'most_tactical', 'most_cross', 'most_unit', 'most_completed', 'most_arrests', 'most_calls' }
 local function CheckBounties(rows, _, ctx)
     local seen = {}
@@ -2181,12 +2203,12 @@ local function CheckBounties(rows, _, ctx)
         if seen[r.id] then return 'err.setting_duplicate' end
         seen[r.id] = true
     end
-    local on = ctx and ctx.pending and ctx.pending['Challenge.weeklyBounty']
-    if on == nil then on = Effective('Challenge.weeklyBounty') end
+    local on = ctx and ctx.pending and ctx.pending['Objectives.bounty.enabled']
+    if on == nil then on = Effective('Objectives.bounty.enabled') end
     if on ~= false and #rows == 0 then return 'err.setting_too_few' end
     return nil
 end
-KNOWN['Challenge.bounties'] = {
+KNOWN['Objectives.bounty.objectives'] = {
     tpl = ListOf(Record({ id = Enum(BOUNTY_KINDS), label = Text(nil, 64) }, { id = true, label = true }),
         { max = #BOUNTY_KINDS }),
     kind = 'rows',
@@ -2197,7 +2219,8 @@ KNOWN['Challenge.bounties'] = {
     },
 }
 
--- Daily and weekly goals (modules/goals): id, name, count and the conditions a counted run must meet (all of them).
+-- Daily and weekly goals (modules/progression/goals.lua): id, name, count and the conditions a counted run must meet
+-- (all of them).
 local GOAL_STATS = {
     'arrests',
     'citations',
@@ -2230,7 +2253,7 @@ local function CheckGoals(rows)
     end
     return nil
 end
-for _, path in ipairs({ 'Goals.daily', 'Goals.weekly' }) do
+for _, path in ipairs({ 'Objectives.dailyGoal.goals', 'Objectives.weeklyGoal.goals' }) do
     KNOWN[path] = {
         tpl = ListOf(GOAL, { max = 30 }),
         kind = 'goals',

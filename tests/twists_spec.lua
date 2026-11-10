@@ -75,7 +75,7 @@ H.eq(T.cfg('bogus'), nil, 'unknown twist')
 --                  CP.Events: FITS, OFFER, CHECK, KEEP, ROLL
 -- ============================================================================
 
-H.load('modules/events/server.lua')
+H.load('modules/progression/events.lua')
 local E = CP.Events
 
 -- a block that spawns armed NPCs (its armedCount, the Mission Builder's armed budget) and one that does not

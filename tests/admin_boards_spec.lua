@@ -254,7 +254,7 @@ do
     ok, e = Act('server:admin:startSeason', 1, { name = 'Autumn Season' })
     H.eq(ok, true, 'another season')
     local kind = nil
-    for _, k in ipairs(Config.Challenge and Config.Challenge.bounties or {}) do
+    for _, k in ipairs(Config.Objectives.bounty.objectives or {}) do
         kind = kind or (type(k) == 'table' and k.id or k)
     end
     if kind then
@@ -330,7 +330,7 @@ do
     LB.invalidate = real
     W.posts = {}
     W.convars.cp_webhook_board = 'https://discord.com/api/webhooks/1/abc'
-    CP.Hooks.fire('settings:changed', { 'Challenge.bounties' })
+    CP.Hooks.fire('settings:changed', { 'Objectives.bounty.objectives' })
     H.step(0)
     H.step(1000)
     H.ok(true, 'a Challenge setting change is handled')

@@ -29,7 +29,7 @@ CP.DeptControls = {
 }
 
 H.load('modules/happyhour/server.lua')
-H.load('modules/events/server.lua')
+H.load('modules/progression/events.lua')
 H.load('modules/cash/server.lua')
 local HH, E, Cash = CP.HappyHour, CP.Events, CP.Cash
 local MC = Config.MissionControls.controls

@@ -299,7 +299,9 @@ local function Secs(n) Adv(n * 1000, 500) end
 local loadedFiles = {}
 do
     local p = io.popen(
-        'cd ' .. H.root .. ' && find modules -name server.lua | sort && find blocks -name server.lua | sort')
+        'cd ' .. H.root .. ' && find modules -name server.lua | sort'
+            .. ' && ls modules/progression/*.lua && find blocks -name server.lua | sort'
+    )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
     p:close()
 end
@@ -584,8 +586,8 @@ do
         { 'Permissions.supervisor.missionControls', true },
         { 'Permissions.grants', { missionCalls = { citizenids = { CID[7] } } } },  -- an extra grant
         { 'Limits.maxCompletionsHour', 12 },                                       -- a plain setting
-        { 'Goals.daily', { { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 } } },
-        { 'Goals.weekly', { { id = 'any_15', label = 'Complete 15 missions', count = 15 } } },
+        { 'Objectives.dailyGoal.goals', { { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 } } },
+        { 'Objectives.weeklyGoal.goals', { { id = 'any_15', label = 'Complete 15 missions', count = 15 } } },
     }) do
         ok, err = Setting(c[1], c[2])
         H.eq(ok, true, ('settings: %s saved: %s'):format(c[1], tostring(err)))

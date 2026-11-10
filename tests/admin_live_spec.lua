@@ -230,7 +230,7 @@ H.eq(#W.audits('unitDisband'), 1, 'audited')
 --                      TYPE OF THE DAY AND THE MODIFIERS
 -- ============================================================================
 
-Config.Events.typeOfTheDay = true
+Config.Objectives.typeOfTheDay.enabled = true
 local rolled = Events.rolledTypeOfTheDay()
 local other = rolled == 'patrol' and 'training' or 'patrol'
 res = W.cb('admin:getToday', 1, {})
@@ -250,7 +250,7 @@ H.ok(W.toasts(7, 'admin.live.notice.tod_changed') >= 1, 'officers are told')
 H.eq(W.audits('todOverride')[1].new_value, other, 'audited')
 
 -- a restart keeps it (read back from today's cp_audit row, which a backup restore never replaces)
-H.load('modules/events/server.lua')
+H.load('modules/progression/events.lua')
 H.eq(CP.Events.typeOfTheDay(), other, 'the override survives a restart')
 ok = W.act('server:admin:setTypeOfDay', 1, { type = 'none', reason = 'quiet day' })
 H.ok(ok, 'no Type of the Day today')
@@ -262,10 +262,10 @@ H.eq(CP.Events.typeOfTheDay(), CP.Events.rolledTypeOfTheDay(), 'the override end
 H.time = savedTime
 ok = W.act('server:admin:setTypeOfDay', 1, { type = 'auto', reason = 'back to normal' })
 H.eq(CP.Events.typeOfTheDay(), CP.Events.rolledTypeOfTheDay(), 'auto puts today\'s roll back')
-Config.Events.typeOfTheDay = false
+Config.Objectives.typeOfTheDay.enabled = false
 ok, err = W.act('server:admin:setTypeOfDay', 1, { type = 'patrol', reason = 'x' })
 H.eq(err, 'err.live_tod_off', 'refused while Type of the Day is off in Settings')
-Config.Events.typeOfTheDay = true
+Config.Objectives.typeOfTheDay.enabled = true
 
 Config.Events.modifierChance = 1
 local rolls = {}

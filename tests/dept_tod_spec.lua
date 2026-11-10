@@ -68,7 +68,7 @@ local function Pick(dept, type, by, ts, action)
     }
 end
 
-H.load('modules/events/server.lua')
+H.load('modules/progression/events.lua')
 local E = CP.Events
 local ROLL = E.rolledTypeOfTheDay()
 local PICK = ROLL == 'patrol' and 'training' or 'patrol'   -- a type the server did not roll today
@@ -117,9 +117,9 @@ on = false
 H.eq(E.typeOfTheDay(nil, 'sast', { citizenid = 'OFF1' }), ROLL, 'switched off: the server type at once')
 on = true
 -- Type of the Day off in Config.Events: nothing at all
-Config.Events.typeOfTheDay = false
+Config.Objectives.typeOfTheDay.enabled = false
 H.eq(E.typeOfTheDay(nil, 'sast', { citizenid = 'OFF1' }), nil, 'Events.typeOfTheDay off: no Type of the Day')
-Config.Events.typeOfTheDay = true
+Config.Objectives.typeOfTheDay.enabled = true
 
 -- ============================================================================
 --                       ONE PICK PER DEPARTMENT PER DAY
@@ -143,7 +143,7 @@ H.ok(CP.L('err.tod_picked_today') ~= 'err.tod_picked_today', 'the refusal has a 
 -- Scoring.compute reads Events.typeOfTheDay with the participant's department and the run's participants.
 
 H.load('modules/scaling/server.lua')
-H.load('modules/scoring/server.lua')
+H.load('modules/progression/scoring.lua')
 local function Points(dept, cid, members)
     local p = {
         src = 1,

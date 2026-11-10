@@ -10,6 +10,7 @@
 --   CP.Ext       a safe call into another resource's export, with the resource-started check
 --   CP.Lock      one-at-a-time per key (an officer, a row, a player), freed on error and when a player drops
 --   CP.Daily     per-day counters for caps: count and reserve in one step, so two requests cannot pass a cap
+--   CP.Objective one kind of Config.Objectives (dailyGoal, weeklyGoal, challenge, bounty, typeOfTheDay) and its switch
 
 CP = CP or {}
 
@@ -245,4 +246,25 @@ function Daily:clear(key)
     else
         self._rows[key] = nil
     end
+end
+
+-- ============================================================================
+--                                  OBJECTIVES
+-- ============================================================================
+
+local OBJECTIVE_KINDS = { dailyGoal = true, weeklyGoal = true, challenge = true, bounty = true, typeOfTheDay = true }
+
+-- One kind of Config.Objectives as it is now (a setting changed in game included), never nil, and whether it is on
+-- (enabled ~= false; the weekly bounty also needs the department challenge).
+---@param kind string 'dailyGoal' | 'weeklyGoal' | 'challenge' | 'bounty' | 'typeOfTheDay'
+---@return table cfg, boolean on
+function CP.Objective(kind)
+    local all = type(Config) == 'table' and type(Config.Objectives) == 'table' and Config.Objectives or {}
+    local cfg = OBJECTIVE_KINDS[kind] and type(all[kind]) == 'table' and all[kind] or {}
+    local on = OBJECTIVE_KINDS[kind] == true and cfg.enabled ~= false
+    if on and kind == 'bounty' then
+        local ch = type(all.challenge) == 'table' and all.challenge or {}
+        on = ch.enabled ~= false
+    end
+    return cfg, on
 end

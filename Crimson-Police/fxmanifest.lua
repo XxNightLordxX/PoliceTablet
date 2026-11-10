@@ -38,6 +38,8 @@ server_scripts {
     -- CP.AdminKit before every module, so any module may register its admin actions as it loads
     'modules/adminkit/server.lua',
     'modules/**/server.lua',
+    -- modules made of sub-files (one file per part, no server.lua)
+    'modules/progression/*.lua',
     'blocks/**/server.lua',
 }
 

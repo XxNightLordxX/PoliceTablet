@@ -298,7 +298,7 @@ return function(H)
         'modules/tablet/server.lua',
         'modules/schedule/server.lua',
         'modules/scaling/server.lua',
-        'modules/events/server.lua',
+        'modules/progression/events.lua',
         'modules/units/server.lua',
         'modules/runs/server.lua',
         'modules/livectl/server.lua',

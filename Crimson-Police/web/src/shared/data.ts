@@ -96,7 +96,7 @@ export function normalizeHud(h: HudState, prev?: HudState | null): HudState {
 }
 
 // The points cap (whole points) and the multipliers of a breakdown. A row stored before CP.Scoring.compute sent them
-// was worked out with the shipped defaults (Config.Scoring.scoreCap 2, Config.Events.todMultiplier 2).
+// was worked out with the shipped defaults (Config.Scoring.scoreCap 2, Config.Objectives.typeOfTheDay.multiplier 2).
 export function pointsLimits(p: RunResult['points']): { cap: number; scoreCap: number; todMultiplier: number } {
     const scoreCap = p.scoreCap ?? 2;
     return { cap: p.cap ?? Math.floor(p.P * scoreCap + 1e-9), scoreCap, todMultiplier: p.todMultiplier ?? 2 };

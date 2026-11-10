@@ -256,7 +256,7 @@ local BLOCKS = {
 for _, b in ipairs(BLOCKS) do H.load('blocks/' .. b .. '/server.lua') end
 H.load('modules/scaling/server.lua')
 H.load('modules/schedule/server.lua')
-H.load('modules/events/server.lua')
+H.load('modules/progression/events.lua')
 H.load('modules/missions/server.lua')
 H.load('modules/draw/server.lua')
 H.load('modules/npc/server.lua')

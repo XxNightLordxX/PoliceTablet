@@ -128,7 +128,7 @@ function ResultRow({ o, active, onSelect }: { o: OfficerSearchRow; active: boole
     );
 }
 
-// Profile moderation, commendations and the service record (admin:getOfficerProfile in modules/profile).
+// Profile moderation, commendations and the service record (admin:getOfficerProfile in modules/progression/profile).
 type ModAction =
     | { kind: 'review'; what: 'avatar' | 'bio'; decision: 'approve' | 'reject' }
     | { kind: 'clear'; what: 'avatar' | 'bio' }

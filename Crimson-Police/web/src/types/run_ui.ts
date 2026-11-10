@@ -47,7 +47,7 @@ export type BoardOperation = NonNullable<BoardData['operation']> & {
 };
 
 // Callback 'getMissionTypes'. Optional extras (requested from modules/draw, docs/dev/ARCHITECTURE.md §12.8):
-// `serverTime` = os.time() when the board was built; `todMultiplier` = Config.Events.todMultiplier (the
+// `serverTime` = os.time() when the board was built; `todMultiplier` = Config.Objectives.typeOfTheDay.multiplier (the
 // Type of the Day's points multiplier; the board assumes the default 2 without it).
 export interface MissionBoardData extends Omit<BoardData, 'operation'> {
     operation: BoardOperation | null;

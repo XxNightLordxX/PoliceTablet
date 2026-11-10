@@ -271,17 +271,17 @@ H.load('modules/schedule/server.lua')
 H.load('modules/permissions/server.lua')
 H.load('modules/payouts/server.lua')
 H.load('modules/cash/server.lua')
-H.load('modules/scoring/server.lua')
-H.load('modules/goals/server.lua')
-H.load('modules/leaderboard/server.lua')
-H.load('modules/challenge/server.lua')
+H.load('modules/progression/scoring.lua')
+H.load('modules/progression/goals.lua')
+H.load('modules/progression/leaderboard.lua')
+H.load('modules/progression/challenge.lua')
 H.load('modules/admin/server.lua')
 H.load('modules/disputes/server.lua')
 H.load('modules/anticheat/server.lua')
 
 -- The goals of the day and week rotate with the real date (this spec runs on the real clock): no shipped
 -- goal may complete from the rows below and add its points to the XP and board checks. Section 4 sets its own.
-Config.Goals.daily, Config.Goals.weekly = {}, {}
+Config.Objectives.dailyGoal.goals, Config.Objectives.weeklyGoal.goals = {}, {}
 
 -- ============================================================================
 --                                   HELPERS
@@ -499,13 +499,13 @@ H.eq(ok, true, 'season started from the console')
 local seasonId = CP.Challenge.currentSeason().id
 H.ok(seasonId ~= nil, 'current season')
 
-local savedGoals = Config.Goals
-Config.Goals = {
-    dailyPoints = 50,
-    weeklyPoints = 200,
-    daily = { { id = 'int_any_1', label = 'Complete 1 mission', count = 1 } },
-    weekly = {},
+local savedGoals = { Config.Objectives.dailyGoal, Config.Objectives.weeklyGoal }
+Config.Objectives.dailyGoal = {
+    enabled = true,
+    points = 50,
+    goals = { { id = 'int_any_1', label = 'Complete 1 mission', count = 1 } },
 }
+Config.Objectives.weeklyGoal = { enabled = true, points = 200, goals = {} }
 H.eq(BoardPoints(4), 0, 'FIB officer starts at 0')
 InsertRun({ cid = 'IFIB0004', dept = 'fib', final = 0, status = 'paid', paid = 0 })
 CP.Goals.onRunCompleted('IFIB0004')
@@ -517,7 +517,7 @@ H.eq(goal and goal.department, 'fib', 'goal row carries the officer department')
 H.eq(goal and goal.final_points, 50, 'daily goal reward')
 H.eq(BoardPoints(4), 50, 'goal points on the board at once (invalidated)')
 H.eq(cjson.decode(goal.breakdown).period, 'daily', 'breakdown period')
-Config.Goals = savedGoals
+Config.Objectives.dailyGoal, Config.Objectives.weeklyGoal = savedGoals[1], savedGoals[2]
 
 -- Manual award from the console with a 250-character accented reason: admin clips by characters, scoring
 -- validates by characters (a byte check refused it as "at most 255 characters").

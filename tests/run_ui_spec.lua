@@ -117,7 +117,7 @@ do
     H.eq(CP.L('board.confirm.accept', { type = 'Tactical' }), 'Accept Tactical', 'CP.L board.confirm.accept')
     H.eq(CP.L('run.route.recalcs_left', { n = 2 }), 'Recalculations left: 2', 'CP.L run.route.recalcs_left')
     H.eq(CP.L('board.card.tod_points', { multiplier = 2 }), '2× today',
-        'Type of the Day multiplier comes from data (Config.Events.todMultiplier)')
+        'Type of the Day multiplier comes from data (Config.Objectives.typeOfTheDay.multiplier)')
     H.ok(CP.Locale.has('run.empty.title'), 'CP.Locale.has run.empty.title')
     H.ok(CP.L('board.confirm.abandon', { type = 'Patrol' }):find('drawn at random', 1, true) ~= nil,
         'accept confirm says the mission is drawn at random')
@@ -205,8 +205,10 @@ Has(board, 'if (runId !== (data?.activeRunId ?? null)) schedule();',
     'board refetches on push run only when the active run changes')
 Has(board, 'res.error === \'err.rate_limited\'', 'a rate-limited board refetch is retried')
 Has(board, 't(\'board.card.tod_points\', { multiplier: todX })', 'the Type of the Day multiplier is not hard-coded')
-H.eq(tonumber(((Read(ROOT .. 'config/config.lua') or ''):match('todMultiplier%s*=%s*([%d.]+)'))), 2.0,
-    'Config.Events.todMultiplier is the default the board falls back to (2)')
+local objectivesText = (Read(ROOT .. 'config/config.lua') or ''):match('Config%.Objectives%s*=%s*(%b{})') or ''
+local todText = objectivesText:match('typeOfTheDay%s*=%s*(%b{})') or ''
+H.eq(tonumber(todText:match('multiplier%s*=%s*([%d.]+)')), 2.0,
+    'Config.Objectives.typeOfTheDay.multiplier is the default the board falls back to (2)')
 Has(board, '\'server:acceptType\'', 'board accepts with server:acceptType')
 Has(board, 'const BOSS_KEY = \'weekly_boss\'', 'boss card accepts with weekly_boss')
 Has(board, '\'server:joinOperation\', op.id', 'join sends the operation id')
@@ -398,7 +400,7 @@ end
 
 local function Mod(rel) return StripComments(Read(ROOT .. rel) or '') end
 local runsSrv, drawSrv, eventsSrv =
-    Mod('modules/runs/server.lua'), Mod('modules/draw/server.lua'), Mod('modules/events/server.lua')
+    Mod('modules/runs/server.lua'), Mod('modules/draw/server.lua'), Mod('modules/progression/events.lua')
 local opsSrv, routeSrv, routeCl =
     Mod('modules/operations/server.lua'), Mod('modules/route/server.lua'), Mod('modules/route/client.lua')
 local runsCl, ipSrv = Mod('modules/runs/client.lua'), Mod('blocks/interact_points/server.lua')
