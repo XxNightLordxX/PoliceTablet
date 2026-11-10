@@ -7,8 +7,8 @@
 -- before anything changes, an older backup gets the defaults of columns added since, and a restore that stops part way
 -- puts the money state back and keeps payments held, also after a restart, until a restore works; when putting the
 -- money state back fails too, the admin gets err.restore_failed_money (never "every payment kept its state").
--- With Config.Backups.daily = true the daily backup runs on the daily job thread (CP.Schedule.onDailyJob): the weekly
--- reset does not wait for a slow backup, and the clean-up starts only once it has returned.
+-- With Config.Backups.daily = true the daily backup is the first daily job (CP.Schedule.job 'backup'): the weekly
+-- jobs do not wait for a slow backup, and the other daily jobs and the clean-up start only once it has returned.
 -- Real runtime: the restore lock is a Lua variable (H.restart drops it), the store is kept (the database or the saves
 -- folder), MariaDB's strict mode refuses NULL in a NOT NULL column (the files engine too).
 
@@ -38,7 +38,7 @@ local people = {
 -- before(): runs after config.lua loads and before the modules do.
 local function Boot(before)
     H.boot({ side = 'server', realLocale = true })
-    if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/storage/memsql.lua') end
+    if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/system/memsql.lua') end
     _G.GetConvar = function(_, default) return default end
     _G.PerformHttpRequest = function() end
     _G.GetResourceMetadata = function(_, key) return key == 'version' and '1.0.0' or nil end
@@ -633,13 +633,13 @@ do
 end
 
 -- ============================================================================
---               8. THE DAILY BACKUP RUNS ON THE DAILY JOB THREAD
+--                  8. THE DAILY BACKUP IS THE FIRST DAILY JOB
 -- ============================================================================
 -- Config.Backups.daily = true: the reset listeners and the weekly reset do not wait for a slow backup, the clean-up
 -- starts only once the backup has returned, and the backup is still written whole.
 
 do
-    Restart(function() H.load('modules/schedule/server.lua') end)
+    Restart(function() H.load('modules/system/schedule.lua') end)
     Config.Backups.daily = true
     Config.Retention = { runArchiveMonths = 0, auditDays = 0 }
     local Sched, Kit, Sys = CP.Schedule, CP.AdminKit, CP.Sysadmin
@@ -660,24 +660,33 @@ do
         if kind == 'cleanup' then order[#order + 1] = 'clean-up' end
         return realLock(kind, ...)
     end
-    Sched.onDaily(function() order[#order + 1] = 'daily' end)
-    Sched.onWeekly(function() order[#order + 1] = 'weekly' end)
+    Sched.job('t_daily', {
+        when = 'daily',
+        run = function() order[#order + 1] = 'daily' end,
+    })
+    Sched.job('t_weekly', {
+        when = 'weekly',
+        run = function() order[#order + 1] = 'weekly' end,
+    })
     H.time = H.time + 7 * 86400
     local fired = Sched._check(H.time)
     H.ok(fired.daily and fired.weekly, 'a day and a week went by')
-    H.eq(table.concat(order, ','), 'daily,backup,weekly', 'the weekly reset ran while the backup is still going')
-    H.ok(not Seen('backup done') and not Seen('clean-up'), 'the boundary check returned before the backup finished')
+    H.eq(table.concat(order, ','), 'backup,weekly',
+        'the weekly job ran while the backup (the first daily job) is going')
+    H.ok(not Seen('backup done') and not Seen('daily') and not Seen('clean-up'),
+        'the boundary check returned before the backup finished')
     H.advance(30000)
     Sys.backup, Kit.lock = realBackup, realLock
-    H.eq(table.concat(order, ','), 'daily,backup,weekly,backup done,clean-up',
-        'the clean-up started once the backup had returned')
+    H.eq(table.concat(order, ','), 'backup,weekly,backup done,daily,clean-up',
+        'the other daily jobs and then the clean-up started once the backup had returned')
     local list = Sys._index()
     local last = list[#list] or {}
     H.eq(last.kind, 'daily', 'the daily backup is listed')
     local fh = last.name and io.open(GetResourcePath() .. '/saves/_backups/' .. last.name .. '.manifest.json', 'rb')
     H.ok(fh ~= nil, 'with its manifest')
     if fh then fh:close() end
-    local done = Sched.cleanupView().last
+    local done
+    for _, j in ipairs(Sched.jobsView().jobs) do if j.id == 'cleanup' then done = j.last end end
     H.ok(done ~= nil and done.skipped == nil and done.error == nil, 'and the clean-up ran')
 end
 

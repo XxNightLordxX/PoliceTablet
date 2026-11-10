@@ -1154,8 +1154,13 @@ CreateThread(function()
         CP.Tablet.registerNavCount('adminPayments', function() return Payments.stuckCount() end, { adminOnly = true })
     end
     if CP.ConfigHealth and CP.ConfigHealth.register then CP.ConfigHealth.register('cash', Payments.health) end
-    if CP.Schedule and CP.Schedule.onDaily then
-        CP.Schedule.onDaily(function() CreateThread(function() Payments.lowBalanceToasts() end) end)
+    if CP.Schedule and CP.Schedule.job then
+        CP.Schedule.job('low_balance', {
+            when = 'daily',
+            manual = true,
+            settings = { 'Cash.source', 'Cash.lowBalanceWarn' },
+            run = function() return Payments.lowBalanceToasts() end,
+        })
     end
 end)
 

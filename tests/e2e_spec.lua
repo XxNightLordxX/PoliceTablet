@@ -367,7 +367,9 @@ for src, pd in pairs(PD) do CID[src] = pd.citizenid end
 local loadedFiles = {}
 do
     local p = io.popen(
-        'cd ' .. H.root .. ' && find modules -name server.lua | sort'
+        'cd ' .. H.root .. ' && ls modules/system/storage.lua modules/adminkit/server.lua'
+            .. ' modules/system/migrations.lua modules/system/schedule.lua'
+            .. ' && find modules -name server.lua | sort'
             .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
@@ -493,6 +495,64 @@ local POLICE_MODEL = 'police3'
 -- The checkpoint report carries no vehicle class or model: the server checks the driver seat itself.
 local function CheckpointEv(k, veh)
     return { type = 'checkpoint', index = k, netId = ents[veh].net }
+end
+
+-- ============================================================================
+--                                     FM9
+-- ============================================================================
+-- EVERY TIMED JOB IN ONE ENGINE (ADMIN UI -> SYSTEM -> JOBS).
+-- The real resource registers each of its timed jobs through CP.Schedule.job; the Jobs list shows them all with
+-- when they run, and each one an admin may start runs now through server:admin:runJobNow, the same code as on its
+-- timer, with its result kept.
+
+do
+    local EXPECTED = {
+        { 'backup', 'daily', true },
+        { 'cleanup', 'daily', true },
+        { 'mission_calls', 'daily', true },
+        { 'pvp_pairs', 'daily', true },
+        { 'pvp_cases', 'daily', true },
+        { 'volunteer_strikes', 'daily', true },
+        { 'low_balance', 'daily', true },
+        { 'season_end', 'daily', true },
+        { 'bounty_week', 'weekly', false },
+        { 'board_week', 'weekly', false },
+        { 'board_month', 'monthly', false },
+        { 'cash_forfeiture', 'every', true },
+        { 'reward_forfeiture', 'every', true },
+    }
+    local view = Cb('admin:getJobs', 5, {})
+    local byId, n = {}, 0
+    for _, j in ipairs(view and view.jobs or {}) do
+        byId[j.id] = j
+        n = n + 1
+    end
+    H.eq(n, #EXPECTED, 'FM9: the Jobs list holds every timed job of the resource')
+    for _, want in ipairs(EXPECTED) do
+        local j = byId[want[1]]
+        H.ok(j and j.when == want[2] and j.manual == want[3],
+            ('FM9: %s is listed (%s, run now %s)'):format(want[1], want[2], tostring(want[3])))
+    end
+    H.eq(byId.backup and byId.backup.on, false, 'FM9: the daily backup ships off (Backups.daily = false)')
+    local ok, e = Act('server:admin:runJobNow', 5, { id = 'backup', reason = 'FM9' })
+    H.ok(not ok and e == 'err.job_off', 'FM9: an off job is not run now')
+    ok, e = Act('server:admin:runJobNow', 5, { id = 'board_week', reason = 'FM9' })
+    H.ok(not ok and e == 'err.job_not_manual', 'FM9: a weekly reset only runs at its own time')
+    ok, e = Act('server:admin:runJobNow', 5, { id = 'nope', reason = 'FM9' })
+    H.ok(not ok and e == 'err.job_unknown', 'FM9: an unknown job')
+    for _, want in ipairs(EXPECTED) do
+        local j = byId[want[1]]
+        if want[3] and j and j.on then
+            local okRun, d = Act('server:admin:runJobNow', 5, { id = want[1], reason = 'FM9' })
+            local after
+            for _, x in ipairs(okRun and d.jobs or {}) do if x.id == want[1] then after = x end end
+            H.ok(okRun and after and after.last and after.last.by == CID[5] and after.last.error == nil,
+                ('FM9: Run now runs %s through the engine (%s)'):format(want[1], tostring(okRun or d)))
+        end
+    end
+    local cash = byId.cash_forfeiture
+    H.ok(cash and cash.last and cash.last.by == nil and cash.nextRunAt == cash.last.at + 600,
+        'FM9: the cash forfeiture ran on its own 10 minute timer, and its next run is shown')
 end
 
 do

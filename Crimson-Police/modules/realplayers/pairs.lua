@@ -292,6 +292,7 @@ local function Prune(now)
     end
     Trim(now)
     if removed > 0 then CP.log(TAG, 'pair ledger clean-up removed %d row(s)', removed) end
+    return removed
 end
 
 -- A longer window after a settings change: the older rows are read once (in a thread).
@@ -987,8 +988,13 @@ CreateThread(function()
         CP.err(TAG, 'modules/integrations/qbx is missing: duty changes are not seen for real suspects')
     end
     if Opp.onTick then Opp.onTick(TrackContact) end
-    if CP.Schedule and CP.Schedule.onDaily then
-        CP.Schedule.onDaily(function() CreateThread(function() Prune(os.time()) end) end)
+    if CP.Schedule and CP.Schedule.job then
+        CP.Schedule.job('pvp_pairs', {
+            when = 'daily',
+            manual = true,
+            settings = { 'RealPlayers.pairLedgerDays' },
+            run = function(ctx) return Prune(ctx.at) end,
+        })
     end
     for _, src in ipairs(Q and Q.getOnlinePlayers and Q.getOnlinePlayers() or {}) do
         local info = Info(src)

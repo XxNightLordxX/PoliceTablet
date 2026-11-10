@@ -31,7 +31,7 @@ local DENIED = 'CREATE command denied to user \'cp\'@\'localhost\' for table `qb
 --             1. THE RUNNER (its own environment, the real Await)
 -- ============================================================================
 
-local RUNNER_SRC = ReadFile(H.root .. 'modules/migrations/server.lua')
+local RUNNER_SRC = ReadFile(H.root .. 'modules/system/migrations.lua')
 
 -- mysqlImpl.query.await answers the runner; returns the runner's CP, its error lines, connect() (oxmysql connects:
 -- MySQL.ready's callback) and the StopResource calls.

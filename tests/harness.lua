@@ -15,7 +15,7 @@
 -- Storage modes (CP_TEST_STORAGE, H.storage; tests/run.lua --storage=... sets it for every spec):
 --   database (default)  as above: MySQL and H.sql go to MariaDB.
 --   files               database-off mode: H.boot sets Config.Database.enabled = false and loads the real
---                       modules/storage files, so every module query goes through CP.Storage.MemSQL and a temporary
+--                       modules/system storage files, so every module query goes through CP.Storage.MemSQL and a temporary
 --                       saves folder (H.savesDir(), built by the real migrations runner on the engine in
 --                       H.resetDatabase / H.resetSaves). H.sql goes to the same engine; statements that name only
 --                       other resources' tables (mdt_dispatch) go to MariaDB, as the real oxmysql would serve them.
@@ -655,7 +655,7 @@ local function Memsql()
         }
     end
     if not (CP.Storage and CP.Storage.MemSQL and CP.Storage.MemSQL.new) then
-        dofile(ROOT .. 'modules/storage/memsql.lua')
+        dofile(ROOT .. 'modules/system/memsql.lua')
     end
     return CP.Storage.MemSQL
 end
@@ -670,7 +670,7 @@ local function WithClock(ts, fn, ...)
     return table.unpack(res, 1, res.n)
 end
 
--- The migrations runner's statement split (modules/migrations/server.lua).
+-- The migrations runner's statement split (modules/system/migrations.lua).
 local function SplitStatements(sql)
     local statements, current = {}, {}
     for line in (sql .. '\n'):gmatch('(.-)\r?\n') do
@@ -767,7 +767,7 @@ local function SpecParams(params)
     return copy
 end
 
--- The real migrations runner (modules/migrations/server.lua) on a MySQL table, before H.boot: its own CP,
+-- The real migrations runner (modules/system/migrations.lua) on a MySQL table, before H.boot: its own CP,
 -- no console lines. Fails when the runner does not reach "ready".
 local function RunMigrations(mysqlImpl)
     local errs = {}
@@ -801,7 +801,7 @@ local function RunMigrations(mysqlImpl)
         f:close()
         return s
     end
-    local chunk = assert(loadfile(ROOT .. 'modules/migrations/server.lua', 't', env))
+    local chunk = assert(loadfile(ROOT .. 'modules/system/migrations.lua', 't', env))
     chunk()
     if not (env.CP.Migrations and env.CP.Migrations.isReady()) then
         error('the migrations runner failed: ' .. table.concat(errs, ' | '), 2)
@@ -811,7 +811,7 @@ end
 -- ============================================================================
 --                      FILES MODE (CP_TEST_STORAGE=files)
 -- ============================================================================
--- Runs Crimson-Police with Config.Database.enabled = false: H.boot loads modules/storage, which swaps MySQL
+-- Runs Crimson-Police with Config.Database.enabled = false: H.boot loads modules/system/storage.lua, which swaps MySQL
 -- for the saves folder engine. The specs' own statements (H.sql) go to the same engine and come back typed
 -- like oxmysql; statements on another resource's table (mdt_dispatch fixtures) still go to MariaDB, as the
 -- real oxmysql would serve them.
@@ -2678,7 +2678,7 @@ function H.load(rel)
     local r = chunk()
     -- the specs call the engine synchronously: a long SELECT does not give the (fake) server its turn here
     -- (tests/memsql_spec.lua 9.14 checks the slicing itself)
-    if rel == 'modules/storage/server.lua' and CP and CP.Storage and CP.Storage.db then CP.Storage.db.slice = nil end
+    if rel == 'modules/system/storage.lua' and CP and CP.Storage and CP.Storage.db then CP.Storage.db.slice = nil end
     return r
 end
 
@@ -3148,8 +3148,8 @@ function H.boot(opts)
         local fh = io.open(H.savesDir() .. '/_tables.json', 'r')
         if fh then fh:close() else H.resetSaves() end
         -- what fxmanifest does: the storage files load right after @oxmysql/lib/MySQL.lua
-        H.load('modules/storage/memsql.lua')
-        H.load('modules/storage/server.lua')
+        H.load('modules/system/memsql.lua')
+        H.load('modules/system/storage.lua')
         H.filesMySQL = _G.MySQL
         preBootDb = nil
     end
@@ -3172,12 +3172,12 @@ function H.boot(opts)
     return H
 end
 
--- The migration files in order, read from the FILES list of modules/migrations/server.lua (the runner's own list).
+-- The migration files in order, read from the FILES list of modules/system/migrations.lua (the runner's own list).
 function H.migrationFiles()
-    local f = assert(io.open(ROOT .. 'modules/migrations/server.lua', 'r'))
+    local f = assert(io.open(ROOT .. 'modules/system/migrations.lua', 'r'))
     local src = f:read('a')
     f:close()
-    local body = assert(src:match('local FILES = (%b{})'), 'modules/migrations/server.lua has no FILES list')
+    local body = assert(src:match('local FILES = (%b{})'), 'modules/system/migrations.lua has no FILES list')
     local out = {}
     for name in body:gmatch('\'([^\']+%.sql)\'') do out[#out + 1] = name end
     return out

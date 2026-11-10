@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tools/gen_collation.py - prints the utf8mb4_general_ci tables of modules/storage/memsql.lua.
+"""tools/gen_collation.py - prints the utf8mb4_general_ci tables of modules/system/memsql.lua.
 
 The saves folder engine compares text like MariaDB's utf8mb4_general_ci: every character of the Basic
 Multilingual Plane has one weight, and LOWER() maps every character to one character. Both tables are

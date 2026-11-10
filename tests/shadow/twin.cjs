@@ -4,7 +4,7 @@
 // options (supportBigNumbers, jsonStrings, flags), its typeCast (TINYINT(1) -> boolean, DATETIME/DATE ->
 // milliseconds), its parseArguments (missing parameters padded with NULL, too many refused) and its
 // parseResponse (query / single / scalar / insert / update), and it formats errors like oxmysql's logError.
-// The harness compares these answers with the saves folder engine (modules/storage/memsql.lua).
+// The harness compares these answers with the saves folder engine (modules/system/memsql.lua).
 //
 //   node tests/shadow/twin.cjs <fifo>    requests: one JSON object per line on stdin
 //                                         answers: one JSON object per line written to <fifo>

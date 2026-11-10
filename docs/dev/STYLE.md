@@ -282,7 +282,7 @@ These are the jobs it does around the formatters:
   check field order against it. Built-in and builder-written missions should look alike.
 - **The two CSS class prefixes with an underscore** (`builder_client-`, `run_ui-`) stay, because tests
   check them. New prefixes are kebab-case.
-- **`modules/storage/memsql.lua` keeps its stdlib aliases** (`local sformat = string.format`, ...).
+- **`modules/system/memsql.lua` keeps its stdlib aliases** (`local sformat = string.format`, ...).
   They are a speed measure in the SQL engine's hot paths, not a style choice.
 - **10 file-level local functions keep camelCase** because their PascalCase name is already taken: it is
   a native (`removeBlip` in two files, `deleteEntity`, `registerCommand`) or another name in the same

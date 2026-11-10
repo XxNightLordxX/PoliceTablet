@@ -84,7 +84,7 @@ export const ADMIN_JUMPS: AdminJump[] = [
     { screen: 'admin_system', params: { tab: 'webhooks' }, label: 'sysadmin.ui.tab.webhooks' },
     { screen: 'admin_system', params: { tab: 'problems' }, label: 'sysadmin.ui.tab.problems' },
     { screen: 'admin_system', params: { tab: 'integrations' }, label: 'sysadmin.ui.tab.integrations' },
-    { screen: 'admin_system', params: { tab: 'cleanup' }, label: 'sysadmin.ui.tab.cleanup' },
+    { screen: 'admin_system', params: { tab: 'jobs' }, label: 'sysadmin.ui.tab.jobs' },
 ];
 
 // True when every typed word is in the words (any case). Empty text = no match.

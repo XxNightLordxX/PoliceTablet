@@ -117,7 +117,7 @@ CP.Missions = {
     isEnabled = function() return true end,
 }
 
-H.load('modules/schedule/server.lua')
+H.load('modules/system/schedule.lua')
 H.load('modules/draw/server.lua')
 local D = CP.Draw
 

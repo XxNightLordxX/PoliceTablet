@@ -1,5 +1,5 @@
--- CP.Storage.MemSQL (modules/storage/memsql.lua): the saves folder engine behind database-off mode
--- (Config.Database.enabled = false) and CP.Storage (modules/storage/server.lua).
+-- CP.Storage.MemSQL (modules/system/memsql.lua): the saves folder engine behind database-off mode
+-- (Config.Database.enabled = false) and CP.Storage (modules/system/storage.lua).
 
 --   1. constructs: every SQL construct family of the inventory, run in order through the MySQL drop-in. The
 --      expected values were produced by running the very same statements, in the same order, on MariaDB 10.11
@@ -28,7 +28,7 @@
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
-if not (CP.Storage and CP.Storage.MemSQL and CP.Storage.MemSQL.new) then H.load('modules/storage/memsql.lua') end
+if not (CP.Storage and CP.Storage.MemSQL and CP.Storage.MemSQL.new) then H.load('modules/system/memsql.lua') end
 local M = CP.Storage.MemSQL
 local cjson = require('cjson')
 
@@ -2604,7 +2604,7 @@ do
         CP.Storage = { MemSQL = M }   -- as memsql.lua leaves it (fxmanifest loads it first)
         _G.MySQL = real or savedMySQL
         Config.Database = cfg
-        H.load('modules/storage/server.lua')
+        H.load('modules/system/storage.lua')
         return CP.Storage
     end
     local st = LoadStorage({ enabled = true, folder = 'saves' })
@@ -2637,7 +2637,7 @@ do
     } }, { __index = savedMySQL })
     H.execute(('mkdir -p \'%s/runner\''):format(TMP))
     st = LoadStorage({ enabled = false, folder = TMP .. '/runner' }, usedDb)
-    H.load('modules/migrations/server.lua')
+    H.load('modules/system/migrations.lua')
     _G.print = realPrint
     H.ok(CP.Migrations.isReady(), 'the migrations runner finished')
     H.eq(CP.Migrations.version(), H.migrationVersion(), 'at the version of the last file in FILES')
@@ -2669,7 +2669,7 @@ do
     lines = {}
     _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
     st = LoadStorage({ enabled = false, folder = TMP .. '/runner' })
-    H.load('modules/migrations/server.lua')
+    H.load('modules/system/migrations.lua')
     _G.print = realPrint
     H.ok(not table.concat(lines, '\n'):find('applied migration', 1, true), 'a restart applies nothing twice')
     H.ok(not table.concat(lines, '\n'):find(' is new, so ', 1, true),
@@ -2687,7 +2687,7 @@ do
             CP.Storage = { MemSQL = M }
             _G.MySQL = real
             Config.Database = { enabled = false, folder = folder }
-            H.load('modules/storage/server.lua')
+            H.load('modules/system/storage.lua')
             _G.print = realPrint
             _G.MySQL = savedMySQL
             return table.concat(out, '\n'), folder
@@ -2742,7 +2742,7 @@ do
     st = LoadStorage({ enabled = true, folder = TMP .. '/runner' })
     H.eq(st.hasSavedData(), true, 'hasSavedData() sees the saves folder in database mode')
     _G.MySQL = M.shim(M.new():load(), { resource = 'Crimson-Police' })
-    H.load('modules/migrations/server.lua')
+    H.load('modules/system/migrations.lua')
     _G.print = realPrint
     local joinedDb = table.concat(lines, '\n')
     H.ok(joinedDb:find(('Crimson-Police database at version %d'):format(H.migrationVersion()), 1, true) ~= nil,
@@ -2978,7 +2978,7 @@ if arg[1] == 'write' then
 end
 local r = d:exec("SELECT DATE_FORMAT(last_complete, '%%Y-%%m-%%d'), DATE_FORMAT(grace_week, '%%Y-%%m-%%d'), UNIX_TIMESTAMP(at) FROM cp_officers").rows[1]
 print(r[1] .. ' ' .. r[2] .. ' ' .. r[3])
-]]):format(H.root .. 'modules/storage/memsql.lua', dir)
+]]):format(H.root .. 'modules/system/memsql.lua', dir)
     )
     local function Run(tz, mode)
         local p = io.popen(('TZ=%s lua5.4 \'%s\' %s 2>&1'):format(tz, script, mode or ''))
@@ -3748,7 +3748,7 @@ do
     os.execute(('rm -rf \'%s\' && cp -a \'%s\' \'%s\''):format(dir, base, dir))
     CP.Storage = { MemSQL = M }
     Config.Database = { enabled = false, folder = dir }
-    dofile(H.root .. 'modules/storage/server.lua')
+    dofile(H.root .. 'modules/system/storage.lua')
     local st = CP.Storage
     local sl = st.db and st.db.slice
     H.ok(sl and sl.wait == Wait and sl.ms == 4 and sl.saveMs == st.saveTurnMs,
@@ -4038,7 +4038,7 @@ do
 end
 
 -- 9.13 one global table: the engine is CP.Storage.MemSQL
-H.eq(CP.MemSQL, nil, 'modules/storage defines no CP.MemSQL (CP.Storage is its one global table)')
+H.eq(CP.MemSQL, nil, 'modules/system/storage.lua defines no CP.MemSQL (CP.Storage is its one global table)')
 H.eq(CP.Storage.MemSQL, M, 'the engine is CP.Storage.MemSQL')
 
 os.execute(('rm -rf \'%s\''):format(TMP))

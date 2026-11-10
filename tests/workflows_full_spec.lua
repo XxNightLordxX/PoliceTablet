@@ -299,7 +299,9 @@ local function Secs(n) Adv(n * 1000, 500) end
 local loadedFiles = {}
 do
     local p = io.popen(
-        'cd ' .. H.root .. ' && find modules -name server.lua | sort'
+        'cd ' .. H.root .. ' && ls modules/system/storage.lua modules/adminkit/server.lua'
+            .. ' modules/system/migrations.lua modules/system/schedule.lua'
+            .. ' && find modules -name server.lua | sort'
             .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )

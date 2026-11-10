@@ -1,6 +1,6 @@
 -- Full admin control, economy: the payments ledger, resolving stuck payments, pay now and retries, the money
 -- tools that ship off, payout unlock and Adjust all, the archive and forfeiture jobs under the busy lock,
--- maintenance, the clean-up and the cash health lines.
+-- maintenance, the clean-up job (System -> Jobs) and the cash health lines.
 
 local H = dofile('tests/harness.lua')
 local cjson = require('cjson')
@@ -216,7 +216,7 @@ for _, m in ipairs({
     'modules/cash/server.lua',
     'modules/payouts/server.lua',
     'modules/payments/server.lua',
-    'modules/schedule/server.lua',
+    'modules/system/schedule.lua',
 }) do
     H.load(m)
 end
@@ -1236,28 +1236,35 @@ do
 end
 
 -- ============================================================================
---                                 16. CLEAN-UP
+--                        16. CLEAN-UP (SYSTEM -> JOBS)
 -- ============================================================================
 
 do
-    local d, e = Cb('admin:getCleanup', 2, {})
+    local function Job(view, id)
+        for _, j in ipairs(view and view.jobs or {}) do if j.id == id then return j end end
+        return nil
+    end
+    local d, e = Cb('admin:getJobs', 2, {})
     H.eq(e, 'err.no_permission', 'admins only')
     H.sql(
         'INSERT INTO cp_admin_requests (request_id, action, actor, created_at) VALUES (?, \'x\', \'y\', FROM_UNIXTIME(?))',
         { 'ffffffff-0000-4000-8000-000000000001', H.time - 8 * 86400 })
     Kit.lock('job', { kind = 'bulkVoid' })
     local ok
-    ok, e = Act('server:admin:runCleanupNow', 1, { reason = 'test' })
+    ok, e = Act('server:admin:runJobNow', 1, { id = 'cleanup', reason = 'test' })
     H.ok(not ok and e == 'err.admin_busy', 'Run now is refused while a long job runs')
     Kit.unlock('job')
-    ok, e = Act('server:admin:runCleanupNow', 2, { reason = 'test' })
+    ok, e = Act('server:admin:runJobNow', 2, { id = 'cleanup', reason = 'test' })
     H.eq(e, 'err.no_permission', 'a supervisor can\'t run it')
-    ok, d = Act('server:admin:runCleanupNow', 1, { reason = 'test' })
-    H.ok(ok and d.last and d.last.requestsDeleted >= 1 and d.last.by == 'ADM00001', 'Run now: the result is kept')
-    H.ok(LastAudit('cleanupRun') ~= nil, 'audited')
-    d = Cb('admin:getCleanup', 1, {})
-    H.ok(d and d.last and d.nextRunAt > H.time and d.requestDays == 7, 'admin:getCleanup: last run and next run')
-    ok, e = Act('server:admin:runCleanupNow', 3, { reason = 'again' })
+    ok, d = Act('server:admin:runJobNow', 1, { id = 'cleanup', reason = 'test' })
+    local c = Job(d, 'cleanup')
+    H.ok(ok and c and c.last and c.last.result.requestsDeleted >= 1 and c.last.by == 'ADM00001',
+        'Run now: the result is kept')
+    H.ok(LastAudit('jobRun') ~= nil, 'audited')
+    d = Cb('admin:getJobs', 1, {})
+    c = Job(d, 'cleanup')
+    H.ok(c and c.last and c.nextRunAt > H.time and d.requestDays == 7, 'admin:getJobs: last run and next run')
+    ok, e = Act('server:admin:runJobNow', 3, { id = 'cleanup', reason = 'again' })
     H.eq(e, 'err.rate_limited', 'once per 10 minutes, whichever admin asks')
 end
 

@@ -64,7 +64,7 @@ local ADMIN_ONLY_LIST = {
     'storageAdmin',       -- storage status, copy and switch, backups and restore
     'playerSupport',      -- check access, give the tablet item, release a stuck screen
     'recordMove',         -- move a re-created character's history
-    'cleanup',            -- the nightly clean-up: status and run now
+    'jobs',               -- the timed jobs (System -> Jobs): the list and Run now
 }
 local ADMIN_ONLY = {}
 for _, a in ipairs(ADMIN_ONLY_LIST) do ADMIN_ONLY[a] = true end

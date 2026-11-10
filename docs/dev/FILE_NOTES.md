@@ -64,7 +64,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/livectl/server.lua`: CP.LiveCtl (server): the Admin UI's Live screen (every live run and unit), an officer's run state with the anti-farm overrides (cooldown clears, extra runs, another boss attempt, a free abandon made normal) and today's events.
 - `Crimson-Police/modules/markers/client.lua`: CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre)
 - `Crimson-Police/modules/markers/server.lua`: CP.Markers (server): every part of a mission besides its objective on the officers' maps (Config.Markers.parts).
-- `Crimson-Police/modules/migrations/server.lua`: Applies sql/migrations/NNN_*.sql in order on start.
 - `Crimson-Police/modules/missions/client.lua`: CP.Missions (client): the mission definitions sent by the server.
 - `Crimson-Police/modules/missions/server.lua`: CP.Missions: the mission registry (loader, normaliser, validator).
 - `Crimson-Police/modules/npc/client.lua`: CP.Npc (client): host-side NPC AI helpers, "Cuff suspect" and the police action options (contacts, custody).
@@ -107,13 +106,10 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/runs/client.lua`: CP.Runs (client): this player's side of the run engine.
 - `Crimson-Police/modules/runs/server.lua`: CP.Runs (server): the run engine.
 - `Crimson-Police/modules/scaling/server.lua`: CP.Scaling: tiers by participant count and scaled mission counts.
-- `Crimson-Police/modules/schedule/server.lua`: CP.Schedule: server-time calendar, reset boundaries and the retention job.
 - `Crimson-Police/modules/settings/client.lua`: CP.Settings (client): the settings an admin changed in game, sent by the server at start and after every change, put over this client's copy of config.lua so client code reads the same values as the server.
 - `Crimson-Police/modules/settings/server.lua`: CP.Settings (server): settings an admin changes in game (Admin UI → Settings and the mission switches), saved in cp_settings over the values of config/config.lua and config/blocks.lua, and sent to every client.
 - `Crimson-Police/modules/spawn/client.lua`: CP.Spawn (client): what this officer's game can see of the points where a mission's people may appear (the spawn director's hidden points, Config.Spawning.preferHidden), where a person who walks up to a car appears (contactRing), whether the ground at a point is fit to put a person, a vehicle or an object on (Config.Spawning.ground), the placer.
 - `Crimson-Police/modules/spawn/server.lua`: CP.Spawn (server): every new mission entity waits frozen where the server made it until the game of an officer of its run has put it on the ground (the placer, modules/spawn/client.lua); a point that game reports bad is swapped for another point the mission may use there (Config.Spawning.place, placeTimeoutMs, retries, onTimeout).
-- `Crimson-Police/modules/storage/memsql.lua`: CP.Storage.MemSQL: the SQL engine and the saves folder behind "database off" (Config.Database.enabled = false). fxmanifest loads it before every other server module; it only defines functions. modules/storage/server.lua decides whether it is used.
-- `Crimson-Police/modules/storage/server.lua`: CP.Storage: where Crimson-Police keeps its data (Config.Database).
 - `Crimson-Police/modules/supawards/server.lua`: CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
 - `Crimson-Police/modules/supervisor/fieldtraining.lua`: CP.FieldTraining (server): field training (Config.Recognition.fieldTraining), part of the supervisor module.
 - `Crimson-Police/modules/supervisor/missionban.lua`: CP.MissionBan (server): a supervisor's temporary mission ban of one officer (the Mission control
@@ -121,6 +117,10 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/supervisor/restrictions.lua`: CP.Restrictions (server): the one restrictions list.
 - `Crimson-Police/modules/suptoday/server.lua`: CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday, UI4).
 - `Crimson-Police/modules/sysadmin/server.lua`: CP.Sysadmin (server): Admin UI → System (storage, backups, webhooks, problems, integrations), Departments (add, turn off, delete, logos, desks), Settings positions and Officers → Support (check access, tablet item, stuck screen).
+- `Crimson-Police/modules/system/memsql.lua`: CP.Storage.MemSQL: the SQL engine and the saves folder behind "database off" (Config.Database.enabled = false). fxmanifest loads it before every other server module; it only defines functions. modules/system/storage.lua decides whether it is used.
+- `Crimson-Police/modules/system/migrations.lua`: Applies sql/migrations/NNN_*.sql in order on start.
+- `Crimson-Police/modules/system/schedule.lua`: CP.Schedule: server-time calendar, reset boundaries and the timed jobs (Admin UI -> System -> Jobs).
+- `Crimson-Police/modules/system/storage.lua`: CP.Storage: where Crimson-Police keeps its data (Config.Database).
 - `Crimson-Police/modules/tablet/client.lua`: CP.Tablet (client): the NUI.
 - `Crimson-Police/modules/tablet/server.lua`: CP.Tablet (server): sessions for the three UIs, toasts, live pushes, the Admin UI opener and the department logo checks.
 - `Crimson-Police/modules/teams/client/operations.lua`: CP.Operations (client): the Cross-Department Mission toast.
@@ -179,6 +179,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/extraGrants.walk.ts`: Admin UI -> Permissions -> Extra grants against the browser mocks (node walk.mjs, a gate step): the grantable powers and the saved grants from admin:getPermissions, and the helpers that build the setting Permissions.grants one change at a time.
 - `Crimson-Police/web/src/admin/components/features.ts`: Admin UI -> Settings -> Features: every feature switch (SettingsData.features, modules/settings Play.features) with the setting it writes, grouped by section of play.
 - `Crimson-Police/web/src/admin/components/features.walk.ts`: Settings -> Features walked against the browser mocks (node walk.mjs, a gate step): each feature switch by section of play (NPC missions, Player vs police, Police teamwork, money, the server) with the setting it writes (a risky one asks first, a money one keeps its typed ENABLE).
+- `Crimson-Police/web/src/admin/components/jobs.walk.ts`: Admin UI · System → Jobs walked against the browser mocks (node walk.mjs, a gate step): one list of every timed job with when it runs, its settings and its last result; Run now runs a job that allows it (with a reason) and is refused for a week reset or a job switched off; the global search jumps to the tab.
 - `Crimson-Police/web/src/admin/components/kit/DateRangeField.tsx`: DateRangeField: a from / to pair of dates (YYYY-MM-DD).
 - `Crimson-Police/web/src/admin/components/kit/JobProgress.tsx`: JobProgress: a bulk job's progress from the 'adminjob' push (admin players only), for one job id or the latest.
 - `Crimson-Police/web/src/admin/components/kit/MoneyEffect.tsx`: MoneyEffect: the money an action moves, line by line (the amount the server computed, never one typed here).
@@ -220,7 +221,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/screens/Rewards.tsx`: Admin UI · Money → Rewards (a tab of admin_money): every feature that pays.
 - `Crimson-Police/web/src/admin/screens/Seasons.tsx`: Admin UI · Seasons & Challenge (screen key 'admin_seasons', callback admin:getSeasons, actions server:admin:startSeason { name }, server:admin:endSeason, server:admin:overrideBounty { objective }).
 - `Crimson-Police/web/src/admin/screens/Settings.tsx`: Admin UI · Settings (screen key 'admin_settings'): every setting of config/config.lua and config/blocks.lua, changed in game.
-- `Crimson-Police/web/src/admin/screens/System.tsx`: Admin UI · System (screen key 'admin_system'): storage (status, copy, switch), backups and restore, webhook states (read only), recent problems and the other resources.
+- `Crimson-Police/web/src/admin/screens/System.tsx`: Admin UI · System (screen key 'admin_system'): storage (status, copy, switch), backups and restore, webhook states (read only), recent problems, the other resources and the timed jobs.
 - `Crimson-Police/web/src/admin/screens/Testing.tsx`: Admin UI · Testing (screen key 'admin_testing').
 - `Crimson-Police/web/src/builder/BlockPanels.tsx`: One settings panel per objective block (SPEC "Mission Builder → Block settings"),
 - `Crimson-Police/web/src/builder/BuilderEditor.tsx`: The Mission Builder editor for one mission: header (name, lifecycle, version,
@@ -293,12 +294,12 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/main.tsx`: Every stylesheet first, in its fixed order (styles/order.ts)
 - `Crimson-Police/web/src/mocks/DevPanel.tsx`: Browser dev mode only (App lazy-loads this file when isEnvBrowser(); it never runs in FiveM).
 - `Crimson-Police/web/src/mocks/Gallery.tsx`: Browser dev mode only: a component gallery inside the tablet frame (DevPanel → Gallery, or ?gallery=1).
-- `Crimson-Police/web/src/mocks/admin_economy.mock.ts`: Browser mocks for full admin control: Payments, department funds, Adjust all and the clean-up. ?money=on shows every money tool switched on (they ship off).
+- `Crimson-Police/web/src/mocks/admin_economy.mock.ts`: Browser mocks for full admin control: Payments, department funds, and Adjust all. ?money=on shows every money tool switched on (they ship off).
 - `Crimson-Police/web/src/mocks/admin_live.mock.ts`: Browser mocks for full admin control: Live runs, units and anti-farm overrides (modules/livectl/server.lua).
 - `Crimson-Police/web/src/mocks/admin_missions.mock.ts`: Browser mocks for full admin control: Missions and the Mission Builder (edited built-ins, Quick edit, versions, Copy as Lua and Import, the load result, history, stats, the Deleted list, test results).
 - `Crimson-Police/web/src/mocks/admin_officers.mock.ts`: Browser mocks for full admin control: Officers, Leaderboards and Seasons (modules/review/corrections, the officers tools of modules/progression: profile, scoring and goals, the recognition and season tools of leaderboard and challenge).
 - `Crimson-Police/web/src/mocks/admin_rs.mock.ts`: Browser mocks for Admin UI · Real suspects: modules/realplayers/staff.lua. ?rsOff in the browser answers as with Config.RealPlayers.liveCrime.enabled and Config.RealPlayers.volunteer.enabled both false.
-- `Crimson-Police/web/src/mocks/admin_system.mock.ts`: Browser mocks for full admin control, System: storage, backups, webhooks, problems, integrations, departments added in game, desks and Support (the shapes of modules/sysadmin).
+- `Crimson-Police/web/src/mocks/admin_system.mock.ts`: Browser mocks for full admin control, System: storage, backups, webhooks, problems, integrations, timed jobs, departments added in game, desks and Support (the shapes of modules/sysadmin).
 - `Crimson-Police/web/src/mocks/boards.mock.ts`: Browser mocks for the boards slice (Leaderboard, Department Challenge, Profile & History, Admin Seasons &
 - `Crimson-Police/web/src/mocks/builder_client.mock.ts`: Browser mocks for the builder client slice (modules/builder/client.lua and the builder screens).
 - `Crimson-Police/web/src/mocks/builder_server.mock.ts`: Browser mocks for the Mission Builder server (modules/builder/server.lua, docs/dev/ARCHITECTURE.md §5.28):
@@ -446,7 +447,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/admin_backup_spec.lua`: Full admin control, System → Backups: a backup holds every table and the resource files, keep N never prunes the newest or the latest automatic one, and a restore moves money forward only (paid stays paid, given stays given, money rows made after the backup are kept), keeps the audit log and the money switches, and raises no id twice.
 - `tests/admin_boards_spec.lua`: Full admin control, boards: keeping an officer off the boards, past windows, ranking by any metric,
 - `tests/admin_control_e2e_spec.lua`: Full admin control, end to end: the packages together on the real server side.
-- `tests/admin_economy_spec.lua`: Full admin control, economy: the payments ledger, resolving stuck payments, pay now and retries, the money tools that ship off, payout unlock and Adjust all, the archive and forfeiture jobs under the busy lock, maintenance, the clean-up and the cash health lines.
+- `tests/admin_economy_spec.lua`: Full admin control, economy: the payments ledger, resolving stuck payments, pay now and retries, the money tools that ship off, payout unlock and Adjust all, the archive and forfeiture jobs under the busy lock, maintenance, the clean-up job (System -> Jobs) and the cash health lines.
 - `tests/admin_features_spec.lua`: Admin UI split by play, (the owner: "ensure the admin panel separates npc stuff and player player stuff
 - `tests/admin_home_spec.lua`: Admin UI -> Home, the dashboard: admin:getHome answers everything Home shows in one request: live now (officers on
 - `tests/admin_lists_spec.lua`: The long Admin UI lists: Config.AdminUi.pageSize (rows per page, 0 = each list as before) read through CP.AdminKit, and the Player suspects cases a page at a time.
@@ -527,6 +528,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/int_engine_spec.lua`: Integration of the engine group: the REAL modules missions, draw, scaling, schedule, events, runs and npc with every REAL block, on the REAL built-in mission files, with stubs only for the modules outside the group (access, qbx, alerts, route, payouts, scoring, cash, anticheat, tablet ...).
 - `tests/int_services_spec.lua`: Integration of the services group: the REAL modules scoring, goals, cash, payouts, leaderboard, challenge, admin, disputes and anticheat running together (plus the real permissions, scaling and schedule), on stubs of CP.Qbx, CP.Access, CP.Tablet, CP.Banking, CP.Missions and CP.Runs.
 - `tests/int_web_spec.lua`: Integration checks for the web group (web/src outside the Mission Builder).
+- `tests/jobs_spec.lua`: FM9: one jobs engine (modules/system/schedule.lua): every timed job of the resource registers through CP.Schedule.job, the daily, weekly and monthly ones run at their boundary in their order, a job on its own timer runs through its runner, each keeps its last result, and Admin UI -> System -> Jobs lists them with Run now.
 - `tests/lib_spec.lua`: The shared helper library (shared/lib.lua and CP.U.toSrc): sources, the store wait, toasts and pushes, export calls, one-at-a-time locks and per-day caps, with the races two requests sent at once used to win.
 - `tests/limit_controls_spec.lua`: The no-repeat rule, the hourly cap and the daily cap as Mission controls: noRepeat, hourlyCap and
 - `tests/live_claim_spec.lua`: The live claim and the case: the live_crime engine mission in its own registry (CP.Missions.registerEngine), CP.LiveCrime.missionFor / claimCheck, the run:created hook that opens the CP.Opponents case, the run:ended hook that writes the pair rows, and CP.Runs.create opts.live.
@@ -545,7 +547,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/markers_parts_spec.lua`: CP.Markers (modules/markers/client.lua): the extra parts of a mission on the minimap and the big map, in the same
 - `tests/markers_server_spec.lua`: CP.Markers (modules/markers/server.lua): every part of a mission besides its objective, the extra parts shipped off.
 - `tests/markers_spec.lua`: CP.Markers (modules/markers/client.lua): the objective pointer on an officer's map, one GPS line at most, cleared at every stop; and its hooks in modules/runs/client.lua.
-- `tests/memsql_spec.lua`: CP.Storage.MemSQL (modules/storage/memsql.lua): the saves folder engine behind database-off mode (Config.Database.enabled = false) and CP.Storage (modules/storage/server.lua).
+- `tests/memsql_spec.lua`: CP.Storage.MemSQL (modules/system/memsql.lua): the saves folder engine behind database-off mode (Config.Database.enabled = false) and CP.Storage (modules/system/storage.lua).
 - `tests/mission_ban_spec.lua`: Mission ban: a supervisor bars one officer of his department (a lower grade, never himself) from taking
 - `tests/mission_controls_spec.lua`: Mission controls core: CP.DeptControls (register, bounds, get, snapshot, set, reset, view), the six callbacks and actions, the master switch, the grants, the change wait, the self rule and the audit.
 - `tests/mission_reader_spec.lua`: The mission file reader (CP.U.parseMissionFile, shared/utils.lua): mission files are data, read and never run.

@@ -689,7 +689,7 @@ old layout switches and where each one lives now.
 | Review | **Review** | One queue of flagged runs and disputes with a Type column and a filter (approve, void or reject), profiles waiting (pictures, bios, reports, banned words) and corrections (with Undo) |
 | | **Activity log** | Every supervisor and admin action, with filters and a CSV export |
 | System | **Settings** | Every setting with its description; Presets (Casual, Serious RP, Go-live: a preview, then one click), Features, History. The gear over each screen opens only its settings |
-| | **Server health** | Storage, backups, webhook states, recent problems, the other resources and the nightly clean-up |
+| | **Server health** | Storage, backups, webhook states, recent problems, the other resources and the timed jobs |
 
 ---
 

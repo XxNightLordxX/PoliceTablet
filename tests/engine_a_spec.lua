@@ -296,7 +296,7 @@ CP.Builder = {
 -- ============================================================================
 
 H.load('modules/scaling/server.lua')
-H.load('modules/schedule/server.lua')
+H.load('modules/system/schedule.lua')
 H.load('modules/progression/events.lua')
 H.load('modules/missions/server.lua')
 H.load('modules/draw/server.lua')
@@ -433,13 +433,25 @@ do
     Config.Leaderboard.weekStartsOn = 'monday'
     Config.Time.resetHour = 0
 
-    -- boundary listeners: fired once when the boundary passes, never on start
+    -- timed jobs: fired once when the boundary passes, never on start
     local daily, weekly, monthly = {}, {}, {}
-    S.onDaily(function(k) daily[#daily + 1] = k end)
-    S.onWeekly(function(k, prev) weekly[#weekly + 1] = { k, prev } end)
-    S.onMonthly(function(ts) monthly[#monthly + 1] = ts end)
-    S.onDaily(function() error('listener failure is contained') end)
-    H.eq(S.onDaily('not a function'), false, 'bad listener refused')
+    S.job('t_daily', {
+        when = 'daily',
+        run = function(ctx) daily[#daily + 1] = ctx.day end,
+    })
+    S.job('t_weekly', {
+        when = 'weekly',
+        run = function(ctx) weekly[#weekly + 1] = { ctx.week, ctx.prevWeekStart } end,
+    })
+    S.job('t_monthly', {
+        when = 'monthly',
+        run = function(ctx) monthly[#monthly + 1] = ctx.monthStart end,
+    })
+    S.job('t_fails', {
+        when = 'daily',
+        run = function() error('job failure is contained') end,
+    })
+    H.eq(S.job('t_bad', { when = 'daily', run = 'not a function' }), false, 'bad job refused')
     local f = S._check(T0 + 60)
     H.ok(not f.daily and not f.weekly and not f.monthly,
         'nothing fires within the same day (start was recorded at load)')
@@ -518,11 +530,11 @@ do
     H.eq(res.auditDeleted, 0, 'auditDays 0 = keep')
     Config.Retention.runArchiveMonths = 12
     Config.Retention.auditDays = 180
-    -- the daily reset runs the retention job (in its own thread, after the daily listeners)
+    -- the daily reset runs the clean-up job (in the daily jobs' thread, last)
     local nBefore = #daily
     f = S._check(T0 + 86400)
     H.ok(f.daily, 'next day fires')
-    H.eq(#daily, nBefore + 1, 'daily listeners fired')
+    H.eq(#daily, nBefore + 1, 'daily jobs ran')
     H.eq(
         H.sql('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE created_at < FROM_UNIXTIME(?)', { T0 - 300 * 86400 })[1].n,
         0, 'the old row was archived at the daily reset')

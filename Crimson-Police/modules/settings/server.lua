@@ -198,6 +198,7 @@ Play.groups = {
             'performance',
             'time',
             'retention',
+            'timed_jobs',
             'backups',
             'admin_test_mode',
             'other',
@@ -592,7 +593,7 @@ Play.screens = {
     admin_money = { 'cash', 'payout_editing', 'item_rewards', 'feature_rewards' },
     admin_review = { 'disputes', 'anti_exploit' },
     admin_audit = { 'retention' },
-    admin_system = { 'storage', 'performance', 'time', 'retention', 'backups', 'other' },
+    admin_system = { 'storage', 'performance', 'time', 'retention', 'timed_jobs', 'backups', 'other' },
 }
 Settings._screens = Play.screens
 
@@ -872,6 +873,7 @@ local RANGES = {
     ['Cash.manualDailyLimit'] = { 0, 10000000 },
     ['Cash.lowBalanceWarn'] = { 0, 100000000 },
     ['Backups.keep'] = { 1, 100 },
+    ['Jobs.runNowMinutes'] = { 1, 1440 },
     -- how much slower the idle and far loops run (Config.Performance): 1 = shipped pace, 4 = a quarter as often
     ['Performance.loopScale'] = { 1, 4 },
     -- the least time between two tablet updates of one kind to one player, and the size of a background answer

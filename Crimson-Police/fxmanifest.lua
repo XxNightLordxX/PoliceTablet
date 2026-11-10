@@ -33,10 +33,13 @@ shared_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     -- storage first: with Config.Database.enabled = false it swaps MySQL for the saves folder engine
-    'modules/storage/memsql.lua',
-    'modules/storage/server.lua',
+    'modules/system/memsql.lua',
+    'modules/system/storage.lua',
     -- CP.AdminKit before every module, so any module may register its admin actions as it loads
     'modules/adminkit/server.lua',
+    -- the rest of the system module: the start-up runner, then the calendar and the timed jobs every module joins
+    'modules/system/migrations.lua',
+    'modules/system/schedule.lua',
     'modules/**/server.lua',
     -- modules made of sub-files (one file per part, no server.lua)
     'modules/progression/*.lua',

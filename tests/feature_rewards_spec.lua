@@ -40,7 +40,7 @@ end
 
 local inv = H.mockInventory({ water = { label = 'Water' }, black_money = { label = 'Dirty money' } })
 
-H.load('modules/schedule/server.lua')
+H.load('modules/system/schedule.lua')
 H.load('modules/rewards/server.lua')
 H.load('modules/cash/server.lua')
 H.load('modules/featurerewards/server.lua')

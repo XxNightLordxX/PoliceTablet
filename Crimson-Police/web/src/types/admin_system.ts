@@ -317,3 +317,40 @@ export interface AuditSaveReply {
     rows: number;
     truncated: boolean;
 }
+
+// ============================================================================
+//                                  TIMED JOBS
+// ============================================================================
+
+// admin:getJobs (System → Jobs): every timed job (modules/system/schedule.lua Schedule.jobsView).
+export interface JobLast {
+    at: number;
+    by?: string | null;
+    durationMs: number;
+    // what it did: counts by name (n, archived, kept, auditDeleted, ...)
+    result?: Record<string, number> | null;
+    error?: string | null;
+    // off | busy | running | maintenance | not_started
+    skipped?: string | null;
+}
+
+export interface JobView {
+    id: string;
+    when: 'daily' | 'weekly' | 'monthly' | 'every';
+    // seconds, for an 'every' job
+    every?: number | null;
+    on: boolean;
+    manual: boolean;
+    running: boolean;
+    nextRunAt?: number | null;
+    last?: JobLast | null;
+    settings: { path: string; value?: string | number | boolean | null }[];
+}
+
+export interface JobsView {
+    jobs: JobView[];
+    resetHour: number;
+    weekStartsOn: string;
+    runNowMinutes: number;
+    requestDays: number;
+}

@@ -332,10 +332,14 @@ end)
 
 CreateThread(function()
     Wait(0)
-    if CP.Schedule and CP.Schedule.onDaily then
-        CP.Schedule.onDaily(function()
-            if On() then CreateThread(function() Prune(os.time()) end) end
-        end)
+    if CP.Schedule and CP.Schedule.job then
+        CP.Schedule.job('pvp_cases', {
+            when = 'daily',
+            manual = true,
+            settings = { 'RealPlayers.saveCases', 'RealPlayers.casesKept', 'RealPlayers.pairLedgerDays' },
+            on = On,
+            run = function(ctx) Prune(ctx.at) end,
+        })
     end
     Start()
 end)

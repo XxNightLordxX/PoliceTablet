@@ -197,7 +197,7 @@ do
     end
     H.eq(table.concat(bad, ', '), '',
         'admins and the console pass every key; a supervisor never does, even switched on')
-    H.ok(P.isAdminOnly('cleanup') and not P.isAdminOnly('forceRecall'), 'isAdminOnly')
+    H.ok(P.isAdminOnly('jobs') and not P.isAdminOnly('forceRecall'), 'isAdminOnly')
     local acts = P.actionsFor(1)
     H.ok(U.contains(acts, 'bulkVoid') and not U.contains(P.actionsFor(2), 'bulkVoid'),
         'the session actions list the new keys for admins only')

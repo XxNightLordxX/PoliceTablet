@@ -195,7 +195,7 @@ names the change it came with.
 - [ ] Normal officer and sergeant use leaves no "sent admin-only" lines in System -> Problems. (K9)
 - [ ] Bulk void of a few thousand rows with Corrections open: the bar moves about twice a second, the row ends as done with Undo, no error banner. (Q21)
 - [ ] System -> Back up now on a big server: no long freeze; the daily backup does not hold up the weekly and monthly resets. (Q15)
-- [ ] Files mode with a year of runs: Run clean-up now gives no multi-second freeze or console hitch, the archived counts match. (Q14)
+- [ ] Files mode with a year of runs: System → Jobs → Clean-up → Run now gives no multi-second freeze or console hitch, the archived counts match. (Q14)
 - [ ] Missions -> Builder shows the same list; the server profiler no longer shows a ~40 ms builder:list block every 30 s. (Q9)
 - [ ] Shipped config: every list pages as before. (H6)
 - [ ] Admin UI: one Money screen (no Payouts, Rewards or Payments in the sidebar) with Pay rates, Rewards, Payments and Department funds tabs; the Home Change pay tile opens Pay rates; Leaderboards → stuck payments opens Payments filtered to Paying; the Payments badge sits on Money; the sidebar search finds Money by typing Payouts or Rewards. (MG2)
@@ -699,3 +699,8 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   and why. Extend the ban by 2 hours: Until moves on 2 h and the officer is told; Lift the suspension with a reason:
   he can open the tablet again and the Activity log has the unsuspend. With live crimes on, a pair block set under
   Real suspects -> Pairs and blocks shows in Restrictions too and lifts from either place. (FM5)
+- [ ] One jobs screen (FM9): Admin UI -> System -> Jobs lists the daily backup (Off), the clean-up, the mission call
+  history, the real players jobs, the low balance warnings, the planned season end, the weekly bounty and recognition,
+  the monthly top 3 and both forfeitures, each with its next run and settings. Clean-up -> Run now with a reason: its
+  last line shows your id and the counts, and the Activity log has Job run now; a second press within 10 minutes is
+  refused. Weekly recognition has no Run now. After the next daily reset every daily job shows a last run. (FM9)

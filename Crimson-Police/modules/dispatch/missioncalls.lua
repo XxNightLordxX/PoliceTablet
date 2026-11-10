@@ -2645,7 +2645,7 @@ end
 -- other modules are only called once every file has loaded).
 CreateThread(function()
     local tries = 0
-    while not (CP.Admin and CP.Admin.registerSubcommand and CP.Schedule and CP.Schedule.onDaily) and tries < 50 do
+    while not (CP.Admin and CP.Admin.registerSubcommand and CP.Schedule and CP.Schedule.job) and tries < 50 do
         tries = tries + 1
         Wait(100)
     end
@@ -2663,14 +2663,20 @@ CreateThread(function()
             return true, 'admin.cmd.missioncall_done', { code = data.code, type = TypeLabel(typeKey) }
         end, 'admin.cmd.usage_missioncall')
     end
-    if CP.Schedule and CP.Schedule.onDaily then
-        CP.Schedule.onDaily(function()
-            local days = Num(Config.Retention and Config.Retention.missionCallDays, 90)
-            if days <= 0 then return end
-            local n = Exec('DELETE FROM cp_mission_calls WHERE created_at < NOW() - INTERVAL ? SECOND',
-                { math.floor(days * DAY_S) })
-            CP.log(TAG, 'history clean-up removed %s call(s)', tostring(n))
-        end)
+    if CP.Schedule and CP.Schedule.job then
+        local function Days() return Num(Config.Retention and Config.Retention.missionCallDays, 90) end
+        CP.Schedule.job('mission_calls', {
+            when = 'daily',
+            manual = true,
+            settings = { 'Retention.missionCallDays' },
+            on = function() return Days() > 0 end,
+            run = function()
+                local n = Exec('DELETE FROM cp_mission_calls WHERE created_at < NOW() - INTERVAL ? SECOND',
+                    { math.floor(Days() * DAY_S) })
+                CP.log(TAG, 'history clean-up removed %s call(s)', tostring(n))
+                return tonumber(n) or 0
+            end,
+        })
     end
     if CP.Qbx and CP.Qbx.onDutyChange then
         CP.Qbx.onDutyChange(function(src)

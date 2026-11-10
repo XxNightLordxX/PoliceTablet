@@ -280,7 +280,7 @@ local function MigrationNames()
             return out
         end
     end
-    local src = LoadResourceFile(CP.resource, 'modules/migrations/server.lua') or ''
+    local src = LoadResourceFile(CP.resource, 'modules/system/migrations.lua') or ''
     local body = src:match('local FILES = (%b{})') or ''
     local out = {}
     for name in body:gmatch('\'([^\']+%.sql)\'') do out[#out + 1] = name end
@@ -1329,7 +1329,7 @@ local function SetKvp(key, v)
     end
 end
 
--- The switch: written to the server's KVP (read by modules/storage before Config.Database at the next start), the
+-- The switch: written to the server's KVP (read by modules/system/storage.lua before Config.Database at the next start), the
 -- generation marker into both stores, then the storage lock until the owner restarts.
 function Sys.switchStorage(src, enabled, folder, startEmpty)
     local S = CP.Storage
@@ -2498,14 +2498,23 @@ CreateThread(function()
     if CP.Admin and CP.Admin.registerSubcommand then
         CP.Admin.registerSubcommand('storagemode', ConsoleStorageMode, 'sysadmin.console.storagemode_help')
     end
-    -- on the daily job thread: before the retention job, and the reset listeners never wait for it
-    if CP.Schedule and CP.Schedule.onDailyJob then
-        CP.Schedule.onDailyJob(function()
-            if not (type(Config.Backups) == 'table' and Config.Backups.daily == true) then return end
-            if not Kit.waitIdle(60000) then return end
-            local ok, res = Kit.withLock('backup', function() return Sys.backup(0, 'daily') end)
-            if not ok then CP.warn(TAG, 'the daily backup failed: %s', CP.L(tostring(res))) end
-        end)
+    -- the first daily job: the clean-up and the other daily jobs run once it has returned
+    if CP.Schedule and CP.Schedule.job then
+        CP.Schedule.job('backup', {
+            when = 'daily',
+            order = 10,
+            manual = true,
+            settings = { 'Backups.daily', 'Backups.keep' },
+            on = function() return type(Config.Backups) == 'table' and Config.Backups.daily == true end,
+            run = function()
+                if not Kit.waitIdle(60000) then return { skipped = 'busy' } end
+                local ok, res = Kit.withLock('backup', function() return Sys.backup(0, 'daily') end)
+                if not ok then
+                    CP.warn(TAG, 'the daily backup failed: %s', CP.L(tostring(res)))
+                    return { error = CP.L(tostring(res)) }
+                end
+            end,
+        })
     end
     -- a start that failed: nothing to do, quietly; the runner took the start-up locks already: nothing either
     if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end

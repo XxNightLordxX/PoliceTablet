@@ -10,7 +10,7 @@ local Act, Cb, Adv, Rid, Count = X.act, X.cb, X.adv, X.rid, X.count
 
 local ADMIN = 5
 -- fxmanifest loads the saves-folder engine in every storage mode (backups write with it)
-if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/storage/memsql.lua') end
+if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/system/memsql.lua') end
 local function Secs(n) Adv(n * 1000) end
 
 -- ============================================================================

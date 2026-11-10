@@ -246,7 +246,9 @@ return function(H, name, opts)
     do
         local files = {}
         local p = io.popen(
-            'cd ' .. H.root .. ' && find modules -name server.lua | sort'
+            'cd ' .. H.root .. ' && ls modules/system/storage.lua modules/adminkit/server.lua'
+                .. ' modules/system/migrations.lua modules/system/schedule.lua'
+                .. ' && find modules -name server.lua | sort'
                 .. ' && ls modules/progression/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua'
                 .. ' && find blocks -name server.lua | sort'
         )

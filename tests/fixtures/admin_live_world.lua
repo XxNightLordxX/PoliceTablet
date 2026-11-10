@@ -296,7 +296,7 @@ return function(H)
         'modules/adminkit/server.lua',
         'modules/deptcontrols/server.lua',
         'modules/tablet/server.lua',
-        'modules/schedule/server.lua',
+        'modules/system/schedule.lua',
         'modules/scaling/server.lua',
         'modules/progression/events.lua',
         'modules/teams/common.lua',

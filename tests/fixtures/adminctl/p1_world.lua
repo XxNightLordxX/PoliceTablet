@@ -169,7 +169,7 @@ return function(H)
         'modules/admin/server.lua',
         'modules/adminkit/server.lua',
         'modules/tablet/server.lua',
-        'modules/schedule/server.lua',
+        'modules/system/schedule.lua',
         'modules/progression/scoring.lua',
         'modules/progression/leaderboard.lua',
         'modules/progression/challenge.lua',

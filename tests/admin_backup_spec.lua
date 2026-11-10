@@ -9,7 +9,7 @@ local H = dofile('tests/harness.lua')
 -- ============================================================================
 
 H.boot({ side = 'server', realLocale = true })
-if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/storage/memsql.lua') end
+if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/system/memsql.lua') end
 
 local hooks = {}
 _G.GetConvar = function(name, default) return hooks[name] or default end

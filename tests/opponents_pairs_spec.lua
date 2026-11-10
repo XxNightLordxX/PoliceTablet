@@ -152,7 +152,7 @@ local function Boot(pairsFirst)
     H.load('modules/access/server.lua')
     CP.Qbx = nil
     H.load('modules/integrations/qbx/server.lua')
-    H.load('modules/schedule/server.lua')
+    H.load('modules/system/schedule.lua')
     -- fxmanifest's globs load the two files in no fixed order: both orders work
     if pairsFirst then H.load('modules/realplayers/pairs.lua') end
     H.load('modules/realplayers/opponents.lua')

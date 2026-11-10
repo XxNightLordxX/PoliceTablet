@@ -1,4 +1,4 @@
-// Browser mocks for full admin control: Payments, department funds, Adjust all and the clean-up.
+// Browser mocks for full admin control: Payments, department funds, and Adjust all.
 // ?money=on shows every money tool switched on (they ship off).
 
 import { registerMock } from '../shared/nui';
@@ -6,7 +6,6 @@ import type {
     BankingCheck,
     CashSourcePreview,
     CashStatus,
-    CleanupView,
     DepartmentFundsView,
     PaymentRow,
     PaymentTotals,
@@ -354,30 +353,4 @@ registerMock('action', 'server:admin:adjustAllPayouts', (p: { confirm?: string }
     needReason(p);
     if (String(p?.confirm ?? '').toUpperCase() !== 'ADJUST') throw new Error('err.confirm_mismatch');
     return { changed: 3, failed: 0 };
-});
-
-const cleanup: CleanupView = {
-    last: {
-        at: now() - 6 * 3600,
-        by: null,
-        archived: 120,
-        kept: 3,
-        auditDeleted: 40,
-        requestsDeleted: 12,
-        historyDeleted: 0,
-        durationMs: 840,
-    },
-    running: false,
-    nextRunAt: now() + 18 * 3600,
-    runArchiveMonths: 12,
-    auditDays: 180,
-    requestDays: 7,
-};
-
-registerMock('request', 'admin:getCleanup', (): CleanupView => cleanup);
-
-registerMock('action', 'server:admin:runCleanupNow', (p: unknown) => {
-    needReason(p);
-    cleanup.last = { ...cleanup.last!, at: now(), by: 'ADM00001', archived: 0, requestsDeleted: 0 };
-    return cleanup;
 });

@@ -195,27 +195,6 @@ export interface CashSourcePreview {
     }[];
 }
 
-// admin:getCleanup (System → Clean-up)
-export interface CleanupView {
-    last?: {
-        at: number;
-        by?: string | null;
-        archived?: number;
-        kept?: number;
-        auditDeleted?: number;
-        requestsDeleted?: number;
-        historyDeleted?: number;
-        durationMs: number;
-        error?: string | null;
-        skipped?: string | null;
-    } | null;
-    running: boolean;
-    nextRunAt: number;
-    runArchiveMonths: number;
-    auditDays: number;
-    requestDays: number;
-}
-
 // admin:previewPayoutAdjust { mode, value, scope }
 export interface PayoutAdjustRow {
     key: string;

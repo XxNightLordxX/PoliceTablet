@@ -1294,11 +1294,23 @@ end)
 
 local nextForfeitAt = nil   -- os.time() of the next forfeiture check (Admin UI -> Payments shows it)
 
+-- Admin UI -> System -> Jobs lists it (its last result, Run now); the loop below runs it through the jobs engine.
+local RunForfeiture = CP.Schedule
+        and CP.Schedule.job
+        and CP.Schedule.job('cash_forfeiture', {
+            when = 'every',
+            every = FORFEIT_EVERY_MS // 1000,
+            manual = true,
+            settings = { 'Disputes.windowHours' },
+            run = ForfeitureJob,
+        })
+    or ForfeitureJob
+
 CreateThread(function()
     -- a start that failed: the loop never starts (quietly; the console has the lines that say what failed)
     if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     while true do
-        ForfeitureJob()
+        RunForfeiture()
         nextForfeitAt = os.time() + FORFEIT_EVERY_MS // 1000
         Wait(FORFEIT_EVERY_MS)
     end

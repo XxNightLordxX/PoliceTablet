@@ -131,7 +131,7 @@ for _, m in ipairs({
     'modules/cash/server.lua',
     'modules/payouts/server.lua',
     'modules/payments/server.lua',
-    'modules/schedule/server.lua',
+    'modules/system/schedule.lua',
 }) do
     H.load(m)
 end

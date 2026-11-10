@@ -2546,6 +2546,16 @@ Config.Retention = {
 }
 
 -- ============================================================================
+--                                  TIMED JOBS
+-- ============================================================================
+-- Admin UI -> System -> Jobs lists every timed job (the clean-up, the daily backup, the forfeitures and the rest) with
+-- what it does, when it runs next and its last result; each job keeps its own settings above and below.
+Config.Jobs = {
+    -- Minutes between two Run now presses of the same job on the Jobs screen, whichever admin presses it (1-1440)
+    runNowMinutes = 10,
+}
+
+-- ============================================================================
 --                                   BACKUPS
 -- ============================================================================
 -- Admin UI → System → Backups: copies of every Crimson-Police table and the mission files, in saves/_backups.

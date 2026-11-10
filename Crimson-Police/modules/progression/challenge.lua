@@ -2300,14 +2300,13 @@ end
 function C._boot()
     if booted then return end
     booted = true
-    if Has('Schedule', 'onDaily') then
+    if Has('Schedule', 'job') then
         -- a planned season end happens at the first daily reset on or after its date
-        CP.Schedule.onDaily(function()
-            CreateThread(function()
-                local ok, err = pcall(C._plannedEndCheck, os.time())
-                if not ok then CP.err(TAG, 'planned season end failed: %s', tostring(err)) end
-            end)
-        end)
+        CP.Schedule.job('season_end', {
+            when = 'daily',
+            manual = true,
+            run = function() C._plannedEndCheck(os.time()) end,
+        })
     end
     CreateThread(function()
         while true do
@@ -2316,8 +2315,12 @@ function C._boot()
             if not ok then CP.err(TAG, 'planned end reminder failed: %s', tostring(err)) end
         end
     end)
-    if Has('Schedule', 'onWeekly') then
-        CP.Schedule.onWeekly(function() WeeklyReset() end)
+    if Has('Schedule', 'job') then
+        CP.Schedule.job('bounty_week', {
+            when = 'weekly',
+            settings = { 'Leaderboard.weekStartsOn' },
+            run = function() WeeklyReset() end,
+        })
     else
         CP.warn(TAG, 'CP.Schedule is missing: weekly bounties only close at season end')
     end

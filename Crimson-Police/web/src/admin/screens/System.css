@@ -160,3 +160,10 @@
     gap: 6px 12px;
     font-size: var(--cp-fs-sm);
 }
+
+/* System -> Jobs: one card per timed job */
+.system-jobs {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}

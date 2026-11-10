@@ -124,7 +124,7 @@ CP.Missions = {
 }
 
 H.load('modules/realplayers/volunteers.lua')
-H.load('modules/schedule/server.lua')
+H.load('modules/system/schedule.lua')
 H.load('modules/draw/server.lua')
 H.step(0)
 local V, D = CP.Volunteers, CP.Draw

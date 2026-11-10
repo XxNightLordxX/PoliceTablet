@@ -115,7 +115,7 @@ CP.Missions = {
 }
 
 H.load('modules/permissions/server.lua')
-H.load('modules/schedule/server.lua')
+H.load('modules/system/schedule.lua')
 H.load('modules/progression/scoring.lua')
 H.load('modules/progression/goals.lua')
 H.load('modules/progression/leaderboard.lua')

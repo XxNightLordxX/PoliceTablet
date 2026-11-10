@@ -870,10 +870,14 @@ end)
 
 CreateThread(function()
     Wait(0)
-    if CP.Schedule and CP.Schedule.onDaily then
-        CP.Schedule.onDaily(function()
-            if SaveOn() then CreateThread(function() PruneStrikes(os.time()) end) end
-        end)
+    if CP.Schedule and CP.Schedule.job then
+        CP.Schedule.job('volunteer_strikes', {
+            when = 'daily',
+            manual = true,
+            settings = { 'RealPlayers.volunteer.saveStrikes', 'RealPlayers.volunteer.strikeHours' },
+            on = SaveOn,
+            run = function(ctx) PruneStrikes(ctx.at) end,
+        })
     end
     StartStrikes()
     local Q = CP.Qbx

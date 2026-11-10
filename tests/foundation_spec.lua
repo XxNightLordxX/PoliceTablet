@@ -22,10 +22,10 @@ end
 -- ============================================================================
 --                     1. MIGRATIONS (both storage engines)
 -- ============================================================================
--- The real runner (modules/migrations/server.lua) in its own environment, on any MySQL table. files (optional)
+-- The real runner (modules/system/migrations.lua) in its own environment, on any MySQL table. files (optional)
 -- replaces its FILES list, to play a server from before this build; storage (optional) is its CP.Storage (the
 -- database-only steps run with mode() 'database'). Returns the runner's CP and its lines.
-local RUNNER_SRC = ReadFile(H.root .. 'modules/migrations/server.lua')
+local RUNNER_SRC = ReadFile(H.root .. 'modules/system/migrations.lua')
 
 local function Runner(mysqlImpl, files, storage)
     local lines, errs, warns = {}, {}, {}

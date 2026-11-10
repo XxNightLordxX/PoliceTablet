@@ -153,7 +153,7 @@ local ADMIN_ONLY = {
     'storageAdmin',
     'playerSupport',
     'recordMove',
-    'cleanup',
+    'jobs',
 }
 local SUPERVISOR_ALWAYS = { 'viewMissionList', 'fieldTraining' }
 -- Config.Permissions.supervisor in the spec's order (the Permissions screen lists them this way).
@@ -1422,7 +1422,7 @@ local MIGRATIONS_CREATE = [[CREATE TABLE IF NOT EXISTS cp_schema_migrations (
   name       VARCHAR(100) NOT NULL,
   applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 )]]
--- the migrations runner's "already applied" errors (modules/migrations/server.lua)
+-- the migrations runner's "already applied" errors (modules/system/migrations.lua)
 local MIGRATION_DONE = {
     'Duplicate column name',
     'Duplicate key name',

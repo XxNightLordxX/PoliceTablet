@@ -298,7 +298,7 @@ CP.Challenge = {
 }
 
 H.load('modules/scaling/server.lua')
-H.load('modules/schedule/server.lua')
+H.load('modules/system/schedule.lua')
 H.load('modules/permissions/server.lua')
 H.load('modules/payouts/server.lua')
 H.load('modules/cash/server.lua')

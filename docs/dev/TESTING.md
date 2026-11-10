@@ -298,7 +298,7 @@ one JSON line in the report: `spec`, `category` (`error`, `error-text`, `rowcoun
 `params`, the answers of `mariadb` (the twin, read like oxmysql) and `engine` (the saves folder engine),
 `detail`, the resource frames `at` and the spec line `from`. `jq -c '{category, sql, detail, from}' <report>`
 gives a quick list. What the engine deliberately does not copy is in the header of
-`modules/storage/memsql.lua`.
+`modules/system/memsql.lua`.
 
 ### lint-fivem
 
@@ -527,7 +527,7 @@ Run `tools/check_all.sh` once, right before the commit (its steps are listed at 
 | You changed | Run while you work | Update in the same commit |
 | --- | --- | --- |
 | A module or block (Lua) | its spec, in database and files mode | ARCHITECTURE §5 when a `CP.X.fn` is added or changes shape |
-| SQL | its spec in all three modes; shadow must show 0 differences | the construct list in `modules/storage/memsql.lua` for a new SQL construct |
+| SQL | its spec in all three modes; shadow must show 0 differences | the construct list in `modules/system/memsql.lua` for a new SQL construct |
 | An event, callback, action or NUI message | `check_contracts.py`, `lint_fivem.py` | ARCHITECTURE §8 or §9. The §8 list is complete, so every name goes in it. |
 | Natives, net handlers, NUI focus, callbacks, entities or files (`os.*`) | `lint_fivem.py` | `tools/lint_baseline.txt`: delete the line of a bug you fixed (the lint calls it stale); add one only for a deliberate use, with its reason |
 | A locale key | `check_contracts.py --merge` | the key in `locales/parts/<part>.json`; `--merge` rebuilds `locales/en.json` |

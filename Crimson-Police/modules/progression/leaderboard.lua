@@ -2022,18 +2022,25 @@ end
 function LB._boot()
     if booted then return end
     booted = true
-    if Has('Schedule', 'onWeekly') then
-        CP.Schedule.onWeekly(function(_, prevWeekStartTs)
-            LB.invalidate()
-            local curStart = WeekStart(os.time())
-            local prev = tonumber(prevWeekStartTs) or WeekStart(curStart - HALF_DAY)
-            LB._weeklyJob(prev, curStart)
-        end)
-        CP.Schedule.onMonthly(function(monthStartTs)
-            LB.invalidate()
-            CP.log(TAG, 'monthly reset %s: top 3 of the last month is now announced on Home',
-                DateKey(tonumber(monthStartTs) or os.time()))
-        end)
+    if Has('Schedule', 'job') then
+        CP.Schedule.job('board_week', {
+            when = 'weekly',
+            settings = { 'Leaderboard.weekStartsOn' },
+            run = function(ctx)
+                LB.invalidate()
+                local curStart = WeekStart(os.time())
+                local prev = tonumber(ctx.prevWeekStart) or WeekStart(curStart - HALF_DAY)
+                LB._weeklyJob(prev, curStart)
+            end,
+        })
+        CP.Schedule.job('board_month', {
+            when = 'monthly',
+            run = function(ctx)
+                LB.invalidate()
+                CP.log(TAG, 'monthly reset %s: top 3 of the last month is now announced on Home',
+                    DateKey(tonumber(ctx.monthStart) or os.time()))
+            end,
+        })
     else
         CP.warn(TAG, 'CP.Schedule is missing: no weekly recognition')
     end

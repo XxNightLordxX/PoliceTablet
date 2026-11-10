@@ -1,5 +1,5 @@
 // Admin UI · System (screen key 'admin_system'): storage (status, copy, switch), backups and restore, webhook states
-// (read only), recent problems and the other resources. Every action is checked again on the server.
+// (read only), recent problems, the other resources and the timed jobs. Every action is checked again on the server.
 
 import { useEffect, useState, type ReactNode } from 'react';
 import {
@@ -38,6 +38,8 @@ import type {
     BackupView,
     BackupsData,
     IntegrationsData,
+    JobView,
+    JobsView,
     ProblemLine,
     ProblemsData,
     RestorePreview,
@@ -45,15 +47,14 @@ import type {
     StorageView,
     WebhookView,
 } from '../../types/admin_system';
-import type { CleanupView } from '../../types/admin_economy';
 import './System.css';
 
-type Panel = 'storage' | 'backups' | 'webhooks' | 'problems' | 'integrations' | 'cleanup';
+type Panel = 'storage' | 'backups' | 'webhooks' | 'problems' | 'integrations' | 'jobs';
 // Each tab's text key is written out, so tools/check_contracts.py sees a missing one (a key built from p.key it
 // can't check, and the tab then shows the raw key).
 const PANELS: {
     key: Panel;
-    icon: 'server' | 'download' | 'globe' | 'alert' | 'layers' | 'trash';
+    icon: 'server' | 'download' | 'globe' | 'alert' | 'layers' | 'clock';
     label: () => string;
 }[] = [
     { key: 'storage', icon: 'server', label: () => t('sysadmin.ui.tab.storage') },
@@ -61,7 +62,7 @@ const PANELS: {
     { key: 'webhooks', icon: 'globe', label: () => t('sysadmin.ui.tab.webhooks') },
     { key: 'problems', icon: 'alert', label: () => t('sysadmin.ui.tab.problems') },
     { key: 'integrations', icon: 'layers', label: () => t('sysadmin.ui.tab.integrations') },
-    { key: 'cleanup', icon: 'trash', label: () => t('sysadmin.ui.tab.cleanup') },
+    { key: 'jobs', icon: 'clock', label: () => t('sysadmin.ui.tab.jobs') },
 ];
 
 function sizeText(bytes?: number): string {
@@ -748,77 +749,130 @@ function IntegrationsPanel() {
 //                                  THE SCREEN
 // ============================================================================
 
-// The nightly clean-up (modules/schedule): what the last one did, when the next one runs, and Run clean-up now.
-function CleanupPanel() {
-    const { data, loading, error, refetch, setData } = useRequest<CleanupView>('admin:getCleanup', {});
+// Every timed job (modules/system/schedule.lua): what it does, when it runs next, its last result and its settings,
+// and Run now for the jobs an admin may start by hand.
+const jobName = (id: string) => (hasKey(`sysadmin.jobs.name.${id}`) ? t(`sysadmin.jobs.name.${id}`) : id);
+
+function JobWhen({ job }: { job: JobView }) {
+    if (job.when === 'every') return <>{t('sysadmin.jobs.when.every', { min: Math.round((job.every ?? 0) / 60) })}</>;
+    if (job.when === 'weekly') return <>{t('sysadmin.jobs.when.weekly')}</>;
+    if (job.when === 'monthly') return <>{t('sysadmin.jobs.when.monthly')}</>;
+    return <>{t('sysadmin.jobs.when.daily')}</>;
+}
+
+function JobLastLine({ job }: { job: JobView }) {
+    const last = job.last;
+    if (!last) return <Note>{t('sysadmin.jobs.never')}</Note>;
+    const head = t('sysadmin.jobs.last_line', {
+        at: formatDateTime(last.at),
+        by: last.by ?? t('sysadmin.jobs.by_schedule'),
+        ms: formatNumber(last.durationMs ?? 0),
+    });
+    let what: string;
+    if (last.error) what = t('sysadmin.jobs.error', { error: last.error });
+    else if (last.skipped && hasKey(`sysadmin.jobs.skipped.${last.skipped}`)) {
+        what = t(`sysadmin.jobs.skipped.${last.skipped}`);
+    } else if (last.result && hasKey(`sysadmin.jobs.result.${job.id}`)) {
+        const vars: Record<string, string> = {};
+        for (const [k, v] of Object.entries(last.result)) vars[k] = formatNumber(v);
+        what = t(`sysadmin.jobs.result.${job.id}`, vars);
+    } else what = t('sysadmin.jobs.result_done');
+    return <Note tone={last.error ? 'danger' : 'info'}>{`${head} ${what}`}</Note>;
+}
+
+function JobsPanel() {
+    const { data, loading, error, refetch, setData } = useRequest<JobsView>('admin:getJobs', {});
     const { run, busy } = useAdminAction();
-    const [ask, setAsk] = useState(false);
+    const [ask, setAsk] = useState<JobView | null>(null);
     if (loading && !data) return <LoadingBlock />;
     if (error && !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
-    const last = data?.last;
+    const list = asArray<JobView>(data?.jobs);
     return (
         <Card
-            title={t('int.ui.cleanup_title')}
-            subtitle={t('int.ui.cleanup_subtitle')}
-            icon="trash"
+            title={t('sysadmin.jobs.title')}
+            subtitle={t('sysadmin.jobs.subtitle', {
+                hour: String(data?.resetHour ?? 0).padStart(2, '0'),
+                weekday: data?.weekStartsOn ?? 'monday',
+            })}
+            icon="clock"
             actions={
-                <Button
-                    size="sm"
-                    variant="secondary"
-                    icon="refresh"
-                    disabled={busy || !!data?.running}
-                    onClick={() => setAsk(true)}
-                >
-                    {t('int.ui.cleanup_now')}
+                <Button size="sm" variant="ghost" icon="refresh" disabled={loading} onClick={() => void refetch()}>
+                    {t('sysadmin.jobs.refresh')}
                 </Button>
             }
         >
-            <Grid min={180} gap={3}>
-                <KeyValue label={t('int.ui.cleanup_next')}>
-                    {data?.nextRunAt ? formatDateTime(data.nextRunAt) : '—'}
-                </KeyValue>
-                <KeyValue label={t('int.ui.cleanup_state')}>
-                    {data?.running ? t('int.ui.cleanup_running') : t('int.ui.cleanup_idle')}
-                </KeyValue>
-                <KeyValue label={t('int.ui.cleanup_keep_runs')}>
-                    {t('int.ui.cleanup_months', { n: data?.runArchiveMonths ?? 0 })}
-                </KeyValue>
-                <KeyValue label={t('int.ui.cleanup_keep_audit')}>
-                    {t('int.ui.cleanup_days', { n: data?.auditDays ?? 0 })}
-                </KeyValue>
-            </Grid>
-            {last ? (
-                <Note tone={last.error ? 'danger' : 'info'}>
-                    {t('int.ui.cleanup_last', {
-                        at: formatDateTime(last.at),
-                        by: last.by ?? t('int.ui.cleanup_by_schedule'),
-                        archived: formatNumber(last.archived ?? 0),
-                        kept: formatNumber(last.kept ?? 0),
-                        audit: formatNumber(last.auditDeleted ?? 0),
-                        ms: formatNumber(last.durationMs ?? 0),
-                    })}
-                    {last.error ? ` ${t('int.ui.cleanup_error', { error: last.error })}` : ''}
-                    {last.skipped ? ` ${t('int.ui.cleanup_skipped')}` : ''}
-                </Note>
-            ) : (
-                <Note>{t('int.ui.cleanup_never')}</Note>
-            )}
+            {list.length === 0 ? <EmptyState title={t('sysadmin.jobs.none')} /> : null}
+            <div className="system-jobs">
+                {list.map(job => (
+                    <Card
+                        key={job.id}
+                        title={jobName(job.id)}
+                        subtitle={
+                            hasKey(`sysadmin.jobs.desc.${job.id}`)
+                                ? t(`sysadmin.jobs.desc.${job.id}`, { days: data?.requestDays ?? 7 })
+                                : undefined
+                        }
+                        actions={
+                            <>
+                                <Badge tone={!job.on ? 'neutral' : job.running ? 'warning' : 'success'} size="sm">
+                                    {!job.on
+                                        ? t('sysadmin.jobs.state_off')
+                                        : job.running
+                                          ? t('sysadmin.jobs.state_running')
+                                          : t('sysadmin.jobs.state_waiting')}
+                                </Badge>
+                                {job.manual ? (
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        icon="refresh"
+                                        disabled={busy || job.running || !job.on}
+                                        onClick={() => setAsk(job)}
+                                    >
+                                        {t('sysadmin.jobs.run_now')}
+                                    </Button>
+                                ) : (
+                                    <Badge size="sm">{t('sysadmin.jobs.only_on_timer')}</Badge>
+                                )}
+                            </>
+                        }
+                    >
+                        <Grid min={180} gap={3}>
+                            <KeyValue label={t('sysadmin.jobs.next')}>
+                                <JobWhen job={job} />
+                                {' · '}
+                                {job.nextRunAt ? formatDateTime(job.nextRunAt) : t('sysadmin.jobs.next_unknown')}
+                            </KeyValue>
+                            <KeyValue label={t('sysadmin.jobs.settings')}>
+                                {job.settings.length === 0
+                                    ? t('sysadmin.jobs.no_settings')
+                                    : job.settings.map(st => `${st.path} = ${String(st.value ?? '—')}`).join(' · ')}
+                            </KeyValue>
+                        </Grid>
+                        <JobLastLine job={job} />
+                    </Card>
+                ))}
+            </div>
             <ConfirmDialog
-                open={ask}
-                title={t('int.ui.cleanup_now')}
-                message={t('int.ui.cleanup_now_text')}
+                open={!!ask}
+                title={`${t('sysadmin.jobs.run_now')}: ${ask ? jobName(ask.id) : ''}`}
+                message={t('sysadmin.jobs.run_now_text', {
+                    name: ask ? jobName(ask.id) : '',
+                    min: data?.runNowMinutes ?? 10,
+                })}
                 reason
                 onConfirm={async reason => {
-                    const res = await run<CleanupView>(
-                        'server:admin:runCleanupNow',
-                        { reason },
-                        { success: 'int.ui.cleanup_done' },
+                    if (!ask) return;
+                    const res = await run<JobsView>(
+                        'server:admin:runJobNow',
+                        { id: ask.id, reason },
+                        { success: 'sysadmin.jobs.run_done' },
                     );
                     if (res.ok && res.data) setData(res.data);
                     else void refetch();
-                    setAsk(false);
+                    setAsk(null);
                 }}
-                onCancel={() => setAsk(false)}
+                onCancel={() => setAsk(null)}
                 busy={busy}
             />
         </Card>
@@ -837,7 +891,7 @@ export default function AdminSystem() {
     else if (panel === 'backups') body = <BackupsPanel />;
     else if (panel === 'webhooks') body = <WebhooksPanel />;
     else if (panel === 'problems') body = <ProblemsPanel />;
-    else if (panel === 'cleanup') body = <CleanupPanel />;
+    else if (panel === 'jobs') body = <JobsPanel />;
     else body = <IntegrationsPanel />;
     return (
         <Screen head="admin_system" subtitle={t('sysadmin.ui.subtitle')} className="system-screen">

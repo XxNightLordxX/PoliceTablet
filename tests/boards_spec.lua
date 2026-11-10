@@ -137,7 +137,7 @@ CP.Missions = {
 }
 
 H.load('modules/permissions/server.lua')
-H.load('modules/schedule/server.lua')
+H.load('modules/system/schedule.lua')
 H.load('modules/progression/leaderboard.lua')
 H.load('modules/progression/scoring.lua') -- the level of a profile (CP.Scoring.xpLevel)
 H.load('modules/progression/challenge.lua')

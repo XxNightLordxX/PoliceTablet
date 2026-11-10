@@ -40,10 +40,10 @@ exposes that is not listed here is private to that module (keep it `local`).
    read with `CP.U.jsonField(v)`; write with `json.encode(CP.U.serialize(t))`. COUNT/SUM results may be
    numbers or numeric strings: wrap with `tonumber(v) or 0` (`CP.U.num`). Callsigns are truncated to 32
    characters and names to 64 before writing (`CP.U.clip`: at most n bytes, never ending inside a UTF-8 character).
-   **Database off** (`Config.Database.enabled = false`): modules/storage replaces this resource's `MySQL` global
+   **Database off** (`Config.Database.enabled = false`): modules/system/storage.lua replaces this resource's `MySQL` global
    with `CP.Storage.MemSQL.shim`, an in-resource engine that runs the same SQL on tables kept as files in the saves folder
    (§5.29). Modules never test the mode: they keep their SQL, and new SQL must stay inside the construct list at
-   the top of `modules/storage/memsql.lua` (anything else fails there with "the saves folder engine (files mode)
+   the top of `modules/system/memsql.lua` (anything else fails there with "the saves folder engine (files mode)
    does not support ..."). Reads of another resource's table (today only sc-dispatch's `mdt_dispatch`) still go
    read-only to the real oxmysql. The only code that sends `cp_` statements to the real oxmysql in files mode
    is the admin's storage copy (`/CrimsonPoliceAdmin storage copy`, §5.29). Resource KVP holds only the storage
@@ -152,8 +152,8 @@ PoliceTablet/                      (git repo)
     missions/custom/deleted/       missions deleted for good from the Admin UI (Bring back moves them back)
     modules/<feature>/server.lua   (+ client.lua where needed)
     modules/integrations/<name>/server.lua (+ client.lua)
-    modules/storage/memsql.lua     CP.Storage.MemSQL: SQL engine + saves folder for database-off mode (server)
-    modules/storage/server.lua     CP.Storage: picks MySQL/MariaDB or the saves folder (Config.Database)
+    modules/system/memsql.lua     CP.Storage.MemSQL: SQL engine + saves folder for database-off mode (server)
+    modules/system/storage.lua     CP.Storage: picks MySQL/MariaDB or the saves folder (Config.Database)
     saves/                         database-off data (JSON documents, _tables.json); only README.md is committed;
                                    saves/_backups/ (System → Backups, both storage modes), saves/exports/ (audit CSV),
                                    both shipped empty with a .gitkeep
@@ -172,8 +172,8 @@ fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shar
 `modules/**/client.lua` (client), then the server sub-files of `modules/progression/*.lua`,
 `modules/supervisor/*.lua`, `modules/review/*.lua` and `modules/realplayers/*.lua` (client:
 `modules/realplayers/client/*.lua`), then `blocks/**/server.lua` / `blocks/**/client.lua`.
-Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` and
-`modules/storage/server.lua` before every other server module (so the `MySQL` global is settled before
+Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/system/memsql.lua` and
+`modules/system/storage.lua` before every other server module (so the `MySQL` global is settled before
 any module can query), then `modules/adminkit/server.lua` (so any module may register its admin actions with
 `CP.AdminKit.action` as it loads). `files` ships web/dist, locales/*.json and logos/*.
 
@@ -823,21 +823,19 @@ Client:
   cancels a progress bar (`lib.progressActive` first).
 - Closes on job/duty loss and character unload.
 
-### 5.5 CP.Schedule — modules/schedule (S)
+### 5.5 CP.Schedule — modules/system/schedule.lua (S)
 Times are server local; the "day" starts at `Config.Time.resetHour`.
 - `now()`, `dayKey(ts?) -> 'YYYY-MM-DD'`, `dayStart(ts?)`, `weekStart(ts?)` (resetHour on
   `Config.Leaderboard.weekStartsOn`), `weekKey(ts?)`, `monthStart(ts?)`, `weekday(ts?) -> 'monday'..'sunday'`,
   `sqlTime(ts)`.
-- `onDaily(fn(dayKey))`, `onWeekly(fn(weekKey, prevWeekStartTs))`, `onMonthly(fn(monthStartTs))` — once when the
-  boundary passes (checked every 60 s; never just because the resource started; a clock moved back to an earlier day
-  fires nothing, with a warning).
-- `onDailyJob(fn(dayKey))` — a long job per daily reset (the daily backup).
-- Retention job, at each daily reset and once 120 s after start (idempotent): `cp_mission_runs` rows older than
+- `job(id, def) -> runner`: every timed job. `when` daily, weekly, monthly (once per boundary, checked every 60 s,
+  never on start or a clock moved back) or every (`every` s; the module's loop calls the runner); `run(ctx)`, `on()`,
+  `settings`, `manual` (Run now), `order` (daily jobs in order on one thread: backup 10, clean-up 90). Each keeps
+  `last`; a running job never starts twice. `run(id, ctx)`, `jobsView()`, callback `admin:getJobs`, action
+  `server:admin:runJobNow { id, reason }` (permission `jobs`, once per `Config.Jobs.runNowMinutes` per job, `jobRun`).
+- Clean-up job `cleanup` (daily, and once 120 s after start; idempotent): runs older than
   `Config.Retention.runArchiveMonths` move to `cp_mission_runs_archive` (`INSERT IGNORE ... SELECT`, then a DELETE of
-  only the rows whose archive copy matches, cash status and amount paid included), never a row whose money or item
-  reward is unfinished (held, pending, paying, giving).
-- `cleanupView() -> CleanupView` (§9.5), callback `admin:getCleanup`, action `server:admin:runCleanupNow { reason }`
-  (§8.4.4).
+  only the rows whose copy matches), never a row whose money or item reward is unfinished.
 
 ### 5.6 CP.Missions — modules/missions
 The mission registry.
@@ -1470,7 +1468,7 @@ Boards, profiles and the weekly announcements.
   per mission), `favouritePartner(citizenid)` (most shared completed runs), `seasonPoints(citizenid)`.
 - `announcements()` — computed from the database: the previous week's top 3 during this week and the previous month's
   during this month (`weekly_top3` / `monthly_top3`, names respect hide_name).
-- Weekly job (`CP.Schedule.onWeekly`, and once 60 s after start; idempotent by the badge).
+- Weekly job (`CP.Schedule.job` board_week, and once 60 s after start; idempotent by the badge).
 - callback `admin:getBoards` (`openAdmin`): ranked rows with `cash` (`SUM(cash_paid)` of every row, voided and flagged
   included), `realName`, `hidden`, `unranked`, `stuck` (`CP.Cash.stuckPayments()`).
 - Web: dates from the server are `'YYYY-MM-DD'` in server time and formatted at noon UTC, so every player sees the
@@ -1756,7 +1754,7 @@ later.
 - Screens: the Supervisor screen is gated by `session.actions.builderEdit` and each action by its permission and the
   row's `can.*`.
 
-### 5.29 CP.Storage (with CP.Storage.MemSQL) — modules/storage (S)
+### 5.29 CP.Storage (with CP.Storage.MemSQL) — modules/system/storage.lua (S)
 Where Crimson-Police keeps its data (`Config.Database`).
 
 - Load order: `@oxmysql/lib/MySQL.lua`, then `memsql.lua` (defines only `CP.Storage.MemSQL`), then `server.lua`,
@@ -1766,7 +1764,7 @@ Where Crimson-Police keeps its data (`Config.Database`).
   that text and nothing is changed), `hasSavedData()`, `realMySQL` (oxmysql's `MySQL` in files mode), `db`, `MemSQL`.
 - The storage chosen in Admin UI → System is kept in the server's resource KVP (`cp_storage_mode` = database|files,
   `cp_storage_folder`) and read before `Config.Database` (which it then reflects).
-- The migrations runner (`modules/migrations`, `CP.Migrations.ready() / isReady() / version() / started() / failed() /
+- The migrations runner (`modules/system/migrations.lua`, `CP.Migrations.ready() / isReady() / version() / started() / failed() /
   status()`).
 - The database server (database mode only): before the first table statement one probe `SELECT VERSION(),
   JSON_VALUE(...)`.
@@ -3368,14 +3366,14 @@ every action.
 | `server:admin:deliverRewards` | `{ citizenid }` | rewardsAdmin | P S; officer online |
 | `server:admin:cancelReward` | `{ id, reason }` | rewardsAdmin | P R S |
 | `server:admin:takeBackReward` | `{ id, reason, confirm, requestId }` | rewardsAdmin | P I R T(item) S W `Rewards.allowTakeBack`; officer online |
-| callback `admin:getCleanup` | `{}` → CleanupView | cleanup | P |
-| `server:admin:runCleanupNow` | `{ reason }` | cleanup | P R; 1 per 10 min; refused while a long job runs |
+| callback `admin:getJobs` | `{}` → JobsView | jobs | P |
+| `server:admin:runJobNow` | `{ id, reason }` | jobs | P R; §5.5 |
 
 Audit actions (category `audit`, posted to the audit webhook; the money ones never dropped from a full queue):
 `paymentsExport`, `paymentResolve`, `paymentPayAgain`, `paymentRetry`, `paymentUnfundedRetry`, `paymentCapRest`,
 `paymentForfeitRepay`, `paymentForfeit`, `paymentCancel`, `cashClawback`, `manualCash`, `deptFund`, `payoutsAdjustAll`
 (plus one `setTypePayout` / `setMissionPayout` per value), `rewardResolve`, `rewardDeliver`, `rewardCancel`,
-`rewardTakeBack`, `cleanupRun`. Toasts: `cash.clawed_back`, `payments.toast.forfeited`, `payments.toast.cancelled`,
+`rewardTakeBack`, `jobRun`. Toasts: `cash.clawed_back`, `payments.toast.forfeited`, `payments.toast.cancelled`,
 `rewards.taken_back`, `rewards.cancelled`, `payments.low_balance_toast`.
 
 #### 8.4.5 System, departments and settings
@@ -3701,7 +3699,7 @@ interface PaymentTotals { byStatus: Record<CashStatus, { count; paid; reclaimed;
 interface BankingCheck { id; status; txn; amount; step?; source?; account?; societyAccount?;
   personal?: { found: boolean; amount?: number; type?: 'deposit' | 'withdraw'; time?: number } | null;
   society?: (same) | null; busy: boolean; online: boolean; payAgain: boolean }
-// UnfundedPreview, DepartmentFundsView, CashSourcePreview, CleanupView, PayoutAdjustPreview: see the file.
+// UnfundedPreview, DepartmentFundsView, CashSourcePreview, PayoutAdjustPreview: see the file.
 // types/rewards.ts: AdminRewardsFilter, RewardInventoryCheck, RewardItemChoices, RewardPoolPreview; RewardRow gains
 // rowId and online; AdminRewardsView gains allowTakeBack. types/economy.ts: outOfRange, supervisorRange, unlock.
 ```

@@ -256,7 +256,7 @@ do
     H.sql('DELETE FROM mdt_dispatch')
 end
 
-H.load('modules/schedule/server.lua')
+H.load('modules/system/schedule.lua')
 H.load('modules/draw/server.lua')
 H.load('modules/integrations/sc_dispatch/server.lua')
 H.load('modules/dispatch/missioncalls.lua')

@@ -1561,12 +1561,24 @@ CreateThread(function()
     end
 end)
 
+-- Admin UI -> System -> Jobs lists it (its last result, Run now); the loop below runs it through the jobs engine.
+local RunForfeiture = CP.Schedule
+        and CP.Schedule.job
+        and CP.Schedule.job('reward_forfeiture', {
+            when = 'every',
+            every = FORFEIT_EVERY_MS // 1000,
+            manual = true,
+            settings = { 'Disputes.windowHours' },
+            run = ForfeitureJob,
+        })
+    or ForfeitureJob
+
 CreateThread(function()
     Wait(START_CHECK_MS)
     -- a start that failed: the loop never starts (quietly)
     if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     while true do
-        ForfeitureJob()
+        RunForfeiture()
         Wait(FORFEIT_EVERY_MS)
     end
 end)

@@ -5,7 +5,7 @@
 local H = dofile('tests/harness.lua')
 
 H.boot({ side = 'server', realLocale = true })
-if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/storage/memsql.lua') end
+if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/system/memsql.lua') end
 for _, m in ipairs({
     'modules/permissions/server.lua',
     'modules/access/server.lua',

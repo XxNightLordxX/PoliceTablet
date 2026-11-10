@@ -1,5 +1,5 @@
-// Browser mocks for full admin control, System: storage, backups, webhooks, problems, integrations, departments added
-// in game, desks and Support (the shapes of modules/sysadmin).
+// Browser mocks for full admin control, System: storage, backups, webhooks, problems, integrations, timed jobs,
+// departments added in game, desks and Support (the shapes of modules/sysadmin).
 
 import { registerMock } from '../shared/nui';
 import type {
@@ -9,6 +9,7 @@ import type {
     ClientStateView,
     DepartmentSetup,
     IntegrationsData,
+    JobsView,
     AdminHomeData,
     ProblemsData,
     RestorePreview,
@@ -341,3 +342,74 @@ registerMock('action', 'server:admin:saveAuditExport', () => ({
     rows: 6200,
     truncated: false,
 }));
+
+// System → Jobs
+const jobs: JobsView = {
+    resetHour: 0,
+    weekStartsOn: 'monday',
+    runNowMinutes: 10,
+    requestDays: 7,
+    jobs: [
+        {
+            id: 'backup',
+            when: 'daily',
+            on: false,
+            manual: true,
+            running: false,
+            nextRunAt: now() + 18 * 3600,
+            settings: [
+                { path: 'Backups.daily', value: false },
+                { path: 'Backups.keep', value: 7 },
+            ],
+        },
+        {
+            id: 'cleanup',
+            when: 'daily',
+            on: true,
+            manual: true,
+            running: false,
+            nextRunAt: now() + 18 * 3600,
+            last: {
+                at: now() - 6 * 3600,
+                by: null,
+                durationMs: 840,
+                result: { archived: 120, kept: 3, auditDeleted: 40, requestsDeleted: 12, historyDeleted: 0 },
+            },
+            settings: [
+                { path: 'Retention.runArchiveMonths', value: 12 },
+                { path: 'Retention.auditDays', value: 180 },
+            ],
+        },
+        {
+            id: 'board_week',
+            when: 'weekly',
+            on: true,
+            manual: false,
+            running: false,
+            nextRunAt: now() + 4 * 86400,
+            settings: [{ path: 'Leaderboard.weekStartsOn', value: 'monday' }],
+        },
+        {
+            id: 'cash_forfeiture',
+            when: 'every',
+            every: 600,
+            on: true,
+            manual: true,
+            running: false,
+            nextRunAt: now() + 300,
+            last: { at: now() - 300, by: null, durationMs: 4, result: { n: 0 } },
+            settings: [{ path: 'Disputes.windowHours', value: 48 }],
+        },
+    ],
+};
+registerMock('request', 'admin:getJobs', (): JobsView => jobs);
+registerMock('action', 'server:admin:runJobNow', (p: unknown) => {
+    const a = (p ?? {}) as { id?: string; reason?: string };
+    if (!a.reason) throw new Error('err.reason_required');
+    const job = jobs.jobs.find(j => j.id === a.id);
+    if (!job) throw new Error('err.job_unknown');
+    if (!job.manual) throw new Error('err.job_not_manual');
+    if (!job.on) throw new Error('err.job_off');
+    job.last = { at: now(), by: 'ADM00001', durationMs: 12, result: { n: 0 } };
+    return jobs;
+});

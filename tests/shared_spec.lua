@@ -103,7 +103,7 @@ H.eq(U.clip('ab😀', 6), 'ab😀', 'a whole 4-byte character is kept')
 H.eq(CP.L('no.such.key'), 'no.such.key', 'unknown key')
 
 -- migrations splitter (statements end at line-ending semicolons, comments stripped)
-H.load('modules/migrations/server.lua')
+H.load('modules/system/migrations.lua')
 local sql = LoadResourceFile('Crimson-Police', 'sql/migrations/001_initial.sql')
 local stmts = CP.Migrations._split(sql)
 H.eq(#stmts, 14, '001 has 14 statements')

@@ -12,7 +12,7 @@ local cjson = require('cjson')
 -- CP.Qbx (the players below and their jobs), CP.Runs (the runs going), ox_inventory, the server's KVP.
 
 H.boot({ side = 'server', realLocale = true })
-if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/storage/memsql.lua') end
+if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/system/memsql.lua') end
 
 local hooks = {}
 _G.GetConvar = function(name, default) return hooks[name] or default end
@@ -22,7 +22,7 @@ _G.GetResourceKvpString = function(k) return kvp[k] end
 _G.SetResourceKvp = function(k, v) kvp[k] = v end
 _G.DeleteResourceKvp = function(k) kvp[k] = nil end
 -- database runs: the storage module too (it only reads the in-game choice there)
-if not (CP.Storage and CP.Storage.validFolder) then H.load('modules/storage/server.lua') end
+if not (CP.Storage and CP.Storage.validFolder) then H.load('modules/system/storage.lua') end
 _G.GetResourceMetadata = function(res, key)
     return key == 'version' and (res == 'Crimson-Police' and '1.0.0' or '2.0') or nil
 end
@@ -132,8 +132,7 @@ CP.Schedule = {
     now = function() return os.time() end,
     dayStart = function(ts) return ts - ts % 86400 end,
     weekStart = function(ts) return ts - ts % 604800 end,
-    onDaily = function() end,
-    onDailyJob = function() end,
+    job = function() return false end,
 }
 local inventory = { [7] = {}, [8] = {} }
 H.exportsMock.ox_inventory = {

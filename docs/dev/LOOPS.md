@@ -317,7 +317,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/downed/server.lua | downed checks | while a run is live or an entry is kept | `Config.Downed.checkEvery` s (min 0.5) | owner setting |
 | modules/markers/server.lua | the extra parts of each officer's map | while `Config.Markers.extraParts` and a part are on and a run is going, or a map still has parts | `Config.Markers.refreshEvery` s (1-30), scaled | owner setting; a list is sent only when it changed |
 | modules/admin/server.lua | admin push queue | while queued | 50 ms sent, 250 ms else | ends when empty |
-| modules/schedule/server.lua | daily jobs | always | 30 -> 60 s | minute precision |
+| modules/system/schedule.lua | daily jobs | always | 30 -> 60 s | minute precision |
 | modules/happyhour/server.lua | happy hour end | while a happy hour may be on: armed at start, by a start and by a Settings change; ends after a pass that sees none | 15 -> 30 s, scaled | the screens hear the end then |
 | modules/progression/challenge.lua | planned-end reminders | always | 60 s | |
 | modules/dispatch/calls.lua | prune | always | 60 s | |
@@ -368,7 +368,7 @@ strings do not count.
 | `modules/builder/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/dispatch/calls.lua` | 2 | 1 | prune, 60 s; one-shots |
 | `modules/cash/server.lua` | 4 | 1 | forfeit sweep, 10 min; one-shots |
-| `modules/progression/challenge.lua` | 3 | 1 | planned-end reminders, 60 s; one-shots |
+| `modules/progression/challenge.lua` | 2 | 1 | planned-end reminders, 60 s; one-shots |
 | `modules/confighealth/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/client/crimtab.lua` | 6 | 0 | Escape guard, downed watch; one-shots |
 | `modules/realplayers/crimtab.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -388,7 +388,7 @@ strings do not count.
 | `modules/realplayers/livecrime.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/livectl/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/markers/client.lua` | 2 | 0 | objective pointer; a start-up hook |
-| `modules/migrations/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/system/migrations.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/dispatch/missioncalls.lua` | 2 | 1 | call posting, `checkEvery`; one-shots; the push is a `SetTimeout` |
 | `modules/missions/client.lua` | 1 | 0 | bounded definitions retry at start |
 | `modules/missions/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -396,13 +396,13 @@ strings do not count.
 | `modules/npccombat/client.lua` | 1 | 0 | damage re-apply while the run is live |
 | `modules/teams/operations.lua` | 4 | 1 | operations, adaptive; one-shots |
 | `modules/realplayers/conduct.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/realplayers/pairs.lua` | 5 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/pairs.lua` | 4 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/proof.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/realplayers/saved.lua` | 4 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/saved.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/opponents.lua` | 3 | 1 | live crime watch while a case is tracked; one-shots |
 | `modules/realplayers/surrender.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/options/client.lua` | 3 | 0 | Auto-Ready input watcher; start-up hooks |
-| `modules/payments/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/payments/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/payouts/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/progression/profile.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/rewards/server.lua` | 5 | 1 | forfeit sweep, 10 min; one-shots |
@@ -410,14 +410,14 @@ strings do not count.
 | `modules/route/server.lua` | 4 | 0 | one-shots; the tick is a `CP.Perf.armed` loop |
 | `modules/runs/client.lua` | 3 | 1 | telemetry, weapon fired; bounded entity wait |
 | `modules/runs/server.lua` | 6 | 1 | maintenance, 60 s; per-run tick threads; one-shots; the engine is a `CP.Perf.armed` loop |
-| `modules/schedule/server.lua` | 3 | 1 | daily jobs, 60 s; one-shots |
+| `modules/system/schedule.lua` | 3 | 1 | daily jobs, 60 s; one-shots |
 | `modules/progression/scoring.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/settings/client.lua` | 1 | 0 | bounded settings wait at start |
 | `modules/settings/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/spawn/client.lua` | 2 | 4 | placer batches and bounded collision, shape test, network id and control waits |
 | `modules/spawn/server.lua` | 2 | 0 | open spawn asks while any; a one-shot |
-| `modules/storage/memsql.lua` | 2 | 18 | the saves folder SQL engine: parser and scan loops with no Wait, async query threads |
-| `modules/storage/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/system/memsql.lua` | 2 | 18 | the saves folder SQL engine: parser and scan loops with no Wait, async query threads |
+| `modules/system/storage.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/supervisor/missionban.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/sysadmin/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/tablet/client.lua` | 14 | 0 | prop keeper, open watcher, Escape guard; bounded loads; one-shots |
@@ -427,7 +427,7 @@ strings do not count.
 | `modules/teams/units.lua` | 1 | 0 | a start-up hook; the sweep is a `CP.Perf.armed` loop |
 | `modules/realplayers/client/volunteers.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/match.lua` | 5 | 0 | match tick while a run has a match; one-shots |
-| `modules/realplayers/volunteers.lua` | 7 | 0 | volunteer sweep while someone volunteers; one-shots |
+| `modules/realplayers/volunteers.lua` | 6 | 0 | volunteer sweep while someone volunteers; one-shots |
 | `shared/init.lua` | 1 | 1 | `CP.Perf.armed`: the loop that runs only while it has work |
 | `shared/net.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `shared/utils.lua` | 0 | 5 | the config text parser, no Wait |

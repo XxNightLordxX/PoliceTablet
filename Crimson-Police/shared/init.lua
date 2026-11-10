@@ -389,6 +389,7 @@ local CONFIG_SECTIONS = {
     'Builder',
     'Testing',
     'Retention',
+    'Jobs',
     'Backups',
     'Performance',
     'Labels',

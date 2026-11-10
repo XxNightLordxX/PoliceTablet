@@ -446,8 +446,8 @@ audit log. [5.15](#515-full-admin-control) explains each one.
   outside the normal flow are built but **ship off**; you switch one on in Settings by typing `ENABLE`
   ([5.15.4](#5154-payments-item-rewards-and-department-money)).
 - **System**: add, edit, turn off and delete departments, place desks, upload logos, copy and switch the storage,
-  back up and restore, see which webhooks are on, read recent problems, check the other resources, run the nightly
-  clean-up now, and revert or export your settings ([5.15.5](#5155-system-departments-and-settings)).
+  back up and restore, see which webhooks are on, read recent problems, check the other resources, see and run the
+  timed jobs, and revert or export your settings ([5.15.5](#5155-system-departments-and-settings)).
 
 ---
 
@@ -621,6 +621,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.AntiCheat` | Flag limits, and the automatic suspension: 3 voided runs in 30 days = 7 days. `stunNeedsProof` (`'flag'`): a stun counts as before, and one the server did not see (the suspect did not fall) adds a note for staff in the Review run detail, so nobody's points are held. `'hold'` = the same, but that officer's points wait for review; `'strict'` = a fleeing person only gives up to a stun the server saw (a cheat menu cannot fake one); `'off'` = no check (the old way). A saved `true` from an earlier version reads as `'strict'`, `false` as `'off'`. `stunRecheck` (2 s): in `'flag'` and `'hold'` the note or flag waits this long and is dropped when the server saw the suspect fall by then (a real taser report often reaches the server before its copy of the suspect falls); 0 = decide at once. `adminProbeLines` (5): a player who is not an admin and sends a request only admins may send (the money, void and other Admin UI tools; no officer or supervisor screen sends one, so it is almost always a cheat menu) is refused as always, and a console line, kept in **System → Problems**, names him and the request (`player 7 (Name) sent admin-only server:admin:adjustPoints while not an admin`): once a minute per player and request, at most this many lines a minute per player (0 = no line) |
 | `Config.Testing` | Admin test mode: `enabled`, `maxTesters`, `allowTeleport`, `debugOverlay`, `panelKey` (`'F7'`: the default test controls key, see [README 6.2](../README.md#62-keys)), `panelKeyGuardMs` (300 ms: the test controls key is ignored this long after the panel lets go, so the same press does not take it back; 0 = off), and `spawnCheck` (the spawn point check: `enabled`, `sceneTimeoutMs` 8000, `moveWithin` 150 m, `routes = false` checks no route points, `teleport = true` the Teleport here button next to a result) |
 | `Config.Retention` | Clean-up of old data: runs archived after 12 months, audit rows deleted after 180 days, mission calls after 90 days (0 = keep) |
+| `Config.Jobs.runNowMinutes` | System → Jobs: minutes between two **Run now** presses of the same job (`10`, as before; 1-1440) |
 | `Config.Performance.loopScale` | How often the background loops wake while idle or far away (`1.0`: the shipped pace in `docs/dev/LOOPS.md`; `2` = half as often, up to `4`). Markers near you still draw every frame and run timers keep their own pace. See **Performance** below |
 | `Config.Performance.pushGapMs` | The least time between two tablet updates of the same kind to one player (`0`: each sent at once, as before; up to `2000` ms). With `250`-`500`, a burst of updates (a run's progress, a unit change, the board) reaches the tablet as one, a moment later. See **Performance** below |
 | `Config.Performance.latentAboveBytes` | Tablet answers bigger than this many bytes (boards, mission lists, admin lists) come in the background at `Config.Limits.exportBps`, like the Admin UI exports, so the rest of the tablet keeps answering while one loads (`0`: only the exports, as before) |
@@ -1412,7 +1413,7 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([1.2](#12
 | **Permissions** | What supervisors may do (a switch for each), **Extra grants** (a power for departments from a grade, Qbox gangs from a grade or single citizen IDs; [1.3](#13-mission-builder-permissions)), **Mission controls** (each control's switch, limits, current value and Reset; [1.2](#12-what-supervisors-may-do)), and **Config health**: the start-up check, with a **Check again** button |
 | **Live** | Every live run and unit, with the controls to recall, end, add time or split a unit, and the **Refused** tab: mission starts the server refused and why ([5.15.3](#5153-live-runs-units-and-anti-farm)) |
 | **Settings** | Every setting of `config.lua` and `blocks.lua`, changed in game, with a change history ([2.6](#26-change-any-setting-in-game-the-settings-screen)) |
-| **System** | Storage, backups, the webhook states, recent console problems, the other resources and the nightly clean-up ([5.15.5](#5155-system-departments-and-settings)) |
+| **System** | Storage, backups, the webhook states, recent console problems, the other resources and the timed jobs ([5.15.5](#5155-system-departments-and-settings)) |
 | **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
 | **Testing** | Optional: every mission and location with its test result, test runs, testers, and an area coverage table ([5.13](#513-testing-tools)) |
 
@@ -1451,7 +1452,7 @@ A click fills the box; you can still type your own. Change the list in `Config.A
 | **Real players**: real players as suspects | Player suspects (Real suspects; the whole group shows only while live crimes or volunteers are on) |
 | **Money**: pay rates, rewards, every payment made and the department funds | Money (Pay rates, Rewards, Payments and Department funds tabs) |
 | **Review**: flagged runs, profiles, disputes, corrections and the activity log | Review (Queue, Profiles and Corrections tabs; the queue holds the flagged runs and disputes); Activity log (Audit Log) |
-| **System**: settings, storage, backups and problems | Settings; Server health (System: Storage, Backups, Webhooks, Problems, Integrations, Clean-up tabs) |
+| **System**: settings, storage, backups and problems | Settings; Server health (System: Storage, Backups, Webhooks, Problems, Integrations, Jobs tabs) |
 
 **Restrictions** (under People) is the one list of everything that bars someone right now: tablet suspensions,
 mission bans, the Real suspects pair blocks, exclusions and suspensions, and volunteers' strikes blocks. Each row says
@@ -2049,8 +2050,9 @@ with a best-before time and bags, whose details ox_inventory fills in when it gi
 Item rewards has a pool editor with an item picker (forbidden items left out) and the expected items and value per run
 at each tier; every change is checked on the server, so the raw editor can't add a weapon either.
 
-**System → Clean-up** shows the last nightly clean-up and **Run clean-up now** (admins, once per 10 minutes). The
-clean-up never archives a run whose money or item rewards are not finished, and it waits while a bulk change runs.
+**System → Jobs** shows the cash and item reward forfeitures with the other timed jobs: their last result and **Run
+now** ([5.15.5](#5155-system-departments-and-settings)). The clean-up never archives a run whose money or item rewards
+are not finished, and it waits while a bulk change runs.
 
 #### 5.15.5 System, departments and settings
 
@@ -2089,9 +2091,17 @@ clean-up never archives a run whose money or item rewards are not finished, and 
 - **Integrations**: every resource Crimson-Police works with (running or not, its version), the checklist of
   [4](#4-settings-to-check-in-your-other-resources), and Crimson-Arena (running, players in the arena, its two
   no-build zones). Nothing here edits another resource.
-- **Clean-up**: when the nightly clean-up runs (at the daily reset), how long runs stay in the live table and how long
-  the audit log is kept, and what the last clean-up did. **Run clean-up now** (with a reason, at most once every 10
-  minutes) does the same at once. Unfinished payments and item rewards always stay in the live table.
+- **Jobs**: every job Crimson-Police runs by itself on a timer, one card each: what it does, when it runs next, its
+  settings with their values now, and its last result (when, who, what it did, or why it was skipped). The daily jobs
+  run one after another at the daily reset: the daily backup (`Config.Backups.daily`, ships off), the mission call
+  history (`Retention.missionCallDays`), the real players pair ledger, saved cases and volunteer strikes, the low
+  balance warnings, the planned season end and last the clean-up (runs archived after `Retention.runArchiveMonths`,
+  audit lines and settings history removed after `Retention.auditDays`, admin request records after 7 days). The
+  weekly bounty, weekly recognition and monthly top 3 run at their reset; the cash and item reward forfeitures every
+  10 minutes. **Run now** (with a reason, audited) runs a job at once with the same rules as on its timer, each job at
+  most once per `Config.Jobs.runNowMinutes` (10); the week and month resets only run at their own time, and a job
+  switched off in its settings is not run. The gear holds every one of these settings. Unfinished payments and item
+  rewards always stay in the live table.
 
 **Departments** (Admin UI → Departments):
 
