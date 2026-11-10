@@ -784,6 +784,54 @@ Config.Markers = {
 }
 
 -- ============================================================================
+--                                MISSION BLIPS
+-- ============================================================================
+-- Extra map blips for the other parts of a mission: the prisoner van, tow truck and coroner van and where each one
+-- waits for you, evidence, the cars and people of a scene, devices, hiding spots once found, ambush cars once they
+-- appear, the hospital, your partners and a live case's reported points. They show on the minimap and the big map.
+-- Shipped off: with enabled = false nothing below shows and the map is as before (Map markers above still marks the
+-- objective). The server decides what each officer gets: a real player suspect's live position never shows (a live
+-- case keeps its last-reported points only), nothing hidden shows before it is found, and Radio Silence still hides
+-- people and cars ('area') or everything ('none') as Config.Markers.radioSilence says.
+Config.MissionBlips = {
+    enabled = false,             -- master switch: false = no extra mission blips at all (each part's on is ignored)
+    refreshEvery = 3,            -- seconds between the server's checks of what each officer's map should show
+    -- Each part of a mission that can get a blip. The prisoner van and tow truck show only when Map markers does not
+    -- already show them (Config.Markers.serviceVehicles off)
+    -- on: true = this part shows (only while enabled is true)
+    -- sprite: the blip's picture, by its blip id (docs.fivem.net/docs/game-references/blips/)
+    -- colour: the blip's colour id (5 = yellow, 1 = red, 17 = orange, 3 = blue, 2 = green, 0 = white)
+    -- scale: the blip's size (1.0 = normal, 0.5 = half)
+    -- label: its name on the map legend ('' = the built-in name)
+    -- shortRange: true = on the minimap only when near; false = at the minimap's edge however far away it is
+    parts = {
+        prisonerVan = { on = false, sprite = 285, colour = 3, scale = 0.8, label = '', shortRange = false },
+        prisonerDrop = { on = false, sprite = 60, colour = 3, scale = 0.7, label = '', shortRange = false },
+        towTruck = { on = false, sprite = 68, colour = 3, scale = 0.8, label = '', shortRange = false },
+        impoundDrop = { on = false, sprite = 50, colour = 3, scale = 0.7, label = '', shortRange = false },
+        coronerVan = { on = false, sprite = 67, colour = 40, scale = 0.8, label = '', shortRange = false },
+        coronerDrop = { on = false, sprite = 1, colour = 40, scale = 0.7, label = '', shortRange = false },
+        evidence = { on = false, sprite = 1, colour = 0, scale = 0.6, label = '', shortRange = true },
+        suspectVehicle = { on = false, sprite = 225, colour = 1, scale = 0.7, label = '', shortRange = false },
+        parkedCar = { on = false, sprite = 225, colour = 0, scale = 0.6, label = '', shortRange = true },
+        witness = { on = false, sprite = 280, colour = 0, scale = 0.6, label = '', shortRange = true },
+        hostage = { on = false, sprite = 280, colour = 3, scale = 0.7, label = '', shortRange = false },
+        device = { on = false, sprite = 1, colour = 5, scale = 0.6, label = '', shortRange = true },
+        hidingSpot = { on = false, sprite = 1, colour = 17, scale = 0.6, label = '', shortRange = true },
+        sceneProp = { on = false, sprite = 1, colour = 0, scale = 0.5, label = '', shortRange = true },
+        ambush = { on = false, sprite = 225, colour = 1, scale = 0.6, label = '', shortRange = false },
+        hospitalDrop = { on = false, sprite = 61, colour = 1, scale = 0.8, label = '', shortRange = false },
+        partner = { on = false, sprite = 1, colour = 3, scale = 0.7, label = '', shortRange = false },
+        reportedPoint = { on = false, sprite = 1, colour = 17, scale = 0.8, label = '', shortRange = false },
+    },
+    -- Who sees a part, by part name; a part without rules shows to every officer on the run. Every rule is optional and
+    -- all must match: departments = { 'sast' }, jobs = { 'police' }, grade = the lowest grade level, missionTypes =
+    -- { 'patrol' }, missions = { 'mission_id' }, roles = 'all' | 'leader' (the unit leader) | 'supervisor'
+    -- Example: partner = { departments = { 'sast' }, roles = 'leader' },
+    rules = {},
+}
+
+-- ============================================================================
 --                                 RANDOM DRAW
 -- ============================================================================
 

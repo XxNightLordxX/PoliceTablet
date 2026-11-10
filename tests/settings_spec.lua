@@ -1464,6 +1464,43 @@ do
     H.eq(E('OfficerOptions.defaults.colourblindMap').default, false, 'the kinds colours, as before')
 end
 
+-- Config.MissionBlips: its own section in the missions group, shipped off, each comment its description, the limits,
+-- the rules picked from the allowed keys only, and a Features row.
+do
+    local function E(p) return S.entry(p) or {} end
+    H.ok(E('MissionBlips.enabled').section ~= E('Markers.enabled').section, 'Mission blips is a section of its own')
+    H.eq(E('MissionBlips.enabled').default, false, 'the master switch ships off')
+    H.eq(E('MissionBlips.enabled').desc,
+        'master switch: false = no extra mission blips at all (each part\'s on is ignored)', 'its comment is its help')
+    H.eq(E('MissionBlips.parts.evidence.on').default, false, 'every part ships off')
+    H.eq(E('MissionBlips.parts.partner.shortRange').desc,
+        'true = on the minimap only when near; false = at the minimap\'s edge however far away it is',
+        'the part fields share their comment lines')
+    H.ok((Check('MissionBlips.refreshEvery', 30)), 'a check every 30 s at most')
+    Err('MissionBlips.refreshEvery', 0, 'err.setting_range', 'at least every second')
+    Err('MissionBlips.parts.partner.sprite', 966, 'err.setting_range', 'sprites stop at 965')
+    Err('MissionBlips.parts.partner.colour', 86, 'err.setting_range', 'colours stop at 85')
+    Err('MissionBlips.parts.partner.scale', 2.5, 'err.setting_range', 'a size of 2.0 at most')
+    H.ok((Check('MissionBlips.parts.partner.label', 'Unit')), 'a label of its own')
+    H.ok((Check('MissionBlips.rules', {
+        partner = {
+            departments = { 'sast' },
+            jobs = { 'sast' },
+            grade = 2,
+            missionTypes = { 'patrol' },
+            missions = { 'store_robbery' },
+            roles = 'leader',
+        },
+    })), 'every rule key at once')
+    H.ok((Check('MissionBlips.rules', {})), 'no rules')
+    H.ok(not (Check('MissionBlips.rules', { partner = { roles = 'chief' } })), 'roles: all, leader or supervisor only')
+    H.ok(not (Check('MissionBlips.rules', { partner = { colour = 3 } })), 'no other rule key')
+    local row = nil
+    for _, f in ipairs(S._features or {}) do if f.key == 'mission_blips' then row = f end end
+    H.ok(row ~= nil and row.play == 'npc', 'the Features tab has a Mission blips row (NPC missions)')
+    H.eq(row and row.path, 'MissionBlips.enabled', 'it switches Config.MissionBlips.enabled')
+end
+
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.
 do
     local function E(p) return S.entry(p) or {} end

@@ -50,6 +50,7 @@ say the same things in short and point back here.
    - [6.10 Adding a department](#610-adding-a-department)
    - [6.11 Field training (FTO)](#611-field-training-fto)
    - [6.12 Feature rewards: money and items for every feature](#612-feature-rewards-money-and-items-for-every-feature)
+   - [6.13 Extra mission blips](#613-extra-mission-blips)
 7. [Settings to check in your other resources](#7-settings-to-check-in-your-other-resources)
    - [7.1 Locations and other scripts](#71-locations-and-other-scripts)
 8. [All commands and keys](#8-all-commands-and-keys)
@@ -1267,6 +1268,7 @@ The two switches at the top ([5.5](#55-the-two-switches-at-the-top-debug-and-sto
 
 | Feature (name in the Features tab) | Section | Switch | More |
 |---|---|---|---|
+| Extra mission blips (vans, evidence, cars, partners) | NPC missions | `Config.MissionBlips.enabled` | [6.13](#613-extra-mission-blips) |
 | Live crimes (real players) | Player vs police | `Config.LiveCrime.enabled` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
 | Volunteer suspects | Player vs police | `Config.Volunteers.enabled` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
 | Criminal tablet for volunteer suspects | Player vs police | `Config.CriminalTablet.enabled` | [9.16.5](#9165-the-criminal-tablet) |
@@ -1664,6 +1666,51 @@ Features → Money** (no typed word needed). Each row there shows its money, acc
 - A volunteer suspect is paid only for a case the server saw end fairly: officers reached him, he did not drop out
   (no-show, cancel, logging off, leaving the search circle), he was not AFK, and his outcome was escaped, detained or
   booked. Test runs never pay.
+
+### 6.13 Extra mission blips
+
+Map markers (`Config.Markers`) marks the objective. **Extra mission blips** (`Config.MissionBlips`) can also mark the
+other parts of a mission on the minimap and the big map. It ships off: with `Config.MissionBlips.enabled = false`
+nothing extra shows and the map is as before.
+
+Turn it on in Admin UI → **Settings** → **Features** (Extra mission blips), then switch on the parts you want in
+Admin UI → **Settings** → Missions and Builder → **Mission blips** (or in `config/config.lua`). Changes work at once,
+no restart, and every change is saved and audited like any setting.
+
+| Part | What it marks |
+|---|---|
+| `prisonerVan`, `prisonerDrop` | the prisoner van, and where it waits for the hand-over |
+| `towTruck`, `impoundDrop` | the tow truck, and where it waits to load the car |
+| `coronerVan`, `coronerDrop` | the coroner van, and where it waits for the body bags |
+| `evidence` | clue props and body bags |
+| `suspectVehicle`, `parkedCar` | a suspect's or stopped car, and the parked cars of a scene |
+| `witness`, `hostage`, `device` | witnesses and people to talk to, hostages, devices to work |
+| `hidingSpot` | where a Manhunt fugitive hid, once he was found |
+| `sceneProp` | other props of a scene |
+| `ambush` | ambush cars and attackers, once they appear |
+| `hospitalDrop` | the nearest hospital while a live-case suspect is down |
+| `partner` | the other officers of your run (police blue) |
+| `reportedPoint` | a live case's reported scene and last-reported points |
+
+Each part has `on`, `sprite`, `colour`, `scale`, `label` (`''` = the built-in name) and `shortRange` (`true` = only
+on the minimap when near). The prisoner van and tow truck are added only while `Config.Markers.serviceVehicles` is
+off, because Map markers shows them already.
+
+**Who sees a part**: `Config.MissionBlips.rules` limits a part by department, job, lowest grade, mission type,
+mission and role. All rules you set must match; a part without rules shows to everyone on the run:
+
+```lua
+rules = {
+    partner = { departments = { 'sast' }, roles = 'leader' },        -- only SAST unit leaders see their partners
+    evidence = { missionTypes = { 'investigation' }, grade = 2 },    -- grade 2 and up, investigation missions only
+},
+```
+
+The server decides what each officer gets and sends only that. A real player suspect's live position is never shown
+(a live case keeps its last-reported points only), nothing hidden shows before it is found (a staged ambush, a
+hidden contact, a fugitive's hiding spot), and Radio Silence still hides people and cars ('area') or everything but
+the vans ('none'), as `Config.Markers.radioSilence` says. The blips go at the run's end, when you leave the run, log
+out, or the switch is turned off.
 
 ---
 

@@ -76,6 +76,8 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/modules/markers/client.lua`: CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre) and at most one GPS line to it, cleared at every objective stop and run end (docs/ARCHITECTURE.md §5.44).
 - `Crimson-Police/modules/migrations/server.lua`: Applies sql/migrations/NNN_*.sql in order on start.
 - `Crimson-Police/modules/missionban/server.lua`: CP.MissionBan (server): a supervisor's temporary mission ban of one officer (the Mission control
+- `Crimson-Police/modules/missionblips/client.lua`: CP.MissionBlips (client): the extra mission blips the server sends (Config.MissionBlips, shipped off), on the minimap and the big map.
+- `Crimson-Police/modules/missionblips/server.lua`: CP.MissionBlips (server): the extra mission blips of Config.MissionBlips (shipped off).
 - `Crimson-Police/modules/missioncalls/client.lua`: CP.MissionCalls (client): the new-call toast and tone.
 - `Crimson-Police/modules/missioncalls/server.lua`: CP.MissionCalls: the tablet's own call board (Dispatch): posting, claims, lapses, re-dispatch, staff calls, the Dispatch screen data and call toasts.
 - `Crimson-Police/modules/missions/client.lua`: CP.Missions (client): the mission definitions sent by the server.
@@ -515,6 +517,8 @@ docs/ARCHITECTURE.md.
 - `tests/mission_ban_spec.lua`: Mission ban: a supervisor bars one officer of his department (a lower grade, never himself) from taking
 - `tests/mission_controls_spec.lua`: Mission controls core: CP.DeptControls (register, bounds, get, snapshot, set, reset, view), the six callbacks and actions, the master switch, the grants, the change wait, the self rule and the audit.
 - `tests/mission_reader_spec.lua`: The mission file reader (CP.U.parseMissionFile, shared/utils.lua): mission files are data, read and never run.
+- `tests/missionblips_client_spec.lua`: CP.MissionBlips (modules/missionblips/client.lua): the extra mission blips on the minimap and the big map.
+- `tests/missionblips_server_spec.lua`: CP.MissionBlips (modules/missionblips/server.lua): the extra mission blips, shipped off.
 - `tests/missioncalls_spec.lua`: Modules/missioncalls: posting, areas, claims and the claim window, the priority window, staff calls, statuses, re-dispatch, lapses, mute, the eligibility cache and its cost, never SC-Dispatch, realCallSummary.
 - `tests/missions_a_spec.lua`: The missions_a built-in mission files and missions/builtin/index.lua.
 - `tests/missions_b_spec.lua`: Slice missions_b: the built-in mission files warrant_service, manhunt,

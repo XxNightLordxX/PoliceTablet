@@ -357,6 +357,7 @@ local CONFIG_SECTIONS = {
     'Spawning',
     'Route',
     'Markers',
+    'MissionBlips',
     'Calls',
     'Alerts',
     'Downed',

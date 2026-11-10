@@ -587,3 +587,14 @@ marker. Run the mission on that location (turn its other locations off, README 5
   text. (Z10)
 - [ ] `Config.AdminUi.windowRows = true`: scroll a long board far down, filter it to a few rows, clear the filter:
   the rows show at once. (Z10)
+- [ ] Extra mission blips ship off: with `Config.MissionBlips.enabled = false` a run shows only the objective blips, as
+  before. Turn on Settings -> Features -> Extra mission blips and the parts `coronerVan`, `coronerDrop`, `evidence`,
+  `parkedCar` and `partner`; on a Process the scene run the coroner van, where it parks and the body bags show on the
+  minimap and the big map, the parked cars near the scene, your partner in blue (not yourself). (BL1)
+- [ ] Add a rule `partner = { roles = 'leader' }`: only the unit leader sees partners, within a few seconds, no
+  restart. With Radio Silence the parked cars and partners go; the van and the bags stay. (BL1)
+- [ ] A Manhunt with `hidingSpot` on: no hiding spot shows until a fugitive runs; then his spot shows. A live case
+  with `reportedPoint` and `hospitalDrop` on: the suspect's own position never shows, only the reported points, and
+  the hospital while he is down. (BL1)
+- [ ] End the run, leave a run, log out: every extra blip goes. resmon on a run with every part on stays under
+  0.05 ms. (BL1)

@@ -311,6 +311,10 @@ local function Cleanup()
     token = token + 1
     HideStartCircle(run)
     MarkerCall('clear') -- before the blocks remove the blips they handed over: their GPS line goes off first
+    if CP.MissionBlips and CP.MissionBlips.clear then
+        local ok, err = pcall(CP.MissionBlips.clear)
+        if not ok then CP.err(TAG, 'CP.MissionBlips.clear failed: %s', tostring(err)) end
+    end
     StopAllBlocks(run)
     RouteStop()
     CombatStop()

@@ -141,6 +141,7 @@ local GROUPS = {
             'difficulty',
             'route_to_the_start',
             'map_markers',
+            'mission_blips',
             'random_draw',
             'units',
             'cross_department_missions',
@@ -212,6 +213,7 @@ Play.groups = {
             'scaling_by_participants',
             'route_to_the_start',
             'map_markers',
+            'mission_blips',
             'random_draw',
             'dispatch',
             'special_events',
@@ -303,6 +305,7 @@ Play.features = {
     { key = 'tell_hints', play = 'npc', path = 'Npc.tellHints' },
     { key = 'rescale', play = 'npc', path = 'Rescale.enabled' },
     { key = 'markers', play = 'npc', path = 'Markers.enabled' },
+    { key = 'mission_blips', play = 'npc', path = 'MissionBlips.enabled', limits = { 'MissionBlips.refreshEvery' } },
     { key = 'route', play = 'npc', path = 'Route.required', risky = true },
     {
         key = 'mission_calls',
@@ -824,6 +827,11 @@ local RANGES = {
     ['Markers.kinds.*.bossScale'] = { 0.3, 2 },
     ['Markers.kinds.*.nextScale'] = { 0.3, 2 },
     ['Markers.kinds.*.surrenderedScale'] = { 0.3, 2 },
+    -- the extra mission blips (Config.MissionBlips)
+    ['MissionBlips.refreshEvery'] = { 1, 30 },
+    ['MissionBlips.parts.*.sprite'] = { 0, 965 },
+    ['MissionBlips.parts.*.colour'] = { 0, 85 },
+    ['MissionBlips.parts.*.scale'] = { 0.3, 2 },
     -- admin control limits
     ['AdminControl.adjustConfirmAbove'] = { 1, 10000 },
     ['AdminControl.adjustDailyLimit'] = { 0, 1000000 },
@@ -1649,6 +1657,18 @@ local KNOWN = {
         allowFalse = true,
     },
     ['Cash.account'] = { tpl = Enum({ 'bank', 'cash' }), kind = 'enum' },
+    -- who sees a mission blip part: every rule optional (Config.MissionBlips.rules)
+    ['MissionBlips.rules'] = {
+        tpl = MapOf(Record({
+            departments = ListOf(ID, { unique = true }),
+            jobs = ListOf(ID, { unique = true }),
+            grade = Num(0, 100, true),
+            missionTypes = ListOf(ID, { unique = true }),
+            missions = ListOf(ID, { unique = true }),
+            roles = Enum({ 'all', 'leader', 'supervisor' }),
+        }), '^%a+$'),
+    },
+    ['MissionBlips.parts.*.label'] = { tpl = Text(nil, 40) },
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
     ['Tablet.sidebarOrder'] = { tpl = Enum({ 'classic', 'mostUsed' }), kind = 'enum' },
     ['Tablet.supervisorLanding'] = { tpl = Enum({ 'first', 'report', 'review', 'live' }), kind = 'enum' },

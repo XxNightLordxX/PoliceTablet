@@ -190,6 +190,9 @@ protection drop and the `crimsonPoliceRun` player bag.
 `modules/markers/` (client, §5.44): the current objective's pointer on the officer's map and its one GPS line
 (Config.Markers).
 
+`modules/missionblips/` (client, server, §5.53): the extra mission blips of every other part of a mission
+(Config.MissionBlips, shipped off).
+
 `modules/spawn/` (client, server, §5.43): what an officer's game can see of the spawn director's points
 (Config.Spawning.preferHidden), the ground probe of one point (Config.Spawning.ground), the placer that puts a
 new mission entity on the ground when the server asks (Config.Spawning.place), and the server's side of it: the ask
@@ -3914,6 +3917,32 @@ point awarded, up to `maxMoney`).
   tests/feature_rewards_spec.lua (and the hook lines in field_training, sup_award_points, live_response and
   volunteer_match specs).
 
+### 5.53 CP.MissionBlips — modules/missionblips (client, server; extra mission blips)
+
+The other parts of a mission on the minimap and the big map, behind `Config.MissionBlips.enabled` (shipped false; every
+part's `on` shipped false too).
+
+- Server: `MB.pass()` runs every `refreshEvery` seconds (`CP.Perf.armed`, armed by `run:created`,
+  `participant:joined` and `settings:changed`; it stops when the switch is off, or no run is going and no map has
+  blips). `MB.collect(run)` lists the parts that are on: run entities by role (`ROLE_PART`; the service vans by tag;
+  any other object is `sceneProp`), the vans' parking points (`CP.Custody._servicesOf`, status coming / parked /
+  loading), Manhunt hiding spots whose fugitive ran (`ctx.state.fugitives[*].ran`), a live case's scene and
+  `ctx.state.reported`, the nearest `Config.Downed.dropOffs` point while a case suspect is `down`, and the run's
+  officers. Never listed: a dead entity, a hidden contact (`hiddenCfg`), an entity of a pending (staged) objective, a
+  real player suspect. `MB.viewFor(run, src, items)` keeps what one officer may see: not himself, a partner only in
+  his routing bucket, `MB.allowed(part, run, src)` (`rules[part]`: departments, jobs, grade, missionTypes, missions,
+  roles `all | leader | supervisor`, all AND-ed; officers read through `CP.Access.getOfficer`, kept 15 s), and Radio
+  Silence (`'area'` drops moving people and cars but the vans, `'none'` keeps only the vans and their drop-offs).
+  The prisoner van and tow truck are parts only while `Config.Markers.serviceVehicles` is off (§5.44 shows them).
+  Positions are rounded (1 m points, 25 m moving), and a list is sent only when it changed.
+- `client:missionBlips` `{ runId, items = { { k, p, n?, s?, x, y, z } } }` (an empty list clears); sent to each
+  officer when his list changes, empty at `run:ended`, `participant:left` and when the switch goes off.
+- Client: `MB.apply(runId, items)` adds, moves, restyles or removes only what changed (look read live from the
+  config), `AddBlipForEntity` once the netId or partner's ped streams in (1 s follow check, `CP.Perf.ms`, only while
+  such a blip is on the map), `SetBlipDisplay(2)`; `MB.clear()` at the run's clean-up (modules/runs), logout
+  (`CP.Qbx.onUnload`) and resource stop. Settings: `MissionBlips.*` ranges, the `MissionBlips.rules` template, the
+  Features row `mission_blips`. Specs: tests/missionblips_server_spec.lua, tests/missionblips_client_spec.lua.
+
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -4524,6 +4553,7 @@ the van. ox_target names `crimson-police:body_tag`, `body_bag`, `coroner`.
 | `client:serviceVehicle` | `{ runId, id, op = 'drive'|'load'|'leave', kind, veh, driver, dest, target, away }` to the driving client | custody |
 | `client:serviceBlip` | `{ runId, id, kind = 'prisonerVan'|'towTruck', show, netId, coords }` to every active participant when a transport van's or tow truck's status changes (show while coming, parked or loading), and to a late partner at `run:arrived` (§5.44 `service`, Config.Markers.serviceVehicles) | custody |
 | `client:closeTablet` | errKey (requireItem: the item left the inventory) | tablet |
+| `client:missionBlips` | `{ runId, items = { { k, p, n?, s?, x, y, z } } }` to an officer when his extra mission blips change; an empty list clears (§5.53, Config.MissionBlips) | missionblips |
 | `client:settings` | `{ { path, value } \| { path, none = true } }`: every setting changed in game that is in use | settings |
 
 Server → client ox_lib callback: `crimson-police:client:roadPoint` `{ near, min, max }` → `{ coords, heading }` or nil (the service-vehicle driver's client; the server validates the reply; custody).
