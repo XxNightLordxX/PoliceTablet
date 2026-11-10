@@ -63,11 +63,13 @@
 --   Volunteer slot (ARCHITECTURE 7.3; one local table Vol, the file is near Lua's 200 locals): stop mode with
 --   no contact hand-off, no observe and no team offers volunteerSlot { role = 'driver', meet = the first car's point }
 --   (Street Race Bust). ctx.volunteer() decides st.vol: 'wait' (asking: no car, no trigger), 'real' (he drives his
---   own car: no NPC car unless Config.Volunteers.driverNpcCars, then one fewer; he is one more car and suspect,
+--   own car: no NPC car unless Config.RealPlayers.volunteer.driverNpcCars, then one fewer; he is one more car and
+-- suspect,
 --   done when CP.Opponents.view has him detained with a share or booked, a detained racer with the detain bonus;
 --   lost fails block.pursuit.fail_escaped), 'void' (nothing spawns), nil (the NPCs as before). The pointer is the
 --   first car's point, then his last-reported point (key last:driver, the server's rec.lastCoords every
---   Config.Volunteers.driverReportEvery s once he is in position or engaged), never a live position; presence
+--   Config.RealPlayers.volunteer.driverReportEvery s once he is in position or engaged), never a live position;
+-- presence
 --   reads rec.lastCoords on the server. The snapshot carries volunteer / volunteerDone for the HUD only.
 --
 -- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.pursuit)
@@ -899,12 +901,13 @@ local function StateOf(ctx)
 end
 
 -- A volunteer driver in his own car (§7.3): no NPC car while volunteers are asked or the run ends for want of
--- one; while he plays, the mission's other cars only with Config.Volunteers.driverNpcCars (he takes one car's place).
+-- one; while he plays, the mission's other cars only with Config.RealPlayers.volunteer.driverNpcCars (he takes one
+-- car's place).
 local function VehTarget(ctx)
     local n = Int(ctx.obj.vehicles)
     local vol = type(ctx.state) == 'table' and ctx.state.vol or nil
     if vol == nil then return n end
-    if vol == 'real' and (Config.Volunteers or {}).driverNpcCars == true then return math.max(0, n - 1) end
+    if vol == 'real' and (CP.RealPlayers('volunteer')).driverNpcCars == true then return math.max(0, n - 1) end
     return 0
 end
 local function OccTarget(ctx) return math.min(MAX_SEATS, math.max(1, Int(ctx.obj.suspectsPerVehicle))) end
@@ -1806,7 +1809,7 @@ end
 
 local Vol = {}
 do
-    local function VCfg() return type(Config.Volunteers) == 'table' and Config.Volunteers or {} end
+    local function VCfg() return (CP.RealPlayers('volunteer')) end
 
     -- volunteerSlot(obj, mission, location): { role = 'driver', meet = the first car's point } or nil.
     function Vol.slot(obj, mission, location)
@@ -1843,8 +1846,8 @@ do
     end
 
     -- Done once CP.Opponents has him detained with a share above 0 or booked (an AFK catch, share 0, never counts while
-    -- Config.Volunteers.afkCatchVoids is on: CP.Volunteers voids it); lost = he got away. Done is kept: it counts as
-    -- one more detained driver (the mission's detain bonus, once), as a cuffed NPC racer.
+    -- Config.RealPlayers.volunteer.afkCatchVoids is on: CP.Volunteers voids it); lost = he got away. Done is kept: it
+    -- counts as one more detained driver (the mission's detain bonus, once), as a cuffed NPC racer.
     local function Facts(ctx, st)
         st.volLost = false
         if st.vol ~= 'real' or st.volDone or not (CP.Opponents and CP.Opponents.view) then return end
@@ -1868,8 +1871,9 @@ do
         end
     end
 
-    -- The last-reported point (Config.Volunteers.driverReportEvery seconds; 0 = none): where the server last saw him
-    -- free and online, taken once he is in position or engaged and never in between, so he is never followed live.
+    -- The last-reported point (Config.RealPlayers.volunteer.driverReportEvery seconds; 0 = none): where the server last
+    -- saw him free and online, taken once he is in position or engaged and never in between, so he is never followed
+    -- live.
     local function Report(ctx, st, phase)
         local every = tonumber(VCfg().driverReportEvery) or 0
         if st.vol ~= 'real' or st.volDone or every <= 0 or phase == 'travel' then

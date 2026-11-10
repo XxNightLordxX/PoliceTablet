@@ -43,7 +43,7 @@
 --   suspect point }. ctx.volunteer() decides st.vol: 'wait' (asking: nobody at the door), 'real' (a volunteer
 --   plays him: no NPC suspect, done when CP.Opponents.view has him detained with a share or booked, lost fails),
 --   'void' (nothing spawns), nil (the NPC as before). No associate while st.vol is set unless
---   Config.Volunteers.doorAssociates; the pointer stays the door. Voids are CP.Volunteers' (onVoid).
+--   Config.RealPlayers.volunteer.doorAssociates; the pointer stays the door. Voids are CP.Volunteers' (onVoid).
 --   validate: spawn points, the door marker and every fleeTo / route waypoint must lie outside
 --   Config.Builder.noBuildZones for every mission; custom missions also get the allowed lists, the
 --   associate spawn-point count and the minimum distance of spawn points from the start, and:
@@ -744,11 +744,11 @@ local function LeftOut(ctx, role)
     return lo and lo[role] or 0
 end
 
--- Config.Volunteers.doorAssociates: false (shipped) = no armed associate while a volunteer may play the wanted person
--- (the NPCs' hostile group shoots every player, the volunteer too).
+-- Config.RealPlayers.volunteer.doorAssociates: false (shipped) = no armed associate while a volunteer may play the
+-- wanted person (the NPCs' hostile group shoots every player, the volunteer too).
 local function NoAssociates(ctx)
     local vol = type(ctx.state) == 'table' and ctx.state.vol or nil
-    return vol ~= nil and (Config.Volunteers or {}).doorAssociates ~= true
+    return vol ~= nil and (CP.RealPlayers('volunteer')).doorAssociates ~= true
 end
 
 local function AssocTarget(ctx)
@@ -1466,13 +1466,14 @@ end
 
 -- The volunteer's case state, from CP.Opponents' server-only facts (never his position): done once he is detained
 -- with a share above 0 or booked. A catch while he was AFK (share 0) never counts: CP.Volunteers voids it
--- (Config.Volunteers.afkCatchVoids, shipped true); with that off it counts like any detain. Lost = he got away.
+-- (Config.RealPlayers.volunteer.afkCatchVoids, shipped true); with that off it counts like any detain. Lost = he got
+-- away.
 local function VolunteerFacts(ctx, st)
     st.volDone, st.volLost = false, false
     if st.vol ~= 'real' or not (CP.Opponents and CP.Opponents.view) then return end
     local view = CP.Opponents.view(ctx.run)
     if type(view) ~= 'table' or (view.index and ctx.index and view.index ~= ctx.index) then return end
-    local afkVoids = (Config.Volunteers or {}).afkCatchVoids ~= false
+    local afkVoids = (CP.RealPlayers('volunteer')).afkCatchVoids ~= false
     for _, cid in ipairs(view.order or {}) do
         local r = view.suspects[cid]
         if r and (r.state == 'detained' or r.state == 'booked') then

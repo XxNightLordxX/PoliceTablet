@@ -125,9 +125,9 @@ do
         'Recognition.fieldTraining.',
         'Recognition.commendations.',
         'CrossDept.',
-        'Volunteers.',
-        'RealSuspects.',
-        'LiveCrime.',
+        'RealPlayers.volunteer.',
+        'RealPlayers.',
+        'RealPlayers.liveCrime.',
         'Cash.',
         'Payouts.',
         'Rewards.daily',
@@ -171,7 +171,8 @@ do
     H.ok(byKey.field_training and Has(byKey.field_training.limits, 'Recognition.fieldTraining.rookiesPerTrainer'),
         'field training links rookies per trainer')
     H.ok(byKey.item_rewards and Has(byKey.item_rewards.limits, 'Rewards.dailyValueCap'), 'item rewards link the caps')
-    H.ok(byKey.volunteers and Has(byKey.volunteers.limits, 'Volunteers.strikes'), 'volunteers link the strikes')
+    H.ok(byKey.volunteers and Has(byKey.volunteers.limits, 'RealPlayers.volunteer.strikes'),
+        'volunteers link the strikes')
     H.eq(byKey.flee and byKey.flee.limits, nil, 'a feature with no limits sends none')
 end
 

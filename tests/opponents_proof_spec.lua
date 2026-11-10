@@ -158,11 +158,11 @@ RegisterNetEvent('police:server:JailPlayer', function(targetId, jailTime)
 end)
 H.load('modules/integrations/sc_police/server.lua')
 H.load('modules/integrations/sc_ambulance/server.lua')
-H.load('modules/opponents/server.lua')
-H.load('modules/opponents/proof/server.lua')
+H.load('modules/realplayers/opponents.lua')
+H.load('modules/realplayers/proof.lua')
 H.step(0)
 local Opp = CP.Opponents
-local RS = Config.RealSuspects
+local RS = Config.RealPlayers
 
 -- the online list the rescue pass reads, counted (CP.Qbx.getOnlinePlayers: the event-kept list)
 local onlineReads = 0
@@ -285,7 +285,7 @@ do
         spawnProtectSeconds = 600,
         earlyRespawnSeconds = 400,
     }) do
-        H.eq(RS[key], value, 'Config.RealSuspects.' .. key .. ' ships ' .. tostring(value))
+        H.eq(RS[key], value, 'Config.RealPlayers.' .. key .. ' ships ' .. tostring(value))
     end
     H.eq(#RS.bookingZones, 4, 'four booking zones')
     H.eq(RS.bookingZones[1].label, 'Mission Row PD', 'the first is Mission Row PD')
@@ -382,7 +382,7 @@ end
 --               (b0) AN OFFICER OUTSIDE THE CASE CUFFS A SUSPECT
 -- ============================================================================
 -- V15, critic C11.
--- Config.RealSuspects.outsideCuff: 'assist' (shipped) = the case's cuff while an officer of the case is within
+-- Config.RealPlayers.outsideCuff: 'assist' (shipped) = the case's cuff while an officer of the case is within
 -- contactRange of the suspect, else stopped; 'stopped' = always stopped. A live case asks the outsider to join.
 
 do
@@ -1044,7 +1044,7 @@ do
         for _, p in pairs(run.participants) do if p.flagged then flagged = flagged + 1 end end
     end
     H.eq(flagged, 0, '(i) no run.flagged and no p.flagged')
-    local f = io.open(H.root .. 'modules/opponents/proof/server.lua', 'r')
+    local f = io.open(H.root .. 'modules/realplayers/proof.lua', 'r')
     local text = f and f:read('a') or ''
     if f then f:close() end
     H.ok(#text > 0, '(i) the proof file is readable')

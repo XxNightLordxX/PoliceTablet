@@ -25,7 +25,7 @@ export type TypeCard = BoardCard & {
     featured?: boolean;
     // switched off for a department of the unit by command (the types Mission control); locked says so
     offByCommand?: boolean;
-    // a mission of the pool may be played against a volunteer suspect (Config.Volunteers modes): the
+    // a mission of the pool may be played against a volunteer suspect (Config.RealPlayers.volunteer modes): the
     // accept dialog offers "Real suspect OK"; required = every mission needs it; available = volunteers free now
     realSuspect?: { required?: boolean; available?: number } | null;
 };
@@ -106,7 +106,7 @@ export interface ActiveMissionData extends ActiveMissionView {
     // The Objective GPS button is on (Config.Markers.objectiveGps; the officer's game refuses it while he drives to the
     // start or Radio Silence hides the objective's line).
     objectiveGps?: boolean;
-    // A live case's card (CP.LiveCrime.caseView, Config.LiveCrime.caseCard); absent for any other run.
+    // A live case's card (CP.LiveCrime.caseView, Config.RealPlayers.liveCrime.caseCard); absent for any other run.
     live?: LiveCaseView | null;
 }
 
@@ -126,7 +126,7 @@ export interface LiveCaseView {
     // Seconds since the last report (absent = none yet) and to the next one (absent = none coming).
     reportedAgoS?: number | null;
     nextReportS?: number | null;
-    // false = Config.LiveCrime.lastReportedEvery is 0 (no last-reported points on this server).
+    // false = Config.RealPlayers.liveCrime.lastReportedEvery is 0 (no last-reported points on this server).
     reportsOn?: boolean;
 }
 

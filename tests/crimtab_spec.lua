@@ -92,9 +92,9 @@ local MISSION = {
 }
 
 H.load('modules/permissions/server.lua')
-H.load('modules/volunteers/server.lua')
-H.load('modules/volunteers/match/server.lua')
-H.load('modules/crimtab/server.lua')
+H.load('modules/realplayers/volunteers.lua')
+H.load('modules/realplayers/match.lua')
+H.load('modules/realplayers/crimtab.lua')
 H.step(0)
 local V, C, P = CP.Volunteers, CP.CrimTab, CP.Permissions
 
@@ -145,7 +145,7 @@ end
 -- ============================================================================
 
 do
-    local c = Config.CriminalTablet
+    local c = Config.RealPlayers.criminalTablet
     H.eq(c.enabled, false, 'the criminal tablet ships off')
     H.eq(c.command, 'crimtab', 'its command is /crimtab')
     H.eq(c.item, false, 'no item opens it')
@@ -160,7 +160,7 @@ do
     H.eq(err, 'err.crimtab_off', 'off: the reason')
 end
 
-Config.CriminalTablet.enabled = true
+Config.RealPlayers.criminalTablet.enabled = true
 
 -- ============================================================================
 --                                WHO MAY USE IT
@@ -184,7 +184,7 @@ do
     H.ok(P.isGrantable('criminalTablet'), 'criminalTablet is a grantable power')
     local keys = table.concat(P.grantableKeys(), ',')
     H.ok(keys:find('criminalTablet', 1, true) ~= nil, 'the Permissions screen lists it')
-    Config.CriminalTablet.access = 'granted'
+    Config.RealPlayers.criminalTablet.access = 'granted'
     H.eq(Get(10).error, 'err.crimtab_no_access', '\'granted\': a civilian without the grant is refused')
     Config.Permissions.grants = { criminalTablet = { citizenids = { 'CRT00010', 'CRT00012', 'CRT00011' } } }
     H.ok(Get(10).ok, 'granted by citizenid: he may')
@@ -192,10 +192,10 @@ do
     H.eq(Get(11).error, 'err.crimtab_on_duty', 'but never on duty, grant or not')
     H.eq(#P.actionsFor(10), 0, 'the grant is no supervisor action (no Supervisor UI button)')
     Config.Permissions.grants = {}
-    Config.CriminalTablet.access = 'everyone'
+    Config.RealPlayers.criminalTablet.access = 'everyone'
 end
 
-Config.Volunteers.enabled = true
+Config.RealPlayers.volunteer.enabled = true
 
 -- ============================================================================
 --                          HOME: ON AND OFF THE LIST
@@ -311,11 +311,11 @@ do
     H.eq(#view.history, 1, 'History: the case')
     H.eq(view.history[1].missionType, 'Investigation', '...its type label')
     H.eq(view.history[1].dropout, 'cancelled', '...and the dropout')
-    Config.CriminalTablet.historySize = 2
+    Config.RealPlayers.criminalTablet.historySize = 2
     for i = 1, 3 do C.record({ citizenid = 'CRT00010', role = 'driver', outcome = 'got_away', endedAt = i }) end
     H.eq(#C.historyOf('CRT00010'), 2, 'History keeps historySize cases')
     H.eq(C.historyOf('CRT00010')[1].endedAt, 3, 'newest first')
-    Config.CriminalTablet.historySize = 20
+    Config.RealPlayers.criminalTablet.historySize = 20
     H.eq(C.record({ role = 'runner' }), false, 'a payload without a citizenid is no line')
 
     local ok2, data = Act(10, { what = 'stop' })
@@ -332,14 +332,14 @@ do
     H.fire(CP.e('server:volunteer'), 10, 'open')
     H.eq(#ClientEvents('client:volunteerMenu', 10), 1, 'replaceCommand false: the command keeps its menu')
     H.eq(#ClientEvents('client:crimtabOpen', 10), 0, '...and does not open the tablet')
-    Config.CriminalTablet.replaceCommand = true
+    Config.RealPlayers.criminalTablet.replaceCommand = true
     H.clockMs = H.clockMs + 3000
     H.fire(CP.e('server:volunteer'), 10, 'open')
     H.eq(#ClientEvents('client:crimtabOpen', 10), 1, 'replaceCommand true: the command opens the tablet')
     H.clockMs = H.clockMs + 3000
     H.fire(CP.e('server:volunteer'), 12, 'open')
     H.eq(#ClientEvents('client:crimtabOpen', 12), 0, 'not for a player who may not use it')
-    Config.CriminalTablet.replaceCommand = false
+    Config.RealPlayers.criminalTablet.replaceCommand = false
 
     -- going on police duty closes an open tablet
     Player(20, 'CRT00020', 'police', false)
@@ -350,23 +350,28 @@ do
     H.eq(#ClientEvents('client:crimtabClose', 10), 0, 'a civilian is left alone')
 end
 
-do -- Config health: Config.CriminalTablet.item names a real ox_inventory item (nothing listed while off or unset)
+-- Config health: Config.RealPlayers.criminalTablet.item names a real ox_inventory item (nothing listed while off or
+-- unset)
+do
     local C = CP.CrimTab
-    local was, wasItem, wasMock = Config.CriminalTablet.enabled, Config.CriminalTablet.item, H.exportsMock.ox_inventory
+    local was, wasItem, wasMock =
+        Config.RealPlayers.criminalTablet.enabled, Config.RealPlayers.criminalTablet.item, H.exportsMock.ox_inventory
     H.exportsMock.ox_inventory = {
         Items = function(name) return name == 'burner_phone' and { label = 'Burner' } or nil end,
     }
-    Config.CriminalTablet.enabled, Config.CriminalTablet.item = true, false
+    Config.RealPlayers.criminalTablet.enabled, Config.RealPlayers.criminalTablet.item = true, false
     H.eq(#C._itemHealth(), 0, 'no item set: no line')
-    Config.CriminalTablet.item = 'burner_phone'
+    Config.RealPlayers.criminalTablet.item = 'burner_phone'
     local l = C._itemHealth()[1]
     H.ok(l and l.level == 'ok' and l.text:find('burner_phone', 1, true) ~= nil, 'a real item: one ok line')
-    Config.CriminalTablet.item = 'no_such_item'
+    Config.RealPlayers.criminalTablet.item = 'no_such_item'
     l = C._itemHealth()[1]
-    H.ok(l and l.level == 'warn' and l.fix == 'CriminalTablet.item', 'an unknown item: a warning with its fix')
-    Config.CriminalTablet.enabled = false
+    H.ok(l and l.level == 'warn' and l.fix == 'RealPlayers.criminalTablet.item',
+        'an unknown item: a warning with its fix')
+    Config.RealPlayers.criminalTablet.enabled = false
     H.eq(#C._itemHealth(), 0, 'the tablet off: no line')
-    Config.CriminalTablet.enabled, Config.CriminalTablet.item, H.exportsMock.ox_inventory = was, wasItem, wasMock
+    Config.RealPlayers.criminalTablet.enabled, Config.RealPlayers.criminalTablet.item, H.exportsMock.ox_inventory =
+        was, wasItem, wasMock
 end
 
 return H

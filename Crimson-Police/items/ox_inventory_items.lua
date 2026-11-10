@@ -14,8 +14,8 @@ return {
             export = 'Crimson-Police.useTablet', -- <resource folder name>.useTablet: change it if you renamed the folder
         },
     },
-    -- The criminal tablet (optional, Config.CriminalTablet.item = 'crimson_criminal_tablet'). It uses the police
-    -- tablet's picture until you add your own crimson_criminal_tablet.png and change image below.
+    -- The criminal tablet (optional, Config.RealPlayers.criminalTablet.item = 'crimson_criminal_tablet'). It uses the
+    -- police tablet's picture until you add your own crimson_criminal_tablet.png and change image below.
     ['crimson_criminal_tablet'] = {
         label = 'Burner Tablet',
         weight = 400,

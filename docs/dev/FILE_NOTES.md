@@ -42,8 +42,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/calls/server.lua`: CP.Calls (server): Hard rule 15, real calls first (docs/dev/ARCHITECTURE.md §5.13, SPEC "Real calls end missions; NPC calls never do", INTEGRATIONS sc-dispatch and sc-npcpolice).
 - `Crimson-Police/modules/cash/server.lua`: CP.Cash (server): the cash formula and every payment Crimson-Police makes.
 - `Crimson-Police/modules/confighealth/server.lua`: CP.ConfigHealth (server): the Config health list of Admin UI → Permissions.
-- `Crimson-Police/modules/crimtab/client.lua`: CP.CrimTab (client): opens and closes the criminal tablet (Config.CriminalTablet) and keeps it fresh.
-- `Crimson-Police/modules/crimtab/server.lua`: CP.CrimTab (server): the criminal tablet for players who play real suspects (Config.CriminalTablet).
 - `Crimson-Police/modules/custody/client.lua`: CP.Custody (client): the police action flow (begin, progress bar, finish), the case-fail confirm, the service vehicles this client drives for the server and their blips, and the road point the server asks for.
 - `Crimson-Police/modules/custody/server.lua`: CP.Custody (server): contact truths and facts, police actions, grading, the custody chain and the service vehicles (prisoner transport, tow truck, coroner van).
 - `Crimson-Police/modules/deptcontrols/server.lua`: CP.DeptControls (server): Mission controls.
@@ -62,8 +60,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/integrations/sc_ambulance/server.lua`: CP.Ambulance (server): the only server code that talks to sc-ambulance.
 - `Crimson-Police/modules/integrations/sc_dispatch/server.lua`: CP.Dispatch: the only code that talks to sc-dispatch.
 - `Crimson-Police/modules/integrations/sc_police/server.lua`: CP.ScPolice: second, read-only handlers for sc-police's net events; they never trigger, cancel or answer one.
-- `Crimson-Police/modules/livecrime/client.lua`: CP.LiveCrime (client): the pop-up that asks an officer to join a live case as backup.
-- `Crimson-Police/modules/livecrime/server.lua`: CP.LiveCrime (server): live crimes (option A, Config.LiveCrime).
 - `Crimson-Police/modules/livectl/server.lua`: CP.LiveCtl (server): the Admin UI's Live screen (every live run and unit), an officer's run state with the anti-farm overrides (cooldown clears, extra runs, another boss attempt, a free abandon made normal) and today's events.
 - `Crimson-Police/modules/markers/client.lua`: CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre)
 - `Crimson-Police/modules/markers/server.lua`: CP.Markers (server): every part of a mission besides its objective on the officers' maps (Config.Markers.parts).
@@ -79,13 +75,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/npccombat/server.lua`: CP.NpcCombat (server): the crimsonPoliceRun player bag of every officer whose game runs the run's NPC damage settings, and the message that drops an officer's headshot and defense protection for the rest of his run.
 - `Crimson-Police/modules/operations/client.lua`: CP.Operations (client): the Cross-Department Mission toast.
 - `Crimson-Police/modules/operations/server.lua`: CP.Operations (server): Cross-Department Missions, with leave before the start and the waitlist.
-- `Crimson-Police/modules/opponents/conduct/server.lua`: CP.Opponents conduct (server): how officers treat a real suspect, from server facts only.
-- `Crimson-Police/modules/opponents/pairs/server.lua`: CP.Opponents identity and pairs (server): the self rule (nobody takes a
-- `Crimson-Police/modules/opponents/proof/server.lua`: CP.Opponents proof (server): the server facts that decide every detain and booking of a real suspect.
-- `Crimson-Police/modules/opponents/saved/server.lua`: CP.Opponents saved cases (server): each closed real-suspect case is saved in cp_pvp_cases while
-- `Crimson-Police/modules/opponents/server.lua`: CP.Opponents (server): the real-player suspects of a case (live crimes, volunteers), keyed by citizenid, and one 1 s watch on event-kept maps that runs only while something is tracked.
-- `Crimson-Police/modules/opponents/staff/server.lua`: CP.Opponents staff (server): what admins read about real-suspect cases and the three admin tools.
-- `Crimson-Police/modules/opponents/surrender/server.lua`: CP.Opponents surrender (server): a real suspect of a live case gives himself up, by his own command or
 - `Crimson-Police/modules/options/client.lua`: CP.Options (client): the officer options as this PC sees them.
 - `Crimson-Police/modules/options/server.lua`: CP.Options (server): each character's officer options (My options), saved sparse in cp_officers.options (JSON: only the keys that differ from the default).
 - `Crimson-Police/modules/payments/server.lua`: CP.Payments (server): Admin UI → Payments: the payments ledger, totals and CSV, the payment actions (resolve, pay now, retries, the money tools that ship off), department funds and the cash health lines.
@@ -97,6 +86,20 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/progression/leaderboard.lua`: CP.Leaderboard (server): the four time-boxed boards ranked by a metric, their cache, the weekly/monthly recognition, public and own profiles with the service record, the hide-name toggle and the admin board view.
 - `Crimson-Police/modules/progression/profile.lua`: CP.Profile (server): pictures, bio and look of an officer, profile reports, commendations and profile moderation.
 - `Crimson-Police/modules/progression/scoring.lua`: CP.Scoring (server): points, streaks, XP, XP levels, badges, manual awards and the officer Home screen.
+- `Crimson-Police/modules/realplayers/client/crimtab.lua`: CP.CrimTab (client): opens and closes the criminal tablet (Config.RealPlayers.criminalTablet) and keeps it fresh.
+- `Crimson-Police/modules/realplayers/client/livecrime.lua`: CP.LiveCrime (client): the pop-up that asks an officer to join a live case as backup.
+- `Crimson-Police/modules/realplayers/client/volunteers.lua`: CP.Volunteers (client): the volunteer command (Config.RealPlayers.volunteer.command, default /crimsonheat).
+- `Crimson-Police/modules/realplayers/conduct.lua`: CP.Opponents conduct (server): how officers treat a real suspect, from server facts only.
+- `Crimson-Police/modules/realplayers/crimtab.lua`: CP.CrimTab (server): the criminal tablet for players who play real suspects (Config.RealPlayers.criminalTablet).
+- `Crimson-Police/modules/realplayers/livecrime.lua`: CP.LiveCrime (server): live crimes (option A, Config.RealPlayers.liveCrime).
+- `Crimson-Police/modules/realplayers/match.lua`: CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer, set at the draw) asks the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'), makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
+- `Crimson-Police/modules/realplayers/opponents.lua`: CP.Opponents (server): the real-player suspects of a case (live crimes, volunteers), keyed by citizenid, and one 1 s watch on event-kept maps that runs only while something is tracked.
+- `Crimson-Police/modules/realplayers/pairs.lua`: CP.Opponents identity and pairs (server): the self rule (nobody takes a
+- `Crimson-Police/modules/realplayers/proof.lua`: CP.Opponents proof (server): the server facts that decide every detain and booking of a real suspect.
+- `Crimson-Police/modules/realplayers/saved.lua`: CP.Opponents saved cases (server): each closed real-suspect case is saved in cp_pvp_cases while
+- `Crimson-Police/modules/realplayers/staff.lua`: CP.Opponents staff (server): what admins read about real-suspect cases and the three admin tools.
+- `Crimson-Police/modules/realplayers/surrender.lua`: CP.Opponents surrender (server): a real suspect of a live case gives himself up, by his own command or
+- `Crimson-Police/modules/realplayers/volunteers.lua`: CP.Volunteers (server): the volunteer list behind Config.RealPlayers.volunteer.command (default /crimsonheat).
 - `Crimson-Police/modules/review/anticheat.lua`: CP.AntiCheat (server): objective-event checks, run flags, outside help, presence sampling, the idle check and the voids -> suspension rule.
 - `Crimson-Police/modules/review/corrections.lua`: CP.Corrections (server): an admin's corrections to officers' records (adjustments, bulk void and restore, retire, reset progression, record move, XP check, restore run, void kinds, flag by hand, badges, streaks, goals, staff notices) and the run history an admin reads.
 - `Crimson-Police/modules/review/disputes.lua`: CP.Disputes (server): officers' disputes about their flagged, voided or failed runs (cp_disputes) and how supervisors and admins answer them.
@@ -125,9 +128,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/testing/server.lua`: CP.Testing (server): Admin test mode.
 - `Crimson-Police/modules/units/client.lua`: CP.Units (client): the invite cue, the ready check toast and the crimsonpolice_ready key mapping.
 - `Crimson-Police/modules/units/server.lua`: CP.Units (server): units of 2-4 officers from any department, leader controls and the ready check.
-- `Crimson-Police/modules/volunteers/client.lua`: CP.Volunteers (client): the volunteer command (Config.Volunteers.command, default /crimsonheat).
-- `Crimson-Police/modules/volunteers/match/server.lua`: CP.Volunteers matching (server): a run whose suspect a volunteer may play (run.volunteer, set at the draw) asks the volunteers who fit, one at a time, with a yes/no pop-up; a yes opens his CP.Opponents case (kind 'volunteer'), makes the run a case with a real suspect (run.realSuspect = 'volunteer') and sends him to the slot's meet point.
-- `Crimson-Police/modules/volunteers/server.lua`: CP.Volunteers (server): the volunteer list behind Config.Volunteers.command (default /crimsonheat).
 - `Crimson-Police/shared/init.lua`: The CP namespace, logging, the block registry, the config load check and RegisterMission().
 - `Crimson-Police/shared/lib.lua`: The shared helper library: the small helpers every module used to carry its own copy of.
 - `Crimson-Police/shared/locale.lua`: Loads locales/<Config.Locale>.json (falls back to en.json).
@@ -192,7 +192,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/officers/OfficerRuns.tsx`: Officers → Runs: one officer's run history, live and archived (admin:getOfficerRuns), and the run dialog (admin:getRun) with Void (strike or correction, all participants, goal rewards), Restore, Change kind, Flag.
 - `Crimson-Police/web/src/admin/components/officers/OfficerTools.tsx`: Officers → officer detail: the admin cards for points (adjust), XP (check, fix), streak, goals, look, badges and the record (refresh, boards, void runs, reset, retire, move record).
 - `Crimson-Police/web/src/admin/components/realSuspects.ts`: Admin UI · Real suspects: the screen's plain helpers (no React), walked by realSuspects.walk.ts.
-- `Crimson-Police/web/src/admin/components/realSuspects.walk.ts`: Admin UI · Real suspects walked against the browser mocks (node walk.mjs, a gate step): the screen shows only for admins while live crimes or volunteers are on, a case opens its timeline and damage ledger (never the admin's own case), and the tool form sends what modules/opponents/staff expects (or says what is wrong first).
+- `Crimson-Police/web/src/admin/components/realSuspects.walk.ts`: Admin UI · Real suspects walked against the browser mocks (node walk.mjs, a gate step): the screen shows only for admins while live crimes or volunteers are on, a case opens its timeline and damage ledger (never the admin's own case), and the tool form sends what modules/realplayers/staff expects (or says what is wrong first).
 - `Crimson-Police/web/src/admin/components/rewardsScreen.ts`: Admin UI -> Money -> Rewards: every feature that pays, as rows built from the settings data (admin:getSettings), each with its switch, money, how the money is paid and its items.
 - `Crimson-Police/web/src/admin/components/rewardsScreen.walk.ts`: Admin UI -> Money -> Rewards walked against the browser mocks (node walk.mjs, a gate step): the Rewards tab of Money lists every feature that pays with its money, account and items, saves through server:admin:setSetting, and the item editors build the values the server checks.
 - `Crimson-Police/web/src/admin/components/screenSettings.ts`: The gear of each Admin UI screen (admin/components/ScreenSettings.tsx) and Settings -> Presets: which settings a screen's gear shows and whether a preset can be applied.
@@ -292,7 +292,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/mocks/admin_live.mock.ts`: Browser mocks for full admin control: Live runs, units and anti-farm overrides (modules/livectl/server.lua).
 - `Crimson-Police/web/src/mocks/admin_missions.mock.ts`: Browser mocks for full admin control: Missions and the Mission Builder (edited built-ins, Quick edit, versions, Copy as Lua and Import, the load result, history, stats, the Deleted list, test results).
 - `Crimson-Police/web/src/mocks/admin_officers.mock.ts`: Browser mocks for full admin control: Officers, Leaderboards and Seasons (modules/review/corrections, the officers tools of modules/progression: profile, scoring and goals, the recognition and season tools of leaderboard and challenge).
-- `Crimson-Police/web/src/mocks/admin_rs.mock.ts`: Browser mocks for Admin UI · Real suspects: modules/opponents/staff/server.lua. ?rsOff in the browser answers as with Config.LiveCrime.enabled and Config.Volunteers.enabled both false.
+- `Crimson-Police/web/src/mocks/admin_rs.mock.ts`: Browser mocks for Admin UI · Real suspects: modules/realplayers/staff.lua. ?rsOff in the browser answers as with Config.RealPlayers.liveCrime.enabled and Config.RealPlayers.volunteer.enabled both false.
 - `Crimson-Police/web/src/mocks/admin_system.mock.ts`: Browser mocks for full admin control, System: storage, backups, webhooks, problems, integrations, departments added in game, desks and Support (the shapes of modules/sysadmin).
 - `Crimson-Police/web/src/mocks/boards.mock.ts`: Browser mocks for the boards slice (Leaderboard, Department Challenge, Profile & History, Admin Seasons &
 - `Crimson-Police/web/src/mocks/builder_client.mock.ts`: Browser mocks for the builder client slice (modules/builder/client.lua and the builder screens).
@@ -319,7 +319,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/officer/components/ContactPanel.tsx`: Active Mission · Contact panel: every person and car of the current contact objective, its facts, the checks still open, the police actions and the dispositions (CP.Custody.view; decisions go to server:contactDecide).
 - `Crimson-Police/web/src/officer/components/FieldTrainingCard.tsx`: Profile · Field training (Config.Recognition.fieldTraining): the rookie's own training (tasks, progress, trainer, notes, ride-along types) and the trainer's rookies with Sign off (and a count of the tasks ready).
 - `Crimson-Police/web/src/officer/components/HappyHourBanner.tsx`: Happy hour: "Happy hour: no mission cooldowns for 18:00, set by Sgt Doe" on the officer Home and the Mission Board.
-- `Crimson-Police/web/src/officer/components/LiveCaseCard.tsx`: Active Mission · the live case card (Config.LiveCrime.caseCard): the reported crime, the suspect count, the three steps (the same for every suspect, like the HUD) and when the "last reported" map points were taken.
+- `Crimson-Police/web/src/officer/components/LiveCaseCard.tsx`: Active Mission · the live case card (Config.RealPlayers.liveCrime.caseCard): the reported crime, the suspect count, the three steps (the same for every suspect, like the HUD) and when the "last reported" map points were taken.
 - `Crimson-Police/web/src/officer/components/LookCard.tsx`: The own profile's Look card: appearance, personal accent, tablet size and call alerts, as saved on cp_officers.
 - `Crimson-Police/web/src/officer/components/MissionCallsLink.tsx`: Mission call pieces on the Mission Board: the "n mission calls open" link to Dispatch, the daily-limit badge and the ready-check toast text (their texts live in the mission calls locale part).
 - `Crimson-Police/web/src/officer/components/ProfileEditDialog.tsx`: Officer UI · Edit profile: picture (initials, presets, an approved link), bio, look (appearance, accent, tablet size) and call alerts.
@@ -414,12 +414,12 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/types/admin_live.ts`: Full admin control, live runs, units and anti-farm (modules/livectl/server.lua, docs/dev/ARCHITECTURE.md §5.39 and §9.5).
 - `Crimson-Police/web/src/types/admin_missions.ts`: Full admin control, Missions and Mission Builder (docs/dev/ARCHITECTURE.md §8.4.2): the shapes of the admin reads and actions of modules/missions, builder, testing, operations and missioncalls.
 - `Crimson-Police/web/src/types/admin_officers.ts`: Full admin control, officers and boards: the shapes of modules/review/corrections, the officers tools in modules/progression: profile, scoring, goals, and the recognition and season tools in leaderboard and challenge (docs/dev/ARCHITECTURE.md §5.38 and §9.5).
-- `Crimson-Police/web/src/types/admin_rs.ts`: Admin UI · Real suspects (screen key 'admin_rs'): what modules/opponents/staff/server.lua answers.
+- `Crimson-Police/web/src/types/admin_rs.ts`: Admin UI · Real suspects (screen key 'admin_rs'): what modules/realplayers/staff.lua answers.
 - `Crimson-Police/web/src/types/admin_system.ts`: Full admin control, System (modules/sysadmin): storage, backups, webhooks, problems, integrations, departments added in game, Support (docs/dev/ARCHITECTURE.md §9.5, "Admin control: system").
 - `Crimson-Police/web/src/types/boards.ts`: Shapes of the boards slice (modules/progression/leaderboard, modules/progression/challenge).
 - `Crimson-Police/web/src/types/builder_client.ts`: Shapes of the builder client slice: the in-world tool overlays sent by
 - `Crimson-Police/web/src/types/builder_server.ts`: Mission Builder protocol shapes (docs/dev/ARCHITECTURE.md §5.28).
-- `Crimson-Police/web/src/types/criminal.ts`: The criminal tablet (modules/crimtab): what crimtab:get and server:crimtab:act answer.
+- `Crimson-Police/web/src/types/criminal.ts`: The criminal tablet (modules/realplayers/crimtab): what crimtab:get and server:crimtab:act answer.
 - `Crimson-Police/web/src/types/custody.ts`: Shapes of the Contact panel (ActiveMissionView.contact, built by CP.Custody.view for a field_contact objective).
 - `Crimson-Police/web/src/types/economy.ts`: Response shapes of the economy slice's supervisor/admin callbacks and actions (modules/payouts/server.lua; documented in docs/dev/ARCHITECTURE.md §5.18).
 - `Crimson-Police/web/src/types/fieldTraining.ts`: Shapes of field training (modules/supervisor/fieldtraining.lua, Config.Recognition.fieldTraining).
@@ -524,9 +524,9 @@ docs/dev/ARCHITECTURE.md.
 - `tests/live_fto_e2e_spec.lua`: End-to-end workflows, part 3: live crime, surrender and field training on the REAL server side of
 - `tests/live_join_spec.lua`: Backup joins a live case: CP.LiveCrime.joinCheck / offer / answer, the join pop-up for an officer who responds to the crime's own SC-Dispatch call or reaches the scene, and CP.Runs.addParticipant for a live run that already runs.
 - `tests/live_response_spec.lua`: The live_response block: the engine-only objective of a live crime.
-- `tests/live_results_spec.lua`: Results for other scripts: the server-only event crimson-police:server:liveCrimeEnded when a live case ends (Config.LiveCrime.endEvent) and the read-only export GetAvailablePolice (CP.LiveCrime.availablePolice, Config.LiveCrime.availablePolice).
-- `tests/live_scoring_spec.lua`: Live scoring: a live case scores only its weighted live_* lines (Config.LiveCrime.linesOnly), its tier
-- `tests/live_surrender_spec.lua`: Surrender and Talk them down in a live case (modules/opponents/surrender): the suspect's own command, an
+- `tests/live_results_spec.lua`: Results for other scripts: the server-only event crimson-police:server:liveCrimeEnded when a live case ends (Config.RealPlayers.liveCrime.endEvent) and the read-only export GetAvailablePolice (CP.LiveCrime.availablePolice, Config.RealPlayers.liveCrime.availablePolice).
+- `tests/live_scoring_spec.lua`: Live scoring: a live case scores only its weighted live_* lines (Config.RealPlayers.liveCrime.linesOnly), its tier
+- `tests/live_surrender_spec.lua`: Surrender and Talk them down in a live case (modules/realplayers/surrender): the suspect's own command, an
 - `tests/live_tablet_spec.lua`: The officers' tablet for a live case: the LIVE line of the ready check (CP.LiveCrime.readyLine), the
 - `tests/livecrime_intake_spec.lua`: Live crimes: the Crimson-Contracts adapter and the intake (CP.LiveCrime).
 - `tests/location_labels_spec.lua`: Built-in location labels name the right place: renamed locations keep their old label in `aliases`, so a Config.DisabledLocations or MissionTweaks entry written by the old label still matches; Traffic Enforcement's two city corridors are posted at 60 km/h.
@@ -569,11 +569,12 @@ docs/dev/ARCHITECTURE.md.
 - `tests/push_mission_spec.lua`: A mission a supervisor pushes to a unit (the pushMission Mission control): the paged call names that mission, only the paged unit sees its name and may accept or decline it; the accept runs every rule but skips the random draw.
 - `tests/qbx_cache_spec.lua`: CP.Qbx's player info cache (Config.Limits.playerInfoCacheMs) and the online list kept by qbx_core's events: how many times Qbox's exports are called, and that every change event makes the next answer fresh.
 - `tests/ready_toast_client_spec.lua`: The unit ready check on a member's game (modules/units/client.lua): the toast names the twists the leader chose , and stays the plain one without twists.
+- `tests/realplayers_spec.lua`: Config.RealPlayers (FM4): real players as suspects are one config section with two modes, liveCrime and volunteer
 - `tests/realsuspects_config_spec.lua`: Police vs real criminal players, (the owner's decision of 2026-10-26, "Build all 3 but options in the config.lua"): the two master switches ship off and show in Admin UI → Settings, and the docs record the decision without rewording RT1's start-route text.
 - `tests/realsuspects_docs_spec.lua`: The owner docs for real suspects stay in step with the code.
 - `tests/realsuspects_e2e_spec.lua`: End-to-end scenarios for real suspects on the REAL server side of Crimson-Police: every server file loaded as in game, database off (the saves folder, as shipped), only the other resources and the natives stubbed.
 - `tests/realsuspects_facts_spec.lua`: Police vs real criminal players: second, read-only handlers for sc-police's and sc-ambulance's net events pass facts to CP.ScPolice.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
-- `tests/realsuspects_rules_spec.lua`: Police vs real criminal players: the NPC-mission Hard rules 15-18 bent for cases with a real suspect (run.realSuspect), each a Config.RealSuspects choice, and Config.LiveCrime.requireRoute for live crimes.
+- `tests/realsuspects_rules_spec.lua`: Police vs real criminal players: the NPC-mission Hard rules 15-18 bent for cases with a real suspect (run.realSuspect), each a Config.RealPlayers choice, and Config.RealPlayers.liveCrime.requireRoute for live crimes.
 - `tests/recognition_spec.lua`: Config.Recognition (FM2): XP levels, the auto badges, the weekly board badges, commendations and the field training
 - `tests/resmon_spec.lua`: Client resmon (docs/dev/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
 - `tests/restore_flagged_spec.lua`: Restoring a bulk-void batch keeps the held item rewards of a row that is still flagged (it waits for the Review Queue), and undoing a batch-caused forfeit of a flagged row puts its items back to held, not pending.
@@ -615,8 +616,8 @@ docs/dev/ARCHITECTURE.md.
 - `tests/testing_spec.lua`: The testing slice: CP.Testing server (invites, start gates, controls, debug geometry, the run-end hook, recording results, the catalog view) and client (panel focus, HUD flag, teleport arena re-check, debug data).
 - `tests/twists_spec.lua`: Twists the officers choose at accept: CP.Twists and CP.Events' fit, offer, check and roll.
 - `tests/volunteer_match_spec.lua`: Volunteer matching: the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
-- `tests/volunteer_modes_spec.lua`: Volunteer modes: Config.Volunteers.modes / missionModes, the volunteerSlot registry, who is free (a 'players_only' accept holds one), the Mission Board card and "Real suspect OK", the draw filter, the pushed-mission refusal, run.volunteer, the release at the run's end and the start-up check.
-- `tests/volunteers_client_spec.lua`: Volunteer opt-in, the client: the command exists only once Config.Volunteers.enabled is on, and the server's menu becomes ox_lib's consent alert, the roles input, the context menu and notifications.
+- `tests/volunteer_modes_spec.lua`: Volunteer modes: Config.RealPlayers.volunteer.modes / missionModes, the volunteerSlot registry, who is free (a 'players_only' accept holds one), the Mission Board card and "Real suspect OK", the draw filter, the pushed-mission refusal, run.volunteer, the release at the run's end and the start-up check.
+- `tests/volunteers_client_spec.lua`: Volunteer opt-in, the client: the command exists only once Config.RealPlayers.volunteer.enabled is on, and the server's menu becomes ox_lib's consent alert, the roles input, the context menu and notifications.
 - `tests/volunteers_spec.lua`: Volunteer opt-in: CP.Volunteers on the server, the command's event (open, join, renew, roles, stop), the window, the ends (expired, on duty, excluded, disabled, left) and strikes.
 - `tests/workflow_errors_spec.lua`: Easy to understand (docs/dev/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
 - `tests/workflows_e2e_spec.lua`: End-to-end workflows, part 2: officers and supervisors on the REAL server side of Crimson-Police, every server file loaded as in game, database off (the saves folder, as shipped), every switch these workflows touch turned on by the admin through the Admin UI's own Settings action.

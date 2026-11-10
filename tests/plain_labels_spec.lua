@@ -49,7 +49,7 @@ do
 end
 
 -- Z10: the clawback dialog names the account the payment used (bank or cash), and a dropped case's text no longer
--- says closed cases go at a restart (Config.RealSuspects.saveCases keeps them)
+-- says closed cases go at a restart (Config.RealPlayers.saveCases keeps them)
 H.ok(CP.L('payments.action_msg.clawback', { name = 'A' }):find('bank or cash', 1, true) ~= nil,
     'Z10: the clawback text names bank or cash')
 H.ok(CP.L('err.rs_no_case'):find('restart', 1, true) == nil, 'Z10: err.rs_no_case says nothing about a restart')

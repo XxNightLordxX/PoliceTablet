@@ -3,18 +3,18 @@
 -- Objective block "live_response" (server half): the engine-only objective of a live crime (the live_crime
 -- engine mission, docs/dev/ARCHITECTURE.md §5.46 and §7.3). The suspects are real players kept by CP.Opponents (§5.45);
 -- this block never touches them. Three phases: Respond (an officer reaches the reported scene or makes contact),
--- Secure the scene (officers hold it for Config.LiveCrime.secureSeconds), and one open "Detain and book the suspects"
--- that never closes and never reacts to one suspect's state: the HUD and the checklist only show the phase. Detains
--- and bookings are the server-only opp_detained / opp_booked events of CP.Opponents' proof, recorded as the shared
--- lines live_detain and live_book weighted by the suspect's share. The case ends with End case (the unit leader), the
--- time limit (completed with what was earned) or Config.LiveCrime.deadCaseSeconds after no suspect is left to work.
--- The map never follows a suspect: it shows where each free suspect was at the last report, every
--- Config.LiveCrime.lastReportedEvery seconds (0 = never).
+-- Secure the scene (officers hold it for Config.RealPlayers.liveCrime.secureSeconds), and one open "Detain and book the
+-- suspects" that never closes and never reacts to one suspect's state: the HUD and the checklist only show the phase.
+-- Detains and bookings are the server-only opp_detained / opp_booked events of CP.Opponents' proof, recorded as the
+-- shared lines live_detain and live_book weighted by the suspect's share. The case ends with End case (the unit
+-- leader), the time limit (completed with what was earned) or Config.RealPlayers.liveCrime.deadCaseSeconds after no
+-- suspect is left to work. The map never follows a suspect: it shows where each free suspect was at the last report,
+-- every Config.RealPlayers.liveCrime.lastReportedEvery seconds (0 = never).
 
 local BLOCK = 'live_response'
 local U = CP.U
 
-local function Cfg() return Config.LiveCrime or {} end
+local function Cfg() return (CP.RealPlayers('liveCrime')) end
 
 local function Num(v, default)
     local n = tonumber(v)
@@ -275,7 +275,7 @@ local function Peaceful(ctx, st, ev)
 end
 
 -- Z10: a suspect detained or booked before In progress (CP.Opponents sends no opp_* event then, e.g. with
--- Config.RealSuspects.routeEnds = 'start'): his lines are awarded when the block starts, as the events would have.
+-- Config.RealPlayers.routeEnds = 'start'): his lines are awarded when the block starts, as the events would have.
 local function CatchUp(ctx, st)
     local case = CP.Opponents and CP.Opponents.caseOf and CP.Opponents.caseOf(ctx.run) or nil
     if not case then return end

@@ -196,7 +196,7 @@ local RESULT = {
     force_recall = 'abandoned',
     cancelled = 'abandoned',
     downed = 'failed',
-    -- a downed officer in a case with a real suspect (CP.Downed.reasonFor, Config.RealSuspects.downed = 'keep_earned'):
+    -- a downed officer in a case with a real suspect (CP.Downed.reasonFor, Config.RealPlayers.downed = 'keep_earned'):
     -- live crimes keep the lines earned so far, volunteer suspects today's failed credit; no type cooldown for either
     downed_case = 'completed',
     downed_kept = 'failed',
@@ -304,12 +304,13 @@ local function limits() return Config.Limits or {} end
 -- Mission controls (Config.MissionControls.controls): the server-wide cooldown changes supervisors may make. A cooldown
 -- entry keeps when it started and both are applied when it is read, so a change, its end or a reset counts at once.
 local Cd = { SCALE = 'cooldownScale', ABANDON = 'abandonCooldown' }
--- A live case (CP.LiveCrime) on Cd too (the file is at Lua's 200 locals): its mission id and Config.LiveCrime.
+-- A live case (CP.LiveCrime) on Cd too (the file is at Lua's 200 locals): its mission id and
+-- Config.RealPlayers.liveCrime.
 Cd.LIVE_ID = 'live_crime'
-function Cd.liveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
+function Cd.liveCfg() return (CP.RealPlayers('liveCrime')) end
 
 -- Whether a run row of this mission starts the abandon (type) cooldown: a live case only with
--- Config.LiveCrime.typeCooldown, read now (a restart rebuilds the cooldowns by the same rule).
+-- Config.RealPlayers.liveCrime.typeCooldown, read now (a restart rebuilds the cooldowns by the same rule).
 function Cd.liveType(missionId)
     return missionId ~= Cd.LIVE_ID or Cd.liveCfg().typeCooldown == true
 end
@@ -3205,7 +3206,7 @@ local function Settle(run, p, result, endReason, others)
     cash.status = status
 
     local payTier = run.payTier or TierByName(run.expectedTier)
-    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew')
+    -- a live case's tier comes from its crew (Config.RealPlayers.liveCrime.tier = 'crew')
     local okL, liveTier = Call('LiveCrime', 'tierRow', run)
     if okL and type(liveTier) == 'table' then payTier = liveTier end
     local rr = {
@@ -3232,7 +3233,7 @@ local function Settle(run, p, result, endReason, others)
         progress = nil,
         items = {},
     }
-    -- a live case: each suspect's outcome by label once it is over (Config.LiveCrime.resultOutcomes)
+    -- a live case: each suspect's outcome by label once it is over (Config.RealPlayers.liveCrime.resultOutcomes)
     local okLv, liveView = Call('LiveCrime', 'resultView', run)
     if okLv and type(liveView) == 'table' then rr.live = liveView end
     -- a volunteer case: goals and the challenge leave its row out by this breakdown key unless switched on
@@ -3564,7 +3565,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
             officers[#officers + 1] = o
         end
     end
-    -- a live case (opts.live) is capped by Config.LiveCrime.maxLiveRuns, never by the server run caps
+    -- a live case (opts.live) is capped by Config.RealPlayers.liveCrime.maxLiveRuns, never by the server run caps
     local live = Cd.liveOpts(opts.live)
     if not test and not opts.operationId and not live then
         local ok, errKey = Runs.capsOk(missionType)
@@ -3632,16 +3633,17 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         run.live = live
         run.realSuspect = 'live'
     end
-    -- a mission whose suspect a volunteer may play (CP.Draw, Config.Volunteers modes, "Real suspect OK"):
+    -- a mission whose suspect a volunteer may play (CP.Draw, Config.RealPlayers.volunteer modes, "Real suspect OK"):
     -- { mode, role, obj } only; who plays him is CP.Volunteers' (memory, never on the run). The match runs on it
-    -- (modules/volunteers/match) and sets run.realSuspect = 'volunteer' once a volunteer says yes.
+    -- (modules/realplayers/match) and sets run.realSuspect = 'volunteer' once a volunteer says yes.
     local vol = type(opts.volunteer) == 'table' and opts.volunteer or nil
     if vol and not live and not test and type(vol.mode) == 'string' and type(vol.role) == 'string' then
         run.volunteer = { mode = vol.mode, role = vol.role, obj = math.tointeger(tonumber(vol.obj)) }
     end
     -- Hard rule 17's switch, locked at accept: whether leaving the start route ends the run. CP.Route.requiredFor
     -- decides (a test run follows its own Start route switch, test.useStartRoute: on = with the route rules; a live
-    -- crime Config.LiveCrime.requireRoute; every other run Config.Route.required); run.live is set above this line.
+    -- crime Config.RealPlayers.liveCrime.requireRoute; every other run Config.Route.required); run.live is set above
+    -- this line.
     do
         local okR, required = Call('Route', 'requiredFor', run)
         if not (okR and type(required) == 'boolean') then
@@ -3760,7 +3762,7 @@ function Runs._create(opts)   -- the start itself; Runs.create keeps a refusal
         local okCaps, capsErr = Runs.capsOk(missionType)
         if not okCaps then return nil, capsErr end
     elseif live and Cd.liveCfg().duringOperation == false then
-        -- Config.LiveCrime.duringOperation = false: the Cross-Department lock stops live cases too
+        -- Config.RealPlayers.liveCrime.duringOperation = false: the Cross-Department lock stops live cases too
         local okLock, locked = Call('Operations', 'isLocked')
         if okLock and locked == true then return nil, 'err.operation_locked' end
     end
@@ -4776,7 +4778,8 @@ function Runs.view(run, src)
     -- The Objective GPS button (Config.Markers.objectiveGps); the officer's game decides when it can set one.
     local markers = type(Config.Markers) == 'table' and Config.Markers or {}
     local objectiveGps = markers.enabled ~= false and markers.objectiveGps ~= false
-    -- a live case's card (Config.LiveCrime.caseCard): steps, suspect count, last-reported time; nil otherwise
+    -- a live case's card (Config.RealPlayers.liveCrime.caseCard): steps, suspect count, last-reported time; nil
+    -- otherwise
     local okLive, liveCase = Call('LiveCrime', 'caseView', run, src)
     if not (okLive and type(liveCase) == 'table') then liveCase = nil end
     return {

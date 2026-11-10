@@ -219,14 +219,14 @@ CP.Qbx = nil
 H.load('modules/integrations/qbx/server.lua')
 H.load('modules/integrations/sc_police/server.lua')
 H.load('modules/integrations/sc_ambulance/server.lua')
-H.load('modules/opponents/server.lua')
-H.load('modules/opponents/proof/server.lua')
-H.load('modules/opponents/conduct/server.lua')
+H.load('modules/realplayers/opponents.lua')
+H.load('modules/realplayers/proof.lua')
+H.load('modules/realplayers/conduct.lua')
 H.load('modules/scaling/server.lua')
 H.load('modules/progression/scoring.lua')
 H.step(0)
 local Opp = CP.Opponents
-local RS = Config.RealSuspects
+local RS = Config.RealPlayers
 
 -- ============================================================================
 --                                    SCENES

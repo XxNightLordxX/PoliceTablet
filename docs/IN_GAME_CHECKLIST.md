@@ -185,7 +185,7 @@ names the change it came with.
 - [ ] Admin -> Officers -> an officer with changed options -> Look lists them; Reset options with a reason empties the list, he gets a notice and My options shows defaults. (O12)
 - [ ] Departments -> SAST -> Officer options -> Auto-Ready Allowed: Yes; a SAST officer turns it on; 50 m from the leader he is Ready at once ("Auto-Ready: you are Ready") and can still press Not ready; 500 m away he is asked as before. (O13)
 - [ ] Permissions -> Mission controls row on; Mission cooldowns Lowest 0.5 / Highest 1.0, Save; a supervisor's change shows value, who and when; Reset with a reason; a grant (SAST from grade 4) under "Who may use them" works. (P4)
-- [ ] Settings -> Real suspects: the AFK and custody options name their unit. (C14)
+- [ ] Settings -> Real players: the AFK and custody options name their unit. (C14)
 - [ ] Settings -> Testing lists the test-panel key (Config.Testing.panelKey, ships F7) as a restart setting; F7 still opens the panel for an admin who never rebound it. (K22)
 - [ ] Audit -> Export (and Export part) and Payments -> Export of thousands of rows: the tablet keeps answering while the file loads (Config.Limits.exportBps). (K17)
 - [ ] With Config.Limits.netRateResponse = 'kick', click Audit -> Load part a few times quickly as admin: you are not dropped or reported; normal clicking never refuses anything with the shipped 'block'. (K10, Checkpoint)
@@ -280,7 +280,7 @@ names the change it came with.
   pop up.
 - [ ] Stand at a mission desk on duty: Open Crimson-Police shows; go off duty: it hides at once (at most a second);
   back on duty: it shows. In Crimson-Arena: hidden.
-- [ ] `Config.CriminalTablet.enabled` true and `item = 'no_such_item'`: Permissions -> Config health shows a warning and
+- [ ] `Config.RealPlayers.criminalTablet.enabled` true and `item = 'no_such_item'`: Permissions -> Config health shows a warning and
   the console prints one line at start; a real item shows an ok line. (R1)
 - [ ] Defuse a device in a search-then-defuse mission after its prop was removed: the prop comes back at the device's
   own spot and the device is worked there, never at another object. (R1)
@@ -346,7 +346,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 
 ## Real suspects (ships off)
 
-- [ ] With Config.LiveCrime.enabled and Config.Volunteers.enabled off as shipped, nothing changes for officers and idle resmon is unchanged. (V1, V3, V4, V5, V6)
+- [ ] With Config.RealPlayers.liveCrime.enabled and Config.RealPlayers.volunteer.enabled off as shipped, nothing changes for officers and idle resmon is unchanged. (V1, V3, V4, V5, V6)
 - [ ] A database server creates the empty table cp_pvp_pairs on start. (V7)
 - [ ] A database server creates the empty table cp_pvp_cases on start. With live crimes or volunteers on, close a case, restart Crimson-Police: Admin UI → Real suspects → Cases still lists it with its timeline and damage ledger. Give a volunteer a strike (say yes, then cancel), restart: his /crimsonheat menu still shows the strike, and he must volunteer again. (F1)
 - [ ] With live crimes on: Admin UI → Real suspects → Pairs and blocks shows "Name (CITIZENID)" for officers and suspects, also for an offline player; Block pair someone, then Lift it with a reason: it leaves the list, the pair can take a case together again, the audit log has the lift, and a restart does not bring it back. Shoot a suspect with a Combat Pistol: the case's damage ledger reads Combat Pistol, not a number. With volunteers on, give a volunteer a strike, then Volunteers tab → Clear strikes with a reason: his /crimsonheat menu shows no strike. (F2)
@@ -354,15 +354,16 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Tase a fleeing real suspect in Flee & Arrest or Pursuit: he gives up at once and no stun_unproven note appears in the run detail. (R7)
 - [ ] Optional: with Config.NpcCombat.playerHitDropsProtection = true, an officer on an NPC mission shot by a player takes normal headshot damage until the run ends; shipped false, no change. (V8)
 - [ ] Crimson-Contracts guards keep their own damage while an officer is on a run nearby (the crimsonPoliceRun bag). (V8)
-- [ ] Config.RealSuspects (officerAlerts, routeEnds, downed, downedPickupDelay) and Config.LiveCrime.requireRoute show in Settings; nothing changes until a live case exists. (V9, V10)
-- [ ] As shipped, the Admin UI has no Real suspects screen. With Config.LiveCrime.enabled = true (reopen the Admin UI), More -> Real suspects lists the cases; a case opens its timeline and damage ledger; your own case is greyed; Block pair, Exclude and Suspend need days and a reason, then show under Pairs and blocks and in the audit log. (V18)
-- [ ] As shipped, /crimsonheat does nothing. With Config.Volunteers.enabled = true (restart, or turn it on in Settings), a civilian types /crimsonheat: the rules alert, then the suspects to play; he gets "You volunteer as a suspect for 60 minutes". /crimsonheat again shows the menu (time left, Renew, Change, Stop). An on-duty officer is refused; going on police duty, logging out or Stop ends it. (V20)
-- [ ] As shipped (every Config.Volunteers mode 'npc') the Mission Board has no "Real suspect" badge and accepting works as before. With enabled = true and Config.Volunteers.modes.investigation = 'players_only', Admin UI -> Permissions -> Config health warns that no Investigation mission has a suspect a volunteer can play (until the slot steps) and the Investigation card is locked "No volunteer suspect is free". (V21)
+- [ ] Config.RealPlayers (officerAlerts, routeEnds, downed, downedPickupDelay) and Config.RealPlayers.liveCrime.requireRoute show in Settings; nothing changes until a live case exists. (V9, V10)
+- [ ] Settings -> All settings has one Real players section (also under the Real suspects screen's gear): the shared rules on top, then the liveCrime, volunteer and criminalTablet groups, each with its own enabled switch and the same cash, items, goals, challenge and typeOfTheDay switches; turning volunteer on leaves live crimes off and shows the Real players group in the sidebar. (FM4)
+- [ ] As shipped, the Admin UI has no Real suspects screen. With Config.RealPlayers.liveCrime.enabled = true (reopen the Admin UI), More -> Real suspects lists the cases; a case opens its timeline and damage ledger; your own case is greyed; Block pair, Exclude and Suspend need days and a reason, then show under Pairs and blocks and in the audit log. (V18)
+- [ ] As shipped, /crimsonheat does nothing. With Config.RealPlayers.volunteer.enabled = true (restart, or turn it on in Settings), a civilian types /crimsonheat: the rules alert, then the suspects to play; he gets "You volunteer as a suspect for 60 minutes". /crimsonheat again shows the menu (time left, Renew, Change, Stop). An on-duty officer is refused; going on police duty, logging out or Stop ends it. (V20)
+- [ ] As shipped (every Config.RealPlayers.volunteer mode 'npc') the Mission Board has no "Real suspect" badge and accepting works as before. With enabled = true and Config.RealPlayers.volunteer.modes.investigation = 'players_only', Admin UI -> Permissions -> Config health warns that no Investigation mission has a suspect a volunteer can play (until the slot steps) and the Investigation card is locked "No volunteer suspect is free". (V21)
 - [ ] As shipped nobody is ever asked to play a suspect. Once a built-in mission offers a volunteer slot (V23-V25), with enabled = true and its type set to 'players_when_available': a listed civilian gets the "Play a suspect now?" pop-up after a unit accepts with Real suspect OK; No (or waiting 30 s) asks the next volunteer and costs no strike; Yes sets his waypoint, the officers get "A volunteer plays this mission's suspect", reaching the waypoint says "You are in position", an officer within 100 m makes the case engaged (Real suspects screen timeline), /crimsonheat shows Cancel this case, and when the mission ends he is told he is free to go. Not reaching the waypoint in 5 minutes is a strike and the NPC plays the suspect. (V22)
-- [ ] Warrant Service with a volunteer (Config.Volunteers.enabled = true, modes.investigation = 'players_when_available', Real suspect OK ticked): while he is asked nobody waits at the door and the HUD says "Stand by"; once he said yes no NPC suspect and no armed associate appear, the knock says "Real suspect: the wanted person is a real player", the map pointer stays on the door, and cuffing him (detained) completes the first step. Cuffing him while he is AFK ends the mission (Abandoned, his strike); a no-show before officers reach him brings the NPC back at the door. (V23)
-- [ ] Street Race Bust with a volunteer driver (Config.Volunteers.enabled = true, modes.patrol = 'players_when_available', Real suspect OK ticked, the volunteer ticked the driver role): while he is asked no racer appears and the HUD says "Stand by: a real suspect may drive"; after his yes no NPC racer appears (driverNpcCars false), the map pointer is the first grid slot, and once he is in position the pointer jumps to "Suspect vehicle: last reported" every 30 s (never between), the HUD says "Real suspect: a real player drives the suspect vehicle"; detaining him completes the race. With driverNpcCars = true two NPC racers race beside him. He gets away (lost): the mission fails. (V24)
-- [ ] Manhunt with a volunteer fugitive (Config.Volunteers.enabled = true, modes.investigation = 'players_when_available', Real suspect OK ticked, the volunteer ticked the fugitive role): while he is asked no fugitive appears and the HUD says "Stand by: a real suspect may play the fugitive"; after his yes no NPC fugitive appears, he has the search circle as a red circle on his map, officers see only the circle and the clues; checking a clue shrinks the circle around him (his map circle shrinks too). Leaving the circle warns him; staying out 30 s ends his part (a strike, Real suspects timeline "stayed outside the search area"). Detaining him completes the search. (V25)
-- [ ] LIVE call (Config.LiveCrime.enabled = true, Crimson-Contracts with ContractsConfig.LifecycleEvents = true): start a Warehouse Burglary with a second account as the crew and trigger its police alert: Dispatch shows a red LIVE card (LIVE-001, the alert's title and street, the area, "2 suspects", never where they are) and idle officers get a red toast; it lapses after 300 s or when the contract ends. An admin test contract never makes one. (V11)
+- [ ] Warrant Service with a volunteer (Config.RealPlayers.volunteer.enabled = true, modes.investigation = 'players_when_available', Real suspect OK ticked): while he is asked nobody waits at the door and the HUD says "Stand by"; once he said yes no NPC suspect and no armed associate appear, the knock says "Real suspect: the wanted person is a real player", the map pointer stays on the door, and cuffing him (detained) completes the first step. Cuffing him while he is AFK ends the mission (Abandoned, his strike); a no-show before officers reach him brings the NPC back at the door. (V23)
+- [ ] Street Race Bust with a volunteer driver (Config.RealPlayers.volunteer.enabled = true, modes.patrol = 'players_when_available', Real suspect OK ticked, the volunteer ticked the driver role): while he is asked no racer appears and the HUD says "Stand by: a real suspect may drive"; after his yes no NPC racer appears (driverNpcCars false), the map pointer is the first grid slot, and once he is in position the pointer jumps to "Suspect vehicle: last reported" every 30 s (never between), the HUD says "Real suspect: a real player drives the suspect vehicle"; detaining him completes the race. With driverNpcCars = true two NPC racers race beside him. He gets away (lost): the mission fails. (V24)
+- [ ] Manhunt with a volunteer fugitive (Config.RealPlayers.volunteer.enabled = true, modes.investigation = 'players_when_available', Real suspect OK ticked, the volunteer ticked the fugitive role): while he is asked no fugitive appears and the HUD says "Stand by: a real suspect may play the fugitive"; after his yes no NPC fugitive appears, he has the search circle as a red circle on his map, officers see only the circle and the clues; checking a clue shrinks the circle around him (his map circle shrinks too). Leaving the circle warns him; staying out 30 s ends his part (a strike, Real suspects timeline "stayed outside the search area"). Detaining him completes the search. (V25)
+- [ ] LIVE call (Config.RealPlayers.liveCrime.enabled = true, Crimson-Contracts with ContractsConfig.LifecycleEvents = true): start a Warehouse Burglary with a second account as the crew and trigger its police alert: Dispatch shows a red LIVE card (LIVE-001, the alert's title and street, the area, "2 suspects", never where they are) and idle officers get a red toast; it lapses after 300 s or when the contract ends. An admin test contract never makes one. (V11)
 - [ ] Claim the LIVE call as a unit leader: the case opens at once at the reported place (no draw, no twists, no ready check as shipped); the HUD shows Respond to the reported scene, Secure the scene (60 s inside 75 m) and Detain and book the suspects; the crime's own sc-dispatch call does not end it. (V12, V14)
 - [ ] During the case the map shows the reported scene and, after securing it, one "last reported" point per free suspect that moves only every 60 s; the tablet's Live case card says how old the points are and when the next comes, never a suspect's state or live position. (V12, V16)
 - [ ] Cuff the suspect with sc-police and keep him cuffed 30 s: a detain line on the result; cuff one who is down: half a detain line; book him at Mission Row (jail 5+ months): a booking line. End case from the radial menu: the result card says "Live case: the lines below are the points", lists each suspect's outcome by label, and pays no cash. (V12, V13, V16)
@@ -370,9 +371,9 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Admin UI -> Real suspects shows the case with its timeline (claim, responded, scene secured, contact, cuffed, detained, end case), the damage ledger and the flags; shoot an unarmed suspect: the officer's run is flagged rs_unarmed_shot. (V17, V18)
 - [ ] With a test script listening (AddEventHandler 'crimson-police:server:liveCrimeEnded'), the end of a live case prints the crime's uid and each suspect's outcome by citizenid, with no position; `exports['Crimson-Police']:GetAvailablePolice()` answers the idle on-duty officers (nil while live crimes are off). (V19)
 - [ ] A volunteer mission ends: a script listening to 'crimson-police:server:volunteerEnded' gets his citizenid, the suspect he played and his outcome; Admin UI -> Real suspects -> Cases filter Volunteers shows the case (the suspect played, the mode, where the match got to), and the Volunteers tab lists who volunteers now with their strikes. (V26)
-- [ ] Surrender in a live case (Config.LiveCrime.enabled = true): as the suspect type /surrender with an officer of the case within 50 m: a Surrender pop-up; Yes tells the officers "Suspect A has surrendered: cuff them". Cuff him and hold 30 s: the result has the Peaceful arrest line. Walk 10 m away, draw a weapon or wait 120 s uncuffed: the surrender ends and both sides are told. As an officer within 15 m of a free suspect you get "close enough to talk down" once; radial Talk them down gives the suspect "An officer is talking you down" (No: the officer is told, nothing else changes). Admin UI -> Real suspects timeline shows talk_down, surrendered (with the officer's name), peaceful_arrest. With enabled = false /surrender does nothing and the radial item is missing. Resmon idle stays at 0.02 ms or less. (RP1)
+- [ ] Surrender in a live case (Config.RealPlayers.liveCrime.enabled = true): as the suspect type /surrender with an officer of the case within 50 m: a Surrender pop-up; Yes tells the officers "Suspect A has surrendered: cuff them". Cuff him and hold 30 s: the result has the Peaceful arrest line. Walk 10 m away, draw a weapon or wait 120 s uncuffed: the surrender ends and both sides are told. As an officer within 15 m of a free suspect you get "close enough to talk down" once; radial Talk them down gives the suspect "An officer is talking you down" (No: the officer is told, nothing else changes). Admin UI -> Real suspects timeline shows talk_down, surrendered (with the officer's name), peaceful_arrest. With enabled = false /surrender does nothing and the radial item is missing. Resmon idle stays at 0.02 ms or less. (RP1)
 - [ ] Owner walk-through: follow docs/OWNER_GUIDE.md 6.1 (Owner checklist) on a test server, share docs/OWNER_GUIDE.md 6.2 (Rules for cases with real suspects) with officers and players, then set both switches back to false: nothing new starts and idle resmon stays at 0.02 ms or less. (V27)
-- [ ] Criminal tablet: `Config.Volunteers.enabled` and `Config.CriminalTablet.enabled` on; a civilian types `/crimtab`: the dark tablet opens on Home; agree, tick a suspect, Get on the list: the time left shows. An officer on duty types `/crimtab`: refused. (G2)
+- [ ] Criminal tablet: `Config.RealPlayers.volunteer.enabled` and `Config.RealPlayers.criminalTablet.enabled` on; a civilian types `/crimtab`: the dark tablet opens on Home; agree, tick a suspect, Get on the list: the time left shows. An officer on duty types `/crimtab`: refused. (G2)
 - [ ] With the criminal tablet open, officers take a mission a volunteer can play: Jobs shows the suspect, type, area and timer (no pop-up); Accept sets the waypoint and Active shows the meet point and time left; Give up within a minute is free (no strike in History). Close the tablet while a question is open: the pop-up comes up for the seconds left. (G2)
 - [ ] `access = 'granted'`: Admin UI → Permissions → Extra grants → Criminal tablet for one gang from a grade: only its members open `/crimtab`; the grant gives no Supervisor UI button. Resmon of Crimson-Police with the tablet closed stays at 0.02 ms or less. (G2)
 - [ ] Home's Live now shows Officers on duty (each department's count under it), Runs going with the run chips, Flagged runs to review, Profiles to review, Open disputes, Stuck payments and (with live crimes or volunteers on) Open player suspect cases. Go on duty: Officers on duty goes up within a few seconds. File a dispute from an officer: Open disputes goes to 1 within a minute; click it: Review opens on Disputes. Click Problems under Alerts: Server health opens on Problems. Set Config.AdminUi.homeShortcuts to { 'review', 'pay' } in Settings: Home shows those two shortcuts in that order. (H5, UI3)
@@ -381,10 +382,10 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Volunteers on: a volunteer with a police job plays a case, officers reach him, he goes on duty: he is told his part is void with a strike, the staff timeline shows "went on police duty mid-case", the criminal tablet History shows "Went on police duty (strike)". (Z1)
 - [ ] Volunteers on: while a volunteer plays a case, turn Volunteers off in Settings: his criminal tablet still gives the case up with Give up (no "no case"). (Z1)
 - [ ] Volunteers on: many quick runs while volunteers are asked; end one run right as it asks; the same volunteer is still asked by the next run (no restart needed). (Z1)
-- [ ] `Config.Volunteers.endEvent = false`: a volunteer plays a case to the end: his criminal tablet History still shows the case. (Z1)
+- [ ] `Config.RealPlayers.volunteer.endEvent = false`: a volunteer plays a case to the end: his criminal tablet History still shows the case. (Z1)
 - [ ] Feature rewards on (suspect): a volunteer is reached by officers, then the officer quits (or takes a real call, or an admin cancels the run): the volunteer gets no suspect pay and Payments made shows no row for him. (Z2)
 - [ ] Feature rewards on (suspect and surrender): an officer and a volunteer on the same PC or connection (identityMatch.flag): the officer's row is flagged rs_linked_accounts, and neither the volunteer's suspect pay nor a talk-down pay is made for that run. (Z2)
-- [ ] Config.Volunteers.voidRun = 'keep_earned': an engaged volunteer gives up right after contact: the officers' result shows only the lines earned (no base points, no Fast finish, no mission cash). (Z2)
+- [ ] Config.RealPlayers.volunteer.voidRun = 'keep_earned': an engaged volunteer gives up right after contact: the officers' result shows only the lines earned (no base points, no Fast finish, no mission cash). (Z2)
 - [ ] Volunteers on: an engaged volunteer is downed and respawns at a hospital before the death timer: he gets a strike and "You respawned at a hospital before the death timer ran out", the staff timeline shows the early-respawn line, and his criminal tablet History shows "Respawned before the death timer (strike)". (Z2)
 - [ ] Live crime with one officer: detain the suspect, then get downed (RealSuspects.downed = 'keep_earned'): the run ends Completed, and a second live case on the same suspect inside pairCooldownHours does not score again for that pair. (Z2)
 - [ ] Criminal tablet open: an admin opens the Admin UI (`client:openAdmin`), then closes it: the criminal tablet is
@@ -398,9 +399,9 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] A volunteer is cuffed and detained, the run goes on; he presses Give up or Stop volunteering on the criminal
   tablet: the run stays In progress, the arrest stands, and Stop volunteering only ends his listing. Cuffed (not yet
   detained) and Give up: he counts as detained (left in cuffs) and the case goes on. (Z5)
-- [ ] `Config.Volunteers.voidRun = 'keep_earned'`, a Warrant Service whose volunteer drops out after contact: the
+- [ ] `Config.RealPlayers.volunteer.voidRun = 'keep_earned'`, a Warrant Service whose volunteer drops out after contact: the
   officers' rows have no No participant downed or No weapons fired bonus. (Z5)
-- [ ] `Config.RealSuspects.onLeave = 'escaped'` (then `'caught'`) with `Config.FeatureRewards.suspect` on: an engaged
+- [ ] `Config.RealPlayers.onLeave = 'escaped'` (then `'caught'`) with `Config.FeatureRewards.suspect` on: an engaged
   volunteer logs off past the grace (or enters an apartment): he gets a strike, no suspect pay, and History says Left
   the case (strike); the officers' case keeps got away (or detained). (Z5)
 - [ ] `voidRun = 'keep_earned'` with a players_only mission: the asked volunteer says No before any yes: the run ends
@@ -543,7 +544,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   LIVE call (the live crime audit says "excluded"). (Z8)
 - [ ] `Config.FeatureRewards.suspect.enabled = true`: a volunteer case flagged rs_pair_repeat pays the volunteer
   nothing. (Z8)
-- [ ] `Config.LiveCrime.enabled = true`: a LIVE claim whose crime ends before the case opens shows Abandoned
+- [ ] `Config.RealPlayers.liveCrime.enabled = true`: a LIVE claim whose crime ends before the case opens shows Abandoned
   (cancelled) in History, not Failed, and adds nothing to the leaderboard failed column. (Z8)
 - [ ] Parking Patrol with a returning driver who argues: run him over with an NPC car (or let traffic kill him): the
   objective completes instead of waiting for the time limit. (Z8)
@@ -551,7 +552,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   unarmed NPC: the run does not fail for the officers still on it. (Z8)
 - [ ] Approve a flagged run while a maintenance lock holds payments: the row stays Held, then the officer's next
   login (or Admin UI -> Payments -> Pay now on that row) pays it. (Z8)
-- [ ] `Config.LiveCrime.enabled = true`, `readyCheck = true`: a unit member responding to the crime's own 911 call
+- [ ] `Config.RealPlayers.liveCrime.enabled = true`, `readyCheck = true`: a unit member responding to the crime's own 911 call
   in sc-dispatch does not cancel the ready check, and the unit can claim the call. (Z8)
 - [ ] Cross-Department join window: mission-ban a joined officer (or turn his department's crossDept join off), then
   Start now: he is removed at the start with the toast, and is not on the run. (Z8)
@@ -576,7 +577,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   badge count. (Z8B)
 - [ ] Push a mission twice at once (double click) with one push left today: only one goes out. A SAST supervisor
   cannot withdraw an FIB lane call. Department -> Controls counts a started happy hour. (Z8B)
-- [ ] `Config.LiveCrime.enabled = true`: a crew of two where one suspect already scored maxCatchesPerSuspectDay
+- [ ] `Config.RealPlayers.liveCrime.enabled = true`: a crew of two where one suspect already scored maxCatchesPerSuspectDay
   today: catching him adds no detain line, catching the other one does. (Z8B)
 - [ ] Two runs ask for a volunteer at the same moment: he gets one pop-up only. (Z8B)
 - [ ] Change `Config.Custody.reach.plateFromVehicle`, `Config.Recognition.commendations.sameKindCooldownDays` or
@@ -585,7 +586,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   start is not locked as 'left behind'. (Z9)
 - [ ] Right after a storage switch (before the restart), run a storage copy: it is refused with the maintenance
   toast and the restart prompt stays. (Z9)
-- [ ] `Config.LiveCrime.enabled = true`: the same officer and real suspect meet a third time with a fast catch: the
+- [ ] `Config.RealPlayers.liveCrime.enabled = true`: the same officer and real suspect meet a third time with a fast catch: the
   officer's row shows in the Review Queue as rs_pair_repeat, unpaid cash shows Held. (Z9)
 - [ ] Give a feature reward or a manual cash payment, then stop the resource while it pays (a payment lock wait):
   after the restart the row shows Pending and the login pays it. (Z9)
@@ -615,12 +616,12 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   duplicate. (Z9)
 - [ ] A two-officer run goes In progress while the partner still drives: he follows the action and is not removed
   as idle at 180 s; he has followActionSeconds (300 s) to arrive. (Z10)
-- [ ] `Config.Volunteers.enabled = true`: an officer and a volunteer who share a PC or connection end a run: the
+- [ ] `Config.RealPlayers.volunteer.enabled = true`: an officer and a volunteer who share a PC or connection end a run: the
   volunteer is not paid (rs_linked_accounts), also when the run ends while the 2 s anticheat pass runs. (Z10)
 - [ ] With allowCapTopUp or allowPayAgain on, flag a capped or paying row for review: Pay the rest and Pay again
   refuse with "flagged for review"; Payments shows no Repay, Retry or Pay the rest on a flagged row. (Z10)
 - [ ] Void a held row in a batch, press Cancel payment on it, then Undo the batch: the row stays Forfeited. (Z10)
-- [ ] `Config.RealSuspects.routeEnds = 'start'`: cuff and detain the suspect before the unit reaches the start
+- [ ] `Config.RealPlayers.routeEnds = 'start'`: cuff and detain the suspect before the unit reaches the start
   circle: once In progress the detain (and booking) lines are on the run. (Z10)
 - [ ] A hidden device search with together on, done by two officers: the devices appear, and the next skill check
   has them as targets. Also when the partner leaves while a spot is held. (Z10)
@@ -629,7 +630,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] A supervisor with builderEdit and no builderTeleport grant tests a draft: Teleport is refused; an admin's
   test Teleport writes a testControl audit row. (Z10)
 - [ ] Restore a backup while officers log in: the restore works. (Z10)
-- [ ] `Config.Volunteers.enabled = true`: a Warrant Service with a volunteer runner, two officers chase him far from
+- [ ] `Config.RealPlayers.volunteer.enabled = true`: a Warrant Service with a volunteer runner, two officers chase him far from
   the door: nobody is flagged 'presence'. (Z10)
 - [ ] An officer with an extra missionControls grant has Mission controls open while a supervisor changes one: his
   screen updates. Two supervisors press Start happy hour together: only one starts, the other gets "Someone is

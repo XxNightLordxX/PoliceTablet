@@ -54,10 +54,10 @@ H.step(0)
 local S = CP.Settings
 
 do
-    H.eq(type(Config.LiveCrime), 'table', 'Config.LiveCrime exists')
-    H.eq(type(Config.Volunteers), 'table', 'Config.Volunteers exists')
-    H.eq(Config.LiveCrime and Config.LiveCrime.enabled, false, 'live crimes ship off')
-    H.eq(Config.Volunteers and Config.Volunteers.enabled, false, 'volunteer suspects ship off')
+    H.eq(type(Config.RealPlayers.liveCrime), 'table', 'Config.RealPlayers.liveCrime exists')
+    H.eq(type(Config.RealPlayers.volunteer), 'table', 'Config.RealPlayers.volunteer exists')
+    H.eq(Config.RealPlayers.liveCrime and Config.RealPlayers.liveCrime.enabled, false, 'live crimes ship off')
+    H.eq(Config.RealPlayers.volunteer and Config.RealPlayers.volunteer.enabled, false, 'volunteer suspects ship off')
 end
 
 -- ============================================================================
@@ -71,15 +71,19 @@ do
         order[sec.key] = i
         byKey[sec.key] = sec
     end
-    H.ok(order.live_crimes ~= nil and order.volunteer_suspects ~= nil, 'the two banners are Settings sections')
+    -- FM4: one Real players section holds the shared rules and both modes (no Real suspects, Live crimes, Volunteer
+    -- suspects or Criminal tablet sections of their own any more)
+    H.ok(order.real_players ~= nil, 'Real players is a Settings section')
+    for _, old in ipairs({ 'real_suspects', 'live_crimes', 'volunteer_suspects', 'criminal_tablet' }) do
+        H.eq(order[old], nil, old .. ' is no section of its own')
+    end
     H.ok(
-        (order.police_actions_and_custody or 0) < (order.real_suspects or 0)
-            and (order.real_suspects or 0) < (order.live_crimes or 0)
-            and (order.live_crimes or 0) < (order.volunteer_suspects or 0),
-        'in Part 3 (Player vs police): after the NPC sections, Real suspects, then live crimes, then volunteers'
-    )
-    H.eq((byKey.live_crimes or {}).title, 'Live crimes (option A)', 'the live crimes title')
-    H.eq((byKey.volunteer_suspects or {}).title, 'Volunteer suspects (options B and C)', 'the volunteers title')
+        (order.police_actions_and_custody or 0) < (order.real_players or 0) and order.real_players < (order.units or 0),
+        'in Part 3 (Player vs police): after the NPC sections, before Police teamwork')
+    H.eq((byKey.real_players or {}).title, 'Real players', 'the Real players title')
+    for _, cfgKey in ipairs({ 'RealSuspects', 'LiveCrime', 'Volunteers', 'CriminalTablet' }) do
+        H.eq(Config[cfgKey], nil, 'Config.' .. cfgKey .. ' is gone (no alias)')
+    end
 
     local function Section(key, group)
         local sec = byKey[key] or { groups = {} }
@@ -92,17 +96,17 @@ do
         end
         return nil, {}
     end
-    local g, paths = Section('live_crimes', 'LiveCrime')
+    local g, paths = Section('real_players', 'RealPlayers.liveCrime')
     H.ok(g ~= nil and Has(g.desc, 'Crimson-Contracts reports once its police alert goes out'),
         'the comment under the banner describes Live crimes')
-    H.ok(CP.U.contains(paths, 'LiveCrime.enabled'), 'its switch is in the group')
-    g, paths = Section('volunteer_suspects', 'Volunteers')
+    H.ok(CP.U.contains(paths, 'RealPlayers.liveCrime.enabled'), 'its switch is in the group')
+    g, paths = Section('real_players', 'RealPlayers.volunteer')
     H.ok(g ~= nil and Has(g.desc, 'while every mode is \'npc\''), 'the comment under the banner describes Volunteers')
-    H.ok(CP.U.contains(paths, 'Volunteers.enabled'), 'its switch is in the group')
+    H.ok(CP.U.contains(paths, 'RealPlayers.volunteer.enabled'), 'its switch is in the group')
 
     for path, desc in pairs({
-        ['LiveCrime.enabled'] = 'true = reported crimes become LIVE calls on the Dispatch screen',
-        ['Volunteers.enabled'] = 'true = players can volunteer with the command below',
+        ['RealPlayers.liveCrime.enabled'] = 'true = reported crimes become LIVE calls on the Dispatch screen',
+        ['RealPlayers.volunteer.enabled'] = 'true = players can volunteer with the command below',
     }) do
         local e = S.entry(path) or {}
         H.eq(e.kind, 'boolean', path .. ' is a switch')
@@ -114,39 +118,39 @@ do
 
     -- V20: the command, the window and strikes, each with its own description and bounds
     for path, want in pairs({
-        ['Volunteers.command'] = { 'crimsonheat', true },
-        ['Volunteers.windowMinutes'] = { 60, false },
-        ['Volunteers.strikes'] = { 3, false },
-        ['Volunteers.strikeHours'] = { 24, false },
-        ['Volunteers.blockHours'] = { 24, false },
-        ['Volunteers.saveStrikes'] = { true, false },
-        ['Volunteers.staffClearStrikes'] = { true, false },   -- F2
+        ['RealPlayers.volunteer.command'] = { 'crimsonheat', true },
+        ['RealPlayers.volunteer.windowMinutes'] = { 60, false },
+        ['RealPlayers.volunteer.strikes'] = { 3, false },
+        ['RealPlayers.volunteer.strikeHours'] = { 24, false },
+        ['RealPlayers.volunteer.blockHours'] = { 24, false },
+        ['RealPlayers.volunteer.saveStrikes'] = { true, false },
+        ['RealPlayers.volunteer.staffClearStrikes'] = { true, false },   -- F2
     }) do
         local e = S.entry(path) or {}
         H.eq(e.default, want[1], path .. ' ships ' .. tostring(want[1]))
         H.ok(type(e.desc) == 'string' and e.desc ~= '', path .. ' has a description')
         H.eq(e.restart == true, want[2], path .. (want[2] and ' needs a restart' or ' applies live'))
     end
-    H.ok(not S.check('Volunteers.windowMinutes', 5), 'a window under 10 minutes is refused')
-    H.ok(not S.check('Volunteers.command', 'crimson heat'), 'a command with a space is refused')
+    H.ok(not S.check('RealPlayers.volunteer.windowMinutes', 5), 'a window under 10 minutes is refused')
+    H.ok(not S.check('RealPlayers.volunteer.command', 'crimson heat'), 'a command with a space is refused')
 
     -- RP1: surrender and Talk them down, each key with its config.lua comment as the description
-    local sw = S.entry('RealSuspects.surrender.enabled') or {}
-    H.eq(sw.kind, 'boolean', 'RealSuspects.surrender.enabled is a switch')
+    local sw = S.entry('RealPlayers.surrender.enabled') or {}
+    H.eq(sw.kind, 'boolean', 'RealPlayers.surrender.enabled is a switch')
     H.eq(sw.desc, 'true = the surrender command and Talk them down work in live cases',
         'its comment is its description')
     H.ok(not sw.restart and not sw.money, 'the surrender switch applies live and is not a money switch')
-    local sc = S.entry('RealSuspects.surrender.command') or {}
+    local sc = S.entry('RealPlayers.surrender.command') or {}
     H.eq(sc.default, 'surrender', 'the surrender command ships /surrender')
     H.eq(sc.restart, true, 'a new command name needs a restart (RegisterCommand cannot be undone)')
-    H.ok(not S.check('RealSuspects.surrender.command', 'give up'), 'a command with a space is refused')
+    H.ok(not S.check('RealPlayers.surrender.command', 'give up'), 'a command with a space is refused')
     for path, bad in pairs({
-        ['RealSuspects.surrender.talkRange'] = 100,
-        ['RealSuspects.surrender.surrenderRange'] = 1,
-        ['RealSuspects.surrender.askSeconds'] = 1,
-        ['RealSuspects.surrender.talkCooldown'] = 1,
-        ['RealSuspects.surrender.holdSeconds'] = 5,
-        ['RealSuspects.surrender.breakRange'] = 500,
+        ['RealPlayers.surrender.talkRange'] = 100,
+        ['RealPlayers.surrender.surrenderRange'] = 1,
+        ['RealPlayers.surrender.askSeconds'] = 1,
+        ['RealPlayers.surrender.talkCooldown'] = 1,
+        ['RealPlayers.surrender.holdSeconds'] = 5,
+        ['RealPlayers.surrender.breakRange'] = 500,
     }) do
         local e = S.entry(path) or {}
         H.ok(type(e.desc) == 'string' and e.desc ~= '', path .. ' has a description')
@@ -164,12 +168,9 @@ do
     local sc = S._schema()
     local order = {}
     for i, sec in ipairs(sc.sections) do order[sec.key] = i end
-    H.ok(
-        order.real_suspects ~= nil and (order.dispatch or 0) < order.real_suspects
-            and order.real_suspects < (order.live_crimes or 0),
-        'Real suspects is a section between Dispatch and Live crimes'
-    )
-    local leave = S.entry('RealSuspects.onLeave') or {}
+    H.ok(order.real_players ~= nil and (order.dispatch or 0) < order.real_players,
+        'Real players is a section after Dispatch')
+    local leave = S.entry('RealPlayers.onLeave') or {}
     H.eq(leave.kind, 'enum', 'onLeave is a pick')
     H.eq(leave.default, 'void', 'onLeave ships void')
     H.eq(table.concat(leave.tpl and leave.tpl.options or {}, ','), 'void,caught,escaped',
@@ -177,15 +178,15 @@ do
     H.ok(Has(leave.desc, 'When a suspect leaves') and Has(leave.desc, 'never holds the officers\' points'),
         'onLeave: the group line and its comment are the description')
     for _, v in ipairs({ 'void', 'caught', 'escaped' }) do
-        H.ok((S.check('RealSuspects.onLeave', v)), 'onLeave ' .. v)
+        H.ok((S.check('RealPlayers.onLeave', v)), 'onLeave ' .. v)
     end
-    local okBad, errBad = S.check('RealSuspects.onLeave', 'jail')
+    local okBad, errBad = S.check('RealPlayers.onLeave', 'jail')
     H.ok(okBad == false and errBad == 'err.setting_option', 'onLeave refuses anything else')
-    local zones = S.entry('RealSuspects.noStartZones') or {}
+    local zones = S.entry('RealPlayers.noStartZones') or {}
     H.eq(zones.kind, 'rows', 'noStartZones is a list of zones (label, coords, radius)')
-    H.eq(#(Config.RealSuspects.noStartZones or {}), 4, 'Pillbox, Paleto medical and the two Crimson-Arena areas')
-    H.eq((S.entry('RealSuspects.excludeAdmins') or {}).kind, 'boolean', 'excludeAdmins is a switch')
-    H.eq((S.entry('RealSuspects.excludeAdmins') or {}).money, nil, 'and not a money switch')
+    H.eq(#(Config.RealPlayers.noStartZones or {}), 4, 'Pillbox, Paleto medical and the two Crimson-Arena areas')
+    H.eq((S.entry('RealPlayers.excludeAdmins') or {}).kind, 'boolean', 'excludeAdmins is a switch')
+    H.eq((S.entry('RealPlayers.excludeAdmins') or {}).money, nil, 'and not a money switch')
     for path, value in pairs({
         excludeAce = 'crimsonpolice.realsuspect.exclude',
         excludeAdmins = true,
@@ -204,9 +205,9 @@ do
         staffNames = true,    -- F2
         weaponNames = true,   -- F2
     }) do
-        local e = S.entry('RealSuspects.' .. path) or {}
-        H.eq(e.default, value, 'RealSuspects.' .. path .. ' ships ' .. tostring(value))
-        H.ok(type(e.desc) == 'string' and #e.desc > 10, 'RealSuspects.' .. path .. ' has a description')
+        local e = S.entry('RealPlayers.' .. path) or {}
+        H.eq(e.default, value, 'RealPlayers.' .. path .. ' ships ' .. tostring(value))
+        H.ok(type(e.desc) == 'string' and #e.desc > 10, 'RealPlayers.' .. path .. ' has a description')
     end
     -- Each description is its own key's comment, word for word: a comment that runs on to a second line never sits
     -- directly above the next key, where Settings would read it as that key's description too.
@@ -278,27 +279,27 @@ do
         fastCatchSeconds = 'seconds: a detain this soon after the case started is a warning sign',
         pairLedgerDays = 'days the pair ledger keeps case rows (admin blocks stay until they expire)',
     }) do
-        H.eq((S.entry('RealSuspects.' .. path) or {}).desc, desc, 'RealSuspects.' .. path .. ': its own comment')
+        H.eq((S.entry('RealPlayers.' .. path) or {}).desc, desc, 'RealPlayers.' .. path .. ': its own comment')
     end
     local trailGroup = nil
     for _, sec in ipairs(sc.sections) do
-        for _, g in ipairs(sec.key == 'real_suspects' and sec.groups or {}) do
-            if g.path == 'RealSuspects.trail' then trailGroup = g end
+        for _, g in ipairs(sec.key == 'real_players' and sec.groups or {}) do
+            if g.path == 'RealPlayers.trail' then trailGroup = g end
         end
     end
     H.eq(trailGroup and trailGroup.desc, 'position trail kept for review', 'the trail group: its own comment')
     -- V7: the anti-farm groups and values
     local groups = {}
     for _, sec in ipairs(sc.sections) do
-        for _, g in ipairs(sec.key == 'real_suspects' and sec.groups or {}) do groups[g.path] = g end
+        for _, g in ipairs(sec.key == 'real_players' and sec.groups or {}) do groups[g.path] = g end
     end
     H.eq(
-        (groups['RealSuspects.identityMatch'] or {}).desc,
+        (groups['RealPlayers.identityMatch'] or {}).desc,
         'Anti-farm (admins only): nobody can take a case against one of his own characters or licenses, and the '
             .. 'identifiers of both players are compared live, never stored or shown',
         'the identityMatch group: its own comment'
     )
-    H.ok(Has((groups['RealSuspects.pairFlag'] or {}).desc, 'with a second warning sign'),
+    H.ok(Has((groups['RealPlayers.pairFlag'] or {}).desc, 'with a second warning sign'),
         'the pairFlag group names the second warning sign')
     for path, value in pairs({
         pairCooldownHours = 24,
@@ -309,46 +310,46 @@ do
         fastCatchSeconds = 60,
         pairLedgerDays = 30,
     }) do
-        H.eq((S.entry('RealSuspects.' .. path) or {}).default, value, 'RealSuspects.' .. path .. ' ships ' .. value)
+        H.eq((S.entry('RealPlayers.' .. path) or {}).default, value, 'RealPlayers.' .. path .. ' ships ' .. value)
     end
-    local block = S.entry('RealSuspects.identityMatch.block') or {}
+    local block = S.entry('RealPlayers.identityMatch.block') or {}
     H.eq(block.kind, 'list', 'identityMatch.block is a list')
     H.eq(table.concat(block.default or {}, ','), 'license,license2,discord,fivem,steam,xbl,live',
         'identityMatch.block ships the account kinds')
-    H.eq(table.concat((S.entry('RealSuspects.identityMatch.flag') or {}).default or {}, ','), 'ip,token',
+    H.eq(table.concat((S.entry('RealPlayers.identityMatch.flag') or {}).default or {}, ','), 'ip,token',
         'identityMatch.flag ships ip and token')
-    H.ok((S.check('RealSuspects.identityMatch.block', { 'license', 'ip' })), 'any identifier kind may block')
-    H.ok((S.check('RealSuspects.identityMatch.flag', {})), 'an empty flag list is allowed (nothing flags)')
-    H.eq((S.check('RealSuspects.identityMatch.block', { 'email' })), false, 'an unknown kind is refused')
-    H.eq((S.check('RealSuspects.identityMatch.flag', { 'ip', 'ip' })), false, 'a kind twice is refused')
-    H.eq((S.check('RealSuspects.pairFlag.days', 0)), false, 'pairFlag.days 0 is refused')
-    H.eq((S.check('RealSuspects.pairLedgerDays', 400)), false, 'pairLedgerDays above a year is refused')
-    H.eq((S.check('RealSuspects.maxCatchesPerSuspectDay', 0)), false, 'maxCatchesPerSuspectDay 0 is refused')
-    H.ok((S.check('RealSuspects.pairCooldownHours', 0)), 'pairCooldownHours 0 (no pair cooldown) is allowed')
+    H.ok((S.check('RealPlayers.identityMatch.block', { 'license', 'ip' })), 'any identifier kind may block')
+    H.ok((S.check('RealPlayers.identityMatch.flag', {})), 'an empty flag list is allowed (nothing flags)')
+    H.eq((S.check('RealPlayers.identityMatch.block', { 'email' })), false, 'an unknown kind is refused')
+    H.eq((S.check('RealPlayers.identityMatch.flag', { 'ip', 'ip' })), false, 'a kind twice is refused')
+    H.eq((S.check('RealPlayers.pairFlag.days', 0)), false, 'pairFlag.days 0 is refused')
+    H.eq((S.check('RealPlayers.pairLedgerDays', 400)), false, 'pairLedgerDays above a year is refused')
+    H.eq((S.check('RealPlayers.maxCatchesPerSuspectDay', 0)), false, 'maxCatchesPerSuspectDay 0 is refused')
+    H.ok((S.check('RealPlayers.pairCooldownHours', 0)), 'pairCooldownHours 0 (no pair cooldown) is allowed')
     for _, path in ipairs({ 'pairCooldownHours', 'pairFlag.days', 'pairLedgerDays', 'identityMatch.block' }) do
-        local e = S.entry('RealSuspects.' .. path) or {}
-        H.ok(not e.restart and not e.money, 'RealSuspects.' .. path .. ' needs no restart and is not a money switch')
+        local e = S.entry('RealPlayers.' .. path) or {}
+        H.ok(not e.restart and not e.money, 'RealPlayers.' .. path .. ' needs no restart and is not a money switch')
     end
-    H.eq(Config.RealSuspects.trail.every, 5, 'a trail point every 5 s')
-    H.eq(Config.RealSuspects.trail.max, 360, 'at most 360 points')
-    local okZero = S.check('RealSuspects.trail.every', 0)
+    H.eq(Config.RealPlayers.trail.every, 5, 'a trail point every 5 s')
+    H.eq(Config.RealPlayers.trail.max, 360, 'at most 360 points')
+    local okZero = S.check('RealPlayers.trail.every', 0)
     H.eq(okZero, false, 'a trail point every 0 s is refused')
     -- V5: the booking zones are zone rows ({} allowed: anywhere), the share is 0..1
-    local booking = S.entry('RealSuspects.bookingZones') or {}
+    local booking = S.entry('RealPlayers.bookingZones') or {}
     H.eq(booking.kind, 'rows', 'bookingZones is a list of zones (label, coords, radius)')
-    H.ok((S.check('RealSuspects.bookingZones', {})), 'bookingZones {} (anywhere) is allowed')
-    H.eq((S.check('RealSuspects.neutralisedShare', 1.5)), false, 'neutralisedShare above 1 is refused')
-    H.ok((S.check('RealSuspects.neutralisedShare', 0.25)), 'neutralisedShare 0.25 is allowed')
-    H.eq((S.check('RealSuspects.custodyHoldSeconds', 0)), false, 'a custody hold of 0 s is refused')
+    H.ok((S.check('RealPlayers.bookingZones', {})), 'bookingZones {} (anywhere) is allowed')
+    H.eq((S.check('RealPlayers.neutralisedShare', 1.5)), false, 'neutralisedShare above 1 is refused')
+    H.ok((S.check('RealPlayers.neutralisedShare', 0.25)), 'neutralisedShare 0.25 is allowed')
+    H.eq((S.check('RealPlayers.custodyHoldSeconds', 0)), false, 'a custody hold of 0 s is refused')
     -- V6: the less-lethal weapons are a list of weapon names, the numbers have ranges
-    local less = S.entry('RealSuspects.lessLethal') or {}
+    local less = S.entry('RealPlayers.lessLethal') or {}
     H.eq(less.kind, 'list', 'lessLethal is a list')
-    H.ok((S.check('RealSuspects.lessLethal', { 'WEAPON_STUNGUN', 'WEAPON_BATON_X' })), 'weapon names are allowed')
-    H.ok((S.check('RealSuspects.lessLethal', {})), 'an empty list is allowed (every weapon is a shot)')
-    H.eq((S.check('RealSuspects.lessLethal', { 'stungun' })), false, 'a name that is not WEAPON_* is refused')
-    H.eq((S.check('RealSuspects.damageLogMax', 0)), false, 'damageLogMax 0 is refused')
-    H.eq((S.check('RealSuspects.downGrace', 120)), false, 'downGrace above a minute is refused')
-    H.ok((S.check('RealSuspects.armedMemory', 30)), 'armedMemory 30 s is allowed')
+    H.ok((S.check('RealPlayers.lessLethal', { 'WEAPON_STUNGUN', 'WEAPON_BATON_X' })), 'weapon names are allowed')
+    H.ok((S.check('RealPlayers.lessLethal', {})), 'an empty list is allowed (every weapon is a shot)')
+    H.eq((S.check('RealPlayers.lessLethal', { 'stungun' })), false, 'a name that is not WEAPON_* is refused')
+    H.eq((S.check('RealPlayers.damageLogMax', 0)), false, 'damageLogMax 0 is refused')
+    H.eq((S.check('RealPlayers.downGrace', 120)), false, 'downGrace above a minute is refused')
+    H.ok((S.check('RealPlayers.armedMemory', 30)), 'armedMemory 30 s is allowed')
     for id, desc in pairs({
         rs_unarmed_shot = 'penalty: shot a real suspect who was never armed',
         rs_ran_over = 'penalty: ran a real suspect over on foot',
@@ -371,12 +372,12 @@ do
         downed = { 'keep_earned', 'keep_earned,failed' },
         outsideCuff = { 'assist', 'assist,stopped' },     -- V15 (critic C11)
     }) do
-        local e = S.entry('RealSuspects.' .. path) or {}
-        H.eq(e.kind, 'enum', 'RealSuspects.' .. path .. ' is a pick')
-        H.eq(e.default, want[1], 'RealSuspects.' .. path .. ' ships ' .. want[1])
-        H.eq(table.concat(e.tpl and e.tpl.options or {}, ','), want[2], 'RealSuspects.' .. path .. ': ' .. want[2])
-        H.eq((S.check('RealSuspects.' .. path, 'off')), false, 'RealSuspects.' .. path .. ' refuses anything else')
-        H.ok(not e.restart and not e.money, 'RealSuspects.' .. path .. ' needs no restart and is not a money switch')
+        local e = S.entry('RealPlayers.' .. path) or {}
+        H.eq(e.kind, 'enum', 'RealPlayers.' .. path .. ' is a pick')
+        H.eq(e.default, want[1], 'RealPlayers.' .. path .. ' ships ' .. want[1])
+        H.eq(table.concat(e.tpl and e.tpl.options or {}, ','), want[2], 'RealPlayers.' .. path .. ': ' .. want[2])
+        H.eq((S.check('RealPlayers.' .. path, 'off')), false, 'RealPlayers.' .. path .. ' refuses anything else')
+        H.ok(not e.restart and not e.money, 'RealPlayers.' .. path .. ' needs no restart and is not a money switch')
     end
     for path, desc in pairs({
         officerAlerts = 'The NPC-mission rules that do not fit a fight with a real player (each can be set back). '
@@ -394,22 +395,23 @@ do
         npcCombat = 'false = no NPC-combat headshot protection or damage cut for officers once a real suspect is in '
             .. 'the case; true = they keep Config.NpcCombat\'s officer settings',
     }) do
-        H.eq((S.entry('RealSuspects.' .. path) or {}).desc, desc, 'RealSuspects.' .. path .. ': its own comment')
+        H.eq((S.entry('RealPlayers.' .. path) or {}).desc, desc, 'RealPlayers.' .. path .. ': its own comment')
     end
-    H.eq((S.entry('RealSuspects.downedPickupDelay') or {}).default, 400, 'downedPickupDelay ships 400 s')
-    H.eq((S.check('RealSuspects.downedPickupDelay', 0)), false, 'a pick-up delay of 0 s is refused')
-    H.ok((S.check('RealSuspects.downedPickupDelay', 600)), 'a pick-up delay above Downed.pickupDelay\'s 120 is allowed')
-    H.eq((S.entry('RealSuspects.npcCombat') or {}).kind, 'boolean', 'npcCombat is a switch')
-    local rr = S.entry('LiveCrime.requireRoute') or {}
-    H.eq(rr.kind, 'boolean', 'LiveCrime.requireRoute is an on/off setting')
-    H.eq(rr.default, false, 'LiveCrime.requireRoute ships false')
+    H.eq((S.entry('RealPlayers.downedPickupDelay') or {}).default, 400, 'downedPickupDelay ships 400 s')
+    H.eq((S.check('RealPlayers.downedPickupDelay', 0)), false, 'a pick-up delay of 0 s is refused')
+    H.ok((S.check('RealPlayers.downedPickupDelay', 600)), 'a pick-up delay above Downed.pickupDelay\'s 120 is allowed')
+    H.eq((S.entry('RealPlayers.npcCombat') or {}).kind, 'boolean', 'npcCombat is a switch')
+    local rr = S.entry('RealPlayers.liveCrime.requireRoute') or {}
+    H.eq(rr.kind, 'boolean', 'RealPlayers.liveCrime.requireRoute is an on/off setting')
+    H.eq(rr.default, false, 'RealPlayers.liveCrime.requireRoute ships false')
     H.eq(
         rr.desc,
         'false = officers on a live case may leave the GPS route to chase; true = the normal route rule '
             .. '(Config.Route.required)',
-        'LiveCrime.requireRoute: its own comment'
+        'RealPlayers.liveCrime.requireRoute: its own comment'
     )
-    H.ok(not rr.restart and not rr.money, 'LiveCrime.requireRoute needs no restart and is not a money switch')
+    H.ok(not rr.restart and not rr.money,
+        'RealPlayers.liveCrime.requireRoute needs no restart and is not a money switch')
 
     -- V10: the intake's keys; types is one setting (an open table) whose values are mission types or false
     for path, desc in pairs({
@@ -465,53 +467,68 @@ do
             .. 'could answer a crime now); \'duty\' = every on-duty officer. The export answers nil while enabled is '
             .. 'false',
     }) do
-        local e = S.entry('LiveCrime.' .. path) or {}
-        H.eq(e.desc, desc, 'LiveCrime.' .. path .. ': its own comment')
-        H.ok(not e.restart and not e.money, 'LiveCrime.' .. path .. ' needs no restart and is not a money switch')
+        local e = S.entry('RealPlayers.liveCrime.' .. path) or {}
+        H.eq(e.desc, desc, 'RealPlayers.liveCrime.' .. path .. ': its own comment')
+        H.ok(not e.restart and not e.money,
+            'RealPlayers.liveCrime.' .. path .. ' needs no restart and is not a money switch')
     end
-    H.eq(S.entry('LiveCrime.types.warehouse_burglary'), nil, 'LiveCrime.types is edited as a whole')
-    H.ok((S.check('LiveCrime.types', { warehouse_burglary = 'tactical', atm_robbery = false, my_heist = 'patrol' })),
-        'LiveCrime.types takes mission types and false, for any contract key')
-    local okT, errT = S.check('LiveCrime.types', { warehouse_burglary = 'heist' })
-    H.ok(okT == false and errT == 'err.setting_live_type', 'LiveCrime.types refuses a value that is not a mission type')
-    H.eq((S.check('LiveCrime.types', { warehouse_burglary = true })), false, 'LiveCrime.types refuses true')
-    H.eq((S.entry('LiveCrime.sources') or {}).kind, 'list', 'LiveCrime.sources is a list')
-    H.ok((S.check('LiveCrime.sources', { 'crimson-contracts', 'my_heists' })), 'LiveCrime.sources takes resource names')
-    H.eq((S.check('LiveCrime.sources', { 'bad name!' })), false, 'LiveCrime.sources refuses other text')
-    H.eq((S.check('LiveCrime.suspectRadius', 5000.0)), false, 'suspectRadius stays within 10-2000 m')
-    H.eq((S.check('LiveCrime.offerTime', 10)), false, 'offerTime stays within 30-3600 s')
-    H.eq((S.check('LiveCrime.maxLiveRuns', 0)), false, 'maxLiveRuns stays within 1-20')
-    H.ok((S.check('LiveCrime.maxLiveRuns', 5)), 'maxLiveRuns 5 is allowed')
-    H.eq((S.check('LiveCrime.sceneRadius', 5)), false, 'sceneRadius stays within 10-500 m')
-    H.eq((S.check('LiveCrime.secureSeconds', 1000)), false, 'secureSeconds stays within 0-900 s')
-    H.ok((S.check('LiveCrime.lastReportedEvery', 0)), 'lastReportedEvery 0 (no points) is allowed')
-    H.eq((S.check('LiveCrime.deadCaseSeconds', 1)), false, 'deadCaseSeconds stays within 5-600 s')
-    H.eq((S.check('LiveCrime.caseTime', 30)), false, 'caseTime stays within 60-3600 s')
-    H.ok((S.check('LiveCrime.caseTime', 3600)), 'caseTime 3600 is allowed')
-    H.eq((S.check('LiveCrime.maxOfficers', 0)), false, 'maxOfficers stays within 1-16')
-    H.eq((S.check('LiveCrime.maxOfficers', 17)), false, 'maxOfficers stays within 1-16 (17)')
-    H.eq((S.check('LiveCrime.joinOfferSeconds', 5)), false, 'joinOfferSeconds stays within 10-120 s')
-    H.ok((S.check('LiveCrime.joinOfferSeconds', 60)), 'joinOfferSeconds 60 is allowed')
-    H.eq((S.entry('LiveCrime.backup') or {}).kind, 'boolean', 'LiveCrime.backup is an on/off setting')
+    H.eq(S.entry('RealPlayers.liveCrime.types.warehouse_burglary'), nil,
+        'RealPlayers.liveCrime.types is edited as a whole')
+    H.ok((
+        S.check('RealPlayers.liveCrime.types',
+            { warehouse_burglary = 'tactical', atm_robbery = false, my_heist = 'patrol' })
+    ), 'RealPlayers.liveCrime.types takes mission types and false, for any contract key')
+    local okT, errT = S.check('RealPlayers.liveCrime.types', { warehouse_burglary = 'heist' })
+    H.ok(okT == false and errT == 'err.setting_live_type',
+        'RealPlayers.liveCrime.types refuses a value that is not a mission type')
+    H.eq((S.check('RealPlayers.liveCrime.types', { warehouse_burglary = true })), false,
+        'RealPlayers.liveCrime.types refuses true')
+    H.eq((S.entry('RealPlayers.liveCrime.sources') or {}).kind, 'list', 'RealPlayers.liveCrime.sources is a list')
+    H.ok((S.check('RealPlayers.liveCrime.sources', { 'crimson-contracts', 'my_heists' })),
+        'RealPlayers.liveCrime.sources takes resource names')
+    H.eq((S.check('RealPlayers.liveCrime.sources', { 'bad name!' })), false,
+        'RealPlayers.liveCrime.sources refuses other text')
+    H.eq((S.check('RealPlayers.liveCrime.suspectRadius', 5000.0)), false, 'suspectRadius stays within 10-2000 m')
+    H.eq((S.check('RealPlayers.liveCrime.offerTime', 10)), false, 'offerTime stays within 30-3600 s')
+    H.eq((S.check('RealPlayers.liveCrime.maxLiveRuns', 0)), false, 'maxLiveRuns stays within 1-20')
+    H.ok((S.check('RealPlayers.liveCrime.maxLiveRuns', 5)), 'maxLiveRuns 5 is allowed')
+    H.eq((S.check('RealPlayers.liveCrime.sceneRadius', 5)), false, 'sceneRadius stays within 10-500 m')
+    H.eq((S.check('RealPlayers.liveCrime.secureSeconds', 1000)), false, 'secureSeconds stays within 0-900 s')
+    H.ok((S.check('RealPlayers.liveCrime.lastReportedEvery', 0)), 'lastReportedEvery 0 (no points) is allowed')
+    H.eq((S.check('RealPlayers.liveCrime.deadCaseSeconds', 1)), false, 'deadCaseSeconds stays within 5-600 s')
+    H.eq((S.check('RealPlayers.liveCrime.caseTime', 30)), false, 'caseTime stays within 60-3600 s')
+    H.ok((S.check('RealPlayers.liveCrime.caseTime', 3600)), 'caseTime 3600 is allowed')
+    H.eq((S.check('RealPlayers.liveCrime.maxOfficers', 0)), false, 'maxOfficers stays within 1-16')
+    H.eq((S.check('RealPlayers.liveCrime.maxOfficers', 17)), false, 'maxOfficers stays within 1-16 (17)')
+    H.eq((S.check('RealPlayers.liveCrime.joinOfferSeconds', 5)), false, 'joinOfferSeconds stays within 10-120 s')
+    H.ok((S.check('RealPlayers.liveCrime.joinOfferSeconds', 60)), 'joinOfferSeconds 60 is allowed')
+    H.eq((S.entry('RealPlayers.liveCrime.backup') or {}).kind, 'boolean',
+        'RealPlayers.liveCrime.backup is an on/off setting')
     for _, k in ipairs({ 'caseCard', 'resultOutcomes' }) do
-        H.eq((S.entry('LiveCrime.' .. k) or {}).kind, 'boolean', 'LiveCrime.' .. k .. ' is an on/off setting (V16)')
-        H.eq(Config.LiveCrime[k], true, 'LiveCrime.' .. k .. ' ships on (behind enabled = false)')
+        H.eq((S.entry('RealPlayers.liveCrime.' .. k) or {}).kind, 'boolean',
+            'RealPlayers.liveCrime.' .. k .. ' is an on/off setting (V16)')
+        H.eq(Config.RealPlayers.liveCrime[k], true,
+            'RealPlayers.liveCrime.' .. k .. ' ships on (behind enabled = false)')
     end
-    H.eq((S.entry('LiveCrime.availablePolice') or {}).kind, 'enum', 'LiveCrime.availablePolice is a choice (V19)')
-    H.eq((S.check('LiveCrime.availablePolice', 'all')), false, 'availablePolice takes only idle or duty')
-    H.eq((S.entry('LiveCrime.endEvent') or {}).kind, 'boolean', 'LiveCrime.endEvent is an on/off setting (V19)')
-    local vEnd = S.entry('Volunteers.endEvent') or {}
-    H.eq(vEnd.kind, 'boolean', 'Volunteers.endEvent is an on/off setting (V26)')
+    H.eq((S.entry('RealPlayers.liveCrime.availablePolice') or {}).kind, 'enum',
+        'RealPlayers.liveCrime.availablePolice is a choice (V19)')
+    H.eq((S.check('RealPlayers.liveCrime.availablePolice', 'all')), false, 'availablePolice takes only idle or duty')
+    H.eq((S.entry('RealPlayers.liveCrime.endEvent') or {}).kind, 'boolean',
+        'RealPlayers.liveCrime.endEvent is an on/off setting (V19)')
+    local vEnd = S.entry('RealPlayers.volunteer.endEvent') or {}
+    H.eq(vEnd.kind, 'boolean', 'RealPlayers.volunteer.endEvent is an on/off setting (V26)')
     H.eq(
         vEnd.desc,
         'Results for other scripts: true = when a mission a volunteer said yes to ends, Crimson-Police '
             .. 'sends the server-only event crimson-police:server:volunteerEnded (the mission, the suspect he played, how '
             .. 'it ended and his outcome, by his citizenid; another script can reward him); false = no event',
-        'Volunteers.endEvent: its own comment'
+        'RealPlayers.volunteer.endEvent: its own comment'
     )
-    H.ok(not vEnd.restart and not vEnd.money, 'Volunteers.endEvent needs no restart and is not a money switch')
+    H.ok(not vEnd.restart and not vEnd.money,
+        'RealPlayers.volunteer.endEvent needs no restart and is not a money switch')
     for _, k in ipairs({ 'readyCheck', 'typeCooldown', 'duringOperation' }) do
-        H.eq((S.entry('LiveCrime.' .. k) or {}).kind, 'boolean', 'LiveCrime.' .. k .. ' is an on/off setting')
+        H.eq((S.entry('RealPlayers.liveCrime.' .. k) or {}).kind, 'boolean',
+            'RealPlayers.liveCrime.' .. k .. ' is an on/off setting')
     end
     for id, desc in pairs({
         live_scene = 'live case: secured the scene',
@@ -535,7 +552,7 @@ do
     -- README 5.2 (what ships off): live crimes and volunteers are switches that ship off; the route switch ships on
     local ships = readme and readme:match('### 5%.2 What ships off.-\n## ') or ''
     local off, on = ships:match('%*%*Ships off%*%*(.-)%*%*Ships on%*%*(.*)')
-    H.ok(Has(off, '`Config.LiveCrime.enabled`') and Has(off, '`Config.Volunteers.enabled`'),
+    H.ok(Has(off, '`Config.RealPlayers.liveCrime.enabled`') and Has(off, '`Config.RealPlayers.volunteer.enabled`'),
         'README 5.2 lists live crimes and volunteers as shipping off')
     H.ok(Has(on, '`Config.Route.required`'), 'README 5.2 lists the start route switch as shipping on')
 
@@ -554,13 +571,15 @@ do
         'Hard rule 17 (the start route) is the one exception: the owner made it switchable with '
             .. 'Config.Route.required (see that rule).'
     ), 'Rule switches keeps RT1\'s Config.Route.required text')
-    H.ok(Has(route, 'Config.LiveCrime.requireRoute (shipped false) replaces Config.Route.required'),
+    H.ok(Has(route, 'Config.RealPlayers.liveCrime.requireRoute (shipped false) replaces Config.Route.required'),
         'Route to the start names the live-crime route option')
     H.ok(Has(route, 'Volunteer-suspect missions follow Config.Route.required.'), 'and the volunteers\' rule')
-    H.ok(Has(switches, 'Config.LiveCrime.requireRoute sets the start-route rule for live crimes (shipped false)'),
-        'Rule switches names the live-crime route option')
+    H.ok(Has(
+        switches,
+        'Config.RealPlayers.liveCrime.requireRoute sets the start-route rule for live crimes (shipped false)'
+    ), 'Rule switches names the live-crime route option')
     H.ok(Has(switches, 'For NPC missions rules 15, 16 and 18 stay on.'), 'the NPC rules stay on')
-    H.ok(Has(Bullet(spec, 'NPCs only:'), 'except live crimes (Config.LiveCrime) and volunteer suspects'),
+    H.ok(Has(Bullet(spec, 'NPCs only:'), 'except live crimes (Config.RealPlayers.liveCrime) and volunteer suspects'),
         'NPCs only names the two exceptions')
     H.ok(Has(Bullet(spec, 'Real calls first:'), 'There are exactly three exceptions'), 'Real calls first: three')
     H.ok(Has(Bullet(spec, 'Mission choice:'), 'Only five exceptions exist'), 'Mission choice: five (step P19 push)')

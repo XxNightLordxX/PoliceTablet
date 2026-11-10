@@ -4,14 +4,15 @@
 
 -- End-to-end scenarios for real suspects on the REAL server side of Crimson-Police: every server file
 -- loaded as in game, database off (the saves folder, as shipped), only the other resources and the natives stubbed.
--- 1. As shipped (Config.LiveCrime.enabled and Config.Volunteers.enabled false): a reported crime, /crimsonheat and
+-- 1. As shipped (Config.RealPlayers.liveCrime.enabled and Config.RealPlayers.volunteer.enabled false): a reported
+-- crime, /crimsonheat and
 --    the Mission Board change nothing.
 -- 2. A live crime: Crimson-Contracts reports it, a unit claims the LIVE call, secures the scene, cuffs one suspect
 --    and books nobody, the other gets away; the points, the case timeline, the end event and the pair rows.
 -- 3. A volunteer suspect: a civilian volunteers with /crimsonheat, a unit accepts Investigation with Real suspect
 --    OK, he says yes, travels, officers reach him and cuff him at Warrant Service's door; the end event.
 -- The fairness rules docs/OWNER_GUIDE.md's "Rules for cases with real suspects" promise are checked on the way: officers never
--- get a suspect's live position, a suspect cuffed while down counts only Config.RealSuspects.neutralisedShare, the
+-- get a suspect's live position, a suspect cuffed while down counts only Config.RealPlayers.neutralisedShare, the
 -- volunteer is asked first and can say no, and staff read each case's timeline.
 
 local H = dofile('tests/harness.lua')
@@ -126,7 +127,7 @@ _G.Entity = function(e)
         }, { __index = b }),
     }
 end
--- Crimson-Contracts is the only script allowed to report a crime (Config.LiveCrime.sources).
+-- Crimson-Contracts is the only script allowed to report a crime (Config.RealPlayers.liveCrime.sources).
 local invoking = nil
 _G.GetInvokingResource = function() return invoking end
 local identifiers = {}  -- [src] = { 'license:...', ... }
@@ -247,7 +248,8 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua && find blocks -name server.lua | sort'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua'
+            .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
     p:close()
@@ -410,9 +412,11 @@ end
 -- ============================================================================
 
 do
-    H.eq(Config.LiveCrime.enabled, false, 'shipped: live crimes off')
-    H.eq(Config.Volunteers.enabled, false, 'shipped: volunteers off')
-    for key, mode in pairs(Config.Volunteers.modes) do H.eq(mode, 'npc', 'shipped: ' .. key .. ' plays the NPC') end
+    H.eq(Config.RealPlayers.liveCrime.enabled, false, 'shipped: live crimes off')
+    H.eq(Config.RealPlayers.volunteer.enabled, false, 'shipped: volunteers off')
+    for key, mode in pairs(Config.RealPlayers.volunteer.modes) do
+        H.eq(mode, 'npc', 'shipped: ' .. key .. ' plays the NPC')
+    end
     for src = 9, 10 do Place(src, vec3(CRIME_AT.x + src, CRIME_AT.y, CRIME_AT.z)) end
     Place(1, vec3(400.0, -980.0, 30.0))
     Place(2, vec3(402.0, -980.0, 30.0))
@@ -446,8 +450,8 @@ FormUnit(1, 2)
 
 local liveRun
 do
-    Config.LiveCrime.enabled = true
-    Config.LiveCrime.lastReportedEvery = 60
+    Config.RealPlayers.liveCrime.enabled = true
+    Config.RealPlayers.liveCrime.lastReportedEvery = 60
     -- the crime's second report: crew A and B stand at the place, both suspects
     for src = 9, 10 do Place(src, vec3(CRIME_AT.x + src, CRIME_AT.y, CRIME_AT.z)) end
     Secs(20)
@@ -520,10 +524,10 @@ do
     Place(1, vec3(H.players[9].coords.x + 1.5, CRIME_AT.y, CRIME_AT.z))   -- sc-police's reach (cuffRange)
     H.fire('police:server:CuffPlayer', 1, 9, false)
     Meta(9, 'ishandcuffed', true)
-    Secs(Config.RealSuspects.custodyHoldSeconds + 3)
+    Secs(Config.RealPlayers.custodyHoldSeconds + 3)
     H.eq(recA.state, 'detained', 'live: A is detained once the cuffs held custodyHoldSeconds')
-    H.eq(recA.share, Config.RealSuspects.neutralisedShare, 'live: A was down, so his detain counts neutralisedShare')
-    H.eq(st.lines.live_detain[CID[9]], Config.RealSuspects.neutralisedShare, 'live: the detain line is weighted')
+    H.eq(recA.share, Config.RealPlayers.neutralisedShare, 'live: A was down, so his detain counts neutralisedShare')
+    H.eq(st.lines.live_detain[CID[9]], Config.RealPlayers.neutralisedShare, 'live: the detain line is weighted')
 
     -- the leader ends the case from the radial menu (End case); B is still free and far away
     local mark = #H.events
@@ -553,7 +557,7 @@ do
     for _, r in ipairs(rows) do
         H.eq(r.state, 'completed', 'live: ' .. r.citizenid .. ' completed')
         H.ok((tonumber(r.final_points) or 0) > 0, 'live: ' .. r.citizenid .. ' earned the live lines')
-        H.eq(tonumber(r.cash_paid) or 0, 0, 'live: points only (Config.LiveCrime.cash = false)')
+        H.eq(tonumber(r.cash_paid) or 0, 0, 'live: points only (Config.RealPlayers.liveCrime.cash = false)')
         H.eq(tonumber(r.live_catches), 1, 'live: one live catch')
     end
 
@@ -575,9 +579,9 @@ end
 
 local volRun, VolMatch
 do
-    Config.LiveCrime.enabled = false
-    Config.Volunteers.enabled = true
-    Config.Volunteers.modes.investigation = 'players_when_available'
+    Config.RealPlayers.liveCrime.enabled = false
+    Config.RealPlayers.volunteer.enabled = true
+    Config.RealPlayers.volunteer.modes.investigation = 'players_when_available'
     -- Investigation's pool is Warrant Service only, at one location
     Config.DisabledMissions = { 'manhunt', 'suspicious_activity' }
     local def = CP.Missions.get('warrant_service')
@@ -664,7 +668,7 @@ do
     Secs(1)
     H.fire('police:server:CuffPlayer', 1, 11, false)
     Meta(11, 'ishandcuffed', true)
-    Secs(Config.RealSuspects.custodyHoldSeconds + 3)
+    Secs(Config.RealPlayers.custodyHoldSeconds + 3)
     local _, rec = CP.Opponents.byCid(CID[11])
     H.eq(rec and rec.state, 'detained', 'volunteer: detained once the cuffs held')
     H.eq(rec and rec.share, 1, 'volunteer: up and not AFK: a full catch')
@@ -734,29 +738,29 @@ end
 
 do
     -- an officer and a player are never admins: the setting is refused and nothing changes
-    local ok, err = Setting(1, 'CriminalTablet.enabled', true)
+    local ok, err = Setting(1, 'RealPlayers.criminalTablet.enabled', true)
     H.eq(ok, false, 'admin: an officer cannot change a setting')
     H.ok(err ~= nil, 'admin: ...he is told why: ' .. tostring(err))
-    H.eq(Config.CriminalTablet.enabled, false, 'admin: ...and the tablet stays off')
+    H.eq(Config.RealPlayers.criminalTablet.enabled, false, 'admin: ...and the tablet stays off')
     local view, why = Cb('crimtab:get', 12)
     H.eq(view, nil, 'admin: shipped, the criminal tablet is off')
     H.eq(why, 'err.crimtab_off', 'admin: ...and says so')
 
     -- the admin switches on volunteers, the criminal tablet (the Features switch) and the volunteer's pay
     for _, c in ipairs({
-        { 'Volunteers.enabled', true },
+        { 'RealPlayers.volunteer.enabled', true },
         {
-            'Volunteers.modes',
+            'RealPlayers.volunteer.modes',
             { patrol = 'npc', training = 'npc', investigation = 'players_when_available', tactical = 'npc' },
         },
-        { 'CriminalTablet.enabled', true },
-        { 'CriminalTablet.access', 'granted' },
+        { 'RealPlayers.criminalTablet.enabled', true },
+        { 'RealPlayers.criminalTablet.access', 'granted' },
         { 'FeatureRewards.suspect.enabled', true },
     }) do
         ok, err = Setting(8, c[1], c[2])
         H.eq(ok, true, ('admin: %s saved: %s'):format(c[1], tostring(err)))
     end
-    H.eq(Config.CriminalTablet.enabled, true, 'admin: the Features switch turns the tablet on at once')
+    H.eq(Config.RealPlayers.criminalTablet.enabled, true, 'admin: the Features switch turns the tablet on at once')
     H.eq(Config.FeatureRewards.suspect.enabled, true, 'admin: Pay volunteer suspects is on')
     H.eq(Config.FeatureRewards.suspect.money.got_away, 1500, 'admin: ...with its default money ready')
 
@@ -884,7 +888,7 @@ do
     local savedLocations = def.locations
     def.locations = { def.locations[1] }
     -- the same officers and volunteer again: the admin lifts the repeat limits in Settings (shipped 30 min, 30 min)
-    for _, c in ipairs({ { 'RealSuspects.jobHopMinutes', 0 }, { 'RealSuspects.suspectCooldownMinutes', 0 } }) do
+    for _, c in ipairs({ { 'RealPlayers.jobHopMinutes', 0 }, { 'RealPlayers.suspectCooldownMinutes', 0 } }) do
         local ok, err = Setting(8, c[1], c[2])
         H.eq(ok, true, ('strike: the admin sets %s to %d: %s'):format(c[1], c[2], tostring(err)))
     end
@@ -909,7 +913,7 @@ do
     local start = run and run.location.start.coords or vec3(0.0, 0.0, 0.0)
     Place(1, start)
     Place(2, vec3(start.x + 2.0, start.y, start.z))
-    Secs((Config.Volunteers.cancelGraceSeconds or 60) + 2)
+    Secs((Config.RealPlayers.volunteer.cancelGraceSeconds or 60) + 2)
     view = Cb('crimtab:get', 12) or {}
     H.eq(view.active and view.active.freeCancel, false, 'strike: past the free seconds, Give up warns of a strike')
     ok = Act('server:crimtab:act', 12, { what = 'cancel' })
@@ -934,7 +938,7 @@ end
 --                7. THE VOLUNTEER QUITS AND COMES BACK MID-CASE
 -- ============================================================================
 -- Step FX1. A CASE BY THE CRIMINAL TABLET, A DROP AND A RECONNECT WITHIN THE GRACE, AN OFFICER DROP.
--- docs/OWNER_GUIDE.md 6: a suspect who comes back within Config.RealSuspects.disconnectGrace stays in the case.
+-- docs/OWNER_GUIDE.md 6: a suspect who comes back within Config.RealPlayers.disconnectGrace stays in the case.
 
 -- A player quits (FXServer's playerDropped) and later joins again with the same character (Qbox's player loaded).
 local function Drop(src)
@@ -1009,7 +1013,7 @@ do
     Secs(1)
     H.fire('police:server:CuffPlayer', 1, 12, false)
     Meta(12, 'ishandcuffed', true)
-    Secs(Config.RealSuspects.custodyHoldSeconds + 3)
+    Secs(Config.RealPlayers.custodyHoldSeconds + 3)
     _, rec = CP.Opponents.byCid(CID[12])
     H.eq(rec and rec.state, 'detained', 'drop: the volunteer, back, is detained by the leader')
     Reconnect(2)

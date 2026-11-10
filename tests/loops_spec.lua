@@ -186,15 +186,15 @@ CP.CrimTab._guardPause()
 H.advance(100, 50)
 CP.CrimTab._guardPause()
 H.advance(100, 50)
-local _, guards = From('modules/crimtab/client.lua')
+local _, guards = From('modules/realplayers/client/crimtab.lua')
 H.eq(guards, 1, 'two closes in a row: one guard thread')
 H.advance(2000, 50)
 waits = {}
 H.advance(1000, 50)
-H.eq((From('modules/crimtab/client.lua')), 0, 'the guard ends once its time is up')
+H.eq((From('modules/realplayers/client/crimtab.lua')), 0, 'the guard ends once its time is up')
 CP.CrimTab._guardPause()
 H.advance(50, 50)
-H.eq(select(2, From('modules/crimtab/client.lua')), 1, 'a later close starts a new guard')
+H.eq(select(2, From('modules/realplayers/client/crimtab.lua')), 1, 'a later close starts a new guard')
 H.advance(2000, 50)
 
 -- ============================================================================

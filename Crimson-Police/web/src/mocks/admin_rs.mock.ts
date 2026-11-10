@@ -1,5 +1,5 @@
-// Browser mocks for Admin UI · Real suspects: modules/opponents/staff/server.lua. ?rsOff in the
-// browser answers as with Config.LiveCrime.enabled and Config.Volunteers.enabled both false.
+// Browser mocks for Admin UI · Real suspects: modules/realplayers/staff.lua. ?rsOff in the
+// browser answers as with Config.RealPlayers.liveCrime.enabled and Config.RealPlayers.volunteer.enabled both false.
 
 import { registerMock } from '../shared/nui';
 import type {

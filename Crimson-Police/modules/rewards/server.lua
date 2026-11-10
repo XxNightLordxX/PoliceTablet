@@ -673,10 +673,9 @@ local function OnRowSettled(run, p, rowId, row, result)
     if type(run) ~= 'table' or type(p) ~= 'table' or type(row) ~= 'table' then return end
     rowId = ToId(rowId)
     if not rowId or run.test or row.state ~= 'completed' then return end
-    -- a live case rolls no items unless the owner turned on Config.LiveCrime.items (a money switch)
-    if CP.LiveCrime and CP.LiveCrime.counts and CP.LiveCrime.counts(run, 'items') == false then return end
-    -- a volunteer case rolls none unless the owner turned on Config.Volunteers.payRewards (a money switch)
-    if CP.Volunteers and CP.Volunteers.counts and CP.Volunteers.counts(run, 'items') == false then return end
+    -- a live or volunteer case rolls no items unless the owner turned on its mode's items switch
+    -- (Config.RealPlayers.liveCrime.items, Config.RealPlayers.volunteer.items: money switches)
+    if not CP.RealPlayersTakePart(run, 'items') then return end
     local cid = row.citizenid
     if not ValidCitizenId(cid) or PresenceFailed(run, p) then return end
     local cfg = Cfg()

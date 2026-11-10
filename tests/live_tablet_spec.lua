@@ -115,7 +115,7 @@ CP.Dispatch = {
 
 H.load('blocks/live_response/server.lua')
 H.load('modules/missions/server.lua')
-H.load('modules/livecrime/server.lua')
+H.load('modules/realplayers/livecrime.lua')
 H.load('modules/runs/server.lua')
 H.step(0)
 local LC, Runs = CP.LiveCrime, CP.Runs
@@ -135,7 +135,7 @@ end
 -- ============================================================================
 
 do
-    local lc = Config.LiveCrime
+    local lc = Config.RealPlayers.liveCrime
     H.eq(lc.enabled, false, 'live crimes ship off: no live case, no card, no LIVE line')
     H.eq(lc.caseCard, true, 'caseCard ships true (behind enabled)')
     H.eq(lc.resultOutcomes, true, 'resultOutcomes ships true (behind enabled)')
@@ -175,8 +175,8 @@ end
 --                   A CRIME, ITS LIVE CALL CLAIMED, THE CASE
 -- ============================================================================
 
-local keep = Config.LiveCrime
-Config.LiveCrime = setmetatable({ enabled = true }, { __index = keep })
+local keep = Config.RealPlayers.liveCrime
+Config.RealPlayers.liveCrime = setmetatable({ enabled = true }, { __index = keep })
 
 Place(50, vec3(2410.0, 4900.0, 40.0))   -- suspect SUS1, near the crime
 Place(51, vec3(2420.0, 4900.0, 40.0))   -- suspect SUS2
@@ -214,9 +214,9 @@ do
     H.eq(line and line.suspects, 2, '...and the suspect count')
     H.eq(Keys(line), 'street,suspects,title', 'and nothing else (no citizenid, no server id)')
     H.eq(LC.readyLine({ crimeKey = 'crimson-contracts:none' }), nil, 'a crime that is gone: no line')
-    Config.LiveCrime.caseCard = false
+    Config.RealPlayers.liveCrime.caseCard = false
     H.eq(LC.readyLine({ crimeKey = crime.crimeKey }), nil, 'caseCard = false: the check reads like a mission\'s')
-    Config.LiveCrime.caseCard = nil
+    Config.RealPlayers.liveCrime.caseCard = nil
 end
 
 local run, err = Runs._create({
@@ -276,12 +276,12 @@ do
     case.suspects.SUS1.state = 'cuffed'
     H.eq(Keys(Runs.view(run, 2).live) .. Runs.view(run, 2).live.phase, before, 'a cuffed suspect: the same card')
 
-    Config.LiveCrime.lastReportedEvery = 0
+    Config.RealPlayers.liveCrime.lastReportedEvery = 0
     H.eq(Runs.view(run, 2).live.reportsOn, false, 'lastReportedEvery = 0: the card says the points are off')
-    Config.LiveCrime.lastReportedEvery = nil
-    Config.LiveCrime.caseCard = false
+    Config.RealPlayers.liveCrime.lastReportedEvery = nil
+    Config.RealPlayers.liveCrime.caseCard = false
     H.eq(Runs.view(run, 2).live, nil, 'caseCard = false: no card')
-    Config.LiveCrime.caseCard = nil
+    Config.RealPlayers.liveCrime.caseCard = nil
 end
 
 -- ============================================================================
@@ -319,14 +319,14 @@ end
 
 do
     local ended = { id = run.id, state = 'ended', live = { title = 'T' } }
-    Config.LiveCrime.resultOutcomes = false
+    Config.RealPlayers.liveCrime.resultOutcomes = false
     local v = LC.resultView(ended)
     H.eq(v and v.outcomes, nil, 'resultOutcomes = false: no outcomes on the result card')
-    Config.LiveCrime.resultOutcomes = nil
+    Config.RealPlayers.liveCrime.resultOutcomes = nil
     caseOfRun[run.id].suspects.SUS2.label = 'A'
     v = LC.resultView(ended)
     H.eq(v and v.outcomes and #v.outcomes, 2, 'the closed case answers again (CP.Opponents keeps it)')
 end
 
-Config.LiveCrime = keep
+Config.RealPlayers.liveCrime = keep
 return H

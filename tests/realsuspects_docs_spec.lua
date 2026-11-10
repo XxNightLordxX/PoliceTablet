@@ -1,8 +1,9 @@
 -- The owner docs for real suspects stay in step with the code. Owner guide section 6 (owner checklist, the rules
 
 -- for cases with real suspects, fairness, troubleshooting) is in the guide's contents, /crimsonheat is in the README's
--- command list, the guide's go-live checklist points to it, every Config.LiveCrime / Config.Volunteers / Config.RealSuspects key path the
--- section names exists, the in-game checklist has a check for every and SPEC's SOP has the rules.
+-- command list, the guide's go-live checklist points to it, every Config.RealPlayers.liveCrime /
+-- Config.RealPlayers.volunteer / Config.RealPlayers key path the section names exists, the in-game checklist has a
+-- check for every and SPEC's SOP has the rules.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
@@ -71,24 +72,24 @@ end
 H.ok(count >= 15, ('guide 6 names the config keys (%d)'):format(count))
 
 -- the defaults the section states are the shipped ones
-H.eq(Config.LiveCrime.enabled, false, 'live crimes ship off, as guide 6 says')
-H.eq(Config.Volunteers.enabled, false, 'volunteers ship off, as guide 6 says')
-H.eq(Config.RealSuspects.neutralisedShare, 0.5, '6.3: a downed catch is half a detain')
-H.eq(Config.LiveCrime.lastReportedEvery, 60, '6.3: last reported every 60 s')
-H.eq(Config.Volunteers.driverReportEvery, 30, '6.3: a driver every 30 s')
-H.eq(Config.RealSuspects.maxCatchesPerSuspectDay, 2, '6.3: twice a day')
-H.eq(Config.RealSuspects.pairCooldownHours, 24, '6.3: 24 h between pairs')
-H.eq(Config.Volunteers.cancelGraceSeconds, 60, '6.2: a free cancel within 60 s')
-H.eq(Config.Volunteers.strikes, 3, '6.2: 3 strikes')
-H.eq(Config.RealSuspects.custodyHoldSeconds, 30, '6.4: the cuffs hold 30 s')
-H.eq(Config.RealSuspects.cuffRange, 3.5, '6.4: within 3.5 m')
-H.eq(Config.LiveCrime.suspectRadius, 300.0, '6.4: suspects within 300 m')
-H.eq(Config.RealSuspects.casesKept, 16, '6.3: 16 closed cases kept')
-H.ok(Has(section, '`' .. Config.RealSuspects.excludeAce .. '`') or Has(section, Config.RealSuspects.excludeAce),
+H.eq(Config.RealPlayers.liveCrime.enabled, false, 'live crimes ship off, as guide 6 says')
+H.eq(Config.RealPlayers.volunteer.enabled, false, 'volunteers ship off, as guide 6 says')
+H.eq(Config.RealPlayers.neutralisedShare, 0.5, '6.3: a downed catch is half a detain')
+H.eq(Config.RealPlayers.liveCrime.lastReportedEvery, 60, '6.3: last reported every 60 s')
+H.eq(Config.RealPlayers.volunteer.driverReportEvery, 30, '6.3: a driver every 30 s')
+H.eq(Config.RealPlayers.maxCatchesPerSuspectDay, 2, '6.3: twice a day')
+H.eq(Config.RealPlayers.pairCooldownHours, 24, '6.3: 24 h between pairs')
+H.eq(Config.RealPlayers.volunteer.cancelGraceSeconds, 60, '6.2: a free cancel within 60 s')
+H.eq(Config.RealPlayers.volunteer.strikes, 3, '6.2: 3 strikes')
+H.eq(Config.RealPlayers.custodyHoldSeconds, 30, '6.4: the cuffs hold 30 s')
+H.eq(Config.RealPlayers.cuffRange, 3.5, '6.4: within 3.5 m')
+H.eq(Config.RealPlayers.liveCrime.suspectRadius, 300.0, '6.4: suspects within 300 m')
+H.eq(Config.RealPlayers.casesKept, 16, '6.3: 16 closed cases kept')
+H.ok(Has(section, '`' .. Config.RealPlayers.excludeAce .. '`') or Has(section, Config.RealPlayers.excludeAce),
     '6.1 names the exclude ace as shipped')
 
 -- the command list and the go-live checklist
-H.ok(Has(readme, '| `/' .. Config.Volunteers.command .. '` |'), 'README 6.1 lists the volunteer command')
+H.ok(Has(readme, '| `/' .. Config.RealPlayers.volunteer.command .. '` |'), 'README 6.1 lists the volunteer command')
 local golive = guide:match('### 7%.1 Before go%-live checklist(.-)\n### 7%.2') or ''
 H.ok(Has(golive, '(#6-real-suspects-live-crimes-and-volunteers)'), 'guide 7.1 points to guide 6')
 

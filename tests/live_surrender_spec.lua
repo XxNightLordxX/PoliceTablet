@@ -1,9 +1,9 @@
--- Surrender and Talk them down in a live case (modules/opponents/surrender): the suspect's own command, an
+-- Surrender and Talk them down in a live case (modules/realplayers/surrender): the suspect's own command, an
 
--- Surrender and Talk them down in a live case (modules/opponents/surrender): the suspect's own command, an
+-- Surrender and Talk them down in a live case (modules/realplayers/surrender): the suspect's own command, an
 -- officer's Talk them down within talkRange, the suspect's yes or no, the server's distance, case and state checks,
 -- the lapse rules, the officers' prompt, Opp.peaceful and the staff timeline lines. All off while
--- Config.LiveCrime.enabled is false.
+-- Config.RealPlayers.liveCrime.enabled is false.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })
@@ -85,11 +85,11 @@ CP.Qbx = {
 H.load('modules/access/server.lua')
 CP.Qbx = nil
 H.load('modules/integrations/qbx/server.lua')
-H.load('modules/opponents/server.lua')
-H.load('modules/opponents/surrender/server.lua')
+H.load('modules/realplayers/opponents.lua')
+H.load('modules/realplayers/surrender.lua')
 H.step(0)
 local Opp = CP.Opponents
-local S = Config.RealSuspects.surrender
+local S = Config.RealPlayers.surrender
 
 Load(1, 'OFF00001', vec3(0.0, 0.0, 30.0), 'sast', true)
 Load(2, 'OFF00002', vec3(2.0, 0.0, 30.0), 'sast', true)
@@ -163,7 +163,7 @@ local function Talk(src) H.fire(CP.e('server:liveTalkDown'), src) end
 -- ============================================================================
 
 do
-    H.eq(Config.LiveCrime.enabled, false, 'live crimes ship off')
+    H.eq(Config.RealPlayers.liveCrime.enabled, false, 'live crimes ship off')
     H.eq(S.enabled, true, 'surrender ships on (it works only while live crimes are on)')
     H.eq(S.command, 'surrender', 'the command is /surrender')
     H.eq(S.talkRange, 15.0, 'talkRange ships 15 m')
@@ -194,7 +194,7 @@ do
     H.ok(case ~= nil, 'the case itself still opened')
 end
 
-Config.LiveCrime.enabled = true
+Config.RealPlayers.liveCrime.enabled = true
 Opp.registerSurrender()
 H.ok(H.commands.surrender ~= nil, 'live crimes on: /surrender is registered (the server checks every use)')
 
@@ -333,7 +333,7 @@ do
 
     run, case, rec, src = Surrendered('ENDS0003')
     Tick(2)
-    rec.armedUntil = GetGameTimer() + Config.RealSuspects.armedMemory * 1000
+    rec.armedUntil = GetGameTimer() + Config.RealPlayers.armedMemory * 1000
     Tick(1)
     H.eq(rec.surrender.ended, 'armed', 'a weapon seen after he gave up ends it')
     Opp.close(run)

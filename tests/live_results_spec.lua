@@ -1,6 +1,6 @@
 -- Results for other scripts: the server-only event crimson-police:server:liveCrimeEnded when a live case
--- ends (Config.LiveCrime.endEvent) and the read-only export GetAvailablePolice (CP.LiveCrime.availablePolice,
--- Config.LiveCrime.availablePolice). Plain Lua with stubs.
+-- ends (Config.RealPlayers.liveCrime.endEvent) and the read-only export GetAvailablePolice
+-- (CP.LiveCrime.availablePolice, Config.RealPlayers.liveCrime.availablePolice). Plain Lua with stubs.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })
@@ -46,7 +46,7 @@ CP.Access = {
     end,
 }
 
-H.load('modules/livecrime/server.lua')
+H.load('modules/realplayers/livecrime.lua')
 local LC = CP.LiveCrime
 
 local EVENT = CP.e('server:liveCrimeEnded')
@@ -86,9 +86,9 @@ end
 -- ============================================================================
 
 do
-    H.eq(Config.LiveCrime.enabled, false, 'live crimes ship off: no case, so no end event')
-    H.eq(Config.LiveCrime.endEvent, true, 'endEvent ships true (behind enabled)')
-    H.eq(Config.LiveCrime.availablePolice, 'idle', 'availablePolice ships idle')
+    H.eq(Config.RealPlayers.liveCrime.enabled, false, 'live crimes ship off: no case, so no end event')
+    H.eq(Config.RealPlayers.liveCrime.endEvent, true, 'endEvent ships true (behind enabled)')
+    H.eq(Config.RealPlayers.liveCrime.availablePolice, 'idle', 'availablePolice ships idle')
     H.eq(LC.availablePolice(), nil, 'the export answers nil while live crimes are off')
 end
 
@@ -131,10 +131,10 @@ do
 
     -- endEvent = false: nothing
     H.events = {}
-    Config.LiveCrime.endEvent = false
+    Config.RealPlayers.liveCrime.endEvent = false
     CP.Hooks.fire('run:ended', Run('V19-3'), 'completed', 'completed')
     H.eq(#Sent(), 0, 'endEvent = false: no event')
-    Config.LiveCrime.endEvent = true
+    Config.RealPlayers.liveCrime.endEvent = true
 
     -- an NPC mission: nothing
     H.events = {}
@@ -155,16 +155,16 @@ do
         [5] = { name = 'mechanic', onduty = true },
     }
     onMission = { [2] = true }
-    Config.LiveCrime.enabled = true
+    Config.RealPlayers.liveCrime.enabled = true
     local total, byDept = LC.availablePolice()
     H.eq(total, 2, 'idle: on-duty officers on no mission')
     H.eq(byDept.lspd, 1, '...per department')
     H.eq(byDept.bcso, 1, '...per department (2)')
-    Config.LiveCrime.availablePolice = 'duty'
+    Config.RealPlayers.liveCrime.availablePolice = 'duty'
     H.eq((LC.availablePolice()), 3, 'duty: every on-duty officer, on a mission or not')
-    Config.LiveCrime.availablePolice = 'idle'
-    Config.LiveCrime.enabled = false
-    local f = io.open('Crimson-Police/modules/livecrime/server.lua', 'r')
+    Config.RealPlayers.liveCrime.availablePolice = 'idle'
+    Config.RealPlayers.liveCrime.enabled = false
+    local f = io.open('Crimson-Police/modules/realplayers/livecrime.lua', 'r')
     local src = f and f:read('a') or ''
     if f then f:close() end
     H.ok(src:find('exports(\'GetAvailablePolice\'', 1, true) ~= nil, 'the export is registered')

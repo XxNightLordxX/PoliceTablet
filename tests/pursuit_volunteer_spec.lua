@@ -91,8 +91,8 @@ end
 -- A volunteer drives: no NPC racer (driverNpcCars ships false), the pointer stays on the grid until his first
 -- report, then his last-reported point only; a detain with a share completes the objective.
 do
-    H.eq(Config.Volunteers.driverNpcCars, false, 'driverNpcCars ships false')
-    H.eq(Config.Volunteers.driverReportEvery, 30, 'a last-reported point every 30 s')
+    H.eq(Config.RealPlayers.volunteer.driverNpcCars, false, 'driverNpcCars ships false')
+    H.eq(Config.RealPlayers.volunteer.driverReportEvery, 30, 'a last-reported point every 30 s')
     view, case, rec =
         Real('travel'), Case('free'), { label = 'A', state = 'free', src = 9, lastCoords = loc.start.coords }
     local run = Run()
@@ -145,12 +145,12 @@ end
 
 -- driverNpcCars = true: the other racers still come; he takes one car's place.
 do
-    Config.Volunteers.driverNpcCars = true
+    Config.RealPlayers.volunteer.driverNpcCars = true
     view, case, rec = Real('in_position'), Case('free'), nil
     local run = Run()
     Secs(3)
     H.eq(Cars(run), 2, 'driverNpcCars true: two NPC racers beside him')
-    Config.Volunteers.driverNpcCars = false
+    Config.RealPlayers.volunteer.driverNpcCars = false
     EndRun(run)
 end
 

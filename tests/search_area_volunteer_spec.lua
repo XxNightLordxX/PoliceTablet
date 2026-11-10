@@ -97,8 +97,8 @@ Config.Spawning.enabled = false  -- everything when the search starts: the clues
 -- A volunteer hides: no NPC fugitive (fugitiveNpcs ships false), his own map gets the circle, a clue shrinks the
 -- circle towards where the server last saw him, and a detain with a share completes the objective.
 do
-    H.eq(Config.Volunteers.fugitiveNpcs, false, 'fugitiveNpcs ships false')
-    H.eq(Config.Volunteers.fugitiveOutSeconds, 30, 'the circle rule allows 30 s outside')
+    H.eq(Config.RealPlayers.volunteer.fugitiveNpcs, false, 'fugitiveNpcs ships false')
+    H.eq(Config.RealPlayers.volunteer.fugitiveOutSeconds, 30, 'the circle rule allows 30 s outside')
     local spot = loc.hiding[3]
     view, case, rec = Real('in_position'), Case('free'), Rec(spot)
     areas = {}
@@ -162,7 +162,7 @@ do
     Secs(10)
     H.eq(outs, 1, 'only once')
     EndRun(run)
-    Config.Volunteers.fugitiveOutSeconds = 0
+    Config.RealPlayers.volunteer.fugitiveOutSeconds = 0
     outs = 0
     rec = Rec(loc.hiding[1])
     run = Run()
@@ -170,7 +170,7 @@ do
     rec.lastCoords = { x = loc.center.x + 700.0, y = loc.center.y, z = loc.center.z }
     Secs(40)
     H.eq(outs, 0, 'fugitiveOutSeconds = 0: no circle rule')
-    Config.Volunteers.fugitiveOutSeconds = 30
+    Config.RealPlayers.volunteer.fugitiveOutSeconds = 30
     EndRun(run)
 end
 
@@ -202,7 +202,7 @@ end
 
 -- fugitiveNpcs = true with two fugitives: one NPC hides beside him.
 do
-    Config.Volunteers.fugitiveNpcs = true
+    Config.RealPlayers.volunteer.fugitiveNpcs = true
     view, case, rec = Real('in_position'), Case('free'), nil
     local m = {}
     for k, v in pairs(def) do m[k] = v end
@@ -216,7 +216,7 @@ do
     Secs(3)
     H.eq(Fugs(run), 1, 'fugitiveNpcs true: one NPC fugitive beside him')
     H.eq(S.checklist(CP.Runs.ctx(run, 1))[2].max, 2, 'two fugitives to catch')
-    Config.Volunteers.fugitiveNpcs = false
+    Config.RealPlayers.volunteer.fugitiveNpcs = false
     EndRun(run)
 end
 

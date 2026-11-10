@@ -19,5 +19,5 @@ Crimson-Police never loads anything from this folder and never edits ox_inventor
 ## The criminal tablet item (optional)
 
 The `['crimson_criminal_tablet'] = { ... },` entry opens the criminal tablet for volunteer suspects
-(`Config.CriminalTablet`). Copy it the same way, then set `item = 'crimson_criminal_tablet'` inside
-`Config.CriminalTablet`. It shows the police tablet's picture until you add a picture of your own.
+(`Config.RealPlayers.criminalTablet`). Copy it the same way, then set `item = 'crimson_criminal_tablet'` inside
+`Config.RealPlayers.criminalTablet`. It shows the police tablet's picture until you add a picture of your own.

@@ -134,15 +134,15 @@ end
 
 -- Whether leaving the start route ends this run (Hard rule 17), the one place that decides it: run.routeRequired once
 -- CP.Runs locked it at accept (it calls this before the lock). Before that: a test run always (its own Start route
--- switch decides whether there is a route at all); a live crime (run.live) Config.LiveCrime.requireRoute == true
--- (shipped false: officers may leave the GPS route to chase); every other run (NPC missions and volunteer suspects)
--- Config.Route.required. Late joiners begin with the run's locked value.
+-- switch decides whether there is a route at all); a live crime (run.live) Config.RealPlayers.liveCrime.requireRoute ==
+-- true (shipped false: officers may leave the GPS route to chase); every other run (NPC missions and volunteer
+-- suspects) Config.Route.required. Late joiners begin with the run's locked value.
 function R.requiredFor(run)
     if type(run) == 'table' then
         if type(run.routeRequired) == 'boolean' then return run.routeRequired end
         if type(run.test) == 'table' then return true end
         if run.live ~= nil and run.live ~= false then
-            return type(Config.LiveCrime) == 'table' and Config.LiveCrime.requireRoute == true
+            return (CP.RealPlayers('liveCrime')).requireRoute == true
         end
     end
     return not (Config.Route and Config.Route.required == false)
@@ -413,12 +413,12 @@ local function NearAction(run, coords, range)
     return best, false
 end
 
--- Config.RealSuspects.routeEnds (shipped 'first_contact'): in a case with a real suspect (run.realSuspect) an officer
+-- Config.RealPlayers.routeEnds (shipped 'first_contact'): in a case with a real suspect (run.realSuspect) an officer
 -- within contactRange of a suspect who is free or cuffed (CP.Opponents.nearAny: the watch's last positions, no native
 -- read) has arrived. 'start' = the NPC-mission rule (only the start counts). NPC runs: always false.
 local function FirstContact(run, coords)
     if not run.realSuspect then return false end
-    local rs = type(Config.RealSuspects) == 'table' and Config.RealSuspects or {}
+    local rs = CP.RealPlayers()
     if rs.routeEnds == 'start' then return false end
     if not (CP.Opponents and type(CP.Opponents.nearAny) == 'function') then return false end
     local ok, near = pcall(CP.Opponents.nearAny, run, coords, tonumber(rs.contactRange) or 100.0)

@@ -36,12 +36,12 @@ async function steps(): Promise<void> {
     ok(limitValue({ ...live!.limits[0], value: { a: 1, b: 2 } }) === '{2}', 'a map limit shows its size');
 
     // the toggle writes the same setting as the list
-    const set = await action('server:admin:setSetting', { path: 'LiveCrime.enabled', value: true });
+    const set = await action('server:admin:setSetting', { path: 'RealPlayers.liveCrime.enabled', value: true });
     ok(set.ok, 'the switch saves through server:admin:setSetting');
     const again = await request<SettingsData>('admin:getSettings', {});
     const after = featureSections(again.data)[0];
     ok(after?.rows.find(r => r.f.key === 'live_crimes')?.on === true && after.on === 1, 'the feature shows on');
-    await action('server:admin:resetSetting', { path: 'LiveCrime.enabled' });
+    await action('server:admin:resetSetting', { path: 'RealPlayers.liveCrime.enabled' });
 }
 
 export async function walk(): Promise<{ passed: number; failures: string[] }> {

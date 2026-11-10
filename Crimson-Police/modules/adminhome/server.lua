@@ -57,13 +57,11 @@ local function FlaggedRuns(src)
 end
 
 -- The open real-suspect cases, or nil when the admin has no Player suspects screen (no antiFarmOverride key, or live
--- crimes and volunteers both off, or Config.RealSuspects.adminScreen = false).
+-- crimes and volunteers both off, or Config.RealPlayers.adminScreen = false).
 local function OpenCases(src)
     local okP, can = Call('Permissions', 'can', src, 'antiFarmOverride')
     if not (okP and can == true) then return nil end
-    local rs = type(Config.RealSuspects) == 'table' and Config.RealSuspects or {}
-    local on = (type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true)
-        or (type(Config.Volunteers) == 'table' and Config.Volunteers.enabled == true)
+    local rs, on = CP.RealPlayers()
     if rs.adminScreen == false or not on then return nil end
     local ok, list = Call('Opponents', 'cases')
     if not ok or type(list) ~= 'table' then return 0 end

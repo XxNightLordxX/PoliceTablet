@@ -91,7 +91,7 @@ CP.Runs = {
 
 H.load('blocks/live_response/server.lua')
 H.load('modules/missions/server.lua')
-H.load('modules/livecrime/server.lua')
+H.load('modules/realplayers/livecrime.lua')
 local LC = CP.LiveCrime
 local M = CP.Missions
 
@@ -118,7 +118,7 @@ local OFFICERS = { { src = 1, citizenid = 'OF1' }, { src = 2, citizenid = 'OF2' 
 -- ============================================================================
 
 do
-    local lc = Config.LiveCrime
+    local lc = Config.RealPlayers.liveCrime
     H.eq(lc.enabled, false, 'live crimes ship off: nobody can claim a LIVE call')
     H.eq(lc.caseTime, 1800, 'caseTime ships 30 minutes')
     H.eq(lc.readyCheck, false, 'readyCheck ships false: a live case opens at once')
@@ -148,15 +148,15 @@ do
     H.eq(index, 1, 'a case has one location')
     H.eq(m.type, 'tactical', 'the crime\'s mission type')
     H.eq(m.locations[1].start.coords.x, 2400.0, 'at the crime\'s reported place')
-    H.eq(m.locations[1].start.radius, Config.LiveCrime.sceneRadius, 'its start circle is the scene radius')
+    H.eq(m.locations[1].start.radius, Config.RealPlayers.liveCrime.sceneRadius, 'its start circle is the scene radius')
     H.eq(m.locations[1].label, 'Grapeseed', 'named after the crime\'s place')
-    H.eq(m.timeLimit, Config.LiveCrime.caseTime, 'the time limit is caseTime')
+    H.eq(m.timeLimit, Config.RealPlayers.liveCrime.caseTime, 'the time limit is caseTime')
     H.eq(m.label, 'Live case: Shots at the lab', 'the label names the alert')
     H.eq(def.locations[1].start.coords.x, 0.0, 'the registered mission is not changed')
-    local keep = Config.LiveCrime.caseTime
-    Config.LiveCrime.caseTime = 10
+    local keep = Config.RealPlayers.liveCrime.caseTime
+    Config.RealPlayers.liveCrime.caseTime = 10
     H.eq(LC.missionFor(crime).timeLimit, 60, 'caseTime is kept within 60-3600')
-    Config.LiveCrime.caseTime = keep
+    Config.RealPlayers.liveCrime.caseTime = keep
     crime.missionType = nil
     H.eq(LC.missionFor(crime), nil, 'no mission type: no mission')
 end
@@ -166,12 +166,12 @@ end
 -- ============================================================================
 
 do
-    local keep = Config.LiveCrime
-    Config.LiveCrime = setmetatable({ enabled = false }, { __index = keep })
+    local keep = Config.RealPlayers.liveCrime
+    Config.RealPlayers.liveCrime = setmetatable({ enabled = false }, { __index = keep })
     local crime = Crime()
     local function Check(officers) return select(2, LC.claimCheck(crime, officers or OFFICERS)) end
     H.eq(Check(), 'err.live_case_off', 'live crimes off')
-    Config.LiveCrime.enabled = true
+    Config.RealPlayers.liveCrime.enabled = true
     H.eq(LC.claimCheck(crime, OFFICERS), true, 'on: the unit may take the case')
 
     crime.ended = true
@@ -213,7 +213,7 @@ do
     H.eq(live.dispatchId, crime.dispatchId, '...its SC-Dispatch call')
     H.eq(live.suspects, 2, '...the number of suspects')
     H.eq(live.members, nil, 'no crew list in the run')
-    Config.LiveCrime = keep
+    Config.RealPlayers.liveCrime = keep
 end
 
 -- ============================================================================
@@ -337,8 +337,9 @@ do
     H.eq(run and run.live and run.live.crimeKey, crime.crimeKey, 'run.live is kept')
     H.eq(run and run.realSuspect, 'live', 'a real suspect of kind live')
     H.eq(run and run.npcCombat, false, 'no NPC-combat settings')
-    H.eq(run and run.routeRequired, false, 'Config.LiveCrime.requireRoute = false: officers may leave the route')
-    H.eq(run and run.timeLimit, Config.LiveCrime.caseTime, 'the case lasts caseTime')
+    H.eq(run and run.routeRequired, false,
+        'Config.RealPlayers.liveCrime.requireRoute = false: officers may leave the route')
+    H.eq(run and run.timeLimit, Config.RealPlayers.liveCrime.caseTime, 'the case lasts caseTime')
     H.players[2] = { coords = vec3(0.0, 0.0, 30.0) }
     local plain, perr = CP.Runs._create({
         mission = mission,

@@ -1,6 +1,6 @@
 -- Police vs real criminal players: the NPC-mission Hard rules 15-18 bent for cases with a real suspect
--- (run.realSuspect), each a Config.RealSuspects choice, and Config.LiveCrime.requireRoute for live crimes. Nothing
--- sets run.realSuspect or run.live yet (V14, V22), so every run here is a fake run.
+-- (run.realSuspect), each a Config.RealPlayers choice, and Config.RealPlayers.liveCrime.requireRoute for live crimes.
+-- Nothing sets run.realSuspect or run.live yet (V14, V22), so every run here is a fake run.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
@@ -221,16 +221,16 @@ local function Reporter(src, runId, metres)
     end
 end
 
-local RS = Config.RealSuspects
+local RS = Config.RealPlayers
 H.eq(RS.officerAlerts, 'normal', 'officerAlerts ships normal (the officers\' own calls go out)')
 H.eq(RS.routeEnds, 'first_contact', 'routeEnds ships first_contact')
 H.eq(RS.downed, 'keep_earned', 'downed ships keep_earned')
 H.eq(RS.downedPickupDelay, 400, 'downedPickupDelay ships 400 s (sc-ambulance\'s DeathTime)')
 H.eq(RS.npcCombat, false, 'npcCombat ships false')
-H.eq(Config.LiveCrime.requireRoute, false, 'requireRoute ships false (officers on a live case may chase)')
+H.eq(Config.RealPlayers.liveCrime.requireRoute, false, 'requireRoute ships false (officers on a live case may chase)')
 
 -- ============================================================================
---           ALERTS (Hard rule 16, Config.RealSuspects.officerAlerts)
+--           ALERTS (Hard rule 16, Config.RealPlayers.officerAlerts)
 -- ============================================================================
 
 do
@@ -400,14 +400,14 @@ do
     H.eq(st.required, false, '...the status says the route is not required')
     H.eq(st.secondsLeft, nil, '...and shows no countdown')
     H.eq(Arrived(23), false, '300 m behind is not contact (contactRange 100 m)')
-    Config.LiveCrime.requireRoute = true
+    Config.RealPlayers.liveCrime.requireRoute = true
     H.eq(CP.Route.requiredFor(r), false, 'the run keeps the value it was locked with')
     r.state = 'ended'
 
     local r2 = Chase('rs-rt-live-strict', 24, { realSuspect = 'live', live = live, suspectAt = behind }, 60)
     H.eq(r2.routeRequired, true, 'requireRoute true: locked with the route rule')
     H.eq(RemovedFor(24)[1] and RemovedFor(24)[1].reason, 'off_route', 'requireRoute true: removed off_route as RT1')
-    Config.LiveCrime.requireRoute = false
+    Config.RealPlayers.liveCrime.requireRoute = false
 
     -- volunteer runs follow Config.Route.required, whatever requireRoute says
     local old = Config.Route.required
@@ -433,7 +433,7 @@ do
 end
 
 -- ============================================================================
---              DOWNED (Hard rule 18, Config.RealSuspects.downed)
+--               DOWNED (Hard rule 18, Config.RealPlayers.downed)
 -- ============================================================================
 
 local function UntilRemoved(src, maxMs)

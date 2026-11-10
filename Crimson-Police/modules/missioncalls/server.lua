@@ -520,7 +520,7 @@ local function CallRule(call, unit, dist, now)
     return nil
 end
 
-local function LiveOn() return type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true end
+local function LiveOn() return select(2, CP.RealPlayers('liveCrime')) end
 
 -- ok, info | false, errKey: can src's unit claim the call right now (every accept check, then the call's rules).
 local function ClaimCheck(src, call, now)
@@ -774,7 +774,7 @@ end
 
 -- The open calls (open or claiming). lane: nil = every call, false = the server's own and staff calls only, a
 -- department key = that department's lane calls only. LIVE calls never count here: they have
--- their own cap, Config.LiveCrime.maxLiveRuns.
+-- their own cap, Config.RealPlayers.liveCrime.maxLiveRuns.
 local function OpenCalls(lane)
     local out = {}
     for _, call in pairs(calls) do
@@ -2228,15 +2228,16 @@ end
 -- ============================================================================
 --                                  LIVE CALLS
 -- ============================================================================
--- A crime CP.LiveCrime reported with suspects (Config.LiveCrime) becomes a red LIVE call: memory only (no
--- cp_mission_calls row, a negative id), priority 1, no draw. It lapses after Config.LiveCrime.offerTime or when its
--- crime ends, and Config.LiveCrime.maxLiveRuns caps the LIVE calls and live cases at once. Its claim opens
--- the crime's live case: CP.Draw's live path, no draw; a claimed LIVE call closes with its case, never re-dispatched.
+-- A crime CP.LiveCrime reported with suspects (Config.RealPlayers.liveCrime) becomes a red LIVE call: memory only (no
+-- cp_mission_calls row, a negative id), priority 1, no draw. It lapses after Config.RealPlayers.liveCrime.offerTime or
+-- when its crime ends, and Config.RealPlayers.liveCrime.maxLiveRuns caps the LIVE calls and live cases at once. Its
+-- claim opens the crime's live case: CP.Draw's live path, no draw; a claimed LIVE call closes with its case, never
+-- re-dispatched.
 
-local function LiveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
+local function LiveCfg() return (CP.RealPlayers('liveCrime')) end
 
 -- The LIVE calls open, being claimed or claimed (a claimed one stays until its case ends): the count
--- Config.LiveCrime.maxLiveRuns caps.
+-- Config.RealPlayers.liveCrime.maxLiveRuns caps.
 function MC.liveCount()
     local n = 0
     for _, call in pairs(calls) do

@@ -83,7 +83,7 @@ end
 -- ============================================================================
 
 do
-    local lc = Config.LiveCrime
+    local lc = Config.RealPlayers.liveCrime
     H.eq(lc.enabled, false, 'live crimes ship off: no live case ever starts')
     H.eq(lc.sceneRadius, 75.0, 'sceneRadius ships 75 m')
     H.eq(lc.secureSeconds, 60, 'secureSeconds ships 60 s')
@@ -291,7 +291,7 @@ do
     officer[2] = vec3(0.0, 0.0, 30.0)
 
     -- lastReportedEvery = 0: no suspect point at all
-    Config.LiveCrime.lastReportedEvery = 0
+    Config.RealPlayers.liveCrime.lastReportedEvery = 0
     Case()
     ctx = Ctx()
     B.prepare(ctx)
@@ -299,7 +299,7 @@ do
     officer[1] = vec3(1000.0, 1000.0, 30.0)
     B.tick(ctx, 1)
     H.eq(#B.marker(ctx).targets, 1, 'only the scene')
-    Config.LiveCrime.lastReportedEvery = 60
+    Config.RealPlayers.liveCrime.lastReportedEvery = 60
     officer[1] = vec3(0.0, 0.0, 30.0)
 end
 

@@ -61,6 +61,7 @@ def lua_files(side):
     else:
         own = glob.glob(os.path.join(RES, 'modules', '**', 'client.lua'), recursive=True) + \
               glob.glob(os.path.join(RES, 'blocks', '**', 'client.lua'), recursive=True)
+        own += [p for p in manifest_scripts('client_scripts') if p not in own]
     return shared + own
 
 rel = lambda p: os.path.relpath(p, ROOT)

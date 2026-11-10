@@ -123,7 +123,7 @@ PoliceTablet/                      (git repo)
     config/blocks.lua              Mission Builder ranges and defaults
     shared/init.lua                CP namespace, logging, CP.Blocks registry, RegisterMission stub
     shared/lib.lua                 the helper library: CP.Db, CP.notify, CP.push, CP.Ext, CP.Lock, CP.Daily,
-                                   CP.Objective, CP.Recognition (§2)
+                                   CP.Objective, CP.Recognition, CP.RealPlayers (§2)
     shared/locale.lua              CP.L / CP.Locale
     shared/net.lua                 CP.Net (actions and callbacks)
     shared/npccombat.lua           CP.NpcCombat: the weapon a mission NPC may carry, the accuracy and firing caps (§5.42)
@@ -170,7 +170,8 @@ PoliceTablet/                      (git repo)
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
 (alphabetical: init, lib, locale, net, npccombat, options, twists, utils), then `modules/**/server.lua` (server) /
 `modules/**/client.lua` (client), then the server sub-files of `modules/progression/*.lua`,
-`modules/supervisor/*.lua` and `modules/review/*.lua`, then `blocks/**/server.lua` / `blocks/**/client.lua`.
+`modules/supervisor/*.lua`, `modules/review/*.lua` and `modules/realplayers/*.lua` (client:
+`modules/realplayers/client/*.lua`), then `blocks/**/server.lua` / `blocks/**/client.lua`.
 Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/storage/memsql.lua` and
 `modules/storage/server.lua` before every other server module (so the `MySQL` global is settled before
 any module can query), then `modules/adminkit/server.lua` (so any module may register its admin actions with
@@ -188,6 +189,10 @@ scoring, goals, challenge, events, leaderboard, profile; listed in fxmanifest as
 `modules/supervisor/` (server sub-files: fieldtraining; listed as `modules/supervisor/*.lua`),
 `modules/review/` (server sub-files: anticheat, corrections, disputes, queue, reviewrules; `modules/review/*.lua`,
 §5.26a),
+`modules/realplayers/` (real players as suspects, one module, FM4: server sub-files opponents, pairs, proof, conduct,
+surrender, staff, saved (§5.45), livecrime (§5.46), volunteers, match (§5.47) and crimtab (§5.51), listed as
+`modules/realplayers/*.lua`; client sub-files livecrime, volunteers and crimtab in `modules/realplayers/client/*.lua`;
+all read `Config.RealPlayers` through `CP.RealPlayers`),
 `modules/rewards/` (server), `modules/confighealth/` (server), `modules/integrations/sc_police/` (server),
 `blocks/field_contact/` and `blocks/process_scene/` (server, client).
 
@@ -243,6 +248,8 @@ Full admin control also has `modules/review/corrections` (§5.38), `modules/live
 | `CP.Daily.new(dayFn?) -> daily`; `daily:reserve(key, cap, n) -> token \| nil`, `:commit(token)`, `:cancel(token)`, `:used(key)`, `:left(key, cap)`, `:add(key, n)`, `:clear(key?)` | shared/lib.lua | Per-day counters for caps kept in memory (the server day, `CP.Schedule.dayStart`). `reserve` checks the cap with the reservations of requests still running and takes n in one step, so two requests sent at once cannot both pass a cap; commit after the save, cancel when it failed. Profile picture links use it (`Config.Profile.avatarUrls.perDay`) |
 | `CP.Objective(kind) -> cfg, on` | shared/lib.lua | One kind of `Config.Objectives` (`dailyGoal`, `weeklyGoal`, `challenge`, `bounty`, `typeOfTheDay`) as it is now, never nil, and its switch (`enabled ~= false`; the bounty also needs the challenge). Goals, the challenge, the bounty and the Type of the Day read their settings only through it |
 | `CP.Recognition(part) -> cfg, on` | shared/lib.lua | One part of `Config.Recognition` (`levels`, `levelCurve`, `badges`, `weeklyBadges`, `commendations`, `fieldTraining`) as it is now, never nil, and its switch (commendations `enabled ~= false`, field training `enabled == true`, the others always on). Scoring (levels, auto badges), the boards (weekly badges), profiles (commendations), the tablet and field training read their settings only through it |
+| `CP.RealPlayers(mode?) -> cfg, on` | shared/lib.lua | One mode of `Config.RealPlayers` (`liveCrime`, `volunteer`, `criminalTablet`) as it is now, never nil, and its switch (`enabled == true`: every mode ships off); with no mode the whole section (the rules both modes share) and whether live crimes or volunteers are on. Every real-player reader (modules/realplayers, the tablet, Admin Home, route, downed, alerts, draw, runs, mission calls, the blocks) goes through it |
+| `CP.RealPlayersTakePart(run, what)`, `CP.RealPlayersRowFilter(what, alias)` | shared/lib.lua | Whether a live or volunteer case takes part in `typeOfTheDay`, `goals`, `challenge`, `cash` or `items` (that switch of its mode; any other run: true), and the SQL that leaves such rows out of goal and challenge sums while the switch is off. Cash, item rewards, scoring, goals and the challenge use them; the modes keep no copy |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText`, `toSrc(v, console?)` (a player source: an integer above 0, or nil; 0 too with `console = true`) |
 
 Naming of `CP.Net.action` names: officer actions are `'server:<name>'` (spec events, e.g. `'server:acceptType'`),
@@ -583,7 +590,7 @@ p = {
 | `real_call_cancelled` | abandoned | yes | yes | no |
 | `real_call`, `force_recall`, `cancelled` | abandoned | **no** | **no** | real_call, force_recall: yes |
 | `downed` | failed | yes | yes | yes |
-| `downed_case` (a downed officer of a live crime, `Config.RealSuspects.downed = 'keep_earned'`; the lines earned so far) | completed | **no** | yes | yes (with `downed` in keepPayTierFor) |
+| `downed_case` (a downed officer of a live crime, `Config.RealPlayers.downed = 'keep_earned'`; the lines earned so far) | completed | **no** | yes | yes (with `downed` in keepPayTierFor) |
 | `downed_kept` (the same on a volunteer-suspect run; today's failed credit) | failed | **no** | yes | yes (with `downed` in keepPayTierFor) |
 | `disconnected` | failed | yes | yes | no |
 | `completed` / `time_limit` / `mission_failed` (still in at the end) | completed / failed | no | yes | — |
@@ -1217,7 +1224,7 @@ required }` (`'off'` only while the warning is shown; `distance` is the straight
   reference is not reset.
 - `Config.Route.required` (shipped true) is locked at accept as `run.routeRequired` (sent in `client:start`; copied to
   the view's `route.required`).
-- First contact (`Config.RealSuspects.routeEnds = 'first_contact'`).
+- First contact (`Config.RealPlayers.routeEnds = 'first_contact'`).
 - Late partners (`Config.Route.lateArriveRange`, 150 m, 0 = off).
 
 Client: `begin(runId, startCoords, { startRoute, radius })` (waypoint and GPS sampling every
@@ -1274,7 +1281,7 @@ The full rule set is the Crimson-Arena section of `docs/dev/INTEGRATIONS.md` (ru
   (a down is counted once).
 - `handle(run, src) -> bool` *(hook, from CP.Runs.endRun)*: holds the flag and removes the participant before anything
   yields, then the follow-up in its own thread.
-- `reasonFor(run)`: `downed`, or in a real-suspect case with `Config.RealSuspects.downed ~= 'failed'` (shipped
+- `reasonFor(run)`: `downed`, or in a real-suspect case with `Config.RealPlayers.downed ~= 'failed'` (shipped
   `'keep_earned'`) `downed_case` (live officer) / `downed_kept` (volunteer-suspect officer) (§4.3).
 - Every way an entry leaves the pending stages (done, gave up, timeout, every cancel reason, the EMS hand-over) sends
   `client:downedEnded` once.
@@ -2216,10 +2223,10 @@ centre) and at most one GPS line. modules/runs/client.lua drives it.
   and tow truck's, which are drawn only by `service` above and are never an extra part).
 - Admin UI: the Map markers screen (`admin_markers`, NPC missions; web admin/screens/MapMarkers.tsx, admin/components/mapMarkers.ts) reads `admin:getSettings` and `admin:getMissions`.
 
-### 5.45 CP.Opponents — modules/opponents (S)
+### 5.45 CP.Opponents — modules/realplayers/opponents (S)
 The real suspects of a case, shared by live crimes (§5.46) and volunteer suspects (§5.47).
 
-#### Core (modules/opponents/server.lua)
+#### Core (modules/realplayers/opponents.lua)
 - `case = { runId, run, kind = 'live'|'volunteer', index, openedAt, openedMs, scene, lostRule, meet, suspects = {
   [cid] = rec }, order, timeline, ledger, trail, notes, crimeEndedAt }`.
 - `open(run, { kind, index, members, scene, lostRule, meet }) -> case|nil` — `members` a list of citizenids or a map
@@ -2245,7 +2252,7 @@ The real suspects of a case, shared by live crimes (§5.46) and volunteer suspec
 - Every state change goes to the timeline and, while the run is in progress, `CP.Runs.dispatch(run, case.index, nil, {
   type = 'opp_<state>' ('opp_released' for free), cid, label, prev, by, share, why })` (server-only types, §5.10).
 
-#### Proof (modules/opponents/proof/server.lua)
+#### Proof (modules/realplayers/proof.lua)
 Inputs: the `CP.ScPolice.on` facts (cuff, uncuff, cuffBreak, bobbyPin, escort, jail), `CP.Ambulance.on('respawn')`,
 the metadata mirror (ignored in a bucket ≠ 0, where Crimson-Arena rewrites cuffs and downs) and the watch.
 - Cuff pair: a 'cuff' by an active participant of a live run also gives `CP.LiveCrime.cuffHint` (staff line naming the
@@ -2263,7 +2270,7 @@ the metadata mirror (ignored in a bucket ≠ 0, where Crimson-Arena rewrites cuf
 - Hospital: a respawn while not down (or up for 5 s+), or after less than `earlyRespawnSeconds` down → void and note
   `rs_early_respawn`.
 
-#### Conduct (modules/opponents/conduct/server.lua)
+#### Conduct (modules/realplayers/conduct.lua)
 How officers treat a real suspect, from server facts only.
 - Armed: the watch reads each tracked suspect's `GetSelectedPedWeapon`.
 - The ledger: a third read-only `weaponDamageEvent` listener, returning at once while no case is open and reading
@@ -2274,7 +2281,7 @@ How officers treat a real suspect, from server facts only.
 - Cash seizures (`CP.ScPolice.on('seizeCash')`, only on-duty `leo` jobs count): every attempt by a participant of a
   run with a case, or on a suspect, is audited (`seizeCash`, own_suspect|other_case|not_suspect).
 
-#### Identity and pairs (modules/opponents/pairs/server.lua, table `cp_pvp_pairs`, migration 009)
+#### Identity and pairs (modules/realplayers/pairs.lua, table `cp_pvp_pairs`, migration 009)
 The anti-farm core both features share.
 - `selfBlock(officerSrc, suspects) -> blocked, kind, flags, match`, per suspect in order: `own_character` (one of
   `CP.Access.selfCitizenids`), `own_license` (his licenses and their Qbox users rows hold the suspect's; strict: an
@@ -2292,13 +2299,13 @@ The anti-farm core both features share.
 - Retention, at start and daily: `live`, `volunteer` and `duty_off` rows older than `pairLedgerDays` and ended admin
   rows are deleted.
 
-#### Staff (modules/opponents/staff/server.lua, saved/server.lua)
+#### Staff (modules/realplayers/staff.lua, saved.lua)
 Server-only (never on an officer's tablet).
 - `cases()`, `findCase(runId)`, `wasSuspect(cid, runId)`, `suspectOfRun(cid, runUuid) -> true|false|nil` (memory, then
   `cp_pvp_pairs`), `pairStats(cid?)` (at most 200 lines), `adminRows()`, `staffCases()`, `staffCase(runId)` (suspects
   with names, times from open to contact/cuff/detain/booking, the timeline as text, flag and note lines, the ledger by
   name; never a trail point).
-- Closed cases are saved in `cp_pvp_cases` (migration 016) while `Config.RealSuspects.saveCases` (shipped true) and a
+- Closed cases are saved in `cp_pvp_cases` (migration 016) while `Config.RealPlayers.saveCases` (shipped true) and a
   feature are on: one row per case (`case_json = Opp.savedForm(case)`, plain values, never a position), written one
   frame after the close.
 - The self rule: `Kit.selfRun` and `P.canReviewRun` count a suspect of the run's case as taking part (fails closed).
@@ -2306,8 +2313,8 @@ Server-only (never on an officer's tablet).
   `err.rs_no_case`; latent), `admin:getRsPairs { citizenid? }`.
 - Admin UI → Real suspects (`admin/screens/RealSuspects.tsx`, key `admin_rs`, under More).
 
-### 5.46 CP.LiveCrime — modules/livecrime and modules/integrations/crimson_contracts (S)
-Live crimes (`Config.LiveCrime`, `enabled` shipped false).
+### 5.46 CP.LiveCrime — modules/realplayers/livecrime and modules/integrations/crimson_contracts (S)
+Live crimes (`Config.RealPlayers.liveCrime`, `enabled` shipped false).
 
 #### Intake
 Crimson-Contracts sends these only with `ContractsConfig.LifecycleEvents = true` (shipped false):
@@ -2326,7 +2333,7 @@ Crimson-Contracts sends these only with `ContractsConfig.LifecycleEvents = true`
   with no end; a reporting resource that stops ends its crimes `stopped`).
 - `onStarted`: a known uid is ignored; `test == true` (an admin's test contract) is a test record, audited
   `liveCrimeIgnored` (`test`), never sampled or reported.
-- `onAlert` (once per crime): the key maps through `Config.LiveCrime.types` (an OPEN Settings table: contract key → a
+- `onAlert` (once per crime): the key maps through `Config.RealPlayers.liveCrime.types` (an OPEN Settings table: contract key → a
   `Config.MissionTypes` key or false; off → `liveCrimeIgnored type_off`).
 - `onEnded`: the open case's run gets `CP.Opponents.crimeEnded(run)`; samples stop; the LIVE call lapses
   (`CP.MissionCalls.endLive`).
@@ -2335,7 +2342,7 @@ Crimson-Contracts sends these only with `ContractsConfig.LifecycleEvents = true`
 
 #### The LIVE call
 - `CP.MissionCalls.postLive(crime)` keeps the call in memory only (a negative id, code `LIVE-<n>`), type = the crime's
-  mission type, area from its coords, priority 1, `offerEnds` = now + `Config.LiveCrime.offerTime` (300, 30–3600),
+  mission type, area from its coords, priority 1, `offerEnds` = now + `Config.RealPlayers.liveCrime.offerTime` (300, 30–3600),
   `live = { crimeKey, title, street, coords, suspects }`.
 - The toast (`client:missionCall` with `live = true`) goes to every member of an idle unit who has not muted calls and
   is not on a real call (favourites ignored), shown as a red "LIVE call".
@@ -2345,7 +2352,7 @@ Crimson-Contracts sends these only with `ContractsConfig.LifecycleEvents = true`
   and the call's rules, never a pool.
 - CP.Draw's live path: every accept rule of a mission (leader, size, duty, arena, on a run, mission ban, types off,
   hourly/daily caps) except no server run caps (`maxLiveRuns` caps cases), the type cooldown only with
-  `Config.LiveCrime.typeCooldown` (false), the operation lock only with `duringOperation = false` (shipped true), and
+  `Config.RealPlayers.liveCrime.typeCooldown` (false), the operation lock only with `duringOperation = false` (shipped true), and
   `IsOnCall(src, except)` with `CP.Calls.exemptFor` of the case-to-be.
 - `LC.claimCheck(crime, officers)` (memory only): `err.live_case_off`, `err.live_case_gone` (no, ended or test crime,
   or every suspect in another case), `err.mc_taken_by`, `err.live_case_suspect_used` (every free suspect at
@@ -2362,14 +2369,14 @@ Crimson-Contracts sends these only with `ContractsConfig.LifecycleEvents = true`
   suspect detained or booked at a share above 0; `gone` when no participant arrived), `Opp.checkPairFlags`.
 
 #### Backup joins the case
-While `enabled` and `Config.LiveCrime.backup` (shipped true) are on, an on-duty officer on no mission is asked
+While `enabled` and `Config.RealPlayers.liveCrime.backup` (shipped true) are on, an on-duty officer on no mission is asked
 (`LC.offer(run, src, why)`, `client:liveJoinOffer`, an ox_lib alert closed after `joinOfferSeconds`, 30, 10–120) when
 he marks himself responding to the crime's own call (an officer still on a mission is asked 3 s after CP.Calls ended
 it), stands within `sceneRadius` of the place (scanned at most every 5 s per case, `maybeOfficer` first), or cuffs a
 suspect from outside the case.
 
 #### The officers' tablet
-`Config.LiveCrime.caseCard` and `resultOutcomes` (both true).
+`Config.RealPlayers.liveCrime.caseCard` and `resultOutcomes` (both true).
 - Ready check (with `readyCheck`): `extra.live = LC.readyLine(ctx.live)` (`{ title, street, suspects }`) in the check
   and `client:readyCheck`.
 - Active Mission: `Runs.view` adds `live = LC.caseView(run, src)` (`{ title, street, suspects, host, phase }` plus the
@@ -2379,9 +2386,9 @@ suspect from outside the case.
 
 #### Scoring
 A run is live when it carries `run.live` or `run.realSuspect = 'live'`; the rules read the run, never `enabled`.
-- `LC.isLive(run)`, `LC.linesOnly(run)` (`Config.LiveCrime.linesOnly`, true): `Scoring.compute` makes the subtotal the
+- `LC.isLive(run)`, `LC.linesOnly(run)` (`Config.RealPlayers.liveCrime.linesOnly`, true): `Scoring.compute` makes the subtotal the
   lines only (the live_* lines, detain and booking weighted by share, conduct penalties) without the end-of-run lines.
-- `LC.tierRow(run)` (`Config.LiveCrime.tier`, 'crew'): the Config.Scaling row for `LC.crewSize(run)` is the points and
+- `LC.tierRow(run)` (`Config.RealPlayers.liveCrime.tier`, 'crew'): the Config.Scaling row for `LC.crewSize(run)` is the points and
   cash multiplier and the pay tier.
 - `LC.counts(run, what)` for typeOfTheDay, goals, challenge, cash, items.
 - Live catches: `noteStat(run, nil, 'live_catches', 1)` per suspect whose detain line was recorded;
@@ -2389,12 +2396,12 @@ A run is live when it carries `run.live` or `run.realSuspect = 'live'`; the rule
 
 #### Results for other scripts
 - `LC.sendEnded(run, state, reason, outcomes, case)` from `run:ended`, once per run, not for tests, while
-  `Config.LiveCrime.endEvent ~= false`.
+  `Config.RealPlayers.liveCrime.endEvent ~= false`.
 - `LC.availablePolice() -> count, { [dept] = count } | nil` and the export `GetAvailablePolice` (nil while off):
   online players on duty in a turned-on department.
 
-#### Surrender and Talk them down (modules/opponents/surrender/server.lua)
-`Config.RealSuspects.surrender` (`enabled` true; also needs `Config.LiveCrime.enabled`); live cases only.
+#### Surrender and Talk them down (modules/realplayers/surrender.lua)
+`Config.RealPlayers.surrender` (`enabled` true; also needs `Config.RealPlayers.liveCrime.enabled`); live cases only.
 - The suspect's command (`command`, `surrender`; registered the first time the feature is on, a new name needs a
   restart; 2 per 3 s): refuses `livecrime.surrender.off`, `not_wanted`, `already`, `cannot` (down, in an instance),
   `pending`.
@@ -2408,10 +2415,10 @@ A run is live when it carries `run.live` or `run.realSuspect = 'live'`; the rule
 - `Opp.peaceful(run, cid) -> bool, by`: a surrender not ended, cuffed after it, not detained by a leave, no officer
   hit since.
 
-### 5.47 CP.Volunteers — modules/volunteers (server, client; stub)
-Volunteer suspects (`Config.Volunteers`, `enabled` shipped false).
+### 5.47 CP.Volunteers — modules/realplayers/volunteers (server, client; stub)
+Volunteer suspects (`Config.RealPlayers.volunteer`, `enabled` shipped false).
 
-#### The opt-in (modules/volunteers)
+#### The opt-in (modules/realplayers/volunteers)
 - `check(src) -> ok, reason, info, untilAt`: `enabled`, a loaded character, `CP.Opponents.eligible(src)`, an admin's
   Exclude, and the strike block of his player key (the license, else `cid:<citizenid>`, so other characters are
   blocked too).
@@ -2425,7 +2432,7 @@ Volunteer suspects (`Config.Volunteers`, `enabled` shipped false).
 
 #### Modes, slots and who is free
 - `modes` (per type, shipped `'npc'` for each) and `missionModes` (per mission, beats its type, `{}`), Settings
-  `Volunteers.modes` / `missionModes` (a `modes` key must be a type, `err.setting_volunteer_type`).
+  `RealPlayers.volunteer.modes` / `missionModes` (a `modes` key must be a type, `err.setting_volunteer_type`).
 - `modeOf(def)` (`'npc'` while off, for the boss and for no mode), `slotOf(def, index)` (the first objective whose
   block's `volunteerSlot(obj, def, location)` answers `{ role, ... }`; cached; an error is no slot), `slotRoles(def)`,
   `canTake(def)`.
@@ -2439,7 +2446,7 @@ Volunteer suspects (`Config.Volunteers`, `enabled` shipped false).
 - Config health `volunteers`: warns for unknown keys, non-modes, and a non-npc mode with no slot (`no_slot` plays the
   NPC, `no_slot_only` never offered).
 
-#### Matching, consent, travel and engagement (modules/volunteers/match/server.lua)
+#### Matching, consent, travel and engagement (modules/realplayers/match.lua)
 Memory only; only for runs with `run.volunteer`.
 - Start: `run:created` one frame later → `V.match(run)` (the slot's role, `meet` (else the start), `meetRadius`).
 - Asking: the held volunteer first, then `available({ [role] = true })`, each once, at most `askTries` (3).
@@ -2460,7 +2467,7 @@ Memory only; only for runs with `run.volunteer`.
 #### Scoring, results and staff
 - `V.isCase(run)` (`run.realSuspect == 'volunteer'`), `V.counts(run, what)` for typeOfTheDay, goals, challenge, cash
   (`payCash`), items (`payRewards`), all shipped false.
-- `V.sendEnded(m, run, state, reason)`, once per run with a yes, never for tests, while `Config.Volunteers.endEvent ~=
+- `V.sendEnded(m, run, state, reason)`, once per run with a yes, never for tests, while `Config.RealPlayers.volunteer.endEvent ~=
   false`.
 - Staff: the case keeps `case.volunteer = { role, mode, phase, why, engaged }`; `V.staffView(runId, case)` is added to
   `Opp.staffCases` / `staffCase`.
@@ -2615,8 +2622,8 @@ Config.Recognition.fieldTraining (ships `enabled = false`: the hook counts nothi
 - Tests: tests/field_training_spec.lua (plain Lua, stubbed rows); the 015 column and its JSON_VALUE read in
   tests/foundation_spec.lua.
 
-### 5.51 CP.CrimTab — modules/crimtab (client, server; the criminal tablet)
-A front end of CP.Volunteers (5.47) for players who play real suspects, behind `Config.CriminalTablet` (shipped off).
+### 5.51 CP.CrimTab — modules/realplayers/crimtab (client, server; the criminal tablet)
+A front end of CP.Volunteers (5.47) for players who play real suspects, behind `Config.RealPlayers.criminalTablet` (shipped off).
 
 - Server: `CP.CrimTab.canUse(src)` -> ok, errKey, info (`err.crimtab_off`, `_not_loaded`, `_on_duty` (police on duty,
   always), `_police` (access `'everyone'`: a police job of Config.Departments), `_no_access` (access `'granted'`: no
@@ -2840,7 +2847,7 @@ draft, and only CP.LiveCrime's engine mission `live_crime` (§5.46) uses it.
   `block.flee_arrest.detail_waiting`.
 - `'real'` (travel, in_position, engaged): no NPC suspect; the knock shows `block.flee_arrest.response_volunteer`.
 - `'void'` (phase `void`: the run ends for want of him): nothing spawns.
-- Associates: `Config.Volunteers.doorAssociates` false (shipped) = none while `st.vol` is set (the hostile group
+- Associates: `Config.RealPlayers.volunteer.doorAssociates` false (shipped) = none while `st.vol` is set (the hostile group
   shoots every player, the volunteer too).
 - Voids go through CP.Volunteers (§5.47, `onVoid` / `voidRun`); the block never ends the run for them.
 
@@ -2850,10 +2857,10 @@ its stopped car to field_contact, which works NPC occupants), no `observe` (Traf
 - `'wait'` (phase `asking`): no car is made and the start trigger is held (a race does not start); the HUD says
   `block.pursuit.hud_volunteer_wait`.
 - `'real'` (travel, in_position, engaged): `VehTarget` is 0, or one fewer than the objective's cars with
-  `Config.Volunteers.driverNpcCars` true (the other racers still come; the trigger runs once one exists).
+  `Config.RealPlayers.volunteer.driverNpcCars` true (the other racers still come; the trigger runs once one exists).
 - Pointer: the NPC cars and people, plus his last-reported point (`key = 'last:driver'`, look `searchArea`, "Suspect
   vehicle: last reported"): CP.Opponents' server-side `rec.lastCoords` while he is free, online and outside an
-  instance, taken every `Config.Volunteers.driverReportEvery` s (30; 0 = none) once his phase is `in_position` or
+  instance, taken every `Config.RealPlayers.volunteer.driverReportEvery` s (30; 0 = none) once his phase is `in_position` or
   `engaged`, never in between and dropped once he is caught.
 - `'void'`: nothing spawns.
 
@@ -2862,7 +2869,7 @@ its stopped car to field_contact, which works NPC occupants), no `observe` (Traf
 - `'wait'` (phase `asking`): no fugitive is made (clues still are), the HUD says
   `block.search_area.hud_volunteer_wait`.
 - `'real'` (travel, in_position, engaged): `FugTarget` is 0, or one fewer than the objective's (scaled) fugitives with
-  `Config.Volunteers.fugitiveNpcs` true.
+  `Config.RealPlayers.volunteer.fugitiveNpcs` true.
 - The circle shrinks towards him: at each clue, `FugitiveAnchor` is his server-side `rec.lastCoords` (free, online,
   outside an instance) once he was seen inside the circle and while he still is, else his meet point.
 - His own map: `CP.Volunteers.caseArea(run, { x, y, z, r })` (`client:volunteerArea`, a red radius blip on his game
@@ -3126,8 +3133,8 @@ which add no event of their own. The conduct step also adds a third read-only `w
 Other resources' server-only events Crimson-Police listens to with `AddEventHandler` (never `RegisterNetEvent`, so no
 client can send them), checked against `GetInvokingResource()`: Crimson-Contracts' `crimson-contracts:server:contractStarted`,
 `:dispatchSent`, `:contractEnded`, `:memberRejoined` and `:crewShot` (modules/integrations/crimson_contracts, live
-crimes V10, §5.46). Registered always; they do nothing while `Config.LiveCrime.enabled` is not true or the sender is
-not in `Config.LiveCrime.sources`.
+crimes V10, §5.46). Registered always; they do nothing while `Config.RealPlayers.liveCrime.enabled` is not true or the sender is
+not in `Config.RealPlayers.liveCrime.sources`.
 
 ### 8.3 Supervisor, admin, builder and test actions (`CP.Net.action`) and callbacks (`CP.Net.callback`)
 
@@ -3239,7 +3246,7 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `server:admin:refreshOfficer` | action | officerRecords | `{ citizenid }` | online; 1 per 10 s per officer |
 | `admin:previewRecordMove` / `server:admin:moveRecord` / `undoRecordMove` | callback / actions | recordMove | `{ from, to, reason, confirm, previewToken, requestId }` / `{ jobId, reason }` | `AdminControl.recordMove`; T = the new citizenid or `UNVERIFIED <cid>` |
 | `server:admin:postNotice` / `removeNotice` | action | officerRecords | `{ text, departments?, expiresAt, reason }` / `{ id, reason }` | 1 per 60 s per admin; ≤ 5 running |
-| `admin:getRsCases`, `admin:getRsCase`, `admin:getRsPairs` | callbacks | antiFarmOverride | `{}` / `{ runUuid }` / `{ citizenid? }` | modules/opponents/staff; server-only case data, refused for the admin's own case |
+| `admin:getRsCases`, `admin:getRsCase`, `admin:getRsPairs` | callbacks | antiFarmOverride | `{}` / `{ runUuid }` / `{ citizenid? }` | modules/realplayers/staff; server-only case data, refused for the admin's own case |
 | `server:admin:rsBlockPair`, `rsExclude`, `rsSuspend` | actions | antiFarmOverride | `{ officer, suspect, days, reason }` / `{ citizenid, days, reason }` | 0 < days <= 3650, never his own characters, `err.rs_off` while both features are off |
 | `server:admin:rsLift`, `rsClearStrikes` | actions | antiFarmOverride | `{ kind, officer?, suspect?, reason }` / `{ citizenid, reason }` | never his own characters, `err.rs_no_row` / `err.rs_no_strikes` when nothing is running |
 | `admin:getOfficerLook`, `server:admin:resetLook`, `clearProfileCooldown` | callback / actions | officerRecords | `{ citizenid, reason }` | modules/progression/profile; cooldown clear 1 per 60 s per officer |

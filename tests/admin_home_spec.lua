@@ -118,9 +118,9 @@ do -- the shortcuts ship as today's five tiles; the panel has no switch
 end
 
 do -- one request answers the whole dashboard
-    Config.LiveCrime = Config.LiveCrime or {}
-    local liveWas = Config.LiveCrime.enabled
-    Config.LiveCrime.enabled = true
+    Config.RealPlayers.liveCrime = Config.RealPlayers.liveCrime or {}
+    local liveWas = Config.RealPlayers.liveCrime.enabled
+    Config.RealPlayers.liveCrime.enabled = true
     CP.warn('adminhome_spec', 'a problem line')
     CP.Refusals.note({ citizenid = 'CIDREF', name = 'Ref Used', missionId = 'patrol_a', reason = 'err.in_arena' })
     local data = Cb('admin:getHome', 1)
@@ -158,12 +158,12 @@ do -- one request answers the whole dashboard
     keys.antiFarmOverride = false
     H.eq(Cb('admin:getHome', 1).queues.rsCases, nil, 'no antiFarmOverride key: no player suspects line')
     keys.antiFarmOverride = true
-    Config.LiveCrime.enabled = false
-    local volWas = type(Config.Volunteers) == 'table' and Config.Volunteers.enabled
-    if type(Config.Volunteers) == 'table' then Config.Volunteers.enabled = false end
+    Config.RealPlayers.liveCrime.enabled = false
+    local volWas = type(Config.RealPlayers.volunteer) == 'table' and Config.RealPlayers.volunteer.enabled
+    if type(Config.RealPlayers.volunteer) == 'table' then Config.RealPlayers.volunteer.enabled = false end
     H.eq(Cb('admin:getHome', 1).queues.rsCases, nil, 'live crimes and volunteers off: no player suspects line')
-    if type(Config.Volunteers) == 'table' then Config.Volunteers.enabled = volWas end
-    Config.LiveCrime.enabled = liveWas
+    if type(Config.RealPlayers.volunteer) == 'table' then Config.RealPlayers.volunteer.enabled = volWas end
+    Config.RealPlayers.liveCrime.enabled = liveWas
 
     -- no liveRuns key: no runs
     keys.liveRuns = false

@@ -1,6 +1,6 @@
 // Admin UI · Real suspects walked against the browser mocks (node walk.mjs, a gate step): the screen shows
 // only for admins while live crimes or volunteers are on, a case opens its timeline and damage ledger (never the
-// admin's own case), and the tool form sends what modules/opponents/staff expects (or says what is wrong first).
+// admin's own case), and the tool form sends what modules/realplayers/staff expects (or says what is wrong first).
 
 import '../../mocks/admin_rs.mock';
 import { ADMIN_GROUP_OF } from '../../layouts/adminNav';

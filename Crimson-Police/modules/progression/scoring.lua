@@ -158,14 +158,15 @@ local function LiveCall(fn, run, ...)
     return nil
 end
 
--- Only the lines earned score (no base points, no end-of-run lines): a live case with Config.LiveCrime.linesOnly, or a
--- volunteer case ended early by Config.Volunteers.voidRun = 'keep_earned' (run.keepEarned).
+-- Only the lines earned score (no base points, no end-of-run lines): a live case with
+-- Config.RealPlayers.liveCrime.linesOnly, or a volunteer case ended early by Config.RealPlayers.volunteer.voidRun =
+-- 'keep_earned' (run.keepEarned).
 local function LinesOnly(run)
     return run.keepEarned == true or LiveCall('linesOnly', run) == true
 end
 
 local function TierRow(run)
-    -- a live case's tier comes from its crew (Config.LiveCrime.tier = 'crew')
+    -- a live case's tier comes from its crew (Config.RealPlayers.liveCrime.tier = 'crew')
     local live = LiveCall('tierRow', run)
     if live then return live end
     local t = run.payTier
@@ -686,7 +687,8 @@ local function ScoreLines(run, p, P, opts)
         end
     end
 
-    -- 3. common end-evaluated bonuses and penalties; a live case scores only its lines (Config.LiveCrime.linesOnly)
+    -- 3. common end-evaluated bonuses and penalties; a live case scores only its lines
+    -- (Config.RealPlayers.liveCrime.linesOnly)
     if linesOnly then return bonuses, penalties, total end
     local duration = DurationOf(run, opts)
     -- Process the scene stops the fast-completion clock (CP.Runs.pauseFastClock)
@@ -766,7 +768,7 @@ function Scoring.compute(run, p, result, opts)
     if result ~= 'completed' then return out end
 
     local bonuses, penalties, total = ScoreLines(run, p, P, opts)
-    -- a live case with Config.LiveCrime.linesOnly: the lines only, P stays the base of their shares
+    -- a live case with Config.RealPlayers.liveCrime.linesOnly: the lines only, P stays the base of their shares
     local linesOnly = LinesOnly(run)
     local subtotal = linesOnly and total or P + total
     local mTeam = Num(TierRow(run).points, 1.0)
@@ -789,9 +791,8 @@ function Scoring.compute(run, p, result, opts)
     local value = math.max(0, math.min(cap, raw))
     local final = math.floor(value + 1e-9)
     local tod = false
-    -- a live or volunteer case only with its typeOfTheDay switch (Config.LiveCrime, Config.Volunteers)
-    local todOk = LiveCall('counts', run, 'typeOfTheDay') ~= false
-        and not (CP.Volunteers and CP.Volunteers.counts and CP.Volunteers.counts(run, 'typeOfTheDay') == false)
+    -- a live or volunteer case only with its mode's typeOfTheDay switch (Config.RealPlayers)
+    local todOk = CP.RealPlayersTakePart(run, 'typeOfTheDay')
     if CP.Events and CP.Events.typeOfTheDay and todOk then
         -- the officer's department's pick for today; the server's type when the setter is in the run
         local okT, key = pcall(CP.Events.typeOfTheDay, nil, p.department, run.participants or { p })

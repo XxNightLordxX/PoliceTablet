@@ -53,7 +53,7 @@ local function Player(src, cid, license, job, onduty)
     }
 end
 
-H.load('modules/volunteers/server.lua')
+H.load('modules/realplayers/volunteers.lua')
 H.step(0)
 local V = CP.Volunteers
 
@@ -86,9 +86,9 @@ local ALL = { runner = true, driver = true, fugitive = true }
 -- ============================================================================
 
 do
-    H.eq(Config.Volunteers.enabled, false, 'volunteers ship off')
-    H.eq(Config.Volunteers.command, 'crimsonheat', 'the shipped command is /crimsonheat')
-    H.eq(Config.Volunteers.windowMinutes, 60, 'an hour window')
+    H.eq(Config.RealPlayers.volunteer.enabled, false, 'volunteers ship off')
+    H.eq(Config.RealPlayers.volunteer.command, 'crimsonheat', 'the shipped command is /crimsonheat')
+    H.eq(Config.RealPlayers.volunteer.windowMinutes, 60, 'an hour window')
     Player(1, 'VOL00001', 'license:aaa')
     Fire(1, 'open')
     H.eq(LastNote(1), 'volunteer.refused.off', 'off: the command only says it is not available')
@@ -99,7 +99,7 @@ do
     H.eq(#V.list(), 0, 'the list stays empty')
 end
 
-Config.Volunteers.enabled = true
+Config.RealPlayers.volunteer.enabled = true
 
 -- ============================================================================
 --                                   JOINING
@@ -227,11 +227,11 @@ do
 
     -- the owner turns volunteers off
     Fire(1, 'join', { roles = ALL })
-    Config.Volunteers.enabled = false
-    CP.Hooks.fire('settings:changed', { 'Volunteers.enabled' })
+    Config.RealPlayers.volunteer.enabled = false
+    CP.Hooks.fire('settings:changed', { 'RealPlayers.volunteer.enabled' })
     H.eq(LastNote(1), 'volunteer.ended.disabled', 'turning it off ends every listing')
     H.eq(#V.list(), 0, 'the list is empty')
-    Config.Volunteers.enabled = true
+    Config.RealPlayers.volunteer.enabled = true
 end
 
 -- ============================================================================

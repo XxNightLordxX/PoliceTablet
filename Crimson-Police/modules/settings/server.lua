@@ -53,9 +53,9 @@ local MONEY_SWITCHES = {
     'Cash.allowClawback',
     'Cash.allowManualCash',
     'Rewards.allowTakeBack',
-    -- Live-case and volunteer-case pay (Config.LiveCrime.cash / items, Config.Volunteers.payCash / payRewards) and
-    -- Config.FeatureRewards are ordinary feature switches: they ship off
-    -- and pay the amounts set in config.lua, without the typed word.
+    -- Live-case and volunteer-case pay (the cash and items switches of Config.RealPlayers.liveCrime and .volunteer)
+    -- and Config.FeatureRewards are ordinary feature switches: they ship off and pay the amounts set in config.lua,
+    -- without the typed word.
 }
 local MONEY_WORD = 'ENABLE'
 
@@ -84,9 +84,9 @@ local POINTS = {
 local RESTART = {
     'Tablet.command',
     'Tablet.adminCommand',
-    'Volunteers.command',
-    'CriminalTablet.command',
-    'RealSuspects.surrender.command',
+    'RealPlayers.volunteer.command',
+    'RealPlayers.criminalTablet.command',
+    'RealPlayers.surrender.command',
     'Tablet.keybind',
     'Tablet.dispatchKey',
     'Tablet.readyKey',
@@ -159,7 +159,7 @@ Play.groups = {
             'blocks',
         },
     },
-    { key = 'play_pvp', sections = { 'real_suspects', 'live_crimes', 'volunteer_suspects', 'criminal_tablet' } },
+    { key = 'play_pvp', sections = { 'real_players' } },
     {
         key = 'play_team',
         sections = {
@@ -291,72 +291,72 @@ Play.features = {
     {
         key = 'live_crimes',
         play = 'pvp',
-        path = 'LiveCrime.enabled',
+        path = 'RealPlayers.liveCrime.enabled',
         risky = true,
         limits = {
-            'LiveCrime.maxLiveRuns',
-            'LiveCrime.maxOfficers',
-            'LiveCrime.offerTime',
-            'LiveCrime.caseTime',
+            'RealPlayers.liveCrime.maxLiveRuns',
+            'RealPlayers.liveCrime.maxOfficers',
+            'RealPlayers.liveCrime.offerTime',
+            'RealPlayers.liveCrime.caseTime',
         },
     },
     {
         key = 'volunteers',
         play = 'pvp',
-        path = 'Volunteers.enabled',
+        path = 'RealPlayers.volunteer.enabled',
         risky = true,
         limits = {
-            'Volunteers.windowMinutes',
-            'Volunteers.strikes',
-            'Volunteers.strikeHours',
-            'Volunteers.blockHours',
-            'Volunteers.askTries',
+            'RealPlayers.volunteer.windowMinutes',
+            'RealPlayers.volunteer.strikes',
+            'RealPlayers.volunteer.strikeHours',
+            'RealPlayers.volunteer.blockHours',
+            'RealPlayers.volunteer.askTries',
         },
     },
     {
         key = 'criminal_tablet',
         play = 'pvp',
-        path = 'CriminalTablet.enabled',
+        path = 'RealPlayers.criminalTablet.enabled',
         limits = {
-            'CriminalTablet.historySize',
-            'Volunteers.windowMinutes',
+            'RealPlayers.criminalTablet.historySize',
+            'RealPlayers.volunteer.windowMinutes',
         },
     },
     {
         key = 'surrender',
         play = 'pvp',
-        path = 'RealSuspects.surrender.enabled',
+        path = 'RealPlayers.surrender.enabled',
         limits = {
-            'RealSuspects.surrender.talkCooldown',
-            'RealSuspects.surrender.holdSeconds',
+            'RealPlayers.surrender.talkCooldown',
+            'RealPlayers.surrender.holdSeconds',
         },
     },
     {
         key = 'rs_screen',
         play = 'pvp',
-        path = 'RealSuspects.adminScreen',
+        path = 'RealPlayers.adminScreen',
         limits = {
-            'RealSuspects.maxCatchesPerSuspectDay',
-            'RealSuspects.pairCooldownHours',
-            'RealSuspects.suspectCooldownMinutes',
-            'RealSuspects.pairFlag.count',
+            'RealPlayers.maxCatchesPerSuspectDay',
+            'RealPlayers.pairCooldownHours',
+            'RealPlayers.suspectCooldownMinutes',
+            'RealPlayers.pairFlag.count',
         },
     },
-    { key = 'live_cash', play = 'pvp', path = 'LiveCrime.cash', limits = { 'Cash.dailyCap' } },
+    { key = 'live_cash', play = 'pvp', path = 'RealPlayers.liveCrime.cash', limits = { 'Cash.dailyCap' } },
     {
         key = 'live_items',
         play = 'pvp',
-        path = 'LiveCrime.items',
+        path = 'RealPlayers.liveCrime.items',
         limits = {
             'Rewards.dailyItemCap',
             'Rewards.dailyValueCap',
         },
     },
-    { key = 'volunteer_cash', play = 'pvp', path = 'Volunteers.payCash', limits = { 'Cash.dailyCap' } },
+    { key = 'volunteer_cash', play = 'pvp', path = 'RealPlayers.volunteer.cash', limits = { 'Cash.dailyCap' } },
     {
         key = 'volunteer_items',
         play = 'pvp',
-        path = 'Volunteers.payRewards',
+        path = 'RealPlayers.volunteer.items',
         limits = {
             'Rewards.dailyItemCap',
             'Rewards.dailyValueCap',
@@ -578,7 +578,7 @@ Play.screens = {
     admin_live = { 'run_limits', 'real_calls', 'alert_suppression' },
     admin_markers = { 'map_markers' },
     admin_testing = { 'admin_test_mode' },
-    admin_rs = { 'real_suspects', 'live_crimes', 'volunteer_suspects', 'criminal_tablet' },
+    admin_rs = { 'real_players' },
     admin_money = { 'cash', 'payout_editing', 'item_rewards', 'feature_rewards' },
     admin_review = { 'disputes', 'anti_exploit' },
     admin_audit = { 'retention' },
@@ -620,9 +620,9 @@ local OPEN = {
     'Rewards.goals',
     'Rewards.levels',
     'Rewards.season',
-    'LiveCrime.types',                              -- the crime keys are Crimson-Contracts' contract keys
-    'Volunteers.modes',                             -- mission type keys
-    'Volunteers.missionModes',                      -- mission ids
+    'RealPlayers.liveCrime.types',                  -- the crime keys are Crimson-Contracts' contract keys
+    'RealPlayers.volunteer.modes',                  -- mission type keys
+    'RealPlayers.volunteer.missionModes',           -- mission ids
     'FeatureRewards.suspect.byType',                -- mission type keys
     'Permissions.builderTeleport',                  -- department keys
     'Permissions.grants',                           -- power keys (Admin UI -> Permissions -> Extra grants)
@@ -634,7 +634,7 @@ local OPEN = {
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
--- FXServer's identifier kinds (the text before ':') and 'token' (GetPlayerToken): Config.RealSuspects.identityMatch
+-- FXServer's identifier kinds (the text before ':') and 'token' (GetPlayerToken): Config.RealPlayers.identityMatch
 local IDENTITY_KINDS = { 'license', 'license2', 'discord', 'fivem', 'steam', 'xbl', 'live', 'ip', 'token' }
 local METRICS = {
     'points',
@@ -741,71 +741,71 @@ local RANGES = {
     ['Route.maxDrift'] = { 200, 5000 },
     ['Route.lateArriveRange'] = { 0, 500 },
     ['Route.followActionSeconds'] = { 0, 1800 },
-    -- real suspects (Config.RealSuspects): a watch pass is 1 s, so nothing below it
-    ['RealSuspects.downedPickupDelay'] = { 5, 3600 },
-    ['RealSuspects.jobHopMinutes'] = { 0, 1440 },
-    ['RealSuspects.afkSeconds'] = { 30, 3600 },
-    ['RealSuspects.afkSampleEvery'] = { 1, 300 },
-    ['RealSuspects.contactRange'] = { 10, 1000 },
-    ['RealSuspects.disconnectGrace'] = { 0, 3600 },
-    ['RealSuspects.reconnectNoticeMinutes'] = { 0, 1440 },
-    ['RealSuspects.evadeWindow'] = { 0, 3600 },
-    ['RealSuspects.trail.every'] = { 1, 60 },
-    ['RealSuspects.trail.max'] = { 1, 5000 },
-    ['RealSuspects.timelineMax'] = { 10, 5000 },
-    ['RealSuspects.casesKept'] = { 1, 200 },
-    ['RealSuspects.cuffPairWindow'] = { 1, 60 },
-    ['RealSuspects.cuffRange'] = { 1, 20 },
-    ['RealSuspects.custodyHoldSeconds'] = { 5, 600 },
-    ['RealSuspects.breakFreeSeconds'] = { 0, 120 },
-    ['RealSuspects.rescueRange'] = { 1, 20 },
-    ['RealSuspects.neutralisedShare'] = { 0, 1 },
-    ['RealSuspects.jailRange'] = { 1, 30 },
-    ['RealSuspects.minJailTime'] = { 0, 1000 },
-    ['RealSuspects.jailTimeMax'] = { 1, 10000 },
-    ['RealSuspects.spawnProtectSeconds'] = { 0, 7200 },
-    ['RealSuspects.earlyRespawnSeconds'] = { 0, 3600 },
-    ['RealSuspects.armedMemory'] = { 0, 600 },
-    ['RealSuspects.downGrace'] = { 0, 60 },
-    ['RealSuspects.damageLogMax'] = { 10, 5000 },
-    ['RealSuspects.pairCooldownHours'] = { 0, 720 },
-    ['RealSuspects.maxCatchesPerSuspectDay'] = { 1, 100 },
-    ['RealSuspects.suspectCooldownMinutes'] = { 0, 1440 },
-    ['RealSuspects.pairFlag.count'] = { 1, 100 },
-    ['RealSuspects.pairFlag.days'] = { 1, 90 },
-    ['RealSuspects.fastCatchSeconds'] = { 0, 600 },
-    ['RealSuspects.pairLedgerDays'] = { 1, 365 },
-    ['RealSuspects.surrender.talkRange'] = { 2, 50 },
-    ['RealSuspects.surrender.surrenderRange'] = { 5, 200 },
-    ['RealSuspects.surrender.askSeconds'] = { 5, 60 },
-    ['RealSuspects.surrender.talkCooldown'] = { 5, 600 },
-    ['RealSuspects.surrender.holdSeconds'] = { 30, 900 },
-    ['RealSuspects.surrender.breakRange'] = { 2, 100 },
-    -- live crimes (Config.LiveCrime)
-    ['LiveCrime.suspectRadius'] = { 10, 2000 },
-    ['LiveCrime.offerTime'] = { 30, 3600 },
-    ['LiveCrime.maxLiveRuns'] = { 1, 20 },
-    ['LiveCrime.caseTime'] = { 60, 3600 },
-    ['LiveCrime.sceneRadius'] = { 10, 500 },
-    ['LiveCrime.secureSeconds'] = { 0, 900 },
-    ['LiveCrime.lastReportedEvery'] = { 0, 600 },
-    ['LiveCrime.deadCaseSeconds'] = { 5, 600 },
-    ['LiveCrime.maxOfficers'] = { 1, 16 },
-    ['LiveCrime.joinOfferSeconds'] = { 10, 120 },
-    -- volunteer suspects (Config.Volunteers)
-    ['Volunteers.windowMinutes'] = { 10, 240 },
-    ['Volunteers.strikes'] = { 1, 10 },
-    ['Volunteers.strikeHours'] = { 1, 168 },
-    ['Volunteers.blockHours'] = { 1, 168 },
+    -- real suspects (Config.RealPlayers): a watch pass is 1 s, so nothing below it
+    ['RealPlayers.downedPickupDelay'] = { 5, 3600 },
+    ['RealPlayers.jobHopMinutes'] = { 0, 1440 },
+    ['RealPlayers.afkSeconds'] = { 30, 3600 },
+    ['RealPlayers.afkSampleEvery'] = { 1, 300 },
+    ['RealPlayers.contactRange'] = { 10, 1000 },
+    ['RealPlayers.disconnectGrace'] = { 0, 3600 },
+    ['RealPlayers.reconnectNoticeMinutes'] = { 0, 1440 },
+    ['RealPlayers.evadeWindow'] = { 0, 3600 },
+    ['RealPlayers.trail.every'] = { 1, 60 },
+    ['RealPlayers.trail.max'] = { 1, 5000 },
+    ['RealPlayers.timelineMax'] = { 10, 5000 },
+    ['RealPlayers.casesKept'] = { 1, 200 },
+    ['RealPlayers.cuffPairWindow'] = { 1, 60 },
+    ['RealPlayers.cuffRange'] = { 1, 20 },
+    ['RealPlayers.custodyHoldSeconds'] = { 5, 600 },
+    ['RealPlayers.breakFreeSeconds'] = { 0, 120 },
+    ['RealPlayers.rescueRange'] = { 1, 20 },
+    ['RealPlayers.neutralisedShare'] = { 0, 1 },
+    ['RealPlayers.jailRange'] = { 1, 30 },
+    ['RealPlayers.minJailTime'] = { 0, 1000 },
+    ['RealPlayers.jailTimeMax'] = { 1, 10000 },
+    ['RealPlayers.spawnProtectSeconds'] = { 0, 7200 },
+    ['RealPlayers.earlyRespawnSeconds'] = { 0, 3600 },
+    ['RealPlayers.armedMemory'] = { 0, 600 },
+    ['RealPlayers.downGrace'] = { 0, 60 },
+    ['RealPlayers.damageLogMax'] = { 10, 5000 },
+    ['RealPlayers.pairCooldownHours'] = { 0, 720 },
+    ['RealPlayers.maxCatchesPerSuspectDay'] = { 1, 100 },
+    ['RealPlayers.suspectCooldownMinutes'] = { 0, 1440 },
+    ['RealPlayers.pairFlag.count'] = { 1, 100 },
+    ['RealPlayers.pairFlag.days'] = { 1, 90 },
+    ['RealPlayers.fastCatchSeconds'] = { 0, 600 },
+    ['RealPlayers.pairLedgerDays'] = { 1, 365 },
+    ['RealPlayers.surrender.talkRange'] = { 2, 50 },
+    ['RealPlayers.surrender.surrenderRange'] = { 5, 200 },
+    ['RealPlayers.surrender.askSeconds'] = { 5, 60 },
+    ['RealPlayers.surrender.talkCooldown'] = { 5, 600 },
+    ['RealPlayers.surrender.holdSeconds'] = { 30, 900 },
+    ['RealPlayers.surrender.breakRange'] = { 2, 100 },
+    -- live crimes (Config.RealPlayers.liveCrime)
+    ['RealPlayers.liveCrime.suspectRadius'] = { 10, 2000 },
+    ['RealPlayers.liveCrime.offerTime'] = { 30, 3600 },
+    ['RealPlayers.liveCrime.maxLiveRuns'] = { 1, 20 },
+    ['RealPlayers.liveCrime.caseTime'] = { 60, 3600 },
+    ['RealPlayers.liveCrime.sceneRadius'] = { 10, 500 },
+    ['RealPlayers.liveCrime.secureSeconds'] = { 0, 900 },
+    ['RealPlayers.liveCrime.lastReportedEvery'] = { 0, 600 },
+    ['RealPlayers.liveCrime.deadCaseSeconds'] = { 5, 600 },
+    ['RealPlayers.liveCrime.maxOfficers'] = { 1, 16 },
+    ['RealPlayers.liveCrime.joinOfferSeconds'] = { 10, 120 },
+    -- volunteer suspects (Config.RealPlayers.volunteer)
+    ['RealPlayers.volunteer.windowMinutes'] = { 10, 240 },
+    ['RealPlayers.volunteer.strikes'] = { 1, 10 },
+    ['RealPlayers.volunteer.strikeHours'] = { 1, 168 },
+    ['RealPlayers.volunteer.blockHours'] = { 1, 168 },
     -- the matching
-    ['Volunteers.askSeconds'] = { 10, 120 },
-    ['Volunteers.askTries'] = { 1, 10 },
-    ['Volunteers.travelSeconds'] = { 60, 1800 },
-    ['Volunteers.meetRadius'] = { 5, 200 },
-    ['Volunteers.cancelGraceSeconds'] = { 0, 600 },
-    ['Volunteers.driverReportEvery'] = { 0, 300 },   -- a volunteer driver's position reports
-    ['Volunteers.fugitiveOutSeconds'] = { 0, 300 },  -- a volunteer fugitive's time out of the area
-    ['CriminalTablet.historySize'] = { 1, 100 },     -- the criminal tablet's History
+    ['RealPlayers.volunteer.askSeconds'] = { 10, 120 },
+    ['RealPlayers.volunteer.askTries'] = { 1, 10 },
+    ['RealPlayers.volunteer.travelSeconds'] = { 60, 1800 },
+    ['RealPlayers.volunteer.meetRadius'] = { 5, 200 },
+    ['RealPlayers.volunteer.cancelGraceSeconds'] = { 0, 600 },
+    ['RealPlayers.volunteer.driverReportEvery'] = { 0, 300 },   -- a volunteer driver's position reports
+    ['RealPlayers.volunteer.fugitiveOutSeconds'] = { 0, 300 },  -- a volunteer fugitive's time out of the area
+    ['RealPlayers.criminalTablet.historySize'] = { 1, 100 },    -- the criminal tablet's History
     -- the objective blip and its GPS line (Config.Markers); ids from the docs.fivem.net blip list (build 3258)
     ['Markers.trackEvery'] = { 1, 10 },
     ['Markers.routeOffWithin'] = { 0, 200 },
@@ -1612,10 +1612,10 @@ local KNOWN = {
         kind = 'optionalText',
     },
     ['Tablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
-    ['Volunteers.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
-    ['CriminalTablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
-    ['CriminalTablet.item'] = { tpl = Alts(FALSE, ITEM_NAME), kind = 'optionalText' },
-    ['RealSuspects.surrender.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
+    ['RealPlayers.volunteer.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
+    ['RealPlayers.criminalTablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
+    ['RealPlayers.criminalTablet.item'] = { tpl = Alts(FALSE, ITEM_NAME), kind = 'optionalText' },
+    ['RealPlayers.surrender.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['Tablet.adminCommand'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['Tablet.keybind'] = { tpl = Text('^[%w_%-]*$', 32) },
     ['Tablet.dispatchKey'] = { tpl = Text('^[%w_%-]*$', 32) },
@@ -1735,42 +1735,44 @@ local KNOWN = {
     ['Flee.exhausted'] = { tpl = Enum({ 'surrender', 'handsUp', 'walk' }), kind = 'enum' },
     ['Markers.radioSilence'] = { tpl = Enum({ 'none', 'area', 'full' }), kind = 'enum' },
     ['AntiCheat.stunNeedsProof'] = { tpl = Enum({ 'flag', 'hold', 'strict', 'off' }), kind = 'enum' },
-    ['RealSuspects.onLeave'] = { tpl = Enum({ 'void', 'caught', 'escaped' }), kind = 'enum' },
+    ['RealPlayers.onLeave'] = { tpl = Enum({ 'void', 'caught', 'escaped' }), kind = 'enum' },
     -- the NPC-mission rules for cases with a real suspect: the rule for real players or the NPC rule
-    ['RealSuspects.officerAlerts'] = { tpl = Enum({ 'normal', 'silenced' }), kind = 'enum' },
-    ['RealSuspects.routeEnds'] = { tpl = Enum({ 'first_contact', 'start' }), kind = 'enum' },
-    ['RealSuspects.downed'] = { tpl = Enum({ 'keep_earned', 'failed' }), kind = 'enum' },
-    ['RealSuspects.outsideCuff'] = { tpl = Enum({ 'assist', 'stopped' }), kind = 'enum' },
+    ['RealPlayers.officerAlerts'] = { tpl = Enum({ 'normal', 'silenced' }), kind = 'enum' },
+    ['RealPlayers.routeEnds'] = { tpl = Enum({ 'first_contact', 'start' }), kind = 'enum' },
+    ['RealPlayers.downed'] = { tpl = Enum({ 'keep_earned', 'failed' }), kind = 'enum' },
+    ['RealPlayers.outsideCuff'] = { tpl = Enum({ 'assist', 'stopped' }), kind = 'enum' },
     -- live crimes: the scripts that may report a crime (resource names), and each crime's mission type or false
-    ['LiveCrime.sources'] = {
+    ['RealPlayers.liveCrime.sources'] = {
         tpl = ListOf(Text('^[%w_%-%.]+$', 64), { unique = true }),
         kind = 'list',
         item = 'string',
     },
-    ['LiveCrime.types'] = { tpl = MapOf(Alts(FALSE, ID), '^[%w_%-]+$') },
+    ['RealPlayers.liveCrime.types'] = { tpl = MapOf(Alts(FALSE, ID), '^[%w_%-]+$') },
     -- who plays a volunteer slot's suspect, per mission type and per mission
-    ['Volunteers.modes'] = { tpl = MapOf(Enum({ 'npc', 'players_when_available', 'players_only' }), '^[%w_%-]+$') },
-    ['Volunteers.missionModes'] = {
+    ['RealPlayers.volunteer.modes'] = {
+        tpl = MapOf(Enum({ 'npc', 'players_when_available', 'players_only' }), '^[%w_%-]+$'),
+    },
+    ['RealPlayers.volunteer.missionModes'] = {
         tpl = MapOf(Enum({ 'npc', 'players_when_available', 'players_only' }), '^[%w_%-]+$'),
     },
     -- a volunteer who drops out, and how such a run ends
-    ['Volunteers.onVoid'] = { tpl = Enum({ 'npc', 'end' }), kind = 'enum' },
-    ['CriminalTablet.access'] = { tpl = Enum({ 'everyone', 'granted' }), kind = 'enum' },
-    ['Volunteers.voidRun'] = { tpl = Enum({ 'cancelled', 'keep_earned' }), kind = 'enum' },
+    ['RealPlayers.volunteer.onVoid'] = { tpl = Enum({ 'npc', 'end' }), kind = 'enum' },
+    ['RealPlayers.criminalTablet.access'] = { tpl = Enum({ 'everyone', 'granted' }), kind = 'enum' },
+    ['RealPlayers.volunteer.voidRun'] = { tpl = Enum({ 'cancelled', 'keep_earned' }), kind = 'enum' },
     -- which team sets a live case's tier
-    ['LiveCrime.tier'] = { tpl = Enum({ 'crew', 'officers' }), kind = 'enum' },
+    ['RealPlayers.liveCrime.tier'] = { tpl = Enum({ 'crew', 'officers' }), kind = 'enum' },
     -- who the export GetAvailablePolice counts
-    ['LiveCrime.availablePolice'] = { tpl = Enum({ 'idle', 'duty' }), kind = 'enum' },
+    ['RealPlayers.liveCrime.availablePolice'] = { tpl = Enum({ 'idle', 'duty' }), kind = 'enum' },
     ['Spawning.onTimeout'] = { tpl = Enum({ 'unfreeze', 'delete' }), kind = 'enum' },
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
-    ['RealSuspects.lessLethal'] = { tpl = ListOf(WEAPON_NAME, { unique = true }), kind = 'list', item = 'string' },
-    ['RealSuspects.identityMatch.block'] = {
+    ['RealPlayers.lessLethal'] = { tpl = ListOf(WEAPON_NAME, { unique = true }), kind = 'list', item = 'string' },
+    ['RealPlayers.identityMatch.block'] = {
         tpl = ListOf(Enum(IDENTITY_KINDS), { unique = true }),
         kind = 'list',
         options = IDENTITY_KINDS,
     },
-    ['RealSuspects.identityMatch.flag'] = {
+    ['RealPlayers.identityMatch.flag'] = {
         tpl = ListOf(Enum(IDENTITY_KINDS), { unique = true }),
         kind = 'list',
         options = IDENTITY_KINDS,
@@ -1908,7 +1910,7 @@ local ROWS = {
             },
         },
     },
-    ['RealSuspects.noStartZones'] = {
+    ['RealPlayers.noStartZones'] = {
         tpl = ListOf(Record(
             { label = Text(nil, 64), coords = VEC3, radius = Num(10, 500, false) },
             { label = true, coords = true, radius = true }
@@ -1924,7 +1926,7 @@ local ROWS = {
         },
     },
     -- {} = a booking counts anywhere
-    ['RealSuspects.bookingZones'] = {
+    ['RealPlayers.bookingZones'] = {
         tpl = ListOf(Record(
             { label = Text(nil, 64), coords = VEC3, radius = Num(10, 500, false) },
             { label = true, coords = true, radius = true }
@@ -2335,7 +2337,8 @@ KNOWN['NpcCombat.weapons'].check = NoAutomatic
 KNOWN['NpcCombat.replace'].check = NoAutomatic
 KNOWN['NpcCombat.fallback'].check = NoAutomatic
 
--- Config.LiveCrime.types: a crime's value names a mission type of Config.MissionTypes, or is false (never a LIVE call).
+-- Config.RealPlayers.liveCrime.types: a crime's value names a mission type of Config.MissionTypes, or is false (never a
+-- LIVE call).
 local function LiveTypes(map)
     local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
     for _, v in pairs(map) do
@@ -2343,10 +2346,10 @@ local function LiveTypes(map)
     end
     return nil
 end
-KNOWN['LiveCrime.types'].check = LiveTypes
+KNOWN['RealPlayers.liveCrime.types'].check = LiveTypes
 
--- Config.Volunteers.modes: every key is a mission type of Config.MissionTypes.
-KNOWN['Volunteers.modes'].check = function(map)
+-- Config.RealPlayers.volunteer.modes: every key is a mission type of Config.MissionTypes.
+KNOWN['RealPlayers.volunteer.modes'].check = function(map)
     local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
     for k in pairs(map) do
         if type(types[k]) ~= 'table' then return 'err.setting_volunteer_type' end

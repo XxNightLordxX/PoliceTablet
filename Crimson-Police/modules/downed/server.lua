@@ -148,24 +148,24 @@ local function NearestDropOff(src)
     return best
 end
 
--- A case with a real suspect (run.realSuspect: 'live' or 'volunteer') and Config.RealSuspects.downed ~= 'failed' (shipped
--- 'keep_earned'): a live officer leaves with 'downed_case' (result completed, the lines he earned so far), a
--- volunteer-suspect officer with 'downed_kept' (result failed, today's failed credit); neither starts a type
--- cooldown. 'failed' and every NPC run: 'downed' (Hard rule 18).
+-- A case with a real suspect (run.realSuspect: 'live' or 'volunteer') and Config.RealPlayers.downed ~= 'failed'
+-- (shipped 'keep_earned'): a live officer leaves with 'downed_case' (result completed, the lines he earned so far), a
+-- volunteer-suspect officer with 'downed_kept' (result failed, today's failed credit); neither starts a type cooldown.
+-- 'failed' and every NPC run: 'downed' (Hard rule 18).
 function D.reasonFor(run)
     if type(run) ~= 'table' or not run.realSuspect then return 'downed' end
-    local rs = Config.RealSuspects
+    local rs = CP.RealPlayers()
     if type(rs) == 'table' and rs.downed == 'failed' then return 'downed' end
     if run.realSuspect == 'live' then return 'downed_case' end
     if run.realSuspect == 'volunteer' then return 'downed_kept' end
     return 'downed'
 end
 
--- Seconds down, with no EMS on duty, before the pick-up: Config.RealSuspects.downedPickupDelay in a case with a real
+-- Seconds down, with no EMS on duty, before the pick-up: Config.RealPlayers.downedPickupDelay in a case with a real
 -- suspect (keep it equal to sc-ambulance's Config.DeathTime), Config.Downed.pickupDelay otherwise.
 local function PickupDelay(e)
     if e.realSuspect then
-        local n = tonumber(type(Config.RealSuspects) == 'table' and Config.RealSuspects.downedPickupDelay)
+        local n = tonumber((CP.RealPlayers()).downedPickupDelay)
         if n and n >= 0 then return n end
     end
     return tonumber(Config.Downed.pickupDelay) or 15
@@ -379,7 +379,7 @@ local function NewEntry(run, src)
         stage = 'down',
         flagged = alerts('has', src) == true,
         lastStand = InLastStand(src),
-        realSuspect = run.realSuspect or nil,       -- the pick-up waits Config.RealSuspects.downedPickupDelay
+        realSuspect = run.realSuspect or nil,       -- the pick-up waits Config.RealPlayers.downedPickupDelay
         seq = seq,
     }
     entries[src] = e

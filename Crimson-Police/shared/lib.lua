@@ -13,6 +13,9 @@
 --   CP.Objective one kind of Config.Objectives (dailyGoal, weeklyGoal, challenge, bounty, typeOfTheDay) and its switch
 --   CP.Recognition one part of Config.Recognition (levels, levelCurve, badges, weeklyBadges, commendations,
 --                fieldTraining) and its switch
+--   CP.Num       a finite number or the default, kept between lo and hi
+--   CP.RealPlayers one mode of Config.RealPlayers (liveCrime, volunteer, criminalTablet) or the shared rules, and its
+--                switch; CP.RealPlayersTakePart and CP.RealPlayersRowFilter: what a real-player case takes part in
 
 CP = CP or {}
 
@@ -26,6 +29,21 @@ function CP.Db()
     local M = CP.Migrations -- server only
     if M and M.ready then M.ready() end
     return true
+end
+
+-- ============================================================================
+--                                   NUMBERS
+-- ============================================================================
+
+-- v as a finite number (a number or a numeric string; NaN and infinities do not count), else default; then kept
+-- between lo and hi when they are given.
+---@return number|nil
+function CP.Num(v, default, lo, hi)
+    v = tonumber(v)
+    if not v or v ~= v or v == math.huge or v == -math.huge then v = default end
+    if v and lo and v < lo then v = lo end
+    if v and hi and v > hi then v = hi end
+    return v
 end
 
 -- ============================================================================
@@ -297,4 +315,61 @@ function CP.Recognition(part)
     if known == nil then return cfg, false end
     if known then return cfg, cfg.enabled ~= false end
     return cfg, cfg.enabled == true
+end
+
+-- ============================================================================
+--                                 REAL PLAYERS
+-- ============================================================================
+
+-- The modes of Config.RealPlayers, and the run.realSuspect value of a case of that mode.
+local REAL_PLAYER_MODES = { liveCrime = 'live', volunteer = 'volunteer', criminalTablet = false }
+-- What a real-player case can take part in: the switch of that name in its mode (each shipped false).
+local TAKE_PART = { typeOfTheDay = true, goals = true, challenge = true, cash = true, items = true }
+
+-- One mode of Config.RealPlayers as it is now (a setting changed in game included), never nil, and whether it is on
+-- (enabled == true: every mode ships off). With no mode: the whole section (the rules both modes share) and whether
+-- live crimes or volunteers are on.
+---@param mode? string 'liveCrime' | 'volunteer' | 'criminalTablet'
+---@return table cfg, boolean on
+function CP.RealPlayers(mode)
+    local all = type(Config) == 'table' and type(Config.RealPlayers) == 'table' and Config.RealPlayers or {}
+    if mode == nil then
+        local lc, vo = all.liveCrime, all.volunteer
+        return all, (type(lc) == 'table' and lc.enabled == true) or (type(vo) == 'table' and vo.enabled == true)
+    end
+    local cfg = REAL_PLAYER_MODES[mode] ~= nil and type(all[mode]) == 'table' and all[mode] or {}
+    return cfg, REAL_PLAYER_MODES[mode] ~= nil and cfg.enabled == true
+end
+
+-- The mode of a run's real-player case: 'liveCrime' (run.live or realSuspect 'live'), 'volunteer' or nil.
+function CP.RealPlayersMode(run)
+    if type(run) ~= 'table' then return nil end
+    if type(run.live) == 'table' or run.realSuspect == 'live' then return 'liveCrime' end
+    if run.realSuspect == 'volunteer' then return 'volunteer' end
+    return nil
+end
+
+-- Whether a run takes part in 'typeOfTheDay', 'goals', 'challenge', 'cash' or 'items': a live or volunteer case
+-- only with that switch of its mode on; any other run: true.
+function CP.RealPlayersTakePart(run, what)
+    local mode = CP.RealPlayersMode(run)
+    if not mode then return true end
+    return TAKE_PART[what] == true and (CP.RealPlayers(mode))[what] == true
+end
+
+-- SQL to add to a WHERE that sums run rows for 'goals' or 'challenge': leaves out live-case rows (their mission_id
+-- 'live_crime') and volunteer-case rows (their breakdown's realSuspect) while that switch of the mode is off ('' when
+-- both are on). alias: the table alias with its dot ('r.') or ''.
+function CP.RealPlayersRowFilter(what, alias)
+    alias = alias or ''
+    local sql = ''
+    if (CP.RealPlayers('liveCrime'))[what] ~= true then
+        sql = (' AND COALESCE(%smission_id, \'\') <> \'live_crime\''):format(alias)
+    end
+    if (CP.RealPlayers('volunteer'))[what] ~= true then
+        sql = sql
+            .. (' AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(%sbreakdown, \'$.realSuspect\')), \'\') <> \'volunteer\''):format(
+                alias)
+    end
+    return sql
 end

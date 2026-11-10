@@ -1,4 +1,4 @@
-// The criminal tablet (modules/crimtab): what crimtab:get and server:crimtab:act answer. Never a run, an
+// The criminal tablet (modules/realplayers/crimtab): what crimtab:get and server:crimtab:act answer. Never a run, an
 // officer or a live position: only the player's own listing, his open question, the suspect he plays and his past.
 
 export type CrimRole = 'runner' | 'driver' | 'fugitive';

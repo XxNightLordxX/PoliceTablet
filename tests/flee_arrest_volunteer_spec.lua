@@ -117,7 +117,7 @@ end
 
 -- afkCatchVoids = false: the AFK catch counts like any other.
 do
-    Config.Volunteers.afkCatchVoids = false
+    Config.RealPlayers.volunteer.afkCatchVoids = false
     view, case = Real('engaged'), Case('free')
     local run = Run()
     Knock(run, 1, loc.door)
@@ -125,7 +125,7 @@ do
     Opp(run, 'opp_detained')
     Secs(30)  -- the objective's minSeconds
     H.eq(run.objectives[1].status, 'done', 'afkCatchVoids false: an AFK catch completes the objective')
-    Config.Volunteers.afkCatchVoids = true
+    Config.RealPlayers.volunteer.afkCatchVoids = true
     EndRun(run)
 end
 
@@ -144,14 +144,14 @@ end
 
 -- doorAssociates = true: the associates come out at the knock as usual.
 do
-    Config.Volunteers.doorAssociates = true
+    Config.RealPlayers.volunteer.doorAssociates = true
     view, case = Real('in_position'), Case('free')
     local run = Run()
     Knock(run, 1, loc.door)
     Secs(3)
     H.eq(#Peds(run, 'suspect'), 0, 'still no NPC at the door')
     H.eq(#Peds(run, 'associate'), 1, 'doorAssociates true: the associate comes out at the knock')
-    Config.Volunteers.doorAssociates = false
+    Config.RealPlayers.volunteer.doorAssociates = false
     EndRun(run)
 end
 
@@ -176,7 +176,7 @@ do
     EndRun(run)
 end
 
--- No match (Config.Volunteers off or mode npc): exactly as today.
+-- No match (Config.RealPlayers.volunteer off or mode npc): exactly as today.
 do
     view, case = nil, nil
     local run = Run()

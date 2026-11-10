@@ -210,20 +210,27 @@ const data: SettingsData = {
             ],
         },
         {
-            key: 'live_crimes',
-            title: 'Live crimes (option A)',
+            key: 'real_players',
+            title: 'Real players',
             file: 'config',
             group: 'police',
             changed: 0,
             count: 2,
             groups: [
                 {
-                    path: 'LiveCrime',
+                    path: 'RealPlayers.liveCrime',
                     label: 'Live crimes',
                     desc: '',
                     settings: [
-                        s('LiveCrime.enabled', 'boolean', false, 'true = real players doing crimes become suspects'),
-                        s('LiveCrime.cash', 'boolean', false, 'true = a live case pays cash', { money: true }),
+                        s(
+                            'RealPlayers.liveCrime.enabled',
+                            'boolean',
+                            false,
+                            'true = real players doing crimes become suspects',
+                        ),
+                        s('RealPlayers.liveCrime.cash', 'boolean', false, 'true = a live case pays cash', {
+                            money: true,
+                        }),
                     ],
                 },
             ],
@@ -312,9 +319,19 @@ const data: SettingsData = {
                         s('Cash.account', 'enum', 'bank', "'bank' or 'cash'", { options: ['bank', 'cash'] }),
                         s('Rewards.enabled', 'boolean', false, 'true = officers can earn items'),
                         s('Rewards.byType', 'json', {}, 'chance per roll, rolls per run, and a weighted pool'),
-                        s('LiveCrime.items', 'boolean', false, 'true = a live case rolls the item rewards of its type'),
-                        s('Volunteers.payCash', 'boolean', false, 'true = it pays the officers cash'),
-                        s('Volunteers.payRewards', 'boolean', false, 'true = it rolls the item rewards of its type'),
+                        s(
+                            'RealPlayers.liveCrime.items',
+                            'boolean',
+                            false,
+                            'true = a live case rolls the item rewards of its type',
+                        ),
+                        s('RealPlayers.volunteer.cash', 'boolean', false, 'true = it pays the officers cash'),
+                        s(
+                            'RealPlayers.volunteer.items',
+                            'boolean',
+                            false,
+                            'true = it rolls the item rewards of its type',
+                        ),
                         ...FEATURES.flatMap(([k, money]) => [
                             s(`FeatureRewards.${k}.enabled`, 'boolean', false, 'true = this feature pays'),
                             ...(k === 'suspect'
@@ -353,21 +370,21 @@ const data: SettingsData = {
     // Settings -> Features (modules/settings Play.features); Spawning.enabled is not in this list, so it is left out
     features: [
         { key: 'spawning', play: 'npc', path: 'Spawning.enabled', risky: true },
-        // limits: LiveCrime.maxLiveRuns is not in this list either, so only the unit size is linked
+        // limits: RealPlayers.liveCrime.maxLiveRuns is not in this list either, so only the unit size is linked
         {
             key: 'live_crimes',
             play: 'pvp',
-            path: 'LiveCrime.enabled',
+            path: 'RealPlayers.liveCrime.enabled',
             risky: true,
-            limits: ['Limits.maxUnitSize', 'LiveCrime.maxLiveRuns'],
+            limits: ['Limits.maxUnitSize', 'RealPlayers.liveCrime.maxLiveRuns'],
         },
-        { key: 'live_cash', play: 'pvp', path: 'LiveCrime.cash' },
+        { key: 'live_cash', play: 'pvp', path: 'RealPlayers.liveCrime.cash' },
     ],
     // the gear of each screen (modules/settings Play.screens); a section the data does not have is left out
     screens: {
         admin_home: ['general', 'tablet_and_commands'],
         admin_markers: ['map_markers'],
-        admin_rs: ['live_crimes'],
+        admin_rs: ['real_players'],
         admin_money: ['limits_and_cash', 'feature_rewards', 'gone_section'],
         admin_departments: ['departments'],
     },
@@ -389,7 +406,7 @@ const PRESET_ROWS: Record<string, { path: string; value: unknown }[]> = {
         { path: 'Debug', value: false },
         { path: 'Tablet.title', value: 'Crimson-Police' },
     ],
-    broken: [{ path: 'LiveCrime.cash', value: true }],
+    broken: [{ path: 'RealPlayers.liveCrime.cash', value: true }],
 };
 
 const history: SettingsHistoryRow[] = [
@@ -436,7 +453,8 @@ function presetPreview(key: string): PresetPreview {
     };
     for (const r of rows) {
         const x = find(r.path);
-        if (!x || x.money || r.path === 'LiveCrime.cash') out.refused.push({ path: r.path, error: 'err.preset_path' });
+        if (!x || x.money || r.path === 'RealPlayers.liveCrime.cash')
+            out.refused.push({ path: r.path, error: 'err.preset_path' });
         else if (JSON.stringify(x.value) === JSON.stringify(r.value)) out.same += 1;
         else out.changes.push({ path: r.path, label: x.label, from: x.value, fromSet: x.isSet, to: r.value });
     }

@@ -11,7 +11,7 @@ local H = dofile('tests/harness.lua')
 -- ============================================================================
 --                                  THE SERVER
 -- ============================================================================
--- Real: shared/*, modules/adminkit. The Player suspects callback is taken from modules/opponents/staff with
+-- Real: shared/*, modules/adminkit. The Player suspects callback is taken from modules/realplayers/staff with
 -- CP.Opponents' case list standing in.
 
 H.boot({ side = 'server' })
@@ -61,7 +61,7 @@ do
     Kit.selfRun = function() return false end
     CP.Opponents = CP.Opponents or {}
     local Opp = CP.Opponents
-    H.load('modules/opponents/staff/server.lua')
+    H.load('modules/realplayers/staff.lua')
     Kit.callback = realCallback
     Opp.staffCases = function()
         local out = {}

@@ -1,9 +1,9 @@
--- Live scoring: a live case scores only its weighted live_* lines (Config.LiveCrime.linesOnly), its tier
+-- Live scoring: a live case scores only its weighted live_* lines (Config.RealPlayers.liveCrime.linesOnly), its tier
 
--- Live scoring: a live case scores only its weighted live_* lines (Config.LiveCrime.linesOnly), its tier
--- comes from the crew (Config.LiveCrime.tier), and the Type of the Day, goals, challenge, cash and item switches keep
--- it out of each of those until the owner turns them on. Every live-case detain is a live catch on the row and a
--- Rank by tab. Plain Lua with stubs (no SQL); the 014 column is checked by foundation_spec.
+-- Live scoring: a live case scores only its weighted live_* lines (Config.RealPlayers.liveCrime.linesOnly), its tier
+-- comes from the crew (Config.RealPlayers.liveCrime.tier), and the Type of the Day, goals, challenge, cash and item
+-- switches keep it out of each of those until the owner turns them on. Every live-case detain is a live catch on the
+-- row and a Rank by tab. Plain Lua with stubs (no SQL); the 014 column is checked by foundation_spec.
 
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server', realLocale = true })
@@ -26,7 +26,7 @@ CP.Events = {
     typeOfTheDay = function() return tod end,
 }
 
-H.load('modules/livecrime/server.lua')
+H.load('modules/realplayers/livecrime.lua')
 H.load('modules/scaling/server.lua')
 H.load('modules/progression/scoring.lua')
 H.load('modules/cash/server.lua')
@@ -74,7 +74,7 @@ end
 -- ============================================================================
 
 do
-    local lc = Config.LiveCrime
+    local lc = Config.RealPlayers.liveCrime
     H.eq(lc.enabled, false, 'live crimes ship off')
     H.eq(lc.linesOnly, true, 'linesOnly ships true')
     H.eq(lc.tier, 'crew', 'the tier ships from the crew')
@@ -97,13 +97,13 @@ do
     H.eq(LC.linesOnly(run), true, 'a live case scores its lines only')
     H.eq(LC.linesOnly(Run(false)), false, 'a mission never')
     for _, k in ipairs({ 'typeOfTheDay', 'goals', 'challenge', 'cash', 'items' }) do
-        H.eq(LC.counts(run, k), false, 'a live case: no ' .. k .. ' while its switch is off')
-        H.eq(LC.counts(Run(false), k), true, 'a mission: ' .. k .. ' as before')
-        Config.LiveCrime[k] = true
-        H.eq(LC.counts(run, k), true, k .. ' on: the live case takes part')
-        Config.LiveCrime[k] = false
+        H.eq(CP.RealPlayersTakePart(run, k), false, 'a live case: no ' .. k .. ' while its switch is off')
+        H.eq(CP.RealPlayersTakePart(Run(false), k), true, 'a mission: ' .. k .. ' as before')
+        Config.RealPlayers.liveCrime[k] = true
+        H.eq(CP.RealPlayersTakePart(run, k), true, k .. ' on: the live case takes part')
+        Config.RealPlayers.liveCrime[k] = false
     end
-    H.eq(LC.counts(run, 'bogus'), false, 'an unknown switch is off')
+    H.eq(CP.RealPlayersTakePart(run, 'bogus'), false, 'an unknown switch is off')
 
     H.eq(LC.crewSize(run), 1, 'no case and no count: a crew of 1')
     run.live.suspects = 2
@@ -112,16 +112,18 @@ do
     H.eq(LC.crewSize(run), 3, 'the case\'s suspects come first')
     H.eq(LC.tierRow(run).tier, 'heavy', 'a crew of 3: the heavy tier')
     H.eq(LC.tierRow(Run(false)), nil, 'a mission keeps its own tier')
-    Config.LiveCrime.tier = 'officers'
+    Config.RealPlayers.liveCrime.tier = 'officers'
     H.eq(LC.tierRow(run), nil, 'tier = officers: the officers\' tier, like a mission')
-    Config.LiveCrime.tier = 'crew'
+    Config.RealPlayers.liveCrime.tier = 'crew'
     view = nil
 
-    H.eq(LC.rowFilter('goals', 'r.'), ' AND COALESCE(r.mission_id, \'\') <> \'live_crime\'',
+    Config.RealPlayers.volunteer.goals = true
+    H.eq(CP.RealPlayersRowFilter('goals', 'r.'), ' AND COALESCE(r.mission_id, \'\') <> \'live_crime\'',
         'goals off: live rows left out')
-    Config.LiveCrime.goals = true
-    H.eq(LC.rowFilter('goals', 'r.'), '', 'goals on: nothing left out')
-    Config.LiveCrime.goals = false
+    Config.RealPlayers.liveCrime.goals = true
+    H.eq(CP.RealPlayersRowFilter('goals', 'r.'), '', 'goals on: nothing left out')
+    Config.RealPlayers.liveCrime.goals = false
+    Config.RealPlayers.volunteer.goals = false
 end
 
 -- ============================================================================
@@ -152,23 +154,23 @@ do
     H.eq(b.final, 115, 'x1.15')
     view = nil
 
-    Config.LiveCrime.typeOfTheDay = true
+    Config.RealPlayers.liveCrime.typeOfTheDay = true
     b = CP.Scoring.compute(run, p, 'completed', { durationS = 60, departments = 1 })
     H.eq(b.tod, true, 'typeOfTheDay on: today\'s type doubles a live case too')
-    Config.LiveCrime.typeOfTheDay = false
+    Config.RealPlayers.liveCrime.typeOfTheDay = false
 
-    Config.LiveCrime.linesOnly = false
+    Config.RealPlayers.liveCrime.linesOnly = false
     b = CP.Scoring.compute(run, p, 'completed', { durationS = 60, departments = 1 })
     H.ok(b.subtotal > 200 and not b.linesOnly, 'linesOnly = false: P plus the lines and the end-of-run lines')
-    Config.LiveCrime.linesOnly = true
+    Config.RealPlayers.liveCrime.linesOnly = true
 
     local m, mp = Run(false)
     b = CP.Scoring.compute(m, mp, 'completed', { durationS = 60, departments = 1 })
     H.eq(b.tod, true, 'a mission keeps the Type of the Day')
     H.ok(b.subtotal >= 200 and b.linesOnly == nil, 'a mission keeps its base points')
 
-    -- step Z2: a volunteer case ended early by Config.Volunteers.voidRun = 'keep_earned' (run.keepEarned) scores
-    -- what was earned so far: the lines only, no base points, no end-of-run lines, no mission cash
+    -- step Z2: a volunteer case ended early by Config.RealPlayers.volunteer.voidRun = 'keep_earned' (run.keepEarned)
+    -- scores what was earned so far: the lines only, no base points, no end-of-run lines, no mission cash
     H.ok((CP.Cash.compute(m, mp)) > 0, 'Z2: a completed mission pays its cash')
     m.keepEarned = true
     b = CP.Scoring.compute(m, mp, 'completed', { durationS = 60, departments = 1 })
@@ -199,13 +201,13 @@ do
     local amount, cb = CP.Cash.compute(run, p)
     H.eq(amount, 0, 'cash off: a live case pays nothing')
     H.eq(cb.B, 0, 'and its base is 0 (nothing to pay again later)')
-    Config.LiveCrime.cash = true
+    Config.RealPlayers.liveCrime.cash = true
     view = { order = { 'A', 'B' } }
     amount, cb = CP.Cash.compute(run, p)
     H.eq(cb.mTier, 1.15, 'cash on: a crew of 2, the reinforced tier\'s cash')
     H.eq(amount, 1150, 'pays like a mission of its type')
     view = nil
-    Config.LiveCrime.cash = false
+    Config.RealPlayers.liveCrime.cash = false
     H.eq((CP.Cash.compute(Run(false))), 1000, 'a mission pays as before')
 end
 
@@ -259,17 +261,18 @@ do
     H.load('modules/settings/server.lua')
     local S = CP.Settings
     -- step G3: plain switches (they ship off; no typed ENABLE)
-    H.eq((S.entry('LiveCrime.cash') or {}).money, nil, 'LiveCrime.cash needs no typed ENABLE')
-    H.eq((S.entry('LiveCrime.items') or {}).money, nil, 'LiveCrime.items needs no typed ENABLE')
-    H.ok(((S.entry('LiveCrime.cash') or {}).desc or ''):find(
+    H.eq((S.entry('RealPlayers.liveCrime.cash') or {}).money, nil, 'RealPlayers.liveCrime.cash needs no typed ENABLE')
+    H.eq((S.entry('RealPlayers.liveCrime.items') or {}).money, nil, 'RealPlayers.liveCrime.items needs no typed ENABLE')
+    H.ok(((S.entry('RealPlayers.liveCrime.cash') or {}).desc or ''):find(
         'true = a live case pays the officers cash like a mission',
         1,
         true
-    ) ~= nil, 'LiveCrime.cash: its comment is the description')
-    H.eq((S.entry('LiveCrime.items') or {}).desc,
-        'true = a live case rolls the item rewards of its type too (Config.Rewards)', 'LiveCrime.items: its comment')
-    H.eq((S.entry('LiveCrime.tier') or {}).kind, 'enum', 'LiveCrime.tier is a pick')
-    H.eq((S.check('LiveCrime.tier', 'suspects')), false, 'crew or officers only')
+    ) ~= nil, 'RealPlayers.liveCrime.cash: its comment is the description')
+    H.eq((S.entry('RealPlayers.liveCrime.items') or {}).desc,
+        'true = a live case rolls the item rewards of its type too (Config.Rewards)',
+        'RealPlayers.liveCrime.items: its comment')
+    H.eq((S.entry('RealPlayers.liveCrime.tier') or {}).kind, 'enum', 'RealPlayers.liveCrime.tier is a pick')
+    H.eq((S.check('RealPlayers.liveCrime.tier', 'suspects')), false, 'crew or officers only')
     H.ok((S.check('Leaderboard.metrics', { 'points', 'live_catches' })), 'live_catches can be put on the board')
 end
 
@@ -278,39 +281,40 @@ end
 -- ============================================================================
 
 do
-    H.load('modules/volunteers/match/server.lua')
+    H.load('modules/realplayers/match.lua')
     local V = CP.Volunteers
-    local vc = Config.Volunteers
-    for _, k in ipairs({ 'typeOfTheDay', 'goals', 'challenge', 'payCash', 'payRewards' }) do
-        H.eq(vc[k], false, 'Volunteers.' .. k .. ' ships false')
+    local vc = Config.RealPlayers.volunteer
+    local same = { 'typeOfTheDay', 'goals', 'challenge', 'cash', 'items' }
+    for _, k in ipairs(same) do
+        H.eq(vc[k], false, 'RealPlayers.volunteer.' .. k .. ' ships false')
     end
     local run, p = Run(false)
-    H.eq(V.counts(run, 'cash'), true, 'an NPC run (no yes) is a plain mission')
+    H.eq(CP.RealPlayersTakePart(run, 'cash'), true, 'an NPC run (no yes) is a plain mission')
     run.realSuspect = 'volunteer'
-    local keys = {
-        typeOfTheDay = 'typeOfTheDay',
-        goals = 'goals',
-        challenge = 'challenge',
-        cash = 'payCash',
-        items = 'payRewards',
-    }
-    for what, key in pairs(keys) do
-        H.eq(V.counts(run, what), false, 'a volunteer case: no ' .. what .. ' while ' .. key .. ' is off')
-        vc[key] = true
-        H.eq(V.counts(run, what), true, key .. ' on: it takes part')
-        vc[key] = false
+    for _, k in ipairs(same) do
+        H.eq(CP.RealPlayersTakePart(run, k), false, 'a volunteer case: no ' .. k .. ' while its switch is off')
+        Config.RealPlayers.liveCrime[k] = true
+        H.eq(CP.RealPlayersTakePart(run, k), false, 'the live switch of ' .. k .. ' does not count for volunteers')
+        Config.RealPlayers.liveCrime[k] = false
+        vc[k] = true
+        H.eq(CP.RealPlayersTakePart(run, k), true, k .. ' on: it takes part')
+        vc[k] = false
     end
-    H.ok(V.rowFilter('goals', 'r.'):find('r.breakdown', 1, true) ~= nil, 'goals off: volunteer rows left out')
+    Config.RealPlayers.liveCrime.goals = true
+    H.ok(CP.RealPlayersRowFilter('goals', 'r.'):find('r.breakdown', 1, true) ~= nil,
+        'goals off: volunteer rows left out')
     vc.goals = true
-    H.eq(V.rowFilter('goals', ''), '', 'goals on: nothing left out')
+    H.eq(CP.RealPlayersRowFilter('goals', ''), '', 'goals on: nothing left out')
     vc.goals = false
+    Config.RealPlayers.liveCrime.goals = false
+    H.eq(V.counts, nil, 'the volunteer module keeps no take-part copy of its own')
 
     local amount, cb = CP.Cash.compute(run, p)
-    H.eq(amount, 0, 'payCash off: a volunteer case pays nothing (cash 0)')
+    H.eq(amount, 0, 'cash off: a volunteer case pays nothing (cash 0)')
     H.eq(cb.B, 0, 'its base is 0')
-    vc.payCash = true
-    H.eq((CP.Cash.compute(run, p)), 1000, 'payCash on: pays like a mission of its type')
-    vc.payCash = false
+    vc.cash = true
+    H.eq((CP.Cash.compute(run, p)), 1000, 'cash on: pays like a mission of its type')
+    vc.cash = false
     local b = CP.Scoring.compute(run, p, 'completed', { durationS = 60, departments = 1 })
     H.eq(b.tod, false, 'no Type of the Day while typeOfTheDay is off')
     vc.typeOfTheDay = true
@@ -319,10 +323,10 @@ do
     vc.typeOfTheDay = false
 
     local S = CP.Settings
-    H.eq((S.entry('Volunteers.payCash') or {}).money, nil, 'Volunteers.payCash needs no typed ENABLE')
-    H.eq((S.entry('Volunteers.payRewards') or {}).money, nil, 'Volunteers.payRewards needs no typed ENABLE')
-    H.eq((S.entry('Volunteers.payRewards') or {}).desc,
-        'true = it rolls the item rewards of its type too (Config.Rewards)', 'Volunteers.payRewards: its comment')
+    H.eq((S.entry('RealPlayers.volunteer.cash') or {}).money, nil, 'RealPlayers.volunteer.cash needs no typed ENABLE')
+    H.eq((S.entry('RealPlayers.volunteer.items') or {}).money, nil, 'RealPlayers.volunteer.items needs no typed ENABLE')
+    H.eq((S.entry('RealPlayers.volunteer.items') or {}).desc,
+        'true = it rolls the item rewards of its type too (Config.Rewards)', 'RealPlayers.volunteer.items: its comment')
 end
 
 return H

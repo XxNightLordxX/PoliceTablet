@@ -26,7 +26,7 @@ export type RewardItems =
     | { kind: 'list'; s: SettingView }
     // Rewards.byType: the pool of one mission type
     | { kind: 'pool'; s: SettingView; key: string }
-    // LiveCrime.items / Volunteers.payRewards: a switch, the case rolls its mission type's pool
+    // RealPlayers.liveCrime.items / RealPlayers.volunteer.items: a switch, the case rolls its mission type's pool
     | { kind: 'switch'; s: SettingView };
 
 export interface RewardRow {
@@ -76,8 +76,8 @@ const FEATURES: { key: string; card: RewardCard; money: [string, string][]; byTy
 // The officers' pay of cases against real players: a switch for the money and one for the items, both from the
 // case's mission type.
 const CASES: { key: string; cash: string; items: string }[] = [
-    { key: 'live', cash: 'LiveCrime.cash', items: 'LiveCrime.items' },
-    { key: 'volunteer_case', cash: 'Volunteers.payCash', items: 'Volunteers.payRewards' },
+    { key: 'live', cash: 'RealPlayers.liveCrime.cash', items: 'RealPlayers.liveCrime.items' },
+    { key: 'volunteer_case', cash: 'RealPlayers.volunteer.cash', items: 'RealPlayers.volunteer.items' },
 ];
 
 // The mission type keys the data has (MissionTypes.<type>.payout), in its order.

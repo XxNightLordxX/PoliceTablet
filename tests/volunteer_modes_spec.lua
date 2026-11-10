@@ -1,4 +1,4 @@
--- Volunteer modes: Config.Volunteers.modes / missionModes, the volunteerSlot registry, who is free (a
+-- Volunteer modes: Config.RealPlayers.volunteer.modes / missionModes, the volunteerSlot registry, who is free (a
 -- 'players_only' accept holds one), the Mission Board card and "Real suspect OK", the draw filter, the pushed-mission
 -- refusal, run.volunteer, the release at the run's end and the start-up check. Plain Lua with stubs.
 
@@ -123,7 +123,7 @@ CP.Missions = {
     isEnabled = function(id) return enabled[id] == true end,
 }
 
-H.load('modules/volunteers/server.lua')
+H.load('modules/realplayers/volunteers.lua')
 H.load('modules/schedule/server.lua')
 H.load('modules/draw/server.lua')
 H.step(0)
@@ -141,9 +141,9 @@ local function Card(src, key)
     return nil
 end
 local function Modes(types, byMission)
-    Config.Volunteers.modes = { patrol = 'npc', training = 'npc', investigation = 'npc', tactical = 'npc' }
-    for k, v in pairs(types or {}) do Config.Volunteers.modes[k] = v end
-    Config.Volunteers.missionModes = byMission or {}
+    Config.RealPlayers.volunteer.modes = { patrol = 'npc', training = 'npc', investigation = 'npc', tactical = 'npc' }
+    for k, v in pairs(types or {}) do Config.RealPlayers.volunteer.modes[k] = v end
+    Config.RealPlayers.volunteer.missionModes = byMission or {}
 end
 
 -- ============================================================================
@@ -151,19 +151,19 @@ end
 -- ============================================================================
 
 do
-    local c = Config.Volunteers
+    local c = Config.RealPlayers.volunteer
     H.eq(c.enabled, false, 'volunteers ship off')
     for _, t in ipairs({ 'patrol', 'training', 'investigation', 'tactical' }) do
         H.eq(c.modes[t], 'npc', 'the ' .. t .. ' type ships npc')
     end
     H.ok(type(c.missionModes) == 'table' and next(c.missionModes) == nil, 'no mission has its own mode')
     H.eq(V.modeOf(WARRANT), 'npc', 'off: npc')
-    Config.Volunteers.missionModes = { warrant_x = 'players_only' }
+    Config.RealPlayers.volunteer.missionModes = { warrant_x = 'players_only' }
     H.eq(V.modeOf(WARRANT), 'npc', 'off: a mode set in config.lua changes nothing')
     H.eq(Ids(D.pool('investigation', { 1 })), 'search_y,warrant_x', 'off: the pool is the same')
     H.eq(Card(1, 'investigation').realSuspect, nil, 'off: the card says nothing about real suspects')
-    Config.Volunteers.missionModes = {}
-    Config.Volunteers.enabled = true
+    Config.RealPlayers.volunteer.missionModes = {}
+    Config.RealPlayers.volunteer.enabled = true
     H.eq(V.modeOf(WARRANT), 'npc', 'on with every mode npc: npc')
     H.eq(Ids(D.pool('investigation', { 1 })), 'search_y,warrant_x', 'on with every mode npc: the same pool')
     H.eq(Card(1, 'investigation').realSuspect, nil, 'on with every mode npc: no real-suspect card')
@@ -319,14 +319,14 @@ do
         for _, l in ipairs(V._modesHealth()) do out[#out + 1] = l.level .. ':' .. l.text end
         return table.concat(out, '\n')
     end
-    Config.Volunteers.enabled = false
+    Config.RealPlayers.volunteer.enabled = false
     H.ok(Texts():find('ok:Volunteer suspects are off', 1, true) ~= nil, 'off: one ok line')
-    Config.Volunteers.enabled = true
+    Config.RealPlayers.volunteer.enabled = true
     Modes({ patrol = 'players_only', ghost = 'npc' },
         { search_y = 'players_when_available', nope = 'npc', warrant_x = 'everyone' })
     local t = Texts()
-    H.ok(t:find('warn:Config.Volunteers names ghost', 1, true) ~= nil, 'an unknown type is named')
-    H.ok(t:find('warn:Config.Volunteers names nope', 1, true) ~= nil, 'an unknown mission is named')
+    H.ok(t:find('warn:Config.RealPlayers.volunteer names ghost', 1, true) ~= nil, 'an unknown type is named')
+    H.ok(t:find('warn:Config.RealPlayers.volunteer names nope', 1, true) ~= nil, 'an unknown mission is named')
     H.ok(t:find('sets warrant_x to \'everyone\'', 1, true) ~= nil, 'a value that is no mode is named')
     H.ok(t:find('patrol is set to players_only, but none of its missions', 1, true) ~= nil,
         'players_only with no slot: never offered')
@@ -344,12 +344,12 @@ end
 do
     H.load('modules/settings/server.lua')
     local S = CP.Settings
-    H.ok(S.check('Volunteers.modes', { patrol = 'players_only' }), 'a mode per type is accepted')
-    H.ok(not S.check('Volunteers.modes', { patrol = 'everyone' }), 'a value that is no mode is refused')
-    H.ok(not S.check('Volunteers.modes', { heist = 'npc' }), 'a key that is no mission type is refused')
-    H.ok(S.check('Volunteers.missionModes', { warrant_service = 'players_when_available' }),
+    H.ok(S.check('RealPlayers.volunteer.modes', { patrol = 'players_only' }), 'a mode per type is accepted')
+    H.ok(not S.check('RealPlayers.volunteer.modes', { patrol = 'everyone' }), 'a value that is no mode is refused')
+    H.ok(not S.check('RealPlayers.volunteer.modes', { heist = 'npc' }), 'a key that is no mission type is refused')
+    H.ok(S.check('RealPlayers.volunteer.missionModes', { warrant_service = 'players_when_available' }),
         'a mode per mission is accepted')
-    for _, path in ipairs({ 'Volunteers.modes', 'Volunteers.missionModes' }) do
+    for _, path in ipairs({ 'RealPlayers.volunteer.modes', 'RealPlayers.volunteer.missionModes' }) do
         local e = S.entry(path) or {}
         H.ok(type(e.desc) == 'string' and e.desc ~= '', path .. ' has a description')
         H.ok(not e.restart and not e.money, path .. ' applies live and is no money switch')

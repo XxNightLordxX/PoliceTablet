@@ -173,12 +173,12 @@ local function ResolveRun(src, runRef)
     return nil, nil
 end
 
--- A case with a real suspect (run.realSuspect: 'live' or 'volunteer') while Config.RealSuspects.officerAlerts is not 'silenced'
--- (shipped 'normal'): its officers' own shots-fired, person-down and EMS calls go out like any officer's, so no flag
--- and no backstop clear. 'silenced' = the NPC-mission rule (Hard rule 16). NPC runs: always false.
+-- A case with a real suspect (run.realSuspect: 'live' or 'volunteer') while Config.RealPlayers.officerAlerts is not
+-- 'silenced' (shipped 'normal'): its officers' own shots-fired, person-down and EMS calls go out like any officer's, so
+-- no flag and no backstop clear. 'silenced' = the NPC-mission rule (Hard rule 16). NPC runs: always false.
 local function AlertsGoOut(run)
     if type(run) ~= 'table' or not run.realSuspect then return false end
-    local rs = Config.RealSuspects
+    local rs = CP.RealPlayers()
     return not (type(rs) == 'table' and rs.officerAlerts == 'silenced')
 end
 A.alertsGoOut = AlertsGoOut
@@ -271,7 +271,7 @@ function A.set(src, runRef)
         if AlertsGoOut(run) then
             if not quietLogged[run] then
                 quietLogged[run] = true
-                CP.log(TAG, 'no flags on run %s: a case with a real suspect (Config.RealSuspects.officerAlerts)',
+                CP.log(TAG, 'no flags on run %s: a case with a real suspect (Config.RealPlayers.officerAlerts)',
                     tostring(run.id))
             end
             return false
@@ -329,7 +329,7 @@ end
 
 -- A run that became a case with a real suspect after its officers arrived (a volunteer who says yes then):
 -- every active participant's flag of ours goes, so his calls go out from now on. Nothing while
--- Config.RealSuspects.officerAlerts is 'silenced' or the run has no real suspect. Returns how many were cleared.
+-- Config.RealPlayers.officerAlerts is 'silenced' or the run has no real suspect. Returns how many were cleared.
 function A.releaseRun(run)
     if not AlertsGoOut(run) or type(run.participants) ~= 'table' then return 0 end
     local n = 0
@@ -650,7 +650,7 @@ local function OnShotsFired(src, _, receivedAt)
         local _, r2 = RunsCall('get', wanted[src].runId)
         if type(r2) == 'table' then run = r2 end
     end
-    -- a case with a real suspect: his call stands (Config.RealSuspects.officerAlerts)
+    -- a case with a real suspect: his call stands (Config.RealPlayers.officerAlerts)
     if not run or AlertsGoOut(run) then return end
     local coords = ServerCoords(src)
     if not coords or not NearMission(run, coords) then return end

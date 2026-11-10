@@ -28,13 +28,15 @@
 --   clues_first is awarded once when every clue was checked before the first arrest.
 --   Volunteer slot (ARCHITECTURE 7.3; one local table Vol): volunteerSlot { role = 'fugitive', meet = the
 --   location's first hiding spot } (Manhunt). ctx.volunteer() decides st.vol: 'wait' (asking: no fugitive, no
---   completion), 'real' (a real player hides: no NPC fugitive unless Config.Volunteers.fugitiveNpcs, then one fewer;
+--   completion), 'real' (a real player hides: no NPC fugitive unless Config.RealPlayers.volunteer.fugitiveNpcs, then
+-- one fewer;
 --   he is one more fugitive, done when CP.Opponents.view has him detained with a share or booked, one arrest; lost
 --   fails block.search_area.fail_escaped), 'void' (nothing spawns), nil (the NPCs as before). The circle shrinks
 --   towards his server-side rec.lastCoords once he was seen inside it (else his meet point); his own map gets the
 --   circle (CP.Volunteers.caseArea) at the start and after each shrink, removed once he is caught. Circle rule from
 --   in_position on, once he was inside: outside it (2D, server coords) one warning (caseNote volunteer.case.out_warn),
---   then after Config.Volunteers.fugitiveOutSeconds CP.Volunteers.outOfBounds (a void and a strike); 0 = no rule.
+--   then after Config.RealPlayers.volunteer.fugitiveOutSeconds CP.Volunteers.outOfBounds (a void and a strike); 0 = no
+-- rule.
 --   The pointer never shows him (the circle and the clues only); the snapshot carries volunteer / volunteerDone.
 --
 -- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.search_area)
@@ -478,10 +480,11 @@ local function Message(ctx, key, vars, kind)
     ctx.hud({ message = { text = CP.L(key, vars), kind = kind or 'info' } })
 end
 
-local function VCfg() return type(Config.Volunteers) == 'table' and Config.Volunteers or {} end
+local function VCfg() return (CP.RealPlayers('volunteer')) end
 
 -- The NPC fugitives to make. A volunteer fugitive (§7.3): none while volunteers are asked or the run ends for want
--- of one; while he plays, the others only with Config.Volunteers.fugitiveNpcs (he takes one fugitive's place).
+-- of one; while he plays, the others only with Config.RealPlayers.volunteer.fugitiveNpcs (he takes one fugitive's
+-- place).
 local function FugTarget(ctx)
     local n = Int(ctx.obj.fugitives)
     local vol = type(ctx.state) == 'table' and ctx.state.vol or nil
@@ -758,7 +761,8 @@ end
 -- One of the search's fugitives is the run's volunteer slot: a real player who hides inside the circle. The server
 -- decides everything from CP.Opponents' server-side record; officers never see where he is, only the circle, which
 -- shrinks towards where the server last saw him at each clue. He must stay inside it: outside it for
--- Config.Volunteers.fugitiveOutSeconds is a void (CP.Volunteers.outOfBounds: a strike, the run goes on as onVoid says).
+-- Config.RealPlayers.volunteer.fugitiveOutSeconds is a void (CP.Volunteers.outOfBounds: a strike, the run goes on as
+-- onVoid says).
 
 local Vol = {}
 do
@@ -801,7 +805,8 @@ do
     end
 
     -- Done once CP.Opponents has him detained with a share above 0 or booked (an AFK catch, share 0, never counts while
-    -- Config.Volunteers.afkCatchVoids is on: CP.Volunteers voids it); lost = he got away. Done is kept (one arrest).
+    -- Config.RealPlayers.volunteer.afkCatchVoids is on: CP.Volunteers voids it); lost = he got away. Done is kept (one
+    -- arrest).
     local function Facts(ctx, st)
         st.volLost = false
         if st.vol ~= 'real' or st.volDone or not (CP.Opponents and CP.Opponents.view) then return end

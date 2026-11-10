@@ -31,7 +31,7 @@ export interface ReadyCheckView {
     waitingForMe?: boolean;
     // Auto-Ready answered Ready for the viewer: Not ready still shows.
     autoForMe?: boolean;
-    // A live case's LIVE line (Config.LiveCrime.readyCheck and caseCard).
+    // A live case's LIVE line (Config.RealPlayers.liveCrime.readyCheck and caseCard).
     live?: { title?: string | null; street?: string | null; suspects: number } | null;
 }
 

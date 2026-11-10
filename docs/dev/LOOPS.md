@@ -270,7 +270,7 @@ async callbacks, audit writes) run once. The census marks them.
 | modules/tablet/client.lua | tablet prop and animation kept | tablet open | 1000 -> 2000 ms, scaled | other scripts clear tasks rarely |
 | modules/tablet/client.lua | open tablet watcher (one thread): downed, desk distance, tablet item | tablet open; the desk check at a desk, the item check with `requireItem` on (not at a desk) | 1000 ms a pass, scaled: downed and desk every pass, item every 2000 ms | focus released soon after the death screen comes up; closes within a second of walking away; the server checks the item again |
 | modules/tablet/client.lua | Escape guard (pause menu) | `pauseGuardMs` after a close | per frame, one thread | a disabled control is read every frame |
-| modules/crimtab/client.lua | Escape guard (pause menu) | `pauseGuardMs` after a close | per frame, one thread, extended | a disabled control is read every frame |
+| modules/realplayers/client/crimtab.lua | Escape guard (pause menu) | `pauseGuardMs` after a close | per frame, one thread, extended | a disabled control is read every frame |
 | modules/markers/client.lua | objective pointer: streaming, nearest target, line | while there is something on the map | 1000 -> 2000 ms, scaled | ends by itself once cleared |
 | modules/markers/client.lua | extra parts: a car or partner moves onto its entity once streamed in | while such a blip is on the map (Config.Markers.extraParts on) | 1000 ms, scaled | ends by itself once no such blip is left |
 | modules/route/client.lua | drive-to-start report | drive to the start | `Config.Route` every (s) | the server's warning deadline |
@@ -305,12 +305,12 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/review/anticheat.lua | buckets, idle, presence sampling | always | 1000 -> 2000 ms, presence 5 s (on the next pass) | idle and bucket rules count seconds |
 | modules/custody/server.lua | custody timers | while a run has a custody book | 1000 ms (kept) | each service vehicle step (road point ask, spawn, drive, park, leave) is one pass: 2 s would make every transport and coroner arrive seconds later |
 | modules/npc/server.lua | death watcher, health, cuff reach, flee clock | while a run is live or a ped record is kept | 1000 ms (kept) | the flee clock adds a second a pass (sprint, jog, walk), and a vanished ped must be seen before the engine's own 2-pass vanish rule |
-| modules/opponents/server.lua | live crime watch | while a case or crew is tracked | 1000 ms (kept) | second deadlines: the lost rule, the disconnect grace, AFK and the trail |
+| modules/realplayers/opponents.lua | live crime watch | while a case or crew is tracked | 1000 ms (kept) | second deadlines: the lost rule, the disconnect grace, AFK and the trail |
 | modules/operations/server.lua | operations | always | 1000 -> 2000 ms active, 5000 -> 10000 ms idle (scaled) | adaptive; the join window is minutes |
 | modules/spawn/server.lua | open spawn asks | while asks are open | 500 -> 1000 ms | placement timeouts are seconds |
 | modules/units/server.lua | invite expiry, lock safety net | while a unit exists | 2000 -> 5000 ms, scaled | invites last 120 s; accepting checks the expiry itself. A ready check has its own timer at the deadline, and Units.ready refuses an answer after it |
-| modules/volunteers/server.lua | volunteer window and duty | while someone volunteers | 15 -> 30 s, scaled | the window is minutes; its end is checked at the draw (`V.available`), so the sweep only tidies |
-| modules/volunteers/match/server.lua | asking, travel, engagement | while a run has a match | 1000 -> 2000 ms | the travel time is minutes |
+| modules/realplayers/volunteers.lua | volunteer window and duty | while someone volunteers | 15 -> 30 s, scaled | the window is minutes; its end is checked at the draw (`V.available`), so the sweep only tidies |
+| modules/realplayers/match.lua | asking, travel, engagement | while a run has a match | 1000 -> 2000 ms | the travel time is minutes |
 | modules/missioncalls/server.lua | call posting and expiry | always | `checkEvery` s | the feature is on all day |
 | modules/missioncalls/server.lua | coalesced screen push | a change | one `SetTimeout`, 1 s after the first change | a burst of changes is one push |
 | modules/testing/server.lua | debug stream, invites | while a test, an invitation or a waiting result is kept | 1000 -> 2000 ms base, debug 2 s, upkeep 5 s (on the next pass) | |
@@ -370,8 +370,8 @@ strings do not count.
 | `modules/cash/server.lua` | 4 | 1 | forfeit sweep, 10 min; one-shots |
 | `modules/progression/challenge.lua` | 3 | 1 | planned-end reminders, 60 s; one-shots |
 | `modules/confighealth/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/crimtab/client.lua` | 6 | 0 | Escape guard, downed watch; one-shots |
-| `modules/crimtab/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/client/crimtab.lua` | 6 | 0 | Escape guard, downed watch; one-shots |
+| `modules/realplayers/crimtab.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/custody/client.lua` | 3 | 0 | bounded control and load waits; one-shots |
 | `modules/custody/server.lua` | 1 | 0 | one-shot; the custody tick is a `CP.Perf.armed` loop |
 | `modules/review/disputes.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -384,8 +384,8 @@ strings do not count.
 | `modules/integrations/qbx/server.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/integrations/sc_dispatch/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/progression/leaderboard.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/livecrime/client.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/livecrime/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/client/livecrime.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/livecrime.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/livectl/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/markers/client.lua` | 2 | 0 | objective pointer; a start-up hook |
 | `modules/migrations/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -396,12 +396,12 @@ strings do not count.
 | `modules/npc/client.lua` | 19 | 1 | owned ped AI, pace, governor, cuff guard; bounded control waits; one-shots |
 | `modules/npccombat/client.lua` | 1 | 0 | damage re-apply while the run is live |
 | `modules/operations/server.lua` | 4 | 1 | operations, adaptive; one-shots |
-| `modules/opponents/conduct/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/opponents/pairs/server.lua` | 5 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/opponents/proof/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/opponents/saved/server.lua` | 4 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/opponents/server.lua` | 3 | 1 | live crime watch while a case is tracked; one-shots |
-| `modules/opponents/surrender/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/conduct.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/pairs.lua` | 5 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/proof.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/saved.lua` | 4 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/opponents.lua` | 3 | 1 | live crime watch while a case is tracked; one-shots |
+| `modules/realplayers/surrender.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/options/client.lua` | 3 | 0 | Auto-Ready input watcher; start-up hooks |
 | `modules/payments/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/payouts/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -425,9 +425,9 @@ strings do not count.
 | `modules/testing/client.lua` | 9 | 0 | debug drawing, focus watch; bounded waits; one-shots |
 | `modules/units/client.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/units/server.lua` | 1 | 0 | a start-up hook; the sweep is a `CP.Perf.armed` loop |
-| `modules/volunteers/client.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/volunteers/match/server.lua` | 5 | 0 | match tick while a run has a match; one-shots |
-| `modules/volunteers/server.lua` | 7 | 0 | volunteer sweep while someone volunteers; one-shots |
+| `modules/realplayers/client/volunteers.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/match.lua` | 5 | 0 | match tick while a run has a match; one-shots |
+| `modules/realplayers/volunteers.lua` | 7 | 0 | volunteer sweep while someone volunteers; one-shots |
 | `shared/init.lua` | 1 | 1 | `CP.Perf.armed`: the loop that runs only while it has work |
 | `shared/net.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `shared/utils.lua` | 0 | 5 | the config text parser, no Wait |

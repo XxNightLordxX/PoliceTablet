@@ -679,7 +679,7 @@
   "admin.perm.fieldTraining": "Field training",
   "admin.perm_desc.fieldTraining": "Pair and unpair trainers and rookies of their own department.",
   "admin.perm.criminalTablet": "Criminal tablet",
-  "admin.perm_desc.criminalTablet": "Use the criminal tablet while Config.CriminalTablet.access is 'granted' (never on police duty).",
+  "admin.perm_desc.criminalTablet": "Use the criminal tablet while Config.RealPlayers.criminalTablet.access is 'granted' (never on police duty).",
   "admin.perms.extra.title": "Extra grants",
   "admin.perms.extra.subtitle": "Give one power to people who are not supervisors: a department from a grade, a Qbox gang from a grade, or one character. Admins still come only from config.lua.",
   "admin.perms.extra.none": "Nobody has extra grants. Only supervisors have these powers.",

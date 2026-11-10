@@ -2,7 +2,7 @@
 
 -- real-suspect data survives a restart. A closed case (its suspects, officers, timeline and damage ledger)
 -- is saved in cp_pvp_cases and read back for the Admin UI after a restart; volunteer strikes and strike blocks are
--- cp_pvp_pairs rows read back too. Config.RealSuspects.saveCases / Config.Volunteers.saveStrikes = false keep
+-- cp_pvp_pairs rows read back too. Config.RealPlayers.saveCases / Config.RealPlayers.volunteer.saveStrikes = false keep
 -- them in memory only.
 
 local H = dofile('tests/harness.lua')
@@ -14,7 +14,7 @@ local function Boot()
     Config.Debug = false
     _G.GetConvar = function(_, default) return default end
     _G.PerformHttpRequest = function() end
-    Config.LiveCrime.enabled = true
+    Config.RealPlayers.liveCrime.enabled = true
     CP.Runs = {
         dispatch = function() return true end,
     }
@@ -22,9 +22,9 @@ local function Boot()
         note = function() return true end,
         flag = function() return true end,
     }
-    H.load('modules/opponents/server.lua')
-    H.load('modules/opponents/saved/server.lua')
-    H.load('modules/opponents/staff/server.lua')
+    H.load('modules/realplayers/opponents.lua')
+    H.load('modules/realplayers/saved.lua')
+    H.load('modules/realplayers/staff.lua')
     H.step(0)
     H.advance(100)   -- the start reads the saved cases in its thread
     return CP.Opponents
@@ -62,7 +62,7 @@ H.restart()
 
 local Opp = Boot()
 do
-    H.eq(Config.RealSuspects.saveCases, true, 'saveCases ships true')
+    H.eq(Config.RealPlayers.saveCases, true, 'saveCases ships true')
     local run = NewRun(RUN1)
     local case = Opp.open(run, { kind = 'live', members = { 'CRIM0001' } })
     local rec = case.suspects.CRIM0001
@@ -109,15 +109,15 @@ end
 -- ============================================================================
 
 do
-    Config.RealSuspects.casesKept = 1
+    Config.RealPlayers.casesKept = 1
     local run = NewRun(RUN2)
     Opp.open(run, { kind = 'live', members = { 'CRIM0002' } })
     Opp.close(run)
     H.advance(100)
     local rows = Saved()
     H.ok(#rows == 1 and rows[1].run_uuid == RUN2, 'casesKept = 1: only the newest saved case is kept')
-    Config.RealSuspects.casesKept = 16
-    Config.RealSuspects.saveCases = false
+    Config.RealPlayers.casesKept = 16
+    Config.RealPlayers.saveCases = false
     run = NewRun(RUN3)
     Opp.open(run, { kind = 'live', members = { 'CRIM0003' } })
     Opp.close(run)
@@ -134,13 +134,13 @@ local function BootVolunteers()
     H.boot({ side = 'server', realLocale = true })
     Config.Debug = false
     _G.GetConvar = function(_, default) return default end
-    Config.Volunteers.enabled = true
+    Config.RealPlayers.volunteer.enabled = true
     CP.Qbx = {
         getInfo = function(src)
             return { citizenid = 'VOL0000' .. src, license = 'license:v' .. src, name = 'Vol ' .. src, job = {} }
         end,
     }
-    H.load('modules/volunteers/server.lua')
+    H.load('modules/realplayers/volunteers.lua')
     H.step(0)
     H.advance(100)
     return CP.Volunteers
@@ -150,7 +150,7 @@ H.advance(1000)
 H.restart()
 local V = BootVolunteers()
 do
-    H.eq(Config.Volunteers.saveStrikes, true, 'saveStrikes ships true')
+    H.eq(Config.RealPlayers.volunteer.saveStrikes, true, 'saveStrikes ships true')
     V.strike('VOL00001', 'no_show')
     V.strike('VOL00002', 'no_show')
     V.strike('VOL00002', 'no_show')

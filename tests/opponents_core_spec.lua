@@ -180,10 +180,10 @@ CP.Qbx = {
 H.load('modules/access/server.lua')
 CP.Qbx = nil
 H.load('modules/integrations/qbx/server.lua')
-H.load('modules/opponents/server.lua')
+H.load('modules/realplayers/opponents.lua')
 H.step(0)
 local Opp = CP.Opponents
-local RS = Config.RealSuspects
+local RS = Config.RealPlayers
 
 local runSeq = 0
 local runs = {}
@@ -244,7 +244,7 @@ Load(2, 'OFF00002', vec3(5.0, 0.0, 30.0), 'sast', true)
 -- ============================================================================
 
 do
-    H.eq(type(RS), 'table', 'Config.RealSuspects exists')
+    H.eq(type(RS), 'table', 'Config.RealPlayers exists')
     H.eq(RS.onLeave, 'void', 'onLeave ships void')
     H.eq(RS.excludeAdmins, true, 'admins are never suspects (shipped)')
     H.eq(Opp.active(), false, 'no case: not active')

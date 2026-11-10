@@ -18,11 +18,11 @@ local function RemoveRadial()
     end
 end
 
--- Config.RealSuspects.surrender, behind Config.LiveCrime.enabled (the server checks it again on every use).
+-- Config.RealPlayers.surrender, behind Config.RealPlayers.liveCrime.enabled (the server checks it again on every use).
 local function TalkOn()
-    local rs = type(Config.RealSuspects) == 'table' and Config.RealSuspects or {}
+    local rs = CP.RealPlayers()
     local s = type(rs.surrender) == 'table' and rs.surrender or {}
-    return type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true and s.enabled ~= false
+    return select(2, CP.RealPlayers('liveCrime')) and s.enabled ~= false
 end
 
 local function RemoveTalk()

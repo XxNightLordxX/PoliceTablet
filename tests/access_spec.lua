@@ -159,20 +159,20 @@ do
     sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
     H.eq(sup.landing, 'first', 'an unknown supervisorLanding counts as first')
     Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding = false, 'first'
-    -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
+    -- Config.RealPlayers.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
     H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
-    Config.LiveCrime.enabled = true
+    Config.RealPlayers.liveCrime.enabled = true
     adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
     H.eq(adm.data.config.realSuspects.screen, true, 'live crimes on: the Admin UI shows Real suspects')
-    Config.RealSuspects.adminScreen = false
+    Config.RealPlayers.adminScreen = false
     adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
     H.eq(adm.data.config.realSuspects.screen, false, 'adminScreen = false: no screen')
-    Config.RealSuspects.adminScreen = true
-    Config.LiveCrime.enabled = false
-    Config.Volunteers.enabled = true
+    Config.RealPlayers.adminScreen = true
+    Config.RealPlayers.liveCrime.enabled = false
+    Config.RealPlayers.volunteer.enabled = true
     adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
     H.eq(adm.data.config.realSuspects.screen, true, 'volunteers on: the screen too')
-    Config.Volunteers.enabled = false
+    Config.RealPlayers.volunteer.enabled = false
     Config.Tablet.access = { command = true, keybind = true, item = true, desk = true, requireItem = false }
     Config.Tablet.item = false
 end

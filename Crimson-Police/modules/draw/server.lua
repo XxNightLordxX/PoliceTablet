@@ -152,7 +152,7 @@ end
 -- ============================================================================
 -- (ARCHITECTURE 5.46): live = { crimeKey } from CP.MissionCalls.
 
-local function LiveCfg() return type(Config.LiveCrime) == 'table' and Config.LiveCrime or {} end
+local function LiveCfg() return (CP.RealPlayers('liveCrime')) end
 
 -- The crime of a live accept, or nil.
 local function LiveCrimeOf(live)
@@ -172,7 +172,7 @@ local function LiveExcept(live, srcs)
     return type(set) == 'table' and set or nil
 end
 
--- The LIVE line of the ready check (Config.LiveCrime.caseCard): the alert title, street and suspect count.
+-- The LIVE line of the ready check (Config.RealPlayers.liveCrime.caseCard): the alert title, street and suspect count.
 local function ReadyLine(live)
     if not (live and CP.LiveCrime and CP.LiveCrime.readyLine) then return nil end
     local _, line = Safe(CP.LiveCrime.readyLine, live)
@@ -180,7 +180,7 @@ local function ReadyLine(live)
 end
 
 -- Whether the Cross-Department lock stops this accept: always for a mission; for a live case only while
--- Config.LiveCrime.duringOperation is false.
+-- Config.RealPlayers.liveCrime.duringOperation is false.
 local function LockStops(live)
     if live and LiveCfg().duringOperation ~= false then return false end
     return OperationLocked()
@@ -622,8 +622,8 @@ local function VolunteerCard(list)
 end
 
 -- opts.area: only missions with a location in that area (a mission call that named its area). opts.realSuspect: the
--- unit ticked "Real suspect OK": without it a 'players_only' mission (Config.Volunteers) is left out, with it
--- one is left out only while no volunteer who fits is free.
+-- unit ticked "Real suspect OK": without it a 'players_only' mission (Config.RealPlayers.volunteer) is left out, with
+-- it one is left out only while no volunteer who fits is free.
 function Draw.pool(missionType, members, opts)
     local area = type(opts) == 'table' and opts.area or nil
     local realOk = type(opts) == 'table' and opts.realSuspect == true
@@ -1545,8 +1545,9 @@ end
 -- error key the officer sees. A mission call claim runs exactly these (CP.MissionCalls). counts (optional):
 -- { lastHour = fn(citizenid), today = fn(citizenid, type) } in place of CP.Runs' counts (the calls' cache).
 -- live: a LIVE call's claim ({ crimeKey }): no server run caps, the type cooldown only with
--- Config.LiveCrime.typeCooldown, the Cross-Department lock only without Config.LiveCrime.duringOperation, the crime's
--- own call is no "real call", and CP.LiveCrime.claimCheck (the crime and the real-suspect rules) on top.
+-- Config.RealPlayers.liveCrime.typeCooldown, the Cross-Department lock only without
+-- Config.RealPlayers.liveCrime.duringOperation, the crime's own call is no "real call", and CP.LiveCrime.claimCheck
+-- (the crime and the real-suspect rules) on top.
 local function CheckAccept(src, typeKey, counts, live)
     live = type(live) == 'table' and live or nil
     local leader, errKey = GetOfficer(src)
@@ -1611,7 +1612,8 @@ local function CheckAccept(src, typeKey, counts, live)
         end
     end
 
-    -- a live case is capped by Config.LiveCrime.maxLiveRuns (its LIVE call), never by the NPC missions' run caps
+    -- a live case is capped by Config.RealPlayers.liveCrime.maxLiveRuns (its LIVE call), never by the NPC missions' run
+    -- caps
     if not live and not CapsOk(missionType) then return false, 'err.server_busy' end
     if live then
         if not (CP.LiveCrime and CP.LiveCrime.claimCheck) then return false, 'err.live_case_off' end
@@ -1861,7 +1863,8 @@ local function AcceptStart(src, typeKey, opts, note)
         if okRs and type(secs) == 'number' then readySecs = secs end
     end
     local wantCheck = readySecs ~= 0
-    -- a live case waits for the ready check only with Config.LiveCrime.readyCheck (shipped false: a real crime)
+    -- a live case waits for the ready check only with Config.RealPlayers.liveCrime.readyCheck (shipped false: a real
+    -- crime)
     if ctx.live and LiveCfg().readyCheck ~= true then wantCheck = false end
     if unit and #srcs >= 2 and wantCheck and type(readyCheck) == 'function' and not opts.noReadyCheck then
         local answered = false
@@ -1963,7 +1966,7 @@ CP.Net.action('server:acceptType', function(src, payload)
     if CP.Tablet and CP.Tablet.itemOk and not CP.Tablet.itemOk(src) then return false, 'err.no_tablet_item' end
 
     local srcs = UnitMembers(src)
-    -- the leader ticked "Real suspect OK" (Config.Volunteers modes); anything but true is no
+    -- the leader ticked "Real suspect OK" (Config.RealPlayers.volunteer modes); anything but true is no
     local realSuspect = type(payload) == 'table' and payload.realSuspect == true or nil
     local st, ok, data = inFlight:runAll(srcs, Accept, src, typeKey, { twists = twists, realSuspect = realSuspect })
     if st == 'busy' then return false, 'err.busy' end

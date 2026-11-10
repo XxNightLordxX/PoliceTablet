@@ -101,8 +101,8 @@ export interface Session {
         adminUi?: {
             reasonChips?: string[];
         };
-        // Config.RealSuspects.adminScreen: screen = the Admin UI shows Real suspects (true only while
-        // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)
+        // Config.RealPlayers.adminScreen: screen = the Admin UI shows Real suspects (true only while
+        // Config.RealPlayers.liveCrime.enabled or Config.RealPlayers.volunteer.enabled is on)
         realSuspects?: { screen: boolean };
         // Config.Tablet.sidebarOrder / activeFirst / compactSidebar: the Officer UI sidebar (layouts/officerNav)
         officerNav?: { order: 'classic' | 'mostUsed'; activeFirst: boolean; compact: boolean };
@@ -427,7 +427,7 @@ export interface RunResult {
         todMultiplier?: number;
         // mBonus: the happy hour points bonus of a run accepted during a happy hour; absent = none
         mBonus?: number;
-        // linesOnly: a live case scored by its lines only (Config.LiveCrime.linesOnly); P is only the
+        // linesOnly: a live case scored by its lines only (Config.RealPlayers.liveCrime.linesOnly); P is only the
         // base of their shares
         linesOnly?: boolean;
     };
@@ -441,7 +441,7 @@ export interface RunResult {
     stats?: RunStats;
     missionCall?: RunMissionCall | null;
     items?: RunItem[];
-    // A live case: each suspect's outcome by label once the case is over (Config.LiveCrime.resultOutcomes);
+    // A live case: each suspect's outcome by label once the case is over (Config.RealPlayers.liveCrime.resultOutcomes);
     // open = this officer left while it still ran.
     live?: RunLiveResult | null;
 }
@@ -556,7 +556,7 @@ export interface NuiMessageMap {
     locale: { type: 'locale'; locale: Record<string, string> };
     // this PC's 'local' officer options (modules/options/client.lua): on 'ready' and after every change
     localOptions: { type: 'localOptions'; options: Record<string, OfficerOptionValue> };
-    // the criminal tablet (modules/crimtab/client.lua): open with its view (and a screen), a fresh view, or
+    // the criminal tablet (modules/realplayers/client/crimtab.lua): open with its view (and a screen), a fresh view, or
     // closed (open = false)
     crimtab: { type: 'crimtab'; open: boolean; view?: unknown; screen?: string | null };
 }

@@ -73,8 +73,9 @@ for _, a in ipairs(ADMIN_ONLY_LIST) do ADMIN_ONLY[a] = true end
 local SUPERVISOR_ALWAYS = { viewMissionList = true, fieldTraining = true }
 
 -- Powers an extra grant may give besides the supervisor switches (Config.Permissions.grants): the builder Teleport
--- button, field training pairing and the criminal tablet (read by CP.CrimTab while Config.CriminalTablet.access
--- is 'granted'). viewMissionList (the department report and the live list) is never granted.
+-- button, field training pairing and the criminal tablet (read by CP.CrimTab while
+-- Config.RealPlayers.criminalTablet.access is 'granted'). viewMissionList (the department report and the live list) is
+-- never granted.
 local EXTRA_POWERS_LIST = { 'builderTeleport', 'fieldTraining', 'criminalTablet' }
 local EXTRA_POWERS = {}
 for _, a in ipairs(EXTRA_POWERS_LIST) do EXTRA_POWERS[a] = true end

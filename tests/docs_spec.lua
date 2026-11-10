@@ -269,9 +269,9 @@ local commands = readme:match('\n### 6%.1 Commands\n(.-)\n### 6%.2') or ''
 local registered = {
     [Cfg.Tablet.command] = true,
     [Cfg.Tablet.adminCommand] = true,
-    [Cfg.Volunteers.command] = true,
-    [Cfg.CriminalTablet.command] = true,
-    [Cfg.RealSuspects.surrender.command] = true,
+    [Cfg.RealPlayers.volunteer.command] = true,
+    [Cfg.RealPlayers.criminalTablet.command] = true,
+    [Cfg.RealPlayers.surrender.command] = true,
 }
 local diag = ReadRepo('Crimson-Police/modules/diag/client.lua') or ''
 registered[diag:match('\nlocal COMMAND = \'([%w_]+)\'') or '?'] = true

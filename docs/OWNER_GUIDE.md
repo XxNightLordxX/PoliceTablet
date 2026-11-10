@@ -414,7 +414,7 @@ You set them in Admin UI → **Permissions** → **Mission controls** (below); s
 - **Extra grants: a power for people who are not supervisors.** Admin UI → **Permissions** → **Extra grants** lists
   every supervisor power (review, disputes, Mission controls, builder, mission calls, commendations and the rest), plus
   **Builder teleport**, **Field training** (pair and unpair) and **Criminal tablet** (who may use the criminal tablet
-  while `Config.CriminalTablet.access = 'granted'`, [6.5](#65-the-criminal-tablet); it never adds a Supervisor UI
+  while `Config.RealPlayers.criminalTablet.access = 'granted'`, [6.5](#65-the-criminal-tablet); it never adds a Supervisor UI
   screen). Click **Edit** on one and give it to a department
   from a grade (or only some grades), to a Qbox gang from a grade, or to one character by citizen ID. Each change
   saves the setting `Config.Permissions.grants`, is checked by the server and is in the audit log; it works at once.
@@ -589,9 +589,9 @@ Everything else works as shipped. These are the ones owners change most:
 
 | Setting | What it does |
 |---|---|
-| `Config.RealSuspects` | Rules for every case whose suspect is a real player (live crimes and volunteers), with surrender and talk-down. A suspect never gets points, cash or items |
-| `Config.LiveCrime.enabled` | Live crimes from Crimson-Contracts as police cases (`false` as shipped) |
-| `Config.Volunteers.enabled` | Players off duty who volunteer to be the suspect of a police mission (`false` as shipped) |
+| `Config.RealPlayers` | Rules for every case whose suspect is a real player (live crimes and volunteers), with surrender and talk-down. A suspect never gets points, cash or items |
+| `Config.RealPlayers.liveCrime.enabled` | Live crimes from Crimson-Contracts as police cases (`false` as shipped) |
+| `Config.RealPlayers.volunteer.enabled` | Players off duty who volunteer to be the suspect of a police mission (`false` as shipped) |
 
 **Police teamwork**
 
@@ -2126,17 +2126,22 @@ checks the tablet makes), **Give tablet item** (one, when they carry none), **Sh
 Two optional ways to put real players opposite your officers. Both ship **off**, and while they are off nothing
 here changes anything:
 
-- **Live crimes** (`Config.LiveCrime`): when a crime script (Crimson-Contracts) reports a crime with a crew, it
+- **Live crimes** (`Config.RealPlayers.liveCrime`): when a crime script (Crimson-Contracts) reports a crime with a crew, it
   shows on the Dispatch screen as a red **LIVE** call. The unit that claims it works a live case at the reported
   place: **Respond to the reported scene**, **Secure the scene**, then **Detain and book the suspects**. The suspects
   are the real crew members.
-- **Volunteer suspects** (`Config.Volunteers`): a player who is not on police duty types `/crimsonheat` and
+- **Volunteer suspects** (`Config.RealPlayers.volunteer`): a player who is not on police duty types `/crimsonheat` and
   volunteers for an hour. When officers take a mission whose suspect a player can play (Warrant Service's wanted
   person, Street Race Bust's driver, Manhunt's fugitive), he gets a yes/no pop-up; on a yes he plays that suspect
   instead of the NPC.
 
-The rules both share are in `Config.RealSuspects` (contact range, cuffs, bookings, the anti-farm caps). Every key
-is in Admin UI → **Settings** with its description. Staff follow each case on Admin UI → **Real suspects** (under
+Everything for real players is one config section, `Config.RealPlayers`: the rules both modes share sit at its top
+(who can be a suspect, contact range, cuffs, bookings, officer conduct, the anti-farm caps and pair ledger,
+surrender and the staff tools), then one block per mode, `liveCrime` and `volunteer`, each with its own `enabled`
+switch and its own options, and `criminalTablet`. Both modes use the same names for what a case takes part in:
+`typeOfTheDay`, `goals`, `challenge`, `cash` and `items` (all shipped `false`). Every key is in Admin UI →
+**Settings** with its description, in the one **Real players** section (also under the gear of the Real suspects
+screen). Staff follow each case on Admin UI → **Real suspects** (under
 **More**; admins with the `antiFarmOverride` key).
 
 ### 6.1 Owner checklist
@@ -2147,28 +2152,28 @@ Live crimes:
 
 - ☐ Crimson-Contracts sends its lifecycle events: `ContractsConfig.LifecycleEvents = true` in its own config.
   Crimson-Police never needs it; without it there are simply no LIVE calls.
-- ☐ `Config.LiveCrime.sources` lists the scripts allowed to report a crime (shipped: `crimson-contracts`). Any
+- ☐ `Config.RealPlayers.liveCrime.sources` lists the scripts allowed to report a crime (shipped: `crimson-contracts`). Any
   other script's report is ignored with one console warning a minute.
-- ☐ `Config.LiveCrime.types` says which crimes become LIVE calls and whose mission type points they use (`false` =
+- ☐ `Config.RealPlayers.liveCrime.types` says which crimes become LIVE calls and whose mission type points they use (`false` =
   never). Admin test contracts are never LIVE calls.
-- ☐ `Config.LiveCrime.maxLiveRuns` (2) fits how many officers you have; `caseTime` (1800 s) is the longest case.
-- ☐ Points only: a live case pays no cash and rolls no item rewards (`Config.LiveCrime.cash` and `items` stay
+- ☐ `Config.RealPlayers.liveCrime.maxLiveRuns` (2) fits how many officers you have; `caseTime` (1800 s) is the longest case.
+- ☐ Points only: a live case pays no cash and rolls no item rewards (`Config.RealPlayers.liveCrime.cash` and `items` stay
   `false` unless you decide otherwise; switched on, it pays its mission type's payout).
-- ☐ Turn it on: `Config.LiveCrime.enabled = true` (config.lua, or Settings: no restart needed).
+- ☐ Turn it on: `Config.RealPlayers.liveCrime.enabled = true` (config.lua, or Settings: no restart needed).
 
 Volunteers:
 
-- ☐ Pick who may never be a suspect: admins are left out (`Config.RealSuspects.excludeAdmins = true`), and so is
-  anyone with the ace in `Config.RealSuspects.excludeAce` (`add_ace identifier.license:xxx
+- ☐ Pick who may never be a suspect: admins are left out (`Config.RealPlayers.excludeAdmins = true`), and so is
+  anyone with the ace in `Config.RealPlayers.excludeAce` (`add_ace identifier.license:xxx
   crimsonpolice.realsuspect.exclude allow` in server.cfg).
-- ☐ Turn it on: `Config.Volunteers.enabled = true` (config.lua, or Settings: `/crimsonheat` appears without a
+- ☐ Turn it on: `Config.RealPlayers.volunteer.enabled = true` (config.lua, or Settings: `/crimsonheat` appears without a
   restart).
-- ☐ Pick the mission types or missions a volunteer may play: `Config.Volunteers.modes` (per type) or
-  `Config.Volunteers.missionModes` (per mission id). `'players_when_available'` is the safe start: the unit leader
+- ☐ Pick the mission types or missions a volunteer may play: `Config.RealPlayers.volunteer.modes` (per type) or
+  `Config.RealPlayers.volunteer.missionModes` (per mission id). `'players_when_available'` is the safe start: the unit leader
   ticks **Real suspect OK**, a volunteer who fits is asked, else the NPC plays. `'players_only'` offers the
   type only while a volunteer is free. While every mode is `'npc'`, nothing changes.
 - ☐ Admin UI → **Permissions** → **Config health** shows no warning about a mode.
-- ☐ Points only: `Config.Volunteers.payCash` and `payRewards` stay `false` unless you decide otherwise. Volunteers
+- ☐ Points only: `Config.RealPlayers.volunteer.cash` and `payRewards` stay `false` unless you decide otherwise. Volunteers
   are paid only with `Config.FeatureRewards.suspect` on (3.12, fair cases only); another script can reward them too
   from the `volunteerEnded` event ([9](#9-exports-for-other-scripts)).
 
@@ -2179,13 +2184,13 @@ Both:
 - ☐ Tell your staff where the case timeline is (Admin UI → **Real suspects**) and what the three tools do: **Block
   pair**, **Exclude** and **Suspend** (each needs a number of days and a reason, and is in the audit log). **Lift**
   ends one early and **Clear strikes** (Volunteers tab) clears a volunteer's strikes and strike block, each with a
-  reason in the audit log (`Config.RealSuspects.staffLift`, `Config.Volunteers.staffClearStrikes`). The screen shows
-  character names next to citizen IDs (`Config.RealSuspects.staffNames`) and weapon names in the damage ledger
-  (`Config.RealSuspects.weaponNames`); both ship on.
+  reason in the audit log (`Config.RealPlayers.staffLift`, `Config.RealPlayers.volunteer.staffClearStrikes`). The screen shows
+  character names next to citizen IDs (`Config.RealPlayers.staffNames`) and weapon names in the damage ledger
+  (`Config.RealPlayers.weaponNames`); both ship on.
 - ☐ Play one case of each kind on the test server with the in-game checklist (`docs/IN_GAME_CHECKLIST.md`, section
   Real suspects) and watch resmon: idle must stay at 0.02 ms or less.
 
-Undo: set `Config.LiveCrime.enabled` and `Config.Volunteers.enabled` back to `false`. A case that is running ends
+Undo: set `Config.RealPlayers.liveCrime.enabled` and `Config.RealPlayers.volunteer.enabled` back to `false`. A case that is running ends
 by its own rules; nothing new starts.
 
 ### 6.2 Rules for cases with real suspects
@@ -2206,7 +2211,7 @@ For officers:
 - Cuff, wait for the cuffs to hold, then book at a station or the prison. A booking far from a station does not
   count.
 - Let a suspect who gives up give up. Hitting someone who is down or cuffed is never part of the job.
-- Talk first. Within `Config.RealSuspects.surrender.talkRange` (15 m) of a free suspect you are told you can talk
+- Talk first. Within `Config.RealPlayers.surrender.talkRange` (15 m) of a free suspect you are told you can talk
   him down: **Talk them down** in the radial menu asks him to surrender. A suspect who surrenders and is then
   cuffed with no officer hitting him is a **Peaceful arrest** (`peaceful_arrest` in Config.Bonuses, for the whole
   unit), and staff see on the timeline who talked him down.
@@ -2220,13 +2225,13 @@ For suspects (crew members of a live crime and volunteers):
   to stay in. A no or no answer costs nothing; a yes followed by a no-show or walking away is a strike (3 strikes
   in a day block volunteering for a day).
 - Do not stand still to be caught (AFK): an AFK catch counts for nobody and is a strike for a volunteer.
-- Live crimes: you can give up at any time with `/surrender` (`Config.RealSuspects.surrender.command`) while an
+- Live crimes: you can give up at any time with `/surrender` (`Config.RealPlayers.surrender.command`) while an
   officer of your case is within `surrenderRange` (50 m), or say yes when an officer talks you down; you can always
   say no. Once you surrender, stay where you are and keep your hands empty: moving `breakRange` (10 m) away, drawing
   a weapon or getting out of the cuffs ends it, and it runs out after `holdSeconds` (120 s) with no cuff.
 - No combat logging, no exploiting, no friends feeding you police positions from the tablet or the radio.
 - You can stop at any time: `/crimsonheat` → **Stop** (or **Cancel this case**). It is free within
-  `Config.Volunteers.cancelGraceSeconds` (60 s) of your yes and before officers reached you, a strike after that.
+  `Config.RealPlayers.volunteer.cancelGraceSeconds` (60 s) of your yes and before officers reached you, a strike after that.
 
 For staff:
 
@@ -2239,48 +2244,48 @@ For staff:
 ### 6.3 What is built in for fairness
 
 - **No points for hurting players.** Points come from securing the scene, detaining and booking. A suspect cuffed
-  while down counts only `Config.RealSuspects.neutralisedShare` (half) of a detain, one cuffed while AFK counts
+  while down counts only `Config.RealPlayers.neutralisedShare` (half) of a detain, one cuffed while AFK counts
   nothing, and shooting an unarmed suspect or running one over is a penalty (`rs_unarmed_shot`, `rs_ran_over`).
 - **De-escalation counts.** In a live case a suspect can surrender (`/surrender`) or be talked down (**Talk them
   down**, radial menu); the suspect always chooses. A surrender followed by a cuff with no officer hit scores the
   `peaceful_arrest` line (15% of P per suspect, x his share), and the timeline names the officer who talked him down.
-  `Config.RealSuspects.surrender` (on, but only while `Config.LiveCrime.enabled` is on).
-- **No live position.** Officers see the reported place and, every `Config.LiveCrime.lastReportedEvery` seconds
+  `Config.RealPlayers.surrender` (on, but only while `Config.RealPlayers.liveCrime.enabled` is on).
+- **No live position.** Officers see the reported place and, every `Config.RealPlayers.liveCrime.lastReportedEvery` seconds
   (60), each free suspect's **last reported** point. A volunteer driver's point moves every
-  `Config.Volunteers.driverReportEvery` seconds (30); a volunteer at the door or in a search area is never on the
+  `Config.RealPlayers.volunteer.driverReportEvery` seconds (30); a volunteer at the door or in a search area is never on the
   map. The case card says how old the points are.
 - **Consent and opt-out.** A crew member is a suspect only of the crime he chose to commit; a volunteer is asked
   first, every time, and can stop or cancel from his `/crimsonheat` menu. Players in a hospital, the arena or
   another instance, on police duty or AFK are never picked.
-- **Caps against farming.** A suspect is worth points `Config.RealSuspects.maxCatchesPerSuspectDay` (2) times a day
+- **Caps against farming.** A suspect is worth points `Config.RealPlayers.maxCatchesPerSuspectDay` (2) times a day
   (in a crew, one already at the cap when the case opens gives no line; the others still do), the same officer and
   suspect meet again for points only after `pairCooldownHours` (24), and accounts that share a connection or PC are
   flagged.
 - **Staff see everything.** Every case keeps a timeline, the damage ledger and the flags on the Real suspects
-  screen (the last `Config.RealSuspects.casesKept`, 16, closed ones; saved, so a restart keeps them).
+  screen (the last `Config.RealPlayers.casesKept`, 16, closed ones; saved, so a restart keeps them).
 
 ### 6.4 When something does not happen
 
 | Issue | Solution |
 |---|---|
-| A crime gives no LIVE call | `Config.LiveCrime.enabled` is `false`, the crime's key is `false` or missing in `Config.LiveCrime.types`, Crimson-Contracts does not send its events (`ContractsConfig.LifecycleEvents`), or `maxLiveRuns` calls are up. The audit log says **Live crime ignored** with the reason |
-| A crime has no suspects | Every crew member was offline, more than `Config.LiveCrime.suspectRadius` (300 m) from the crime, AFK, on police duty, in a no-start zone or excluded |
-| `/crimsonheat` says it is off | `Config.Volunteers.enabled` is `false`. A player who is refused for another reason is told why (on duty, AFK, excluded, too many strikes) |
+| A crime gives no LIVE call | `Config.RealPlayers.liveCrime.enabled` is `false`, the crime's key is `false` or missing in `Config.RealPlayers.liveCrime.types`, Crimson-Contracts does not send its events (`ContractsConfig.LifecycleEvents`), or `maxLiveRuns` calls are up. The audit log says **Live crime ignored** with the reason |
+| A crime has no suspects | Every crew member was offline, more than `Config.RealPlayers.liveCrime.suspectRadius` (300 m) from the crime, AFK, on police duty, in a no-start zone or excluded |
+| `/crimsonheat` says it is off | `Config.RealPlayers.volunteer.enabled` is `false`. A player who is refused for another reason is told why (on duty, AFK, excluded, too many strikes) |
 | Nobody is ever asked to play a suspect | Every mode is `'npc'`, the unit did not tick **Real suspect OK**, or no volunteer fits (listed for that suspect, not AFK, not down, no recent case with one of the officers) |
-| A cuff did not count | The officer must be on the case and within `Config.RealSuspects.cuffRange` (3.5 m), and the cuffs must hold `custodyHoldSeconds` (30 s). The timeline shows each cuff and why it did not count |
-| `/surrender` or **Talk them down** does nothing | `Config.LiveCrime.enabled` or `Config.RealSuspects.surrender.enabled` is `false`, the player is not a free suspect of a live case (volunteer cases have no surrender), no officer of the case is within `surrenderRange` (50 m), or the officer is not within `talkRange` (15 m) of a free suspect. A new command name needs a restart |
+| A cuff did not count | The officer must be on the case and within `Config.RealPlayers.cuffRange` (3.5 m), and the cuffs must hold `custodyHoldSeconds` (30 s). The timeline shows each cuff and why it did not count |
+| `/surrender` or **Talk them down** does nothing | `Config.RealPlayers.liveCrime.enabled` or `Config.RealPlayers.surrender.enabled` is `false`, the player is not a free suspect of a live case (volunteer cases have no surrender), no officer of the case is within `surrenderRange` (50 m), or the officer is not within `talkRange` (15 m) of a free suspect. A new command name needs a restart |
 | A live case vanished after `restart Crimson-Police` | A restart ends every open case and its run: no row, no points, no pay, no cooldown, and the LIVE calls are gone too (a surrender in progress ends with it). The unit has to be formed again. Closed cases, their timelines, payments, blocks, strikes and your Settings changes are kept. The crime script's next crime makes a new LIVE call |
-| The Real suspects screen is missing | Both features are off, the admin has no `antiFarmOverride` key, or `Config.RealSuspects.adminScreen = false` |
+| The Real suspects screen is missing | Both features are off, the admin has no `antiFarmOverride` key, or `Config.RealPlayers.adminScreen = false` |
 
 ### 6.5 The criminal tablet
 
-A tablet of its own for volunteer suspects (`Config.CriminalTablet`), with a dark street look nothing like
+A tablet of its own for volunteer suspects (`Config.RealPlayers.criminalTablet`), with a dark street look nothing like
 the police tablet (the same buttons, cards and tables as the police tablets, in its own colours). It ships **off** (`enabled = false`): until you turn it on, nothing changes and `/crimsonheat`
-keeps its pop-up menu. It runs on volunteers, so `Config.Volunteers.enabled` must be on too.
+keeps its pop-up menu. It runs on volunteers, so `Config.RealPlayers.volunteer.enabled` must be on too.
 
 - **Open it** with `/crimtab` (`command`, restart to rename it) or an ox_inventory item: paste the
   `crimson_criminal_tablet` entry of `items/ox_inventory_items.lua` into ox_inventory and set
-  `Config.CriminalTablet.item = 'crimson_criminal_tablet'` (shipped `false`: no item). Admin UI → Permissions →
+  `Config.RealPlayers.criminalTablet.item = 'crimson_criminal_tablet'` (shipped `false`: no item). Admin UI → Permissions →
   **Config health** (and one console line at start) warns when that item is not an ox_inventory item. With
   `replaceCommand = true`, `/crimsonheat` opens the tablet instead of its menu for a player who may use it.
 - **Who may use it**: `access = 'everyone'` (shipped) lets every player whose job is not a police job of
@@ -2288,7 +2293,7 @@ keeps its pop-up menu. It runs on volunteers, so `Config.Volunteers.enabled` mus
   grant use it: Admin UI → **Permissions** → **Extra grants** (by Qbox gang and grade, department and grade, or
   citizen ID). Police on duty can never open it, and an open tablet closes when its player goes on police duty.
 - **Home**: agree to the rules, tick the suspects you play and **Get on the list** for
-  `Config.Volunteers.windowMinutes`; while on it: the time left, **Save suspects**, **Renew** and **Get off the list**
+  `Config.RealPlayers.volunteer.windowMinutes`; while on it: the time left, **Save suspects**, **Renew** and **Get off the list**
   (two clicks).
 - **Jobs**: the question police just sent you (the suspect, the mission type, the area, how far, the time to get
   there and to answer). **Accept** is the same yes as the pop-up (the meet point becomes your waypoint); **Decline**
@@ -2332,7 +2337,7 @@ keeps its pop-up menu. It runs on volunteers, so `Config.Volunteers.enabled` mus
 - ☐ Share the rules in [5.14](#514-rules-to-tell-your-officers) with your officers, and the Detach tip in
   [4](#4-settings-to-check-in-your-other-resources) with your dispatchers.
 - ☐ Your anti-cheat allows Bomb Disposal's harmless explosion ([4](#4-settings-to-check-in-your-other-resources)).
-- ☐ Real suspects stay off (`Config.LiveCrime.enabled` and `Config.Volunteers.enabled` ship `false`) until you
+- ☐ Real suspects stay off (`Config.RealPlayers.liveCrime.enabled` and `Config.RealPlayers.volunteer.enabled` ship `false`) until you
   went through the owner checklist and shared the rules in [6](#6-real-suspects-live-crimes-and-volunteers).
 - ☐ Make one backup and try one restore on a test server: Admin UI → **System** → **Backups**
   ([7.3](#73-backups)). A restore ends with "Restart Crimson-Police now"; do that from txAdmin.
@@ -2483,16 +2488,16 @@ extra lines help whoever looks at it.
 | `exports['Crimson-Police']:OpenTablet()` | client | Opens the tablet, with the same officer checks as `/CrimsonPolice` (on duty, department job, not suspended; the item when `requireItem = true`). It works even when `access.command = false` |
 | `exports['Crimson-Police']:GetDepartment(src)` | server | The department key of the player's active job (`'sast'`, `'fib'` ...) or `nil` |
 | `exports['Crimson-Police']:IsOnMission(src)` | server | `true` while the player is on a Crimson-Police mission |
-| `exports['Crimson-Police']:GetAvailablePolice()` | server | Read-only, for crime scripts: the number of on-duty officers who could answer a crime now (on no Crimson-Police mission with `Config.LiveCrime.availablePolice = 'idle'`, every on-duty officer with `'duty'`) and a table `{ [department] = count }`; `nil` while `Config.LiveCrime.enabled = false` (count police your own way then) |
+| `exports['Crimson-Police']:GetAvailablePolice()` | server | Read-only, for crime scripts: the number of on-duty officers who could answer a crime now (on no Crimson-Police mission with `Config.RealPlayers.liveCrime.availablePolice = 'idle'`, every on-duty officer with `'duty'`) and a table `{ [department] = count }`; `nil` while `Config.RealPlayers.liveCrime.enabled = false` (count police your own way then) |
 
-Server-only event for other scripts: `crimson-police:server:liveCrimeEnded` (`Config.LiveCrime.endEvent = true`)
+Server-only event for other scripts: `crimson-police:server:liveCrimeEnded` (`Config.RealPlayers.liveCrime.endEvent = true`)
 when a live case ends, with `{ resource, uid, id, key, result, reason, suspects = { [citizenid] = outcome }, caught,
 officers, endedAt }`: `resource`, `uid`, `id` and `key` are the reporting script's own names for the crime, `result`
 is how the run ended (`completed`, `failed`, `abandoned`), each outcome is `detained`, `booked`, `got_away`, `left`,
 `void` or `stopped`, `caught` counts the detained and booked suspects and `officers` the case's officers. Listen with
 `AddEventHandler` only (never `RegisterNetEvent`, so no client can send it). It carries no server id and no position.
 
-Server-only event for other scripts: `crimson-police:server:volunteerEnded` (`Config.Volunteers.endEvent = true`) when
+Server-only event for other scripts: `crimson-police:server:volunteerEnded` (`Config.RealPlayers.volunteer.endEvent = true`) when
 a mission a volunteer said yes to ends (Crimson-Police pays volunteers only with `Config.FeatureRewards.suspect` on,
 3.12; another script can reward them too), with `{ citizenid, missionId, missionType, role, mode, outcome, dropout,
 engaged, result, reason, officers, endedAt }`: `citizenid` is the volunteer, `role` the suspect he played (`runner`,

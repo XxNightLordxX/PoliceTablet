@@ -22,7 +22,7 @@ export const RS_TOOL_ACTION: Record<RsTool, string> = {
 
 export type RsCaseFilter = 'all' | 'open' | 'flagged' | 'live' | 'volunteer';
 
-// A citizenid the server accepts (modules/opponents/staff: letters, digits, _ and -, at most 50).
+// A citizenid the server accepts (modules/realplayers/staff: letters, digits, _ and -, at most 50).
 export function validCid(v: unknown): v is string {
     return typeof v === 'string' && v.length > 0 && v.length <= 50 && /^[\w-]+$/.test(v);
 }

@@ -109,7 +109,7 @@ local function Statements(pattern)
 end
 
 local flags, audits = {}, {}
-local featureOn = false   -- Config.LiveCrime.enabled after each start (config.lua ships it off)
+local featureOn = false   -- Config.RealPlayers.liveCrime.enabled after each start (config.lua ships it off)
 local function Boot(pairsFirst)
     H.boot({ side = 'server', realLocale = true })
     _G.GetConvar = function(_, default) return default end
@@ -154,10 +154,10 @@ local function Boot(pairsFirst)
     H.load('modules/integrations/qbx/server.lua')
     H.load('modules/schedule/server.lua')
     -- fxmanifest's globs load the two files in no fixed order: both orders work
-    if pairsFirst then H.load('modules/opponents/pairs/server.lua') end
-    H.load('modules/opponents/server.lua')
-    if not pairsFirst then H.load('modules/opponents/pairs/server.lua') end
-    Config.LiveCrime.enabled = featureOn
+    if pairsFirst then H.load('modules/realplayers/pairs.lua') end
+    H.load('modules/realplayers/opponents.lua')
+    if not pairsFirst then H.load('modules/realplayers/pairs.lua') end
+    Config.RealPlayers.liveCrime.enabled = featureOn
     H.step(0)
     return CP.Opponents
 end
@@ -174,14 +174,14 @@ end
 
 local bootAt = H.time
 local Opp = Boot(false)
-local RS = Config.RealSuspects
+local RS = Config.RealPlayers
 
 -- ============================================================================
 --                       1. THE SELF RULE (Opp.selfBlock)
 -- ============================================================================
 
 do
-    H.eq(Config.LiveCrime.enabled, false, 'live crimes ship off')
+    H.eq(Config.RealPlayers.liveCrime.enabled, false, 'live crimes ship off')
     H.eq(table.concat(RS.identityMatch.block, ','), 'license,license2,discord,fivem,steam,xbl,live',
         'identityMatch.block ships the account kinds')
     H.eq(table.concat(RS.identityMatch.flag, ','), 'ip,token', 'identityMatch.flag ships ip and token')
@@ -270,7 +270,7 @@ end
 -- ============================================================================
 
 featureOn = true
-Config.LiveCrime.enabled = true
+Config.RealPlayers.liveCrime.enabled = true
 
 local runSeq = 0
 local cidOfSrc = { [1] = A, [4] = D }
@@ -611,7 +611,7 @@ do
             now - 60,
             now - 3 * DAY,
         })
-    H.eq(Config.RealSuspects.pairLedgerDays, 30, 'pairLedgerDays ships 30')
+    H.eq(Config.RealPlayers.pairLedgerDays, 30, 'pairLedgerDays ships 30')
     H.advance(61000, 1000)
     local left = {}
     for _, r in ipairs(H.sql('SELECT kind, run_uuid FROM cp_pvp_pairs ORDER BY id')) do
@@ -664,7 +664,7 @@ do
     H.eq(Opp.lastPoliceAt(D), H.time, 'leaving the department job (off duty): lastPoliceAt now')
 
     -- with both features off a duty change is kept in memory only
-    Config.LiveCrime.enabled = false
+    Config.RealPlayers.liveCrime.enabled = false
     H.time = H.time + 60
     players[1].PlayerData.job.onduty = false
     TriggerEvent('QBCore:Server:SetDuty', 1, false)

@@ -226,12 +226,12 @@ Config.Permissions = {
     builderTeleport = {},
     -- Extra grants (Admin UI -> Permissions -> Extra grants): a power for people who are not supervisors, by power key
     -- (a key of supervisor above, builderTeleport, fieldTraining = pair and unpair field training, or criminalTablet,
-    -- the criminal tablet while Config.CriminalTablet.access is 'granted'). Each power may name departments from a
-    -- grade, e.g. departments = { sast = { minGrade = 3 } } (or { grades = { 3, 5 } }), Qbox gangs the same way,
-    -- e.g. gangs = { ballas = { minGrade = 2 } }, and single characters by their citizenid, e.g. the list
-    -- of citizenids = { 'ABC12345' }. A power switched off above stays off for everyone, an admin-only action can
-    -- never be granted and admins still come only from AdminAce and QboxAdmins. Empty = only supervisors (and the
-    -- builderTeleport grades), as before
+    -- the criminal tablet while Config.RealPlayers.criminalTablet.access is 'granted'). Each power may name departments
+    -- from a grade, e.g. departments = { sast = { minGrade = 3 } } (or { grades = { 3, 5 } }), Qbox gangs the same way,
+    -- e.g. gangs = { ballas = { minGrade = 2 } }, and single characters by their citizenid, e.g. the list of citizenids
+    -- = { 'ABC12345' }. A power switched off above stays off for everyone, an admin-only action can never be granted
+    -- and admins still come only from AdminAce and QboxAdmins. Empty = only supervisors (and the builderTeleport
+    -- grades), as before
     grants = {},
     -- Always admin-only, whatever is set above: single-mission payouts, clearing
     -- admin payouts, manual awards (apart from the awardPoints Mission control), disputes
@@ -915,7 +915,7 @@ Config.Downed = {
 -- ============================================================================
 --                          POLICE ACTIONS AND CUSTODY
 -- ============================================================================
--- See also Part 3 (Player vs police): a real suspect's cuffs and detain are timed in Config.RealSuspects.
+-- See also Part 3 (Player vs police): a real suspect's cuffs and detain are timed in Config.RealPlayers.
 
 -- What officers do with the people and cars of a mission (talk, frisk, search, cite, arrest, impound) and the vans
 -- that come for them. Usually changed here: times (how long each action takes) and the chances.
@@ -1289,19 +1289,22 @@ Config.Builder = {
 
 -- ############################################################################
 --                          PART 3 · PLAYER VS POLICE
--- Real players as suspects: the rules for every such case, live crimes and volunteer suspects.
--- Usually changed here: LiveCrime.enabled, Volunteers.enabled and CriminalTablet.enabled (all ship off), once your
--- server is ready for criminal players to take part.
+-- Real players as suspects, in one section: the rules every such case shares, then its two modes (live crimes and
+-- volunteer suspects) and the criminal tablet volunteers can use.
+-- Usually changed here: RealPlayers.liveCrime.enabled, RealPlayers.volunteer.enabled and
+-- RealPlayers.criminalTablet.enabled (all ship off), once your server is ready for criminal players to take part.
 -- ############################################################################
 
 -- ============================================================================
---                    REAL SUSPECTS (rules for real players)
+--                                 REAL PLAYERS
 -- ============================================================================
--- Rules for every case where the suspect is a real player instead of an NPC: a LIVE crime (Config.LiveCrime) or a
--- mission played against a volunteer (Config.Volunteers). Nothing here does anything while both are off.
--- Crimson-Police never tells officers who a suspect is, and gives him nothing unless Config.FeatureRewards.suspect
--- is on (a volunteer paid for a fair case).
-Config.RealSuspects = {
+-- Every case where the suspect is a real player instead of an NPC, in one place. Two modes: liveCrime (a real crime
+-- Crimson-Contracts reports becomes a LIVE call) and volunteer (a player volunteers to play a mission's suspect), each
+-- with its own switch. The rules at the top are shared by both modes: who can be a suspect, the proof the server
+-- checks, officer conduct, the caps and the pair ledger (anti-farm), surrender and the staff tools of the Real suspects
+-- screen. Nothing here does anything while both modes are off. Crimson-Police never tells officers who a suspect is,
+-- and gives him nothing unless Config.FeatureRewards.suspect is on (a volunteer paid for a fair case).
+Config.RealPlayers = {
     -- The NPC-mission rules that do not fit a fight with a real player (each can be set back). 'normal' = an
     -- officer's own shots-fired, person-down and EMS calls go out like any officer's, so backup can come; 'silenced'
     -- = the NPC-mission rule (no alerts)
@@ -1424,10 +1427,10 @@ Config.RealSuspects = {
     },
     fastCatchSeconds = 60,           -- seconds: a detain this soon after the case started is a warning sign
     pairLedgerDays = 30,             -- days the pair ledger keeps case rows (admin blocks stay until they expire)
-    -- Surrender and Talk them down in a live case (Config.LiveCrime; nothing while live crimes are off). A suspect
-    -- gives himself up with the command below, or says yes when an officer of the case close to him uses Talk them
-    -- down (radial menu); the suspect always chooses. A surrendered suspect then detained with no officer hit on him
-    -- scores the peaceful_arrest line (Config.Bonuses), and the case timeline shows who talked him down
+    -- Surrender and Talk them down in a live case (Config.RealPlayers.liveCrime; nothing while live crimes are off). A
+    -- suspect gives himself up with the command below, or says yes when an officer of the case close to him uses Talk
+    -- them down (radial menu); the suspect always chooses. A surrendered suspect then detained with no officer hit on
+    -- him scores the peaceful_arrest line (Config.Bonuses), and the case timeline shows who talked him down
     surrender = {
         enabled = true,              -- true = the surrender command and Talk them down work in live cases
         command = 'surrender',       -- the suspect's chat command (without the /)
@@ -1438,197 +1441,194 @@ Config.RealSuspects = {
         holdSeconds = 120,           -- seconds a surrender lasts with no cuff before it lapses
         breakRange = 10.0,           -- metres: a surrendered suspect who moves this far from where he gave up ends it
     },
-}
-
--- ============================================================================
---                            LIVE CRIMES (option A)
--- ============================================================================
--- A live crime is a real crime that Crimson-Contracts reports once its police alert goes out; the crew that started
--- the contract are the suspects. It shows as a red LIVE call on the Dispatch screen; officers who claim it respond
--- to the real crew and earn points for securing the scene, detaining and booking the suspects (the shares are the
--- live_* entries in Config.Bonuses). Crimson-Contracts needs ContractsConfig.LifecycleEvents = true.
-Config.LiveCrime = {
-    enabled = false,                 -- true = reported crimes become LIVE calls on the Dispatch screen
-    -- false = officers on a live case may leave the GPS route to chase; true = the normal route rule
-    -- (Config.Route.required)
-    requireRoute = false,
-    sources = { 'crimson-contracts' },  -- the only scripts allowed to report a crime
-    types = {                           -- which crimes become LIVE calls, and the mission type whose points they use
-        warehouse_burglary = 'investigation',
-        container_heist = 'investigation',
-        hostile_drug_pickup = 'tactical',
-        drug_lab_raid = 'tactical',
-        weapon_shipment = 'tactical',
-        prisoner_ambush = 'tactical',
-        atm_robbery = false,         -- false = never a LIVE call (a solo ATM hack has no crew to track)
+    -- Live crimes (option A): a live crime is a real crime that Crimson-Contracts reports once its police alert goes
+    -- out; the crew that started the contract are the suspects. It shows as a red LIVE call on the Dispatch screen;
+    -- officers who claim it respond to the real crew and earn points for securing the scene, detaining and booking the
+    -- suspects (the shares are the live_* entries in Config.Bonuses). Crimson-Contracts needs
+    -- ContractsConfig.LifecycleEvents = true.
+    liveCrime = {
+        enabled = false,                 -- true = reported crimes become LIVE calls on the Dispatch screen
+        -- false = officers on a live case may leave the GPS route to chase; true = the normal route rule
+        -- (Config.Route.required)
+        requireRoute = false,
+        sources = { 'crimson-contracts' },  -- the only scripts allowed to report a crime
+        -- which crimes become LIVE calls, and the mission type whose points they use
+        types = {
+            warehouse_burglary = 'investigation',
+            container_heist = 'investigation',
+            hostile_drug_pickup = 'tactical',
+            drug_lab_raid = 'tactical',
+            weapon_shipment = 'tactical',
+            prisoner_ambush = 'tactical',
+            atm_robbery = false,         -- false = never a LIVE call (a solo ATM hack has no crew to track)
+        },
+        suspectRadius = 300.0,           -- crew members further than this from the crime at the alert are not suspects
+        -- seconds a LIVE call stays open before it lapses (the crime's end lapses it too)
+        offerTime = 300,
+        maxLiveRuns = 2,                 -- LIVE calls and live cases at once; a crime past this gets no LIVE call
+        caseTime = 1800,                 -- seconds a live case lasts at most; it then ends with the points earned
+        -- true = a unit of 2+ answers the ready check before its live case opens, like a mission; false = the case
+        -- opens at once (a real crime does not wait)
+        readyCheck = false,
+        -- true = an officer with a type cooldown (he abandoned a mission of that type) can't claim a LIVE call of that
+        -- type, and leaving a live case early starts that cooldown; false = live cases ignore type cooldowns
+        typeCooldown = false,
+        -- true = LIVE calls can still be claimed while a Cross-Department Mission runs (its lock stops missions only);
+        -- false = the Cross-Department lock stops live cases too
+        duringOperation = true,
+        -- Backup: true = an on-duty officer on no mission who marks himself responding to the crime's own SC-Dispatch
+        -- call, reaches the scene or cuffs a suspect gets a pop-up to join the live case; false = only the unit that
+        -- claimed the LIVE call works the case
+        backup = true,
+        maxOfficers = 6,                 -- officers on one live case at most (the unit that claimed it counts)
+        joinOfferSeconds = 30,           -- seconds the join pop-up waits for an answer
+        -- The officers' tablet: true = a LIVE line on the unit's ready check and a case card on Active Mission (the
+        -- three steps, the suspect count and when the "last reported" points were taken; never a suspect's state or a
+        -- live position); false = the case shows like any mission
+        caseCard = true,
+        -- true = the result card lists each suspect's outcome by label (Suspect A: booked, Suspect B: got away) once
+        -- the case is over; false = no outcomes on the result card
+        resultOutcomes = true,
+        -- Results for other scripts: true = when a live case ends, Crimson-Police sends the server-only event
+        -- crimson-police:server:liveCrimeEnded (the crime, how the case ended and each suspect's outcome); false = no
+        -- event
+        endEvent = true,
+        -- Who the export GetAvailablePolice counts: 'idle' = on-duty officers on no mission (they could answer a crime
+        -- now); 'duty' = every on-duty officer. The export answers nil while enabled is false
+        availablePolice = 'idle',
+        -- The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and book the
+        -- suspects. Metres around the reported place that count as being at the scene
+        sceneRadius = 75.0,
+        -- seconds officers must hold the scene to secure it (0 = reaching it is enough)
+        secureSeconds = 60,
+        -- Seconds between the "last reported" map points of suspects still free (never a live position; 0 = no points)
+        lastReportedEvery = 60,
+        -- Seconds a case stays open once no suspect is left to work (all booked, lost, left or void) before it ends
+        deadCaseSeconds = 30,
+        -- Points of a live case: true = only its live lines (scene secured, each detain and booking x the suspect's
+        -- share) and its conduct penalties; false = the mission type's points plus those lines, like a mission
+        linesOnly = true,
+        -- Which team sets a live case's tier (the points and cash multiplier of Config.Scaling): 'crew' = the number of
+        -- suspects at the alert; 'officers' = the officers on the case, like a mission
+        tier = 'crew',
+        typeOfTheDay = false,            -- true = a live case of today's Type of the Day gets its points multiplier too
+        goals = false,                   -- true = live cases count for the officers' daily and weekly goals
+        challenge = false,               -- true = live cases count for the department challenge and the weekly bounty
+        -- Money: true = a live case pays the officers cash like a mission of its type (its Config.MissionTypes payout,
+        -- so the money is set already); false = points only. Ships off
+        cash = false,
+        items = false,                   -- true = a live case rolls the item rewards of its type too (Config.Rewards)
     },
-    suspectRadius = 300.0,           -- crew members further than this from the crime at the alert are not suspects
-    offerTime = 300,                 -- seconds a LIVE call stays open before it lapses (the crime's end lapses it too)
-    maxLiveRuns = 2,                 -- LIVE calls and live cases at once; a crime past this gets no LIVE call
-    caseTime = 1800,                 -- seconds a live case lasts at most; it then ends with the points earned
-    -- true = a unit of 2+ answers the ready check before its live case opens, like a mission; false = the case
-    -- opens at once (a real crime does not wait)
-    readyCheck = false,
-    -- true = an officer with a type cooldown (he abandoned a mission of that type) can't claim a LIVE call of that
-    -- type, and leaving a live case early starts that cooldown; false = live cases ignore type cooldowns
-    typeCooldown = false,
-    -- true = LIVE calls can still be claimed while a Cross-Department Mission runs (its lock stops missions only);
-    -- false = the Cross-Department lock stops live cases too
-    duringOperation = true,
-    -- Backup: true = an on-duty officer on no mission who marks himself responding to the crime's own SC-Dispatch
-    -- call, reaches the scene or cuffs a suspect gets a pop-up to join the live case; false = only the unit that
-    -- claimed the LIVE call works the case
-    backup = true,
-    maxOfficers = 6,                 -- officers on one live case at most (the unit that claimed it counts)
-    joinOfferSeconds = 30,           -- seconds the join pop-up waits for an answer
-    -- The officers' tablet: true = a LIVE line on the unit's ready check and a case card on Active Mission (the
-    -- three steps, the suspect count and when the "last reported" points were taken; never a suspect's state or a
-    -- live position); false = the case shows like any mission
-    caseCard = true,
-    -- true = the result card lists each suspect's outcome by label (Suspect A: booked, Suspect B: got away) once the
-    -- case is over; false = no outcomes on the result card
-    resultOutcomes = true,
-    -- Results for other scripts: true = when a live case ends, Crimson-Police sends the server-only event
-    -- crimson-police:server:liveCrimeEnded (the crime, how the case ended and each suspect's outcome); false = no event
-    endEvent = true,
-    -- Who the export GetAvailablePolice counts: 'idle' = on-duty officers on no mission (they could answer a crime
-    -- now); 'duty' = every on-duty officer. The export answers nil while enabled is false
-    availablePolice = 'idle',
-    -- The live case (officers who claimed a LIVE call): Respond, Secure the scene, then Detain and book the
-    -- suspects. Metres around the reported place that count as being at the scene
-    sceneRadius = 75.0,
-    secureSeconds = 60,              -- seconds officers must hold the scene to secure it (0 = reaching it is enough)
-    -- Seconds between the "last reported" map points of suspects still free (never a live position; 0 = no points)
-    lastReportedEvery = 60,
-    -- Seconds a case stays open once no suspect is left to work (all booked, lost, left or void) before it ends
-    deadCaseSeconds = 30,
-    -- Points of a live case: true = only its live lines (scene secured, each detain and booking x the suspect's
-    -- share) and its conduct penalties; false = the mission type's points plus those lines, like a mission
-    linesOnly = true,
-    -- Which team sets a live case's tier (the points and cash multiplier of Config.Scaling): 'crew' = the number of
-    -- suspects at the alert; 'officers' = the officers on the case, like a mission
-    tier = 'crew',
-    typeOfTheDay = false,            -- true = a live case of today's Type of the Day gets its points multiplier too
-    goals = false,                   -- true = live cases count for the officers' daily and weekly goals
-    challenge = false,               -- true = live cases count for the department challenge and the weekly bounty
-    -- Money: true = a live case pays the officers cash like a mission of its type (its Config.MissionTypes payout,
-    -- so the money is set already); false = points only. Ships off
-    cash = false,
-    items = false,                   -- true = a live case rolls the item rewards of its type too (Config.Rewards)
-}
-
--- ============================================================================
---                     VOLUNTEER SUSPECTS (options B and C)
--- ============================================================================
--- A player who is not on police duty can volunteer, with the command below, to be the suspect of a police tablet
--- mission for an hour. When officers take a mission whose suspect a real player can play (Warrant Service's wanted
--- person, Street Race Bust's driver, Manhunt's fugitive) and a volunteer fits, he gets a yes/no pop-up; if he says
--- yes he plays that suspect instead of the NPC. Volunteers see pop-ups, notifications and a menu (or the criminal
--- tablet below, once it is on); they are paid only with Config.FeatureRewards.suspect on. Set a mode per mission
--- type below: while every mode is 'npc', nothing changes even with enabled = true.
-Config.Volunteers = {
-    enabled = false,                 -- true = players can volunteer with the command below
-    -- The chat command (without the /) a player volunteers with: it asks him to agree to the rules and pick the
-    -- suspects he will play, and while he volunteers it opens a menu to renew, change them or stop (restart to change)
-    command = 'crimsonheat',
-    windowMinutes = 60,              -- minutes a volunteer stays on the list; he can renew it from the menu
-    -- A volunteer who says yes and then does not show up or walks away from the case gets a strike. This many
-    -- strikes within strikeHours stop that player, on every character, from volunteering for blockHours
-    strikes = 3,
-    strikeHours = 24,                -- hours a strike counts towards the block
-    blockHours = 24,                 -- hours a player who reached the strikes can't volunteer
-    -- true = strikes and strike blocks are saved (the database or the saves folder), so a restart keeps them; false =
-    -- memory only, a restart clears them. The volunteer list is never saved: after a restart a player volunteers again
-    saveStrikes = true,
-    -- true = admins can clear a player's strikes and strike block from the Real suspects Volunteers tab (with a
-    -- reason, in the audit log); false = they run out on their own
-    staffClearStrikes = true,
-    -- Who plays the suspect of a mission a volunteer can play, per mission type: 'npc' = always the NPC (as today);
-    -- 'players_when_available' = when the unit ticks "Real suspect OK" on the Mission Board and a volunteer who
-    -- fits is online, he is asked to play the suspect, else the NPC plays him; 'players_only' = the type's missions
-    -- are offered only while a volunteer who fits is free, to a unit that ticks "Real suspect OK", and its draw
-    -- takes only missions a volunteer can play. A mission named in missionModes below follows its own mode instead
-    modes = {
-        patrol = 'npc',
-        training = 'npc',
-        investigation = 'npc',
-        tactical = 'npc',
+    -- Volunteer suspects (options B and C): a player who is not on police duty can volunteer, with the command below,
+    -- to be the suspect of a police tablet mission for an hour. When officers take a mission whose suspect a real
+    -- player can play (Warrant Service's wanted person, Street Race Bust's driver, Manhunt's fugitive) and a volunteer
+    -- fits, he gets a yes/no pop-up; if he says yes he plays that suspect instead of the NPC. Volunteers see pop-ups,
+    -- notifications and a menu (or the criminal tablet below, once it is on); they are paid only with
+    -- Config.FeatureRewards.suspect on. Set a mode per mission type below: while every mode is 'npc', nothing changes
+    -- even with enabled = true.
+    volunteer = {
+        enabled = false,                 -- true = players can volunteer with the command below
+        -- The chat command (without the /) a player volunteers with: it asks him to agree to the rules and pick the
+        -- suspects he will play, and while he volunteers it opens a menu to renew, change them or stop (restart to
+        -- change)
+        command = 'crimsonheat',
+        windowMinutes = 60,              -- minutes a volunteer stays on the list; he can renew it from the menu
+        -- A volunteer who says yes and then does not show up or walks away from the case gets a strike. This many
+        -- strikes within strikeHours stop that player, on every character, from volunteering for blockHours
+        strikes = 3,
+        strikeHours = 24,                -- hours a strike counts towards the block
+        blockHours = 24,                 -- hours a player who reached the strikes can't volunteer
+        -- true = strikes and strike blocks are saved (the database or the saves folder), so a restart keeps them; false
+        -- = memory only, a restart clears them. The volunteer list is never saved: after a restart a player volunteers
+        -- again
+        saveStrikes = true,
+        -- true = admins can clear a player's strikes and strike block from the Real suspects Volunteers tab (with a
+        -- reason, in the audit log); false = they run out on their own
+        staffClearStrikes = true,
+        -- Who plays the suspect of a mission a volunteer can play, per mission type: 'npc' = always the NPC (as today);
+        -- 'players_when_available' = when the unit ticks "Real suspect OK" on the Mission Board and a volunteer who
+        -- fits is online, he is asked to play the suspect, else the NPC plays him; 'players_only' = the type's missions
+        -- are offered only while a volunteer who fits is free, to a unit that ticks "Real suspect OK", and its draw
+        -- takes only missions a volunteer can play. A mission named in missionModes below follows its own mode instead
+        modes = {
+            patrol = 'npc',
+            training = 'npc',
+            investigation = 'npc',
+            tactical = 'npc',
+        },
+        -- The same choice for single missions, by mission id (beats its type's mode), e.g. { warrant_service =
+        -- 'players_only' }. Empty = every mission follows its type
+        missionModes = {},
+        -- Asking: the volunteers who fit get a yes/no pop-up one at a time (the one a 'players_only' accept held
+        -- first). A no or no answer is never a strike
+        askSeconds = 30,                 -- seconds the pop-up waits for an answer before the next volunteer is asked
+        askTries = 3,                    -- volunteers asked per mission before the NPC plays the suspect
+        -- After a yes he has this many seconds to reach the suspect's starting point (it is set as his map waypoint);
+        -- not there in time = a no-show (a strike) unless officers already reached him
+        travelSeconds = 300,
+        meetRadius = 25.0,               -- metres from the starting point that count as being in position
+        -- Seconds after his yes in which his own Cancel this case is no strike (once officers reached him it always is)
+        cancelGraceSeconds = 60,
+        -- When the volunteer who said yes drops out before officers reach him (no-show, Cancel this case, logs off):
+        -- 'npc' = the NPC plays the suspect as if nobody had said yes; 'end' = the mission ends (see voidRun). A
+        -- 'players_only' mission, and any mission once officers reached him, always ends
+        onVoid = 'npc',
+        -- How such a mission ends: 'cancelled' = Abandoned with no cooldown, penalty or pay; 'keep_earned' = Completed
+        -- with what the officers earned so far (the points of their lines only: no base points, end-of-run bonuses or
+        -- mission cash)
+        voidRun = 'cancelled',
+        -- A volunteer who is caught while AFK (he did not move for a while, Config.RealPlayers): true = his part is
+        -- void (a strike, and the mission ends as in voidRun); false = the catch counts like any other catch
+        afkCatchVoids = true,
+        -- Warrant Service's armed associates while a volunteer plays the wanted person at the door: false = they stay
+        -- away (the NPCs would shoot him too); true = they come out at the knock as usual
+        doorAssociates = false,
+        -- Street Race Bust's other NPC racers (and the other suspect cars of a stop pursuit) while a volunteer drives
+        -- one in his own car: false = his car is the only suspect car; true = the others still come (he takes one car's
+        -- place)
+        driverNpcCars = false,
+        -- Seconds between the map's "last reported" points of a volunteer driver once he is in position (where the
+        -- server last saw him, never a live position); 0 = no points, the map keeps the starting point
+        driverReportEvery = 30,
+        -- Manhunt's other NPC fugitives (more officers bring more) while a volunteer hides as one of them: false = he
+        -- is the only fugitive; true = the others still hide (he takes one fugitive's place)
+        fugitiveNpcs = false,
+        -- Seconds a volunteer fugitive may stay outside the search circle (the red circle on his own map; it shrinks
+        -- towards where the server last saw him at each clue) before his part is void (a strike); 0 = no circle rule
+        fugitiveOutSeconds = 30,
+        -- Results for other scripts: true = when a mission a volunteer said yes to ends, Crimson-Police sends the
+        -- server-only event crimson-police:server:volunteerEnded (the mission, the suspect he played, how it ended and
+        -- his outcome, by his citizenid; another script can reward him); false = no event
+        endEvent = true,
+        -- What a mission played against a volunteer (once he said yes) takes part in; true = like any other mission
+        typeOfTheDay = false,            -- true = today's Type of the Day points multiplier applies to it too
+        goals = false,                   -- true = it counts for the officers' daily and weekly goals
+        challenge = false,               -- true = it counts for the department challenge and the weekly bounty
+        -- Money: true = it pays the officers cash like any mission of its type (its Config.MissionTypes payout, so the
+        -- money is set already); false = points only (its cash is 0). Ships off. The volunteer's own pay is
+        -- Config.FeatureRewards.suspect
+        cash = false,
+        items = false,                   -- true = it rolls the item rewards of its type too (Config.Rewards)
     },
-    -- The same choice for single missions, by mission id (beats its type's mode), e.g. { warrant_service =
-    -- 'players_only' }. Empty = every mission follows its type
-    missionModes = {},
-    -- Asking: the volunteers who fit get a yes/no pop-up one at a time (the one a 'players_only' accept held first).
-    -- A no or no answer is never a strike
-    askSeconds = 30,                 -- seconds the pop-up waits for an answer before the next volunteer is asked
-    askTries = 3,                    -- volunteers asked per mission before the NPC plays the suspect
-    -- After a yes he has this many seconds to reach the suspect's starting point (it is set as his map waypoint); not
-    -- there in time = a no-show (a strike) unless officers already reached him
-    travelSeconds = 300,
-    meetRadius = 25.0,               -- metres from the starting point that count as being in position
-    -- Seconds after his yes in which his own Cancel this case is no strike (once officers reached him it always is)
-    cancelGraceSeconds = 60,
-    -- When the volunteer who said yes drops out before officers reach him (no-show, Cancel this case, logs off):
-    -- 'npc' = the NPC plays the suspect as if nobody had said yes; 'end' = the mission ends (see voidRun). A
-    -- 'players_only' mission, and any mission once officers reached him, always ends
-    onVoid = 'npc',
-    -- How such a mission ends: 'cancelled' = Abandoned with no cooldown, penalty or pay; 'keep_earned' = Completed
-    -- with what the officers earned so far (the points of their lines only: no base points, end-of-run bonuses or
-    -- mission cash)
-    voidRun = 'cancelled',
-    -- A volunteer who is caught while AFK (he did not move for a while, Config.RealSuspects): true = his part is
-    -- void (a strike, and the mission ends as in voidRun); false = the catch counts like any other catch
-    afkCatchVoids = true,
-    -- Warrant Service's armed associates while a volunteer plays the wanted person at the door: false = they stay
-    -- away (the NPCs would shoot him too); true = they come out at the knock as usual
-    doorAssociates = false,
-    -- Street Race Bust's other NPC racers (and the other suspect cars of a stop pursuit) while a volunteer drives one
-    -- in his own car: false = his car is the only suspect car; true = the others still come (he takes one car's place)
-    driverNpcCars = false,
-    -- Seconds between the map's "last reported" points of a volunteer driver once he is in position (where the server
-    -- last saw him, never a live position); 0 = no points, the map keeps the starting point
-    driverReportEvery = 30,
-    -- Manhunt's other NPC fugitives (more officers bring more) while a volunteer hides as one of them: false = he is
-    -- the only fugitive; true = the others still hide (he takes one fugitive's place)
-    fugitiveNpcs = false,
-    -- Seconds a volunteer fugitive may stay outside the search circle (the red circle on his own map; it shrinks
-    -- towards where the server last saw him at each clue) before his part is void (a strike); 0 = no circle rule
-    fugitiveOutSeconds = 30,
-    -- Results for other scripts: true = when a mission a volunteer said yes to ends, Crimson-Police sends the
-    -- server-only event crimson-police:server:volunteerEnded (the mission, the suspect he played, how it ended and
-    -- his outcome, by his citizenid; another script can reward him); false = no event
-    endEvent = true,
-    -- What a mission played against a volunteer (once he said yes) takes part in; true = like any other mission
-    typeOfTheDay = false,            -- true = today's Type of the Day points multiplier applies to it too
-    goals = false,                   -- true = it counts for the officers' daily and weekly goals
-    challenge = false,               -- true = it counts for the department challenge and the weekly bounty
-    -- Money: true = it pays the officers cash like any mission of its type (its Config.MissionTypes payout, so the
-    -- money is set already); false = points only (its cash is 0). Ships off. The volunteer's own pay is
-    -- Config.FeatureRewards.suspect
-    payCash = false,
-    payRewards = false,              -- true = it rolls the item rewards of its type too (Config.Rewards)
-}
-
--- ============================================================================
---                               CRIMINAL TABLET
--- ============================================================================
--- A tablet of its own for players who play real suspects, with a dark street look (nothing like the police
--- tablet): Home (volunteer on or off, the hour window), Jobs (the suspect police want played right now: the mission
--- type, the suspect, the area; Accept is the same yes as the pop-up), Active (the meet point, the rules and the
--- time left, give up), History (cases since the last restart, outcomes and strikes with when they run out) and
--- Rules. It runs on Volunteer suspects above (Config.Volunteers.enabled must be on too) and never shows where an
--- officer is. Police on duty can never open it.
-Config.CriminalTablet = {
-    enabled = false,                 -- true = players can open the criminal tablet with the command or item below
-    command = 'crimtab',             -- the chat command (without the /) that opens it (restart to change)
-    -- An ox_inventory item name that also opens it (items/ox_inventory_items.lua has an entry to paste), or false
-    item = false,
-    -- Who may use it: 'everyone' = every player whose job is not a police job (Config.Departments); 'granted' =
-    -- only the players named by the criminalTablet extra grant (Admin UI -> Permissions -> Extra grants)
-    access = 'everyone',
-    -- true = the volunteer command (Config.Volunteers.command) opens this tablet for a player who may use it,
-    -- instead of the pop-up menu; false = the command keeps its menu
-    replaceCommand = false,
-    historySize = 20,                -- past cases each player's History keeps (memory only: a restart clears it)
+    -- The criminal tablet: a tablet of its own for players who play real suspects, with a dark street look (nothing
+    -- like the police tablet): Home (volunteer on or off, the hour window), Jobs (the suspect police want played right
+    -- now: the mission type, the suspect, the area; Accept is the same yes as the pop-up), Active (the meet point, the
+    -- rules and the time left, give up), History (cases since the last restart, outcomes and strikes with when they run
+    -- out) and Rules. It runs on Volunteer suspects above (Config.RealPlayers.volunteer.enabled must be on too) and
+    -- never shows where an officer is. Police on duty can never open it.
+    criminalTablet = {
+        enabled = false,                 -- true = players can open the criminal tablet with the command or item below
+        command = 'crimtab',             -- the chat command (without the /) that opens it (restart to change)
+        -- An ox_inventory item name that also opens it (items/ox_inventory_items.lua has an entry to paste), or false
+        item = false,
+        -- Who may use it: 'everyone' = every player whose job is not a police job (Config.Departments); 'granted' =
+        -- only the players named by the criminalTablet extra grant (Admin UI -> Permissions -> Extra grants)
+        access = 'everyone',
+        -- true = the volunteer command (Config.RealPlayers.volunteer.command) opens this tablet for a player who may
+        -- use it, instead of the pop-up menu; false = the command keeps its menu
+        replaceCommand = false,
+        historySize = 20,                -- past cases each player's History keeps (memory only: a restart clears it)
+    },
 }
 
 -- ############################################################################
@@ -1896,7 +1896,7 @@ Config.Leaderboard = {
     topN = 25,               -- rows a board shows
     weekStartsOn = 'monday',
     seasonWeeks = 8,         -- suggested season length for "weeks left"; an admin ends the season
-    -- Rank by tabs; 'live_catches' (suspects detained in live cases, Config.LiveCrime) can be added
+    -- Rank by tabs; 'live_catches' (suspects detained in live cases, Config.RealPlayers.liveCrime) can be added
     metrics = { 'points', 'missions', 'arrests', 'impounds', 'citations', 'rescues', 'calls', 'judgement' },
     minDecisions = 10,       -- Judgement: decisions needed in the window
     announceWeekly = true,   -- the weekly top 3 on Home and the board webhook
@@ -2311,8 +2311,8 @@ Config.Rewards = {
 -- An items list holds { item = 'water', count = 1, chance = 1.0, value = 20 } entries: count a number or { min, max
 -- }, chance 0-1 for each payment, value in dollars for Config.Rewards.dailyValueCap.
 Config.FeatureRewards = {
-    -- The volunteer suspect (the criminal player of Config.Volunteers), paid once per case, and only for a case the
-    -- server saw end fairly: officers reached him, he did not drop out or go AFK and his part was not void
+    -- The volunteer suspect (the criminal player of Config.RealPlayers.volunteer), paid once per case, and only for a
+    -- case the server saw end fairly: officers reached him, he did not drop out or go AFK and his part was not void
     suspect = {
         enabled = false,             -- true = a volunteer suspect is paid for a fair case
         account = 'cash',            -- 'bank' | 'cash' | 'item' (the money is the item named in moneyItem)

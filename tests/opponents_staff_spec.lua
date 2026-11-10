@@ -1,7 +1,7 @@
 -- CP.Opponents staff: the server-only case data admins read (names fixed when a line is written, the
 
 -- CP.Opponents staff: the server-only case data admins read (names fixed when a line is written, the
--- timeline as lines, the flag lines, the ledger), Config.RealSuspects.casesKept, the admin callbacks and the three
+-- timeline as lines, the flag lines, the ledger), Config.RealPlayers.casesKept, the admin callbacks and the three
 -- tools (block a pair, exclude a player, suspend an officer), and the self rule over suspects (P.tookPart). Plain
 -- Lua with stubs: qbx_core's exports, CP.AdminKit and the pair writers are mocked; nothing reads the database.
 
@@ -61,11 +61,11 @@ CP.AntiCheat = {
     flag = function() return true end,
 }
 H.load('modules/integrations/qbx/server.lua')
-H.load('modules/opponents/server.lua')
-H.load('modules/opponents/staff/server.lua')
+H.load('modules/realplayers/opponents.lua')
+H.load('modules/realplayers/staff.lua')
 H.step(0)
 local Opp = CP.Opponents
-local RS = Config.RealSuspects
+local RS = Config.RealPlayers
 for _, kind in ipairs({ 'block', 'exclude', 'suspend' }) do
     Opp[kind] = function(...)
         writes[#writes + 1] = { kind, ... }
@@ -211,7 +211,7 @@ do
     local ok, e = Act('server:admin:rsExclude', { citizenid = 'CRIM0001', days = 7 })
     H.ok(ok == false and e == 'err.rs_off', 'the tools are refused while both features are off')
     H.eq(#writes, 0, 'and write nothing')
-    Config.LiveCrime.enabled = true
+    Config.RealPlayers.liveCrime.enabled = true
     ok, e = Act('server:admin:rsBlockPair', { officer = 'OFF00001', suspect = 'CRIM0001', days = 0 })
     H.ok(ok == false and e == 'err.rs_invalid_days', '0 days is refused')
     H.ok(CP.L('err.rs_invalid_days'):find('above 0', 1, true) ~= nil, 'Z10: and the text no longer says 0 is allowed')
@@ -232,7 +232,7 @@ do
     H.ok(ok == true and writes[3][1] == 'exclude', 'exclude a player')
     local who = acts['server:admin:rsExclude'].opts.self({ citizenid = 'CRIM0001' })
     H.eq(who.citizenid, 'CRIM0001', 'exclude and suspend run AdminKit\'s self rule on the citizenid')
-    Config.LiveCrime.enabled = false
+    Config.RealPlayers.liveCrime.enabled = false
 end
 
 -- ============================================================================
@@ -265,11 +265,11 @@ do
     end
     local list = cbs['admin:getRsCases'].fn({ src = 9, args = {} })
     H.eq(#list.listed, 0, 'volunteers off (as shipped): no list of volunteers')
-    Config.Volunteers.enabled = true
+    Config.RealPlayers.volunteer.enabled = true
     list = cbs['admin:getRsCases'].fn({ src = 9, args = {} })
     H.eq(list.listed[1] and list.listed[1].citizenid, 'VOL00001', 'volunteers on: staff see who is on the list')
     H.eq(list.listed[1] and list.listed[1].strikes, 1, '...with his strikes')
-    Config.Volunteers.enabled = false
+    Config.RealPlayers.volunteer.enabled = false
     CP.Volunteers.staffView = function() error('boom') end
     view = Opp.staffCase('run-0003')
     H.ok(view ~= nil and view.volunteer == nil, 'a failing volunteer view leaves the case readable')
@@ -305,7 +305,7 @@ do
     )
     local ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'CRIM0001' })
     H.ok(ok == false and e == 'err.rs_off', 'lift is refused while both features are off')
-    Config.LiveCrime.enabled = true
+    Config.RealPlayers.liveCrime.enabled = true
     local nAudit = #audits
     ok = Act('server:admin:rsLift', { kind = 'block', officer = 'OFF00001', suspect = 'CRIM0001' })
     H.ok(ok == true and lifted[1][1] == 'block' and lifted[1][2] == 'OFF00001' and lifted[1][3] == 'CRIM0001',
@@ -323,13 +323,13 @@ do
     ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'CRIM0001' })
     H.ok(ok == false and e == 'err.self_target', 'never one of the admin\'s own characters')
     selfCids.CRIM0001 = nil
-    H.eq(Config.RealSuspects.staffLift, true, 'staffLift ships true')
-    Config.RealSuspects.staffLift = false
+    H.eq(Config.RealPlayers.staffLift, true, 'staffLift ships true')
+    Config.RealPlayers.staffLift = false
     ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'CRIM0001' })
     H.ok(ok == false and e == 'err.rs_lift_off', 'staffLift = false: lifting is refused')
     H.eq(cbs['admin:getRsPairs'].fn({ src = 9, args = {} }).lift, false, 'and the screen offers no Lift')
-    Config.RealSuspects.staffLift = true
-    Config.LiveCrime.enabled = false
+    Config.RealPlayers.staffLift = true
+    Config.RealPlayers.liveCrime.enabled = false
 
     -- clear strikes: volunteers on, a reason, audited, nothing to clear refused
     local cleared = {}
@@ -343,8 +343,8 @@ do
     }
     ok, e = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00001' })
     H.ok(ok == false and e == 'err.rs_off' and #cleared == 0, 'clear strikes is refused while volunteers are off')
-    Config.Volunteers.enabled = true
-    H.eq(Config.Volunteers.staffClearStrikes, true, 'staffClearStrikes ships true')
+    Config.RealPlayers.volunteer.enabled = true
+    H.eq(Config.RealPlayers.volunteer.staffClearStrikes, true, 'staffClearStrikes ships true')
     H.ok(acts['server:admin:rsClearStrikes'].opts.reason == true, 'rsClearStrikes needs a reason')
     nAudit = #audits
     ok = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00001' })
@@ -357,11 +357,11 @@ do
     local list = cbs['admin:getRsCases'].fn({ src = 9, args = {} })
     H.eq(list.clearStrikes, true, 'the Volunteers tab offers Clear strikes')
     H.eq(list.listed[1].name, 'Ada Test', 'a listed volunteer with no name gets his character name')
-    Config.Volunteers.staffClearStrikes = false
+    Config.RealPlayers.volunteer.staffClearStrikes = false
     ok, e = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00001' })
     H.ok(ok == false and e == 'err.rs_clear_off', 'staffClearStrikes = false: refused')
-    Config.Volunteers.staffClearStrikes = true
-    Config.Volunteers.enabled = false
+    Config.RealPlayers.volunteer.staffClearStrikes = true
+    Config.RealPlayers.volunteer.enabled = false
     CP.Volunteers = nil
 
     -- names: one batched lookup per screen load (online from the cache, offline from Qbox's players table, then
@@ -417,11 +417,11 @@ do
     H.eq(players, 1, '30 pair lines: one players-table statement')
     H.eq(officers, 1, 'and one cp_officers statement')
     H.eq(data.lift, true, 'the running rows can be lifted (staffLift ships true)')
-    H.eq(Config.RealSuspects.staffNames, true, 'staffNames ships true')
-    Config.RealSuspects.staffNames = false
+    H.eq(Config.RealPlayers.staffNames, true, 'staffNames ships true')
+    Config.RealPlayers.staffNames = false
     data = cbs['admin:getRsPairs'].fn({ src = 9, args = {} })
     H.eq(next(data.names), nil, 'staffNames = false: citizen IDs only')
-    Config.RealSuspects.staffNames = true
+    Config.RealPlayers.staffNames = true
     Opp.pairStats, Opp.adminRows = nil, nil
     H.sql('DROP TABLE IF EXISTS players')
     H.sql('DELETE FROM cp_officers WHERE citizenid = \'OFFC0001\'')
@@ -473,10 +473,10 @@ do
     local view = Opp.staffCase('run-0005')
     H.eq(view.ledger[1].weaponName, 'Combat Pistol', 'the damage ledger names the weapon')
     H.ok(view.ledger[2].weaponName == nil and view.ledger[2].weapon == 777, 'an unknown weapon keeps its hash')
-    H.eq(Config.RealSuspects.weaponNames, true, 'weaponNames ships true')
-    Config.RealSuspects.weaponNames = false
+    H.eq(Config.RealPlayers.weaponNames, true, 'weaponNames ships true')
+    Config.RealPlayers.weaponNames = false
     H.eq(Opp.staffCase('run-0005').ledger[1].weaponName, nil, 'weaponNames = false: the raw hash only')
-    Config.RealSuspects.weaponNames = true
+    Config.RealPlayers.weaponNames = true
     Opp.close(R5)
 end
 

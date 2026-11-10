@@ -67,9 +67,7 @@ do
     for _, sec in ipairs(sc.sections) do H.ok(seen[sec.key] ~= nil, sec.key .. ': a play group names it') end
     H.eq(seen.spawning, 'play_npc', 'spawning is NPC missions')
     H.eq(seen.dispatch, 'play_npc', 'mission calls are NPC missions')
-    H.eq(seen.live_crimes, 'play_pvp', 'live crimes are Player vs police')
-    H.eq(seen.volunteer_suspects, 'play_pvp', 'volunteer suspects are Player vs police')
-    H.eq(seen.real_suspects, 'play_pvp', 'the real-suspect rules are Player vs police')
+    H.eq(seen.real_players, 'play_pvp', 'Real players (both modes and their shared rules) is Player vs police')
     H.eq(seen.recognition, 'play_team', 'recognition (with field training) is Police teamwork')
     H.eq(seen.mission_controls, 'play_team', 'supervisor mission controls are Police teamwork')
     H.eq(seen.cross_department_missions, 'play_team', 'cross-department operations are Police teamwork')
@@ -118,9 +116,9 @@ do
         'Spawning.enabled',
         'NpcCombat.enabled',
         'MissionCalls.enabled',
-        'LiveCrime.enabled',
-        'Volunteers.enabled',
-        'RealSuspects.surrender.enabled',
+        'RealPlayers.liveCrime.enabled',
+        'RealPlayers.volunteer.enabled',
+        'RealPlayers.surrender.enabled',
         'CrossDept.enabled',
         'Recognition.fieldTraining.enabled',
         'Recognition.commendations.enabled',
@@ -133,8 +131,8 @@ do
     end
     -- step G3 (owner decision 2026-11-02): live-case and volunteer cash are plain switches (no typed ENABLE); the
     -- admin money tools keep it
-    H.eq(S.view('LiveCrime.cash').money, nil, 'cash for live cases needs no typed ENABLE')
-    H.eq(S.view('Volunteers.payCash').money, nil, 'cash for volunteer cases needs no typed ENABLE')
+    H.eq(S.view('RealPlayers.liveCrime.cash').money, nil, 'cash for live cases needs no typed ENABLE')
+    H.eq(S.view('RealPlayers.volunteer.cash').money, nil, 'cash for volunteer cases needs no typed ENABLE')
     H.eq(S.view('Cash.allowManualCash').money, true, 'a money tool keeps its typed ENABLE')
     -- step G3: every feature reward is a Money feature with its amounts and the shared item switch as limits
     for _, key in ipairs({

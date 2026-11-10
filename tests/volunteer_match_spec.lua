@@ -2,8 +2,8 @@
 
 -- Volunteer matching: the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
 -- on a yes (run.realSuspect = 'volunteer'), travel and in position, engagement (the officers' protection drop), a
--- no-show, Cancel this case, the release, the NPC fallback and the endings (Config.Volunteers.onVoid / voidRun,
--- 'players_only'), ctx.volunteer()'s view, and the volunteerEnded event and the staff view. Plain Lua with
+-- no-show, Cancel this case, the release, the NPC fallback and the endings (Config.RealPlayers.volunteer.onVoid /
+-- voidRun, 'players_only'), ctx.volunteer()'s view, and the volunteerEnded event and the staff view. Plain Lua with
 -- stubs.
 
 local H = dofile('tests/harness.lua')
@@ -144,8 +144,8 @@ local WARRANT = {
     objectives = { { block = 'vmatch_plain' }, { block = 'vmatch_runner' } },
 }
 
-H.load('modules/volunteers/server.lua')
-H.load('modules/volunteers/match/server.lua')
+H.load('modules/realplayers/volunteers.lua')
+H.load('modules/realplayers/match.lua')
 H.step(0)
 local V = CP.Volunteers
 
@@ -218,7 +218,7 @@ local RUNNER = { runner = true }
 -- ============================================================================
 
 do
-    local c = Config.Volunteers
+    local c = Config.RealPlayers.volunteer
     H.eq(c.askSeconds, 30, 'the pop-up waits 30 s')
     H.eq(c.askTries, 3, 'three volunteers asked at most')
     H.eq(c.travelSeconds, 300, 'five minutes to reach the starting point')
@@ -233,7 +233,7 @@ do
     H.eq(run.realSuspect, nil, 'the run stays an NPC run')
 end
 
-Config.Volunteers.enabled = true
+Config.RealPlayers.volunteer.enabled = true
 
 -- ============================================================================
 --                     ASKING: ONE AT A TIME, NO, NO ANSWER
@@ -358,7 +358,7 @@ end
 
 do
     Reset()
-    Config.RealSuspects.npcCombat = true
+    Config.RealPlayers.npcCombat = true
     V._sweep()
     local run = NewRun()
     Answer(10, LastAsk(10), true)
@@ -367,7 +367,7 @@ do
     H.advance(2000, 1000) -- one match pass (TICK_MS 2 s since step LP2)
     H.eq(V.matchView(run, 2).phase, 'engaged', 'engaged')
     H.eq(#dropped, 0, 'npcCombat = true: the officers keep the protection')
-    Config.RealSuspects.npcCombat = false
+    Config.RealPlayers.npcCombat = false
     Finish(run, 'completed', 'completed')
 end
 
@@ -459,7 +459,7 @@ do
 
     -- onVoid 'end' + a cancel after the grace: a strike and the run is cancelled
     Reset()
-    Config.Volunteers.onVoid = 'end'
+    Config.RealPlayers.volunteer.onVoid = 'end'
     run = NewRun()
     Answer(10, LastAsk(10), true)
     H.step(0)
@@ -470,11 +470,11 @@ do
     H.eq(V.strikes('VMA00001'), 2, 'a cancel after the grace is a strike')
     H.eq(ended[1] and ended[1].reason, 'cancelled', 'onVoid end: the run is cancelled (no cooldown, penalty or pay)')
     H.ok(Toast('volunteer.officer.void_end'), 'the officers are told why')
-    Config.Volunteers.onVoid = 'npc'
+    Config.RealPlayers.volunteer.onVoid = 'npc'
 
     -- after the engagement a leave always ends it: voidRun 'keep_earned' = completed
     Reset()
-    Config.Volunteers.voidRun = 'keep_earned'
+    Config.RealPlayers.volunteer.voidRun = 'keep_earned'
     run = NewRun()
     Answer(10, LastAsk(10), true)
     H.step(0)
@@ -487,7 +487,7 @@ do
     H.eq(V.strikes('VMA00001'), 0, 'three strikes blocked him: the count started again')
     H.eq(ended[1] and ended[1].state, 'completed', 'after contact a leave ends the run; keep_earned = completed')
     H.eq(run.keepEarned, true, 'Z2: keep_earned marks the run so only the lines earned so far score')
-    Config.Volunteers.voidRun = 'cancelled'
+    Config.RealPlayers.volunteer.voidRun = 'cancelled'
 end
 
 -- ============================================================================
@@ -636,8 +636,9 @@ end
 -- ============================================================================
 
 do
-    H.eq(Config.Volunteers.afkCatchVoids, true, 'an AFK catch voids his part (ships true)')
-    H.eq(Config.Volunteers.doorAssociates, false, 'no armed associate while a volunteer plays the door (ships false)')
+    H.eq(Config.RealPlayers.volunteer.afkCatchVoids, true, 'an AFK catch voids his part (ships true)')
+    H.eq(Config.RealPlayers.volunteer.doorAssociates, false,
+        'no armed associate while a volunteer plays the door (ships false)')
     for _, v in ipairs(V.list()) do V.stop(v.src) end
     Civilian(20, 'VMA00020')
     H.clockMs = H.clockMs + 2000
@@ -663,12 +664,12 @@ do
     H.eq(ended[1] and ended[1].reason, 'cancelled', 'officers had reached him: the run ends as voidRun says')
     H.eq(run.state, 'ended', 'the run is over')
 
-    Config.Volunteers.afkCatchVoids = false
+    Config.RealPlayers.volunteer.afkCatchVoids = false
     run = Caught(0)
     H.eq(#states, 0, 'afkCatchVoids false: the AFK catch stands')
     H.eq(V.matchView(run, 2).phase, 'engaged', 'and the case goes on')
     Finish(run, 'completed', 'completed')
-    Config.Volunteers.afkCatchVoids = true
+    Config.RealPlayers.volunteer.afkCatchVoids = true
 
     run = Caught(1)
     H.eq(#states, 0, 'a catch with a share is never a void')
@@ -716,7 +717,7 @@ do
         end
         return out
     end
-    H.eq(Config.Volunteers.endEvent, true, 'endEvent ships true (behind enabled = false)')
+    H.eq(Config.RealPlayers.volunteer.endEvent, true, 'endEvent ships true (behind enabled = false)')
     -- step G3: the volunteer's own pay (the real fairness rule; the payment itself is tests/feature_rewards_spec)
     H.load('modules/featurerewards/server.lua')
     local frPaid = {}
@@ -861,14 +862,14 @@ do
     H.eq(V.staffView(run.id, case).why, 'no_show', 'staff see the dropout too')
     H.eq(#frPaid, 1, 'G3: a no-show is never paid')
 
-    Config.Volunteers.endEvent = false
+    Config.RealPlayers.volunteer.endEvent = false
     Reset()
     run = NewRun()
     Answer(30, LastAsk(30), true)
     H.step(0)
     Finish(run, 'completed', 'completed')
     H.eq(#Sent(), 0, 'endEvent = false: no event')
-    Config.Volunteers.endEvent = true
+    Config.RealPlayers.volunteer.endEvent = true
     Config.FeatureRewards.suspect.enabled = false
     closeOut = nil
     H.eq(V.staffView('nope', nil), nil, 'no case: nothing for staff')
@@ -928,13 +929,13 @@ do
     run = NewRun()
     Answer(41, LastAsk(41), true)
     H.step(0)
-    Config.Volunteers.enabled = false
+    Config.RealPlayers.volunteer.enabled = false
     V._sweep()
     H.eq(V.cidBySrc(41), nil, 'Z1: volunteers off: he is off the list')
     H.eq(V.cancelCase(99), false, 'Z1: another player cannot cancel it')
     H.eq(V.cancelCase(41), true, 'Z1: he still cancels his case')
     H.eq(LastNote(41), 'volunteer.case.cancelled', 'Z1: he is told it is cancelled')
-    Config.Volunteers.enabled = true
+    Config.RealPlayers.volunteer.enabled = true
     Finish(run, 'completed', 'completed')
 
     -- the run ends while Fits yields: no stale hold, he is asked by the next run
@@ -973,7 +974,7 @@ do
     CP.CrimTab = {
         record = function(payload) recorded[#recorded + 1] = payload return true end,
     }
-    Config.Volunteers.endEvent = false
+    Config.RealPlayers.volunteer.endEvent = false
     Reset()
     for _, v in ipairs(V.list()) do V.stop(v.src) end
     Civilian(43, 'VMZ00043')
@@ -985,7 +986,7 @@ do
     Finish(run, 'completed', 'completed')
     H.eq(#recorded, 1, 'Z1: endEvent = false: History still records the case')
     H.eq(recorded[1] and recorded[1].citizenid, 'VMZ00043', '...his own line')
-    Config.Volunteers.endEvent = true
+    Config.RealPlayers.volunteer.endEvent = true
     CP.CrimTab = nil
 end
 
@@ -1155,7 +1156,7 @@ do
     H.eq(recorded[1] and recorded[1].dropout, nil, 'Z5: History: no strike dropout for a free cancel')
 
     -- keep_earned and a no before any yes (players_only): Abandoned, never a Completed row
-    Config.Volunteers.voidRun = 'keep_earned'
+    Config.RealPlayers.volunteer.voidRun = 'keep_earned'
     Reset()
     for _, v in ipairs(V.list()) do V.stop(v.src) end
     Civilian(55, 'VMZ00055')
@@ -1167,7 +1168,7 @@ do
     H.step(0)
     H.eq(ended[1] and ended[1].state, 'abandoned', 'Z5: keep_earned with no yes: the run is cancelled')
     H.eq(run.keepEarned, nil, 'Z5: ...and never marked keep_earned')
-    Config.Volunteers.voidRun = 'cancelled'
+    Config.RealPlayers.volunteer.voidRun = 'cancelled'
     CP.CrimTab = nil
 end
 

@@ -134,11 +134,11 @@ CP.Qbx = {
 H.load('modules/access/server.lua')
 CP.Qbx = nil
 H.load('modules/integrations/qbx/server.lua')
-H.load('modules/opponents/server.lua')
+H.load('modules/realplayers/opponents.lua')
 H.load('modules/integrations/crimson_contracts/server.lua')
-H.load('modules/livecrime/server.lua')
+H.load('modules/realplayers/livecrime.lua')
 H.step(0)
-local LC, Opp, LIVE, RS = CP.LiveCrime, CP.Opponents, Config.LiveCrime, Config.RealSuspects
+local LC, Opp, LIVE, RS = CP.LiveCrime, CP.Opponents, Config.RealPlayers.liveCrime, Config.RealPlayers
 local realWarn = CP.warn
 CP.warn = function(tag, fmt, ...)
     warns[#warns + 1] = { tag = tag, text = fmt:format(...) }
@@ -306,7 +306,8 @@ do
     Fire('contractStarted', c)
     Fire('dispatchSent', Alert(c))
     H.eq(LC.get('my-heists:' .. c.uid), nil, '(d) a script not in sources is dropped')
-    H.eq(Warned('not in Config.LiveCrime.sources'), 1, '(d) one warning naming the setting, not one per event')
+    H.eq(Warned('not in Config.RealPlayers.liveCrime.sources'), 1,
+        '(d) one warning naming the setting, not one per event')
     invoker = nil
     Fire('contractStarted', c)
     H.eq(LC.get('crimson-contracts:' .. c.uid), nil, '(d) no invoking resource: dropped')
@@ -456,7 +457,7 @@ do
     H.eq(camReads, 0, '(i) the crew\'s samples stopped')
     bucket[33] = nil
 
-    -- Pillbox (Config.RealSuspects.noStartZones) next to a crime there
+    -- Pillbox (Config.RealPlayers.noStartZones) next to a crime there
     Load(41, 'PILL0041', vec3(310.0, -590.0, 43.0))
     Load(42, 'OUTS0042', vec3(500.0, -600.0, 43.0))
     c = Contract({ PILL0041 = 41, OUTS0042 = 42 }, { coords = { x = 400.0, y = -600.0, z = 43.0 } })

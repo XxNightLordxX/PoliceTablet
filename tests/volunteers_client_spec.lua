@@ -1,4 +1,4 @@
--- Volunteer opt-in, the client: the command exists only once Config.Volunteers.enabled is on, and the
+-- Volunteer opt-in, the client: the command exists only once Config.RealPlayers.volunteer.enabled is on, and the
 -- server's menu becomes ox_lib's consent alert, the roles input, the context menu and notifications. Plain Lua stubs.
 
 local H = dofile('tests/harness.lua')
@@ -25,7 +25,7 @@ local waypoints = {}
 _G.SetNewWaypoint = function(x, y) waypoints[#waypoints + 1] = { x = x, y = y } end
 _G.SetWaypointOff = function() waypoints[#waypoints + 1] = 'off' end
 
-H.load('modules/volunteers/client.lua')
+H.load('modules/realplayers/client/volunteers.lua')
 H.step(0)
 
 local function Sent(action)
@@ -44,7 +44,7 @@ end
 
 do
     H.eq(H.commands.crimsonheat, nil, 'shipped off: no /crimsonheat command')
-    Config.Volunteers.enabled = true
+    Config.RealPlayers.volunteer.enabled = true
     CP.Hooks.fire('settings:changed')
     H.ok(H.commands.crimsonheat ~= nil, 'turned on: /crimsonheat exists')
     H.commands.crimsonheat.fn(0, {}, '')

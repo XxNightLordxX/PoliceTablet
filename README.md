@@ -530,13 +530,11 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Feature (name in the Features tab) | Section | Switch | More |
 |---|---|---|---|
 | Extra parts of a mission on the map (in the Map markers row) | NPC missions | `Config.Markers.extraParts` | [guide 3.13](docs/OWNER_GUIDE.md#313-map-markers-every-part-of-a-mission) |
-| Live crimes (real players) | Player vs police | `Config.LiveCrime.enabled` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
-| Volunteer suspects | Player vs police | `Config.Volunteers.enabled` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
-| Criminal tablet for volunteer suspects | Player vs police | `Config.CriminalTablet.enabled` | [guide 6.5](docs/OWNER_GUIDE.md#65-the-criminal-tablet) |
-| Cash for live cases | Player vs police | `Config.LiveCrime.cash` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
-| Item rewards for live cases | Player vs police | `Config.LiveCrime.items` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
-| Cash for volunteer cases | Player vs police | `Config.Volunteers.payCash` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
-| Item rewards for volunteer cases | Player vs police | `Config.Volunteers.payRewards` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
+| Live crimes (real players) | Player vs police | `Config.RealPlayers.liveCrime.enabled` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
+| Volunteer suspects | Player vs police | `Config.RealPlayers.volunteer.enabled` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
+| Criminal tablet for volunteer suspects | Player vs police | `Config.RealPlayers.criminalTablet.enabled` | [guide 6.5](docs/OWNER_GUIDE.md#65-the-criminal-tablet) |
+| Cash and item rewards for live cases (one row each) | Player vs police | `Config.RealPlayers.liveCrime.cash`, `Config.RealPlayers.liveCrime.items` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
+| Cash and item rewards for volunteer cases (one row each) | Player vs police | `Config.RealPlayers.volunteer.cash`, `Config.RealPlayers.volunteer.items` | [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
 | Supervisor mission controls | Police teamwork | `Config.Permissions.supervisor.missionControls` | [guide 1.2](docs/OWNER_GUIDE.md#12-what-supervisors-may-do) |
 | Field training (FTO) | Police teamwork | `Config.Recognition.fieldTraining.enabled` | [guide 3.11](docs/OWNER_GUIDE.md#311-field-training-fto) |
 | Avatar image links | Police teamwork | `Config.Profile.avatarUrls.enabled` | [guide 3.4](docs/OWNER_GUIDE.md#34-profile-pictures) |
@@ -581,8 +579,8 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Tow truck for impounds | NPC missions | `Config.Custody.tow.enabled` |
 | Decision debrief on the result screen | NPC missions | `Config.Decisions.debrief` |
 | Mission Builder for supervisors | NPC missions | `Config.Builder.enabled` |
-| Surrender and talk-down | Player vs police | `Config.RealSuspects.surrender.enabled` |
-| Real suspects admin screen | Player vs police | `Config.RealSuspects.adminScreen` |
+| Surrender and talk-down | Player vs police | `Config.RealPlayers.surrender.enabled` |
+| Real suspects admin screen | Player vs police | `Config.RealPlayers.adminScreen` |
 | Cross-department operations | Police teamwork | `Config.CrossDept.enabled` |
 | Unit ready check | Police teamwork | `Config.Units.readyCheck` |
 | Commendations | Police teamwork | `Config.Recognition.commendations.enabled` |
@@ -628,9 +626,9 @@ In the server console, type every command **without** the slash.
 | `CrimsonPoliceAdmin settings reset <path>` | Console only | Puts one setting back to its config.lua value. Example: `settings reset Cash.source` |
 | `CrimsonPoliceAdmin settings reset all` | Console only | Puts every setting changed in game back to config.lua |
 | `/CrimsonPoliceAdmin missioncall <type> [area]` | Admins, console | Posts a mission call now. Type = `patrol`, `investigation` or `tactical`. Area = `south_ls`, `downtown`, `west_ls`, `vinewood`, `east_ls`, `port`, `senora`, `north`, `west_county` or `county` (the default). Not while a Cross-Department Mission runs; 2 minutes between calls from the same person (the console counts as one) |
-| `/crimsonheat` | Players who are **not** on police duty, only with `Config.Volunteers.enabled = true` | Volunteers to play a mission's suspect for `Config.Volunteers.windowMinutes` (60): agree to the rules, tick the suspects to play. Typed again it opens the menu (time left, Renew, Change the suspects you play, Stop, and Cancel this case while you play one). The name is `Config.Volunteers.command` (restart to change it). See [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
-| `/crimtab` | Players who are **not** on a police job (or who hold the `criminalTablet` extra grant), only with `Config.CriminalTablet.enabled = true`; never on police duty | Opens the criminal tablet: Home (get on or off the volunteer list), Jobs, Active, History and Rules. The name is `Config.CriminalTablet.command` (restart to change it). See [guide 6.5](docs/OWNER_GUIDE.md#65-the-criminal-tablet) |
-| `/surrender` | A suspect of a live case, only with `Config.LiveCrime.enabled = true` | Asks him to confirm, then surrenders him to the officers of his case (one must be within `Config.RealSuspects.surrender.surrenderRange`, 50 m). The name is `Config.RealSuspects.surrender.command` (restart to change it). See [guide 6.2](docs/OWNER_GUIDE.md#62-rules-for-cases-with-real-suspects) |
+| `/crimsonheat` | Players who are **not** on police duty, only with `Config.RealPlayers.volunteer.enabled = true` | Volunteers to play a mission's suspect for `Config.RealPlayers.volunteer.windowMinutes` (60): agree to the rules, tick the suspects to play. Typed again it opens the menu (time left, Renew, Change the suspects you play, Stop, and Cancel this case while you play one). The name is `Config.RealPlayers.volunteer.command` (restart to change it). See [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
+| `/crimtab` | Players who are **not** on a police job (or who hold the `criminalTablet` extra grant), only with `Config.RealPlayers.criminalTablet.enabled = true`; never on police duty | Opens the criminal tablet: Home (get on or off the volunteer list), Jobs, Active, History and Rules. The name is `Config.RealPlayers.criminalTablet.command` (restart to change it). See [guide 6.5](docs/OWNER_GUIDE.md#65-the-criminal-tablet) |
+| `/surrender` | A suspect of a live case, only with `Config.RealPlayers.liveCrime.enabled = true` | Asks him to confirm, then surrenders him to the officers of his case (one must be within `Config.RealPlayers.surrender.surrenderRange`, 50 m). The name is `Config.RealPlayers.surrender.command` (restart to change it). See [guide 6.2](docs/OWNER_GUIDE.md#62-rules-for-cases-with-real-suspects) |
 
 "Admins, console" means an admin in game **and** the server console. "Console only" commands are the three ways
 back in for when the Admin UI can't open ([4.5](#45-the-server-console)). Mission ids (for `payout mission` and `test`)
@@ -685,7 +683,7 @@ old layout switches and where each one lives now.
 | Missions | **Missions** | Built-in and custom missions: the Mission Builder, publish, archive, restore, roll back, reload files, Cross-Department Missions and mission calls; the switches turn a mission or one location on or off |
 | | **Running now** | Every live run and unit: recall, end, add time, split a unit, and the starts the server refused |
 | | **Map markers**, **Test tools** | How each part of a mission shows on the map; optional test results, test runs and testers |
-| Real players | **Player suspects** | Live crimes, volunteers, surrender and talk-down, the pair ledger, blocks and exclusions (the group shows only while live crimes or volunteers are on) |
+| Real players | **Player suspects** | Live crimes, volunteers, surrender and talk-down, the pair ledger, blocks and exclusions; its gear holds all of `Config.RealPlayers` (shown while live crimes or volunteers are on) |
 | Money | **Money** | Pay rates, feature rewards, every payment made or owed (with the payment tools) and the department funds |
 | Review | **Review** | One queue of flagged runs and disputes with a Type column and a filter (approve, void or reject), profiles waiting (pictures, bios, reports, banned words) and corrections (with Undo) |
 | | **Activity log** | Every supervisor and admin action, with filters and a CSV export |

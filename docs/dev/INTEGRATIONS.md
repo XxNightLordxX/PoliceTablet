@@ -2911,8 +2911,8 @@ VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it
   (`id`) start again at 1 after a restart of Crimson-Contracts; `uid` stays unique. The ATM robbery
   (`ContractsConfig.ATM.activityKey = 'atm_robbery'`) sends none of these.
 - **Implication:** modules/integrations/crimson_contracts/server.lua registers the five handlers with
-  `AddEventHandler` at start, always, and each returns at once unless `Config.LiveCrime.enabled == true`; then
-  `GetInvokingResource()` must be in `Config.LiveCrime.sources` (shipped `{ 'crimson-contracts' }`, the folder name:
+  `AddEventHandler` at start, always, and each returns at once unless `Config.RealPlayers.liveCrime.enabled == true`; then
+  `GetInvokingResource()` must be in `Config.RealPlayers.liveCrime.sources` (shipped `{ 'crimson-contracts' }`, the folder name:
   a renamed folder must be renamed there too). Crime records are keyed `'<resource>:<uid>'`, never by `id`. The server
   ids in `members` and memberRejoined's `src` are hints that may be stale and are never read: members are found with
   `exports.qbx_core:GetPlayerByCitizenId` when the alert arrives (C9). A crew member who fires after the roll and kills

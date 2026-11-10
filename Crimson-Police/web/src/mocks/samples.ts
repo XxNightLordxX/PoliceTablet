@@ -150,7 +150,7 @@ const CONFIG: Session['config'] = {
                 ? []
                 : ['Balance change', 'Event', 'Correction'],
     },
-    // ?rsOff: no Real suspects screen (Config.LiveCrime.enabled and Config.Volunteers.enabled both false)
+    // ?rsOff: no Real suspects screen (Config.RealPlayers.liveCrime.enabled and Config.RealPlayers.volunteer.enabled both false)
     realSuspects: { screen: !(typeof window !== 'undefined' && /[?&]rsOff\b/.test(window.location.search)) },
     // ?mostUsed, ?activeFirst, ?compactSidebar: the Officer UI sidebar as Config.Tablet.sidebarOrder = 'mostUsed',
     // activeFirst = true and compactSidebar = true show it

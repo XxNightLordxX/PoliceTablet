@@ -104,7 +104,7 @@ CP.Dispatch = {
 
 H.load('blocks/live_response/server.lua')
 H.load('modules/missions/server.lua')
-H.load('modules/livecrime/server.lua')
+H.load('modules/realplayers/livecrime.lua')
 H.load('modules/runs/server.lua')
 H.step(0)
 local LC, Runs = CP.LiveCrime, CP.Runs
@@ -130,20 +130,20 @@ local function Place(src, coords) H.players[src] = { coords = coords or vec3(0.0
 -- ============================================================================
 
 do
-    local lc = Config.LiveCrime
+    local lc = Config.RealPlayers.liveCrime
     H.eq(lc.enabled, false, 'live crimes ship off: nobody is ever asked to join')
     H.eq(lc.backup, true, 'backup ships true (behind enabled)')
     H.eq(lc.maxOfficers, 6, 'maxOfficers ships 6')
     H.eq(lc.joinOfferSeconds, 30, 'joinOfferSeconds ships 30')
-    H.eq(Config.RealSuspects.outsideCuff, 'assist', 'outsideCuff ships assist')
+    H.eq(Config.RealPlayers.outsideCuff, 'assist', 'outsideCuff ships assist')
 end
 
 -- ============================================================================
 --                   A CRIME, ITS LIVE CALL CLAIMED, THE CASE
 -- ============================================================================
 
-local keep = Config.LiveCrime
-Config.LiveCrime = setmetatable({ enabled = true }, { __index = keep })
+local keep = Config.RealPlayers.liveCrime
+Config.RealPlayers.liveCrime = setmetatable({ enabled = true }, { __index = keep })
 
 Place(50, vec3(2410.0, 4900.0, 40.0))   -- the suspect, near the crime
 Place(1, vec3(0.0, 0.0, 30.0))          -- the officer who claimed the LIVE call
@@ -187,16 +187,16 @@ H.ok(run.clientStart ~= nil, 'a live run keeps what its clients got at the start
 do
     Place(3, vec3(0.0, 10.0, 30.0))
     H.eq(LC.joinCheck(run, 3), true, 'an on-duty officer on no mission may join')
-    Config.LiveCrime.enabled = false
+    Config.RealPlayers.liveCrime.enabled = false
     H.eq(select(2, LC.joinCheck(run, 3)), 'err.live_join_off', 'live crimes off: nobody joins')
-    Config.LiveCrime.enabled = true
-    Config.LiveCrime.backup = false
+    Config.RealPlayers.liveCrime.enabled = true
+    Config.RealPlayers.liveCrime.backup = false
     H.eq(select(2, LC.joinCheck(run, 3)), 'err.live_join_off', 'backup = false: only the claiming unit')
-    Config.LiveCrime.backup = nil
+    Config.RealPlayers.liveCrime.backup = nil
     H.eq(select(2, LC.joinCheck(run, 1)), 'err.live_join_already', 'a participant is already on it')
-    Config.LiveCrime.maxOfficers = 1
+    Config.RealPlayers.liveCrime.maxOfficers = 1
     H.eq(select(2, LC.joinCheck(run, 3)), 'err.live_join_full', 'maxOfficers reached')
-    Config.LiveCrime.maxOfficers = nil
+    Config.RealPlayers.liveCrime.maxOfficers = nil
     cidOf[3] = 'SUS1'
     H.eq(select(2, LC.joinCheck(run, 3)), 'err.live_case_own_suspect', 'a crew member of the crime')
     cidOf[3] = nil
@@ -363,5 +363,5 @@ do
     H.eq(LC.cuffHint({ id = 'npc', state = 'in_progress' }, 3), false, 'not a live case: no line')
 end
 
-Config.LiveCrime = keep
+Config.RealPlayers.liveCrime = keep
 return H

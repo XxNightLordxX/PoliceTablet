@@ -28,7 +28,7 @@ local warnedAt = {}               -- [what] = os.time() of its last warning
 -- ============================================================================
 
 -- Read on every event, so turning it on in Admin UI → Settings needs no restart.
-local function On() return type(Config.LiveCrime) == 'table' and Config.LiveCrime.enabled == true end
+local function On() return select(2, CP.RealPlayers('liveCrime')) end
 
 local function WarnOnce(what, fmt, ...)
     local now = os.time()
@@ -37,9 +37,9 @@ local function WarnOnce(what, fmt, ...)
     CP.warn(TAG, fmt, ...)
 end
 
--- Whether this resource may report a crime (Config.LiveCrime.sources, read now).
+-- Whether this resource may report a crime (Config.RealPlayers.liveCrime.sources, read now).
 local function Allowed(res)
-    local list = Config.LiveCrime.sources
+    local list = (CP.RealPlayers('liveCrime')).sources
     if type(res) ~= 'string' or res == '' or type(list) ~= 'table' then return false end
     for _, name in ipairs(list) do
         if name == res then return true end
@@ -152,14 +152,15 @@ end
 --                                   HANDLERS
 -- ============================================================================
 -- AddEventHandler only, never RegisterNetEvent: clients cannot send a server event, so only server scripts reach
--- these. Registered always and off at once while Config.LiveCrime.enabled is not true.
+-- these. Registered always and off at once while Config.RealPlayers.liveCrime.enabled is not true.
 
 local function Handle(name, payload)
     if not On() then return end
     local res = GetInvokingResource()
     if not Allowed(res) then
-        WarnOnce('source:' .. tostring(res), '%s from %s ignored: that script is not in Config.LiveCrime.sources',
-            PREFIX .. name, tostring(res or 'an unknown script'))
+        WarnOnce('source:' .. tostring(res),
+            '%s from %s ignored: that script is not in Config.RealPlayers.liveCrime.sources', PREFIX .. name,
+            tostring(res or 'an unknown script'))
         return
     end
     local data = type(payload) == 'table' and CHECK[name](payload) or nil

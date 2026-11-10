@@ -41,8 +41,14 @@ async function steps(): Promise<void> {
         'a mission type: its own Rewards.byType pool',
     );
     const live = rows.find(r => r.key === 'live');
-    ok(live?.on?.path === 'LiveCrime.cash' && live.money.length === 0 && !!live.moneyNoteKey, 'live cases: a switch');
-    ok(live?.items?.kind === 'switch' && live.items.s.path === 'LiveCrime.items', 'live cases: the item switch');
+    ok(
+        live?.on?.path === 'RealPlayers.liveCrime.cash' && live.money.length === 0 && !!live.moneyNoteKey,
+        'live cases: a switch',
+    );
+    ok(
+        live?.items?.kind === 'switch' && live.items.s.path === 'RealPlayers.liveCrime.items',
+        'live cases: the item switch',
+    );
     const suspect = rows.find(r => r.key === 'suspect');
     ok(
         suspect?.money.map(m => m.s.path).join(',') ===

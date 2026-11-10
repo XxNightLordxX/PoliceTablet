@@ -1,6 +1,6 @@
-// Admin UI · Real suspects (screen key 'admin_rs'): what modules/opponents/staff/server.lua answers.
+// Admin UI · Real suspects (screen key 'admin_rs'): what modules/realplayers/staff.lua answers.
 
-// Admin UI · Real suspects (screen key 'admin_rs'): what modules/opponents/staff/server.lua answers.
+// Admin UI · Real suspects (screen key 'admin_rs'): what modules/realplayers/staff.lua answers.
 // Callbacks (antiFarmOverride key): admin:getRsCases, admin:getRsCase { runUuid }, admin:getRsPairs { citizenid? }.
 // Actions (a reason, 1-3650 days): server:admin:rsBlockPair { officer, suspect, days, reason },
 // server:admin:rsExclude / server:admin:rsSuspend { citizenid, days, reason }.
@@ -69,9 +69,9 @@ export interface RsCasesData {
     casesPage?: { page: number; pages: number; total: number } | null;
     // the volunteers on the list now (empty while volunteers are off)
     listed?: RsListedVolunteer[];
-    // the Volunteers tab offers Clear strikes (Config.Volunteers.staffClearStrikes)
+    // the Volunteers tab offers Clear strikes (Config.RealPlayers.volunteer.staffClearStrikes)
     clearStrikes?: boolean;
-    // blocks, exclusions and suspensions can be lifted early (Config.RealSuspects.staffLift)
+    // blocks, exclusions and suspensions can be lifted early (Config.RealPlayers.staffLift)
     lift?: boolean;
     serverTime: number;
 }
@@ -117,7 +117,7 @@ export interface RsLedgerLine {
     officer?: RsOfficer | null;
     label?: string | null;
     weapon?: number | null;
-    // the weapon's name (Config.RealSuspects.weaponNames), absent for a weapon not in shared/weapons.lua
+    // the weapon's name (Config.RealPlayers.weaponNames), absent for a weapon not in shared/weapons.lua
     weaponName?: string | null;
     n: number;
     willKill: boolean;
@@ -160,10 +160,10 @@ export interface RsPairsData {
     // os.time() of the oldest ledger row read at start (nil = none)
     from?: number | null;
     admin: RsAdminRow[];
-    // character names by citizen ID for the pairs and the running rows (Config.RealSuspects.staffNames; an empty
+    // character names by citizen ID for the pairs and the running rows (Config.RealPlayers.staffNames; an empty
     // list when there are none)
     names?: Record<string, string> | unknown[] | null;
-    // the running rows can be lifted early (Config.RealSuspects.staffLift)
+    // the running rows can be lifted early (Config.RealPlayers.staffLift)
     lift?: boolean;
     serverTime: number;
     citizenid?: string;

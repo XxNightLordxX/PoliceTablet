@@ -279,7 +279,8 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua && find blocks -name server.lua | sort'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua'
+            .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
     p:close()
@@ -487,7 +488,7 @@ local function Cuff(officer, suspect)
     Place(officer, vec3(at.x + 1.5, at.y, at.z))
     H.fire('police:server:CuffPlayer', officer, suspect, false)
     Meta(suspect, 'ishandcuffed', true)
-    Secs(Config.RealSuspects.custodyHoldSeconds + 3)
+    Secs(Config.RealPlayers.custodyHoldSeconds + 3)
 end
 local function Timeline(runId)
     local case = CP.Opponents.findCase(runId)
@@ -589,22 +590,22 @@ end
 
 do
     H.eq(Config.Database.enabled, false, 'shipped: database off (the saves folder)')
-    H.eq(Config.LiveCrime.enabled, false, 'shipped: live crimes off')
-    H.eq(Config.LiveCrime.cash, false, 'shipped: live cases pay points only')
+    H.eq(Config.RealPlayers.liveCrime.enabled, false, 'shipped: live crimes off')
+    H.eq(Config.RealPlayers.liveCrime.cash, false, 'shipped: live cases pay points only')
     H.eq(Config.Recognition.fieldTraining.enabled, false, 'shipped: field training off')
     H.eq(Config.FeatureRewards.surrender.enabled, false, 'shipped: talk-downs pay nothing')
     H.eq(Config.FeatureRewards.ftoSignOff.enabled, false, 'shipped: sign-offs pay nothing')
     H.eq(Config.FeatureRewards.ftoComplete.enabled, false, 'shipped: a finished training pays nothing')
 
     local ok, err = Act('server:admin:setSetting', 4,
-        { path = 'LiveCrime.enabled', json = 'true', reason = 'not an admin' })
+        { path = 'RealPlayers.liveCrime.enabled', json = 'true', reason = 'not an admin' })
     H.eq(ok, false, 'admin: a supervisor cannot change a setting (' .. tostring(err) .. ')')
 
     local water = { { item = 'water', count = 1, chance = 1.0, value = 20 } }
     for _, c in ipairs({
-        { 'LiveCrime.enabled', true },
-        { 'LiveCrime.cash', true },
-        { 'LiveCrime.lastReportedEvery', 60 },
+        { 'RealPlayers.liveCrime.enabled', true },
+        { 'RealPlayers.liveCrime.cash', true },
+        { 'RealPlayers.liveCrime.lastReportedEvery', 60 },
         { 'Rewards.enabled', true },
         { 'FeatureRewards.surrender.enabled', true },
         { 'FeatureRewards.surrender.items', water },
@@ -617,7 +618,7 @@ do
         ok, err = Setting(c[1], c[2])
         H.eq(ok, true, ('admin: %s saved: %s'):format(c[1], tostring(err)))
     end
-    H.eq(Config.LiveCrime.enabled, true, 'admin: live crimes on at once')
+    H.eq(Config.RealPlayers.liveCrime.enabled, true, 'admin: live crimes on at once')
     H.eq(Config.Recognition.fieldTraining.enabled, true, 'admin: field training on at once')
 
     -- every officer opens the tablet once (the session also saves his officer row: department, callsign)
@@ -708,7 +709,7 @@ do
     H.eq(talkN, 1, 'talk: the backup is paid for the talk-down once, at the end')
     H.eq(ItemsGiven(6, 'water'), 1, 'talk: ...and gets the water')
 
-    -- payouts: Config.LiveCrime.cash on, so each row pays the Investigation payout once
+    -- payouts: Config.RealPlayers.liveCrime.cash on, so each row pays the Investigation payout once
     Secs(3)
     local rows = Rows('run_uuid = ?', { run.id })
     H.eq(#rows, 3, 'pay: one row per officer, the backup included')
@@ -782,7 +783,7 @@ do
 
     Restart()
 
-    H.eq(Config.LiveCrime.enabled, true, 'restart: the Settings changes are kept')
+    H.eq(Config.RealPlayers.liveCrime.enabled, true, 'restart: the Settings changes are kept')
     H.eq(Config.Recognition.fieldTraining.enabled, true, 'restart: ...field training too')
     H.eq(Runs.getBySrc(1), nil, 'restart: the leader is on no case')
     H.eq(Runs.getBySrc(2), nil, 'restart: nor is his partner')
@@ -808,7 +809,7 @@ do
 
     -- Gus' surrender went with the case: /surrender tells him he is not wanted, Talk them down finds no case
     mark = #H.events
-    local cmd = H.commands[Config.RealSuspects.surrender.command or 'surrender']
+    local cmd = H.commands[Config.RealPlayers.surrender.command or 'surrender']
     H.ok(cmd ~= nil, 'restart: /surrender is registered again (live crimes on from the saved settings)')
     if cmd then cmd.fn(12, {}, '') end
     H.ok(Toasts(12, mark)['livecrime.surrender.not_wanted'], 'restart: /surrender says he is not wanted')
@@ -931,8 +932,9 @@ end
 --             5. A PLAYER QUITS AND COMES BACK IN THE MIDDLE OF IT
 -- ============================================================================
 -- Step FX1. A LIVE CRIME: A SUSPECT AND AN OFFICER DROP; FIELD TRAINING: THE ROOKIE MID-RUN, THE TRAINER BEFORE THE
--- SIGN-OFF. docs/OWNER_GUIDE.md 6 and 3.11: a suspect who comes back within Config.RealSuspects.disconnectGrace stays in the
--- case; an officer who quits leaves the run with his own result while it goes on for the rest; the training is saved.
+-- SIGN-OFF. docs/OWNER_GUIDE.md 6 and 3.11: a suspect who comes back within Config.RealPlayers.disconnectGrace stays in
+-- the case; an officer who quits leaves the run with his own result while it goes on for the rest; the training is
+-- saved.
 
 -- A player quits (FXServer's playerDropped) and later joins again with the same character (Qbox's player loaded).
 local function Drop(src)
