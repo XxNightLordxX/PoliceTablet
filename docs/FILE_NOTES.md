@@ -73,11 +73,10 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/modules/livecrime/client.lua`: CP.LiveCrime (client): the pop-up that asks an officer to join a live case as backup.
 - `Crimson-Police/modules/livecrime/server.lua`: CP.LiveCrime (server): live crimes (option A, Config.LiveCrime).
 - `Crimson-Police/modules/livectl/server.lua`: CP.LiveCtl (server): the Admin UI's Live screen (every live run and unit), an officer's run state with the anti-farm overrides (cooldown clears, extra runs, another boss attempt, a free abandon made normal) and today's events.
-- `Crimson-Police/modules/markers/client.lua`: CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre) and at most one GPS line to it, cleared at every objective stop and run end (docs/ARCHITECTURE.md §5.44).
+- `Crimson-Police/modules/markers/client.lua`: CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre)
+- `Crimson-Police/modules/markers/server.lua`: CP.Markers (server): every part of a mission besides its objective on the officers' maps (Config.Markers.parts).
 - `Crimson-Police/modules/migrations/server.lua`: Applies sql/migrations/NNN_*.sql in order on start.
 - `Crimson-Police/modules/missionban/server.lua`: CP.MissionBan (server): a supervisor's temporary mission ban of one officer (the Mission control
-- `Crimson-Police/modules/missionblips/client.lua`: CP.MissionBlips (client): the extra mission blips the server sends (Config.MissionBlips, shipped off), on the minimap and the big map.
-- `Crimson-Police/modules/missionblips/server.lua`: CP.MissionBlips (server): the extra mission blips of Config.MissionBlips (shipped off).
 - `Crimson-Police/modules/missioncalls/client.lua`: CP.MissionCalls (client): the new-call toast and tone.
 - `Crimson-Police/modules/missioncalls/server.lua`: CP.MissionCalls: the tablet's own call board (Dispatch): posting, claims, lapses, re-dispatch, staff calls, the Dispatch screen data and call toasts.
 - `Crimson-Police/modules/missions/client.lua`: CP.Missions (client): the mission definitions sent by the server.
@@ -129,6 +128,7 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/modules/volunteers/server.lua`: CP.Volunteers (server): the volunteer list behind Config.Volunteers.command (default /crimsonheat).
 - `Crimson-Police/shared/init.lua`: The CP namespace, logging, the block registry, the config load check and RegisterMission().
 - `Crimson-Police/shared/locale.lua`: Loads locales/<Config.Locale>.json (falls back to en.json).
+- `Crimson-Police/shared/markers.lua`: CP.MarkerAliases (shared): the old names of Map markers' settings, from before the mission blips were folded into
 - `Crimson-Police/shared/net.lua`: The request/action plumbing between the NUI, the client and the server.
 - `Crimson-Police/shared/npccombat.lua`: CP.NpcCombat (shared): which weapon a mission NPC may carry, and its accuracy and firing caps (Config.NpcCombat).
 - `Crimson-Police/shared/options.lua`: CP.OptionDefs: the registry of officer options (the My options choices an officer makes for their own tablet) and their rules.
@@ -179,8 +179,8 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/kit/RowsEditor.tsx`: RowsEditor: the base row editor for a list setting with a row template (SettingView.rows): add, remove and move rows, one input per field.
 - `Crimson-Police/web/src/admin/components/kit/index.ts`: The admin kit: shared pieces of the full admin control screens (docs/ARCHITECTURE.md §9.5, "Admin control").
 - `Crimson-Police/web/src/admin/components/kit/useAdminAction.ts`: useAdminAction: useAction for the admin actions of CP.AdminKit.
-- `Crimson-Police/web/src/admin/components/missionBlips.ts`: Admin UI -> Mission blips (Config.AdminUi.missionBlipsScreen): the extra mission blips of Config.MissionBlips as
-- `Crimson-Police/web/src/admin/components/missionBlips.walk.ts`: Admin UI -> Mission blips (Config.AdminUi.missionBlipsScreen) walked against the browser mocks (node walk.mjs, a gate step): the screen shows under NPC missions unless switched off, lists every part with its look, the pickers offer the departments, jobs, mission types and missions, and the rules saved are the value the server checks.
+- `Crimson-Police/web/src/admin/components/mapMarkers.ts`: Admin UI -> Map markers (Config.AdminUi.markersScreen): Config.Markers as rows built from the settings data
+- `Crimson-Police/web/src/admin/components/mapMarkers.walk.ts`: Admin UI -> Map markers (Config.AdminUi.markersScreen) walked against the browser mocks (node walk.mjs, a gate
 - `Crimson-Police/web/src/admin/components/missionControls.walk.ts`: Admin UI -> Permissions -> Mission controls against the browser mocks (node walk.mjs, a gate step): the card's body rendered off (nothing switched on, nothing changed) and on with changed values, and a Reset.
 - `Crimson-Police/web/src/admin/components/needsAttention.ts`: Admin UI -> Home's Needs attention panel (Config.AdminUi.needsAttention): the lines of admin:getNeedsAttention, each a count that opens its screen.
 - `Crimson-Police/web/src/admin/components/needsAttention.walk.ts`: Admin UI -> Home's Needs attention panel against the browser mocks (node walk.mjs, a gate step): the one batched admin:getNeedsAttention answer, its lines and the screen each one opens, and the plain screen titles.
@@ -197,7 +197,7 @@ docs/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/screens/Home.tsx`: Admin UI · Home (screen key 'admin_home', Config.AdminUi.landing = 'home'): the landing screen.
 - `Crimson-Police/web/src/admin/screens/Leaderboards.tsx`: Admin UI · Leaderboards (screen key 'admin_leaderboards', callback admin:getBoards).
 - `Crimson-Police/web/src/admin/screens/Live.tsx`: Admin UI → Live: every live run (tests and Cross-Department Missions too) and every unit, with Recall, End run, End test, + minutes, Remove from unit and Disband (modules/livectl/server.lua).
-- `Crimson-Police/web/src/admin/screens/MissionBlips.tsx`: Admin UI · Mission blips (screen key 'admin_blips', Config.AdminUi.missionBlipsScreen): the extra mission blips.
+- `Crimson-Police/web/src/admin/screens/MapMarkers.tsx`: Admin UI · Map markers (screen key 'admin_markers', Config.AdminUi.markersScreen; the old 'admin_blips' opens it):
 - `Crimson-Police/web/src/admin/screens/Missions.tsx`: Admin UI · Missions (screen key 'admin_missions', title key 'ui.screen.admin_missions').
 - `Crimson-Police/web/src/admin/screens/Money.tsx`: Admin UI → Money (Config.AdminUi.moneyScreen): Mission pay and Payments made as two tabs of one screen.
 - `Crimson-Police/web/src/admin/screens/Officers.tsx`: Admin UI · Officers (screen key 'admin_officers').
@@ -515,13 +515,14 @@ docs/ARCHITECTURE.md.
 - `tests/loop_census_spec.lua`: Loop census (docs/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
 - `tests/loop_pace_spec.lua`: Loops run less often (docs/LOOPS.md): CP.Perf scales the idle and far waits by Config.Performance.loopScale (1-4) and never a per-frame wait; the slower shipped intervals; the NUI's shortest screen poll.
 - `tests/loops_spec.lua`: Loops timed right (docs/LOOPS.md): every client script of fxmanifest.lua loaded as FXServer runs it, then the game left idle (no run, tablet closed, every feature switch off).
+- `tests/markers_alias_spec.lua`: Map markers' old names (shared/markers.lua, CP.MarkerAliases; MG1 folded Config.MissionBlips into Config.Markers):
+- `tests/markers_parts_spec.lua`: CP.Markers (modules/markers/client.lua): the extra parts of a mission on the minimap and the big map, in the same
+- `tests/markers_server_spec.lua`: CP.Markers (modules/markers/server.lua): every part of a mission besides its objective, the extra parts shipped off.
 - `tests/markers_spec.lua`: CP.Markers (modules/markers/client.lua): the objective pointer on an officer's map, one GPS line at most, cleared at every stop; and its hooks in modules/runs/client.lua.
 - `tests/memsql_spec.lua`: CP.Storage.MemSQL (modules/storage/memsql.lua): the saves folder engine behind database-off mode (Config.Database.enabled = false) and CP.Storage (modules/storage/server.lua).
 - `tests/mission_ban_spec.lua`: Mission ban: a supervisor bars one officer of his department (a lower grade, never himself) from taking
 - `tests/mission_controls_spec.lua`: Mission controls core: CP.DeptControls (register, bounds, get, snapshot, set, reset, view), the six callbacks and actions, the master switch, the grants, the change wait, the self rule and the audit.
 - `tests/mission_reader_spec.lua`: The mission file reader (CP.U.parseMissionFile, shared/utils.lua): mission files are data, read and never run.
-- `tests/missionblips_client_spec.lua`: CP.MissionBlips (modules/missionblips/client.lua): the extra mission blips on the minimap and the big map.
-- `tests/missionblips_server_spec.lua`: CP.MissionBlips (modules/missionblips/server.lua): the extra mission blips, shipped off.
 - `tests/missioncalls_spec.lua`: Modules/missioncalls: posting, areas, claims and the claim window, the priority window, staff calls, statuses, re-dispatch, lapses, mute, the eligibility cache and its cost, never SC-Dispatch, realCallSummary.
 - `tests/missions_a_spec.lua`: The missions_a built-in mission files and missions/builtin/index.lua.
 - `tests/missions_b_spec.lua`: Slice missions_b: the built-in mission files warrant_service, manhunt,

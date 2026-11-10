@@ -166,8 +166,8 @@ const CONFIG: Session['config'] = {
         needsAttention: typeof window !== 'undefined' && /[?&]needsAttention\b/.test(window.location.search),
         // ?rewardsScreen: the Rewards screen (Config.AdminUi.rewardsScreen = true)
         rewardsScreen: typeof window !== 'undefined' && /[?&]rewardsScreen\b/.test(window.location.search),
-        // ?noBlipsScreen: no Mission blips screen (Config.AdminUi.missionBlipsScreen = false)
-        missionBlipsScreen: !(typeof window !== 'undefined' && /[?&]noBlipsScreen\b/.test(window.location.search)),
+        // ?noMarkersScreen: no Map markers screen (Config.AdminUi.markersScreen = false)
+        markersScreen: !(typeof window !== 'undefined' && /[?&]noMarkersScreen\b/.test(window.location.search)),
         // ?moneyScreen, ?oneRequest: one Money screen and one request per screen open
         moneyScreen: typeof window !== 'undefined' && /[?&]moneyScreen\b/.test(window.location.search),
         oneRequest: typeof window !== 'undefined' && /[?&]oneRequest\b/.test(window.location.search),

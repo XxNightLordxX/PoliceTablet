@@ -2144,8 +2144,9 @@ end
 -- ============================================================================
 --                         THE SERVICE VEHICLES' BLIPS
 -- ============================================================================
--- A prisoner van or tow truck shows on the map of every officer on the run (CP.Markers.service,
--- Config.Markers.serviceVehicles) from its spawn until it drives off. The coroner van stays unmarked (it serves a
+-- A prisoner van or tow truck shows on the map of every officer on the run (CP.Markers.service, while
+-- Config.Markers.parts.prisonerVan / towTruck is on and its rules let him see it: CP.Markers.vanAllowed on the server)
+-- from its spawn until it drives off. The coroner van stays unmarked here (an extra part of Map markers: it serves a
 -- scene the officers are already at). Sent when its status changes, never on a timer: the client follows the vehicle
 -- itself once it streams in, and shows it at the position sent until then.
 
@@ -2167,10 +2168,18 @@ end
 
 -- to: one officer who joined after the blip went out (run:arrived); nil: every active participant, when the status
 -- changed since the last send (a vehicle never shown sends nothing when it goes).
+-- What officer src gets of data: the blip, or show = false when its part's rules leave him out.
+local function BlipFor(run, data, src)
+    local ok, shown = true, true
+    if CP.Markers and CP.Markers.vanAllowed then ok, shown = pcall(CP.Markers.vanAllowed, data.kind, run, src) end
+    if not ok or shown or not data.show then return data end
+    return { runId = data.runId, id = data.id, kind = data.kind, show = false }
+end
+
 local function SyncBlip(run, s, to)
     if not BLIP_LOOK[s.kind] then return end
     if to then
-        if s.blipOn then TriggerClientEvent(SERVICE_BLIP_EVENT, to, BlipOf(run, s)) end
+        if s.blipOn then TriggerClientEvent(SERVICE_BLIP_EVENT, to, BlipFor(run, BlipOf(run, s), to)) end
         return
     end
     if s.blipSent == s.status then return end
@@ -2178,7 +2187,7 @@ local function SyncBlip(run, s, to)
     local data = BlipOf(run, s)
     if not data.show and not s.blipOn then return end
     s.blipOn = data.show or nil
-    for _, src in ipairs(ActiveSrcs(run)) do TriggerClientEvent(SERVICE_BLIP_EVENT, src, data) end
+    for _, src in ipairs(ActiveSrcs(run)) do TriggerClientEvent(SERVICE_BLIP_EVENT, src, BlipFor(run, data, src)) end
 end
 
 -- ============================================================================

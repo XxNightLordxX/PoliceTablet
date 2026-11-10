@@ -225,6 +225,6 @@
   "ui.more.show": "More options",
   "ui.more.show_n": "More options ({n})",
   "ui.more.hide": "Fewer options",
-  "ui.screen.admin_blips": "Mission blips",
-  "ui.nav.plain.admin_blips": "Map blips for every part of a mission"
+  "ui.screen.admin_markers": "Map markers",
+  "ui.nav.plain.admin_markers": "How the objective and every part of a mission show on the map"
 }

@@ -39,12 +39,18 @@ const FEATURES: [string, number][] = [
     ['supAward', 5],
 ];
 
-// Config.MissionBlips.parts: a few parts with their shipped sprite and colour
-const BLIP_PARTS: [string, number, number][] = [
-    ['coronerVan', 67, 40],
-    ['evidence', 1, 0],
-    ['hidingSpot', 1, 17],
-    ['partner', 1, 3],
+// Config.Markers.parts: the prisoner van (its own switch, shipped on) and a few extra parts, shipped look
+const BLIP_PARTS: [string, number, number, boolean][] = [
+    ['prisonerVan', 285, 3, true],
+    ['coronerVan', 67, 40, false],
+    ['evidence', 1, 0, false],
+    ['hidingSpot', 1, 17, false],
+    ['partner', 1, 3, false],
+];
+// Config.Markers.kinds: two kinds of objective blip
+const BLIP_KINDS: [string, number, number][] = [
+    ['start', 162, 5],
+    ['hostile', 1, 1],
 ];
 
 const data: SettingsData = {
@@ -221,40 +227,48 @@ const data: SettingsData = {
                 },
             ],
         },
-        // Admin UI -> Mission blips (Config.AdminUi.missionBlipsScreen): the master switch, a few parts, the rules
+        // Admin UI -> Map markers (Config.AdminUi.markersScreen): the objective's settings, two kinds, the extra
+        // parts' switch, a few parts, the rules
         {
-            key: 'mission_blips',
-            title: 'Mission blips',
+            key: 'map_markers',
+            title: 'Map markers',
             file: 'config',
             group: 'missions',
             changed: 0,
             count: 0,
             groups: [
                 {
-                    path: 'MissionBlips',
-                    label: 'Mission blips',
+                    path: 'Markers',
+                    label: 'Map markers',
                     desc: '',
                     settings: [
-                        s('MissionBlips.enabled', 'boolean', false, 'master switch: false = no extra mission blips'),
-                        s('MissionBlips.refreshEvery', 'number', 3, 'seconds between checks', { min: 1, max: 30 }),
-                        ...BLIP_PARTS.flatMap(([id, sprite, colour]) => [
-                            s(`MissionBlips.parts.${id}.on`, 'boolean', false, 'true = this part shows'),
-                            s(`MissionBlips.parts.${id}.sprite`, 'number', sprite, 'blip id', { min: 0, max: 965 }),
-                            s(`MissionBlips.parts.${id}.colour`, 'number', colour, 'colour id', { min: 0, max: 85 }),
-                            s(`MissionBlips.parts.${id}.scale`, 'number', 0.7, 'size', {
+                        s('Markers.enabled', 'boolean', true, 'false = no objective blip or line'),
+                        s('Markers.route', 'boolean', true, 'false = no GPS line to the objective'),
+                        ...BLIP_KINDS.flatMap(([id, sprite, colour]) => [
+                            s(`Markers.kinds.${id}.sprite`, 'number', sprite, 'blip id', { min: 0, max: 965 }),
+                            s(`Markers.kinds.${id}.colour`, 'number', colour, 'colour id', { min: 0, max: 85 }),
+                            s(`Markers.kinds.${id}.scale`, 'number', 0.9, 'size', { min: 0.3, max: 2, integer: false }),
+                        ]),
+                        s('Markers.extraParts', 'boolean', false, 'true = the other parts of a mission show too'),
+                        s('Markers.refreshEvery', 'number', 3, 'seconds between checks', { min: 1, max: 30 }),
+                        ...BLIP_PARTS.flatMap(([id, sprite, colour, on]) => [
+                            s(`Markers.parts.${id}.on`, 'boolean', on, 'true = this part shows'),
+                            s(`Markers.parts.${id}.sprite`, 'number', sprite, 'blip id', { min: 0, max: 965 }),
+                            s(`Markers.parts.${id}.colour`, 'number', colour, 'colour id', { min: 0, max: 85 }),
+                            s(`Markers.parts.${id}.scale`, 'number', 0.7, 'size', {
                                 min: 0.3,
                                 max: 2,
                                 integer: false,
                             }),
-                            s(`MissionBlips.parts.${id}.label`, 'text', '', "its name ('' = built-in)"),
-                            s(`MissionBlips.parts.${id}.shortRange`, 'boolean', false, 'true = near only'),
+                            s(`Markers.parts.${id}.label`, 'text', '', "its name ('' = built-in)"),
+                            s(`Markers.parts.${id}.shortRange`, 'boolean', false, 'true = near only'),
                         ]),
-                        s('MissionBlips.rules', 'json', {}, 'who sees a part, by part name'),
+                        s('Markers.rules', 'json', {}, 'who sees a part, by part name'),
                     ],
                 },
             ],
         },
-        // the departments (Mission blips rules pick from their keys and jobs)
+        // the departments (Map markers rules pick from their keys and jobs)
         {
             key: 'departments',
             title: 'Departments',

@@ -359,7 +359,7 @@ do
     H.eq(To(s), '1,2', 'blip: sent to both officers once it spawned')
     local d = s[1] and s[1].data or {}
     H.ok(d.runId == run.id and d.id == van.id and d.kind == 'prisonerVan' and d.show == true and d.netId == van.veh,
-        'blip: the run, the van\'s id and net id, kinds.prisonerVan')
+        'blip: the run, the van\'s id and net id, parts.prisonerVan')
     H.ok(d.coords and D(d.coords, vec3(700.0, 500.0, 30.0)) < 1.0, 'blip: where the server has it')
     mark = #H.events
     W.tick(20)
@@ -370,6 +370,17 @@ do
     s = Sent(mark)
     H.ok(#s == 1 and s[1].to == 3 and s[1].data.show == true and s[1].data.netId == van.veh,
         'blip: a late partner gets the van already on the others\' maps')
+    -- the van's part rules (Config.Markers.rules.prisonerVan, read by CP.Markers.vanAllowed) leave him out: no blip
+    local savedMarkers = CP.Markers
+    CP.Markers = {
+        vanAllowed = function(part, _, src) return not (part == 'prisonerVan' and src == 3) end,
+    }
+    mark = #H.events
+    CP.Hooks.fire('run:arrived', run, 3, false)
+    s = Sent(mark)
+    H.ok(#s == 1 and s[1].to == 3 and s[1].data.show == false and s[1].data.netId == nil,
+        'blip: an officer the van\'s rules leave out gets show = false')
+    CP.Markers = savedMarkers
 
     -- late: put on its parking point (one update each, at its new spot)
     mark = #H.events

@@ -187,11 +187,9 @@ More folders (all in the spec's Feature folders table; §5.30–§5.34):
 `modules/npccombat/` (client, server, §5.42): the run-scoped damage settings of an officer's game (Config.NpcCombat), the
 protection drop and the `crimsonPoliceRun` player bag.
 
-`modules/markers/` (client, §5.44): the current objective's pointer on the officer's map and its one GPS line
-(Config.Markers).
-
-`modules/missionblips/` (client, server, §5.53): the extra mission blips of every other part of a mission
-(Config.MissionBlips, shipped off).
+`modules/markers/` (client, server, §5.44): the one blip system: the current objective's pointer on the officer's
+map and its one GPS line, the prisoner van and tow truck coming to him, and every other part of a mission
+(Config.Markers; the extra parts shipped off).
 
 `modules/spawn/` (client, server, §5.43): what an officer's game can see of the spawn director's points
 (Config.Spawning.preferHidden), the ground probe of one point (Config.Spawning.ground), the placer that puts a
@@ -3180,7 +3178,7 @@ asks (`Config.Spawning.place`), so nothing spawns in front of the officers or in
   at the door, the prisoner van on its point): freezes it and replaces any ask with one at `coords` (no other points; a
   bad answer lets it go).
 
-### 5.44 CP.Markers — modules/markers (client)
+### 5.44 CP.Markers — modules/markers (client, server; the one blip system)
 
 The current objective on this officer's map (`Config.Markers`): one pointer per officer (a blip, or a circle with its
 centre) and at most one GPS line. modules/runs/client.lua drives it: `client:objective start` → `set(runId, index,
@@ -3236,12 +3234,49 @@ msg.marker, ctx)` after the block's `start`; `client:marker` → `update` (the c
   net id and shows only the nearest of several points; with `radioSilenceLastKnown` > 0 a hidden moving target gets a
   200 m `markers.last_known` circle, moved every that many seconds. search_area keeps its circle as the pointer.
 - `service(key, spec)` — a prisoner van or tow truck coming to this officer (`spec = { netId, coords, kind =
-  'prisonerVan'|'towTruck', label }`, nil removes): shown in every Radio Silence mode while `serviceVehicles` is on,
-  never routed. modules/custody/client.lua calls it from `client:serviceBlip` (key `service:<id>`); the server
+  'prisonerVan'|'towTruck', label }`, nil removes): shown in every Radio Silence mode while its part's `on` is true
+  (`Config.Markers.parts.prisonerVan` / `towTruck`, shipped true; its look, label and range are the part's), never
+  routed. The server sends `show = false` to an officer the part's rules leave out (`CP.Markers.vanAllowed`). modules/custody/client.lua calls it from `client:serviceBlip` (key `service:<id>`); the server
   (`SyncBlip` in its 1 s tick) sends it on each status change (coming, parked, loading; off once it leaves), and
   `run:arrived` sends the ones on the map to a late partner. The coroner van stays unmarked.
 - One 1 s check loop only while something is on the map (streaming swaps, adopted blips, nearest target, line, HUD
   line, the waypoint). No entity pool scans.
+- The extra parts (`Config.Markers.extraParts`, shipped false; every part's `on` shipped false but the prisoner van's
+  and tow truck's, which are drawn only by `service` above and are never an extra part):
+  - Server (modules/markers/server.lua): `M.pass()` runs every `refreshEvery` seconds (`CP.Perf.armed`, armed by
+    `run:created`, `participant:joined` and `settings:changed`; it stops when the switch is off, or no run is going
+    and no map has blips). `M.collect(run)` lists the parts that are on: run entities by role (`ROLE_PART`; the
+    coroner van by tag; any other object is `sceneProp`), the vans' parking points (`CP.Custody._servicesOf`, status
+    coming / parked / loading), Manhunt hiding spots whose fugitive ran (`ctx.state.fugitives[*].ran`), a live case's
+    scene and `ctx.state.reported`, the nearest `Config.Downed.dropOffs` point while a case suspect is `down`, and the
+    run's officers. Never listed: a dead entity, a hidden contact (`hiddenCfg`), an entity of a pending (staged)
+    objective, a real player suspect. `M.viewFor(run, src, items)` keeps what one officer may see: not himself, a
+    partner only in his routing bucket, `M.allowed(part, run, src)` (`rules[part]`: departments, jobs, grade,
+    missionTypes, missions, roles `all | leader | supervisor`, all AND-ed; officers read through
+    `CP.Access.getOfficer`, kept 15 s), and Radio Silence (`'area'` drops moving people and cars but the vans,
+    `'none'` keeps only the vans and their drop-offs). `M.vanAllowed(part, run, src)` is the same rules check for the
+    prisoner van and tow truck (modules/custody `SyncBlip`). Positions are rounded (1 m points, 25 m moving), and a
+    list is sent only when it changed.
+  - `client:markerParts` `{ runId, items = { { k, p, n?, s?, x, y, z } } }` (an empty list clears); sent to each
+    officer when his list changes, empty at `run:ended`, `participant:left` and when the switch goes off.
+  - Client: `applyParts(runId, items)` adds, moves, restyles or removes only what changed (look read live from the
+    config), `AddBlipForEntity` once the netId or partner's ped streams in (1 s follow check, `CP.Perf.ms`, only while
+    such a blip is on the map), `SetBlipDisplay(2)`; `clearParts()` at the run's clean-up (modules/runs), logout
+    (`CP.Qbx.onUnload`) and resource stop.
+  - Settings: the `Markers.refreshEvery` and `Markers.parts.*` ranges, the `Markers.rules` template, one Features row
+    `markers` (its limits link `Markers.extraParts`). Specs: tests/markers_spec.lua, tests/markers_parts_spec.lua,
+    tests/markers_server_spec.lua, tests/markers_alias_spec.lua.
+  - Old names (shared/markers.lua, `CP.MarkerAliases`): `mapConfig(Config)` reads an older config.lua's
+    `Config.MissionBlips`, `Config.Markers.serviceVehicles` (the vans' `on`), `kinds.prisonerVan` / `towTruck` (their
+    look) and `Config.AdminUi.missionBlipsScreen` into the new names as config.lua loads, on both sides (a new name
+    set already wins); `paths(old)` maps a saved path, and modules/settings moves such rows once at start
+    (`Settings._aliasRows`, then `report()` prints one console line) and reads them in an imported file.
+- Admin UI: the Map markers screen (`admin_markers`, NPC missions; `Config.AdminUi.markersScreen`, session
+  `config.adminUi.markersScreen`, shown unless false; `admin_blips` is an alias, `resolveAdminKey`; web
+  admin/screens/MapMarkers.tsx, admin/components/mapMarkers.ts) reads `admin:getSettings` and `admin:getMissions`: the
+  objective's settings, each kind's look, `Markers.extraParts`, each part field and the whole `Markers.rules` value,
+  each saved through `server:admin:setSetting` (checked and audited as any setting). Walk:
+  admin/components/mapMarkers.walk.ts.
 
 ### 5.45 CP.Opponents — modules/opponents (S)
 
@@ -3917,37 +3952,6 @@ point awarded, up to `maxMoney`).
   tests/feature_rewards_spec.lua (and the hook lines in field_training, sup_award_points, live_response and
   volunteer_match specs).
 
-### 5.53 CP.MissionBlips — modules/missionblips (client, server; extra mission blips)
-
-The other parts of a mission on the minimap and the big map, behind `Config.MissionBlips.enabled` (shipped false; every
-part's `on` shipped false too).
-
-- Server: `MB.pass()` runs every `refreshEvery` seconds (`CP.Perf.armed`, armed by `run:created`,
-  `participant:joined` and `settings:changed`; it stops when the switch is off, or no run is going and no map has
-  blips). `MB.collect(run)` lists the parts that are on: run entities by role (`ROLE_PART`; the service vans by tag;
-  any other object is `sceneProp`), the vans' parking points (`CP.Custody._servicesOf`, status coming / parked /
-  loading), Manhunt hiding spots whose fugitive ran (`ctx.state.fugitives[*].ran`), a live case's scene and
-  `ctx.state.reported`, the nearest `Config.Downed.dropOffs` point while a case suspect is `down`, and the run's
-  officers. Never listed: a dead entity, a hidden contact (`hiddenCfg`), an entity of a pending (staged) objective, a
-  real player suspect. `MB.viewFor(run, src, items)` keeps what one officer may see: not himself, a partner only in
-  his routing bucket, `MB.allowed(part, run, src)` (`rules[part]`: departments, jobs, grade, missionTypes, missions,
-  roles `all | leader | supervisor`, all AND-ed; officers read through `CP.Access.getOfficer`, kept 15 s), and Radio
-  Silence (`'area'` drops moving people and cars but the vans, `'none'` keeps only the vans and their drop-offs).
-  The prisoner van and tow truck are parts only while `Config.Markers.serviceVehicles` is off (§5.44 shows them).
-  Positions are rounded (1 m points, 25 m moving), and a list is sent only when it changed.
-- `client:missionBlips` `{ runId, items = { { k, p, n?, s?, x, y, z } } }` (an empty list clears); sent to each
-  officer when his list changes, empty at `run:ended`, `participant:left` and when the switch goes off.
-- Client: `MB.apply(runId, items)` adds, moves, restyles or removes only what changed (look read live from the
-  config), `AddBlipForEntity` once the netId or partner's ped streams in (1 s follow check, `CP.Perf.ms`, only while
-  such a blip is on the map), `SetBlipDisplay(2)`; `MB.clear()` at the run's clean-up (modules/runs), logout
-  (`CP.Qbx.onUnload`) and resource stop. Settings: `MissionBlips.*` ranges, the `MissionBlips.rules` template, the
-  Features row `mission_blips`. Specs: tests/missionblips_server_spec.lua, tests/missionblips_client_spec.lua.
-- Admin UI: the Mission blips screen (`admin_blips`, NPC missions; `Config.AdminUi.missionBlipsScreen`, session
-  `config.adminUi.missionBlipsScreen`, shown unless false; web admin/screens/MissionBlips.tsx,
-  admin/components/missionBlips.ts) reads `admin:getSettings` and `admin:getMissions` and saves each part field and
-  the whole `MissionBlips.rules` value through `server:admin:setSetting` (checked and audited as any setting). Walk:
-  admin/components/missionBlips.walk.ts.
-
 ## 6. Cross-cutting conventions
 
 ### 6.1 Entities and NPCs
@@ -4556,9 +4560,9 @@ the van. ox_target names `crimson-police:body_tag`, `body_bag`, `coroner`.
 | `client:contactAct` | `{ runId, netId, behaviour, args, seconds }` to the run host only, when the behaviour starts | custody |
 | `client:contactConfirm` | `{ netId, choice, factKey }`: open the tablet with the case-fail confirm | custody |
 | `client:serviceVehicle` | `{ runId, id, op = 'drive'|'load'|'leave', kind, veh, driver, dest, target, away }` to the driving client | custody |
-| `client:serviceBlip` | `{ runId, id, kind = 'prisonerVan'|'towTruck', show, netId, coords }` to every active participant when a transport van's or tow truck's status changes (show while coming, parked or loading), and to a late partner at `run:arrived` (§5.44 `service`, Config.Markers.serviceVehicles) | custody |
+| `client:serviceBlip` | `{ runId, id, kind = 'prisonerVan'|'towTruck', show, netId, coords }` to every active participant when a transport van's or tow truck's status changes (show while coming, parked or loading), and to a late partner at `run:arrived` (§5.44 `service`, Config.Markers.parts.prisonerVan / towTruck; `show = false` to an officer their rules leave out) | custody |
 | `client:closeTablet` | errKey (requireItem: the item left the inventory) | tablet |
-| `client:missionBlips` | `{ runId, items = { { k, p, n?, s?, x, y, z } } }` to an officer when his extra mission blips change; an empty list clears (§5.53, Config.MissionBlips) | missionblips |
+| `client:markerParts` | `{ runId, items = { { k, p, n?, s?, x, y, z } } }` to an officer when the extra parts on his map change; an empty list clears (§5.44, Config.Markers.parts) | markers |
 | `client:settings` | `{ { path, value } \| { path, none = true } }`: every setting changed in game that is in use | settings |
 
 Server → client ox_lib callback: `crimson-police:client:roadPoint` `{ near, min, max }` → `{ coords, heading }` or nil (the service-vehicle driver's client; the server validates the reply; custody).

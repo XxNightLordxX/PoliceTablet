@@ -142,7 +142,8 @@ do
     H.ok(c.category == 2 and c.areaAlpha == 80 and c.startCircleMin == 200.0, 'shipped: legend distance, circles')
     H.eq(c.radioSilence, 'area', 'shipped: Radio Silence keeps circles and single points (owner decision)')
     H.eq(c.radioSilenceLastKnown, 0, 'shipped: no last-known circle')
-    H.ok(c.startBlip == true and c.hudLine == true and c.objectiveGps == true and c.serviceVehicles == true, 'switches')
+    H.ok(c.startBlip == true and c.hudLine == true and c.objectiveGps == true, 'switches')
+    H.ok(c.parts.prisonerVan.on == true and c.parts.towTruck.on == true, 'the vans\' parts ship on (serviceVehicles)')
     H.eq(K.fightArea.sprite, 84, 'kinds: the fight area is a red skull')
     H.eq(K.fightArea.colour, 1, 'kinds: red = enemy')
     H.eq(K.escort.colour, 3, 'kinds: blue = friendly')
@@ -551,12 +552,23 @@ do
     world.streamed[300] = 7001
     Tick()
     H.eq(B(Live()[1]).kind, 'entity', 'on the van once streamed')
-    Config.Markers.serviceVehicles = false
+    Config.Markers.parts.prisonerVan.on = false
     Tick()
-    H.eq(#Live(), 0, 'serviceVehicles = false: no van blip')
-    Config.Markers.serviceVehicles = true
+    H.eq(#Live(), 0, 'parts.prisonerVan.on = false: no van blip')
+    Config.Markers.parts.prisonerVan.on = true
     Tick()
     H.eq(#Live(), 1, 'back on')
+    -- its look, name and range are its part's (one blip system: no kinds.prisonerVan)
+    M.service('van-1', nil)
+    Config.Markers.parts.prisonerVan.colour = 27
+    Config.Markers.parts.prisonerVan.label = 'Bus'
+    Config.Markers.parts.prisonerVan.shortRange = true
+    M.service('van-1', { netId = 300, coords = { x = 50.0, y = 50.0, z = 30.0 }, kind = 'prisonerVan' })
+    van = B(Live()[1])
+    H.ok(van.colour == 27 and van.name == 'Bus' and van.shortRange == true, 'the van: its part\'s look and label')
+    Config.Markers.parts.prisonerVan.colour = 3
+    Config.Markers.parts.prisonerVan.label = ''
+    Config.Markers.parts.prisonerVan.shortRange = false
     M.service('van-1', nil)
     H.eq(#Live(), 0, 'removed')
 
@@ -1555,8 +1567,9 @@ do
     local live = Live()
     H.eq(#live, 1, 'sv7: the van on the map')
     local vb = B(live[1])
-    H.ok(vb.sprite == K.prisonerVan.sprite and vb.colour == K.prisonerVan.colour and vb.scale == K.prisonerVan.scale,
-        'sv7: kinds.prisonerVan (blue cell bars)')
+    local P = Config.Markers.parts
+    H.ok(vb.sprite == P.prisonerVan.sprite and vb.colour == P.prisonerVan.colour and vb.scale == P.prisonerVan.scale,
+        'sv7: parts.prisonerVan (blue cell bars)')
     H.ok(vb.kind == 'coord' and vb.x == 150.0 and vb.name == 'markers.prisoner_van',
         'sv7: at the server\'s position until it streams in, named Prisoner transport')
     H.eq(#Routed(), 0, 'sv7: never routed')
@@ -1566,8 +1579,8 @@ do
     H.ok(#Live() == 1 and B(Live()[1]).kind == 'entity', 'sv7: on the van itself once it streams in')
     Send({ runId = 'run-sv7', id = 2, kind = 'towTruck', show = true, netId = 901, coords = { x = 0.0, y = 200.0 } })
     local tow = nil
-    for _, b in ipairs(Live()) do if B(b).sprite == K.towTruck.sprite then tow = b end end
-    H.ok(tow and B(tow).colour == K.towTruck.colour and B(tow).name == 'markers.tow_truck', 'sv7: the tow truck too')
+    for _, b in ipairs(Live()) do if B(b).sprite == P.towTruck.sprite then tow = b end end
+    H.ok(tow and B(tow).colour == P.towTruck.colour and B(tow).name == 'markers.tow_truck', 'sv7: the tow truck too')
     Send({ runId = 'run-other', id = 3, kind = 'prisonerVan', show = true, netId = 902, coords = van.coords })
     Send({ runId = 'run-sv7', id = 4, kind = 'start', show = true, netId = 903, coords = van.coords })
     H.eq(#Live(), 2, 'sv7: another run\'s van and an unknown kind are ignored')

@@ -50,7 +50,7 @@ say the same things in short and point back here.
    - [6.10 Adding a department](#610-adding-a-department)
    - [6.11 Field training (FTO)](#611-field-training-fto)
    - [6.12 Feature rewards: money and items for every feature](#612-feature-rewards-money-and-items-for-every-feature)
-   - [6.13 Extra mission blips](#613-extra-mission-blips)
+   - [6.13 Map markers: every part of a mission](#613-map-markers-every-part-of-a-mission)
 7. [Settings to check in your other resources](#7-settings-to-check-in-your-other-resources)
    - [7.1 Locations and other scripts](#71-locations-and-other-scripts)
 8. [All commands and keys](#8-all-commands-and-keys)
@@ -1027,7 +1027,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.NpcDifficulty.preset` | `'easy'`, `'normal'`, `'hard'` or `'custom'`. Changes how NPCs fight, never the pay |
 | `Config.NpcCombat` | How hard armed NPCs fight back: no automatic weapons, an accuracy cap, single shots, half damage, no headshot one-shots. See [5.9](#59-how-hard-npcs-fight-back) |
 | `Config.Flee` | How long a suspect who runs from your officers keeps running: the server times every runner on foot (time in a car does not count), who sprints for `sprintSeconds` (10 s), jogs for `jogSeconds` (12 s), walks for `walkSeconds` (8 s) and is then worn out. Each suspect lasts up to `jitter` (25 %) longer or shorter, `Config.NpcDifficulty`'s `fleeMult` stretches it (`'hard'`: 20 % longer), a runner no officer comes within `recoverRange` (60 m) of for `recoverSeconds` (20 s) sprints again, and `armedTire = false` keeps armed suspects fresh. A tired runner visibly slows down: at most a jog, then a walk, at `jogRate` (0.95) / `walkRate` (0.85) of the normal speed, and with `windedClipset` he jogs, then walks winded. Once worn out he gives up as soon as an officer is within `giveUpRange` (30 m): `exhausted = 'surrender'` he kneels, `'handsUp'` he stands with his hands up (Cuff suspect either way), `'walk'` he walks on and never gives up on his own. `enabled = false` turns it off. `nearestRoute` (on): a runner, cook or inmate who scatters flees along the escape route that starts nearest where he appears, so nobody runs back across the site past your officers (`false`: the routes take turns) |
-| `Config.Markers` | The objective on your officers' map: one blip for the objective they are on (for a fight or a search area, a circle and its centre) and one GPS line to it (`route`, in `routeColour`: 5 = yellow), off within `routeOffWithin` (40 m) of it and inside a circle. An officer still driving to the start gets only the line to the start, and one with a waypoint of his own gets no objective line. A suspect or car too far away for his game still shows where the server says (`farTargets`); objective blips show at the radar edge (`shortRange = false`), flash for `flashSeconds` (5 s) when new and show their distance in the map legend (`category = 2`); `areaAlpha` (80) is how solid the circles are, and a start at least `startCircleMin` (200 m) wide shows as a yellow circle. The mission start is a yellow map pin, "Mission start" (`kinds.start`), from accept until the officer arrives or the run ends (`startBlip`; `false` = only the waypoint shows it, as before): the waypoint set at accept is its GPS line, and while that waypoint is gone (the officer cleared it or set his own) the pin carries the line instead, so the start always keeps one; **Set GPS** on the tablet puts the waypoint back. `radioSilence` (`'area'`) is what Radio Silence hides: `'area'` keeps each objective's circle or its one blip (of several doors or devices only the officer's nearest) without a GPS line and without blips on people and cars, `'none'` hides every objective blip, `'full'` nothing; every mission follows it, and the Active Mission screen tells the officers which one applies (the drive to the start, the prisoner van and the tow truck always show). `kinds` sets each kind of blip's sprite, colour and size (yellow = go here, red = enemy, orange = fleeing, blue = friendly, green = safe point). Every objective gets one as it comes up: the mission's own blips when it draws them (Business Check: each door still to check is a numbered yellow blip, and the line goes to your nearest), else a yellow pin named after the objective at its spot, a Mission Builder mission's included; a moving one is followed from the server every `trackEvery` (2) seconds. Cars and suspects stay on the map at any distance (Stolen Vehicle Takedown, Street Race Bust, Pursuit Sim, Traffic Enforcement once the violator has passed you): their own red blips, and where the server has them once they are too far away for your game, with the line to your nearest. On Armored Truck Escort each officer's line goes to the truck while he is more than its clear radius (100 m) from it, else to the destination. Suspects, contacts and hostages too (Warrant Service, Prison Break, the raids' runners, Hostage Rescue, Parking Patrol, Suspicious Activity and the people of a traffic or stolen-car stop): a suspect orange while he runs and red once he fights or gives up, each hostage still tied blue and the green safe point once one is freed, a contact yellow until it is decided; a parked car that has not appeared yet shows at its kerb spot, and the Warrant Service front door has the line until you knock. Every fight (Gang Shootout, Hostage Rescue, the raids, the Weekly Boss) is a red circle with a skull, "Hostiles", round where the hostiles appear, with the line to its centre until you are inside; the Manhunt search circle is yellow with the line to its centre until you are inside, then to your nearest clue still to check (a numbered yellow dot), to a fugitive who runs (orange, red once he gives up), and back to the shrunk circle once every clue is checked. Point objectives too: Bomb Disposal's devices and the Drug Lab Raid's lab are numbered yellow blips (orange while set back) with the line to your nearest; a search for hidden devices, stashes or caches is a yellow circle with a yellow pin at its centre; a scene to process is a yellow map pin "Scene"; Beat Patrol and EVOC checkpoints are numbered yellow blips with their own line in `routeColour`, which an officer still driving to the start or with a waypoint of his own does not get. Blips that still show the same thing are kept between updates, so the line and the first flash are not redrawn. The detail blips show at the radar edge too (`shortRange`): each hostile's red dot, a boss a bigger one named after him (Gang Hideout Raid: "The lieutenant"). A device is named after the mission's target (Drug Lab Raid: "Shut down the lab"); one that was set back is orange, named after the recovery step ("Ventilate 1") and flashes until it is fixed (`setbackFlash`). A suspect who runs on foot from a car (Pursuit Sim, Street Race Bust, Stolen Vehicle Takedown) is orange. The prisoner transport and the tow truck are blue blips on every officer's map from the moment they appear until they drive off (`serviceVehicles`; never a GPS line, in every Radio Silence mode). Once an officer is at the action his HUD names what his objective blip leads to and how far it is ("Destination · 1.2 km", `hudLine`), and **Objective GPS** on the Active Mission screen puts a map waypoint on it (`objectiveGps`): the waypoint is then his one GPS line, follows a moving objective while it is still his, and goes when the objective ends; it is not offered while he drives to the start or under Radio Silence `'area'`/`'none'`. `enabled = false` turns it off |
+| `Config.Markers` | The objective on your officers' map: one blip for the objective they are on (for a fight or a search area, a circle and its centre) and one GPS line to it (`route`, in `routeColour`: 5 = yellow), off within `routeOffWithin` (40 m) of it and inside a circle. An officer still driving to the start gets only the line to the start, and one with a waypoint of his own gets no objective line. A suspect or car too far away for his game still shows where the server says (`farTargets`); objective blips show at the radar edge (`shortRange = false`), flash for `flashSeconds` (5 s) when new and show their distance in the map legend (`category = 2`); `areaAlpha` (80) is how solid the circles are, and a start at least `startCircleMin` (200 m) wide shows as a yellow circle. The mission start is a yellow map pin, "Mission start" (`kinds.start`), from accept until the officer arrives or the run ends (`startBlip`; `false` = only the waypoint shows it, as before): the waypoint set at accept is its GPS line, and while that waypoint is gone (the officer cleared it or set his own) the pin carries the line instead, so the start always keeps one; **Set GPS** on the tablet puts the waypoint back. `radioSilence` (`'area'`) is what Radio Silence hides: `'area'` keeps each objective's circle or its one blip (of several doors or devices only the officer's nearest) without a GPS line and without blips on people and cars, `'none'` hides every objective blip, `'full'` nothing; every mission follows it, and the Active Mission screen tells the officers which one applies (the drive to the start, the prisoner van and the tow truck always show). `kinds` sets each kind of blip's sprite, colour and size (yellow = go here, red = enemy, orange = fleeing, blue = friendly, green = safe point). Every objective gets one as it comes up: the mission's own blips when it draws them (Business Check: each door still to check is a numbered yellow blip, and the line goes to your nearest), else a yellow pin named after the objective at its spot, a Mission Builder mission's included; a moving one is followed from the server every `trackEvery` (2) seconds. Cars and suspects stay on the map at any distance (Stolen Vehicle Takedown, Street Race Bust, Pursuit Sim, Traffic Enforcement once the violator has passed you): their own red blips, and where the server has them once they are too far away for your game, with the line to your nearest. On Armored Truck Escort each officer's line goes to the truck while he is more than its clear radius (100 m) from it, else to the destination. Suspects, contacts and hostages too (Warrant Service, Prison Break, the raids' runners, Hostage Rescue, Parking Patrol, Suspicious Activity and the people of a traffic or stolen-car stop): a suspect orange while he runs and red once he fights or gives up, each hostage still tied blue and the green safe point once one is freed, a contact yellow until it is decided; a parked car that has not appeared yet shows at its kerb spot, and the Warrant Service front door has the line until you knock. Every fight (Gang Shootout, Hostage Rescue, the raids, the Weekly Boss) is a red circle with a skull, "Hostiles", round where the hostiles appear, with the line to its centre until you are inside; the Manhunt search circle is yellow with the line to its centre until you are inside, then to your nearest clue still to check (a numbered yellow dot), to a fugitive who runs (orange, red once he gives up), and back to the shrunk circle once every clue is checked. Point objectives too: Bomb Disposal's devices and the Drug Lab Raid's lab are numbered yellow blips (orange while set back) with the line to your nearest; a search for hidden devices, stashes or caches is a yellow circle with a yellow pin at its centre; a scene to process is a yellow map pin "Scene"; Beat Patrol and EVOC checkpoints are numbered yellow blips with their own line in `routeColour`, which an officer still driving to the start or with a waypoint of his own does not get. Blips that still show the same thing are kept between updates, so the line and the first flash are not redrawn. The detail blips show at the radar edge too (`shortRange`): each hostile's red dot, a boss a bigger one named after him (Gang Hideout Raid: "The lieutenant"). A device is named after the mission's target (Drug Lab Raid: "Shut down the lab"); one that was set back is orange, named after the recovery step ("Ventilate 1") and flashes until it is fixed (`setbackFlash`). A suspect who runs on foot from a car (Pursuit Sim, Street Race Bust, Stolen Vehicle Takedown) is orange. The prisoner transport and the tow truck are blue blips on every officer's map from the moment they appear until they drive off (`parts.prisonerVan.on` and `parts.towTruck.on`, shipped `true`; their look, name and range are their parts'; never a GPS line, in every Radio Silence mode). `extraParts` (shipped `false`), `refreshEvery`, `parts` and `rules` add the other parts of a mission ([6.13](#613-map-markers-every-part-of-a-mission)). Once an officer is at the action his HUD names what his objective blip leads to and how far it is ("Destination · 1.2 km", `hudLine`), and **Objective GPS** on the Active Mission screen puts a map waypoint on it (`objectiveGps`): the waypoint is then his one GPS line, follows a moving objective while it is still his, and goes when the objective ends; it is not offered while he drives to the start or under Radio Silence `'area'`/`'none'`. `enabled = false` turns it off |
 | `Config.Route` | The GPS route to the mission start. `required` (`true`): officers must follow it; `abandonAfter` (30 s) off the route in one stretch ends their run as Abandoned with the type cooldown, after a warning at `warnAfter` (10 s). `false`: the route is still set and shown and **Recalculate route** still works, but leaving it never ends a run (no warning, no countdown, no cooldown); the start timeout stays. A run keeps the value it was accepted with, so a change in **Settings** applies to new runs; a test run follows its own **Start route** switch. Also `maxDeviation` (120 m off the line counts as off route), `maxRecalcs` (2) and `maxDrift` (1000 m). `lateArriveRange` (150 m): once the run is In progress, an officer still on his way follows the action instead of the start (GPS to the objective, no route check) and arrives this close to it; `0` = only the start counts. `followActionSeconds` (300 s): from then on he has this long to reach the action, never less time than he had, so the start timeout does not drop a partner who left late while he chases; the HUD and the tablet show the time left in the last 2 minutes; `0` = he keeps the start deadline from his accept |
 | `Config.MissionCalls` | Tablet mission calls: `enabled`, how often (`spawnEvery`), how many open at once (`maxOpen`) |
 | `Config.Events` | Type of the Day, the Weekly Boss (`weeklyBoss.days`, `points`, `payout`) and the twists your officers may choose when they take a mission: `twists.<key>` (`enabled`, `points` = share of P it adds, `cash` = its cash multiplier) for Armored Hostiles (+25 %, x1.25; only where armed NPCs spawn), Time Crunch (+20 %, x1.20) and Radio Silence (+25 %, x1.25). Several stack, up to `twistMaxPoints` (+70 %) and `twistMaxCash` (x1.95), paid only for a completed run. `modifierChance` (0) adds a random twist to that share of runs on top of the chosen ones |
@@ -1268,7 +1268,7 @@ The two switches at the top ([5.5](#55-the-two-switches-at-the-top-debug-and-sto
 
 | Feature (name in the Features tab) | Section | Switch | More |
 |---|---|---|---|
-| Extra mission blips (vans, evidence, cars, partners) | NPC missions | `Config.MissionBlips.enabled` | [6.13](#613-extra-mission-blips) |
+| Extra parts of a mission on the map (in the Map markers row) | NPC missions | `Config.Markers.extraParts` | [6.13](#613-map-markers-every-part-of-a-mission) |
 | Live crimes (real players) | Player vs police | `Config.LiveCrime.enabled` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
 | Volunteer suspects | Player vs police | `Config.Volunteers.enabled` | [9.16](#916-real-suspects-live-crimes-and-volunteers) |
 | Criminal tablet for volunteer suspects | Player vs police | `Config.CriminalTablet.enabled` | [9.16.5](#9165-the-criminal-tablet) |
@@ -1309,7 +1309,7 @@ The two switches at the top ([5.5](#55-the-two-switches-at-the-top-debug-and-sto
 | Runners tire (sprint, jog, walk) | NPC missions | `Config.Flee.enabled` |
 | Tell hints on the HUD | NPC missions | `Config.Npc.tellHints` |
 | Rescale when officers leave | NPC missions | `Config.Rescale.enabled` |
-| Map markers and objective pointer | NPC missions | `Config.Markers.enabled` |
+| Map markers: the objective pointer and every part of a mission | NPC missions | `Config.Markers.enabled` |
 | Follow the GPS route to the start | NPC missions | `Config.Route.required` |
 | Mission calls | NPC missions | `Config.MissionCalls.enabled` |
 | Reopen abandoned mission calls | NPC missions | `Config.MissionCalls.reopen.enabled` |
@@ -1667,30 +1667,33 @@ Features → Money** (no typed word needed). Each row there shows its money, acc
   (no-show, cancel, logging off, leaving the search circle), he was not AFK, and his outcome was escaped, detained or
   booked. Test runs never pay.
 
-### 6.13 Extra mission blips
+### 6.13 Map markers: every part of a mission
 
-Map markers (`Config.Markers`) marks the objective. **Extra mission blips** (`Config.MissionBlips`) can also mark the
-other parts of a mission on the minimap and the big map. It ships off: with `Config.MissionBlips.enabled = false`
-nothing extra shows and the map is as before.
+Map markers (`Config.Markers`) is the one blip system of Crimson-Police: it marks the objective, the prisoner van
+and tow truck coming to you, and, if you want, every other part of a mission on the minimap and the big map. The
+other parts ship off: with `Config.Markers.extraParts = false` only the objective, the prisoner van and the tow
+truck show, as before.
 
-The easy way is Admin UI → **Mission blips** (under NPC missions; `Config.AdminUi.missionBlipsScreen`, shipped
-`true`, `false` hides the screen). On top is the main switch (**Turn on**) and how often the server checks. Below it
-is one row per part, each with:
+The easy way is Admin UI → **Map markers** (under NPC missions; `Config.AdminUi.markersScreen`, shipped `true`,
+`false` hides the screen). On top are the objective's own settings (its blip, GPS line, Radio Silence, HUD line) and
+the look of each kind of objective blip. Then the switch of the extra parts (**Turn on**) and how often the server
+checks. Below it is one row per part, each with:
 
-- its **on** switch (a part that is on waits for the main switch, and says so);
+- its **on** switch (the prisoner van and tow truck have their own switch, shipped on; every other part that is on
+  waits for the extra parts' switch, and says so);
 - its **look**: the picture (pick a named one such as Van, Car or Hospital, or type any blip id), the colour (pick
   a named one such as Blue or Red, or type any colour id), the size, the name on the map and **Only when near**;
 - **Who sees it**: tick departments, jobs and mission types, add missions, set the lowest grade and pick everyone,
   the unit leader or supervisors. Nothing ticked means any. **Remove the rules** shows the part to everyone again.
 
-You can also turn it on in Admin UI → **Settings** → **Features** (Extra mission blips) and edit every value in
-Admin UI → **Settings** → Missions and Builder → **Mission blips** (or in `config/config.lua`). Changes work at once,
-no restart, and every change is saved and audited like any setting.
+You can also find it in Admin UI → **Settings** → **Features** (one Map markers row, which links the extra parts'
+switch) and edit every value in Admin UI → **Settings** → Missions and Builder → **Map markers** (or in
+`config/config.lua`). Changes work at once, no restart, and every change is saved and audited like any setting.
 
 | Part | What it marks |
 |---|---|
-| `prisonerVan`, `prisonerDrop` | the prisoner van, and where it waits for the hand-over |
-| `towTruck`, `impoundDrop` | the tow truck, and where it waits to load the car |
+| `prisonerVan`, `prisonerDrop` | the prisoner van (its own switch, shipped on), and where it waits for the hand-over |
+| `towTruck`, `impoundDrop` | the tow truck (its own switch, shipped on), and where it waits to load the car |
 | `coronerVan`, `coronerDrop` | the coroner van, and where it waits for the body bags |
 | `evidence` | clue props and body bags |
 | `suspectVehicle`, `parkedCar` | a suspect's or stopped car, and the parked cars of a scene |
@@ -1703,10 +1706,18 @@ no restart, and every change is saved and audited like any setting.
 | `reportedPoint` | a live case's reported scene and last-reported points |
 
 Each part has `on`, `sprite`, `colour`, `scale`, `label` (`''` = the built-in name) and `shortRange` (`true` = only
-on the minimap when near). The prisoner van and tow truck are added only while `Config.Markers.serviceVehicles` is
-off, because Map markers shows them already.
+on the minimap when near). The prisoner van and tow truck are drawn once each (never a second blip), in every Radio
+Silence mode, while their `on` is `true`.
 
-**Who sees a part**: `Config.MissionBlips.rules` limits a part by department, job, lowest grade, mission type,
+**Older names still work.** A `config.lua` from before this change keeps working: its old `MissionBlips` block is
+read into `Config.Markers` (`MissionBlips.enabled` as `Config.Markers.extraParts`; `refreshEvery`, `parts` and
+`rules` under the same names), `Markers.serviceVehicles` as the `on` of `Config.Markers.parts.prisonerVan` and
+`Config.Markers.parts.towTruck`, and `AdminUi.missionBlipsScreen` as `Config.AdminUi.markersScreen` (a new name you
+set already wins). Settings saved in game under the old names still apply and are moved to the new names at the
+first start. The console says once which old names it read and their new names: rename them in
+`config/config.lua` when you have time. An old link to the Mission blips screen opens Map markers.
+
+**Who sees a part**: `Config.Markers.rules` limits a part by department, job, lowest grade, mission type,
 mission and role. All rules you set must match; a part without rules shows to everyone on the run:
 
 ```lua
@@ -1719,8 +1730,9 @@ rules = {
 The server decides what each officer gets and sends only that. A real player suspect's live position is never shown
 (a live case keeps its last-reported points only), nothing hidden shows before it is found (a staged ambush, a
 hidden contact, a fugitive's hiding spot), and Radio Silence still hides people and cars ('area') or everything but
-the vans ('none'), as `Config.Markers.radioSilence` says. The blips go at the run's end, when you leave the run, log
-out, or the switch is turned off.
+the vans ('none'), as `Config.Markers.radioSilence` says. The prisoner van and tow truck follow their rules too (an
+officer the rules leave out never gets their blip). The blips go at the run's end, when you leave the run, log out,
+or the switch is turned off.
 
 ---
 

@@ -587,10 +587,11 @@ marker. Run the mission on that location (turn its other locations off, README 5
   text. (Z10)
 - [ ] `Config.AdminUi.windowRows = true`: scroll a long board far down, filter it to a few rows, clear the filter:
   the rows show at once. (Z10)
-- [ ] Extra mission blips ship off: with `Config.MissionBlips.enabled = false` a run shows only the objective blips, as
-  before. Turn on Settings -> Features -> Extra mission blips and the parts `coronerVan`, `coronerDrop`, `evidence`,
-  `parkedCar` and `partner`; on a Process the scene run the coroner van, where it parks and the body bags show on the
-  minimap and the big map, the parked cars near the scene, your partner in blue (not yourself). (BL1)
+- [ ] The extra parts of Map markers ship off: with `Config.Markers.extraParts = false` a run shows only the objective
+  blips, the prisoner van and the tow truck. Turn on Admin UI -> Map markers -> Turn on and the parts `coronerVan`,
+  `coronerDrop`, `evidence`, `parkedCar` and `partner`; on a Process the scene run the coroner van, where it parks and
+  the body bags show on the minimap and the big map, the parked cars near the scene, your partner in blue (not
+  yourself). (BL1, MG1)
 - [ ] Add a rule `partner = { roles = 'leader' }`: only the run's leader sees partners, within a few seconds, no
   restart. With Radio Silence the parked cars and partners go; the van and the bags stay. (BL1)
 - [ ] A Manhunt with `hidingSpot` on: no hiding spot shows until a fugitive runs; then his spot shows. A live case
@@ -598,23 +599,33 @@ marker. Run the mission on that location (turn its other locations off, README 5
   the hospital while he is down. (BL1)
 - [ ] End the run, leave a run, log out: every extra blip goes. resmon on a run with every part on stays under
   0.05 ms. (BL1)
-- [ ] Admin UI -> Mission blips is listed under NPC missions. Turn on: the card turns green and Settings -> Features
-  shows Extra mission blips on. Switch on Coroner van, pick the picture Van and the colour Purple: on the next
-  Process the scene run the van shows with that look on the minimap and the big map, no restart. (BL2)
-- [ ] Mission blips -> Partner -> Change who sees it: tick SAST, pick The run's leader only, Save: the row shows
+- [ ] Admin UI -> Map markers is listed under NPC missions (an old link to Mission blips opens it). On top: the
+  objective's settings and the look of each kind of objective blip; change the Mission start colour: the next start
+  pin has it. Turn on the extra parts: the card turns green. Switch on Coroner van, pick the picture Van and the
+  colour Purple: on the next Process the scene run the van shows with that look, no restart. Settings -> Features
+  has one Map markers row (no Extra mission blips row). (BL2, MG1)
+- [ ] Map markers -> Partner -> Change who sees it: tick SAST, pick The run's leader only, Save: the row shows
   the two limits, Settings -> History has the change, and only the run's leader sees partners if he is SAST. Remove the
-  rules: everyone on the run sees them again. `Config.AdminUi.missionBlipsScreen = false` hides the screen. (BL2)
-- [ ] Mission blips, a part with `roles = 'leader'`: the officer who started the run leaves it (or drops): the next
+  rules: everyone on the run sees them again. `Config.AdminUi.markersScreen = false` hides the screen. (BL2, MG1)
+- [ ] Map markers, a part with `roles = 'leader'`: the officer who started the run leaves it (or drops): the next
   officer (the new host) sees the part within a few seconds. (Z11)
-- [ ] Mission blips with `suspectVehicle` on, a Traffic Enforcement run: no blip on the violator while it drives
+- [ ] Map markers with `suspectVehicle` on, a Traffic Enforcement run: no blip on the violator while it drives
   toward the observe point; it shows once the car has passed you, as the objective blip does. (Z11)
-- [ ] Mission blips during a run: change a part's colour or label on the Mission blips screen: the coroner drop-off,
-  hospital or other still blips change within a second, no new list needed. (Z11)
-- [ ] Mission blips, a live case with `hospitalDrop` on: a suspect goes down, then disconnects: the hospital blip
+- [ ] Map markers during a run: change a part's colour or label: the coroner drop-off, hospital or other still blips
+  change within a second, no new list needed. (Z11)
+- [ ] Map markers, a live case with `hospitalDrop` on: a suspect goes down, then disconnects: the hospital blip
   goes. (Z11)
-- [ ] Mission blips -> Change who sees it: tick a choice, then save another setting (or another admin saves one):
-  the ticks stay until you save or cancel. The On count leaves out Prisoner van and Tow truck while Map markers'
-  serviceVehicles is on, and their hints say so. (Z11)
+- [ ] Map markers -> Change who sees it: tick a choice, then save another setting (or another admin saves one):
+  the ticks stay until you save or cancel. The On count leaves out Prisoner van and Tow truck (they have their own
+  switch, and their rows say so). (Z11, MG1)
+- [ ] One blip system: request a prisoner van and a tow truck with the extra parts on and every part on: each shows
+  once (one blip, blue, "Prisoner transport" / "Tow truck"), never a second blip. Switch Prisoner van off on Map
+  markers: its blip goes within 2 s; on again: back. Give it a new colour or label: the next van has it. A rule
+  `prisonerVan = { grade = 3 }`: an officer below grade 3 gets no van blip on the next van. (MG1)
+- [ ] Old names: put back an old `Config.MissionBlips = { enabled = true, ... }` block and
+  `Config.Markers.serviceVehicles = false` (or keep settings saved in game under those names before the update), start:
+  one console line lists each old name with its new one, the extra parts are on and the vans hidden as before;
+  Settings shows the values under Markers.extraParts and Markers.parts, and the next start prints no such line. (MG1)
 - [ ] Back up now, then restart Crimson-Police while it writes (big store): after the start, saves/_backups holds no
   `.t.*.json` or `.f*.bin` without a matching `.manifest.json`. (Z11)
 - [ ] A restore that fails part way, then the fix restore of its automatic backup works: the reply and the audit

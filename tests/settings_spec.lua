@@ -1464,25 +1464,29 @@ do
     H.eq(E('OfficerOptions.defaults.colourblindMap').default, false, 'the kinds colours, as before')
 end
 
--- Config.MissionBlips: its own section in the missions group, shipped off, each comment its description, the limits,
--- the rules picked from the allowed keys only, and a Features row.
+-- Config.Markers.parts (MG1: the mission blips folded into Map markers): in the Map markers section, the extra parts
+-- shipped off, each comment its description, the limits, the rules picked from the allowed keys only, one Features row.
 do
     local function E(p) return S.entry(p) or {} end
-    H.ok(E('MissionBlips.enabled').section ~= E('Markers.enabled').section, 'Mission blips is a section of its own')
-    H.eq(E('MissionBlips.enabled').default, false, 'the master switch ships off')
-    H.eq(E('MissionBlips.enabled').desc,
-        'master switch: false = no extra mission blips at all (each part\'s on is ignored)', 'its comment is its help')
-    H.eq(E('MissionBlips.parts.evidence.on').default, false, 'every part ships off')
-    H.eq(E('MissionBlips.parts.partner.shortRange').desc,
+    H.eq(E('MissionBlips.enabled').path, nil, 'one blip system: no Mission blips settings of their own')
+    H.eq(E('Markers.serviceVehicles').path, nil, 'serviceVehicles is the vans\' on now')
+    H.eq(E('Markers.extraParts').section, E('Markers.enabled').section, 'the parts are in the Map markers section')
+    H.eq(E('Markers.extraParts').default, false, 'the extra parts ship off')
+    H.ok((E('Markers.extraParts').desc or ''):find('the other parts of a mission', 1, true) ~= nil,
+        'its comment is its help')
+    H.eq(E('Markers.parts.evidence.on').default, false, 'every extra part ships off')
+    H.eq(E('Markers.parts.prisonerVan.on').default, true, 'the prisoner van ships on, as serviceVehicles did')
+    H.eq(E('Markers.parts.towTruck.on').default, true, 'the tow truck too')
+    H.eq(E('Markers.parts.partner.shortRange').desc,
         'true = on the minimap only when near; false = at the minimap\'s edge however far away it is',
         'the part fields share their comment lines')
-    H.ok((Check('MissionBlips.refreshEvery', 30)), 'a check every 30 s at most')
-    Err('MissionBlips.refreshEvery', 0, 'err.setting_range', 'at least every second')
-    Err('MissionBlips.parts.partner.sprite', 966, 'err.setting_range', 'sprites stop at 965')
-    Err('MissionBlips.parts.partner.colour', 86, 'err.setting_range', 'colours stop at 85')
-    Err('MissionBlips.parts.partner.scale', 2.5, 'err.setting_range', 'a size of 2.0 at most')
-    H.ok((Check('MissionBlips.parts.partner.label', 'Unit')), 'a label of its own')
-    H.ok((Check('MissionBlips.rules', {
+    H.ok((Check('Markers.refreshEvery', 30)), 'a check every 30 s at most')
+    Err('Markers.refreshEvery', 0, 'err.setting_range', 'at least every second')
+    Err('Markers.parts.partner.sprite', 966, 'err.setting_range', 'sprites stop at 965')
+    Err('Markers.parts.partner.colour', 86, 'err.setting_range', 'colours stop at 85')
+    Err('Markers.parts.partner.scale', 2.5, 'err.setting_range', 'a size of 2.0 at most')
+    H.ok((Check('Markers.parts.partner.label', 'Unit')), 'a label of its own')
+    H.ok((Check('Markers.rules', {
         partner = {
             departments = { 'sast' },
             jobs = { 'sast' },
@@ -1492,21 +1496,27 @@ do
             roles = 'leader',
         },
     })), 'every rule key at once')
-    H.ok((Check('MissionBlips.rules', {})), 'no rules')
-    H.ok(not (Check('MissionBlips.rules', { partner = { roles = 'chief' } })), 'roles: all, leader or supervisor only')
-    H.ok(not (Check('MissionBlips.rules', { partner = { colour = 3 } })), 'no other rule key')
-    local row = nil
-    for _, f in ipairs(S._features or {}) do if f.key == 'mission_blips' then row = f end end
-    H.ok(row ~= nil and row.play == 'npc', 'the Features tab has a Mission blips row (NPC missions)')
-    H.eq(row and row.path, 'MissionBlips.enabled', 'it switches Config.MissionBlips.enabled')
-    -- the Mission blips screen (BL2) edits these same settings: one per part field, the rules as one value
-    H.eq(E('AdminUi.missionBlipsScreen').default, true, 'the Admin UI ships with a Mission blips screen')
-    H.eq(E('AdminUi.missionBlipsScreen').kind, 'boolean', 'missionBlipsScreen is a switch')
-    H.ok((E('AdminUi.missionBlipsScreen').desc or ''):find('Mission blips screen', 1, true) ~= nil,
-        'missionBlipsScreen: its config.lua comment is its description')
-    H.eq(E('MissionBlips.parts.coronerVan.sprite').kind, 'number', 'a part\'s sprite is its own number setting')
-    H.eq(E('MissionBlips.parts.coronerVan.shortRange').kind, 'boolean', 'its range is a switch')
-    H.eq(E('MissionBlips.rules').kind, 'json', 'the rules are one setting the screen saves whole')
+    H.ok((Check('Markers.rules', {})), 'no rules')
+    H.ok(not (Check('Markers.rules', { partner = { roles = 'chief' } })), 'roles: all, leader or supervisor only')
+    H.ok(not (Check('Markers.rules', { partner = { colour = 3 } })), 'no other rule key')
+    local rows, row = 0, nil
+    for _, f in ipairs(S._features or {}) do
+        if f.key == 'markers' then row = f end
+        if f.key == 'markers' or f.key == 'mission_blips' then rows = rows + 1 end
+    end
+    H.eq(rows, 1, 'the Features tab has one Map markers row')
+    H.eq(row and row.path, 'Markers.enabled', 'it switches Config.Markers.enabled')
+    H.ok(row and table.concat(row.limits or {}, ','):find('Markers.extraParts', 1, true) ~= nil,
+        'and links the extra parts\' switch')
+    -- the Map markers screen edits these same settings: one per part field, the rules as one value
+    H.eq(E('AdminUi.markersScreen').default, true, 'the Admin UI ships with a Map markers screen')
+    H.eq(E('AdminUi.markersScreen').kind, 'boolean', 'markersScreen is a switch')
+    H.ok((E('AdminUi.markersScreen').desc or ''):find('Map markers screen', 1, true) ~= nil,
+        'markersScreen: its config.lua comment is its description')
+    H.eq(E('AdminUi.missionBlipsScreen').path, nil, 'missionBlipsScreen is an old name only')
+    H.eq(E('Markers.parts.coronerVan.sprite').kind, 'number', 'a part\'s sprite is its own number setting')
+    H.eq(E('Markers.parts.coronerVan.shortRange').kind, 'boolean', 'its range is a switch')
+    H.eq(E('Markers.rules').kind, 'json', 'the rules are one setting the screen saves whole')
 end
 
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.

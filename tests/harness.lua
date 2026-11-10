@@ -3118,6 +3118,7 @@ function H.boot(opts)
     -- shared/*.lua in fxmanifest's (alphabetical) order
     H.load('shared/init.lua')
     H.load('shared/locale.lua')
+    H.load('shared/markers.lua')
     H.load('shared/net.lua')
     H.load('shared/npccombat.lua')
     H.load('shared/options.lua')

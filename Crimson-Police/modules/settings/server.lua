@@ -141,7 +141,6 @@ local GROUPS = {
             'difficulty',
             'route_to_the_start',
             'map_markers',
-            'mission_blips',
             'random_draw',
             'units',
             'cross_department_missions',
@@ -213,7 +212,6 @@ Play.groups = {
             'scaling_by_participants',
             'route_to_the_start',
             'map_markers',
-            'mission_blips',
             'random_draw',
             'dispatch',
             'special_events',
@@ -304,8 +302,13 @@ Play.features = {
     { key = 'flee', play = 'npc', path = 'Flee.enabled' },
     { key = 'tell_hints', play = 'npc', path = 'Npc.tellHints' },
     { key = 'rescale', play = 'npc', path = 'Rescale.enabled' },
-    { key = 'markers', play = 'npc', path = 'Markers.enabled' },
-    { key = 'mission_blips', play = 'npc', path = 'MissionBlips.enabled', limits = { 'MissionBlips.refreshEvery' } },
+    -- Map markers: the objective's blip and line, and the other parts of a mission (Markers.extraParts)
+    {
+        key = 'markers',
+        play = 'npc',
+        path = 'Markers.enabled',
+        limits = { 'Markers.extraParts', 'Markers.refreshEvery' },
+    },
     { key = 'route', play = 'npc', path = 'Route.required', risky = true },
     {
         key = 'mission_calls',
@@ -827,11 +830,11 @@ local RANGES = {
     ['Markers.kinds.*.bossScale'] = { 0.3, 2 },
     ['Markers.kinds.*.nextScale'] = { 0.3, 2 },
     ['Markers.kinds.*.surrenderedScale'] = { 0.3, 2 },
-    -- the extra mission blips (Config.MissionBlips)
-    ['MissionBlips.refreshEvery'] = { 1, 30 },
-    ['MissionBlips.parts.*.sprite'] = { 0, 965 },
-    ['MissionBlips.parts.*.colour'] = { 0, 85 },
-    ['MissionBlips.parts.*.scale'] = { 0.3, 2 },
+    -- every part of a mission on the map (Config.Markers.parts)
+    ['Markers.refreshEvery'] = { 1, 30 },
+    ['Markers.parts.*.sprite'] = { 0, 965 },
+    ['Markers.parts.*.colour'] = { 0, 85 },
+    ['Markers.parts.*.scale'] = { 0.3, 2 },
     -- admin control limits
     ['AdminControl.adjustConfirmAbove'] = { 1, 10000 },
     ['AdminControl.adjustDailyLimit'] = { 0, 1000000 },
@@ -1657,8 +1660,8 @@ local KNOWN = {
         allowFalse = true,
     },
     ['Cash.account'] = { tpl = Enum({ 'bank', 'cash' }), kind = 'enum' },
-    -- who sees a mission blip part: every rule optional (Config.MissionBlips.rules)
-    ['MissionBlips.rules'] = {
+    -- who sees a part of a mission on the map: every rule optional (Config.Markers.rules)
+    ['Markers.rules'] = {
         tpl = MapOf(Record({
             departments = ListOf(ID, { unique = true }),
             jobs = ListOf(ID, { unique = true }),
@@ -1668,7 +1671,7 @@ local KNOWN = {
             roles = Enum({ 'all', 'leader', 'supervisor' }),
         }), '^%a+$'),
     },
-    ['MissionBlips.parts.*.label'] = { tpl = Text(nil, 40) },
+    ['Markers.parts.*.label'] = { tpl = Text(nil, 40) },
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
     ['Tablet.sidebarOrder'] = { tpl = Enum({ 'classic', 'mostUsed' }), kind = 'enum' },
     ['Tablet.supervisorLanding'] = { tpl = Enum({ 'first', 'report', 'review', 'live' }), kind = 'enum' },
@@ -3130,6 +3133,52 @@ local function DeleteRow(path)
     return true
 end
 
+-- The saved rows with Map markers' old names read as the new ones (CP.MarkerAliases.paths), once: an old row is saved
+-- again under each of its new paths that has no row yet, then removed, so every later change, reset or export uses
+-- the new name. A row that cannot be moved is still read under its new name this start.
+function Settings._aliasRows(rows)
+    local A = CP.MarkerAliases
+    if not (A and A.paths) then return rows end
+    local have = {}
+    for _, r in ipairs(rows) do have[tostring(r.setting_key)] = true end
+    local out = {}
+    for _, r in ipairs(rows) do
+        local old = tostring(r.setting_key)
+        local news = A.paths(old)
+        if news == nil then
+            out[#out + 1] = r
+        else
+            local moved = true
+            for _, new in ipairs(news) do
+                if not have[new] then
+                    have[new] = true
+                    out[#out + 1] = {
+                        setting_key = new,
+                        value_json = r.value_json,
+                        updated_by = r.updated_by,
+                        updated_ts = r.updated_ts,
+                    }
+                    if A.savedUsed then A.savedUsed(old, new) end
+                    local ok, err = pcall(MySQL.insert.await, [[
+                        INSERT INTO cp_settings (setting_key, value_json, updated_by, updated_at) VALUES (?, ?, ?, NOW())
+                        ON DUPLICATE KEY UPDATE value_json = VALUES(value_json), updated_by = VALUES(updated_by),
+                          updated_at = VALUES(updated_at)
+                    ]], { new, tostring(r.value_json), tostring(r.updated_by or 'console') })
+                    if not ok then
+                        moved = false
+                        CP.err(TAG, 'saving %s under its new name %s failed: %s', old, new, tostring(err))
+                    end
+                end
+            end
+            if moved then
+                local ok, err = pcall(MySQL.update.await, 'DELETE FROM cp_settings WHERE setting_key = ?', { old })
+                if not ok then CP.err(TAG, 'removing the old setting %s failed: %s', old, tostring(err)) end
+            end
+        end
+    end
+    return out
+end
+
 -- Every saved row, each checked again (a value config.lua no longer allows is ignored with one warning).
 local function LoadRows()
     local ok, rows = pcall(MySQL.query.await,
@@ -3139,14 +3188,15 @@ local function LoadRows()
         return false
     end
     saved = {}
+    rows = Settings._aliasRows(type(rows) == 'table' and rows or {})
     -- every saved value, so a bonus's kind is checked with its saved value (they are saved together)
     local pending = {}
-    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+    for _, r in ipairs(rows) do
         local doc = U.jsonField(r.value_json)
         if type(doc) == 'table' and doc.v ~= nil then pending[tostring(r.setting_key)] = doc.v end
     end
     local ctx = { boot = true, pending = pending }
-    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+    for _, r in ipairs(rows) do
         local path = tostring(r.setting_key)
         local doc = U.jsonField(r.value_json)
         local rec = { by = r.updated_by, at = math.floor(U.num(r.updated_ts)) }
@@ -3281,6 +3331,8 @@ function Settings.boot()
     local ok = LoadRows()
     if ok then ApplyAll(true) end
     loaded = true
+    -- one line when config.lua or a saved setting still used Map markers' old names
+    if CP.MarkerAliases and CP.MarkerAliases.report then pcall(CP.MarkerAliases.report) end
     local n = 0
     for _ in pairs(saved) do n = n + 1 end
     if n > 0 then print(('[crimson-police] %s'):format(CP.L('settings.console_loaded', { n = n }))) end
@@ -4448,7 +4500,25 @@ function Settings.previewImport(text)
     if #doc.settings > IMPORT_ROWS then return nil, 'err.setting_too_many' end
     local view = { changes = {}, unknown = {}, locked = {}, invalid = {}, money = {}, unchanged = 0 }
     local apply, seen = {}, {}
+    -- a file exported before Map markers took in the mission blips: its old names read as the new ones
+    local items, named = {}, {}
     for _, item in ipairs(doc.settings) do
+        if type(item) == 'table' and type(item.path) == 'string' then named[item.path] = true end
+    end
+    for _, item in ipairs(doc.settings) do
+        local news = type(item) == 'table' and CP.MarkerAliases and CP.MarkerAliases.paths(item.path) or nil
+        if news then
+            for _, new in ipairs(news) do
+                if not named[new] then
+                    named[new] = true
+                    items[#items + 1] = { path = new, value = item.value, none = item.none }
+                end
+            end
+        else
+            items[#items + 1] = item
+        end
+    end
+    for _, item in ipairs(items) do
         local path = type(item) == 'table' and item.path or nil
         if type(path) ~= 'string' or seen[path] then
             view.invalid[#view.invalid + 1] = { path = tostring(path), error = 'err.import_format' }

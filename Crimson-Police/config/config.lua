@@ -200,11 +200,12 @@ Config.AdminUi = {
     -- its money, how it is paid and its items, saved like any setting; false = no such screen (Settings still has
     -- every value). Nothing is paid differently
     rewardsScreen = false,
-    -- true = the Admin UI gets a Mission blips screen (under NPC missions): the master switch of the extra mission
-    -- blips, every part with its on switch, look (sprite, colour, size), label and range, and who sees it
-    -- (departments, jobs, lowest grade, mission types, missions, role), saved like any setting; false = no such
-    -- screen (Settings still has every value). The blips themselves stay off until Config.MissionBlips.enabled
-    missionBlipsScreen = true,
+    -- true = the Admin UI gets a Map markers screen (under NPC missions): how the objective blips look, the switch of
+    -- the extra parts, and every part (the prisoner van and tow truck among them) with its on switch, look (sprite,
+    -- colour, size), label and range, and who sees it (departments, jobs, lowest grade, mission types, missions,
+    -- role), saved like any setting; false = no such screen (Settings still has every value). The extra parts stay
+    -- off until Config.Markers.extraParts
+    markersScreen = true,
     -- true = Admin UI -> Home shows a "Needs attention" panel on top: the Problems lines, today's refused mission
     -- starts, the open disputes, the flagged runs waiting for a review and the open player suspect cases, each a
     -- count that opens its screen; false = no such panel (Home as before). It only reads
@@ -725,6 +726,10 @@ Config.Route = {
 -- fleeing or needs a follow-up; 3 = blue, friendly; 2 = green, safe point) and a scale (its size, 1.0 = normal).
 -- nextScale, bossScale, surrenderedScale, followUpColour and setbackColour are the same for the next checkpoint, a
 -- boss, a suspect who gave up (the same size near you and far away), a point to follow up and a device set back.
+-- Under parts, every other part of a mission can get a blip of its own (shipped: only the prisoner van and tow truck
+-- coming to you; the rest waits for extraParts). The server decides what each officer gets: a real player suspect's
+-- live position never shows (a live case keeps its last-reported points only), nothing hidden shows before it is
+-- found, and Radio Silence still hides people and cars ('area') or everything but the vans ('none').
 -- Sprite and colour ids: docs.fivem.net/docs/game-references/blips/
 Config.Markers = {
     enabled = true,              -- false = no objective blip or line from Crimson-Police (the missions' own blips stay)
@@ -751,7 +756,6 @@ Config.Markers = {
     radioSilenceLastKnown = 0,
     hudLine = true,              -- true = the HUD shows the objective's name and how far it is
     objectiveGps = true,         -- true = an Objective GPS button on the tablet puts a waypoint on the objective
-    serviceVehicles = true,      -- true = a prisoner van or tow truck coming to you shows on the map
     -- How each kind of blip looks: sprite (blip id), colour id and size. Yellow = go here, red = enemy, orange =
     -- fleeing or needs a follow-up, blue = friendly, green = safe point
     -- sprite: the blip's picture, by its blip id (docs.fivem.net/docs/game-references/blips/)
@@ -782,37 +786,27 @@ Config.Markers = {
         scene = { sprite = 162, colour = 5, scale = 0.9 },                      -- a scene to work
         point = { sprite = 1, colour = 5, scale = 0.8, followUpColour = 17 },   -- a point to check (or follow up)
         device = { sprite = 1, colour = 5, scale = 0.8, setbackColour = 17 },   -- a device to work (or one set back)
-        prisonerVan = { sprite = 285, colour = 3, scale = 0.8 },                -- a prisoner van coming to you
-        towTruck = { sprite = 68, colour = 3, scale = 0.8 },                    -- a tow truck coming to you
         objective = { sprite = 162, colour = 5, scale = 0.9 },                  -- any other objective
     },
-}
-
--- ============================================================================
---                                MISSION BLIPS
--- ============================================================================
--- Extra map blips for the other parts of a mission: the prisoner van, tow truck and coroner van and where each one
--- waits for you, evidence, the cars and people of a scene, devices, hiding spots once found, ambush cars once they
--- appear, the hospital, your partners and a live case's reported points. They show on the minimap and the big map.
--- Shipped off: with enabled = false nothing below shows and the map is as before (Map markers above still marks the
--- objective). The server decides what each officer gets: a real player suspect's live position never shows (a live
--- case keeps its last-reported points only), nothing hidden shows before it is found, and Radio Silence still hides
--- people and cars ('area') or everything ('none') as Config.Markers.radioSilence says.
-Config.MissionBlips = {
-    enabled = false,             -- master switch: false = no extra mission blips at all (each part's on is ignored)
-    refreshEvery = 3,            -- seconds between the server's checks of what each officer's map should show
-    -- Each part of a mission that can get a blip. The prisoner van and tow truck show only when Map markers does not
-    -- already show them (Config.Markers.serviceVehicles off)
-    -- on: true = this part shows (only while enabled is true)
+    -- true = the other parts of a mission below get map blips too: where the prisoner van and tow truck wait for you,
+    -- the coroner van and where it waits, evidence, the cars and people of a scene, devices, hiding spots once found,
+    -- ambush cars once they appear, the hospital, your partners and a live case's reported points; false = none of
+    -- them (each one's on is then ignored). The prisoner van and tow truck follow only their own on
+    extraParts = false,
+    refreshEvery = 3,            -- seconds between the server's checks of what each officer's extra parts show
+    -- Each part of a mission that can get a blip, with its look. prisonerVan and towTruck: a prisoner van or tow truck
+    -- coming to you, shown in every Radio Silence mode while its on is true; every other part shows only while
+    -- extraParts is true too
+    -- on: true = this part shows
     -- sprite: the blip's picture, by its blip id (docs.fivem.net/docs/game-references/blips/)
     -- colour: the blip's colour id (5 = yellow, 1 = red, 17 = orange, 3 = blue, 2 = green, 0 = white)
     -- scale: the blip's size (1.0 = normal, 0.5 = half)
     -- label: its name on the map legend ('' = the built-in name)
     -- shortRange: true = on the minimap only when near; false = at the minimap's edge however far away it is
     parts = {
-        prisonerVan = { on = false, sprite = 285, colour = 3, scale = 0.8, label = '', shortRange = false },
+        prisonerVan = { on = true, sprite = 285, colour = 3, scale = 0.8, label = '', shortRange = false },
         prisonerDrop = { on = false, sprite = 60, colour = 3, scale = 0.7, label = '', shortRange = false },
-        towTruck = { on = false, sprite = 68, colour = 3, scale = 0.8, label = '', shortRange = false },
+        towTruck = { on = true, sprite = 68, colour = 3, scale = 0.8, label = '', shortRange = false },
         impoundDrop = { on = false, sprite = 50, colour = 3, scale = 0.7, label = '', shortRange = false },
         coronerVan = { on = false, sprite = 67, colour = 40, scale = 0.8, label = '', shortRange = false },
         coronerDrop = { on = false, sprite = 1, colour = 40, scale = 0.7, label = '', shortRange = false },

@@ -33,6 +33,8 @@ export function resolveAdminKey(
     params: ScreenParams | undefined,
     session: Session | null | undefined,
 ): { key: ScreenKey; params: ScreenParams } {
+    // the Mission blips screen is a part of Map markers now: its old key opens Map markers
+    if (key === 'admin_blips') return { key: 'admin_markers', params: params ?? {} };
     const tab = ALIASES[key];
     if (!tab || !moneyScreenOn(session)) return { key, params: params ?? {} };
     return { key: 'admin_money', params: { ...(params ?? {}), moneyTab: tab } };

@@ -292,7 +292,7 @@ Layout options (presentation only: screen keys, visibility and links never chang
 - Supervisor UI (Config.Tablet, all default false or 'first'): supervisorByTask groups the sidebar by task (people, missions, rewards, review) with a heading over each; supervisorCompact shows icons only; supervisorLanding opens on 'report', 'review' or 'live' when visible (anything else = the first screen) until a screen is picked. supervisorControlsCard shows on Department Report a read-only card of each Mission control he may use now (value in use, whether a change is live, min and max, today's use; the callback is refused with err.controls_card_off while off). supervisorRemember reopens Give points, Mission ban and Clear cooldown with the last successful values (page memory only; out-of-range numbers fall back to the min; the server checks again). supervisorReviewLive pushes a decision on a flagged run or dispute to every other supervisor of the decider's department (an admin without one: every department) with the Review Queue open (asked in the last 75 s); off = at their next 30 s refresh.
 - Officer UI (Config.Tablet.sidebarOrder 'classic' or 'mostUsed', activeFirst, compactSidebar): 'mostUsed' lists home, board, active, dispatch, unit, profile, leaderboard, challenge, options; activeFirst moves Active Mission under Home while on a run; compact shows icons only (68 px, names as button titles, badges on the icon).
 - Admin UI sidebar: groupSidebar (on) shows Home, Payouts, Missions, Live, Officers and Settings and folds the rest under More (which carries their badge sum; kept open per viewer in the browser). groupByPlay (true) orders the screens by section with headings (NPC missions, Player vs police, Police teamwork, Economy, System), Settings follows the same sections, and Settings → Features lists every feature switch by section with On/Off, a save (risky ones confirm first, money ones need the typed ENABLE) and a link to the setting. plainLayout (false) gives each screen a plain name, a group heading with a one-line description, a screen search (with "Search settings for ...", Enter opens the first) and a breadcrumb over every screen but Home.
-- Admin UI pages: missionBlipsScreen (true) shows the Mission blips screen (NPC missions): Config.MissionBlips' master switch, every part's switch, look and label, and its rules picked from the departments, jobs, mission types and missions, every save a normal setting save. rewardsScreen (false) shows the Rewards screen, one place for every payout and item reward of NPC missions, live and volunteer cases and Config.FeatureRewards features, headed by the Rewards.enabled switch, every save a normal setting save. landing ('home'; 'payouts' or 'missions' hide Home) opens on Home: a Live now strip and six tiles (builder, catalog, payouts, officers, settings search, Something wrong? with mission load, config health, problems, payments and today's refusals). homeForms (true) puts quick forms in four tiles (missions and locations on or off, change pay with a reason, give or take points with the typed citizen ID at or above Corrections.adjustConfirmAbove, quick settings) that send the full screens' actions. reasonChips (three texts; at most 8 of up to 60 characters) are buttons under the reason boxes of Set payout, Give or take points and Quick edit that replace the editable reason (Quick edit times are typed in minutes). settingsView ('simple') opens Settings on the everyday settings with plain labels and no Config path; a switch and a button open All settings (by config.lua section); a search or filter looks through every setting; in Simple, MissionTweaks and DisabledLocations point to Missions.
+- Admin UI pages: markersScreen (true; missionBlipsScreen before, still read) shows the Map markers screen (NPC missions; the old Mission blips key opens it): the objective's settings and the look of each kind of objective blip, Config.Markers.extraParts (the switch of the extra parts), every part's switch, look and label, and its rules picked from the departments, jobs, mission types and missions, every save a normal setting save. rewardsScreen (false) shows the Rewards screen, one place for every payout and item reward of NPC missions, live and volunteer cases and Config.FeatureRewards features, headed by the Rewards.enabled switch, every save a normal setting save. landing ('home'; 'payouts' or 'missions' hide Home) opens on Home: a Live now strip and six tiles (builder, catalog, payouts, officers, settings search, Something wrong? with mission load, config health, problems, payments and today's refusals). homeForms (true) puts quick forms in four tiles (missions and locations on or off, change pay with a reason, give or take points with the typed citizen ID at or above Corrections.adjustConfirmAbove, quick settings) that send the full screens' actions. reasonChips (three texts; at most 8 of up to 60 characters) are buttons under the reason boxes of Set payout, Give or take points and Quick edit that replace the editable reason (Quick edit times are typed in minutes). settingsView ('simple') opens Settings on the everyday settings with plain labels and no Config path; a switch and a button open All settings (by config.lua section); a search or filter looks through every setting; in Simple, MissionTweaks and DisabledLocations point to Missions.
 - Action replies carry the new state (a speed-up only): supervisor and admin actions answer with the screen's new view, which the screen applies and asks again only when it is missing; Active Mission's log gets the next point pushed at once.
 
 Logo and watermark
@@ -958,7 +958,7 @@ Service vehicles (transport van, tow truck, coroner van)
 
 - The driving client is the participant nearest the scene, else the host. It proposes a road point 150–250 m away; the server checks it is inside spawnDistance and not within Config.Custody.serviceClearance (30 m) of any player, spawns the vehicle (locked, reserved plate) and hands its AI to that client, which drives, parks and, for the tow truck, takes control of flatbed and car and loads it. If that client leaves, dies or goes more than 250 m away, the AI moves to the next nearest participant.
 - A van not parked within Config.Custody.serviceTimeout (60 s) is placed at its parking point (transport or coroner point, else the scene), out of every participant's view and only while no player is within serviceClearance; a late van whose point an officer stands on drives on until he steps away; a van with no road point comes to a road point beside the scene (serviceClearance to +40 m, server-checked) or waits. A placed van waits frozen for the placer (Config.Spawning.place). A tow truck with no road point in time is never made, and a tow that has not loaded in time fades the car out as impounded.
-- The van and tow truck show on every run officer's map (Config.Markers.serviceVehicles: "Prisoner transport", "Tow truck", blue) from appearing to leaving, in every Radio Silence mode, never with a GPS line; sent when their status changes, followed once near enough; late partners get them too. The coroner van is unmarked.
+- The van and tow truck show on every run officer's map (Config.Markers.parts.prisonerVan / towTruck, on by default, serviceVehicles before: "Prisoner transport", "Tow truck", blue; an officer the part's rules leave out gets none) from appearing to leaving, in every Radio Silence mode, never with a GPS line; sent when their status changes, followed once near enough; late partners get them too. The coroner van is unmarked.
 
 Impound
 
@@ -1696,11 +1696,12 @@ Config.AdminUi = {
     -- its money, how it is paid and its items, saved like any setting; false = no such screen (Settings still has
     -- every value). Nothing is paid differently
     rewardsScreen = false,
-    -- true = the Admin UI gets a Mission blips screen (under NPC missions): the master switch of the extra mission
-    -- blips, every part with its on switch, look (sprite, colour, size), label and range, and who sees it
-    -- (departments, jobs, lowest grade, mission types, missions, role), saved like any setting; false = no such
-    -- screen (Settings still has every value). The blips themselves stay off until Config.MissionBlips.enabled
-    missionBlipsScreen = true,
+    -- true = the Admin UI gets a Map markers screen (under NPC missions): how the objective blips look, the switch of
+    -- the extra parts, and every part (the prisoner van and tow truck among them) with its on switch, look (sprite,
+    -- colour, size), label and range, and who sees it (departments, jobs, lowest grade, mission types, missions,
+    -- role), saved like any setting; false = no such screen (Settings still has every value). The extra parts stay
+    -- off until Config.Markers.extraParts
+    markersScreen = true,
     -- true = Admin UI -> Home shows a "Needs attention" panel on top: the Problems lines, today's refused mission
     -- starts, the open disputes, the flagged runs waiting for a review and the open player suspect cases, each a
     -- count that opens its screen; false = no such panel (Home as before). It only reads
@@ -2221,6 +2222,10 @@ Config.Route = {
 -- fleeing or needs a follow-up; 3 = blue, friendly; 2 = green, safe point) and a scale (its size, 1.0 = normal).
 -- nextScale, bossScale, surrenderedScale, followUpColour and setbackColour are the same for the next checkpoint, a
 -- boss, a suspect who gave up (the same size near you and far away), a point to follow up and a device set back.
+-- Under parts, every other part of a mission can get a blip of its own (shipped: only the prisoner van and tow truck
+-- coming to you; the rest waits for extraParts). The server decides what each officer gets: a real player suspect's
+-- live position never shows (a live case keeps its last-reported points only), nothing hidden shows before it is
+-- found, and Radio Silence still hides people and cars ('area') or everything but the vans ('none').
 -- Sprite and colour ids: docs.fivem.net/docs/game-references/blips/
 Config.Markers = {
     enabled = true,              -- false = no objective blip or line from Crimson-Police (the missions' own blips stay)
@@ -2247,7 +2252,6 @@ Config.Markers = {
     radioSilenceLastKnown = 0,
     hudLine = true,              -- true = the HUD shows the objective's name and how far it is
     objectiveGps = true,         -- true = an Objective GPS button on the tablet puts a waypoint on the objective
-    serviceVehicles = true,      -- true = a prisoner van or tow truck coming to you shows on the map
     -- How each kind of blip looks: sprite (blip id), colour id and size. Yellow = go here, red = enemy, orange =
     -- fleeing or needs a follow-up, blue = friendly, green = safe point
     -- sprite: the blip's picture, by its blip id (docs.fivem.net/docs/game-references/blips/)
@@ -2278,37 +2282,27 @@ Config.Markers = {
         scene = { sprite = 162, colour = 5, scale = 0.9 },                      -- a scene to work
         point = { sprite = 1, colour = 5, scale = 0.8, followUpColour = 17 },   -- a point to check (or follow up)
         device = { sprite = 1, colour = 5, scale = 0.8, setbackColour = 17 },   -- a device to work (or one set back)
-        prisonerVan = { sprite = 285, colour = 3, scale = 0.8 },                -- a prisoner van coming to you
-        towTruck = { sprite = 68, colour = 3, scale = 0.8 },                    -- a tow truck coming to you
         objective = { sprite = 162, colour = 5, scale = 0.9 },                  -- any other objective
     },
-}
-
--- ============================================================================
---                                MISSION BLIPS
--- ============================================================================
--- Extra map blips for the other parts of a mission: the prisoner van, tow truck and coroner van and where each one
--- waits for you, evidence, the cars and people of a scene, devices, hiding spots once found, ambush cars once they
--- appear, the hospital, your partners and a live case's reported points. They show on the minimap and the big map.
--- Shipped off: with enabled = false nothing below shows and the map is as before (Map markers above still marks the
--- objective). The server decides what each officer gets: a real player suspect's live position never shows (a live
--- case keeps its last-reported points only), nothing hidden shows before it is found, and Radio Silence still hides
--- people and cars ('area') or everything ('none') as Config.Markers.radioSilence says.
-Config.MissionBlips = {
-    enabled = false,             -- master switch: false = no extra mission blips at all (each part's on is ignored)
-    refreshEvery = 3,            -- seconds between the server's checks of what each officer's map should show
-    -- Each part of a mission that can get a blip. The prisoner van and tow truck show only when Map markers does not
-    -- already show them (Config.Markers.serviceVehicles off)
-    -- on: true = this part shows (only while enabled is true)
+    -- true = the other parts of a mission below get map blips too: where the prisoner van and tow truck wait for you,
+    -- the coroner van and where it waits, evidence, the cars and people of a scene, devices, hiding spots once found,
+    -- ambush cars once they appear, the hospital, your partners and a live case's reported points; false = none of
+    -- them (each one's on is then ignored). The prisoner van and tow truck follow only their own on
+    extraParts = false,
+    refreshEvery = 3,            -- seconds between the server's checks of what each officer's extra parts show
+    -- Each part of a mission that can get a blip, with its look. prisonerVan and towTruck: a prisoner van or tow truck
+    -- coming to you, shown in every Radio Silence mode while its on is true; every other part shows only while
+    -- extraParts is true too
+    -- on: true = this part shows
     -- sprite: the blip's picture, by its blip id (docs.fivem.net/docs/game-references/blips/)
     -- colour: the blip's colour id (5 = yellow, 1 = red, 17 = orange, 3 = blue, 2 = green, 0 = white)
     -- scale: the blip's size (1.0 = normal, 0.5 = half)
     -- label: its name on the map legend ('' = the built-in name)
     -- shortRange: true = on the minimap only when near; false = at the minimap's edge however far away it is
     parts = {
-        prisonerVan = { on = false, sprite = 285, colour = 3, scale = 0.8, label = '', shortRange = false },
+        prisonerVan = { on = true, sprite = 285, colour = 3, scale = 0.8, label = '', shortRange = false },
         prisonerDrop = { on = false, sprite = 60, colour = 3, scale = 0.7, label = '', shortRange = false },
-        towTruck = { on = false, sprite = 68, colour = 3, scale = 0.8, label = '', shortRange = false },
+        towTruck = { on = true, sprite = 68, colour = 3, scale = 0.8, label = '', shortRange = false },
         impoundDrop = { on = false, sprite = 50, colour = 3, scale = 0.7, label = '', shortRange = false },
         coronerVan = { on = false, sprite = 67, colour = 40, scale = 0.8, label = '', shortRange = false },
         coronerDrop = { on = false, sprite = 1, colour = 40, scale = 0.7, label = '', shortRange = false },

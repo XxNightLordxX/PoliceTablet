@@ -1,5 +1,9 @@
 -- CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre)
--- and at most one GPS line to it, cleared at every objective stop and run end (docs/ARCHITECTURE.md §5.44).
+
+-- CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre)
+-- and at most one GPS line to it, cleared at every objective stop and run end (docs/ARCHITECTURE.md §5.44); the
+-- prisoner van and tow truck coming to him (M.service) and the other parts of his mission the server sends
+-- (Config.Markers.parts, M.applyParts), each part with its own look.
 
 CP.Markers = CP.Markers or {}
 local M = CP.Markers
@@ -42,6 +46,11 @@ local NEAREST_ONLY = { point = true, device = true }
 -- What every mode shows: the drive to the start and the service vehicles coming to the officer.
 local ALWAYS_SHOWN = { start = true, prisonerVan = true, towTruck = true }
 local SERVICE_LABELS = { prisonerVan = 'markers.prisoner_van', towTruck = 'markers.tow_truck' }
+-- The prisoner van and tow truck as shipped (Config.Markers.parts), for a config.lua without them.
+local SERVICE_LOOK = {
+    prisonerVan = { sprite = 285, colour = 3, scale = 0.8 },
+    towTruck = { sprite = 68, colour = 3, scale = 0.8 },
+}
 local FIELDS = { 'adoptKey', 'look', 'variant', 'label', 'number', 'coords', 'radius', 'netId', 'moving', 'beyond' }
 -- Colour-blind map colours (My options -> Map -> colourblindMap): each blip's role and its colour id, never
 -- red (1) or green (2). A kind not listed is an objective; a follow-up or set-back variant is a target.
@@ -136,9 +145,16 @@ end
 
 -- sprite, colour and scale of a Config.Markers.kinds entry; variant picks bossScale, nextScale, followUpColour or
 -- setbackColour when the kind has one, and 'surrendered' its surrenderedScale (0.6 when it has none).
+-- The prisoner van and tow truck look as their part says (Config.Markers.parts).
+local function ServicePart(kind)
+    local parts = type(Cfg().parts) == 'table' and Cfg().parts or {}
+    local p = parts[kind]
+    return type(p) == 'table' and p or nil
+end
+
 local function Look(kind, variant)
     local kinds = type(Cfg().kinds) == 'table' and Cfg().kinds or {}
-    local k = kinds[kind]
+    local k = SERVICE_LOOK[kind] and (ServicePart(kind) or SERVICE_LOOK[kind]) or kinds[kind]
     if type(k) ~= 'table' then k = type(kinds.objective) == 'table' and kinds.objective or DEFAULT_LOOK end
     local sprite = Int(k.sprite) or DEFAULT_LOOK.sprite
     local colour = Int(k.colour) or DEFAULT_LOOK.colour
@@ -258,8 +274,13 @@ local function Drop(el)
 end
 
 local function LabelOf(el)
-    return el.label or (el.service and SERVICE_LABELS[el.look] and CP.L(SERVICE_LABELS[el.look]))
-        or CP.L('markers.objective')
+    if el.label then return el.label end
+    if el.service and SERVICE_LABELS[el.look] then
+        local p = ServicePart(el.look)
+        local own = p and type(p.label) == 'string' and p.label ~= '' and p.label:sub(1, 40) or nil
+        return own or CP.L(SERVICE_LABELS[el.look])
+    end
+    return CP.L('markers.objective')
 end
 
 -- A new pointer blip: above the detail blips, flashing once (SET_BLIP_FLASH_TIMER). carry: a block
@@ -335,7 +356,8 @@ local function Place(el)
     local cfg = Cfg()
     local hide
     if el.service then
-        hide = cfg.serviceVehicles == false
+        local p = ServicePart(el.look)
+        hide = p ~= nil and p.on == false
     else
         -- Radio Silence 'area' puts no blip on a person or a car: a target followed by its net id is hidden whatever
         -- its look (a target without one gets 'objective'), so it shows only the optional last-known circle
@@ -728,8 +750,9 @@ function M.release(key, blip)
     return true
 end
 
--- A prisoner van or tow truck coming to this officer (kinds prisonerVan, towTruck): spec = { netId, coords, kind,
--- label }, nil = remove. Shown in every Radio Silence mode while Config.Markers.serviceVehicles is on; never routed.
+-- A prisoner van or tow truck coming to this officer (parts prisonerVan, towTruck): spec = { netId, coords, kind,
+-- label }, nil = remove. Shown in every Radio Silence mode while its part's on is true; never routed. Its look,
+-- label and range are its part's (Config.Markers.parts).
 function M.service(key, spec)
     key = Key(key)
     if not key then return false end
@@ -837,7 +860,12 @@ function M.style(blip, kind, label, opts)
     SetBlipSprite(blip, sprite)
     SetBlipColour(blip, colour)
     SetBlipScale(blip, scale)
-    SetBlipAsShortRange(blip, Cfg().shortRange == true)
+    local part = SERVICE_LOOK[kind] and ServicePart(kind) or nil
+    if part then
+        SetBlipAsShortRange(blip, part.shortRange == true)
+    else
+        SetBlipAsShortRange(blip, Cfg().shortRange == true)
+    end
     SetBlipCategory(blip, Int(Cfg().category) or 2)
     local n = Int(opts.number)
     if n and n >= 0 then ShowNumberOnBlip(blip, n) end
@@ -857,6 +885,198 @@ function M.styleArea(blip, kind)
 end
 
 -- ============================================================================
+--                               THE EXTRA PARTS
+-- ============================================================================
+-- The other parts of the mission the server sends (Config.Markers.parts, while extraParts is on): on the minimap and
+-- the big map. Their blips change only when a list comes in: one is added, moved, restyled or removed then. A car,
+-- person or partner follows its entity once that streams in (AddBlipForEntity); until then it sits where the server
+-- saw it. The follow check runs only while such a blip is on the map (CP.Perf.ms, 1 s). Everything goes at the run's
+-- end, a list for another run, logout and resource stop.
+
+local PART_FOLLOW_MS = 1000     -- how often a part's blip waiting for its entity checks whether it streamed in
+local PART_LOOK = { sprite = 1, colour = 0, scale = 0.7 }
+
+local partBlips = {}            -- [key] = { id, part, netId, src, x, y, z, entity (followed entity or nil), look }
+local partRun = nil             -- the run the parts' blips are of
+
+local function PartInt(v, default)
+    local n = tonumber(v)
+    n = n and math.tointeger(math.floor(n)) or nil
+    return n or default
+end
+
+-- The part's look, read now (Admin UI -> Settings changes it live): sprite, colour, scale, label, shortRange.
+local function PartLook(part)
+    local parts = type(Cfg().parts) == 'table' and Cfg().parts or {}
+    local p = type(parts[part]) == 'table' and parts[part] or {}
+    local label = type(p.label) == 'string' and p.label ~= '' and p.label:sub(1, 40) or CP.L('markers.part.' .. part)
+    return {
+        sprite = PartInt(p.sprite, PART_LOOK.sprite),
+        colour = PartInt(p.colour, PART_LOOK.colour),
+        scale = (tonumber(p.scale) or PART_LOOK.scale) + 0.0,
+        label = label,
+        shortRange = p.shortRange == true,
+    }
+end
+
+local function PartSig(l)
+    return ('%d|%d|%.2f|%s|%s'):format(l.sprite, l.colour, l.scale, l.label, tostring(l.shortRange))
+end
+
+local function PartRemove(b)
+    if b and Exists(b.id) then RemoveBlip(b.id) end
+end
+
+local function PartStyle(b)
+    local l = PartLook(b.part)
+    SetBlipSprite(b.id, l.sprite)
+    SetBlipColour(b.id, l.colour)
+    SetBlipScale(b.id, l.scale)
+    SetBlipAsShortRange(b.id, l.shortRange)
+    SetBlipDisplay(b.id, 2) -- the minimap and the big map
+    NameBlip(b.id, l.label)
+    b.look = PartSig(l)
+end
+
+-- The entity a part's blip should follow, when it is streamed in on this game: a run entity (netId) or a partner.
+local function PartEntity(b)
+    if b.netId then return Streamed(b.netId) end
+    if b.src then
+        local player = GetPlayerFromServerId(b.src)
+        if not player or player == -1 then return nil end
+        local ped = GetPlayerPed(player)
+        if ped and ped ~= 0 and DoesEntityExist(ped) then return ped end
+    end
+    return nil
+end
+
+-- (Re)make b's blip: on its entity when that is streamed in, else at the server's position.
+local function PartPlace(b)
+    PartRemove(b)
+    local ent = (b.netId or b.src) and PartEntity(b) or nil
+    if ent then
+        b.id = AddBlipForEntity(ent)
+    else
+        b.id = AddBlipForCoord(b.x, b.y, b.z)
+    end
+    b.entity = ent
+    PartStyle(b)
+end
+
+-- True while a part's blip belongs to a car, person or partner (it may stream in or out).
+local function PartTracking()
+    for _, b in pairs(partBlips) do if b.netId or b.src then return true end end
+    return false
+end
+
+-- One follow pass: a blip whose entity streamed in moves onto it; one whose entity went goes back to the server's
+-- position. Returns true (the loop stops) when no blip belongs to an entity.
+local function PartFollow()
+    for _, b in pairs(partBlips) do
+        if b.entity and not DoesEntityExist(b.entity) then
+            b.entity = nil
+            PartPlace(b)
+        elseif (b.netId or b.src) and not b.entity and PartEntity(b) then
+            PartPlace(b)
+        end
+    end
+    return not PartTracking()
+end
+
+local ArmPartFollow = CP.Perf.armed('markers', function() return CP.Perf.ms(PART_FOLLOW_MS) end, PartFollow)
+
+local function PartClean(it)
+    if type(it) ~= 'table' or type(it.k) ~= 'string' or type(it.p) ~= 'string' then return nil end
+    local x, y, z = tonumber(it.x), tonumber(it.y), tonumber(it.z) or 0.0
+    if not x or not y then return nil end
+    return {
+        key = it.k:sub(1, 64),
+        part = it.p:sub(1, 32),
+        netId = PartInt(it.n, nil),
+        src = PartInt(it.s, nil),
+        x = x + 0.0,
+        y = y + 0.0,
+        z = z + 0.0,
+    }
+end
+
+-- Take every extra part off the map (modules/runs at the run's end, logout, resource stop).
+function M.clearParts()
+    for _, b in pairs(partBlips) do PartRemove(b) end
+    partBlips = {}
+    partRun = nil
+end
+
+-- Show the list the server sent for run id: new blips are added, gone ones removed, moved ones moved, restyled
+-- ones restyled; nothing else is touched.
+function M.applyParts(id, list)
+    if id ~= partRun then M.clearParts() end
+    partRun = id
+    local want, order = {}, {}
+    for _, raw in ipairs(type(list) == 'table' and list or {}) do
+        local it = PartClean(raw)
+        if it and not want[it.key] then
+            want[it.key] = it
+            order[#order + 1] = it.key
+        end
+    end
+    for key, b in pairs(partBlips) do
+        local it = want[key]
+        if not it or it.part ~= b.part or it.netId ~= b.netId or it.src ~= b.src then
+            PartRemove(b)
+            partBlips[key] = nil
+        end
+    end
+    for _, key in ipairs(order) do
+        local it = want[key]
+        local b = partBlips[key]
+        if not b then
+            partBlips[key] = it
+            PartPlace(it)
+        else
+            if not Exists(b.id) then
+                b.x, b.y, b.z = it.x, it.y, it.z
+                PartPlace(b)
+            elseif not b.entity and (b.x ~= it.x or b.y ~= it.y or b.z ~= it.z) then
+                SetBlipCoords(b.id, it.x, it.y, it.z)
+            end
+            b.x, b.y, b.z = it.x, it.y, it.z
+            if Exists(b.id) and b.look ~= PartSig(PartLook(b.part)) then PartStyle(b) end
+        end
+    end
+    if next(partBlips) == nil then partRun = nil end
+    if PartTracking() then ArmPartFollow() end
+end
+
+-- How many extra parts are on the map (tests and the debug view).
+function M.partCount()
+    local n = 0
+    for _ in pairs(partBlips) do n = n + 1 end
+    return n
+end
+
+RegisterNetEvent(CP.e('client:markerParts'), function(data)
+    if type(data) ~= 'table' or type(data.runId) ~= 'string' then return end
+    local items = type(data.items) == 'table' and data.items or {}
+    if #items == 0 then
+        if partRun == nil or partRun == data.runId then M.clearParts() end
+        return
+    end
+    local run = CP.Runs and CP.Runs.current and CP.Runs.current()
+    if not run or run.id ~= data.runId then return end
+    M.applyParts(data.runId, items)
+end)
+
+-- A live change to a part's look (Admin UI -> Settings) restyles its blips at once, even those that do not move.
+CP.Hooks.on('settings:changed', function()
+    for _, b in pairs(partBlips) do
+        if Exists(b.id) and b.look ~= PartSig(PartLook(b.part)) then PartStyle(b) end
+    end
+end)
+
+if CP.Qbx and CP.Qbx.onUnload then CP.Qbx.onUnload(function() M.clearParts() end) end
+
+-- ============================================================================
 --                                RESOURCE STOP
 -- ============================================================================
 
@@ -871,6 +1091,7 @@ AddEventHandler('onResourceStop', function(res)
     if res ~= CP.resource then return end
     M.clear()
     for key in pairs(services) do M.service(key, nil) end
+    M.clearParts()
 end)
 
 -- ============================================================================

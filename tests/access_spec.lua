@@ -200,13 +200,13 @@ do
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.rewardsScreen, true,
         'rewardsScreen on: the session asks for it')
     Config.AdminUi.rewardsScreen = false
-    -- Config.AdminUi.missionBlipsScreen (BL2): the Mission blips screen, shipped on; only false hides it
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.missionBlipsScreen, true,
-        'missionBlipsScreen ships on: the Admin UI has a Mission blips screen')
-    Config.AdminUi.missionBlipsScreen = false
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.missionBlipsScreen, false,
-        'missionBlipsScreen = false: no Mission blips screen')
-    Config.AdminUi.missionBlipsScreen = true
+    -- Config.AdminUi.markersScreen (MG1, missionBlipsScreen before): the Map markers screen, shipped on
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.markersScreen, true,
+        'markersScreen ships on: the Admin UI has a Map markers screen')
+    Config.AdminUi.markersScreen = false
+    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.markersScreen, false,
+        'markersScreen = false: no Map markers screen')
+    Config.AdminUi.markersScreen = true
     -- Config.AdminUi.needsAttention (H5): Home's Needs attention panel, shipped off
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.needsAttention, false,
         'needsAttention ships off: Home as before')

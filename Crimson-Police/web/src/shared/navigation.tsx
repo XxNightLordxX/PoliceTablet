@@ -35,6 +35,8 @@ export type AdminScreenKey =
     | 'admin_money'
     | 'admin_system'
     | 'admin_rs'
+    | 'admin_markers'
+    // the Mission blips screen before Map markers took it in: an alias of admin_markers (resolveAdminKey)
     | 'admin_blips';
 export type ScreenKey = OfficerScreenKey | SupervisorScreenKey | AdminScreenKey;
 
