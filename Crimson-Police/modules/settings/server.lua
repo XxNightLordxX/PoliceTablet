@@ -383,6 +383,7 @@ Play.features = {
         path = 'Units.readyCheck',
         limits = {
             'Units.readyTimeout',
+            'CrossDept.readyCheck',
             'Limits.maxUnitSize',
         },
     },

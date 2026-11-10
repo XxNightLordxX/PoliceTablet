@@ -597,6 +597,7 @@ Everything else works as shipped. These are the ones owners change most:
 | Setting | What it does |
 |---|---|
 | `Config.CrossDept.enabled` | Cross-Department Missions on or off |
+| `Config.CrossDept.readyCheck` | `true` = the officers who joined confirm Ready (the unit ready check, `Config.Units.readyTimeout`) before the run starts; ships `false` |
 | `Config.Units.invitePolicy` | `'anyone'` in a unit may invite, or only the `'leader'` |
 | `Config.Objectives` | Everything officers and departments aim for, one block per kind, each with its own `enabled`: `dailyGoal` and `weeklyGoal` (`points` and the `goals` list), `challenge` (the department challenge: `scoring` `'average'`, `'total'` or `'top10'`, `minRunsActive`), `bounty` (the weekly bounty: `bonus` and the `objectives` list; needs the challenge) and `typeOfTheDay` (`multiplier`, points only). Also in **Settings** → Objectives and under the gear of **Seasons & Challenge** |
 | `Config.Leaderboard.weekStartsOn` | The day the week starts (`'monday'`) |

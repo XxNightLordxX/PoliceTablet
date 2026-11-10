@@ -300,7 +300,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
@@ -783,7 +783,7 @@ do
     H.eq(CP.Units.unitOf(1), nil, 'restart: the unit is gone')
     H.eq(CP.Units.unitOf(2), nil, 'restart: ...for both')
     FormUnit(1, 2)
-    ok, data = Act('server:unitLeave', 2)
+    ok, data = Act('server:teamLeave', 2)
     H.eq(ok, true, 'unit: the FIB agent leaves: ' .. tostring(data))
     H.eq(CP.Units.unitOf(2), nil, 'unit: ...and is in no unit')
     H.eq(CP.Units.unitOf(1), nil, 'unit: a unit of one is no unit')

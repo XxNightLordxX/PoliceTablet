@@ -402,7 +402,7 @@ local function Mod(rel) return StripComments(Read(ROOT .. rel) or '') end
 local runsSrv, drawSrv, eventsSrv =
     Mod('modules/runs/server.lua'), Mod('modules/draw/server.lua'), Mod('modules/progression/events.lua')
 local opsSrv, routeSrv, routeCl =
-    Mod('modules/operations/server.lua'), Mod('modules/route/server.lua'), Mod('modules/route/client.lua')
+    Mod('modules/teams/operations.lua'), Mod('modules/route/server.lua'), Mod('modules/route/client.lua')
 local runsCl, ipSrv = Mod('modules/runs/client.lua'), Mod('blocks/interact_points/server.lua')
 
 local function Covers(keys, fields, what)
@@ -569,7 +569,7 @@ H.ok(opsSrv:find('\'server:joinOperation\'', 1, true) ~= nil,
     'action server:joinOperation is registered by modules/operations')
 
 -- Pushes the board listens to are the ones the modules send.
-local unitsSrv = Mod('modules/units/server.lua')
+local unitsSrv = Mod('modules/teams/units.lua')
 H.ok(unitsSrv:find('CP.push(m, \'board\'', 1, true) ~= nil, 'modules/units pushes \'board\' when the unit changes')
 H.ok(opsSrv:find('CP.push(p, \'board\', data)', 1, true) ~= nil, 'modules/operations pushes \'board\'')
 

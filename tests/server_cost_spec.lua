@@ -79,7 +79,7 @@ for _, m in ipairs({
     { 'Route', 'modules/route/server.lua' },
     { 'Downed', 'modules/downed/server.lua' },
     { 'Testing', 'modules/testing/server.lua' },
-    { 'Units', 'modules/units/server.lua' },
+    { 'Units', 'modules/teams/units.lua' },
 }) do
     local mod, field = CP[m[1]], m[3] or '_ticking'
     local ticking = type(mod[field]) == 'function' and mod[field]()

@@ -299,7 +299,8 @@ return function(H)
         'modules/schedule/server.lua',
         'modules/scaling/server.lua',
         'modules/progression/events.lua',
-        'modules/units/server.lua',
+        'modules/teams/common.lua',
+        'modules/teams/units.lua',
         'modules/runs/server.lua',
         'modules/livectl/server.lua',
     }) do

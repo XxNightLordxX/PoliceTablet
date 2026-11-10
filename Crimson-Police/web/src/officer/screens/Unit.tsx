@@ -4,8 +4,8 @@
 // waiting for them (Accept / Decline), an invite picker of on-duty officers from any department, and
 // Leave unit (confirm; mid-run it abandons the unit's run). Data: callback getUnit (UnitView + slice
 // fields, src/types/teams.ts), live via push topic 'unit'. Actions: server:unitInvite (targetSrc),
-// server:unitRespond ({ accepted, unitId }), server:unitLeave. Test invitations (callback test:pendingInvites,
-// push 'invites') are answered here too with server:testRespond. Invites close (locked) once the leader
+// server:unitRespond ({ accepted, unitId }), server:teamLeave ({ team: 'unit' | 'operation' }). Test
+// invitations (callback test:pendingInvites, push 'invites') are answered here too with server:testRespond. Invites close (locked) once the leader
 // accepts a mission type and stay closed while the unit's run is active.
 
 import { useMemo, useState } from 'react';
@@ -784,7 +784,7 @@ export default function Unit() {
             ),
         );
     const leaveOperation = () =>
-        act('op', () => run('server:leaveOperation', undefined, { success: 'unit.ui.op_left_toast' }));
+        act('op', () => run('server:teamLeave', { team: 'operation' }, { success: 'unit.ui.op_left_toast' }));
     const confirmManage = async () => {
         const d = manage;
         if (!d) return;
@@ -795,7 +795,7 @@ export default function Unit() {
         void refetch();
     };
     const leave = async () => {
-        const res = await run<UnitLeaveResult>('server:unitLeave');
+        const res = await run<UnitLeaveResult>('server:teamLeave', { team: 'unit' });
         setConfirmLeave(false);
         void refetch();
         return res;
@@ -828,7 +828,10 @@ export default function Unit() {
             <ScreenStatus state={screenStateOf(!!data, loading, error)} error={error} onRetry={() => void refetch()} />
             {!data ? null : (
                 <>
-                    <ReadyCheckBanner check={unit?.readyCheck ?? null} onAnswered={() => void refetch()} />
+                    <ReadyCheckBanner
+                        check={unit?.readyCheck ?? data.operation?.readyCheck ?? null}
+                        onAnswered={() => void refetch()}
+                    />
                     {(unit?.locked && !unit?.readyCheck) || data.onRun ? (
                         <div
                             className={cx(

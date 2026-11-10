@@ -306,9 +306,9 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/custody/server.lua | custody timers | while a run has a custody book | 1000 ms (kept) | each service vehicle step (road point ask, spawn, drive, park, leave) is one pass: 2 s would make every transport and coroner arrive seconds later |
 | modules/npc/server.lua | death watcher, health, cuff reach, flee clock | while a run is live or a ped record is kept | 1000 ms (kept) | the flee clock adds a second a pass (sprint, jog, walk), and a vanished ped must be seen before the engine's own 2-pass vanish rule |
 | modules/realplayers/opponents.lua | live crime watch | while a case or crew is tracked | 1000 ms (kept) | second deadlines: the lost rule, the disconnect grace, AFK and the trail |
-| modules/operations/server.lua | operations | always | 1000 -> 2000 ms active, 5000 -> 10000 ms idle (scaled) | adaptive; the join window is minutes |
+| modules/teams/operations.lua | operations | always | 1000 -> 2000 ms active, 5000 -> 10000 ms idle (scaled) | adaptive; the join window is minutes |
 | modules/spawn/server.lua | open spawn asks | while asks are open | 500 -> 1000 ms | placement timeouts are seconds |
-| modules/units/server.lua | invite expiry, lock safety net | while a unit exists | 2000 -> 5000 ms, scaled | invites last 120 s; accepting checks the expiry itself. A ready check has its own timer at the deadline, and Units.ready refuses an answer after it |
+| modules/teams/units.lua | invite expiry, lock safety net | while a unit exists | 2000 -> 5000 ms, scaled | invites last 120 s; accepting checks the expiry itself. A ready check has its own timer at the deadline, and Units.ready refuses an answer after it |
 | modules/realplayers/volunteers.lua | volunteer window and duty | while someone volunteers | 15 -> 30 s, scaled | the window is minutes; its end is checked at the draw (`V.available`), so the sweep only tidies |
 | modules/realplayers/match.lua | asking, travel, engagement | while a run has a match | 1000 -> 2000 ms | the travel time is minutes |
 | modules/dispatch/missioncalls.lua | call posting and expiry | always | `checkEvery` s | the feature is on all day |
@@ -394,7 +394,7 @@ strings do not count.
 | `modules/missions/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/npc/client.lua` | 19 | 1 | owned ped AI, pace, governor, cuff guard; bounded control waits; one-shots |
 | `modules/npccombat/client.lua` | 1 | 0 | damage re-apply while the run is live |
-| `modules/operations/server.lua` | 4 | 1 | operations, adaptive; one-shots |
+| `modules/teams/operations.lua` | 4 | 1 | operations, adaptive; one-shots |
 | `modules/realplayers/conduct.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/pairs.lua` | 5 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/proof.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -423,8 +423,8 @@ strings do not count.
 | `modules/tablet/client.lua` | 14 | 0 | prop keeper, open watcher, Escape guard; bounded loads; one-shots |
 | `modules/tablet/server.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/testing/client.lua` | 9 | 0 | debug drawing, focus watch; bounded waits; one-shots |
-| `modules/units/client.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/units/server.lua` | 1 | 0 | a start-up hook; the sweep is a `CP.Perf.armed` loop |
+| `modules/teams/client/units.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/teams/units.lua` | 1 | 0 | a start-up hook; the sweep is a `CP.Perf.armed` loop |
 | `modules/realplayers/client/volunteers.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/match.lua` | 5 | 0 | match tick while a run has a match; one-shots |
 | `modules/realplayers/volunteers.lua` | 7 | 0 | volunteer sweep while someone volunteers; one-shots |

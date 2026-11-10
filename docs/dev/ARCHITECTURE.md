@@ -1291,8 +1291,9 @@ The full rule set is the Crimson-Arena section of `docs/dev/INTEGRATIONS.md` (ru
   both metadata false and the ped alive; no metadata after a logout is never revived: abort, no teleport), move to the
   drop-off, fade in.
 
-### 5.16 CP.Units — modules/units
-Files for §5.16–§5.17: `modules/{units,operations}/{server,client}.lua`, `locales/parts/teams.json`, web
+### 5.16 CP.Units — modules/teams (one team system)
+Files for §5.16–§5.17: `modules/teams/{common,units,operations}.lua` (CP.Teams: shared helpers),
+`modules/teams/client/*.lua`, `locales/parts/teams.json`, web
 `officer/screens/Unit.tsx`, `supervisor/screens/CrossDept.tsx`, `supervisor/components/OperationPanel.tsx` (props `{
 scope: 'sup' | 'admin' }`, never wrapped in `<Screen>`), `officer/components/ReadyCheckBanner.tsx`, `types/teams.ts`
 (every view shape), `mocks/teams.mock.ts` (`?teams=leader|member|solo|invites|locked|lockedoff|long|full`,
@@ -1308,11 +1309,11 @@ Units live in memory only (a restart drops them, as it drops runs).
   the unit.
 - `lock(unit)` (withdraws pending invites), `unlock(unit|id)` *(hook: at run end)* — ignored while a member is still
   on a normal run (no operation, no test) or a ready check is pending.
-- `server:unitLeave` while locked and on a normal run → `removeParticipant(run, src, 'quit')` first; operation and
-  test runs are left alone.
+- `server:teamLeave` (unit) while locked and on a normal run → `removeParticipant(run, src, 'quit')` first;
+  `{ team = 'operation' }` → `CP.Operations.leave`.
 - Leader controls (refused with `err.unit_locked` once a type is accepted).
 - `readyCheck(unit, typeKey, onReady, onCancel, extra?) -> started` — from `CP.Draw.accept` after the lock for units
-  of 2+ (false = no check needed).
+  of 2+ (false = no check needed). `teamReadyCheck` / `dropTeam` / `checkFor`: an operation's.
 - `lastPartners(src)` (the online officers of his last ended non-test run, 900 s), distance bands
   (`Config.Units.nearbyBands`, server coords).
 - UnitView extras: `me`, `maxSize`, `inviteTtl`, `canInvite`, `inviteBlocked`, `onRun`, `unit.canManage`,
@@ -1326,7 +1327,7 @@ Units live in memory only (a restart drops them, as it drops runs).
 |---|---|---|
 | action | `server:unitInvite` | `targetSrc` or `{ targetSrc }` → `{ unitId, expiresIn }` |
 | action | `server:unitRespond` | `{ accepted, unitId }` or a boolean (newest invite) → `{ unitId, accepted }` |
-| action | `server:unitLeave` | → `{ left, abandoned }` |
+| action | `server:teamLeave` | `{ team = 'unit' \| 'operation' }` → `{ left, abandoned? }` |
 | callback | `getUnit` | → UnitView |
 | action | `server:unitKick` / `server:unitPromote` | `{ targetSrc }` → `{ kicked }` / `{ leader }` |
 | action | `server:unitDisband` | → `{ disbanded }` |
@@ -1336,7 +1337,7 @@ Units live in memory only (a restart drops them, as it drops runs).
 | key mapping | `crimsonpolice_ready` | `Config.Tablet.readyKey`: answers Ready |
 | push | `unit` | `{ unitId|false, invited?, readyCheck? }` to members and invitees; `board` to members |
 
-### 5.17 CP.Operations — modules/operations (Cross-Department Missions)
+### 5.17 CP.Operations — modules/teams/operations.lua (Cross-Department Missions)
 - `active()`, `isLocked()` (joining, running, waiting), `view`, `boardCard(src)`, `officerCard(src)`,
   `cooldownLeft()`, `eligible(def)` (published and enabled, `departments` empty, `maxOfficers >= 2`, never the boss).
 - `launch(src, missionId)` — `Config.CrossDept.enabled ~= false`, no active operation, the cooldown over (counted from
@@ -1345,7 +1346,8 @@ Units live in memory only (a restart drops them, as it drops runs).
 - Joining: `join(src, opId)` re-checks the state after the checks that may yield, so two joins never pass the cap
   together.
 - `startNow(src)` — whoever opened the current window, any admin, or anyone with the permission when that person is
-  offline.
+  offline. `Config.CrossDept.readyCheck`: the unit ready check first (`{ readyCheck = true }`); who is not Ready
+  leaves the join list.
 - `onRunEnded(run, state)` *(hook)*: completed → `completed` (final, the lock lifts); anything else → `waiting`
   (`failed`, or `abandoned` when everyone left).
 - Idle auto-cancel (`Config.CrossDept.idleCancel`): the clock starts at launch and when the run ends, is cleared while
@@ -1362,7 +1364,6 @@ Units live in memory only (a restart drops them, as it drops runs).
 | Kind | Name | Payload → reply |
 |---|---|---|
 | action | `server:joinOperation` | `operationId` or `{ operationId }` (nil = the active one) → `{ id, joined, max }` or `{ waitlisted, position }` |
-| action | `server:leaveOperation` | → `{ left }` |
 | action | `server:sup\|admin:opLaunch` | `{ missionId }` → `{ id }` |
 | action | `server:sup\|admin:opStart` | → `{ runId, participants }` |
 | action | `server:sup\|admin:opRelaunch` | → `{ id }` |
@@ -3085,7 +3086,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:acceptType` | missionType (`'weekly_boss'` for the boss card), or `{ missionType, twists = { key, ... } }` → `{ runId, twists }` | draw |
 | `server:unitInvite` | targetSrc | units |
 | `server:unitRespond` | `{ accepted, unitId }` (a bare boolean = latest invite) | units |
-| `server:unitLeave` | — | units |
+| `server:teamLeave` | `{ team }` | units |
 | `server:joinOperation` | operationId | operations |
 | `server:routeStatus` | runId, metres, coords (three args, no reqId) | route |
 | `server:recalcRoute` | runId | route |
@@ -3115,7 +3116,6 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:unitKick` / `server:unitPromote` / `server:unitCancelInvite` | `{ targetSrc }` | units |
 | `server:unitDisband` | — | units |
 | `server:unitReady` | `{ accepted }` (a bare boolean from the key mapping) | units |
-| `server:leaveOperation` | — | operations |
 | `server:settingsHello` | — (plain event, 2 per 10 s; the reply waits until the settings are loaded) | settings |
 
 Events with "three args, no reqId" are plain `RegisterNetEvent` handlers (client Lua → server);

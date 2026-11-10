@@ -1667,6 +1667,8 @@ Config.Units = {
 -- ============================================================================
 --                          CROSS-DEPARTMENT MISSIONS
 -- ============================================================================
+-- A Cross-Department Mission is one team of officers from every department, run by the same team system as units:
+-- the same Leave on the Unit screen and, with readyCheck on, the same ready check (Config.Units.readyTimeout).
 
 Config.CrossDept = {
     enabled = true,          -- true = officers may launch cross-department missions
@@ -1676,6 +1678,7 @@ Config.CrossDept = {
     idleCancel = 1800,       -- auto-cancel after this long with no run in progress
     cooldown = 1800,         -- seconds between launches, server-wide
     waitlist = true,         -- officers can queue when every place is taken; a freed place goes to the first
+    readyCheck = false,      -- true = the joined officers confirm Ready (unit ready check) before the run starts
 }
 
 -- ============================================================================

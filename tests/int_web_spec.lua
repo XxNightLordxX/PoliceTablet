@@ -67,7 +67,7 @@ end
 --                          MISSION BOARD: joinBlocked
 -- ============================================================================
 
-local ops = Read(ROOT .. 'modules/operations/server.lua')
+local ops = Read(ROOT .. 'modules/teams/operations.lua')
 local board = Read(WEB .. 'officer/screens/MissionBoard.tsx')
 local runTypes = Read(WEB .. 'types/run_ui.ts')
 H.ok(ops ~= nil and board ~= nil and runTypes ~= nil, 'operations server, Mission Board and run_ui types exist')

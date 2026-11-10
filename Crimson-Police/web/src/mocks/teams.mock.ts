@@ -414,14 +414,6 @@ registerMock('action', 'server:unitReady', (payload: unknown) => {
     return { accepted };
 });
 
-registerMock('action', 'server:leaveOperation', () => {
-    if (!units.operation) throw new Error('err.op_not_joined');
-    if (!units.operation.canLeave) throw new Error('err.op_leave_started');
-    units.operation = null;
-    pushUnit();
-    return { left: true };
-});
-
 registerMock('request', 'getUnit', () => reply(unitView()));
 
 registerMock('action', 'server:unitInvite', (target: unknown) => {
@@ -459,7 +451,15 @@ registerMock('action', 'server:unitRespond', (payload: unknown) => {
     return { unitId: inv.unitId, accepted: true };
 });
 
-registerMock('action', 'server:unitLeave', () => {
+// One leave for every team: { team: 'operation' } leaves the Cross-Department Mission, else the unit.
+registerMock('action', 'server:teamLeave', (payload: unknown) => {
+    if ((payload as { team?: string } | undefined)?.team === 'operation') {
+        if (!units.operation) throw new Error('err.op_not_joined');
+        if (!units.operation.canLeave) throw new Error('err.op_leave_started');
+        units.operation = null;
+        pushUnit();
+        return { left: true };
+    }
     const u = units.unit;
     if (!u) throw new Error('err.unit_none');
     const abandoned = u.locked && units.onRun;

@@ -279,7 +279,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end

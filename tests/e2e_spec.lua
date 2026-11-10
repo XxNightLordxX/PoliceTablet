@@ -368,7 +368,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
@@ -2536,7 +2536,7 @@ do -- 14a. Drug Lab Raid, with Process the scene
     end
     PX.statsCheck(run, cuffed, srcs, 'lab raid')
     H.eq(#CP.Runs.heldBodies(run), 0, 'lab raid: nothing kept after the run')
-    Act('server:unitLeave', srcs[2])
+    Act('server:teamLeave', srcs[2])
     Config.Events.modifierChance = chance
 end
 
@@ -2576,7 +2576,7 @@ do -- 14b. Gang Hideout Raid, the lieutenant, the runners and the cache
     local r = PX.row(run, CID[srcs[2]])
     H.eq(r.state, 'completed', 'hideout raid: the partner\'s row completed')
     PX.statsCheck(run, cuffed, srcs, 'hideout raid')
-    Act('server:unitLeave', srcs[2])
+    Act('server:teamLeave', srcs[2])
     Config.Events.modifierChance = chance
 end
 
@@ -2700,7 +2700,7 @@ do
     local unit = CP.Units.unitOf and CP.Units.unitOf(leader)
     H.ok(unit ~= nil and not unit.locked, 'ready check: the unit is unlocked again')
     autoReady = true
-    Act('server:unitLeave', member)
+    Act('server:teamLeave', member)
 end
 
 -- ============================================================================

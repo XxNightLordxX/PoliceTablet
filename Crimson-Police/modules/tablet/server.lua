@@ -550,13 +550,13 @@ local function WayOf(src, args)
 end
 
 -- What the officer option openOn 'active_on_run' needs (My options -> Opening the tablet): whether the player is on a
--- run, and whether his unit's ready check waits for his answer.
+-- run, and whether a ready check (his unit's or his Cross-Department team's) waits for his answer.
 local function Opening(src)
     local onRun = CP.Runs and CP.Runs.getBySrc and CP.Runs.getBySrc(src) ~= nil or false
     local waiting = false
     local U = CP.Units
-    local unit = U and U.unitOf and U.unitOf(src) or nil
-    local check = unit and U.readyCheckOf and U.readyCheckOf(unit) or nil
+    local check = nil
+    if U and U.checkFor then check = select(2, U.checkFor(src)) end
     if type(check) == 'table' and not check.done and type(check.answers) == 'table' then
         for _, m in ipairs(type(check.members) == 'table' and check.members or {}) do
             if m == src and check.answers[m] == nil then waiting = true end

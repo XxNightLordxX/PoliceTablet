@@ -71,8 +71,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/npc/server.lua`: CP.Npc (server): the authoritative state machine of mission NPCs.
 - `Crimson-Police/modules/npccombat/client.lua`: CP.NpcCombat (client): softer NPC hits and no headshot multiplier on this officer while a run is live.
 - `Crimson-Police/modules/npccombat/server.lua`: CP.NpcCombat (server): the crimsonPoliceRun player bag of every officer whose game runs the run's NPC damage settings, and the message that drops an officer's headshot and defense protection for the rest of his run.
-- `Crimson-Police/modules/operations/client.lua`: CP.Operations (client): the Cross-Department Mission toast.
-- `Crimson-Police/modules/operations/server.lua`: CP.Operations (server): Cross-Department Missions, with leave before the start and the waitlist.
 - `Crimson-Police/modules/options/client.lua`: CP.Options (client): the officer options as this PC sees them.
 - `Crimson-Police/modules/options/server.lua`: CP.Options (server): each character's officer options (My options), saved sparse in cp_officers.options (JSON: only the keys that differ from the default).
 - `Crimson-Police/modules/payments/server.lua`: CP.Payments (server): Admin UI → Payments: the payments ledger, totals and CSV, the payment actions (resolve, pay now, retries, the money tools that ship off), department funds and the cash health lines.
@@ -125,10 +123,13 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/sysadmin/server.lua`: CP.Sysadmin (server): Admin UI → System (storage, backups, webhooks, problems, integrations), Departments (add, turn off, delete, logos, desks), Settings positions and Officers → Support (check access, tablet item, stuck screen).
 - `Crimson-Police/modules/tablet/client.lua`: CP.Tablet (client): the NUI.
 - `Crimson-Police/modules/tablet/server.lua`: CP.Tablet (server): sessions for the three UIs, toasts, live pushes, the Admin UI opener and the department logo checks.
+- `Crimson-Police/modules/teams/client/operations.lua`: CP.Operations (client): the Cross-Department Mission toast.
+- `Crimson-Police/modules/teams/client/units.lua`: CP.Units (client): the invite cue, the ready check toast and the crimsonpolice_ready key mapping.
+- `Crimson-Police/modules/teams/common.lua`: CP.Teams (server): the helpers both parts of the teams module use (units.lua and operations.lua).
+- `Crimson-Police/modules/teams/operations.lua`: CP.Operations (server): Cross-Department Missions, a team of every department: the join list, waitlist and start.
+- `Crimson-Police/modules/teams/units.lua`: CP.Units (server): units of 2-4 officers from any department, leader controls and the ready check.
 - `Crimson-Police/modules/testing/client.lua`: CP.Testing (client): the test-control panel, the debug overlay drawing and the test invitation prompt.
 - `Crimson-Police/modules/testing/server.lua`: CP.Testing (server): Admin test mode.
-- `Crimson-Police/modules/units/client.lua`: CP.Units (client): the invite cue, the ready check toast and the crimsonpolice_ready key mapping.
-- `Crimson-Police/modules/units/server.lua`: CP.Units (server): units of 2-4 officers from any department, leader controls and the ready check.
 - `Crimson-Police/shared/init.lua`: The CP namespace, logging, the block registry, the config load check and RegisterMission().
 - `Crimson-Police/shared/lib.lua`: The shared helper library: the small helpers every module used to carry its own copy of.
 - `Crimson-Police/shared/locale.lua`: Loads locales/<Config.Locale>.json (falls back to en.json).
@@ -577,7 +578,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/pursuit_volunteer_spec.lua`: Pursuit's volunteer slot (docs/dev/ARCHITECTURE.md §7.3): Street Race Bust's driver (stop mode, no contact hand-off) played by a volunteer in his own car.
 - `tests/push_mission_spec.lua`: A mission a supervisor pushes to a unit (the pushMission Mission control): the paged call names that mission, only the paged unit sees its name and may accept or decline it; the accept runs every rule but skips the random draw.
 - `tests/qbx_cache_spec.lua`: CP.Qbx's player info cache (Config.Limits.playerInfoCacheMs) and the online list kept by qbx_core's events: how many times Qbox's exports are called, and that every change event makes the next answer fresh.
-- `tests/ready_toast_client_spec.lua`: The unit ready check on a member's game (modules/units/client.lua): the toast names the twists the leader chose , and stays the plain one without twists.
+- `tests/ready_toast_client_spec.lua`: The unit ready check on a member's game (modules/teams/client/units.lua): the toast names the twists the leader chose , and stays the plain one without twists.
 - `tests/realplayers_spec.lua`: Config.RealPlayers (FM4): real players as suspects are one config section with two modes, liveCrime and volunteer
 - `tests/realsuspects_config_spec.lua`: Police vs real criminal players, (the owner's decision of 2026-10-26, "Build all 3 but options in the config.lua"): the two master switches ship off and show in Admin UI → Settings, and the docs record the decision without rewording RT1's start-route text.
 - `tests/realsuspects_docs_spec.lua`: The owner docs for real suspects stay in step with the code.
@@ -622,7 +623,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/sup_actions_spec.lua`: Supervisor officer actions: Clear cooldown (one officer's mission or type cooldown, from Department Report) and "+ minutes" on a live run (Live Missions), both Mission controls of kind 'action'.
 - `tests/sup_award_points_spec.lua`: A supervisor gives points (the awardPoints Mission control, owner decision 2026-10-19): only through the admin's point-adjust path (CP.Corrections.adjust), inside the admin's min and max and awardPointsPerDay, to an officer of his own department, never to a character of his own license, with a reason, audited as 'supervisor'.
 - `tests/sup_today_spec.lua`: Supervisor UI -> Department, today at a glance (UI4): the sup:getToday answer and its permission.
-- `tests/teams_spec.lua`: Modules/units and modules/operations (slice teams).
+- `tests/teams_spec.lua`: The teams module: modules/teams/units.lua and operations.lua (units and Cross-Department Missions).
 - `tests/testing_spec.lua`: The testing slice: CP.Testing server (invites, start gates, controls, debug geometry, the run-end hook, recording results, the catalog view) and client (panel focus, HUD flag, teleport arena re-check, debug data).
 - `tests/twists_spec.lua`: Twists the officers choose at accept: CP.Twists and CP.Events' fit, offer, check and roll.
 - `tests/volunteer_match_spec.lua`: Volunteer matching: the yes/no pop-up one volunteer at a time with its answer checks, the case that opens

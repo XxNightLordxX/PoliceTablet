@@ -67,6 +67,8 @@ export interface UnitOperationCard {
     joinEndsIn?: number | null;
     // Leaving is possible until the start (no penalty).
     canLeave: boolean;
+    // Config.CrossDept.readyCheck: the start's ready check, while it waits (the unit engine's view).
+    readyCheck?: ReadyCheckView | null;
 }
 
 // An invite the viewer's unit sent that is still open.
@@ -123,7 +125,7 @@ export interface UnitScreenView {
     operation?: UnitOperationCard | null;
 }
 
-// Reply of server:unitLeave.
+// Reply of server:teamLeave { team: 'unit' }.
 export interface UnitLeaveResult {
     left: boolean;
     abandoned: boolean;

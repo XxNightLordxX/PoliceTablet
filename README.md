@@ -59,7 +59,7 @@ What is in it, one line each:
   on.
 - **Custody**: arrested NPCs go to a prisoner van, impounded cars to a tow truck, scenes to a coroner van.
 - **Units**: officers from any department team up; bigger units get harder missions and more pay.
-- **Cross-Department Missions**: a supervisor launches one big mission for every department at once.
+- **Cross-Department Missions**: a supervisor launches one mission for every department.
 - **Cash payouts**: paid into the officer's bank account (with a Renewed-Banking history line), from new money or
   the department's account.
 - **XP and levels**: 50 levels plus prestige stars. They are for show only and never change a player's Qbox rank.
@@ -582,7 +582,7 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Surrender and talk-down | Player vs police | `Config.RealPlayers.surrender.enabled` |
 | Real suspects admin screen | Player vs police | `Config.RealPlayers.adminScreen` |
 | Cross-department operations | Police teamwork | `Config.CrossDept.enabled` |
-| Unit ready check | Police teamwork | `Config.Units.readyCheck` |
+| Ready check | Police teamwork | `Config.Units.readyCheck`, `Config.CrossDept.readyCheck` |
 | Commendations | Police teamwork | `Config.Recognition.commendations.enabled` |
 | Daily goal | Police teamwork | `Config.Objectives.dailyGoal.enabled` |
 | Weekly goal | Police teamwork | `Config.Objectives.weeklyGoal.enabled` |
@@ -647,7 +647,7 @@ Settings → Key Bindings → FiveM**, then look for the Crimson-Police lines.
 |---|---|---|
 | Open the Crimson-Police tablet | Same as `/CrimsonPolice` | none (`Config.Tablet.keybind`) |
 | Crimson-Police: open Dispatch | Opens the tablet on the Dispatch screen | none (`Config.Tablet.dispatchKey`) |
-| Crimson-Police: ready for the unit's mission | Answers a unit ready check with Ready | none (`Config.Tablet.readyKey`) |
+| Crimson-Police: ready for the unit's mission | Answers a ready check (Ready) | none (`Config.Tablet.readyKey`) |
 | Crimson-Police: contact action (plate, place in vehicle, hand over, escort) | The police action shown on screen during a mission | none (`Config.Tablet.contactKey`) |
 | Crimson-Police: test controls and invitations | Test run controls for admins, or the test invitation for testers. Press again to free the mouse | **F7** (`Config.Testing.panelKey`) |
 

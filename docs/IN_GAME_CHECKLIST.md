@@ -41,6 +41,7 @@ names the change it came with.
 - [ ] Accept a mission, then set your own waypoint elsewhere: the yellow Mission start pin and its line stay until you arrive; Set GPS on the tablet makes the line the waypoint again (one line). (M9)
 - [ ] Armored Truck Escort: the HUD shows "Escorted vehicle" or "Destination" with a distance; Objective GPS on the tablet sets a waypoint and the yellow objective line goes off while it is set. (M10)
 - [ ] Unit screen -> Cross-Department Mission card -> Leave (or Leave the waitlist): a confirm opens; Cancel keeps you in, Confirm leaves. (K21)
+- [ ] Set Config.CrossDept.readyCheck = true (Settings -> Ready check). Launch, join with a SAST and an FIB officer, Start now: both get the ready prompt (the ready key works, Auto-Ready does not); both Ready starts the run; a Not ready takes that officer off the join list and joining opens again. (FM8)
 - [ ] At 1080p, 1440p and another UI scale, open the citation offence picker, the Leaderboard filters, Profile and an Admin Settings dropdown: the list opens inside the tablet, arrows / Home / End / Enter / typing work, Escape closes the list first, a click outside closes it, the value saves. (K23)
 - [ ] Leave the route during a run with the tablet closed: the off-route warning pulses three times and then stays highlighted; live dots in the tablet do the same. (K18)
 - [ ] Fill an officer's inventory to the weight limit and accept a custom mission that gives an item: "no room" toast, no item, the run starts; no orphan is logged at the end. (K7)

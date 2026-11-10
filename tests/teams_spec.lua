@@ -1,4 +1,4 @@
--- Modules/units and modules/operations (slice teams).
+-- The teams module: modules/teams/units.lua and operations.lua (units and Cross-Department Missions).
 
 -- Other modules are stubbed (Access, Qbx, Tablet, Runs, Alerts, Calls, Permissions, Missions, Draw,
 -- Admin); CP.Scaling is the real module. Every SQL statement of the slice runs against MariaDB. The
@@ -29,10 +29,11 @@ H.load('shared/locale.lua')
 -- Every locale key the slice's Lua uses exists in the part.
 do
     local files = {
-        'modules/units/server.lua',
-        'modules/units/client.lua',
-        'modules/operations/server.lua',
-        'modules/operations/client.lua',
+        'modules/teams/common.lua',
+        'modules/teams/units.lua',
+        'modules/teams/client/units.lua',
+        'modules/teams/operations.lua',
+        'modules/teams/client/operations.lua',
     }
     local missing = {}
     for _, f in ipairs(files) do
@@ -324,8 +325,9 @@ local function EndRunStub(run, state)
 end
 
 H.load('modules/scaling/server.lua')
-H.load('modules/units/server.lua')
-H.load('modules/operations/server.lua')
+H.load('modules/teams/common.lua')
+H.load('modules/teams/units.lua')
+H.load('modules/teams/operations.lua')
 H.step(0)   -- the start-up threads register listeners and read cp_operations
 
 -- ============================================================================
@@ -565,7 +567,7 @@ H.eq(unit.invites[3], nil, 'late accept cleans the invite')
 
 -- Leader leaves before accepting: the longest-standing member takes over.
 Clear()
-ok, data = Act('server:unitLeave', 1)
+ok, data = Act('server:teamLeave', 1)
 H.eq(ok, true, 'leader leaves')
 H.eq(data.abandoned, false, 'no run abandoned')
 H.eq(U.unitOf(1), nil, 'former leader has no unit')
@@ -574,12 +576,12 @@ H.eq(#unit.members, 2, 'two members left')
 H.ok(LastNote(2, 'unit.you_lead') ~= nil, 'new leader told')
 H.ok(LastNote(5, 'unit.new_leader') ~= nil, 'others told about the new leader')
 H.ok(LastNote(1, 'unit.you_left') ~= nil, 'leaver told')
-ok, data = Act('server:unitLeave', 1)
+ok, data = Act('server:teamLeave', 1)
 H.eq(data, 'err.unit_none', 'leave without a unit')
 
 -- A unit left with one member dissolves.
 Clear()
-ok = Act('server:unitLeave', 5)
+ok = Act('server:teamLeave', 5)
 H.eq(ok, true, 'member leaves')
 H.eq(U.unitOf(2), nil, 'unit dissolved')
 H.eq(U.unitOf(5), nil, 'leaver unitless')
@@ -637,7 +639,7 @@ H.eq(res.data.inviteBlocked, 'unit.blocked_on_run', 'on-run reason wins')
 -- Leaving the unit mid-run abandons that run (quit).
 Clear()
 removed = {}
-ok, data = Act('server:unitLeave', 3)
+ok, data = Act('server:teamLeave', 3)
 H.eq(ok, true, 'leave mid-run')
 H.eq(data.abandoned, true, 'run abandoned')
 H.eq(#removed, 1, 'removeParticipant called once')
@@ -657,7 +659,7 @@ H.eq(U.unlock(unitB.id), false, 'unlock of an unlocked unit is a no-op')
 local opRun = NewRun({ members = { 2 }, operationId = 99 })
 U.lock(unitB)
 removed = {}
-ok, data = Act('server:unitLeave', 2)
+ok, data = Act('server:teamLeave', 2)
 H.eq(ok, true, 'leave while on an operation run')
 H.eq(data.abandoned, false, 'operation run not abandoned')
 H.eq(#removed, 0, 'no removeParticipant for the operation run')
@@ -922,7 +924,7 @@ H.eq(ok, true, 'the first SAST officer takes the one SAST place')
 ok, data = Act('server:joinOperation', 3, opId)
 H.eq(data, 'err.op_department_full', 'the second SAST officer is refused (places 1)')
 H.eq(O.boardCard(3).joinBlocked, 'err.op_department_full', 'and his card says why')
-Act('server:leaveOperation', 2)
+Act('server:teamLeave', 2, { team = 'operation' })
 CP.DeptControls = savedDC
 H.eq(O._cleanCross({ join = true, places = 99 }, true), nil, 'check: more places than maxParticipants is refused')
 H.eq(O._cleanCross({ join = true, places = 99 }, false).places, 8, 'a saved value is moved inside')
@@ -1424,7 +1426,7 @@ res = Cb('getUnit', 6)
 listed = false
 for _, o in ipairs(res.data.invitable) do if o.src == 3 then listed = true end end
 H.eq(listed, false, 'nor sees them in the invite list')
-Act('server:unitLeave', 6)
+Act('server:teamLeave', 6)
 H.time = H.time + 59
 ok, data = Act('server:unitInvite', 1, 3)
 H.eq(data, 'err.unit_kicked_recently', 'still blocked after 59 s')
@@ -1763,7 +1765,7 @@ Act('server:unitInvite', 1, 3)
 Act('server:unitRespond', 3, true)
 Clear()
 StartCheck(u)
-ok = Act('server:unitLeave', 3)
+ok = Act('server:teamLeave', 3)
 H.eq(ok, true, 'a member leaves during the check')
 H.eq(LastCancel().who[1], 3, 'leaving cancels')
 H.ok(HasNote(2, 'unit.ready.cancel_left'), 'leave toast')
@@ -1962,7 +1964,7 @@ H.eq(res.data.operation.participants[1].canRemove, true, 'joiners removable befo
 
 -- Leave before the start: no penalty, the first on the waitlist takes the place.
 Clear()
-ok = Act('server:leaveOperation', 3)
+ok = Act('server:teamLeave', 3, { team = 'operation' })
 H.eq(ok, true, 'leave before the start')
 H.ok(HasNote(3, 'officer.op.left'), 'told it costs nothing')
 H.eq(#removed, 0, 'no run touched')
@@ -1971,7 +1973,7 @@ for _, p in ipairs(O.active().participants) do ids[#ids + 1] = p.src end
 H.eq(table.concat(ids, ','), '2,4,5', 'the waitlisted officer took the freed place')
 H.ok(HasNote(5, 'officer.op.waitlist_promoted'), 'and was told')
 H.eq(#O.active().waitlist, 1, 'one still waiting')
-ok, data = Act('server:leaveOperation', 3)
+ok, data = Act('server:teamLeave', 3, { team = 'operation' })
 H.eq(data, 'err.op_not_joined', 'cannot leave twice')
 
 -- A waitlisted officer who can no longer take a mission is skipped.
@@ -1979,7 +1981,7 @@ Act('server:joinOperation', 9, opId)
 H.eq(#O.active().waitlist, 2, 'two waiting (6, 9)')
 arena[6] = true
 Clear()
-Act('server:leaveOperation', 4)
+Act('server:teamLeave', 4, { team = 'operation' })
 arena[6] = nil
 ids = {}
 for _, p in ipairs(O.active().participants) do ids[#ids + 1] = p.src end
@@ -2023,7 +2025,7 @@ ok = Act('server:sup:opStart', 1)
 H.eq(ok, true, 'operation started')
 H.eq(#O.active().waitlist, 0, 'the waitlist closed at the start')
 H.ok(HasNote(3, 'officer.op.waitlist_closed'), 'and the waiting officer was told')
-ok, data = Act('server:leaveOperation', 2)
+ok, data = Act('server:teamLeave', 2, { team = 'operation' })
 H.eq(data, 'err.op_leave_started', 'no leaving the operation after the start')
 ok, data = Act('server:sup:opRemoveJoiner', 1, { src = 2, reason = 'Late' })
 H.eq(data, 'err.op_remove_started', 'no removing after the start')
@@ -2224,6 +2226,163 @@ do
     U._reset()
     for s = 11, 200 do H.players[s] = nil end
     CP.Qbx, CP.Access, H.exportsMock.qbx_core = stubQbx, stubAccess, stubExports
+end
+
+-- ============================================================================
+--                 ONE TEAM SYSTEM (FM8): units and operations
+-- ============================================================================
+-- A Cross-Department Mission is a team run by the unit engine: one module (modules/teams), one leave and, with
+-- Config.CrossDept.readyCheck, the unit ready check before the run starts.
+do
+    local function Exists(rel)
+        local fh = io.open(H.root .. rel, 'r')
+        if fh then fh:close() end
+        return fh ~= nil
+    end
+    for _, f in ipairs({ 'common.lua', 'units.lua', 'operations.lua', 'client/units.lua', 'client/operations.lua' }) do
+        H.ok(Exists('modules/teams/' .. f), 'modules/teams/' .. f .. ' exists')
+    end
+    for _, f in ipairs({ 'units/server.lua', 'units/client.lua', 'operations/server.lua', 'operations/client.lua' }) do
+        H.ok(not Exists('modules/' .. f), 'the old modules/' .. f .. ' is gone')
+    end
+    local mf = assert(io.open(H.root .. 'fxmanifest.lua', 'r'))
+    local manifest = mf:read('a')
+    mf:close()
+    H.ok(manifest:find('\'modules/teams/*.lua\'', 1, true) ~= nil, 'the manifest loads the teams sub-files')
+    H.ok(manifest:find('\'modules/teams/client/*.lua\'', 1, true) ~= nil, 'and the teams client files')
+    -- the duplicated helpers live once, in CP.Teams and CP.Call
+    for _, f in ipairs({ 'units.lua', 'operations.lua' }) do
+        local fh = assert(io.open(H.root .. 'modules/teams/' .. f, 'r'))
+        local src = fh:read('a')
+        fh:close()
+        for _, name in ipairs({ 'GetOfficer', 'OnRun', 'InArena', 'OnlinePlayers', 'MaybeOfficer' }) do
+            H.ok(not src:find('local function ' .. name .. '(', 1, true), f .. ': no private copy of ' .. name)
+        end
+        H.ok(not src:find('table.pack(pcall(m[fnName]', 1, true), f .. ': no private copy of the module call')
+    end
+    H.eq(type(CP.Call), 'function', 'CP.Call is in the shared library')
+    H.eq(Config.CrossDept.readyCheck, false, 'shipped: no ready check for Cross-Department Missions (as before)')
+
+    Clear()
+    U._reset()
+    for k in pairs(arena) do arena[k] = nil end
+    for k in pairs(onCall) do onCall[k] = nil end
+    for _, s2 in ipairs({ 2, 3, 5, 6 }) do runBySrc[s2] = nil end
+    if O.active() then O.cancel(0, 'Clean slate for the team checks') end
+    O._setLastLaunch(H.time - 100000)
+    pickResult = 1
+
+    -- the old leave routes are gone; the one leave serves a unit
+    local okOld, whyOld = Act('server:unitLeave', 2)
+    H.eq(whyOld, 'no reply', 'server:unitLeave is gone')
+    okOld, whyOld = Act('server:leaveOperation', 2)
+    H.eq(whyOld, 'no reply', 'server:leaveOperation is gone')
+    H.eq(select(1, Act('server:unitInvite', 2, 5)), true, 'a SAST officer invites an FIB officer')
+    H.eq(select(1, Act('server:unitRespond', 5, { accepted = true, unitId = U.unitOf(2).id })), true, 'accepted')
+    local okL, dL = Act('server:teamLeave', 5, { team = 'unit' })
+    H.eq(okL, true, 'one leave: the unit')
+    H.eq(dL.left, true, 'left the unit')
+    H.eq(U.unitOf(5), nil, 'no longer in the unit')
+    H.eq(select(2, Act('server:teamLeave', 5, { team = 'nope' })), 'err.invalid_payload', 'an unknown team is refused')
+
+    -- the one leave: the operation's join list (old feature: leave before the start)
+    local okA, dA = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+    H.eq(okA, true, 'launch for the team checks')
+    local tid = dA.id
+    Act('server:joinOperation', 2, tid)
+    Act('server:joinOperation', 5, tid)
+    Act('server:joinOperation', 6, tid)
+    local okOL, dOL = Act('server:teamLeave', 6, { team = 'operation' })
+    H.eq(okOL, true, 'one leave: the operation')
+    H.eq(dOL.left, true, 'left the join list')
+    H.eq(#O.active().participants, 2, 'two left on the join list')
+
+    -- ready check off (shipped): Start now starts the run at once
+    local okS0, dS0 = Act('server:sup:opStart', 1)
+    H.eq(okS0, true, 'readyCheck off: started')
+    H.eq(dS0.readyCheck, nil, 'no ready check')
+    H.eq(O.active().status, 'running', 'running at once')
+    O.cancel(0, 'End of the off check')
+
+    -- ready check on: the unit engine asks every participant, the first joiner too, and Auto-Ready never answers
+    Config.CrossDept.readyCheck = true
+    O._setLastLaunch(H.time - 100000)
+    okA, dA = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+    tid = dA.id
+    Act('server:joinOperation', 2, tid)
+    Act('server:joinOperation', 5, tid)
+    Clear()
+    local okS, dS = Act('server:sup:opStart', 1)
+    H.eq(okS, true, 'Start now with the ready check')
+    H.eq(dS.readyCheck, true, 'the answer says the officers are asked')
+    H.eq(O.active().status, 'joining', 'no run yet')
+    H.eq(O.active().runId, nil, 'no run created')
+    H.eq(#ClientEvents('client:readyCheck', 2), 1, 'the first joiner is asked')
+    H.eq(#ClientEvents('client:readyCheck', 5), 1, 'the FIB officer is asked')
+    H.eq(ClientEvents('client:readyCheck', 5)[1].args[1].leaderName, 'John Doe', 'the prompt names the launcher')
+    local ov = Cb('getUnit', 5)
+    ov = ov and ov.data
+    H.ok(ov and ov.operation and ov.operation.readyCheck and ov.operation.readyCheck.waitingForMe,
+        'the Unit screen shows the check on the operation card')
+    H.eq(select(2, Act('server:joinOperation', 3, tid)), 'err.op_join_closed', 'nobody joins during the check')
+    H.eq(select(2, Act('server:unitReady', 2, { accepted = true, auto = true })), 'err.unit_ready_auto',
+        'Auto-Ready never answers a Cross-Department check')
+    H.eq(select(1, Act('server:unitReady', 2, { accepted = true })), true, 'the first joiner is ready')
+    H.eq(O.active().runId, nil, 'one of two: still waiting')
+    H.eq(select(1, Act('server:unitReady', 5, true)), true, 'the FIB officer is ready (the ready key)')
+    H.eq(O.active().status, 'running', 'everyone ready: the run starts')
+    H.eq(#created > 0 and created[#created].operationId, tid, 'the run is the operation run')
+    O.cancel(0, 'End of the ready check')
+
+    -- a decline: the officer leaves the join list, joining opens again, the others stay
+    O._setLastLaunch(H.time - 100000)
+    okA, dA = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+    tid = dA.id
+    Act('server:joinOperation', 2, tid)
+    Act('server:joinOperation', 5, tid)
+    Act('server:joinOperation', 6, tid)
+    Act('server:sup:opStart', 1)
+    Clear()
+    H.eq(select(1, Act('server:unitReady', 6, false)), true, 'Leo declines')
+    local cur = O.active()
+    H.eq(cur.status, 'joining', 'still joining')
+    H.eq(#cur.participants, 2, 'the decliner left the join list')
+    H.ok(LastNote(6, 'officer.op.removed_not_ready') ~= nil, 'and is told why')
+    H.ok(LastNote(2, 'unit.ready.cancel_declined') ~= nil, 'the others get the unit engine cancel toast')
+    H.eq(select(1, Act('server:joinOperation', 3, tid)), true, 'joining is open again')
+
+    -- a timeout after the join window: the silent officer leaves, the next tick asks the rest again
+    H.time = H.time + 400
+    O._tick()
+    H.eq(Cb('getUnit', 3).data.operation.readyCheck ~= nil, true, 'the window closed: the check runs by itself')
+    Act('server:unitReady', 2, true)
+    Act('server:unitReady', 5, true)
+    H.time = H.time + 30
+    U._sweep()
+    cur = O.active()
+    H.eq(#cur.participants, 2, 'the officer who did not answer left the join list')
+    H.ok(LastNote(3, 'officer.op.removed_not_ready') ~= nil, 'he is told')
+    O._tick()
+    H.eq(select(1, Act('server:unitReady', 2, true)), true, 'asked again')
+    Act('server:unitReady', 5, true)
+    H.eq(O.active().status, 'running', 'the rest start the run')
+    O.cancel(0, 'End of the timeout check')
+
+    -- a cancel during the check ends it without a run
+    O._setLastLaunch(H.time - 100000)
+    okA, dA = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+    tid = dA.id
+    Act('server:joinOperation', 2, tid)
+    Act('server:joinOperation', 5, tid)
+    Act('server:sup:opStart', 1)
+    Clear()
+    H.eq(select(1, Act('server:sup:opCancel', 1, { reason = 'Not today' })), true, 'cancelled during the check')
+    local cleared = ClientEvents('client:readyCheck', 5)
+    H.ok(#cleared >= 1 and cleared[#cleared].args[1] == nil, 'the prompt closes')
+    H.eq(select(2, Act('server:unitReady', 5, true)), 'err.unit_ready_none', 'nothing left to answer')
+    H.eq(O.active(), nil, 'no operation')
+    Config.CrossDept.readyCheck = false
+    U._reset()
 end
 
 os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db))

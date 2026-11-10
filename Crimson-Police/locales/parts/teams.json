@@ -319,5 +319,7 @@
   "unit.ui.ready_key": "Or press {key}.",
   "unit.ui.ready_auto": "Auto-Ready answered Ready for you.",
   "err.op_department_out": "Your department has opted out of Cross-Department Missions. Ask a supervisor to opt back in.",
-  "err.op_department_full": "Every place your department may take in this Cross-Department Mission is taken. Join the waitlist instead."
+  "err.op_department_full": "Every place your department may take in this Cross-Department Mission is taken. Join the waitlist instead.",
+  "officer.op.removed_not_ready": "You were taken off {mission} because you did not answer Ready.",
+  "sup.crossdept.ready_toast": "The officers who joined {mission} are asked if they are ready; the run starts once all are."
 }

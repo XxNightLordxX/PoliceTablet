@@ -14,6 +14,7 @@
 --   CP.Recognition one part of Config.Recognition (levels, levelCurve, badges, weeklyBadges, commendations,
 --                fieldTraining) and its switch
 --   CP.Num       a finite number or the default, kept between lo and hi
+--   CP.Call      a safe call into another module of this resource (CP.<Mod>.<fn> in pcall, failures logged)
 --   CP.RealPlayers one mode of Config.RealPlayers (liveCrime, volunteer, criminalTablet) or the shared rules, and its
 --                switch; CP.RealPlayersTakePart and CP.RealPlayersRowFilter: what a real-player case takes part in
 --   CP.Restriction one kind of restriction (a mission ban, a suspension, a pair block...) joins the one restrictions
@@ -46,6 +47,23 @@ function CP.Num(v, default, lo, hi)
     if v and lo and v < lo then v = lo end
     if v and hi and v > hi then v = hi end
     return v
+end
+
+-- Calls CP[modName][fnName](...) in pcall. Answers false when the module or function is missing or raised (the error
+-- is logged under tag), else true followed by the function's own answers.
+---@param tag string
+---@param modName string
+---@param fnName string
+---@return boolean ok
+function CP.Call(tag, modName, fnName, ...)
+    local m = CP[modName]
+    if type(m) ~= 'table' or type(m[fnName]) ~= 'function' then return false end
+    local res = table.pack(pcall(m[fnName], ...))
+    if not res[1] then
+        if CP.err then CP.err(tag, 'CP.%s.%s failed: %s', modName, fnName, tostring(res[2])) end
+        return false
+    end
+    return true, table.unpack(res, 2, res.n)
 end
 
 -- ============================================================================

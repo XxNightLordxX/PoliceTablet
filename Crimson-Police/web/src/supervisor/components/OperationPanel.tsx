@@ -35,6 +35,7 @@ import { formatDateTime, formatMultiplier } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { t, tOr } from '../../shared/i18n';
 import { cx } from '../../shared/cx';
+import { toast } from '../../shared/toast';
 import type {
     EligibleMission,
     OperationInfo,
@@ -512,7 +513,16 @@ function ActiveOperation({
                 title={t('sup.crossdept.start_title')}
                 message={t('sup.crossdept.start_confirm', { mission: op.missionLabel, n: op.joined })}
                 confirmLabel={t('sup.crossdept.start_now')}
-                onConfirm={() => call(`server:${scope}:opStart`, undefined, 'sup.crossdept.started_toast')}
+                onConfirm={async () => {
+                    // Config.CrossDept.readyCheck: the participants are asked first, the run starts once all are ready
+                    const res = await call(`server:${scope}:opStart`);
+                    const asked = !!(res.data as { readyCheck?: boolean } | undefined)?.readyCheck;
+                    if (res.ok) {
+                        const key = asked ? 'sup.crossdept.ready_toast' : 'sup.crossdept.started_toast';
+                        toast('success', t(key, { mission: op.missionLabel }));
+                    }
+                    return res;
+                }}
                 onCancel={() => setDialog(null)}
             />
             <ConfirmDialog
