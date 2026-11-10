@@ -136,12 +136,14 @@ export interface Session {
     serverTime: number; // os.time() at session build
 }
 
-// CP.HappyHour.state: no mission cooldowns for anyone until endsAt.
+// CP.HappyHour.state: every mission cooldown x scale (0 = none) for anyone until endsAt.
 export interface HappyHourState {
     endsAt: number;
     // seconds left when it was sent
     left: number;
     minutes: number;
+    // x every mission's cooldown while it runs (0 = no cooldowns)
+    scale?: number;
     // the no-repeat rule is off too
     noRepeat: boolean;
     // "Sgt Doe" while the officer who started it is online

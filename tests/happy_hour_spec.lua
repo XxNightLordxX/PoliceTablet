@@ -83,7 +83,7 @@ for _, m in ipairs({
     'modules/deptcontrols/server.lua',
     'modules/settings/server.lua',
     'modules/tablet/server.lua',
-    'modules/happyhour/server.lua',
+    'modules/supervisor/happyhour.lua',
     'modules/runs/server.lua',
 }) do
     H.load(m)
@@ -149,7 +149,7 @@ CP.Hooks.on('deptControls:changed', function(e) changed[#changed + 1] = e end)
 do
     local b = Config.MissionControls.controls.happyHour
     H.ok(b and b.on == true and b.min == 5 and b.max == 30, 'happyHour ships on, 5-30 minutes')
-    H.eq(Config.MissionControls.happyHourPerDay, 1, 'once a day')
+    H.ok(b and b.scaleMin == 0 and b.scaleMax == 0 and b.perDay == 1, 'scale 0 (no cooldowns), once a day')
     H.ok(DC.def('happyHour').serverWide and not DC.def('happyHour').master, 'server-wide, outside the master switch')
     H.eq(HH.state(nil), nil, 'no happy hour')
     H.eq(Left(3, 'missions', 'hh_mission'), 1200, 'the config cooldown')
@@ -251,7 +251,7 @@ do
     local realWait = _G.Wait
     _G.Wait = function(ms)
         local info = debug.getinfo(2, 'S')
-        if info.short_src:find('happyhour/server.lua', 1, true) then wakes = wakes + 1 end
+        if info.short_src:find('supervisor/happyhour.lua', 1, true) then wakes = wakes + 1 end
         return realWait(ms)
     end
     H.advance(2 * 60 * 1000, 5000)
@@ -281,6 +281,60 @@ do
     H.time = ended
 end
 
+-- ============================================================================
+--                                   5. FM10
+-- ============================================================================
+-- A TIMED COOLDOWN CHANGE (LENGTH, SCALE, PER DAY).
+-- Happy hour is the timed change of the cooldown controls: the admin's scaleMin to scaleMax is the scale a starter
+-- picks (shipped 0 to 0: no cooldowns, as before) and perDay lives in the same entry.
+
+do
+    local b = Config.MissionControls.controls.happyHour
+    local function End()
+        return Act('server:admin:resetMissionControl', 1, { department = '*', key = 'happyHour', reason = 'fm10' })
+    end
+    End()   -- section 4's hour reads live again once the clock is back at the start
+    local ok, err = Start(1, { minutes = 10, scale = 0.5 }, 'half')
+    H.ok(ok == false and err == 'err.control_value', 'shipped 0 to 0: a half scale is refused')
+
+    b.scaleMin, b.scaleMax = 0.5, 2
+    ok, err = Start(1, { minutes = 10 }, 'lowest')
+    H.ok(ok == true, 'no scale picked: the lowest the admin allows: ' .. tostring(err))
+    H.eq(Left(3, 'missions', 'hh_mission'), 600, 'x 0.5: half the mission cooldown for everyone')
+    H.eq(HH.state(nil).scale, 0.5, 'the screens are told the scale')
+    H.eq(Left(1, 'missions', 'hh_mission'), 1200, 'it lowers cooldowns: the one who started it keeps his')
+    local c
+    for _, x in ipairs(DC.view(2).serverWide) do if x.key == 'happyHour' then c = x end end
+    H.ok(c and c.scaleMin == 0.5 and c.scaleMax == 2, 'the supervisor row is given the scales it may pick')
+    H.ok(c and type(c.numbers) == 'table' and c.numbers[1].name == 'scaleMin' and c.numbers[3].name == 'perDay',
+        'the admin card is given the number fields of the entry')
+    End()
+
+    ok, err = Start(1, { minutes = 10, scale = 1.5 }, 'busy night')
+    H.ok(ok == true, 'a scale above 1 slows cooldowns for a while: ' .. tostring(err))
+    H.eq(Left(3, 'missions', 'hh_mission'), 1800, 'x 1.5 for the officers')
+    H.eq(Left(1, 'missions', 'hh_mission'), 1800, 'and the starter too (it relaxes nothing)')
+    H.eq(HH.state(Officer(1)).self, false, 'so the starter is not told it skips him')
+    End()
+    ok, err = Start(1, { minutes = 10, scale = 2.5 }, 'x')
+    H.ok(ok == false and err == 'err.control_value', 'above scaleMax is refused')
+
+    b.perDay = 0
+    H.time = H.time + Config.MissionControls.changeWait + 1   -- past the wait between two changes
+    ok, err = Start(5, { minutes = 10 }, 'none today')
+    H.ok(ok == false and err == 'err.happy_hour_used',
+        'perDay 0 in the entry: supervisors start none: ' .. tostring(err))
+    b.scaleMin, b.scaleMax, b.perDay = 0, 0, 1
+
+    H.eq(DC.checkConfig({ happyHour = { on = true, scaleMin = 3 } }), 'err.control_config', 'a scale above 2')
+    H.eq(DC.checkConfig({ happyHour = { on = true, perDay = 1.5 } }), 'err.control_config', 'a part start a day')
+    H.eq(DC.checkConfig({ happyHour = { on = true, scaleMin = 0.25, scaleMax = 1, perDay = 3 } }), nil,
+        'the entry takes its number fields')
+    H.eq(DC.checkConfig({ cooldownScale = { on = true, perDay = 1 } }), 'err.control_config',
+        'another control does not take them')
+    H.time = ended
+end
+
 H.sql('DELETE FROM cp_dept_controls')
 H.sql('DELETE FROM cp_mission_runs')
 H.sql('DELETE FROM cp_audit')
@@ -296,7 +350,7 @@ do
     CP.err = function(tag, msg, ...) lines[#lines + 1] = tostring(tag) .. ': ' .. tostring(msg):format(...) end
     H.killThreads()                                     -- the loop of the start that worked
     DC.clearCache()
-    H.load('modules/happyhour/server.lua')
+    H.load('modules/supervisor/happyhour.lua')
     H.advance(5 * 60 * 1000, 5000)
     CP.err, CP.Migrations = realErr, saved
     H.eq(table.concat(lines, ' | '), '', 'no check failed line after a failed start')

@@ -349,6 +349,12 @@ export interface ExtraGrantsData {
 // ============================================================================
 
 // One control's bounds: on = the admin switch, min / max = the only values a supervisor may pick.
+// one number field of a control's bounds (DC.register numbers): its admin range
+export interface MissionControlNumber {
+    name: string;
+    range: [number, number];
+    integer?: boolean;
+}
 export interface MissionControlBounds {
     on?: boolean;
     min?: number;
@@ -448,9 +454,14 @@ export interface MissionControlState {
     range?: [number, number];
     // Config.Departments.<key>.missionControls[key] (never for a server-wide control)
     own?: MissionControlBounds;
-    // happyHour: Config.MissionControls.happyHourPerDay and how many started today; clearCooldown and
-    // addRunTime: uses a supervisor may make a day
+    // happyHour: its perDay (Config.MissionControls.controls.happyHour) and how many started today; clearCooldown
+    // and addRunTime: uses a supervisor may make a day
     perDay?: number;
+    // happyHour: the cooldown scales a starter may pick (scaleMin to scaleMax)
+    scaleMin?: number;
+    scaleMax?: number;
+    // more number fields the control's bounds take besides min and max (happy hour's scaleMin, scaleMax, perDay)
+    numbers?: MissionControlNumber[];
     usedToday?: number;
     // addRunTime: seconds supervisors may add to one run in all
     maxSeconds?: number;

@@ -395,7 +395,6 @@ Play.features = {
         risky = true,
         limits = {
             'MissionControls.changeWait',
-            'MissionControls.happyHourPerDay',
             'MissionControls.clearCooldownPerDay',
             'MissionControls.addRunTimePerDay',
             'MissionControls.addRunTimeMax',
@@ -852,7 +851,6 @@ local RANGES = {
     ['AdminControl.jobProgressEveryMs'] = { 0, 5000 },
     ['AdminControl.refusalsKept'] = { 10, 2000 },
     ['MissionControls.changeWait'] = { 0, 86400 },
-    ['MissionControls.happyHourPerDay'] = { 0, 24 },
     ['MissionControls.clearCooldownPerDay'] = { 0, 50 },
     ['MissionControls.addRunTimePerDay'] = { 0, 100 },
     ['MissionControls.addRunTimeMax'] = { 0, 3600 },
@@ -2458,12 +2456,16 @@ local function CheckControls(map, _, ctx)
     return (CP.DeptControls.checkConfig(map, ctx and ctx.boot))
 end
 -- canTurnOff: readyCheck's flag (supervisors may switch the ready check off), other flags a control registers;
+-- scaleMin, scaleMax, perDay: happy hour's cooldown scales and starts a day (its number fields);
 -- presets: the Config.NpcDifficulty presets a supervisor may pick for difficulty
 local CONTROLS_TPL = MapOf(Record({
     on = true,
     min = Num(-MAX_ABS, MAX_ABS),
     max = Num(-MAX_ABS, MAX_ABS),
     canTurnOff = true,
+    scaleMin = Num(0, 2),
+    scaleMax = Num(0, 2),
+    perDay = Num(0, 24, true),
     presets = ListOf(Enum({ 'easy', 'normal', 'hard', 'custom' }), { max = 4, unique = true }),
 }), '^%a[%w_]*$')
 KNOWN['MissionControls.controls'] = { tpl = CONTROLS_TPL, check = CheckControls }

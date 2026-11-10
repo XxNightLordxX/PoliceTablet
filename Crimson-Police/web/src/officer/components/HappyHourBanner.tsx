@@ -1,9 +1,10 @@
-// Happy hour: "Happy hour: no mission cooldowns for 18:00, set by Sgt Doe" on the officer Home and the
-// Mission Board. Starts from the session (or the board's data) and follows push 'happyHour' (false = it ended).
+// Happy hour: "Happy hour: no mission cooldowns for 18:00, set by Sgt Doe" (or "mission cooldowns x0.5 for") on
+// the officer Home and the Mission Board. Starts from the session (or the board's data) and follows push 'happyHour' (false = it ended).
 
 import { useEffect, useState } from 'react';
 import { Countdown, Icon } from '../../shared/components';
 import { usePush } from '../../shared/hooks';
+import { formatFactor } from '../../shared/format';
 import { hasKey, t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import type { HappyHourState } from '../../shared/types';
@@ -45,7 +46,9 @@ export function HappyHourBanner({ state, onChange }: HappyHourBannerProps) {
             </span>
             <div className="happy-hour__main">
                 <div className="happy-hour__title">
-                    <span>{t('hh.banner')}</span>{' '}
+                    <span>
+                        {current.scale ? t('hh.banner_scaled', { x: formatFactor(current.scale) }) : t('hh.banner')}
+                    </span>{' '}
                     <Countdown
                         seconds={current.left}
                         resetKey={current}

@@ -32,7 +32,7 @@ CP.DeptControls = {
     heldBy = function() return held end,
 }
 
-H.load('modules/happyhour/server.lua')
+H.load('modules/supervisor/happyhour.lua')
 H.load('modules/progression/events.lua')
 H.load('modules/scaling/server.lua')
 H.load('modules/progression/scoring.lua')

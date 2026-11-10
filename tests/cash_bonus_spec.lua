@@ -28,7 +28,7 @@ CP.DeptControls = {
     heldBy = function() return held end,
 }
 
-H.load('modules/happyhour/server.lua')
+H.load('modules/supervisor/happyhour.lua')
 H.load('modules/progression/events.lua')
 H.load('modules/cash/server.lua')
 local HH, E, Cash = CP.HappyHour, CP.Events, CP.Cash

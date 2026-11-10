@@ -122,7 +122,7 @@ Has('modules/review/anticheat.lua', 'local TICK_MS = 2000', 'anticheat pass ever
 Has('modules/teams/operations.lua', 'local TICK_IDLE_MS = 10000', 'no operation: every 10 s')
 Has('modules/teams/units.lua', 'local SWEEP_MS = 5000', 'unit invite sweep every 5 s')
 Has('modules/system/schedule.lua', 'local CHECK_EVERY_MS = 60000', 'daily boundary check every 60 s')
-Has('modules/happyhour/server.lua', 'local TICK_MS = 30000', 'happy hour end check every 30 s')
+Has('modules/supervisor/happyhour.lua', 'local TICK_MS = 30000', 'happy hour end check every 30 s')
 for _, rel in ipairs({
     'blocks/escort/client.lua',
     'blocks/flee_arrest/client.lua',

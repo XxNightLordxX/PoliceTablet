@@ -52,7 +52,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/downed/server.lua`: CP.Downed (server): Hard rule 18, downed participants (docs/dev/ARCHITECTURE.md §5.15, SPEC "Downed participants", Crimson-Arena rules 1 and 3).
 - `Crimson-Police/modules/draw/server.lua`: CP.Draw: mission pools, the random draw, locations and the Mission Board.
 - `Crimson-Police/modules/featurerewards/server.lua`: CP.FeatureRewards (server): the money and items of the features outside a mission's own pay
-- `Crimson-Police/modules/happyhour/server.lua`: CP.HappyHour (server): the happy hour Mission control.
 - `Crimson-Police/modules/integrations/crimson_contracts/server.lua`: CP.CrimsonContracts (server): the adapter for Crimson-Contracts' server-only contract events (sent only with ContractsConfig.LifecycleEvents = true).
 - `Crimson-Police/modules/integrations/qbx/client.lua`: CP.Qbx (client): the only client code that talks to qbx_core.
 - `Crimson-Police/modules/integrations/qbx/server.lua`: CP.Qbx (server): the only server code that talks to qbx_core.
@@ -112,6 +111,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/spawn/server.lua`: CP.Spawn (server): every new mission entity waits frozen where the server made it until the game of an officer of its run has put it on the ground (the placer, modules/spawn/client.lua); a point that game reports bad is swapped for another point the mission may use there (Config.Spawning.place, placeTimeoutMs, retries, onTimeout).
 - `Crimson-Police/modules/supawards/server.lua`: CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
 - `Crimson-Police/modules/supervisor/fieldtraining.lua`: CP.FieldTraining (server): field training (Config.Recognition.fieldTraining), part of the supervisor module.
+- `Crimson-Police/modules/supervisor/happyhour.lua`: CP.HappyHour (server): happy hour, the timed cooldown change of the cooldown Mission controls.
 - `Crimson-Police/modules/supervisor/missionban.lua`: CP.MissionBan (server): a supervisor's temporary mission ban of one officer (the Mission control
 - `Crimson-Police/modules/supervisor/notices.lua`: CP.Notices (server): the one notice system.
 - `Crimson-Police/modules/supervisor/restrictions.lua`: CP.Restrictions (server): the one restrictions list.
@@ -326,7 +326,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/officer/components/CommendationsCard.tsx`: An officer's commendations, newest first, plus the read-only SC-Dispatch MDT commendations (tagged MDT).
 - `Crimson-Police/web/src/officer/components/ContactPanel.tsx`: Active Mission · Contact panel: every person and car of the current contact objective, its facts, the checks still open, the police actions and the dispositions (CP.Custody.view; decisions go to server:contactDecide).
 - `Crimson-Police/web/src/officer/components/FieldTrainingCard.tsx`: Profile · Field training (Config.Recognition.fieldTraining): the rookie's own training (tasks, progress, trainer, notes, ride-along types) and the trainer's rookies with Sign off (and a count of the tasks ready).
-- `Crimson-Police/web/src/officer/components/HappyHourBanner.tsx`: Happy hour: "Happy hour: no mission cooldowns for 18:00, set by Sgt Doe" on the officer Home and the Mission Board.
+- `Crimson-Police/web/src/officer/components/HappyHourBanner.tsx`: Happy hour: "Happy hour: no mission cooldowns for 18:00, set by Sgt Doe" (or "mission cooldowns x0.5 for") on the officer Home and the Mission Board.
 - `Crimson-Police/web/src/officer/components/LiveCaseCard.tsx`: Active Mission · the live case card (Config.RealPlayers.liveCrime.caseCard): the reported crime, the suspect count, the three steps (the same for every suspect, like the HUD) and when the "last reported" map points were taken.
 - `Crimson-Police/web/src/officer/components/LookCard.tsx`: The own profile's Look card: appearance, personal accent, tablet size and call alerts, as saved on cp_officers.
 - `Crimson-Police/web/src/officer/components/MissionCallsLink.tsx`: Mission call pieces on the Mission Board: the "n mission calls open" link to Dispatch, the daily-limit badge and the ready-check toast text (their texts live in the mission calls locale part).
@@ -338,6 +338,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/officer/components/TwistPicker.tsx`: The twists a leader may add at the accept step (Mission Board, mission call claim): one switch per twist with its own bonus, and the total bonus of the ones picked ("+45% points, x1.50 cash"), capped as the server caps it.
 - `Crimson-Police/web/src/officer/components/twistTicks.ts`: The twists the accept step (Mission Board, mission call claim) starts with ticked.
 - `Crimson-Police/web/src/officer/components/usualTwists.walk.ts`: My usual twists against the browser mocks (node walk.mjs, a gate step): the accept step starts with the officer's usual twists that the card offers, so a usual twist the type does not offer is never sent; with none picked the department's pre-ticked twists stay the start, as before.
+- `Crimson-Police/web/src/officer/happyHour.walk.ts`: Happy hour as the timed cooldown change (FM10, node walk.mjs, a gate step): the officer banner names the scale when it is not 0 (and keeps "no mission cooldowns" at 0), and the Mission controls value text shows the scale and the no-repeat tail.
 - `Crimson-Police/web/src/officer/screens/ActiveMission.tsx`: Officer UI · Active Mission (screen key 'active', title key 'ui.screen.active') · run_ui slice.
 - `Crimson-Police/web/src/officer/screens/Challenge.tsx`: Officer UI · Department Challenge (the Challenge tab of Me, callbacks getChallenge + getDeptContributors).
 - `Crimson-Police/web/src/officer/screens/Dispatch.tsx`: Officer UI · Dispatch (screen key 'dispatch'): mission calls.

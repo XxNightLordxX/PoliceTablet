@@ -182,14 +182,19 @@ You set them in Admin UI → **Permissions** → **Mission controls** (below); s
     `Config.Limits.maxCompletionsDay`, `0` = no cap); `0` here also means no cap.
   - These three count for every department too, and the self rule applies: the supervisor who switched the
     no-repeat rule off or raised a cap keeps the config.lua rule himself (and so does any unit he is in).
-  - `happyHour = { on = true, min = 5, max = 30 }` (happy hour): a supervisor picks the minutes (here 5 to 30) and
-    presses **Start happy hour** in Supervisor UI → Mission controls. Until it ends no mission has a cooldown for
-    anyone on the server, and with the box ticked the no-repeat rule is off too. The abandon cooldown, the hourly and
+  - `happyHour = { on = true, min = 5, max = 30, scaleMin = 0, scaleMax = 0, perDay = 1 }` (happy hour, the timed
+    cooldown change, listed with the other cooldown controls): a supervisor picks the minutes (here 5 to 30) and, when
+    you allow more than one, the cooldown scale (`scaleMin` to `scaleMax`, `0` = no cooldown, `0.5` = half, `1.5` =
+    half as long again), then presses **Start happy hour** in Supervisor UI → Mission controls. As shipped (`0` to
+    `0`) no mission has a cooldown for anyone on the server until it ends, and with the box ticked the no-repeat rule
+    is off too. The abandon cooldown, the hourly and
     daily caps and the cash rules stay. When it ends every officer's cooldowns count again from when his runs really
-    ended. The supervisor who started it keeps his own cooldowns (and so does any unit he is in). A restart keeps it.
+    ended. While it lowers cooldowns the supervisor who started it keeps his own (and so does any unit he is in); a
+    scale above 1 counts for him too. A restart keeps it.
     Officers see a banner on Home and the Mission Board ("Happy hour: no mission cooldowns for 14:32, set by Sgt
-    Doe"); admins see a chip with **End now** in Admin UI → Live. `Config.MissionControls.happyHourPerDay` (`1`):
-    happy hours a supervisor may start a day (`0` = none); admins may start more, one at a time.
+    Doe", or "mission cooldowns x0.5 for" with a scale); admins see a chip with **End now** in Admin UI → Live.
+    `perDay` (`1`): happy hours supervisors may start a day on the whole server (`0` = none); admins may start more,
+    one at a time. Admin UI → Permissions → Mission controls has a box for each of these numbers.
   - `clearCooldown = { on = true }` (**Clear cooldown**, on when you install: it is a cooldown control): in Supervisor
     UI → **Department** → **Officers** a supervisor opens an officer and presses **Clear cooldown**. He sees the
     officer's mission type and mission cooldowns with the time left and clears one at a time, with a reason. Any

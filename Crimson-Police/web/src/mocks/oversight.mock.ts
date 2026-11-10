@@ -1345,7 +1345,17 @@ const mcSaved: Record<
 
 // happy hour: how many a supervisor started today in this mock session (once a day)
 let hhStarted = 0;
-const hhCounts = () => ({ perDay: 1, usedToday: hhStarted });
+const hhCounts = () => ({
+    perDay: 1,
+    usedToday: hhStarted,
+    scaleMin: 0,
+    scaleMax: 0.5,
+    numbers: [
+        { name: 'scaleMin', range: [0, 2] as [number, number] },
+        { name: 'scaleMax', range: [0, 2] as [number, number] },
+        { name: 'perDay', range: [0, 24] as [number, number], integer: true },
+    ],
+});
 
 function mcState(
     dept: string,
@@ -1387,7 +1397,7 @@ registerMock('request', 'admin:getMissionControls', (): MissionControlsView => {
         noRepeat: { on: true },
         hourlyCap: { on: true, min: 1, max: 16 },
         dailyCap: { on: true, min: 0, max: 40 },
-        happyHour: { on: true, min: 5, max: 30 },
+        happyHour: { on: true, min: 5, max: 30, scaleMin: 0, scaleMax: 0.5, perDay: 1 },
         clearCooldown: { on: true },
         addRunTime: { on: false, min: 1, max: 5 },
         ...(EDGE ? { edgeDepartmentControlWithAVeryLongKey: { on: true, min: 0, max: 100 } } : {}),
@@ -1464,7 +1474,7 @@ registerMock('request', 'sup:getMissionControls', (): MissionControlsView => {
         noRepeat: { on: !EMPTY },
         hourlyCap: { on: !EMPTY, min: 1, max: 16 },
         dailyCap: { on: !EMPTY, min: 0, max: 40 },
-        happyHour: { on: !EMPTY, min: 5, max: 30 },
+        happyHour: { on: !EMPTY, min: 5, max: 30, scaleMin: 0, scaleMax: 0.5, perDay: 1 },
     };
     return {
         master: !EMPTY,

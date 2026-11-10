@@ -30,6 +30,7 @@ import type {
     CrossDeptValue,
     GoalsValue,
     MissionControlBounds,
+    MissionControlNumber,
     MissionControlState,
     MissionControlValue,
     MissionControlsDepartment,
@@ -123,10 +124,15 @@ export function useValueText(): (key: string, v: MissionControlValue | undefined
         if (typeof v === 'number' && v === 0 && key === 'readyCheck') return t('admin.perms.mc.value_off');
         if (typeof v === 'number') return one(v);
         if (key === 'happyHour') {
-            // { minutes, noRepeat } while one runs; {} = none
+            // { minutes, scale, noRepeat } while one runs; {} = none
             const hh = asMap<number>(v);
             if (!hh.minutes) return t('admin.perms.mc.value_off');
-            return t(hh.noRepeat ? 'mc.value.happyHour_norepeat' : 'mc.value.happyHour', { n: hh.minutes });
+            const scale = hh.scale ?? 0;
+            const base =
+                scale > 0
+                    ? t('mc.value.happyHour_scaled', { n: hh.minutes, x: formatFactor(scale) })
+                    : t('mc.value.happyHour', { n: hh.minutes });
+            return hh.noRepeat ? `${base}, ${t('mc.value.happyHour_norepeat_tail')}` : base;
         }
         const parts = Object.entries(asMap<number>(v)).map(([k, n]) => `${typeLabel(k)} ${one(n)}`);
         return parts.length > 0 ? parts.join(', ') : '-';
@@ -205,8 +211,16 @@ function BoundsFields({
     const [flags, setFlags] = useState<Record<string, boolean>>(() =>
         Object.fromEntries(flagNames.map(f => [f, bounds[f] === true])),
     );
+    // more number fields a control registers (happy hour's scaleMin, scaleMax, perDay)
+    const numberDefs = asArray<MissionControlNumber>(control.numbers);
+    const savedNumbers = () =>
+        Object.fromEntries(
+            numberDefs.map(n => [n.name, typeof bounds[n.name] === 'number' ? (bounds[n.name] as number) : null]),
+        );
+    const [numbers, setNumbers] = useState<Record<string, number | null>>(savedNumbers);
     const [picked, setPicked] = useState<string[]>(savedList);
     useEffect(() => {
+        setNumbers(savedNumbers());
         setOn(bounds.on);
         setMin(bounds.min ?? null);
         setMax(bounds.max ?? null);
@@ -223,13 +237,15 @@ function BoundsFields({
     for (const f of flagNames) {
         if (flags[f] || bounds[f] !== undefined) next[f] = flags[f] === true;
     }
+    for (const n of numberDefs) next[n.name] = numbers[n.name] ?? undefined;
     if (listField && (picked.length > 0 || bounds[listField] !== undefined)) {
         next[listField] = choiceNames.filter(n => picked.includes(n));
     }
     for (const k of Object.keys(next) as (keyof MissionControlBounds)[]) if (next[k] === undefined) delete next[k];
     const dirty = JSON.stringify(next) !== JSON.stringify(Object.fromEntries(Object.entries(bounds)));
     const invalid = min !== null && max !== null && min > max;
-    if (!numeric && switchLabel === undefined && flagNames.length === 0 && !listField) return null;
+    const noFields = flagNames.length === 0 && numberDefs.length === 0 && !listField;
+    if (!numeric && switchLabel === undefined && noFields) return null;
     const lo = control.range?.[0];
     const hi = control.range?.[1];
     return (
@@ -267,6 +283,24 @@ function BoundsFields({
                     </label>
                 </>
             ) : null}
+            {numberDefs.map(n => {
+                const label = hasKey(`admin.perms.mc.number.${n.name}`) ? t(`admin.perms.mc.number.${n.name}`) : n.name;
+                return (
+                    <label key={n.name} className="oversight-mc-field">
+                        <span>{label}</span>
+                        <NumberInput
+                            aria-label={label}
+                            value={numbers[n.name] ?? null}
+                            onChange={v => setNumbers(prev => ({ ...prev, [n.name]: v }))}
+                            min={n.range[0]}
+                            max={n.range[1]}
+                            integer={n.integer === true}
+                            step={n.integer ? 1 : 0.05}
+                            showRange={false}
+                        />
+                    </label>
+                );
+            })}
             {listField ? (
                 <div className="oversight-mc-field">
                     <span>{t('admin.perms.mc.presets')}</span>

@@ -1036,12 +1036,10 @@ do
         )
         H.ok(d.happyHour.on == true and d.happyHour.min == 5 and d.happyHour.max == 30,
             'step P6: happy hour ships on, 5-30 minutes')
-        H.ok(
-            E('MissionControls.happyHourPerDay').default == 1 and E('MissionControls.happyHourPerDay').max == 24
-                and E('MissionControls.happyHourPerDay').desc:find('a day server-wide (any supervisor', 1, true)
-                    ~= nil,
-            'step P6: once a day, with its comment'
-        )
+        H.ok(d.happyHour.scaleMin == 0 and d.happyHour.scaleMax == 0 and d.happyHour.perDay == 1,
+            'FM10: happy hour ships at scale 0 (no cooldowns), once a day, in its control entry')
+        H.ok(S.entry('MissionControls.happyHourPerDay') == nil and Config.MissionControls.happyHourPerDay == nil,
+            'FM10: the old per-day key is gone (its number lives in controls.happyHour.perDay)')
         H.ok(
             d.clearCooldown.on == true and d.addRunTime.on == false and d.addRunTime.min == 1 and d.addRunTime.max == 5,
             'step P7: Clear cooldown ships on, + minutes off (1-5 a click)')

@@ -28,7 +28,7 @@ import {
     ScreenStatus,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
-import { fmtDateTime, formatDuration } from '../../shared/format';
+import { fmtDateTime, formatDuration, formatFactor } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
@@ -641,7 +641,8 @@ function Editor({
 type Pending =
     { kind: 'set'; c: MissionControlState; value: MissionControlValue } | { kind: 'reset'; c: MissionControlState };
 
-// Happy hour: minutes and the no-repeat box, Start; while it runs the countdown and End now.
+// Happy hour, the timed cooldown change: minutes, the cooldown scale (when the admin allows more than one) and the
+// no-repeat box, Start; while it runs the countdown and End now.
 function HappyHourRow({
     c,
     busy,
@@ -656,6 +657,10 @@ function HappyHourRow({
     const text = useValueText();
     const [minutes, setMinutes] = useState(() => fit(c, 15));
     const [noRepeat, setNoRepeat] = useState(false);
+    const scaleLo = c.scaleMin ?? 0;
+    const scaleHi = Math.max(scaleLo, c.scaleMax ?? scaleLo);
+    const [scale, setScale] = useState(scaleLo);
+    const pickedScale = Math.min(scaleHi, Math.max(scaleLo, scale));
     const running = c.saved !== undefined && c.saved !== null && (c.timeLeft ?? 0) > 0;
     const perDay = c.perDay ?? 1;
     const usedUp = (c.usedToday ?? 0) >= perDay;
@@ -712,6 +717,24 @@ function HappyHourRow({
                         disabled={busy || usedUp}
                         onChange={setMinutes}
                     />
+                    {scaleHi > scaleLo ? (
+                        <label className="sup-mc-slider">
+                            <span className="sup-mc-slider__label">{t('sup.hh.scale')}</span>
+                            <input
+                                type="range"
+                                aria-label={t('sup.hh.scale')}
+                                min={scaleLo}
+                                max={scaleHi}
+                                step={0.05}
+                                value={pickedScale}
+                                disabled={busy || usedUp}
+                                onChange={e => setScale(Math.round(Number(e.target.value) * 20) / 20)}
+                            />
+                            <span className="sup-mc-slider__value cp-num">
+                                {pickedScale === 0 ? t('sup.hh.scale_none') : `×${formatFactor(pickedScale)}`}
+                            </span>
+                        </label>
+                    ) : null}
                     <Toggle
                         checked={noRepeat}
                         disabled={busy || usedUp}
@@ -732,7 +755,13 @@ function HappyHourRow({
                             variant="primary"
                             icon="check"
                             disabled={busy || waiting || usedUp}
-                            onClick={() => onAsk({ kind: 'set', c, value: { minutes, noRepeat: noRepeat ? 1 : 0 } })}
+                            onClick={() =>
+                                onAsk({
+                                    kind: 'set',
+                                    c,
+                                    value: { minutes, scale: pickedScale, noRepeat: noRepeat ? 1 : 0 },
+                                })
+                            }
                         >
                             {t('sup.hh.start')}
                         </Button>
@@ -928,7 +957,9 @@ function ReasonDialog({
     const next = pending.kind === 'set' ? pending.value : c.configValue;
     const ok = reason.trim().length > 0 && !busy;
     const hh = c.key === 'happyHour';
-    const minutes = hh && pending.kind === 'set' ? (pending.value as Record<string, number>).minutes : 0;
+    const picked = hh && pending.kind === 'set' ? (pending.value as Record<string, number>) : {};
+    const minutes = picked.minutes ?? 0;
+    const scale = picked.scale ?? 0;
     const title = hh
         ? pending.kind === 'set'
             ? t('sup.hh.confirm_start', { minutes })
@@ -937,7 +968,11 @@ function ReasonDialog({
           ? t('sup.controls.confirm_set', { control: controlName(c.key) })
           : t('sup.controls.confirm_reset', { control: controlName(c.key) });
     const description = hh
-        ? t(pending.kind === 'set' ? 'sup.hh.confirm_text' : 'sup.hh.confirm_end_text')
+        ? pending.kind === 'set'
+            ? scale > 0
+                ? t('sup.hh.confirm_text_scaled', { x: formatFactor(scale) })
+                : t('sup.hh.confirm_text')
+            : t('sup.hh.confirm_end_text')
         : t('sup.controls.confirm_text', { from: text(c.key, c.value), to: text(c.key, next) });
     const confirmLabel = hh
         ? t(pending.kind === 'set' ? 'sup.hh.start' : 'sup.hh.end')

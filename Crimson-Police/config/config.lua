@@ -1700,6 +1700,11 @@ Config.MissionControls = {
     controls = {        -- per control: on = the admin switch, min/max = the only values a supervisor may pick
         -- x every mission's cooldown, per mission type, for every department; min 0 = a type with no mission cooldown
         cooldownScale = { on = true, min = 0, max = 2 },
+        -- Happy hour, the timed cooldown change: a supervisor starts it for min to max minutes with a cooldown scale
+        -- from scaleMin to scaleMax (x every mission's cooldown for anyone on the server; 0 = no cooldown, 0.5 = half)
+        -- and may switch the no-repeat rule off with it; abandon cooldown and caps stay. perDay = happy hours a day
+        -- server-wide (any supervisor; admins any); never for the one who started it while it lowers cooldowns
+        happyHour = { on = true, min = 5, max = 30, scaleMin = 0, scaleMax = 0, perDay = 1 },
         -- the abandon cooldown in seconds (Limits.abandonCooldown) for every department; 0 = none
         abandonCooldown = { on = true, min = 0, max = 900 },
         -- false switches the no-repeat rule (Draw.avoidLast) off for every department: a mission may come up twice
@@ -1708,8 +1713,6 @@ Config.MissionControls = {
         hourlyCap = { on = true, min = 1, max = 16 },
         -- completed missions per officer per day (Limits.maxCompletionsDay) for every department; 0 = no cap
         dailyCap = { on = true, min = 0, max = 40 },
-        -- happy hour minutes: no mission cooldowns for anyone on the server (abandon cooldown and caps stay)
-        happyHour = { on = true, min = 5, max = 30 },
         -- Department Report: a supervisor clears one officer's mission or type cooldown (any department, never his
         -- own character, never while the officer is on a run); each officer still at most
         -- AdminControl.cooldownClearsPerDay clears a day by all staff together
@@ -1804,8 +1807,6 @@ Config.MissionControls = {
         -- like an admin's award, at most awardPointsPerDay points a supervisor a day
         awardPoints = { on = false, min = 1, max = 50 },
     },
-    happyHourPerDay = 1, -- happy hours a day server-wide (any supervisor; admins any); never for the one who started it
-
     -- officers' cooldowns one supervisor may clear a day (admins any)
     clearCooldownPerDay = 5,
     -- times one supervisor may add minutes to a running mission a day (admins any)

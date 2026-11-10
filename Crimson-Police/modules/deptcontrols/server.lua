@@ -92,6 +92,24 @@ local function Flags(list)
     return out
 end
 
+-- More number fields a control's bounds may carry besides min and max (happy hour's scale and per day):
+-- { { name, range = { lo, hi }, integer }, ... } in the order the admin's card shows them.
+local function Numbers(list)
+    local out, byName = {}, {}
+    for _, n in ipairs(type(list) == 'table' and list or {}) do
+        local name = type(n) == 'table' and n.name
+        local r = type(n) == 'table' and n.range
+        local good = type(name) == 'string' and name ~= 'on' and name ~= 'min' and name ~= 'max' and type(r) == 'table'
+            and IsNum(r[1]) and IsNum(r[2]) and not byName[name]
+        if good then
+            local e = { name = name, range = { r[1], r[2] }, integer = n.integer == true }
+            out[#out + 1] = e
+            byName[name] = e
+        end
+    end
+    return out, byName
+end
+
 -- DC.register(key, def): a control other modules read with DC.get.
 --   kind        'number' (one number), 'bool' (true or false), 'map' (a number per key, e.g. per mission type),
 --               'choice' (one name from the list the admin's bounds give in the field named by list) or 'action' (a staff action with no saved value, e.g. clearing an officer's cooldown: only its admin
@@ -118,6 +136,8 @@ end
 --               (the Department Report's 'Your controls today' card, DC.mine)
 --   bounded     false: the control has no min and max (the admin's card shows only its switch)
 --   flags       optional { name, ... }: more true / false fields its bounds may carry (readyCheck's canTurnOff)
+--   numbers     optional { { name, range = { lo, hi }, integer }, ... }: more number fields its bounds may carry
+--               (happy hour's scaleMin, scaleMax and perDay); the admin's card shows a box for each
 --   list        a 'choice' control: the bounds field with the names a supervisor may pick (difficulty: 'presets');
 --               left out, every name choices gives is offered (featuredType: every mission type)
 --   choices     a 'choice' control: fn() -> every name that list may hold (the Config.NpcDifficulty presets)
@@ -144,6 +164,7 @@ function DC.register(key, def)
         return false
     end
     if not defs[key] then order[#order + 1] = key end
+    local numberList, numberByName = Numbers(def.numbers)
     defs[key] = {
         key = key,
         kind = def.kind,
@@ -164,6 +185,8 @@ function DC.register(key, def)
         usedToday = type(def.usedToday) == 'function' and def.usedToday or nil,
         bounded = def.bounded ~= false and def.kind ~= 'bool' and def.kind ~= 'choice',
         flags = Flags(def.flags),
+        numbers = numberList,
+        numberByName = numberByName,
         list = def.kind == 'choice' and def.list or nil,
         choices = def.kind == 'choice' and def.choices or nil,
     }
@@ -447,14 +470,16 @@ local function Own(def, dept, key, officer)
     return v, row
 end
 
--- Another control's live change laid over the value (a happy hour over the cooldowns): value, its row | nil.
+-- Another control's live change laid over the value (a happy hour over the cooldowns): value, its row | nil. The
+-- one who set it (and his unit) keeps the value under it while the change relaxes a rule (the self rule).
 local function Overlay(dept, key, officer, value)
     for _, k in ipairs(order) do
         local od = defs[k]
         local fn = od.overlays and od.overlays[key]
         local where = fn and StoreDept(od, dept)
         local row = type(where) == 'string' and Active(od, BoundsOf(od, dept)) and LiveRow(where, k) or nil
-        if row and not (officer ~= nil and SelfHeld(officer, row)) then
+        local held = row and officer ~= nil and SelfHeld(officer, row) and Relaxes(od, row.value, ConfigValue(od, nil))
+        if row and not held then
             local ok, v = pcall(fn, value, row.value)
             if ok and v ~= nil then return v, row end
             if not ok then CP.err(TAG, 'the overlay of %s on %s failed: %s', k, key, tostring(v)) end
@@ -796,6 +821,7 @@ local function ControlFields(def, dept)
         range = def.range and { def.range[1], def.range[2] } or nil,
         own = OwnBounds(def, dept),
         flags = FlagList(def),
+        numbers = #def.numbers > 0 and U.deepcopy(def.numbers) or nil,
         list = def.list,
         offered = def.kind == 'choice' and Offered(def, bounds) or nil,
         choices = def.choices and ChoiceList(def) or nil,
@@ -965,6 +991,12 @@ function DC.checkConfig(map, boot)
                 if not ChoicesOk(defs[key], v) then return 'err.control_config', key end
             elseif boot and not defs[key] and type(v) == 'table' then
                 if #v > CHOICE_MAX then return 'err.control_config', key end
+            elseif defs[key] and defs[key].numberByName[field] then
+                local n = defs[key].numberByName[field]
+                local bad = not IsNum(v) or v < n.range[1] or v > n.range[2]
+                if bad or (n.integer and math.tointeger(v) == nil) then return 'err.control_config', key end
+            elseif boot and not defs[key] and IsNum(v) then
+                -- a number field of a control that registers after the saved settings are read
             elseif defs[key] and defs[key].flags[field] or (boot and not defs[key]) then
                 if type(v) ~= 'boolean' then return 'err.control_config', key end
             else

@@ -247,7 +247,7 @@ thread would save a few wakes a minute and tie the modules' failures together.
 | missioncalls/server push | converted to a timer | yes, a change | 1 s after the first change | yes | one push per burst | the coalescing window |
 | testing/server upkeep | no | yes, a test | 2000 ms, debug 2 s, upkeep 5 s | yes | debug and upkeep in one pass | the debug stream rate |
 | admin/server push queue | no | yes, while queued | 50 ms sent, 250 ms else | yes | one queue | ends when empty |
-| happyhour/server end | no event when time runs out | yes | 30 s | yes | one loop | the screens hear the end then |
+| supervisor/happyhour end | no event when time runs out | yes | 30 s | yes | one loop | the screens hear the end then |
 | schedule, challenge, calls, draw (server) | no | always | 60 s | yes | one per module | minute precision |
 | cash, rewards forfeit sweeps (server) | no | always | 10 min | yes | one each | the forfeit window is days |
 | web `useRequest` polls | pushes refresh at once; the poll is the safety net | yes, screen mounted | 20-60 s | yes | one per screen | the safety net only |
@@ -318,7 +318,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/markers/server.lua | the extra parts of each officer's map | while `Config.Markers.extraParts` and a part are on and a run is going, or a map still has parts | `Config.Markers.refreshEvery` s (1-30), scaled | owner setting; a list is sent only when it changed |
 | modules/admin/server.lua | admin push queue | while queued | 50 ms sent, 250 ms else | ends when empty |
 | modules/system/schedule.lua | daily jobs | always | 30 -> 60 s | minute precision |
-| modules/happyhour/server.lua | happy hour end | while a happy hour may be on: armed at start, by a start and by a Settings change; ends after a pass that sees none | 15 -> 30 s, scaled | the screens hear the end then |
+| modules/supervisor/happyhour.lua | happy hour end | while a happy hour may be on: armed at start, by a start and by a Settings change; ends after a pass that sees none | 15 -> 30 s, scaled | the screens hear the end then |
 | modules/progression/challenge.lua | planned-end reminders | always | 60 s | |
 | modules/dispatch/calls.lua | prune | always | 60 s | |
 | modules/draw/server.lua | housekeeping | always | 60 s | |
@@ -379,7 +379,7 @@ strings do not count.
 | `modules/downed/server.lua` | 3 | 0 | start-up hooks; the check is a `CP.Perf.armed` loop |
 | `modules/draw/server.lua` | 2 | 1 | holder housekeeping, 60 s; a one-shot |
 | `modules/featurerewards/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/happyhour/server.lua` | 1 | 1 | the end check, armed while one may run |
+| `modules/supervisor/happyhour.lua` | 1 | 1 | the end check, armed while one may run |
 | `modules/integrations/qbx/client.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/integrations/qbx/server.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/integrations/sc_dispatch/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |

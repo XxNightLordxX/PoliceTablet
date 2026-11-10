@@ -123,6 +123,10 @@ names the change it came with.
 - [ ] With every Config.MissionControls.controls.*.on = false and the master switch off, the screen is gone after reopening the tablet. (P5)
 - [ ] Start a 15-minute happy hour: a SAST officer takes Beat Patrol twice in a row; Home and the Mission Board banner count down and name the sergeant; the sergeant still has his cooldown and the banner says so; a second happy hour the same day is refused. (P6)
 - [ ] Admin UI -> Live shows the happy-hour chip; End now brings the cooldowns back at once. (P6)
+- [ ] Admin UI -> Permissions -> Mission controls -> Happy hour: set Highest cooldown scale 1. Supervisor UI -> Mission
+  controls shows a Cooldowns x slider; start 10 minutes at x0.5: the officer banner reads "mission cooldowns x0.5",
+  a 20-minute mission cooldown shows 10 minutes, the sergeant keeps his 20. Set Starts a day 0: a supervisor's Start
+  is refused. (FM10)
 - [ ] Department Report -> a SAST officer with a Gang Shootout cooldown -> Clear cooldown with a reason: he gets a toast and his card unlocks. (P7)
 - [ ] With "+ minutes" switched on, press "+ minutes", 2 on a live SAST run: the participants are told and the HUD timer gains two minutes. (P7)
 - [ ] Time to reach the start: set SAST to 900 s: a SAST-led unit's HUD shows 15:00 after accept, an FIB-led unit still 10:00. (P8)
@@ -613,7 +617,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] An admin's Review badge counts the admin-only flag kinds his Review Queue lists. (Z9)
 - [ ] A department readyCheck Mission control of 40 s: other officers' cards count down 40 s while a call is
   claiming. (Z9)
-- [ ] A second supervisor starting a happy hour the same day is refused (happyHourPerDay is server-wide, as the
+- [ ] A second supervisor starting a happy hour the same day is refused (happyHour.perDay is server-wide, as the
   docs now say). `/CrimsonPoliceAdmin missioncall` with no type prints the command name, no `{cmd}`. (Z9)
 - [ ] Admin UI -> Audit -> Save to server while staff act: the file holds the rows there when it began, no
   duplicate. (Z9)
