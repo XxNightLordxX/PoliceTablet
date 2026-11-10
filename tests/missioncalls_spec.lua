@@ -1954,4 +1954,32 @@ do
         'Z8B: his own department\'s lane call he can')
 end
 
+-- Z10: tablets opened and closed while the push builds a view (MC.list waits on the database) never break the walk
+do
+    Reset()
+    local S = CENTRE.south_ls
+    for s = 40, 41 do AddPlayer(s, vec3(S.x + s, S.y, 30.0)) end
+    Cb('getMissionCalls', 40)
+    Cb('getMissionCalls', 41)
+    local realList, during = MC.list, false
+    MC.list = function(src)
+        if not during then
+            during = true
+            for s = 42, 70 do
+                AddPlayer(s, vec3(S.x + s, S.y, 30.0))
+                Cb('getMissionCalls', s)
+            end
+            CP.Hooks.fire('tablet:closed', src == 40 and 41 or 40)
+        end
+        return realList(src)
+    end
+    pushes = {}
+    NewCall('investigation', 'vinewood')
+    local okP, errP = pcall(MC._pushAll)
+    MC.list = realList
+    H.ok(okP, 'Z10: the push walk survives watchers added meanwhile: ' .. tostring(errP))
+    H.eq(#pushes, 1, 'Z10: one push: the tablet closed meanwhile gets none')
+    Reset()
+end
+
 return H

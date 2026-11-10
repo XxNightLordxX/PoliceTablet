@@ -643,6 +643,15 @@ Command(0, 'award', 'OFF00003', '0', 'x')
 Command(0, 'award', 'OFF00003', '20000', 'x')
 Command(0, 'award', 'OFF00003', '50')
 H.eq(CountCalls('manualAward'), nAward, 'bad awards refused (unknown, 0, too many, no reason)')
+-- Z10: under a maintenance lock the write subcommands are refused
+local realMaint = CP.Maintenance
+CP.Maintenance = {
+    active = function() return 'restore' end,
+}
+Command(0, 'award', 'OFF00003', '50', 'Locked', 'store')
+CP.Maintenance = realMaint
+H.eq(CountCalls('manualAward'), nAward, 'Z10: no award during a maintenance lock')
+H.ok(Printed(CP.L('err.maintenance')), 'Z10: the console is told why')
 
 Command(0, 'season', 'start', 'Season', 'One')
 H.eq(LastCall('startSeason')[2], 'Season One', 'season start name')
@@ -1578,13 +1587,37 @@ H.eq(idle.participants[3].status, 'active', 'arrived participant stays')
 local nRemove = CountCalls('removeParticipant')
 CP.AntiCheat._idleCheck(H.time + 400)
 H.eq(CountCalls('removeParticipant'), nRemove, 'the idle check runs once per run')
-
 -- bucket tracking
 idle.participants[3].lastEvent = { coords = vec3(0, 0, 0), at = 0, bucket = 0 }
 buckets[3] = 7
 CP.AntiCheat._trackBuckets()
 H.eq(idle.participants[3].lastEvent, nil, 'bucket change drops the speed position')
 buckets[3] = nil
+
+-- Z10: a late officer who follows the action (CP.Runs.extendStart gave him more time) is not removed as idle
+runs = {}
+local follow = NewRun('run-follow', 'gang_shootout', {
+    Participant(3, 'sast'),
+    Participant(6, 'sast', 'active', false),
+    Participant(7, 'sast', 'active', false),
+})
+follow.participants[6].followUntil = H.time + 300
+CP.AntiCheat._idleCheck(H.time + 180)
+H.eq(follow.participants[6].status, 'active', 'Z10: a follower keeps his followActionSeconds')
+H.eq(follow.participants[7].status, 'left', 'Z10: a non-follower is still removed as idle')
+-- Z10: a run that ended (out of Runs.all and Runs.get, still settling) keeps its anticheat state, so the
+-- run:ended pay checks still see its flags
+local settling = NewRun('run-settling', 'gang_shootout', { Participant(3, 'sast'), Participant(6, 'sast') })
+CP.AntiCheat.flag(settling, 6, 'rs_linked_accounts', 'same connection')
+H.eq(CP.AntiCheat.flaggedWith(settling, 'rs_linked_accounts'), true, 'Z10: flagged while the run goes')
+runs = {}
+CP.Runs.ended = function(id) return id == 'run-settling' and settling or nil end
+CP.AntiCheat._trackBuckets()
+H.eq(CP.AntiCheat.flaggedWith(settling, 'rs_linked_accounts'), true, 'Z10: still flagged while the run settles')
+CP.Runs.ended = function() return nil end
+CP.AntiCheat._trackBuckets()
+H.eq(CP.AntiCheat.flaggedWith(settling, 'rs_linked_accounts'), false, 'Z10: forgotten once the run is gone')
+CP.Runs.ended = nil
 
 -- signature
 H.eq(CP.AntiCheat.evidenceSignature({ type = 'a', netId = 3, coords = vec3(1, 2, 3) }),

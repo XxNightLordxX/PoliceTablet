@@ -2,6 +2,7 @@
   "err.control_unknown": "That Mission control doesn't exist. Refresh the screen.",
   "err.control_off": "An admin hasn't switched this Mission control on. Ask an admin to turn it on in Settings.",
   "err.control_value": "That value is outside what an admin allows for this Mission control. Pick a value inside the range shown.",
+  "err.control_busy": "Someone is changing this Mission control right now. Wait a moment and try again.",
   "err.control_wait": "This Mission control was changed a moment ago. Try again in a few minutes.",
   "err.control_not_set": "This Mission control already uses the config value, so there is nothing to reset.",
   "err.control_config": "A Mission control in the config is unknown, or has a minimum above its maximum. Fix it in Settings and save again.",

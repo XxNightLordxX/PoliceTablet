@@ -286,6 +286,8 @@ export interface AuditPartView {
     part: number;
     parts: number;
     total: number;
+    // The newest audit row id the export holds to; sent back with the later parts.
+    maxId?: number;
 }
 
 export interface AuditSaveReply {

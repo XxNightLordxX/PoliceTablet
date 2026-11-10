@@ -233,6 +233,33 @@ do
 end
 
 do
+    -- Z10: Restart objective (tests) gives back the bag props and the coroner van first, and a scene that had bodies
+    -- never earns the alive bonus after it
+    local run = W.start({ 1 }, Mission(1))
+    W.tick(1)
+    Kill(run, W.hostiles[1])
+    W.roadPoint = function(_, args)
+        return { coords = { x = args.near.x + 180.0, y = args.near.y, z = args.near.z }, heading = 0.0 }
+    end
+    Runs.objectiveComplete(run, 1)
+    local st = State(run)
+    local body = st.order[1]
+    local bc = W.at(run, body)
+    W.place(1, bc.x + 1.0, bc.y, bc.z)
+    Step(1, run, 'tag', body, 5200)
+    Step(1, run, 'bag', body, 6200)
+    local bagModel = W.model(run, st.bodies[body].bag)
+    local van = st.service
+    H.ok(van ~= nil, 'Z10: the coroner van was called')
+    impl.restart(Runs.ctx(run, 2))
+    H.eq(bagModel.exists, false, 'Z10: the restart deletes the body-bag prop')
+    H.eq(van and van.released, true, 'Z10: and releases the old coroner van')
+    H.eq(run.score.shared.all_taken_alive, nil, 'Z10: a scene that had a body never earns all_taken_alive')
+    if run.state ~= 'ended' then Runs.endRun(run, 'failed', 'test') end
+    W.roadPoint = nil
+end
+
+do
     -- the run ends mid-scene: bodies and bags are all removed
     local run = W.start({ 1 }, Mission(2, { coroner = false }))
     W.tick(1)

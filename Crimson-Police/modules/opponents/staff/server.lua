@@ -397,7 +397,7 @@ local function Days(v)
 end
 
 local function Answer(ok, untilOrErr)
-    if not ok then return false, untilOrErr == 'invalid_days' and 'err.invalid_days' or 'err.invalid_citizenid' end
+    if not ok then return false, untilOrErr == 'invalid_days' and 'err.rs_invalid_days' or 'err.invalid_citizenid' end
     return true, untilOrErr
 end
 
@@ -523,7 +523,7 @@ if CP.AdminKit and CP.AdminKit.action then
             return false, 'err.invalid_citizenid'
         end
         local days = Days(p.days)
-        if not days then return false, 'err.invalid_days' end
+        if not days then return false, 'err.rs_invalid_days' end
         for _, cid in ipairs({ p.officer, p.suspect }) do
             if Kit.isSelf(ctx.src, cid) then return false, 'err.self_target' end
         end
@@ -541,7 +541,7 @@ if CP.AdminKit and CP.AdminKit.action then
         if not FeatureOn() then return false, 'err.rs_off' end
         if not ValidCid(p.citizenid) then return false, 'err.invalid_citizenid' end
         local days = Days(p.days)
-        if not days then return false, 'err.invalid_days' end
+        if not days then return false, 'err.rs_invalid_days' end
         local ok, res = Answer(Opp.exclude(p.citizenid, days))
         if not ok then return false, res end
         ctx.audit('rsExclude', p.citizenid, nil, ('%s days, until %d'):format(tostring(days), res))
@@ -557,7 +557,7 @@ if CP.AdminKit and CP.AdminKit.action then
         if not FeatureOn() then return false, 'err.rs_off' end
         if not ValidCid(p.citizenid) then return false, 'err.invalid_citizenid' end
         local days = Days(p.days)
-        if not days then return false, 'err.invalid_days' end
+        if not days then return false, 'err.rs_invalid_days' end
         local ok, res = Answer(Opp.suspend(p.citizenid, days))
         if not ok then return false, res end
         ctx.audit('rsSuspend', p.citizenid, nil, ('%s days, until %d'):format(tostring(days), res))

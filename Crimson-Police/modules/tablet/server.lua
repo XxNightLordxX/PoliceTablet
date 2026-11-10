@@ -632,6 +632,8 @@ local function BuildSession(src, ui, args)
     end
     args = type(args) == 'table' and args or {}
     local via, desk = WayOf(src, args)
+    -- Z10: the Admin UI is never a desk session (an earlier desk open would make the client close it at once)
+    if ui == 'admin' then via, desk = 'command', nil end
     -- the silent session only refreshes the HUD theme at login: it opens nothing
     if ui ~= 'admin' and args.silent ~= true then
         local okWay, wayErr = T.checkAccess(src, officer, via, desk)

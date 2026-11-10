@@ -1019,6 +1019,16 @@ do
     MySQL.query.await = realQuery
     H.ok(wrote, 'Z9: a row was written during the save')
     H.eq(resL and resL.rows, before, 'Z9: the save holds the rows there when it began')
+    -- Z10: the parts of one export hold to the rows of its first part (maxId), so a row written between two part
+    -- requests shifts nothing
+    local p1 = Sys.auditPart({}, 1)
+    H.ok(p1 and tonumber(p1.maxId) and p1.maxId > 0, 'Z10: a part answers the maxId it holds to')
+    H.sql('INSERT INTO cp_audit (actor, role, action) VALUES (\'console\', \'console\', \'z10Late\')')
+    local p2 = Sys.auditPart({ maxId = p1.maxId }, 1)
+    H.ok(p2 and p2.total == p1.total and p2.maxId == p1.maxId and not p2.csv:find('z10Late', 1, true),
+        'Z10: the next part with that maxId leaves out the row written meanwhile')
+    local p3 = Sys.auditPart({}, 1)
+    H.eq(p3 and p3.total, p1.total + 1, 'Z10: a new export (no maxId) sees it')
 end
 
 return H

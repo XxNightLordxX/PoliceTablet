@@ -1225,16 +1225,21 @@ do
     H.eq(ok, true, 'started: ' .. tostring(data))
     local run = Runs.getBySrc(1)
     H.eq(run and run.expectedTier, 'heavy', 'expected Heavy for three')
+    local keepFollow = Config.Route.followActionSeconds
+    Config.Route.followActionSeconds = 0
     Arrive(run, 1)
     Arrive(run, 2)
     H.eq(run.state, 'in_progress', 'in progress with the first arrival')
     H.eq(run.tier and run.tier.tier, 'heavy', 'the tier counts everyone still on the run (Heavy)')
-    -- the third joiner keeps driving on the start route but never gets there
+    -- the third joiner keeps driving on the start route but never gets there. Z10: with followActionSeconds 0 he gets
+    -- no extra time to follow the action, so the idle check removes him (a follower with extra time keeps it:
+    -- oversight_spec)
     local started = run.startedAt
     while run.participants[6].status == 'active' and os.time() - started < 200 do
         H.fire('crimson-police:server:routeStatus', 6, run.id, 10.0, H.players[6].coords)
         Secs(2)
     end
+    Config.Route.followActionSeconds = keepFollow
     H.eq(run.participants[6].endReason, 'idle',
         '3 minutes after In progress the joiner who never arrived is removed (idle)')
     H.eq(run.tier and run.tier.tier, 'reinforced', 'the tier is recalculated down to Reinforced')

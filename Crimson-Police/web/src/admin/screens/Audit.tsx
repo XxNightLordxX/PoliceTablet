@@ -173,10 +173,11 @@ export default function AdminAudit() {
     const [part, setPart] = useState<AuditPartView | null>(null);
     const { page: _p, ...exportFilters } = filters;
     void _p;
-    const loadPart = async (n: number) => {
+    // maxId: the later parts of one export stay on the rows of its first part (rows written meanwhile never shift them)
+    const loadPart = async (n: number, maxId?: number) => {
         const res = await request<AuditPartView>(
             'admin:exportAuditPart',
-            { ...exportFilters, part: n },
+            { ...exportFilters, part: n, ...(maxId ? { maxId } : {}) },
             { timeoutMs: EXPORT_TIMEOUT_MS },
         );
         if (res.ok && res.data) setPart(res.data);
@@ -492,14 +493,14 @@ export default function AdminAudit() {
                         <Button
                             variant="ghost"
                             disabled={!part || part.part <= 1}
-                            onClick={() => part && void loadPart(part.part - 1)}
+                            onClick={() => part && void loadPart(part.part - 1, part.maxId)}
                         >
                             {t('admin.audit.prev')}
                         </Button>
                         <Button
                             variant="ghost"
                             disabled={!part || part.part >= part.parts}
-                            onClick={() => part && void loadPart(part.part + 1)}
+                            onClick={() => part && void loadPart(part.part + 1, part.maxId)}
                         >
                             {t('admin.audit.next')}
                         </Button>

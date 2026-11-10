@@ -447,7 +447,9 @@ end
 
 -- Rows into a table, up to INSERT_BATCH per statement (rows that lack the same columns share one); a nullable column
 -- the row has no value for is written as NULL.
-local function InsertRows(db, info, rows)
+-- upsert: ON DUPLICATE KEY UPDATE every column, so a row written meanwhile (a login's cp_officers row during a
+-- restore's put-back) is replaced by the backup's instead of failing the batch (PutBack only).
+local function InsertRows(db, info, rows, upsert)
     local i = 1
     while i <= #rows do
         local cols, shape = RowCols(info, rows[i])
@@ -471,10 +473,17 @@ local function InsertRows(db, info, rows)
             end
             tuples[#tuples + 1] = '(' .. table.concat(parts, ', ') .. ')'
         end
-        db.query.await(('INSERT INTO %s (%s) VALUES %s'):format(
+        local tail = ''
+        if upsert then
+            local sets = {}
+            for k, n in ipairs(names) do sets[k] = ('%s = VALUES(%s)'):format(n, n) end
+            tail = ' ON DUPLICATE KEY UPDATE ' .. table.concat(sets, ', ')
+        end
+        db.query.await(('INSERT INTO %s (%s) VALUES %s%s'):format(
             QuoteName(info.name),
             table.concat(names, ', '),
-            table.concat(tuples, ', ')
+            table.concat(tuples, ', '),
+            tail
         ), params)
         i = last + 1
         Wait(0)
@@ -1101,10 +1110,11 @@ local function PutBack(m, snap)
                     if type(r) == 'table' and not KeepSetting(tostring(r.setting_key)) then put[#put + 1] = r end
                 end
                 for _, r in ipairs(keep) do put[#put + 1] = r end
-                InsertRows(MySQL, info, put)
+                InsertRows(MySQL, info, put, true)
             else
                 MySQL.update.await('DELETE FROM ' .. QuoteName(tname), {})
-                InsertRows(MySQL, info, rows)
+                -- Z10: a login may write a cp_officers row between the DELETE and its batch: upsert
+                InsertRows(MySQL, info, rows, true)
             end
         end
     end
@@ -1811,11 +1821,15 @@ end
 function Sys.auditPart(args, part)
     if not (Has('Admin', '_auditWhere') and Has('Admin', '_csv')) then return nil, 'err.module_unavailable' end
     Db()
-    local total = AuditTotal(args)
+    -- Z10: the parts of one export are held to the rows there at its first part (args.maxId, which the Audit screen
+    -- sends back with each later part), so audit rows written between the requests never shift the pages
+    local maxId = type(args) == 'table' and math.tointeger(tonumber(args.maxId)) or nil
+    if not maxId or maxId <= 0 then maxId = Int(MySQL.scalar.await('SELECT MAX(id) FROM cp_audit', {})) end
+    local total = AuditTotal(args, maxId)
     local parts = math.max(1, math.ceil(total / AUDIT_PART))
     part = math.max(1, math.min(parts, Int(part) > 0 and Int(part) or 1))
-    local rows = AuditRows(args, AUDIT_PART, (part - 1) * AUDIT_PART)
-    return { csv = CP.Admin._csv(rows), rows = #rows, part = part, parts = parts, total = total }
+    local rows = AuditRows(args, AUDIT_PART, (part - 1) * AUDIT_PART, maxId)
+    return { csv = CP.Admin._csv(rows), rows = #rows, part = part, parts = parts, total = total, maxId = maxId }
 end
 
 -- Save to server: every matching row (up to AUDIT_SAVE_MAX) into saves/exports/audit-<time>.csv.

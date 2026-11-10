@@ -290,6 +290,7 @@ do
         requestId = Rid(),
     })
     H.eq(ok, true, 'a strike bulk void')
+    local strikeBatch = e and e.jobId
     W.drain()
     local strikes = W.async(function() return CP.AntiCheat.strikeCount and CP.AntiCheat.strikeCount('OFF00004') end)
     H.ok((tonumber(strikes) or 0) >= 1, 'strike voids count: ' .. tostring(strikes))
@@ -301,6 +302,16 @@ do
     H.eq(ok, true, 'the kind of one void is changed')
     local after = W.async(function() return CP.AntiCheat.strikeCount('OFF00004') end)
     H.eq(tonumber(after), before - 1, 'the strike count follows')
+
+    -- Z10: a voided row whose payment an admin cancelled (Cancel payment) is not paid by the batch restore
+    H.sql([[UPDATE cp_mission_runs SET cash_status = 'forfeited', cash_paid = 0,
+        breakdown = JSON_SET(breakdown, '$.cash.status', 'forfeited', '$.cash.beforeVoid', 'pending',
+            '$.cash.cancelled', 'admin') WHERE id = ?]], { heldId })
+    ok, e = Act('server:admin:restoreBatch', 1, { batchId = strikeBatch, reason = 'Undo', requestId = Rid() })
+    H.ok(ok == true, 'Z10: the strike batch is restored: ' .. tostring(e and e.rows or e))
+    H.ok(W.drain(), 'Z10: the restore job finishes')
+    H.eq(One('SELECT cash_status FROM cp_mission_runs WHERE id = ?', { heldId }).cash_status, 'forfeited',
+        'Z10: the cancelled payment stays cancelled')
 
     -- the cap
     Config.AdminControl.bulkMaxRows = 3

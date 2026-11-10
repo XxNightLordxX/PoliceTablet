@@ -537,6 +537,32 @@ local function Find(ctx, st, n, src)
     })
 end
 
+local function MarkNear(st, src, n, status, t)
+    local bySrc = st.near[src] or {}
+    st.near[src] = bySrc
+    bySrc[n] = { at = t, status = status }
+end
+
+-- A hidden search found point n's device (src found it, at t): counted; with seize, the evidence and the Seize
+-- follow-up; otherwise its prop is spawned (run.shared.devices). One place for a solo find, a together find and a
+-- together step whose unit shrank to one officer.
+local function FoundDevice(ctx, st, n, src, t)
+    local p = st.points[n]
+    p.found = true
+    st.found = st.found + 1
+    if st.seize then
+        -- items to seize: virtual evidence, never a prop and never run.shared.devices
+        NoteEvidence(ctx, src)
+        if SeizeAction(ctx.obj) then
+            p.status, p.seizeFollow = 'followup', true
+            if src then MarkNear(st, src, n, 'followup', t or Now()) end
+        end
+    else
+        st.pendingSpawns[#st.pendingSpawns + 1] = n
+        ProcessSpawns(ctx, st)
+    end
+end
+
 local function Resolve(ctx, st, n)
     local p = st.points[n]
     if ChoiceList(ctx.obj) and p.outcome ~= nil then
@@ -575,14 +601,7 @@ HoldTogether = function(ctx, st, n, src)
         for i, q in ipairs(st.points) do
             if q.status == 'held' then
                 q.status = 'done'
-                if st.hidden and q.device then
-                    q.found = true
-                    st.found = st.found + 1
-                    if st.seize then
-                        NoteEvidence(ctx, q.heldBy)
-                        if SeizeAction(ctx.obj) then q.status, q.seizeFollow = 'followup', true end
-                    end
-                end
+                if st.hidden and q.device then FoundDevice(ctx, st, i, q.heldBy, t) end
                 Find(ctx, st, i, q.heldBy)
             end
         end
@@ -613,12 +632,6 @@ local function HeldFor(st, src, n, status)
     return (Now() - e.at) / 1000
 end
 
-local function MarkNear(st, src, n, status, t)
-    local bySrc = st.near[src] or {}
-    st.near[src] = bySrc
-    bySrc[n] = { at = t, status = status }
-end
-
 -- ============================================================================
 --                                   EVIDENCE
 -- ============================================================================
@@ -641,21 +654,7 @@ local function OnInteract(ctx, st, src, ev)
         HoldTogether(ctx, st, n, src)
     elseif st.hidden then
         p.status = 'done'
-        if p.device then
-            p.found = true
-            st.found = st.found + 1
-            if st.seize then
-                -- items to seize: virtual evidence, never a prop and never run.shared.devices
-                NoteEvidence(ctx, src)
-                if SeizeAction(ctx.obj) then
-                    p.status, p.seizeFollow = 'followup', true
-                    MarkNear(st, src, n, 'followup', p.checkedAt)
-                end
-            else
-                st.pendingSpawns[#st.pendingSpawns + 1] = n
-                ProcessSpawns(ctx, st)
-            end
-        end
+        if p.device then FoundDevice(ctx, st, n, src, p.checkedAt) end
     else
         local o = p.outcome ~= nil and OutcomeDef(ctx.obj, p.outcome) or nil
         if o and type(o.followUp) == 'table' then
@@ -1010,10 +1009,7 @@ CP.Blocks.register(BLOCK, {
             for i, p in ipairs(st.points) do
                 if p.status == 'held' then
                     p.status = 'done'
-                    if st.hidden and p.device then
-                        p.found = true
-                        st.found = st.found + 1
-                    end
+                    if st.hidden and p.device then FoundDevice(ctx, st, i, p.heldBy, Now()) end
                     Find(ctx, st, i, p.heldBy)
                     changed = true
                 end

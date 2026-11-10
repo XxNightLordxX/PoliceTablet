@@ -213,7 +213,8 @@ do
     H.eq(#writes, 0, 'and write nothing')
     Config.LiveCrime.enabled = true
     ok, e = Act('server:admin:rsBlockPair', { officer = 'OFF00001', suspect = 'CRIM0001', days = 0 })
-    H.ok(ok == false and e == 'err.invalid_days', '0 days is refused')
+    H.ok(ok == false and e == 'err.rs_invalid_days', '0 days is refused')
+    H.ok(CP.L('err.rs_invalid_days'):find('above 0', 1, true) ~= nil, 'Z10: and the text no longer says 0 is allowed')
     selfCids.CRIM0001 = true
     ok, e = Act('server:admin:rsBlockPair', { officer = 'OFF00001', suspect = 'CRIM0001', days = 3 })
     H.ok(ok == false and e == 'err.self_target', 'a block naming one of the admin\'s own characters is refused')

@@ -491,6 +491,13 @@ function Runs.get(runId)
     return runs[runId]
 end
 
+-- A run that ended in the last ENDED_KEEP_S seconds (it may still be settling: CleanupRun forgets it before the
+-- participants are settled and run:ended fires), nil otherwise.
+function Runs.ended(runId)
+    local e = type(runId) == 'string' and endedRuns[runId] or nil
+    return e and e.run or nil
+end
+
 function Runs.getBySrc(src)
     src = ToSrc(src)
     local id = src and bySrc[src]
@@ -4115,6 +4122,8 @@ function Runs.extendStart(run, src, seconds)
             CP.log(TAG, 'run %s: %d has until %d to reach the action (%d s more)', run.id, src, due, due - p.deadline)
             p.deadline = due
         end
+        -- Z10: the idle check (CP.AntiCheat) leaves him alone until this deadline
+        p.followUntil = p.deadline
     end
     return p.deadline
 end

@@ -185,5 +185,23 @@ do
     EndRun(run)
 end
 
+-- Z10: presence measures to the volunteer runner's last server position, not to the door
+do
+    local realCaseOf = CP.Opponents.caseOf
+    CP.Opponents.caseOf = function() return case end
+    view, case = Real('engaged'), Case('free')
+    local run = Run()
+    Knock(run, 1, loc.door)
+    local far = vec3(loc.door.x + 900.0, loc.door.y, loc.door.z)
+    case.suspects.VOL1.lastCoords = vec3(far.x + 10.0, far.y, far.z)
+    local ctx = CP.Runs.ctx(run, 1)
+    local d = FA.presence(ctx, 1, far)
+    H.ok(d < 50, 'Z10: an officer chasing the volunteer is in range of him (' .. tostring(d) .. ' m)')
+    case.suspects.VOL1.lastCoords = nil
+    H.ok(FA.presence(ctx, 1, far) > 800, 'Z10: without his position the door is the reference')
+    CP.Opponents.caseOf = realCaseOf
+    EndRun(run)
+end
+
 CP.Opponents.view = realView
 return H

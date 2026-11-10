@@ -506,6 +506,12 @@ do
     ok, e = Act('server:admin:resolvePayment', 1,
         { rowId = id, outcome = 'payAgain', checked = true, reason = 'x', confirm = '30', requestId = Rid() })
     H.ok(not ok and e == 'err.confirm_mismatch', 'Pay again asks for the amount')
+    -- Z10: a row flagged for review is never paid again
+    H.sql('UPDATE cp_mission_runs SET flagged = 1 WHERE id = ' .. id)
+    ok, e = Act('server:admin:resolvePayment', 1,
+        { rowId = id, outcome = 'payAgain', checked = true, reason = 'x', confirm = '300', requestId = Rid() })
+    H.ok(not ok and e == 'err.payment_flagged' and #calls.add == 0, 'Z10: Pay again refuses a flagged row')
+    H.sql('UPDATE cp_mission_runs SET flagged = 0 WHERE id = ' .. id)
     local before = bank.balance.sast
     ok, e = Act('server:admin:resolvePayment', 1,
         { rowId = id, outcome = 'payAgain', checked = true, reason = 'x', confirm = '300', requestId = Rid() })
@@ -715,6 +721,11 @@ do
     Config.Cash.allowCapTopUp = true
     ok, e = Act('server:admin:payCapRest', 1, { rowId = id, reason = 'x', confirm = '500', requestId = Rid() })
     H.ok(not ok and e == 'err.confirm_mismatch', 'the typed amount is the server\'s rest (200)')
+    -- Z10: a row flagged for review is never topped up
+    H.sql('UPDATE cp_mission_runs SET flagged = 1 WHERE id = ' .. id)
+    ok, e = Act('server:admin:payCapRest', 1, { rowId = id, reason = 'x', confirm = '200', requestId = Rid() })
+    H.ok(not ok and e == 'err.payment_flagged' and #calls.add == 0, 'Z10: Pay the rest refuses a flagged row')
+    H.sql('UPDATE cp_mission_runs SET flagged = 0 WHERE id = ' .. id)
     addYield = true
     local r1 = Fire('server:admin:payCapRest', 1, { rowId = id, reason = 'x', confirm = '200', requestId = Rid() })
     local r2 = Fire('server:admin:payCapRest', 3, { rowId = id, reason = 'x', confirm = '200', requestId = Rid() })

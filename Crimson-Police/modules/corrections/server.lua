@@ -611,7 +611,8 @@ local function RestoreBatch(job, keys)
             for _, id in ipairs(ids) do params[#params + 1] = id end
             local rows = Query(
                 ([[SELECT id, citizenid, state, flagged, cash_status, cash_paid,
-                JSON_VALUE(breakdown, '$.cash.beforeVoid') AS before_void FROM %s
+                JSON_VALUE(breakdown, '$.cash.beforeVoid') AS before_void,
+                JSON_VALUE(breakdown, '$.cash.cancelled') AS cancelled FROM %s
                 WHERE void_batch = ? AND voided = 1 AND id IN (%s)]]):format(TABLES[t], Marks(#ids)),
                 params
             )
@@ -624,7 +625,9 @@ local function RestoreBatch(job, keys)
                     -- a row still flagged waits for the Review Queue: its held item rewards stay held
                     if not U.truthy(r.flagged) then approved[#approved + 1] = id end
                     if t == 'L' and r.cash_status == 'forfeited' and math.floor(Num(r.cash_paid, 0)) == 0
-                        and (r.before_void == 'held' or r.before_void == 'pending') then
+                        and (r.before_void == 'held' or r.before_void == 'pending')
+                        and (r.cancelled == nil or r.cancelled == '') then
+                        -- Z10: a payment an admin cancelled (Cancel payment) stays cancelled
                         unforfeit[#unforfeit + 1] = id
                     end
                     if t == 'L' and not U.truthy(r.flagged)

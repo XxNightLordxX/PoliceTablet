@@ -1859,6 +1859,14 @@ local function Presence(ctx, src, coords)
             end
         end
     end
+    if best == math.huge and st.vol == 'real' and not st.volDone then
+        -- Z10: a volunteer runner: his last server position (CP.Opponents, server only, never sent), as pursuit does
+        local case = CP.Opponents and CP.Opponents.caseOf and CP.Opponents.caseOf(ctx.run) or nil
+        local same = type(case) == 'table' and not (case.index and ctx.index and case.index ~= ctx.index)
+        local cid = same and case.order and case.order[1]
+        local rec = cid and case.suspects and case.suspects[cid] or nil
+        if rec and rec.lastCoords then best = U.dist(coords, rec.lastCoords) end
+    end
     if best == math.huge then
         local ref = (st.mode == 'door' and PointList(ctx.location, ctx.obj.door)[1])
             or (ctx.location and ctx.location.start and ctx.location.start.coords)

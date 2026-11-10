@@ -293,6 +293,15 @@ do
     H.eq(Refused(Open(1, { ui = 'supervisor' })), 'err.not_at_desk', 'and refused once the officer walked away')
     H.ok(Open(1, { via = 'command' }).ok, 'a new open names its own way')
     H.ok(Open(1, {}).ok, 'the command is remembered from then on')
+    -- Z10: after a desk session the Admin UI (no way named: /CrimsonPoliceAdmin, switchUi) is not a desk session
+    admins[1] = true
+    At(1, 100.0, 100.0)
+    H.ok(Open(1, { via = 'desk', desk = 1 }).ok, 'Z10: opened at the desk')
+    local adm = Open(1, { ui = 'admin' })
+    H.ok(adm.ok and adm.data.access.via == 'command' and adm.data.access.desk == nil,
+        'Z10: the Admin UI after a desk session is not a desk session')
+    admins[1] = nil
+    H.ok(Open(1, { via = 'command' }).ok, 'Z10: back to the command')
 end
 
 -- ============================================================================
@@ -1030,7 +1039,8 @@ local nui, keymaps, objects, deleted, scenarios, cleared = {}, {}, {}, {}, {}, 0
 local nextObj = 5000
 _G.SendNUIMessage = function(m) nui[#nui + 1] = m end
 _G.SetNuiFocus = function() end
-_G.RegisterNUICallback = function() end
+local nuiCb = {}
+_G.RegisterNUICallback = function(name, fn) nuiCb[name] = fn end
 _G.RegisterKeyMapping = function(cmd, desc, dev, key) keymaps[cmd] = { desc = desc, key = key } end
 _G.PlayerPedId = function() return 42 end
 local pedCoords = vec3(0.0, 0.0, 0.0)
@@ -1334,6 +1344,23 @@ do
     H.reset()
     H.advance(3000, 100)
     H.eq(#H.findEvents('crimson-police:server:tabletItemGone'), 0, 'at a desk the item is not watched')
+    Close()
+    -- Z10: the Admin UI switched to the Officer UI watches the item from then on
+    H.fire('crimson-police:client:openAdmin', nil, {
+        ui = 'admin',
+        roles = { officer = true, supervisor = true, admin = true },
+        actions = {},
+        config = {},
+        access = { via = 'command' },
+    })
+    H.advance(200, 50)
+    H.eq(CT.isOpen(), true, 'Z10: the Admin UI is open')
+    nuiCb.switchUi({ ui = 'officer' }, function() end)
+    H.advance(200, 50)
+    H.reset()
+    H.advance(3500, 100)
+    H.eq(#H.findEvents('crimson-police:server:tabletItemGone'), 1,
+        'Z10: after a switch from the Admin UI the missing item is reported')
     Close()
     Config.Tablet.access.requireItem = false
     itemCount = 1

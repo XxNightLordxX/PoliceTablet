@@ -158,11 +158,6 @@ local function Report(ctx, st)
     end
 end
 
-local function Start(ctx)
-    local st = StateOf(ctx)
-    Hud(ctx, st)
-end
-
 local function Tick(ctx, dt)
     local st = StateOf(ctx)
     local cfg = Cfg()
@@ -277,6 +272,28 @@ local function Peaceful(ctx, st, ev)
     ctx.award('peaceful_arrest', { weight = weight })
     if O.timeline then O.timeline(ctx.run, { what = 'peaceful_arrest', label = ev.label, by = by }) end
     NoteTalkDown(ctx.run, ev.cid, by)
+end
+
+-- Z10: a suspect detained or booked before In progress (CP.Opponents sends no opp_* event then, e.g. with
+-- Config.RealSuspects.routeEnds = 'start'): his lines are awarded when the block starts, as the events would have.
+local function CatchUp(ctx, st)
+    local case = CP.Opponents and CP.Opponents.caseOf and CP.Opponents.caseOf(ctx.run) or nil
+    if not case then return end
+    for _, cid in ipairs(case.order or {}) do
+        local rec = case.suspects[cid]
+        if rec and (rec.state == 'detained' or rec.state == 'booked') then
+            local ev = { cid = rec.cid or cid, label = rec.label, share = rec.share }
+            Line(ctx, st, 'live_detain', ev)
+            Peaceful(ctx, st, ev)
+            if rec.state == 'booked' then Line(ctx, st, 'live_book', ev) end
+        end
+    end
+end
+
+local function Start(ctx)
+    local st = StateOf(ctx)
+    CatchUp(ctx, st)
+    Hud(ctx, st)
 end
 
 local function OnEvent(ctx, src, ev)

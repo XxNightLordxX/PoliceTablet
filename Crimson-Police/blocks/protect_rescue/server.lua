@@ -16,8 +16,8 @@
 --   objective starts. Hostages are watched for the whole run once they exist, also while an earlier
 --   objective is current ('runStart'): damage by an active participant costs hitPenalty (penalty hostage_hit, shared; someone
 --   who left shoots as an outsider), any damage loses the no_hostage_hurt bonus, a death fails the
---   run (failIfDies), and a hostage killed by a participant, also one who left, always fails it
---   (run.fail_killed_unarmed).
+--   run (failIfDies), and a hostage killed by an active participant always fails it
+--   (run.fail_killed_unarmed); one who left kills as an outsider (failIfDies decides).
 --
 -- Objective fields read (defaults: ARCHITECTURE §3.3 and Config.Blocks.protect_rescue)
 --   minSeconds [15] · presenceRange [presenceRange[3] = 150] · label

@@ -489,6 +489,48 @@ do
     DC.unregister('t_bool')
 end
 
+-- ============================================================================
+--                                     Z10
+-- ============================================================================
+-- ONE WRITE OF A CONTROL AT A TIME; THE PUSH REACHES A GRANTEE.
+
+do
+    Config.Permissions.supervisor.missionControls = true
+    local inner = nil
+    DC.register('t_lock', {
+        kind = 'bool',
+        serverWide = true,
+        master = false,
+        configValue = function() return true end,
+        relaxes = function() return true end,
+        allow = function()
+            -- a second change while this one waits on its rule (the database)
+            if not inner then inner = table.pack(DC.set(1, 't_lock', true, 'second press')) end
+            return nil
+        end,
+    })
+    Config.MissionControls.controls = { t_lock = { on = true } }
+    local ok = DC.set(1, 't_lock', false, 'first press')
+    H.eq(ok, true, 'Z10: the first change is saved')
+    H.ok(inner and inner[1] == false and inner[2] == 'err.control_busy',
+        'Z10: a change of the same control during it is refused')
+    -- the lock is gone after the write: the next change runs
+    inner = { true }
+    H.eq(DC.set(1, 't_lock', true, 'later'), true, 'Z10: a later change runs')
+    -- an officer with an extra missionControls grant gets the push
+    local pushed = {}
+    local realPush, realGranted = CP.Tablet.push, CP.Permissions.granted
+    CP.Tablet.push = function(n, kind) if kind == 'missionControls' then pushed[n] = true end end
+    CP.Permissions.granted = function(n, action)
+        if n == 5 and action == 'missionControls' then return true end
+        return realGranted(n, action)
+    end
+    DC.set(1, 't_lock', false, 'push check')
+    CP.Tablet.push, CP.Permissions.granted = realPush, realGranted
+    H.ok(pushed[2] and pushed[5], 'Z10: the push reaches a supervisor and a missionControls grantee')
+    DC.unregister('t_lock')
+end
+
 Config.Permissions.supervisor = keepSup
 Config.MissionControls = keepMC
 Config.Departments.sast.missionControls = nil

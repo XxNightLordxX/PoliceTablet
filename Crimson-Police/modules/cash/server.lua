@@ -737,7 +737,7 @@ end
 local function ClaimMarker(rowId, key, status, extraWhere)
     return Update(
         ([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.%s', 'paying')
-        WHERE id = ? AND cash_status = ? AND voided = 0 AND JSON_EXTRACT(breakdown, '$.cash') IS NOT NULL
+        WHERE id = ? AND cash_status = ? AND voided = 0 AND flagged = 0 AND JSON_EXTRACT(breakdown, '$.cash') IS NOT NULL
           AND JSON_EXTRACT(breakdown, '$.cash.%s') IS NULL%s]]):format(key, key, extraWhere or ''),
         { rowId, status }
     ) > 0
@@ -903,6 +903,7 @@ function Cash.payAgain(rowId, audit)
     if not row then return false, bd end
     rowId = math.floor(CP.U.num(row.id))
     if row.cash_status ~= 'paying' then return false, 'err.state_changed' end
+    if CP.U.truthy(row.flagged) then return false, 'err.payment_flagged' end
     if Cash.rowBusy(rowId, row.citizenid) then return false, 'err.payment_in_flight' end
     local c = CashOf(bd)
     if c.again ~= nil then return false, 'err.state_changed' end
@@ -1005,6 +1006,7 @@ function Cash.payCapRest(rowId, audit)
     if not row then return false, bd end
     rowId = math.floor(CP.U.num(row.id))
     if row.cash_status ~= 'capped' or CP.U.truthy(row.voided) then return false, 'err.state_changed' end
+    if CP.U.truthy(row.flagged) then return false, 'err.payment_flagged' end
     if CashOf(bd).restPaid ~= nil then return false, 'err.state_changed' end
     local rest = AmountOf(row, bd) - math.floor(CP.U.num(row.cash_paid))
     if rest <= 0 then return false, 'err.nothing_to_pay' end

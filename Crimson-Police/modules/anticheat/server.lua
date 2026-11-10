@@ -615,7 +615,10 @@ function AC._idleCheck(nowTs)
                 st.idleDone = true
                 for _, s in ipairs(ActiveSrcs(run)) do
                     local p = run.participants[s]
-                    if p and p.status == 'active' and not p.arrived then
+                    -- a late officer who follows the action (CP.Runs.extendStart) keeps his extended deadline; the
+                    -- start timeout removes him there
+                    local following = tonumber(p and p.followUntil) and p.followUntil > nowTs
+                    if p and p.status == 'active' and not p.arrived and not following then
                         CP.log(TAG, 'run %s: %d never reached the start: idle', tostring(run.id), s)
                         Call('Runs', 'removeParticipant', run, s, 'idle', { notify = 'admin.anticheat.idle_notice' })
                         if run.state == 'ended' then break end
@@ -645,7 +648,10 @@ function AC._trackBuckets()
         end
     end
     for id in pairs(state) do
-        if not live[id] and not (Has('Runs', 'get') and CP.Runs.get(id)) then state[id] = nil end
+        -- Z10: a run that just ended keeps its state until it is forgotten: its participants are settled and its
+        -- run:ended hooks (volunteer and talk-down pay) read flaggedWith after CleanupRun took it out of Runs.all
+        local kept = (Has('Runs', 'get') and CP.Runs.get(id)) or (Has('Runs', 'ended') and CP.Runs.ended(id))
+        if not live[id] and not kept then state[id] = nil end
     end
 end
 

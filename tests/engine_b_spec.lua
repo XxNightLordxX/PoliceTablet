@@ -1093,6 +1093,7 @@ H.eq(Runs.extendStart(G1, 1, 300), os.time() + 500, 'extendStart: never less tim
 G1.participants[1].deadline = os.time() + 2
 H.eq(Runs.extendStart(G1, 1, 300), os.time() + 300, 'extendStart: 300 s from now')
 H.eq(Runs.extendStart(G1, 1, 0), os.time() + 300, 'extendStart: 0 s changes nothing')
+H.eq(G1.participants[1].followUntil, os.time() + 300, 'Z10: extendStart marks him a follower for the idle check')
 H.advance(5000)
 H.eq(G1.participants[1].status, 'active', 'extendStart: past the deadline he had, still on the run')
 G1.participants[1].deadline = os.time() - 1

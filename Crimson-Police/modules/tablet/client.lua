@@ -495,11 +495,17 @@ local StartWatchers, StopDeskPose, WatchAck
 local function ShowUi(ui, session, opts)
     local wasProp = WantsProp()
     local wasOpen = state.open
+    local wasAdmin = state.ui == 'admin'
     opts = type(opts) == 'table' and opts or {}
     state.ui = ui
     state.session = session
     state.open = true
-    if not wasOpen or opts.via then
+    if ui == 'admin' then
+        -- Z10: the Admin UI is never a desk session (no desk pose, no walk-away close), whatever opened last
+        if wasOpen and state.via == 'desk' then StopDeskPose() end
+        state.via, state.desk = (opts.via ~= nil and opts.via ~= 'desk') and opts.via or 'command', nil
+    elseif not wasOpen or opts.via or wasAdmin then
+        -- (back from the Admin UI: the way the server checked again, session.access)
         local access = type(session.access) == 'table' and session.access or {}
         state.via = opts.via or access.via
         state.desk = state.via == 'desk' and (opts.desk or access.desk) or nil
@@ -521,7 +527,9 @@ local function ShowUi(ui, session, opts)
     elseif not wasProp then
         StartProp()
     end
-    if not wasOpen then StartWatchers() end
+    -- Z10: a switch between the Admin UI and another UI starts the watcher again, so the requireItem and desk checks
+    -- follow the UI shown now (the old watcher ends by its token)
+    if not wasOpen or wasAdmin ~= (ui == 'admin') then StartWatchers() end
     CP.log(TAG, '%s UI opened (%s)', ui, tostring(state.via))
 end
 

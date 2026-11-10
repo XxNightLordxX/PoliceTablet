@@ -341,7 +341,7 @@ local function Start(ctx)
     if #st.order == 0 then
         -- nobody died: nothing to process, so no minimum time either; killing is never worth more than arresting
         local ab = ctx.obj.aliveBonus
-        ctx.award(ab.id, { count = 1, points = TrustedFile(ctx) and ab.points or nil })
+        if not st.hadBodies then ctx.award(ab.id, { count = 1, points = TrustedFile(ctx) and ab.points or nil }) end
         ctx.obj.minSeconds = 0
         Flush(ctx, st)
         Complete(ctx, st)
@@ -462,7 +462,16 @@ CP.Blocks.register(BLOCK, {
     checklist = Checklist,
     restart = function(ctx)
         local st = StateOf(ctx)
+        -- Z10: what Stop gives back (the bag props, the coroner van) goes first; the bodies not bagged stay held, so
+        -- Start lists them again. A scene that had bodies never earns the alive bonus after the restart.
+        local hadBodies = #st.order > 0 or st.hadBodies == true
+        for _, netId in ipairs(st.order) do
+            local b = st.bodies[netId]
+            if b and b.bag then ctx.delete(b.bag) end
+        end
+        if st.service then CP.Custody.releaseService(ctx.run, st.service) end
         for k in pairs(st) do st[k] = nil end
+        st.hadBodies = hadBodies or nil
         Start(ctx)
     end,
     stop = Stop,

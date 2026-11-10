@@ -68,15 +68,17 @@ export function useRowWindow(total: number, on: boolean, viewportGuess: number, 
     useEffect(() => () => cancelAnimationFrame(frame.current), []);
     const onScroll = useCallback(
         (e: UIEvent<HTMLElement>) => {
-            if (!active) return;
+            // windowRows on: the scroll position is kept also while the list is short (no window), so a list that
+            // grows past WINDOW_MIN_ROWS again starts from where the element really is (the browser clamped it)
+            if (!on) return;
             const el = e.currentTarget;
             cancelAnimationFrame(frame.current);
             frame.current = requestAnimationFrame(() => {
                 setScrollTop(el.scrollTop);
-                if (el.clientHeight > 0) setViewport(el.clientHeight);
+                if (active && el.clientHeight > 0) setViewport(el.clientHeight);
             });
         },
-        [active],
+        [on, active],
     );
     return { win: rowWindow(total, scrollTop, viewport, rowHeight, active), onScroll, rowRef };
 }

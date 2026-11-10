@@ -2006,10 +2006,18 @@ local function PushAll()
     if not dirty then return end
     dirty = false
     local now = os.time()
+    -- Z10: the watchers are copied first: MC.list yields, and getMissionCalls, a close or a drop changes the table
+    -- meanwhile (a key added during pairs() breaks the walk)
+    local list = {}
     for src, at in pairs(watchers) do
         if now - at > WATCH_TTL_S or not GetPlayerName(src) then
             watchers[src] = nil
         else
+            list[#list + 1] = src
+        end
+    end
+    for _, src in ipairs(list) do
+        if watchers[src] then
             local okV, view = pcall(MC.list, src)
             if okV and view then Push(src, 'calls', view) end
         end

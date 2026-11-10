@@ -1863,6 +1863,55 @@ do -- Z9: every stash found but one still waits for its Seize: it keeps a pointe
     H.eq(IP.checklist(ctx)[1].done, true, 'Z9 ip seize: and the checklist is done')
 end
 
+do -- Z10: a hidden device search done together spawns the found device, also when the unit shrinks to one
+    local function TogetherSearch(srcs)
+        H.clockMs = 8150000
+        local obj = IP.defaults({
+            block = 'interact_points',
+            points = 'spots',
+            progress = { label = 'Searching', duration = 3000 },
+            hidden = { count = 1, prop = 'prop_ld_bomb' },
+            together = { count = 2, window = 6, soloProgress = 3000 },
+        })
+        local ctx = FakeCtx({
+            obj = obj,
+            location = { spots = Spots(2, 0.0, 3400.0) },
+            srcs = srcs,
+            mission = { source = 'builtin' },
+        })
+        IP.prepare(ctx)
+        IP.start(ctx)
+        return ctx, ctx.state
+    end
+    local ctx, st = TogetherSearch({ 1, 2 })
+    At(1, st.points[1].coords)
+    At(2, st.points[2].coords)
+    IP.tick(ctx, 1)
+    Advance(3000)
+    IP.tick(ctx, 1)
+    H.eq(IP.onEvent(ctx, 1, { type = 'interact', point = 1 }), true, 'Z10 ip together hidden: spot 1 held')
+    H.eq(IP.onEvent(ctx, 2, { type = 'interact', point = 2 }), true, 'Z10 ip together hidden: spot 2 held')
+    IP.tick(ctx, 1)
+    H.eq(st.found, 1, 'Z10 ip together hidden: the device is found')
+    H.eq(#ctx.calls.spawn, 1, 'Z10 ip together hidden: and its prop spawned')
+    H.eq(#((ctx.run.shared or {}).devices or {}), 1, 'Z10 ip together hidden: in run.shared.devices')
+    -- the unit shrinks to one officer while the device spot is held
+    local ctx2, st2 = TogetherSearch({ 1, 2 })
+    local dev
+    for n, p in ipairs(st2.points) do if p.device then dev = n end end
+    At(1, st2.points[dev].coords)
+    IP.tick(ctx2, 1)
+    Advance(3000)
+    IP.tick(ctx2, 1)
+    IP.onEvent(ctx2, 1, { type = 'interact', point = dev })
+    H.eq(st2.points[dev].status, 'held', 'Z10 ip together hidden: the device spot is held')
+    ctx2.srcs = { 1 }
+    IP.onParticipantLeft(ctx2, 2)
+    IP.tick(ctx2, 1)
+    H.eq(st2.found, 1, 'Z10 ip shrink: the held device counts')
+    H.eq(#ctx2.calls.spawn, 1, 'Z10 ip shrink: and its prop spawned')
+end
+
 do -- fastBonus.after: the clock runs from the end of an earlier objective (Drug Lab Raid: from the breach)
     local spots = { vec3(3300.0, 3000.0, 30.0), vec3(3310.0, 3000.0, 30.0) }
     local function Search(after, sinceBreachS)

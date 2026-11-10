@@ -374,6 +374,36 @@ do
     H.eq(PaymentsAfter(OwnerRestart), 0, 'and it is not paid')
 end
 
+-- Z10: a login writes an officer row the backup holds between the put-back's DELETE and its batch: the restore
+-- still works and the backup's row wins
+do
+    Clear()
+    H.sql('DELETE FROM cp_officers WHERE citizenid = \'LOGIN010\'')
+    H.sql(
+        'INSERT INTO cp_officers (citizenid, department, display_name, xp) VALUES (\'LOGIN010\', \'sast\', \'L\', 500)')
+    local b = Backup()
+    H.sql('UPDATE cp_officers SET xp = 7 WHERE citizenid = \'LOGIN010\'')
+    local realUpdate, realQuery = MySQL.update.await, MySQL.query.await
+    local wrote = false
+    MySQL.update.await = function(sql, params)
+        local res = realUpdate(sql, params)
+        if not wrote and type(sql) == 'string' and sql:find('DELETE FROM `cp_officers`', 1, true) then
+            wrote = true
+            realQuery([[INSERT INTO cp_officers (citizenid, department, display_name) VALUES ('LOGIN010', 'sast', 'L')
+                ON DUPLICATE KEY UPDATE display_name = VALUES(display_name)]], {})
+        end
+        return res
+    end
+    local ok, e = Restore(b)
+    MySQL.update.await = realUpdate
+    H.ok(wrote, 'Z10: a login wrote the officer row during the put-back')
+    H.ok(ok == true, 'Z10: the restore still works: ' .. tostring(type(e) == 'table' and e.backup or e))
+    H.eq(Num(One('SELECT xp FROM cp_officers WHERE citizenid = \'LOGIN010\'').xp), 500,
+        'Z10: the backup\'s officer row wins')
+    OwnerRestart()
+    H.sql('DELETE FROM cp_officers WHERE citizenid = \'LOGIN010\'')
+end
+
 -- ============================================================================
 --                   2. A RECORD MOVED SINCE THE BACKUP (F14)
 -- ============================================================================

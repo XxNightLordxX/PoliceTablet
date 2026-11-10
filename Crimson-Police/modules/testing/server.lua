@@ -1368,6 +1368,12 @@ function Testing.control(src, payload)
         local target = payload.target
         if target ~= nil and target ~= 'start' and target ~= 'objective' then return false, 'err.invalid_payload' end
         if target == nil then target = run.state == 'in_progress' and 'objective' or 'start' end
+        -- Z10: a supervisor's draft test (builderEdit) teleports only with the Builder's teleport grant
+        -- (Config.Permissions.builderTeleport, CP.Builder.canTeleport); admins always may
+        if not (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true) then
+            local B = CP.Builder
+            if not (B and B.canTeleport and B.canTeleport(src) == true) then return false, 'err.no_permission' end
+        end
         local coords
         if target == 'start' then
             coords = run.location and run.location.start and run.location.start.coords
@@ -1377,6 +1383,9 @@ function Testing.control(src, payload)
         end
         local c = VecTable(coords)
         if not c then return false, 'err.test_control_failed' end
+        Audit(src, 'audit', 'testControl',
+            meta and ('%s#%d'):format(meta.missionId, meta.locationIndex) or run.missionId, nil, 'teleport:' .. target,
+            nil)
         CP.log(TAG, '%d teleports to the %s of test %s', src, target, run.id)
         return true, { control = control, target = target, coords = { x = c.x, y = c.y, z = c.z } }
     elseif control == 'debug' then

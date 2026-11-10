@@ -368,4 +368,22 @@ do
     H.ok(err2 == nil or not tostring(err2):find('engine%-only'), 'the engine itself may build it')
 end
 
+-- Z10: a suspect detained or booked before In progress (no opp_* event then) scores when the block starts
+do
+    Case()
+    timeline = {}
+    case.suspects.CA.state = 'booked'
+    case.suspects.CA.share = 1
+    case.suspects.CB.state = 'detained'
+    case.suspects.CB.share = 0.5
+    local ctx = Ctx()
+    B.prepare(ctx)
+    B.start(ctx)
+    H.eq(#Lines(ctx, 'live_detain'), 2, 'Z10: both early detains score at the start')
+    H.eq(#Lines(ctx, 'live_book'), 1, 'Z10: the early booking scores at the start')
+    H.eq(Lines(ctx, 'live_detain')[2].opts.weight, 0.5, 'Z10: with the suspect\'s share')
+    B.onEvent(ctx, nil, { type = 'opp_booked', cid = 'CA', share = 1 })
+    H.eq(#Lines(ctx, 'live_book'), 1, 'Z10: a later event for the same suspect scores nothing twice')
+end
+
 return H

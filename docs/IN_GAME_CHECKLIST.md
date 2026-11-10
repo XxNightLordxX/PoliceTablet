@@ -501,3 +501,35 @@ names the change it came with.
   docs now say). `/CrimsonPoliceAdmin missioncall` with no type prints the command name, no `{cmd}`. (Z9)
 - [ ] Admin UI -> Audit -> Save to server while staff act: the file holds the rows there when it began, no
   duplicate. (Z9)
+- [ ] A two-officer run goes In progress while the partner still drives: he follows the action and is not removed
+  as idle at 180 s; he has followActionSeconds (300 s) to arrive. (Z10)
+- [ ] `Config.Volunteers.enabled = true`: an officer and a volunteer who share a PC or connection end a run: the
+  volunteer is not paid (rs_linked_accounts), also when the run ends while the 2 s anticheat pass runs. (Z10)
+- [ ] With allowCapTopUp or allowPayAgain on, flag a capped or paying row for review: Pay the rest and Pay again
+  refuse with "flagged for review"; Payments shows no Repay, Retry or Pay the rest on a flagged row. (Z10)
+- [ ] Void a held row in a batch, press Cancel payment on it, then Undo the batch: the row stays Forfeited. (Z10)
+- [ ] `Config.RealSuspects.routeEnds = 'start'`: cuff and detain the suspect before the unit reaches the start
+  circle: once In progress the detain (and booking) lines are on the run. (Z10)
+- [ ] A hidden device search with together on, done by two officers: the devices appear, and the next skill check
+  has them as targets. Also when the partner leaves while a spot is held. (Z10)
+- [ ] Open the Officer UI at a mission desk, close it, walk away and type /CrimsonPoliceAdmin: the Admin UI stays
+  open. With requireItem on, switch from the Admin UI to the Officer UI and drop the item: the tablet closes. (Z10)
+- [ ] A supervisor with builderEdit and no builderTeleport grant tests a draft: Teleport is refused; an admin's
+  test Teleport writes a testControl audit row. (Z10)
+- [ ] Restore a backup while officers log in: the restore works. (Z10)
+- [ ] `Config.Volunteers.enabled = true`: a Warrant Service with a volunteer runner, two officers chase him far from
+  the door: nobody is flagged 'presence'. (Z10)
+- [ ] An officer with an extra missionControls grant has Mission controls open while a supervisor changes one: his
+  screen updates. Two supervisors press Start happy hour together: only one starts, the other gets "Someone is
+  changing this Mission control". (Z10)
+- [ ] Open Dispatch on several tablets while calls change and tablets open and close: every open screen keeps
+  updating. (Z10)
+- [ ] Load audit export part 1, do an admin action, then load part 2: no row of part 1 repeats. (Z10)
+- [ ] In a test run, Restart objective on Process the scene after bagging a body: the old coroner van and the bag
+  props go, and no all_taken_alive bonus is given. (Z10)
+- [ ] The clawback dialog names "bank or cash"; real suspects Block / Exclude / Suspend with 0 days say "above 0";
+  an old case's text says nothing about a restart. (Z10)
+- [ ] During a maintenance lock, `/CrimsonPoliceAdmin award <cid> 50 reason` is refused with the maintenance
+  text. (Z10)
+- [ ] `Config.AdminUi.windowRows = true`: scroll a long board far down, filter it to a few rows, clear the filter:
+  the rows show at once. (Z10)

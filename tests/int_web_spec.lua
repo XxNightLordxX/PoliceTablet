@@ -1154,4 +1154,24 @@ do
     H.ok(out:find('## locale-en', 1, true) == nil, 'locales/en.json equals the merged parts (no locale-en problem)')
 end
 
+-- Z10: Payments offers no money action on a flagged row (Repay, Retry unfunded, Pay the rest), the Audit export's
+-- later parts send back the first part's maxId, and a windowed Table keeps its scroll position while the list is short
+do
+    local pay = Read(WEB .. 'admin/screens/Payments.tsx') or ''
+    for _, action in ipairs({ 'unfunded', 'capRest', 'repay' }) do
+        local line = pay:match('\n%s*(if [^;]-out%.push%(\'' .. action .. '\'%))')
+        H.ok(line and line:find('!r.flagged', 1, true) ~= nil, 'Z10: Payments ' .. action .. ' needs a row not flagged')
+    end
+    local audit = Read(WEB .. 'admin/screens/Audit.tsx') or ''
+    H.ok(
+        audit:find('loadPart(part.part + 1, part.maxId)', 1, true) ~= nil
+            and audit:find('loadPart(part.part - 1, part.maxId)', 1, true) ~= nil,
+        'Z10: the next and previous parts send the maxId back'
+    )
+    local rw = Read(WEB .. 'shared/rowWindow.ts') or ''
+    local handler = rw:match('const onScroll = useCallback%((.-)\n    %);') or ''
+    H.ok(handler:find('if (!active) return;', 1, true) == nil and handler:find('setScrollTop(el.scrollTop)', 1, true),
+        'Z10: the scroll position is kept while the window is not active')
+end
+
 return H

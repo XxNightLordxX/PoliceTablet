@@ -2229,6 +2229,8 @@ function Admin.registerSubcommand(name, fn, helpKey)
     return true
 end
 
+local MAINT_WRITES = { award = true, payout = true, season = true, suspend = true }
+
 function Admin.command(src, args)
     src = tonumber(src) or 0
     args = type(args) == 'table' and args or {}
@@ -2254,6 +2256,11 @@ function Admin.command(src, args)
         local ok, opened, e = Call('Tablet', 'openAdmin', src)
         if ok and opened == false and e then Reply(src, 'error', e) end
         return
+    end
+    -- Z10: the write subcommands are refused under a maintenance lock, as every action is (a left-behind store, a
+    -- restore's put-back)
+    if MAINT_WRITES[sub] and CP.Maintenance and CP.Maintenance.active and CP.Maintenance.active() then
+        return Reply(src, 'error', 'err.maintenance')
     end
     local fn = SUB[sub]
     if not fn then

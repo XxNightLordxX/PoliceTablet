@@ -603,7 +603,8 @@ local function Push(dept, key)
         local n = math.tointeger(tonumber(s))
         if n and not CP.Access.isAdmin(n) then
             local o = CP.Access.getOfficer(n)
-            if o and o.isSupervisor and (dept == SERVER_WIDE or o.department == dept) then
+            -- Z10: an extra missionControls grant uses the screen too
+            if o and (o.isSupervisor or Granted(n)) and (dept == SERVER_WIDE or o.department == dept) then
                 T.push(n, 'missionControls', data)
             end
         end
@@ -629,11 +630,12 @@ end
 -- DC.set(src, key, value, reason, opts): the only write. opts.department: the department (admins; a supervisor's
 -- own when left out), opts.expiresAt: os.time() the change ends (server code only, never from a screen).
 -- Returns true, { department, key, value } | false, errKey (opts.waitLeft on err.control_wait: seconds).
-function DC.set(src, key, value, reason, opts)
-    opts = type(opts) == 'table' and opts or {}
-    if defs[key] and defs[key].kind == 'action' then return false, 'err.control_unknown' end
-    local ok, err, role, dept = DC.canChange(src, key, opts.department)
-    if not ok then return false, err end
+-- Z10: the controls being written now (DC.set reads its rule, then waits on the database): a second change of the same
+-- control meanwhile is refused, so two supervisors pressing Start happy hour together cannot both pass its rule.
+-- A control with a rule (def.allow, e.g. happy hour's one-at-a-time and per-day count) is held server-wide.
+local setting = {}  -- lockKey -> true
+
+local function SetChecked(src, key, value, reason, opts, role, dept)
     local def = defs[key]
     local cleanReason, errR = CP.AdminKit.reason(reason)
     if not cleanReason then return false, errR end
@@ -688,6 +690,23 @@ function DC.set(src, key, value, reason, opts)
     Changed(dept, key)
     CP.log(TAG, '%s set %s of %s', ActorOf(n), key, dept)
     return true, { department = dept, key = key, value = clean }
+end
+
+function DC.set(src, key, value, reason, opts)
+    opts = type(opts) == 'table' and opts or {}
+    if defs[key] and defs[key].kind == 'action' then return false, 'err.control_unknown' end
+    local ok, err, role, dept = DC.canChange(src, key, opts.department)
+    if not ok then return false, err end
+    local lockKey = defs[key].allow and key or (tostring(dept) .. '|' .. key)
+    if setting[lockKey] then return false, 'err.control_busy' end
+    setting[lockKey] = true
+    local res = table.pack(pcall(SetChecked, src, key, value, reason, opts, role, dept))
+    setting[lockKey] = nil
+    if not res[1] then
+        CP.err(TAG, 'setting the %s control of %s failed: %s', key, tostring(dept), tostring(res[2]))
+        return false, 'err.internal'
+    end
+    return table.unpack(res, 2, res.n)
 end
 
 -- DC.reset(src, dept, key, reason): back to the config value (the row is deleted). A supervisor: his own department

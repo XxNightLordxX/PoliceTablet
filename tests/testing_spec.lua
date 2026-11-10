@@ -580,6 +580,18 @@ do
     okT, tp = T.control(1, { control = 'teleport' })
     H.eq(tp, 'err.test_teleport_disabled', 'allowTeleport = false')
     Config.Testing.allowTeleport = true
+    -- Z10: a tester who is not an admin teleports only with the Builder's teleport grant, and it is audited
+    admins[1] = nil
+    CP.Builder.canTeleport = function() return false end
+    okT, tp = T.control(1, { control = 'teleport', target = 'start' })
+    H.eq(tp, 'err.no_permission', 'Z10: no builderTeleport grant: no test teleport')
+    CP.Builder.canTeleport = function() return true end
+    okT, tp = T.control(1, { control = 'teleport', target = 'start' })
+    H.eq(okT, true, 'Z10: with the grant he teleports')
+    CP.Builder.canTeleport = nil
+    admins[1] = true
+    H.ok(audits[#audits][4] == 'testControl' and audits[#audits][7] == 'teleport:start',
+        'Z10: a test teleport is audited')
 
     okC = T.control(1, { control = 'skip' })
     H.eq(okC, true, 'skip')
