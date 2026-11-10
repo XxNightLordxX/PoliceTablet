@@ -49,6 +49,12 @@ function CP.Num(v, default, lo, hi)
     return v
 end
 
+-- A Qbox citizenid as the store keeps it: 1-50 letters, digits, _ or -.
+---@return boolean
+function CP.ValidCid(v)
+    return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
+end
+
 -- Calls CP[modName][fnName](...) in pcall. Answers false when the module or function is missing or raised (the error
 -- is logged under tag), else true followed by the function's own answers.
 ---@param tag string

@@ -527,7 +527,7 @@ H.specName = SPEC_NAME
 -- CP_SQL_LOG=<file> appends one JSON line per MySQL.*.await / MySQL.ready call and per direct H.sql call
 -- (CP_SQL_LOG=<dir>/ writes <dir>/<spec>.jsonl instead). Off when the variable is unset: nothing is wrapped.
 --   { "n": 12, "spec": "economy_spec", "db": "..", "kind": "update", "sql": "...", "params": [..],
---     "result": .., "cols": [..], "error": "..", "at": ["modules/cash/server.lua:177", ..], "from": "tests/x.lua:9" }
+--     "result": .., "cols": [..], "error": "..", "at": ["modules/money/cash.lua:177", ..], "from": "tests/x.lua:9" }
 -- kind: query | single | scalar | insert | update | ready | H.sql (a spec's own statement).
 -- params: the parameter list (nil holes -> null, Lua tables -> JSON). result: exactly what the harness returned
 -- (row objects keep the column order given in cols; floats keep a '.0'; nil -> null; failed calls carry "error").

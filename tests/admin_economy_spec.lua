@@ -213,9 +213,10 @@ for _, m in ipairs({
     'modules/confighealth/server.lua',
     'modules/settings/server.lua',
     'modules/tablet/server.lua',
-    'modules/cash/server.lua',
-    'modules/payouts/server.lua',
-    'modules/payments/server.lua',
+    'modules/money/engine.lua',
+    'modules/money/cash.lua',
+    'modules/money/payouts.lua',
+    'modules/money/payments.lua',
     'modules/system/schedule.lua',
 }) do
     H.load(m)
@@ -561,13 +562,13 @@ do
 
     -- step Z2: a feature reward paid as a money item: Pay again gives the item, never a Qbox account named 'item'
     Reset()
-    local itemGiven, savedFR = {}, CP.FeatureRewards
-    CP.FeatureRewards = {
-        giveMoneyItem = function(src, item, amount)
-            itemGiven[#itemGiven + 1] = { src = src, item = item, amount = amount }
-            return true
-        end,
-    }
+    -- the money engine's deposit gives the item through ox_inventory
+    local itemGiven, savedCall = {}, CP.Ext.call
+    CP.Ext.call = function(res, fn, src, item, amount)
+        if res ~= 'ox_inventory' then return savedCall(res, fn, src, item, amount) end
+        if fn == 'AddItem' then itemGiven[#itemGiven + 1] = { src = src, item = item, amount = amount } end
+        return true, true
+    end
     local idItem = Row({
         status = 'paying',
         owed = 150,
@@ -581,7 +582,7 @@ do
         'Z2: Pay again of a money-item row gives the item again'
     )
     H.eq(RowOf(idItem).cash_status, 'paid', 'Z2: and the row is paid')
-    CP.FeatureRewards = savedFR
+    CP.Ext.call = savedCall
 
     -- an old row without markers while the source is society: Pay again can't know what happened
     Config.Cash.source = 'society'
@@ -760,13 +761,13 @@ do
     -- mode, never a department withdraw nor a Qbox account named 'item'
     Reset()
     Config.Cash.source = 'society'
-    local itemGiven, savedFR = {}, CP.FeatureRewards
-    CP.FeatureRewards = {
-        giveMoneyItem = function(src, item, amount)
-            itemGiven[#itemGiven + 1] = { src = src, item = item, amount = amount }
-            return true
-        end,
-    }
+    -- the money engine's deposit gives the item through ox_inventory
+    local itemGiven, savedCall = {}, CP.Ext.call
+    CP.Ext.call = function(res, fn, src, item, amount)
+        if res ~= 'ox_inventory' then return savedCall(res, fn, src, item, amount) end
+        if fn == 'AddItem' then itemGiven[#itemGiven + 1] = { src = src, item = item, amount = amount } end
+        return true, true
+    end
     local id3 = Row({
         status = 'capped',
         owed = 400,
@@ -775,7 +776,7 @@ do
         cash = { source = 'server', account = 'item', moneyItem = 'black_money' },
     })
     ok, e = Act('server:admin:payCapRest', 1, { rowId = id3, reason = 'x', confirm = '300', requestId = Rid() })
-    CP.FeatureRewards = savedFR
+    CP.Ext.call = savedCall
     Config.Cash.source = 'server'
     H.ok(ok == true, 'Z7: the rest of a money item row is paid: ' .. tostring(e))
     H.ok(#itemGiven == 1 and itemGiven[1].item == 'black_money' and itemGiven[1].amount == 300, 'Z7: as the money item')

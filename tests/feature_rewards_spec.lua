@@ -41,9 +41,10 @@ end
 local inv = H.mockInventory({ water = { label = 'Water' }, black_money = { label = 'Dirty money' } })
 
 H.load('modules/system/schedule.lua')
-H.load('modules/rewards/server.lua')
-H.load('modules/cash/server.lua')
-H.load('modules/featurerewards/server.lua')
+H.load('modules/money/engine.lua')
+H.load('modules/money/rewards.lua')
+H.load('modules/money/cash.lua')
+H.load('modules/money/featurerewards.lua')
 H.advance(5000)
 local FR = CP.FeatureRewards
 local FC = Config.FeatureRewards

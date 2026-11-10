@@ -137,7 +137,8 @@ CP.Payouts = {
     baseFor = function() return 500 end,
     sourceFor = function() return 'type' end,
 }
-Quiet('modules/cash/server.lua')
+Quiet('modules/money/engine.lua')
+Quiet('modules/money/cash.lua')
 CP.Qbx = {
     onDutyChange = function() end,
     onGroupUpdate = function() end,

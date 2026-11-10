@@ -58,11 +58,7 @@ local busy = {}           -- 'type:<key>' / 'mission:<id>' while a write is in f
 --                                   HELPERS
 -- ============================================================================
 
-local function Num(v, default)
-    local n = tonumber(v)
-    if n == nil or n ~= n or n == math.huge or n == -math.huge then return default end
-    return n
-end
+local Num = CP.Num
 
 local function Now()
     if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end

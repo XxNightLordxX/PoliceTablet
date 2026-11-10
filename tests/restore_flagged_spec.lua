@@ -11,7 +11,8 @@ H.sql('DELETE FROM cp_item_rewards')
 H.sql('DELETE FROM cp_audit')
 Config.Rewards.enabled = true
 H.mockInventory({ water = { label = 'Water' } })
-H.load('modules/rewards/server.lua')
+H.load('modules/money/engine.lua')
+H.load('modules/money/rewards.lua')
 H.advance(5000)
 
 local function Item(rowId, status)

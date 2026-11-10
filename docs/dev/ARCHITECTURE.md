@@ -195,7 +195,7 @@ listed as `modules/supervisor/*.lua`),
 surrender, staff, saved (§5.45), livecrime (§5.46), volunteers, match (§5.47) and crimtab (§5.51), listed as
 `modules/realplayers/*.lua`; client sub-files livecrime, volunteers and crimtab in `modules/realplayers/client/*.lua`;
 all read `Config.RealPlayers` through `CP.RealPlayers`),
-`modules/rewards/` (server), `modules/confighealth/` (server), `modules/integrations/sc_police/` (server),
+`modules/money/` (server: engine first, then cash, featurerewards, payments, payouts, rewards), `modules/confighealth/` (server), `modules/integrations/sc_police/` (server),
 `blocks/field_contact/` and `blocks/process_scene/` (server, client).
 
 `modules/diag/` (client, §5.35): the F8 command `CrimsonPoliceState`, with the freeze fix
@@ -218,7 +218,7 @@ blocks.lua, the mission and location switches, and the same values on every clie
 
 `modules/adminkit/` (server, §5.37): full admin control's foundation. `CP.AdminKit` (the guard wrapper of every new
 admin action, previews, request ids, jobs, day counts, the busy lock) and `CP.Maintenance` (the maintenance lock).
-Full admin control also has `modules/review/corrections` (§5.38), `modules/livectl/` (§5.39), `modules/payments/`
+Full admin control also has `modules/review/corrections` (§5.38), `modules/livectl/` (§5.39), `modules/money/payments`
 (§5.40) and `modules/sysadmin/` (§5.41).
 
 ---
@@ -1404,7 +1404,7 @@ Points, streaks, XP and badges.
 - `onRunCompleted(citizenid)` *(hook)* and after an approval: a `goal` row once per period (found by `mission_id` =
   goal id + `breakdown.period`, so daily and weekly goals with one id never collide), then `goal:completed`.
 
-### 5.20 CP.Cash — modules/cash (S)
+### 5.20 CP.Cash — modules/money/cash.lua (S)
 - `compute(run, p) -> amount, breakdown` (§9.6 `cash`).
 - `pay(rowId)` — an offline officer's row goes to `pending` (no money moves).
 - Daily cap (`Config.Cash.dailyCap`): paid/capped cash of rows on the row's own reset day; one officer's payments are
@@ -1424,7 +1424,11 @@ Points, streaks, XP and badges.
 - Admin money tools (§5.40), each `-> ok, data | false, errKey`; claim first, then `audit(info)` (false: the claim is
   undone, `err.audit_failed`), then the money under the officer's payment lock, then the final state.
 
-### 5.21 CP.Payouts — modules/payouts (S)
+### 5.20a CP.Money — modules/money/engine.lua (S; the one money engine)
+Every payment (mission cash, §5.52, §5.40) is written (`writeRow`), handed to CP.Cash (`settle`) and deposited
+(`deposit`) here.
+
+### 5.21 CP.Payouts — modules/money/payouts.lua (S)
 - `typePayout(type) -> amount, adminLocked`, `missionPayout(missionId)`, `baseFor(mission) -> B`, `sourceFor(mission)
   -> 'admin'|'type'|'event'`, `list() -> { types, missions }`.
 - `setType(src, type, amount|nil, reason, role, { unlock })` (nil = clear, admin only; `unlock` leaves the type open
@@ -1885,7 +1889,7 @@ English only: a profile has no language.
 
 Push `profile` (`{ citizenid }`) to the officer after every change.
 
-### 5.33 CP.Rewards — modules/rewards (optional item rewards)
+### 5.33 CP.Rewards — modules/money/rewards.lua (optional item rewards)
 Off by default (`Config.Rewards.enabled = false`): no listener writes a row and nothing calls ox_inventory.
 
 Data: `cp_item_rewards`, one row per officer, source, source key and item (`uq_reward`).
@@ -1904,22 +1908,20 @@ Data: `cp_item_rewards`, one row per officer, source, source key and item (`uq_r
   nothing twice).
 - Caps per officer per reset day, every source together, forfeited not counted: `dailyItemCap` and `dailyValueCap`
   (count × configured value).
-- Validation (3 s after start, on first use, once ox_inventory is up, and on every `settings:changed` of `Rewards.*`):
+- Validation (3 s after start, on first use, once ox_inventory is up, on `settings:changed` of `Rewards.*`):
   a forbidden name (armour, bandage, ammo-\*, weapon_\*, money, black_money, cash, and `Config.Rewards.forbidden` with
   `*` wildcards; case-insensitive) or an item ox_inventory does not know is turned off with a warning and a Config
   health line.
 - Status: `held` → `pending` (the locker) → `giving` → `given`; `forfeited`; given and forfeited are final.
 - row:approved: held → pending → given; row:voided: pending → held; row:forfeited: held/pending → forfeited.
-- History: every status change writes `breakdown.items` (`{ name, label, count, status }`, giving shows as pending)
-  with `JSON_SET` on that path only.
+- History: every status change writes `breakdown.items` (`{ name, label, count, status }`) with `JSON_SET`.
 - API: `lockerCount(citizenid)` (30 s cache; home:extras `rewardsWaiting`), `forRow(rowId)`, `deliver(citizenid)`,
   `locker(src)` (canClaim false with `rewards.reason.off|arena|inventory`), `claim(src, id)`, `validate()`,
   `forbidden(name)`, `health()` (registered as `rewards`), `entryFor`, `chanceFor`, `roll`, `expected(entry)`,
   `itemChoices()`, `adminView({ page, citizenid, status, source, from, to })`.
-- Admin tools (§8.4.4): `checkInventory(id)` (Search for `cpReward = id`, then only slots whose own metadata has it:
-  Search matches values and ignores keys; online only), `resolve(id, 'given'|'locker', audit)` (`err.reward_found`
-  when the item is there), `cancel(id)`, `takeBack(id, audit)` (exactly the tagged slots, each with its own metadata,
-  because ox_inventory adds keys when it gives; refused and undone when not all there).
+- Admin tools (§8.4.4): `checkInventory(id)` (slots whose own metadata has `cpReward = id`; online only),
+  `resolve(id, 'given'|'locker', audit)` (`err.reward_found` when the item is there), `cancel(id)`, `takeBack(id,
+  audit)` (exactly the tagged slots; refused and undone when not all there).
 - Net: callback `getRewardsLocker`, action `server:rewards:claim { id }` (2/s), callback `admin:getRewards`
   (openAdmin), push `rewards` whenever the locker changes.
 
@@ -2118,13 +2120,13 @@ The Admin UI's **Live** screen, an officer's **Today & cooldowns** card and the 
   with their `Config.Events.twists` switches and bonuses.
 - The sidebar count `adminLive` (admins only) is the number of live runs.
 
-### 5.40 CP.Payments — modules/payments (S; full admin control, economy)
+### 5.40 CP.Payments — modules/money/payments.lua (S; full admin control, economy)
 Admin UI → Payments, Departments → Funds and the cash health lines.
 - `list(args) -> PaymentsView` (§9.5): rows with `cash_status <> 'none'`, filters `status` (or `stuck`), `department`,
   `missionType` (`manual_cash` matches the mission id), `citizenid`, `from`/`to` (`>=` and `<`), `page`, `size ≤ 50`.
 - `totals(args) -> PaymentTotals`: counts, paid and taken back summed in SQL per status and department.
-- `export(args) -> { csv, rows, truncated }` (≤ 5000 rows; a cell starting with `=`, `+`, `-`, `@`, tab or CR gets a
-  leading `'`; audited `paymentsExport`), `csv(rows)`.
+- `export(args) -> { csv, rows, truncated }` (≤ 5000 rows, cells made safe to open, audited
+  `paymentsExport`), `csv(rows)`.
 - `departmentFunds(key)`: balance (shown while the source is the server too), paid from the account today / this week
   / this season (rows with `breakdown.cash.source = 'society'`), unfunded rows, admin funding (`cp_dept_funding`) and
   its last 5 rows, the Add funds switch and maximum.
@@ -2638,7 +2640,7 @@ A front end of CP.Volunteers (5.47) for players who play real suspects, behind `
 - NUI: web/src/criminal (CriminalTablet.tsx, model.ts, criminal.walk.ts), its own CSS; mocks/criminal.mock.ts
   (`?ui=crimtab`).
 
-### 5.52 CP.FeatureRewards — modules/featurerewards (S; feature rewards)
+### 5.52 CP.FeatureRewards — modules/money/featurerewards.lua (S; feature rewards)
 Money and items for the features outside a mission's own pay, behind `Config.FeatureRewards.<feature>.enabled` (all
 shipped false, each with a default money amount).
 
@@ -2649,8 +2651,8 @@ shipped false, each with a default money amount).
   talking officer's citizenid from `run.participants[by]`; key `<runId>:<suspect cid>`), `FT.signOff` (key
   `fto:<rookie>:<task>`, and `fto:<rookie>:done` when the training is done) and the `server:sup:awardPoints` action
   (key `sup:<award row id>`).
-- CP.Cash's PayClaimed honours the row's `cash.account` (`bank` | `cash` | `item`: `FR.giveMoneyItem`, CanCarryItem
-  then AddItem, a raise leaves the row paying) and `cash.source = 'server'` (never the society account).
+- Paid by CP.Money (§5.20a): the row's `cash.account` (`bank` | `cash` | `item`) and `cash.source = 'server'`
+  (never the society account).
 - Settings: the `FeatureRewards.*` paths (economy features `reward_*`, each with its money, account, items and
   `Rewards.enabled` as limits).
 - `suspect.byType` (`{ [mission type] = { got_away, caught } }`, shipped `{}`): `FR.money('suspect', { outcome,

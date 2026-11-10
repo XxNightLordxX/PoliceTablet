@@ -178,8 +178,9 @@ return function(H)
         'modules/review/anticheat.lua',
         'modules/progression/profile.lua',
         'modules/progression/goals.lua',
-        'modules/payouts/server.lua',
-        'modules/cash/server.lua',
+        'modules/money/engine.lua',
+        'modules/money/payouts.lua',
+        'modules/money/cash.lua',
         'modules/review/corrections.lua',
         'modules/supervisor/notices.lua',
     }) do

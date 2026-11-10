@@ -66,7 +66,8 @@ for name, fn in pairs(H.exportsMock.ox_inventory) do
 end
 
 H.load('modules/system/schedule.lua')
-H.load('modules/rewards/server.lua')
+H.load('modules/money/engine.lua')
+H.load('modules/money/rewards.lua')
 local R = CP.Rewards
 H.advance(5000)   -- the start check
 

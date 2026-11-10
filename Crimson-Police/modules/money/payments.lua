@@ -22,11 +22,7 @@ local navCache = { at = -1, n = 0 }
 --                                   HELPERS
 -- ============================================================================
 
-local function Num(v, d)
-    local n = tonumber(v)
-    if n == nil or n ~= n or n == math.huge or n == -math.huge then return d end
-    return n
-end
+local Num = CP.Num
 
 local function Int(v, lo, hi)
     local n = math.tointeger(tonumber(v))
@@ -39,9 +35,7 @@ local function Now()
     return os.time()
 end
 
-local function ValidCid(v)
-    return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
-end
+local ValidCid = CP.ValidCid
 
 local function ValidKey(v) return type(v) == 'string' and #v >= 1 and #v <= 40 and v:match('^[%w_%-]+$') ~= nil end
 
@@ -993,44 +987,9 @@ end, {
 -- ============================================================================
 --                   MANUAL CASH PAYMENT (SWITCH, SHIPS OFF)
 -- ============================================================================
--- A manual_cash row (mission_type manual_award: out of run counts, goals, streaks and the draw by the existing
--- filters), paid through the normal flow (source, account, pending until login) but outside the daily cap: it has
--- its own per-admin daily limit, counted from today's rows (every character of the admin's license). The row is
--- written as 'none', which no login payment and no Pay now picks up, and is paid only after its audit row exists.
-
-local function InsertManualRow(cid, dept, amount, actor, reason, runUuid)
-    local bd = {
-        runId = runUuid,
-        missionLabel = CP.L('payments.manual_label'),
-        missionType = 'manual_award',
-        result = 'completed',
-        endReason = 'completed',
-        test = false,
-        tier = 'standard',
-        payTier = 'standard',
-        participants = 1,
-        departments = 1,
-        durationS = 0,
-        points = { P = 0, bonuses = {}, penalties = {}, subtotal = 0, final = 0 },
-        cash = { B = amount, mTier = 1.0, mMod = 1.0, amount = amount, status = 'none' },
-        kind = MANUAL_CASH,
-        by = actor,
-        reason = reason,
-    }
-    local okJ, js = pcall(json.encode, U.serialize(bd))
-    local ok, id = pcall(MySQL.insert.await, [[
-        INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid, department, season_id, participants,
-            departments_n, tier, state, end_reason, points_base, bonus_points, penalty_points, final_points, cash_base,
-            cash_multiplier, cash_paid, cash_status, duration_s, breakdown, flagged, voided, created_at)
-        VALUES (?, 'manual_award', 'manual_cash', ?, ?, ?, 1, 1, 'standard', 'completed', 'completed', 0, 0, 0, 0, ?,
-            1.00, 0, 'none', 0, ?, 0, 0, FROM_UNIXTIME(?))
-    ]], { runUuid, cid, U.clip(dept, 32), SeasonId(), amount, okJ and js or '{}', Now() })
-    if not ok or not tonumber(id) then
-        CP.err(TAG, 'inserting the manual cash row for %s failed: %s', cid, tostring(id))
-        return nil
-    end
-    return math.floor(tonumber(id))
-end
+-- A manual_cash row written and paid by the money engine (CP.Money.writeRow, then CP.Money.settle once its audit row
+-- exists), so the normal flow applies (source, account, pending until login) but outside the daily cap: it has its
+-- own per-admin daily limit, counted from today's rows (every character of the admin's license).
 
 local function ManualUsed(ctx)
     return Kit.dailySum({ missionIds = { MANUAL_CASH }, actor = ctx.actor, src = ctx.src, column = 'cash_base' })
@@ -1054,7 +1013,17 @@ Kit.action('server:admin:manualCash', 'payments', function(ctx)
     if used == nil then return false, 'err.internal' end
     if limit > 0 and used + amount > limit then return false, 'err.manual_limit' end
     local runUuid = ctx.requestId or Kit.uuid()
-    local id = InsertManualRow(p.citizenid, officer[1].department or 'unknown', amount, ctx.actor, ctx.reason, runUuid)
+    local id = CP.Money.writeRow({
+        runUuid = runUuid,
+        missionId = MANUAL_CASH,
+        citizenid = p.citizenid,
+        department = officer[1].department or 'unknown',
+        amount = amount,
+        label = CP.L('payments.manual_label'),
+        kind = MANUAL_CASH,
+        by = ctx.actor,
+        reason = ctx.reason,
+    })
     if not id then return false, 'err.internal' end
     -- the limit again, now that the row is counted: two payments at the same moment never pass it together
     local after = ManualUsed(ctx)
@@ -1066,14 +1035,7 @@ Kit.action('server:admin:manualCash', 'payments', function(ctx)
         Update('DELETE FROM cp_mission_runs WHERE id = ? AND cash_status = \'none\'', { id })
         return false, 'err.audit_failed'
     end
-    -- 'pending' before the pay waits for the store and the officer's payment lock: a stop or crash in that wait
-    -- leaves an audited row the login, start and end-of-maintenance sweeps pay (they skip manual award rows still
-    -- 'none')
-    Update([[UPDATE cp_mission_runs SET cash_status = 'pending',
-        breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.cash.status', 'pending'), breakdown)
-        WHERE id = ? AND cash_status = 'none']], { id })
-    -- not paid now (maintenance lock, lock wait, in flight): it stays 'pending'
-    local status = CP.Cash.pay(id) or 'pending'
+    local status = CP.Money.settle(id)
     Touched(ctx, p.citizenid)
     return true, { id = id, status = status, amount = amount }
 end, {

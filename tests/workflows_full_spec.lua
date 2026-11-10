@@ -302,7 +302,7 @@ do
         'cd ' .. H.root .. ' && ls modules/system/storage.lua modules/adminkit/server.lua'
             .. ' modules/system/migrations.lua modules/system/schedule.lua'
             .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua modules/teams/*.lua modules/money/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end

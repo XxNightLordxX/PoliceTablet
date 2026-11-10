@@ -30,7 +30,8 @@ CP.DeptControls = {
 
 H.load('modules/supervisor/happyhour.lua')
 H.load('modules/progression/events.lua')
-H.load('modules/cash/server.lua')
+H.load('modules/money/engine.lua')
+H.load('modules/money/cash.lua')
 local HH, E, Cash = CP.HappyHour, CP.Events, CP.Cash
 local MC = Config.MissionControls.controls
 local SAST = { { citizenid = 'SAST1' } }

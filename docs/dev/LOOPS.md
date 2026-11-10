@@ -322,7 +322,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/progression/challenge.lua | planned-end reminders | always | 60 s | |
 | modules/dispatch/calls.lua | prune | always | 60 s | |
 | modules/draw/server.lua | housekeeping | always | 60 s | |
-| modules/cash/server.lua, rewards/server.lua | forfeit sweeps | always | 10 min | |
+| modules/money/cash.lua, rewards/server.lua | forfeit sweeps | always | 10 min | |
 
 ## NUI timers (web/src)
 
@@ -367,7 +367,7 @@ strings do not count.
 | `modules/builder/client.lua` | 4 | 4 | Builder tools (admin, per frame while open); bounded loads |
 | `modules/builder/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/dispatch/calls.lua` | 2 | 1 | prune, 60 s; one-shots |
-| `modules/cash/server.lua` | 4 | 1 | forfeit sweep, 10 min; one-shots |
+| `modules/money/cash.lua` | 4 | 1 | forfeit sweep, 10 min; one-shots |
 | `modules/progression/challenge.lua` | 2 | 1 | planned-end reminders, 60 s; one-shots |
 | `modules/confighealth/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/client/crimtab.lua` | 6 | 0 | Escape guard, downed watch; one-shots |
@@ -378,7 +378,7 @@ strings do not count.
 | `modules/downed/client.lua` | 1 | 0 | bounded waits |
 | `modules/downed/server.lua` | 3 | 0 | start-up hooks; the check is a `CP.Perf.armed` loop |
 | `modules/draw/server.lua` | 2 | 1 | holder housekeeping, 60 s; a one-shot |
-| `modules/featurerewards/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/money/featurerewards.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/supervisor/happyhour.lua` | 1 | 1 | the end check, armed while one may run |
 | `modules/integrations/qbx/client.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/integrations/qbx/server.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -402,10 +402,10 @@ strings do not count.
 | `modules/realplayers/opponents.lua` | 3 | 1 | live crime watch while a case is tracked; one-shots |
 | `modules/realplayers/surrender.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/options/client.lua` | 3 | 0 | Auto-Ready input watcher; start-up hooks |
-| `modules/payments/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/payouts/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/money/payments.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/money/payouts.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/progression/profile.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/rewards/server.lua` | 5 | 1 | forfeit sweep, 10 min; one-shots |
+| `modules/money/rewards.lua` | 5 | 1 | forfeit sweep, 10 min; one-shots |
 | `modules/route/client.lua` | 2 | 0 | drive-to-start report; a start-up hook |
 | `modules/route/server.lua` | 4 | 0 | one-shots; the tick is a `CP.Perf.armed` loop |
 | `modules/runs/client.lua` | 3 | 1 | telemetry, weapon fired; bounded entity wait |

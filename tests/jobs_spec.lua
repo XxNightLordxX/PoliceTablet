@@ -98,13 +98,13 @@ do
         { 'modules/realplayers/pairs.lua', 'pvp_pairs' },
         { 'modules/realplayers/saved.lua', 'pvp_cases' },
         { 'modules/realplayers/volunteers.lua', 'volunteer_strikes' },
-        { 'modules/payments/server.lua', 'low_balance' },
+        { 'modules/money/payments.lua', 'low_balance' },
         { 'modules/progression/challenge.lua', 'season_end' },
         { 'modules/progression/challenge.lua', 'bounty_week' },
         { 'modules/progression/leaderboard.lua', 'board_week' },
         { 'modules/progression/leaderboard.lua', 'board_month' },
-        { 'modules/cash/server.lua', 'cash_forfeiture' },
-        { 'modules/rewards/server.lua', 'reward_forfeiture' },
+        { 'modules/money/cash.lua', 'cash_forfeiture' },
+        { 'modules/money/rewards.lua', 'reward_forfeiture' },
     }
     local part = require('cjson').decode(Read('locales/parts/admin_system.json'))
     for _, r in ipairs(REGISTERED) do

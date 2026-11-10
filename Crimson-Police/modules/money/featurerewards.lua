@@ -3,7 +3,8 @@
 -- CP.FeatureRewards (server): the money and items of the features outside a mission's own pay
 -- (Config.FeatureRewards): the volunteer suspect, the officer who talked a suspect down, field training sign-offs and
 -- completion, and supervisor point awards. Each payment is one row of the payments ledger (cp_mission_runs, mission
--- type manual_award, mission id reward_<feature>) paid by CP.Cash (audited, pending until login, the daily cap), and
+-- type manual_award, mission id reward_<feature>) written and paid by the money engine (CP.Money, then CP.Cash:
+-- audited, pending until login, the daily cap), and
 -- its items are run rewards of that row (CP.Rewards, under Config.Rewards.enabled and its daily caps). The row's
 -- run_uuid is made from the feature and the case key, so one case pays once whatever calls it twice.
 
@@ -25,20 +26,9 @@ local busy = {}                    -- [run_uuid] = true while that payment is be
 --                                   HELPERS
 -- ============================================================================
 
-local function Num(v, d)
-    local n = tonumber(v)
-    if n == nil or n ~= n or n == math.huge or n == -math.huge then return d end
-    return n
-end
+local Num = CP.Num
 
-local function Now()
-    if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
-    return os.time()
-end
-
-local function ValidCid(v)
-    return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
-end
+local ValidCid = CP.ValidCid
 
 local function All() return type(Config.FeatureRewards) == 'table' and Config.FeatureRewards or {} end
 
@@ -148,78 +138,23 @@ local function DeptOf(cid)
     return nil
 end
 
-local function SeasonId()
-    if CP.Challenge and CP.Challenge.currentSeason then
-        local ok, s = pcall(CP.Challenge.currentSeason)
-        if ok and type(s) == 'table' and tonumber(s.id) then return math.floor(tonumber(s.id)) end
-    end
-    return 0
-end
-
--- cid nil: any player's row of that id (a payment keyed by someone else, opts.uuidCid).
-local function ExistingRow(runUuid, cid)
-    local ok, id
-    if cid then
-        ok, id = pcall(MySQL.scalar.await,
-            'SELECT id FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = ? LIMIT 1', { runUuid, cid })
-    else
-        ok, id = pcall(MySQL.scalar.await, 'SELECT id FROM cp_mission_runs WHERE run_uuid = ? LIMIT 1', { runUuid })
-    end
-    if not ok then
-        CP.err(TAG, 'looking up payment %s failed: %s', runUuid, tostring(id))
-        return false
-    end
-    return tonumber(id)
-end
-
+-- The ledger row of one payment (CP.Money.writeRow): its feature, case and account.
 local function InsertRow(feature, cid, runUuid, amount, opts)
     local account, moneyItem = FR.account(feature)
-    local dept = feature == 'suspect' and 'none' or (DeptOf(cid) or 'unknown')
-    local label = CP.L('admin.mission.reward_' .. feature)
-    local bd = {
-        runId = runUuid,
-        missionLabel = label,
-        missionType = 'manual_award',
-        result = 'completed',
-        endReason = 'completed',
-        test = false,
-        tier = 'standard',
-        payTier = 'standard',
-        participants = 1,
-        departments = 1,
-        durationS = 0,
-        points = { P = 0, bonuses = {}, penalties = {}, subtotal = 0, final = 0 },
-        cash = {
-            B = amount,
-            mTier = 1.0,
-            mMod = 1.0,
-            amount = amount,
-            status = 'none',
-            account = account,
-            moneyItem = moneyItem,
-            -- a suspect has no department account: his pay is always new money
-            source = feature == 'suspect' and 'server' or nil,
-        },
+    return CP.Money.writeRow({
+        runUuid = runUuid,
+        missionId = 'reward_' .. feature,
+        citizenid = cid,
+        department = feature == 'suspect' and 'none' or (DeptOf(cid) or 'unknown'),
+        amount = amount,
+        label = CP.L('admin.mission.reward_' .. feature),
         kind = 'feature_reward',
-        feature = feature,
-        caseKey = U.clip(opts.key, 80),
-        outcome = opts.outcome,
         by = feature,
         reason = opts.reason,
-    }
-    local okJ, js = pcall(json.encode, U.serialize(bd))
-    local ok, id = pcall(MySQL.insert.await, [[
-        INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid, department, season_id, participants,
-            departments_n, tier, state, end_reason, points_base, bonus_points, penalty_points, final_points, cash_base,
-            cash_multiplier, cash_paid, cash_status, duration_s, breakdown, flagged, voided, created_at)
-        VALUES (?, 'manual_award', ?, ?, ?, NULLIF(?, 0), 1, 1, 'standard', 'completed', 'completed', 0, 0, 0, 0, ?,
-            1.00, 0, 'none', 0, ?, 0, 0, FROM_UNIXTIME(?))
-    ]], { runUuid, 'reward_' .. feature, cid, U.clip(dept, 32), SeasonId(), amount, okJ and js or '{}', Now() })
-    if not ok or not tonumber(id) then
-        CP.err(TAG, 'inserting the %s payment for %s failed: %s', feature, cid, tostring(id))
-        return nil
-    end
-    return math.floor(tonumber(id))
+        -- a suspect has no department account: his pay is always new money
+        cash = { account = account, moneyItem = moneyItem, source = feature == 'suspect' and 'server' or nil },
+        extra = { feature = feature, caseKey = U.clip(opts.key, 80), outcome = opts.outcome },
+    })
 end
 
 local function Audit(feature, rowId, cid, amount, items, key)
@@ -258,7 +193,7 @@ function FR.pay(feature, cid, opts)
     if busy[runUuid] then return nil, 'busy' end
     busy[runUuid] = true
     local ok, res, why = pcall(function()
-        local had = ExistingRow(runUuid, not uuidCid and cid or nil)
+        local had = CP.Money.rowOf(runUuid, not uuidCid and cid or nil)
         if had == false then return nil, 'error' end
         if had then return nil, 'duplicate' end
         local rowId = InsertRow(feature, cid, runUuid, amount, {
@@ -269,16 +204,7 @@ function FR.pay(feature, cid, opts)
         if not rowId then return nil, 'error' end
         Audit(feature, rowId, cid, amount, items, key)
         local status = 'none'
-        if amount > 0 and CP.Cash and CP.Cash.pay then
-            -- 'pending' before the pay waits for the store and the officer's payment lock: a stop or crash in that
-            -- wait leaves an audited row the login, start and end-of-maintenance sweeps pay (they skip manual award
-            -- rows still 'none')
-            local okP, errP = pcall(MySQL.update.await,
-                [[UPDATE cp_mission_runs SET cash_status = 'pending' WHERE id = ? AND cash_status = 'none']], { rowId })
-            if not okP then CP.err(TAG, 'marking row %d pending failed: %s', rowId, tostring(errP)) end
-            -- not paid now (maintenance lock, left-behind store, in flight): it stays 'pending'
-            status = CP.Cash.pay(rowId) or 'pending'
-        end
+        if amount > 0 then status = CP.Money.settle(rowId) end
         local given = 0
         if #items > 0 and CP.Rewards and CP.Rewards._grant then
             local list = {}
@@ -328,26 +254,6 @@ function FR.suspectEnded(runId, payload, afk)
         outcome = payload.outcome,
         missionType = payload.missionType,
     })
-end
-
--- ============================================================================
---                       MONEY PAID AS AN ITEM (CP.Cash)
--- ============================================================================
-
--- Gives amount of a money item (account = 'item'). -> true | false (no room or no ox_inventory: nothing added) |
--- false, 'error' (it raised: the inventory may have changed).
-function FR.giveMoneyItem(src, item, amount)
-    if type(item) ~= 'string' or item == '' then return false end
-    amount = math.floor(Num(amount, 0))
-    if amount <= 0 then return true end
-    local okC, can = CP.Ext.call('ox_inventory', 'CanCarryItem', src, item, amount)
-    if not okC or can ~= true then return false end
-    local ok, res = CP.Ext.call('ox_inventory', 'AddItem', src, item, amount)
-    if not ok then
-        CP.err(TAG, 'ox_inventory AddItem(%s, %d) raised for %s: %s', item, amount, tostring(src), tostring(res))
-        return false, 'error'
-    end
-    return res == true or (res ~= false and res ~= nil)
 end
 
 -- ============================================================================
@@ -417,7 +323,7 @@ function FR.checkSetting(path, value)
     return nil
 end
 
--- modules/settings loads after this file: the validator is registered once every file has loaded
+-- the validator is registered once every file has loaded
 CreateThread(function()
     if CP.Settings and CP.Settings.registerValidator then
         CP.Settings.registerValidator('FeatureRewards', function(path, clean) return FR.checkSetting(path, clean) end)

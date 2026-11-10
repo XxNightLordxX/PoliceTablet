@@ -29,7 +29,8 @@ CP.Events = {
 H.load('modules/realplayers/livecrime.lua')
 H.load('modules/scaling/server.lua')
 H.load('modules/progression/scoring.lua')
-H.load('modules/cash/server.lua')
+H.load('modules/money/engine.lua')
+H.load('modules/money/cash.lua')
 local LC = CP.LiveCrime
 
 local function Run(live)

@@ -109,7 +109,8 @@ local function Boot(before)
         'modules/settings/server.lua',
         'modules/tablet/server.lua',
         'modules/sysadmin/server.lua',
-        'modules/cash/server.lua',
+        'modules/money/engine.lua',
+        'modules/money/cash.lua',
     }) do
         H.load(m)
     end

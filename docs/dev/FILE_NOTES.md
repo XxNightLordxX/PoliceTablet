@@ -38,7 +38,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/adminkit/server.lua`: CP.AdminKit (server): the one wrapper every new admin action goes through (permission, rate, request id, reason, typed word, preview, self, compare-and-set, audit, caches, toasts), bulk jobs, day counts and the busy lock.
 - `Crimson-Police/modules/builder/client.lua`: CP.Builder (client): the Mission Builder's in-world tools.
 - `Crimson-Police/modules/builder/server.lua`: CP.Builder (server): the Mission Builder's drafts, edit locks, versions,
-- `Crimson-Police/modules/cash/server.lua`: CP.Cash (server): the cash formula and every payment Crimson-Police makes.
 - `Crimson-Police/modules/confighealth/server.lua`: CP.ConfigHealth (server): the Config health list of Admin UI → Permissions.
 - `Crimson-Police/modules/custody/client.lua`: CP.Custody (client): the police action flow (begin, progress bar, finish), the case-fail confirm, the service vehicles this client drives for the server and their blips, and the road point the server asks for.
 - `Crimson-Police/modules/custody/server.lua`: CP.Custody (server): contact truths and facts, police actions, grading, the custody chain and the service vehicles (prisoner transport, tow truck, coroner van).
@@ -51,7 +50,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/downed/client.lua`: CP.Downed (client): the NPC pick-up of a downed participant and the EMS request from their own client (docs/dev/ARCHITECTURE.md §5.15, Crimson-Arena rules 3 and 13).
 - `Crimson-Police/modules/downed/server.lua`: CP.Downed (server): Hard rule 18, downed participants (docs/dev/ARCHITECTURE.md §5.15, SPEC "Downed participants", Crimson-Arena rules 1 and 3).
 - `Crimson-Police/modules/draw/server.lua`: CP.Draw: mission pools, the random draw, locations and the Mission Board.
-- `Crimson-Police/modules/featurerewards/server.lua`: CP.FeatureRewards (server): the money and items of the features outside a mission's own pay
 - `Crimson-Police/modules/integrations/crimson_contracts/server.lua`: CP.CrimsonContracts (server): the adapter for Crimson-Contracts' server-only contract events (sent only with ContractsConfig.LifecycleEvents = true).
 - `Crimson-Police/modules/integrations/qbx/client.lua`: CP.Qbx (client): the only client code that talks to qbx_core.
 - `Crimson-Police/modules/integrations/qbx/server.lua`: CP.Qbx (server): the only server code that talks to qbx_core.
@@ -65,14 +63,18 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/markers/server.lua`: CP.Markers (server): every part of a mission besides its objective on the officers' maps (Config.Markers.parts).
 - `Crimson-Police/modules/missions/client.lua`: CP.Missions (client): the mission definitions sent by the server.
 - `Crimson-Police/modules/missions/server.lua`: CP.Missions: the mission registry (loader, normaliser, validator).
+- `Crimson-Police/modules/money/cash.lua`: CP.Cash (server): the cash formula and every payment Crimson-Police makes.
+- `Crimson-Police/modules/money/engine.lua`: CP.Money (server): the one money engine.
+- `Crimson-Police/modules/money/featurerewards.lua`: CP.FeatureRewards (server): the money and items of the features outside a mission's own pay
+- `Crimson-Police/modules/money/payments.lua`: CP.Payments (server): Admin UI → Payments: the payments ledger, totals and CSV, the payment actions (resolve, pay now, retries, the money tools that ship off), department funds and the cash health lines.
+- `Crimson-Police/modules/money/payouts.lua`: CP.Payouts (server): editable base cash payouts per mission type and per mission, the supervisor limits and the Payouts screens of the Supervisor UI and the Admin UI.
+- `Crimson-Police/modules/money/rewards.lua`: CP.Rewards (server): optional ox_inventory item rewards (Config.Rewards, off by default).
 - `Crimson-Police/modules/npc/client.lua`: CP.Npc (client): host-side NPC AI helpers, "Cuff suspect" and the police action options (contacts, custody).
 - `Crimson-Police/modules/npc/server.lua`: CP.Npc (server): the authoritative state machine of mission NPCs.
 - `Crimson-Police/modules/npccombat/client.lua`: CP.NpcCombat (client): softer NPC hits and no headshot multiplier on this officer while a run is live.
 - `Crimson-Police/modules/npccombat/server.lua`: CP.NpcCombat (server): the crimsonPoliceRun player bag of every officer whose game runs the run's NPC damage settings, and the message that drops an officer's headshot and defense protection for the rest of his run.
 - `Crimson-Police/modules/options/client.lua`: CP.Options (client): the officer options as this PC sees them.
 - `Crimson-Police/modules/options/server.lua`: CP.Options (server): each character's officer options (My options), saved sparse in cp_officers.options (JSON: only the keys that differ from the default).
-- `Crimson-Police/modules/payments/server.lua`: CP.Payments (server): Admin UI → Payments: the payments ledger, totals and CSV, the payment actions (resolve, pay now, retries, the money tools that ship off), department funds and the cash health lines.
-- `Crimson-Police/modules/payouts/server.lua`: CP.Payouts (server): editable base cash payouts per mission type and per mission, the supervisor limits and the Payouts screens of the Supervisor UI and the Admin UI.
 - `Crimson-Police/modules/permissions/server.lua`: CP.Permissions: the one place that decides whether a role may do an action.
 - `Crimson-Police/modules/progression/challenge.lua`: CP.Challenge (server): seasons, the department challenge, the weekly bounty and the supervisor Department Report.
 - `Crimson-Police/modules/progression/events.lua`: CP.Events: Type of the Day, run twists (mission modifiers) and the Weekly Boss.
@@ -99,7 +101,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/review/disputes.lua`: CP.Disputes (server): officers' disputes about their flagged, voided or failed runs (cp_disputes) and how supervisors and admins answer them.
 - `Crimson-Police/modules/review/queue.lua`: CP.Review (server): the one Review queue.
 - `Crimson-Police/modules/review/reviewrules.lua`: CP.ReviewRules (server): a department's stricter review rules for flagged runs (the Mission control
-- `Crimson-Police/modules/rewards/server.lua`: CP.Rewards (server): optional ox_inventory item rewards (Config.Rewards, off by default).
 - `Crimson-Police/modules/route/client.lua`: CP.Route (client): the GPS route to the mission start and the reports the server checks (docs/dev/ARCHITECTURE.md §5.12, SPEC "Route to the start").
 - `Crimson-Police/modules/route/server.lua`: CP.Route (server): Hard rule 17, the route to the mission start (docs/dev/ARCHITECTURE.md §5.12, SPEC "Route to the start", Crimson-Arena rules 5 and 6).
 - `Crimson-Police/modules/runs/client.lua`: CP.Runs (client): this player's side of the run engine.
@@ -430,7 +431,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/types/builder_server.ts`: Mission Builder protocol shapes (docs/dev/ARCHITECTURE.md §5.28).
 - `Crimson-Police/web/src/types/criminal.ts`: The criminal tablet (modules/realplayers/crimtab): what crimtab:get and server:crimtab:act answer.
 - `Crimson-Police/web/src/types/custody.ts`: Shapes of the Contact panel (ActiveMissionView.contact, built by CP.Custody.view for a field_contact objective).
-- `Crimson-Police/web/src/types/economy.ts`: Response shapes of the economy slice's supervisor/admin callbacks and actions (modules/payouts/server.lua; documented in docs/dev/ARCHITECTURE.md §5.18).
+- `Crimson-Police/web/src/types/economy.ts`: Response shapes of the economy slice's supervisor/admin callbacks and actions (modules/money/payouts.lua; documented in docs/dev/ARCHITECTURE.md §5.18).
 - `Crimson-Police/web/src/types/fieldTraining.ts`: Shapes of field training (modules/supervisor/fieldtraining.lua, Config.Recognition.fieldTraining).
 - `Crimson-Police/web/src/types/missioncalls.ts`: Shapes of the Dispatch screen (mission calls): getMissionCalls and push topic 'calls', the supervisor panel and the admin area coverage matrix.
 - `Crimson-Police/web/src/types/notices.ts`: The one notice system (modules/supervisor/notices.lua): notices:get { kind } and the actions server:notice:post and server:notice:end.
@@ -556,6 +557,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/missions_a_spec.lua`: The missions_a built-in mission files and missions/builtin/index.lua.
 - `tests/missions_b_spec.lua`: Slice missions_b: the built-in mission files warrant_service, manhunt,
 - `tests/missions_c_spec.lua`: The five newer built-in missions (parking_patrol, traffic_enforcement, suspicious_activity, drug_lab_raid, gang_hideout_raid) and the changed cards: files, guardrails, and end-to-end runs at every tier they support.
+- `tests/money_spec.lua`: The money module (modules/money): one money engine (CP.Money) that every payment goes through.
 - `tests/my_keys_spec.lua`: My options -> My keys (modules/tablet/client.lua): the client action getKeyLabels names the key bound to each Crimson-Police key mapping, or says it is not set.
 - `tests/net_spec.lua`: CP.Net.request on the client never raises: an ox_lib raise or a server that never answers is an error reply.
 - `tests/notices_spec.lua`: The one notice system (CP.Notices, modules/supervisor/notices.lua): staff notices and department notices are kinds

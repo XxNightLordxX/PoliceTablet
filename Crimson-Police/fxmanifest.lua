@@ -48,6 +48,13 @@ server_scripts {
     'modules/realplayers/*.lua',
     'modules/dispatch/*.lua',
     'modules/teams/*.lua',
+    -- the money module: the one money engine first, then the parts that pay through it
+    'modules/money/engine.lua',
+    'modules/money/cash.lua',
+    'modules/money/featurerewards.lua',
+    'modules/money/payments.lua',
+    'modules/money/payouts.lua',
+    'modules/money/rewards.lua',
     'blocks/**/server.lua',
 }
 

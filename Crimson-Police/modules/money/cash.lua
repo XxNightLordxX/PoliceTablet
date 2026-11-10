@@ -56,11 +56,7 @@ local rowLock = CP.Lock.new() -- a row id while pay() works on it
 --                                   HELPERS
 -- ============================================================================
 
-local function Num(v, default)
-    local n = tonumber(v)
-    if n == nil or n ~= n or n == math.huge or n == -math.huge then return default end
-    return n
-end
+local Num = CP.Num
 
 local function ToId(v)
     local n = tonumber(v)
@@ -431,13 +427,7 @@ PayClaimed = function(row, rowId, cid, src, progress)
     local cashBd = type(bd.cash) == 'table' and bd.cash or {}
     local society = Config.Cash and Config.Cash.source == 'society' and cashBd.source ~= 'server'
     local account = dept and dept.societyAccount
-    local moneyAccount = (Config.Cash and Config.Cash.account) or 'bank'
-    local moneyItem = nil
-    if cashBd.account == 'bank' or cashBd.account == 'cash' then
-        moneyAccount = cashBd.account
-    elseif cashBd.account == 'item' and type(cashBd.moneyItem) == 'string' and cashBd.moneyItem ~= '' then
-        moneyAccount, moneyItem = 'item', cashBd.moneyItem
-    end
+    local moneyAccount, moneyItem = CP.Money.accountOf(cashBd)
     -- Step markers (claimed -> withdrawn -> added) and what this payment used, saved before and between the money
     -- calls: an admin resolving a payment left in 'paying' reads them (Admin UI -> Payments).
     Mark(rowId, {
@@ -474,14 +464,7 @@ PayClaimed = function(row, rowId, cid, src, progress)
 
     if amount > 0 then
         progress.moved = true
-        local okMoney, whyMoney = false, nil
-        if moneyItem then
-            if CP.FeatureRewards and CP.FeatureRewards.giveMoneyItem then
-                okMoney, whyMoney = CP.FeatureRewards.giveMoneyItem(src, moneyItem, amount)
-            end
-        elseif CP.Qbx.addMoney then
-            okMoney, whyMoney = CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission')
-        end
+        local okMoney, whyMoney = CP.Money.deposit(src, moneyAccount, moneyItem, amount)
         if not okMoney and whyMoney == 'error' then
             -- AddMoney raised: the balance may already have changed, so the row is never retried automatically
             -- (it stays paying and is listed in stuckPayments for a manual check; no society refund either).
@@ -822,16 +805,8 @@ local function PayAgainLocked(row, bd, rowId, amount, needWithdraw)
         Mark(rowId, { againStep = 'withdrawn' }, 'paying')
     end
     local moneyAccount = c.account or (Config.Cash and Config.Cash.account) or 'bank'
-    local okMoney, why = false, nil
-    if moneyAccount == 'item' then
-        -- a feature reward paid as a money item: the item again, never a Qbox account named 'item'
-        local FR = CP.FeatureRewards
-        if FR and FR.giveMoneyItem and type(c.moneyItem) == 'string' and c.moneyItem ~= '' then
-            okMoney, why = FR.giveMoneyItem(src, c.moneyItem, amount)
-        end
-    elseif CP.Qbx.addMoney then
-        okMoney, why = CP.Qbx.addMoney(src, moneyAccount, amount, 'crimson-police-mission')
-    end
+    -- a money item again when the payment used one (never a Qbox account named 'item')
+    local okMoney, why = CP.Money.deposit(src, moneyAccount, c.moneyItem, amount)
     if not okMoney and why == 'error' then
         CP.err(TAG, 'row %d: Pay again raised in AddMoney; it stays paying for a manual check (transaction %s)', rowId,
             transId)
@@ -931,16 +906,8 @@ local function CapRestLocked(row, bd, rowId, rest)
         end
     end
     local moneyAccount = c.account or (Config.Cash and Config.Cash.account) or 'bank'
-    local okMoney, why = false, nil
-    if moneyAccount == 'item' then
-        -- a feature reward paid as a money item: the item, never a Qbox account named 'item'
-        local FR = CP.FeatureRewards
-        if FR and FR.giveMoneyItem and type(c.moneyItem) == 'string' and c.moneyItem ~= '' then
-            okMoney, why = FR.giveMoneyItem(src, c.moneyItem, rest)
-        end
-    elseif CP.Qbx.addMoney then
-        okMoney, why = CP.Qbx.addMoney(src, moneyAccount, rest, 'crimson-police-mission')
-    end
+    -- a money item again when the payment used one (never a Qbox account named 'item')
+    local okMoney, why = CP.Money.deposit(src, moneyAccount, c.moneyItem, rest)
     if not okMoney and why == 'error' then
         CP.err(TAG, 'row %d: paying the capped rest raised in AddMoney; its marker stays paying (transaction %s)',
             rowId, transId)

@@ -300,8 +300,9 @@ CP.Challenge = {
 H.load('modules/scaling/server.lua')
 H.load('modules/system/schedule.lua')
 H.load('modules/permissions/server.lua')
-H.load('modules/payouts/server.lua')
-H.load('modules/cash/server.lua')
+H.load('modules/money/engine.lua')
+H.load('modules/money/payouts.lua')
+H.load('modules/money/cash.lua')
 H.load('modules/progression/scoring.lua')
 H.load('modules/progression/goals.lua')
 

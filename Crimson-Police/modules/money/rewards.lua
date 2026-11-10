@@ -37,11 +37,7 @@ local function Cfg() return type(Config.Rewards) == 'table' and Config.Rewards o
 
 local function Enabled() return Cfg().enabled == true end
 
-local function Num(v, d)
-    local n = tonumber(v)
-    if n == nil or n ~= n or n == math.huge or n == -math.huge then return d end
-    return n
-end
+local Num = CP.Num
 
 local function ToId(v)
     local n = math.tointeger(tonumber(v) or -1)
@@ -70,9 +66,7 @@ local function WeekKey()
     return tostring(WeekStart())
 end
 
-local function ValidCitizenId(v)
-    return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
-end
+local ValidCitizenId = CP.ValidCid
 
 local function Query(sql, params)
     local ok, rows = pcall(MySQL.query.await, sql, params or {})

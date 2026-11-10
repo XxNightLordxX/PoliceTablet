@@ -2010,6 +2010,10 @@ many were capped today). **Export CSV** gives the same list for a spreadsheet (c
 sidebar shows how many payments are stuck, and the stuck-payments card on **Leaderboards** has **Open in Payments**
 (the list filtered to "paying").
 
+Every payment is paid the same way, by one money engine: mission cash, feature rewards (3.12) and the money tools
+below all use the same account (bank, cash or a money item), the same source (new money or the department account),
+the daily cap, held while flagged, pending until login, and the same ledger row here.
+
 What you can do from a row (the buttons show only where they make sense):
 
 - **Resolve** a payment stuck half way ("paying", after a crash or a Qbox error). It shows what Renewed-Banking

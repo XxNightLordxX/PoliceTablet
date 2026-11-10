@@ -167,7 +167,8 @@ CP.Payouts = {
     baseFor = function() return 500 end,
     sourceFor = function() return 'type' end,
 }
-Quiet('modules/cash/server.lua')
+Quiet('modules/money/engine.lua')
+Quiet('modules/money/cash.lua')
 -- the real access module without its qbx listeners (they write officer rows on every load)
 CP.Qbx = {
     onDutyChange = function() end,

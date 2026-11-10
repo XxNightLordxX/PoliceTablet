@@ -128,9 +128,10 @@ for _, m in ipairs({
     'modules/confighealth/server.lua',
     'modules/settings/server.lua',
     'modules/tablet/server.lua',
-    'modules/cash/server.lua',
-    'modules/payouts/server.lua',
-    'modules/payments/server.lua',
+    'modules/money/engine.lua',
+    'modules/money/cash.lua',
+    'modules/money/payouts.lua',
+    'modules/money/payments.lua',
     'modules/system/schedule.lua',
 }) do
     H.load(m)

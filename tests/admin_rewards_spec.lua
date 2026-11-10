@@ -114,7 +114,8 @@ for _, m in ipairs({
     'modules/confighealth/server.lua',
     'modules/settings/server.lua',
     'modules/tablet/server.lua',
-    'modules/rewards/server.lua',
+    'modules/money/engine.lua',
+    'modules/money/rewards.lua',
 }) do
     H.load(m)
 end

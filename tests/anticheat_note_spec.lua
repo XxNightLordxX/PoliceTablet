@@ -166,9 +166,10 @@ H.load('modules/permissions/server.lua')
 H.load('modules/admin/server.lua')
 H.load('modules/review/anticheat.lua')
 H.load('modules/review/queue.lua')
-H.load('modules/cash/server.lua')
+H.load('modules/money/engine.lua')
+H.load('modules/money/cash.lua')
 H.load('modules/system/schedule.lua')
-H.load('modules/rewards/server.lua')
+H.load('modules/money/rewards.lua')
 H.advance(5000)   -- the start checks
 local AC = CP.AntiCheat
 

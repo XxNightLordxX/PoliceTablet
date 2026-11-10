@@ -719,7 +719,8 @@ do
     end
     H.eq(Config.RealPlayers.volunteer.endEvent, true, 'endEvent ships true (behind enabled = false)')
     -- step G3: the volunteer's own pay (the real fairness rule; the payment itself is tests/feature_rewards_spec)
-    H.load('modules/featurerewards/server.lua')
+    H.load('modules/money/engine.lua')
+    H.load('modules/money/featurerewards.lua')
     local frPaid = {}
     CP.FeatureRewards.payLater = function(feature, cid, opts)
         frPaid[#frPaid + 1] = { feature = feature, cid = cid, key = opts.key, outcome = opts.outcome }
